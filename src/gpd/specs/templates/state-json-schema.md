@@ -222,7 +222,7 @@ Every ID-like field must point to a declared object ID in the same contract:
 
 #### Explicit Anchor-Gap Guidance
 
-If the user does not know the decisive anchor yet, keep that uncertainty explicit instead of inventing a paper, reference, benchmark, or baseline. Accepted phrasings include:
+If the user does not know the decisive anchor yet, keep that uncertainty explicit instead of inventing a paper, reference, benchmark, or baseline. Put that blocker in `scope.unresolved_questions`, `context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors`. Accepted phrasings include:
 
 - `Which reference should serve as the decisive benchmark anchor?`
 - `Benchmark reference not yet selected; still to identify the decisive anchor.`

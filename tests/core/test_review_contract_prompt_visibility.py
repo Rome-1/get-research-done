@@ -51,6 +51,7 @@ def test_summary_template_surfaces_plan_contract_ref_rule_for_contract_ledgers()
     assert "If `contract_results` or `comparison_verdicts` are present, `plan_contract_ref` is also required." in summary_template
     assert "plan_contract_ref (required when `contract_results` or `comparison_verdicts` are present)" in summary_template
     assert "For contract-backed summaries, `contract_results` is required" in summary_template
+    assert "must end with the exact `#/contract` fragment" in summary_template
 
 
 def test_write_paper_prompt_discovers_plan_scoped_and_legacy_phase_summaries() -> None:
@@ -81,5 +82,6 @@ def test_contract_ledgers_surface_decisive_only_verdict_rules_and_strict_suggest
 
     assert "Do not invent `artifact` or `other` subject kinds" in contract_results
     assert "Only `subject_role: decisive` satisfies a required decisive comparison" in contract_results
+    assert "reference-backed decisive comparison is required" in contract_results
     assert "Invented keys such as `check_id` fail validation." in contract_results
     assert "Allowed keys are exactly `check`, `reason`, `suggested_subject_kind`, `suggested_subject_id`, and `evidence_path`." in verification_template

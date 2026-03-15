@@ -594,6 +594,7 @@ def test_new_project_requires_scoping_contract_across_setup_modes() -> None:
         'At least one anchor, reference/prior-output constraint, or an explicit "anchor unknown / must establish later" note'
         in workflow_text
     )
+    assert "scope.unresolved_questions`, `context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors`" in workflow_text
     assert "Do not approve a scoping contract that strips decisive outputs, anchors, prior outputs, or review/stop triggers down to generic placeholders." in workflow_text
     assert "Do NOT skip the initial scoping-contract approval gate." in workflow_text
     assert "scoping contract with decisive outputs, anchors, and explicit approval" in command_text
@@ -781,7 +782,12 @@ def test_new_project_minimal_mode_and_planning_wiring_allow_coarse_scoped_decomp
 
     assert "whether the anchor is still unknown" in workflow_text
     assert "Do not force a phase list just to make the scoping contract look complete." in workflow_text
-    assert "If the user does not know the anchor yet, preserve that explicitly in `scope.unresolved_questions` or `context_intake.context_gaps` rather than inventing a paper, benchmark, or baseline." in workflow_text
+    assert (
+        "If the user does not know the anchor yet, preserve that explicitly in `scope.unresolved_questions`, "
+        "`context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors` rather than inventing a paper, "
+        "benchmark, or baseline."
+        in workflow_text
+    )
     assert 'If the user named a prior output, review checkpoint, or "come back to me before continuing" condition, carry it into `context_intake.must_include_prior_outputs` or `context_intake.crucial_inputs` rather than leaving it only in prose.' in workflow_text
     assert "A full phase breakdown is not required at this stage;" in workflow_text
     assert "Use the coarsest decomposition the approved contract actually supports." in workflow_text
@@ -1086,6 +1092,7 @@ def test_state_json_schema_surfaces_stdin_contract_persistence_and_model_normali
     assert "If a project contract has any `references[]`, at least one reference must set `must_surface: true`." in state_schema
     assert "If a project-contract reference sets `must_surface: true`, `applies_to[]` must not be empty." in state_schema
     assert "If a project-contract reference sets `must_surface: true`, `required_actions[]` must not be empty." in state_schema
+    assert "`scope.unresolved_questions`, `context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors`" in state_schema
     assert "Which reference should serve as the decisive benchmark anchor?" in state_schema
     assert "Blank-after-trim values are invalid" in state_schema
 

@@ -72,6 +72,31 @@ def test_validate_frontmatter_summary_with_source_path_accepts_sibling_plan_cont
     assert result.errors == []
 
 
+def test_validate_frontmatter_summary_with_source_path_rejects_non_contract_plan_fragment(tmp_path: Path) -> None:
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir(parents=True)
+    (artifact_dir / "01-01-PLAN.md").write_text(
+        (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    summary_path = artifact_dir / "01-01-SUMMARY.md"
+    summary_path.write_text(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
+            "plan_contract_ref: .gpd/phases/01-benchmark/01-01-PLAN.md#/contract",
+            "plan_contract_ref: 01-01-PLAN.md#/not-contract",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_frontmatter(summary_path.read_text(encoding="utf-8"), "summary", source_path=summary_path)
+
+    assert result.valid is False
+    assert "plan_contract_ref: must end with '#/contract'" in result.errors
+
+
 def test_validate_frontmatter_summary_with_source_path_rejects_unknown_contract_ids(tmp_path: Path) -> None:
     phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
@@ -463,6 +488,27 @@ def test_verify_summary_rejects_unresolved_plan_contract_ref(tmp_path: Path) -> 
     assert "plan_contract_ref: could not resolve matching plan contract" in result.errors
 
 
+def test_verify_summary_rejects_non_contract_plan_fragment(tmp_path: Path) -> None:
+    plan_path = tmp_path / "01-01-PLAN.md"
+    plan_path.write_text((FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"), encoding="utf-8")
+    summary_path = tmp_path / "01-01-SUMMARY.md"
+    summary_path.write_text(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
+            "plan_contract_ref: .gpd/phases/01-benchmark/01-01-PLAN.md#/contract",
+            "plan_contract_ref: 01-01-PLAN.md#/summary",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    result = verify_summary(tmp_path, summary_path)
+
+    assert result.passed is False
+    assert "plan_contract_ref: must end with '#/contract'" in result.errors
+
+
 def test_validate_frontmatter_summary_rejects_contradictory_comparison_verdict(tmp_path: Path) -> None:
     phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
@@ -762,7 +808,7 @@ def test_validate_frontmatter_summary_requires_decisive_role_for_decisive_compar
     assert any("Missing decisive comparison_verdict for acceptance test test-benchmark" in error for error in result.errors)
 
 
-@pytest.mark.parametrize("comparison_kind", ["benchmark", "prior_work", "experiment", "cross_method"])
+@pytest.mark.parametrize("comparison_kind", ["benchmark", "prior_work", "experiment", "cross_method", "baseline"])
 def test_validate_frontmatter_summary_rejects_implicit_subject_role_for_decisive_comparison_kind(
     tmp_path: Path, comparison_kind: str
 ) -> None:
@@ -772,7 +818,7 @@ def test_validate_frontmatter_summary_rejects_implicit_subject_role_for_decisive
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
-    reference_line = "    reference_id: ref-benchmark\n" if comparison_kind != "cross_method" else ""
+    reference_line = "    reference_id: ref-benchmark\n" if comparison_kind not in {"cross_method"} else ""
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text(
         (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
@@ -799,7 +845,7 @@ def test_validate_frontmatter_summary_rejects_implicit_subject_role_for_decisive
     )
 
 
-@pytest.mark.parametrize("comparison_kind", ["benchmark", "prior_work", "experiment"])
+@pytest.mark.parametrize("comparison_kind", ["benchmark", "prior_work", "experiment", "baseline"])
 def test_validate_frontmatter_summary_rejects_unanchored_decisive_external_comparison(
     tmp_path: Path, comparison_kind: str
 ) -> None:
@@ -835,6 +881,35 @@ def test_validate_frontmatter_summary_rejects_unanchored_decisive_external_compa
         in error
         for error in result.errors
     )
+
+
+def test_validate_frontmatter_summary_requires_reference_backed_comparison_to_use_decisive_kind(tmp_path: Path) -> None:
+    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir.mkdir(parents=True)
+    (phase_dir / "01-01-PLAN.md").write_text(
+        (FIXTURES_STAGE0 / "plan_with_contract.md")
+        .read_text(encoding="utf-8")
+        .replace("kind: benchmark", "kind: existence", 1)
+        .replace("procedure: Compare against the benchmark reference", "procedure: Confirm the artifact exists", 1)
+        .replace("pass_condition: Matches reference within tolerance", "pass_condition: Artifact exists", 1),
+        encoding="utf-8",
+    )
+    summary_path = phase_dir / "01-SUMMARY.md"
+    summary_path.write_text(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
+            "comparison_kind: benchmark",
+            "comparison_kind: other",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_frontmatter(summary_path.read_text(encoding="utf-8"), "summary", source_path=summary_path)
+
+    assert result.valid is False
+    assert "Missing decisive comparison_verdict for reference ref-benchmark" in result.errors
 
 
 def test_validate_frontmatter_summary_rejects_prior_work_verdict_for_benchmark_acceptance_test(

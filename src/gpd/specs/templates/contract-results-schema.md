@@ -32,6 +32,7 @@ plan_contract_ref: .gpd/phases/XX-name/XX-YY-PLAN.md#/contract
 Rules:
 
 - Must be a string.
+- Must end with the exact `#/contract` fragment; pointing at the PLAN file alone or at another fragment is invalid.
 - Must resolve to the matching PLAN contract when validated from disk.
 
 ---
@@ -119,6 +120,7 @@ Rules:
 - If a decisive comparison is required, omitting its verdict makes the artifact incomplete.
 - If the decisive comparison is still open, emit `verdict: inconclusive` or `verdict: tension` instead of omitting the entry.
 - A prose sentence like “agrees with literature” does not replace a verdict entry.
+- When a reference-backed decisive comparison is required, use `comparison_kind: benchmark`, `prior_work`, `experiment`, `baseline`, or `cross_method`. `comparison_kind: other` does not satisfy that requirement.
 
 ---
 

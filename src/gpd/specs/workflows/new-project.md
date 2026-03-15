@@ -135,7 +135,7 @@ Build a canonical scoping contract from the extracted input.
 - Unresolved questions / context gaps
 
 **Preservation rule:** If the user names a specific observable, figure, dataset, derivation, paper, benchmark, notebook, prior run, or stop condition, keep that wording recognizable in the contract. Do not generalize it away into a vague proxy.
-If the user does not know the anchor yet, preserve that explicitly in `scope.unresolved_questions` or `context_intake.context_gaps` rather than inventing a paper, benchmark, or baseline.
+If the user does not know the anchor yet, preserve that explicitly in `scope.unresolved_questions`, `context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors` rather than inventing a paper, benchmark, or baseline.
 Prefer explicit missing-anchor wording such as `Which reference should serve as the decisive benchmark anchor?`, `Benchmark reference not yet selected`, `still to identify the decisive anchor`, or `baseline comparison is TBD`.
 Do not force a phase list just to make the scoping contract look complete. If decomposition is still unclear, record that uncertainty and let `ROADMAP.md` start with a single coarse phase or first grounded investigation chunk.
 

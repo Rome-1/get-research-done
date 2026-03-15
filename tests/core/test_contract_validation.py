@@ -144,6 +144,21 @@ def test_validate_project_contract_approved_mode_accepts_not_yet_selected_anchor
     assert result.mode == "approved"
 
 
+def test_validate_project_contract_approved_mode_accepts_anchor_unknown_in_weakest_anchors() -> None:
+    contract = _load_contract_fixture()
+    contract["references"] = []
+    _remove_incidental_grounding(contract)
+    contract["uncertainty_markers"]["weakest_anchors"] = [
+        "Benchmark reference not yet selected; still to identify the decisive anchor"
+    ]
+    contract["scope"]["unresolved_questions"] = []
+
+    result = validate_project_contract(contract, mode="approved")
+
+    assert result.valid is True
+    assert result.mode == "approved"
+
+
 def test_validate_project_contract_approved_mode_accepts_prior_output_grounding() -> None:
     contract = _load_contract_fixture()
     contract["references"] = []

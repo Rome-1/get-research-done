@@ -251,8 +251,9 @@ UNSUPPORTED_FRONTMATTER_FIELDS: dict[str, dict[str, str]] = {
     },
 }
 
-_DECISIVE_COMPARISON_KINDS = frozenset({"benchmark", "prior_work", "experiment", "cross_method"})
-_DECISIVE_EXTERNAL_COMPARISON_KINDS = frozenset({"benchmark", "prior_work", "experiment"})
+_DECISIVE_COMPARISON_KINDS = frozenset({"benchmark", "prior_work", "experiment", "cross_method", "baseline"})
+_DECISIVE_EXTERNAL_COMPARISON_KINDS = frozenset({"benchmark", "prior_work", "experiment", "baseline"})
+_DECISIVE_REFERENCE_COMPARISON_KINDS = frozenset({"benchmark", "prior_work", "experiment", "cross_method", "baseline"})
 _DECISIVE_ACCEPTANCE_TEST_COMPARISON_KINDS: dict[str, frozenset[str]] = {
     "benchmark": frozenset({"benchmark"}),
     "cross_method": frozenset({"cross_method"}),
@@ -481,6 +482,21 @@ def _unsupported_frontmatter_errors(schema_name: str, meta: dict[str, object]) -
     ]
 
 
+def _plan_contract_ref_fragment_error(plan_contract_ref: str) -> str | None:
+    """Return a user-facing fragment error for ``plan_contract_ref`` when invalid."""
+
+    ref_value = plan_contract_ref.strip()
+    if not ref_value:
+        return "plan_contract_ref: expected a non-empty string"
+
+    path_text, separator, fragment = ref_value.partition("#")
+    if not path_text.strip():
+        return "plan_contract_ref: must include a PLAN path before #/contract"
+    if separator != "#" or fragment != "/contract":
+        return "plan_contract_ref: must end with '#/contract'"
+    return None
+
+
 def _matches_decisive_acceptance_test_verdict(
     verdict: ComparisonVerdict,
     *,
@@ -504,7 +520,11 @@ def _matches_decisive_reference_verdict(
 ) -> bool:
     """Return whether *verdict* closes a decisive reference-backed comparison."""
 
-    return verdict.subject_role == "decisive" and reference_id in verdict.anchored_reference_ids(known_reference_ids)
+    return (
+        verdict.subject_role == "decisive"
+        and verdict.comparison_kind in _DECISIVE_REFERENCE_COMPARISON_KINDS
+        and reference_id in verdict.anchored_reference_ids(known_reference_ids)
+    )
 
 
 def _summary_contract_errors(
@@ -860,6 +880,8 @@ def _find_matching_plan_contract(summary_dir: Path, summary_meta: dict) -> Resea
 
     plan_contract_ref = summary_meta.get("plan_contract_ref")
     if isinstance(plan_contract_ref, str):
+        if _plan_contract_ref_fragment_error(plan_contract_ref) is not None:
+            return None
         plan_ref_path = plan_contract_ref.split("#", 1)[0].strip()
         if plan_ref_path:
             relative_plan_path = Path(plan_ref_path[2:] if plan_ref_path.startswith("./") else plan_ref_path)
@@ -952,8 +974,13 @@ def validate_frontmatter(content: str, schema_name: str, source_path: Path | Non
 
     if schema_name in {"summary", "verification"}:
         plan_contract_ref = meta.get("plan_contract_ref")
+        plan_contract_ref_fragment_error: str | None = None
         if plan_contract_ref is not None and not isinstance(plan_contract_ref, str):
             errors.append("plan_contract_ref: expected a string")
+        elif isinstance(plan_contract_ref, str):
+            plan_contract_ref_fragment_error = _plan_contract_ref_fragment_error(plan_contract_ref)
+            if plan_contract_ref_fragment_error is not None:
+                errors.append(plan_contract_ref_fragment_error)
         if (meta.get("contract_results") is not None or meta.get("comparison_verdicts") is not None) and not isinstance(
             plan_contract_ref, str
         ):
@@ -980,7 +1007,11 @@ def validate_frontmatter(content: str, schema_name: str, source_path: Path | Non
 
         if source_path is not None:
             plan_contract = _find_matching_plan_contract(Path(source_path).parent, meta)
-            if isinstance(plan_contract_ref, str) and plan_contract is None:
+            if (
+                isinstance(plan_contract_ref, str)
+                and plan_contract_ref_fragment_error is None
+                and plan_contract is None
+            ):
                 errors.append("plan_contract_ref: could not resolve matching plan contract")
             if plan_contract is not None:
                 if not isinstance(plan_contract_ref, str):
@@ -1190,8 +1221,17 @@ def verify_summary(
         )
 
     plan_contract_ref = meta.get("plan_contract_ref")
+    plan_contract_ref_fragment_error: str | None = None
+    if isinstance(plan_contract_ref, str):
+        plan_contract_ref_fragment_error = _plan_contract_ref_fragment_error(plan_contract_ref)
+        if plan_contract_ref_fragment_error is not None:
+            errors.append(plan_contract_ref_fragment_error)
     plan_contract = _find_matching_plan_contract(full_path.parent, meta)
-    if isinstance(plan_contract_ref, str) and plan_contract is None:
+    if (
+        isinstance(plan_contract_ref, str)
+        and plan_contract_ref_fragment_error is None
+        and plan_contract is None
+    ):
         errors.append("plan_contract_ref: could not resolve matching plan contract")
     if plan_contract is not None:
         if not isinstance(meta.get("plan_contract_ref"), str):

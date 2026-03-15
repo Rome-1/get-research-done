@@ -349,7 +349,11 @@ def _light_contract_consistency_errors(contract: ResearchContract) -> list[str]:
 def _has_explicit_anchor_unknown(contract: ResearchContract) -> bool:
     """Return whether the contract explicitly records that anchors are still unknown."""
 
-    candidates = [*contract.scope.unresolved_questions, *contract.context_intake.context_gaps]
+    candidates = [
+        *contract.scope.unresolved_questions,
+        *contract.context_intake.context_gaps,
+        *contract.uncertainty_markers.weakest_anchors,
+    ]
     for item in candidates:
         if not isinstance(item, str):
             continue
