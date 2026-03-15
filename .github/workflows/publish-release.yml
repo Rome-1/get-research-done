@@ -1,0 +1,264 @@
+# Admin-owned publish workflow:
+# - Run manually from merged `main` after the release PR has landed.
+# - This workflow rebuilds from that reviewed commit, publishes to PyPI first,
+#   then publishes npm and creates the GitHub Release/tag.
+# - If the actual publish day differs from the already-merged release PR, this
+#   workflow stamps the real publish date locally for the release artifacts and
+#   opens a tiny follow-up PR to persist `CITATION.cff` / `README.md`.
+# - Ordinary PR merges to `main` must never invoke this flow automatically.
+name: publish release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-release
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    name: build release artifacts
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release_sha: ${{ steps.release_sha.outputs.sha }}
+      release_date: ${{ steps.publish_date.outputs.release_date }}
+      metadata_changed: ${{ steps.publish_date.outputs.metadata_changed }}
+
+    steps:
+      - name: Ensure workflow runs from default branch
+        run: |
+          if [ "${{ github.ref_name }}" != "${{ github.event.repository.default_branch }}" ]; then
+            echo "::error::Run this workflow from ${{ github.event.repository.default_branch }}."
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install development dependencies
+        run: |
+          uv sync --dev --frozen
+
+      - name: Fetch tags
+        run: git fetch --tags origin
+
+      - name: Determine release version
+        id: version
+        run: |
+          VERSION="$(uv run python scripts/release_workflow.py show-version --repo .)"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Record release commit SHA
+        id: release_sha
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp actual publish date
+        id: publish_date
+        run: |
+          python scripts/release_workflow.py stamp-publish-date --repo . > /tmp/publish-date.json
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metadata = json.loads(Path("/tmp/publish-date.json").read_text(encoding="utf-8"))
+          metadata_changed = "true" if metadata["changed_files"] else "false"
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as fh:
+              fh.write(f"release_date={metadata['release_date']}\n")
+              fh.write(f"metadata_changed={metadata_changed}\n")
+          PY
+
+      - name: Check tag does not already exist
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "::error::Tag v${VERSION} already exists."
+            exit 1
+          fi
+
+      - name: Run release validation suite
+        run: |
+          uv run pytest tests/test_release_consistency.py -v
+          npm_config_cache="$(mktemp -d)" npm pack --dry-run --json >/tmp/npm-pack.json
+
+      - name: Build Python distributions
+        run: |
+          uv build
+          uv run --with twine python -m twine check dist/*
+
+      - name: Upload Python distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dists
+          path: dist/*
+          if-no-files-found: error
+
+  publish-pypi:
+    name: publish to PyPI
+    needs: build-release
+    runs-on: ubuntu-latest
+    environment:
+      name: PyPI
+      url: https://pypi.org/p/get-physics-done
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download Python distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: python-dists
+          path: dist
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+
+  publish-npm-and-github-release:
+    name: publish npm and create GitHub release
+    needs:
+      - build-release
+      - publish-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build-release.outputs.release_sha }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Stamp actual publish date in release checkout
+        run: |
+          python scripts/release_workflow.py stamp-publish-date --repo . --release-date "${{ needs.build-release.outputs.release_date }}" > /tmp/publish-date.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Ensure npm token is configured
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN is not configured."
+            exit 1
+          fi
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub release
+        id: github_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Creating the release with `gh release create` also creates the
+          # matching lightweight tag, but only after PyPI and npm succeeded.
+          VERSION="${{ needs.build-release.outputs.version }}"
+          RELEASE_SHA="${{ needs.build-release.outputs.release_sha }}"
+          python scripts/release_workflow.py release-notes --repo . --version "$VERSION" > /tmp/release-notes.txt
+          gh release create "v${VERSION}" \
+            --target "$RELEASE_SHA" \
+            --title "v${VERSION}" \
+            --notes-file /tmp/release-notes.txt
+          RELEASE_URL=$(gh release view "v${VERSION}" --json url --jq '.url')
+          echo "release_url=${RELEASE_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Create follow-up PR for stamped publish date
+        id: metadata_pr
+        if: ${{ needs.build-release.outputs.metadata_changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          VERSION="${{ needs.build-release.outputs.version }}"
+          RELEASE_DATE="${{ needs.build-release.outputs.release_date }}"
+          FOLLOWUP_BRANCH="post-release/v${VERSION}-publish-date"
+
+          if git ls-remote --exit-code --heads origin "$FOLLOWUP_BRANCH" >/dev/null 2>&1; then
+            PR_URL=$(gh pr list --state open --base "$DEFAULT_BRANCH" --head "$FOLLOWUP_BRANCH" --json url --jq '.[0].url')
+            echo "pr_url=${PR_URL}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git switch -c "$FOLLOWUP_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CITATION.cff README.md
+          git commit -m "docs: stamp v${VERSION} publish date"
+          git push --set-upstream origin "$FOLLOWUP_BRANCH"
+
+          cat > /tmp/publish-date-pr-body.md <<EOF
+          ## Summary
+          - Persist the actual publish date for \`v${VERSION}\` after the manual publish workflow completed.
+          - Update \`CITATION.cff\` and the citation year in \`README.md\` to match \`${RELEASE_DATE}\`.
+
+          ## Why this is a follow-up PR
+          - The release PR is reviewed before publish, but the final publish date is only known on the day the manual publish workflow runs.
+          - This PR keeps \`main\` aligned with the published metadata without requiring the publish workflow to push directly to protected \`main\`.
+          EOF
+
+          gh pr create --base "$DEFAULT_BRANCH" --head "$FOLLOWUP_BRANCH" --title "docs: stamp v${VERSION} publish date" --body-file /tmp/publish-date-pr-body.md
+          PR_URL=$(gh pr list --state open --base "$DEFAULT_BRANCH" --head "$FOLLOWUP_BRANCH" --json url --jq '.[0].url')
+          echo "pr_url=${PR_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Write publish summary
+        env:
+          RELEASE_URL: ${{ steps.github_release.outputs.release_url }}
+          METADATA_PR_URL: ${{ steps.metadata_pr.outputs.pr_url }}
+        run: |
+          VERSION="${{ needs.build-release.outputs.version }}"
+          RELEASE_SHA="${{ needs.build-release.outputs.release_sha }}"
+          RELEASE_DATE="${{ needs.build-release.outputs.release_date }}"
+          METADATA_CHANGED="${{ needs.build-release.outputs.metadata_changed }}"
+          {
+            echo "## Publish release"
+            echo ""
+            echo "- Version: \`v${VERSION}\`"
+            echo "- Commit: \`${RELEASE_SHA}\`"
+            echo "- Publish date: \`${RELEASE_DATE}\`"
+            echo "- PyPI: published via trusted publishing from environment \`PyPI\`"
+            echo "- npm: published from the merged release commit"
+            echo "- GitHub release: ${RELEASE_URL}"
+            if [ "${METADATA_CHANGED}" = "true" ]; then
+              echo "- Follow-up metadata PR: ${METADATA_PR_URL}"
+            else
+              echo "- Follow-up metadata PR: not needed; release PR already used the publish date"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

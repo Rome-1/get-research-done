@@ -71,6 +71,8 @@ Cross-runtime release checks:
 ## Pull Request Checklist
 
 - `main` is protected: direct pushes are blocked, and pull requests must pass the required `tests` workflow before merge.
+- Feature and fix PRs must not bump package versions or publish releases.
+- Add public release notes under `## vNEXT` in `CHANGELOG.md` so the release workflows can prepare the next tagged release from reviewed notes.
 - Add or update tests when behavior changes.
 - Update public docs when install flow, commands, or release messaging changes.
 - Keep commit messages concise and descriptive.

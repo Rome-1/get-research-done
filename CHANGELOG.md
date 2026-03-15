@@ -2,6 +2,10 @@
 
 All notable changes to Get Physics Done are documented here.
 
+## vNEXT
+
+- Split releases into a manual release-PR preparation workflow and a separate publish workflow for PyPI, npm, tags, and GitHub Releases.
+
 ## v1.1.0
 
 - Public open-source release.

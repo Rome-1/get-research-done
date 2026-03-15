@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -12,6 +13,14 @@ import zipfile
 from pathlib import Path
 
 import pytest
+
+from scripts.release_workflow import (
+    ReleaseError,
+    bump_version,
+    extract_release_notes,
+    prepare_release,
+    stamp_publish_date,
+)
 
 
 def _repo_root() -> Path:
@@ -100,6 +109,11 @@ def _paper_template_paths(repo_root: Path) -> tuple[list[str], list[str]]:
     return relative_paths, sdist_paths
 
 
+def _copy_release_surfaces(repo_root: Path, out_dir: Path) -> None:
+    for relative_path in ("CHANGELOG.md", "CITATION.cff", "README.md", "package.json", "pyproject.toml"):
+        shutil.copy2(repo_root / relative_path, out_dir / relative_path)
+
+
 def _expected_runtime_dependency_names() -> set[str]:
     return {
         "arxiv-mcp-server",
@@ -152,11 +166,11 @@ def test_required_public_release_artifacts_exist() -> None:
     assert missing == []
 
 
-def test_public_citation_metadata_uses_launch_date() -> None:
+def test_public_citation_metadata_uses_iso_release_date() -> None:
     repo_root = _repo_root()
     citation = (repo_root / "CITATION.cff").read_text(encoding="utf-8")
 
-    assert "date-released: '2026-03-15'" in citation
+    assert re.search(r"^date-released: '\d{4}-\d{2}-\d{2}'$", citation, re.M)
 
 
 def test_public_citation_and_readme_versions_match_release_version() -> None:
@@ -168,6 +182,19 @@ def test_public_citation_and_readme_versions_match_release_version() -> None:
     assert f"version: {version}" in citation
     assert f"version = {{{version}}}" in readme
     assert f"(Version {version})" in readme
+
+
+def test_public_readme_citation_year_matches_citation_release_date() -> None:
+    repo_root = _repo_root()
+    citation = (repo_root / "CITATION.cff").read_text(encoding="utf-8")
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+
+    match = re.search(r"^date-released: '(\d{4})-\d{2}-\d{2}'$", citation, re.M)
+    assert match is not None
+    release_year = match.group(1)
+
+    assert f"year = {{{release_year}}}" in readme
+    assert f"Physical Superintelligence PBC ({release_year}). Get Physics Done (GPD)" in readme
 
 
 def test_public_docs_acknowledge_psi_and_gsd_inspiration() -> None:
@@ -405,6 +432,54 @@ def test_merge_gate_workflow_uses_main_branch_pytest_on_python_311() -> None:
     assert "uv run pytest tests/ -v" in workflow
 
 
+def test_prepare_release_workflow_creates_release_pr_without_publishing() -> None:
+    repo_root = _repo_root()
+    workflow = (repo_root / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+
+    assert "Admin-owned release workflow:" in workflow
+    assert "This workflow never publishes anything and never pushes to `main`." in workflow
+    assert "opens a release PR on `release/vX.Y.Z`." in workflow
+    assert "name: prepare release" in workflow
+    assert "workflow_dispatch:" in workflow
+    assert 'description: "Dry run — validate and preview without opening a release PR"' in workflow
+    assert "pull-requests: write" in workflow
+    assert "astral-sh/setup-uv@v4" in workflow
+    assert "uv sync --dev --frozen" in workflow
+    assert "scripts/release_workflow.py prepare" in workflow
+    assert "uv run pytest tests/test_release_consistency.py -v" in workflow
+    assert "uv build" in workflow
+    assert "npm pack --dry-run --json" in workflow
+    assert "gh pr create" in workflow
+    assert 'git add CHANGELOG.md CITATION.cff README.md package.json pyproject.toml' in workflow
+    assert "Publish release" in workflow
+    assert "pypa/gh-action-pypi-publish@release/v1" not in workflow
+    assert "npm publish" not in workflow
+    assert "gh release create" not in workflow
+
+
+def test_publish_release_workflow_uses_trusted_publishing_from_merged_release_commit() -> None:
+    repo_root = _repo_root()
+    workflow = (repo_root / ".github" / "workflows" / "publish-release.yml").read_text(encoding="utf-8")
+
+    assert "Admin-owned publish workflow:" in workflow
+    assert "Run manually from merged `main` after the release PR has landed." in workflow
+    assert "Ordinary PR merges to `main` must never invoke this flow automatically." in workflow
+    assert "name: publish release" in workflow
+    assert "workflow_dispatch:" in workflow
+    assert "scripts/release_workflow.py show-version" in workflow
+    assert "scripts/release_workflow.py stamp-publish-date" in workflow
+    assert "environment:" in workflow
+    assert "name: PyPI" in workflow
+    assert "id-token: write" in workflow
+    assert "pypa/gh-action-pypi-publish@release/v1" in workflow
+    assert "npm publish" in workflow
+    assert "gh release create" in workflow
+    assert "post-release/v${VERSION}-publish-date" in workflow
+    assert "ref: ${{ needs.build-release.outputs.release_sha }}" in workflow
+    assert "scripts/release_workflow.py release-notes" in workflow
+    assert "gh pr create" in workflow
+
+
 def test_public_docs_keep_runtime_surface_first() -> None:
     repo_root = _repo_root()
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
@@ -567,6 +642,11 @@ def test_contributing_docs_cover_release_validation_flow() -> None:
     assert "Keep public artifacts present and up to date" in content
     assert "direct pushes are blocked" in content
     assert "required `tests` workflow" in content
+    assert "Feature and fix PRs must not bump package versions or publish releases." in content
+    assert "Add public release notes under `## vNEXT` in `CHANGELOG.md`" in content
+    assert "## Release Process" not in content
+    assert "`Prepare release`" not in content
+    assert "`Publish release`" not in content
 
 
 def test_gitignore_covers_repo_local_npm_cache() -> None:
@@ -649,3 +729,96 @@ def test_fresh_built_release_artifacts_match_public_bootstrap_and_docs(tmp_path:
         assert "git+${repoGitUrl}@${GITHUB_MAIN_BRANCH}" in install_content
         assert "requestedVersion" in install_content
         assert "GitHub sources" in install_content
+
+
+def test_prepare_release_updates_all_versioned_public_surfaces(tmp_path: Path) -> None:
+    repo_root = _repo_root()
+    _copy_release_surfaces(repo_root, tmp_path)
+    current_version = _python_release_version(repo_root)
+    next_version = bump_version(current_version, "patch")
+    original_citation = (tmp_path / "CITATION.cff").read_text(encoding="utf-8")
+    original_readme = (tmp_path / "README.md").read_text(encoding="utf-8")
+
+    changelog_path = tmp_path / "CHANGELOG.md"
+    changelog_path.write_text(
+        (repo_root / "CHANGELOG.md").read_text(encoding="utf-8").replace(
+            "All notable changes to Get Physics Done are documented here.\n\n",
+            "All notable changes to Get Physics Done are documented here.\n\n"
+            "## vNEXT\n\n"
+            "- Manual release workflows now prepare a release PR and publish only after an explicit publish action.\n\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    metadata = prepare_release(tmp_path, "patch")
+
+    assert metadata.previous_version == current_version
+    assert metadata.version == next_version
+    assert metadata.release_branch == f"release/v{next_version}"
+    assert metadata.release_notes.startswith("- Manual release workflows now prepare")
+
+    assert f'version = "{next_version}"' in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+    package_json = json.loads((tmp_path / "package.json").read_text(encoding="utf-8"))
+    assert package_json["version"] == next_version
+    assert package_json["gpdPythonVersion"] == next_version
+
+    citation = (tmp_path / "CITATION.cff").read_text(encoding="utf-8")
+    assert f"version: {next_version}" in citation
+    assert citation == original_citation.replace(f"version: {current_version}", f"version: {next_version}")
+
+    readme = (tmp_path / "README.md").read_text(encoding="utf-8")
+    assert f"version = {{{next_version}}}" in readme
+    assert f"(Version {next_version})" in readme
+    assert "year = {2026}" in readme
+    assert readme == original_readme.replace(f"version = {{{current_version}}}", f"version = {{{next_version}}}").replace(
+        f"(Version {current_version})",
+        f"(Version {next_version})",
+    )
+
+    changelog = changelog_path.read_text(encoding="utf-8")
+    assert changelog.startswith(
+        "# Changelog\n\nAll notable changes to Get Physics Done are documented here.\n\n"
+        f"## vNEXT\n\n## v{next_version}\n"
+    )
+    assert extract_release_notes(changelog, next_version) == metadata.release_notes
+
+
+def test_prepare_release_requires_nonempty_vnext_section(tmp_path: Path) -> None:
+    repo_root = _repo_root()
+    _copy_release_surfaces(repo_root, tmp_path)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n## v1.1.0\n\n- Existing release notes.\n", encoding="utf-8")
+
+    with pytest.raises(ReleaseError, match="No ## vNEXT section found"):
+        prepare_release(tmp_path, "patch")
+
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n## vNEXT\n\n", encoding="utf-8")
+
+    with pytest.raises(ReleaseError, match="## vNEXT section in CHANGELOG.md is empty"):
+        prepare_release(tmp_path, "patch")
+
+
+def test_stamp_publish_date_updates_citation_release_date_and_readme_year(tmp_path: Path) -> None:
+    repo_root = _repo_root()
+    _copy_release_surfaces(repo_root, tmp_path)
+
+    metadata = stamp_publish_date(tmp_path, release_date="2027-01-02")
+
+    assert metadata.release_date == "2027-01-02"
+    assert metadata.release_year == "2027"
+    assert metadata.changed_files == ("CITATION.cff", "README.md")
+
+    citation = (tmp_path / "CITATION.cff").read_text(encoding="utf-8")
+    readme = (tmp_path / "README.md").read_text(encoding="utf-8")
+    assert "date-released: '2027-01-02'" in citation
+    assert "year = {2027}" in readme
+    assert "Physical Superintelligence PBC (2027). Get Physics Done (GPD)" in readme
+
+
+def test_stamp_publish_date_reports_no_changes_when_release_date_already_matches(tmp_path: Path) -> None:
+    repo_root = _repo_root()
+    _copy_release_surfaces(repo_root, tmp_path)
+
+    metadata = stamp_publish_date(tmp_path, release_date="2026-03-15")
+
+    assert metadata.changed_files == ()

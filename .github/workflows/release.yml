@@ -1,4 +1,9 @@
-name: release
+# Admin-owned release workflow:
+# - Run manually from `main` when you want to prepare a public release.
+# - This workflow never publishes anything and never pushes to `main`.
+# - It updates all versioned public surfaces, validates release artifacts, then
+#   opens a release PR on `release/vX.Y.Z`.
+name: prepare release
 
 on:
   workflow_dispatch:
@@ -12,19 +17,38 @@ on:
           - minor
           - major
       dry_run:
-        description: "Dry run — validate and preview without publishing or committing"
+        description: "Dry run — validate and preview without opening a release PR"
         required: false
         type: boolean
         default: false
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: ${{ inputs.dry_run && 'dry run' || 'bump, validate, publish' }}
+  prepare-release:
+    name: ${{ inputs.dry_run && 'prepare release (dry run)' || 'prepare release' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      version: ${{ steps.prepare.outputs.version }}
+      release_branch: ${{ steps.prepare.outputs.release_branch }}
+      pr_url: ${{ steps.create_pr.outputs.pr_url }}
+
     steps:
+      - name: Ensure workflow runs from default branch
+        run: |
+          if [ "${{ github.ref_name }}" != "${{ github.event.repository.default_branch }}" ]; then
+            echo "::error::Run this workflow from ${{ github.event.repository.default_branch }}."
+            exit 1
+          fi
+
       - name: Check out repository
         uses: actions/checkout@v4
         with:
@@ -34,7 +58,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -42,181 +66,161 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Validate changelog has vNEXT content
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install development dependencies
         run: |
-          python3 -c "
-          import re, pathlib, sys
-          text = pathlib.Path('CHANGELOG.md').read_text()
-          match = re.search(r'^## vNEXT\s*\n(.*?)(?=^## v|\Z)', text, re.M | re.S)
-          if not match:
-              print('ERROR: No ## vNEXT section found in CHANGELOG.md.', file=sys.stderr)
-              print('Add your changes under ## vNEXT before releasing.', file=sys.stderr)
-              sys.exit(1)
-          body = match.group(1).strip()
-          if not body:
-              print('ERROR: ## vNEXT section in CHANGELOG.md is empty.', file=sys.stderr)
-              print('Add release notes under ## vNEXT before releasing.', file=sys.stderr)
-              sys.exit(1)
-          print(f'Changelog content found ({len(body.splitlines())} lines)')
-          "
+          uv sync --dev --frozen
 
-      - name: Bump version and rename changelog
-        id: bump
+      - name: Fetch tags
+        run: git fetch --tags origin
+
+      - name: Prepare release files
+        id: prepare
         run: |
-          python3 -c "
-          import re, pathlib, sys
+          uv run python scripts/release_workflow.py prepare --repo . --bump "${{ inputs.bump }}" > /tmp/release-metadata.json
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-          bump = '${{ inputs.bump }}'
-
-          # Read current version from pyproject.toml
-          pyproject = pathlib.Path('pyproject.toml')
-          text = pyproject.read_text()
-          match = re.search(r'^version\s*=\s*\"(\d+)\.(\d+)\.(\d+)\"', text, re.M)
-          if not match:
-              print('ERROR: Could not parse version from pyproject.toml', file=sys.stderr)
-              sys.exit(1)
-
-          major, minor, patch = int(match.group(1)), int(match.group(2)), int(match.group(3))
-          old_version = f'{major}.{minor}.{patch}'
-
-          if bump == 'major':
-              major += 1; minor = 0; patch = 0
-          elif bump == 'minor':
-              minor += 1; patch = 0
-          else:
-              patch += 1
-
-          new_version = f'{major}.{minor}.{patch}'
-          print(f'Bumping {old_version} -> {new_version} ({bump})')
-
-          # Update pyproject.toml
-          text = re.sub(r'^(version\s*=\s*\")[\d.]+\"', rf'\g<1>{new_version}\"', text, count=1, flags=re.M)
-          pyproject.write_text(text)
-
-          # Update package.json
-          pkg = pathlib.Path('package.json')
-          pkg_text = pkg.read_text()
-          pkg_text = re.sub(r'(\"version\":\s*\")[\d.]+\"', rf'\g<1>{new_version}\"', pkg_text, count=1)
-          pkg_text = re.sub(r'(\"gpdPythonVersion\":\s*\")[\d.]+\"', rf'\g<1>{new_version}\"', pkg_text, count=1)
-          pkg.write_text(pkg_text)
-
-          # Rename vNEXT -> vX.Y.Z in CHANGELOG.md
-          changelog = pathlib.Path('CHANGELOG.md')
-          cl_text = changelog.read_text()
-          cl_text = cl_text.replace('## vNEXT', f'## v{new_version}', 1)
-
-          # Add fresh vNEXT section at the top (after header)
-          cl_text = cl_text.replace(f'## v{new_version}', f'## vNEXT\n\n## v{new_version}', 1)
-          changelog.write_text(cl_text)
-          "
-
-          VERSION=$(python3 -c "
-          import re, pathlib
-          text = pathlib.Path('pyproject.toml').read_text()
-          match = re.search(r'^version\s*=\s*\"([^\"]+)\"', text, re.M)
-          print(match.group(1))
-          ")
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Extract changelog body for release notes
-        id: changelog
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          python3 -c "
-          import re, pathlib, sys
-          text = pathlib.Path('CHANGELOG.md').read_text()
-          headings = list(re.finditer(r'^## v(\S+)', text, re.M))
-          for i, h in enumerate(headings):
-              if h.group(1) == '${VERSION}':
-                  start = h.end()
-                  end = headings[i+1].start() if i+1 < len(headings) else len(text)
-                  body = text[start:end].strip()
-                  print(body)
-                  sys.exit(0)
-          print(f'ERROR: Could not find ## v${VERSION} in CHANGELOG.md', file=sys.stderr)
-          sys.exit(1)
-          " > /tmp/release-notes.txt
-
-          {
-            echo "body<<CHANGELOG_EOF"
-            cat /tmp/release-notes.txt
-            echo "CHANGELOG_EOF"
-          } >> "$GITHUB_OUTPUT"
+          metadata = json.loads(Path("/tmp/release-metadata.json").read_text(encoding="utf-8"))
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as fh:
+              for key in ("version", "previous_version", "release_branch"):
+                  fh.write(f"{key}={metadata[key]}\n")
+          PY
 
       - name: Check tag does not already exist
         run: |
-          VERSION="${{ steps.bump.outputs.version }}"
+          VERSION="${{ steps.prepare.outputs.version }}"
           if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
             echo "::error::Tag v${VERSION} already exists."
             exit 1
           fi
 
-      - name: Dry run summary
+      - name: Run release validation suite
+        run: |
+          uv run pytest tests/test_release_consistency.py -v
+          uv build
+          uv run --with twine python -m twine check dist/*
+          npm_config_cache="$(mktemp -d)" npm pack --dry-run --json >/tmp/npm-pack.json
+
+      - name: Write dry-run summary
         if: inputs.dry_run
         run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          echo ""
-          echo "==========================================="
-          echo "  DRY RUN — nothing was published or committed"
-          echo "==========================================="
-          echo ""
-          echo "  Version:     v${VERSION}"
-          echo "  Bump type:   ${{ inputs.bump }}"
-          echo "  Tag:         v${VERSION} (does not exist yet — good)"
-          echo ""
-          echo "  Files that would be modified:"
-          echo "    - pyproject.toml  (version = \"${VERSION}\")"
-          echo "    - package.json    (version + gpdPythonVersion = \"${VERSION}\")"
-          echo "    - CHANGELOG.md    (## vNEXT renamed to ## v${VERSION})"
-          echo ""
-          echo "  Release notes:"
-          echo "  ---"
-          cat /tmp/release-notes.txt
-          echo "  ---"
-          echo ""
-          echo "  Would publish to: PyPI, npm"
-          echo "  Would create: git tag v${VERSION}, GitHub Release v${VERSION}"
-          echo ""
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-      - name: Commit version bump
-        if: ${{ !inputs.dry_run }}
-        run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pyproject.toml package.json CHANGELOG.md
-          git commit -m "release: v${VERSION}"
-          git push
+          metadata = json.loads(Path("/tmp/release-metadata.json").read_text(encoding="utf-8"))
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          summary.write_text(
+              "## Prepare release dry run\n\n"
+              f"- Previous version: `v{metadata['previous_version']}`\n"
+              f"- Next version: `v{metadata['version']}`\n"
+              f"- Release branch: `{metadata['release_branch']}`\n"
+              "- Updated files: `CHANGELOG.md`, `CITATION.cff`, `README.md`, `package.json`, `pyproject.toml`\n"
+              "- Result: validated only; no branch, PR, tag, or publish step was created\n\n"
+              "## Release notes\n\n"
+              f"{metadata['release_notes']}\n",
+              encoding="utf-8",
+          )
+          print(summary.read_text(encoding="utf-8"))
+          PY
 
-      - name: Build Python package
-        if: ${{ !inputs.dry_run }}
-        run: |
-          pip install build
-          python -m build
-
-      - name: Publish to PyPI
-        if: ${{ !inputs.dry_run }}
-        run: |
-          pip install twine
-          twine upload dist/*
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-
-      - name: Publish to npm
-        if: ${{ !inputs.dry_run }}
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Create tag and GitHub release
+      - name: Ensure release branch and PR do not already exist
         if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          VERSION="${{ steps.bump.outputs.version }}"
-          git tag "v${VERSION}"
-          git push origin "v${VERSION}"
-          gh release create "v${VERSION}" \
-            --title "v${VERSION}" \
-            --notes-file /tmp/release-notes.txt
+          RELEASE_BRANCH="${{ steps.prepare.outputs.release_branch }}"
+          if git ls-remote --exit-code --heads origin "$RELEASE_BRANCH" >/dev/null 2>&1; then
+            echo "::error::Branch $RELEASE_BRANCH already exists on origin."
+            exit 1
+          fi
+
+          EXISTING_PR_URL=$(gh pr list --state open --base "$DEFAULT_BRANCH" --head "$RELEASE_BRANCH" --json url --jq '.[0].url')
+          if [ -n "$EXISTING_PR_URL" ]; then
+            echo "::error::Release PR already exists: $EXISTING_PR_URL"
+            exit 1
+          fi
+
+      - name: Create release pull request
+        id: create_pr
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          # The version bump is reviewed like any other change: commit it on a
+          # release branch, open a PR, and let the normal protected-branch flow
+          # merge it into `main`.
+          VERSION="${{ steps.prepare.outputs.version }}"
+          RELEASE_BRANCH="${{ steps.prepare.outputs.release_branch }}"
+
+          git switch -c "$RELEASE_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md CITATION.cff README.md package.json pyproject.toml
+          git commit -m "release: v${VERSION}"
+          git push --set-upstream origin "$RELEASE_BRANCH"
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metadata = json.loads(Path("/tmp/release-metadata.json").read_text(encoding="utf-8"))
+          default_branch = os.environ["DEFAULT_BRANCH"]
+          Path("/tmp/release-pr-body.md").write_text(
+              "## Summary\n"
+              f"- Prepare release `v{metadata['version']}` from `{default_branch}`.\n"
+              "- Update the tracked version, changelog, and citation surfaces for the next public release.\n"
+              "- Validate the Python and npm release artifacts before any publish step.\n\n"
+              "## Release notes\n\n"
+              f"{metadata['release_notes']}\n\n"
+              "## After merge\n"
+              "- Run the `Publish release` workflow from `main`.\n",
+              encoding="utf-8",
+          )
+          PY
+
+          gh pr create --base "$DEFAULT_BRANCH" --head "$RELEASE_BRANCH" --title "release: v${VERSION}" --body-file /tmp/release-pr-body.md
+          PR_URL=$(gh pr list --state open --base "$DEFAULT_BRANCH" --head "$RELEASE_BRANCH" --json url --jq '.[0].url')
+          if [ -z "$PR_URL" ]; then
+            echo "::error::Failed to determine the new release PR URL."
+            exit 1
+          fi
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Write release PR summary
+        if: ${{ !inputs.dry_run }}
+        env:
+          PR_URL: ${{ steps.create_pr.outputs.pr_url }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metadata = json.loads(Path("/tmp/release-metadata.json").read_text(encoding="utf-8"))
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          pr_url = os.environ.get("PR_URL", "").strip()
+          summary.write_text(
+              "## Prepare release\n\n"
+              f"- Previous version: `v{metadata['previous_version']}`\n"
+              f"- Next version: `v{metadata['version']}`\n"
+              f"- Release branch: `{metadata['release_branch']}`\n"
+              f"- Release PR: {pr_url}\n"
+              "- Updated versioned files: `CHANGELOG.md`, `CITATION.cff`, `README.md`, `package.json`, `pyproject.toml`\n"
+              "- Publish-date fields are stamped later by `Publish release`, so the final release date comes from the actual publish day.\n"
+              "- Next step: merge the release PR, then run `Publish release` from `main`\n\n"
+              "## Release notes\n\n"
+              f"{metadata['release_notes']}\n",
+              encoding="utf-8",
+          )
+          print(summary.read_text(encoding="utf-8"))
+          PY
