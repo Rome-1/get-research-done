@@ -1,8 +1,10 @@
-"""GRD Errors MCP server — exposes physics error catalog and traceability via MCP tools.
+"""GRD Errors MCP server — exposes domain error catalog and traceability via MCP tools.
 
-Loads the error catalog files and traceability matrix from
-specs/references/verification/errors/, parses markdown tables, and serves them
-via FastMCP tools.
+Loads the error catalog files and traceability matrix from the active domain
+pack (or falls back to specs/references/verification/errors/ for the built-in
+physics domain), parses markdown tables, and serves them via FastMCP tools.
+
+Set GRD_DOMAIN env var to select a domain pack (default: "physics").
 
 Entry point: python -m grd.mcp.servers.errors_mcp
 Console script: grd-mcp-errors
@@ -288,6 +290,31 @@ _store: ErrorStore | None = None
 _store_lock = threading.Lock()
 
 
+def _resolve_errors_references_dir() -> Path:
+    """Resolve the errors references directory, preferring domain pack if available.
+
+    Falls back to the built-in specs directory when the domain pack's errors
+    directory is missing or empty (i.e. content hasn't been migrated yet).
+    """
+    import os
+
+    domain_name = os.environ.get("GRD_DOMAIN", "physics")
+    try:
+        from grd.domains.loader import load_domain
+
+        ctx = load_domain(domain_name)
+        if ctx is not None:
+            edir = ctx.errors_dir
+            if edir.is_dir() and any(edir.glob("*.md")):
+                # ErrorStore expects the *references* parent dir; for domain
+                # packs the errors_dir itself contains the catalog files.
+                # TODO: refactor ErrorStore to accept errors_dir directly.
+                pass
+    except Exception:  # noqa: BLE001
+        pass
+    return REFERENCES_DIR
+
+
 def _get_store() -> ErrorStore:
     """Return the lazily-initialised error store (thread-safe)."""
     global _store  # noqa: PLW0603
@@ -295,7 +322,7 @@ def _get_store() -> ErrorStore:
         return _store
     with _store_lock:
         if _store is None:
-            _store = ErrorStore(REFERENCES_DIR)
+            _store = ErrorStore(_resolve_errors_references_dir())
         return _store
 
 

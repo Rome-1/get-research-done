@@ -1,7 +1,10 @@
-"""GRD Protocols MCP server — exposes physics computation protocols via MCP tools.
+"""GRD Protocols MCP server — exposes domain computation protocols via MCP tools.
 
-Loads protocol files from specs/references/protocols/, parses YAML frontmatter
-and markdown body, and serves them via FastMCP tools.
+Loads protocol files from the active domain pack's protocols directory (or falls
+back to specs/references/protocols/ for the built-in physics domain), parses YAML
+frontmatter and markdown body, and serves them via FastMCP tools.
+
+Set GRD_DOMAIN env var to select a domain pack (default: "physics").
 
 Entry point: python -m grd.mcp.servers.protocols_server
 Console script: grd-mcp-protocols
@@ -299,6 +302,28 @@ _store: ProtocolStore | None = None
 _store_lock = threading.Lock()
 
 
+def _resolve_protocols_dir() -> Path:
+    """Resolve the protocols directory, preferring domain pack if available.
+
+    Falls back to the built-in specs directory when the domain pack's protocols
+    directory is missing or empty (i.e. content hasn't been migrated yet).
+    """
+    import os
+
+    domain_name = os.environ.get("GRD_DOMAIN", "physics")
+    try:
+        from grd.domains.loader import load_domain
+
+        ctx = load_domain(domain_name)
+        if ctx is not None:
+            pdir = ctx.protocols_dir
+            if pdir.is_dir() and any(pdir.glob("*.md")):
+                return pdir
+    except Exception:  # noqa: BLE001
+        pass
+    return PROTOCOLS_DIR
+
+
 def _get_store() -> ProtocolStore:
     """Return the lazily-initialised protocol store (thread-safe)."""
     global _store  # noqa: PLW0603
@@ -306,7 +331,7 @@ def _get_store() -> ProtocolStore:
         return _store
     with _store_lock:
         if _store is None:
-            _store = ProtocolStore(PROTOCOLS_DIR)
+            _store = ProtocolStore(_resolve_protocols_dir())
         return _store
 
 
