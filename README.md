@@ -1,6 +1,6 @@
 # Get Research Done (GRD)
 
-### Built by physicists, for physicists
+### AI copilot for structured research
 
 [![CI](https://github.com/psi-oss/get-research-done/actions/workflows/test.yml/badge.svg)](https://github.com/psi-oss/get-research-done/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/psi-oss/get-research-done/blob/main/LICENSE)
@@ -154,6 +154,19 @@ Wave 3: plans that depend on earlier waves
 - **Wave**: not a separate top-level planning object, but the execution order inside a phase. Plans in the same wave can run in parallel; later waves depend on earlier ones.
 
 Phase numbers continue across the whole project, so a new milestone may start at `Phase 6` rather than resetting to `Phase 1`.
+
+## Domain Packs
+
+GRD uses **domain packs** to provide domain-specific conventions, protocols, error catalogs, and verification rules. A domain pack is a directory with a `domain.yaml` file and supporting content.
+
+The bundled **physics** domain pack is loaded by default. Set `GRD_DOMAIN=<name>` to select a different domain.
+
+**Discovery order** (last wins):
+1. **Bundled packs**: shipped with GRD (currently: physics)
+2. **User packs**: `~/.grd/domains/<name>/`
+3. **Project packs**: `.grd/domain/` (project-local override)
+
+To create a new domain pack, copy `src/grd/domains/_template/` and customize `domain.yaml` and the conventions YAML.
 
 ## Worked Example
 
