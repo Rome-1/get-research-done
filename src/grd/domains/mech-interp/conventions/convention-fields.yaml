@@ -1,0 +1,133 @@
+# Mechanistic Interpretability convention fields
+# These define the domain-specific conventions that can be locked per-project.
+
+fields:
+  - name: model_family
+    label: "Model family"
+    description: "Target model architecture family"
+    aliases: ["model"]
+    value_aliases:
+      "gpt2": "gpt2-small"
+      "gpt-2": "gpt2-small"
+      "pythia-70m": "pythia-70m"
+      "llama": "llama-2"
+
+  - name: activation_site
+    label: "Activation site"
+    description: "Default hook point for activation capture (resid_pre, resid_post, mlp_out, attn_out)"
+    aliases: ["hook", "hookpoint"]
+    value_aliases:
+      "residual_pre": "resid_pre"
+      "residual_post": "resid_post"
+      "residual": "resid_post"
+      "mlp": "mlp_out"
+      "attention": "attn_out"
+
+  - name: feature_method
+    label: "Feature extraction method"
+    description: "Method for extracting interpretable features (SAE, PCA, NMF, probing)"
+    aliases: ["features", "extraction"]
+    value_aliases:
+      "sparse_autoencoder": "sae"
+      "sparse-autoencoder": "sae"
+      "principal_components": "pca"
+
+  - name: sae_architecture
+    label: "SAE architecture"
+    description: "Sparse autoencoder variant (vanilla, top-k, gated, jump-relu)"
+    aliases: ["sae_arch", "sae_type"]
+    value_aliases:
+      "standard": "vanilla"
+      "basic": "vanilla"
+      "topk": "top-k"
+      "top_k": "top-k"
+      "jump_relu": "jump-relu"
+      "jumprelu": "jump-relu"
+
+  - name: patching_method
+    label: "Patching method"
+    description: "Activation patching variant (activation, path, causal-scrubbing, attribution)"
+    aliases: ["patching"]
+    value_aliases:
+      "act_patch": "activation-patching"
+      "actpatch": "activation-patching"
+      "path_patch": "path-patching"
+      "pathpatch": "path-patching"
+      "causal_scrub": "causal-scrubbing"
+
+  - name: ablation_type
+    label: "Ablation type"
+    description: "Default ablation method (zero, mean, resample, noise)"
+    aliases: ["ablation"]
+    value_aliases:
+      "zero_ablation": "zero"
+      "mean_ablation": "mean"
+      "resample_ablation": "resample"
+      "resampling": "resample"
+      "gaussian": "noise"
+
+  - name: tokenizer
+    label: "Tokenizer"
+    description: "Tokenizer used for input processing"
+    aliases: ["tok"]
+
+  - name: metric
+    label: "Evaluation metric"
+    description: "Primary metric for measuring circuit/feature quality (logit-diff, loss, accuracy, KL-divergence)"
+    aliases: ["eval_metric"]
+    value_aliases:
+      "logit_diff": "logit-diff"
+      "logitdiff": "logit-diff"
+      "kl_div": "kl-divergence"
+      "kl": "kl-divergence"
+      "cross_entropy": "ce-loss"
+      "ce": "ce-loss"
+
+  - name: layer_indexing
+    label: "Layer indexing"
+    description: "Layer numbering convention (0-indexed vs 1-indexed)"
+    aliases: ["indexing"]
+    value_aliases:
+      "zero": "0-indexed"
+      "zero_indexed": "0-indexed"
+      "one": "1-indexed"
+      "one_indexed": "1-indexed"
+
+  - name: component_notation
+    label: "Component notation"
+    description: "Notation for referencing model components (e.g., L3H7 vs layer3.head7)"
+    aliases: ["notation"]
+    value_aliases:
+      "compact": "LxHy"
+      "LH": "LxHy"
+      "dotted": "layer.head"
+      "verbose": "layer.head"
+
+  - name: direction_convention
+    label: "Direction convention"
+    description: "How feature directions are represented (unit-norm, unnormalized, cosine-sim)"
+    aliases: ["direction"]
+
+  - name: dataset
+    label: "Default dataset"
+    description: "Primary dataset for activation collection and evaluation"
+    aliases: ["data"]
+
+  - name: dtype
+    label: "Computation dtype"
+    description: "Default floating-point precision for computations (float32, float16, bfloat16)"
+    aliases: ["precision"]
+    value_aliases:
+      "fp32": "float32"
+      "fp16": "float16"
+      "bf16": "bfloat16"
+      "half": "float16"
+
+  - name: library
+    label: "Interpretability library"
+    description: "Primary library/framework for interpretability (TransformerLens, nnsight, baukit)"
+    aliases: ["framework", "lib"]
+    value_aliases:
+      "tl": "transformer-lens"
+      "transformerlens": "transformer-lens"
+      "lens": "transformer-lens"
