@@ -20,7 +20,13 @@ from grd.core.conventions import (
     normalize_key,
     normalize_value,
 )
-from grd.domains.loader import DomainContext, DomainPack, load_domain
+from grd.domains.loader import (
+    ContentHealthError,
+    DomainContext,
+    DomainPack,
+    check_content_health,
+    load_domain,
+)
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -102,6 +108,25 @@ class TestPhysicsDomainContext:
         from grd.core.conventions import CONVENTION_LABELS
 
         assert physics_ctx.convention_labels == CONVENTION_LABELS
+
+    def test_physics_content_types(self, physics_ctx: DomainContext) -> None:
+        assert set(physics_ctx.content_types) == {"subfields", "protocols", "errors"}
+
+    def test_physics_content_dir_accessor(self, physics_ctx: DomainContext) -> None:
+        pack_path = physics_ctx.pack_path
+        assert physics_ctx.content_dir("protocols") == pack_path / "protocols"
+        assert physics_ctx.content_dir("errors") == pack_path / "errors"
+        assert physics_ctx.content_dir("subfields") == pack_path / "subfields"
+
+    def test_physics_content_dir_unknown_returns_none(self, physics_ctx: DomainContext) -> None:
+        assert physics_ctx.content_dir("nonexistent") is None
+
+    def test_physics_backward_compat_properties(self, physics_ctx: DomainContext) -> None:
+        """The convenience .protocols_dir / .errors_dir / .subfields_dir still work."""
+        pack_path = physics_ctx.pack_path
+        assert physics_ctx.protocols_dir == pack_path / "protocols"
+        assert physics_ctx.errors_dir == pack_path / "errors"
+        assert physics_ctx.subfields_dir == pack_path / "subfields"
 
 
 class TestPhysicsDomainConventionOps:
@@ -267,3 +292,138 @@ class TestDomainLoading:
         # With project_root, should find the project-local pack
         path = resolve_domain_pack_path("physics", project_root=tmp_path)
         assert path == domain_dir
+
+    def test_load_domain_with_content_section(self, tmp_path: Path) -> None:
+        """A domain.yaml with a 'content' section populates content_dirs."""
+        from grd.domains.loader import _parse_domain_yaml
+
+        domain_dir = tmp_path / "test-domain"
+        domain_dir.mkdir()
+        (domain_dir / "domain.yaml").write_text(dedent("""\
+            name: test-domain
+            display_name: Test Domain
+            description: A test domain.
+            version: 1
+            content:
+              protocols: protocols
+              errors: errors
+              verification: verification
+        """))
+        pack = _parse_domain_yaml(domain_dir)
+        assert pack.content_dirs == {
+            "protocols": "protocols",
+            "errors": "errors",
+            "verification": "verification",
+        }
+
+    def test_load_domain_with_legacy_dir_fields(self, tmp_path: Path) -> None:
+        """Legacy *_dir fields are still parsed into content_dirs."""
+        from grd.domains.loader import _parse_domain_yaml
+
+        domain_dir = tmp_path / "legacy-domain"
+        domain_dir.mkdir()
+        (domain_dir / "domain.yaml").write_text(dedent("""\
+            name: legacy-domain
+            display_name: Legacy Domain
+            description: A domain using old-style *_dir fields.
+            version: 1
+            subfields_dir: my-subfields
+            protocols_dir: my-protocols
+            errors_dir: my-errors
+        """))
+        pack = _parse_domain_yaml(domain_dir)
+        assert pack.content_dirs == {
+            "subfields": "my-subfields",
+            "protocols": "my-protocols",
+            "errors": "my-errors",
+        }
+
+    def test_content_section_takes_precedence_over_legacy(self, tmp_path: Path) -> None:
+        """When both content section and legacy fields exist, content wins."""
+        from grd.domains.loader import _parse_domain_yaml
+
+        domain_dir = tmp_path / "mixed-domain"
+        domain_dir.mkdir()
+        (domain_dir / "domain.yaml").write_text(dedent("""\
+            name: mixed-domain
+            display_name: Mixed Domain
+            description: A domain with both old and new fields.
+            version: 1
+            protocols_dir: old-protocols
+            content:
+              protocols: new-protocols
+        """))
+        pack = _parse_domain_yaml(domain_dir)
+        assert pack.content_dirs == {"protocols": "new-protocols"}
+
+
+# ─── Content health check tests ───────────────────────────────────────────
+
+
+class TestContentHealthCheck:
+    def test_healthy_domain_returns_no_errors(self, tmp_path: Path) -> None:
+        domain_dir = tmp_path / "healthy"
+        domain_dir.mkdir()
+        (domain_dir / "protocols").mkdir()
+        (domain_dir / "errors").mkdir()
+        pack = DomainPack(
+            name="healthy",
+            display_name="Healthy",
+            description="Healthy domain",
+            version=1,
+            pack_path=domain_dir,
+            content_dirs={"protocols": "protocols", "errors": "errors"},
+        )
+        ctx = DomainContext(pack)
+        errors = check_content_health(ctx)
+        assert errors == []
+
+    def test_missing_content_dir_returns_error(self, tmp_path: Path) -> None:
+        domain_dir = tmp_path / "unhealthy"
+        domain_dir.mkdir()
+        # Only create protocols, not errors
+        (domain_dir / "protocols").mkdir()
+        pack = DomainPack(
+            name="unhealthy",
+            display_name="Unhealthy",
+            description="Unhealthy domain",
+            version=1,
+            pack_path=domain_dir,
+            content_dirs={"protocols": "protocols", "errors": "errors"},
+        )
+        ctx = DomainContext(pack)
+        errors = check_content_health(ctx)
+        assert len(errors) == 1
+        assert errors[0].content_type == "errors"
+        assert errors[0].expected_path == domain_dir / "errors"
+
+    def test_empty_content_dirs_is_healthy(self, tmp_path: Path) -> None:
+        domain_dir = tmp_path / "minimal"
+        domain_dir.mkdir()
+        pack = DomainPack(
+            name="minimal",
+            display_name="Minimal",
+            description="No content declared",
+            version=1,
+            pack_path=domain_dir,
+        )
+        ctx = DomainContext(pack)
+        errors = check_content_health(ctx)
+        assert errors == []
+
+    def test_backward_compat_properties_without_content_dirs(self, tmp_path: Path) -> None:
+        """When no content_dirs are declared, backward-compat properties fall back."""
+        domain_dir = tmp_path / "no-content"
+        domain_dir.mkdir()
+        pack = DomainPack(
+            name="no-content",
+            display_name="No Content",
+            description="No content dirs",
+            version=1,
+            pack_path=domain_dir,
+        )
+        ctx = DomainContext(pack)
+        # Fallback paths should still resolve (even if dirs don't exist)
+        assert ctx.protocols_dir == domain_dir / "protocols"
+        assert ctx.errors_dir == domain_dir / "errors"
+        assert ctx.subfields_dir == domain_dir / "subfields"

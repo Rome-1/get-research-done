@@ -21,9 +21,11 @@ import yaml
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "ContentHealthError",
     "ConventionFieldDef",
     "DomainPack",
     "DomainContext",
+    "check_content_health",
     "load_domain",
     "list_available_domains",
     "resolve_domain_pack_path",
@@ -71,9 +73,7 @@ class DomainPack:
     version: int
     pack_path: Path
     conventions_file: str = "conventions/convention-fields.yaml"
-    subfields_dir: str = "subfields"
-    protocols_dir: str = "protocols"
-    errors_dir: str = "errors"
+    content_dirs: dict[str, str] = field(default_factory=dict)
     publication_config: dict[str, str] = field(default_factory=dict)
     branding: dict[str, str] = field(default_factory=dict)
 
@@ -161,20 +161,92 @@ class DomainContext:
         """Return field → {variant: canonical} value alias mapping."""
         return {f.name: f.value_aliases for f in self.convention_fields if f.value_aliases}
 
+    def content_dir(self, content_type: str) -> Path | None:
+        """Return the resolved path for a declared content type, or None."""
+        rel = self._pack.content_dirs.get(content_type)
+        if rel is None:
+            return None
+        return self._pack.pack_path / rel
+
+    @property
+    def content_types(self) -> list[str]:
+        """Return the list of declared content types."""
+        return list(self._pack.content_dirs)
+
+    # Backward-compatible convenience properties for common content types.
     @cached_property
     def protocols_dir(self) -> Path:
-        return self._pack.pack_path / self._pack.protocols_dir
+        return self.content_dir("protocols") or self._pack.pack_path / "protocols"
 
     @cached_property
     def errors_dir(self) -> Path:
-        return self._pack.pack_path / self._pack.errors_dir
+        return self.content_dir("errors") or self._pack.pack_path / "errors"
 
     @cached_property
     def subfields_dir(self) -> Path:
-        return self._pack.pack_path / self._pack.subfields_dir
+        return self.content_dir("subfields") or self._pack.pack_path / "subfields"
+
+
+# ─── Health Check ─────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class ContentHealthError:
+    """A single content directory health-check failure."""
+
+    content_type: str
+    expected_path: Path
+    message: str
+
+
+def check_content_health(ctx: DomainContext) -> list[ContentHealthError]:
+    """Validate that all declared content directories exist.
+
+    Returns a list of errors (empty list means healthy).
+    """
+    errors: list[ContentHealthError] = []
+    for ctype in ctx.content_types:
+        path = ctx.content_dir(ctype)
+        if path is None:
+            continue
+        if not path.is_dir():
+            errors.append(
+                ContentHealthError(
+                    content_type=ctype,
+                    expected_path=path,
+                    message=f"Declared content directory '{ctype}' not found: {path}",
+                )
+            )
+    return errors
 
 
 # ─── Loading ──────────────────────────────────────────────────────────────────
+
+
+_LEGACY_DIR_FIELDS = {
+    "subfields_dir": "subfields",
+    "protocols_dir": "protocols",
+    "errors_dir": "errors",
+}
+
+
+def _parse_content_dirs(data: dict) -> dict[str, str]:
+    """Build content_dirs from the ``content`` section or legacy ``*_dir`` fields.
+
+    Prefers the new ``content`` mapping when present.  Falls back to legacy
+    per-type ``subfields_dir`` / ``protocols_dir`` / ``errors_dir`` keys for
+    backward compatibility with older domain.yaml files.
+    """
+    content_section = data.get("content")
+    if isinstance(content_section, dict):
+        return {str(k): str(v) for k, v in content_section.items()}
+
+    # Legacy: individual *_dir fields
+    dirs: dict[str, str] = {}
+    for legacy_key, content_type in _LEGACY_DIR_FIELDS.items():
+        if legacy_key in data:
+            dirs[content_type] = str(data[legacy_key])
+    return dirs
 
 
 def _parse_domain_yaml(pack_path: Path) -> DomainPack:
@@ -198,9 +270,7 @@ def _parse_domain_yaml(pack_path: Path) -> DomainPack:
         version=int(data.get("version", 1)),
         pack_path=pack_path,
         conventions_file=str(data.get("conventions_file", "conventions/convention-fields.yaml")),
-        subfields_dir=str(data.get("subfields_dir", "subfields")),
-        protocols_dir=str(data.get("protocols_dir", "protocols")),
-        errors_dir=str(data.get("errors_dir", "errors")),
+        content_dirs=_parse_content_dirs(data),
         publication_config=pub,
         branding=branding,
     )
