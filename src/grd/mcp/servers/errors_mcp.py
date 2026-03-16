@@ -1,8 +1,7 @@
 """GRD Errors MCP server — exposes domain error catalog and traceability via MCP tools.
 
 Loads the error catalog files and traceability matrix from the active domain
-pack (or falls back to specs/references/verification/errors/ for the built-in
-physics domain), parses markdown tables, and serves them via FastMCP tools.
+pack's errors directory, parses markdown tables, and serves them via FastMCP tools.
 
 Set GRD_DOMAIN env var to select a domain pack (default: "physics").
 
@@ -20,23 +19,20 @@ from mcp.server.fastmcp import FastMCP
 
 from grd.core.observability import grd_span
 from grd.mcp.servers import parse_frontmatter_safe, run_mcp_server
-from grd.specs import SPECS_DIR
 
 # MCP stdio uses stdout for JSON-RPC — redirect logging to stderr
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(name)s %(levelname)s: %(message)s")
 logger = logging.getLogger("grd-errors")
 
-REFERENCES_DIR = SPECS_DIR / "references"
-
 # The 4 error catalog part files (ordered by error ID range)
 ERROR_CATALOG_FILES = [
-    "verification/errors/llm-errors-core.md",  # #1-25
-    "verification/errors/llm-errors-field-theory.md",  # #26-51
-    "verification/errors/llm-errors-extended.md",  # #52-81, #102-104
-    "verification/errors/llm-errors-deep.md",  # #82-101
+    "llm-errors-core.md",  # #1-25
+    "llm-errors-field-theory.md",  # #26-51
+    "llm-errors-extended.md",  # #52-81, #102-104
+    "llm-errors-deep.md",  # #82-101
 ]
 
-TRACEABILITY_FILE = "verification/errors/llm-errors-traceability.md"
+TRACEABILITY_FILE = "llm-errors-traceability.md"
 
 # Traceability matrix column names
 TRACEABILITY_COLUMNS = [
@@ -106,20 +102,20 @@ def _infer_domain_from_id(error_id: int) -> str:
 class ErrorStore:
     """In-memory store of parsed error classes and traceability data."""
 
-    def __init__(self, references_dir: Path) -> None:
+    def __init__(self, errors_dir: Path) -> None:
         self._errors: dict[int, dict[str, object]] = {}
         self._traceability: dict[int, dict[str, str]] = {}
-        self._load_catalogs(references_dir)
-        self._load_traceability(references_dir)
+        self._load_catalogs(errors_dir)
+        self._load_traceability(errors_dir)
 
-    def _load_catalogs(self, references_dir: Path) -> None:
+    def _load_catalogs(self, errors_dir: Path) -> None:
         """Load all 4 error catalog files."""
-        with grd_span("errors.load_catalogs", references_dir=str(references_dir)):
-            self._do_load_catalogs(references_dir)
+        with grd_span("errors.load_catalogs", errors_dir=str(errors_dir)):
+            self._do_load_catalogs(errors_dir)
 
-    def _do_load_catalogs(self, references_dir: Path) -> None:
+    def _do_load_catalogs(self, errors_dir: Path) -> None:
         for filename in ERROR_CATALOG_FILES:
-            path = references_dir / filename
+            path = errors_dir / filename
             if not path.is_file():
                 logger.warning("Error catalog not found: %s", path)
                 continue
@@ -161,13 +157,13 @@ class ErrorStore:
 
         logger.info("Loaded %d error classes from catalogs", len(self._errors))
 
-    def _load_traceability(self, references_dir: Path) -> None:
+    def _load_traceability(self, errors_dir: Path) -> None:
         """Load the traceability matrix mapping errors to verification checks."""
         with grd_span("errors.load_traceability"):
-            self._do_load_traceability(references_dir)
+            self._do_load_traceability(errors_dir)
 
-    def _do_load_traceability(self, references_dir: Path) -> None:
-        path = references_dir / TRACEABILITY_FILE
+    def _do_load_traceability(self, errors_dir: Path) -> None:
+        path = errors_dir / TRACEABILITY_FILE
         if not path.is_file():
             logger.warning("Traceability matrix not found: %s", path)
             return
@@ -290,12 +286,8 @@ _store: ErrorStore | None = None
 _store_lock = threading.Lock()
 
 
-def _resolve_errors_references_dir() -> Path:
-    """Resolve the errors references directory, preferring domain pack if available.
-
-    Falls back to the built-in specs directory when the domain pack's errors
-    directory is missing or empty (i.e. content hasn't been migrated yet).
-    """
+def _resolve_errors_dir() -> Path:
+    """Resolve the errors directory from the active domain pack."""
     import os
 
     domain_name = os.environ.get("GRD_DOMAIN", "physics")
@@ -306,13 +298,11 @@ def _resolve_errors_references_dir() -> Path:
         if ctx is not None:
             edir = ctx.errors_dir
             if edir.is_dir() and any(edir.glob("*.md")):
-                # ErrorStore expects the *references* parent dir; for domain
-                # packs the errors_dir itself contains the catalog files.
-                # TODO: refactor ErrorStore to accept errors_dir directly.
-                pass
+                return edir
     except Exception:  # noqa: BLE001
         pass
-    return REFERENCES_DIR
+    logger.warning("No errors directory found for domain '%s'", domain_name)
+    return Path(__file__).resolve().parent.parent.parent / "domains" / "physics" / "verification" / "errors"
 
 
 def _get_store() -> ErrorStore:
@@ -322,7 +312,7 @@ def _get_store() -> ErrorStore:
         return _store
     with _store_lock:
         if _store is None:
-            _store = ErrorStore(_resolve_errors_references_dir())
+            _store = ErrorStore(_resolve_errors_dir())
         return _store
 
 

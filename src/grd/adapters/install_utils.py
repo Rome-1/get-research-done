@@ -1346,9 +1346,10 @@ def install_grd_content(
     install_scope: str | None = None,
     markdown_transform: Callable[[str, str, str | None], str] | None = None,
 ) -> list[str]:
-    """Install get-research-done/ content from specs/ subdirectories.
+    """Install get-research-done/ content from specs/ and domains/ subdirectories.
 
-    Copies references/, templates/, workflows/ with path replacement.
+    Copies references/, templates/, workflows/ from specs/ and domain pack
+    content from domains/ with path replacement.
     Returns list of failure descriptions (empty on success).
     """
     grd_dest = target_dir / "get-research-done"
@@ -1366,18 +1367,25 @@ def install_grd_content(
                 markdown_transform=markdown_transform,
             )
 
+    # Install domain pack content (domains/ is a sibling of specs/)
+    domains_dir = specs_dir.parent / "domains"
+    if domains_dir.is_dir():
+        copy_with_path_replacement(
+            domains_dir,
+            grd_dest / "domains",
+            path_prefix,
+            runtime,
+            install_scope,
+            markdown_transform=markdown_transform,
+        )
+
     if verify_installed(grd_dest, "get-research-done"):
         subdir_info = []
-        for subdir in GRD_CONTENT_DIRS:
+        for subdir in (*GRD_CONTENT_DIRS, "domains"):
             subdir_path = grd_dest / subdir
             if subdir_path.is_dir():
                 count = sum(1 for f in subdir_path.rglob("*") if f.is_file())
                 subdir_info.append(f"{subdir}: {count}")
-        protocols_path = grd_dest / "references" / "protocols"
-        if protocols_path.is_dir():
-            protocol_count = sum(1 for f in protocols_path.rglob("*") if f.is_file())
-            if protocol_count:
-                subdir_info.append(f"protocols: {protocol_count}")
         _install_logger.info("Installed get-research-done (%s)", ", ".join(subdir_info))
         return []
 

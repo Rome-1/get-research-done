@@ -32,21 +32,21 @@ assets:
     - path: templates/project-types/condensed-matter.md
       required: true
   subfield_guides:
-    - path: references/subfields/condensed-matter.md
+    - path: domains/physics/subfields/condensed-matter.md
       required: true
-    - path: references/subfields/quantum-info.md
+    - path: domains/physics/subfields/quantum-info.md
   verification_domains:
-    - path: references/verification/domains/verification-domain-condmat.md
+    - path: domains/physics/verification/domains/verification-domain-condmat.md
       required: true
-    - path: references/verification/domains/verification-domain-quantum-info.md
+    - path: domains/physics/verification/domains/verification-domain-quantum-info.md
   protocols_core:
-    - path: references/protocols/tensor-networks.md
+    - path: domains/physics/protocols/tensor-networks.md
       required: true
-    - path: references/protocols/quantum-many-body.md
+    - path: domains/physics/protocols/quantum-many-body.md
       required: true
-    - path: references/protocols/variational-methods.md
+    - path: domains/physics/protocols/variational-methods.md
   protocols_optional:
-    - path: references/protocols/exact-diagonalization.md
+    - path: domains/physics/protocols/exact-diagonalization.md
   execution_guides:
     - path: references/execution/executor-subfield-guide.md
 anchor_prompts:

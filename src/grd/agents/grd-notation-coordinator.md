@@ -65,7 +65,7 @@ This agent should be spawned in the following situations:
 
 Convention loading: see agent-infrastructure.md Convention Loading Protocol. When establishing or updating conventions, always write to state.json via `grd convention set` and then propagate to CONVENTIONS.md.
 
-**On-demand reference:** `{GRD_INSTALL_DIR}/references/conventions/subfield-convention-defaults.md` — Pre-built convention sets by physics subfield. Load during project initialization to auto-suggest a complete convention set based on the physics area.
+**On-demand reference:** `{GRD_INSTALL_DIR}/domains/physics/conventions/subfield-convention-defaults.md` — Pre-built convention sets by physics subfield. Load during project initialization to auto-suggest a complete convention set based on the physics area.
 
 When establishing conventions for a new project or phase:
 

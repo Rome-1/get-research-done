@@ -21,7 +21,7 @@ You are not the final referee. Do not decide accept/minor/major/reject. Your job
 <references>
 - @{GRD_INSTALL_DIR}/references/shared/shared-protocols.md
 - @{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md
-- @{GRD_INSTALL_DIR}/references/publication/peer-review-panel.md
+- @{GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md
 </references>
 
 <process>
@@ -34,7 +34,7 @@ You are not the final referee. Do not decide accept/minor/major/reject. Your job
 </process>
 
 <artifact_format>
-Before writing either JSON artifact, read `@{GRD_INSTALL_DIR}/references/publication/peer-review-panel.md` directly and use its stage artifact contract exactly.
+Before writing either JSON artifact, read `@{GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md` directly and use its stage artifact contract exactly.
 
 Required details for `CLAIMS.json`:
 

@@ -42,9 +42,9 @@ If a polished PDF companion is requested and TeX is available, compile the lates
 <references>
 - @{GRD_INSTALL_DIR}/references/shared/shared-protocols.md
 - @{GRD_INSTALL_DIR}/references/physics-subfields.md
-- @{GRD_INSTALL_DIR}/references/verification/core/verification-core.md
+- @{GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md
 - @{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md
-- @{GRD_INSTALL_DIR}/references/publication/peer-review-panel.md
+- @{GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md
 
 Reference notes:
 - Shared protocols: forbidden files, source hierarchy, convention tracking, physics verification
@@ -54,15 +54,15 @@ Reference notes:
 - Peer-review panel: staged review protocol, stage artifact contract, and recommendation guardrails
 
 **On-demand references:**
-- `{GRD_INSTALL_DIR}/references/publication/publication-pipeline-modes.md` -- Mode adaptation for referee strictness, scope of critique, and recommendation thresholds by autonomy and research_mode (load when reviewing for paper submission)
+- `{GRD_INSTALL_DIR}/domains/physics/publication/publication-pipeline-modes.md` -- Mode adaptation for referee strictness, scope of critique, and recommendation thresholds by autonomy and research_mode (load when reviewing for paper submission)
 - @{GRD_INSTALL_DIR}/templates/paper/referee-report.tex
 - Canonical polished LaTeX companion template for the default referee-report `.tex` artifact
 </references>
 
 Convention loading: see agent-infrastructure.md Convention Loading Protocol.
 
-Before writing `REVIEW-LEDGER*.json` or `REFEREE-DECISION*.json`, re-open `@{GRD_INSTALL_DIR}/references/publication/peer-review-panel.md`, `@{GRD_INSTALL_DIR}/templates/paper/review-ledger-schema.md`, and `@{GRD_INSTALL_DIR}/templates/paper/referee-decision-schema.md`. Treat those files as the artifact and schema sources of truth; do not infer the JSON shape from memory or from earlier round artifacts.
-@{GRD_INSTALL_DIR}/references/publication/peer-review-panel.md
+Before writing `REVIEW-LEDGER*.json` or `REFEREE-DECISION*.json`, re-open `@{GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md`, `@{GRD_INSTALL_DIR}/templates/paper/review-ledger-schema.md`, and `@{GRD_INSTALL_DIR}/templates/paper/referee-decision-schema.md`. Treat those files as the artifact and schema sources of truth; do not infer the JSON shape from memory or from earlier round artifacts.
+@{GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md
 @{GRD_INSTALL_DIR}/templates/paper/review-ledger-schema.md
 @{GRD_INSTALL_DIR}/templates/paper/referee-decision-schema.md
 

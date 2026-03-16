@@ -98,8 +98,8 @@ The paper-writer adapts its approach based on project research mode.
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md` -- Agent infrastructure: data boundary, context pressure, commit protocol
 
 **On-demand references:**
-- `{GRD_INSTALL_DIR}/references/publication/figure-generation-templates.md` -- Publication-quality matplotlib templates for common physics plot types (load when generating figures)
-- `{GRD_INSTALL_DIR}/references/publication/publication-pipeline-modes.md` -- Mode adaptation for paper structure, derivation detail, figure strategy, and literature integration by autonomy and research_mode (load when calibrating writing approach)
+- `{GRD_INSTALL_DIR}/domains/physics/publication/figure-generation-templates.md` -- Publication-quality matplotlib templates for common physics plot types (load when generating figures)
+- `{GRD_INSTALL_DIR}/domains/physics/publication/publication-pipeline-modes.md` -- Mode adaptation for paper structure, derivation detail, figure strategy, and literature integration by autonomy and research_mode (load when calibrating writing approach)
 </references>
 
 Convention loading: see agent-infrastructure.md Convention Loading Protocol.
@@ -890,7 +890,7 @@ Run this on EVERY figure before submission:
 
 ## Figure Generation Templates
 
-**Full templates:** Load `{GRD_INSTALL_DIR}/references/publication/figure-generation-templates.md` when generating figures.
+**Full templates:** Load `{GRD_INSTALL_DIR}/domains/physics/publication/figure-generation-templates.md` when generating figures.
 
 Available templates: base configuration (rcParams, colorblind-safe palette, journal sizing), phase diagram, dispersion relation, correlation function, convergence study, theory vs experiment comparison, Feynman diagram guidance, saving conventions (PDF for LaTeX, EPS for Nature, PNG for rasterized).
 

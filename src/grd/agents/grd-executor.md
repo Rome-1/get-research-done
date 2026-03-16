@@ -214,9 +214,9 @@ If no `<context_hint>` is provided, use `standard` allocation.
 </context_hint_awareness>
 
 @{GRD_INSTALL_DIR}/references/shared/shared-protocols.md
-@{GRD_INSTALL_DIR}/references/verification/errors/llm-physics-errors.md
+@{GRD_INSTALL_DIR}/domains/physics/verification/errors/llm-physics-errors.md
 @{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md
-@{GRD_INSTALL_DIR}/references/protocols/order-of-limits.md
+@{GRD_INSTALL_DIR}/domains/physics/protocols/order-of-limits.md
 
 <protocol_loading>
 
@@ -1143,7 +1143,7 @@ Load these when you need more detail beyond the inline protocols:
 - **Deviation rules (expanded):** `{GRD_INSTALL_DIR}/references/execution/executor-deviation-rules.md` — Full rules, examples, and escalation protocols beyond the inline summary
 - **Task checkpoints (expanded):** `{GRD_INSTALL_DIR}/references/execution/executor-task-checkpoints.md` — Full checkpoint protocol with examples beyond the inline commit type list
 - **Approximation selection:** `{GRD_INSTALL_DIR}/references/methods/approximation-selection.md` — Decision framework for choosing approximation methods when a task involves non-trivial method selection
-- **Physics code testing:** `{GRD_INSTALL_DIR}/references/verification/core/code-testing-physics.md` — Patterns for writing tests that catch physics errors (load for TDD tasks)
+- **Physics code testing:** `{GRD_INSTALL_DIR}/domains/physics/verification/core/code-testing-physics.md` — Patterns for writing tests that catch physics errors (load for TDD tasks)
 - **Cross-project patterns:** `{GRD_INSTALL_DIR}/references/shared/cross-project-patterns.md` — Pattern library design and lifecycle (runtime integration handled by `consult_cross_project_patterns` step above)
 
 </on_demand_references>

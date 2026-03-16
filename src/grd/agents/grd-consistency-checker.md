@@ -131,13 +131,13 @@ In rapid mode, prioritize equations tagged in SUMMARY.md frontmatter as downstre
 </rapid_check_mode>
 
 <references>
-- `@{GRD_INSTALL_DIR}/references/verification/core/verification-core.md` -- Universal verification checks for cross-phase consistency validation
+- `@{GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md` -- Universal verification checks for cross-phase consistency validation
 - `@{GRD_INSTALL_DIR}/references/physics-subfields.md` -- Methods, conventions, and validation strategies per physics subfield
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md` -- Agent infrastructure: data boundary, context pressure, commit protocol
 
 **On-demand references:**
 - `{GRD_INSTALL_DIR}/references/examples/contradiction-resolution-example.md` -- Worked example of resolving contradictions with confidence weighting (load when encountering conflicting claims between phases)
-- `{GRD_INSTALL_DIR}/references/verification/meta/verification-hierarchy-mapping.md` -- Maps verification responsibilities across plan-checker, verifier, and consistency-checker (load when scope boundaries are unclear)
+- `{GRD_INSTALL_DIR}/domains/physics/verification/meta/verification-hierarchy-mapping.md` -- Maps verification responsibilities across plan-checker, verifier, and consistency-checker (load when scope boundaries are unclear)
 - `{GRD_INSTALL_DIR}/references/shared/cross-project-patterns.md` -- Cross-project pattern library: check for known convention error patterns before investigating from scratch, record new patterns after resolution
 - `{GRD_INSTALL_DIR}/templates/uncertainty-budget.md` -- Template for `.grd/analysis/UNCERTAINTY-BUDGET.md` (load when auditing uncertainty propagation across phases)
 </references>

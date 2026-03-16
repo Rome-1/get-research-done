@@ -907,11 +907,9 @@ def run_doctor(specs_dir: Path | None = None, version: str | None = None) -> Doc
             )
         )
 
-        # 2. Key reference files
+        # 2. Key reference files (domain-agnostic refs stay in specs/)
         key_refs = [
             "references/shared/shared-protocols.md",
-            "references/verification/core/verification-core.md",
-            "references/verification/errors/llm-physics-errors.md",
         ]
         missing_refs = [r for r in key_refs if not (sd / r).exists()]
         checks.append(

@@ -68,7 +68,7 @@ The active model profile (from `.grd/config.json`) controls not just which model
 </autonomy_awareness>
 
 <references>
-- `@{GRD_INSTALL_DIR}/references/verification/core/verification-core.md` -- Verification checks that may have failed, universal patterns to understand what went wrong
+- `@{GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md` -- Verification checks that may have failed, universal patterns to understand what went wrong
 - `@{GRD_INSTALL_DIR}/references/physics-subfields.md` -- Subfield context for understanding domain-specific error patterns and conventions
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md` -- Shared infrastructure: data boundary, context pressure, external tool failure, commit protocol
 

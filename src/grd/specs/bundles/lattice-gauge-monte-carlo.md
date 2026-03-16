@@ -34,25 +34,25 @@ assets:
     - path: templates/project-types/nuclear-particle.md
       required: true
   subfield_guides:
-    - path: references/subfields/qft.md
+    - path: domains/physics/subfields/qft.md
       required: true
-    - path: references/subfields/nuclear-particle.md
+    - path: domains/physics/subfields/nuclear-particle.md
       required: true
   verification_domains:
-    - path: references/verification/domains/verification-domain-qft.md
+    - path: domains/physics/verification/domains/verification-domain-qft.md
       required: true
-    - path: references/verification/domains/verification-domain-nuclear-particle.md
+    - path: domains/physics/verification/domains/verification-domain-nuclear-particle.md
       required: true
-    - path: references/verification/domains/verification-domain-statmech.md
+    - path: domains/physics/verification/domains/verification-domain-statmech.md
   protocols_core:
-    - path: references/protocols/lattice-gauge-theory.md
+    - path: domains/physics/protocols/lattice-gauge-theory.md
       required: true
-    - path: references/protocols/monte-carlo.md
+    - path: domains/physics/protocols/monte-carlo.md
       required: true
-    - path: references/protocols/renormalization-group.md
+    - path: domains/physics/protocols/renormalization-group.md
   protocols_optional:
-    - path: references/protocols/group-theory.md
-    - path: references/protocols/perturbation-theory.md
+    - path: domains/physics/protocols/group-theory.md
+    - path: domains/physics/protocols/perturbation-theory.md
   execution_guides:
     - path: references/execution/executor-subfield-guide.md
 anchor_prompts:
