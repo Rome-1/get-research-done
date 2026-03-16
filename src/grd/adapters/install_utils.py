@@ -776,7 +776,10 @@ def expand_at_includes(
         src_path: Path | None = None
         if include_path.startswith("{GRD_INSTALL_DIR}/"):
             relative_path = include_path[len("{GRD_INSTALL_DIR}/") :]
-            src_path = src_root / relative_path
+            if relative_path.startswith("domains/"):
+                src_path = src_root.parent / relative_path
+            else:
+                src_path = src_root / relative_path
         elif include_path.startswith("{GRD_AGENTS_DIR}/"):
             relative_path = include_path[len("{GRD_AGENTS_DIR}/") :]
             src_path = src_root.parent / "agents" / relative_path

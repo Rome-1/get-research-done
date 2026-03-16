@@ -11,8 +11,8 @@ Read these reference files using the file_read tool:
 - {GRD_INSTALL_DIR}/references/execution/execute-plan-recovery.md
 - {GRD_INSTALL_DIR}/references/execution/execute-plan-validation.md
 - {GRD_INSTALL_DIR}/references/execution/execute-plan-checkpoints.md
-- {GRD_INSTALL_DIR}/references/protocols/reproducibility.md
-- {GRD_INSTALL_DIR}/references/protocols/error-propagation-protocol.md -- Cross-phase uncertainty propagation protocol (Uncertainty Budget declaration format, verification checks, phase handoff format)
+- {GRD_INSTALL_DIR}/domains/physics/protocols/reproducibility.md
+- {GRD_INSTALL_DIR}/domains/physics/protocols/error-propagation-protocol.md -- Cross-phase uncertainty propagation protocol (Uncertainty Budget declaration format, verification checks, phase handoff format)
 - {GRD_INSTALL_DIR}/references/execution/executor-index.md -- Maps execution scenarios (QFT, condensed matter, numerical, paper writing, debugging) to the correct domain-specific reference files
 - {GRD_INSTALL_DIR}/templates/calculation-log.md -- Template for CALCULATION_LOG.md (detailed derivation records within a phase)
 - {GRD_INSTALL_DIR}/templates/recovery-plan.md -- Template for RECOVERY.md (structured recovery after plan execution failure)

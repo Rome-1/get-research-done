@@ -11,9 +11,9 @@ context_cost: small
 
 # Conventions Quick Reference
 
-Extracted from `../shared/shared-protocols.md` for lightweight loading. The most common source of LLM physics errors is convention mismatch between expressions from different sources.
+Extracted from `references/shared/shared-protocols.md` for lightweight loading. The most common source of LLM physics errors is convention mismatch between expressions from different sources.
 
-**Full protocol:** See `../shared/shared-protocols.md` for the complete convention tracking protocol, machine-readable assertions, and conflict detection procedures.
+**Full protocol:** See `references/shared/shared-protocols.md` for the complete convention tracking protocol, machine-readable assertions, and conflict detection procedures.
 
 ## Required Convention Declarations
 

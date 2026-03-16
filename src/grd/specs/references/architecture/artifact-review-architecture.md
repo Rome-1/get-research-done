@@ -48,9 +48,9 @@ When review or verification behavior is described in multiple places:
 
 ## Use This File With
 
-- `references/verification/audits/verification-gap-analysis.md`
-- `references/verification/core/verification-core.md`
-- `references/publication/paper-quality-scoring.md`
+- `domains/physics/verification/audits/verification-gap-analysis.md`
+- `domains/physics/verification/core/verification-core.md`
+- `domains/physics/publication/paper-quality-scoring.md`
 - the paper/review workflows under `src/grd/specs/workflows/`
 
 ## Bottom Line

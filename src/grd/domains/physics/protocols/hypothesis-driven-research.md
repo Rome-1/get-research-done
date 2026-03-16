@@ -480,7 +480,7 @@ Improve maintainability              Improve physical transparency
 
 **The discipline is simple:** Never compute without first asking "what must the answer look like?"
 
-**See also:** `references/verification/core/verification-core.md` — prediction patterns (limiting cases, symmetry constraints, conservation laws) map directly to the verification checks used to validate results.
+**See also:** `domains/physics/verification/core/verification-core.md` — prediction patterns (limiting cases, symmetry constraints, conservation laws) map directly to the verification checks used to validate results.
 </why_predict_first>
 
 <subfield_prediction_patterns>

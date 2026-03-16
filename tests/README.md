@@ -7,7 +7,7 @@ The final section of this README keeps the full checked-in repository interdepen
 ## Repository Interdependency Graph
 
 <!-- repo-graph-generated-on:start -->
-Generated on `2026-03-15` from the current worktree.
+Generated on `2026-03-16` from the current worktree.
 <!-- repo-graph-generated-on:end -->
 
 ## Status
@@ -26,17 +26,18 @@ This graph therefore includes:
 
 <!-- repo-graph-scope:start -->
 
-- Live repo files analyzed in the current tree: `635`
-- Python files under `src/` and `tests/`: `199`
+- Live repo files analyzed in the current tree: `643`
+- Python files under `src/` and `tests/`: `203`
 - `src/grd/commands/*.md`: `61`
 - `src/grd/agents/*.md`: `23`
 - `src/grd/specs/workflows/*.md`: `62`
 - `src/grd/specs/templates/**/*.md`: `71`
-- `src/grd/specs/references/**/*.md`: `156`
+- `src/grd/specs/references/**/*.md`: `44`
+- `src/grd/domains/**/*.md`: `112`
 - `src/grd/adapters/*.py`: `9`
 - `src/grd/hooks/*.py`: `6`
 - `src/grd/mcp/servers/*.py`: `8`
-- `tests/**` files: `133`
+- `tests/**` files: `135`
 - `infra/grd-*.json`: `8`
 
 Excluded as noise from node counting, but still modeled where contractually relevant:
@@ -554,7 +555,7 @@ flowchart TD
 - `src/grd/commands/research-phase.md -> src/grd/specs/references/orchestration/model-profile-resolution.md`
   `include`
 
-- `src/grd/commands/verify-work.md -> src/grd/specs/references/verification/core/verification-core.md`
+- `src/grd/commands/verify-work.md -> src/grd/domains/physics/verification/core/verification-core.md`
   `include`
 
 - `src/grd/specs/workflows/plan-phase.md -> src/grd/agents/grd-phase-researcher.md`
@@ -597,25 +598,25 @@ flowchart TD
 - `src/grd/agents/{grd-review-reader,grd-review-literature,grd-review-significance}.md -> src/grd/specs/references/orchestration/agent-infrastructure.md`
   `include`
 
-- `src/grd/agents/{grd-bibliographer,grd-consistency-checker,grd-debugger,grd-executor,grd-explainer,grd-phase-researcher,grd-plan-checker,grd-planner,grd-referee,grd-research-mapper,grd-verifier}.md -> src/grd/specs/references/physics-subfields.md`
+- `src/grd/agents/{grd-bibliographer,grd-consistency-checker,grd-debugger,grd-executor,grd-explainer,grd-phase-researcher,grd-plan-checker,grd-planner,grd-referee,grd-research-mapper,grd-verifier}.md -> src/grd/domains/physics/physics-subfields.md`
   `include`
 
-- `src/grd/agents/{grd-review-math,grd-review-physics}.md -> src/grd/specs/references/physics-subfields.md`
+- `src/grd/agents/{grd-review-math,grd-review-physics}.md -> src/grd/domains/physics/physics-subfields.md`
   `include`
 
-- `src/grd/agents/{grd-consistency-checker,grd-debugger,grd-plan-checker,grd-planner,grd-referee,grd-verifier}.md -> src/grd/specs/references/verification/core/verification-core.md`
+- `src/grd/agents/{grd-consistency-checker,grd-debugger,grd-plan-checker,grd-planner,grd-referee,grd-verifier}.md -> src/grd/domains/physics/verification/core/verification-core.md`
   `include`
 
-- `src/grd/agents/{grd-review-math,grd-review-physics}.md -> src/grd/specs/references/verification/core/verification-core.md`
+- `src/grd/agents/{grd-review-math,grd-review-physics}.md -> src/grd/domains/physics/verification/core/verification-core.md`
   `include`
 
-- `src/grd/agents/{grd-bibliographer,grd-paper-writer,grd-referee}.md -> src/grd/specs/references/publication/publication-pipeline-modes.md`
+- `src/grd/agents/{grd-bibliographer,grd-paper-writer,grd-referee}.md -> src/grd/domains/physics/publication/publication-pipeline-modes.md`
   `include`
 
-- `src/grd/agents/{grd-review-literature,grd-review-significance}.md -> src/grd/specs/references/publication/publication-pipeline-modes.md`
+- `src/grd/agents/{grd-review-literature,grd-review-significance}.md -> src/grd/domains/physics/publication/publication-pipeline-modes.md`
   `include`
 
-- `src/grd/agents/{grd-review-reader,grd-review-literature,grd-review-math,grd-review-physics,grd-review-significance,grd-referee}.md -> src/grd/specs/references/publication/peer-review-panel.md`
+- `src/grd/agents/{grd-review-reader,grd-review-literature,grd-review-math,grd-review-physics,grd-review-significance,grd-referee}.md -> src/grd/domains/physics/publication/peer-review-panel.md`
   `include`
 
 - `src/grd/agents/{grd-phase-researcher,grd-project-researcher,grd-verifier}.md -> src/grd/specs/references/research/research-modes.md`
@@ -704,7 +705,7 @@ flowchart TD
 - `src/grd/specs/workflows/execute-phase.md -> src/grd/specs/{references/orchestration/meta-orchestration.md,references/orchestration/checkpoints.md,references/verification/core/verification-core.md,templates/summary.md,templates/continuation-prompt.md,templates/paper/figure-tracker.md,templates/paper/experimental-comparison.md,templates/recovery-plan.md}`
   `include`
 
-- `src/grd/specs/workflows/execute-plan.md -> src/grd/specs/references/protocols/error-propagation-protocol.md`
+- `src/grd/specs/workflows/execute-plan.md -> src/grd/domains/physics/protocols/error-propagation-protocol.md`
   `include`
 
 - `src/grd/specs/workflows/execute-plan.md -> src/grd/specs/{references/execution/git-integration.md,references/execution/execute-plan-recovery.md,references/execution/execute-plan-validation.md,references/execution/execute-plan-checkpoints.md,references/protocols/reproducibility.md,references/execution/executor-index.md,references/orchestration/context-budget.md,references/orchestration/checkpoints.md,templates/summary.md}`
@@ -716,7 +717,7 @@ flowchart TD
 - `src/grd/specs/workflows/execute-plan.md -> src/grd/specs/templates/recovery-plan.md`
   `include`
 
-- `src/grd/specs/workflows/verify-phase.md -> src/grd/specs/references/protocols/error-propagation-protocol.md`
+- `src/grd/specs/workflows/verify-phase.md -> src/grd/domains/physics/protocols/error-propagation-protocol.md`
   `include`
 
 - `src/grd/specs/workflows/verify-phase.md -> src/grd/specs/{references/verification/core/verification-core.md,references/verification/core/verification-numerical.md,references/verification/meta/verification-independence.md,templates/verification-report.md,workflows/numerical-convergence.md}`
@@ -725,7 +726,7 @@ flowchart TD
 - `src/grd/specs/workflows/verify-work.md -> src/grd/specs/templates/research-verification.md`
   `include`
 
-- `src/grd/specs/workflows/verify-work.md -> src/grd/specs/references/protocols/error-propagation-protocol.md`
+- `src/grd/specs/workflows/verify-work.md -> src/grd/domains/physics/protocols/error-propagation-protocol.md`
   `include`
 
 - `src/grd/specs/workflows/verify-work.md -> src/grd/specs/{references/verification/meta/verification-independence.md,workflows/debug.md}`
@@ -738,7 +739,7 @@ flowchart TD
 - `src/grd/specs/workflows/verify-work.md -> src/grd/agents/grd-plan-checker.md`
   `conditional-spawn`
 
-- `src/grd/specs/workflows/error-propagation.md -> src/grd/specs/references/protocols/error-propagation-protocol.md`
+- `src/grd/specs/workflows/error-propagation.md -> src/grd/domains/physics/protocols/error-propagation-protocol.md`
   `include`
 
 - `src/grd/specs/workflows/error-propagation.md -> src/grd/specs/templates/uncertainty-budget.md`

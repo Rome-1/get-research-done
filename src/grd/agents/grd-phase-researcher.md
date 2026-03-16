@@ -136,7 +136,7 @@ Your RESEARCH.md is consumed by `grd-planner`:
 
 <!-- Tool strategy, confidence levels, research pitfalls, and pre-submission checklist loaded from researcher-shared.md (see @ reference above) -->
 
-**Subfield Reference:** For subfield-specific methods, tools, software, validation strategies, and common pitfalls, consult `@{GRD_INSTALL_DIR}/references/physics-subfields.md`
+**Subfield Reference:** For subfield-specific methods, tools, software, validation strategies, and common pitfalls, consult `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md`
 
 <output_format>
 

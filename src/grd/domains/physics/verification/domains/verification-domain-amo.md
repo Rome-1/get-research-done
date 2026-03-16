@@ -22,8 +22,8 @@ Selection rules, dipole approximation, rotating wave approximation, sum rules, d
 - `../core/verification-quick-reference.md` — compact checklist (default entry point)
 - `../core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
 - `../core/verification-numerical.md` — convergence, statistical validation, numerical stability
-- `references/verification/domains/verification-domain-qft.md` — QFT (for QED corrections, radiative processes)
-- `references/verification/domains/verification-domain-condmat.md` — condensed matter (for many-body AMO systems)
+- `domains/physics/verification/domains/verification-domain-qft.md` — QFT (for QED corrections, radiative processes)
+- `domains/physics/verification/domains/verification-domain-condmat.md` — condensed matter (for many-body AMO systems)
 
 ---
 

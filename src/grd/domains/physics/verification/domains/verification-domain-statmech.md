@@ -13,7 +13,7 @@ context_cost: medium
 
 Thermodynamic consistency, detailed balance, finite-size scaling, and subfield-specific checks for statistical mechanics.
 
-> **Note:** For cosmology/GR, see `references/verification/domains/verification-domain-gr-cosmology.md`. For fluids/plasma, see `references/verification/domains/verification-domain-fluid-plasma.md`. For astrophysics, see `references/verification/domains/verification-domain-astrophysics.md`.
+> **Note:** For cosmology/GR, see `domains/physics/verification/domains/verification-domain-gr-cosmology.md`. For fluids/plasma, see `domains/physics/verification/domains/verification-domain-fluid-plasma.md`. For astrophysics, see `domains/physics/verification/domains/verification-domain-astrophysics.md`.
 
 **Load when:** Working on statistical mechanics, phase transitions, Monte Carlo, cosmological calculations, or fluid dynamics simulations.
 
@@ -21,8 +21,8 @@ Thermodynamic consistency, detailed balance, finite-size scaling, and subfield-s
 - `../core/verification-quick-reference.md` — compact checklist (default entry point)
 - `../core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
 - `../core/verification-numerical.md` — convergence, statistical validation, numerical stability
-- `references/verification/domains/verification-domain-qft.md` — QFT, particle, GR, mathematical physics
-- `references/verification/domains/verification-domain-condmat.md` — condensed matter, quantum information, AMO
+- `domains/physics/verification/domains/verification-domain-qft.md` — QFT, particle, GR, mathematical physics
+- `domains/physics/verification/domains/verification-domain-condmat.md` — condensed matter, quantum information, AMO
 
 ---
 
@@ -205,5 +205,5 @@ Classical FDT:
 - `../core/verification-quick-reference.md` -- Compact checklist (default entry point)
 - `../core/verification-core.md` -- Dimensional analysis, limiting cases, conservation laws
 - `../core/verification-numerical.md` -- Convergence, statistical validation, numerical stability
-- `references/verification/domains/verification-domain-qft.md` -- QFT, particle physics, GR, mathematical physics
-- `references/verification/domains/verification-domain-condmat.md` -- Condensed matter, quantum information, AMO
+- `domains/physics/verification/domains/verification-domain-qft.md` -- QFT, particle physics, GR, mathematical physics
+- `domains/physics/verification/domains/verification-domain-condmat.md` -- Condensed matter, quantum information, AMO

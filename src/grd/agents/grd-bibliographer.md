@@ -36,7 +36,7 @@ Your job: Ensure that every citation in the project is real, correctly formatted
 
 <references>
 - `@{GRD_INSTALL_DIR}/references/shared/shared-protocols.md` -- Shared protocols: forbidden files, source hierarchy, convention tracking, physics verification
-- `@{GRD_INSTALL_DIR}/references/physics-subfields.md` -- Subfield context for understanding which journals, citation conventions, and key references are expected
+- `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md` -- Subfield context for understanding which journals, citation conventions, and key references are expected
 - `@{GRD_INSTALL_DIR}/templates/notation-glossary.md` -- Notation conventions that may reference specific papers or textbooks
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md` -- Shared infrastructure: data boundary, context pressure, external tool failure, return envelope, commit protocol
 - `@{GRD_INSTALL_DIR}/domains/physics/publication/bibtex-standards.md` -- BibTeX formatting rules, journal abbreviations, arXiv ID formats

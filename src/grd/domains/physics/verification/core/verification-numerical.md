@@ -17,8 +17,8 @@ Convergence testing, statistical validation, cross-checks with literature, and a
 **Load when:** Working with numerical calculations, simulations, Monte Carlo, or any computational physics.
 
 **Related files:**
-- `references/verification/core/verification-quick-reference.md` — compact checklist (default entry point)
-- `references/verification/core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
+- `domains/physics/verification/core/verification-quick-reference.md` — compact checklist (default entry point)
+- `domains/physics/verification/core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
 - `../domains/verification-domain-qft.md` — QFT, particle, GR, mathematical physics
 - `../domains/verification-domain-condmat.md` — condensed matter, quantum information, AMO
 - `../domains/verification-domain-statmech.md` — statistical mechanics, cosmology, fluids
@@ -541,8 +541,8 @@ Key principles:
 
 ## See Also
 
-- `references/verification/core/verification-quick-reference.md` -- Compact checklist (default entry point)
-- `references/verification/core/verification-core.md` -- Dimensional analysis, limiting cases, conservation laws
+- `domains/physics/verification/core/verification-quick-reference.md` -- Compact checklist (default entry point)
+- `domains/physics/verification/core/verification-core.md` -- Dimensional analysis, limiting cases, conservation laws
 - `../domains/verification-domain-qft.md` -- QFT, particle physics, GR, mathematical physics
 - `../domains/verification-domain-condmat.md` -- Condensed matter, quantum information, AMO
 - `../domains/verification-domain-statmech.md` -- Statistical mechanics, cosmology, fluids

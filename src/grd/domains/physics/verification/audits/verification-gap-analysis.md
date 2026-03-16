@@ -123,4 +123,4 @@ Historical dated audits are intentionally kept outside the shipped runtime refer
 - `../errors/llm-errors-traceability.md` — quick traceability index into the error catalog
 - `../meta/verification-hierarchy-mapping.md` — current plan-checker / verifier / consistency-checker mapping
 - `../core/verification-core.md` — universal verification procedures
-- `../../shared/shared-protocols.md` — convention tracking and shared verification protocols
+- `references/shared/shared-protocols.md` — convention tracking and shared verification protocols

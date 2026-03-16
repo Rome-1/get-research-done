@@ -116,4 +116,4 @@ The consistency-checker operates orthogonally to both plan-checker and verifier:
 - `../core/verification-quick-reference.md` — conceptual 14-check checklist
 - `../core/verification-core.md` — universal verification procedures
 - `verifier-profile-checks.md` — domain-specific verifier depth
-- `../../orchestration/model-profiles.md` — current profile semantics across agents
+- `references/orchestration/model-profiles.md` — current profile semantics across agents

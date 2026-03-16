@@ -26,8 +26,8 @@ MHD equilibrium, stability, magnetic reconnection, turbulence spectra, conservat
 - `../core/verification-quick-reference.md` — compact checklist (default entry point)
 - `../core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
 - `../core/verification-numerical.md` — convergence, statistical validation
-- `references/protocols/fluid-dynamics-mhd.md` — step-by-step calculation protocol
-- `references/subfields/fluid-plasma.md` — tools, methods, research frontiers
+- `domains/physics/protocols/fluid-dynamics-mhd.md` — step-by-step calculation protocol
+- `domains/physics/subfields/fluid-plasma.md` — tools, methods, research frontiers
 
 ---
 

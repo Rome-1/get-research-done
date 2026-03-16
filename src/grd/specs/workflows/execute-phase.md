@@ -488,7 +488,7 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
        - Workflow: {GRD_INSTALL_DIR}/workflows/execute-plan.md
        - Summary template: {GRD_INSTALL_DIR}/templates/summary.md
        - Checkpoints ref: {GRD_INSTALL_DIR}/references/orchestration/checkpoints.md
-       - Validation ref: {GRD_INSTALL_DIR}/references/verification/core/verification-core.md (+ domain-specific verification file)
+       - Validation ref: {GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md (+ domain-specific verification file)
        - Plan: {phase_dir}/{plan_file}
        - State: .grd/STATE.md
        - Config: .grd/config.json (if exists)

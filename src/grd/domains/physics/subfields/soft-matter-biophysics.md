@@ -15,7 +15,7 @@ context_cost: medium
 
 ## Core Methods
 
-**Detailed protocols:** For step-by-step calculation protocols, see `references/protocols/numerical-computation.md`, `references/protocols/monte-carlo.md`, `references/protocols/molecular-dynamics.md` (force fields, integrators, thermostats), `references/protocols/stochastic-processes.md` (Langevin dynamics, FDT, active matter), `references/protocols/variational-methods.md` (SCFT, free energy methods).
+**Detailed protocols:** For step-by-step calculation protocols, see `domains/physics/protocols/numerical-computation.md`, `domains/physics/protocols/monte-carlo.md`, `domains/physics/protocols/molecular-dynamics.md` (force fields, integrators, thermostats), `domains/physics/protocols/stochastic-processes.md` (Langevin dynamics, FDT, active matter), `domains/physics/protocols/variational-methods.md` (SCFT, free energy methods).
 
 **Polymer Physics:**
 

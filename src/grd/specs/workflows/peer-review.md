@@ -174,7 +174,7 @@ task(
   model="{read_model}",
   readonly=false,
   prompt="First, read {GRD_AGENTS_DIR}/grd-review-reader.md for your role and instructions.
-Then read {GRD_INSTALL_DIR}/references/publication/peer-review-panel.md and use its `ClaimIndex` / `StageReviewReport` artifact contract exactly.
+Then read {GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md and use its `ClaimIndex` / `StageReviewReport` artifact contract exactly.
 
 Operate in manuscript-reader stage mode. This stage must start nearly fresh and remain manuscript-first.
 
@@ -219,7 +219,7 @@ task(
   model="{literature_model}",
   readonly=false,
   prompt="First, read {GRD_AGENTS_DIR}/grd-review-literature.md for your role and instructions.
-Then read {GRD_INSTALL_DIR}/references/publication/peer-review-panel.md and use its `StageReviewReport` artifact contract exactly.
+Then read {GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md and use its `StageReviewReport` artifact contract exactly.
 
 Operate in literature-context stage mode with a fresh context.
 
@@ -253,7 +253,7 @@ task(
   model="{math_model}",
   readonly=false,
   prompt="First, read {GRD_AGENTS_DIR}/grd-review-math.md for your role and instructions.
-Then read {GRD_INSTALL_DIR}/references/publication/peer-review-panel.md and use its `StageReviewReport` artifact contract exactly.
+Then read {GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md and use its `StageReviewReport` artifact contract exactly.
 
 Operate in mathematical-soundness stage mode with a fresh context.
 
@@ -296,7 +296,7 @@ task(
   model="{physics_model}",
   readonly=false,
   prompt="First, read {GRD_AGENTS_DIR}/grd-review-physics.md for your role and instructions.
-Then read {GRD_INSTALL_DIR}/references/publication/peer-review-panel.md and use its `StageReviewReport` artifact contract exactly.
+Then read {GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md and use its `StageReviewReport` artifact contract exactly.
 
 Operate in physical-soundness stage mode with a fresh context.
 
@@ -349,7 +349,7 @@ task(
   model="{significance_model}",
   readonly=false,
   prompt="First, read {GRD_AGENTS_DIR}/grd-review-significance.md for your role and instructions.
-Then read {GRD_INSTALL_DIR}/references/publication/peer-review-panel.md and use its `StageReviewReport` artifact contract exactly.
+Then read {GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md and use its `StageReviewReport` artifact contract exactly.
 
 Operate in interestingness-and-venue-fit stage mode with a fresh context.
 
@@ -393,7 +393,7 @@ task(
   model="{referee_model}",
   readonly=false,
   prompt="First, read {GRD_AGENTS_DIR}/grd-referee.md for your role and instructions.
-Then read {GRD_INSTALL_DIR}/references/publication/peer-review-panel.md, {GRD_INSTALL_DIR}/templates/paper/review-ledger-schema.md, and {GRD_INSTALL_DIR}/templates/paper/referee-decision-schema.md before you write any adjudication artifacts.
+Then read {GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md, {GRD_INSTALL_DIR}/templates/paper/review-ledger-schema.md, and {GRD_INSTALL_DIR}/templates/paper/referee-decision-schema.md before you write any adjudication artifacts.
 
 Act as the final adjudicating referee for the staged peer-review panel.
 

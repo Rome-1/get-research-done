@@ -18,7 +18,7 @@ context_cost: medium
 
 ## Core Methods
 
-**Detailed protocols:** For step-by-step calculation protocols, see `references/protocols/algebraic-qft.md`, `references/protocols/group-theory.md`, `references/protocols/generalized-symmetries.md`, `references/protocols/topological-methods.md`, `references/protocols/holography-ads-cft.md`, and `references/protocols/conformal-bootstrap.md` (for conformal nets and chiral-CFT structural data).
+**Detailed protocols:** For step-by-step calculation protocols, see `domains/physics/protocols/algebraic-qft.md`, `domains/physics/protocols/group-theory.md`, `domains/physics/protocols/generalized-symmetries.md`, `domains/physics/protocols/topological-methods.md`, `domains/physics/protocols/holography-ads-cft.md`, and `domains/physics/protocols/conformal-bootstrap.md` (for conformal nets and chiral-CFT structural data).
 
 **Haag-Kastler and local-covariant structure:**
 

@@ -61,7 +61,7 @@ Read these files at execution start using the file_read tool:
 - Workflow: {GRD_INSTALL_DIR}/workflows/execute-plan.md
 - Summary template: {GRD_INSTALL_DIR}/templates/summary.md
 - Checkpoints ref: {GRD_INSTALL_DIR}/references/orchestration/checkpoints.md
-- Validation ref: {GRD_INSTALL_DIR}/references/verification/core/verification-core.md
+- Validation ref: {GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md
 - Plan: {phase_dir}/{plan_file}
 - State: .grd/STATE.md
 - Config: .grd/config.json (if exists)

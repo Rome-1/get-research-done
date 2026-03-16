@@ -14,14 +14,14 @@ This document has been split into modular files for better context efficiency. L
 ## Quick Start
 
 For most verification needs, start with the quick reference:
-- **`references/verification/core/verification-quick-reference.md`** — Compact 14-check checklist, decision tree, domain quick-checks (~9KB)
+- **`domains/physics/verification/core/verification-quick-reference.md`** — Compact 14-check checklist, decision tree, domain quick-checks (~9KB)
 
 ## Modular Files
 
 | File | Size | Content | Load When |
 |------|------|---------|-----------|
-| `references/verification/core/verification-core.md` | ~15KB | Dimensional analysis, limiting cases, symmetry, conservation laws, order-of-magnitude, physical plausibility, in-execution validation, cancellation detection | Always — universal checks for any physics |
-| `references/verification/core/verification-numerical.md` | ~15KB | Convergence testing, cross-checks with literature, statistical validation, automated verification framework | Working with numerical calculations or simulations |
+| `domains/physics/verification/core/verification-core.md` | ~15KB | Dimensional analysis, limiting cases, symmetry, conservation laws, order-of-magnitude, physical plausibility, in-execution validation, cancellation detection | Always — universal checks for any physics |
+| `domains/physics/verification/core/verification-numerical.md` | ~15KB | Convergence testing, cross-checks with literature, statistical validation, automated verification framework | Working with numerical calculations or simulations |
 | `../domains/verification-domain-qft.md` | ~10KB | Ward identities, unitarity, causality, positivity, crossing symmetry | QFT, scattering, renormalization |
 | `../domains/verification-domain-condmat.md` | ~10KB | Spectral sum rules, Kramers-Kronig, spectral representations | Many-body physics, response functions, spectral analysis |
 | `../domains/verification-domain-statmech.md` | ~10KB | Thermodynamic consistency, detailed balance, KMS/FDT | Phase transitions, Monte Carlo |
@@ -36,14 +36,14 @@ For most verification needs, start with the quick reference:
 
 ## Typical Loading Patterns
 
-**Analytical derivation:** `references/verification/core/verification-core.md` + domain file
-**Numerical calculation:** `references/verification/core/verification-core.md` + `references/verification/core/verification-numerical.md` + domain file
-**Monte Carlo simulation:** `references/verification/core/verification-numerical.md` + `../domains/verification-domain-statmech.md`
-**Response function calculation:** `../domains/verification-domain-condmat.md` + `references/verification/core/verification-numerical.md`
-**Scattering amplitude:** `references/verification/core/verification-core.md` + `../domains/verification-domain-qft.md`
-**Algebraic quantum field theory:** `references/verification/core/verification-core.md` + `../domains/verification-domain-algebraic-qft.md`
-**String field theory:** `references/verification/core/verification-core.md` + `../domains/verification-domain-string-field-theory.md`
-**MHD/fluid simulation:** `references/verification/core/verification-numerical.md` + `../domains/verification-domain-fluid-plasma.md`
+**Analytical derivation:** `domains/physics/verification/core/verification-core.md` + domain file
+**Numerical calculation:** `domains/physics/verification/core/verification-core.md` + `domains/physics/verification/core/verification-numerical.md` + domain file
+**Monte Carlo simulation:** `domains/physics/verification/core/verification-numerical.md` + `../domains/verification-domain-statmech.md`
+**Response function calculation:** `../domains/verification-domain-condmat.md` + `domains/physics/verification/core/verification-numerical.md`
+**Scattering amplitude:** `domains/physics/verification/core/verification-core.md` + `../domains/verification-domain-qft.md`
+**Algebraic quantum field theory:** `domains/physics/verification/core/verification-core.md` + `../domains/verification-domain-algebraic-qft.md`
+**String field theory:** `domains/physics/verification/core/verification-core.md` + `../domains/verification-domain-string-field-theory.md`
+**MHD/fluid simulation:** `domains/physics/verification/core/verification-numerical.md` + `../domains/verification-domain-fluid-plasma.md`
 **Paper-ready result:** All files relevant to the domain
 
 ## See Also

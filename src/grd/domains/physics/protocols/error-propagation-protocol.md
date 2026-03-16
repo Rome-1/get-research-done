@@ -120,4 +120,4 @@ In these cases, note "Uncertainty propagation: N/A" with the reason.
 - **#103**: Functional Jacobian errors in field-theoretic transformations
 - **#104**: IR safety violations in cross-phase observable definitions
 
-See `references/verification/errors/llm-errors-extended.md` for full detection strategies and examples.
+See `domains/physics/verification/errors/llm-errors-extended.md` for full detection strategies and examples.

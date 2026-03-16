@@ -18,8 +18,8 @@ Dimensional analysis, limiting cases, symmetry, conservation laws, order-of-magn
 **Load when:** Always — these are the non-negotiable checks for any physics calculation.
 
 **Related files:**
-- `references/verification/core/verification-quick-reference.md` — compact checklist (default entry point)
-- `references/verification/core/verification-numerical.md` — convergence, statistical validation, numerical stability
+- `domains/physics/verification/core/verification-quick-reference.md` — compact checklist (default entry point)
+- `domains/physics/verification/core/verification-numerical.md` — convergence, statistical validation, numerical stability
 - `../domains/verification-domain-qft.md` — QFT, particle, GR, mathematical physics
 - `../domains/verification-domain-condmat.md` — condensed matter, quantum information, AMO
 - `../domains/verification-domain-statmech.md` — statistical mechanics, cosmology, fluids
@@ -41,7 +41,7 @@ Levels 1-3 can often be checked programmatically. Level 4 requires deeper analys
 
 **Level 5: External Oracle** — Result verified by an independent computational system (SymPy, numpy, or other CAS/numerical library) whose output is shown in VERIFICATION.md. This is the strongest form of verification because it breaks the LLM self-consistency loop: the LLM cannot hallucinate a correct CAS output.
 
-Every VERIFICATION.md MUST include at least one Level 5 check — an executed code block with actual output. See `references/verification/core/computational-verification-templates.md` for copy-paste-ready templates.
+Every VERIFICATION.md MUST include at least one Level 5 check — an executed code block with actual output. See `domains/physics/verification/core/computational-verification-templates.md` for copy-paste-ready templates.
 </core_principle>
 
 > **Key companion document:** See `../errors/llm-physics-errors.md` for the catalog of 104 LLM-specific physics error classes with detection strategies and traceability matrix.
@@ -732,8 +732,8 @@ When a computed result is anomalously small compared to individual contributing 
 
 ## See Also
 
-- `references/verification/core/verification-quick-reference.md` -- Compact checklist (default entry point)
-- `references/verification/core/verification-numerical.md` -- Convergence testing, statistical validation, numerical stability
+- `domains/physics/verification/core/verification-quick-reference.md` -- Compact checklist (default entry point)
+- `domains/physics/verification/core/verification-numerical.md` -- Convergence testing, statistical validation, numerical stability
 - `../domains/verification-domain-qft.md` -- QFT, particle physics, GR, mathematical physics
 - `../domains/verification-domain-condmat.md` -- Condensed matter, quantum information, AMO
 - `../domains/verification-domain-statmech.md` -- Statistical mechanics, cosmology, fluids

@@ -23,8 +23,8 @@ Equilibration, thermodynamic consistency, scaling law verification, force field 
 - `../core/verification-quick-reference.md` — compact checklist (default entry point)
 - `../core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
 - `../core/verification-numerical.md` — convergence, statistical validation, numerical stability
-- `references/verification/domains/verification-domain-statmech.md` — statistical mechanics (partition functions, phase transitions)
-- `references/verification/domains/verification-domain-condmat.md` — condensed matter (order parameters, symmetry breaking)
+- `domains/physics/verification/domains/verification-domain-statmech.md` — statistical mechanics (partition functions, phase transitions)
+- `domains/physics/verification/domains/verification-domain-condmat.md` — condensed matter (order parameters, symmetry breaking)
 
 ---
 

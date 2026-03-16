@@ -21,22 +21,22 @@ GRD is designed for physics research broadly, with particular strength in proble
 
 | Subfield | Reference | Key Topics |
 |----------|-----------|------------|
-| Quantum Field Theory | references/subfields/qft.md | Perturbative QFT, renormalization, Feynman diagrams, gauge theories, EFTs, lattice QFT, generalized symmetries, supersymmetry |
-| Quantum Gravity | references/subfields/quantum-gravity.md | Semiclassical gravity, black hole information, holography, quantum chaos, asymptotic safety, nonperturbative approaches |
-| String Theory | references/subfields/string-theory.md | Worldsheet CFT, D-branes, dualities, compactification, moduli stabilization, swampland, string phenomenology |
-| Condensed Matter | references/subfields/condensed-matter.md | Many-body, DFT, DMFT, tensor networks, topological phases, band theory |
-| GR & Cosmology | references/subfields/gr-cosmology.md | Perturbation theory, CMB, inflation, de Sitter space, numerical relativity, gravitational waves, black holes |
-| Statistical Mechanics | references/subfields/stat-mech.md | Phase transitions, Monte Carlo, critical phenomena, RG, exactly solved models |
-| AMO Physics | references/subfields/amo.md | Quantum optics, cold atoms, scattering theory, master equations, BEC |
-| Nuclear & Particle | references/subfields/nuclear-particle.md | QCD, nuclear structure, collider phenomenology, flavor physics, PDFs, effective theories, global fits |
-| Quantum Information | references/subfields/quantum-info.md | Circuits, error correction, entanglement, tensor networks, variational algorithms |
-| Fluid & Plasma | references/subfields/fluid-plasma.md | Navier-Stokes, MHD, turbulence, kinetic theory, spectral methods |
-| Mathematical Physics | references/subfields/mathematical-physics.md | Rigorous proofs, functional analysis, representation theory, integrable systems, CFT, topological defects |
-| Algebraic QFT | references/subfields/algebraic-qft.md | Haag-Kastler nets, modular theory, von Neumann factor types, DHR sectors |
-| String Field Theory | references/subfields/string-field-theory.md | Open/closed superstrings, BRST, BV, tachyon condensation, `A_infinity` / `L_infinity` |
-| Classical Mechanics | references/subfields/classical-mechanics.md | Lagrangian/Hamiltonian dynamics, nonlinear dynamics, chaos, celestial mechanics |
-| Soft Matter & Biophysics | references/subfields/soft-matter-biophysics.md | Polymer physics, membrane dynamics, active matter, colloids, self-assembly, biomolecular simulation |
-| Astrophysics | references/subfields/astrophysics.md | Stellar structure, accretion disks, compact objects, radiative transfer, gravitational waves, nucleosynthesis |
+| Quantum Field Theory | domains/physics/subfields/qft.md | Perturbative QFT, renormalization, Feynman diagrams, gauge theories, EFTs, lattice QFT, generalized symmetries, supersymmetry |
+| Quantum Gravity | domains/physics/subfields/quantum-gravity.md | Semiclassical gravity, black hole information, holography, quantum chaos, asymptotic safety, nonperturbative approaches |
+| String Theory | domains/physics/subfields/string-theory.md | Worldsheet CFT, D-branes, dualities, compactification, moduli stabilization, swampland, string phenomenology |
+| Condensed Matter | domains/physics/subfields/condensed-matter.md | Many-body, DFT, DMFT, tensor networks, topological phases, band theory |
+| GR & Cosmology | domains/physics/subfields/gr-cosmology.md | Perturbation theory, CMB, inflation, de Sitter space, numerical relativity, gravitational waves, black holes |
+| Statistical Mechanics | domains/physics/subfields/stat-mech.md | Phase transitions, Monte Carlo, critical phenomena, RG, exactly solved models |
+| AMO Physics | domains/physics/subfields/amo.md | Quantum optics, cold atoms, scattering theory, master equations, BEC |
+| Nuclear & Particle | domains/physics/subfields/nuclear-particle.md | QCD, nuclear structure, collider phenomenology, flavor physics, PDFs, effective theories, global fits |
+| Quantum Information | domains/physics/subfields/quantum-info.md | Circuits, error correction, entanglement, tensor networks, variational algorithms |
+| Fluid & Plasma | domains/physics/subfields/fluid-plasma.md | Navier-Stokes, MHD, turbulence, kinetic theory, spectral methods |
+| Mathematical Physics | domains/physics/subfields/mathematical-physics.md | Rigorous proofs, functional analysis, representation theory, integrable systems, CFT, topological defects |
+| Algebraic QFT | domains/physics/subfields/algebraic-qft.md | Haag-Kastler nets, modular theory, von Neumann factor types, DHR sectors |
+| String Field Theory | domains/physics/subfields/string-field-theory.md | Open/closed superstrings, BRST, BV, tachyon condensation, `A_infinity` / `L_infinity` |
+| Classical Mechanics | domains/physics/subfields/classical-mechanics.md | Lagrangian/Hamiltonian dynamics, nonlinear dynamics, chaos, celestial mechanics |
+| Soft Matter & Biophysics | domains/physics/subfields/soft-matter-biophysics.md | Polymer physics, membrane dynamics, active matter, colloids, self-assembly, biomolecular simulation |
+| Astrophysics | domains/physics/subfields/astrophysics.md | Stellar structure, accretion disks, compact objects, radiative transfer, gravitational waves, nucleosynthesis |
 
 ---
 

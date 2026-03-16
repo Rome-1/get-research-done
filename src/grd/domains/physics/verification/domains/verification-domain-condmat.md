@@ -13,7 +13,7 @@ context_cost: large
 
 Sum rules, Kramers-Kronig relations, spectral representations, and subfield-specific checks for condensed matter physics.
 
-> **Note:** For quantum information, see `references/verification/domains/verification-domain-quantum-info.md`. For AMO, see `references/verification/domains/verification-domain-amo.md`. For soft matter, see `references/verification/domains/verification-domain-soft-matter.md`.
+> **Note:** For quantum information, see `domains/physics/verification/domains/verification-domain-quantum-info.md`. For AMO, see `domains/physics/verification/domains/verification-domain-amo.md`. For soft matter, see `domains/physics/verification/domains/verification-domain-soft-matter.md`.
 
 **Load when:** Working on condensed matter calculations, many-body physics, spectral functions, response functions, quantum information, or atomic/molecular/optical physics.
 
@@ -21,8 +21,8 @@ Sum rules, Kramers-Kronig relations, spectral representations, and subfield-spec
 - `../core/verification-quick-reference.md` — compact checklist (default entry point)
 - `../core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
 - `../core/verification-numerical.md` — convergence, statistical validation, numerical stability
-- `references/verification/domains/verification-domain-qft.md` — QFT, particle, GR, mathematical physics
-- `references/verification/domains/verification-domain-statmech.md` — statistical mechanics, cosmology, fluids
+- `domains/physics/verification/domains/verification-domain-qft.md` — QFT, particle, GR, mathematical physics
+- `domains/physics/verification/domains/verification-domain-statmech.md` — statistical mechanics, cosmology, fluids
 
 ---
 
@@ -342,5 +342,5 @@ integral_correct, _ = quad(dos_correct, -1000, 1000)
 - `../core/verification-quick-reference.md` -- Compact checklist (default entry point)
 - `../core/verification-core.md` -- Dimensional analysis, limiting cases, conservation laws
 - `../core/verification-numerical.md` -- Convergence, statistical validation, numerical stability
-- `references/verification/domains/verification-domain-qft.md` -- QFT, particle physics, GR, mathematical physics
-- `references/verification/domains/verification-domain-statmech.md` -- Statistical mechanics, cosmology, fluids
+- `domains/physics/verification/domains/verification-domain-qft.md` -- QFT, particle physics, GR, mathematical physics
+- `domains/physics/verification/domains/verification-domain-statmech.md` -- Statistical mechanics, cosmology, fluids

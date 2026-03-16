@@ -160,7 +160,7 @@ Regardless of autonomy mode, these conditions ALWAYS trigger a hard stop and use
 ```
 Current modes: autonomy={autonomy}, research_mode={research_mode}
 Adapt your search breadth, strictness, and checkpoint frequency accordingly.
-See references/publication/publication-pipeline-modes.md for mode specifications.
+See domains/physics/publication/publication-pipeline-modes.md for mode specifications.
 ```
 
 **For the orchestrator:** Mode transitions (explore → exploit) should be triggered by the `suggest-next` command or by the planner when a viable approach is validated. The orchestrator should:

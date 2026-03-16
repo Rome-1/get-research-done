@@ -153,7 +153,7 @@ See paper templates: `templates/paper/manuscript-outline.md`, `templates/paper/f
 
 ## Standard Verification Checks for Condensed Matter
 
-See `references/verification/core/verification-core.md` for universal checks and `references/verification/domains/verification-domain-condmat.md` for condensed matter-specific verification (sum rules, Kramers-Kronig, Luttinger theorem).
+See `domains/physics/verification/core/verification-core.md` for universal checks and `domains/physics/verification/domains/verification-domain-condmat.md` for condensed matter-specific verification (sum rules, Kramers-Kronig, Luttinger theorem).
 
 ---
 

@@ -640,7 +640,7 @@ For detailed subfield-specific protocols (QFT, condensed matter, stat mech, GR, 
 
 **file_read:** `{GRD_INSTALL_DIR}/references/execution/executor-subfield-guide.md`
 
-Also consult: `{GRD_INSTALL_DIR}/references/physics-subfields.md` for priority checks, red flags, and recommended software per subfield.
+Also consult: `{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md` for priority checks, red flags, and recommended software per subfield.
 
 Load during `load_plan` step if the phase involves a specific subfield. The Protocol Loading Map above handles the physics reasoning protocols; this guide adds subfield-specific execution heuristics on top of those.
 

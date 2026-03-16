@@ -10,9 +10,9 @@ context_cost: medium
 
 # LLM Error Traceability Matrix
 
-Extracted from `references/verification/errors/llm-physics-errors.md` for lightweight loading. Maps each error class to the verification checks most likely to catch it.
+Extracted from `domains/physics/verification/errors/llm-physics-errors.md` for lightweight loading. Maps each error class to the verification checks most likely to catch it.
 
-**Full catalog:** See `references/verification/errors/llm-physics-errors.md` (index) for detailed descriptions, detection strategies, and examples of all 104 error classes across 4 part files.
+**Full catalog:** See `domains/physics/verification/errors/llm-physics-errors.md` (index) for detailed descriptions, detection strategies, and examples of all 104 error classes across 4 part files.
 
 ## Traceability Matrix
 

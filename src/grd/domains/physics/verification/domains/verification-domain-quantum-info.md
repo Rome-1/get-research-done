@@ -23,8 +23,8 @@ CPTP verification, entanglement measures, information-theoretic bounds, channel 
 - `../core/verification-quick-reference.md` — compact checklist (default entry point)
 - `../core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
 - `../core/verification-numerical.md` — convergence, statistical validation, numerical stability
-- `references/verification/domains/verification-domain-amo.md` — AMO physics (for physical qubit implementations)
-- `references/verification/domains/verification-domain-condmat.md` — condensed matter (for topological qubits, many-body entanglement)
+- `domains/physics/verification/domains/verification-domain-amo.md` — AMO physics (for physical qubit implementations)
+- `domains/physics/verification/domains/verification-domain-condmat.md` — condensed matter (for topological qubits, many-body entanglement)
 
 ---
 

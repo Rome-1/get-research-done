@@ -77,7 +77,7 @@ Mode effects on the write-paper pipeline:
 - **Balanced autonomy**: Auto-generate the outline from the research digest, draft all sections, and pause only for claim-level decisions, major structural changes, or referee conflicts.
 - **YOLO autonomy**: Draft all sections, run referee, and present the final result with only hard-stop interruptions.
 
-For detailed mode adaptation specifications (bibliographer search breadth, referee strictness, paper-writer style by mode), see `{GRD_INSTALL_DIR}/references/publication/publication-pipeline-modes.md`.
+For detailed mode adaptation specifications (bibliographer search breadth, referee strictness, paper-writer style by mode), see `{GRD_INSTALL_DIR}/domains/physics/publication/publication-pipeline-modes.md`.
 
 Run centralized context preflight before continuing:
 
@@ -884,7 +884,7 @@ Before declaring the draft complete:
 5. **Check word count / page count** against journal requirements.
 6. **Check reference formatting** matches journal style.
 
-**7. Run paper quality scoring** (see `{GRD_INSTALL_DIR}/references/publication/paper-quality-scoring.md`):
+**7. Run paper quality scoring** (see `{GRD_INSTALL_DIR}/domains/physics/publication/paper-quality-scoring.md`):
 
 Score the paper across 7 dimensions (equations, figures, citations, conventions, verification, completeness, results presentation) for a total out of 100. Apply journal-specific multipliers for the target journal.
 

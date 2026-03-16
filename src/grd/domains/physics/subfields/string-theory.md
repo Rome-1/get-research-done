@@ -22,7 +22,7 @@ context_cost: medium
 
 ## Core Methods
 
-**Detailed protocols:** For step-by-step calculation protocols, see `references/protocols/supersymmetry.md`, `references/protocols/holography-ads-cft.md`, `references/protocols/de-sitter-space.md`, `references/protocols/path-integrals.md`, `references/protocols/string-field-theory.md` (for off-shell formulations), `references/protocols/effective-field-theory.md`, `references/protocols/renormalization-group.md`, `references/protocols/group-theory.md`, and `references/protocols/topological-methods.md`.
+**Detailed protocols:** For step-by-step calculation protocols, see `domains/physics/protocols/supersymmetry.md`, `domains/physics/protocols/holography-ads-cft.md`, `domains/physics/protocols/de-sitter-space.md`, `domains/physics/protocols/path-integrals.md`, `domains/physics/protocols/string-field-theory.md` (for off-shell formulations), `domains/physics/protocols/effective-field-theory.md`, `domains/physics/protocols/renormalization-group.md`, `domains/physics/protocols/group-theory.md`, and `domains/physics/protocols/topological-methods.md`.
 
 **Worldsheet CFT and BRST Structure:**
 
@@ -57,7 +57,7 @@ context_cost: medium
 - String field theory is the right language when off-shell control, tachyon condensation, picture-changing ambiguities, or formal unitarity/UV arguments are central
 - The relevant algebraic structure (`A_infinity`, `L_infinity`, BV) and the worldsheet input data should be stated explicitly
 - Do not import string-field-theory conclusions into ordinary worldsheet perturbation theory unless the map between the two formulations is clear
-- For dedicated SFT workflows, load `references/subfields/string-field-theory.md` and `references/protocols/string-field-theory.md`
+- For dedicated SFT workflows, load `domains/physics/subfields/string-field-theory.md` and `domains/physics/protocols/string-field-theory.md`
 
 ## Key Tools and Software
 
@@ -132,15 +132,15 @@ What regime of string theory?
 ├── Conjectural EFT consistency criteria
 │   └── Swampland reasoning + explicit string constructions
 └── Off-shell or non-perturbative formalism
-    └── String field theory (also load `references/subfields/string-field-theory.md`)
+    └── String field theory (also load `domains/physics/subfields/string-field-theory.md`)
 ```
 
 ## Common Collaboration Patterns
 
-- **String theory + quantum gravity:** Use `references/subfields/quantum-gravity.md` when the core question is holography, black-hole information, or semiclassical gravity rather than string-specific worldsheet or compactification structure
-- **String theory + particle phenomenology:** Compactification data, selection rules, and Yukawas often feed directly into `references/protocols/phenomenology.md`
-- **String theory + cosmology:** de Sitter, inflation, axions, and moduli cosmology need `references/protocols/de-sitter-space.md` plus explicit compactification control
-- **String theory + mathematical physics:** Mirror symmetry, topological strings, modular forms, and category-theoretic structure often need `references/subfields/mathematical-physics.md` alongside this guide
+- **String theory + quantum gravity:** Use `domains/physics/subfields/quantum-gravity.md` when the core question is holography, black-hole information, or semiclassical gravity rather than string-specific worldsheet or compactification structure
+- **String theory + particle phenomenology:** Compactification data, selection rules, and Yukawas often feed directly into `domains/physics/protocols/phenomenology.md`
+- **String theory + cosmology:** de Sitter, inflation, axions, and moduli cosmology need `domains/physics/protocols/de-sitter-space.md` plus explicit compactification control
+- **String theory + mathematical physics:** Mirror symmetry, topological strings, modular forms, and category-theoretic structure often need `domains/physics/subfields/mathematical-physics.md` alongside this guide
 
 ## Project Scope by Career Stage
 

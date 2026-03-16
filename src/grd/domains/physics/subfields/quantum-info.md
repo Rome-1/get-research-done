@@ -15,7 +15,7 @@ context_cost: medium
 
 ## Core Methods
 
-**Detailed protocols:** For step-by-step calculation protocols, see `references/protocols/tensor-networks.md`, `references/protocols/variational-methods.md`, `references/protocols/quantum-error-correction.md`.
+**Detailed protocols:** For step-by-step calculation protocols, see `domains/physics/protocols/tensor-networks.md`, `domains/physics/protocols/variational-methods.md`, `domains/physics/protocols/quantum-error-correction.md`.
 
 **Quantum Circuits:**
 

@@ -23,9 +23,9 @@ Haag-Kastler nets, GNS representations, modular theory, superselection sectors, 
 **Related files:**
 - `../core/verification-quick-reference.md` — compact checklist
 - `../core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
-- `references/verification/domains/verification-domain-qft.md` — Ward identities and ordinary field-theoretic checks
-- `references/verification/domains/verification-domain-mathematical-physics.md` — self-adjointness, spectral theory, general rigor checks
-- `references/protocols/algebraic-qft.md` — formulation-specific workflow
+- `domains/physics/verification/domains/verification-domain-qft.md` — Ward identities and ordinary field-theoretic checks
+- `domains/physics/verification/domains/verification-domain-mathematical-physics.md` — self-adjointness, spectral theory, general rigor checks
+- `domains/physics/protocols/algebraic-qft.md` — formulation-specific workflow
 
 ---
 

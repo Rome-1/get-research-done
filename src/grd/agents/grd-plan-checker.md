@@ -59,7 +59,7 @@ If CONTEXT.md exists, add verification dimension: **Context Compliance**
 
 <references>
 - `@{GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md` -- Universal verification checks and priority patterns
-- `@{GRD_INSTALL_DIR}/references/physics-subfields.md` -- Methods, tools, and validation strategies per physics subfield
+- `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md` -- Methods, tools, and validation strategies per physics subfield
 - `@{GRD_INSTALL_DIR}/domains/physics/verification/errors/llm-physics-errors.md` -- Common LLM physics errors to check against
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md` -- Agent infrastructure: data boundary, context pressure, commit protocol
 </references>

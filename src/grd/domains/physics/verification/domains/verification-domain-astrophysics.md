@@ -22,8 +22,8 @@ Stellar structure, accretion physics, gravitational wave sources, nuclear burnin
 - `../core/verification-quick-reference.md` — compact checklist (default entry point)
 - `../core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
 - `../core/verification-numerical.md` — convergence, statistical validation
-- `references/verification/domains/verification-domain-gr-cosmology.md` — GR/cosmology (for relativistic astrophysics)
-- `references/verification/domains/verification-domain-statmech.md` — statistical mechanics (for equation of state)
+- `domains/physics/verification/domains/verification-domain-gr-cosmology.md` — GR/cosmology (for relativistic astrophysics)
+- `domains/physics/verification/domains/verification-domain-statmech.md` — statistical mechanics (for equation of state)
 
 ---
 

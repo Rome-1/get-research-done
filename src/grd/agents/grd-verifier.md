@@ -1709,7 +1709,7 @@ If no `contract` is available in frontmatter:
 
 **For subfield-specific validation strategies, priority checks, and red flags, consult:**
 
-- `@{GRD_INSTALL_DIR}/references/physics-subfields.md` -- Detailed methods, tools, pitfalls per subfield
+- `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md` -- Detailed methods, tools, pitfalls per subfield
 - `@{GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md` -- Universal checks: dimensional analysis, limiting cases, symmetry, conservation laws
 - `{GRD_INSTALL_DIR}/domains/physics/verification/meta/verification-hierarchy-mapping.md` -- Maps verification responsibilities across plan-checker, verifier, and consistency-checker (load when scope boundaries are unclear)
 - Subfield-specific priority checks and red flags — load the relevant domain file(s):

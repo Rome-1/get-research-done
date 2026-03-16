@@ -22,9 +22,9 @@ BRST cohomology, ghost and picture bookkeeping, BV / `A_infinity` / `L_infinity`
 **Related files:**
 - `../core/verification-quick-reference.md` — compact checklist
 - `../core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
-- `references/verification/domains/verification-domain-qft.md` — BRST and gauge-theory checks with field-theory language
-- `references/verification/domains/verification-domain-mathematical-physics.md` — homotopy-algebra and structural consistency
-- `references/protocols/string-field-theory.md` — formulation-specific workflow
+- `domains/physics/verification/domains/verification-domain-qft.md` — BRST and gauge-theory checks with field-theory language
+- `domains/physics/verification/domains/verification-domain-mathematical-physics.md` — homotopy-algebra and structural consistency
+- `domains/physics/protocols/string-field-theory.md` — formulation-specific workflow
 
 ---
 

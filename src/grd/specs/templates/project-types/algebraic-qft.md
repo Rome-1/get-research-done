@@ -132,7 +132,7 @@ See paper templates: `templates/paper/manuscript-outline.md`, `templates/paper/f
 
 ## Standard Verification Checks for Algebraic QFT
 
-See `references/verification/domains/verification-domain-algebraic-qft.md` for AQFT-specific checks and `references/verification/core/verification-core.md` for universal checks.
+See `domains/physics/verification/domains/verification-domain-algebraic-qft.md` for AQFT-specific checks and `domains/physics/verification/core/verification-core.md` for universal checks.
 
 - Haag-Kastler axiom bookkeeping
 - GNS and cyclic/separating-vector discipline

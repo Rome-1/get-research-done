@@ -678,7 +678,7 @@ def test_parameter_sweep():
 
 ## See Also
 
-- `references/verification/core/verification-core.md` — analytical verification checks (dimensional analysis, limiting cases, conservation laws) that code tests should encode
-- `references/protocols/hypothesis-driven-research.md` — predict-derive-verify cycle; code tests are the computational implementation of stated predictions
+- `domains/physics/verification/core/verification-core.md` — analytical verification checks (dimensional analysis, limiting cases, conservation laws) that code tests should encode
+- `domains/physics/protocols/hypothesis-driven-research.md` — predict-derive-verify cycle; code tests are the computational implementation of stated predictions
 
 </test_organization>

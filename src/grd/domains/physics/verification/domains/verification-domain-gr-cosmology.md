@@ -22,8 +22,8 @@ Constraint propagation, gauge invariance of perturbations, energy conditions, as
 - `../core/verification-quick-reference.md` — compact checklist (default entry point)
 - `../core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
 - `../core/verification-numerical.md` — convergence, statistical validation, numerical stability
-- `references/verification/domains/verification-domain-qft.md` — QFT, particle physics (for quantum gravity overlap)
-- `references/verification/domains/verification-domain-astrophysics.md` — astrophysics (for observational cosmology overlap)
+- `domains/physics/verification/domains/verification-domain-qft.md` — QFT, particle physics (for quantum gravity overlap)
+- `domains/physics/verification/domains/verification-domain-astrophysics.md` — astrophysics (for observational cosmology overlap)
 
 ---
 

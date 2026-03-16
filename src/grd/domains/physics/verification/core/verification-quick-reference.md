@@ -10,7 +10,7 @@ context_cost: medium
 
 # Verification Quick Reference
 
-Compact reference for physics verification. This file is the conceptual checklist; the stable machine-facing verifier registry lives in `grd.core.verification_checks` and the `grd-verification` MCP server. For full procedures, worked examples, and code templates, see the modular verification files: `references/verification/core/verification-core.md` (universal checks), `references/verification/core/verification-numerical.md` (convergence/statistics), `../domains/verification-domain-qft.md` (QFT/particle), `../domains/verification-domain-condmat.md` (condensed matter), `../domains/verification-domain-statmech.md` (stat mech/cosmo), `../domains/verification-domain-gr-cosmology.md` (GR/cosmology), `../domains/verification-domain-amo.md` (AMO/quantum optics), `../domains/verification-domain-nuclear-particle.md` (nuclear/particle), `../domains/verification-domain-astrophysics.md` (astrophysics/stellar), `../domains/verification-domain-mathematical-physics.md` (mathematical physics), `../domains/verification-domain-algebraic-qft.md` (algebraic QFT/operator algebras), `../domains/verification-domain-string-field-theory.md` (string field theory), `../domains/verification-domain-quantum-info.md` (quantum information/computing), `../domains/verification-domain-soft-matter.md` (soft matter/biophysics), `../domains/verification-domain-fluid-plasma.md` (fluid dynamics/MHD/plasma).
+Compact reference for physics verification. This file is the conceptual checklist; the stable machine-facing verifier registry lives in `grd.core.verification_checks` and the `grd-verification` MCP server. For full procedures, worked examples, and code templates, see the modular verification files: `domains/physics/verification/core/verification-core.md` (universal checks), `domains/physics/verification/core/verification-numerical.md` (convergence/statistics), `../domains/verification-domain-qft.md` (QFT/particle), `../domains/verification-domain-condmat.md` (condensed matter), `../domains/verification-domain-statmech.md` (stat mech/cosmo), `../domains/verification-domain-gr-cosmology.md` (GR/cosmology), `../domains/verification-domain-amo.md` (AMO/quantum optics), `../domains/verification-domain-nuclear-particle.md` (nuclear/particle), `../domains/verification-domain-astrophysics.md` (astrophysics/stellar), `../domains/verification-domain-mathematical-physics.md` (mathematical physics), `../domains/verification-domain-algebraic-qft.md` (algebraic QFT/operator algebras), `../domains/verification-domain-string-field-theory.md` (string field theory), `../domains/verification-domain-quantum-info.md` (quantum information/computing), `../domains/verification-domain-soft-matter.md` (soft matter/biophysics), `../domains/verification-domain-fluid-plasma.md` (fluid dynamics/MHD/plasma).
 
 ---
 
@@ -163,9 +163,9 @@ For the full catalog of 104 LLM physics error classes, see `../errors/llm-physic
 
 ## See Also
 
-- `references/verification/core/verification-patterns.md` — Index pointing to modular verification files
-- `references/verification/core/verification-core.md` — Universal checks: dimensional analysis, limiting cases, conservation laws, symmetry
-- `references/verification/core/verification-numerical.md` — Convergence testing, statistical validation, automated verification
+- `domains/physics/verification/core/verification-patterns.md` — Index pointing to modular verification files
+- `domains/physics/verification/core/verification-core.md` — Universal checks: dimensional analysis, limiting cases, conservation laws, symmetry
+- `domains/physics/verification/core/verification-numerical.md` — Convergence testing, statistical validation, automated verification
 - `../domains/verification-domain-qft.md` — QFT, particle physics, GR, mathematical physics checks
 - `../domains/verification-domain-algebraic-qft.md` — AQFT, local nets, modular theory, von Neumann factor-type checks
 - `../domains/verification-domain-string-field-theory.md` — String field theory, BRST, ghost/picture, truncation checks

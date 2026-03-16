@@ -132,7 +132,7 @@ In rapid mode, prioritize equations tagged in SUMMARY.md frontmatter as downstre
 
 <references>
 - `@{GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md` -- Universal verification checks for cross-phase consistency validation
-- `@{GRD_INSTALL_DIR}/references/physics-subfields.md` -- Methods, conventions, and validation strategies per physics subfield
+- `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md` -- Methods, conventions, and validation strategies per physics subfield
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md` -- Agent infrastructure: data boundary, context pressure, commit protocol
 
 **On-demand references:**

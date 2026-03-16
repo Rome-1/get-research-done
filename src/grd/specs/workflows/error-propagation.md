@@ -14,7 +14,7 @@ Uncertainties propagate. Every intermediate result in a derivation chain carries
 
 <required_reading>
 Read these reference and template files using the file_read tool:
-- {GRD_INSTALL_DIR}/references/protocols/error-propagation-protocol.md -- Cross-phase uncertainty propagation protocol (verification checks, phase handoff format, catastrophic cancellation detection)
+- {GRD_INSTALL_DIR}/domains/physics/protocols/error-propagation-protocol.md -- Cross-phase uncertainty propagation protocol (verification checks, phase handoff format, catastrophic cancellation detection)
 - {GRD_INSTALL_DIR}/templates/uncertainty-budget.md -- Template for project-wide uncertainty ledger (.grd/analysis/UNCERTAINTY-BUDGET.md)
 - {GRD_INSTALL_DIR}/templates/parameter-table.md -- Template for parameter registry (.grd/analysis/PARAMETERS.md)
 </required_reading>

@@ -26,7 +26,7 @@ Crossing symmetry, chiral power counting, parton sum rules, heavy quark symmetry
 **Related files:**
 - `../core/verification-quick-reference.md` — compact checklist (default entry point)
 - `../core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
-- `references/verification/domains/verification-domain-qft.md` — QFT (for Feynman diagrams, renormalization, Ward identities)
+- `domains/physics/verification/domains/verification-domain-qft.md` — QFT (for Feynman diagrams, renormalization, Ward identities)
 - `../core/verification-numerical.md` — convergence, statistical validation
 
 ---

@@ -16,7 +16,7 @@ context_cost: medium
 
 ## Core Methods
 
-**Detailed protocols:** For step-by-step calculation protocols, see `references/protocols/string-field-theory.md`, `references/protocols/path-integrals.md`, `references/protocols/supersymmetry.md`, `references/protocols/holography-ads-cft.md`, `references/protocols/group-theory.md`, `references/protocols/numerical-computation.md`, and `references/protocols/analytic-continuation.md`.
+**Detailed protocols:** For step-by-step calculation protocols, see `domains/physics/protocols/string-field-theory.md`, `domains/physics/protocols/path-integrals.md`, `domains/physics/protocols/supersymmetry.md`, `domains/physics/protocols/holography-ads-cft.md`, `domains/physics/protocols/group-theory.md`, `domains/physics/protocols/numerical-computation.md`, and `domains/physics/protocols/analytic-continuation.md`.
 
 **Foundational formulations:**
 
@@ -120,9 +120,9 @@ What kind of SFT problem is it?
 
 ## Common Collaboration Patterns
 
-- **String field theory + string theory:** Use `references/subfields/string-theory.md` when the problem depends on worldsheet CFT, D-brane constructions, compactification, or duality dictionary rather than on off-shell SFT structure alone
-- **String field theory + mathematical physics:** Homotopy algebra, BV structure, and cyclicity questions often also need `references/subfields/mathematical-physics.md`
-- **String field theory + holography:** When an SFT background is interpreted holographically, also load `references/protocols/holography-ads-cft.md` and the relevant string-theory context
+- **String field theory + string theory:** Use `domains/physics/subfields/string-theory.md` when the problem depends on worldsheet CFT, D-brane constructions, compactification, or duality dictionary rather than on off-shell SFT structure alone
+- **String field theory + mathematical physics:** Homotopy algebra, BV structure, and cyclicity questions often also need `domains/physics/subfields/mathematical-physics.md`
+- **String field theory + holography:** When an SFT background is interpreted holographically, also load `domains/physics/protocols/holography-ads-cft.md` and the relevant string-theory context
 
 ## Project Scope by Career Stage
 

@@ -13,7 +13,7 @@ context_cost: large
 
 Ward identities, unitarity, causality, positivity, crossing symmetry, and subfield-specific checks for quantum field theory and particle physics.
 
-> **Note:** For GR/cosmology, see `references/verification/domains/verification-domain-gr-cosmology.md`. For mathematical physics, see `references/verification/domains/verification-domain-mathematical-physics.md`. For algebraic QFT and operator algebras, see `references/verification/domains/verification-domain-algebraic-qft.md`. For string field theory, see `references/verification/domains/verification-domain-string-field-theory.md`. For nuclear/particle, see `references/verification/domains/verification-domain-nuclear-particle.md`.
+> **Note:** For GR/cosmology, see `domains/physics/verification/domains/verification-domain-gr-cosmology.md`. For mathematical physics, see `domains/physics/verification/domains/verification-domain-mathematical-physics.md`. For algebraic QFT and operator algebras, see `domains/physics/verification/domains/verification-domain-algebraic-qft.md`. For string field theory, see `domains/physics/verification/domains/verification-domain-string-field-theory.md`. For nuclear/particle, see `domains/physics/verification/domains/verification-domain-nuclear-particle.md`.
 
 **Load when:** Working on QFT calculations, scattering amplitudes, renormalization, general relativity, or mathematical physics.
 
@@ -21,8 +21,8 @@ Ward identities, unitarity, causality, positivity, crossing symmetry, and subfie
 - `../core/verification-quick-reference.md` — compact checklist (default entry point)
 - `../core/verification-core.md` — dimensional analysis, limiting cases, conservation laws
 - `../core/verification-numerical.md` — convergence, statistical validation, numerical stability
-- `references/verification/domains/verification-domain-condmat.md` — condensed matter, quantum information, AMO
-- `references/verification/domains/verification-domain-statmech.md` — statistical mechanics, cosmology, fluids
+- `domains/physics/verification/domains/verification-domain-condmat.md` — condensed matter, quantum information, AMO
+- `domains/physics/verification/domains/verification-domain-statmech.md` — statistical mechanics, cosmology, fluids
 
 ---
 
@@ -431,5 +431,5 @@ ratio = dsigma_correct(theta_90) / dsigma_claimed(theta_90)
 - `../core/verification-quick-reference.md` -- Compact checklist (default entry point)
 - `../core/verification-core.md` -- Dimensional analysis, limiting cases, conservation laws
 - `../core/verification-numerical.md` -- Convergence, statistical validation, numerical stability
-- `references/verification/domains/verification-domain-condmat.md` -- Condensed matter, quantum information, AMO
-- `references/verification/domains/verification-domain-statmech.md` -- Statistical mechanics, cosmology, fluids
+- `domains/physics/verification/domains/verification-domain-condmat.md` -- Condensed matter, quantum information, AMO
+- `domains/physics/verification/domains/verification-domain-statmech.md` -- Statistical mechanics, cosmology, fluids

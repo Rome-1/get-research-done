@@ -1494,7 +1494,7 @@ Loaded from shared-protocols.md reference. See `<references>` section above.
 
 For subfield-specific priority checks, red flags, and standard benchmarks, consult the selected protocol bundle context first. If no bundle is selected or the bundle is incomplete, fall back to:
 
-- `@{GRD_INSTALL_DIR}/references/physics-subfields.md` -- Methods, tools, validation per subfield
+- `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md` -- Methods, tools, validation per subfield
 - `@{GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md` -- Universal verification checks and quick-reference priority checks
 - `@{GRD_INSTALL_DIR}/references/orchestration/checkpoints.md` -- Checkpoint types, when to use, and structuring guidance
 

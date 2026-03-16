@@ -2,7 +2,7 @@
 
 Executable templates and code examples for computational physics verification. The live verifier registry now has 19 checks: 14 universal checks (`5.1`-`5.14`) plus 5 contract-aware checks (`5.15`-`5.19`).
 
-**Template note:** This file is a library of reusable worked examples and support patterns for the universal physics checks. It is not the machine-readable source of truth for current verifier numbering or required scope. Use `grd.core.verification_checks` and `references/verification/meta/verifier-profile-checks.md` to decide which checks are actually required for a phase.
+**Template note:** This file is a library of reusable worked examples and support patterns for the universal physics checks. It is not the machine-readable source of truth for current verifier numbering or required scope. Use `grd.core.verification_checks` and `domains/physics/verification/meta/verifier-profile-checks.md` to decide which checks are actually required for a phase.
 
 Load on demand when performing the corresponding verification check.
 

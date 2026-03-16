@@ -384,7 +384,7 @@ class TestRunDoctor:
 
     def test_missing_nested_key_reference_warns(self, tmp_path: Path):
         specs_dir = self._make_specs_dir(tmp_path)
-        missing_ref = specs_dir / "references" / "verification" / "errors" / "llm-physics-errors.md"
+        missing_ref = specs_dir / "references" / "shared" / "shared-protocols.md"
         missing_ref.unlink()
 
         report = run_doctor(specs_dir=specs_dir, version="0.1.0")
@@ -392,7 +392,7 @@ class TestRunDoctor:
 
         assert checks["Key References"].status == CheckStatus.WARN
         assert any(
-            "references/verification/errors/llm-physics-errors.md" in warning
+            "references/shared/shared-protocols.md" in warning
             for warning in checks["Key References"].warnings
         )
 

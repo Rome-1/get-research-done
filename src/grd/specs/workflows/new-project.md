@@ -1867,7 +1867,7 @@ Interactive mode: Present suggested conventions, wait for user confirmation/over
    grd convention set metric_signature "mostly_minus" 2>/dev/null || true
    ```
 
-   Adjust values based on what PROJECT.md specifies. If PROJECT.md doesn't specify conventions, use the subfield defaults from `{GRD_INSTALL_DIR}/references/conventions/subfield-convention-defaults.md`.
+   Adjust values based on what PROJECT.md specifies. If PROJECT.md doesn't specify conventions, use the subfield defaults from `{GRD_INSTALL_DIR}/domains/physics/conventions/subfield-convention-defaults.md`.
 
 3. Note that full convention establishment was skipped. The user can run `grd convention set ...` or `/grd:validate-conventions` later to complete convention setup.
 

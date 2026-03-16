@@ -29,6 +29,7 @@ WORKFLOWS_DIR = REPO_ROOT / "src/grd/specs/workflows"
 COMMANDS_DIR = REPO_ROOT / "src/grd/commands"
 AGENTS_DIR = REPO_ROOT / "src/grd/agents"
 REFERENCES_DIR = REPO_ROOT / "src/grd/specs/references"
+PHYSICS_DIR = REPO_ROOT / "src/grd/domains/physics"
 GRAPH_PATH = REPO_ROOT / "tests" / "README.md"
 WORKFLOW_EXEMPT_COMMANDS = frozenset({"health", "suggest-next"})
 
@@ -94,33 +95,33 @@ AGENT_REFERENCE_TOKENS = {
     "grd-bibliographer.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/physics-subfields.md",
-        "references/publication/publication-pipeline-modes.md",
+        "domains/physics/physics-subfields.md",
+        "domains/physics/publication/publication-pipeline-modes.md",
         "templates/notation-glossary.md",
-        "references/publication/bibtex-standards.md",
+        "domains/physics/publication/bibtex-standards.md",
     ],
     "grd-explainer.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/physics-subfields.md",
+        "domains/physics/physics-subfields.md",
         "templates/notation-glossary.md",
     ],
     "grd-consistency-checker.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/physics-subfields.md",
-        "references/verification/core/verification-core.md",
+        "domains/physics/physics-subfields.md",
+        "domains/physics/verification/core/verification-core.md",
         "references/shared/cross-project-patterns.md",
         "references/examples/contradiction-resolution-example.md",
-        "references/verification/meta/verification-hierarchy-mapping.md",
+        "domains/physics/verification/meta/verification-hierarchy-mapping.md",
         "templates/uncertainty-budget.md",
         "templates/conventions.md",
     ],
     "grd-debugger.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/physics-subfields.md",
-        "references/verification/core/verification-core.md",
+        "domains/physics/physics-subfields.md",
+        "domains/physics/verification/core/verification-core.md",
         "references/shared/cross-project-patterns.md",
         "workflows/record-insight.md",
     ],
@@ -136,10 +137,10 @@ AGENT_REFERENCE_TOKENS = {
         "references/execution/executor-task-checkpoints.md",
         "references/execution/executor-completion.md",
         "references/execution/executor-worked-example.md",
-        "references/protocols/order-of-limits.md",
+        "domains/physics/protocols/order-of-limits.md",
         "references/methods/approximation-selection.md",
-        "references/verification/errors/llm-physics-errors.md",
-        "references/verification/core/code-testing-physics.md",
+        "domains/physics/verification/errors/llm-physics-errors.md",
+        "domains/physics/verification/core/code-testing-physics.md",
         "references/orchestration/checkpoints.md",
         "templates/state-machine.md",
         "templates/summary.md",
@@ -153,78 +154,78 @@ AGENT_REFERENCE_TOKENS = {
     "grd-notation-coordinator.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/conventions/subfield-convention-defaults.md",
+        "domains/physics/conventions/subfield-convention-defaults.md",
         "templates/conventions.md",
     ],
     "grd-paper-writer.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/publication/publication-pipeline-modes.md",
+        "domains/physics/publication/publication-pipeline-modes.md",
         "templates/notation-glossary.md",
         "templates/latex-preamble.md",
-        "references/publication/figure-generation-templates.md",
+        "domains/physics/publication/figure-generation-templates.md",
     ],
     "grd-review-reader.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/publication/peer-review-panel.md",
+        "domains/physics/publication/peer-review-panel.md",
     ],
     "grd-review-literature.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/publication/publication-pipeline-modes.md",
-        "references/publication/peer-review-panel.md",
+        "domains/physics/publication/publication-pipeline-modes.md",
+        "domains/physics/publication/peer-review-panel.md",
     ],
     "grd-review-math.md": [
         "references/shared/shared-protocols.md",
-        "references/physics-subfields.md",
-        "references/verification/core/verification-core.md",
-        "references/publication/peer-review-panel.md",
+        "domains/physics/physics-subfields.md",
+        "domains/physics/verification/core/verification-core.md",
+        "domains/physics/publication/peer-review-panel.md",
     ],
     "grd-review-physics.md": [
         "references/shared/shared-protocols.md",
-        "references/physics-subfields.md",
-        "references/verification/core/verification-core.md",
-        "references/publication/peer-review-panel.md",
+        "domains/physics/physics-subfields.md",
+        "domains/physics/verification/core/verification-core.md",
+        "domains/physics/publication/peer-review-panel.md",
     ],
     "grd-review-significance.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/publication/publication-pipeline-modes.md",
-        "references/publication/peer-review-panel.md",
+        "domains/physics/publication/publication-pipeline-modes.md",
+        "domains/physics/publication/peer-review-panel.md",
     ],
     "grd-phase-researcher.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/physics-subfields.md",
+        "domains/physics/physics-subfields.md",
         "references/research/research-modes.md",
     ],
     "grd-plan-checker.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/physics-subfields.md",
-        "references/verification/core/verification-core.md",
+        "domains/physics/physics-subfields.md",
+        "domains/physics/verification/core/verification-core.md",
     ],
     "grd-planner.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/physics-subfields.md",
-        "references/verification/core/verification-core.md",
+        "domains/physics/physics-subfields.md",
+        "domains/physics/verification/core/verification-core.md",
         "templates/planner-subagent-prompt.md",
         "templates/phase-prompt.md",
         "templates/parameter-table.md",
         "templates/summary.md",
         "workflows/execute-plan.md",
-        "references/protocols/order-of-limits.md",
+        "domains/physics/protocols/order-of-limits.md",
         "references/methods/approximation-selection.md",
-        "references/verification/core/code-testing-physics.md",
+        "domains/physics/verification/core/code-testing-physics.md",
         "references/orchestration/checkpoints.md",
         "references/planning/planner-conventions.md",
         "references/planning/planner-approximations.md",
         "references/planning/planner-scope-examples.md",
         "references/planning/planner-tdd.md",
         "references/planning/planner-iterative.md",
-        "references/protocols/hypothesis-driven-research.md",
+        "domains/physics/protocols/hypothesis-driven-research.md",
     ],
     "grd-project-researcher.md": [
         "references/shared/shared-protocols.md",
@@ -234,10 +235,10 @@ AGENT_REFERENCE_TOKENS = {
     "grd-referee.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/physics-subfields.md",
-        "references/verification/core/verification-core.md",
-        "references/publication/publication-pipeline-modes.md",
-        "references/publication/peer-review-panel.md",
+        "domains/physics/physics-subfields.md",
+        "domains/physics/verification/core/verification-core.md",
+        "domains/physics/publication/publication-pipeline-modes.md",
+        "domains/physics/publication/peer-review-panel.md",
         "templates/paper/referee-report.tex",
     ],
     "grd-research-synthesizer.md": [
@@ -254,7 +255,7 @@ AGENT_REFERENCE_TOKENS = {
     "grd-research-mapper.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/physics-subfields.md",
+        "domains/physics/physics-subfields.md",
         "references/templates/research-mapper/FORMALISM.md",
         "references/templates/research-mapper/REFERENCES.md",
         "references/templates/research-mapper/ARCHITECTURE.md",
@@ -265,11 +266,11 @@ AGENT_REFERENCE_TOKENS = {
     ],
     "grd-verifier.md": [
         "references/shared/shared-protocols.md",
-        "references/physics-subfields.md",
-        "references/verification/core/verification-core.md",
+        "domains/physics/physics-subfields.md",
+        "domains/physics/verification/core/verification-core.md",
         "references/research/research-modes.md",
-        "references/verification/meta/verification-hierarchy-mapping.md",
-        "references/verification/core/computational-verification-templates.md",
+        "domains/physics/verification/meta/verification-hierarchy-mapping.md",
+        "domains/physics/verification/core/computational-verification-templates.md",
     ],
 }
 
@@ -904,12 +905,12 @@ def test_contract_schema_references_stay_wired_into_templates_and_review_docs() 
     contract_results_schema = (TEMPLATES_DIR / "contract-results-schema.md").read_text(encoding="utf-8")
     referee = (AGENTS_DIR / "grd-referee.md").read_text(encoding="utf-8")
     peer_review = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
-    panel = (REFERENCES_DIR / "publication" / "peer-review-panel.md").read_text(encoding="utf-8")
-    scoring = (REFERENCES_DIR / "publication" / "paper-quality-scoring.md").read_text(encoding="utf-8")
+    panel = (PHYSICS_DIR / "publication" / "peer-review-panel.md").read_text(encoding="utf-8")
+    scoring = (PHYSICS_DIR / "publication" / "paper-quality-scoring.md").read_text(encoding="utf-8")
     referee_decision_schema = (TEMPLATES_DIR / "paper" / "referee-decision-schema.md").read_text(encoding="utf-8")
     paper_config_schema = (TEMPLATES_DIR / "paper" / "paper-config-schema.md").read_text(encoding="utf-8")
     reproducibility_template = (TEMPLATES_DIR / "paper" / "reproducibility-manifest.md").read_text(encoding="utf-8")
-    reproducibility_protocol = (REFERENCES_DIR / "protocols" / "reproducibility.md").read_text(encoding="utf-8")
+    reproducibility_protocol = (PHYSICS_DIR / "protocols" / "reproducibility.md").read_text(encoding="utf-8")
     execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
     verify_work = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
     plan_phase = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
@@ -958,14 +959,14 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     assert "Active References:\n{active_reference_context}" in peer_review
     assert "templates/paper/review-ledger-schema.md" in peer_review
     assert "templates/paper/referee-decision-schema.md" in peer_review
-    assert "references/publication/peer-review-panel.md" in peer_review
+    assert "domains/physics/publication/peer-review-panel.md" in peer_review
     assert "templates/verification-report.md" in verify_command
     assert "templates/contract-results-schema.md" in verify_command
     assert "state-json-schema.md` itself" in sync_state
     assert "Keep the current `project_contract` and `active_reference_context` visible throughout that staged review" in write_paper
     assert "peer-review-panel.md` directly" in review_reader
     assert "peer-review-panel.md` directly" in review_literature
-    assert "re-open `@{GRD_INSTALL_DIR}/references/publication/peer-review-panel.md`" in referee
+    assert "re-open `@{GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md`" in referee
 
 
 def test_skill_surface_exposes_contract_references_for_paper_and_review_workflows() -> None:
@@ -1168,14 +1169,14 @@ def test_stage8_surfaces_decisive_comparisons_paper_quality_artifacts_and_profil
     write_paper = (WORKFLOWS_DIR / "write-paper.md").read_text(encoding="utf-8")
     new_project = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     execute_phase = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
-    scoring = (REFERENCES_DIR / "publication" / "paper-quality-scoring.md").read_text(encoding="utf-8")
+    scoring = (PHYSICS_DIR / "publication" / "paper-quality-scoring.md").read_text(encoding="utf-8")
     settings = (WORKFLOWS_DIR / "settings.md").read_text(encoding="utf-8")
     profiles = (REFERENCES_DIR / "orchestration" / "model-profiles.md").read_text(encoding="utf-8")
-    quick_reference = (REFERENCES_DIR / "verification" / "core" / "verification-quick-reference.md").read_text(
+    quick_reference = (PHYSICS_DIR / "verification" / "core" / "verification-quick-reference.md").read_text(
         encoding="utf-8"
     )
     verifier_profiles = (
-        REFERENCES_DIR / "verification" / "meta" / "verifier-profile-checks.md"
+        PHYSICS_DIR / "verification" / "meta" / "verifier-profile-checks.md"
     ).read_text(encoding="utf-8")
     planner = (AGENTS_DIR / "grd-planner.md").read_text(encoding="utf-8")
     executor = (AGENTS_DIR / "grd-executor.md").read_text(encoding="utf-8")
@@ -1256,6 +1257,7 @@ def test_repo_graph_prompt_scope_counts_match_repo_inventory() -> None:
     assert parse_scope_count("src/grd/specs/workflows/*.md") == len(list(WORKFLOWS_DIR.glob("*.md")))
     assert parse_scope_count("src/grd/specs/templates/**/*.md") == len(list(TEMPLATES_DIR.rglob("*.md")))
     assert parse_scope_count("src/grd/specs/references/**/*.md") == len(list(REFERENCES_DIR.rglob("*.md")))
+    assert parse_scope_count("src/grd/domains/**/*.md") == len(list(PHYSICS_DIR.parent.rglob("*.md")))
 
 
 def test_repo_graph_same_stem_command_inventory_matches_repo() -> None:
@@ -1295,5 +1297,5 @@ def test_repo_graph_tracks_staged_review_panel_wiring() -> None:
     assert (
         "src/grd/agents/{grd-review-reader,grd-review-literature,grd-review-math,"
         "grd-review-physics,grd-review-significance,grd-referee}.md"
-        " -> src/grd/specs/references/publication/peer-review-panel.md"
+        " -> src/grd/domains/physics/publication/peer-review-panel.md"
     ) in graph_text
