@@ -957,6 +957,16 @@ def _load_lock():  # noqa: ANN202 — returns ConventionLock (imported inside)
     return ConventionLock(**lock_data)
 
 
+def _load_domain_ctx():  # noqa: ANN202
+    """Load the DomainContext for the current project, or None."""
+    import os
+
+    from grd.domains.loader import load_domain
+
+    domain_name = os.environ.get("GRD_DOMAIN", "physics")
+    return load_domain(domain_name, project_root=_get_cwd())
+
+
 
 @convention_app.command("set")
 def convention_set(
@@ -991,7 +1001,7 @@ def convention_set(
             lock_data = {}
         lock = ConventionLock(**lock_data)
 
-        result = convention_set(lock, key, value, force=force)
+        result = convention_set(lock, key, value, force=force, domain_ctx=_load_domain_ctx())
         if result.updated:
             raw["convention_lock"] = lock.model_dump(exclude_none=True)
             save_state_json_locked(cwd, raw)
@@ -1004,7 +1014,7 @@ def convention_list() -> None:
     """List all active conventions."""
     from grd.core.conventions import convention_list
 
-    _output(convention_list(_load_lock()))
+    _output(convention_list(_load_lock(), domain_ctx=_load_domain_ctx()))
 
 
 @convention_app.command("diff")
@@ -1023,7 +1033,7 @@ def convention_check() -> None:
     """Check convention consistency across phases."""
     from grd.core.conventions import convention_check
 
-    _output(convention_check(_load_lock()))
+    _output(convention_check(_load_lock(), domain_ctx=_load_domain_ctx()))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
