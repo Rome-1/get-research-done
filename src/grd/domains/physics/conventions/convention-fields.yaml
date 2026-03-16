@@ -1,0 +1,99 @@
+# Physics convention fields — the 18 canonical convention lock fields
+# These define the domain-specific conventions that can be locked per-project.
+
+fields:
+  - name: metric_signature
+    label: "Metric signature"
+    description: "Spacetime metric sign convention"
+    aliases: ["metric"]
+    value_aliases:
+      "(+,-,-,-)": "mostly-minus"
+      "(+,\u2212,\u2212,\u2212)": "mostly-minus"
+      "+---": "mostly-minus"
+      "mostly_minus": "mostly-minus"
+      "(-,+,+,+)": "mostly-plus"
+      "(\u2212,+,+,+)": "mostly-plus"
+      "-+++": "mostly-plus"
+      "mostly_plus": "mostly-plus"
+      "(+,+,+,+)": "euclidean"
+      "++++": "euclidean"
+
+  - name: fourier_convention
+    label: "Fourier convention"
+    description: "Choice of Fourier transform normalization"
+    aliases: ["fourier"]
+
+  - name: natural_units
+    label: "Natural units"
+    description: "Unit system (hbar=c=kB=1 vs SI vs Planck vs lattice)"
+    aliases: ["units"]
+
+  - name: gauge_choice
+    label: "Gauge choice"
+    description: "Gauge fixing convention (Coulomb, axial, temporal, Lorenz)"
+    aliases: ["gauge"]
+
+  - name: regularization_scheme
+    label: "Regularization scheme"
+    description: "Regularization method (cutoff, dimensional, PV, lattice)"
+    aliases: ["regularization"]
+
+  - name: renormalization_scheme
+    label: "Renormalization scheme"
+    description: "Renormalization prescription (MS, MSbar, on-shell)"
+    aliases: ["renorm", "renormalization"]
+
+  - name: coordinate_system
+    label: "Coordinate system"
+    description: "Coordinate convention (Cartesian, spherical, lightcone)"
+    aliases: ["coordinates"]
+
+  - name: spin_basis
+    label: "Spin basis"
+    description: "Spinor representation (Weyl, Majorana, Dirac)"
+    aliases: ["spin"]
+
+  - name: state_normalization
+    label: "State normalization"
+    description: "Quantum state normalization convention"
+    aliases: ["normalization"]
+
+  - name: coupling_convention
+    label: "Coupling convention"
+    description: "Coupling constant convention (e vs e/(4pi), g vs g/2)"
+    aliases: ["coupling"]
+
+  - name: index_positioning
+    label: "Index positioning"
+    description: "Tensor index convention (upper/lower vs abstract)"
+    aliases: ["index"]
+
+  - name: time_ordering
+    label: "Time ordering"
+    description: "Time ordering prescription (contour ordering, i-epsilon)"
+    aliases: ["ordering"]
+
+  - name: commutation_convention
+    label: "Commutation convention"
+    description: "Commutator/anticommutator notation"
+    aliases: ["commutator"]
+
+  - name: levi_civita_sign
+    label: "Levi-Civita sign"
+    description: "Levi-Civita tensor sign convention with metric"
+
+  - name: generator_normalization
+    label: "Generator normalization"
+    description: "Lie algebra generator normalization (Tr(T_a T_b) = ...)"
+
+  - name: covariant_derivative_sign
+    label: "Covariant derivative sign"
+    description: "Sign in covariant derivative (+ig vs -ig)"
+
+  - name: gamma_matrix_convention
+    label: "Gamma matrix convention"
+    description: "Dirac gamma matrix anticommutation convention"
+
+  - name: creation_annihilation_order
+    label: "Creation/annihilation order"
+    description: "Commutation relation sign for creation/annihilation operators"

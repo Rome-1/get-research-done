@@ -15,14 +15,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_JSON = json.loads((REPO_ROOT / "package.json").read_text(encoding="utf-8"))
 PYPROJECT = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 PACKAGE_VERSION = str(PACKAGE_JSON["version"])
-PYTHON_PACKAGE_VERSION = str(PACKAGE_JSON["gpdPythonVersion"])
+PYTHON_PACKAGE_VERSION = str(PACKAGE_JSON["grdPythonVersion"])
 
 REPO_GIT_URL = str(PACKAGE_JSON["repository"]["url"]).removeprefix("git+").rstrip("/")
 if not REPO_GIT_URL.endswith(".git"):
     REPO_GIT_URL = f"{REPO_GIT_URL}.git"
 REPO_BASE_URL = REPO_GIT_URL.removesuffix(".git")
 
-PYPI_SPEC = f"get-physics-done=={PYTHON_PACKAGE_VERSION}"
+PYPI_SPEC = f"get-research-done=={PYTHON_PACKAGE_VERSION}"
 TAG_ARCHIVE_SPEC = f"{REPO_BASE_URL}/archive/refs/tags/v{PYTHON_PACKAGE_VERSION}.tar.gz"
 MAIN_ARCHIVE_SPEC = f"{REPO_BASE_URL}/archive/refs/heads/main.tar.gz"
 TAG_HTTPS_GIT_SPEC = f"git+{REPO_GIT_URL}@v{PYTHON_PACKAGE_VERSION}"
@@ -34,10 +34,10 @@ RUNTIME_DISPLAY_NAMES = {
     "opencode": "OpenCode",
 }
 RUNTIME_HELP_COMMANDS = {
-    "claude-code": "/gpd:help",
-    "codex": "$gpd-help",
-    "gemini": "/gpd:help",
-    "opencode": "/gpd-help",
+    "claude-code": "/grd:help",
+    "codex": "$grd-help",
+    "gemini": "/grd:help",
+    "opencode": "/grd-help",
 }
 RUNTIME_LAUNCH_COMMANDS = {
     "claude-code": "claude",
@@ -46,16 +46,16 @@ RUNTIME_LAUNCH_COMMANDS = {
     "opencode": "opencode",
 }
 RUNTIME_NEW_PROJECT_COMMANDS = {
-    "claude-code": "/gpd:new-project",
-    "codex": "$gpd-new-project",
-    "gemini": "/gpd:new-project",
-    "opencode": "/gpd-new-project",
+    "claude-code": "/grd:new-project",
+    "codex": "$grd-new-project",
+    "gemini": "/grd:new-project",
+    "opencode": "/grd-new-project",
 }
 RUNTIME_MAP_RESEARCH_COMMANDS = {
-    "claude-code": "/gpd:map-research",
-    "codex": "$gpd-map-research",
-    "gemini": "/gpd:map-research",
-    "opencode": "/gpd-map-research",
+    "claude-code": "/grd:map-research",
+    "codex": "$grd-map-research",
+    "gemini": "/grd:map-research",
+    "opencode": "/grd-map-research",
 }
 ALL_RUNTIME_NAMES = list(RUNTIME_DISPLAY_NAMES)
 
@@ -168,7 +168,7 @@ if args[:4] == ["-m", "pip", "install", "--upgrade"]:
     target = args[-1]
     if FAIL_PYPI and target == PYPI_SPEC:
         record()
-        sys.stderr.write("ERROR: No matching distribution found for get-physics-done\\n")
+        sys.stderr.write("ERROR: No matching distribution found for get-research-done\\n")
         raise SystemExit(1)
     if FAIL_TAG_ARCHIVE and target == TAG_ARCHIVE_SPEC:
         record()
@@ -191,10 +191,10 @@ if args[:4] == ["-m", "pip", "install", "--upgrade"]:
     record()
     raise SystemExit(0)
 
-if args[:3] == ["-m", "gpd.cli", "install"]:
+if args[:3] == ["-m", "grd.cli", "install"]:
     runtimes = selected_runtimes(args)
     scope = selected_scope(args)
-    print(f"Installing GPD ({{scope}}) for: {{format_runtime_list(runtimes)}}")
+    print(f"Installing GRD ({{scope}}) for: {{format_runtime_list(runtimes)}}")
     for runtime in runtimes:
         print(f"✓ {{RUNTIME_LABELS[runtime]}}")
     print("Install Summary")
@@ -221,7 +221,7 @@ if args[:3] == ["-m", "gpd.cli", "install"]:
     record()
     raise SystemExit(0)
 
-if args[:3] == ["-m", "gpd.cli", "uninstall"]:
+if args[:3] == ["-m", "grd.cli", "uninstall"]:
     print("runtime uninstall ok")
     record()
     raise SystemExit(0)
@@ -250,8 +250,8 @@ def _run_bootstrap_with_fake_python(
 
     env = os.environ.copy()
     env["HOME"] = str(home)
-    env["GPD_HOME"] = str(home / ".gpd")
-    env["GPD_BOOTSTRAP_DISABLE_NETWORK_PROBES"] = "1"
+    env["GRD_HOME"] = str(home / ".grd")
+    env["GRD_BOOTSTRAP_DISABLE_NETWORK_PROBES"] = "1"
     env["PATH"] = os.pathsep.join([str(local_bin), str(fake_bin), env.get("PATH", "")])
     if extra_env:
         env.update(extra_env)
@@ -279,7 +279,7 @@ def test_bootstrap_uses_managed_virtualenv_and_skips_host_pip(tmp_path: Path) ->
 
     assert any(entry["argv"] == ["-m", "venv", "--help"] for entry in entries)
     assert any(
-        entry["argv"][:2] == ["-m", "venv"] and entry["argv"][-1].replace("\\", "/").endswith("/.gpd/venv")
+        entry["argv"][:2] == ["-m", "venv"] and entry["argv"][-1].replace("\\", "/").endswith("/.grd/venv")
         for entry in entries
     )
 
@@ -294,24 +294,24 @@ def test_bootstrap_uses_managed_virtualenv_and_skips_host_pip(tmp_path: Path) ->
     assert managed_pip_installs[0]["argv"][-1] == PYPI_SPEC
 
     managed_runtime_installs = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "gpd.cli", "install", "codex", "--local"]
+        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", "codex", "--local"]
     ]
     assert len(managed_runtime_installs) == 1
 
-    assert (home / ".gpd" / "venv" / "bin" / "python").exists()
-    assert f"GPD v{PACKAGE_VERSION} - Get Physics Done" in result.stdout
+    assert (home / ".grd" / "venv" / "bin" / "python").exists()
+    assert f"GRD v{PACKAGE_VERSION} - Get Research Done" in result.stdout
     assert "© 2026 Physical Superintelligence PBC (PSI)" in result.stdout
-    assert "Installing GPD (local) for: Codex" in result.stdout
+    assert "Installing GRD (local) for: Codex" in result.stdout
     assert "Install Summary" in result.stdout
     assert "Next steps" in result.stdout
     assert "1. Open Codex from your system terminal (codex)." in result.stdout
-    assert "2. Run $gpd-help for the command list." in result.stdout
+    assert "2. Run $grd-help for the command list." in result.stdout
     assert (
-        "3. Start with $gpd-new-project for a new project or $gpd-map-research for existing work."
+        "3. Start with $grd-new-project for a new project or $grd-map-research for existing work."
         in result.stdout
     )
-    assert "Installing GPD for Codex (local)..." not in result.stdout
-    assert "Installed GPD for Codex (local)." not in result.stdout
+    assert "Installing GRD for Codex (local)..." not in result.stdout
+    assert "Installed GRD for Codex (local)." not in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -328,7 +328,7 @@ def test_bootstrap_uninstall_routes_to_runtime_uninstall(tmp_path: Path) -> None
 
     assert any(entry["argv"] == ["-m", "venv", "--help"] for entry in entries)
     assert any(
-        entry["argv"][:2] == ["-m", "venv"] and entry["argv"][-1].replace("\\", "/").endswith("/.gpd/venv")
+        entry["argv"][:2] == ["-m", "venv"] and entry["argv"][-1].replace("\\", "/").endswith("/.grd/venv")
         for entry in entries
     )
 
@@ -339,13 +339,13 @@ def test_bootstrap_uninstall_routes_to_runtime_uninstall(tmp_path: Path) -> None
     assert managed_pip_installs[0]["argv"][-1] == PYPI_SPEC
 
     managed_runtime_uninstalls = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "gpd.cli", "uninstall", "codex", "--local"]
+        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "codex", "--local"]
     ]
     assert len(managed_runtime_uninstalls) == 1
 
-    assert (home / ".gpd" / "venv" / "bin" / "python").exists()
-    assert f"Preparing managed GPD CLI from PyPI (get-physics-done=={PYTHON_PACKAGE_VERSION}) into the managed environment..." in result.stdout
-    assert "Uninstalling GPD from Codex (local)..." in result.stdout
+    assert (home / ".grd" / "venv" / "bin" / "python").exists()
+    assert f"Preparing managed GRD CLI from PyPI (get-research-done=={PYTHON_PACKAGE_VERSION}) into the managed environment..." in result.stdout
+    assert "Uninstalling GRD from Codex (local)..." in result.stdout
     assert "runtime uninstall ok" in result.stdout
 
 
@@ -361,7 +361,7 @@ def test_bootstrap_uninstall_subcommand_alias_routes_to_runtime_uninstall(tmp_pa
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_runtime_uninstalls = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "gpd.cli", "uninstall", "--all", "--local"]
+        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "--all", "--local"]
     ]
 
     assert len(managed_runtime_uninstalls) == 1
@@ -384,13 +384,13 @@ def test_bootstrap_install_subcommand_accepts_positional_runtime_alias(tmp_path:
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_runtime_installs = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "gpd.cli", "install", "codex", "--local"]
+        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", "codex", "--local"]
     ]
 
     assert len(managed_runtime_installs) == 1
-    assert "Installing GPD (local) for: Codex" in result.stdout
+    assert "Installing GRD (local) for: Codex" in result.stdout
     assert "Install Summary" in result.stdout
-    assert "Installed GPD for Codex (local)." not in result.stdout
+    assert "Installed GRD for Codex (local)." not in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -405,7 +405,7 @@ def test_bootstrap_supports_all_runtime_uninstall_in_one_pass(tmp_path: Path) ->
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_runtime_uninstalls = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "gpd.cli", "uninstall", "--all", "--global"]
+        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "--all", "--global"]
     ]
 
     assert len(managed_runtime_uninstalls) == 1
@@ -477,7 +477,7 @@ def test_bootstrap_hides_successful_pip_chatter(tmp_path: Path) -> None:
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
     assert "Requirement already satisfied: noisy-package==1.0.0" not in result.stdout
     assert "Install Summary" in result.stdout
-    assert "Installed GPD for Codex (local)." not in result.stdout
+    assert "Installed GRD for Codex (local)." not in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -496,7 +496,7 @@ def test_bootstrap_forwards_target_dir_to_runtime_install(tmp_path: Path) -> Non
         entry
         for entry in entries
         if entry["managed"]
-        and entry["argv"] == ["-m", "gpd.cli", "install", "codex", "--local", "--target-dir", str(target_dir)]
+        and entry["argv"] == ["-m", "grd.cli", "install", "codex", "--local", "--target-dir", str(target_dir)]
     ]
     assert len(managed_runtime_installs) == 1
 
@@ -534,7 +534,7 @@ def test_bootstrap_reinstall_force_reinstalls_matching_release(tmp_path: Path) -
     assert len(managed_pip_installs) == 1
     assert "--force-reinstall" in managed_pip_installs[0]["argv"]
     assert managed_pip_installs[0]["argv"][-1] == PYPI_SPEC
-    assert f"Reinstalling GPD from PyPI (get-physics-done=={PYTHON_PACKAGE_VERSION}) into the managed environment..." in result.stdout
+    assert f"Reinstalling GRD from PyPI (get-research-done=={PYTHON_PACKAGE_VERSION}) into the managed environment..." in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -556,7 +556,7 @@ def test_bootstrap_upgrade_prefers_latest_main_source(tmp_path: Path) -> None:
     assert "--force-reinstall" in managed_pip_installs[0]["argv"]
     assert "--no-cache-dir" in managed_pip_installs[0]["argv"]
     assert managed_pip_installs[0]["argv"][-1] == MAIN_ARCHIVE_SPEC
-    assert "Upgrading GPD from the latest GitHub main branch into the managed environment..." in result.stdout
+    assert "Upgrading GRD from the latest GitHub main branch into the managed environment..." in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -589,7 +589,7 @@ def test_bootstrap_upgrade_prefers_preflighted_git_checkout_when_archive_is_inac
         tmp_path,
         installer_args=["--claude", "--local", "--upgrade"],
         extra_env={
-            "GPD_BOOTSTRAP_TEST_PROBES": json.dumps(
+            "GRD_BOOTSTRAP_TEST_PROBES": json.dumps(
                 {
                     MAIN_ARCHIVE_SPEC: {
                         "availability": "unavailable",
@@ -637,7 +637,7 @@ def test_bootstrap_upgrade_fails_closed_without_falling_back_to_release_sources(
         entry["argv"][-1] for entry in entries if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
     ]
     managed_runtime_installs = [
-        entry for entry in entries if entry["managed"] and entry["argv"][:3] == ["-m", "gpd.cli", "install"]
+        entry for entry in entries if entry["managed"] and entry["argv"][:3] == ["-m", "grd.cli", "install"]
     ]
 
     assert managed_pip_targets == [
@@ -649,7 +649,7 @@ def test_bootstrap_upgrade_fails_closed_without_falling_back_to_release_sources(
     assert managed_runtime_installs == []
     assert "GitHub main upgrade failed across all main-branch candidates." in result.stdout
     assert "broader GitHub source candidate set" not in result.stdout
-    assert f"Failed to install GPD v{PYTHON_PACKAGE_VERSION} from GitHub sources." in result.stderr
+    assert f"Failed to install GRD v{PYTHON_PACKAGE_VERSION} from GitHub sources." in result.stderr
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -661,7 +661,7 @@ def test_bootstrap_supports_all_runtime_install_in_one_pass(tmp_path: Path) -> N
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_runtime_installs = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "gpd.cli", "install", "--all", "--global"]
+        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", "--all", "--global"]
     ]
 
     assert len(managed_runtime_installs) == 1
@@ -671,7 +671,7 @@ def test_bootstrap_supports_all_runtime_install_in_one_pass(tmp_path: Path) -> N
     assert "OpenCode" in result.stdout
     assert "Install Summary" in result.stdout
     assert "Next steps" in result.stdout
-    assert "- Claude Code (claude), then /gpd:help, then /gpd:new-project or /gpd:map-research" in result.stdout
+    assert "- Claude Code (claude), then /grd:help, then /grd:new-project or /grd:map-research" in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -708,7 +708,7 @@ def test_bootstrap_prefers_preflighted_tag_git_candidate_when_tag_archive_is_ina
         tmp_path,
         extra_env={
             "FAKE_PIP_FAIL_PYPI": "1",
-            "GPD_BOOTSTRAP_TEST_PROBES": json.dumps(
+            "GRD_BOOTSTRAP_TEST_PROBES": json.dumps(
                 {
                     TAG_ARCHIVE_SPEC: {
                         "availability": "unavailable",
@@ -733,7 +733,7 @@ def test_bootstrap_prefers_preflighted_tag_git_candidate_when_tag_archive_is_ina
     assert managed_pip_targets == [PYPI_SPEC, TAG_HTTPS_GIT_SPEC]
     assert "PyPI install failed. Falling back to GitHub source..." in result.stdout
     assert f"Detected that GitHub source archive for v{PYTHON_PACKAGE_VERSION} is unavailable: HTTP 404." in result.stdout
-    assert f"Installing GPD from HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} into the managed environment..." in result.stdout
+    assert f"Installing GRD from HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} into the managed environment..." in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -743,7 +743,7 @@ def test_bootstrap_release_install_fails_closed_without_falling_back_to_main_sou
         tmp_path,
         extra_env={
             "FAKE_PIP_FAIL_PYPI": "1",
-            "GPD_BOOTSTRAP_TEST_PROBES": json.dumps(
+            "GRD_BOOTSTRAP_TEST_PROBES": json.dumps(
                 {
                     TAG_ARCHIVE_SPEC: {
                         "availability": "unavailable",
@@ -774,7 +774,7 @@ def test_bootstrap_release_install_fails_closed_without_falling_back_to_main_sou
     assert f"Detected that HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} is unavailable: tag v{PYTHON_PACKAGE_VERSION} is not published." in result.stdout
     assert "No accessible tagged GitHub release source candidate was detected." in result.stdout
     assert "main branch" not in result.stdout
-    assert f"Failed to install GPD v{PYTHON_PACKAGE_VERSION} from GitHub sources." in result.stderr
+    assert f"Failed to install GRD v{PYTHON_PACKAGE_VERSION} from GitHub sources." in result.stderr
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -784,7 +784,7 @@ def test_bootstrap_fails_closed_when_probes_mark_all_public_sources_unavailable(
         tmp_path,
         extra_env={
             "FAKE_PIP_FAIL_PYPI": "1",
-            "GPD_BOOTSTRAP_TEST_PROBES": json.dumps(
+            "GRD_BOOTSTRAP_TEST_PROBES": json.dumps(
                 {
                     TAG_ARCHIVE_SPEC: {
                         "availability": "unavailable",
@@ -815,7 +815,7 @@ def test_bootstrap_fails_closed_when_probes_mark_all_public_sources_unavailable(
     assert f"Detected that HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} is unavailable: git exit 2." in result.stdout
     assert "No accessible tagged GitHub release source candidate was detected." in result.stdout
     assert "main branch" not in result.stdout
-    assert f"Failed to install GPD v{PYTHON_PACKAGE_VERSION}" in result.stderr
+    assert f"Failed to install GRD v{PYTHON_PACKAGE_VERSION}" in result.stderr
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -843,5 +843,5 @@ def test_bootstrap_fails_closed_when_all_release_sources_fail(tmp_path: Path) ->
         TAG_HTTPS_GIT_SPEC,
     ]
     assert "current main branch source archive" not in result.stdout
-    assert f"Failed to install GPD v{PYTHON_PACKAGE_VERSION} from GitHub sources." in result.stderr
+    assert f"Failed to install GRD v{PYTHON_PACKAGE_VERSION} from GitHub sources." in result.stderr
     assert "Could not find a version that satisfies the requirement" not in result.stderr

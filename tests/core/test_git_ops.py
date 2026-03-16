@@ -1,4 +1,4 @@
-"""Tests for gpd.core.git_ops — commit and pre-commit check logic."""
+"""Tests for grd.core.git_ops — commit and pre-commit check logic."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from gpd.cli import app
-from gpd.core.git_ops import (
+from grd.cli import app
+from grd.core.git_ops import (
     CommitResult,
     PreCommitCheckResult,
     cmd_commit,
@@ -32,7 +32,7 @@ class TestPreCommitCheck:
         assert result.passed is True
         assert result.files_checked == 0
 
-    @patch("gpd.core.git_ops._exec_git")
+    @patch("grd.core.git_ops._exec_git")
     def test_no_files_checks_staged_files_when_available(self, mock_git: MagicMock, tmp_path: Path) -> None:
         md = tmp_path / "state.md"
         md.write_text("# ok\n", encoding="utf-8")
@@ -144,11 +144,11 @@ class TestPreCommitCheck:
         assert result.details[0].file == "docs/ok.md"
 
     def test_scratch_commit_target_fails_storage_validation(self, tmp_path: Path) -> None:
-        target = tmp_path / ".gpd" / "tmp" / "final.csv"
+        target = tmp_path / ".grd" / "tmp" / "final.csv"
         target.parent.mkdir(parents=True)
         target.write_text("x,y\n", encoding="utf-8")
 
-        result = cmd_pre_commit_check(tmp_path, [".gpd/tmp/final.csv"])
+        result = cmd_pre_commit_check(tmp_path, [".grd/tmp/final.csv"])
 
         assert result.passed is False
         assert result.details[0].storage_valid is False
@@ -168,11 +168,11 @@ class TestPreCommitCheck:
         assert any("scratch directories" in warning for warning in result.warnings)
 
     def test_internal_artifact_commit_target_fails_storage_validation(self, tmp_path: Path) -> None:
-        target = tmp_path / ".gpd" / "paper" / "main.tex"
+        target = tmp_path / ".grd" / "paper" / "main.tex"
         target.parent.mkdir(parents=True)
         target.write_text("\\documentclass{article}\n", encoding="utf-8")
 
-        result = cmd_pre_commit_check(tmp_path, [".gpd/paper/main.tex"])
+        result = cmd_pre_commit_check(tmp_path, [".grd/paper/main.tex"])
 
         assert result.passed is False
         assert result.details[0].storage_valid is False
@@ -189,25 +189,25 @@ class TestCommit:
     """Tests for cmd_commit with mocked git subprocess."""
 
     def test_empty_message_raises(self, tmp_path: Path) -> None:
-        from gpd.core.errors import ValidationError
+        from grd.core.errors import ValidationError
 
         with pytest.raises(ValidationError, match="required"):
             cmd_commit(tmp_path, "")
 
     def test_whitespace_message_raises(self, tmp_path: Path) -> None:
-        from gpd.core.errors import ValidationError
+        from grd.core.errors import ValidationError
 
         with pytest.raises(ValidationError, match="required"):
             cmd_commit(tmp_path, "   ")
 
     def test_successful_commit(self, tmp_path: Path) -> None:
         with (
-            patch("gpd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
+            patch("grd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
             patch(
-                "gpd.core.git_ops.cmd_pre_commit_check",
+                "grd.core.git_ops.cmd_pre_commit_check",
                 return_value=PreCommitCheckResult(passed=True, files_checked=1),
             ) as mock_precheck,
-            patch("gpd.core.git_ops._exec_git") as mock_git,
+            patch("grd.core.git_ops._exec_git") as mock_git,
         ):
             # git add succeeds, diff --cached shows changes, commit succeeds, rev-parse returns SHA
             mock_git.side_effect = [
@@ -216,21 +216,21 @@ class TestCommit:
                 (0, "", ""),       # git commit
                 (0, "abc1234", ""),  # git rev-parse
             ]
-            result = cmd_commit(tmp_path, "test: commit message", files=[".gpd/STATE.md"])
+            result = cmd_commit(tmp_path, "test: commit message", files=[".grd/STATE.md"])
 
         assert result.committed is True
         assert result.sha == "abc1234"
         assert result.message == "test: commit message"
-        mock_precheck.assert_called_once_with(tmp_path, [".gpd/STATE.md"])
+        mock_precheck.assert_called_once_with(tmp_path, [".grd/STATE.md"])
 
     def test_nothing_to_commit(self, tmp_path: Path) -> None:
         with (
-            patch("gpd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
+            patch("grd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
             patch(
-                "gpd.core.git_ops.cmd_pre_commit_check",
+                "grd.core.git_ops.cmd_pre_commit_check",
                 return_value=PreCommitCheckResult(passed=True, files_checked=1),
             ),
-            patch("gpd.core.git_ops._exec_git") as mock_git,
+            patch("grd.core.git_ops._exec_git") as mock_git,
         ):
             mock_git.side_effect = [
                 (0, "", ""),  # git add
@@ -243,12 +243,12 @@ class TestCommit:
 
     def test_git_add_failure(self, tmp_path: Path) -> None:
         with (
-            patch("gpd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
+            patch("grd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
             patch(
-                "gpd.core.git_ops.cmd_pre_commit_check",
+                "grd.core.git_ops.cmd_pre_commit_check",
                 return_value=PreCommitCheckResult(passed=True, files_checked=1),
             ),
-            patch("gpd.core.git_ops._exec_git") as mock_git,
+            patch("grd.core.git_ops._exec_git") as mock_git,
         ):
             mock_git.side_effect = [
                 (128, "", "fatal: not a git repository"),  # git add fails
@@ -260,12 +260,12 @@ class TestCommit:
 
     def test_git_commit_failure(self, tmp_path: Path) -> None:
         with (
-            patch("gpd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
+            patch("grd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
             patch(
-                "gpd.core.git_ops.cmd_pre_commit_check",
+                "grd.core.git_ops.cmd_pre_commit_check",
                 return_value=PreCommitCheckResult(passed=True, files_checked=1),
             ),
-            patch("gpd.core.git_ops._exec_git") as mock_git,
+            patch("grd.core.git_ops._exec_git") as mock_git,
         ):
             mock_git.side_effect = [
                 (0, "", ""),     # git add
@@ -279,12 +279,12 @@ class TestCommit:
 
     def test_default_files_stages_planning(self, tmp_path: Path) -> None:
         with (
-            patch("gpd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
+            patch("grd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
             patch(
-                "gpd.core.git_ops.cmd_pre_commit_check",
+                "grd.core.git_ops.cmd_pre_commit_check",
                 return_value=PreCommitCheckResult(passed=True, files_checked=1),
             ) as mock_precheck,
-            patch("gpd.core.git_ops._exec_git") as mock_git,
+            patch("grd.core.git_ops._exec_git") as mock_git,
         ):
             mock_git.side_effect = [
                 (0, "", ""),       # git add
@@ -293,19 +293,19 @@ class TestCommit:
                 (0, "def5678", ""),  # rev-parse
             ]
             cmd_commit(tmp_path, "test: default staging")
-            # Verify the git add was called with .gpd/
+            # Verify the git add was called with .grd/
             add_call = mock_git.call_args_list[0]
-            assert ".gpd/" in add_call[0][1]
-            mock_precheck.assert_called_once_with(tmp_path, [".gpd/"])
+            assert ".grd/" in add_call[0][1]
+            mock_precheck.assert_called_once_with(tmp_path, [".grd/"])
 
     def test_empty_files_defaults_to_planning_dir(self, tmp_path: Path) -> None:
         with (
-            patch("gpd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
+            patch("grd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
             patch(
-                "gpd.core.git_ops.cmd_pre_commit_check",
+                "grd.core.git_ops.cmd_pre_commit_check",
                 return_value=PreCommitCheckResult(passed=True, files_checked=1),
             ) as mock_precheck,
-            patch("gpd.core.git_ops._exec_git") as mock_git,
+            patch("grd.core.git_ops._exec_git") as mock_git,
         ):
             mock_git.side_effect = [
                 (0, "", ""),       # git add
@@ -315,8 +315,8 @@ class TestCommit:
             ]
             cmd_commit(tmp_path, "test: default staging", files=[])
             add_call = mock_git.call_args_list[0]
-            assert ".gpd/" in add_call[0][1]
-            mock_precheck.assert_called_once_with(tmp_path, [".gpd/"])
+            assert ".grd/" in add_call[0][1]
+            mock_precheck.assert_called_once_with(tmp_path, [".grd/"])
 
     def test_commit_blocks_when_pre_commit_check_fails(self, tmp_path: Path) -> None:
         pre_commit = PreCommitCheckResult(
@@ -325,9 +325,9 @@ class TestCommit:
             warnings=["File contains NaN or Inf values"],
         )
         with (
-            patch("gpd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
-            patch("gpd.core.git_ops.cmd_pre_commit_check", return_value=pre_commit),
-            patch("gpd.core.git_ops._exec_git") as mock_git,
+            patch("grd.core.config.load_config", return_value=MagicMock(commit_docs=True)),
+            patch("grd.core.git_ops.cmd_pre_commit_check", return_value=pre_commit),
+            patch("grd.core.git_ops._exec_git") as mock_git,
         ):
             result = cmd_commit(tmp_path, "test: blocked", files=["bad.md"])
 
@@ -338,11 +338,11 @@ class TestCommit:
 
     def test_commit_skips_when_commit_docs_disabled(self, tmp_path: Path) -> None:
         with (
-            patch("gpd.core.config.load_config", return_value=MagicMock(commit_docs=False)),
-            patch("gpd.core.git_ops.cmd_pre_commit_check") as mock_precheck,
-            patch("gpd.core.git_ops._exec_git") as mock_git,
+            patch("grd.core.config.load_config", return_value=MagicMock(commit_docs=False)),
+            patch("grd.core.git_ops.cmd_pre_commit_check") as mock_precheck,
+            patch("grd.core.git_ops._exec_git") as mock_git,
         ):
-            result = cmd_commit(tmp_path, "test: skipped", files=[".gpd/STATE.md"])
+            result = cmd_commit(tmp_path, "test: skipped", files=[".grd/STATE.md"])
 
         assert result.committed is False
         assert result.skipped is True
@@ -359,19 +359,19 @@ class TestCommit:
 class TestCommitCLI:
     """Tests for the CLI wiring of commit and pre-commit-check."""
 
-    @patch("gpd.core.git_ops.cmd_commit")
+    @patch("grd.core.git_ops.cmd_commit")
     def test_commit_cli(self, mock_commit: MagicMock) -> None:
         mock_commit.return_value = CommitResult(
             committed=True,
             message="test: message",
-            files=[".gpd/STATE.md"],
+            files=[".grd/STATE.md"],
             sha="abc1234",
         )
-        result = runner.invoke(app, ["commit", "test: message", "--files", ".gpd/STATE.md"])
+        result = runner.invoke(app, ["commit", "test: message", "--files", ".grd/STATE.md"])
         assert result.exit_code == 0
         mock_commit.assert_called_once()
 
-    @patch("gpd.core.git_ops.cmd_commit")
+    @patch("grd.core.git_ops.cmd_commit")
     def test_commit_cli_failure_exits_1(self, mock_commit: MagicMock) -> None:
         mock_commit.return_value = CommitResult(
             committed=False,
@@ -381,7 +381,7 @@ class TestCommitCLI:
         result = runner.invoke(app, ["commit", "test: message"])
         assert result.exit_code == 1
 
-    @patch("gpd.core.git_ops.cmd_commit")
+    @patch("grd.core.git_ops.cmd_commit")
     def test_commit_cli_skip_exits_0(self, mock_commit: MagicMock) -> None:
         mock_commit.return_value = CommitResult(
             committed=False,
@@ -392,36 +392,36 @@ class TestCommitCLI:
         result = runner.invoke(app, ["commit", "test: message"])
         assert result.exit_code == 0
 
-    @patch("gpd.core.git_ops.cmd_pre_commit_check")
+    @patch("grd.core.git_ops.cmd_pre_commit_check")
     def test_pre_commit_check_cli_pass(self, mock_check: MagicMock) -> None:
         mock_check.return_value = PreCommitCheckResult(
             passed=True,
             files_checked=1,
         )
-        result = runner.invoke(app, ["pre-commit-check", "--files", ".gpd/STATE.md"])
+        result = runner.invoke(app, ["pre-commit-check", "--files", ".grd/STATE.md"])
         assert result.exit_code == 0
         mock_check.assert_called_once()
 
-    @patch("gpd.core.git_ops.cmd_commit")
+    @patch("grd.core.git_ops.cmd_commit")
     def test_commit_cli_accepts_multiple_paths_after_single_files_flag(self, mock_commit: MagicMock) -> None:
         mock_commit.return_value = CommitResult(
             committed=True,
             message="test: message",
-            files=[".gpd/PROJECT.md", ".gpd/state.json"],
+            files=[".grd/PROJECT.md", ".grd/state.json"],
             sha="abc1234",
         )
         result = runner.invoke(
             app,
-            ["commit", "test: message", "--files", ".gpd/PROJECT.md", ".gpd/state.json"],
+            ["commit", "test: message", "--files", ".grd/PROJECT.md", ".grd/state.json"],
         )
         assert result.exit_code == 0
         mock_commit.assert_called_once_with(
             ANY,
             "test: message",
-            files=[".gpd/PROJECT.md", ".gpd/state.json"],
+            files=[".grd/PROJECT.md", ".grd/state.json"],
         )
 
-    @patch("gpd.core.git_ops.cmd_pre_commit_check")
+    @patch("grd.core.git_ops.cmd_pre_commit_check")
     def test_pre_commit_check_cli_accepts_multiple_paths_after_single_files_flag(self, mock_check: MagicMock) -> None:
         mock_check.return_value = PreCommitCheckResult(
             passed=True,
@@ -429,15 +429,15 @@ class TestCommitCLI:
         )
         result = runner.invoke(
             app,
-            ["pre-commit-check", "--files", ".gpd/PROJECT.md", ".gpd/state.json"],
+            ["pre-commit-check", "--files", ".grd/PROJECT.md", ".grd/state.json"],
         )
         assert result.exit_code == 0
         mock_check.assert_called_once_with(
             ANY,
-            [".gpd/PROJECT.md", ".gpd/state.json"],
+            [".grd/PROJECT.md", ".grd/state.json"],
         )
 
-    @patch("gpd.core.git_ops.cmd_pre_commit_check")
+    @patch("grd.core.git_ops.cmd_pre_commit_check")
     def test_pre_commit_check_cli_fail(self, mock_check: MagicMock) -> None:
         mock_check.return_value = PreCommitCheckResult(
             passed=False,

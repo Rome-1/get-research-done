@@ -1,4 +1,4 @@
-"""Tests for gpd.core.context — context assembly for AI agent commands."""
+"""Tests for grd.core.context — context assembly for AI agent commands."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from gpd.core.context import (
+from grd.core.context import (
     _generate_slug,
     _is_phase_complete,
     _normalize_phase_name,
@@ -24,7 +24,7 @@ from gpd.core.context import (
     init_verify_work,
     load_config,
 )
-from gpd.core.errors import ConfigError, ValidationError
+from grd.core.errors import ConfigError, ValidationError
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
 
@@ -32,8 +32,8 @@ FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
 
 
 def _setup_project(tmp_path: Path) -> Path:
-    """Create a minimal GPD project structure and return project root."""
-    planning = tmp_path / ".gpd"
+    """Create a minimal GRD project structure and return project root."""
+    planning = tmp_path / ".grd"
     planning.mkdir()
     (planning / "phases").mkdir()
     return tmp_path
@@ -41,14 +41,14 @@ def _setup_project(tmp_path: Path) -> Path:
 
 def _create_phase_dir(tmp_path: Path, name: str) -> Path:
     """Create a phase directory and return its path."""
-    phase_dir = tmp_path / ".gpd" / "phases" / name
+    phase_dir = tmp_path / ".grd" / "phases" / name
     phase_dir.mkdir(parents=True, exist_ok=True)
     return phase_dir
 
 
 def _create_config(tmp_path: Path, config: dict) -> Path:
     """Write config.json and return its path."""
-    config_path = tmp_path / ".gpd" / "config.json"
+    config_path = tmp_path / ".grd" / "config.json"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(json.dumps(config))
     return config_path
@@ -56,7 +56,7 @@ def _create_config(tmp_path: Path, config: dict) -> Path:
 
 def _create_roadmap(tmp_path: Path, content: str) -> Path:
     """Write ROADMAP.md and return its path."""
-    roadmap = tmp_path / ".gpd" / "ROADMAP.md"
+    roadmap = tmp_path / ".grd" / "ROADMAP.md"
     roadmap.parent.mkdir(parents=True, exist_ok=True)
     roadmap.write_text(content)
     return roadmap
@@ -64,15 +64,15 @@ def _create_roadmap(tmp_path: Path, content: str) -> Path:
 
 def _write_project_contract_state(tmp_path: Path) -> None:
     """Persist the Stage 0 project contract fixture into state.json."""
-    from gpd.core.state import default_state_dict
+    from grd.core.state import default_state_dict
 
     state = default_state_dict()
     state["project_contract"] = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
-    (tmp_path / ".gpd" / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    (tmp_path / ".grd" / "state.json").write_text(json.dumps(state), encoding="utf-8")
 
 
 def _write_stat_mech_project(tmp_path: Path) -> None:
-    project = tmp_path / ".gpd" / "PROJECT.md"
+    project = tmp_path / ".grd" / "PROJECT.md"
     project.write_text(
         """# Test Project
 
@@ -95,7 +95,7 @@ Binder cumulants, thermalization windows, and finite-size scaling should be benc
 
 
 def _write_bundle_ready_contract_state(tmp_path: Path) -> None:
-    from gpd.core.state import default_state_dict
+    from grd.core.state import default_state_dict
 
     state = default_state_dict()
     state["project_contract"] = {
@@ -157,11 +157,11 @@ def _write_bundle_ready_contract_state(tmp_path: Path) -> None:
             "disconfirming_observations": ["Finite-size crossings drift away from the benchmark window"],
         },
     }
-    (tmp_path / ".gpd" / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    (tmp_path / ".grd" / "state.json").write_text(json.dumps(state), encoding="utf-8")
 
 
 def _write_numerical_relativity_project(tmp_path: Path) -> None:
-    project = tmp_path / ".gpd" / "PROJECT.md"
+    project = tmp_path / ".grd" / "PROJECT.md"
     project.write_text(
         """# Test Project
 
@@ -184,7 +184,7 @@ Apparent horizon tracking, constraint propagation, and gravitational waveform ex
 
 
 def _write_numerical_relativity_contract_state(tmp_path: Path) -> None:
-    from gpd.core.state import default_state_dict
+    from grd.core.state import default_state_dict
 
     state = default_state_dict()
     state["project_contract"] = {
@@ -246,17 +246,17 @@ def _write_numerical_relativity_contract_state(tmp_path: Path) -> None:
             "disconfirming_observations": ["Constraint growth or waveform phase drift relative to the benchmark"],
         },
     }
-    (tmp_path / ".gpd" / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    (tmp_path / ".grd" / "state.json").write_text(json.dumps(state), encoding="utf-8")
 
 
 def _write_current_execution(tmp_path: Path, payload: dict[str, object]) -> None:
-    observability = tmp_path / ".gpd" / "observability"
+    observability = tmp_path / ".grd" / "observability"
     observability.mkdir(parents=True, exist_ok=True)
     (observability / "current-execution.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
 def _write_literature_review_anchor_file(tmp_path: Path) -> None:
-    literature_dir = tmp_path / ".gpd" / "literature"
+    literature_dir = tmp_path / ".grd" / "literature"
     literature_dir.mkdir(parents=True, exist_ok=True)
     (literature_dir / "benchmark-REVIEW.md").write_text(
         """# Literature Review: Benchmark Survey
@@ -293,7 +293,7 @@ review_summary:
 
 
 def _write_research_map_anchor_files(tmp_path: Path) -> None:
-    map_dir = tmp_path / ".gpd" / "research-map"
+    map_dir = tmp_path / ".grd" / "research-map"
     map_dir.mkdir(parents=True, exist_ok=True)
     (map_dir / "REFERENCES.md").write_text(
         """# Reference and Anchor Map
@@ -302,19 +302,19 @@ def _write_research_map_anchor_files(tmp_path: Path) -> None:
 
 | Anchor | Type | Source / Locator | What It Constrains | Required Action | Carry Forward To |
 | ------ | ---- | ---------------- | ------------------ | --------------- | ---------------- |
-| prior-baseline | prior artifact | `.gpd/phases/01-test-phase/01-SUMMARY.md` | Baseline summary for calibration and later comparisons | use | planning/execution |
+| prior-baseline | prior artifact | `.grd/phases/01-test-phase/01-SUMMARY.md` | Baseline summary for calibration and later comparisons | use | planning/execution |
 | benchmark-paper | benchmark | Author et al., Journal, 2024 | Published comparison target for the decisive observable | read/compare/cite | verification/writing |
 
 ## Benchmarks and Comparison Targets
 
 - Universal crossing window
   - Source: Author et al., Journal, 2024
-  - Compared in: `.gpd/phases/01-test-phase/01-SUMMARY.md`
+  - Compared in: `.grd/phases/01-test-phase/01-SUMMARY.md`
   - Status: pending
 
 ## Prior Artifacts and Baselines
 
-- `.gpd/phases/01-test-phase/01-SUMMARY.md`: Prior baseline summary that later phases must keep visible
+- `.grd/phases/01-test-phase/01-SUMMARY.md`: Prior baseline summary that later phases must keep visible
 
 ## Open Reference Questions
 
@@ -328,7 +328,7 @@ def _write_research_map_anchor_files(tmp_path: Path) -> None:
 ## Comparison with Literature
 
 - Result from Author et al., Journal, 2024: agreement still needs confirmation
-  - Comparison in: `.gpd/phases/01-test-phase/01-SUMMARY.md`
+  - Comparison in: `.grd/phases/01-test-phase/01-SUMMARY.md`
 """,
         encoding="utf-8",
     )
@@ -396,7 +396,7 @@ class TestLoadConfig:
 
     def test_malformed_config_raises(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
-        config_path = tmp_path / ".gpd" / "config.json"
+        config_path = tmp_path / ".grd" / "config.json"
         config_path.write_text("not valid json {{{")
         with pytest.raises(ConfigError, match="Malformed config.json"):
             load_config(tmp_path)
@@ -428,18 +428,18 @@ class TestInitExecutePhase:
     def test_includes_state(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         _create_phase_dir(tmp_path, "01-setup")
-        (tmp_path / ".gpd" / "STATE.md").write_text("# State\nstuff")
+        (tmp_path / ".grd" / "STATE.md").write_text("# State\nstuff")
 
         ctx = init_execute_phase(tmp_path, "1", includes={"state"})
         assert ctx["state_content"] == "# State\nstuff"
 
     def test_json_only_state_counts_as_existing(self, tmp_path: Path) -> None:
-        from gpd.core.state import default_state_dict
+        from grd.core.state import default_state_dict
 
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
         (phase_dir / "a-PLAN.md").write_text("plan")
-        (tmp_path / ".gpd" / "state.json").write_text(json.dumps(default_state_dict()), encoding="utf-8")
+        (tmp_path / ".grd" / "state.json").write_text(json.dumps(default_state_dict()), encoding="utf-8")
 
         ctx = init_execute_phase(tmp_path, "1")
 
@@ -469,10 +469,10 @@ class TestInitExecutePhase:
         assert ctx["derived_active_reference_count"] >= 2
         assert ctx["active_reference_count"] >= 2
         assert "Benchmark Ref 2024" in ctx["active_reference_context"]
-        assert ".gpd/phases/01-test-phase/01-SUMMARY.md" in ctx["active_reference_context"]
-        assert ".gpd/research-map/REFERENCES.md" in ctx["active_reference_context"]
+        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["active_reference_context"]
+        assert ".grd/research-map/REFERENCES.md" in ctx["active_reference_context"]
         assert "critical slope" in "\n".join(ctx["effective_reference_intake"]["known_good_baselines"])
-        assert ".gpd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
+        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
 
     def test_surfaces_live_execution_context(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -556,7 +556,7 @@ class TestInitExecutePhase:
         )
 
     def test_protocol_bundle_verifier_extensions_match_mcp_bundle_checklist(self, tmp_path: Path) -> None:
-        from gpd.mcp.servers.verification_server import get_bundle_checklist
+        from grd.mcp.servers.verification_server import get_bundle_checklist
 
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
@@ -599,10 +599,10 @@ class TestInitPlanPhase:
         _setup_project(tmp_path)
         _create_phase_dir(tmp_path, "02-analysis")
         _write_project_contract_state(tmp_path)
-        literature_dir = tmp_path / ".gpd" / "literature"
+        literature_dir = tmp_path / ".grd" / "literature"
         literature_dir.mkdir()
         (literature_dir / "benchmark-REVIEW.md").write_text("# Literature Review\nbenchmark details")
-        map_dir = tmp_path / ".gpd" / "research-map"
+        map_dir = tmp_path / ".grd" / "research-map"
         map_dir.mkdir()
         (map_dir / "REFERENCES.md").write_text("# References Map\nanchor registry")
         (map_dir / "VALIDATION.md").write_text("# Validation Map\nbenchmark checks")
@@ -613,9 +613,9 @@ class TestInitPlanPhase:
         assert ctx["contract_intake"]["must_read_refs"] == ["ref-benchmark"]
         assert ctx["active_reference_count"] == 1
         assert "[ref-benchmark]" in ctx["active_reference_context"]
-        assert ".gpd/literature/benchmark-REVIEW.md" in ctx["literature_review_files"]
-        assert ".gpd/research-map/REFERENCES.md" in ctx["research_map_reference_files"]
-        assert ".gpd/research-map/VALIDATION.md" in ctx["reference_artifact_files"]
+        assert ".grd/literature/benchmark-REVIEW.md" in ctx["literature_review_files"]
+        assert ".grd/research-map/REFERENCES.md" in ctx["research_map_reference_files"]
+        assert ".grd/research-map/VALIDATION.md" in ctx["reference_artifact_files"]
         assert "benchmark details" in ctx["reference_artifacts_content"]
         assert "anchor registry" in ctx["reference_artifacts_content"]
 
@@ -632,9 +632,9 @@ class TestInitPlanPhase:
         assert "ref-benchmark" in ctx["effective_reference_intake"]["must_read_refs"]
         assert "lit-anchor-benchmark-ref-2024" in ctx["effective_reference_intake"]["must_read_refs"]
         assert "benchmark-paper" not in ctx["effective_reference_intake"]["must_read_refs"]
-        assert ".gpd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
+        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
         assert ctx["active_reference_count"] >= ctx["derived_active_reference_count"]
-        assert ".gpd/research-map/REFERENCES.md" in ctx["active_reference_context"]
+        assert ".grd/research-map/REFERENCES.md" in ctx["active_reference_context"]
         assert "unresolved reference token" not in ctx["active_reference_context"]
 
     def test_merges_structured_reference_fields_into_project_contract(self, tmp_path: Path) -> None:
@@ -663,7 +663,7 @@ class TestInitPlanPhase:
         _write_literature_review_anchor_file(tmp_path)
         _write_research_map_anchor_files(tmp_path)
 
-        state_path = tmp_path / ".gpd" / "state.json"
+        state_path = tmp_path / ".grd" / "state.json"
         before = state_path.read_text(encoding="utf-8")
 
         ctx = init_plan_phase(tmp_path, "2")
@@ -674,7 +674,7 @@ class TestInitPlanPhase:
         assert ctx["contract_intake"]["must_read_refs"] == ["ref-benchmark", "lit-anchor-benchmark-ref-2024"]
         assert stored["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
         assert before == after
-        assert not (tmp_path / ".gpd" / "STATE.md").exists()
+        assert not (tmp_path / ".grd" / "STATE.md").exists()
 
     def test_reports_missing_active_references_explicitly(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -759,9 +759,9 @@ class TestInitNewMilestone:
         assert ctx["project_contract"]["scope"]["question"] == "What benchmark must the project recover?"
         assert ctx["contract_intake"]["must_read_refs"] == ["ref-benchmark", "lit-anchor-benchmark-ref-2024"]
         assert "ref-benchmark" in ctx["effective_reference_intake"]["must_read_refs"]
-        assert ".gpd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
+        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
         assert "Benchmark Ref 2024" in ctx["active_reference_context"]
-        assert ".gpd/research-map/REFERENCES.md" in ctx["reference_artifact_files"]
+        assert ".grd/research-map/REFERENCES.md" in ctx["reference_artifact_files"]
 
 
 # ─── init_quick ───────────────────────────────────────────────────────────────
@@ -778,7 +778,7 @@ class TestInitQuick:
 
     def test_increments_number(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
-        quick_dir = tmp_path / ".gpd" / "quick"
+        quick_dir = tmp_path / ".grd" / "quick"
         quick_dir.mkdir()
         (quick_dir / "1-first-task").mkdir()
         (quick_dir / "2-second-task").mkdir()
@@ -788,7 +788,7 @@ class TestInitQuick:
 
     def test_permission_error_on_quick_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         _setup_project(tmp_path)
-        quick_dir = tmp_path / ".gpd" / "quick"
+        quick_dir = tmp_path / ".grd" / "quick"
         quick_dir.mkdir()
 
         original_iterdir = Path.iterdir
@@ -823,17 +823,17 @@ class TestInitResume:
 
     def test_with_interrupted_agent(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
-        (tmp_path / ".gpd" / "current-agent-id.txt").write_text("agent-123\n")
+        (tmp_path / ".grd" / "current-agent-id.txt").write_text("agent-123\n")
 
         ctx = init_resume(tmp_path)
         assert ctx["has_interrupted_agent"] is True
         assert ctx["interrupted_agent_id"] == "agent-123"
 
     def test_json_only_state_counts_as_existing(self, tmp_path: Path) -> None:
-        from gpd.core.state import default_state_dict
+        from grd.core.state import default_state_dict
 
         _setup_project(tmp_path)
-        (tmp_path / ".gpd" / "state.json").write_text(json.dumps(default_state_dict()), encoding="utf-8")
+        (tmp_path / ".grd" / "state.json").write_text(json.dumps(default_state_dict()), encoding="utf-8")
 
         ctx = init_resume(tmp_path)
 
@@ -849,7 +849,7 @@ class TestInitResume:
                 "plan": "02",
                 "segment_id": "seg-4",
                 "segment_status": "paused",
-                "resume_file": ".gpd/phases/03-analysis/.continue-here.md",
+                "resume_file": ".grd/phases/03-analysis/.continue-here.md",
                 "updated_at": "2026-03-10T12:00:00+00:00",
             },
         )
@@ -1021,7 +1021,7 @@ class TestInitTodos:
 
     def test_finds_todos(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
-        pending = tmp_path / ".gpd" / "todos" / "pending"
+        pending = tmp_path / ".grd" / "todos" / "pending"
         pending.mkdir(parents=True)
         (pending / "check-convergence.md").write_text(
             'title: "Check convergence"\narea: numerical\ncreated: 2026-03-01'
@@ -1034,7 +1034,7 @@ class TestInitTodos:
 
     def test_area_filter(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
-        pending = tmp_path / ".gpd" / "todos" / "pending"
+        pending = tmp_path / ".grd" / "todos" / "pending"
         pending.mkdir(parents=True)
         (pending / "a.md").write_text("title: A\narea: theory")
         (pending / "b.md").write_text("title: B\narea: numerical")
@@ -1083,7 +1083,7 @@ class TestInitMapResearch:
 
     def test_existing_maps(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
-        map_dir = tmp_path / ".gpd" / "research-map"
+        map_dir = tmp_path / ".grd" / "research-map"
         map_dir.mkdir()
         (map_dir / "theory.md").write_text("# Theory Map")
 
@@ -1110,7 +1110,7 @@ class TestInitMapResearch:
         assert ctx["project_contract"] is None
         assert ctx["derived_active_reference_count"] >= 2
         assert "Benchmark Ref 2024" in ctx["active_reference_context"]
-        assert ".gpd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
+        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
 
 
 # ─── init_progress ────────────────────────────────────────────────────────────
@@ -1145,7 +1145,7 @@ class TestInitProgress:
         assert ctx["next_phase"]["number"] == "03"
 
     def test_progress_prefers_phase_inventory_over_stale_state_position(self, tmp_path: Path) -> None:
-        from gpd.core.state import default_state_dict
+        from grd.core.state import default_state_dict
 
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "02-analysis")
@@ -1153,7 +1153,7 @@ class TestInitProgress:
 
         state = default_state_dict()
         state["position"]["current_phase"] = "03"
-        (tmp_path / ".gpd" / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        (tmp_path / ".grd" / "state.json").write_text(json.dumps(state), encoding="utf-8")
 
         ctx = init_progress(tmp_path)
 
@@ -1162,7 +1162,7 @@ class TestInitProgress:
 
     def test_detects_paused_state(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
-        (tmp_path / ".gpd" / "STATE.md").write_text(
+        (tmp_path / ".grd" / "STATE.md").write_text(
             "# State\n**Status:** Paused\n**Stopped at:** 2026-03-01T12:00:00Z"
         )
 
@@ -1184,7 +1184,7 @@ class TestInitProgress:
                 "session_id": "sess-2",
                 "phase": "02",
                 "segment_status": "paused",
-                "resume_file": ".gpd/phases/02-analysis/.continue-here.md",
+                "resume_file": ".grd/phases/02-analysis/.continue-here.md",
                 "updated_at": "2026-03-11T08:00:00+00:00",
             },
         )
@@ -1205,7 +1205,7 @@ class TestInitProgress:
                 "plan": "1",
                 "segment_status": "paused",
                 "checkpoint_reason": "pre-fanout",
-                "resume_file": ".gpd/phases/02-analysis/.continue-here.md",
+                "resume_file": ".grd/phases/02-analysis/.continue-here.md",
                 "updated_at": "2026-03-11T08:00:00+00:00",
             },
         )
@@ -1219,7 +1219,7 @@ class TestInitProgress:
 
     def test_includes_project(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
-        (tmp_path / ".gpd" / "PROJECT.md").write_text("# My Project")
+        (tmp_path / ".grd" / "PROJECT.md").write_text("# My Project")
 
         ctx = init_progress(tmp_path, includes={"project"})
         assert ctx["project_content"] == "# My Project"
@@ -1243,27 +1243,27 @@ class TestExtractFrontmatterField:
     def test_empty_value_does_not_bleed_into_next_line(self, tmp_path: Path) -> None:
         """When a field has an empty value (e.g. 'title:\\n'), the regex must
         NOT consume the newline and capture the next line's content."""
-        from gpd.core.context import _extract_frontmatter_field
+        from grd.core.context import _extract_frontmatter_field
 
         content = "title:\narea: numerical\ncreated: 2026-03-01"
         # 'title' has no value on its line → should return None
         assert _extract_frontmatter_field(content, "title") is None
 
     def test_field_with_value_still_works(self, tmp_path: Path) -> None:
-        from gpd.core.context import _extract_frontmatter_field
+        from grd.core.context import _extract_frontmatter_field
 
         content = "title: Check convergence\narea: numerical"
         assert _extract_frontmatter_field(content, "title") == "Check convergence"
         assert _extract_frontmatter_field(content, "area") == "numerical"
 
     def test_field_with_leading_spaces(self, tmp_path: Path) -> None:
-        from gpd.core.context import _extract_frontmatter_field
+        from grd.core.context import _extract_frontmatter_field
 
         content = "title:   spaced value  \narea: numerical"
         assert _extract_frontmatter_field(content, "title") == "spaced value"
 
     def test_field_with_quoted_value(self, tmp_path: Path) -> None:
-        from gpd.core.context import _extract_frontmatter_field
+        from grd.core.context import _extract_frontmatter_field
 
         content = 'title: "Quoted Title"\narea: theory'
         assert _extract_frontmatter_field(content, "title") == "Quoted Title"
@@ -1277,10 +1277,10 @@ class TestInitPhaseOp:
 
     def test_no_phase_returns_phase_found_false(self, tmp_path):
         """init_phase_op with no phase should set phase_found=False."""
-        from gpd.core.context import init_phase_op
-        gpd_dir = tmp_path / ".gpd"
-        gpd_dir.mkdir()
-        (gpd_dir / "config.json").write_text("{}", encoding="utf-8")
+        from grd.core.context import init_phase_op
+        grd_dir = tmp_path / ".grd"
+        grd_dir.mkdir()
+        (grd_dir / "config.json").write_text("{}", encoding="utf-8")
 
         result = init_phase_op(tmp_path)
         assert isinstance(result, dict)
@@ -1288,11 +1288,11 @@ class TestInitPhaseOp:
 
     def test_with_phase_directory(self, tmp_path):
         """init_phase_op with existing phase should set phase_found=True."""
-        from gpd.core.context import init_phase_op
-        gpd_dir = tmp_path / ".gpd"
-        phases_dir = gpd_dir / "phases" / "01-test"
+        from grd.core.context import init_phase_op
+        grd_dir = tmp_path / ".grd"
+        phases_dir = grd_dir / "phases" / "01-test"
         phases_dir.mkdir(parents=True)
-        (gpd_dir / "config.json").write_text("{}", encoding="utf-8")
+        (grd_dir / "config.json").write_text("{}", encoding="utf-8")
 
         result = init_phase_op(tmp_path, phase="1")
         assert isinstance(result, dict)

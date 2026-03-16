@@ -1,0 +1,19 @@
+name: physics
+display_name: Physics
+description: >
+  Physics research: quantum field theory, condensed matter, general relativity,
+  astrophysics, statistical mechanics, AMO, nuclear/particle physics, and more.
+version: 1
+
+conventions_file: conventions/convention-fields.yaml
+subfields_dir: subfields
+protocols_dir: protocols
+errors_dir: errors
+
+publication:
+  journal_templates: publication/journal-templates.yaml
+  review_stages: publication/review-stages.yaml
+
+branding:
+  tagline: "Built by physicists, for physicists"
+  color: blue

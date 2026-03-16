@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gpd import registry
+from grd import registry
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-AGENTS_DIR = REPO_ROOT / "src" / "gpd" / "agents"
+AGENTS_DIR = REPO_ROOT / "src" / "grd" / "agents"
 
 
 def _read_agent(name: str) -> str:
@@ -15,38 +15,38 @@ def _read_agent(name: str) -> str:
 
 
 def test_executor_prompt_describes_default_writable_scoped_task_role() -> None:
-    executor = _read_agent("gpd-executor")
+    executor = _read_agent("grd-executor")
 
     assert "default writable implementation agent" in executor
     assert "Scoped-task mode" in executor
     assert "the prompt itself is the execution contract" in executor
-    assert "route it to gpd-paper-writer" in executor
-    assert "route it to gpd-notation-coordinator" in executor
+    assert "route it to grd-paper-writer" in executor
+    assert "route it to grd-notation-coordinator" in executor
 
 
 def test_planner_debugger_and_explainer_route_work_to_specialized_agents() -> None:
-    planner = _read_agent("gpd-planner")
-    debugger = _read_agent("gpd-debugger")
-    explainer = _read_agent("gpd-explainer")
+    planner = _read_agent("grd-planner")
+    debugger = _read_agent("grd-debugger")
+    explainer = _read_agent("grd-explainer")
 
-    assert "go to `gpd-executor`" in planner
-    assert "goes to `gpd-paper-writer`" in planner
-    assert "goes to `gpd-notation-coordinator`" in planner
+    assert "go to `grd-executor`" in planner
+    assert "goes to `grd-paper-writer`" in planner
+    assert "goes to `grd-notation-coordinator`" in planner
 
-    assert "hand it to `gpd-executor`" in debugger
-    assert "hand it to `gpd-paper-writer`" in debugger
-    assert "hand it to `gpd-notation-coordinator`" in debugger
+    assert "hand it to `grd-executor`" in debugger
+    assert "hand it to `grd-paper-writer`" in debugger
+    assert "hand it to `grd-notation-coordinator`" in debugger
 
     assert "not the default writable implementation agent" in explainer
-    assert "route that work to `gpd-executor`" in explainer
-    assert "route it to `gpd-paper-writer`" in explainer
-    assert "route it to `gpd-notation-coordinator`" in explainer
+    assert "route that work to `grd-executor`" in explainer
+    assert "route it to `grd-paper-writer`" in explainer
+    assert "route it to `grd-notation-coordinator`" in explainer
 
 
 def test_public_worker_prompts_identify_writable_production_surface() -> None:
-    executor = _read_agent("gpd-executor")
-    debugger = _read_agent("gpd-debugger")
-    paper_writer = _read_agent("gpd-paper-writer")
+    executor = _read_agent("grd-executor")
+    debugger = _read_agent("grd-debugger")
+    paper_writer = _read_agent("grd-paper-writer")
 
     assert "Agent surface: public writable production agent." in executor
     assert "Agent surface: public writable production agent specialized for discrepancy investigation" in debugger

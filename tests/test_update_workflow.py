@@ -5,32 +5,32 @@ from pathlib import Path
 
 import pytest
 
-from gpd.adapters import get_adapter
+from grd.adapters import get_adapter
 
-GPD_ROOT = Path(__file__).resolve().parent.parent / "src" / "gpd"
+GRD_ROOT = Path(__file__).resolve().parent.parent / "src" / "grd"
 
 
 def test_update_workflow_uses_current_runtime_agnostic_contract() -> None:
-    content = (GPD_ROOT / "specs" / "workflows" / "update.md").read_text(encoding="utf-8")
+    content = (GRD_ROOT / "specs" / "workflows" / "update.md").read_text(encoding="utf-8")
 
-    assert "get-physics-done" in content
-    assert "{GPD_RUNTIME_FLAG}" in content
-    assert "{GPD_INSTALL_SCOPE_FLAG}" in content
+    assert "get-research-done" in content
+    assert "{GRD_RUNTIME_FLAG}" in content
+    assert "{GRD_INSTALL_SCOPE_FLAG}" in content
     assert "--target-dir" in content
-    assert "registry.npmjs.org/get-physics-done/latest" in content
-    assert "pip index versions gpd" not in content
-    assert "gpd install --all" not in content
-    assert "gpd:update-check.json" not in content
-    assert "commands/gpd/" not in content
+    assert "registry.npmjs.org/get-research-done/latest" in content
+    assert "pip index versions grd" not in content
+    assert "grd install --all" not in content
+    assert "grd:update-check.json" not in content
+    assert "commands/grd/" not in content
 
 
 def test_reapply_patches_workflow_uses_runtime_config_placeholders() -> None:
-    content = (GPD_ROOT / "specs" / "workflows" / "reapply-patches.md").read_text(encoding="utf-8")
+    content = (GRD_ROOT / "specs" / "workflows" / "reapply-patches.md").read_text(encoding="utf-8")
 
-    assert "{GPD_CONFIG_DIR}" in content
-    assert "{GPD_GLOBAL_CONFIG_DIR}" in content
-    assert "~/.claude/gpd-local-patches" not in content
-    assert "./.claude/gpd-local-patches" not in content
+    assert "{GRD_CONFIG_DIR}" in content
+    assert "{GRD_GLOBAL_CONFIG_DIR}" in content
+    assert "~/.claude/grd-local-patches" not in content
+    assert "./.claude/grd-local-patches" not in content
 
 
 @pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
@@ -46,10 +46,10 @@ def test_default_local_install_keeps_local_update_scope_and_manifest(
     if runtime == "codex":
         monkeypatch.setenv("CODEX_SKILLS_DIR", str(tmp_path / "shared-skills"))
 
-    adapter.install(GPD_ROOT, target, is_global=False)
+    adapter.install(GRD_ROOT, target, is_global=False)
 
-    content = (target / "get-physics-done" / "workflows" / "update.md").read_text(encoding="utf-8")
-    manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+    content = (target / "get-research-done" / "workflows" / "update.md").read_text(encoding="utf-8")
+    manifest = json.loads((target / "grd-file-manifest.json").read_text(encoding="utf-8"))
 
     assert 'INSTALL_SCOPE="--local"' in content
     assert 'INSTALL_SCOPE="--global"' not in content
@@ -70,14 +70,14 @@ def test_explicit_target_local_install_keeps_local_update_scope(tmp_path: Path, 
         skills_dir.mkdir(parents=True)
         install_kwargs["skills_dir"] = skills_dir
 
-    adapter.install(GPD_ROOT, target, **install_kwargs)
+    adapter.install(GRD_ROOT, target, **install_kwargs)
 
-    content = (target / "get-physics-done" / "workflows" / "update.md").read_text(encoding="utf-8")
+    content = (target / "get-research-done" / "workflows" / "update.md").read_text(encoding="utf-8")
 
     assert 'INSTALL_SCOPE="--local"' in content
-    assert f'GPD_CONFIG_DIR="{target.as_posix()}"' in content
-    assert "{GPD_INSTALL_SCOPE_FLAG}" not in content
-    assert "TARGET_DIR_ARG=$(python3 - \"$GPD_CONFIG_DIR\"" in content
+    assert f'GRD_CONFIG_DIR="{target.as_posix()}"' in content
+    assert "{GRD_INSTALL_SCOPE_FLAG}" not in content
+    assert "TARGET_DIR_ARG=$(python3 - \"$GRD_CONFIG_DIR\"" in content
 
 
 @pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
@@ -92,12 +92,12 @@ def test_explicit_target_local_install_reapply_patches_uses_runtime_paths(tmp_pa
         skills_dir.mkdir(parents=True)
         install_kwargs["skills_dir"] = skills_dir
 
-    adapter.install(GPD_ROOT, target, **install_kwargs)
+    adapter.install(GRD_ROOT, target, **install_kwargs)
 
-    content = (target / "get-physics-done" / "workflows" / "reapply-patches.md").read_text(encoding="utf-8")
+    content = (target / "get-research-done" / "workflows" / "reapply-patches.md").read_text(encoding="utf-8")
 
-    assert f'PATCHES_DIR="{target.as_posix()}/gpd-local-patches"' in content
-    assert "{GPD_CONFIG_DIR}" not in content
-    assert "{GPD_GLOBAL_CONFIG_DIR}" not in content
-    assert "~/.claude/gpd-local-patches" not in content
-    assert "./.claude/gpd-local-patches" not in content
+    assert f'PATCHES_DIR="{target.as_posix()}/grd-local-patches"' in content
+    assert "{GRD_CONFIG_DIR}" not in content
+    assert "{GRD_GLOBAL_CONFIG_DIR}" not in content
+    assert "~/.claude/grd-local-patches" not in content
+    assert "./.claude/grd-local-patches" not in content

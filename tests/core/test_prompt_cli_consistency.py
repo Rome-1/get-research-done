@@ -5,26 +5,26 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from gpd.registry import VALID_CONTEXT_MODES, _parse_frontmatter
+from grd.registry import VALID_CONTEXT_MODES, _parse_frontmatter
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CLI_PATH = REPO_ROOT / "src/gpd/cli.py"
+CLI_PATH = REPO_ROOT / "src/grd/cli.py"
 PROMPT_ROOTS = (
-    REPO_ROOT / "src/gpd/commands",
-    REPO_ROOT / "src/gpd/agents",
-    REPO_ROOT / "src/gpd/specs/workflows",
-    REPO_ROOT / "src/gpd/specs/references",
-    REPO_ROOT / "src/gpd/specs/templates",
+    REPO_ROOT / "src/grd/commands",
+    REPO_ROOT / "src/grd/agents",
+    REPO_ROOT / "src/grd/specs/workflows",
+    REPO_ROOT / "src/grd/specs/references",
+    REPO_ROOT / "src/grd/specs/templates",
 )
 GRAPH_PATH = REPO_ROOT / "tests" / "README.md"
 
 INIT_COMMAND_RE = re.compile(r"@init_app\.command\(\s*\"([a-z0-9-]+)\"(?:,|\))", re.MULTILINE)
-INIT_USAGE_RE = re.compile(r"\bgpd init ([a-z0-9-]+)\b")
+INIT_USAGE_RE = re.compile(r"\bgrd init ([a-z0-9-]+)\b")
 VALIDATE_COMMAND_RE = re.compile(r"@validate_app\.command\(\s*\"([a-z0-9-]+)\"(?:,|\))", re.MULTILINE)
-VALIDATE_USAGE_RE = re.compile(r"\bgpd(?:\s+--raw)?\s+validate\s+([a-z0-9-]+)\b")
-NON_CANONICAL_GPD_COMMAND_RE = re.compile(r"(?<![A-Za-z0-9_./}])(?:\$gpd-[A-Za-z0-9{}-]+|/gpd-[A-Za-z0-9{}-]+)(?!\.md)")
-RAW_AFTER_SUBCOMMAND_RE = re.compile(r"\bgpd\s+(?!--raw\b)[^`\n]*\s+--raw\b")
-SUMMARY_EXTRACT_FIELDS_RE = re.compile(r"\bgpd\s+summary-extract\b[^\n`]*\s--fields\b")
+VALIDATE_USAGE_RE = re.compile(r"\bgrd(?:\s+--raw)?\s+validate\s+([a-z0-9-]+)\b")
+NON_CANONICAL_GRD_COMMAND_RE = re.compile(r"(?<![A-Za-z0-9_./}])(?:\$grd-[A-Za-z0-9{}-]+|/grd-[A-Za-z0-9{}-]+)(?!\.md)")
+RAW_AFTER_SUBCOMMAND_RE = re.compile(r"\bgrd\s+(?!--raw\b)[^`\n]*\s+--raw\b")
+SUMMARY_EXTRACT_FIELDS_RE = re.compile(r"\bgrd\s+summary-extract\b[^\n`]*\s--fields\b")
 
 
 def _iter_prompt_sources() -> list[Path]:
@@ -44,7 +44,7 @@ def _declared_validate_subcommands() -> set[str]:
     return set(VALIDATE_COMMAND_RE.findall(content))
 
 
-def test_prompt_sources_use_only_real_gpd_init_subcommands() -> None:
+def test_prompt_sources_use_only_real_grd_init_subcommands() -> None:
     allowed = _declared_init_subcommands()
     invalid: list[str] = []
 
@@ -58,7 +58,7 @@ def test_prompt_sources_use_only_real_gpd_init_subcommands() -> None:
     assert invalid == []
 
 
-def test_prompt_sources_use_only_real_gpd_validate_subcommands() -> None:
+def test_prompt_sources_use_only_real_grd_validate_subcommands() -> None:
     allowed = _declared_validate_subcommands()
     invalid: list[str] = []
 
@@ -72,29 +72,29 @@ def test_prompt_sources_use_only_real_gpd_validate_subcommands() -> None:
     assert invalid == []
 
 
-def test_prompt_sources_use_canonical_gpd_command_syntax() -> None:
+def test_prompt_sources_use_canonical_grd_command_syntax() -> None:
     invalid: list[str] = []
 
     for path in _iter_prompt_sources():
         content = path.read_text(encoding="utf-8")
-        for match in NON_CANONICAL_GPD_COMMAND_RE.finditer(content):
+        for match in NON_CANONICAL_GRD_COMMAND_RE.finditer(content):
             invalid.append(f"{path.relative_to(REPO_ROOT)} -> {match.group(0)}")
 
     assert invalid == []
 
 
 def test_help_prompt_command_count_matches_live_inventory() -> None:
-    command_count = len(list((REPO_ROOT / "src/gpd/commands").glob("*.md")))
-    help_prompt = (REPO_ROOT / "src/gpd/commands/help.md").read_text(encoding="utf-8")
+    command_count = len(list((REPO_ROOT / "src/grd/commands").glob("*.md")))
+    help_prompt = (REPO_ROOT / "src/grd/commands/help.md").read_text(encoding="utf-8")
 
-    assert f"Run `/gpd:help --all` for all {command_count} commands." in help_prompt
+    assert f"Run `/grd:help --all` for all {command_count} commands." in help_prompt
 
 
 def test_suggest_next_prompt_uses_real_cli_subcommand() -> None:
-    suggest_prompt = (REPO_ROOT / "src/gpd/commands/suggest-next.md").read_text(encoding="utf-8")
+    suggest_prompt = (REPO_ROOT / "src/grd/commands/suggest-next.md").read_text(encoding="utf-8")
 
-    assert "Uses `gpd --raw suggest`" in suggest_prompt
-    assert "gpd suggest-next to scan" not in suggest_prompt
+    assert "Uses `grd --raw suggest`" in suggest_prompt
+    assert "grd suggest-next to scan" not in suggest_prompt
 
 
 def test_doc_sources_place_global_raw_before_subcommands() -> None:
@@ -113,7 +113,7 @@ def test_command_prompts_declare_valid_context_modes() -> None:
     missing: list[str] = []
     invalid: list[str] = []
 
-    for path in sorted((REPO_ROOT / "src/gpd/commands").glob("*.md")):
+    for path in sorted((REPO_ROOT / "src/grd/commands").glob("*.md")):
         meta, _body = _parse_frontmatter(path.read_text(encoding="utf-8"))
         mode = meta.get("context_mode")
         if mode is None:
@@ -139,26 +139,26 @@ def test_prompt_sources_use_summary_extract_field_flag_not_fields() -> None:
 
 
 def test_new_project_prompt_uses_stdin_for_contract_validation_and_persistence() -> None:
-    workflow = (REPO_ROOT / "src/gpd/specs/workflows/new-project.md").read_text(encoding="utf-8")
+    workflow = (REPO_ROOT / "src/grd/specs/workflows/new-project.md").read_text(encoding="utf-8")
 
-    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | gpd --raw validate project-contract -' in workflow
-    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | gpd state set-project-contract -' in workflow
-    assert "/tmp/gpd-project-contract.json" not in workflow
+    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd --raw validate project-contract -' in workflow
+    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd state set-project-contract -' in workflow
+    assert "/tmp/grd-project-contract.json" not in workflow
     assert "temporary JSON file if needed" not in workflow
 
 
 def test_state_json_schema_stays_aligned_with_stdin_contract_persistence_flow() -> None:
-    schema = (REPO_ROOT / "src/gpd/specs/templates/state-json-schema.md").read_text(encoding="utf-8")
+    schema = (REPO_ROOT / "src/grd/specs/templates/state-json-schema.md").read_text(encoding="utf-8")
 
-    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | gpd --raw validate project-contract -' in schema
-    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | gpd state set-project-contract -' in schema
-    assert "Preferred write path: `gpd state set-project-contract <path-to-contract.json>`." not in schema
+    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd --raw validate project-contract -' in schema
+    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd state set-project-contract -' in schema
+    assert "Preferred write path: `grd state set-project-contract <path-to-contract.json>`." not in schema
 
 
 def test_compare_branches_prompt_keeps_branch_summary_extraction_in_memory() -> None:
-    workflow = (REPO_ROOT / "src/gpd/specs/workflows/compare-branches.md").read_text(encoding="utf-8")
+    workflow = (REPO_ROOT / "src/grd/specs/workflows/compare-branches.md").read_text(encoding="utf-8")
 
     assert "Prefer parsing the `git show` output directly in memory." in workflow
-    assert "do not write it to `.gpd/tmp/` just to run a path-based extractor." in workflow
+    assert "do not write it to `.grd/tmp/` just to run a path-based extractor." in workflow
     assert "Keep branch-summary extraction in memory/stdout only" in workflow
-    assert "do not use `.gpd/tmp/`, `/tmp`, or another temp root for this step." in workflow
+    assert "do not use `.grd/tmp/`, `/tmp`, or another temp root for this step." in workflow

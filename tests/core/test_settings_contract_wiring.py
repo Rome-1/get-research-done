@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-WORKFLOWS_DIR = REPO_ROOT / "src/gpd/specs/workflows"
-COMMANDS_DIR = REPO_ROOT / "src/gpd/commands"
-REFERENCES_DIR = REPO_ROOT / "src/gpd/specs/references"
+WORKFLOWS_DIR = REPO_ROOT / "src/grd/specs/workflows"
+COMMANDS_DIR = REPO_ROOT / "src/grd/commands"
+REFERENCES_DIR = REPO_ROOT / "src/grd/specs/references"
 
 
 def test_new_project_minimal_contract_guidance_surfaces_exact_schema_enum_vocabulary() -> None:
@@ -31,9 +31,9 @@ def test_settings_and_planning_config_keep_conventions_outside_config_json() -> 
 
     assert "physics research preferences" not in settings_command
     assert "physics-specific settings" not in settings_workflow
-    assert "Project conventions do **not** live in `.gpd/config.json`." in settings_workflow
-    assert "Project conventions still live in `.gpd/CONVENTIONS.md` and `.gpd/state.json` (`convention_lock`)" in settings_workflow
+    assert "Project conventions do **not** live in `.grd/config.json`." in settings_workflow
+    assert "Project conventions still live in `.grd/CONVENTIONS.md` and `.grd/state.json` (`convention_lock`)" in settings_workflow
     assert '"physics": {' not in planning_config
     assert "Project conventions are not part of `config.json`." in planning_config
     assert "Do **not** introduce a `physics` block there." in planning_config
-    assert "The user can run `gpd convention set ...` or `/gpd:validate-conventions` later to complete convention setup." in new_project
+    assert "The user can run `grd convention set ...` or `/grd:validate-conventions` later to complete convention setup." in new_project

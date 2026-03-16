@@ -1,4 +1,4 @@
-"""Tests for gpd.core.health — health check dashboard."""
+"""Tests for grd.core.health — health check dashboard."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
-from gpd.core.health import (
+from grd.core.health import (
     CheckStatus,
     HealthCheck,
     HealthReport,
@@ -28,7 +28,7 @@ from gpd.core.health import (
     run_doctor,
     run_health,
 )
-from gpd.core.storage_paths import ProjectStorageLayout
+from grd.core.storage_paths import ProjectStorageLayout
 
 # ─── Model Tests ─────────────────────────────────────────────────────────────
 
@@ -84,9 +84,9 @@ class TestCheckProjectStructure:
         assert len(result.issues) > 0
 
     def test_ok_with_full_structure(self, tmp_path: Path):
-        from gpd.core.constants import REQUIRED_PLANNING_DIRS, REQUIRED_PLANNING_FILES
+        from grd.core.constants import REQUIRED_PLANNING_DIRS, REQUIRED_PLANNING_FILES
 
-        planning = tmp_path / ".gpd"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         for f in REQUIRED_PLANNING_FILES:
             (planning / f).write_text("stub")
@@ -121,18 +121,18 @@ class TestCheckStoragePaths:
 
     def test_hidden_results_and_scratch_outputs_warn(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        hidden_results = cwd / ".gpd" / "phases" / "01-setup" / "results"
+        hidden_results = cwd / ".grd" / "phases" / "01-setup" / "results"
         hidden_results.mkdir(parents=True)
         (hidden_results / "out.json").write_text("{}", encoding="utf-8")
-        scratch_file = cwd / ".gpd" / "tmp" / "final.csv"
+        scratch_file = cwd / ".grd" / "tmp" / "final.csv"
         scratch_file.parent.mkdir(parents=True)
         scratch_file.write_text("x,y\n", encoding="utf-8")
 
         result = check_storage_paths(cwd)
 
         assert result.status == CheckStatus.WARN
-        assert any(".gpd/phases/01-setup/results/out.json" in warning for warning in result.warnings)
-        assert any(".gpd/tmp/final.csv" in warning for warning in result.warnings)
+        assert any(".grd/phases/01-setup/results/out.json" in warning for warning in result.warnings)
+        assert any(".grd/tmp/final.csv" in warning for warning in result.warnings)
 
 
 class TestCheckCompaction:
@@ -142,7 +142,7 @@ class TestCheckCompaction:
         assert result.details.get("reason") == "no_state_file"
 
     def test_small_state_ok(self, tmp_path: Path):
-        planning = tmp_path / ".gpd"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "STATE.md").write_text("# State\nShort content\n")
         result = check_compaction_needed(tmp_path)
@@ -155,7 +155,7 @@ class TestCheckOrphans:
         assert result.status == CheckStatus.OK
 
     def test_empty_phase_dir_warns(self, tmp_path: Path):
-        phases = tmp_path / ".gpd" / "phases"
+        phases = tmp_path / ".grd" / "phases"
         (phases / "01-intro").mkdir(parents=True)
         result = check_orphans(tmp_path)
         assert result.status == CheckStatus.WARN
@@ -169,7 +169,7 @@ class TestCheckConventionLock:
         assert any("state.json" in w for w in result.warnings)
 
     def test_no_convention_lock_key(self, tmp_path: Path):
-        planning = tmp_path / ".gpd"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "state.json").write_text(json.dumps({"position": {}}))
         result = check_convention_lock(tmp_path)
@@ -178,7 +178,7 @@ class TestCheckConventionLock:
     def test_convention_lock_non_dict_warns(self, tmp_path: Path):
         """A truthy non-dict convention_lock must not raise AttributeError."""
         fake_state = {"convention_lock": "not-a-dict"}
-        with patch("gpd.core.health.load_state_json", return_value=fake_state):
+        with patch("grd.core.health.load_state_json", return_value=fake_state):
             result = check_convention_lock(tmp_path)
         assert result.status == CheckStatus.WARN
         assert any("not a dict" in w for w in result.warnings)
@@ -186,7 +186,7 @@ class TestCheckConventionLock:
     def test_empty_dict_falls_through_to_counting_loop(self, tmp_path: Path):
         """An empty dict {} is a valid convention_lock; should report counts, not 'No convention_lock'."""
         fake_state = {"convention_lock": {}}
-        with patch("gpd.core.health.load_state_json", return_value=fake_state):
+        with patch("grd.core.health.load_state_json", return_value=fake_state):
             result = check_convention_lock(tmp_path)
         assert "No convention_lock in state.json" not in result.warnings
         assert "set" in result.details
@@ -204,12 +204,12 @@ class TestCheckConfig:
 class TestCheckGitStatus:
     def test_non_git_dir(self, tmp_path: Path):
         completed = subprocess.CompletedProcess(
-            args=["git", "status", "--porcelain", ".gpd/"],
+            args=["git", "status", "--porcelain", ".grd/"],
             returncode=128,
             stdout="",
             stderr="fatal: not a git repository (or any of the parent directories): .git",
         )
-        with patch("gpd.core.health.subprocess.run", return_value=completed):
+        with patch("grd.core.health.subprocess.run", return_value=completed):
             result = check_git_status(tmp_path)
 
         assert result.label == "Git Status"
@@ -221,12 +221,12 @@ class TestCheckGitStatus:
 class TestCheckCheckpointTags:
     def test_non_git_dir(self, tmp_path: Path):
         completed = subprocess.CompletedProcess(
-            args=["git", "tag", "-l", "gpd-checkpoint/*"],
+            args=["git", "tag", "-l", "grd-checkpoint/*"],
             returncode=128,
             stdout="",
             stderr="fatal: not a git repository (or any of the parent directories): .git",
         )
-        with patch("gpd.core.health.subprocess.run", return_value=completed):
+        with patch("grd.core.health.subprocess.run", return_value=completed):
             result = check_checkpoint_tags(tmp_path)
 
         assert result.label == "Checkpoint Tags"
@@ -237,16 +237,16 @@ class TestCheckCheckpointTags:
     def test_warns_on_stale_checkpoint_tags(self, tmp_path: Path):
         def _run(args: list[str], **_: object) -> subprocess.CompletedProcess[str]:
             if args[:3] == ["git", "tag", "-l"]:
-                return subprocess.CompletedProcess(args=args, returncode=0, stdout="gpd-checkpoint/old\n", stderr="")
+                return subprocess.CompletedProcess(args=args, returncode=0, stdout="grd-checkpoint/old\n", stderr="")
             if args[:4] == ["git", "log", "-1", "--format=%ct"]:
                 return subprocess.CompletedProcess(args=args, returncode=0, stdout="0\n", stderr="")
             raise AssertionError(f"Unexpected args: {args}")
 
-        with patch("gpd.core.health.subprocess.run", side_effect=_run):
+        with patch("grd.core.health.subprocess.run", side_effect=_run):
             result = check_checkpoint_tags(tmp_path)
 
         assert result.status == CheckStatus.WARN
-        assert result.details["stale_tags"] == ["gpd-checkpoint/old"]
+        assert result.details["stale_tags"] == ["grd-checkpoint/old"]
         assert any("older than" in warning for warning in result.warnings)
 
 
@@ -257,7 +257,7 @@ class TestCheckRoadmapConsistency:
         assert any("not found" in i for i in result.issues)
 
     def test_roadmap_with_matching_phases(self, tmp_path: Path):
-        planning = tmp_path / ".gpd"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "ROADMAP.md").write_text("## Phase 1: Intro\n## Phase 2: Method\n")
         phases = planning / "phases"
@@ -275,7 +275,7 @@ class TestCheckPlanFrontmatter:
 
     def test_detects_plan_numbering_gap(self, tmp_path: Path):
         """Standard plan filenames like 01-PLAN.md must be parsed by the regex."""
-        phases = tmp_path / ".gpd" / "phases"
+        phases = tmp_path / ".grd" / "phases"
         phase_dir = phases / "01-intro"
         phase_dir.mkdir(parents=True)
         # Create plans with a gap: 01, 03 (missing 02)
@@ -289,7 +289,7 @@ class TestCheckPlanFrontmatter:
 
     def test_no_gap_with_consecutive_plans(self, tmp_path: Path):
         """Consecutive plan numbers should not produce warnings."""
-        phases = tmp_path / ".gpd" / "phases"
+        phases = tmp_path / ".grd" / "phases"
         phase_dir = phases / "01-intro"
         phase_dir.mkdir(parents=True)
         plan_content = "---\nwave: 1\n---\n# Plan\n"
@@ -330,14 +330,14 @@ class TestRunHealth:
             if args[:3] == ["git", "status", "--porcelain"]:
                 return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
             if args[:3] == ["git", "tag", "-l"]:
-                return subprocess.CompletedProcess(args=args, returncode=0, stdout="gpd-checkpoint/old\n", stderr="")
+                return subprocess.CompletedProcess(args=args, returncode=0, stdout="grd-checkpoint/old\n", stderr="")
             if args[:4] == ["git", "log", "-1", "--format=%ct"]:
                 return subprocess.CompletedProcess(args=args, returncode=0, stdout="0\n", stderr="")
             if args[:3] == ["git", "tag", "-d"]:
                 return subprocess.CompletedProcess(args=args, returncode=0, stdout="Deleted tag\n", stderr="")
             raise AssertionError(f"Unexpected args: {args}")
 
-        with patch("gpd.core.health.subprocess.run", side_effect=_run):
+        with patch("grd.core.health.subprocess.run", side_effect=_run):
             report = run_health(tmp_path, fix=True)
 
         assert any("Removed 1 stale checkpoint tag" in fix for fix in report.fixes_applied)
@@ -550,7 +550,7 @@ trigger:
 
 
 def _bootstrap_health_project(tmp_path: Path) -> Path:
-    planning = tmp_path / ".gpd"
+    planning = tmp_path / ".grd"
     planning.mkdir()
     (planning / "phases").mkdir()
     (planning / "state.json").write_text("{}", encoding="utf-8")
@@ -570,16 +570,16 @@ class TestCheckLatestReturn:
 
     def test_summary_with_valid_return_is_ok(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        phase_dir = cwd / ".gpd" / "phases" / "01-setup"
+        phase_dir = cwd / ".grd" / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
         summary_content = (
             "# Summary\n\n"
             "```yaml\n"
-            "gpd_return:\n"
+            "grd_return:\n"
             "  status: completed\n"
             "  files_written: [src/main.py]\n"
             "  issues: []\n"
-            "  next_actions: [/gpd:verify-work 02]\n"
+            "  next_actions: [/grd:verify-work 02]\n"
             "```\n"
         )
         (phase_dir / "01-setup-01-SUMMARY.md").write_text(summary_content, encoding="utf-8")
@@ -591,7 +591,7 @@ class TestCheckLatestReturn:
 
     def test_summary_without_return_block_warns(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        phase_dir = cwd / ".gpd" / "phases" / "01-setup"
+        phase_dir = cwd / ".grd" / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
         (phase_dir / "01-setup-01-SUMMARY.md").write_text(
             "# Summary\nJust text, no return block.\n",

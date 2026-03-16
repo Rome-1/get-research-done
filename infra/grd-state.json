@@ -1,0 +1,40 @@
+{
+  "name": "grd-state",
+  "description": "GRD project state management. Tools for querying state, phase info, progress, validation, health checks, and configuration.",
+  "transport": "stdio",
+  "command": "grd-mcp-state",
+  "args": [],
+  "env": {
+    "LOG_LEVEL": "${LOG_LEVEL:-WARNING}"
+  },
+  "capabilities": [
+    "get_state",
+    "get_phase_info",
+    "advance_plan",
+    "get_progress",
+    "validate_state",
+    "run_health_check",
+    "get_config"
+  ],
+  "registry_prefix": "grd_state",
+  "prerequisites": [
+    "Install GRD first: npx -y get-research-done"
+  ],
+  "health_check": {
+    "tool": "get_config",
+    "input": {
+      "project_dir": "/tmp/test"
+    },
+    "expect": "contains model_profile"
+  },
+  "alternatives": {
+    "python_module": {
+      "command": "python",
+      "args": [
+        "-m",
+        "grd.mcp.servers.state_server"
+      ],
+      "notes": "Requires grd package installed"
+    }
+  }
+}

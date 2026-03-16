@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from gpd import registry
+from grd import registry
 
 
 @pytest.fixture(autouse=True)
@@ -65,43 +65,43 @@ def test_registry_agent_metadata_values_are_valid() -> None:
 
 def test_representative_agents_expose_expected_metadata_policy() -> None:
     expectations = {
-        "gpd-executor": {
+        "grd-executor": {
             "surface": "public",
             "role_family": "worker",
             "artifact_write_authority": "scoped_write",
             "shared_state_authority": "return_only",
         },
-        "gpd-planner": {
+        "grd-planner": {
             "surface": "public",
             "role_family": "coordination",
             "artifact_write_authority": "scoped_write",
             "shared_state_authority": "return_only",
         },
-        "gpd-roadmapper": {
+        "grd-roadmapper": {
             "surface": "public",
             "role_family": "coordination",
             "artifact_write_authority": "scoped_write",
             "shared_state_authority": "direct",
         },
-        "gpd-notation-coordinator": {
+        "grd-notation-coordinator": {
             "surface": "public",
             "role_family": "coordination",
             "artifact_write_authority": "scoped_write",
             "shared_state_authority": "direct",
         },
-        "gpd-phase-researcher": {
+        "grd-phase-researcher": {
             "surface": "internal",
             "role_family": "analysis",
             "artifact_write_authority": "scoped_write",
             "shared_state_authority": "return_only",
         },
-        "gpd-verifier": {
+        "grd-verifier": {
             "surface": "internal",
             "role_family": "verification",
             "artifact_write_authority": "scoped_write",
             "shared_state_authority": "return_only",
         },
-        "gpd-review-reader": {
+        "grd-review-reader": {
             "surface": "internal",
             "role_family": "review",
             "artifact_write_authority": "scoped_write",

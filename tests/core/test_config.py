@@ -1,16 +1,16 @@
-"""Tests for gpd.core.config."""
+"""Tests for grd.core.config."""
 
 import json
 from pathlib import Path
 
 import pytest
 
-from gpd.core.config import (
+from grd.core.config import (
     AGENT_DEFAULT_TIERS,
     MODEL_PROFILES,
     AutonomyMode,
     BranchingStrategy,
-    GPDProjectConfig,
+    GRDProjectConfig,
     ModelProfile,
     ModelTier,
     ResearchMode,
@@ -21,7 +21,7 @@ from gpd.core.config import (
     resolve_model,
     resolve_tier,
 )
-from gpd.core.errors import ConfigError
+from grd.core.errors import ConfigError
 
 # ─── Enum values ────────────────────────────────────────────────────────────────
 
@@ -74,11 +74,11 @@ class TestModelProfiles:
             assert set(mapping.keys()) == profiles, f"{agent} missing profiles"
 
     def test_planner_always_tier_1(self):
-        for profile, tier in MODEL_PROFILES["gpd-planner"].items():
+        for profile, tier in MODEL_PROFILES["grd-planner"].items():
             assert tier == ModelTier.TIER_1, f"planner {profile} should be tier-1"
 
     def test_research_mapper_mostly_tier_3(self):
-        tiers = MODEL_PROFILES["gpd-research-mapper"]
+        tiers = MODEL_PROFILES["grd-research-mapper"]
         assert tiers["deep-theory"] == ModelTier.TIER_2
         assert tiers["numerical"] == ModelTier.TIER_3
 
@@ -86,12 +86,12 @@ class TestModelProfiles:
         assert set(AGENT_DEFAULT_TIERS.keys()) == set(MODEL_PROFILES.keys())
 
 
-# ─── GPDProjectConfig defaults ────────────────────────────────────────────────────────
+# ─── GRDProjectConfig defaults ────────────────────────────────────────────────────────
 
 
-class TestGPDProjectConfigDefaults:
+class TestGRDProjectConfigDefaults:
     def test_defaults(self):
-        cfg = GPDProjectConfig()
+        cfg = GRDProjectConfig()
         assert cfg.model_profile == ModelProfile.REVIEW
         assert cfg.autonomy == AutonomyMode.BALANCED
         assert cfg.review_cadence == ReviewCadence.ADAPTIVE
@@ -113,17 +113,17 @@ class TestGPDProjectConfigDefaults:
 class TestLoadConfig:
     def test_missing_file_returns_defaults(self, tmp_path: Path):
         cfg = load_config(tmp_path)
-        assert cfg == GPDProjectConfig()
+        assert cfg == GRDProjectConfig()
 
     def test_empty_object(self, tmp_path: Path):
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text("{}")
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text("{}")
         cfg = load_config(tmp_path)
         assert cfg.model_profile == ModelProfile.REVIEW
 
     def test_custom_values(self, tmp_path: Path):
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text(
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text(
             json.dumps(
                 {
                     "model_profile": "deep-theory",
@@ -150,15 +150,15 @@ class TestLoadConfig:
         tmp_path: Path,
         invalid_value: str,
     ) -> None:
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text(json.dumps({"autonomy": invalid_value}))
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text(json.dumps({"autonomy": invalid_value}))
 
         with pytest.raises(ConfigError, match="Invalid config.json values"):
             load_config(tmp_path)
 
     def test_nested_section_fallback(self, tmp_path: Path):
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text(
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text(
             json.dumps(
                 {
                     "planning": {"commit_docs": False},
@@ -186,23 +186,23 @@ class TestLoadConfig:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text(json.dumps({"commit_docs": True}))
-        monkeypatch.setattr("gpd.core.config._planning_dir_is_gitignored", lambda _: True)
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text(json.dumps({"commit_docs": True}))
+        monkeypatch.setattr("grd.core.config._planning_dir_is_gitignored", lambda _: True)
 
         cfg = load_config(tmp_path)
 
         assert cfg.commit_docs is False
 
     def test_malformed_json_raises(self, tmp_path: Path):
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text("{bad json")
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text("{bad json")
         with pytest.raises(ConfigError, match="Malformed config.json"):
             load_config(tmp_path)
 
     def test_physics_section_is_rejected_by_current_config_schema(self, tmp_path: Path) -> None:
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text(
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text(
             json.dumps({"physics": {"unit_system": "natural"}}),
             encoding="utf-8",
         )
@@ -211,8 +211,8 @@ class TestLoadConfig:
             load_config(tmp_path)
 
     def test_model_overrides(self, tmp_path: Path):
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text(
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text(
             json.dumps(
                 {
                     "model_overrides": {
@@ -229,16 +229,16 @@ class TestLoadConfig:
         }
 
     def test_invalid_model_overrides_runtime_raises(self, tmp_path: Path):
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text(
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text(
             json.dumps({"model_overrides": {"unknown-runtime": {"tier-1": "foo"}}})
         )
         with pytest.raises(ConfigError, match="model_overrides contains unknown runtime"):
             load_config(tmp_path)
 
     def test_invalid_model_overrides_tier_raises(self, tmp_path: Path):
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text(
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text(
             json.dumps({"model_overrides": {"codex": {"tier-x": "foo"}}})
         )
         with pytest.raises(ConfigError, match="model_overrides\\['codex'\\] contains unknown tier"):
@@ -249,8 +249,8 @@ class TestLoadConfig:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text(
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text(
             json.dumps({"model_overrides": {"codex": {"tier-1": "gpt-5"}}})
         )
 
@@ -259,7 +259,7 @@ class TestLoadConfig:
         def _raise_runtime_lookup_failure() -> list[str]:
             raise FileNotFoundError("runtime catalog missing")
 
-        monkeypatch.setattr("gpd.adapters.runtime_catalog.list_runtime_names", _raise_runtime_lookup_failure)
+        monkeypatch.setattr("grd.adapters.runtime_catalog.list_runtime_names", _raise_runtime_lookup_failure)
 
         with pytest.raises(ConfigError, match="Unable to resolve supported runtimes"):
             load_config(tmp_path)
@@ -271,27 +271,27 @@ class TestLoadConfig:
 
 class TestResolveAgentTier:
     def test_known_agent_and_profile(self):
-        tier = resolve_agent_tier("gpd-planner", ModelProfile.DEEP_THEORY)
+        tier = resolve_agent_tier("grd-planner", ModelProfile.DEEP_THEORY)
         assert tier == ModelTier.TIER_1
 
     def test_executor_numerical(self):
-        tier = resolve_agent_tier("gpd-executor", "numerical")
+        tier = resolve_agent_tier("grd-executor", "numerical")
         assert tier == ModelTier.TIER_2
 
     def test_unknown_agent_raises(self):
-        with pytest.raises(ConfigError, match="Unknown agent 'gpd-unknown'"):
-            resolve_agent_tier("gpd-unknown", "review")
+        with pytest.raises(ConfigError, match="Unknown agent 'grd-unknown'"):
+            resolve_agent_tier("grd-unknown", "review")
 
     def test_unknown_profile_falls_back_to_review(self):
-        tier = resolve_agent_tier("gpd-planner", "nonexistent")
+        tier = resolve_agent_tier("grd-planner", "nonexistent")
         assert tier == ModelTier.TIER_1  # planner review is tier-1
 
     def test_registry_only_agent_falls_back_to_default_tier(self, monkeypatch: pytest.MonkeyPatch):
-        import gpd.registry as content_registry
+        import grd.registry as content_registry
 
-        monkeypatch.setattr(content_registry, "list_agents", lambda: ["gpd-registry-only"])
+        monkeypatch.setattr(content_registry, "list_agents", lambda: ["grd-registry-only"])
 
-        tier = resolve_agent_tier("gpd-registry-only", "review")
+        tier = resolve_agent_tier("grd-registry-only", "review")
 
         assert tier == ModelTier.TIER_2
 
@@ -301,12 +301,12 @@ class TestResolveAgentTier:
 
 class TestResolveModel:
     def test_default_config(self, tmp_path: Path):
-        model = resolve_model(tmp_path, "gpd-planner")
+        model = resolve_model(tmp_path, "grd-planner")
         assert model is None
 
     def test_with_runtime_specific_override(self, tmp_path: Path):
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text(
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text(
             json.dumps(
                 {
                     "model_overrides": {
@@ -316,12 +316,12 @@ class TestResolveModel:
                 }
             )
         )
-        model = resolve_model(tmp_path, "gpd-planner", runtime="claude-code")
+        model = resolve_model(tmp_path, "grd-planner", runtime="claude-code")
         assert model == "opus"
 
     def test_without_override_for_active_runtime_returns_none(self, tmp_path: Path):
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text(
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text(
             json.dumps(
                 {
                     "model_overrides": {
@@ -330,15 +330,15 @@ class TestResolveModel:
                 }
             )
         )
-        model = resolve_model(tmp_path, "gpd-planner", runtime="codex")
+        model = resolve_model(tmp_path, "grd-planner", runtime="codex")
         assert model is None
 
 
 class TestResolveTier:
     def test_project_resolve_tier_uses_profile(self, tmp_path: Path):
-        (tmp_path / ".gpd").mkdir()
-        (tmp_path / ".gpd" / "config.json").write_text(
+        (tmp_path / ".grd").mkdir()
+        (tmp_path / ".grd" / "config.json").write_text(
             json.dumps({"model_profile": "paper-writing"})
         )
-        tier = resolve_tier(tmp_path, "gpd-project-researcher")
+        tier = resolve_tier(tmp_path, "grd-project-researcher")
         assert tier == ModelTier.TIER_3

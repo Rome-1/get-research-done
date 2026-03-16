@@ -8,9 +8,9 @@ import pytest
 from PIL import Image
 from pybtex.database import BibliographyData, Entry
 
-from gpd.mcp.paper.bibliography import CitationSource
-from gpd.mcp.paper.compiler import CompilationResult, _get_tlmgr_package, check_class_file
-from gpd.mcp.paper.models import Author, FigureRef, PaperConfig, Section
+from grd.mcp.paper.bibliography import CitationSource
+from grd.mcp.paper.compiler import CompilationResult, _get_tlmgr_package, check_class_file
+from grd.mcp.paper.models import Author, FigureRef, PaperConfig, Section
 
 # ---- Compiler wrapper tests ----
 
@@ -41,7 +41,7 @@ class TestCompilerWrapper:
 class TestBuildPaper:
     @pytest.mark.asyncio
     async def test_build_paper_renders_tex(self, tmp_path, monkeypatch):
-        from gpd.mcp.paper.compiler import build_paper
+        from grd.mcp.paper.compiler import build_paper
 
         config = PaperConfig(
             title="Test Paper",
@@ -63,14 +63,14 @@ class TestBuildPaper:
         async def mock_compile(tex_path, output_dir, compiler="pdflatex"):
             return mock_result
 
-        monkeypatch.setattr("gpd.mcp.paper.compiler.compile_paper", mock_compile)
+        monkeypatch.setattr("grd.mcp.paper.compiler.compile_paper", mock_compile)
 
         output = await build_paper(config, tmp_path, bib_data=bib)
 
         assert (tmp_path / "main.tex").exists()
         tex_content = (tmp_path / "main.tex").read_text()
         assert r"\documentclass" in tex_content
-        assert "Generated with Get Physics Done" in tex_content
+        assert "Generated with Get Research Done" in tex_content
         assert (tmp_path / "references.bib").exists()
         bib_content = (tmp_path / "references.bib").read_text()
         assert len(bib_content) > 0
@@ -89,7 +89,7 @@ class TestBuildPaper:
 
     @pytest.mark.asyncio
     async def test_build_paper_merges_bib_data_and_citation_sources(self, tmp_path, monkeypatch):
-        from gpd.mcp.paper.compiler import build_paper
+        from grd.mcp.paper.compiler import build_paper
 
         config = PaperConfig(
             title="Merged Bibliography Paper",
@@ -111,7 +111,7 @@ class TestBuildPaper:
         async def mock_compile(tex_path, output_dir, compiler="pdflatex"):
             return mock_result
 
-        monkeypatch.setattr("gpd.mcp.paper.compiler.compile_paper", mock_compile)
+        monkeypatch.setattr("grd.mcp.paper.compiler.compile_paper", mock_compile)
 
         output = await build_paper(
             config,
@@ -140,7 +140,7 @@ class TestBuildPaper:
 
     @pytest.mark.asyncio
     async def test_build_paper_prepares_config_figures(self, tmp_path, monkeypatch):
-        from gpd.mcp.paper.compiler import build_paper
+        from grd.mcp.paper.compiler import build_paper
 
         fig_path = tmp_path / "velocity.png"
         Image.new("RGB", (200, 200), color="blue").save(fig_path)
@@ -160,8 +160,8 @@ class TestBuildPaper:
         async def mock_compile(tex_path, output_dir, compiler="pdflatex"):
             return mock_result
 
-        monkeypatch.setattr("gpd.mcp.paper.compiler.check_class_file", lambda dc, install_hint=None: (True, "ok"))
-        monkeypatch.setattr("gpd.mcp.paper.compiler.compile_paper", mock_compile)
+        monkeypatch.setattr("grd.mcp.paper.compiler.check_class_file", lambda dc, install_hint=None: (True, "ok"))
+        monkeypatch.setattr("grd.mcp.paper.compiler.compile_paper", mock_compile)
 
         output = await build_paper(config, tmp_path)
 
@@ -179,7 +179,7 @@ class TestBuildPaper:
 
     @pytest.mark.asyncio
     async def test_build_paper_writes_bibliography_audit_from_sources(self, tmp_path, monkeypatch):
-        from gpd.mcp.paper.compiler import build_paper
+        from grd.mcp.paper.compiler import build_paper
 
         config = PaperConfig(
             title="Audit Paper",
@@ -195,7 +195,7 @@ class TestBuildPaper:
         async def mock_compile(tex_path, output_dir, compiler="pdflatex"):
             return mock_result
 
-        monkeypatch.setattr("gpd.mcp.paper.compiler.compile_paper", mock_compile)
+        monkeypatch.setattr("grd.mcp.paper.compiler.compile_paper", mock_compile)
 
         output = await build_paper(
             config,
@@ -225,7 +225,7 @@ class TestBuildPaper:
     async def test_build_paper_manifest_keeps_figure_source_alignment_when_some_figures_are_skipped(
         self, tmp_path, monkeypatch
     ):
-        from gpd.mcp.paper.compiler import build_paper
+        from grd.mcp.paper.compiler import build_paper
 
         existing_figure = tmp_path / "existing.png"
         Image.new("RGB", (200, 200), color="green").save(existing_figure)
@@ -242,7 +242,7 @@ class TestBuildPaper:
         )
 
         monkeypatch.setattr(
-            "gpd.mcp.paper.compiler.check_journal_dependencies",
+            "grd.mcp.paper.compiler.check_journal_dependencies",
             lambda spec: (False, ["missing TeX dependency"]),
         )
 
@@ -260,7 +260,7 @@ class TestBuildPaper:
     async def test_build_paper_fails_when_some_figures_cannot_be_prepared_but_keeps_valid_figures(
         self, tmp_path, monkeypatch
     ):
-        from gpd.mcp.paper.compiler import build_paper
+        from grd.mcp.paper.compiler import build_paper
 
         good_figure = tmp_path / "good.png"
         Image.new("RGB", (200, 200), color="purple").save(good_figure)
@@ -285,8 +285,8 @@ class TestBuildPaper:
         async def mock_compile(tex_path, output_dir, compiler="pdflatex"):
             return mock_result
 
-        monkeypatch.setattr("gpd.mcp.paper.compiler.check_journal_dependencies", lambda spec: (True, []))
-        monkeypatch.setattr("gpd.mcp.paper.compiler.compile_paper", mock_compile)
+        monkeypatch.setattr("grd.mcp.paper.compiler.check_journal_dependencies", lambda spec: (True, []))
+        monkeypatch.setattr("grd.mcp.paper.compiler.compile_paper", mock_compile)
 
         output = await build_paper(config, tmp_path)
 
@@ -307,7 +307,7 @@ class TestBuildPaper:
 
 class TestPublicAPI:
     def test_public_api_imports(self):
-        from gpd.mcp.paper import (
+        from grd.mcp.paper import (
             ArtifactManifest,
             Author,
             BibliographyAudit,
@@ -390,7 +390,7 @@ class TestPublicAPI:
         assert callable(write_stage_review_report)
 
     def test_public_api_review_artifact_helpers_round_trip(self, tmp_path):
-        from gpd.mcp.paper import (
+        from grd.mcp.paper import (
             ClaimIndex,
             ClaimRecord,
             ClaimType,
@@ -462,14 +462,14 @@ class TestPublicAPI:
         )
         bundle = ReviewPanelBundle(
             manuscript_path="paper/main.tex",
-            claim_index_path=".gpd/review/CLAIMS.json",
-            stage_reports=[".gpd/review/STAGE-physics.json"],
-            review_ledger_path=".gpd/review/REVIEW-LEDGER.json",
-            decision_path=".gpd/review/REFEREE-DECISION.json",
+            claim_index_path=".grd/review/CLAIMS.json",
+            stage_reports=[".grd/review/STAGE-physics.json"],
+            review_ledger_path=".grd/review/REVIEW-LEDGER.json",
+            decision_path=".grd/review/REFEREE-DECISION.json",
             final_recommendation=ReviewRecommendation.minor_revision,
             final_confidence=ReviewConfidence.medium,
-            final_report_path=".gpd/REFEREE-REPORT.md",
-            final_report_tex_path=".gpd/REFEREE-REPORT.tex",
+            final_report_path=".grd/REFEREE-REPORT.md",
+            final_report_tex_path=".grd/REFEREE-REPORT.tex",
         )
 
         claims_path = tmp_path / "CLAIMS.json"
@@ -494,7 +494,7 @@ class TestPublicAPI:
 class TestClassFileFallback:
     @pytest.mark.asyncio
     async def test_build_paper_missing_class_file(self, tmp_path, monkeypatch):
-        from gpd.mcp.paper.compiler import build_paper
+        from grd.mcp.paper.compiler import build_paper
 
         config = PaperConfig(
             title="Test",
@@ -504,7 +504,7 @@ class TestClassFileFallback:
         )
 
         monkeypatch.setattr(
-            "gpd.mcp.paper.compiler.check_class_file",
+            "grd.mcp.paper.compiler.check_class_file",
             lambda dc, install_hint=None: (False, f"{dc}.cls not found. Install via: tlmgr install revtex"),
         )
 
@@ -521,7 +521,7 @@ class TestClassFileFallback:
 
     @pytest.mark.asyncio
     async def test_build_paper_missing_jhep_support_file(self, tmp_path, monkeypatch):
-        from gpd.mcp.paper.compiler import build_paper
+        from grd.mcp.paper.compiler import build_paper
 
         config = PaperConfig(
             title="Test",
@@ -531,9 +531,9 @@ class TestClassFileFallback:
             journal="jhep",
         )
 
-        monkeypatch.setattr("gpd.mcp.paper.compiler.check_class_file", lambda dc, install_hint=None: (True, "ok"))
+        monkeypatch.setattr("grd.mcp.paper.compiler.check_class_file", lambda dc, install_hint=None: (True, "ok"))
         monkeypatch.setattr(
-            "gpd.mcp.paper.compiler.check_tex_file",
+            "grd.mcp.paper.compiler.check_tex_file",
             lambda resource_name, install_hint=None: (
                 (False, "jheppub.sty not found. Install via: tlmgr install jhep")
                 if resource_name == "jheppub.sty"

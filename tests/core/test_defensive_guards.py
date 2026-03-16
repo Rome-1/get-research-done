@@ -1,4 +1,4 @@
-"""Tests for defensive guards in gpd.core.extras and gpd.core.results.
+"""Tests for defensive guards in grd.core.extras and grd.core.results.
 
 These tests verify that malformed or unexpected data does not crash the
 core functions but is handled gracefully — by skipping bad items and
@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import logging
 
-from gpd.contracts import VerificationEvidence, contract_from_data
-from gpd.core.extras import (
+from grd.contracts import VerificationEvidence, contract_from_data
+from grd.core.extras import (
     ApproximationCheckResult,
     approximation_check,
     approximation_list,
 )
-from gpd.core.results import (
+from grd.core.results import (
     _normalize_verification_records,
     result_add,
     result_update,

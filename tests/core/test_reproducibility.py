@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gpd.core.reproducibility import (
+from grd.core.reproducibility import (
     EnvironmentSpecification,
     ExecutionStep,
     ExpectedNumericalResult,

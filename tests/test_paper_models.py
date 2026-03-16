@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from gpd.mcp.paper.models import Author, FigureRef, JournalSpec, PaperConfig, Section
+from grd.mcp.paper.models import Author, FigureRef, JournalSpec, PaperConfig, Section
 
 # ---- Model validation tests ----
 
@@ -29,7 +29,7 @@ class TestModels:
         assert config.figures == []
         assert config.appendix_sections == []
         assert config.bib_file == "references"
-        assert config.attribution_footer == "Generated with Get Physics Done"
+        assert config.attribution_footer == "Generated with Get Research Done"
 
     def test_paper_config_full(self):
         config = PaperConfig(
@@ -76,7 +76,7 @@ class TestModels:
 
 class TestJournalMap:
     def test_get_journal_spec_all_six(self):
-        from gpd.mcp.paper.journal_map import get_journal_spec
+        from grd.mcp.paper.journal_map import get_journal_spec
 
         for key in ["prl", "apj", "mnras", "nature", "jhep", "jfm"]:
             spec = get_journal_spec(key)
@@ -86,18 +86,18 @@ class TestJournalMap:
             assert f"{spec.bib_style}.bst" in spec.required_tex_files
 
     def test_get_journal_spec_unknown_raises(self):
-        from gpd.mcp.paper.journal_map import get_journal_spec
+        from grd.mcp.paper.journal_map import get_journal_spec
 
         with pytest.raises(ValueError, match="Unknown journal"):
             get_journal_spec("nonexistent")
 
     def test_domain_journal_map_coverage(self):
-        from gpd.mcp.paper.journal_map import DOMAIN_JOURNAL_MAP
+        from grd.mcp.paper.journal_map import DOMAIN_JOURNAL_MAP
 
         assert len(DOMAIN_JOURNAL_MAP) >= 15
 
     def test_astrophysics_maps_to_apj(self):
-        from gpd.mcp.paper.journal_map import get_journal_for_domain
+        from grd.mcp.paper.journal_map import get_journal_for_domain
 
         assert get_journal_for_domain("astrophysics") == "apj"
         assert get_journal_for_domain("cosmology") == "apj"
@@ -106,12 +106,12 @@ class TestJournalMap:
         assert get_journal_for_domain("particle_physics") == "prl"
 
     def test_default_is_prl(self):
-        from gpd.mcp.paper.journal_map import get_journal_for_domain
+        from grd.mcp.paper.journal_map import get_journal_for_domain
 
         assert get_journal_for_domain("unknown_domain_xyz") == "prl"
 
     def test_list_journals(self):
-        from gpd.mcp.paper.journal_map import list_journals
+        from grd.mcp.paper.journal_map import list_journals
 
         journals = list_journals()
         assert len(journals) == 6
@@ -123,14 +123,14 @@ class TestJournalMap:
 
 class TestTemplates:
     def test_load_all_templates(self):
-        from gpd.mcp.paper.template_registry import load_template
+        from grd.mcp.paper.template_registry import load_template
 
         for j in ["prl", "apj", "mnras", "nature", "jhep", "jfm"]:
             t = load_template(j)
             assert t is not None
 
     def test_render_prl_paper(self):
-        from gpd.mcp.paper.template_registry import render_paper
+        from grd.mcp.paper.template_registry import render_paper
 
         config = PaperConfig(
             title="Test Paper",
@@ -146,10 +146,10 @@ class TestTemplates:
         assert r"\begin{abstract}" in tex
         assert r"\section{Introduction}" in tex
         assert r"\bibliography{references}" in tex
-        assert "Generated with Get Physics Done" in tex
+        assert "Generated with Get Research Done" in tex
 
     def test_render_apj_paper(self):
-        from gpd.mcp.paper.template_registry import render_paper
+        from grd.mcp.paper.template_registry import render_paper
 
         config = PaperConfig(
             title="Stellar Paper",
@@ -162,7 +162,7 @@ class TestTemplates:
         assert "aastex631" in tex
 
     def test_render_keeps_full_document_when_section_content_is_fenced(self):
-        from gpd.mcp.paper.template_registry import render_paper
+        from grd.mcp.paper.template_registry import render_paper
 
         config = PaperConfig(
             title="Fenced Content",
@@ -176,7 +176,7 @@ class TestTemplates:
         assert "E = mc^2" in tex
 
     def test_render_jhep_paper(self):
-        from gpd.mcp.paper.template_registry import render_paper
+        from grd.mcp.paper.template_registry import render_paper
 
         config = PaperConfig(
             title="Loop Corrections",
@@ -194,7 +194,7 @@ class TestTemplates:
         assert r"\bibliographystyle{JHEP}" in tex
 
     def test_render_nature_affiliation_does_not_concatenate_small_with_text(self):
-        from gpd.mcp.paper.template_registry import render_paper
+        from grd.mcp.paper.template_registry import render_paper
 
         config = PaperConfig(
             title="Nature Paper",
@@ -208,7 +208,7 @@ class TestTemplates:
         assert r"\smallInstitute" not in tex
 
     def test_render_with_figures(self):
-        from gpd.mcp.paper.template_registry import render_paper
+        from grd.mcp.paper.template_registry import render_paper
 
         config = PaperConfig(
             title="Fig Paper",
@@ -223,7 +223,7 @@ class TestTemplates:
         assert r"\label{fig:velocity}" in tex
 
     def test_render_with_appendix(self):
-        from gpd.mcp.paper.template_registry import render_paper
+        from grd.mcp.paper.template_registry import render_paper
 
         config = PaperConfig(
             title="App Paper",
@@ -237,7 +237,7 @@ class TestTemplates:
         assert "Details" in tex
 
     def test_unknown_template_raises(self):
-        from gpd.mcp.paper.template_registry import load_template
+        from grd.mcp.paper.template_registry import load_template
 
         with pytest.raises(FileNotFoundError):
             load_template("nonexistent")

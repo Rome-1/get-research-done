@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from gpd.contracts import ResearchContract
-from gpd.core.protocol_bundles import (
+from grd.contracts import ResearchContract
+from grd.core.protocol_bundles import (
     get_protocol_bundle,
     invalidate_protocol_bundle_cache,
     list_protocol_bundles,
@@ -286,7 +286,7 @@ def test_render_protocol_bundle_context_surfaces_guidance() -> None:
     assert "Selection tags:" in rendered
     assert "Estimator policies:" in rendered
     assert "Verifier extensions:" in rendered
-    assert "{GPD_INSTALL_DIR}/references/protocols/monte-carlo.md" in rendered
+    assert "{GRD_INSTALL_DIR}/references/protocols/monte-carlo.md" in rendered
 
 
 def test_select_protocol_bundles_lattice_gauge_excludes_stat_mech_when_both_match() -> None:

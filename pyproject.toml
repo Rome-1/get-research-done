@@ -1,7 +1,7 @@
 [project]
-name = "get-physics-done"
+name = "get-research-done"
 version = "1.1.0"
-description = "GPD — Get Physics Done: open-source AI copilot for physics research"
+description = "GRD — Get Research Done: open-source AI copilot for research"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
@@ -12,9 +12,9 @@ maintainers = [
     { name = "Physical Superintelligence PBC" },
 ]
 keywords = [
-    "physical superintelligence",
-    "psi",
-    "physics",
+    "research",
+    "domain-agnostic",
+    "science",
     "research",
     "ai",
     "agentic",
@@ -27,7 +27,7 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3.11",
-    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering",
 ]
 dependencies = [
     # Core
@@ -45,27 +45,27 @@ dependencies = [
 ]
 
 [project.scripts]
-gpd = "gpd.cli:entrypoint"
-"gpd-mcp-conventions" = "gpd.mcp.servers.conventions_server:main"
-"gpd-mcp-verification" = "gpd.mcp.servers.verification_server:main"
-"gpd-mcp-protocols" = "gpd.mcp.servers.protocols_server:main"
-"gpd-mcp-errors" = "gpd.mcp.servers.errors_mcp:main"
-"gpd-mcp-patterns" = "gpd.mcp.servers.patterns_server:main"
-"gpd-mcp-state" = "gpd.mcp.servers.state_server:main"
-"gpd-mcp-skills" = "gpd.mcp.servers.skills_server:main"
+grd = "grd.cli:entrypoint"
+"grd-mcp-conventions" = "grd.mcp.servers.conventions_server:main"
+"grd-mcp-verification" = "grd.mcp.servers.verification_server:main"
+"grd-mcp-protocols" = "grd.mcp.servers.protocols_server:main"
+"grd-mcp-errors" = "grd.mcp.servers.errors_mcp:main"
+"grd-mcp-patterns" = "grd.mcp.servers.patterns_server:main"
+"grd-mcp-state" = "grd.mcp.servers.state_server:main"
+"grd-mcp-skills" = "grd.mcp.servers.skills_server:main"
 
 [project.urls]
-Homepage = "https://github.com/psi-oss/get-physics-done"
-Documentation = "https://github.com/psi-oss/get-physics-done#readme"
-Repository = "https://github.com/psi-oss/get-physics-done"
-Issues = "https://github.com/psi-oss/get-physics-done/issues"
+Homepage = "https://github.com/Rome-1/get-research-done"
+Documentation = "https://github.com/Rome-1/get-research-done#readme"
+Repository = "https://github.com/Rome-1/get-research-done"
+Issues = "https://github.com/Rome-1/get-research-done/issues"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/gpd"]
+packages = ["src/grd"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

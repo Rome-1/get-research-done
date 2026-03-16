@@ -1,4 +1,4 @@
-"""Tests for gpd.core.json_utils and the ``gpd json`` CLI subcommands."""
+"""Tests for grd.core.json_utils and the ``grd json`` CLI subcommands."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from gpd.cli import app
-from gpd.core.errors import ValidationError
-from gpd.core.json_utils import (
+from grd.cli import app
+from grd.core.errors import ValidationError
+from grd.core.json_utils import (
     json_get,
     json_keys,
     json_list,

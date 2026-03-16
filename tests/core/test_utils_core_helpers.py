@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-import gpd.core.utils as utils
-from gpd.core.utils import (
+import grd.core.utils as utils
+from grd.core.utils import (
     compare_phase_numbers,
     file_lock,
     phase_normalize,
@@ -136,7 +136,7 @@ def test_safe_read_file_truncated_returns_none_for_missing_files(tmp_path: Path)
 
 
 def test_utils_module_imports_without_fcntl(monkeypatch: pytest.MonkeyPatch) -> None:
-    module_name = "gpd.core.utils"
+    module_name = "grd.core.utils"
     original_module = sys.modules.get(module_name)
     real_import = builtins.__import__
 

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from gpd.core.constants import ProjectLayout
+from grd.core.constants import ProjectLayout
 
 
 @pytest.mark.parametrize(
@@ -22,7 +22,7 @@ def test_project_layout_file_properties(attribute: str, filename: str, tmp_path:
     path = getattr(layout, attribute)
 
     assert path.name == filename
-    assert path.parent == tmp_path / ".gpd"
+    assert path.parent == tmp_path / ".grd"
 
 
 @pytest.mark.parametrize(
@@ -40,7 +40,7 @@ def test_project_layout_directory_properties(attribute: str, dirname: str, tmp_p
     path = getattr(layout, attribute)
 
     assert path.name == dirname
-    assert path.parent == tmp_path / ".gpd"
+    assert path.parent == tmp_path / ".grd"
 
 
 @pytest.mark.parametrize(
@@ -119,4 +119,4 @@ def test_project_layout_phase_artifact_paths(
     path = getattr(layout, method_name)("01-setup", "01")
 
     assert path.name == expected_name
-    assert path.parent == tmp_path / ".gpd" / "phases" / "01-setup"
+    assert path.parent == tmp_path / ".grd" / "phases" / "01-setup"

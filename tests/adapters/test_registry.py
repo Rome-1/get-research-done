@@ -6,11 +6,11 @@ from types import SimpleNamespace
 
 import pytest
 
-import gpd.adapters as adapters_module
-from gpd.adapters import get_adapter, list_runtimes
-from gpd.adapters.base import RuntimeAdapter
-from gpd.adapters.runtime_catalog import GlobalConfigPolicy, HookPayloadPolicy, RuntimeDescriptor, list_runtime_names
-from gpd.adapters.tool_names import (
+import grd.adapters as adapters_module
+from grd.adapters import get_adapter, list_runtimes
+from grd.adapters.base import RuntimeAdapter
+from grd.adapters.runtime_catalog import GlobalConfigPolicy, HookPayloadPolicy, RuntimeDescriptor, list_runtime_names
+from grd.adapters.tool_names import (
     CANONICAL_TOOL_NAMES,
     CONTEXTUAL_TOOL_REFERENCE_NAMES,
     build_canonical_alias_map,
@@ -61,10 +61,10 @@ class TestRegistry:
     @pytest.mark.parametrize(
         ("runtime", "expected"),
         [
-            ("claude-code", "npx -y get-physics-done --claude"),
-            ("codex", "npx -y get-physics-done --codex"),
-            ("gemini", "npx -y get-physics-done --gemini"),
-            ("opencode", "npx -y get-physics-done --opencode"),
+            ("claude-code", "npx -y get-research-done --claude"),
+            ("codex", "npx -y get-research-done --codex"),
+            ("gemini", "npx -y get-research-done --gemini"),
+            ("opencode", "npx -y get-research-done --opencode"),
         ],
     )
     def test_update_command_is_adapter_owned(self, runtime: str, expected: str) -> None:
@@ -78,7 +78,7 @@ class TestRegistry:
             config_dir_name=".alpha",
             install_flag="--alpha",
             launch_command="alpha",
-            command_prefix="/gpd:",
+            command_prefix="/grd:",
             activation_env_vars=(),
             selection_flags=("--alpha",),
             selection_aliases=("alpha-runtime",),
@@ -92,7 +92,7 @@ class TestRegistry:
             config_dir_name=".beta",
             install_flag="--beta",
             launch_command="beta",
-            command_prefix="/gpd:",
+            command_prefix="/grd:",
             activation_env_vars=(),
             selection_flags=("--beta",),
             selection_aliases=("beta-runtime",),
@@ -115,8 +115,8 @@ class TestRegistry:
         def fake_import_module(name: str) -> object:
             imported_modules.append(name)
             return {
-                "gpd.adapters.alpha_runtime": SimpleNamespace(AlphaAdapter=AlphaAdapter),
-                "gpd.adapters.beta_runtime": SimpleNamespace(BetaAdapter=BetaAdapter),
+                "grd.adapters.alpha_runtime": SimpleNamespace(AlphaAdapter=AlphaAdapter),
+                "grd.adapters.beta_runtime": SimpleNamespace(BetaAdapter=BetaAdapter),
             }[name]
 
         monkeypatch.setattr(adapters_module, "iter_runtime_descriptors", lambda: (beta_descriptor, alpha_descriptor))
@@ -126,7 +126,7 @@ class TestRegistry:
 
         adapters_module._ensure_loaded()
 
-        assert imported_modules == ["gpd.adapters.beta_runtime", "gpd.adapters.alpha_runtime"]
+        assert imported_modules == ["grd.adapters.beta_runtime", "grd.adapters.alpha_runtime"]
         assert adapters_module.list_runtimes() == ["beta-runtime", "alpha-runtime"]
         assert adapters_module.get_adapter("alpha-runtime").runtime_name == "alpha-runtime"
 

@@ -1,4 +1,4 @@
-"""Tests for gpd.core.commands — ported JS command functions.
+"""Tests for grd.core.commands — ported JS command functions.
 
 Tests the pure logic functions without filesystem mocking (uses tmp_path).
 """
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from gpd.core.commands import (
+from grd.core.commands import (
     cmd_current_timestamp,
     cmd_generate_slug,
     cmd_history_digest,
@@ -18,7 +18,7 @@ from gpd.core.commands import (
     cmd_validate_return,
     cmd_verify_path_exists,
 )
-from gpd.core.errors import ValidationError
+from grd.core.errors import ValidationError
 
 # ─── cmd_current_timestamp ─────────────────────────────────────────────────
 
@@ -167,7 +167,7 @@ class TestSummaryExtract:
 
 class TestHistoryDigest:
     def _setup_phases(self, tmp_path: Path) -> None:
-        phases_dir = tmp_path / ".gpd" / "phases"
+        phases_dir = tmp_path / ".grd" / "phases"
         for name in ("01-setup", "02-core"):
             d = phases_dir / name
             d.mkdir(parents=True)
@@ -210,7 +210,7 @@ class TestHistoryDigest:
         assert result.methods == []
 
     def test_no_phases_dir(self, tmp_path: Path):
-        (tmp_path / ".gpd").mkdir()
+        (tmp_path / ".grd").mkdir()
         result = cmd_history_digest(tmp_path)
         assert result.phases == {}
 
@@ -220,7 +220,7 @@ class TestHistoryDigest:
 
 class TestRegressionCheck:
     def _setup_complete_phases(self, tmp_path: Path) -> None:
-        phases = tmp_path / ".gpd" / "phases"
+        phases = tmp_path / ".grd" / "phases"
         for name in ("01-setup", "02-core"):
             d = phases / name
             d.mkdir(parents=True)
@@ -238,7 +238,7 @@ class TestRegressionCheck:
     def test_convention_conflict(self, tmp_path: Path):
         self._setup_complete_phases(tmp_path)
         # Add a conflicting convention in phase 2
-        phase2_dir = tmp_path / ".gpd" / "phases" / "02-core"
+        phase2_dir = tmp_path / ".grd" / "phases" / "02-core"
         (phase2_dir / "02-core-01-SUMMARY.md").write_text(
             "---\nconventions:\n  - metric = mostly-plus\n---\n\n# Summary\n"
         )
@@ -250,7 +250,7 @@ class TestRegressionCheck:
 
     def test_verification_gap(self, tmp_path: Path):
         self._setup_complete_phases(tmp_path)
-        phase1_dir = tmp_path / ".gpd" / "phases" / "01-setup"
+        phase1_dir = tmp_path / ".grd" / "phases" / "01-setup"
         (phase1_dir / "01-setup-VERIFICATION.md").write_text(
             "---\nstatus: gaps_found\nscore: 2/5 checks verified\n---\n\n# Verification\n"
         )
@@ -261,7 +261,7 @@ class TestRegressionCheck:
         assert issues[0].gap_count == 3
 
     def test_quick_mode_limits_phases(self, tmp_path: Path):
-        phases = tmp_path / ".gpd" / "phases"
+        phases = tmp_path / ".grd" / "phases"
         for i in range(1, 6):
             name = f"{str(i).zfill(2)}-phase{i}"
             d = phases / name
@@ -290,11 +290,11 @@ class TestValidateReturn:
         f = self._write_return(
             tmp_path,
             (
-                "gpd_return:\n"
+                "grd_return:\n"
                 "  status: completed\n"
                 "  files_written: [src/main.py]\n"
                 "  issues: []\n"
-                "  next_actions: [/gpd:verify-work 01]\n"
+                "  next_actions: [/grd:verify-work 01]\n"
                 "  duration_seconds: 120\n"
             ),
         )
@@ -303,7 +303,7 @@ class TestValidateReturn:
         assert result.warning_count == 0
 
     def test_missing_required_field(self, tmp_path: Path):
-        f = self._write_return(tmp_path, ("gpd_return:\n  status: completed\n"))
+        f = self._write_return(tmp_path, ("grd_return:\n  status: completed\n"))
         result = cmd_validate_return(f)
         assert result.passed is False
         assert "Missing required field: files_written" in result.errors
@@ -314,11 +314,11 @@ class TestValidateReturn:
         f = self._write_return(
             tmp_path,
             (
-                "gpd_return:\n"
+                "grd_return:\n"
                 "  status: unknown\n"
                 "  files_written: [src/main.py]\n"
                 "  issues: []\n"
-                "  next_actions: [/gpd:verify-work 01]\n"
+                "  next_actions: [/grd:verify-work 01]\n"
             ),
         )
         result = cmd_validate_return(f)
@@ -329,11 +329,11 @@ class TestValidateReturn:
         f = self._write_return(
             tmp_path,
             (
-                "gpd_return:\n"
+                "grd_return:\n"
                 "  status: completed\n"
                 "  files_written: [src/main.py]\n"
                 "  issues: []\n"
-                "  next_actions: [/gpd:verify-work 01]\n"
+                "  next_actions: [/grd:verify-work 01]\n"
                 "  tasks_completed: abc\n"
                 "  tasks_total: 5\n"
             ),
@@ -346,11 +346,11 @@ class TestValidateReturn:
         f = self._write_return(
             tmp_path,
             (
-                "gpd_return:\n"
+                "grd_return:\n"
                 "  status: completed\n"
                 "  files_written: [src/main.py]\n"
                 "  issues: []\n"
-                "  next_actions: [/gpd:verify-work 01]\n"
+                "  next_actions: [/grd:verify-work 01]\n"
                 "  tasks_completed: 3\n"
                 "  tasks_total: 5\n"
             ),
@@ -365,11 +365,11 @@ class TestValidateReturn:
         f = self._write_return(
             tmp_path,
             (
-                "gpd_return:\n"
+                "grd_return:\n"
                 "  status: completed\n"
                 "  files_written: [src/main.py]\n"
                 "  issues: []\n"
-                "  next_actions: [/gpd:verify-work 01]\n"
+                "  next_actions: [/grd:verify-work 01]\n"
             ),
         )
         result = cmd_validate_return(f)
@@ -379,10 +379,10 @@ class TestValidateReturn:
 
     def test_no_return_block(self, tmp_path: Path):
         f = tmp_path / "no_return.md"
-        f.write_text("# Just a regular file\n\nNo gpd_return here.\n")
+        f.write_text("# Just a regular file\n\nNo grd_return here.\n")
         result = cmd_validate_return(f)
         assert result.passed is False
-        assert "No gpd_return YAML block found" in result.errors
+        assert "No grd_return YAML block found" in result.errors
 
     def test_file_not_found_raises(self, tmp_path: Path):
         with pytest.raises(ValidationError, match="File not found"):
@@ -392,11 +392,11 @@ class TestValidateReturn:
         f = self._write_return(
             tmp_path,
             (
-                "gpd_return:\n"
+                "grd_return:\n"
                 '  status: "completed"\n'
                 '  files_written: ["src/main.py"]\n'
                 "  issues: []\n"
-                '  next_actions: ["/gpd:verify-work 01"]\n'
+                '  next_actions: ["/grd:verify-work 01"]\n'
                 "  duration_seconds: 60\n"
             ),
         )
@@ -404,13 +404,13 @@ class TestValidateReturn:
         assert result.passed is True
         assert result.fields["status"] == "completed"
         assert result.fields["files_written"] == ["src/main.py"]
-        assert result.fields["next_actions"] == ["/gpd:verify-work 01"]
+        assert result.fields["next_actions"] == ["/grd:verify-work 01"]
 
     def test_block_list_values_are_parsed(self, tmp_path: Path):
         f = self._write_return(
             tmp_path,
             (
-                "gpd_return:\n"
+                "grd_return:\n"
                 "  status: checkpoint\n"
                 "  files_written:\n"
                 "    - src/main.py\n"
@@ -418,7 +418,7 @@ class TestValidateReturn:
                 "  issues:\n"
                 "    - waiting on benchmark rerun\n"
                 "  next_actions:\n"
-                "    - /gpd:verify-work 01\n"
+                "    - /grd:verify-work 01\n"
             ),
         )
 
@@ -427,4 +427,4 @@ class TestValidateReturn:
         assert result.passed is True
         assert result.fields["files_written"] == ["src/main.py", "tests/test_main.py"]
         assert result.fields["issues"] == ["waiting on benchmark rerun"]
-        assert result.fields["next_actions"] == ["/gpd:verify-work 01"]
+        assert result.fields["next_actions"] == ["/grd:verify-work 01"]

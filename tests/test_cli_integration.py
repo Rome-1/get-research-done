@@ -1,7 +1,7 @@
 """Integration tests for CLI commands with zero prior test coverage.
 
 Each test exercises the real CLI -> core path (no mocks) using a minimal
-GPD project directory created by the ``gpd_project`` fixture.  The goal is
+GRD project directory created by the ``grd_project`` fixture.  The goal is
 to verify that the CLI wiring, argument parsing, and core logic all cooperate
 without crashing.
 """
@@ -15,8 +15,8 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from gpd.cli import app
-from gpd.core.state import default_state_dict, generate_state_markdown
+from grd.cli import app
+from grd.core.state import default_state_dict, generate_state_markdown
 
 runner = CliRunner()
 
@@ -27,9 +27,9 @@ runner = CliRunner()
 
 
 @pytest.fixture()
-def gpd_project(tmp_path: Path) -> Path:
-    """Create a minimal GPD project with all files commands might touch."""
-    planning = tmp_path / ".gpd"
+def grd_project(tmp_path: Path) -> Path:
+    """Create a minimal GRD project with all files commands might touch."""
+    planning = tmp_path / ".grd"
     planning.mkdir()
 
     state = default_state_dict()
@@ -107,25 +107,25 @@ def gpd_project(tmp_path: Path) -> Path:
 
 
 @pytest.fixture(autouse=True)
-def _chdir(gpd_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _chdir(grd_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """All tests run from the project directory."""
-    monkeypatch.chdir(gpd_project)
+    monkeypatch.chdir(grd_project)
 
 
 def _invoke(*args: str, expect_ok: bool = True) -> object:
-    """Invoke a gpd CLI command and return the CliRunner result."""
+    """Invoke a grd CLI command and return the CliRunner result."""
     result = runner.invoke(app, list(args), catch_exceptions=False)
     if expect_ok:
         assert result.exit_code == 0, (
-            f"gpd {' '.join(args)} failed (exit {result.exit_code}):\n{result.output}"
+            f"grd {' '.join(args)} failed (exit {result.exit_code}):\n{result.output}"
         )
     return result
 
 
 def _mark_complete_runtime_install(config_dir: Path, *, runtime: str, install_scope: str = "local") -> None:
     """Create the concrete install markers real runtime installs write."""
-    (config_dir / "get-physics-done").mkdir(parents=True, exist_ok=True)
-    (config_dir / "gpd-file-manifest.json").write_text(
+    (config_dir / "get-research-done").mkdir(parents=True, exist_ok=True)
+    (config_dir / "grd-file-manifest.json").write_text(
         json.dumps({"runtime": runtime, "install_scope": install_scope}),
         encoding="utf-8",
     )
@@ -191,12 +191,12 @@ class TestSlug:
 
 
 class TestVerifyPath:
-    def test_verify_existing_file(self, gpd_project: Path) -> None:
-        result = _invoke("verify-path", ".gpd/state.json")
+    def test_verify_existing_file(self, grd_project: Path) -> None:
+        result = _invoke("verify-path", ".grd/state.json")
         assert "file" in result.output.lower() or "True" in result.output or "true" in result.output
 
     def test_verify_existing_directory(self) -> None:
-        result = _invoke("verify-path", ".gpd")
+        result = _invoke("verify-path", ".grd")
         assert "directory" in result.output.lower() or "True" in result.output or "true" in result.output
 
     def test_verify_nonexistent_path(self) -> None:
@@ -204,8 +204,8 @@ class TestVerifyPath:
         assert result.exit_code == 1
         assert "False" in result.output or "false" in result.output
 
-    def test_verify_path_raw(self, gpd_project: Path) -> None:
-        result = _invoke("--raw", "verify-path", ".gpd/state.json")
+    def test_verify_path_raw(self, grd_project: Path) -> None:
+        result = _invoke("--raw", "verify-path", ".grd/state.json")
         parsed = json.loads(result.output)
         assert parsed["exists"] is True
         assert parsed["type"] == "file"
@@ -332,8 +332,8 @@ class TestObserve:
 
 
 class TestFrontmatterValidate:
-    def test_frontmatter_validate_invalid_schema_returns_exit_code_one(self, gpd_project: Path) -> None:
-        summary = gpd_project / "invalid-summary.md"
+    def test_frontmatter_validate_invalid_schema_returns_exit_code_one(self, grd_project: Path) -> None:
+        summary = grd_project / "invalid-summary.md"
         summary.write_text(
             "---\nphase: '01'\nplan: '01'\n---\n\n# Summary\n",
             encoding="utf-8",
@@ -343,7 +343,7 @@ class TestFrontmatterValidate:
             "--raw",
             "frontmatter",
             "validate",
-            str(summary.relative_to(gpd_project)),
+            str(summary.relative_to(grd_project)),
             "--schema",
             "summary",
             expect_ok=False,
@@ -377,9 +377,9 @@ class TestRegressionCheck:
         result = _invoke("regression-check", "--quick")
         assert result.exit_code == 0
 
-    def test_regression_check_detects_conflict(self, gpd_project: Path) -> None:
+    def test_regression_check_detects_conflict(self, grd_project: Path) -> None:
         """Inject a convention conflict across two completed phases."""
-        p2 = gpd_project / ".gpd" / "phases" / "02-phase-two"
+        p2 = grd_project / ".grd" / "phases" / "02-phase-two"
 
         # Make phase 2 look completed with a conflicting convention
         (p2 / "01-PLAN.md").write_text("---\nphase: '02'\n---\n# Plan\n")
@@ -404,14 +404,14 @@ class TestRegressionCheck:
 
 
 class TestValidateReturn:
-    def test_validate_return_valid(self, gpd_project: Path) -> None:
-        """A file with a valid gpd_return block should pass."""
-        return_file = gpd_project / "valid_return.md"
+    def test_validate_return_valid(self, grd_project: Path) -> None:
+        """A file with a valid grd_return block should pass."""
+        return_file = grd_project / "valid_return.md"
         return_file.write_text(
-            "# Summary\n\n```yaml\ngpd_return:\n"
+            "# Summary\n\n```yaml\ngrd_return:\n"
             '  status: completed\n  files_written: ["src/main.py"]\n'
             "  issues: []\n"
-            '  next_actions: ["/gpd:verify-work 01"]\n'
+            '  next_actions: ["/grd:verify-work 01"]\n'
             "  duration_seconds: 120\n```\n"
         )
         result = _invoke("--raw", "validate-return", str(return_file))
@@ -419,11 +419,11 @@ class TestValidateReturn:
         assert parsed["passed"] is True
         assert len(parsed["errors"]) == 0
 
-    def test_validate_return_missing_fields(self, gpd_project: Path) -> None:
+    def test_validate_return_missing_fields(self, grd_project: Path) -> None:
         """A file with missing required fields should fail."""
-        return_file = gpd_project / "incomplete_return.md"
+        return_file = grd_project / "incomplete_return.md"
         return_file.write_text(
-            "# Summary\n\n```yaml\ngpd_return:\n"
+            "# Summary\n\n```yaml\ngrd_return:\n"
             '  status: completed\n```\n'
         )
         result = runner.invoke(
@@ -436,9 +436,9 @@ class TestValidateReturn:
         assert parsed["passed"] is False
         assert len(parsed["errors"]) > 0
 
-    def test_validate_return_no_block(self, gpd_project: Path) -> None:
-        """A file without a gpd_return block should fail."""
-        return_file = gpd_project / "no_block.md"
+    def test_validate_return_no_block(self, grd_project: Path) -> None:
+        """A file without a grd_return block should fail."""
+        return_file = grd_project / "no_block.md"
         return_file.write_text("# Just a regular file\n\nNo return block here.\n")
         result = runner.invoke(
             app,
@@ -448,16 +448,16 @@ class TestValidateReturn:
         assert result.exit_code == 1
         parsed = json.loads(result.output)
         assert parsed["passed"] is False
-        assert any("No gpd_return" in e for e in parsed["errors"])
+        assert any("No grd_return" in e for e in parsed["errors"])
 
-    def test_validate_return_invalid_status(self, gpd_project: Path) -> None:
+    def test_validate_return_invalid_status(self, grd_project: Path) -> None:
         """A file with an invalid status should report errors."""
-        return_file = gpd_project / "bad_status.md"
+        return_file = grd_project / "bad_status.md"
         return_file.write_text(
-            "# Summary\n\n```yaml\ngpd_return:\n"
+            "# Summary\n\n```yaml\ngrd_return:\n"
             '  status: banana\n  files_written: ["src/main.py"]\n'
             "  issues: []\n"
-            '  next_actions: ["/gpd:verify-work 01"]\n```\n'
+            '  next_actions: ["/grd:verify-work 01"]\n```\n'
         )
         result = runner.invoke(
             app,
@@ -469,14 +469,14 @@ class TestValidateReturn:
         assert parsed["passed"] is False
         assert any("Invalid status" in e for e in parsed["errors"])
 
-    def test_validate_return_warnings(self, gpd_project: Path) -> None:
+    def test_validate_return_warnings(self, grd_project: Path) -> None:
         """Missing recommended fields should produce warnings, not errors."""
-        return_file = gpd_project / "warns.md"
+        return_file = grd_project / "warns.md"
         return_file.write_text(
-            "# Summary\n\n```yaml\ngpd_return:\n"
+            "# Summary\n\n```yaml\ngrd_return:\n"
             '  status: completed\n  files_written: ["src/main.py"]\n'
             "  issues: []\n"
-            '  next_actions: ["/gpd:verify-work 01"]\n```\n'
+            '  next_actions: ["/grd:verify-work 01"]\n```\n'
         )
         result = _invoke("--raw", "validate-return", str(return_file))
         parsed = json.loads(result.output)
@@ -501,9 +501,9 @@ class TestConfigCommands:
         parsed = json.loads(result.output)
         assert parsed["found"] is False
 
-    def test_config_get_alias_key_reads_effective_value(self, gpd_project: Path) -> None:
+    def test_config_get_alias_key_reads_effective_value(self, grd_project: Path) -> None:
         """Alias keys should resolve through the canonical config surface."""
-        config_path = gpd_project / ".gpd" / "config.json"
+        config_path = grd_project / ".grd" / "config.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
         config["commit_docs"] = False
         config_path.write_text(json.dumps(config), encoding="utf-8")
@@ -513,8 +513,8 @@ class TestConfigCommands:
         assert parsed["found"] is True
         assert parsed["value"] is False
 
-    def test_config_get_returns_defaults_when_config_is_missing(self, gpd_project: Path) -> None:
-        (gpd_project / ".gpd" / "config.json").unlink()
+    def test_config_get_returns_defaults_when_config_is_missing(self, grd_project: Path) -> None:
+        (grd_project / ".grd" / "config.json").unlink()
 
         result = _invoke("--raw", "config", "get", "autonomy")
         parsed = json.loads(result.output)
@@ -522,17 +522,17 @@ class TestConfigCommands:
         assert parsed["found"] is True
         assert parsed["value"] == "balanced"
 
-    def test_config_set_rejects_unsupported_key(self, gpd_project: Path) -> None:
+    def test_config_set_rejects_unsupported_key(self, grd_project: Path) -> None:
         result = _invoke("--raw", "config", "set", "new_key", "new_value", expect_ok=False)
         parsed = json.loads(result.output)
         assert "Unsupported config key" in parsed["error"]
 
-        config = json.loads((gpd_project / ".gpd" / "config.json").read_text(encoding="utf-8"))
+        config = json.loads((grd_project / ".grd" / "config.json").read_text(encoding="utf-8"))
         assert "new_key" not in config
 
-    def test_config_set_nested_alias_updates_canonical_value(self, gpd_project: Path) -> None:
+    def test_config_set_nested_alias_updates_canonical_value(self, grd_project: Path) -> None:
         _invoke("--raw", "config", "set", "planning.commit_docs", "false")
-        config = json.loads((gpd_project / ".gpd" / "config.json").read_text(encoding="utf-8"))
+        config = json.loads((grd_project / ".grd" / "config.json").read_text(encoding="utf-8"))
         assert config["commit_docs"] is False
         assert "planning" not in config
 
@@ -541,19 +541,19 @@ class TestConfigCommands:
         assert parsed["found"] is True
         assert parsed["value"] is False
 
-    def test_config_set_json_value(self, gpd_project: Path) -> None:
+    def test_config_set_json_value(self, grd_project: Path) -> None:
         """Setting a JSON value (e.g. integer, boolean) should parse it."""
         _invoke("config", "set", "parallelization", "false")
-        config = json.loads((gpd_project / ".gpd" / "config.json").read_text(encoding="utf-8"))
+        config = json.loads((grd_project / ".grd" / "config.json").read_text(encoding="utf-8"))
         assert config["parallelization"] is False
 
-    def test_config_set_rejects_legacy_autonomy_value(self, gpd_project: Path) -> None:
+    def test_config_set_rejects_legacy_autonomy_value(self, grd_project: Path) -> None:
         result = _invoke("--raw", "config", "set", "autonomy", "guided", expect_ok=False)
 
         parsed = json.loads(result.output)
         assert "Invalid config.json values" in parsed["error"]
 
-        config = json.loads((gpd_project / ".gpd" / "config.json").read_text(encoding="utf-8"))
+        config = json.loads((grd_project / ".grd" / "config.json").read_text(encoding="utf-8"))
         assert config["autonomy"] == "yolo"
 
     def test_config_ensure_section_exists(self) -> None:
@@ -562,13 +562,13 @@ class TestConfigCommands:
         parsed = json.loads(result.output)
         assert parsed["created"] is False
 
-    def test_config_ensure_section_creates(self, gpd_project: Path) -> None:
+    def test_config_ensure_section_creates(self, grd_project: Path) -> None:
         """ensure-section without config.json should create defaults."""
-        (gpd_project / ".gpd" / "config.json").unlink()
+        (grd_project / ".grd" / "config.json").unlink()
         result = _invoke("--raw", "config", "ensure-section")
         parsed = json.loads(result.output)
         assert parsed["created"] is True
-        config_path = gpd_project / ".gpd" / "config.json"
+        config_path = grd_project / ".grd" / "config.json"
         assert config_path.exists()
         config = json.loads(config_path.read_text())
         assert config["autonomy"] == "balanced"
@@ -655,23 +655,23 @@ class TestJsonCommands:
         assert "compute" in result.output
         assert "verify" in result.output
 
-    def test_json_set(self, gpd_project: Path) -> None:
-        target = str(gpd_project / "test_output.json")
+    def test_json_set(self, grd_project: Path) -> None:
+        target = str(grd_project / "test_output.json")
         result = _invoke("json", "set", "--file", target, "--path", ".key", "--value", '"hello"')
         assert result.exit_code == 0
         data = json.loads(Path(target).read_text())
         assert data["key"] == "hello"
 
-    def test_json_set_nested(self, gpd_project: Path) -> None:
-        target = str(gpd_project / "test_nested.json")
+    def test_json_set_nested(self, grd_project: Path) -> None:
+        target = str(grd_project / "test_nested.json")
         _invoke("json", "set", "--file", target, "--path", ".a.b", "--value", "42")
         data = json.loads(Path(target).read_text())
         assert data["a"]["b"] == 42
 
-    def test_json_merge_files(self, gpd_project: Path) -> None:
-        f1 = gpd_project / "merge1.json"
-        f2 = gpd_project / "merge2.json"
-        out = gpd_project / "merged.json"
+    def test_json_merge_files(self, grd_project: Path) -> None:
+        f1 = grd_project / "merge1.json"
+        f2 = grd_project / "merge2.json"
+        out = grd_project / "merged.json"
         f1.write_text(json.dumps({"a": 1, "b": 2}))
         f2.write_text(json.dumps({"c": 3, "d": 4}))
         result = _invoke(
@@ -719,7 +719,7 @@ class TestSummaryExtractCommand:
         result = _invoke(
             "--raw",
             "summary-extract",
-            ".gpd/phases/01-test-phase/01-SUMMARY.md",
+            ".grd/phases/01-test-phase/01-SUMMARY.md",
         )
         parsed = json.loads(result.output)
         assert parsed["one_liner"] == "Set up project"
@@ -729,7 +729,7 @@ class TestSummaryExtractCommand:
         result = _invoke(
             "--raw",
             "summary-extract",
-            ".gpd/phases/01-test-phase/01-SUMMARY.md",
+            ".grd/phases/01-test-phase/01-SUMMARY.md",
             "--field",
             "one_liner",
         )
@@ -740,7 +740,7 @@ class TestSummaryExtractCommand:
 
 class TestResolveModelCommand:
     def test_resolve_tier(self) -> None:
-        result = _invoke("resolve-tier", "gpd-executor")
+        result = _invoke("resolve-tier", "grd-executor")
         assert result.output.strip() == "tier-2"
 
     def test_resolve_tier_rejects_unknown_agent(self) -> None:
@@ -748,32 +748,32 @@ class TestResolveModelCommand:
         parsed = json.loads(result.output)
         assert parsed["error"] == "Unknown agent 'not-an-agent'"
 
-    def test_resolve_model_prefers_installed_runtime_override(self, gpd_project: Path) -> None:
-        config_path = gpd_project / ".gpd" / "config.json"
+    def test_resolve_model_prefers_installed_runtime_override(self, grd_project: Path) -> None:
+        config_path = grd_project / ".grd" / "config.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
         config["model_overrides"] = {"codex": {"tier-1": "gpt-5"}}
         config_path.write_text(json.dumps(config), encoding="utf-8")
-        (gpd_project / ".claude").mkdir()
-        _mark_complete_runtime_install(gpd_project / ".codex", runtime="codex")
+        (grd_project / ".claude").mkdir()
+        _mark_complete_runtime_install(grd_project / ".codex", runtime="codex")
 
-        fake_home = gpd_project / "_fake_home"
+        fake_home = grd_project / "_fake_home"
         fake_home.mkdir()
         with patch("pathlib.Path.home", return_value=fake_home):
-            result = _invoke("resolve-model", "gpd-executor")
+            result = _invoke("resolve-model", "grd-executor")
             assert result.output.strip() == ""
 
-            planner_result = _invoke("resolve-model", "gpd-planner")
+            planner_result = _invoke("resolve-model", "grd-planner")
             assert planner_result.output.strip() == "gpt-5"
 
-    def test_init_execute_phase_prefers_installed_runtime_for_model_fields(self, gpd_project: Path) -> None:
-        config_path = gpd_project / ".gpd" / "config.json"
+    def test_init_execute_phase_prefers_installed_runtime_for_model_fields(self, grd_project: Path) -> None:
+        config_path = grd_project / ".grd" / "config.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
         config["model_overrides"] = {"codex": {"tier-1": "gpt-5", "tier-2": "gpt-5-mini"}}
         config_path.write_text(json.dumps(config), encoding="utf-8")
-        (gpd_project / ".claude").mkdir()
-        _mark_complete_runtime_install(gpd_project / ".codex", runtime="codex")
+        (grd_project / ".claude").mkdir()
+        _mark_complete_runtime_install(grd_project / ".codex", runtime="codex")
 
-        fake_home = gpd_project / "_fake_home"
+        fake_home = grd_project / "_fake_home"
         fake_home.mkdir()
         with patch("pathlib.Path.home", return_value=fake_home):
             result = _invoke("--raw", "init", "execute-phase", "1")

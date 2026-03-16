@@ -6,11 +6,11 @@ import json
 import re
 from pathlib import Path
 
-from gpd.contracts import ResearchContract
-from gpd.core.contract_validation import validate_project_contract
+from grd.contracts import ResearchContract
+from grd.core.contract_validation import validate_project_contract
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
-TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "src" / "gpd" / "specs" / "templates"
+TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "src" / "grd" / "specs" / "templates"
 
 
 def _load_contract_fixture() -> dict[str, object]:
@@ -148,7 +148,7 @@ def test_validate_project_contract_approved_mode_accepts_prior_output_grounding(
     contract = _load_contract_fixture()
     contract["references"] = []
     _remove_incidental_grounding(contract)
-    contract["context_intake"]["must_include_prior_outputs"] = [".gpd/phases/00-baseline/00-01-SUMMARY.md"]
+    contract["context_intake"]["must_include_prior_outputs"] = [".grd/phases/00-baseline/00-01-SUMMARY.md"]
     contract["scope"]["unresolved_questions"] = []
 
     result = validate_project_contract(contract, mode="approved")
@@ -366,7 +366,7 @@ def test_validate_project_contract_warns_when_optional_sections_are_missing_but_
     contract["links"] = []
     contract["context_intake"] = {
         "must_read_refs": [],
-        "must_include_prior_outputs": [".gpd/phases/00-baseline/00-01-SUMMARY.md"],
+        "must_include_prior_outputs": [".grd/phases/00-baseline/00-01-SUMMARY.md"],
         "user_asserted_anchors": [],
         "known_good_baselines": [],
         "context_gaps": [],

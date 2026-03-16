@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from gpd.mcp.paper.compiler import build_paper
-from gpd.mcp.paper.models import Author, FigureRef, PaperConfig, Section
+from grd.mcp.paper.compiler import build_paper
+from grd.mcp.paper.models import Author, FigureRef, PaperConfig, Section
 
 
 def _minimal_config(tmp_path: Path) -> PaperConfig:
@@ -48,14 +48,14 @@ async def test_build_paper_catches_oserror_from_figure_preparation(
         raise OSError("Permission denied")
 
     monkeypatch.setattr(
-        "gpd.mcp.paper.compiler._prepare_figures_with_sources",
+        "grd.mcp.paper.compiler._prepare_figures_with_sources",
         raise_oserror,
     )
 
     # Stub out the heavy parts of the pipeline that follow figure preparation
     # so the test does not need a real TeX toolchain.
     monkeypatch.setattr(
-        "gpd.mcp.paper.compiler.check_journal_dependencies",
+        "grd.mcp.paper.compiler.check_journal_dependencies",
         lambda spec: (False, ["TeX not available (stubbed)"]),
     )
 

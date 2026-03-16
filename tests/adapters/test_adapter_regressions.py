@@ -10,7 +10,7 @@ import pytest
 
 
 def test_write_settings_errors_reference_the_directory(tmp_path: Path) -> None:
-    from gpd.adapters.install_utils import write_settings
+    from grd.adapters.install_utils import write_settings
 
     settings_path = tmp_path / "settings.json"
 
@@ -20,7 +20,7 @@ def test_write_settings_errors_reference_the_directory(tmp_path: Path) -> None:
 
 
 def test_write_settings_mkdir_errors_reference_settings_directory(tmp_path: Path) -> None:
-    from gpd.adapters.install_utils import write_settings
+    from grd.adapters.install_utils import write_settings
 
     settings_path = tmp_path / "deep" / "nested" / "settings.json"
 
@@ -30,7 +30,7 @@ def test_write_settings_mkdir_errors_reference_settings_directory(tmp_path: Path
 
 
 def test_convert_tool_references_uses_literal_replacements() -> None:
-    from gpd.adapters.install_utils import convert_tool_references_in_body
+    from grd.adapters.install_utils import convert_tool_references_in_body
 
     assert "todo_write" in convert_tool_references_in_body(
         "Use TodoWrite to record tasks.",
@@ -42,8 +42,8 @@ def test_convert_tool_references_uses_literal_replacements() -> None:
     )
 
 
-def test_codex_install_restores_skills_dir_after_failure(gpd_root: Path, tmp_path: Path) -> None:
-    from gpd.adapters.codex import CodexAdapter
+def test_codex_install_restores_skills_dir_after_failure(grd_root: Path, tmp_path: Path) -> None:
+    from grd.adapters.codex import CodexAdapter
 
     adapter = CodexAdapter()
     sentinel = Path("/original/skills/dir")
@@ -58,13 +58,13 @@ def test_codex_install_restores_skills_dir_after_failure(gpd_root: Path, tmp_pat
         side_effect=RuntimeError("simulated install failure"),
     ):
         with pytest.raises(RuntimeError, match="simulated install failure"):
-            adapter.install(gpd_root, target, is_global=False, skills_dir=tmp_path / "new-skills")
+            adapter.install(grd_root, target, is_global=False, skills_dir=tmp_path / "new-skills")
 
     assert adapter._skills_dir == sentinel
 
 
-def test_codex_install_restores_skills_dir_after_success(gpd_root: Path, tmp_path: Path) -> None:
-    from gpd.adapters.codex import CodexAdapter
+def test_codex_install_restores_skills_dir_after_success(grd_root: Path, tmp_path: Path) -> None:
+    from grd.adapters.codex import CodexAdapter
 
     adapter = CodexAdapter()
     sentinel = Path("/original/skills/dir")
@@ -75,14 +75,14 @@ def test_codex_install_restores_skills_dir_after_success(gpd_root: Path, tmp_pat
     fake_result = {"runtime": "codex", "target": str(target), "commands": 0, "agents": 0}
 
     with patch.object(CodexAdapter.__bases__[0], "install", return_value=fake_result):
-        result = adapter.install(gpd_root, target, is_global=False, skills_dir=tmp_path / "new-skills")
+        result = adapter.install(grd_root, target, is_global=False, skills_dir=tmp_path / "new-skills")
 
     assert result == fake_result
     assert adapter._skills_dir == sentinel
 
 
 def test_configure_opencode_permissions_recovers_from_non_dict_json(tmp_path: Path) -> None:
-    from gpd.adapters.opencode import configure_opencode_permissions
+    from grd.adapters.opencode import configure_opencode_permissions
 
     config_dir = tmp_path / "opencode"
     config_dir.mkdir()
@@ -97,7 +97,7 @@ def test_configure_opencode_permissions_recovers_from_non_dict_json(tmp_path: Pa
 
 
 def test_write_mcp_servers_opencode_recovers_from_non_dict_mcp_key(tmp_path: Path) -> None:
-    from gpd.adapters.opencode import _write_mcp_servers_opencode
+    from grd.adapters.opencode import _write_mcp_servers_opencode
 
     config_dir = tmp_path / "opencode"
     config_dir.mkdir()
@@ -106,9 +106,9 @@ def test_write_mcp_servers_opencode_recovers_from_non_dict_mcp_key(tmp_path: Pat
     count = _write_mcp_servers_opencode(
         config_dir,
         {
-            "gpd-errors": {
+            "grd-errors": {
                 "command": "python",
-                "args": ["-m", "gpd.mcp.servers.errors_mcp"],
+                "args": ["-m", "grd.mcp.servers.errors_mcp"],
             }
         },
     )
@@ -116,4 +116,4 @@ def test_write_mcp_servers_opencode_recovers_from_non_dict_mcp_key(tmp_path: Pat
 
     assert count == 1
     assert isinstance(written["mcp"], dict)
-    assert "gpd-errors" in written["mcp"]
+    assert "grd-errors" in written["mcp"]

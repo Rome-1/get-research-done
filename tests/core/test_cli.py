@@ -1,7 +1,7 @@
-"""Tests for gpd.cli — unified CLI entry point.
+"""Tests for grd.cli — unified CLI entry point.
 
 Tests use typer.testing.CliRunner which invokes the CLI in-process.
-We mock the underlying gpd.core.* functions since those modules may not
+We mock the underlying grd.core.* functions since those modules may not
 be fully ported yet and have their own test suites.
 """
 
@@ -15,34 +15,34 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from typer.testing import CliRunner
 
-import gpd.cli as cli_module
-from gpd.adapters import list_runtimes
-from gpd.cli import app
+import grd.cli as cli_module
+from grd.adapters import list_runtimes
+from grd.cli import app
 
 runner = CliRunner()
 
 
 def _make_checkout(tmp_path: Path, version: str = "9.9.9") -> Path:
-    """Create a minimal GPD source checkout for CLI version tests."""
+    """Create a minimal GRD source checkout for CLI version tests."""
     repo_root = tmp_path / "checkout"
     repo_root.mkdir(parents=True, exist_ok=True)
     (repo_root / "package.json").write_text(
         json.dumps(
             {
-                "name": "get-physics-done",
+                "name": "get-research-done",
                 "version": version,
-                "gpdPythonVersion": version,
+                "grdPythonVersion": version,
             }
         ),
         encoding="utf-8",
     )
     (repo_root / "pyproject.toml").write_text(
-        f'[project]\nname = "get-physics-done"\nversion = "{version}"\n',
+        f'[project]\nname = "get-research-done"\nversion = "{version}"\n',
         encoding="utf-8",
     )
-    gpd_root = repo_root / "src" / "gpd"
+    grd_root = repo_root / "src" / "grd"
     for subdir in ("commands", "agents", "hooks", "specs"):
-        (gpd_root / subdir).mkdir(parents=True, exist_ok=True)
+        (grd_root / subdir).mkdir(parents=True, exist_ok=True)
     return repo_root
 
 
@@ -52,13 +52,13 @@ def _make_checkout(tmp_path: Path, version: str = "9.9.9") -> Path:
 def test_version():
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert "gpd" in result.output
+    assert "grd" in result.output
 
 
 def test_version_subcommand():
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "gpd" in result.output
+    assert "grd" in result.output
 
 
 def test_version_subcommand_prefers_checkout_version(tmp_path: Path):
@@ -73,24 +73,24 @@ def test_version_subcommand_prefers_checkout_version(tmp_path: Path):
 def test_raw_version_option_outputs_json():
     result = runner.invoke(app, ["--raw", "--version"])
     assert result.exit_code == 0
-    assert json.loads(result.output)["result"].startswith("gpd ")
+    assert json.loads(result.output)["result"].startswith("grd ")
 
 
 def test_raw_version_subcommand_outputs_json():
     result = runner.invoke(app, ["--raw", "version"])
     assert result.exit_code == 0
-    assert json.loads(result.output)["result"].startswith("gpd ")
+    assert json.loads(result.output)["result"].startswith("grd ")
 
 
 def test_entrypoint_reexecs_from_checkout_when_running_outside_checkout(tmp_path: Path, monkeypatch) -> None:
     checkout = _make_checkout(tmp_path, "9.9.9")
-    managed_cli = tmp_path / "managed" / "site-packages" / "gpd" / "cli.py"
+    managed_cli = tmp_path / "managed" / "site-packages" / "grd" / "cli.py"
     managed_cli.parent.mkdir(parents=True, exist_ok=True)
     managed_cli.write_text("# managed copy placeholder\n", encoding="utf-8")
 
     monkeypatch.chdir(checkout)
     monkeypatch.setattr(cli_module, "__file__", str(managed_cli))
-    monkeypatch.setattr(cli_module.sys, "argv", ["gpd", "version"])
+    monkeypatch.setattr(cli_module.sys, "argv", ["grd", "version"])
 
     captured: dict[str, object] = {}
 
@@ -109,10 +109,10 @@ def test_entrypoint_reexecs_from_checkout_when_running_outside_checkout(tmp_path
             except SystemExit as exc:
                 assert exc.code == 0
 
-    assert captured["argv"] == [cli_module.sys.executable, "-m", "gpd.cli", "version"]
+    assert captured["argv"] == [cli_module.sys.executable, "-m", "grd.cli", "version"]
     env = captured["env"]
     assert isinstance(env, dict)
-    assert env["GPD_DISABLE_CHECKOUT_REEXEC"] == "1"
+    assert env["GRD_DISABLE_CHECKOUT_REEXEC"] == "1"
     assert env["PYTHONPATH"].split(os.pathsep)[0] == str(checkout / "src")
 
 
@@ -164,7 +164,7 @@ def test_view_command_is_not_exposed():
 # ─── state subcommands ──────────────────────────────────────────────────────
 
 
-@patch("gpd.core.state.state_load")
+@patch("grd.core.state.state_load")
 def test_state_load(mock_load):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"position": {"current_phase": "42"}}
@@ -174,7 +174,7 @@ def test_state_load(mock_load):
     mock_load.assert_called_once()
 
 
-@patch("gpd.core.state.state_get")
+@patch("grd.core.state.state_get")
 def test_state_get_section(mock_get):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"section": "position", "data": {}}
@@ -184,7 +184,7 @@ def test_state_get_section(mock_get):
     mock_get.assert_called_once()
 
 
-@patch("gpd.core.state.state_update")
+@patch("grd.core.state.state_update")
 def test_state_update(mock_update):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"updated": True}
@@ -194,7 +194,7 @@ def test_state_update(mock_update):
     mock_update.assert_called_once()
 
 
-@patch("gpd.core.state.state_validate")
+@patch("grd.core.state.state_validate")
 def test_state_validate_pass(mock_validate):
     mock_result = MagicMock()
     mock_result.valid = True
@@ -204,7 +204,7 @@ def test_state_validate_pass(mock_validate):
     assert result.exit_code == 0
 
 
-@patch("gpd.core.state.state_validate")
+@patch("grd.core.state.state_validate")
 def test_state_validate_fail(mock_validate):
     mock_result = MagicMock()
     mock_result.valid = False
@@ -217,7 +217,7 @@ def test_state_validate_fail(mock_validate):
 # ─── phase subcommands ──────────────────────────────────────────────────────
 
 
-@patch("gpd.core.phases.list_phases")
+@patch("grd.core.phases.list_phases")
 def test_phase_list(mock_list):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"phases": []}
@@ -227,7 +227,7 @@ def test_phase_list(mock_list):
     mock_list.assert_called_once()
 
 
-@patch("gpd.core.phases.phase_add")
+@patch("grd.core.phases.phase_add")
 def test_phase_add(mock_add):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"phase": "43", "added": True}
@@ -239,7 +239,7 @@ def test_phase_add(mock_add):
     assert "Compute cross section" in args[0][1]
 
 
-@patch("gpd.core.phases.phase_complete")
+@patch("grd.core.phases.phase_complete")
 def test_phase_complete(mock_complete):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"completed": True}
@@ -249,7 +249,7 @@ def test_phase_complete(mock_complete):
     mock_complete.assert_called_once()
 
 
-@patch("gpd.core.phases.validate_phase_waves")
+@patch("grd.core.phases.validate_phase_waves")
 def test_phase_validate_waves_pass(mock_validate):
     mock_result = MagicMock()
     mock_result.validation.valid = True
@@ -262,7 +262,7 @@ def test_phase_validate_waves_pass(mock_validate):
     mock_validate.assert_called_once()
 
 
-@patch("gpd.core.phases.validate_phase_waves")
+@patch("grd.core.phases.validate_phase_waves")
 def test_phase_validate_waves_fail(mock_validate):
     mock_result = MagicMock()
     mock_result.validation.valid = False
@@ -278,7 +278,7 @@ def test_phase_validate_waves_fail(mock_validate):
 # ─── raw output ─────────────────────────────────────────────────────────────
 
 
-@patch("gpd.core.state.state_load")
+@patch("grd.core.state.state_load")
 def test_raw_json_output(mock_load):
     mock_load.return_value = {"position": {"current_phase": "42"}}
     result = runner.invoke(app, ["--raw", "state", "load"])
@@ -326,7 +326,7 @@ def test_entrypoint_normalizes_trailing_global_options(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(cli_module, "_maybe_reexec_from_checkout", lambda: None)
-    monkeypatch.setattr(cli_module.sys, "argv", ["gpd", "progress", "bar", "--cwd", "/tmp/demo", "--raw"])
+    monkeypatch.setattr(cli_module.sys, "argv", ["grd", "progress", "bar", "--cwd", "/tmp/demo", "--raw"])
 
     def fake_app(*, args: list[str] | None = None) -> int:
         captured["args"] = args
@@ -338,7 +338,7 @@ def test_entrypoint_normalizes_trailing_global_options(monkeypatch) -> None:
     assert captured["args"] == ["--cwd", "/tmp/demo", "--raw", "progress", "bar"]
 
 
-@patch("gpd.core.phases.progress_render")
+@patch("grd.core.phases.progress_render")
 def test_app_call_accepts_trailing_raw_and_cwd(mock_progress, tmp_path: Path, capsys) -> None:
     mock_progress.return_value = {"bar": "ok"}
 
@@ -376,7 +376,7 @@ def test_validate_command_context_accepts_tokenized_standalone_arguments(tmp_pat
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["command"] == "gpd:discover"
+    assert payload["command"] == "grd:discover"
     assert payload["context_mode"] == "project-aware"
     assert payload["passed"] is True
 
@@ -402,7 +402,7 @@ def test_validate_command_context_accepts_tokenized_explain_arguments(tmp_path: 
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["command"] == "gpd:explain"
+    assert payload["command"] == "grd:explain"
     assert payload["context_mode"] == "project-aware"
     assert payload["passed"] is True
 
@@ -429,7 +429,7 @@ def test_pre_commit_check_fails_for_unreadable_inputs(tmp_path: Path) -> None:
     target = tmp_path / "state.md"
     target.write_text("# ok\n", encoding="utf-8")
 
-    with patch("gpd.core.git_ops.Path.read_text", side_effect=OSError("denied")):
+    with patch("grd.core.git_ops.Path.read_text", side_effect=OSError("denied")):
         result = runner.invoke(
             app,
             ["--raw", "--cwd", str(tmp_path), "pre-commit-check", "--files", str(target)],
@@ -445,7 +445,7 @@ def test_pre_commit_check_fails_for_unreadable_inputs(tmp_path: Path) -> None:
 # ─── convention subcommands ─────────────────────────────────────────────────
 
 
-@patch("gpd.core.conventions.convention_list")
+@patch("grd.core.conventions.convention_list")
 def test_convention_list(mock_list):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"conventions": {}}
@@ -458,7 +458,7 @@ def test_convention_list(mock_list):
 # ─── query subcommands ──────────────────────────────────────────────────────
 
 
-@patch("gpd.core.query.query_deps")
+@patch("grd.core.query.query_deps")
 def test_query_deps(mock_deps):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"deps": []}
@@ -471,7 +471,7 @@ def test_query_deps(mock_deps):
 # ─── health / doctor ────────────────────────────────────────────────────────
 
 
-@patch("gpd.core.health.run_health")
+@patch("grd.core.health.run_health")
 def test_health(mock_health):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"passed": True, "checks": []}
@@ -481,7 +481,7 @@ def test_health(mock_health):
     mock_health.assert_called_once()
 
 
-@patch("gpd.core.health.run_doctor")
+@patch("grd.core.health.run_doctor")
 def test_doctor(mock_doctor):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"ok": True}
@@ -494,7 +494,7 @@ def test_doctor(mock_doctor):
 # ─── trace subcommands ──────────────────────────────────────────────────────
 
 
-@patch("gpd.core.trace.trace_start")
+@patch("grd.core.trace.trace_start")
 def test_trace_start(mock_start):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"started": True}
@@ -504,7 +504,7 @@ def test_trace_start(mock_start):
     mock_start.assert_called_once()
 
 
-@patch("gpd.core.trace.trace_stop")
+@patch("grd.core.trace.trace_stop")
 def test_trace_stop(mock_stop):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"stopped": True}
@@ -515,7 +515,7 @@ def test_trace_stop(mock_stop):
 
 
 def test_observe_sessions_reads_local_metadata(tmp_path: Path) -> None:
-    planning = tmp_path / ".gpd" / "observability" / "sessions"
+    planning = tmp_path / ".grd" / "observability" / "sessions"
     planning.mkdir(parents=True)
     (planning / "cli-session-1.jsonl").write_text(
         "\n".join(
@@ -562,7 +562,7 @@ def test_observe_sessions_reads_local_metadata(tmp_path: Path) -> None:
 
 
 def test_observe_show_filters_events(tmp_path: Path) -> None:
-    sessions_dir = tmp_path / ".gpd" / "observability" / "sessions"
+    sessions_dir = tmp_path / ".grd" / "observability" / "sessions"
     sessions_dir.mkdir(parents=True)
     (sessions_dir / "cli-a.jsonl").write_text(
         "\n".join(
@@ -611,7 +611,7 @@ def test_observe_show_filters_events(tmp_path: Path) -> None:
 
 def test_observe_show_falls_back_to_session_logs(tmp_path: Path) -> None:
     """show_events reads per-session logs when filtering observability data."""
-    sessions_dir = tmp_path / ".gpd" / "observability" / "sessions"
+    sessions_dir = tmp_path / ".grd" / "observability" / "sessions"
     sessions_dir.mkdir(parents=True)
     (sessions_dir / "cli-a.jsonl").write_text(
         json.dumps(
@@ -632,7 +632,7 @@ def test_observe_show_falls_back_to_session_logs(tmp_path: Path) -> None:
 
     # The CLI invocation may create a global events file as a side effect of
     # its own observability, so test the core function directly instead.
-    from gpd.core.observability import show_events
+    from grd.core.observability import show_events
 
     result = show_events(tmp_path, category="cli", command="timestamp")
     assert result.count == 1
@@ -640,7 +640,7 @@ def test_observe_show_falls_back_to_session_logs(tmp_path: Path) -> None:
 
 
 def test_observe_event_appends_event(tmp_path: Path) -> None:
-    (tmp_path / ".gpd").mkdir()
+    (tmp_path / ".grd").mkdir()
 
     result = runner.invoke(
         app,
@@ -672,28 +672,28 @@ def test_observe_event_appends_event(tmp_path: Path) -> None:
     assert payload["category"] == "workflow"
     assert payload["name"] == "wave-start"
     assert payload["data"]["wave"] == 2
-    sessions_dir = tmp_path / ".gpd" / "observability" / "sessions"
+    sessions_dir = tmp_path / ".grd" / "observability" / "sessions"
     session_logs = sorted(sessions_dir.glob("*.jsonl"))
     assert len(session_logs) == 1
     events = [json.loads(line) for line in session_logs[0].read_text(encoding="utf-8").splitlines() if line.strip()]
     assert any(event["category"] == "workflow" and event["name"] == "wave-start" for event in events)
-    assert not (tmp_path / ".gpd" / "observability" / "events.jsonl").exists()
+    assert not (tmp_path / ".grd" / "observability" / "events.jsonl").exists()
 
 
 def test_cli_invocation_does_not_write_observability_files_without_explicit_events(tmp_path: Path) -> None:
-    (tmp_path / ".gpd").mkdir()
+    (tmp_path / ".grd").mkdir()
 
     result = runner.invoke(app, ["--cwd", str(tmp_path), "timestamp"])
 
     assert result.exit_code == 0
-    obs_dir = tmp_path / ".gpd" / "observability"
+    obs_dir = tmp_path / ".grd" / "observability"
     assert not obs_dir.exists()
 
 
 # ─── suggest ────────────────────────────────────────────────────────────────
 
 
-@patch("gpd.core.suggest.suggest_next")
+@patch("grd.core.suggest.suggest_next")
 def test_suggest(mock_suggest):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"suggestions": []}
@@ -706,7 +706,7 @@ def test_suggest(mock_suggest):
 # ─── pattern subcommands ────────────────────────────────────────────────────
 
 
-@patch("gpd.core.patterns.pattern_init")
+@patch("grd.core.patterns.pattern_init")
 def test_pattern_init(mock_init):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"initialized": True}
@@ -716,7 +716,7 @@ def test_pattern_init(mock_init):
     mock_init.assert_called_once()
 
 
-@patch("gpd.core.patterns.pattern_search")
+@patch("grd.core.patterns.pattern_search")
 def test_pattern_search(mock_search):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"results": []}
@@ -731,7 +731,7 @@ def test_pattern_search(mock_search):
 # ─── init subcommands ───────────────────────────────────────────────────────
 
 
-@patch("gpd.core.context.init_execute_phase")
+@patch("grd.core.context.init_execute_phase")
 def test_init_execute_phase(mock_init):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"context": "..."}
@@ -741,7 +741,7 @@ def test_init_execute_phase(mock_init):
     mock_init.assert_called_once()
 
 
-@patch("gpd.core.context.init_new_project")
+@patch("grd.core.context.init_new_project")
 def test_init_new_project(mock_init):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"context": "..."}
@@ -780,7 +780,7 @@ def test_paper_build_uses_default_config_surface(tmp_path: Path):
     result_payload.success = True
     result_payload.errors = []
 
-    with patch("gpd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=result_payload)) as mock_build:
+    with patch("grd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=result_payload)) as mock_build:
         result = runner.invoke(app, ["--raw", "--cwd", str(tmp_path), "paper-build"], catch_exceptions=False)
 
     assert result.exit_code == 0
@@ -853,7 +853,7 @@ def test_paper_build_prefers_paper_dir_before_later_config_roots(tmp_path: Path)
     result_payload.success = True
     result_payload.errors = []
 
-    with patch("gpd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=result_payload)) as mock_build:
+    with patch("grd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=result_payload)) as mock_build:
         result = runner.invoke(app, ["--raw", "--cwd", str(tmp_path), "paper-build"], catch_exceptions=False)
 
     assert result.exit_code == 0
@@ -900,7 +900,7 @@ def test_paper_build_prefers_manuscript_before_draft(tmp_path: Path) -> None:
     result_payload.success = True
     result_payload.errors = []
 
-    with patch("gpd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=result_payload)) as mock_build:
+    with patch("grd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=result_payload)) as mock_build:
         result = runner.invoke(app, ["--raw", "--cwd", str(tmp_path), "paper-build"], catch_exceptions=False)
 
     assert result.exit_code == 0
@@ -910,7 +910,7 @@ def test_paper_build_prefers_manuscript_before_draft(tmp_path: Path) -> None:
 
 
 def test_paper_build_does_not_discover_legacy_planning_configs(tmp_path: Path, capsys) -> None:
-    planning_paper_dir = tmp_path / ".gpd" / "paper"
+    planning_paper_dir = tmp_path / ".grd" / "paper"
     planning_paper_dir.mkdir(parents=True)
     (planning_paper_dir / "PAPER-CONFIG.json").write_text(
         json.dumps(
@@ -933,11 +933,11 @@ def test_paper_build_does_not_discover_legacy_planning_configs(tmp_path: Path, c
     captured = capsys.readouterr()
     payload = json.loads(captured.err)
     assert "No paper config found" in payload["error"]
-    assert ".gpd/paper" not in payload["error"]
+    assert ".grd/paper" not in payload["error"]
 
 
 def test_paper_build_rejects_explicit_legacy_planning_config_path(tmp_path: Path, capsys) -> None:
-    planning_paper_dir = tmp_path / ".gpd" / "paper"
+    planning_paper_dir = tmp_path / ".grd" / "paper"
     planning_paper_dir.mkdir(parents=True)
     (planning_paper_dir / "PAPER-CONFIG.json").write_text(
         json.dumps(
@@ -953,7 +953,7 @@ def test_paper_build_rejects_explicit_legacy_planning_config_path(tmp_path: Path
     )
 
     try:
-        cli_module.app(args=["--raw", "--cwd", str(tmp_path), "paper-build", ".gpd/paper/PAPER-CONFIG.json"])
+        cli_module.app(args=["--raw", "--cwd", str(tmp_path), "paper-build", ".grd/paper/PAPER-CONFIG.json"])
     except SystemExit as exc:
         assert exc.code == 1
 
@@ -1003,7 +1003,7 @@ def test_paper_build_prefers_config_dir_bibliography_before_output_and_reference
     result_payload.success = True
     result_payload.errors = []
 
-    with patch("gpd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=result_payload)) as mock_build:
+    with patch("grd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=result_payload)) as mock_build:
         result = runner.invoke(
             app,
             ["--raw", "--cwd", str(tmp_path), "paper-build", "--output-dir", str(output_dir)],
@@ -1048,7 +1048,7 @@ def test_paper_build_without_bibliography_does_not_import_pybtex(tmp_path: Path,
     result_payload.success = True
     result_payload.errors = []
 
-    with patch("gpd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=result_payload)) as mock_build:
+    with patch("grd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=result_payload)) as mock_build:
         result = runner.invoke(app, ["--raw", "--cwd", str(tmp_path), "paper-build"], catch_exceptions=False)
 
     assert result.exit_code == 0
@@ -1060,7 +1060,7 @@ def test_paper_build_without_bibliography_does_not_import_pybtex(tmp_path: Path,
 # ─── ported command subcommands ─────────────────────────────────────────────
 
 
-@patch("gpd.core.commands.cmd_current_timestamp")
+@patch("grd.core.commands.cmd_current_timestamp")
 def test_timestamp_subcommand(mock_ts):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"timestamp": "2026-03-04T12:00:00+00:00"}
@@ -1070,7 +1070,7 @@ def test_timestamp_subcommand(mock_ts):
     mock_ts.assert_called_once_with("full")
 
 
-@patch("gpd.core.commands.cmd_generate_slug")
+@patch("grd.core.commands.cmd_generate_slug")
 def test_slug_subcommand(mock_slug):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"slug": "hello-world"}
@@ -1080,7 +1080,7 @@ def test_slug_subcommand(mock_slug):
     mock_slug.assert_called_once_with("Hello World")
 
 
-@patch("gpd.core.commands.cmd_verify_path_exists")
+@patch("grd.core.commands.cmd_verify_path_exists")
 def test_verify_path_subcommand(mock_verify):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"exists": True, "type": "file"}
@@ -1090,7 +1090,7 @@ def test_verify_path_subcommand(mock_verify):
     mock_verify.assert_called_once()
 
 
-@patch("gpd.core.commands.cmd_history_digest")
+@patch("grd.core.commands.cmd_history_digest")
 def test_history_digest_subcommand(mock_digest):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"phases": {}, "decisions": [], "methods": []}
@@ -1100,7 +1100,7 @@ def test_history_digest_subcommand(mock_digest):
     mock_digest.assert_called_once()
 
 
-@patch("gpd.core.commands.cmd_regression_check")
+@patch("grd.core.commands.cmd_regression_check")
 def test_regression_check_subcommand_passing(mock_check):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"passed": True, "issues": [], "phases_checked": 2}
@@ -1110,7 +1110,7 @@ def test_regression_check_subcommand_passing(mock_check):
     assert result.exit_code == 0
 
 
-@patch("gpd.core.commands.cmd_regression_check")
+@patch("grd.core.commands.cmd_regression_check")
 def test_regression_check_subcommand_failing(mock_check):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {"passed": False, "issues": [{"type": "conflict"}], "phases_checked": 2}

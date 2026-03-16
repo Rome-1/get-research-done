@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from gpd.cli import _format_install_header_lines, _render_install_option_line, app
+from grd.cli import _format_install_header_lines, _render_install_option_line, app
 
 runner = CliRunner()
 
@@ -28,17 +28,17 @@ runner = CliRunner()
 
 
 @pytest.fixture()
-def gpd_root(tmp_path: Path) -> Path:
-    """Minimal GPD package data directory for install tests."""
-    root = tmp_path / "gpd_pkg"
+def grd_root(tmp_path: Path) -> Path:
+    """Minimal GRD package data directory for install tests."""
+    root = tmp_path / "grd_pkg"
     for d in ("commands", "agents", "hooks"):
         (root / d).mkdir(parents=True)
     (root / "commands" / "help.md").write_text(
-        "---\nname: gpd:help\ndescription: Help\n---\nHelp body.\n",
+        "---\nname: grd:help\ndescription: Help\n---\nHelp body.\n",
         encoding="utf-8",
     )
-    (root / "agents" / "gpd-verifier.md").write_text(
-        "---\nname: gpd-verifier\ndescription: Verifier\n---\nVerifier body.\n",
+    (root / "agents" / "grd-verifier.md").write_text(
+        "---\nname: grd-verifier\ndescription: Verifier\n---\nVerifier body.\n",
         encoding="utf-8",
     )
     (root / "hooks" / "statusline.py").write_text("print('ok')\n", encoding="utf-8")
@@ -51,67 +51,67 @@ def gpd_root(tmp_path: Path) -> Path:
 
 
 def _make_checkout(tmp_path: Path, version: str = "9.9.9") -> Path:
-    """Create a minimal GPD source checkout."""
+    """Create a minimal GRD source checkout."""
     repo_root = tmp_path / "checkout"
     repo_root.mkdir(parents=True, exist_ok=True)
     (repo_root / "package.json").write_text(
         json.dumps(
             {
-                "name": "get-physics-done",
+                "name": "get-research-done",
                 "version": version,
-                "gpdPythonVersion": version,
+                "grdPythonVersion": version,
             }
         ),
         encoding="utf-8",
     )
     (repo_root / "pyproject.toml").write_text(
-        f'[project]\nname = "get-physics-done"\nversion = "{version}"\n',
+        f'[project]\nname = "get-research-done"\nversion = "{version}"\n',
         encoding="utf-8",
     )
-    gpd_root = repo_root / "src" / "gpd"
+    grd_root = repo_root / "src" / "grd"
     for subdir in ("commands", "agents", "hooks", "specs"):
-        (gpd_root / subdir).mkdir(parents=True, exist_ok=True)
+        (grd_root / subdir).mkdir(parents=True, exist_ok=True)
     return repo_root
 
 
 # ─── 1. Install to non-existent directory ────────────────────────────────────
 
 
-def test_install_creates_nonexistent_target_dir(gpd_root: Path, tmp_path: Path):
+def test_install_creates_nonexistent_target_dir(grd_root: Path, tmp_path: Path):
     """Install to a directory that doesn't exist yet — should create it."""
     target = tmp_path / "does" / "not" / "exist" / ".claude"
     assert not target.exists()
 
-    from gpd.adapters.claude_code import ClaudeCodeAdapter
+    from grd.adapters.claude_code import ClaudeCodeAdapter
 
     adapter = ClaudeCodeAdapter()
-    result = adapter.install(gpd_root, target)
+    result = adapter.install(grd_root, target)
     assert target.exists()
-    assert (target / "commands" / "gpd").is_dir()
+    assert (target / "commands" / "grd").is_dir()
     assert result["commands"] >= 1
 
 
 # ─── 2. Upgrade over existing install ────────────────────────────────────────
 
 
-def test_install_upgrades_existing(gpd_root: Path, tmp_path: Path):
-    """Install over an existing GPD install — replaces files correctly."""
-    from gpd.adapters.claude_code import ClaudeCodeAdapter
+def test_install_upgrades_existing(grd_root: Path, tmp_path: Path):
+    """Install over an existing GRD install — replaces files correctly."""
+    from grd.adapters.claude_code import ClaudeCodeAdapter
 
     target = tmp_path / ".claude"
     adapter = ClaudeCodeAdapter()
 
     # First install
-    result1 = adapter.install(gpd_root, target)
+    result1 = adapter.install(grd_root, target)
     assert result1["commands"] >= 1
 
     # Modify an installed file to simulate user edit
-    commands_dir = target / "commands" / "gpd"
+    commands_dir = target / "commands" / "grd"
     first_md = next(commands_dir.rglob("*.md"))
     first_md.write_text("user modified content", encoding="utf-8")
 
     # Second install (upgrade)
-    result2 = adapter.install(gpd_root, target)
+    result2 = adapter.install(grd_root, target)
     assert result2["commands"] >= 1
 
     # File should be overwritten by upgrade (atomic swap)
@@ -131,8 +131,8 @@ def test_install_all_continues_on_failure(tmp_path: Path):
         raise RuntimeError(f"Simulated failure for {runtime_name}")
 
     with (
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.get_adapter") as mock_get,
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.get_adapter") as mock_get,
     ):
         mock_adapter = MagicMock()
         mock_adapter.display_name = "Test"
@@ -151,8 +151,8 @@ def test_install_all_success_exits_0(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path)}
 
     with (
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.get_adapter") as mock_get,
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.get_adapter") as mock_get,
     ):
         mock_adapter = MagicMock()
         mock_adapter.display_name = "Test"
@@ -170,25 +170,25 @@ def test_install_banner_uses_display_names(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path / ".claude")}
 
     with (
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.get_adapter") as mock_get,
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.get_adapter") as mock_get,
     ):
         mock_adapter = MagicMock()
         mock_adapter.display_name = "Claude Code"
-        mock_adapter.help_command = "/gpd:help"
+        mock_adapter.help_command = "/grd:help"
         mock_get.return_value = mock_adapter
 
         result = runner.invoke(app, ["--cwd", str(tmp_path), "install", "claude-code", "--local"])
 
     assert result.exit_code == 0
-    assert "Installing GPD (local) for: Claude Code" in result.output
-    assert "Installing GPD (local) for: claude-code" not in result.output
+    assert "Installing GRD (local) for: Claude Code" in result.output
+    assert "Installing GRD (local) for: claude-code" not in result.output
 
 
 def test_format_install_header_lines_uses_psi_branding() -> None:
     """Interactive install header should use the branded PSI wording."""
     assert _format_install_header_lines("1.0.0") == (
-        "GPD v1.0.0 - Get Physics Done",
+        "GRD v1.0.0 - Get Research Done",
         "© 2026 Physical Superintelligence PBC (PSI)",
     )
 
@@ -211,12 +211,12 @@ def test_install_summary_formats_target_relative_to_cwd(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(target)}
 
     with (
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.get_adapter") as mock_get,
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.get_adapter") as mock_get,
     ):
         mock_adapter = MagicMock()
         mock_adapter.display_name = "Claude Code"
-        mock_adapter.help_command = "/gpd:help"
+        mock_adapter.help_command = "/grd:help"
         mock_get.return_value = mock_adapter
 
         result = runner.invoke(app, ["--cwd", str(tmp_path), "install", "claude-code", "--local"])
@@ -234,15 +234,15 @@ def test_install_summary_leaves_blank_line_after_next_steps(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(target)}
 
     with (
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.get_adapter") as mock_get,
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.get_adapter") as mock_get,
     ):
         mock_adapter = MagicMock()
         mock_adapter.display_name = "Claude Code"
         mock_adapter.launch_command = "claude"
-        mock_adapter.help_command = "/gpd:help"
-        mock_adapter.new_project_command = "/gpd:new-project"
-        mock_adapter.map_research_command = "/gpd:map-research"
+        mock_adapter.help_command = "/grd:help"
+        mock_adapter.new_project_command = "/grd:new-project"
+        mock_adapter.map_research_command = "/grd:map-research"
         mock_get.return_value = mock_adapter
 
         result = runner.invoke(app, ["--cwd", str(tmp_path), "install", "claude-code", "--local"])
@@ -250,9 +250,9 @@ def test_install_summary_leaves_blank_line_after_next_steps(tmp_path: Path):
     assert result.exit_code == 0
     assert "Next steps" in result.output
     assert "1. Open Claude Code from your system terminal (claude)." in result.output
-    assert "2. Run /gpd:help for the command list." in result.output
+    assert "2. Run /grd:help for the command list." in result.output
     assert (
-        "3. Start with /gpd:new-project for a new project or /gpd:map-research for existing work.\n\n"
+        "3. Start with /grd:new-project for a new project or /grd:map-research for existing work.\n\n"
         in result.output
     )
 
@@ -272,33 +272,33 @@ def test_install_summary_lists_runtime_specific_help_for_multi_runtime_install(t
         "claude-code": MagicMock(
             display_name="Claude Code",
             launch_command="claude",
-            help_command="/gpd:claude-help",
-            new_project_command="/gpd:claude-new-project",
-            map_research_command="/gpd:claude-map-research",
+            help_command="/grd:claude-help",
+            new_project_command="/grd:claude-new-project",
+            map_research_command="/grd:claude-map-research",
         ),
         "gemini": MagicMock(
             display_name="Gemini CLI",
             launch_command="gemini",
-            help_command="/gpd:gemini-help",
-            new_project_command="/gpd:gemini-new-project",
-            map_research_command="/gpd:gemini-map-research",
+            help_command="/grd:gemini-help",
+            new_project_command="/grd:gemini-new-project",
+            map_research_command="/grd:gemini-map-research",
         ),
     }
 
     with (
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.get_adapter", side_effect=lambda runtime: adapters[runtime]),
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.get_adapter", side_effect=lambda runtime: adapters[runtime]),
     ):
         result = runner.invoke(app, ["install", "claude-code", "gemini", "--local"])
 
     assert result.exit_code == 0
     assert "Next steps" in result.output
     assert (
-        "- Claude Code (claude), then /gpd:claude-help, then /gpd:claude-new-project or /gpd:claude-map-research"
+        "- Claude Code (claude), then /grd:claude-help, then /grd:claude-new-project or /grd:claude-map-research"
         in result.output
     )
     assert (
-        "- Gemini CLI (gemini), then /gpd:gemini-help, then /gpd:gemini-new-project or /gpd:gemini-map-research"
+        "- Gemini CLI (gemini), then /grd:gemini-help, then /grd:gemini-new-project or /grd:gemini-map-research"
         in result.output
     )
     assert "1. From your system terminal" not in result.output
@@ -311,19 +311,19 @@ def test_uninstall_no_manifest_graceful(tmp_path: Path):
     """Uninstall when no manifest exists — should not crash."""
     target = tmp_path / ".claude"
     target.mkdir()
-    # Create some GPD files but no manifest
-    gpd_dir = target / "get-physics-done"
-    gpd_dir.mkdir()
-    (gpd_dir / "test.md").write_text("test", encoding="utf-8")
+    # Create some GRD files but no manifest
+    grd_dir = target / "get-research-done"
+    grd_dir.mkdir()
+    (grd_dir / "test.md").write_text("test", encoding="utf-8")
 
-    from gpd.adapters.claude_code import ClaudeCodeAdapter
+    from grd.adapters.claude_code import ClaudeCodeAdapter
 
     adapter = ClaudeCodeAdapter()
     result = adapter.uninstall(target)
 
     # Should succeed and report what was removed
     assert result["runtime"] == "claude-code"
-    assert "get-physics-done/" in result["removed"]
+    assert "get-research-done/" in result["removed"]
 
 
 def test_uninstall_empty_target_nothing_to_remove(tmp_path: Path):
@@ -331,7 +331,7 @@ def test_uninstall_empty_target_nothing_to_remove(tmp_path: Path):
     target = tmp_path / ".claude"
     target.mkdir()
 
-    from gpd.adapters.claude_code import ClaudeCodeAdapter
+    from grd.adapters.claude_code import ClaudeCodeAdapter
 
     adapter = ClaudeCodeAdapter()
     result = adapter.uninstall(target)
@@ -359,13 +359,13 @@ def test_install_no_args_uses_interactive_defaults(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path)}
 
     with (
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.get_adapter") as mock_get,
-        patch("gpd.adapters.list_runtimes", return_value=["claude-code"]),
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.get_adapter") as mock_get,
+        patch("grd.adapters.list_runtimes", return_value=["claude-code"]),
     ):
         mock_adapter = MagicMock()
         mock_adapter.display_name = "Claude Code"
-        mock_adapter.help_command = "/gpd:help"
+        mock_adapter.help_command = "/grd:help"
         mock_adapter.resolve_target_dir.side_effect = (
             lambda is_global, cwd=None: tmp_path / (".claude-global" if is_global else ".claude")
         )
@@ -375,14 +375,14 @@ def test_install_no_args_uses_interactive_defaults(tmp_path: Path):
         result = runner.invoke(app, ["install"], input="1\n1\n")
 
     assert result.exit_code == 0
-    assert "GPD v" in result.output
+    assert "GRD v" in result.output
     assert "© 2026 Physical Superintelligence PBC (PSI)" in result.output
     assert "[1] Claude Code" in result.output
     assert "· claude-code" in result.output
     assert "Enter choice [1]" in result.output
     assert "[1] Local" in result.output
     assert "· current project only ·" in result.output
-    assert "Get Physics Done, by Physical Superintelligence PBC (PSI)" not in result.output
+    assert "Get Research Done, by Physical Superintelligence PBC (PSI)" not in result.output
     assert "██████" in result.output
 
 
@@ -396,8 +396,8 @@ def test_install_raw_outputs_json(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path)}
 
     with (
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.get_adapter") as mock_get,
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.get_adapter") as mock_get,
     ):
         mock_adapter = MagicMock()
         mock_adapter.display_name = "Claude Code"
@@ -424,9 +424,9 @@ def test_install_raw_includes_failures(tmp_path: Path):
         raise RuntimeError("boom")
 
     with (
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.get_adapter") as mock_get,
-        patch("gpd.adapters.list_runtimes", return_value=["claude-code", "gemini"]),
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.get_adapter") as mock_get,
+        patch("grd.adapters.list_runtimes", return_value=["claude-code", "gemini"]),
     ):
         mock_adapter = MagicMock()
         mock_adapter.display_name = "Test"
@@ -448,14 +448,14 @@ def test_install_raw_finalize_failure_not_reported_as_installed(tmp_path: Path):
 
     class FailingFinalizeAdapter:
         display_name = "Claude Code"
-        help_command = "/gpd:help"
+        help_command = "/grd:help"
 
         def finalize_install(self, install_result, *, force_statusline=False):
             raise RuntimeError("finalize boom")
 
     with (
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.get_adapter", return_value=FailingFinalizeAdapter()),
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.get_adapter", return_value=FailingFinalizeAdapter()),
     ):
         result = runner.invoke(app, ["--raw", "install", "claude-code", "--local"])
 
@@ -484,7 +484,7 @@ def test_uninstall_raw_outputs_json(tmp_path: Path):
 
 def test_install_single_runtime_passes_is_global(tmp_path: Path):
     """compute_path_prefix still distinguishes global vs local installs."""
-    from gpd.adapters.install_utils import compute_path_prefix
+    from grd.adapters.install_utils import compute_path_prefix
 
     # Global install should produce absolute path prefix
     target = tmp_path / ".claude"
@@ -499,7 +499,7 @@ def test_install_single_runtime_passes_is_global(tmp_path: Path):
 
 def test_install_single_runtime_forwards_is_global(tmp_path: Path):
     """_install_single_runtime correctly calls adapter.install with is_global when supported."""
-    from gpd.cli import _install_single_runtime
+    from grd.cli import _install_single_runtime
 
     captured_calls: list[dict[str, object]] = []
 
@@ -507,12 +507,12 @@ def test_install_single_runtime_forwards_is_global(tmp_path: Path):
         runtime_name = "claude-code"
         display_name = "Claude Code"
         config_dir_name = ".claude"
-        help_command = "/gpd:help"
+        help_command = "/grd:help"
 
         def resolve_target_dir(self, is_global, cwd=None):
             return tmp_path / ".claude"
 
-        def install(self, gpd_root, target_dir, *, is_global=False, explicit_target=False):
+        def install(self, grd_root, target_dir, *, is_global=False, explicit_target=False):
             captured_calls.append({"is_global": is_global, "explicit_target": explicit_target})
             return {"runtime": "claude-code", "commands": 0, "agents": 0}
 
@@ -520,8 +520,8 @@ def test_install_single_runtime_forwards_is_global(tmp_path: Path):
             return None
 
     with (
-        patch("gpd.adapters.get_adapter", return_value=SpyAdapter()),
-        patch("gpd.cli._get_cwd", return_value=tmp_path),
+        patch("grd.adapters.get_adapter", return_value=SpyAdapter()),
+        patch("grd.cli._get_cwd", return_value=tmp_path),
     ):
         _install_single_runtime("claude-code", is_global=True)
 
@@ -531,8 +531,8 @@ def test_install_single_runtime_forwards_is_global(tmp_path: Path):
 
     captured_calls.clear()
     with (
-        patch("gpd.adapters.get_adapter", return_value=SpyAdapter()),
-        patch("gpd.cli._get_cwd", return_value=tmp_path),
+        patch("grd.adapters.get_adapter", return_value=SpyAdapter()),
+        patch("grd.cli._get_cwd", return_value=tmp_path),
     ):
         _install_single_runtime("claude-code", is_global=False)
 
@@ -542,8 +542,8 @@ def test_install_single_runtime_forwards_is_global(tmp_path: Path):
 
 
 def test_install_single_runtime_prefers_checkout_source_tree(tmp_path: Path):
-    """When invoked inside the repo, install should use that checkout's src/gpd tree."""
-    from gpd.cli import _install_single_runtime
+    """When invoked inside the repo, install should use that checkout's src/grd tree."""
+    from grd.cli import _install_single_runtime
 
     checkout = _make_checkout(tmp_path, "9.9.9")
     captured_calls: list[dict[str, object]] = []
@@ -552,31 +552,31 @@ def test_install_single_runtime_prefers_checkout_source_tree(tmp_path: Path):
         runtime_name = "claude-code"
         display_name = "Claude Code"
         config_dir_name = ".claude"
-        help_command = "/gpd:help"
+        help_command = "/grd:help"
 
         def resolve_target_dir(self, is_global, cwd=None):
             return tmp_path / ".claude"
 
-        def install(self, gpd_root, target_dir, *, is_global=False, explicit_target=False):
-            captured_calls.append({"gpd_root": gpd_root, "target_dir": target_dir})
+        def install(self, grd_root, target_dir, *, is_global=False, explicit_target=False):
+            captured_calls.append({"grd_root": grd_root, "target_dir": target_dir})
             return {"runtime": "claude-code", "commands": 0, "agents": 0}
 
         def finalize_install(self, install_result, *, force_statusline=False):
             return None
 
     with (
-        patch("gpd.adapters.get_adapter", return_value=SpyAdapter()),
-        patch("gpd.cli._get_cwd", return_value=checkout),
+        patch("grd.adapters.get_adapter", return_value=SpyAdapter()),
+        patch("grd.cli._get_cwd", return_value=checkout),
     ):
         _install_single_runtime("claude-code", is_global=False)
 
     assert len(captured_calls) == 1
-    assert captured_calls[0]["gpd_root"] == checkout / "src" / "gpd"
+    assert captured_calls[0]["grd_root"] == checkout / "src" / "grd"
 
 
 def test_install_single_runtime_marks_explicit_target(tmp_path: Path):
     """_install_single_runtime forwards explicit_target when --target-dir is used."""
-    from gpd.cli import _install_single_runtime
+    from grd.cli import _install_single_runtime
 
     captured_calls: list[dict[str, object]] = []
     target = tmp_path / "custom-runtime-dir"
@@ -585,12 +585,12 @@ def test_install_single_runtime_marks_explicit_target(tmp_path: Path):
         runtime_name = "claude-code"
         display_name = "Claude Code"
         config_dir_name = ".claude"
-        help_command = "/gpd:help"
+        help_command = "/grd:help"
 
         def resolve_target_dir(self, is_global, cwd=None):
             return tmp_path / ".claude"
 
-        def install(self, gpd_root, target_dir, *, is_global=False, explicit_target=False):
+        def install(self, grd_root, target_dir, *, is_global=False, explicit_target=False):
             captured_calls.append(
                 {
                     "is_global": is_global,
@@ -603,7 +603,7 @@ def test_install_single_runtime_marks_explicit_target(tmp_path: Path):
         def finalize_install(self, install_result, *, force_statusline=False):
             return None
 
-    with patch("gpd.adapters.get_adapter", return_value=SpyAdapter()):
+    with patch("grd.adapters.get_adapter", return_value=SpyAdapter()):
         _install_single_runtime("claude-code", is_global=False, target_dir_override=str(target))
 
     assert len(captured_calls) == 1
@@ -614,7 +614,7 @@ def test_install_single_runtime_marks_explicit_target(tmp_path: Path):
 
 def test_install_single_runtime_resolves_relative_target_dir_against_cli_cwd(tmp_path: Path):
     """Relative --target-dir should be anchored to --cwd, not the process cwd."""
-    from gpd.cli import _install_single_runtime
+    from grd.cli import _install_single_runtime
 
     captured_calls: list[Path] = []
     cli_cwd = tmp_path / "workspace"
@@ -624,12 +624,12 @@ def test_install_single_runtime_resolves_relative_target_dir_against_cli_cwd(tmp
         runtime_name = "claude-code"
         display_name = "Claude Code"
         config_dir_name = ".claude"
-        help_command = "/gpd:help"
+        help_command = "/grd:help"
 
         def resolve_target_dir(self, is_global, cwd=None):
             return tmp_path / ".claude"
 
-        def install(self, gpd_root, target_dir, *, is_global=False, explicit_target=False):
+        def install(self, grd_root, target_dir, *, is_global=False, explicit_target=False):
             captured_calls.append(target_dir)
             return {"runtime": "claude-code", "commands": 0, "agents": 0}
 
@@ -637,8 +637,8 @@ def test_install_single_runtime_resolves_relative_target_dir_against_cli_cwd(tmp
             return None
 
     with (
-        patch("gpd.adapters.get_adapter", return_value=SpyAdapter()),
-        patch("gpd.cli._get_cwd", return_value=cli_cwd),
+        patch("grd.adapters.get_adapter", return_value=SpyAdapter()),
+        patch("grd.cli._get_cwd", return_value=cli_cwd),
     ):
         _install_single_runtime("claude-code", is_global=False, target_dir_override="relative-target")
 
@@ -664,8 +664,8 @@ def test_uninstall_resolves_relative_target_dir_against_cli_cwd(tmp_path: Path):
             return {"runtime": "claude-code", "removed": []}
 
     with (
-        patch("gpd.adapters.get_adapter", return_value=SpyAdapter()),
-        patch("gpd.cli._get_cwd", return_value=cli_cwd),
+        patch("grd.adapters.get_adapter", return_value=SpyAdapter()),
+        patch("grd.cli._get_cwd", return_value=cli_cwd),
     ):
         result = runner.invoke(app, ["uninstall", "claude-code", "--target-dir", "relative-target"])
 
@@ -676,8 +676,8 @@ def test_uninstall_resolves_relative_target_dir_against_cli_cwd(tmp_path: Path):
 def test_install_interactive_rejects_ambiguous_runtime_name(tmp_path: Path):
     """Substring matches that hit multiple runtimes should fail closed."""
     with (
-        patch("gpd.adapters.list_runtimes", return_value=["claude-code", "codex", "opencode"]),
-        patch("gpd.adapters.get_adapter") as mock_get,
+        patch("grd.adapters.list_runtimes", return_value=["claude-code", "codex", "opencode"]),
+        patch("grd.adapters.get_adapter") as mock_get,
     ):
         adapters = {
             "claude-code": MagicMock(display_name="Claude Code", selection_aliases=("claude", "claude code")),
@@ -708,9 +708,9 @@ def test_install_interactive_accepts_unique_fuzzy_runtime_name(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path / runtime_name)}
 
     with (
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.list_runtimes", return_value=["claude-code", "codex", "opencode"]),
-        patch("gpd.adapters.get_adapter") as mock_get,
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.list_runtimes", return_value=["claude-code", "codex", "opencode"]),
+        patch("grd.adapters.get_adapter") as mock_get,
     ):
         adapters = {
             "claude-code": MagicMock(display_name="Claude Code", selection_aliases=("claude", "claude code")),
@@ -718,7 +718,7 @@ def test_install_interactive_accepts_unique_fuzzy_runtime_name(tmp_path: Path):
             "opencode": MagicMock(display_name="OpenCode", selection_aliases=("opencode", "open code")),
         }
         for adapter in adapters.values():
-            adapter.help_command = "/gpd:help"
+            adapter.help_command = "/grd:help"
         mock_get.side_effect = lambda runtime: adapters[runtime]
 
         result = runner.invoke(app, ["install"], input="open\n1\n")
@@ -740,9 +740,9 @@ def test_install_interactive_rejects_invalid_location_choice(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path / runtime_name)}
 
     with (
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.get_adapter") as mock_get,
-        patch("gpd.adapters.list_runtimes", return_value=["claude-code"]),
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.get_adapter") as mock_get,
+        patch("grd.adapters.list_runtimes", return_value=["claude-code"]),
     ):
         mock_adapter = MagicMock()
         mock_adapter.display_name = "Claude Code"
@@ -788,13 +788,13 @@ def test_install_local_option_never_forwards_global_scope(
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path / runtime_name)}
 
     with (
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.get_adapter") as mock_get,
-        patch("gpd.adapters.list_runtimes", return_value=supported_runtimes),
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.get_adapter") as mock_get,
+        patch("grd.adapters.list_runtimes", return_value=supported_runtimes),
     ):
         mock_adapter = MagicMock()
         mock_adapter.display_name = "Test"
-        mock_adapter.help_command = "/gpd:help"
+        mock_adapter.help_command = "/grd:help"
         mock_get.return_value = mock_adapter
 
         result = runner.invoke(app, argv)
@@ -828,8 +828,8 @@ def test_install_global_and_local_conflict():
 def test_install_rejects_explicit_runtimes_with_all() -> None:
     """`--all` cannot be combined with explicit runtime arguments on install."""
     with (
-        patch("gpd.cli._install_single_runtime") as mock_install_single,
-        patch("gpd.adapters.list_runtimes") as mock_list_runtimes,
+        patch("grd.cli._install_single_runtime") as mock_install_single,
+        patch("grd.adapters.list_runtimes") as mock_list_runtimes,
     ):
         result = runner.invoke(app, ["install", "claude-code", "--all", "--local"])
 
@@ -852,7 +852,7 @@ def test_install_target_dir_rejects_multiple_runtimes(tmp_path: Path):
 
 def test_install_target_dir_rejects_all_runtimes(tmp_path: Path):
     """`--all` plus an explicit target dir is also unsafe."""
-    with patch("gpd.adapters.list_runtimes", return_value=["claude-code", "gemini"]):
+    with patch("grd.adapters.list_runtimes", return_value=["claude-code", "gemini"]):
         result = runner.invoke(
             app,
             ["install", "--all", "--target-dir", str(tmp_path / "shared")],
@@ -871,13 +871,13 @@ def test_install_deduplicates_repeated_runtime_args(tmp_path: Path) -> None:
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path / ".claude")}
 
     with (
-        patch("gpd.adapters.list_runtimes", return_value=["claude-code", "gemini"]),
-        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.get_adapter") as mock_get_adapter,
+        patch("grd.adapters.list_runtimes", return_value=["claude-code", "gemini"]),
+        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.adapters.get_adapter") as mock_get_adapter,
     ):
         mock_adapter = MagicMock()
         mock_adapter.display_name = "Claude Code"
-        mock_adapter.help_command = "/gpd:help"
+        mock_adapter.help_command = "/grd:help"
         mock_get_adapter.return_value = mock_adapter
 
         result = runner.invoke(app, ["install", "claude-code", "claude-code", "--local"])
@@ -896,8 +896,8 @@ def test_uninstall_global_and_local_conflict():
 def test_uninstall_rejects_explicit_runtimes_with_all() -> None:
     """`--all` cannot be combined with explicit runtime arguments on uninstall."""
     with (
-        patch("gpd.adapters.get_adapter") as mock_get_adapter,
-        patch("gpd.adapters.list_runtimes") as mock_list_runtimes,
+        patch("grd.adapters.get_adapter") as mock_get_adapter,
+        patch("grd.adapters.list_runtimes") as mock_list_runtimes,
     ):
         result = runner.invoke(app, ["uninstall", "claude-code", "--all", "--local"])
 
@@ -929,8 +929,8 @@ def test_uninstall_deduplicates_repeated_runtime_args(tmp_path: Path) -> None:
     mock_adapter.uninstall.return_value = {"removed": ["commands"]}
 
     with (
-        patch("gpd.adapters.list_runtimes", return_value=["claude-code", "gemini"]),
-        patch("gpd.adapters.get_adapter", return_value=mock_adapter),
+        patch("grd.adapters.list_runtimes", return_value=["claude-code", "gemini"]),
+        patch("grd.adapters.get_adapter", return_value=mock_adapter),
     ):
         result = runner.invoke(
             app,

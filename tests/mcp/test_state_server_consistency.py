@@ -37,15 +37,15 @@ def _is_mcp_tool_decorator(node: ast.expr) -> bool:
     return False
 
 
-REQUIRED_EXCEPTIONS = {"GPDError", "OSError", "ValueError"}
+REQUIRED_EXCEPTIONS = {"GRDError", "OSError", "ValueError"}
 
 
 def test_all_state_server_tools_have_error_handling():
-    """Every @mcp.tool() in state_server.py must catch GPDError, OSError, ValueError."""
+    """Every @mcp.tool() in state_server.py must catch GRDError, OSError, ValueError."""
     source_path = (
         Path(__file__).resolve().parents[2]
         / "src"
-        / "gpd"
+        / "grd"
         / "mcp"
         / "servers"
         / "state_server.py"
@@ -104,7 +104,7 @@ def test_state_server_has_expected_tool_count():
     source_path = (
         Path(__file__).resolve().parents[2]
         / "src"
-        / "gpd"
+        / "grd"
         / "mcp"
         / "servers"
         / "state_server.py"

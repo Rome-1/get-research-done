@@ -1,6 +1,6 @@
 """Property-based tests using manual fuzzing (hypothesis not available).
 
-Tests algebraic properties of core GPD functions:
+Tests algebraic properties of core GRD functions:
 - idempotency, roundtrip stability, uniqueness, character validity.
 """
 
@@ -10,10 +10,10 @@ import random
 import re
 import string
 
-from gpd.core.frontmatter import extract_frontmatter, reconstruct_frontmatter
-from gpd.core.results import _auto_generate_id
-from gpd.core.state import ensure_state_schema, generate_state_markdown
-from gpd.core.utils import generate_slug, phase_normalize, phase_unpad, safe_parse_int
+from grd.core.frontmatter import extract_frontmatter, reconstruct_frontmatter
+from grd.core.results import _auto_generate_id
+from grd.core.state import ensure_state_schema, generate_state_markdown
+from grd.core.utils import generate_slug, phase_normalize, phase_unpad, safe_parse_int
 
 # ---------------------------------------------------------------------------
 # Helpers for random generation

@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * GPD bootstrap installer — installs or uninstalls Get Physics Done.
+ * GRD bootstrap installer — installs or uninstalls Get Research Done.
  *
  * Usage:
- *   npx -y get-physics-done
- *   npx -y get-physics-done --<runtime-flag> --global
- *   npx -y get-physics-done --<runtime-flag> --local
- *   npx -y get-physics-done --all --global
- *   npx -y get-physics-done --uninstall
- *   npx -y get-physics-done --uninstall --<runtime-flag> --global
- *   npx -y get-physics-done uninstall --all --local
+ *   npx -y get-research-done
+ *   npx -y get-research-done --<runtime-flag> --global
+ *   npx -y get-research-done --<runtime-flag> --local
+ *   npx -y get-research-done --all --global
+ *   npx -y get-research-done --uninstall
+ *   npx -y get-research-done --uninstall --<runtime-flag> --global
+ *   npx -y get-research-done uninstall --all --local
  */
 
 const fs = require("fs");
@@ -22,16 +22,16 @@ const readline = require("readline");
 const {
   version: packageVersion,
   repository,
-  gpdPythonVersion: rawPythonPackageVersion,
+  grdPythonVersion: rawPythonPackageVersion,
 } = require("../package.json");
-const RUNTIME_CATALOG = require("../src/gpd/adapters/runtime_catalog.json");
+const RUNTIME_CATALOG = require("../src/grd/adapters/runtime_catalog.json");
 
 const pythonPackageVersion = typeof rawPythonPackageVersion === "string" ? rawPythonPackageVersion.trim() : "";
-const GPD_HOME_ENV = "GPD_HOME";
-const GPD_HOME_DIRNAME = ".gpd";
+const GRD_HOME_ENV = "GRD_HOME";
+const GRD_HOME_DIRNAME = ".grd";
 const GITHUB_MAIN_BRANCH = "main";
-const BOOTSTRAP_TEST_PROBES_ENV = "GPD_BOOTSTRAP_TEST_PROBES";
-const BOOTSTRAP_DISABLE_NETWORK_PROBES_ENV = "GPD_BOOTSTRAP_DISABLE_NETWORK_PROBES";
+const BOOTSTRAP_TEST_PROBES_ENV = "GRD_BOOTSTRAP_TEST_PROBES";
+const BOOTSTRAP_DISABLE_NETWORK_PROBES_ENV = "GRD_BOOTSTRAP_DISABLE_NETWORK_PROBES";
 const INSTALL_CANDIDATE_PROBE_TIMEOUT_MS = 5000;
 const INSTALL_CANDIDATE_PROBE_REDIRECT_LIMIT = 5;
 
@@ -46,11 +46,11 @@ const brandLogo = "\x1b[38;2;243;240;232m";
 const brandTitle = "\x1b[38;2;247;244;237m";
 const brandMeta = "\x1b[38;2;158;152;140m";
 const brandAccent = "\x1b[38;2;216;199;163m";
-const brandDisplayName = "Get Physics Done";
+const brandDisplayName = "Get Research Done";
 const brandOwner = "Physical Superintelligence PBC";
 const brandOwnerShort = "PSI";
 const brandCopyrightYear = 2026;
-const productPositioning = "Open-source AI copilot for physics research";
+const productPositioning = "Open-source AI copilot for research";
 
 let bootstrapProbeOverridesCache = undefined;
 
@@ -340,7 +340,7 @@ function probeHttpCandidate(urlString, redirectCount = 0) {
       {
         method: "HEAD",
         headers: {
-          "User-Agent": `get-physics-done-bootstrap/${packageVersion}`,
+          "User-Agent": `get-research-done-bootstrap/${packageVersion}`,
         },
       },
       (response) => {
@@ -531,7 +531,7 @@ function flushCapturedOutput(result) {
 }
 
 function gpdHomeDir() {
-  return process.env[GPD_HOME_ENV] || path.join(os.homedir(), GPD_HOME_DIRNAME);
+  return process.env[GRD_HOME_ENV] || path.join(os.homedir(), GRD_HOME_DIRNAME);
 }
 
 function managedEnvDir(gpdHome) {
@@ -602,7 +602,7 @@ async function installManagedPackage(python, pythonVersion, options = {}) {
     const resolution = await resolveInstallCandidates(mainBranchInstallCandidates());
     const upgradeCandidates = resolution.candidates;
     if (upgradeCandidates.length > 0) {
-      log(`Upgrading GPD from the latest GitHub ${GITHUB_MAIN_BRANCH} branch into the managed environment...`);
+      log(`Upgrading GRD from the latest GitHub ${GITHUB_MAIN_BRANCH} branch into the managed environment...`);
       logUnavailableCandidates(resolution.skipped);
       if (resolution.skipped.length > 0) {
         log(`Using ${upgradeCandidates[0].label} for the ${GITHUB_MAIN_BRANCH}-branch upgrade.`);
@@ -624,13 +624,13 @@ async function installManagedPackage(python, pythonVersion, options = {}) {
   }
 
   const action = purpose === "uninstall"
-    ? "Preparing managed GPD CLI"
+    ? "Preparing managed GRD CLI"
     : forceReinstall
-      ? "Reinstalling GPD"
-      : "Installing GPD";
+      ? "Reinstalling GRD"
+      : "Installing GRD";
 
   // 1. Try PyPI first — fast, reliable, no auth needed.
-  const pypiSpec = `get-physics-done==${pythonVersion}`;
+  const pypiSpec = `get-research-done==${pythonVersion}`;
   log(`${action} from PyPI (${pypiSpec}) into the managed environment...`);
   const pypiResult = runPipInstall(python, pypiSpec, pipInstallEnv, { forceReinstall });
   if (pypiResult.status === 0) {
@@ -769,13 +769,13 @@ function printBanner() {
   console.log(`${bold}${brandLogo}╚██████╔╝██║     ██████╔╝${reset}`);
   console.log(`${bold}${brandLogo} ╚═════╝ ╚═╝     ╚═════╝${reset}`);
   console.log("");
-  console.log(` ${bold}${brandTitle}GPD v${packageVersion} - ${brandDisplayName}${reset}`);
+  console.log(` ${bold}${brandTitle}GRD v${packageVersion} - ${brandDisplayName}${reset}`);
   console.log(` ${dim}${brandMeta}© ${brandCopyrightYear} ${brandOwner} (${brandOwnerShort})${reset}`);
   console.log("");
 }
 
 function printHelp() {
-  const installCommand = "npx -y get-physics-done";
+  const installCommand = "npx -y get-research-done";
   const primaryRuntime = ALL_RUNTIMES[0];
   const dollarCommandRuntime = findRuntime((runtime) => runtime.command_prefix.startsWith("$"), primaryRuntime);
   const primaryFlag = runtimeInstallFlag(primaryRuntime);
@@ -789,8 +789,8 @@ function printHelp() {
   console.log(` ${cyan}-l, --local${reset}             Use the current project only`);
   console.log(` ${cyan}-g, --global${reset}            Use the global runtime config dir`);
   console.log(` ${cyan}--uninstall${reset}             Uninstall from selected runtime config`);
-  console.log(` ${cyan}--reinstall${reset}             Reinstall the matching tagged GitHub source in ~/.gpd/venv`);
-  console.log(` ${cyan}--upgrade${reset}               Upgrade ~/.gpd/venv from the latest GitHub main source`);
+  console.log(` ${cyan}--reinstall${reset}             Reinstall the matching tagged GitHub source in ~/.grd/venv`);
+  console.log(` ${cyan}--upgrade${reset}               Upgrade ~/.grd/venv from the latest GitHub main source`);
   for (const runtime of ALL_RUNTIMES) {
     const flags = runtimeSelectionFlagList(runtime).join(", ");
     const padding = " ".repeat(Math.max(0, 24 - flags.length));
@@ -1042,7 +1042,7 @@ async function selectInstallScope(args, runtimes, targetDir, action = "install")
 
 function buildRuntimeCommandArgs(command, runtimes, scope, targetDir = null, options = {}) {
   const { forceStatusline = false } = options;
-  const cliArgs = ["-m", "gpd.cli", command];
+  const cliArgs = ["-m", "grd.cli", command];
   if (runtimes.length === ALL_RUNTIMES.length) {
     cliArgs.push("--all");
   } else {
@@ -1134,12 +1134,12 @@ async function main() {
     purpose: isUninstall ? "uninstall" : "install",
   });
   if (!packageInstall.ok) {
-    error(`Failed to install GPD v${packageInstall.requestedVersion} from GitHub sources.`);
+    error(`Failed to install GRD v${packageInstall.requestedVersion} from GitHub sources.`);
     process.exit(1);
   }
 
   if (isUninstall) {
-    log(`Uninstalling GPD from ${formatRuntimeList(selectedRuntimes)} (${scope})...`);
+    log(`Uninstalling GRD from ${formatRuntimeList(selectedRuntimes)} (${scope})...`);
   }
 
   const cliArgs = buildRuntimeCommandArgs(action, selectedRuntimes, scope, targetDir, { forceStatusline });

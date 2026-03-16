@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from gpd.core.constants import PLANNING_DIR_NAME
-from gpd.core.storage_paths import (
+from grd.core.constants import PLANNING_DIR_NAME
+from grd.core.storage_paths import (
     DurableOutputKind,
     ProjectStorageLayout,
     StorageClass,
@@ -175,7 +175,7 @@ def test_validate_user_output_accepts_durable_outputs_and_rejects_other_paths(tm
     assert validated == layout.root / "exports" / "final.json"
 
     with pytest.raises(StoragePathError, match="stable project directory"):
-        layout.validate_user_output(".gpd/review/final.json")
+        layout.validate_user_output(".grd/review/final.json")
 
     with pytest.raises(StoragePathError, match="stable project directory"):
         layout.validate_user_output("notes/final.json")
@@ -224,7 +224,7 @@ def test_validate_final_output_rejects_internal_project_scratch_temp_and_externa
     monkeypatch.setattr(ProjectStorageLayout, "temp_roots", lambda self: (temp_root,))
 
     with pytest.raises(StoragePathError, match="internal storage"):
-        layout.validate_final_output(".gpd/paper/main.tex")
+        layout.validate_final_output(".grd/paper/main.tex")
 
     with pytest.raises(StoragePathError, match="scratch directories"):
         layout.validate_final_output(layout.scratch_dir / "final.json")
@@ -244,7 +244,7 @@ def test_validate_commit_target_allows_internal_docs_but_rejects_internal_artifa
 ) -> None:
     layout = _make_layout(tmp_path)
 
-    assert layout.validate_commit_target(".gpd/STATE.md") == layout.internal_root / "STATE.md"
+    assert layout.validate_commit_target(".grd/STATE.md") == layout.internal_root / "STATE.md"
 
     hidden_results = layout.internal_root / "phases" / "01-setup" / "results" / "out.json"
     hidden_results.parent.mkdir(parents=True)
@@ -318,9 +318,9 @@ def test_audit_storage_warnings_flags_hidden_results_and_scratch_outputs(tmp_pat
 
     warnings = layout.audit_storage_warnings()
 
-    assert any(".gpd/phases/01-setup/results/out.json" in warning for warning in warnings)
-    assert any(".gpd/paper/main.tex" in warning for warning in warnings)
-    assert any(".gpd/tmp/final.csv" in warning for warning in warnings)
+    assert any(".grd/phases/01-setup/results/out.json" in warning for warning in warnings)
+    assert any(".grd/paper/main.tex" in warning for warning in warnings)
+    assert any(".grd/tmp/final.csv" in warning for warning in warnings)
     assert any("tmp/final.csv" in warning for warning in warnings)
 
 

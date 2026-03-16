@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from gpd.core.referee_policy import RefereeDecisionInput
-from gpd.mcp.paper.models import (
+from grd.core.referee_policy import RefereeDecisionInput
+from grd.mcp.paper.models import (
     ClaimIndex,
     ClaimRecord,
     ClaimType,
@@ -22,7 +22,7 @@ from gpd.mcp.paper.models import (
     ReviewSupportStatus,
     StageReviewReport,
 )
-from gpd.mcp.paper.review_artifacts import (
+from grd.mcp.paper.review_artifacts import (
     read_claim_index,
     read_referee_decision,
     read_review_ledger,
@@ -92,7 +92,7 @@ def test_review_artifact_round_trip(tmp_path: Path) -> None:
         target_journal="jhep",
         final_recommendation=ReviewRecommendation.major_revision,
         final_confidence=ReviewConfidence.high,
-        stage_artifacts=[".gpd/review/STAGE-interestingness.json"],
+        stage_artifacts=[".grd/review/STAGE-interestingness.json"],
         novelty="adequate",
         significance="weak",
         venue_fit="adequate",
@@ -100,14 +100,14 @@ def test_review_artifact_round_trip(tmp_path: Path) -> None:
     )
     bundle = ReviewPanelBundle(
         manuscript_path="paper/main.tex",
-        claim_index_path=".gpd/review/CLAIMS.json",
-        stage_reports=[".gpd/review/STAGE-interestingness.json"],
-        review_ledger_path=".gpd/review/REVIEW-LEDGER.json",
-        decision_path=".gpd/review/REFEREE-DECISION.json",
+        claim_index_path=".grd/review/CLAIMS.json",
+        stage_reports=[".grd/review/STAGE-interestingness.json"],
+        review_ledger_path=".grd/review/REVIEW-LEDGER.json",
+        decision_path=".grd/review/REFEREE-DECISION.json",
         final_recommendation=ReviewRecommendation.major_revision,
         final_confidence=ReviewConfidence.high,
-        final_report_path=".gpd/REFEREE-REPORT.md",
-        final_report_tex_path=".gpd/REFEREE-REPORT.tex",
+        final_report_path=".grd/REFEREE-REPORT.md",
+        final_report_tex_path=".grd/REFEREE-REPORT.tex",
     )
 
     claims_path = tmp_path / "CLAIMS.json"

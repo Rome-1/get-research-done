@@ -1,7 +1,7 @@
 """Regression test: ProgressJsonResult should not have misleading extra fields."""
 from __future__ import annotations
 
-from gpd.core.phases import ProgressJsonResult
+from grd.core.phases import ProgressJsonResult
 
 
 def test_progress_json_result_no_total_plans_in_phase_field():

@@ -1,0 +1,13 @@
+name: my-domain
+display_name: My Research Domain
+description: >
+  Description of this research domain and what conventions/protocols it provides.
+version: 1
+
+conventions_file: conventions/convention-fields.yaml
+subfields_dir: subfields
+protocols_dir: protocols
+errors_dir: errors
+
+branding:
+  tagline: "Your tagline here"

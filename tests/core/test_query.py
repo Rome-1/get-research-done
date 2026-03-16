@@ -1,4 +1,4 @@
-"""Tests for gpd.core.query — cross-phase result queries."""
+"""Tests for grd.core.query — cross-phase result queries."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from textwrap import dedent
 
 import pytest
 
-from gpd.core.errors import QueryError
-from gpd.core.query import (
+from grd.core.errors import QueryError
+from grd.core.query import (
     AssumptionsResult,
     DepsResult,
     QueryResult,
@@ -29,7 +29,7 @@ from gpd.core.query import (
 @pytest.fixture
 def project_dir(tmp_path: Path) -> Path:
     """Create a project with phase SUMMARY files for testing."""
-    phases_dir = tmp_path / ".gpd" / "phases"
+    phases_dir = tmp_path / ".grd" / "phases"
 
     # Phase 01
     p01 = phases_dir / "01-formalism"
@@ -104,7 +104,7 @@ def project_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def empty_project(tmp_path: Path) -> Path:
     """Create a project with no phases."""
-    (tmp_path / ".gpd").mkdir()
+    (tmp_path / ".grd").mkdir()
     return tmp_path
 
 
@@ -259,18 +259,18 @@ class TestCollectSummaries:
         assert s03.plan is None  # SUMMARY.md has no plan prefix
 
     def test_skips_parse_errors(self, tmp_path: Path) -> None:
-        phases_dir = tmp_path / ".gpd" / "phases" / "01-test"
+        phases_dir = tmp_path / ".grd" / "phases" / "01-test"
         phases_dir.mkdir(parents=True)
         (phases_dir / "01-01-SUMMARY.md").write_text("---\nbad: [yaml: {{\n---\n")
         summaries = collect_summaries(tmp_path)
         assert len(summaries) == 0
 
     def test_skips_invalid_utf8_summary_files(self, tmp_path: Path) -> None:
-        bad_phase_dir = tmp_path / ".gpd" / "phases" / "01-bad"
+        bad_phase_dir = tmp_path / ".grd" / "phases" / "01-bad"
         bad_phase_dir.mkdir(parents=True)
         (bad_phase_dir / "01-01-SUMMARY.md").write_bytes(b"\xff\xfe\x00\x80invalid")
 
-        good_phase_dir = tmp_path / ".gpd" / "phases" / "02-good"
+        good_phase_dir = tmp_path / ".grd" / "phases" / "02-good"
         good_phase_dir.mkdir(parents=True)
         (good_phase_dir / "02-01-SUMMARY.md").write_text(
             dedent("""\
@@ -340,7 +340,7 @@ class TestQuery:
             assert 1 <= phase_num <= 2
 
     def test_query_text_handles_yaml_dates_in_frontmatter(self, project_dir: Path) -> None:
-        phase_dir = project_dir / ".gpd" / "phases" / "04-dated-frontmatter"
+        phase_dir = project_dir / ".grd" / "phases" / "04-dated-frontmatter"
         phase_dir.mkdir(parents=True)
         (phase_dir / "04-01-SUMMARY.md").write_text(
             dedent("""\
@@ -359,7 +359,7 @@ class TestQuery:
         assert any(m.phase in ("4", "04") and m.field == "text" for m in result.matches)
 
     def test_query_provides_handles_yaml_dates_in_structured_values(self, project_dir: Path) -> None:
-        phase_dir = project_dir / ".gpd" / "phases" / "04-structured-provides"
+        phase_dir = project_dir / ".grd" / "phases" / "04-structured-provides"
         phase_dir.mkdir(parents=True)
         (phase_dir / "04-02-SUMMARY.md").write_text(
             dedent("""\
@@ -403,7 +403,7 @@ class TestQueryDeps:
             query_deps(project_dir, "")
 
     def test_deps_accepts_scalar_provides_and_requires(self, tmp_path: Path) -> None:
-        phase1 = tmp_path / ".gpd" / "phases" / "01-setup"
+        phase1 = tmp_path / ".grd" / "phases" / "01-setup"
         phase1.mkdir(parents=True)
         (phase1 / "01-01-SUMMARY.md").write_text(
             dedent("""\
@@ -414,7 +414,7 @@ class TestQueryDeps:
             """)
         )
 
-        phase2 = tmp_path / ".gpd" / "phases" / "02-core"
+        phase2 = tmp_path / ".grd" / "phases" / "02-core"
         phase2.mkdir(parents=True)
         (phase2 / "02-01-SUMMARY.md").write_text(
             dedent("""\
@@ -471,7 +471,7 @@ class TestQueryAssumptions:
             query_assumptions(project_dir, "")
 
     def test_fallback_frontmatter_search_handles_yaml_dates(self, project_dir: Path) -> None:
-        phase_dir = project_dir / ".gpd" / "phases" / "05-dated-assumptions"
+        phase_dir = project_dir / ".grd" / "phases" / "05-dated-assumptions"
         phase_dir.mkdir(parents=True)
         (phase_dir / "05-01-SUMMARY.md").write_text(
             dedent("""\

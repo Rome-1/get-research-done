@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gpd import registry
+from grd import registry
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-COMMANDS_DIR = REPO_ROOT / "src/gpd/commands"
-TEMPLATES_DIR = REPO_ROOT / "src/gpd/specs/templates"
+COMMANDS_DIR = REPO_ROOT / "src/grd/commands"
+TEMPLATES_DIR = REPO_ROOT / "src/grd/specs/templates"
 
 
 def _read_command(name: str) -> str:
@@ -41,8 +41,8 @@ def test_verify_work_review_contract_uses_phase_scoped_output_path() -> None:
     contract = registry.get_command("verify-work").review_contract
 
     assert contract is not None
-    assert contract.required_outputs == [".gpd/phases/XX-name/{phase}-VERIFICATION.md"]
-    assert ".gpd/phases/XX-name/{phase}-VERIFICATION.md" in _read_command("verify-work")
+    assert contract.required_outputs == [".grd/phases/XX-name/{phase}-VERIFICATION.md"]
+    assert ".grd/phases/XX-name/{phase}-VERIFICATION.md" in _read_command("verify-work")
 
 
 def test_summary_template_surfaces_plan_contract_ref_rule_for_contract_ledgers() -> None:
@@ -56,7 +56,7 @@ def test_summary_template_surfaces_plan_contract_ref_rule_for_contract_ledgers()
 def test_write_paper_prompt_discovers_plan_scoped_and_legacy_phase_summaries() -> None:
     source = _read_command("write-paper")
 
-    assert "ls .gpd/phases/*/SUMMARY.md .gpd/phases/*/*-SUMMARY.md 2>/dev/null" in source
+    assert "ls .grd/phases/*/SUMMARY.md .grd/phases/*/*-SUMMARY.md 2>/dev/null" in source
 
 
 def test_comparison_templates_match_full_comparison_verdict_subject_kind_enum() -> None:

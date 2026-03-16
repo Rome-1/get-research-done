@@ -7,20 +7,20 @@ from pathlib import Path
 
 import pytest
 
-from gpd import registry
+from grd import registry
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-AGENTS_DIR = REPO_ROOT / "src/gpd/agents"
-INFRA_PATH = REPO_ROOT / "src/gpd/specs/references/orchestration/agent-infrastructure.md"
+AGENTS_DIR = REPO_ROOT / "src/grd/agents"
+INFRA_PATH = REPO_ROOT / "src/grd/specs/references/orchestration/agent-infrastructure.md"
 
-DIRECT_AGENTS = {"gpd-debugger", "gpd-executor", "gpd-planner"}
+DIRECT_AGENTS = {"grd-debugger", "grd-executor", "grd-planner"}
 DIRECT_SENTENCE = (
-    "Commit authority: direct. You may use `gpd commit` for your own scoped artifacts only. "
-    "Do NOT use raw `git commit` when `gpd commit` applies."
+    "Commit authority: direct. You may use `grd commit` for your own scoped artifacts only. "
+    "Do NOT use raw `git commit` when `grd commit` applies."
 )
 ORCHESTRATOR_SENTENCE = (
-    "Commit authority: orchestrator-only. Do NOT run `gpd commit`, `git commit`, or stage files. "
-    "Return changed paths in `gpd_return.files_written`."
+    "Commit authority: orchestrator-only. Do NOT run `grd commit`, `git commit`, or stage files. "
+    "Return changed paths in `grd_return.files_written`."
 )
 
 
@@ -58,7 +58,7 @@ def test_registry_agent_commit_authority_values_are_valid() -> None:
 
 def test_agent_infrastructure_commit_matrix_covers_full_agent_inventory() -> None:
     infra = INFRA_PATH.read_text(encoding="utf-8")
-    matrix_agents = set(re.findall(r"^\| (gpd-[a-z-]+) \| `(?:direct|orchestrator)` \|", infra, re.MULTILINE))
+    matrix_agents = set(re.findall(r"^\| (grd-[a-z-]+) \| `(?:direct|orchestrator)` \|", infra, re.MULTILINE))
 
     assert matrix_agents == set(registry.list_agents())
 
@@ -72,7 +72,7 @@ def test_agent_prompts_include_exact_commit_authority_sentence() -> None:
 
 
 def test_verifier_does_not_duplicate_stale_commit_ownership_block() -> None:
-    verifier = (AGENTS_DIR / "gpd-verifier.md").read_text(encoding="utf-8")
+    verifier = (AGENTS_DIR / "grd-verifier.md").read_text(encoding="utf-8")
 
     assert "## Agent Commit Ownership" not in verifier
     assert "Which agents commit their own work vs. return `files_written`" not in verifier

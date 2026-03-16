@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from gpd.adapters.codex import _convert_to_codex_skill
-from gpd.adapters.gemini import _convert_frontmatter_to_gemini, _convert_to_gemini_toml
-from gpd.adapters.install_utils import split_markdown_frontmatter
-from gpd.adapters.opencode import convert_claude_to_opencode_frontmatter
+from grd.adapters.codex import _convert_to_codex_skill
+from grd.adapters.gemini import _convert_frontmatter_to_gemini, _convert_to_gemini_toml
+from grd.adapters.install_utils import split_markdown_frontmatter
+from grd.adapters.opencode import convert_claude_to_opencode_frontmatter
 
 
 def test_split_markdown_frontmatter_keeps_inline_triple_dash_in_field_value() -> None:

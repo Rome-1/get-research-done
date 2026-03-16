@@ -1,4 +1,4 @@
-"""Tests for gpd.core.patterns."""
+"""Tests for grd.core.patterns."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from gpd.core.errors import PatternError
-from gpd.core.patterns import (
+from grd.core.errors import PatternError
+from grd.core.patterns import (
     _BOOTSTRAP_PATTERNS,
     CONFIDENCE_LEVELS,
     VALID_CATEGORIES,
@@ -61,30 +61,30 @@ class TestConstants:
 class TestPatternsRootResolution:
     def test_prefers_explicit_patterns_root_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         explicit = tmp_path / "custom-patterns"
-        monkeypatch.setenv("GPD_PATTERNS_ROOT", str(explicit))
-        monkeypatch.delenv("GPD_DATA_DIR", raising=False)
+        monkeypatch.setenv("GRD_PATTERNS_ROOT", str(explicit))
+        monkeypatch.delenv("GRD_DATA_DIR", raising=False)
 
         assert patterns_root() == explicit
 
     def test_uses_data_dir_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         data_dir = tmp_path / "data"
-        monkeypatch.delenv("GPD_PATTERNS_ROOT", raising=False)
-        monkeypatch.setenv("GPD_DATA_DIR", str(data_dir))
+        monkeypatch.delenv("GRD_PATTERNS_ROOT", raising=False)
+        monkeypatch.setenv("GRD_DATA_DIR", str(data_dir))
 
         assert patterns_root() == data_dir / "learned-patterns"
 
-    def test_defaults_to_home_gpd_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_defaults_to_home_grd_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         fake_home = tmp_path / "home"
         fake_home.mkdir()
-        monkeypatch.delenv("GPD_PATTERNS_ROOT", raising=False)
-        monkeypatch.delenv("GPD_DATA_DIR", raising=False)
+        monkeypatch.delenv("GRD_PATTERNS_ROOT", raising=False)
+        monkeypatch.delenv("GRD_DATA_DIR", raising=False)
         monkeypatch.setattr(Path, "home", lambda: fake_home)
 
-        assert patterns_root() == fake_home / ".gpd" / "learned-patterns"
+        assert patterns_root() == fake_home / ".grd" / "learned-patterns"
 
     def test_specs_root_overrides_env_and_home(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.delenv("GPD_PATTERNS_ROOT", raising=False)
-        monkeypatch.delenv("GPD_DATA_DIR", raising=False)
+        monkeypatch.delenv("GRD_PATTERNS_ROOT", raising=False)
+        monkeypatch.delenv("GRD_DATA_DIR", raising=False)
 
         assert patterns_root(specs_root=tmp_path / "project") == tmp_path / "project" / "learned-patterns"
 
@@ -289,14 +289,14 @@ class TestPatternPromote:
             pattern_promote("nonexistent-id", root=lib_root)
 
 
-# ─── Issue 2: gpd_span wraps actual operations ──────────────────────────────
+# ─── Issue 2: grd_span wraps actual operations ──────────────────────────────
 
 
 class TestSpanWrapsOperations:
-    """Verify that gpd_span wraps the actual operations, not just logging."""
+    """Verify that grd_span wraps the actual operations, not just logging."""
 
     def test_pattern_add_span_wraps_file_write(self, lib_root: Path, monkeypatch: pytest.MonkeyPatch):
-        """pattern_add's gpd_span should wrap the file-writing and index-saving
+        """pattern_add's grd_span should wrap the file-writing and index-saving
         operations, not just the logger.info call."""
         span_entered = False
         span_exited = False
@@ -305,13 +305,13 @@ class TestSpanWrapsOperations:
 
         from contextlib import contextmanager
 
-        from gpd.core import patterns as patterns_mod
-        from gpd.core.observability import gpd_span as real_gpd_span
+        from grd.core import patterns as patterns_mod
+        from grd.core.observability import grd_span as real_grd_span
 
         @contextmanager
         def tracking_span(name, **attrs):
             nonlocal span_entered, span_exited
-            with real_gpd_span(name, **attrs) as s:
+            with real_grd_span(name, **attrs) as s:
                 span_entered = True
                 yield s
             span_exited = True
@@ -331,17 +331,17 @@ class TestSpanWrapsOperations:
                 index_saved_inside_span = True
             return original_save_index(root, index)
 
-        monkeypatch.setattr(patterns_mod, "gpd_span", tracking_span)
+        monkeypatch.setattr(patterns_mod, "grd_span", tracking_span)
         monkeypatch.setattr(patterns_mod, "atomic_write", tracking_atomic_write)
         monkeypatch.setattr(patterns_mod, "_save_index", tracking_save_index)
 
         result = pattern_add(domain="qft", title="Span Test Add", root=lib_root)
         assert result.added is True
-        assert file_written_inside_span, "atomic_write should be called inside gpd_span"
-        assert index_saved_inside_span, "_save_index should be called inside gpd_span"
+        assert file_written_inside_span, "atomic_write should be called inside grd_span"
+        assert index_saved_inside_span, "_save_index should be called inside grd_span"
 
     def test_pattern_list_span_wraps_filtering(self, lib_root: Path, monkeypatch: pytest.MonkeyPatch):
-        """pattern_list's gpd_span should wrap the filtering/sorting logic."""
+        """pattern_list's grd_span should wrap the filtering/sorting logic."""
         pattern_add(domain="qft", title="List Span A", severity="low", root=lib_root)
         pattern_add(domain="qft", title="List Span B", severity="critical", root=lib_root)
 
@@ -349,18 +349,18 @@ class TestSpanWrapsOperations:
 
         from contextlib import contextmanager
 
-        from gpd.core import patterns as patterns_mod
-        from gpd.core.observability import gpd_span as real_gpd_span
+        from grd.core import patterns as patterns_mod
+        from grd.core.observability import grd_span as real_grd_span
 
         @contextmanager
         def tracking_span(name, **attrs):
             nonlocal span_active_during_result
-            with real_gpd_span(name, **attrs) as s:
+            with real_grd_span(name, **attrs) as s:
                 span_active_during_result = True
                 yield s
             span_active_during_result = False
 
-        monkeypatch.setattr(patterns_mod, "gpd_span", tracking_span)
+        monkeypatch.setattr(patterns_mod, "grd_span", tracking_span)
 
         result = pattern_list(root=lib_root)
         assert result.count == 2
@@ -369,7 +369,7 @@ class TestSpanWrapsOperations:
         # after the context manager exits. We check that it was True at some point.
 
     def test_pattern_promote_span_wraps_mutation(self, lib_root: Path, monkeypatch: pytest.MonkeyPatch):
-        """pattern_promote's gpd_span should wrap the confidence mutation and save."""
+        """pattern_promote's grd_span should wrap the confidence mutation and save."""
         add_result = pattern_add(domain="qft", title="Promote Span Test", root=lib_root)
 
         mutation_inside_span = False
@@ -379,13 +379,13 @@ class TestSpanWrapsOperations:
 
         from contextlib import contextmanager
 
-        from gpd.core import patterns as patterns_mod
-        from gpd.core.observability import gpd_span as real_gpd_span
+        from grd.core import patterns as patterns_mod
+        from grd.core.observability import grd_span as real_grd_span
 
         @contextmanager
         def tracking_span(name, **attrs):
             nonlocal span_entered, span_exited
-            with real_gpd_span(name, **attrs) as s:
+            with real_grd_span(name, **attrs) as s:
                 span_entered = True
                 yield s
             span_exited = True
@@ -406,17 +406,17 @@ class TestSpanWrapsOperations:
                 mutation_inside_span = True
             return original_update_frontmatter(root, entry)
 
-        monkeypatch.setattr(patterns_mod, "gpd_span", tracking_span)
+        monkeypatch.setattr(patterns_mod, "grd_span", tracking_span)
         monkeypatch.setattr(patterns_mod, "_save_index", tracking_save_index)
         monkeypatch.setattr(patterns_mod, "_update_pattern_frontmatter", tracking_update_frontmatter)
 
         result = pattern_promote(add_result.id, root=lib_root)
         assert result.promoted is True
-        assert mutation_inside_span, "_update_pattern_frontmatter should be called inside gpd_span"
-        assert save_inside_span, "_save_index should be called inside gpd_span"
+        assert mutation_inside_span, "_update_pattern_frontmatter should be called inside grd_span"
+        assert save_inside_span, "_save_index should be called inside grd_span"
 
     def test_pattern_search_span_wraps_scoring(self, lib_root: Path, monkeypatch: pytest.MonkeyPatch):
-        """pattern_search's gpd_span should wrap the scoring logic."""
+        """pattern_search's grd_span should wrap the scoring logic."""
         pattern_add(domain="qft", title="Search Span Fourier", root=lib_root)
 
         span_entered = False
@@ -424,28 +424,28 @@ class TestSpanWrapsOperations:
 
         from contextlib import contextmanager
 
-        from gpd.core import patterns as patterns_mod
-        from gpd.core.observability import gpd_span as real_gpd_span
+        from grd.core import patterns as patterns_mod
+        from grd.core.observability import grd_span as real_grd_span
 
         # We track whether _load_index result is iterated inside the span
         # by monkey-patching the span itself
         @contextmanager
         def tracking_span(name, **attrs):
             nonlocal span_entered, span_exited
-            with real_gpd_span(name, **attrs) as s:
+            with real_grd_span(name, **attrs) as s:
                 span_entered = True
                 yield s
             span_exited = True
 
-        monkeypatch.setattr(patterns_mod, "gpd_span", tracking_span)
+        monkeypatch.setattr(patterns_mod, "grd_span", tracking_span)
 
         result = pattern_search("fourier", root=lib_root)
         assert result.count >= 1
         # If span wrapped the scoring, span_entered should be True
-        assert span_entered, "gpd_span should have been entered during search"
+        assert span_entered, "grd_span should have been entered during search"
 
     def test_pattern_seed_span_wraps_bootstrap_loop(self, lib_root: Path, monkeypatch: pytest.MonkeyPatch):
-        """pattern_seed's gpd_span should wrap the bootstrap loop and index save."""
+        """pattern_seed's grd_span should wrap the bootstrap loop and index save."""
         files_written_inside_span = 0
         save_inside_span = False
         span_entered = False
@@ -453,13 +453,13 @@ class TestSpanWrapsOperations:
 
         from contextlib import contextmanager
 
-        from gpd.core import patterns as patterns_mod
-        from gpd.core.observability import gpd_span as real_gpd_span
+        from grd.core import patterns as patterns_mod
+        from grd.core.observability import grd_span as real_grd_span
 
         @contextmanager
         def tracking_span(name, **attrs):
             nonlocal span_entered, span_exited
-            with real_gpd_span(name, **attrs) as s:
+            with real_grd_span(name, **attrs) as s:
                 span_entered = True
                 yield s
             span_exited = True
@@ -479,11 +479,11 @@ class TestSpanWrapsOperations:
                 save_inside_span = True
             return original_save_index(root, index)
 
-        monkeypatch.setattr(patterns_mod, "gpd_span", tracking_span)
+        monkeypatch.setattr(patterns_mod, "grd_span", tracking_span)
         monkeypatch.setattr(patterns_mod, "atomic_write", tracking_atomic_write)
         monkeypatch.setattr(patterns_mod, "_save_index", tracking_save_index)
 
         result = pattern_seed(root=lib_root)
         assert result.added >= 8
-        assert files_written_inside_span > 0, "atomic_write should be called inside gpd_span during seed"
-        assert save_inside_span, "_save_index should be called inside gpd_span during seed"
+        assert files_written_inside_span > 0, "atomic_write should be called inside grd_span during seed"
+        assert save_inside_span, "_save_index should be called inside grd_span during seed"

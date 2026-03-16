@@ -23,24 +23,24 @@ from unittest.mock import patch
 
 import pytest
 
-from gpd.core.config import ConfigError, GPDProjectConfig, load_config
-from gpd.core.constants import ENV_GPD_DEBUG, ProjectLayout
-from gpd.core.errors import ValidationError
-from gpd.core.frontmatter import (
+from grd.core.config import ConfigError, GRDProjectConfig, load_config
+from grd.core.constants import ENV_GRD_DEBUG, ProjectLayout
+from grd.core.errors import ValidationError
+from grd.core.frontmatter import (
     FrontmatterParseError,
     FrontmatterValidationError,
     extract_frontmatter,
     splice_frontmatter,
     validate_frontmatter,
 )
-from gpd.core.health import (
+from grd.core.health import (
     CheckStatus,
     check_config,
     check_convention_lock,
     check_state_validity,
 )
-from gpd.core.json_utils import json_get, json_keys, json_list, json_pluck
-from gpd.core.state import (
+from grd.core.json_utils import json_get, json_keys, json_list, json_pluck
+from grd.core.state import (
     default_state_dict,
     ensure_state_schema,
     generate_state_markdown,
@@ -49,7 +49,7 @@ from gpd.core.state import (
     state_validate,
     sync_state_json,
 )
-from gpd.core.utils import safe_read_file
+from grd.core.utils import safe_read_file
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -57,14 +57,14 @@ from gpd.core.utils import safe_read_file
 
 
 def _make_planning(tmp_path: Path) -> Path:
-    """Create minimal .gpd/ structure and return project root."""
-    planning = tmp_path / ".gpd"
+    """Create minimal .grd/ structure and return project root."""
+    planning = tmp_path / ".grd"
     planning.mkdir(parents=True, exist_ok=True)
     return tmp_path
 
 
 def _write_state_json(cwd: Path, obj: dict) -> Path:
-    """Write state.json to .gpd/ and return the path."""
+    """Write state.json to .grd/ and return the path."""
     p = ProjectLayout(cwd).state_json
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(obj, indent=2), encoding="utf-8")
@@ -72,7 +72,7 @@ def _write_state_json(cwd: Path, obj: dict) -> Path:
 
 
 def _write_state_md(cwd: Path, content: str) -> Path:
-    """Write STATE.md to .gpd/ and return the path."""
+    """Write STATE.md to .grd/ and return the path."""
     p = ProjectLayout(cwd).state_md
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
@@ -84,7 +84,7 @@ MINIMAL_STATE_MD = """\
 
 ## Project Reference
 
-See: .gpd/PROJECT.md
+See: .grd/PROJECT.md
 
 **Core research question:** Test question
 **Current focus:** Testing recovery
@@ -127,7 +127,7 @@ See: .gpd/PROJECT.md
 
 **Last session:** 2026-03-09
 **Stopped at:** Phase 01, Plan 01, Task 2
-**Resume file:** .gpd/phases/01-test/01-test-01-PLAN.md
+**Resume file:** .grd/phases/01-test/01-test-01-PLAN.md
 """
 
 
@@ -222,14 +222,14 @@ class TestLoadStateJsonFallback:
         assert result is None
 
     def test_debug_logging_on_corrupt_json(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-        """When GPD_DEBUG is set, corrupt state.json should log debug messages."""
+        """When GRD_DEBUG is set, corrupt state.json should log debug messages."""
         cwd = _make_planning(tmp_path)
         layout = ProjectLayout(cwd)
         layout.state_json.write_text("BAD JSON", encoding="utf-8")
-        with patch.dict(os.environ, {ENV_GPD_DEBUG: "1"}):
+        with patch.dict(os.environ, {ENV_GRD_DEBUG: "1"}):
             import logging
 
-            with caplog.at_level(logging.DEBUG, logger="gpd.core.state"):
+            with caplog.at_level(logging.DEBUG, logger="grd.core.state"):
                 load_state_json(cwd)
         assert any("state.json parse error" in r.message for r in caplog.records)
 
@@ -240,10 +240,10 @@ class TestLoadStateJsonFallback:
         layout.state_json.write_text("BAD", encoding="utf-8")
         layout.state_json.with_suffix(".json.bak").write_text("BAD BAK", encoding="utf-8")
         _write_state_md(cwd, MINIMAL_STATE_MD)
-        with patch.dict(os.environ, {ENV_GPD_DEBUG: "1"}):
+        with patch.dict(os.environ, {ENV_GRD_DEBUG: "1"}):
             import logging
 
-            with caplog.at_level(logging.DEBUG, logger="gpd.core.state"):
+            with caplog.at_level(logging.DEBUG, logger="grd.core.state"):
                 result = load_state_json(cwd)
         assert result is not None
         assert any("state.json.bak restore failed" in r.message for r in caplog.records)
@@ -423,7 +423,7 @@ class TestSaveStateRollback:
         bad_state = default_state_dict()
         bad_state["position"]["current_phase"] = "02"
 
-        with patch("gpd.core.state.generate_state_markdown", side_effect=RuntimeError("boom")):
+        with patch("grd.core.state.generate_state_markdown", side_effect=RuntimeError("boom")):
             with pytest.raises(RuntimeError, match="boom"):
                 save_state_json(cwd, bad_state)
 
@@ -606,10 +606,10 @@ class TestConfigErrorHandling:
     """load_config should return defaults on missing file, raise on malformed."""
 
     def test_missing_config_returns_defaults(self, tmp_path: Path) -> None:
-        """When config.json doesn't exist, return default GPDProjectConfig."""
+        """When config.json doesn't exist, return default GRDProjectConfig."""
         cwd = _make_planning(tmp_path)
         config = load_config(cwd)
-        assert isinstance(config, GPDProjectConfig)
+        assert isinstance(config, GRDProjectConfig)
         assert config.model_profile.value == "review"
 
     def test_malformed_json_raises_config_error(self, tmp_path: Path) -> None:
@@ -654,7 +654,7 @@ class TestConfigErrorHandling:
         config_path = ProjectLayout(cwd).config_json
         config_path.write_text("{}", encoding="utf-8")
         config = load_config(cwd)
-        assert config == GPDProjectConfig()
+        assert config == GRDProjectConfig()
 
 # ===================================================================
 # health.py: check_* functions graceful degradation

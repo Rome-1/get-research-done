@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gpd.adapters.runtime_catalog import (
+from grd.adapters.runtime_catalog import (
     get_hook_payload_policy,
     get_runtime_descriptor,
     iter_runtime_descriptors,

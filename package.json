@@ -1,22 +1,22 @@
 {
-  "name": "get-physics-done",
+  "name": "get-research-done",
   "version": "1.1.0",
-  "gpdPythonVersion": "1.1.0",
-  "description": "Open-source AI copilot for physics research across supported AI runtimes",
+  "grdPythonVersion": "1.1.0",
+  "description": "Open-source AI copilot for research across supported AI runtimes",
   "bin": {
-    "get-physics-done": "bin/install.js"
+    "get-research-done": "bin/install.js"
   },
   "files": [
     "bin/",
-    "src/gpd/adapters/runtime_catalog.json"
+    "src/grd/adapters/runtime_catalog.json"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/psi-oss/get-physics-done"
+    "url": "https://github.com/psi-oss/get-research-done"
   },
-  "homepage": "https://github.com/psi-oss/get-physics-done#readme",
+  "homepage": "https://github.com/psi-oss/get-research-done#readme",
   "bugs": {
-    "url": "https://github.com/psi-oss/get-physics-done/issues"
+    "url": "https://github.com/psi-oss/get-research-done/issues"
   },
   "author": "Physical Superintelligence PBC (PSI)",
   "keywords": [

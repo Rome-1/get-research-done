@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from gpd.core.commands import cmd_summary_extract
-from gpd.core.errors import ValidationError
+from grd.core.commands import cmd_summary_extract
+from grd.core.errors import ValidationError
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage4"
 
@@ -19,7 +19,7 @@ def test_summary_extract_parses_contract_results_and_comparison_verdicts(tmp_pat
     assert result.key_files == ["figures/benchmark.png", "src/benchmark.py"]
     assert result.key_files_created == ["figures/benchmark.png"]
     assert result.key_files_modified == ["src/benchmark.py"]
-    assert result.plan_contract_ref == ".gpd/phases/01-benchmark/01-01-PLAN.md#/contract"
+    assert result.plan_contract_ref == ".grd/phases/01-benchmark/01-01-PLAN.md#/contract"
     assert result.contract_results is not None
     assert result.contract_results.claims["claim-benchmark"].status == "passed"
     assert result.contract_results.references["ref-benchmark"].completed_actions == ["read", "compare", "cite"]

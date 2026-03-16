@@ -8,90 +8,90 @@ from typing import Literal
 
 import pytest
 
-from gpd import registry
-from gpd.adapters.install_utils import expand_at_includes
-from gpd.contracts import ResearchContract, VerificationEvidence
+from grd import registry
+from grd.adapters.install_utils import expand_at_includes
+from grd.contracts import ResearchContract, VerificationEvidence
 from scripts.repo_graph_contract import parse_scope_count
 
 
 @pytest.fixture(autouse=True)
 def _clean_registry_cache():
     """Ensure fresh registry cache for each test."""
-    from gpd import registry
+    from grd import registry
     registry.invalidate_cache()
     yield
     registry.invalidate_cache()
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-TEMPLATES_DIR = REPO_ROOT / "src/gpd/specs/templates"
-WORKFLOWS_DIR = REPO_ROOT / "src/gpd/specs/workflows"
-COMMANDS_DIR = REPO_ROOT / "src/gpd/commands"
-AGENTS_DIR = REPO_ROOT / "src/gpd/agents"
-REFERENCES_DIR = REPO_ROOT / "src/gpd/specs/references"
+TEMPLATES_DIR = REPO_ROOT / "src/grd/specs/templates"
+WORKFLOWS_DIR = REPO_ROOT / "src/grd/specs/workflows"
+COMMANDS_DIR = REPO_ROOT / "src/grd/commands"
+AGENTS_DIR = REPO_ROOT / "src/grd/agents"
+REFERENCES_DIR = REPO_ROOT / "src/grd/specs/references"
 GRAPH_PATH = REPO_ROOT / "tests" / "README.md"
 WORKFLOW_EXEMPT_COMMANDS = frozenset({"health", "suggest-next"})
 
 COMMAND_SPAWN_TOKENS = {
-    "explain.md": ["gpd-explainer", "gpd-bibliographer"],
-    "literature-review.md": ["gpd-literature-reviewer"],
-    "debug.md": ["gpd-debugger"],
-    "map-research.md": ["gpd-research-mapper"],
-    "plan-phase.md": ["gpd-planner", "gpd-plan-checker"],
-    "quick.md": ["gpd-planner", "gpd-executor"],
-    "research-phase.md": ["gpd-phase-researcher"],
+    "explain.md": ["grd-explainer", "grd-bibliographer"],
+    "literature-review.md": ["grd-literature-reviewer"],
+    "debug.md": ["grd-debugger"],
+    "map-research.md": ["grd-research-mapper"],
+    "plan-phase.md": ["grd-planner", "grd-plan-checker"],
+    "quick.md": ["grd-planner", "grd-executor"],
+    "research-phase.md": ["grd-phase-researcher"],
     "write-paper.md": [
-        "gpd-paper-writer",
-        "gpd-bibliographer",
-        "gpd-review-reader",
-        "gpd-review-literature",
-        "gpd-review-math",
-        "gpd-review-physics",
-        "gpd-review-significance",
-        "gpd-referee",
+        "grd-paper-writer",
+        "grd-bibliographer",
+        "grd-review-reader",
+        "grd-review-literature",
+        "grd-review-math",
+        "grd-review-physics",
+        "grd-review-significance",
+        "grd-referee",
     ],
     "peer-review.md": [
-        "gpd-review-reader",
-        "gpd-review-literature",
-        "gpd-review-math",
-        "gpd-review-physics",
-        "gpd-review-significance",
-        "gpd-referee",
+        "grd-review-reader",
+        "grd-review-literature",
+        "grd-review-math",
+        "grd-review-physics",
+        "grd-review-significance",
+        "grd-referee",
     ],
 }
 
 WORKFLOW_SPAWN_TOKENS = {
-    "explain.md": ["gpd-explainer", "gpd-bibliographer"],
-    "plan-phase.md": ["gpd-phase-researcher", "gpd-planner", "gpd-plan-checker", "gpd-experiment-designer"],
+    "explain.md": ["grd-explainer", "grd-bibliographer"],
+    "plan-phase.md": ["grd-phase-researcher", "grd-planner", "grd-plan-checker", "grd-experiment-designer"],
     "execute-phase.md": [
-        "gpd-executor",
-        "gpd-debugger",
-        "gpd-verifier",
-        "gpd-consistency-checker",
-        "gpd-notation-coordinator",
-        "gpd-experiment-designer",
+        "grd-executor",
+        "grd-debugger",
+        "grd-verifier",
+        "grd-consistency-checker",
+        "grd-notation-coordinator",
+        "grd-experiment-designer",
     ],
-    "verify-work.md": ["gpd-planner", "gpd-plan-checker"],
-    "write-paper.md": ["gpd-paper-writer", "gpd-bibliographer", "gpd-referee"],
+    "verify-work.md": ["grd-planner", "grd-plan-checker"],
+    "write-paper.md": ["grd-paper-writer", "grd-bibliographer", "grd-referee"],
     "peer-review.md": [
-        "gpd-review-reader",
-        "gpd-review-literature",
-        "gpd-review-math",
-        "gpd-review-physics",
-        "gpd-review-significance",
-        "gpd-referee",
+        "grd-review-reader",
+        "grd-review-literature",
+        "grd-review-math",
+        "grd-review-physics",
+        "grd-review-significance",
+        "grd-referee",
     ],
     "new-project.md": [
-        "gpd-project-researcher",
-        "gpd-research-synthesizer",
-        "gpd-roadmapper",
-        "gpd-notation-coordinator",
+        "grd-project-researcher",
+        "grd-research-synthesizer",
+        "grd-roadmapper",
+        "grd-notation-coordinator",
     ],
-    "new-milestone.md": ["gpd-project-researcher", "gpd-research-synthesizer", "gpd-roadmapper"],
+    "new-milestone.md": ["grd-project-researcher", "grd-research-synthesizer", "grd-roadmapper"],
 }
 
 AGENT_REFERENCE_TOKENS = {
-    "gpd-bibliographer.md": [
+    "grd-bibliographer.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/physics-subfields.md",
@@ -99,13 +99,13 @@ AGENT_REFERENCE_TOKENS = {
         "templates/notation-glossary.md",
         "references/publication/bibtex-standards.md",
     ],
-    "gpd-explainer.md": [
+    "grd-explainer.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/physics-subfields.md",
         "templates/notation-glossary.md",
     ],
-    "gpd-consistency-checker.md": [
+    "grd-consistency-checker.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/physics-subfields.md",
@@ -116,7 +116,7 @@ AGENT_REFERENCE_TOKENS = {
         "templates/uncertainty-budget.md",
         "templates/conventions.md",
     ],
-    "gpd-debugger.md": [
+    "grd-debugger.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/physics-subfields.md",
@@ -124,7 +124,7 @@ AGENT_REFERENCE_TOKENS = {
         "references/shared/cross-project-patterns.md",
         "workflows/record-insight.md",
     ],
-    "gpd-executor.md": [
+    "grd-executor.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/shared/cross-project-patterns.md",
@@ -145,18 +145,18 @@ AGENT_REFERENCE_TOKENS = {
         "templates/summary.md",
         "templates/calculation-log.md",
     ],
-    "gpd-experiment-designer.md": [
+    "grd-experiment-designer.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/examples/ising-experiment-design-example.md",
     ],
-    "gpd-notation-coordinator.md": [
+    "grd-notation-coordinator.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/conventions/subfield-convention-defaults.md",
         "templates/conventions.md",
     ],
-    "gpd-paper-writer.md": [
+    "grd-paper-writer.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/publication/publication-pipeline-modes.md",
@@ -164,48 +164,48 @@ AGENT_REFERENCE_TOKENS = {
         "templates/latex-preamble.md",
         "references/publication/figure-generation-templates.md",
     ],
-    "gpd-review-reader.md": [
+    "grd-review-reader.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/publication/peer-review-panel.md",
     ],
-    "gpd-review-literature.md": [
-        "references/shared/shared-protocols.md",
-        "references/orchestration/agent-infrastructure.md",
-        "references/publication/publication-pipeline-modes.md",
-        "references/publication/peer-review-panel.md",
-    ],
-    "gpd-review-math.md": [
-        "references/shared/shared-protocols.md",
-        "references/physics-subfields.md",
-        "references/verification/core/verification-core.md",
-        "references/publication/peer-review-panel.md",
-    ],
-    "gpd-review-physics.md": [
-        "references/shared/shared-protocols.md",
-        "references/physics-subfields.md",
-        "references/verification/core/verification-core.md",
-        "references/publication/peer-review-panel.md",
-    ],
-    "gpd-review-significance.md": [
+    "grd-review-literature.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/publication/publication-pipeline-modes.md",
         "references/publication/peer-review-panel.md",
     ],
-    "gpd-phase-researcher.md": [
+    "grd-review-math.md": [
+        "references/shared/shared-protocols.md",
+        "references/physics-subfields.md",
+        "references/verification/core/verification-core.md",
+        "references/publication/peer-review-panel.md",
+    ],
+    "grd-review-physics.md": [
+        "references/shared/shared-protocols.md",
+        "references/physics-subfields.md",
+        "references/verification/core/verification-core.md",
+        "references/publication/peer-review-panel.md",
+    ],
+    "grd-review-significance.md": [
+        "references/shared/shared-protocols.md",
+        "references/orchestration/agent-infrastructure.md",
+        "references/publication/publication-pipeline-modes.md",
+        "references/publication/peer-review-panel.md",
+    ],
+    "grd-phase-researcher.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/physics-subfields.md",
         "references/research/research-modes.md",
     ],
-    "gpd-plan-checker.md": [
+    "grd-plan-checker.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/physics-subfields.md",
         "references/verification/core/verification-core.md",
     ],
-    "gpd-planner.md": [
+    "grd-planner.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/physics-subfields.md",
@@ -226,12 +226,12 @@ AGENT_REFERENCE_TOKENS = {
         "references/planning/planner-iterative.md",
         "references/protocols/hypothesis-driven-research.md",
     ],
-    "gpd-project-researcher.md": [
+    "grd-project-researcher.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/research/research-modes.md",
     ],
-    "gpd-referee.md": [
+    "grd-referee.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/physics-subfields.md",
@@ -240,18 +240,18 @@ AGENT_REFERENCE_TOKENS = {
         "references/publication/peer-review-panel.md",
         "templates/paper/referee-report.tex",
     ],
-    "gpd-research-synthesizer.md": [
+    "grd-research-synthesizer.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "templates/research-project/SUMMARY.md",
     ],
-    "gpd-roadmapper.md": [
+    "grd-roadmapper.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "templates/roadmap.md",
         "templates/state.md",
     ],
-    "gpd-research-mapper.md": [
+    "grd-research-mapper.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/physics-subfields.md",
@@ -263,7 +263,7 @@ AGENT_REFERENCE_TOKENS = {
         "references/templates/research-mapper/VALIDATION.md",
         "references/templates/research-mapper/CONCERNS.md",
     ],
-    "gpd-verifier.md": [
+    "grd-verifier.md": [
         "references/shared/shared-protocols.md",
         "references/physics-subfields.md",
         "references/verification/core/verification-core.md",
@@ -305,8 +305,8 @@ def test_referee_latex_template_exists() -> None:
 def test_shared_protocols_require_permission_before_dependency_installs() -> None:
     shared = (REFERENCES_DIR / "shared" / "shared-protocols.md").read_text(encoding="utf-8")
     checkpoints = (REFERENCES_DIR / "orchestration" / "checkpoints.md").read_text(encoding="utf-8")
-    verifier = (AGENTS_DIR / "gpd-verifier.md").read_text(encoding="utf-8")
-    planner = (AGENTS_DIR / "gpd-planner.md").read_text(encoding="utf-8")
+    verifier = (AGENTS_DIR / "grd-verifier.md").read_text(encoding="utf-8")
+    planner = (AGENTS_DIR / "grd-planner.md").read_text(encoding="utf-8")
 
     assert "Agents must NEVER install dependencies silently." in shared
     assert "Ask the user before any install attempt" in shared
@@ -321,7 +321,7 @@ def test_shared_protocols_require_permission_before_dependency_installs() -> Non
 def test_agent_infrastructure_requires_concrete_next_actions_and_continuation_block() -> None:
     infra = (REFERENCES_DIR / "orchestration" / "agent-infrastructure.md").read_text(encoding="utf-8")
 
-    assert "Prefer copy-pasteable GPD commands" in infra
+    assert "Prefer copy-pasteable GRD commands" in infra
     assert "references/orchestration/continuation-format.md" in infra
     assert "## > Next Up" in infra
 
@@ -329,51 +329,51 @@ def test_agent_infrastructure_requires_concrete_next_actions_and_continuation_bl
 def test_executor_completion_examples_use_command_based_next_actions() -> None:
     completion = (REFERENCES_DIR / "execution" / "executor-completion.md").read_text(encoding="utf-8")
 
-    assert '"/gpd:execute-phase {phase}"' in completion
-    assert '"/gpd:show-phase {phase}"' in completion
+    assert '"/grd:execute-phase {phase}"' in completion
+    assert '"/grd:show-phase {phase}"' in completion
 
 
 def test_referee_workflow_mentions_optional_pdf_compile_and_missing_tex_prompt() -> None:
-    referee = (AGENTS_DIR / "gpd-referee.md").read_text(encoding="utf-8")
+    referee = (AGENTS_DIR / "grd-referee.md").read_text(encoding="utf-8")
     peer_review = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
 
     assert "compile the latest referee-report `.tex` file to a matching `.pdf`" in referee
     assert "Do NOT install TeX yourself" in referee
-    assert "Continue now with `.gpd/REFEREE-REPORT.md` + `.gpd/REFEREE-REPORT.tex` only" in peer_review
+    assert "Continue now with `.grd/REFEREE-REPORT.md` + `.grd/REFEREE-REPORT.tex` only" in peer_review
     assert "Authorize the agent to install TeX now" in peer_review
 
 
 def test_executor_prompt_defaults_to_return_only_shared_state_updates() -> None:
-    executor = (AGENTS_DIR / "gpd-executor.md").read_text(encoding="utf-8")
+    executor = (AGENTS_DIR / "grd-executor.md").read_text(encoding="utf-8")
 
     assert "return shared-state updates to the orchestrator instead of writing `STATE.md` directly" in executor
     assert "Your job: Execute the research plan completely, checkpoint each step, create SUMMARY.md, update STATE.md." not in executor
 
 
 def test_referee_prompt_no_longer_claims_read_only_artifact_policy() -> None:
-    referee = (AGENTS_DIR / "gpd-referee.md").read_text(encoding="utf-8")
+    referee = (AGENTS_DIR / "grd-referee.md").read_text(encoding="utf-8")
 
-    assert "Only scoped review artifacts written, and changed paths reported in `gpd_return.files_written`" in referee
+    assert "Only scoped review artifacts written, and changed paths reported in `grd_return.files_written`" in referee
     assert "No files modified (read-only agent)" not in referee
 
 
 def test_prompt_sources_do_not_use_stale_agent_install_paths():
     files = [
-        REPO_ROOT / "src/gpd/specs/references/orchestration/agent-delegation.md",
-        REPO_ROOT / "src/gpd/specs/templates/continuation-prompt.md",
+        REPO_ROOT / "src/grd/specs/references/orchestration/agent-delegation.md",
+        REPO_ROOT / "src/grd/specs/templates/continuation-prompt.md",
     ]
 
     for path in files:
-        assert "{GPD_INSTALL_DIR}/agents/" not in path.read_text(encoding="utf-8"), path
+        assert "{GRD_INSTALL_DIR}/agents/" not in path.read_text(encoding="utf-8"), path
 
 
 def test_prompt_sources_use_real_pattern_library_description():
-    verifier_files = [REPO_ROOT / "src/gpd/agents/gpd-verifier.md"]
+    verifier_files = [REPO_ROOT / "src/grd/agents/grd-verifier.md"]
 
     for path in verifier_files:
         content = path.read_text(encoding="utf-8")
-        assert "{GPD_INSTALL_DIR}/learned-patterns/" not in content, path
-        assert "GPD_PATTERNS_ROOT" in content, path
+        assert "{GRD_INSTALL_DIR}/learned-patterns/" not in content, path
+        assert "GRD_PATTERNS_ROOT" in content, path
 
     learned_pattern_template = (TEMPLATES_DIR / "learned-pattern.md").read_text(encoding="utf-8")
     assert "learned-patterns/patterns-by-domain/" in learned_pattern_template
@@ -385,7 +385,7 @@ def test_workflow_task_prompts_do_not_embed_at_references() -> None:
     for path in sorted(WORKFLOWS_DIR.rglob("*.md")):
         content = path.read_text(encoding="utf-8")
         for match in re.finditer(r"task\([\s\S]*?\)", content):
-            if "@{GPD_INSTALL_DIR}" in match.group(0):
+            if "@{GRD_INSTALL_DIR}" in match.group(0):
                 invalid.append(str(path.relative_to(REPO_ROOT)))
                 break
 
@@ -398,7 +398,7 @@ def test_commands_reference_same_stem_workflows() -> None:
     for command_path in sorted(COMMANDS_DIR.glob("*.md")):
         if command_path.stem not in workflow_stems:
             continue
-        expected = f"@{{GPD_INSTALL_DIR}}/workflows/{command_path.stem}.md"
+        expected = f"@{{GRD_INSTALL_DIR}}/workflows/{command_path.stem}.md"
         assert expected in command_path.read_text(encoding="utf-8"), command_path
 
 
@@ -411,11 +411,11 @@ def test_commands_are_workflow_backed_or_explicitly_exempt() -> None:
     for command_stem in sorted(WORKFLOW_EXEMPT_COMMANDS):
         command_text = (COMMANDS_DIR / f"{command_stem}.md").read_text(encoding="utf-8")
         if command_stem == "health":
-            assert "gpd --raw health" in command_text
-            assert "@{GPD_INSTALL_DIR}/workflows/health.md" not in command_text
+            assert "grd --raw health" in command_text
+            assert "@{GRD_INSTALL_DIR}/workflows/health.md" not in command_text
         elif command_stem == "suggest-next":
-            assert "gpd --raw suggest" in command_text
-            assert "@{GPD_INSTALL_DIR}/workflows/suggest-next.md" not in command_text
+            assert "grd --raw suggest" in command_text
+            assert "@{GRD_INSTALL_DIR}/workflows/suggest-next.md" not in command_text
 
 
 def test_commands_reference_expected_spawn_agents() -> None:
@@ -434,7 +434,7 @@ def test_agents_reference_expected_shared_specs() -> None:
 
 
 def test_review_commands_expose_typed_contracts() -> None:
-    write_paper = registry.get_command("gpd:write-paper")
+    write_paper = registry.get_command("grd:write-paper")
     peer_review = registry.get_command("peer-review")
     verify_work = registry.get_command("verify-work")
     respond_to_referees = registry.get_command("respond-to-referees")
@@ -444,16 +444,16 @@ def test_review_commands_expose_typed_contracts() -> None:
     assert "existing manuscript" in write_paper.review_contract.required_evidence
     assert "artifact manifest" in write_paper.review_contract.required_evidence
     assert "reproducibility manifest" in write_paper.review_contract.required_evidence
-    assert ".gpd/REFEREE-REPORT.tex" in write_paper.review_contract.required_outputs
+    assert ".grd/REFEREE-REPORT.tex" in write_paper.review_contract.required_outputs
     assert "manuscript" in write_paper.review_contract.preflight_checks
 
     assert peer_review.review_contract is not None
     assert peer_review.review_contract.review_mode == "publication"
-    assert ".gpd/REFEREE-REPORT.md" in peer_review.review_contract.required_outputs
-    assert ".gpd/REFEREE-REPORT.tex" in peer_review.review_contract.required_outputs
-    assert ".gpd/review/CLAIMS.json" in peer_review.review_contract.required_outputs
-    assert ".gpd/review/STAGE-interestingness.json" in peer_review.review_contract.required_outputs
-    assert ".gpd/review/REFEREE-DECISION.json" in peer_review.review_contract.required_outputs
+    assert ".grd/REFEREE-REPORT.md" in peer_review.review_contract.required_outputs
+    assert ".grd/REFEREE-REPORT.tex" in peer_review.review_contract.required_outputs
+    assert ".grd/review/CLAIMS.json" in peer_review.review_contract.required_outputs
+    assert ".grd/review/STAGE-interestingness.json" in peer_review.review_contract.required_outputs
+    assert ".grd/review/REFEREE-DECISION.json" in peer_review.review_contract.required_outputs
     assert "manuscript" in peer_review.review_contract.preflight_checks
     assert peer_review.review_contract.stage_ids == [
         "reader",
@@ -465,31 +465,31 @@ def test_review_commands_expose_typed_contracts() -> None:
     ]
     assert peer_review.review_contract.requires_fresh_context_per_stage is True
     assert peer_review.review_contract.stage_artifacts == [
-        ".gpd/review/CLAIMS.json",
-        ".gpd/review/STAGE-reader.json",
-        ".gpd/review/STAGE-literature.json",
-        ".gpd/review/STAGE-math.json",
-        ".gpd/review/STAGE-physics.json",
-        ".gpd/review/STAGE-interestingness.json",
-        ".gpd/review/REVIEW-LEDGER.json",
-        ".gpd/review/REFEREE-DECISION.json",
+        ".grd/review/CLAIMS.json",
+        ".grd/review/STAGE-reader.json",
+        ".grd/review/STAGE-literature.json",
+        ".grd/review/STAGE-math.json",
+        ".grd/review/STAGE-physics.json",
+        ".grd/review/STAGE-interestingness.json",
+        ".grd/review/REVIEW-LEDGER.json",
+        ".grd/review/REFEREE-DECISION.json",
     ]
-    assert peer_review.review_contract.final_decision_output == ".gpd/review/REFEREE-DECISION.json"
+    assert peer_review.review_contract.final_decision_output == ".grd/review/REFEREE-DECISION.json"
 
     assert verify_work.review_contract is not None
     assert verify_work.review_contract.required_state == "phase_executed"
     assert "phase_artifacts" in verify_work.review_contract.preflight_checks
 
     assert respond_to_referees.review_contract is not None
-    assert ".gpd/paper/REFEREE_RESPONSE.md" in respond_to_referees.review_contract.required_outputs
-    assert ".gpd/AUTHOR-RESPONSE.md" in respond_to_referees.review_contract.required_outputs
+    assert ".grd/paper/REFEREE_RESPONSE.md" in respond_to_referees.review_contract.required_outputs
+    assert ".grd/AUTHOR-RESPONSE.md" in respond_to_referees.review_contract.required_outputs
     assert "structured referee issues" in respond_to_referees.review_contract.required_evidence
     assert "peer-review review ledger when available" in respond_to_referees.review_contract.required_evidence
     assert "peer-review decision artifacts when available" in respond_to_referees.review_contract.required_evidence
-    assert "gpd:peer-review" in registry.list_review_commands()
-    assert "gpd:write-paper" in registry.list_review_commands()
-    assert "gpd:respond-to-referees" in registry.list_review_commands()
-    assert "gpd:verify-work" in registry.list_review_commands()
+    assert "grd:peer-review" in registry.list_review_commands()
+    assert "grd:write-paper" in registry.list_review_commands()
+    assert "grd:respond-to-referees" in registry.list_review_commands()
+    assert "grd:verify-work" in registry.list_review_commands()
 
 
 def test_representative_commands_expose_expected_context_modes() -> None:
@@ -505,11 +505,11 @@ def test_representative_commands_expose_expected_context_modes() -> None:
 def test_slides_workflow_references_templates_and_existing_output_policy() -> None:
     workflow = (WORKFLOWS_DIR / "slides.md").read_text(encoding="utf-8")
 
-    assert "{GPD_INSTALL_DIR}/templates/slides/presentation-brief.md" in workflow
-    assert "{GPD_INSTALL_DIR}/templates/slides/outline.md" in workflow
-    assert "{GPD_INSTALL_DIR}/templates/slides/slides.md" in workflow
-    assert "{GPD_INSTALL_DIR}/templates/slides/speaker-notes.md" in workflow
-    assert "{GPD_INSTALL_DIR}/templates/slides/main.tex" in workflow
+    assert "{GRD_INSTALL_DIR}/templates/slides/presentation-brief.md" in workflow
+    assert "{GRD_INSTALL_DIR}/templates/slides/outline.md" in workflow
+    assert "{GRD_INSTALL_DIR}/templates/slides/slides.md" in workflow
+    assert "{GRD_INSTALL_DIR}/templates/slides/speaker-notes.md" in workflow
+    assert "{GRD_INSTALL_DIR}/templates/slides/main.tex" in workflow
     assert "1. Refresh" in workflow
     assert "2. Update" in workflow
     assert "3. Skip" in workflow
@@ -517,15 +517,15 @@ def test_slides_workflow_references_templates_and_existing_output_policy() -> No
 
 def test_representative_prompts_use_centralized_command_context_preflight() -> None:
     expected = {
-        COMMANDS_DIR / "compare-experiment.md": "gpd --raw validate command-context compare-experiment",
-        COMMANDS_DIR / "compare-results.md": "gpd --raw validate command-context compare-results",
-        COMMANDS_DIR / "dimensional-analysis.md": "gpd --raw validate command-context dimensional-analysis",
-        COMMANDS_DIR / "explain.md": "gpd --raw validate command-context explain",
-        COMMANDS_DIR / "limiting-cases.md": "gpd --raw validate command-context limiting-cases",
-        COMMANDS_DIR / "literature-review.md": "gpd --raw validate command-context literature-review",
-        COMMANDS_DIR / "sensitivity-analysis.md": "gpd --raw validate command-context sensitivity-analysis",
-        WORKFLOWS_DIR / "peer-review.md": "gpd --raw validate command-context peer-review",
-        WORKFLOWS_DIR / "progress.md": "gpd --raw validate command-context progress",
+        COMMANDS_DIR / "compare-experiment.md": "grd --raw validate command-context compare-experiment",
+        COMMANDS_DIR / "compare-results.md": "grd --raw validate command-context compare-results",
+        COMMANDS_DIR / "dimensional-analysis.md": "grd --raw validate command-context dimensional-analysis",
+        COMMANDS_DIR / "explain.md": "grd --raw validate command-context explain",
+        COMMANDS_DIR / "limiting-cases.md": "grd --raw validate command-context limiting-cases",
+        COMMANDS_DIR / "literature-review.md": "grd --raw validate command-context literature-review",
+        COMMANDS_DIR / "sensitivity-analysis.md": "grd --raw validate command-context sensitivity-analysis",
+        WORKFLOWS_DIR / "peer-review.md": "grd --raw validate command-context peer-review",
+        WORKFLOWS_DIR / "progress.md": "grd --raw validate command-context progress",
     }
 
     for path, token in expected.items():
@@ -533,10 +533,10 @@ def test_representative_prompts_use_centralized_command_context_preflight() -> N
 
 
 def test_list_review_commands_contains_all_expected_commands() -> None:
-    """Regression: line 307 duplicated the gpd:peer-review check instead of
-    testing gpd:respond-to-referees and gpd:verify-work."""
+    """Regression: line 307 duplicated the grd:peer-review check instead of
+    testing grd:respond-to-referees and grd:verify-work."""
     review_cmds = registry.list_review_commands()
-    expected = {"gpd:peer-review", "gpd:write-paper", "gpd:respond-to-referees", "gpd:verify-work"}
+    expected = {"grd:peer-review", "grd:write-paper", "grd:respond-to-referees", "grd:verify-work"}
     assert expected <= set(review_cmds), f"Missing review commands: {expected - set(review_cmds)}"
 
 
@@ -549,10 +549,10 @@ def test_list_review_commands_no_duplicates() -> None:
 def test_respond_to_referees_references_staged_review_artifacts() -> None:
     command_text = (COMMANDS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
     workflow_text = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
-    writer_text = (AGENTS_DIR / "gpd-paper-writer.md").read_text(encoding="utf-8")
+    writer_text = (AGENTS_DIR / "grd-paper-writer.md").read_text(encoding="utf-8")
 
-    assert ".gpd/review/REVIEW-LEDGER.json" in command_text
-    assert ".gpd/review/REFEREE-DECISION.json" in command_text
+    assert ".grd/review/REVIEW-LEDGER.json" in command_text
+    assert ".grd/review/REFEREE-DECISION.json" in command_text
     assert "REVIEW-LEDGER*.json" in workflow_text
     assert "REFEREE-DECISION*.json" in workflow_text
     assert "REVIEW-LEDGER{-RN}.json" in writer_text
@@ -572,7 +572,7 @@ def test_new_project_recommended_autonomy_matches_balanced_default() -> None:
     workflow_text = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
 
     assert workflow_text.count('"autonomy": "balanced"') >= 2
-    assert "How would you like to write `.gpd/config.json`?" in workflow_text
+    assert "How would you like to write `.grd/config.json`?" in workflow_text
     assert "`autonomy=balanced`, `research_mode=balanced`, `parallelization=true`, `commit_docs=true`" in workflow_text
     assert (
         "Config: Balanced autonomy | Adaptive review cadence | Balanced research mode | Parallel | All agents | Review profile"
@@ -603,26 +603,26 @@ def test_new_project_wiring_mentions_contract_persistence_and_contract_first_dow
     workflow_text = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     command_text = (COMMANDS_DIR / "new-project.md").read_text(encoding="utf-8")
 
-    assert "gpd state set-project-contract" in workflow_text
-    assert "gpd --raw validate project-contract -" in workflow_text
-    assert "gpd state set-project-contract -" in workflow_text
-    assert "/tmp/gpd-project-contract.json" not in workflow_text
+    assert "grd state set-project-contract" in workflow_text
+    assert "grd --raw validate project-contract -" in workflow_text
+    assert "grd state set-project-contract -" in workflow_text
+    assert "/tmp/grd-project-contract.json" not in workflow_text
     assert "temporary JSON file if needed" not in workflow_text
-    assert "Read PROJECT.md and `.gpd/state.json` and extract" in workflow_text
+    assert "Read PROJECT.md and `.grd/state.json` and extract" in workflow_text
     assert "Derive phases from requirements AND the approved project contract" in workflow_text
     assert "If auto mode and `autonomy` is not `supervised`" in workflow_text
-    assert "@{GPD_INSTALL_DIR}/templates/state-json-schema.md" in command_text
+    assert "@{GRD_INSTALL_DIR}/templates/state-json-schema.md" in command_text
 
 
 def test_new_project_defers_workflow_setup_until_after_scope_approval() -> None:
     workflow_text = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     command_text = (COMMANDS_DIR / "new-project.md").read_text(encoding="utf-8")
 
-    assert "Before `.gpd/config.json` exists, the `autonomy` and `research_mode` values from `gpd init new-project` are temporary defaults" in workflow_text
+    assert "Before `.grd/config.json` exists, the `autonomy` and `research_mode` values from `grd init new-project` are temporary defaults" in workflow_text
     assert "## 2.5 Early Workflow Setup" not in workflow_text
     assert "What physics problem do you want to investigate?" in workflow_text
-    assert "If `.gpd/config.json` does not exist yet, run Step 5 now before generating or committing `PROJECT.md`." in workflow_text
-    assert "Run this step after scope approval and before the first project-artifact commit whenever `.gpd/config.json` does not exist yet." in workflow_text
+    assert "If `.grd/config.json` does not exist yet, run Step 5 now before generating or committing `PROJECT.md`." in workflow_text
+    assert "Run this step after scope approval and before the first project-artifact commit whenever `.grd/config.json` does not exist yet." in workflow_text
     assert "If Step 2.5 already captured provisional setup preferences" not in workflow_text
     assert "workflow opens with the physics-questioning pass" in command_text
     assert "asks for workflow preferences only after scope approval and before the first project-artifact commit" in command_text
@@ -699,13 +699,13 @@ def test_discuss_and_plan_workflows_resolve_roadmap_only_phases() -> None:
     plan_text = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
 
     assert "Phase [X] not found in roadmap." not in discuss_text
-    assert 'ROADMAP_INFO=$(gpd roadmap get-phase "${PHASE}")' in discuss_text
-    assert 'phase_slug=$(gpd slug "$phase_name")' in discuss_text
+    assert 'ROADMAP_INFO=$(grd roadmap get-phase "${PHASE}")' in discuss_text
+    assert 'phase_slug=$(grd slug "$phase_name")' in discuss_text
     assert "Continue to check_existing using the roadmap-derived phase metadata." in discuss_text
     assert 'REQUESTED_PHASE="${PHASE}"' in plan_text
-    assert 'PHASE=$(echo "$INIT" | gpd json get .phase_number --default "${REQUESTED_PHASE}")' in plan_text
-    assert 'PHASE_INFO=$(gpd roadmap get-phase "${PHASE}")' in plan_text
-    assert 'PHASE_SLUG=$(gpd slug "$PHASE_NAME")' in plan_text
+    assert 'PHASE=$(echo "$INIT" | grd json get .phase_number --default "${REQUESTED_PHASE}")' in plan_text
+    assert 'PHASE_INFO=$(grd roadmap get-phase "${PHASE}")' in plan_text
+    assert 'PHASE_SLUG=$(grd slug "$PHASE_NAME")' in plan_text
     assert "Use these resolved values for all later references to `PHASE_DIR`, `PHASE_SLUG`, and `PADDED_PHASE`." in plan_text
 
 
@@ -718,7 +718,7 @@ def test_planning_and_phase_templates_surface_active_reference_context() -> None
     assert "**Project Contract:** {project_contract}" in planner_prompt
     assert "**Active References:** {active_reference_context}" in planner_prompt
     assert "@path/to/reference-or-benchmark-anchor.md" in phase_prompt
-    assert "Planning requires an approved scoping contract in `.gpd/state.json`" in workflow_text
+    assert "Planning requires an approved scoping contract in `.grd/state.json`" in workflow_text
     assert "**Project Contract:** {project_contract}" in workflow_text
     assert "**Active References:** {active_reference_context}" in workflow_text
     assert "**Anchor coverage:** Required references, baselines, and prior outputs are surfaced" in workflow_text
@@ -726,8 +726,8 @@ def test_planning_and_phase_templates_surface_active_reference_context() -> None
 
 def test_planning_prompts_keep_contract_gate_in_light_mode_and_all_modes() -> None:
     planner_prompt = (TEMPLATES_DIR / "planner-subagent-prompt.md").read_text(encoding="utf-8")
-    planner_agent = (AGENTS_DIR / "gpd-planner.md").read_text(encoding="utf-8")
-    checker_agent = (AGENTS_DIR / "gpd-plan-checker.md").read_text(encoding="utf-8")
+    planner_agent = (AGENTS_DIR / "grd-planner.md").read_text(encoding="utf-8")
+    checker_agent = (AGENTS_DIR / "grd-plan-checker.md").read_text(encoding="utf-8")
     workflow_text = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
 
     assert "Light mode changes verbosity, not contract completeness." in planner_prompt
@@ -738,7 +738,7 @@ def test_planning_prompts_keep_contract_gate_in_light_mode_and_all_modes() -> No
 
 
 def test_plan_checker_requires_contract_gate_and_reference_artifacts() -> None:
-    checker_agent = (AGENTS_DIR / "gpd-plan-checker.md").read_text(encoding="utf-8")
+    checker_agent = (AGENTS_DIR / "grd-plan-checker.md").read_text(encoding="utf-8")
     workflow_text = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
 
     assert "## Dimension 0: Contract Gate" in checker_agent
@@ -753,7 +753,7 @@ def test_plan_checker_requires_contract_gate_and_reference_artifacts() -> None:
 
 def test_roadmap_template_and_workflows_surface_phase_contract_coverage() -> None:
     roadmap_template = (TEMPLATES_DIR / "roadmap.md").read_text(encoding="utf-8")
-    roadmapper_agent = (AGENTS_DIR / "gpd-roadmapper.md").read_text(encoding="utf-8")
+    roadmapper_agent = (AGENTS_DIR / "grd-roadmapper.md").read_text(encoding="utf-8")
     new_project = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     new_milestone = (WORKFLOWS_DIR / "new-milestone.md").read_text(encoding="utf-8")
 
@@ -792,10 +792,10 @@ def test_new_project_minimal_mode_and_planning_wiring_allow_coarse_scoped_decomp
 def test_reference_workflows_require_anchor_registry_propagation() -> None:
     literature_workflow = (WORKFLOWS_DIR / "literature-review.md").read_text(encoding="utf-8")
     literature_command = (COMMANDS_DIR / "literature-review.md").read_text(encoding="utf-8")
-    literature_agent = (AGENTS_DIR / "gpd-literature-reviewer.md").read_text(encoding="utf-8")
+    literature_agent = (AGENTS_DIR / "grd-literature-reviewer.md").read_text(encoding="utf-8")
     map_workflow = (WORKFLOWS_DIR / "map-research.md").read_text(encoding="utf-8")
     map_command = (COMMANDS_DIR / "map-research.md").read_text(encoding="utf-8")
-    mapper_agent = (AGENTS_DIR / "gpd-research-mapper.md").read_text(encoding="utf-8")
+    mapper_agent = (AGENTS_DIR / "grd-research-mapper.md").read_text(encoding="utf-8")
 
     assert "contract-critical anchors" in literature_workflow
     assert "Active Anchor Registry" in literature_command
@@ -811,11 +811,11 @@ def test_file_producing_command_surfaces_use_canonical_spawn_contract() -> None:
     research = (COMMANDS_DIR / "research-phase.md").read_text(encoding="utf-8")
 
     for content, agent_name, file_token in (
-        (literature, "gpd-literature-reviewer", ".gpd/literature/{slug}-REVIEW.md"),
-        (debug, "gpd-debugger", ".gpd/debug/{slug}.md"),
-        (research, "gpd-phase-researcher", ".gpd/phases/${PHASE}-{slug}/${PHASE}-RESEARCH.md"),
+        (literature, "grd-literature-reviewer", ".grd/literature/{slug}-REVIEW.md"),
+        (debug, "grd-debugger", ".grd/debug/{slug}.md"),
+        (research, "grd-phase-researcher", ".grd/phases/${PHASE}-{slug}/${PHASE}-RESEARCH.md"),
     ):
-        assert f'read {{GPD_AGENTS_DIR}}/{agent_name}.md for your role and instructions' in content
+        assert f'read {{GRD_AGENTS_DIR}}/{agent_name}.md for your role and instructions' in content
         assert "readonly=false" in content
         assert f"{file_token}\nRead that file before continuing" in content
         assert f"@{file_token}" not in content
@@ -830,13 +830,13 @@ def test_revision_and_audit_workflows_verify_artifacts_before_trusting_success_t
     assert "Re-open `AUTHOR-RESPONSE.md` and `REFEREE_RESPONSE.md`" in respond
 
     assert "Verify the promised referee artifacts before trusting the handoff text" in audit
-    assert "Confirm `.gpd/REFEREE-REPORT.md` exists" in audit
+    assert "Confirm `.grd/REFEREE-REPORT.md` exists" in audit
     assert "If the agent reported success but either artifact is missing, treat peer review as failed" in audit
 
 
 def test_phase_research_and_verification_surfaces_keep_anchor_checks_mandatory() -> None:
-    phase_researcher = (AGENTS_DIR / "gpd-phase-researcher.md").read_text(encoding="utf-8")
-    planner_agent = (AGENTS_DIR / "gpd-planner.md").read_text(encoding="utf-8")
+    phase_researcher = (AGENTS_DIR / "grd-phase-researcher.md").read_text(encoding="utf-8")
+    planner_agent = (AGENTS_DIR / "grd-planner.md").read_text(encoding="utf-8")
     verify_workflow = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
 
     assert "## Active Anchor References" in phase_researcher
@@ -860,8 +860,8 @@ def test_stage4_templates_and_workflows_surface_contract_results_and_verdict_led
     comparison_template = (
         TEMPLATES_DIR / "paper" / "experimental-comparison.md"
     ).read_text(encoding="utf-8")
-    executor_agent = (AGENTS_DIR / "gpd-executor.md").read_text(encoding="utf-8")
-    verifier_agent = (AGENTS_DIR / "gpd-verifier.md").read_text(encoding="utf-8")
+    executor_agent = (AGENTS_DIR / "grd-executor.md").read_text(encoding="utf-8")
+    verifier_agent = (AGENTS_DIR / "grd-verifier.md").read_text(encoding="utf-8")
 
     assert "contract_results" in summary_template
     assert "comparison_verdicts" in summary_template
@@ -873,7 +873,7 @@ def test_stage4_templates_and_workflows_surface_contract_results_and_verdict_led
     assert "comparison_verdicts" in verification_template
     assert "Record only user-visible contract targets here" in verification_template
     assert "absence of a verdict is itself a gap" in verification_template
-    assert "Use `@{GPD_INSTALL_DIR}/templates/verification-report.md` for the canonical verification frontmatter contract." in research_verification
+    assert "Use `@{GRD_INSTALL_DIR}/templates/verification-report.md` for the canonical verification frontmatter contract." in research_verification
     assert "status: passed | gaps_found | expert_needed | human_needed" in research_verification
     assert "comparison_verdicts: []" in research_verification
     assert "session_status: validating | completed | diagnosed" in research_verification
@@ -881,7 +881,7 @@ def test_stage4_templates_and_workflows_surface_contract_results_and_verdict_led
     assert "decisive benchmark / cross-method check remains partial, not attempted, or still lacks a decisive verdict" in research_verification
     assert "claim_id" in research_verification
     assert "acceptance_test_id" in research_verification
-    assert "frontmatter contract compatible with `@{GPD_INSTALL_DIR}/templates/verification-report.md`" in verify_workflow
+    assert "frontmatter contract compatible with `@{GRD_INSTALL_DIR}/templates/verification-report.md`" in verify_workflow
     assert "status: human_needed" in verify_workflow
     assert "session_status: validating" in verify_workflow
     assert "Mirror decisive verdicts into frontmatter `comparison_verdicts`." in verify_workflow
@@ -902,7 +902,7 @@ def test_contract_schema_references_stay_wired_into_templates_and_review_docs() 
     summary_template = (TEMPLATES_DIR / "summary.md").read_text(encoding="utf-8")
     verification_template = (TEMPLATES_DIR / "verification-report.md").read_text(encoding="utf-8")
     contract_results_schema = (TEMPLATES_DIR / "contract-results-schema.md").read_text(encoding="utf-8")
-    referee = (AGENTS_DIR / "gpd-referee.md").read_text(encoding="utf-8")
+    referee = (AGENTS_DIR / "grd-referee.md").read_text(encoding="utf-8")
     peer_review = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
     panel = (REFERENCES_DIR / "publication" / "peer-review-panel.md").read_text(encoding="utf-8")
     scoring = (REFERENCES_DIR / "publication" / "paper-quality-scoring.md").read_text(encoding="utf-8")
@@ -920,11 +920,11 @@ def test_contract_schema_references_stay_wired_into_templates_and_review_docs() 
     assert "templates/contract-results-schema.md" in verification_template
     assert "templates/paper/review-ledger-schema.md" in referee
     assert "templates/paper/referee-decision-schema.md" in referee
-    assert "gpd validate review-ledger" in peer_review
-    assert "--ledger .gpd/review/REVIEW-LEDGER{round_suffix}.json" in peer_review
+    assert "grd validate review-ledger" in peer_review
+    assert "--ledger .grd/review/REVIEW-LEDGER{round_suffix}.json" in peer_review
     assert "templates/paper/review-ledger-schema.md" in panel
     assert "templates/paper/referee-decision-schema.md" in panel
-    assert "--ledger .gpd/review/REVIEW-LEDGER{round_suffix}.json" in panel
+    assert "--ledger .grd/review/REVIEW-LEDGER{round_suffix}.json" in panel
     assert "templates/paper/paper-quality-input-schema.md" in scoring
     assert '"journal": "prl"' in paper_config_schema
     assert '"authors"' in paper_config_schema
@@ -937,12 +937,12 @@ def test_contract_schema_references_stay_wired_into_templates_and_review_docs() 
     assert "templates/paper/reproducibility-manifest.md" in reproducibility_protocol
     assert "templates/paper/paper-config-schema.md" in write_paper
     assert "templates/paper/reproducibility-manifest.md" in write_paper
-    assert "gpd paper-build paper/PAPER-CONFIG.json" in paper_config_schema
+    assert "grd paper-build paper/PAPER-CONFIG.json" in paper_config_schema
     assert "paper/reproducibility-manifest.json" in write_paper
-    assert "gpd --raw validate reproducibility-manifest paper/reproducibility-manifest.json --strict" in write_paper
-    assert "gpd validate summary-contract" in execute_plan
-    assert "gpd validate verification-contract" in verify_work
-    assert "gpd validate plan-contract" in plan_phase
+    assert "grd --raw validate reproducibility-manifest paper/reproducibility-manifest.json --strict" in write_paper
+    assert "grd validate summary-contract" in execute_plan
+    assert "grd validate verification-contract" in verify_work
+    assert "grd validate plan-contract" in plan_phase
 
 
 def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_contract_context() -> None:
@@ -950,9 +950,9 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     verify_command = (COMMANDS_DIR / "verify-work.md").read_text(encoding="utf-8")
     write_paper = (WORKFLOWS_DIR / "write-paper.md").read_text(encoding="utf-8")
     sync_state = (WORKFLOWS_DIR / "sync-state.md").read_text(encoding="utf-8")
-    review_reader = (AGENTS_DIR / "gpd-review-reader.md").read_text(encoding="utf-8")
-    review_literature = (AGENTS_DIR / "gpd-review-literature.md").read_text(encoding="utf-8")
-    referee = (AGENTS_DIR / "gpd-referee.md").read_text(encoding="utf-8")
+    review_reader = (AGENTS_DIR / "grd-review-reader.md").read_text(encoding="utf-8")
+    review_literature = (AGENTS_DIR / "grd-review-literature.md").read_text(encoding="utf-8")
+    referee = (AGENTS_DIR / "grd-referee.md").read_text(encoding="utf-8")
 
     assert "Project Contract:\n{project_contract}" in peer_review
     assert "Active References:\n{active_reference_context}" in peer_review
@@ -965,14 +965,14 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     assert "Keep the current `project_contract` and `active_reference_context` visible throughout that staged review" in write_paper
     assert "peer-review-panel.md` directly" in review_reader
     assert "peer-review-panel.md` directly" in review_literature
-    assert "re-open `@{GPD_INSTALL_DIR}/references/publication/peer-review-panel.md`" in referee
+    assert "re-open `@{GRD_INSTALL_DIR}/references/publication/peer-review-panel.md`" in referee
 
 
 def test_skill_surface_exposes_contract_references_for_paper_and_review_workflows() -> None:
-    from gpd.mcp.servers.skills_server import get_skill
+    from grd.mcp.servers.skills_server import get_skill
 
-    write_paper = get_skill("gpd-write-paper")
-    peer_review = get_skill("gpd-peer-review")
+    write_paper = get_skill("grd-write-paper")
+    peer_review = get_skill("grd-peer-review")
 
     assert "error" not in write_paper
     assert "error" not in peer_review
@@ -984,25 +984,25 @@ def test_skill_surface_exposes_contract_references_for_paper_and_review_workflow
 
 
 def test_review_and_execution_prompts_expand_required_schema_sources() -> None:
-    src_root = REPO_ROOT / "src/gpd/specs"
+    src_root = REPO_ROOT / "src/grd/specs"
 
     review_reader = expand_at_includes(
-        (AGENTS_DIR / "gpd-review-reader.md").read_text(encoding="utf-8"),
+        (AGENTS_DIR / "grd-review-reader.md").read_text(encoding="utf-8"),
         src_root,
         "/runtime/",
     )
     review_literature = expand_at_includes(
-        (AGENTS_DIR / "gpd-review-literature.md").read_text(encoding="utf-8"),
+        (AGENTS_DIR / "grd-review-literature.md").read_text(encoding="utf-8"),
         src_root,
         "/runtime/",
     )
     referee = expand_at_includes(
-        (AGENTS_DIR / "gpd-referee.md").read_text(encoding="utf-8"),
+        (AGENTS_DIR / "grd-referee.md").read_text(encoding="utf-8"),
         src_root,
         "/runtime/",
     )
     executor = expand_at_includes(
-        (AGENTS_DIR / "gpd-executor.md").read_text(encoding="utf-8"),
+        (AGENTS_DIR / "grd-executor.md").read_text(encoding="utf-8"),
         src_root,
         "/runtime/",
     )
@@ -1018,10 +1018,10 @@ def test_non_adapter_sources_do_not_hardcode_runtime_names() -> None:
     runtime_name_re = re.compile(r"\b(?:claude(?:-code)?|codex|gemini|opencode)\b", re.IGNORECASE)
     offenders: list[str] = []
 
-    for path in sorted((REPO_ROOT / "src" / "gpd").rglob("*")):
+    for path in sorted((REPO_ROOT / "src" / "grd").rglob("*")):
         if not path.is_file() or path.suffix not in {".py", ".md"}:
             continue
-        if path.is_relative_to(REPO_ROOT / "src" / "gpd" / "adapters"):
+        if path.is_relative_to(REPO_ROOT / "src" / "grd" / "adapters"):
             continue
         content = path.read_text(encoding="utf-8")
         if runtime_name_re.search(content):
@@ -1047,8 +1047,8 @@ def test_plan_contract_schema_surfaces_downstream_contract_fields_and_normalizat
 def test_state_json_schema_surfaces_stdin_contract_persistence_and_model_normalization_rules() -> None:
     state_schema = (TEMPLATES_DIR / "state-json-schema.md").read_text(encoding="utf-8")
 
-    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | gpd --raw validate project-contract -' in state_schema
-    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | gpd state set-project-contract -' in state_schema
+    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd --raw validate project-contract -' in state_schema
+    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd state set-project-contract -' in state_schema
     assert "temporary file" in state_schema
     assert "`schema_version` must be `1`." in state_schema
     assert "Approved project contracts must include at least one observable, claim, or deliverable." in state_schema
@@ -1076,7 +1076,7 @@ def test_stage5_execution_surfaces_use_bounded_review_cadence_and_first_result_g
     continuation = (TEMPLATES_DIR / "continuation-prompt.md").read_text(encoding="utf-8")
     checkpoints = (REFERENCES_DIR / "orchestration" / "checkpoints.md").read_text(encoding="utf-8")
     checkpoint_flow = (REFERENCES_DIR / "execution" / "execute-plan-checkpoints.md").read_text(encoding="utf-8")
-    executor_agent = (AGENTS_DIR / "gpd-executor.md").read_text(encoding="utf-8")
+    executor_agent = (AGENTS_DIR / "grd-executor.md").read_text(encoding="utf-8")
 
     assert "review_cadence" in execute_phase
     assert "FIRST_RESULT_GATE_REQUIRED" in execute_phase
@@ -1101,10 +1101,10 @@ def test_stage6_surfaces_protocol_bundle_context_across_planning_execution_and_v
     execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
     verify_work = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
     continuation = (TEMPLATES_DIR / "continuation-prompt.md").read_text(encoding="utf-8")
-    planner_agent = (AGENTS_DIR / "gpd-planner.md").read_text(encoding="utf-8")
-    checker_agent = (AGENTS_DIR / "gpd-plan-checker.md").read_text(encoding="utf-8")
-    executor_agent = (AGENTS_DIR / "gpd-executor.md").read_text(encoding="utf-8")
-    verifier_agent = (AGENTS_DIR / "gpd-verifier.md").read_text(encoding="utf-8")
+    planner_agent = (AGENTS_DIR / "grd-planner.md").read_text(encoding="utf-8")
+    checker_agent = (AGENTS_DIR / "grd-plan-checker.md").read_text(encoding="utf-8")
+    executor_agent = (AGENTS_DIR / "grd-executor.md").read_text(encoding="utf-8")
+    verifier_agent = (AGENTS_DIR / "grd-verifier.md").read_text(encoding="utf-8")
     executor_guide = (REFERENCES_DIR / "execution" / "executor-subfield-guide.md").read_text(encoding="utf-8")
 
     assert "**Protocol Bundles:** {protocol_bundle_context}" in planner_prompt
@@ -1124,7 +1124,7 @@ def test_stage6_surfaces_protocol_bundle_context_across_planning_execution_and_v
 
 
 def test_stage6_executor_bundle_fallback_stays_generic_when_no_bundle_fits() -> None:
-    executor_agent = (AGENTS_DIR / "gpd-executor.md").read_text(encoding="utf-8")
+    executor_agent = (AGENTS_DIR / "grd-executor.md").read_text(encoding="utf-8")
     executor_guide = (REFERENCES_DIR / "execution" / "executor-subfield-guide.md").read_text(encoding="utf-8")
 
     assert "If no bundle is selected" in executor_agent
@@ -1143,9 +1143,9 @@ def test_stage7_runtime_parity_docs_use_canonical_model_resolution_and_generic_h
     execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
     quick = (WORKFLOWS_DIR / "quick.md").read_text(encoding="utf-8")
 
-    assert "Do not scrape `.gpd/config.json` directly in workflows." in model_resolution
-    assert "gpd resolve-tier" in model_resolution
-    assert "gpd resolve-model" in model_resolution
+    assert "Do not scrape `.grd/config.json` directly in workflows." in model_resolution
+    assert "grd resolve-tier" in model_resolution
+    assert "grd resolve-model" in model_resolution
     assert "Delegation Contract" in agent_delegation
     assert "Return-envelope parity" in agent_delegation
     assert "control decision authority throughout execution" in execute_plan
@@ -1156,7 +1156,7 @@ def test_stage7_runtime_parity_docs_use_canonical_model_resolution_and_generic_h
     assert "classifyHandoffIfNeeded" not in execute_phase
     assert "classifyHandoffIfNeeded" not in execute_plan
     assert "classifyHandoffIfNeeded" not in quick
-    assert "cat .gpd/config.json" not in model_resolution
+    assert "cat .grd/config.json" not in model_resolution
     assert "print(c.get('model_profile', 'review'))" not in execute_phase
 
 
@@ -1177,12 +1177,12 @@ def test_stage8_surfaces_decisive_comparisons_paper_quality_artifacts_and_profil
     verifier_profiles = (
         REFERENCES_DIR / "verification" / "meta" / "verifier-profile-checks.md"
     ).read_text(encoding="utf-8")
-    planner = (AGENTS_DIR / "gpd-planner.md").read_text(encoding="utf-8")
-    executor = (AGENTS_DIR / "gpd-executor.md").read_text(encoding="utf-8")
-    verifier_agent = (AGENTS_DIR / "gpd-verifier.md").read_text(encoding="utf-8")
+    planner = (AGENTS_DIR / "grd-planner.md").read_text(encoding="utf-8")
+    executor = (AGENTS_DIR / "grd-executor.md").read_text(encoding="utf-8")
+    verifier_agent = (AGENTS_DIR / "grd-verifier.md").read_text(encoding="utf-8")
 
     assert "emit decisive verdicts" in compare_command
-    assert ".gpd/comparisons/[slug]-COMPARISON.md" in compare_workflow
+    assert ".grd/comparisons/[slug]-COMPARISON.md" in compare_workflow
     assert "comparison_verdicts" in internal_template
     assert "figure_registry" in figure_tracker
     assert "role: smoking_gun|benchmark|comparison|sanity_check|publication_polish|other" in figure_tracker
@@ -1251,17 +1251,17 @@ def test_verification_and_publication_prompts_keep_decisive_contract_targets_rea
 
 
 def test_repo_graph_prompt_scope_counts_match_repo_inventory() -> None:
-    assert parse_scope_count("src/gpd/commands/*.md") == len(list(COMMANDS_DIR.glob("*.md")))
-    assert parse_scope_count("src/gpd/agents/*.md") == len(list(AGENTS_DIR.glob("*.md")))
-    assert parse_scope_count("src/gpd/specs/workflows/*.md") == len(list(WORKFLOWS_DIR.glob("*.md")))
-    assert parse_scope_count("src/gpd/specs/templates/**/*.md") == len(list(TEMPLATES_DIR.rglob("*.md")))
-    assert parse_scope_count("src/gpd/specs/references/**/*.md") == len(list(REFERENCES_DIR.rglob("*.md")))
+    assert parse_scope_count("src/grd/commands/*.md") == len(list(COMMANDS_DIR.glob("*.md")))
+    assert parse_scope_count("src/grd/agents/*.md") == len(list(AGENTS_DIR.glob("*.md")))
+    assert parse_scope_count("src/grd/specs/workflows/*.md") == len(list(WORKFLOWS_DIR.glob("*.md")))
+    assert parse_scope_count("src/grd/specs/templates/**/*.md") == len(list(TEMPLATES_DIR.rglob("*.md")))
+    assert parse_scope_count("src/grd/specs/references/**/*.md") == len(list(REFERENCES_DIR.rglob("*.md")))
 
 
 def test_repo_graph_same_stem_command_inventory_matches_repo() -> None:
     graph_text = GRAPH_PATH.read_text(encoding="utf-8")
     match = re.search(
-        r"src/gpd/commands/\{([^}]*)\}\.md -> src/gpd/specs/workflows/\{same stems\}\.md",
+        r"src/grd/commands/\{([^}]*)\}\.md -> src/grd/specs/workflows/\{same stems\}\.md",
         graph_text,
     )
     assert match is not None, "Missing same-stem command inventory in tests README graph"
@@ -1274,26 +1274,26 @@ def test_repo_graph_same_stem_command_inventory_matches_repo() -> None:
 def test_repo_graph_tracks_staged_review_panel_wiring() -> None:
     graph_text = GRAPH_PATH.read_text(encoding="utf-8")
     review_agents = [
-        "gpd-review-reader",
-        "gpd-review-literature",
-        "gpd-review-math",
-        "gpd-review-physics",
-        "gpd-review-significance",
+        "grd-review-reader",
+        "grd-review-literature",
+        "grd-review-math",
+        "grd-review-physics",
+        "grd-review-significance",
     ]
 
     for agent_name in review_agents:
         assert agent_name in graph_text, f"Tests README graph is missing {agent_name}"
 
     assert (
-        "src/gpd/commands/peer-review.md -> src/gpd/agents/"
-        "{gpd-review-reader,gpd-review-literature,gpd-review-math,gpd-review-physics,gpd-review-significance,gpd-referee}.md"
+        "src/grd/commands/peer-review.md -> src/grd/agents/"
+        "{grd-review-reader,grd-review-literature,grd-review-math,grd-review-physics,grd-review-significance,grd-referee}.md"
     ) in graph_text
     assert (
-        "src/gpd/specs/workflows/peer-review.md -> src/gpd/agents/"
-        "{gpd-review-reader,gpd-review-literature,gpd-review-math,gpd-review-physics,gpd-review-significance,gpd-referee}.md"
+        "src/grd/specs/workflows/peer-review.md -> src/grd/agents/"
+        "{grd-review-reader,grd-review-literature,grd-review-math,grd-review-physics,grd-review-significance,grd-referee}.md"
     ) in graph_text
     assert (
-        "src/gpd/agents/{gpd-review-reader,gpd-review-literature,gpd-review-math,"
-        "gpd-review-physics,gpd-review-significance,gpd-referee}.md"
-        " -> src/gpd/specs/references/publication/peer-review-panel.md"
+        "src/grd/agents/{grd-review-reader,grd-review-literature,grd-review-math,"
+        "grd-review-physics,grd-review-significance,grd-referee}.md"
+        " -> src/grd/specs/references/publication/peer-review-panel.md"
     ) in graph_text

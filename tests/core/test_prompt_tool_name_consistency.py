@@ -5,17 +5,17 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from gpd.adapters import get_adapter
-from gpd.adapters.install_utils import convert_tool_references_in_body
-from gpd.adapters.tool_names import CANONICAL_TOOL_NAMES, build_runtime_alias_map, canonical
-from gpd.registry import _parse_frontmatter, _parse_tools
+from grd.adapters import get_adapter
+from grd.adapters.install_utils import convert_tool_references_in_body
+from grd.adapters.tool_names import CANONICAL_TOOL_NAMES, build_runtime_alias_map, canonical
+from grd.registry import _parse_frontmatter, _parse_tools
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PRIMARY_PROMPT_ROOTS = (
-    REPO_ROOT / "src/gpd/commands",
-    REPO_ROOT / "src/gpd/agents",
+    REPO_ROOT / "src/grd/commands",
+    REPO_ROOT / "src/grd/agents",
 )
-SHARED_SPEC_ROOTS = (REPO_ROOT / "src/gpd/specs",)
+SHARED_SPEC_ROOTS = (REPO_ROOT / "src/grd/specs",)
 FORBIDDEN_CONTEXTUAL_RUNTIME_ALIAS_PATTERNS = (
     re.compile(r"\*\*Read:\*\*"),
     re.compile(r"(?m)^\s*Read:"),

@@ -1,4 +1,4 @@
-"""Tests for gpd.core.frontmatter — YAML frontmatter CRUD + validation."""
+"""Tests for grd.core.frontmatter — YAML frontmatter CRUD + validation."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from gpd.core.frontmatter import (
+from grd.core.frontmatter import (
     FrontmatterParseError,
     FrontmatterValidation,
     FrontmatterValidationError,
@@ -432,7 +432,7 @@ class TestValidateFrontmatter:
             "    question: What setup output should be ready for later comparison?\n"
             "    unresolved_questions: [\"Which benchmark will be authoritative?\"]\n"
             "  context_intake:\n"
-            "    must_include_prior_outputs: [.gpd/phases/00-setup/00-01-SUMMARY.md]\n"
+            "    must_include_prior_outputs: [.grd/phases/00-setup/00-01-SUMMARY.md]\n"
             "    known_good_baselines: [Smoke-test CLI output]\n"
             "  claims:\n"
             "    - id: claim-setup\n"
@@ -488,7 +488,7 @@ class TestValidateFrontmatter:
             "    unresolved_questions:\n"
             "      - Which benchmark should anchor the first computation?\n"
             "  context_intake:\n"
-            "    must_include_prior_outputs: [.gpd/phases/00-scan/00-01-SUMMARY.md]\n"
+            "    must_include_prior_outputs: [.grd/phases/00-scan/00-01-SUMMARY.md]\n"
             "    context_gaps: [Need a decisive benchmark before committing to fanout]\n"
             "  uncertainty_markers:\n"
             "    weakest_anchors: [The current framing may still be proxy-heavy]\n"
@@ -800,13 +800,13 @@ class TestVerifyCommits:
     def test_empty_hashes_raises(self):
         from pathlib import Path
 
-        from gpd.core.frontmatter import FrontmatterValidationError, verify_commits
+        from grd.core.frontmatter import FrontmatterValidationError, verify_commits
 
         with pytest.raises(FrontmatterValidationError, match="At least one"):
             verify_commits(Path("."), [])
 
     def test_invalid_hashes(self, tmp_path):
-        from gpd.core.frontmatter import verify_commits
+        from grd.core.frontmatter import verify_commits
 
         # Use tmp_path (not a git repo) so all hashes are invalid
         result = verify_commits(tmp_path, ["0000000"])
@@ -824,13 +824,13 @@ class TestVerifyReferences:
     def test_file_not_found(self, tmp_path):
         from pathlib import Path
 
-        from gpd.core.frontmatter import verify_references
+        from grd.core.frontmatter import verify_references
 
         result = verify_references(tmp_path, Path("nonexistent.md"))
         assert result.valid is False
 
     def test_no_references_in_content(self, tmp_path):
-        from gpd.core.frontmatter import verify_references
+        from grd.core.frontmatter import verify_references
 
         f = tmp_path / "test.md"
         f.write_text("No file refs here.\n")
@@ -839,7 +839,7 @@ class TestVerifyReferences:
         assert result.total == 0
 
     def test_backtick_ref_found(self, tmp_path):
-        from gpd.core.frontmatter import verify_references
+        from grd.core.frontmatter import verify_references
 
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "main.py").write_text("print('hi')")
@@ -850,7 +850,7 @@ class TestVerifyReferences:
         assert result.found == 1
 
     def test_backtick_ref_missing(self, tmp_path):
-        from gpd.core.frontmatter import verify_references
+        from grd.core.frontmatter import verify_references
 
         f = tmp_path / "test.md"
         f.write_text("See `src/missing.py` for details.\n")
@@ -859,7 +859,7 @@ class TestVerifyReferences:
         assert "src/missing.py" in result.missing
 
     def test_at_ref_found(self, tmp_path):
-        from gpd.core.frontmatter import verify_references
+        from grd.core.frontmatter import verify_references
 
         (tmp_path / "docs").mkdir()
         (tmp_path / "docs" / "README.md").write_text("# Docs")
@@ -870,7 +870,7 @@ class TestVerifyReferences:
         assert result.found == 1
 
     def test_http_urls_skipped(self, tmp_path):
-        from gpd.core.frontmatter import verify_references
+        from grd.core.frontmatter import verify_references
 
         f = tmp_path / "test.md"
         f.write_text("See `http://example.com/foo.py`.\n")
@@ -878,7 +878,7 @@ class TestVerifyReferences:
         assert result.total == 0
 
     def test_template_vars_skipped(self, tmp_path):
-        from gpd.core.frontmatter import verify_references
+        from grd.core.frontmatter import verify_references
 
         f = tmp_path / "test.md"
         f.write_text("Use `${PROJECT}/src/foo.py` or `{{base}}/bar.py`.\n")
@@ -895,13 +895,13 @@ class TestVerifyArtifacts:
     def test_plan_not_found(self, tmp_path):
         from pathlib import Path
 
-        from gpd.core.frontmatter import verify_artifacts
+        from grd.core.frontmatter import verify_artifacts
 
         result = verify_artifacts(tmp_path, Path("nonexistent.md"))
         assert result.all_passed is False
 
     def test_missing_contract_is_invalid(self, tmp_path):
-        from gpd.core.frontmatter import verify_artifacts
+        from grd.core.frontmatter import verify_artifacts
 
         f = tmp_path / "plan.md"
         f.write_text("---\ntitle: test\n---\n\nNo artifacts.\n")
@@ -910,7 +910,7 @@ class TestVerifyArtifacts:
         assert any("contract not found" in issue.lower() for artifact in result.artifacts for issue in artifact.issues)
 
     def test_contract_deliverable_exists(self, tmp_path):
-        from gpd.core.frontmatter import verify_artifacts
+        from grd.core.frontmatter import verify_artifacts
 
         (tmp_path / "figures").mkdir()
         (tmp_path / "figures" / "main.png").write_text("figure-bytes")
@@ -921,7 +921,7 @@ class TestVerifyArtifacts:
         assert result.passed_count == 1
 
     def test_contract_deliverable_missing(self, tmp_path):
-        from gpd.core.frontmatter import verify_artifacts
+        from grd.core.frontmatter import verify_artifacts
 
         f = tmp_path / "plan.md"
         f.write_text(_valid_plan_contract_frontmatter() + "Body.\n")
@@ -929,7 +929,7 @@ class TestVerifyArtifacts:
         assert result.all_passed is False
 
     def test_contract_deliverable_must_contain_check(self, tmp_path):
-        from gpd.core.frontmatter import verify_artifacts
+        from grd.core.frontmatter import verify_artifacts
 
         (tmp_path / "figures").mkdir()
         (tmp_path / "figures" / "main.png").write_text("benchmark evidence\nreference within tolerance\n")
@@ -942,7 +942,7 @@ class TestVerifyArtifacts:
         assert result.all_passed is True
 
     def test_contract_deliverable_missing_required_fragment(self, tmp_path):
-        from gpd.core.frontmatter import verify_artifacts
+        from grd.core.frontmatter import verify_artifacts
 
         (tmp_path / "figures").mkdir()
         (tmp_path / "figures" / "main.png").write_text("benchmark evidence only\n")
@@ -956,7 +956,7 @@ class TestVerifyArtifacts:
         assert any("Missing pattern: reference within tolerance" in i for a in result.artifacts for i in a.issues)
 
     def test_invalid_contract_fails_artifact_verification(self, tmp_path):
-        from gpd.core.frontmatter import verify_artifacts
+        from grd.core.frontmatter import verify_artifacts
 
         f = tmp_path / "plan.md"
         content = (
@@ -988,14 +988,14 @@ class TestVerifyPlanStructure:
     def test_file_not_found(self, tmp_path):
         from pathlib import Path
 
-        from gpd.core.frontmatter import verify_plan_structure
+        from grd.core.frontmatter import verify_plan_structure
 
         result = verify_plan_structure(tmp_path, Path("nonexistent.md"))
         assert result.valid is False
         assert any("not found" in e.lower() for e in result.errors)
 
     def test_valid_plan_with_tasks(self, tmp_path):
-        from gpd.core.frontmatter import verify_plan_structure
+        from grd.core.frontmatter import verify_plan_structure
 
         content = (
             "---\n"
@@ -1062,7 +1062,7 @@ class TestVerifyPlanStructure:
         assert result.tasks[0].has_action is True
 
     def test_missing_frontmatter_fields(self, tmp_path):
-        from gpd.core.frontmatter import verify_plan_structure
+        from grd.core.frontmatter import verify_plan_structure
 
         f = tmp_path / "plan.md"
         f.write_text("---\nphase: 01-test\n---\n\nBody.\n")
@@ -1071,7 +1071,7 @@ class TestVerifyPlanStructure:
         assert any("Missing required" in e for e in result.errors)
 
     def test_task_missing_name(self, tmp_path):
-        from gpd.core.frontmatter import verify_plan_structure
+        from grd.core.frontmatter import verify_plan_structure
 
         content = (
             _valid_plan_contract_frontmatter()
@@ -1086,7 +1086,7 @@ class TestVerifyPlanStructure:
         assert any("missing <name>" in e for e in result.errors)
 
     def test_wave_gt1_empty_deps_warns(self, tmp_path):
-        from gpd.core.frontmatter import verify_plan_structure
+        from grd.core.frontmatter import verify_plan_structure
 
         content = _valid_plan_contract_frontmatter().replace("wave: 1\n", "wave: 2\n") + "Body.\n"
         f = tmp_path / "plan.md"
@@ -1095,7 +1095,7 @@ class TestVerifyPlanStructure:
         assert any("Wave > 1" in w for w in result.warnings)
 
     def test_checkpoint_interactive_mismatch(self, tmp_path):
-        from gpd.core.frontmatter import verify_plan_structure
+        from grd.core.frontmatter import verify_plan_structure
 
         content = (
             _valid_plan_contract_frontmatter()
@@ -1111,7 +1111,7 @@ class TestVerifyPlanStructure:
         assert any("checkpoint" in e.lower() for e in result.errors)
 
     def test_interactive_without_checkpoint_mismatch(self, tmp_path):
-        from gpd.core.frontmatter import verify_plan_structure
+        from grd.core.frontmatter import verify_plan_structure
 
         content = (
             _valid_plan_contract_frontmatter(interactive="true")
@@ -1130,7 +1130,7 @@ class TestVerifyPlanStructure:
         assert any("interactive is true" in e for e in result.errors)
 
     def test_incomplete_contract_is_reported(self, tmp_path):
-        from gpd.core.frontmatter import verify_plan_structure
+        from grd.core.frontmatter import verify_plan_structure
 
         content = (
             "---\n"
@@ -1161,7 +1161,7 @@ class TestVerifyPlanStructure:
         assert any("Invalid contract: missing acceptance_tests" in error for error in result.errors)
 
     def test_invalid_reference_targets_are_reported(self, tmp_path):
-        from gpd.core.frontmatter import verify_plan_structure
+        from grd.core.frontmatter import verify_plan_structure
 
         content = (
             "---\n"
@@ -1226,7 +1226,7 @@ class TestVerifyPlanStructure:
         assert any("applies_to unknown target claim-missing" in error for error in result.errors)
 
     def test_rejects_unsupported_must_haves_field(self, tmp_path):
-        from gpd.core.frontmatter import verify_plan_structure
+        from grd.core.frontmatter import verify_plan_structure
 
         content = (
             _valid_plan_contract_frontmatter().replace(
@@ -1258,7 +1258,7 @@ class TestSelfCheckRegexBoundaries:
     """Regression: _SELF_CHECK_PASS/FAIL must not match substrings."""
 
     def test_fail_does_not_match_failures(self):
-        from gpd.core.frontmatter import _SELF_CHECK_FAIL
+        from grd.core.frontmatter import _SELF_CHECK_FAIL
 
         assert _SELF_CHECK_FAIL.search("fail") is not None
         assert _SELF_CHECK_FAIL.search("failed") is not None
@@ -1268,18 +1268,18 @@ class TestSelfCheckRegexBoundaries:
         assert _SELF_CHECK_FAIL.search("no failures") is None
 
     def test_fail_does_not_match_failsafe(self):
-        from gpd.core.frontmatter import _SELF_CHECK_FAIL
+        from grd.core.frontmatter import _SELF_CHECK_FAIL
 
         assert _SELF_CHECK_FAIL.search("failsafe") is None
 
     def test_pass_does_not_match_incomplete(self):
-        from gpd.core.frontmatter import _SELF_CHECK_PASS
+        from grd.core.frontmatter import _SELF_CHECK_PASS
 
         # "complete" must not match inside "incomplete"
         assert _SELF_CHECK_PASS.search("incomplete") is None
 
     def test_pass_matches_valid_words(self):
-        from gpd.core.frontmatter import _SELF_CHECK_PASS
+        from grd.core.frontmatter import _SELF_CHECK_PASS
 
         assert _SELF_CHECK_PASS.search("pass") is not None
         assert _SELF_CHECK_PASS.search("passed") is not None
@@ -1290,7 +1290,7 @@ class TestSelfCheckRegexBoundaries:
         assert _SELF_CHECK_PASS.search("succeeded") is not None
 
     def test_fail_matches_valid_words(self):
-        from gpd.core.frontmatter import _SELF_CHECK_FAIL
+        from grd.core.frontmatter import _SELF_CHECK_FAIL
 
         assert _SELF_CHECK_FAIL.search("fail") is not None
         assert _SELF_CHECK_FAIL.search("failed") is not None
@@ -1298,11 +1298,11 @@ class TestSelfCheckRegexBoundaries:
         assert _SELF_CHECK_FAIL.search("blocked") is not None
 
     def test_pass_does_not_match_passover(self):
-        from gpd.core.frontmatter import _SELF_CHECK_PASS
+        from grd.core.frontmatter import _SELF_CHECK_PASS
 
         assert _SELF_CHECK_PASS.search("passover") is None
 
     def test_pass_does_not_match_compass(self):
-        from gpd.core.frontmatter import _SELF_CHECK_PASS
+        from grd.core.frontmatter import _SELF_CHECK_PASS
 
         assert _SELF_CHECK_PASS.search("compass") is None

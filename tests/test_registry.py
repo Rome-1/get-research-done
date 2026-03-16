@@ -1,4 +1,4 @@
-"""Tests for gpd/registry.py — content registry edge cases."""
+"""Tests for grd/registry.py — content registry edge cases."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from gpd import registry
-from gpd.registry import (
+from grd import registry
+from grd.registry import (
     AgentDef,
     CommandDef,
     SkillDef,
@@ -236,13 +236,13 @@ class TestParseCommandFile:
     def test_full_command_file(self, tmp_path: Path) -> None:
         f = tmp_path / "debug.md"
         f.write_text(
-            "---\nname: gpd:debug\ndescription: Debug command\n"
+            "---\nname: grd:debug\ndescription: Debug command\n"
             "argument-hint: <error>\nrequires:\n  project: true\n"
             "allowed-tools:\n  - file_read\n  - shell\n---\nCommand body.",
             encoding="utf-8",
         )
         cmd = _parse_command_file(f, source="commands")
-        assert cmd.name == "gpd:debug"
+        assert cmd.name == "grd:debug"
         assert cmd.description == "Debug command"
         assert cmd.argument_hint == "<error>"
         assert cmd.context_mode == "project-required"
@@ -282,7 +282,7 @@ class TestParseCommandFile:
 
     def test_command_parses_explicit_context_mode(self, tmp_path: Path) -> None:
         f = tmp_path / "help.md"
-        f.write_text("---\nname: gpd:help\ncontext_mode: global\n---\nBody.", encoding="utf-8")
+        f.write_text("---\nname: grd:help\ncontext_mode: global\n---\nBody.", encoding="utf-8")
 
         cmd = _parse_command_file(f, source="commands")
 
@@ -290,14 +290,14 @@ class TestParseCommandFile:
 
     def test_command_invalid_context_mode_raises(self, tmp_path: Path) -> None:
         f = tmp_path / "help.md"
-        f.write_text("---\nname: gpd:help\ncontext_mode: somewhere\n---\nBody.", encoding="utf-8")
+        f.write_text("---\nname: grd:help\ncontext_mode: somewhere\n---\nBody.", encoding="utf-8")
 
         with pytest.raises(ValueError, match="Invalid context_mode"):
             _parse_command_file(f, source="commands")
 
     def test_command_file_invalid_frontmatter_raises_with_path(self, tmp_path: Path) -> None:
         f = tmp_path / "help.md"
-        f.write_text("---\nname: gpd:help\nbad: [unterminated\n---\nBody.", encoding="utf-8")
+        f.write_text("---\nname: grd:help\nbad: [unterminated\n---\nBody.", encoding="utf-8")
 
         with pytest.raises(ValueError, match="Invalid frontmatter in .*help\\.md"):
             _parse_command_file(f, source="commands")
@@ -305,7 +305,7 @@ class TestParseCommandFile:
     def test_command_uses_default_peer_review_contract(self, tmp_path: Path) -> None:
         f = tmp_path / "peer-review.md"
         f.write_text(
-            "---\nname: gpd:peer-review\ndescription: Peer review\nrequires:\n  files: [\"paper/*.tex\"]\n---\nBody.",
+            "---\nname: grd:peer-review\ndescription: Peer review\nrequires:\n  files: [\"paper/*.tex\"]\n---\nBody.",
             encoding="utf-8",
         )
         cmd = _parse_command_file(f, source="commands")
@@ -321,14 +321,14 @@ class TestParseCommandFile:
             "research_artifacts",
             "manuscript",
         ]
-        assert ".gpd/REFEREE-REPORT.md" in cmd.review_contract.required_outputs
-        assert ".gpd/REFEREE-REPORT.tex" in cmd.review_contract.required_outputs
+        assert ".grd/REFEREE-REPORT.md" in cmd.review_contract.required_outputs
+        assert ".grd/REFEREE-REPORT.tex" in cmd.review_contract.required_outputs
 
     def test_command_review_contract_parses_false_string_for_fresh_context(self, tmp_path: Path) -> None:
         f = tmp_path / "review-contract-false.md"
         f.write_text(
             "---\n"
-            "name: gpd:review-contract-false\n"
+            "name: grd:review-contract-false\n"
             "review-contract:\n"
             "  review_mode: publication\n"
             '  requires_fresh_context_per_stage: "false"\n'
@@ -346,7 +346,7 @@ class TestParseCommandFile:
         f = tmp_path / "review-rounds.md"
         f.write_text(
             "---\n"
-            "name: gpd:review-rounds\n"
+            "name: grd:review-rounds\n"
             "review-contract:\n"
             "  review_mode: publication\n"
             "  max_review_rounds: many\n"
@@ -408,52 +408,52 @@ class TestDiscovery:
     def test_commands_keyed_by_stem_not_frontmatter_name(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
-        (commands_dir / "my-cmd.md").write_text("---\nname: gpd:my-cmd\n---\nBody.", encoding="utf-8")
+        (commands_dir / "my-cmd.md").write_text("---\nname: grd:my-cmd\n---\nBody.", encoding="utf-8")
 
         monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
         result = registry._discover_commands()
         assert "my-cmd" in result
-        assert "gpd:my-cmd" not in result
+        assert "grd:my-cmd" not in result
 
     def test_command_name_mismatch_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
-        (commands_dir / "execute-phase.md").write_text("---\nname: gpd:plan-phase\n---\nBody.", encoding="utf-8")
+        (commands_dir / "execute-phase.md").write_text("---\nname: grd:plan-phase\n---\nBody.", encoding="utf-8")
 
         monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
 
         with pytest.raises(ValueError, match="does not match file stem"):
             registry._discover_commands()
 
-    def test_command_name_without_gpd_prefix_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_command_name_without_grd_prefix_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
         (commands_dir / "peer-review.md").write_text("---\nname: peer-review\n---\nBody.", encoding="utf-8")
 
         monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
 
-        with pytest.raises(ValueError, match=r"expected 'gpd:peer-review'"):
+        with pytest.raises(ValueError, match=r"expected 'grd:peer-review'"):
             registry._discover_commands()
 
     def test_agents_keyed_by_declared_name(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "alias.md").write_text("---\nname: gpd-alias\n---\nPrompt.", encoding="utf-8")
+        (agents_dir / "alias.md").write_text("---\nname: grd-alias\n---\nPrompt.", encoding="utf-8")
 
         monkeypatch.setattr(registry, "AGENTS_DIR", agents_dir)
         result = registry._discover_agents()
-        assert "gpd-alias" in result
+        assert "grd-alias" in result
         assert "alias" not in result
 
     def test_duplicate_agent_names_raise(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "first.md").write_text("---\nname: gpd-duplicate\n---\nFirst prompt.", encoding="utf-8")
-        (agents_dir / "second.md").write_text("---\nname: gpd-duplicate\n---\nSecond prompt.", encoding="utf-8")
+        (agents_dir / "first.md").write_text("---\nname: grd-duplicate\n---\nFirst prompt.", encoding="utf-8")
+        (agents_dir / "second.md").write_text("---\nname: grd-duplicate\n---\nSecond prompt.", encoding="utf-8")
 
         monkeypatch.setattr(registry, "AGENTS_DIR", agents_dir)
 
-        with pytest.raises(ValueError, match="Duplicate agent name 'gpd-duplicate'"):
+        with pytest.raises(ValueError, match="Duplicate agent name 'grd-duplicate'"):
             registry._discover_agents()
 
 
@@ -466,14 +466,14 @@ class TestSkillDiscovery:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
         (commands_dir / "help.md").write_text(
-            "---\nname: gpd:help\ndescription: primary help\n---\nPrimary help body.",
+            "---\nname: grd:help\ndescription: primary help\n---\nPrimary help body.",
             encoding="utf-8",
         )
 
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "gpd-debugger.md").write_text(
-            "---\nname: gpd-debugger\ndescription: primary debugger\n---\nPrimary debugger prompt.",
+        (agents_dir / "grd-debugger.md").write_text(
+            "---\nname: grd-debugger\ndescription: primary debugger\n---\nPrimary debugger prompt.",
             encoding="utf-8",
         )
 
@@ -482,27 +482,27 @@ class TestSkillDiscovery:
 
         skills = registry._discover_skills(registry._discover_commands(), registry._discover_agents())
 
-        assert set(skills) == {"gpd-debugger", "gpd-help"}
-        assert skills["gpd-help"].source_kind == "command"
-        assert skills["gpd-help"].content == "Primary help body."
-        assert skills["gpd-debugger"].source_kind == "agent"
-        assert skills["gpd-debugger"].content == "Primary debugger prompt."
+        assert set(skills) == {"grd-debugger", "grd-help"}
+        assert skills["grd-help"].source_kind == "command"
+        assert skills["grd-help"].content == "Primary help body."
+        assert skills["grd-debugger"].source_kind == "agent"
+        assert skills["grd-debugger"].content == "Primary debugger prompt."
 
     def test_duplicate_skill_names_across_command_and_agent_raise(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
-        (commands_dir / "foo.md").write_text("---\nname: gpd:foo\n---\nCommand body.", encoding="utf-8")
+        (commands_dir / "foo.md").write_text("---\nname: grd:foo\n---\nCommand body.", encoding="utf-8")
 
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "gpd-foo.md").write_text("---\nname: gpd-foo\n---\nAgent prompt.", encoding="utf-8")
+        (agents_dir / "grd-foo.md").write_text("---\nname: grd-foo\n---\nAgent prompt.", encoding="utf-8")
 
         monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
         monkeypatch.setattr(registry, "AGENTS_DIR", agents_dir)
 
-        with pytest.raises(ValueError, match="Duplicate skill name 'gpd-foo'"):
+        with pytest.raises(ValueError, match="Duplicate skill name 'grd-foo'"):
             registry._discover_skills(registry._discover_commands(), registry._discover_agents())
 
 
@@ -524,7 +524,7 @@ class TestNonMdFilesIgnored:
     def test_non_md_files_in_commands_dir_ignored(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
-        (commands_dir / "valid.md").write_text("---\nname: gpd:valid\n---\nBody.", encoding="utf-8")
+        (commands_dir / "valid.md").write_text("---\nname: grd:valid\n---\nBody.", encoding="utf-8")
         (commands_dir / "readme.txt").write_text("Not a command.", encoding="utf-8")
 
         monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
@@ -551,7 +551,7 @@ class TestRegistryCache:
     def test_lazy_load_commands(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
-        (commands_dir / "cached.md").write_text("---\nname: gpd:cached\n---\nBody.", encoding="utf-8")
+        (commands_dir / "cached.md").write_text("---\nname: grd:cached\n---\nBody.", encoding="utf-8")
 
         monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
 
@@ -580,7 +580,7 @@ class TestRegistryCache:
 
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
-        (commands_dir / "y.md").write_text("---\nname: gpd:y\n---\nBody.", encoding="utf-8")
+        (commands_dir / "y.md").write_text("---\nname: grd:y\n---\nBody.", encoding="utf-8")
 
         monkeypatch.setattr(registry, "AGENTS_DIR", agents_dir)
         monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
@@ -624,7 +624,7 @@ class TestPublicAPI:
     @pytest.fixture(autouse=True)
     def _clean_cache(self):
         """Ensure registry cache is invalidated before and after each test."""
-        from gpd import registry
+        from grd import registry
         registry.invalidate_cache()
         yield
         registry.invalidate_cache()
@@ -666,26 +666,26 @@ class TestPublicAPI:
     def test_load_agents_from_dir_parses_arbitrary_agent_directory(self, tmp_path: Path) -> None:
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "gpd-public.md").write_text(
-            "---\nname: gpd-public\ndescription: Public\ntools: file_read\nsurface: public\n---\nPublic prompt.",
+        (agents_dir / "grd-public.md").write_text(
+            "---\nname: grd-public\ndescription: Public\ntools: file_read\nsurface: public\n---\nPublic prompt.",
             encoding="utf-8",
         )
-        (agents_dir / "gpd-internal.md").write_text(
-            "---\nname: gpd-internal\ndescription: Internal\ntools: file_read\nsurface: internal\n---\nInternal prompt.",
+        (agents_dir / "grd-internal.md").write_text(
+            "---\nname: grd-internal\ndescription: Internal\ntools: file_read\nsurface: internal\n---\nInternal prompt.",
             encoding="utf-8",
         )
 
         agents = load_agents_from_dir(agents_dir)
 
-        assert sorted(agents) == ["gpd-internal", "gpd-public"]
-        assert agents["gpd-public"].surface == "public"
-        assert agents["gpd-internal"].surface == "internal"
+        assert sorted(agents) == ["grd-internal", "grd-public"]
+        assert agents["grd-public"].surface == "public"
+        assert agents["grd-internal"].surface == "internal"
 
     def test_list_commands_returns_sorted(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
-        (commands_dir / "zebra.md").write_text("---\nname: gpd:zebra\n---\nZ.", encoding="utf-8")
-        (commands_dir / "apple.md").write_text("---\nname: gpd:apple\n---\nA.", encoding="utf-8")
+        (commands_dir / "zebra.md").write_text("---\nname: grd:zebra\n---\nZ.", encoding="utf-8")
+        (commands_dir / "apple.md").write_text("---\nname: grd:apple\n---\nA.", encoding="utf-8")
 
         monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
         registry.invalidate_cache()
@@ -695,27 +695,27 @@ class TestPublicAPI:
     def test_list_skills_returns_sorted(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
-        (commands_dir / "plan-phase.md").write_text("---\nname: gpd:plan-phase\n---\nPlan.", encoding="utf-8")
+        (commands_dir / "plan-phase.md").write_text("---\nname: grd:plan-phase\n---\nPlan.", encoding="utf-8")
 
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
-        (agents_dir / "gpd-debugger.md").write_text("---\nname: gpd-debugger\n---\nDebug.", encoding="utf-8")
+        (agents_dir / "grd-debugger.md").write_text("---\nname: grd-debugger\n---\nDebug.", encoding="utf-8")
 
         monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
         monkeypatch.setattr(registry, "AGENTS_DIR", agents_dir)
         registry.invalidate_cache()
 
-        assert registry.list_skills() == ["gpd-debugger", "gpd-plan-phase"]
+        assert registry.list_skills() == ["grd-debugger", "grd-plan-phase"]
 
     def test_list_review_commands_returns_only_review_commands(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
         (commands_dir / "peer-review.md").write_text(
-            "---\nname: gpd:peer-review\ndescription: Peer review\n---\nReview body.",
+            "---\nname: grd:peer-review\ndescription: Peer review\n---\nReview body.",
             encoding="utf-8",
         )
         (commands_dir / "debug.md").write_text(
-            "---\nname: gpd:debug\ndescription: Debug\n---\nDebug body.",
+            "---\nname: grd:debug\ndescription: Debug\n---\nDebug body.",
             encoding="utf-8",
         )
 
@@ -723,7 +723,7 @@ class TestPublicAPI:
         monkeypatch.setattr(registry, "AGENTS_DIR", tmp_path / "nonexistent-agents")
         registry.invalidate_cache()
 
-        assert registry.list_review_commands() == ["gpd:peer-review"]
+        assert registry.list_review_commands() == ["grd:peer-review"]
 
     def test_get_agent_returns_correct_def(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         agents_dir = tmp_path / "agents"
@@ -752,7 +752,7 @@ class TestPublicAPI:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
         (commands_dir / "test-cmd.md").write_text(
-            "---\nname: gpd:test-cmd\ndescription: Tested\n---\nCmd body.", encoding="utf-8"
+            "---\nname: grd:test-cmd\ndescription: Tested\n---\nCmd body.", encoding="utf-8"
         )
 
         monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
@@ -760,31 +760,31 @@ class TestPublicAPI:
 
         cmd = registry.get_command("test-cmd")
         assert isinstance(cmd, CommandDef)
-        assert cmd.name == "gpd:test-cmd"
+        assert cmd.name == "grd:test-cmd"
         assert cmd.description == "Tested"
 
     def test_get_command_accepts_public_command_label(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
         (commands_dir / "peer-review.md").write_text(
-            "---\nname: gpd:peer-review\ndescription: Peer review\n---\nReview body.",
+            "---\nname: grd:peer-review\ndescription: Peer review\n---\nReview body.",
             encoding="utf-8",
         )
 
         monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
         registry.invalidate_cache()
 
-        cmd = registry.get_command("/gpd:peer-review")
+        cmd = registry.get_command("/grd:peer-review")
 
         assert isinstance(cmd, CommandDef)
-        assert cmd.name == "gpd:peer-review"
+        assert cmd.name == "grd:peer-review"
         assert cmd.description == "Peer review"
 
     def test_get_skill_returns_correct_def(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
         (commands_dir / "execute-phase.md").write_text(
-            "---\nname: gpd:execute-phase\ndescription: Execute\n---\nExecute body.",
+            "---\nname: grd:execute-phase\ndescription: Execute\n---\nExecute body.",
             encoding="utf-8",
         )
 
@@ -792,9 +792,9 @@ class TestPublicAPI:
         monkeypatch.setattr(registry, "AGENTS_DIR", tmp_path / "nonexistent-agents")
         registry.invalidate_cache()
 
-        skill = registry.get_skill("gpd:execute-phase")
+        skill = registry.get_skill("grd:execute-phase")
         assert isinstance(skill, SkillDef)
-        assert skill.name == "gpd-execute-phase"
+        assert skill.name == "grd-execute-phase"
         assert skill.registry_name == "execute-phase"
         assert skill.source_kind == "command"
         assert skill.content == "Execute body."
@@ -803,7 +803,7 @@ class TestPublicAPI:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
         (commands_dir / "execute-phase.md").write_text(
-            "---\nname: gpd:execute-phase\ndescription: Execute\n---\nExecute body.",
+            "---\nname: grd:execute-phase\ndescription: Execute\n---\nExecute body.",
             encoding="utf-8",
         )
 
@@ -814,14 +814,14 @@ class TestPublicAPI:
         skill = registry.get_skill("execute-phase")
 
         assert isinstance(skill, SkillDef)
-        assert skill.name == "gpd-execute-phase"
+        assert skill.name == "grd-execute-phase"
         assert skill.registry_name == "execute-phase"
 
     def test_get_skill_accepts_public_command_label(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
         (commands_dir / "execute-phase.md").write_text(
-            "---\nname: gpd:execute-phase\ndescription: Execute\n---\nExecute body.",
+            "---\nname: grd:execute-phase\ndescription: Execute\n---\nExecute body.",
             encoding="utf-8",
         )
 
@@ -829,10 +829,10 @@ class TestPublicAPI:
         monkeypatch.setattr(registry, "AGENTS_DIR", tmp_path / "nonexistent-agents")
         registry.invalidate_cache()
 
-        skill = registry.get_skill("/gpd:execute-phase")
+        skill = registry.get_skill("/grd:execute-phase")
 
         assert isinstance(skill, SkillDef)
-        assert skill.name == "gpd-execute-phase"
+        assert skill.name == "grd-execute-phase"
         assert skill.registry_name == "execute-phase"
 
     def test_real_slides_command_metadata(self) -> None:
@@ -840,7 +840,7 @@ class TestPublicAPI:
 
         cmd = registry.get_command("slides")
 
-        assert cmd.name == "gpd:slides"
+        assert cmd.name == "grd:slides"
         assert cmd.argument_hint == "[topic, talk title, audience, or source path]"
         assert cmd.context_mode == "projectless"
         assert cmd.allowed_tools == [
@@ -856,9 +856,9 @@ class TestPublicAPI:
     def test_real_slides_skill_uses_output_category(self) -> None:
         registry.invalidate_cache()
 
-        skill = registry.get_skill("gpd-slides")
+        skill = registry.get_skill("grd-slides")
 
-        assert skill.name == "gpd-slides"
+        assert skill.name == "grd-slides"
         assert skill.category == "output"
 
     def test_invalidate_cache_module_level(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -939,7 +939,7 @@ class TestDataclasses:
 
     def test_skill_def_frozen(self) -> None:
         skill = SkillDef(
-            name="gpd-test",
+            name="grd-test",
             description="d",
             content="body",
             category="other",
@@ -948,11 +948,11 @@ class TestDataclasses:
             registry_name="test",
         )
         with pytest.raises(AttributeError):
-            skill.name = "gpd-other"  # type: ignore[misc]
+            skill.name = "grd-other"  # type: ignore[misc]
 
     def test_skill_def_slots(self) -> None:
         skill = SkillDef(
-            name="gpd-test",
+            name="grd-test",
             description="d",
             content="body",
             category="other",
@@ -990,7 +990,7 @@ class TestSkillCategoryMap:
             pytest.fail("_SKILL_CATEGORY_MAP not found in registry source")
 
     def test_peer_review_appears_exactly_once(self) -> None:
-        """Regression: 'gpd-peer-review' was duplicated at two positions."""
+        """Regression: 'grd-peer-review' was duplicated at two positions."""
         import ast
         import inspect
 
@@ -1001,10 +1001,10 @@ class TestSkillCategoryMap:
             if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", None) == "_SKILL_CATEGORY_MAP":
                 assert isinstance(node.value, ast.Dict)
                 keys = [k.value for k in node.value.keys if isinstance(k, ast.Constant)]
-                assert keys.count("gpd-peer-review") == 1
+                assert keys.count("grd-peer-review") == 1
                 break
 
     def test_infer_skill_category_peer_review(self) -> None:
-        from gpd.registry import _infer_skill_category
+        from grd.registry import _infer_skill_category
 
-        assert _infer_skill_category("gpd-peer-review") == "paper"
+        assert _infer_skill_category("grd-peer-review") == "paper"

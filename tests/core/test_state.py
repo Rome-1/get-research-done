@@ -1,12 +1,12 @@
-"""Tests for gpd.core.state — parse/generate round-trip, validation, defaults."""
+"""Tests for grd.core.state — parse/generate round-trip, validation, defaults."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from gpd.core.constants import ProjectLayout
-from gpd.core.state import (
+from grd.core.constants import ProjectLayout
+from grd.core.state import (
     VALID_STATUSES,
     ResearchState,
     default_state_dict,
@@ -80,7 +80,7 @@ MINIMAL_STATE_MD = """\
 
 ## Project Reference
 
-See: .gpd/PROJECT.md (updated 2026-03-01)
+See: .grd/PROJECT.md (updated 2026-03-01)
 
 **Core research question:** How does X work?
 **Current focus:** Testing the parser
@@ -261,7 +261,7 @@ def test_generate_state_markdown_shows_verification_evidence_count():
             "depends_on": [],
             "verified": True,
             "verification_records": [
-                {"verifier": "gpd-verifier", "method": "limit-check", "confidence": "high"}
+                {"verifier": "grd-verifier", "method": "limit-check", "confidence": "high"}
             ],
         }
     )
@@ -458,7 +458,7 @@ def test_ensure_state_schema_malformed_verification_record_preserves_intermediat
             "verification_records": [
                 {
                     "verified_at": "2026-03-14T00:00:00Z",
-                    "verifier": "gpd-verifier",
+                    "verifier": "grd-verifier",
                     "method": "manual",
                     "confidence": "high",
                 }
@@ -622,7 +622,7 @@ def test_state_validate_rejects_state_markdown_missing_canonical_section(tmp_pat
 
 def test_load_state_json_review_blocks_on_schema_normalization(tmp_path):
     layout = ProjectLayout(tmp_path)
-    layout.gpd.mkdir(parents=True, exist_ok=True)
+    layout.grd.mkdir(parents=True, exist_ok=True)
     layout.state_json.write_text(json.dumps({"position": {"status": 42}}), encoding="utf-8")
 
     assert load_state_json(tmp_path, integrity_mode="review") is None
@@ -679,7 +679,7 @@ def test_state_validate_review_blocks_missing_evidence_file(tmp_path):
             "verified": True,
             "verification_records": [
                 {
-                    "verifier": "gpd-verifier",
+                    "verifier": "grd-verifier",
                     "method": "artifact-check",
                     "confidence": "high",
                     "evidence_path": "artifacts/reports/R-04.json",
@@ -724,7 +724,7 @@ def test_save_state_markdown_preserves_verification_records_for_tagged_results(t
             "verified": True,
             "verification_records": [
                 {
-                    "verifier": "gpd-verifier",
+                    "verifier": "grd-verifier",
                     "method": "dimensional-analysis",
                     "confidence": "high",
                     "trace_id": "trace-06",
@@ -821,7 +821,7 @@ def test_state_record_session_does_not_emit_local_observability_events(tmp_path,
     monkeypatch.chdir(tmp_path)
 
     layout = ProjectLayout(tmp_path)
-    layout.gpd.mkdir()
+    layout.grd.mkdir()
     layout.phases_dir.mkdir()
 
     state = default_state_dict()
@@ -835,7 +835,7 @@ def test_state_record_session_does_not_emit_local_observability_events(tmp_path,
     result = state_record_session(tmp_path, stopped_at="Phase 4 P2", resume_file="NEXT.md")
     assert result.recorded is True
 
-    observability_dir = layout.gpd / "observability"
+    observability_dir = layout.grd / "observability"
     assert not observability_dir.exists()
 
 
@@ -896,10 +896,10 @@ def _bootstrap_project_with_state(
     status: str = "Executing",
     extra_lines: int = 0,
 ) -> Path:
-    """Create a minimal .gpd/ project with STATE.md + state.json."""
-    from gpd.core.state import default_state_dict, generate_state_markdown
+    """Create a minimal .grd/ project with STATE.md + state.json."""
+    from grd.core.state import default_state_dict, generate_state_markdown
 
-    planning = tmp_path / ".gpd"
+    planning = tmp_path / ".grd"
     planning.mkdir(exist_ok=True)
     (planning / "phases").mkdir(exist_ok=True)
     (planning / "PROJECT.md").write_text("# Project\nTest.\n")
@@ -935,8 +935,8 @@ def test_state_compact_recovers_intent_before_reading(tmp_path):
     temp files contain updated state.  After recovery, state_compact should
     see the updated (recovered) state.json, not the stale one.
     """
-    from gpd.core.constants import STATE_WRITE_INTENT_FILENAME
-    from gpd.core.state import (
+    from grd.core.constants import STATE_WRITE_INTENT_FILENAME
+    from grd.core.state import (
         default_state_dict,
         generate_state_markdown,
         state_compact,
@@ -960,7 +960,7 @@ def test_state_compact_recovers_intent_before_reading(tmp_path):
     md = generate_state_markdown(state)
     md += "\n" + "\n".join(f"<!-- padding {i} -->" for i in range(100))
 
-    planning = tmp_path / ".gpd"
+    planning = tmp_path / ".grd"
     planning.mkdir(exist_ok=True)
     (planning / "phases").mkdir(exist_ok=True)
     (planning / "PROJECT.md").write_text("# Project\nTest.\n")
@@ -1008,7 +1008,7 @@ def test_state_compact_recovers_intent_before_reading(tmp_path):
 
 def test_advance_plan_advances_normally(tmp_path):
     """state_advance_plan should advance Current Plan when below total."""
-    from gpd.core.state import state_advance_plan
+    from grd.core.state import state_advance_plan
 
     cwd = _bootstrap_project_with_state(
         tmp_path,
@@ -1027,9 +1027,9 @@ def test_advance_plan_returns_error_when_fields_missing(tmp_path):
     After removing the unreachable code, the earlier None-check on
     safe_parse_int must still catch the missing-field case correctly.
     """
-    from gpd.core.state import state_advance_plan
+    from grd.core.state import state_advance_plan
 
-    planning = tmp_path / ".gpd"
+    planning = tmp_path / ".grd"
     planning.mkdir(exist_ok=True)
     (planning / "phases").mkdir(exist_ok=True)
     (planning / "PROJECT.md").write_text("# Project\nTest.\n")
@@ -1048,7 +1048,7 @@ def test_advance_plan_returns_error_when_fields_missing(tmp_path):
 
 def test_advance_plan_marks_phase_complete_on_last_plan(tmp_path):
     """When current_plan >= total_plans, it marks phase complete."""
-    from gpd.core.state import (
+    from grd.core.state import (
         default_state_dict,
         generate_state_markdown,
         state_advance_plan,
@@ -1062,7 +1062,7 @@ def test_advance_plan_marks_phase_complete_on_last_plan(tmp_path):
     pos["status"] = "Executing"
     pos["progress_percent"] = 90
 
-    planning = tmp_path / ".gpd"
+    planning = tmp_path / ".grd"
     planning.mkdir(exist_ok=True)
     (planning / "phases").mkdir(exist_ok=True)
     (planning / "PROJECT.md").write_text("# Project\nTest.\n")

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from gpd.mcp.paper.figures import (
+from grd.mcp.paper.figures import (
     check_figure_resolution,
     detect_format,
     get_dpi_for_journal,
@@ -15,7 +15,7 @@ from gpd.mcp.paper.figures import (
     normalize_figure,
     prepare_figures,
 )
-from gpd.mcp.paper.models import FigureRef
+from grd.mcp.paper.models import FigureRef
 
 # ---- Format detection ----
 
@@ -251,7 +251,7 @@ class TestTiffConversionExceptionChaining:
         source = tmp_path / "fig.tiff"
         source.write_bytes(b"fake-tiff-data")
 
-        from gpd.mcp.paper.figures import _convert_tiff
+        from grd.mcp.paper.figures import _convert_tiff
 
         with pytest.raises(RuntimeError, match="TIFF conversion requires Pillow") as exc_info:
             _convert_tiff(source, tmp_path / "output")

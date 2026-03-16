@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gpd.mcp.paper.bibliography import (
+from grd.mcp.paper.bibliography import (
     BibliographyAudit,
     CitationSource,
     audit_citation_source,

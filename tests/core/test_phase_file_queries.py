@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gpd.core.frontmatter import verify_phase_completeness
-from gpd.core.phases import list_phase_files, validate_phase_waves
+from grd.core.frontmatter import verify_phase_completeness
+from grd.core.phases import list_phase_files, validate_phase_waves
 
 
 def _create_phase_dir(cwd: Path, name: str) -> Path:
-    phase_dir = cwd / ".gpd" / "phases" / name
+    phase_dir = cwd / ".grd" / "phases" / name
     phase_dir.mkdir(parents=True, exist_ok=True)
     return phase_dir
 
 
 def _write_roadmap(cwd: Path, content: str) -> None:
-    (cwd / ".gpd" / "ROADMAP.md").write_text(content, encoding="utf-8")
+    (cwd / ".grd" / "ROADMAP.md").write_text(content, encoding="utf-8")
 
 
 class TestVerifyPhaseCompleteness:
@@ -112,7 +112,7 @@ class TestListPhaseFiles:
         assert result.files == ["01-setup-01-SUMMARY.md", "01-setup-02-SUMMARY.md"]
 
     def test_returns_zero_when_phases_directory_is_missing(self, tmp_path: Path) -> None:
-        planning = tmp_path / ".gpd"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
         (planning / "state.json").write_text("{}", encoding="utf-8")

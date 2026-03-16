@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from gpd.core.paper_quality import (
+from grd.core.paper_quality import (
     BinaryCheck,
     CitationsQualityInput,
     CompletenessQualityInput,
@@ -22,7 +22,7 @@ from gpd.core.paper_quality import (
     score_paper_quality,
 )
 
-TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "src" / "gpd" / "specs" / "templates" / "paper" / "paper-quality-input-schema.md"
+TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "src" / "grd" / "specs" / "templates" / "paper" / "paper-quality-input-schema.md"
 
 
 def _full_metric(total: int) -> CoverageMetric:
@@ -210,14 +210,14 @@ def test_score_paper_quality_applies_journal_adjustments():
 
 def test_severity_in_module_all():
     """Severity should be importable via __all__ (used in PaperQualityIssue)."""
-    from gpd.core import paper_quality
+    from grd.core import paper_quality
 
     assert "Severity" in paper_quality.__all__
 
 
 def test_severity_importable_directly():
     """Severity can be imported by name from paper_quality."""
-    from gpd.core.paper_quality import Severity
+    from grd.core.paper_quality import Severity
 
     assert Severity.blocker == "blocker"
     assert Severity.major == "major"
@@ -226,7 +226,7 @@ def test_severity_importable_directly():
 
 def test_paper_quality_issue_uses_severity():
     """PaperQualityIssue.severity field accepts Severity enum values."""
-    from gpd.core.paper_quality import PaperQualityIssue, Severity
+    from grd.core.paper_quality import PaperQualityIssue, Severity
 
     issue = PaperQualityIssue(
         check="test_check",
@@ -242,7 +242,7 @@ def test_paper_quality_issue_uses_severity():
 
 def test_category_max_scores_match_constant():
     """CategoryScore.max_score values must come from CATEGORY_MAX, not hardcoded."""
-    from gpd.core.paper_quality import CATEGORY_MAX
+    from grd.core.paper_quality import CATEGORY_MAX
 
     report = score_paper_quality(
         PaperQualityInput(

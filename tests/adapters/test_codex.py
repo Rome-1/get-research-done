@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from gpd.adapters.codex import CodexAdapter, _convert_codex_tool_name, _convert_to_codex_skill
-from gpd.adapters.install_utils import build_runtime_cli_bridge_command
-from gpd.registry import load_agents_from_dir
+from grd.adapters.codex import CodexAdapter, _convert_codex_tool_name, _convert_to_codex_skill
+from grd.adapters.install_utils import build_runtime_cli_bridge_command
+from grd.registry import load_agents_from_dir
 
 
 @pytest.fixture()
@@ -42,7 +42,7 @@ class TestProperties:
         assert adapter.config_dir_name == ".codex"
 
     def test_help_command(self, adapter: CodexAdapter) -> None:
-        assert adapter.help_command == "$gpd-help"
+        assert adapter.help_command == "$grd-help"
 
 
 class TestConvertCodexToolName:
@@ -65,66 +65,66 @@ class TestConvertCodexToolName:
 
 class TestConvertToCodexSkill:
     def test_no_frontmatter_wraps(self) -> None:
-        result = _convert_to_codex_skill("Just body text", "gpd-help")
+        result = _convert_to_codex_skill("Just body text", "grd-help")
         assert result.startswith("---\n")
-        assert "name: gpd-help" in result
+        assert "name: grd-help" in result
         assert "Just body text" in result
 
     def test_frontmatter_name_converted(self) -> None:
-        content = "---\nname: gpd:help\ndescription: Show help\n---\nBody"
-        result = _convert_to_codex_skill(content, "gpd-help")
-        assert "name: gpd-help" in result
-        assert "gpd:help" not in result
+        content = "---\nname: grd:help\ndescription: Show help\n---\nBody"
+        result = _convert_to_codex_skill(content, "grd-help")
+        assert "name: grd-help" in result
+        assert "grd:help" not in result
 
     def test_color_stripped(self) -> None:
         content = "---\nname: test\ncolor: cyan\ndescription: D\n---\nBody"
-        result = _convert_to_codex_skill(content, "gpd-test")
+        result = _convert_to_codex_skill(content, "grd-test")
         assert "color:" not in result
 
     def test_allowed_tools_converted(self) -> None:
         content = "---\nname: test\ndescription: D\nallowed-tools:\n  - Read\n  - Bash\n---\nBody"
-        result = _convert_to_codex_skill(content, "gpd-test")
+        result = _convert_to_codex_skill(content, "grd-test")
         assert "allowed-tools:" in result
         assert "read_file" in result
         assert "shell" in result
 
     def test_task_excluded_from_tools(self) -> None:
         content = "---\nname: test\ndescription: D\nallowed-tools:\n  - Read\n  - Task\n---\nBody"
-        result = _convert_to_codex_skill(content, "gpd-test")
+        result = _convert_to_codex_skill(content, "grd-test")
         assert "Task" not in result.split("---", 2)[1]
 
     def test_slash_command_conversion(self) -> None:
-        content = "---\nname: test\ndescription: D\n---\nUse /gpd:execute-phase to run."
-        result = _convert_to_codex_skill(content, "gpd-test")
-        assert "$gpd-execute-phase" in result
+        content = "---\nname: test\ndescription: D\n---\nUse /grd:execute-phase to run."
+        result = _convert_to_codex_skill(content, "grd-test")
+        assert "$grd-execute-phase" in result
 
     def test_path_conversion(self) -> None:
         """Path conversion is handled by replace_placeholders in the install pipeline.
-        _convert_to_codex_skill only handles /gpd: -> $gpd- and frontmatter conversion."""
-        content = "---\nname: test\ndescription: D\n---\nSee /gpd:execute-phase"
-        result = _convert_to_codex_skill(content, "gpd-test")
-        assert "$gpd-execute-phase" in result
+        _convert_to_codex_skill only handles /grd: -> $grd- and frontmatter conversion."""
+        content = "---\nname: test\ndescription: D\n---\nSee /grd:execute-phase"
+        result = _convert_to_codex_skill(content, "grd-test")
+        assert "$grd-execute-phase" in result
 
     def test_description_preserved(self) -> None:
         content = "---\nname: test\ndescription: My description\n---\nBody"
-        result = _convert_to_codex_skill(content, "gpd-test")
+        result = _convert_to_codex_skill(content, "grd-test")
         assert "description: My description" in result
 
     def test_description_with_triple_dash_is_preserved(self) -> None:
         content = "---\nname: test\ndescription: before --- after\n---\nBody"
-        result = _convert_to_codex_skill(content, "gpd-test")
+        result = _convert_to_codex_skill(content, "grd-test")
         assert "description: before --- after" in result
         assert result.rstrip().endswith("Body")
 
     def test_missing_name_added(self) -> None:
         content = "---\ndescription: D\n---\nBody"
-        result = _convert_to_codex_skill(content, "gpd-test")
-        assert "name: gpd-test" in result
+        result = _convert_to_codex_skill(content, "grd-test")
+        assert "name: grd-test" in result
 
     def test_missing_description_added(self) -> None:
         content = "---\nname: test\n---\nBody"
-        result = _convert_to_codex_skill(content, "gpd-test")
-        assert "description: GPD skill - gpd-test" in result
+        result = _convert_to_codex_skill(content, "grd-test")
+        assert "description: GRD skill - grd-test" in result
 
     def test_duplicate_tools_deduplicated(self) -> None:
         """Tools appearing in both tools: and allowed-tools: are deduplicated."""
@@ -139,7 +139,7 @@ class TestConvertToCodexSkill:
             "---\n"
             "Body"
         )
-        result = _convert_to_codex_skill(content, "gpd-test")
+        result = _convert_to_codex_skill(content, "grd-test")
         # Extract allowed-tools entries from the frontmatter
         fm = result.split("---")[1]
         tool_entries = [line.strip()[2:] for line in fm.splitlines() if line.strip().startswith("- ")]
@@ -158,7 +158,7 @@ class TestConvertToCodexSkill:
             "---\n"
             "Body"
         )
-        result = _convert_to_codex_skill(content, "gpd-test")
+        result = _convert_to_codex_skill(content, "grd-test")
         fm = result.split("---")[1]
         tool_entries = [line.strip()[2:] for line in fm.splitlines() if line.strip().startswith("- ")]
         assert tool_entries == ["read_file", "shell"]
@@ -168,7 +168,7 @@ class TestInstall:
     def test_local_install_uses_repo_scoped_skills_dir_by_default(
         self,
         adapter: CodexAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -180,114 +180,114 @@ class TestInstall:
         (preserved_skill / "SKILL.md").write_text("keep", encoding="utf-8")
         monkeypatch.setenv("CODEX_SKILLS_DIR", str(shared_skills))
 
-        result = adapter.install(gpd_root, target, is_global=False)
+        result = adapter.install(grd_root, target, is_global=False)
         local_skills = tmp_path / ".agents" / "skills"
 
         assert result["skills_dir"] == str(local_skills)
-        assert any(d.name.startswith("gpd-") for d in local_skills.iterdir() if d.is_dir())
-        assert not any(d.name.startswith("gpd-") for d in shared_skills.iterdir() if d.is_dir())
+        assert any(d.name.startswith("grd-") for d in local_skills.iterdir() if d.is_dir())
+        assert not any(d.name.startswith("grd-") for d in shared_skills.iterdir() if d.is_dir())
         assert (shared_skills / "custom-keep" / "SKILL.md").exists()
 
-    def test_install_creates_skills(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_creates_skills(self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        gpd_skills = [d for d in skills.iterdir() if d.is_dir() and d.name.startswith("gpd-")]
-        assert len(gpd_skills) > 0
-        for skill_dir in gpd_skills:
+        grd_skills = [d for d in skills.iterdir() if d.is_dir() and d.name.startswith("grd-")]
+        assert len(grd_skills) > 0
+        for skill_dir in grd_skills:
             assert (skill_dir / "SKILL.md").exists()
 
-    def test_install_rewrites_gpd_cli_calls_to_runtime_cli_bridge(
+    def test_install_rewrites_grd_cli_calls_to_runtime_cli_bridge(
         self,
         adapter: CodexAdapter,
         tmp_path: Path,
     ) -> None:
-        gpd_root = Path(__file__).resolve().parents[2] / "src" / "gpd"
+        grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
         target = tmp_path / ".codex"
         target.mkdir()
-        adapter.install(gpd_root, target, is_global=False)
+        adapter.install(grd_root, target, is_global=False)
         local_skills = tmp_path / ".agents" / "skills"
 
         expected_bridge = expected_codex_bridge(target, is_global=False)
-        skill = (local_skills / "gpd-set-profile" / "SKILL.md").read_text(encoding="utf-8")
-        workflow = (target / "get-physics-done" / "workflows" / "set-profile.md").read_text(encoding="utf-8")
-        agent = (target / "agents" / "gpd-planner.md").read_text(encoding="utf-8")
+        skill = (local_skills / "grd-set-profile" / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (target / "get-research-done" / "workflows" / "set-profile.md").read_text(encoding="utf-8")
+        agent = (target / "agents" / "grd-planner.md").read_text(encoding="utf-8")
 
         assert "Codex shell compatibility:" in skill
-        assert f"When shell steps call the GPD CLI, use {expected_bridge}" in skill
-        assert "`GPD_ACTIVE_RUNTIME=codex uv run gpd ...`" in skill
+        assert f"When shell steps call the GRD CLI, use {expected_bridge}" in skill
+        assert "`GRD_ACTIVE_RUNTIME=codex uv run grd ...`" in skill
         assert expected_bridge + " config ensure-section" in skill
         assert f'INIT=$({expected_bridge} init progress --include state,config)' in skill
-        assert 'echo "ERROR: gpd initialization failed: $INIT"' in skill
+        assert 'echo "ERROR: grd initialization failed: $INIT"' in skill
         assert expected_bridge + " config ensure-section" in workflow
         assert f'INIT=$({expected_bridge} init plan-phase "${{PHASE}}")' in agent
         assert "```bash\ngpd config ensure-section\n" not in workflow
-        assert 'INIT=$(gpd init plan-phase "${PHASE}")' not in agent
+        assert 'INIT=$(grd init plan-phase "${PHASE}")' not in agent
 
     def test_install_does_not_expose_agents_as_skills(
-        self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path
+        self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
 
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        installed_skill_names = {d.name for d in skills.iterdir() if d.is_dir() and d.name.startswith("gpd-")}
-        agents = load_agents_from_dir(gpd_root / "agents")
+        installed_skill_names = {d.name for d in skills.iterdir() if d.is_dir() and d.name.startswith("grd-")}
+        agents = load_agents_from_dir(grd_root / "agents")
         agent_names = {agent.name for agent in agents.values()}
 
         assert installed_skill_names.isdisjoint(agent_names)
 
-    def test_install_creates_gpd_content(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_creates_gpd_content(self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        gpd_dest = target / "get-physics-done"
-        assert gpd_dest.is_dir()
+        grd_dest = target / "get-research-done"
+        assert grd_dest.is_dir()
         for subdir in ("references", "templates", "workflows"):
-            assert (gpd_dest / subdir).is_dir()
+            assert (grd_dest / subdir).is_dir()
 
-    def test_install_creates_agents(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_creates_agents(self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
         agents_dir = target / "agents"
         assert agents_dir.is_dir()
-        agent_files = list(agents_dir.glob("gpd-*.md"))
+        agent_files = list(agents_dir.glob("grd-*.md"))
         assert len(agent_files) >= 2
 
     def test_install_writes_agent_role_config_files(
-        self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path
+        self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
 
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        executor_role = target / "agents" / "gpd-executor.toml"
+        executor_role = target / "agents" / "grd-executor.toml"
         assert executor_role.exists()
         parsed = tomllib.loads(executor_role.read_text(encoding="utf-8"))
         assert parsed["sandbox_mode"] == "workspace-write"
-        assert (target / "agents" / "gpd-executor.md").resolve().as_posix() in parsed["developer_instructions"]
+        assert (target / "agents" / "grd-executor.md").resolve().as_posix() in parsed["developer_instructions"]
 
     def test_install_preserves_shell_placeholders_for_codex_agents(
-        self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path
+        self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
-        (gpd_root / "agents" / "gpd-shell-vars.md").write_text(
-            "---\nname: gpd-shell-vars\ndescription: shell vars\n---\n"
+        (grd_root / "agents" / "grd-shell-vars.md").write_text(
+            "---\nname: grd-shell-vars\ndescription: shell vars\n---\n"
             "Use ${PHASE_ARG} and $ARGUMENTS in prose.\n"
             'Inspect with `file_read("$artifact_path")`.\n'
             "```bash\n"
@@ -300,29 +300,29 @@ class TestInstall:
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        checker = (target / "agents" / "gpd-shell-vars.md").read_text(encoding="utf-8")
+        checker = (target / "agents" / "grd-shell-vars.md").read_text(encoding="utf-8")
         assert "Use ${PHASE_ARG} and $ARGUMENTS in prose." in checker
         assert "$artifact_path" in checker
         assert 'echo "$phase_dir" "$file"' in checker
         assert "Math stays $T$." in checker
 
-    def test_install_writes_version(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_writes_version(self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        assert (target / "get-physics-done" / "VERSION").exists()
+        assert (target / "get-research-done" / "VERSION").exists()
 
-    def test_install_configures_toml(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_configures_toml(self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
         config_toml = target / "config.toml"
         assert config_toml.exists()
@@ -332,32 +332,32 @@ class TestInstall:
             f'notify = ["{escaped_exe}", '
             f'"{(target / "hooks" / "notify.py").as_posix()}"]'
         )
-        assert "# GPD update notification" in content
+        assert "# GRD update notification" in content
         assert expected_notify in content
         assert "[features]" in content
         assert "multi_agent = true" in content
-        assert "[agents.gpd-executor]" in content
-        assert 'config_file = "agents/gpd-executor.toml"' in content
+        assert "[agents.grd-executor]" in content
+        assert 'config_file = "agents/grd-executor.toml"' in content
 
     def test_install_registers_agent_roles_in_config_toml(
-        self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path
+        self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
 
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
         parsed = tomllib.loads((target / "config.toml").read_text(encoding="utf-8"))
-        assert parsed["agents"]["gpd-executor"]["config_file"] == "agents/gpd-executor.toml"
-        assert parsed["agents"]["gpd-verifier"]["config_file"] == "agents/gpd-verifier.toml"
-        assert parsed["agents"]["gpd-executor"]["description"]
+        assert parsed["agents"]["grd-executor"]["config_file"] == "agents/grd-executor.toml"
+        assert parsed["agents"]["grd-verifier"]["config_file"] == "agents/grd-verifier.toml"
+        assert parsed["agents"]["grd-executor"]["description"]
 
     def test_install_writes_codex_mcp_startup_timeout(
         self,
         adapter: CodexAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".codex"
@@ -365,15 +365,15 @@ class TestInstall:
         skills = tmp_path / "skills"
         skills.mkdir()
 
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
         parsed = tomllib.loads((target / "config.toml").read_text(encoding="utf-8"))
-        assert parsed["mcp_servers"]["gpd-state"]["startup_timeout_sec"] == 30
+        assert parsed["mcp_servers"]["grd-state"]["startup_timeout_sec"] == 30
 
     def test_install_notify_not_inside_existing_section(
         self,
         adapter: CodexAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         """Notify must be at TOML root level, not inside an existing section."""
@@ -388,7 +388,7 @@ class TestInstall:
             encoding="utf-8",
         )
 
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
         content = (target / "config.toml").read_text(encoding="utf-8")
         # Verify notify appears BEFORE the section, not inside it
@@ -402,39 +402,39 @@ class TestInstall:
     def test_install_with_explicit_target_uses_absolute_notify_path(
         self,
         adapter: CodexAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / "custom-codex"
         target.mkdir()
-        real_gpd_root = Path(__file__).resolve().parents[2] / "src" / "gpd"
+        real_grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
 
-        adapter.install(real_gpd_root, target, is_global=False, explicit_target=True)
+        adapter.install(real_grd_root, target, is_global=False, explicit_target=True)
 
         content = (target / "config.toml").read_text(encoding="utf-8")
         assert f'"{(target / "hooks" / "notify.py").as_posix()}"' in content
         assert '".codex/hooks/notify.py"' not in content
-        workflow = (target / "get-physics-done" / "workflows" / "set-profile.md").read_text(encoding="utf-8")
+        workflow = (target / "get-research-done" / "workflows" / "set-profile.md").read_text(encoding="utf-8")
         assert expected_codex_bridge(target, explicit_target=True) + " config ensure-section" in workflow
 
     def test_reinstall_rewrites_stale_managed_notify_interpreter(
         self,
         adapter: CodexAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         (target / "config.toml").write_text(
-            '# GPD update notification\nnotify = ["python3", ".codex/hooks/notify.py"]\n',
+            '# GRD update notification\nnotify = ["python3", ".codex/hooks/notify.py"]\n',
             encoding="utf-8",
         )
         shared_skills = tmp_path / "shared-skills"
         monkeypatch.setenv("CODEX_SKILLS_DIR", str(shared_skills))
-        monkeypatch.setattr("gpd.adapters.install_utils.sys.executable", "/custom/venv/bin/python")
+        monkeypatch.setattr("grd.adapters.install_utils.sys.executable", "/custom/venv/bin/python")
 
-        adapter.install(gpd_root, target, is_global=False)
+        adapter.install(grd_root, target, is_global=False)
 
         content = (target / "config.toml").read_text(encoding="utf-8")
         assert 'notify = ["/custom/venv/bin/python", ".codex/hooks/notify.py"]' in content
@@ -443,7 +443,7 @@ class TestInstall:
     def test_install_uses_gpd_python_override_for_notify_and_mcp(
         self,
         adapter: CodexAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -451,65 +451,65 @@ class TestInstall:
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        monkeypatch.setenv("GPD_PYTHON", "/env/override/python")
-        monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: None)
+        monkeypatch.setenv("GRD_PYTHON", "/env/override/python")
+        monkeypatch.setattr("grd.version.checkout_root", lambda start=None: None)
 
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
         parsed = tomllib.loads((target / "config.toml").read_text(encoding="utf-8"))
         assert parsed["notify"] == ["/env/override/python", (target / "hooks" / "notify.py").as_posix()]
-        assert parsed["mcp_servers"]["gpd-state"]["command"] == "/env/override/python"
+        assert parsed["mcp_servers"]["grd-state"]["command"] == "/env/override/python"
 
-    def test_install_writes_manifest(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_writes_manifest(self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        assert (target / "gpd-file-manifest.json").exists()
+        assert (target / "grd-file-manifest.json").exists()
 
-    def test_install_returns_counts(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_returns_counts(self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        result = adapter.install(gpd_root, target, skills_dir=skills)
+        result = adapter.install(grd_root, target, skills_dir=skills)
 
         assert result["runtime"] == "codex"
         assert result["skills"] > 0
         assert result["agents"] > 0
         assert result["agentRoles"] > 0
 
-    def test_install_nested_commands_flattened(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_nested_commands_flattened(self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        # commands/sub/deep.md should become gpd-sub-deep/ skill
-        assert (skills / "gpd-sub-deep" / "SKILL.md").exists()
+        # commands/sub/deep.md should become grd-sub-deep/ skill
+        assert (skills / "grd-sub-deep" / "SKILL.md").exists()
 
     def test_nested_command_include_expands_in_recursive_codex_install(
         self,
         adapter: CodexAdapter,
         tmp_path: Path,
     ) -> None:
-        source_root = Path(__file__).resolve().parents[2] / "src" / "gpd"
-        gpd_root = tmp_path / "gpd"
-        shutil.copytree(source_root, gpd_root)
+        source_root = Path(__file__).resolve().parents[2] / "src" / "grd"
+        grd_root = tmp_path / "grd"
+        shutil.copytree(source_root, grd_root)
 
-        nested_command = gpd_root / "commands" / "nested" / "include.md"
+        nested_command = grd_root / "commands" / "nested" / "include.md"
         nested_command.parent.mkdir(parents=True, exist_ok=True)
         nested_command.write_text(
             """---
-name: gpd:nested-include
+name: grd:nested-include
 description: Nested command include expansion regression
 ---
 
 <execution_context>
-@{GPD_INSTALL_DIR}/workflows/update.md
+@{GRD_INSTALL_DIR}/workflows/update.md
 </execution_context>
 """,
             encoding="utf-8",
@@ -519,11 +519,11 @@ description: Nested command include expansion regression
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        content = (skills / "gpd-nested-include" / "SKILL.md").read_text(encoding="utf-8")
+        content = (skills / "grd-nested-include" / "SKILL.md").read_text(encoding="utf-8")
         assert "<!-- [included: update.md] -->" in content
-        assert "Check for a newer GPD release" in content
+        assert "Check for a newer GRD release" in content
         assert re.search(r"^\s*@.*?/workflows/update\.md\s*$", content, flags=re.MULTILINE) is None
 
     def test_update_skill_expands_workflow_include(
@@ -531,18 +531,18 @@ description: Nested command include expansion regression
         adapter: CodexAdapter,
         tmp_path: Path,
     ) -> None:
-        gpd_root = Path(__file__).resolve().parents[2] / "src" / "gpd"
+        grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        content = (skills / "gpd-update" / "SKILL.md").read_text(encoding="utf-8")
+        content = (skills / "grd-update" / "SKILL.md").read_text(encoding="utf-8")
         assert "<!-- [included: update.md] -->" in content
-        assert "Check for a newer GPD release" in content
+        assert "Check for a newer GRD release" in content
         assert re.search(r"^\s*@.*?/workflows/update\.md\s*$", content, flags=re.MULTILINE) is None
-        assert "$gpd-reapply-patches" in content
+        assert "$grd-reapply-patches" in content
         assert "<codex_questioning>" in content
         assert "> **Platform note:** If `ask_user` is not available" not in content
         assert "Use ask_user:" not in content
@@ -553,15 +553,15 @@ description: Nested command include expansion regression
         adapter: CodexAdapter,
         tmp_path: Path,
     ) -> None:
-        gpd_root = Path(__file__).resolve().parents[2] / "src" / "gpd"
+        grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
 
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        workflow = (target / "get-physics-done" / "workflows" / "new-project.md").read_text(encoding="utf-8")
+        workflow = (target / "get-research-done" / "workflows" / "new-project.md").read_text(encoding="utf-8")
         assert "<codex_questioning>" in workflow
         assert "> **Platform note:** If `ask_user` is not available" not in workflow
         assert "Use ask_user:" not in workflow
@@ -571,18 +571,18 @@ description: Nested command include expansion regression
     def test_install_agents_inline_gpd_agents_dir_in_agent_surfaces_only(
         self,
         adapter: CodexAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
-        agents_src = gpd_root / "agents"
-        (agents_src / "gpd-shared.md").write_text(
-            "---\nname: gpd-shared\ndescription: shared\nsurface: internal\nrole_family: coordination\n---\n"
+        agents_src = grd_root / "agents"
+        (agents_src / "grd-shared.md").write_text(
+            "---\nname: grd-shared\ndescription: shared\nsurface: internal\nrole_family: coordination\n---\n"
             "Shared agent body.\n",
             encoding="utf-8",
         )
-        (agents_src / "gpd-main.md").write_text(
-            "---\nname: gpd-main\ndescription: main\nsurface: public\nrole_family: worker\n---\n"
-            "@{GPD_AGENTS_DIR}/gpd-shared.md\n",
+        (agents_src / "grd-main.md").write_text(
+            "---\nname: grd-main\ndescription: main\nsurface: public\nrole_family: worker\n---\n"
+            "@{GRD_AGENTS_DIR}/grd-shared.md\n",
             encoding="utf-8",
         )
 
@@ -590,27 +590,27 @@ description: Nested command include expansion regression
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        content = (target / "agents" / "gpd-main.md").read_text(encoding="utf-8")
+        content = (target / "agents" / "grd-main.md").read_text(encoding="utf-8")
         assert "Shared agent body." in content
-        assert "<!-- [included: gpd-shared.md] -->" in content
+        assert "<!-- [included: grd-shared.md] -->" in content
         assert "@ include not resolved:" not in content.lower()
-        assert not (skills / "gpd-main").exists()
+        assert not (skills / "grd-main").exists()
 
     def test_complete_milestone_skill_expands_bullet_list_includes(
         self,
         adapter: CodexAdapter,
         tmp_path: Path,
     ) -> None:
-        gpd_root = Path(__file__).resolve().parents[2] / "src" / "gpd"
+        grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        content = (skills / "gpd-complete-milestone" / "SKILL.md").read_text(encoding="utf-8")
+        content = (skills / "grd-complete-milestone" / "SKILL.md").read_text(encoding="utf-8")
         assert "<!-- [included: complete-milestone.md] -->" in content
         assert "<!-- [included: milestone-archive.md] -->" in content
         assert "Mark a completed research stage" in content
@@ -623,7 +623,7 @@ class TestUninstall:
     def test_global_uninstall_uses_manifest_skills_dir_when_env_drifts(
         self,
         adapter: CodexAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -633,13 +633,13 @@ class TestUninstall:
         monkeypatch.setenv("CODEX_CONFIG_DIR", str(target))
         monkeypatch.setenv("CODEX_SKILLS_DIR", str(original_shared_skills))
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
 
-        manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+        manifest = json.loads((target / "grd-file-manifest.json").read_text(encoding="utf-8"))
         assert manifest["codex_skills_dir"] == str(original_shared_skills)
 
         drifted_shared_skills = tmp_path / "shared-skills-b"
-        preserved_skill = drifted_shared_skills / "gpd-foreign"
+        preserved_skill = drifted_shared_skills / "grd-foreign"
         preserved_skill.mkdir(parents=True)
         (preserved_skill / "SKILL.md").write_text("keep", encoding="utf-8")
         monkeypatch.setenv("CODEX_SKILLS_DIR", str(drifted_shared_skills))
@@ -647,7 +647,7 @@ class TestUninstall:
         adapter.uninstall(target)
 
         assert not any(
-            entry.is_dir() and entry.name.startswith("gpd-")
+            entry.is_dir() and entry.name.startswith("grd-")
             for entry in original_shared_skills.iterdir()
         )
         assert (preserved_skill / "SKILL.md").exists()
@@ -655,7 +655,7 @@ class TestUninstall:
     def test_local_uninstall_uses_repo_scoped_skills_dir_by_default(
         self,
         adapter: CodexAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -667,56 +667,56 @@ class TestUninstall:
         (preserved_skill / "SKILL.md").write_text("keep", encoding="utf-8")
         monkeypatch.setenv("CODEX_SKILLS_DIR", str(shared_skills))
 
-        adapter.install(gpd_root, target, is_global=False)
+        adapter.install(grd_root, target, is_global=False)
         adapter.uninstall(target)
         local_skills = tmp_path / ".agents" / "skills"
 
-        assert not any(d.name.startswith("gpd-") for d in local_skills.iterdir() if d.is_dir())
+        assert not any(d.name.startswith("grd-") for d in local_skills.iterdir() if d.is_dir())
         assert (shared_skills / "custom-keep" / "SKILL.md").exists()
 
-    def test_uninstall_removes_skills(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_uninstall_removes_skills(self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
         result = adapter.uninstall(target, skills_dir=skills)
 
-        gpd_skills = [d for d in skills.iterdir() if d.is_dir() and d.name.startswith("gpd-")]
-        assert len(gpd_skills) == 0
+        grd_skills = [d for d in skills.iterdir() if d.is_dir() and d.name.startswith("grd-")]
+        assert len(grd_skills) == 0
         assert any("skills" in item for item in result["removed"])
 
-    def test_uninstall_removes_agents(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_uninstall_removes_agents(self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
 
-        # Add non-GPD agent to make sure it survives
+        # Add non-GRD agent to make sure it survives
         (target / "agents" / "custom.md").write_text("keep", encoding="utf-8")
         (target / "agents" / "custom.toml").write_text('developer_instructions = "keep"\n', encoding="utf-8")
 
         adapter.uninstall(target, skills_dir=skills)
 
         agents_dir = target / "agents"
-        assert not any(f.name.startswith("gpd-") for f in agents_dir.iterdir())
+        assert not any(f.name.startswith("grd-") for f in agents_dir.iterdir())
         assert (agents_dir / "custom.md").exists()
         assert (agents_dir / "custom.toml").exists()
 
-    def test_uninstall_cleans_toml(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_uninstall_cleans_toml(self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
         adapter.uninstall(target, skills_dir=skills)
 
         config_toml = target / "config.toml"
         if config_toml.exists():
             content = config_toml.read_text(encoding="utf-8")
-            assert "gpd-" not in content
+            assert "grd-" not in content
             assert "notify.py" not in content
             assert "multi_agent" not in content
 
@@ -728,15 +728,15 @@ class TestUninstall:
         result = adapter.uninstall(target, skills_dir=skills)
         assert result["removed"] == []
 
-    def test_uninstall_preserves_non_gpd_toml_lines(self, adapter: CodexAdapter, tmp_path: Path) -> None:
-        """Uninstall must not destroy user TOML content that happens to contain 'gpd-'."""
+    def test_uninstall_preserves_non_grd_toml_lines(self, adapter: CodexAdapter, tmp_path: Path) -> None:
+        """Uninstall must not destroy user TOML content that happens to contain 'grd-'."""
         target = tmp_path / ".codex"
         target.mkdir()
         config_toml = target / "config.toml"
         config_toml.write_text(
             'model = "gpt-4"\n'
-            '# My notes about gpd-style naming\n'
-            'custom = "my-gpd-tool"\n'
+            '# My notes about grd-style naming\n'
+            'custom = "my-grd-tool"\n'
             f'notify = ["{sys.executable or "python3"}", "/path/notify.py"]\n',
             encoding="utf-8",
         )
@@ -746,12 +746,12 @@ class TestUninstall:
 
         content = config_toml.read_text(encoding="utf-8")
         assert 'model = "gpt-4"' in content
-        assert "gpd-style naming" in content
-        assert 'custom = "my-gpd-tool"' in content
+        assert "grd-style naming" in content
+        assert 'custom = "my-grd-tool"' in content
         assert f'notify = ["{sys.executable or "python3"}", "/path/notify.py"]' in content
 
-    def test_uninstall_preserves_non_gpd_agent_roles(
-        self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path
+    def test_uninstall_preserves_non_grd_agent_roles(
+        self, adapter: CodexAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
         target = tmp_path / ".codex"
         target.mkdir()
@@ -764,23 +764,23 @@ class TestUninstall:
         skills = tmp_path / "skills"
         skills.mkdir()
 
-        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.install(grd_root, target, skills_dir=skills)
         adapter.uninstall(target, skills_dir=skills)
 
         parsed = tomllib.loads((target / "config.toml").read_text(encoding="utf-8"))
         assert parsed["agents"]["reviewer"]["config_file"] == "agents/reviewer.toml"
-        assert "gpd-executor" not in parsed["agents"]
-        assert "gpd-verifier" not in parsed["agents"]
+        assert "grd-executor" not in parsed["agents"]
+        assert "grd-verifier" not in parsed["agents"]
 
-    def test_uninstall_removes_gpd_comment_with_notify(self, adapter: CodexAdapter, tmp_path: Path) -> None:
-        """The '# GPD update notification' comment should be cleaned alongside the notify line."""
+    def test_uninstall_removes_grd_comment_with_notify(self, adapter: CodexAdapter, tmp_path: Path) -> None:
+        """The '# GRD update notification' comment should be cleaned alongside the notify line."""
         target = tmp_path / ".codex"
         target.mkdir()
         config_toml = target / "config.toml"
         config_toml.write_text(
             'model = "gpt-4"\n'
             "\n"
-            "# GPD update notification\n"
+            "# GRD update notification\n"
             f'notify = ["{sys.executable or "python3"}", "/path/notify.py"]\n',
             encoding="utf-8",
         )
@@ -789,7 +789,7 @@ class TestUninstall:
         adapter.uninstall(target, skills_dir=skills)
 
         content = config_toml.read_text(encoding="utf-8")
-        assert "GPD update notification" not in content
+        assert "GRD update notification" not in content
         assert "notify.py" not in content
 
 
@@ -799,7 +799,7 @@ class TestNotifyConfiguration:
         adapter: CodexAdapter,
         tmp_path: Path,
     ) -> None:
-        from gpd.adapters.codex import _configure_config_toml
+        from grd.adapters.codex import _configure_config_toml
 
         target = tmp_path / ".codex"
         target.mkdir()
@@ -814,10 +814,10 @@ class TestNotifyConfiguration:
         _configure_config_toml(target, is_global=True)
 
         content = config_toml.read_text(encoding="utf-8")
-        assert '# GPD original notify: ["toolctl", "/path/to/my-tool"]' in content
+        assert '# GRD original notify: ["toolctl", "/path/to/my-tool"]' in content
         escaped_exe = (sys.executable or "python3").replace("\\", "\\\\")
         assert f'notify = ["{escaped_exe}", "-c",' in content
-        assert "gpd-codex-notify-wrapper-v1" in content
+        assert "grd-codex-notify-wrapper-v1" in content
         assert "/path/to/my-tool" in content
         assert "notify.py" in content
 
@@ -828,14 +828,14 @@ class TestNotifyConfiguration:
         cleaned = config_toml.read_text(encoding="utf-8")
         assert 'notify = ["toolctl", "/path/to/my-tool"]' in cleaned
         assert "notify.py" not in cleaned
-        assert "GPD original notify" not in cleaned
+        assert "GRD original notify" not in cleaned
 
     def test_wraps_custom_notify_py_and_restores_it_on_uninstall(
         self,
         adapter: CodexAdapter,
         tmp_path: Path,
     ) -> None:
-        from gpd.adapters.codex import _configure_config_toml
+        from grd.adapters.codex import _configure_config_toml
 
         target = tmp_path / ".codex"
         target.mkdir()
@@ -849,9 +849,9 @@ class TestNotifyConfiguration:
         _configure_config_toml(target, is_global=False)
 
         content = config_toml.read_text(encoding="utf-8")
-        assert '# GPD original notify: ["python", "/Users/me/custom/notify.py"]' in content
+        assert '# GRD original notify: ["python", "/Users/me/custom/notify.py"]' in content
         assert 'notify = ["python", "/Users/me/custom/notify.py"]' not in content
-        assert "gpd-codex-notify-wrapper-v1" in content
+        assert "grd-codex-notify-wrapper-v1" in content
 
         skills = tmp_path / "skills"
         skills.mkdir()
@@ -859,11 +859,11 @@ class TestNotifyConfiguration:
 
         cleaned = config_toml.read_text(encoding="utf-8")
         assert 'notify = ["python", "/Users/me/custom/notify.py"]' in cleaned
-        assert "gpd-codex-notify-wrapper-v1" not in cleaned
-        assert "GPD original notify" not in cleaned
+        assert "grd-codex-notify-wrapper-v1" not in cleaned
+        assert "GRD original notify" not in cleaned
 
     def test_mcp_toml_escapes_windows_paths(self, tmp_path: Path) -> None:
-        from gpd.adapters.codex import _write_mcp_servers_codex_toml
+        from grd.adapters.codex import _write_mcp_servers_codex_toml
 
         target = tmp_path / ".codex"
         target.mkdir()
@@ -871,9 +871,9 @@ class TestNotifyConfiguration:
         count = _write_mcp_servers_codex_toml(
             target,
             {
-                "gpd-test": {
+                "grd-test": {
                     "command": r"C:\Python311\python.exe",
-                    "args": [r"C:\Program Files\GPD\server.py"],
+                    "args": [r"C:\Program Files\GRD\server.py"],
                     "env": {"PYTHONPATH": r"C:\Users\tester\venv"},
                 }
             },
@@ -882,22 +882,22 @@ class TestNotifyConfiguration:
         content = (target / "config.toml").read_text(encoding="utf-8")
         assert count == 1
         assert r'command = "C:\\Python311\\python.exe"' in content
-        assert r'args = ["C:\\Program Files\\GPD\\server.py"]' in content
+        assert r'args = ["C:\\Program Files\\GRD\\server.py"]' in content
         assert r'PYTHONPATH = "C:\\Users\\tester\\venv"' in content
 
     def test_mcp_toml_preserves_user_overrides_and_custom_fields(self, tmp_path: Path) -> None:
-        from gpd.adapters.codex import _write_mcp_servers_codex_toml
+        from grd.adapters.codex import _write_mcp_servers_codex_toml
 
         target = tmp_path / ".codex"
         target.mkdir()
         (target / "config.toml").write_text(
-            '[mcp_servers.gpd-state]\n'
+            '[mcp_servers.grd-state]\n'
             'command = "python3"\n'
             'args = ["-m", "old.server"]\n'
             'startup_timeout_sec = 45\n'
-            'cwd = "/tmp/custom-gpd"\n'
+            'cwd = "/tmp/custom-grd"\n'
             '\n'
-            '[mcp_servers.gpd-state.env]\n'
+            '[mcp_servers.grd-state.env]\n'
             'LOG_LEVEL = "INFO"\n'
             'EXTRA_FLAG = "1"\n',
             encoding="utf-8",
@@ -906,21 +906,21 @@ class TestNotifyConfiguration:
         count = _write_mcp_servers_codex_toml(
             target,
             {
-                "gpd-state": {
+                "grd-state": {
                     "command": "/custom/venv/bin/python",
-                    "args": ["-m", "gpd.mcp.servers.state_server"],
+                    "args": ["-m", "grd.mcp.servers.state_server"],
                     "env": {"LOG_LEVEL": "WARNING"},
                 }
             },
         )
 
         parsed = tomllib.loads((target / "config.toml").read_text(encoding="utf-8"))
-        server = parsed["mcp_servers"]["gpd-state"]
+        server = parsed["mcp_servers"]["grd-state"]
         assert count == 1
         assert server["command"] == "/custom/venv/bin/python"
-        assert server["args"] == ["-m", "gpd.mcp.servers.state_server"]
+        assert server["args"] == ["-m", "grd.mcp.servers.state_server"]
         assert server["startup_timeout_sec"] == 45
-        assert server["cwd"] == "/tmp/custom-gpd"
+        assert server["cwd"] == "/tmp/custom-grd"
         assert server["env"] == {"LOG_LEVEL": "INFO", "EXTRA_FLAG": "1"}
 
     def test_wraps_existing_false_multi_agent_and_restores_it_on_uninstall(
@@ -928,7 +928,7 @@ class TestNotifyConfiguration:
         adapter: CodexAdapter,
         tmp_path: Path,
     ) -> None:
-        from gpd.adapters.codex import _configure_config_toml
+        from grd.adapters.codex import _configure_config_toml
 
         target = tmp_path / ".codex"
         target.mkdir()
@@ -943,7 +943,7 @@ class TestNotifyConfiguration:
         _configure_config_toml(target, is_global=True)
 
         content = config_toml.read_text(encoding="utf-8")
-        assert "# GPD original multi_agent: multi_agent = false" in content
+        assert "# GRD original multi_agent: multi_agent = false" in content
         assert "multi_agent = true" in content
 
         skills = tmp_path / "skills"
@@ -951,6 +951,6 @@ class TestNotifyConfiguration:
         adapter.uninstall(target, skills_dir=skills)
 
         cleaned = config_toml.read_text(encoding="utf-8")
-        assert "GPD original multi_agent" not in cleaned
+        assert "GRD original multi_agent" not in cleaned
         assert "multi_agent = false" in cleaned
         assert "multi_agent = true" not in cleaned

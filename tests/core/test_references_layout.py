@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REFERENCES_DIR = REPO_ROOT / "src/gpd/specs/references"
+REFERENCES_DIR = REPO_ROOT / "src/grd/specs/references"
 
 ROOT_MARKDOWN_FILES = {
     "README.md",
@@ -193,15 +193,15 @@ def test_deleted_decimal_phase_reference_is_gone() -> None:
 
 
 def test_insert_phase_workflow_points_to_merged_decimal_phase_section() -> None:
-    content = (REPO_ROOT / "src/gpd/specs/workflows/insert-phase.md").read_text(encoding="utf-8")
+    content = (REPO_ROOT / "src/grd/specs/workflows/insert-phase.md").read_text(encoding="utf-8")
     assert "references/decimal-phase-calculation.md" not in content
     assert "references/orchestration/agent-infrastructure.md" in content
     assert "Decimal Phase Calculation" in content
 
 
 def test_research_mapper_references_use_renamed_template_tree() -> None:
-    agent = (REPO_ROOT / "src/gpd/agents/gpd-research-mapper.md").read_text(encoding="utf-8")
-    workflow = (REPO_ROOT / "src/gpd/specs/workflows/map-research.md").read_text(encoding="utf-8")
+    agent = (REPO_ROOT / "src/grd/agents/grd-research-mapper.md").read_text(encoding="utf-8")
+    workflow = (REPO_ROOT / "src/grd/specs/workflows/map-research.md").read_text(encoding="utf-8")
 
     expected_paths = [
         "references/templates/research-mapper/FORMALISM.md",
@@ -220,7 +220,7 @@ def test_research_mapper_references_use_renamed_template_tree() -> None:
 def test_source_files_only_reference_existing_reference_markdown_files() -> None:
     referenced_paths: set[str] = set()
 
-    for path in (REPO_ROOT / "src/gpd").rglob("*"):
+    for path in (REPO_ROOT / "src/grd").rglob("*"):
         if not path.is_file() or path.suffix not in {".md", ".py"} or REFERENCES_DIR in path.parents:
             continue
         content = path.read_text(encoding="utf-8")
@@ -253,10 +253,10 @@ def test_reference_docs_inline_markdown_targets_resolve() -> None:
 
 def test_no_stale_root_reference_paths_remain_in_prompt_sources() -> None:
     source_roots = [
-        REPO_ROOT / "src/gpd/agents",
-        REPO_ROOT / "src/gpd/commands",
-        REPO_ROOT / "src/gpd/specs/templates",
-        REPO_ROOT / "src/gpd/specs/workflows",
+        REPO_ROOT / "src/grd/agents",
+        REPO_ROOT / "src/grd/commands",
+        REPO_ROOT / "src/grd/specs/templates",
+        REPO_ROOT / "src/grd/specs/workflows",
     ]
     stale_tokens = [
         "references/decimal-phase-calculation.md",

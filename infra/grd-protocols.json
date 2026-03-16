@@ -1,0 +1,35 @@
+{
+  "name": "grd-protocols",
+  "description": "Physics computation protocols for GRD research workflows. Provides step-by-step methodology, verification checkpoints, and auto-routing for 47 physics domains.",
+  "transport": "stdio",
+  "command": "grd-mcp-protocols",
+  "args": [],
+  "env": {
+    "LOG_LEVEL": "${LOG_LEVEL:-WARNING}"
+  },
+  "capabilities": [
+    "get_protocol",
+    "list_protocols",
+    "route_protocol",
+    "get_protocol_checkpoints"
+  ],
+  "registry_prefix": "grd_protocols",
+  "prerequisites": [
+    "Install GRD first: npx -y get-research-done"
+  ],
+  "health_check": {
+    "tool": "list_protocols",
+    "input": {},
+    "expect": "count >= 40 protocols loaded"
+  },
+  "alternatives": {
+    "python_module": {
+      "command": "python",
+      "args": [
+        "-m",
+        "grd.mcp.servers.protocols_server"
+      ],
+      "notes": "Requires grd package installed"
+    }
+  }
+}

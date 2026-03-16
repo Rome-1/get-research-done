@@ -1,4 +1,4 @@
-"""Regression tests for runtime platform detection in gpd.core.context."""
+"""Regression tests for runtime platform detection in grd.core.context."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from unittest.mock import patch
 
 import pytest
 
-import gpd.core.context as context_module
+import grd.core.context as context_module
 
 
 def _clear_runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Remove runtime detection env vars so each test controls the signal."""
     for key in list(os.environ):
-        if key.startswith(("CLAUDE_CODE", "CODEX", "GEMINI", "OPENCODE")) or key == "GPD_ACTIVE_RUNTIME":
+        if key.startswith(("CLAUDE_CODE", "CODEX", "GEMINI", "OPENCODE")) or key == "GRD_ACTIVE_RUNTIME":
             monkeypatch.delenv(key, raising=False)
 
 
@@ -47,8 +47,8 @@ def test_init_context_uses_runtime_detect_directory_fallback(monkeypatch: pytest
         _clear_runtime_env(runtime_env)
         (tmp_path / ".codex").mkdir()
 
-        with patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path), \
-             patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path):
+        with patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path), \
+             patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path):
             module = importlib.reload(context_module)
             ctx = module.init_new_project(tmp_path)
             assert ctx["platform"] == "codex"
@@ -61,12 +61,12 @@ def test_init_context_prefers_explicit_gpd_runtime_override(
 ) -> None:
     with monkeypatch.context() as runtime_env:
         _clear_runtime_env(runtime_env)
-        runtime_env.setenv("GPD_ACTIVE_RUNTIME", "codex")
-        (tmp_path / ".claude" / "get-physics-done").mkdir(parents=True)
-        (tmp_path / ".codex" / "get-physics-done").mkdir(parents=True)
+        runtime_env.setenv("GRD_ACTIVE_RUNTIME", "codex")
+        (tmp_path / ".claude" / "get-research-done").mkdir(parents=True)
+        (tmp_path / ".codex" / "get-research-done").mkdir(parents=True)
 
-        with patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path), \
-             patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path):
+        with patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path), \
+             patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path):
             module = importlib.reload(context_module)
             ctx = module.init_progress(tmp_path)
             assert ctx["platform"] == "codex"

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from gpd.adapters import get_adapter, list_runtimes
-from gpd.adapters.tool_names import (
+from grd.adapters import get_adapter, list_runtimes
+from grd.adapters.tool_names import (
     CANONICAL_TOOL_NAMES,
     build_canonical_alias_map,
     build_runtime_alias_map,

@@ -1,0 +1,42 @@
+{
+  "name": "grd-verification",
+  "description": "GRD physics verification checks. Tools for running contract-aware checks, dimensional analysis, domain and bundle-specific checklists, limiting case checks, symmetry verification, and coverage gap analysis.",
+  "transport": "stdio",
+  "command": "grd-mcp-verification",
+  "args": [],
+  "env": {
+    "LOG_LEVEL": "${LOG_LEVEL:-WARNING}"
+  },
+  "capabilities": [
+    "run_check",
+    "run_contract_check",
+    "suggest_contract_checks",
+    "get_checklist",
+    "get_bundle_checklist",
+    "dimensional_check",
+    "limiting_case_check",
+    "symmetry_check",
+    "get_verification_coverage"
+  ],
+  "registry_prefix": "grd_verification",
+  "prerequisites": [
+    "Install GRD first: npx -y get-research-done"
+  ],
+  "health_check": {
+    "tool": "get_checklist",
+    "input": {
+      "domain": "qft"
+    },
+    "expect": "contains Ward identities"
+  },
+  "alternatives": {
+    "python_module": {
+      "command": "python",
+      "args": [
+        "-m",
+        "grd.mcp.servers.verification_server"
+      ],
+      "notes": "Requires grd package installed"
+    }
+  }
+}

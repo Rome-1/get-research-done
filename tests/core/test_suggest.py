@@ -1,4 +1,4 @@
-"""Tests for gpd.core.suggest — next-action intelligence."""
+"""Tests for grd.core.suggest — next-action intelligence."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from gpd.core.suggest import (
+from grd.core.suggest import (
     Recommendation,
     SuggestContext,
     SuggestResult,
@@ -17,7 +17,7 @@ from gpd.core.suggest import (
 )
 
 _RUNTIME_ENV_PREFIXES = ("CLAUDE", "CODEX", "GEMINI", "OPENCODE")
-_RUNTIME_ENV_VARS_TO_CLEAR = {"GPD_ACTIVE_RUNTIME", "XDG_CONFIG_HOME"}
+_RUNTIME_ENV_VARS_TO_CLEAR = {"GRD_ACTIVE_RUNTIME", "XDG_CONFIG_HOME"}
 
 
 @pytest.fixture(autouse=True)
@@ -26,15 +26,15 @@ def _isolate_runtime_detection(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     for key in list(os.environ):
         if key.startswith(_RUNTIME_ENV_PREFIXES) or key in _RUNTIME_ENV_VARS_TO_CLEAR:
             monkeypatch.delenv(key, raising=False)
-    monkeypatch.setattr("gpd.hooks.runtime_detect.Path.home", lambda: tmp_path / "home")
+    monkeypatch.setattr("grd.hooks.runtime_detect.Path.home", lambda: tmp_path / "home")
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 
 
 def _setup_project(tmp_path: Path) -> Path:
-    """Create a minimal GPD project structure and return project root."""
-    planning = tmp_path / ".gpd"
+    """Create a minimal GRD project structure and return project root."""
+    planning = tmp_path / ".grd"
     planning.mkdir()
     (planning / "phases").mkdir()
     (planning / "PROJECT.md").write_text("# My Project\n")
@@ -43,12 +43,12 @@ def _setup_project(tmp_path: Path) -> Path:
 
 def _create_roadmap(tmp_path: Path, content: str = "# Roadmap\n## Phase 1\n") -> None:
     """Write ROADMAP.md."""
-    (tmp_path / ".gpd" / "ROADMAP.md").write_text(content)
+    (tmp_path / ".grd" / "ROADMAP.md").write_text(content)
 
 
 def _create_state(tmp_path: Path, state: dict[str, object]) -> None:
     """Write state.json."""
-    (tmp_path / ".gpd" / "state.json").write_text(json.dumps(state))
+    (tmp_path / ".grd" / "state.json").write_text(json.dumps(state))
 
 
 def _create_phase(
@@ -61,7 +61,7 @@ def _create_phase(
     verification: bool = False,
 ) -> Path:
     """Create a phase directory with specified artifacts."""
-    phase_dir = tmp_path / ".gpd" / "phases" / name
+    phase_dir = tmp_path / ".grd" / "phases" / name
     phase_dir.mkdir(parents=True, exist_ok=True)
     for i in range(1, plans + 1):
         (phase_dir / f"{i:02d}-PLAN.md").write_text(f"Plan {i}\n")
@@ -76,7 +76,7 @@ def _create_phase(
 
 def _create_todos(tmp_path: Path, count: int) -> None:
     """Create pending todo files."""
-    pending = tmp_path / ".gpd" / "todos" / "pending"
+    pending = tmp_path / ".grd" / "todos" / "pending"
     pending.mkdir(parents=True, exist_ok=True)
     for i in range(count):
         (pending / f"todo-{i}.md").write_text(f"Todo {i}\n")
@@ -84,8 +84,8 @@ def _create_todos(tmp_path: Path, count: int) -> None:
 
 def _mark_complete_runtime_install(config_dir: Path, *, runtime: str, install_scope: str = "local") -> None:
     """Create the concrete install markers real runtime installs write."""
-    (config_dir / "get-physics-done").mkdir(parents=True, exist_ok=True)
-    (config_dir / "gpd-file-manifest.json").write_text(
+    (config_dir / "get-research-done").mkdir(parents=True, exist_ok=True)
+    (config_dir / "grd-file-manifest.json").write_text(
         json.dumps({"runtime": runtime, "install_scope": install_scope}),
         encoding="utf-8",
     )
@@ -114,13 +114,13 @@ def test_no_project_uses_workspace_runtime_install_for_command_formatting(tmp_pa
     _mark_complete_runtime_install(elsewhere / ".claude", runtime="claude-code")
 
     with (
-        patch("gpd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
-        patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
+        patch("grd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
+        patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
     ):
         result = suggest_next(workspace)
 
     assert result.top_action is not None
-    assert result.top_action.command == "$gpd-new-project"
+    assert result.top_action.command == "$grd-new-project"
 
 
 def test_no_project_with_runtime_dir_but_no_install_uses_plain_gpd_command(tmp_path: Path) -> None:
@@ -131,16 +131,16 @@ def test_no_project_with_runtime_dir_but_no_install_uses_plain_gpd_command(tmp_p
 
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    (elsewhere / ".claude" / "get-physics-done").mkdir(parents=True)
+    (elsewhere / ".claude" / "get-research-done").mkdir(parents=True)
 
     with (
-        patch("gpd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
-        patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
+        patch("grd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
+        patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
     ):
         result = suggest_next(workspace)
 
     assert result.top_action is not None
-    assert result.top_action.command == "gpd new-project"
+    assert result.top_action.command == "grd new-project"
 
 
 # ─── Empty Project ─────────────────────────────────────────────────────────────
@@ -296,7 +296,7 @@ def test_unverified_results_suggest_verification(tmp_path: Path) -> None:
     result = suggest_next(root)
     verify_results = next((s for s in result.suggestions if s.action == "verify-results"), None)
     assert verify_results is not None
-    assert verify_results.command == "gpd verify-work 01"
+    assert verify_results.command == "grd verify-work 01"
     assert verify_results.phase == "01"
     assert result.context.unverified_results == 1
 
@@ -415,12 +415,12 @@ def test_paper_exists_suggests_peer_review_before_submission(tmp_path: Path) -> 
 
 
 def test_referee_report_in_planning_root_suggests_response(tmp_path: Path) -> None:
-    """Referee report in .gpd suggests responding to referees."""
+    """Referee report in .grd suggests responding to referees."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
     (root / "paper").mkdir()
     (root / "paper" / "main.tex").write_text("\\documentclass{article}\n")
-    (root / ".gpd" / "REFEREE-REPORT.md").write_text("Major revision needed.\n")
+    (root / ".grd" / "REFEREE-REPORT.md").write_text("Major revision needed.\n")
     result = suggest_next(root)
     actions = [s.action for s in result.suggestions]
     assert "respond-to-referees" in actions
@@ -476,7 +476,7 @@ def test_explore_mode_boosts_discussion(tmp_path: Path) -> None:
     """Explore mode should lower priority (boost) discuss-phase."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
-    (root / ".gpd" / "config.json").write_text(json.dumps({"research_mode": "explore"}))
+    (root / ".grd" / "config.json").write_text(json.dumps({"research_mode": "explore"}))
     _create_phase(root, "01-setup", plans=2, summaries=0)
     _create_phase(root, "02-core")  # pending
     result = suggest_next(root)
@@ -489,7 +489,7 @@ def test_exploit_mode_boosts_execution(tmp_path: Path) -> None:
     """Exploit mode should lower priority (boost) execute-phase."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
-    (root / ".gpd" / "config.json").write_text(json.dumps({"research_mode": "exploit"}))
+    (root / ".grd" / "config.json").write_text(json.dumps({"research_mode": "exploit"}))
     _create_phase(root, "01-setup", plans=2, summaries=0)
     result = suggest_next(root)
     execute = next((s for s in result.suggestions if s.action == "execute-phase"), None)
@@ -501,7 +501,7 @@ def test_supervised_mode_penalizes_execution(tmp_path: Path) -> None:
     """Supervised autonomy mode should increase execution priority (penalize)."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
-    (root / ".gpd" / "config.json").write_text(json.dumps({"autonomy": "supervised"}))
+    (root / ".grd" / "config.json").write_text(json.dumps({"autonomy": "supervised"}))
     _create_phase(root, "01-setup", plans=2, summaries=0)
     result = suggest_next(root)
     execute = next((s for s in result.suggestions if s.action == "execute-phase"), None)
@@ -513,7 +513,7 @@ def test_yolo_mode_boosts_execution(tmp_path: Path) -> None:
     """YOLO mode should lower execution priority (boost)."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
-    (root / ".gpd" / "config.json").write_text(json.dumps({"autonomy": "yolo"}))
+    (root / ".grd" / "config.json").write_text(json.dumps({"autonomy": "yolo"}))
     _create_phase(root, "01-setup", plans=2, summaries=0)
     result = suggest_next(root)
     execute = next((s for s in result.suggestions if s.action == "execute-phase"), None)
@@ -543,7 +543,7 @@ def test_decimal_phases_sorted_correctly(tmp_path: Path) -> None:
 
 def test_recommendation_is_frozen() -> None:
     """Recommendation should be immutable."""
-    rec = Recommendation(action="test", priority=1, reason="reason", command="/gpd:test")
+    rec = Recommendation(action="test", priority=1, reason="reason", command="/grd:test")
     with pytest.raises(AttributeError):
         rec.action = "changed"  # type: ignore[misc]
 
@@ -575,7 +575,7 @@ def test_adaptive_mode_without_lock_signal_boosts_discussion(tmp_path: Path) -> 
     """Adaptive mode should stay discussion-heavy until the method is locked by evidence."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
-    (root / ".gpd" / "config.json").write_text(json.dumps({"research_mode": "adaptive"}))
+    (root / ".grd" / "config.json").write_text(json.dumps({"research_mode": "adaptive"}))
     _create_phase(root, "01-setup", plans=2, summaries=0)
     _create_phase(root, "02-core")
     result = suggest_next(root)
@@ -589,7 +589,7 @@ def test_adaptive_mode_with_decisive_evidence_boosts_execution_and_verification(
     """Adaptive mode should narrow only once decisive evidence or an explicit lock exists."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
-    (root / ".gpd" / "config.json").write_text(json.dumps({"research_mode": "adaptive"}))
+    (root / ".grd" / "config.json").write_text(json.dumps({"research_mode": "adaptive"}))
     locked_phase = _create_phase(root, "00-scan", summaries=1)
     (locked_phase / "01-SUMMARY.md").write_text(
         """---
@@ -629,7 +629,7 @@ def test_int_current_phase_coerced_to_str(tmp_path: Path, monkeypatch: pytest.Mo
 
     raw_state = {"position": {"current_phase": 3, "status": "active"}}
     monkeypatch.setattr(
-        "gpd.core.suggest._load_state_json_safe",
+        "grd.core.suggest._load_state_json_safe",
         lambda _cwd: raw_state,
     )
     result = suggest_next(root)

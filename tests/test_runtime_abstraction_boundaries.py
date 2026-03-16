@@ -32,31 +32,31 @@ _RUNTIME_OWNED_PREFIXES = (
     ".codex/",
     ".gemini/",
     ".opencode/",
-    "src/gpd/adapters/",
+    "src/grd/adapters/",
 )
 _ALLOWED_RUNTIME_FILES = {
     "CITATION.cff",
     ".gitignore",
     "package.json",
     "pyproject.toml",
-    "src/gpd/hooks/runtime_detect.py",
+    "src/grd/hooks/runtime_detect.py",
 }
 _ALLOWED_SHARED_PYTHON_RUNTIME_FILES = {
-    "src/gpd/hooks/runtime_detect.py",
+    "src/grd/hooks/runtime_detect.py",
 }
 _SHARED_ADAPTER_INFRA_FILES = {
-    "src/gpd/adapters/__init__.py",
-    "src/gpd/adapters/base.py",
-    "src/gpd/adapters/install_utils.py",
-    "src/gpd/adapters/tool_names.py",
+    "src/grd/adapters/__init__.py",
+    "src/grd/adapters/base.py",
+    "src/grd/adapters/install_utils.py",
+    "src/grd/adapters/tool_names.py",
 }
 _ALLOWED_RUNTIME_ADAPTER_FILES = {
-    "src/gpd/adapters/claude_code.py",
-    "src/gpd/adapters/codex.py",
-    "src/gpd/adapters/gemini.py",
-    "src/gpd/adapters/opencode.py",
-    "src/gpd/adapters/runtime_catalog.py",
-    "src/gpd/adapters/runtime_catalog.json",
+    "src/grd/adapters/claude_code.py",
+    "src/grd/adapters/codex.py",
+    "src/grd/adapters/gemini.py",
+    "src/grd/adapters/opencode.py",
+    "src/grd/adapters/runtime_catalog.py",
+    "src/grd/adapters/runtime_catalog.json",
 }
 _SHARED_ADAPTER_RUNTIME_BRANCH_PATTERN = (
     r'(runtime\s*==\s*"|runtime\s+in\s+\(|runtime_name\s*==\s*"|runtime_name\s+in\s+\()'
@@ -66,11 +66,11 @@ _RUNTIME_INSTALL_ARTIFACT_PATTERN = re.compile(
     r"\.gemini/agents|\.opencode/agents|\.claude/commands|\.gemini/commands|\.opencode/commands)"
 )
 _SHARED_RUNTIME_AGNOSTIC_PATHS = (
-    REPO_ROOT / "src/gpd/agents",
-    REPO_ROOT / "src/gpd/commands",
-    REPO_ROOT / "src/gpd/specs",
-    REPO_ROOT / "src/gpd/registry.py",
-    REPO_ROOT / "src/gpd/mcp/servers/skills_server.py",
+    REPO_ROOT / "src/grd/agents",
+    REPO_ROOT / "src/grd/commands",
+    REPO_ROOT / "src/grd/specs",
+    REPO_ROOT / "src/grd/registry.py",
+    REPO_ROOT / "src/grd/mcp/servers/skills_server.py",
 )
 _TEXT_SURFACE_SUFFIXES = {".md", ".py"}
 
@@ -98,11 +98,11 @@ def _is_doc(rel_path: Path) -> bool:
 
 
 def _is_installed_shared_markdown(rel_path: Path) -> bool:
-    return rel_path.parts[:3] == ("src", "gpd", "commands") or rel_path.parts[:3] == (
+    return rel_path.parts[:3] == ("src", "grd", "commands") or rel_path.parts[:3] == (
         "src",
-        "gpd",
+        "grd",
         "agents",
-    ) or rel_path.parts[:3] == ("src", "gpd", "specs")
+    ) or rel_path.parts[:3] == ("src", "grd", "specs")
 
 
 def _is_test(rel_path: Path) -> bool:
@@ -166,8 +166,8 @@ def test_shared_python_modules_do_not_hardcode_runtime_terms() -> None:
         (path, line_no, snippet)
         for path, line_no, snippet in _git_grep(_RUNTIME_PATTERN)
         if path.suffix == ".py"
-        and path.parts[:2] == ("src", "gpd")
-        and not path.as_posix().startswith("src/gpd/adapters/")
+        and path.parts[:2] == ("src", "grd")
+        and not path.as_posix().startswith("src/grd/adapters/")
         and not _is_allowed_shared_python_runtime_file(path)
     ]
 
@@ -194,7 +194,7 @@ def test_shared_adapter_infrastructure_stays_runtime_agnostic() -> None:
     leaks = [
         (path, line_no, snippet)
         for path, line_no, snippet in _git_grep(_SHARED_ADAPTER_RUNTIME_BRANCH_PATTERN)
-        if path.parts[:3] == ("src", "gpd", "adapters")
+        if path.parts[:3] == ("src", "grd", "adapters")
         and path.as_posix() not in _ALLOWED_RUNTIME_ADAPTER_FILES
     ]
 

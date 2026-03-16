@@ -10,10 +10,10 @@ import pytest
 
 
 def _setup_project_with_summary(tmp_path: Path, yaml_block: str) -> Path:
-    from gpd.core.constants import PHASES_DIR_NAME, PLANNING_DIR_NAME
+    from grd.core.constants import PHASES_DIR_NAME, PLANNING_DIR_NAME
 
-    gpd_dir = tmp_path / PLANNING_DIR_NAME
-    phases_dir = gpd_dir / PHASES_DIR_NAME / "01-test"
+    grd_dir = tmp_path / PLANNING_DIR_NAME
+    phases_dir = grd_dir / PHASES_DIR_NAME / "01-test"
     phases_dir.mkdir(parents=True)
     summary = phases_dir / "plan-01-SUMMARY.md"
     summary.write_text(f"---\ntitle: test\n---\n\n```yaml\n{yaml_block}\n```\n", encoding="utf-8")
@@ -21,7 +21,7 @@ def _setup_project_with_summary(tmp_path: Path, yaml_block: str) -> Path:
 
 
 def _write_state_md(tmp_path: Path, decisions_body: str) -> Path:
-    planning = tmp_path / ".gpd"
+    planning = tmp_path / ".grd"
     planning.mkdir(exist_ok=True)
     (planning / "STATE.md").write_text(
         "# State\n\n"
@@ -37,7 +37,7 @@ def _write_state_md(tmp_path: Path, decisions_body: str) -> Path:
 
 
 def test_safe_read_file_returns_none_for_binary_files(tmp_path: Path) -> None:
-    from gpd.core.utils import safe_read_file
+    from grd.core.utils import safe_read_file
 
     binary_file = tmp_path / "data.bin"
     binary_file.write_bytes(b"\x80\x81\x82\xff\xfe")
@@ -48,7 +48,7 @@ def test_safe_read_file_returns_none_for_binary_files(tmp_path: Path) -> None:
 
 
 def test_result_not_found_error_str_has_no_surrounding_quotes() -> None:
-    from gpd.core.errors import ResultNotFoundError
+    from grd.core.errors import ResultNotFoundError
 
     err = ResultNotFoundError("R-1")
 
@@ -59,7 +59,7 @@ def test_result_not_found_error_str_has_no_surrounding_quotes() -> None:
 
 
 def test_question_list_preserves_mixed_string_and_dict_items() -> None:
-    from gpd.core.extras import question_list
+    from grd.core.extras import question_list
 
     result = question_list(
         {
@@ -78,7 +78,7 @@ def test_question_list_preserves_mixed_string_and_dict_items() -> None:
 
 
 def test_calculation_list_preserves_mixed_string_and_dict_items() -> None:
-    from gpd.core.extras import calculation_list
+    from grd.core.extras import calculation_list
 
     result = calculation_list(
         {
@@ -97,7 +97,7 @@ def test_calculation_list_preserves_mixed_string_and_dict_items() -> None:
 
 
 def test_approximation_list_skips_corrupt_entries() -> None:
-    from gpd.core.extras import approximation_list
+    from grd.core.extras import approximation_list
 
     result = approximation_list(
         {
@@ -121,7 +121,7 @@ def test_approximation_list_skips_corrupt_entries() -> None:
 
 
 def test_check_approximation_handles_edge_cases() -> None:
-    from gpd.core.extras import check_approximation_validity
+    from grd.core.extras import check_approximation_validity
 
     assert check_approximation_validity(-1000, "x >> 0") == "invalid"
     assert check_approximation_validity(1.0, "0.1 << x << 100") == "marginal"
@@ -129,7 +129,7 @@ def test_check_approximation_handles_edge_cases() -> None:
 
 
 def test_json_set_reports_type_mismatch_errors(tmp_path: Path) -> None:
-    from gpd.core.json_utils import json_set
+    from grd.core.json_utils import json_set
 
     fp = tmp_path / "data.json"
     fp.write_text(json.dumps({"items": [1, 2, 3]}), encoding="utf-8")
@@ -143,13 +143,13 @@ def test_json_set_reports_type_mismatch_errors(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "yaml_block",
     [
-        "gpd_return: completed",
-        "gpd_return:\n  - a\n  - b",
-        "gpd_return: null",
+        "grd_return: completed",
+        "grd_return:\n  - a\n  - b",
+        "grd_return: null",
     ],
 )
-def test_check_latest_return_tolerates_non_dict_gpd_return(tmp_path: Path, yaml_block: str) -> None:
-    from gpd.core.health import check_latest_return
+def test_check_latest_return_tolerates_non_dict_grd_return(tmp_path: Path, yaml_block: str) -> None:
+    from grd.core.health import check_latest_return
 
     result = check_latest_return(_setup_project_with_summary(tmp_path, yaml_block))
 
@@ -157,10 +157,10 @@ def test_check_latest_return_tolerates_non_dict_gpd_return(tmp_path: Path, yaml_
 
 
 def test_apply_fixes_resets_config_on_parse_error(tmp_path: Path) -> None:
-    from gpd.core.health import CheckStatus, HealthCheck, _apply_fixes
+    from grd.core.health import CheckStatus, HealthCheck, _apply_fixes
 
-    gpd_dir = tmp_path / ".gpd"
-    gpd_dir.mkdir()
+    grd_dir = tmp_path / ".grd"
+    grd_dir.mkdir()
 
     fixes = _apply_fixes(
         tmp_path,
@@ -174,11 +174,11 @@ def test_apply_fixes_resets_config_on_parse_error(tmp_path: Path) -> None:
     )
 
     assert any("config.json" in fix.lower() or "default" in fix.lower() for fix in fixes)
-    assert (gpd_dir / "config.json").exists()
+    assert (grd_dir / "config.json").exists()
 
 
 def test_decision_count_regex_counts_unbracketed_entries(tmp_path: Path) -> None:
-    from gpd.core.health import CheckStatus, check_compaction_needed
+    from grd.core.health import CheckStatus, check_compaction_needed
 
     decisions = "\n".join(f"- Phase {idx % 5 + 1}: Decision {idx + 1}" for idx in range(5))
     result = check_compaction_needed(_write_state_md(tmp_path, decisions))
@@ -188,7 +188,7 @@ def test_decision_count_regex_counts_unbracketed_entries(tmp_path: Path) -> None
 
 
 def test_verify_output_checksum_trims_whitespace(tmp_path: Path) -> None:
-    from gpd.core.reproducibility import compute_sha256, verify_output_checksum
+    from grd.core.reproducibility import compute_sha256, verify_output_checksum
 
     test_file = tmp_path / "data.txt"
     test_file.write_text("hello world", encoding="utf-8")
@@ -199,7 +199,7 @@ def test_verify_output_checksum_trims_whitespace(tmp_path: Path) -> None:
 
 
 def test_empty_manifest_has_full_checksum_coverage() -> None:
-    from gpd.core.reproducibility import validate_reproducibility_manifest
+    from grd.core.reproducibility import validate_reproducibility_manifest
 
     manifest = {
         "paper_title": "Test Paper",
@@ -227,8 +227,8 @@ def test_empty_manifest_has_full_checksum_coverage() -> None:
 
 
 def test_result_update_wraps_validation_error_as_result_error() -> None:
-    from gpd.core.errors import ResultError
-    from gpd.core.results import result_update
+    from grd.core.errors import ResultError
+    from grd.core.results import result_update
 
     state = {
         "intermediate_results": [
@@ -241,7 +241,7 @@ def test_result_update_wraps_validation_error_as_result_error() -> None:
 
 
 def test_result_add_auto_id_uses_explicit_phase_override() -> None:
-    from gpd.core.results import result_add
+    from grd.core.results import result_add
 
     state = {
         "position": {"current_phase": "01"},
@@ -257,7 +257,7 @@ def test_result_add_auto_id_uses_explicit_phase_override() -> None:
 
 
 def test_verify_summary_marks_invalid_commits_as_failed(tmp_path: Path) -> None:
-    from gpd.core.frontmatter import verify_summary
+    from grd.core.frontmatter import verify_summary
 
     summary = tmp_path / "SUMMARY.md"
     summary.write_text("---\nphase: '01'\n---\ncommit `deadbeef1234`\n", encoding="utf-8")
@@ -273,7 +273,7 @@ def test_verify_summary_marks_invalid_commits_as_failed(tmp_path: Path) -> None:
 
 
 def test_check_environment_timeout_still_reports_git_version_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    from gpd.core.health import check_environment
+    from grd.core.health import check_environment
 
     original_run = subprocess.run
 
@@ -290,7 +290,7 @@ def test_check_environment_timeout_still_reports_git_version_key(monkeypatch: py
 
 
 def test_safe_parse_int_accepts_bool_and_float_inputs() -> None:
-    from gpd.core.utils import safe_parse_int
+    from grd.core.utils import safe_parse_int
 
     assert safe_parse_int(True) == 1
     assert safe_parse_int(False) == 0
@@ -298,7 +298,7 @@ def test_safe_parse_int_accepts_bool_and_float_inputs() -> None:
 
 
 def test_verification_checks_api_handles_valid_and_invalid_ids() -> None:
-    from gpd.core.verification_checks import get_verification_check, list_verification_checks
+    from grd.core.verification_checks import get_verification_check, list_verification_checks
 
     assert get_verification_check("5.1") is not None
     assert get_verification_check("contract.benchmark_reproduction") is not None
@@ -307,7 +307,7 @@ def test_verification_checks_api_handles_valid_and_invalid_ids() -> None:
 
 
 def test_error_class_3_maps_to_expected_primary_checks() -> None:
-    from gpd.core.verification_checks import ERROR_CLASS_COVERAGE_DEFS
+    from grd.core.verification_checks import ERROR_CLASS_COVERAGE_DEFS
 
     error_class = next((entry for entry in ERROR_CLASS_COVERAGE_DEFS if entry.error_class_id == 3), None)
 
@@ -316,7 +316,7 @@ def test_error_class_3_maps_to_expected_primary_checks() -> None:
 
 
 def test_pre_commit_nonfinite_detection_avoids_limit_notation_false_positives(tmp_path) -> None:
-    from gpd.core.git_ops import cmd_pre_commit_check
+    from grd.core.git_ops import cmd_pre_commit_check
 
     good = tmp_path / "good.md"
     good.write_text(
@@ -339,7 +339,7 @@ def test_pre_commit_nonfinite_detection_avoids_limit_notation_false_positives(tm
 
 
 def test_summary_extract_result_accepts_supported_conventions_types() -> None:
-    from gpd.core.commands import SummaryExtractResult
+    from grd.core.commands import SummaryExtractResult
 
     assert SummaryExtractResult(path="test.md", conventions={"metric": "mostly-minus"}).conventions == {
         "metric": "mostly-minus"
@@ -354,14 +354,14 @@ def test_summary_extract_result_accepts_supported_conventions_types() -> None:
 def test_summary_extract_result_rejects_arbitrary_objects() -> None:
     from pydantic import ValidationError as PydanticValidationError
 
-    from gpd.core.commands import SummaryExtractResult
+    from grd.core.commands import SummaryExtractResult
 
     with pytest.raises(PydanticValidationError):
         SummaryExtractResult(path="test.md", conventions=object())
 
 
 def test_body_one_liner_regex_ignores_mid_document_frontmatter() -> None:
-    from gpd.core.commands import _BODY_ONE_LINER_RE
+    from grd.core.commands import _BODY_ONE_LINER_RE
 
     content = "---\ntitle: test\n---\n\n**First line**\n\n---\n\n**Second line**"
     match = _BODY_ONE_LINER_RE.search(content)
@@ -371,9 +371,9 @@ def test_body_one_liner_regex_ignores_mid_document_frontmatter() -> None:
 
 
 def test_show_events_returns_empty_when_session_logs_have_no_matches(tmp_path: Path) -> None:
-    from gpd.core.observability import show_events
+    from grd.core.observability import show_events
 
-    sessions_dir = tmp_path / ".gpd" / "observability" / "sessions"
+    sessions_dir = tmp_path / ".grd" / "observability" / "sessions"
     sessions_dir.mkdir(parents=True)
     (sessions_dir / "session-a.jsonl").write_text(
         '{"event_id": "e1", "timestamp": "2026-03-10T00:00:00+00:00", "session_id": "session-a", "action": "log", "category": "test", "name": "demo", "status": "ok"}\n',
@@ -387,27 +387,27 @@ def test_show_events_returns_empty_when_session_logs_have_no_matches(tmp_path: P
 
 
 def test_coverage_metric_rejects_nonzero_satisfied_with_zero_total() -> None:
-    from gpd.core.paper_quality import CoverageMetric
+    from grd.core.paper_quality import CoverageMetric
 
     with pytest.raises(ValueError):
         CoverageMetric(satisfied=5, total=0)
 
 
 def test_suggest_next_handles_non_utf8_state_json(tmp_path: Path) -> None:
-    from gpd.core.suggest import suggest_next
+    from grd.core.suggest import suggest_next
 
-    gpd_dir = tmp_path / ".gpd"
-    gpd_dir.mkdir()
-    (gpd_dir / "state.json").write_bytes(b'{"position": "\x80\x81\x82"}')
+    grd_dir = tmp_path / ".grd"
+    grd_dir.mkdir()
+    (grd_dir / "state.json").write_bytes(b'{"position": "\x80\x81\x82"}')
 
     assert suggest_next(tmp_path) is not None
 
 
 def test_regression_check_detects_standalone_verification_files(tmp_path: Path) -> None:
-    from gpd.core.commands import cmd_regression_check
-    from gpd.core.constants import STANDALONE_VERIFICATION
+    from grd.core.commands import cmd_regression_check
+    from grd.core.constants import STANDALONE_VERIFICATION
 
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-setup"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-setup"
     phase_dir.mkdir(parents=True)
     (phase_dir / "task-1-PLAN.md").write_text("plan", encoding="utf-8")
     (phase_dir / "task-1-SUMMARY.md").write_text("---\nphase: 1\n---\n# Summary\n", encoding="utf-8")

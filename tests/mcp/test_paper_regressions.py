@@ -6,8 +6,8 @@ import re
 
 
 def test_prl_and_apj_skip_empty_affiliations() -> None:
-    from gpd.mcp.paper.models import Author, PaperConfig, Section
-    from gpd.mcp.paper.template_registry import render_paper
+    from grd.mcp.paper.models import Author, PaperConfig, Section
+    from grd.mcp.paper.template_registry import render_paper
 
     prl = PaperConfig(
         title="Test Paper",
@@ -29,8 +29,8 @@ def test_prl_and_apj_skip_empty_affiliations() -> None:
 
 
 def test_mnras_running_header_uses_author_names() -> None:
-    from gpd.mcp.paper.models import Author, PaperConfig, Section
-    from gpd.mcp.paper.template_registry import render_paper
+    from grd.mcp.paper.models import Author, PaperConfig, Section
+    from grd.mcp.paper.template_registry import render_paper
 
     config = PaperConfig(
         title="Test Paper",
@@ -52,8 +52,8 @@ def test_mnras_running_header_uses_author_names() -> None:
 
 
 def test_templates_handle_empty_authors_without_dangling_breaks() -> None:
-    from gpd.mcp.paper.models import PaperConfig, Section
-    from gpd.mcp.paper.template_registry import render_paper
+    from grd.mcp.paper.models import PaperConfig, Section
+    from grd.mcp.paper.template_registry import render_paper
 
     mnras = PaperConfig(
         title="Test Paper",
@@ -82,8 +82,8 @@ def test_templates_handle_empty_authors_without_dangling_breaks() -> None:
 
 
 def test_build_artifact_manifest_captures_tex_and_optional_bib(tmp_path) -> None:
-    from gpd.mcp.paper.artifact_manifest import build_artifact_manifest
-    from gpd.mcp.paper.models import Author, PaperConfig, Section
+    from grd.mcp.paper.artifact_manifest import build_artifact_manifest
+    from grd.mcp.paper.models import Author, PaperConfig, Section
 
     tex_path = tmp_path / "paper.tex"
     tex_path.write_text("\\documentclass{article}\\begin{document}\\bibliography{refs}\\end{document}", encoding="utf-8")
@@ -108,8 +108,8 @@ def test_build_artifact_manifest_captures_tex_and_optional_bib(tmp_path) -> None
 def test_prepare_figures_returns_relative_paths(tmp_path) -> None:
     from PIL import Image
 
-    from gpd.mcp.paper.figures import prepare_figures
-    from gpd.mcp.paper.models import FigureRef
+    from grd.mcp.paper.figures import prepare_figures
+    from grd.mcp.paper.models import FigureRef
 
     input_dir = tmp_path / "input"
     input_dir.mkdir()
@@ -126,8 +126,8 @@ def test_prepare_figures_returns_relative_paths(tmp_path) -> None:
 
 
 def test_render_paper_cleans_title_fences() -> None:
-    from gpd.mcp.paper.models import PaperConfig, Section
-    from gpd.mcp.paper.template_registry import render_paper
+    from grd.mcp.paper.models import PaperConfig, Section
+    from grd.mcp.paper.template_registry import render_paper
 
     rendered = render_paper(
         PaperConfig(
@@ -146,8 +146,8 @@ def test_render_paper_cleans_title_fences() -> None:
 def test_render_paper_cleans_fenced_author_section_appendix_and_caption_fields() -> None:
     from pathlib import Path
 
-    from gpd.mcp.paper.models import Author, FigureRef, PaperConfig, Section
-    from gpd.mcp.paper.template_registry import render_paper
+    from grd.mcp.paper.models import Author, FigureRef, PaperConfig, Section
+    from grd.mcp.paper.template_registry import render_paper
 
     rendered = render_paper(
         PaperConfig(
@@ -171,7 +171,7 @@ def test_render_paper_cleans_fenced_author_section_appendix_and_caption_fields()
 
 
 def test_latex_autofix_preserves_documentclass_and_texttt_underscores() -> None:
-    from gpd.utils.latex import _fix_unbalanced_braces, _fix_unescaped_underscores
+    from grd.utils.latex import _fix_unbalanced_braces, _fix_unescaped_underscores
 
     broken_doc = "\\documentclass{article}\n\\begin{document}\nHello}\n\\end{document}"
     texttt_doc = "The variable \\texttt{my_var} is important."
@@ -181,7 +181,7 @@ def test_latex_autofix_preserves_documentclass_and_texttt_underscores() -> None:
 
 
 def test_clean_latex_fences_leaves_unmatched_fences_unchanged() -> None:
-    from gpd.utils.latex import clean_latex_fences
+    from grd.utils.latex import clean_latex_fences
 
     content = "Some text ```latex\\section{Intro} and no closing fence"
 
@@ -189,8 +189,8 @@ def test_clean_latex_fences_leaves_unmatched_fences_unchanged() -> None:
 
 
 def test_journal_spec_is_exported_from_paper_package() -> None:
-    import gpd.mcp.paper as paper_pkg
-    from gpd.mcp.paper import JournalSpec
+    import grd.mcp.paper as paper_pkg
+    from grd.mcp.paper import JournalSpec
 
     assert JournalSpec is not None
     assert "JournalSpec" in paper_pkg.__all__

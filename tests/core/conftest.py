@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from gpd.core.state import default_state_dict, generate_state_markdown
+from grd.core.state import default_state_dict, generate_state_markdown
 
 
 def _write_state_project(
@@ -17,7 +17,7 @@ def _write_state_project(
     status: str = "Executing",
     extra_lines: int = 0,
 ) -> Path:
-    planning = tmp_path / ".gpd"
+    planning = tmp_path / ".grd"
     planning.mkdir(exist_ok=True)
     (planning / "phases").mkdir(exist_ok=True)
     (planning / "PROJECT.md").write_text("# Project\nTest.\n", encoding="utf-8")

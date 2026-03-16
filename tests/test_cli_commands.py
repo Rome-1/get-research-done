@@ -1,4 +1,4 @@
-"""Smoke tests for EVERY `gpd` CLI command.
+"""Smoke tests for EVERY `grd` CLI command.
 
 Ensures every command can be invoked without crashing in a valid project
 directory. This catches the class of bug where CLI functions pass a Path to
@@ -20,17 +20,17 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from gpd.cli import app
-from gpd.core.state import default_state_dict, generate_state_markdown
+from grd.cli import app
+from grd.core.state import default_state_dict, generate_state_markdown
 
 runner = CliRunner()
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures" / "stage0"
 
 
 @pytest.fixture()
-def gpd_project(tmp_path: Path) -> Path:
-    """Create a minimal GPD project with all files commands might touch."""
-    planning = tmp_path / ".gpd"
+def grd_project(tmp_path: Path) -> Path:
+    """Create a minimal GRD project with all files commands might touch."""
+    planning = tmp_path / ".grd"
     planning.mkdir()
 
     state = default_state_dict()
@@ -159,20 +159,20 @@ def gpd_project(tmp_path: Path) -> Path:
 
 
 @pytest.fixture(autouse=True)
-def _chdir(gpd_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _chdir(grd_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """All tests run from the project directory."""
-    monkeypatch.chdir(gpd_project)
+    monkeypatch.chdir(grd_project)
 
 
 def _invoke(*args: str, expect_ok: bool = True) -> None:
-    """Invoke a gpd CLI command and assert it doesn't crash."""
+    """Invoke a grd CLI command and assert it doesn't crash."""
     result = runner.invoke(app, list(args), catch_exceptions=False)
     if expect_ok:
-        assert result.exit_code == 0, f"gpd {' '.join(args)} failed:\n{result.output}"
+        assert result.exit_code == 0, f"grd {' '.join(args)} failed:\n{result.output}"
 
 
 def _write_review_stage_artifacts(project_root: Path, artifact_names: tuple[str, ...] | None = None) -> None:
-    review_dir = project_root / ".gpd" / "review"
+    review_dir = project_root / ".grd" / "review"
     review_dir.mkdir(parents=True, exist_ok=True)
     for artifact_name in artifact_names or (
         "STAGE-reader.json",
@@ -202,17 +202,17 @@ class TestConventionCommands:
     def test_set_force(self) -> None:
         _invoke("convention", "set", "metric_signature", "(+,-,-,-)", "--force")
 
-    def test_check_empty_state(self, gpd_project: Path) -> None:
-        (gpd_project / ".gpd" / "state.json").write_text("{}")
+    def test_check_empty_state(self, grd_project: Path) -> None:
+        (grd_project / ".grd" / "state.json").write_text("{}")
         _invoke("convention", "check")
 
-    def test_check_no_state_file(self, gpd_project: Path) -> None:
-        (gpd_project / ".gpd" / "state.json").unlink()
+    def test_check_no_state_file(self, grd_project: Path) -> None:
+        (grd_project / ".grd" / "state.json").unlink()
         _invoke("convention", "check")
 
-    def test_set_persists(self, gpd_project: Path) -> None:
+    def test_set_persists(self, grd_project: Path) -> None:
         _invoke("convention", "set", "fourier_convention", "physics")
-        state = json.loads((gpd_project / ".gpd" / "state.json").read_text())
+        state = json.loads((grd_project / ".grd" / "state.json").read_text())
         assert state["convention_lock"]["fourier_convention"] == "physics"
 
 
@@ -248,19 +248,19 @@ class TestStateCommands:
     def test_add_blocker(self) -> None:
         _invoke("state", "add-blocker", "--text", "Need reference data")
 
-    def test_set_project_contract(self, gpd_project: Path) -> None:
-        contract_path = gpd_project / "contract.json"
+    def test_set_project_contract(self, grd_project: Path) -> None:
+        contract_path = grd_project / "contract.json"
         contract_path.write_text(
             (FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"),
             encoding="utf-8",
         )
 
         _invoke("state", "set-project-contract", str(contract_path))
-        state = json.loads((gpd_project / ".gpd" / "state.json").read_text(encoding="utf-8"))
+        state = json.loads((grd_project / ".grd" / "state.json").read_text(encoding="utf-8"))
         assert state["project_contract"]["scope"]["question"] == "What benchmark must the project recover?"
 
-    def test_set_project_contract_resolves_relative_path_against_cwd(self, gpd_project: Path) -> None:
-        contract_path = gpd_project / "contract.json"
+    def test_set_project_contract_resolves_relative_path_against_cwd(self, grd_project: Path) -> None:
+        contract_path = grd_project / "contract.json"
         contract_path.write_text(
             (FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"),
             encoding="utf-8",
@@ -268,33 +268,33 @@ class TestStateCommands:
 
         result = runner.invoke(
             app,
-            ["--cwd", str(gpd_project), "state", "set-project-contract", "contract.json"],
+            ["--cwd", str(grd_project), "state", "set-project-contract", "contract.json"],
             catch_exceptions=False,
         )
 
         assert result.exit_code == 0, result.output
-        state = json.loads((gpd_project / ".gpd" / "state.json").read_text(encoding="utf-8"))
+        state = json.loads((grd_project / ".grd" / "state.json").read_text(encoding="utf-8"))
         assert state["project_contract"]["scope"]["question"] == "What benchmark must the project recover?"
 
-    def test_set_project_contract_accepts_stdin(self, gpd_project: Path) -> None:
+    def test_set_project_contract_accepts_stdin(self, grd_project: Path) -> None:
         contract_text = (FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8")
 
         result = runner.invoke(
             app,
-            ["--cwd", str(gpd_project), "state", "set-project-contract", "-"],
+            ["--cwd", str(grd_project), "state", "set-project-contract", "-"],
             input=contract_text,
             catch_exceptions=False,
         )
 
         assert result.exit_code == 0, result.output
-        state = json.loads((gpd_project / ".gpd" / "state.json").read_text(encoding="utf-8"))
+        state = json.loads((grd_project / ".grd" / "state.json").read_text(encoding="utf-8"))
         assert state["project_contract"]["scope"]["question"] == "What benchmark must the project recover?"
 
-    def test_set_project_contract_rejects_semantically_invalid_contract(self, gpd_project: Path) -> None:
+    def test_set_project_contract_rejects_semantically_invalid_contract(self, grd_project: Path) -> None:
         contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
         contract["uncertainty_markers"]["weakest_anchors"] = []
         contract["uncertainty_markers"]["disconfirming_observations"] = []
-        contract_path = gpd_project / "invalid-contract.json"
+        contract_path = grd_project / "invalid-contract.json"
         contract_path.write_text(json.dumps(contract), encoding="utf-8")
 
         result = runner.invoke(
@@ -327,8 +327,8 @@ class TestInitCommands:
     def test_execute_phase(self) -> None:
         _invoke("init", "execute-phase", "1")
 
-    def test_plan_phase_surfaces_artifact_derived_reference_context(self, gpd_project: Path) -> None:
-        literature_dir = gpd_project / ".gpd" / "literature"
+    def test_plan_phase_surfaces_artifact_derived_reference_context(self, grd_project: Path) -> None:
+        literature_dir = grd_project / ".grd" / "literature"
         literature_dir.mkdir(parents=True)
         (literature_dir / "benchmark-REVIEW.md").write_text(
             """# Literature Review: Benchmark Survey
@@ -357,7 +357,7 @@ review_summary:
 """,
             encoding="utf-8",
         )
-        map_dir = gpd_project / ".gpd" / "research-map"
+        map_dir = grd_project / ".grd" / "research-map"
         map_dir.mkdir(parents=True)
         (map_dir / "REFERENCES.md").write_text(
             """# Reference and Anchor Map
@@ -366,7 +366,7 @@ review_summary:
 
 | Anchor | Type | Source / Locator | What It Constrains | Required Action | Carry Forward To |
 | ------ | ---- | ---------------- | ------------------ | --------------- | ---------------- |
-| prior-baseline | prior artifact | `.gpd/phases/01-test-phase/01-SUMMARY.md` | Baseline summary for later comparisons | use | planning/execution |
+| prior-baseline | prior artifact | `.grd/phases/01-test-phase/01-SUMMARY.md` | Baseline summary for later comparisons | use | planning/execution |
 """,
             encoding="utf-8",
         )
@@ -378,19 +378,19 @@ review_summary:
         assert payload["project_contract"] is None
         assert payload["derived_active_reference_count"] >= 2
         assert "Benchmark Ref 2024" in payload["active_reference_context"]
-        assert ".gpd/phases/01-test-phase/01-SUMMARY.md" in payload["active_reference_context"]
-        assert ".gpd/phases/01-test-phase/01-SUMMARY.md" in payload["effective_reference_intake"]["must_include_prior_outputs"]
+        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in payload["active_reference_context"]
+        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in payload["effective_reference_intake"]["must_include_prior_outputs"]
 
-    def test_new_milestone_surfaces_contract_and_effective_reference_context(self, gpd_project: Path) -> None:
-        (gpd_project / ".gpd" / "ROADMAP.md").write_text(
+    def test_new_milestone_surfaces_contract_and_effective_reference_context(self, grd_project: Path) -> None:
+        (grd_project / ".grd" / "ROADMAP.md").write_text(
             "# Roadmap\n\n## Milestone v1.1: Scaling Study\n",
             encoding="utf-8",
         )
-        state = json.loads((gpd_project / ".gpd" / "state.json").read_text(encoding="utf-8"))
+        state = json.loads((grd_project / ".grd" / "state.json").read_text(encoding="utf-8"))
         state["project_contract"] = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
-        (gpd_project / ".gpd" / "state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+        (grd_project / ".grd" / "state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
 
-        literature_dir = gpd_project / ".gpd" / "literature"
+        literature_dir = grd_project / ".grd" / "literature"
         literature_dir.mkdir(parents=True)
         (literature_dir / "benchmark-REVIEW.md").write_text(
             "## Active Anchor Registry\n\n"
@@ -399,11 +399,11 @@ review_summary:
             "| Benchmark Ref 2024 | benchmark | Published benchmark curve for the decisive observable | read/compare/cite | planning/execution |\n",
             encoding="utf-8",
         )
-        map_dir = gpd_project / ".gpd" / "research-map"
+        map_dir = grd_project / ".grd" / "research-map"
         map_dir.mkdir(parents=True)
         (map_dir / "CONCERNS.md").write_text(
             "## Prior Outputs\n\n"
-            "- `.gpd/phases/01-test-phase/01-SUMMARY.md`\n",
+            "- `.grd/phases/01-test-phase/01-SUMMARY.md`\n",
             encoding="utf-8",
         )
 
@@ -414,8 +414,8 @@ review_summary:
         assert payload["current_milestone"] == "v1.1"
         assert payload["project_contract"]["references"][0]["id"] == "ref-benchmark"
         assert "Benchmark Ref 2024" in payload["active_reference_context"]
-        assert ".gpd/phases/01-test-phase/01-SUMMARY.md" in payload["effective_reference_intake"]["must_include_prior_outputs"]
-        assert ".gpd/research-map/CONCERNS.md" in payload["research_map_reference_files"]
+        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in payload["effective_reference_intake"]["must_include_prior_outputs"]
+        assert ".grd/research-map/CONCERNS.md" in payload["research_map_reference_files"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -568,10 +568,10 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:write-paper"
+        assert payload["command"] == "grd:write-paper"
         assert payload["context_mode"] == "project-required"
         assert payload["review_contract"]["review_mode"] == "publication"
-        assert ".gpd/REFEREE-REPORT.tex" in payload["review_contract"]["required_outputs"]
+        assert ".grd/REFEREE-REPORT.tex" in payload["review_contract"]["required_outputs"]
         assert payload["review_contract"]["preflight_checks"] == [
             "project_state",
             "roadmap",
@@ -595,14 +595,14 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:peer-review"
+        assert payload["command"] == "grd:peer-review"
         assert payload["context_mode"] == "project-required"
         assert payload["review_contract"]["review_mode"] == "publication"
-        assert ".gpd/REFEREE-REPORT.md" in payload["review_contract"]["required_outputs"]
-        assert ".gpd/REFEREE-REPORT.tex" in payload["review_contract"]["required_outputs"]
-        assert ".gpd/review/CLAIMS.json" in payload["review_contract"]["required_outputs"]
-        assert ".gpd/review/STAGE-interestingness.json" in payload["review_contract"]["required_outputs"]
-        assert ".gpd/review/REFEREE-DECISION.json" in payload["review_contract"]["required_outputs"]
+        assert ".grd/REFEREE-REPORT.md" in payload["review_contract"]["required_outputs"]
+        assert ".grd/REFEREE-REPORT.tex" in payload["review_contract"]["required_outputs"]
+        assert ".grd/review/CLAIMS.json" in payload["review_contract"]["required_outputs"]
+        assert ".grd/review/STAGE-interestingness.json" in payload["review_contract"]["required_outputs"]
+        assert ".grd/review/REFEREE-DECISION.json" in payload["review_contract"]["required_outputs"]
         assert payload["review_contract"]["preflight_checks"] == [
             "project_state",
             "roadmap",
@@ -626,28 +626,28 @@ class TestReviewValidationCommands:
             "meta",
         ]
         assert payload["review_contract"]["stage_artifacts"] == [
-            ".gpd/review/CLAIMS.json",
-            ".gpd/review/STAGE-reader.json",
-            ".gpd/review/STAGE-literature.json",
-            ".gpd/review/STAGE-math.json",
-            ".gpd/review/STAGE-physics.json",
-            ".gpd/review/STAGE-interestingness.json",
-            ".gpd/review/REVIEW-LEDGER.json",
-            ".gpd/review/REFEREE-DECISION.json",
+            ".grd/review/CLAIMS.json",
+            ".grd/review/STAGE-reader.json",
+            ".grd/review/STAGE-literature.json",
+            ".grd/review/STAGE-math.json",
+            ".grd/review/STAGE-physics.json",
+            ".grd/review/STAGE-interestingness.json",
+            ".grd/review/REVIEW-LEDGER.json",
+            ".grd/review/REFEREE-DECISION.json",
         ]
-        assert payload["review_contract"]["final_decision_output"] == ".gpd/review/REFEREE-DECISION.json"
+        assert payload["review_contract"]["final_decision_output"] == ".grd/review/REFEREE-DECISION.json"
         assert payload["review_contract"]["requires_fresh_context_per_stage"] is True
 
     def test_review_contract_accepts_public_command_label(self) -> None:
         result = runner.invoke(
             app,
-            ["--raw", "validate", "review-contract", "/gpd:peer-review"],
+            ["--raw", "validate", "review-contract", "/grd:peer-review"],
             catch_exceptions=False,
         )
 
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:peer-review"
+        assert payload["command"] == "grd:peer-review"
         assert payload["review_contract"]["review_mode"] == "publication"
 
     def test_review_contract_respond_to_referees_uses_typed_registry_surface(self) -> None:
@@ -659,11 +659,11 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:respond-to-referees"
+        assert payload["command"] == "grd:respond-to-referees"
         assert payload["context_mode"] == "project-required"
         assert payload["review_contract"]["review_mode"] == "publication"
-        assert ".gpd/paper/REFEREE_RESPONSE.md" in payload["review_contract"]["required_outputs"]
-        assert ".gpd/AUTHOR-RESPONSE.md" in payload["review_contract"]["required_outputs"]
+        assert ".grd/paper/REFEREE_RESPONSE.md" in payload["review_contract"]["required_outputs"]
+        assert ".grd/AUTHOR-RESPONSE.md" in payload["review_contract"]["required_outputs"]
         assert "existing manuscript" in payload["review_contract"]["required_evidence"]
         assert "structured referee issues" in payload["review_contract"]["required_evidence"]
         assert "peer-review review ledger when available" in payload["review_contract"]["required_evidence"]
@@ -685,11 +685,11 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 1, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:progress"
+        assert payload["command"] == "grd:progress"
         assert payload["context_mode"] == "project-required"
         assert payload["passed"] is False
         assert payload["guidance"] == (
-            "This command requires an initialized GPD project. Run `gpd init new-project`."
+            "This command requires an initialized GRD project. Run `grd init new-project`."
         )
 
     def test_command_context_projectless_passes_without_project(
@@ -705,7 +705,7 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:map-research"
+        assert payload["command"] == "grd:map-research"
         assert payload["context_mode"] == "projectless"
         assert payload["passed"] is True
 
@@ -724,7 +724,7 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:slides"
+        assert payload["command"] == "grd:slides"
         assert payload["context_mode"] == "projectless"
         assert payload["passed"] is True
 
@@ -743,12 +743,12 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 1, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:discover"
+        assert payload["command"] == "grd:discover"
         assert payload["context_mode"] == "project-aware"
         assert payload["passed"] is False
         assert payload["explicit_inputs"] == ["phase number or standalone topic"]
         assert payload["guidance"] == (
-            "Either provide phase number or standalone topic explicitly, or run `gpd init new-project`."
+            "Either provide phase number or standalone topic explicitly, or run `grd init new-project`."
         )
 
     def test_command_context_project_aware_accepts_explicit_inputs_without_project(
@@ -764,7 +764,7 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:discover"
+        assert payload["command"] == "grd:discover"
         assert payload["context_mode"] == "project-aware"
         assert payload["passed"] is True
 
@@ -783,7 +783,7 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 1, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:discover"
+        assert payload["command"] == "grd:discover"
         assert payload["context_mode"] == "project-aware"
         assert payload["passed"] is False
 
@@ -802,12 +802,12 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 1, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:explain"
+        assert payload["command"] == "grd:explain"
         assert payload["context_mode"] == "project-aware"
         assert payload["passed"] is False
         assert payload["explicit_inputs"] == ["concept, result, method, notation, or paper"]
         assert payload["guidance"] == (
-            "Either provide concept, result, method, notation, or paper explicitly, or run `gpd init new-project`."
+            "Either provide concept, result, method, notation, or paper explicitly, or run `grd init new-project`."
         )
 
     def test_command_context_compare_results_requires_explicit_inputs_without_project(
@@ -825,12 +825,12 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 1, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:compare-results"
+        assert payload["command"] == "grd:compare-results"
         assert payload["context_mode"] == "project-aware"
         assert payload["passed"] is False
         assert payload["explicit_inputs"] == ["phase, artifact, or comparison target"]
         assert payload["guidance"] == (
-            "Either provide phase, artifact, or comparison target explicitly, or run `gpd init new-project`."
+            "Either provide phase, artifact, or comparison target explicitly, or run `grd init new-project`."
         )
 
     def test_review_preflight_write_paper_strict(self) -> None:
@@ -842,7 +842,7 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:write-paper"
+        assert payload["command"] == "grd:write-paper"
         assert payload["passed"] is True
         checks = {check["name"]: check for check in payload["checks"]}
         check_names = set(checks)
@@ -874,7 +874,7 @@ class TestReviewValidationCommands:
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         checks = {check["name"]: check for check in payload["checks"]}
-        assert payload["command"] == "gpd:help"
+        assert payload["command"] == "grd:help"
         assert payload["context_mode"] == "global"
         assert payload["passed"] is True
         assert checks["project_context"]["passed"] is True
@@ -896,7 +896,7 @@ class TestReviewValidationCommands:
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         checks = {check["name"]: check for check in payload["checks"]}
-        assert payload["command"] == "gpd:new-project"
+        assert payload["command"] == "grd:new-project"
         assert payload["context_mode"] == "projectless"
         assert payload["passed"] is True
         assert checks["project_context"]["passed"] is True
@@ -918,7 +918,7 @@ class TestReviewValidationCommands:
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         checks = {check["name"]: check for check in payload["checks"]}
-        assert payload["command"] == "gpd:discover"
+        assert payload["command"] == "grd:discover"
         assert payload["context_mode"] == "project-aware"
         assert payload["passed"] is True
         assert checks["project_exists"]["passed"] is False
@@ -941,7 +941,7 @@ class TestReviewValidationCommands:
         assert result.exit_code == 1, result.output
         payload = json.loads(result.output)
         checks = {check["name"]: check for check in payload["checks"]}
-        assert payload["command"] == "gpd:quick"
+        assert payload["command"] == "grd:quick"
         assert payload["context_mode"] == "project-required"
         assert payload["passed"] is False
         assert checks["project_exists"]["passed"] is False
@@ -955,7 +955,7 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:peer-review"
+        assert payload["command"] == "grd:peer-review"
         assert payload["passed"] is True
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["project_state"]["passed"] is True
@@ -971,8 +971,8 @@ class TestReviewValidationCommands:
         assert checks["reproducibility_manifest"]["passed"] is True
         assert checks["reproducibility_ready"]["passed"] is True
 
-    def test_review_preflight_strict_blocks_review_integrity_failures(self, gpd_project: Path) -> None:
-        planning = gpd_project / ".gpd"
+    def test_review_preflight_strict_blocks_review_integrity_failures(self, grd_project: Path) -> None:
+        planning = grd_project / ".grd"
         state = json.loads((planning / "state.json").read_text(encoding="utf-8"))
         state["intermediate_results"] = [
             {"id": "R-01", "description": "Unbacked claim", "depends_on": [], "verified": True, "verification_records": []}
@@ -990,8 +990,8 @@ class TestReviewValidationCommands:
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["state_integrity"]["passed"] is False
 
-    def test_review_preflight_strict_blocks_semantically_invalid_project_contract(self, gpd_project: Path) -> None:
-        planning = gpd_project / ".gpd"
+    def test_review_preflight_strict_blocks_semantically_invalid_project_contract(self, grd_project: Path) -> None:
+        planning = grd_project / ".grd"
         state = json.loads((planning / "state.json").read_text(encoding="utf-8"))
         contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
         contract["uncertainty_markers"]["weakest_anchors"] = []
@@ -1011,8 +1011,8 @@ class TestReviewValidationCommands:
         assert checks["state_integrity"]["passed"] is False
         assert "project_contract:" in checks["state_integrity"]["detail"]
 
-    def test_review_preflight_strict_blocks_invalid_phase_artifact_frontmatter(self, gpd_project: Path) -> None:
-        planning = gpd_project / ".gpd"
+    def test_review_preflight_strict_blocks_invalid_phase_artifact_frontmatter(self, grd_project: Path) -> None:
+        planning = grd_project / ".grd"
         phase_dir = planning / "phases" / "01-test-phase"
         (phase_dir / "01-SUMMARY.md").write_text("# Summary\n\nMissing frontmatter.\n", encoding="utf-8")
         (phase_dir / "01-VERIFICATION.md").write_text("# Verification\n\nMissing frontmatter.\n", encoding="utf-8")
@@ -1029,8 +1029,8 @@ class TestReviewValidationCommands:
         assert checks["summary_frontmatter"]["passed"] is False
         assert checks["verification_frontmatter"]["passed"] is False
 
-    def test_review_preflight_verify_work_for_phase(self, gpd_project: Path) -> None:
-        planning = gpd_project / ".gpd"
+    def test_review_preflight_verify_work_for_phase(self, grd_project: Path) -> None:
+        planning = grd_project / ".grd"
         state = json.loads((planning / "state.json").read_text(encoding="utf-8"))
         state["position"]["status"] = "Phase complete — ready for verification"
         (planning / "state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -1044,7 +1044,7 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:verify-work"
+        assert payload["command"] == "grd:verify-work"
         assert payload["passed"] is True
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["phase_lookup"]["passed"] is True
@@ -1060,7 +1060,7 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 1, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:verify-work"
+        assert payload["command"] == "grd:verify-work"
         assert payload["passed"] is False
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["phase_lookup"]["passed"] is True
@@ -1069,8 +1069,8 @@ class TestReviewValidationCommands:
         assert checks["required_state"]["blocking"] is True
         assert 'found "Planning"' in checks["required_state"]["detail"]
 
-    def test_review_preflight_verify_work_without_subject_uses_current_phase_artifacts(self, gpd_project: Path) -> None:
-        planning = gpd_project / ".gpd"
+    def test_review_preflight_verify_work_without_subject_uses_current_phase_artifacts(self, grd_project: Path) -> None:
+        planning = grd_project / ".grd"
         state = json.loads((planning / "state.json").read_text(encoding="utf-8"))
         state["position"]["current_phase"] = "02"
         state["position"]["status"] = "Phase complete — ready for verification"
@@ -1085,7 +1085,7 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 1, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:verify-work"
+        assert payload["command"] == "grd:verify-work"
         assert payload["passed"] is False
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["phase_summaries"]["passed"] is False
@@ -1101,14 +1101,14 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:respond-to-referees"
+        assert payload["command"] == "grd:respond-to-referees"
         assert payload["passed"] is True
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["manuscript"]["passed"] is True
         assert checks["referee_report_source"]["passed"] is True
 
-    def test_review_preflight_peer_review_fails_without_manuscript(self, gpd_project: Path) -> None:
-        (gpd_project / "paper" / "main.tex").unlink()
+    def test_review_preflight_peer_review_fails_without_manuscript(self, grd_project: Path) -> None:
+        (grd_project / "paper" / "main.tex").unlink()
 
         result = runner.invoke(
             app,
@@ -1118,13 +1118,13 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 1, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:peer-review"
+        assert payload["command"] == "grd:peer-review"
         assert payload["passed"] is False
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["manuscript"]["passed"] is False
 
-    def test_review_preflight_fails_without_manuscript(self, gpd_project: Path) -> None:
-        (gpd_project / "paper" / "main.tex").unlink()
+    def test_review_preflight_fails_without_manuscript(self, grd_project: Path) -> None:
+        (grd_project / "paper" / "main.tex").unlink()
 
         result = runner.invoke(
             app,
@@ -1134,14 +1134,14 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 1
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:respond-to-referees"
+        assert payload["command"] == "grd:respond-to-referees"
         assert payload["passed"] is False
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["manuscript"]["passed"] is False
 
 
-    def test_review_preflight_peer_review_strict_requires_artifact_audits(self, gpd_project: Path) -> None:
-        paper_dir = gpd_project / "paper"
+    def test_review_preflight_peer_review_strict_requires_artifact_audits(self, grd_project: Path) -> None:
+        paper_dir = grd_project / "paper"
         (paper_dir / "ARTIFACT-MANIFEST.json").unlink()
 
         result = runner.invoke(
@@ -1155,11 +1155,11 @@ class TestReviewValidationCommands:
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["artifact_manifest"]["passed"] is False
 
-    def test_review_preflight_peer_review_accepts_explicit_manuscript_path(self, gpd_project: Path) -> None:
-        (gpd_project / "paper" / "main.tex").unlink()
+    def test_review_preflight_peer_review_accepts_explicit_manuscript_path(self, grd_project: Path) -> None:
+        (grd_project / "paper" / "main.tex").unlink()
 
-        paper_dir = gpd_project / "paper"
-        review_dir = gpd_project / "submission"
+        paper_dir = grd_project / "paper"
+        review_dir = grd_project / "submission"
         review_dir.mkdir()
         (review_dir / "main.tex").write_text(
             "\\documentclass{article}\n\\begin{document}\nSubmission manuscript.\n\\end{document}\n",
@@ -1176,13 +1176,13 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:peer-review"
+        assert payload["command"] == "grd:peer-review"
         assert payload["passed"] is True
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["manuscript"]["passed"] is True
         assert "submission/main.tex" in checks["manuscript"]["detail"]
 
-    def test_review_preflight_peer_review_accepts_explicit_manuscript_directory(self, gpd_project: Path) -> None:
+    def test_review_preflight_peer_review_accepts_explicit_manuscript_directory(self, grd_project: Path) -> None:
         result = runner.invoke(
             app,
             ["--raw", "validate", "review-preflight", "peer-review", "paper", "--strict"],
@@ -1197,9 +1197,9 @@ class TestReviewValidationCommands:
 
     def test_review_preflight_peer_review_directory_uses_lexicographic_fallback_without_main_file(
         self,
-        gpd_project: Path,
+        grd_project: Path,
     ) -> None:
-        paper_dir = gpd_project / "paper"
+        paper_dir = grd_project / "paper"
         (paper_dir / "main.tex").unlink()
         (paper_dir / "z-notes.tex").write_text("\\section{Notes}\n", encoding="utf-8")
         (paper_dir / "a-appendix.md").write_text("# Appendix\n", encoding="utf-8")
@@ -1216,8 +1216,8 @@ class TestReviewValidationCommands:
         assert checks["manuscript"]["passed"] is True
         assert "a-appendix.md" in checks["manuscript"]["detail"]
 
-    def test_review_preflight_peer_review_strict_blocks_dirty_bibliography_audit(self, gpd_project: Path) -> None:
-        paper_dir = gpd_project / "paper"
+    def test_review_preflight_peer_review_strict_blocks_dirty_bibliography_audit(self, grd_project: Path) -> None:
+        paper_dir = grd_project / "paper"
         (paper_dir / "BIBLIOGRAPHY-AUDIT.json").write_text(
             json.dumps(
                 {
@@ -1245,8 +1245,8 @@ class TestReviewValidationCommands:
         assert checks["bibliography_audit"]["passed"] is True
         assert checks["bibliography_audit_clean"]["passed"] is False
 
-    def test_review_preflight_peer_review_strict_blocks_non_ready_reproducibility_manifest(self, gpd_project: Path) -> None:
-        paper_dir = gpd_project / "paper"
+    def test_review_preflight_peer_review_strict_blocks_non_ready_reproducibility_manifest(self, grd_project: Path) -> None:
+        paper_dir = grd_project / "paper"
         manifest = json.loads((paper_dir / "reproducibility-manifest.json").read_text(encoding="utf-8"))
         manifest["last_verified"] = ""
         manifest["last_verified_platform"] = ""
@@ -1264,8 +1264,8 @@ class TestReviewValidationCommands:
         assert checks["reproducibility_manifest"]["passed"] is True
         assert checks["reproducibility_ready"]["passed"] is False
 
-    def test_review_preflight_arxiv_submission_strict_requires_artifact_audits(self, gpd_project: Path) -> None:
-        paper_dir = gpd_project / "paper"
+    def test_review_preflight_arxiv_submission_strict_requires_artifact_audits(self, grd_project: Path) -> None:
+        paper_dir = grd_project / "paper"
         (paper_dir / "ARTIFACT-MANIFEST.json").unlink()
         (paper_dir / "BIBLIOGRAPHY-AUDIT.json").unlink()
 
@@ -1283,12 +1283,12 @@ class TestReviewValidationCommands:
 
     def test_review_preflight_arxiv_submission_accepts_explicit_non_default_paper_directory(
         self,
-        gpd_project: Path,
+        grd_project: Path,
     ) -> None:
-        paper_dir = gpd_project / "paper"
+        paper_dir = grd_project / "paper"
         (paper_dir / "main.tex").unlink()
 
-        submission_dir = gpd_project / "submission"
+        submission_dir = grd_project / "submission"
         submission_dir.mkdir()
         (submission_dir / "main.tex").write_text(
             "\\documentclass{article}\n\\begin{document}\nSubmission manuscript.\n\\end{document}\n",
@@ -1308,7 +1308,7 @@ class TestReviewValidationCommands:
 
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["command"] == "gpd:arxiv-submission"
+        assert payload["command"] == "grd:arxiv-submission"
         assert payload["passed"] is True
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["manuscript"]["passed"] is True
@@ -1318,8 +1318,8 @@ class TestReviewValidationCommands:
         assert checks["reproducibility_manifest"]["passed"] is False
         assert checks["reproducibility_manifest"]["blocking"] is False
 
-    def test_validate_paper_quality_command(self, gpd_project: Path) -> None:
-        quality_path = gpd_project / "paper-quality.json"
+    def test_validate_paper_quality_command(self, grd_project: Path) -> None:
+        quality_path = grd_project / "paper-quality.json"
         quality_path.write_text(
             json.dumps(
                 {
@@ -1378,8 +1378,8 @@ class TestReviewValidationCommands:
         assert payload["ready_for_submission"] is True
         assert payload["journal"] == "prd"
 
-    def test_validate_paper_quality_command_fails_on_blockers(self, gpd_project: Path) -> None:
-        quality_path = gpd_project / "paper-quality-blocked.json"
+    def test_validate_paper_quality_command_fails_on_blockers(self, grd_project: Path) -> None:
+        quality_path = grd_project / "paper-quality-blocked.json"
         quality_path.write_text(
             json.dumps(
                 {
@@ -1411,8 +1411,8 @@ class TestReviewValidationCommands:
         payload = json.loads(result.output)
         assert payload["ready_for_submission"] is False
 
-    def test_validate_paper_quality_command_blocks_missing_decisive_verdicts(self, gpd_project: Path) -> None:
-        quality_path = gpd_project / "paper-quality-decisive-blocked.json"
+    def test_validate_paper_quality_command_blocks_missing_decisive_verdicts(self, grd_project: Path) -> None:
+        quality_path = grd_project / "paper-quality-decisive-blocked.json"
         quality_path.write_text(
             json.dumps(
                 {
@@ -1447,9 +1447,9 @@ class TestReviewValidationCommands:
         blocker_checks = {issue["check"] for issue in payload["blocking_issues"]}
         assert "decisive_artifacts_with_explicit_verdicts" in blocker_checks
 
-    def test_validate_paper_quality_command_from_project_artifacts(self, gpd_project: Path) -> None:
+    def test_validate_paper_quality_command_from_project_artifacts(self, grd_project: Path) -> None:
         stage4_dir = Path(__file__).resolve().parent / "fixtures" / "stage4"
-        paper_dir = gpd_project / "paper"
+        paper_dir = grd_project / "paper"
         (paper_dir / "main.tex").write_text(
             "\\documentclass{article}\n"
             "\\begin{document}\n"
@@ -1485,7 +1485,7 @@ class TestReviewValidationCommands:
             ),
             encoding="utf-8",
         )
-        tracker_dir = gpd_project / ".gpd" / "paper"
+        tracker_dir = grd_project / ".grd" / "paper"
         tracker_dir.mkdir(parents=True, exist_ok=True)
         (tracker_dir / "FIGURE_TRACKER.md").write_text(
             "---\n"
@@ -1503,12 +1503,12 @@ class TestReviewValidationCommands:
             "    caption_self_contained: true\n"
             "    colorblind_safe: true\n"
             "    comparison_sources:\n"
-            "      - .gpd/comparisons/benchmark-COMPARISON.md\n"
+            "      - .grd/comparisons/benchmark-COMPARISON.md\n"
             "---\n\n"
             "# Figure Tracker\n",
             encoding="utf-8",
         )
-        comparison_dir = gpd_project / ".gpd" / "comparisons"
+        comparison_dir = grd_project / ".grd" / "comparisons"
         comparison_dir.mkdir(parents=True, exist_ok=True)
         (comparison_dir / "benchmark-COMPARISON.md").write_text(
             "---\n"
@@ -1516,10 +1516,10 @@ class TestReviewValidationCommands:
             "comparison_sources:\n"
             "  - label: theory\n"
             "    kind: summary\n"
-            "    path: .gpd/phases/01-benchmark/01-SUMMARY.md\n"
+            "    path: .grd/phases/01-benchmark/01-SUMMARY.md\n"
             "  - label: benchmark\n"
             "    kind: verification\n"
-            "    path: .gpd/phases/01-benchmark/01-VERIFICATION.md\n"
+            "    path: .grd/phases/01-benchmark/01-VERIFICATION.md\n"
             "comparison_verdicts:\n"
             "  - subject_id: claim-benchmark\n"
             "    subject_kind: claim\n"
@@ -1534,7 +1534,7 @@ class TestReviewValidationCommands:
             "# Internal Comparison\n",
             encoding="utf-8",
         )
-        phase_dir = gpd_project / ".gpd" / "phases" / "01-benchmark"
+        phase_dir = grd_project / ".grd" / "phases" / "01-benchmark"
         phase_dir.mkdir(parents=True, exist_ok=True)
         (phase_dir / "01-SUMMARY.md").write_text(
             (stage4_dir / "summary_with_contract_results.md").read_text(encoding="utf-8"),
@@ -1547,7 +1547,7 @@ class TestReviewValidationCommands:
 
         result = runner.invoke(
             app,
-            ["--raw", "validate", "paper-quality", "--from-project", str(gpd_project)],
+            ["--raw", "validate", "paper-quality", "--from-project", str(grd_project)],
             catch_exceptions=False,
         )
 
@@ -1557,9 +1557,9 @@ class TestReviewValidationCommands:
         assert payload["categories"]["verification"]["checks"]["contract_targets_verified"] > 0
         assert payload["categories"]["results"]["checks"]["comparison_with_prior_work_present"] > 0
 
-    def test_validate_referee_decision_command_accepts_consistent_major_revision(self, gpd_project: Path) -> None:
-        _write_review_stage_artifacts(gpd_project)
-        decision_path = gpd_project / "referee-decision.json"
+    def test_validate_referee_decision_command_accepts_consistent_major_revision(self, grd_project: Path) -> None:
+        _write_review_stage_artifacts(grd_project)
+        decision_path = grd_project / "referee-decision.json"
         decision_path.write_text(
             json.dumps(
                 {
@@ -1567,11 +1567,11 @@ class TestReviewValidationCommands:
                     "target_journal": "jhep",
                     "final_recommendation": "major_revision",
                     "stage_artifacts": [
-                        ".gpd/review/STAGE-reader.json",
-                        ".gpd/review/STAGE-literature.json",
-                        ".gpd/review/STAGE-math.json",
-                        ".gpd/review/STAGE-physics.json",
-                        ".gpd/review/STAGE-interestingness.json",
+                        ".grd/review/STAGE-reader.json",
+                        ".grd/review/STAGE-literature.json",
+                        ".grd/review/STAGE-math.json",
+                        ".grd/review/STAGE-physics.json",
+                        ".grd/review/STAGE-interestingness.json",
                     ],
                     "claim_scope_proportionate_to_evidence": False,
                     "reframing_possible_without_new_results": True,
@@ -1582,7 +1582,7 @@ class TestReviewValidationCommands:
             ),
             encoding="utf-8",
         )
-        ledger_path = gpd_project / "review-ledger-consistent.json"
+        ledger_path = grd_project / "review-ledger-consistent.json"
         ledger_path.write_text(
             json.dumps(
                 {
@@ -1606,9 +1606,9 @@ class TestReviewValidationCommands:
         assert payload["valid"] is True
         assert payload["most_positive_allowed_recommendation"] == "major_revision"
 
-    def test_validate_referee_decision_command_blocks_overly_positive_prl_decision(self, gpd_project: Path) -> None:
-        _write_review_stage_artifacts(gpd_project)
-        decision_path = gpd_project / "referee-decision-prl.json"
+    def test_validate_referee_decision_command_blocks_overly_positive_prl_decision(self, grd_project: Path) -> None:
+        _write_review_stage_artifacts(grd_project)
+        decision_path = grd_project / "referee-decision-prl.json"
         decision_path.write_text(
             json.dumps(
                 {
@@ -1616,11 +1616,11 @@ class TestReviewValidationCommands:
                     "target_journal": "prl",
                     "final_recommendation": "minor_revision",
                     "stage_artifacts": [
-                        ".gpd/review/STAGE-reader.json",
-                        ".gpd/review/STAGE-literature.json",
-                        ".gpd/review/STAGE-math.json",
-                        ".gpd/review/STAGE-physics.json",
-                        ".gpd/review/STAGE-interestingness.json",
+                        ".grd/review/STAGE-reader.json",
+                        ".grd/review/STAGE-literature.json",
+                        ".grd/review/STAGE-math.json",
+                        ".grd/review/STAGE-physics.json",
+                        ".grd/review/STAGE-interestingness.json",
                     ],
                     "novelty": "adequate",
                     "significance": "weak",
@@ -1641,8 +1641,8 @@ class TestReviewValidationCommands:
         assert payload["valid"] is False
         assert payload["most_positive_allowed_recommendation"] == "reject"
 
-    def test_validate_referee_decision_command_rejects_missing_stage_artifacts(self, gpd_project: Path) -> None:
-        decision_path = gpd_project / "referee-decision-missing-artifacts.json"
+    def test_validate_referee_decision_command_rejects_missing_stage_artifacts(self, grd_project: Path) -> None:
+        decision_path = grd_project / "referee-decision-missing-artifacts.json"
         decision_path.write_text(
             json.dumps(
                 {
@@ -1650,11 +1650,11 @@ class TestReviewValidationCommands:
                     "target_journal": "jhep",
                     "final_recommendation": "major_revision",
                     "stage_artifacts": [
-                        ".gpd/review/STAGE-reader.json",
-                        ".gpd/review/STAGE-literature.json",
-                        ".gpd/review/STAGE-math.json",
-                        ".gpd/review/STAGE-physics.json",
-                        ".gpd/review/STAGE-interestingness.json",
+                        ".grd/review/STAGE-reader.json",
+                        ".grd/review/STAGE-literature.json",
+                        ".grd/review/STAGE-math.json",
+                        ".grd/review/STAGE-physics.json",
+                        ".grd/review/STAGE-interestingness.json",
                     ],
                 }
             ),
@@ -1673,10 +1673,10 @@ class TestReviewValidationCommands:
         assert any("listed staged review artifacts do not exist" in reason for reason in payload["reasons"])
 
     def test_validate_referee_decision_command_rejects_unknown_blocking_issue_ids_when_ledger_given(
-        self, gpd_project: Path
+        self, grd_project: Path
     ) -> None:
-        _write_review_stage_artifacts(gpd_project)
-        decision_path = gpd_project / "referee-decision-ledger-mismatch.json"
+        _write_review_stage_artifacts(grd_project)
+        decision_path = grd_project / "referee-decision-ledger-mismatch.json"
         decision_path.write_text(
             json.dumps(
                 {
@@ -1684,18 +1684,18 @@ class TestReviewValidationCommands:
                     "target_journal": "jhep",
                     "final_recommendation": "major_revision",
                     "stage_artifacts": [
-                        ".gpd/review/STAGE-reader.json",
-                        ".gpd/review/STAGE-literature.json",
-                        ".gpd/review/STAGE-math.json",
-                        ".gpd/review/STAGE-physics.json",
-                        ".gpd/review/STAGE-interestingness.json",
+                        ".grd/review/STAGE-reader.json",
+                        ".grd/review/STAGE-literature.json",
+                        ".grd/review/STAGE-math.json",
+                        ".grd/review/STAGE-physics.json",
+                        ".grd/review/STAGE-interestingness.json",
                     ],
                     "blocking_issue_ids": ["REF-999"],
                 }
             ),
             encoding="utf-8",
         )
-        ledger_path = gpd_project / "review-ledger.json"
+        ledger_path = grd_project / "review-ledger.json"
         ledger_path.write_text(
             json.dumps(
                 {
@@ -1750,10 +1750,10 @@ class TestReviewValidationCommands:
         assert "Cannot read both referee-decision and review-ledger from stdin" in payload["error"]
 
     def test_validate_referee_decision_command_rejects_omitted_unresolved_blocking_ledger_issues(
-        self, gpd_project: Path
+        self, grd_project: Path
     ) -> None:
-        _write_review_stage_artifacts(gpd_project)
-        decision_path = gpd_project / "referee-decision-omits-blocker.json"
+        _write_review_stage_artifacts(grd_project)
+        decision_path = grd_project / "referee-decision-omits-blocker.json"
         decision_path.write_text(
             json.dumps(
                 {
@@ -1761,17 +1761,17 @@ class TestReviewValidationCommands:
                     "target_journal": "jhep",
                     "final_recommendation": "major_revision",
                     "stage_artifacts": [
-                        ".gpd/review/STAGE-reader.json",
-                        ".gpd/review/STAGE-literature.json",
-                        ".gpd/review/STAGE-math.json",
-                        ".gpd/review/STAGE-physics.json",
-                        ".gpd/review/STAGE-interestingness.json",
+                        ".grd/review/STAGE-reader.json",
+                        ".grd/review/STAGE-literature.json",
+                        ".grd/review/STAGE-math.json",
+                        ".grd/review/STAGE-physics.json",
+                        ".grd/review/STAGE-interestingness.json",
                     ],
                 }
             ),
             encoding="utf-8",
         )
-        ledger_path = gpd_project / "review-ledger-open-blocker.json"
+        ledger_path = grd_project / "review-ledger-open-blocker.json"
         ledger_path.write_text(
             json.dumps(
                 {
@@ -1816,8 +1816,8 @@ class TestReviewValidationCommands:
             for reason in payload["reasons"]
         )
 
-    def test_validate_paper_quality_command_reports_shape_errors_without_traceback(self, gpd_project: Path) -> None:
-        input_path = gpd_project / "paper-quality-invalid.json"
+    def test_validate_paper_quality_command_reports_shape_errors_without_traceback(self, grd_project: Path) -> None:
+        input_path = grd_project / "paper-quality-invalid.json"
         input_path.write_text(
             json.dumps(
                 {
@@ -1845,8 +1845,8 @@ class TestReviewValidationCommands:
         payload = json.loads(result.output)
         assert "paper-quality input.equations must be an object, not str" in payload["error"]
 
-    def test_validate_paper_quality_command_rejects_unknown_fields_without_traceback(self, gpd_project: Path) -> None:
-        input_path = gpd_project / "paper-quality-unknown-field.json"
+    def test_validate_paper_quality_command_rejects_unknown_fields_without_traceback(self, grd_project: Path) -> None:
+        input_path = grd_project / "paper-quality-unknown-field.json"
         input_path.write_text(
             json.dumps(
                 {
@@ -1875,8 +1875,8 @@ class TestReviewValidationCommands:
         assert "paper-quality input.verification.report_exists: Extra inputs are not permitted" in payload["error"]
         assert "templates/paper/paper-quality-input-schema.md" in payload["error"]
 
-    def test_validate_referee_decision_command_reports_shape_errors_without_traceback(self, gpd_project: Path) -> None:
-        decision_path = gpd_project / "referee-decision-invalid.json"
+    def test_validate_referee_decision_command_reports_shape_errors_without_traceback(self, grd_project: Path) -> None:
+        decision_path = grd_project / "referee-decision-invalid.json"
         decision_path.write_text(
             json.dumps(
                 {
@@ -1899,8 +1899,8 @@ class TestReviewValidationCommands:
         payload = json.loads(result.output)
         assert "referee-decision.stage_artifacts must be an array, not str" in payload["error"]
 
-    def test_validate_review_ledger_command_accepts_valid_ledger(self, gpd_project: Path) -> None:
-        ledger_path = gpd_project / "review-ledger.json"
+    def test_validate_review_ledger_command_accepts_valid_ledger(self, grd_project: Path) -> None:
+        ledger_path = grd_project / "review-ledger.json"
         ledger_path.write_text(
             json.dumps(
                 {
@@ -1934,8 +1934,8 @@ class TestReviewValidationCommands:
         payload = json.loads(result.output)
         assert payload["issues"][0]["issue_id"] == "REF-001"
 
-    def test_validate_review_ledger_command_reports_shape_errors_without_traceback(self, gpd_project: Path) -> None:
-        ledger_path = gpd_project / "review-ledger-invalid.json"
+    def test_validate_review_ledger_command_reports_shape_errors_without_traceback(self, grd_project: Path) -> None:
+        ledger_path = grd_project / "review-ledger-invalid.json"
         ledger_path.write_text(
             json.dumps(
                 {
@@ -1958,8 +1958,8 @@ class TestReviewValidationCommands:
         payload = json.loads(result.output)
         assert "review-ledger.issues must be an array, not str" in payload["error"]
 
-    def test_validate_plan_contract_command_accepts_valid_plan(self, gpd_project: Path) -> None:
-        phase_dir = gpd_project / ".gpd" / "phases" / "01-benchmark"
+    def test_validate_plan_contract_command_accepts_valid_plan(self, grd_project: Path) -> None:
+        phase_dir = grd_project / ".grd" / "phases" / "01-benchmark"
         phase_dir.mkdir(parents=True, exist_ok=True)
         plan_path = phase_dir / "01-01-PLAN.md"
         plan_path.write_text(
@@ -1977,8 +1977,8 @@ class TestReviewValidationCommands:
         payload = json.loads(result.output)
         assert payload["valid"] is True
 
-    def test_validate_summary_contract_command_rejects_unknown_contract_ids(self, gpd_project: Path) -> None:
-        phase_dir = gpd_project / ".gpd" / "phases" / "01-benchmark"
+    def test_validate_summary_contract_command_rejects_unknown_contract_ids(self, grd_project: Path) -> None:
+        phase_dir = grd_project / ".grd" / "phases" / "01-benchmark"
         phase_dir.mkdir(parents=True, exist_ok=True)
         (phase_dir / "01-01-PLAN.md").write_text(
             (FIXTURES_DIR / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -2002,8 +2002,8 @@ class TestReviewValidationCommands:
         payload = json.loads(result.output)
         assert any("Unknown claim contract_results entry: claim-unknown" in error for error in payload["errors"])
 
-    def test_validate_summary_contract_command_reports_unresolved_plan_contract_ref(self, gpd_project: Path) -> None:
-        phase_dir = gpd_project / ".gpd" / "phases" / "01-benchmark"
+    def test_validate_summary_contract_command_reports_unresolved_plan_contract_ref(self, grd_project: Path) -> None:
+        phase_dir = grd_project / ".grd" / "phases" / "01-benchmark"
         phase_dir.mkdir(parents=True, exist_ok=True)
         summary_path = phase_dir / "01-SUMMARY.md"
         summary_path.write_text(
@@ -2021,8 +2021,8 @@ class TestReviewValidationCommands:
         payload = json.loads(result.output)
         assert "plan_contract_ref: could not resolve matching plan contract" in payload["errors"]
 
-    def test_validate_verification_contract_command_requires_contract_results(self, gpd_project: Path) -> None:
-        phase_dir = gpd_project / ".gpd" / "phases" / "01-benchmark"
+    def test_validate_verification_contract_command_requires_contract_results(self, grd_project: Path) -> None:
+        phase_dir = grd_project / ".grd" / "phases" / "01-benchmark"
         phase_dir.mkdir(parents=True, exist_ok=True)
         (phase_dir / "01-01-PLAN.md").write_text(
             (FIXTURES_DIR / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -2035,7 +2035,7 @@ class TestReviewValidationCommands:
             "verified: 2026-03-13T00:00:00Z\n"
             "status: passed\n"
             "score: 1/1 contract targets verified\n"
-            "plan_contract_ref: .gpd/phases/01-benchmark/01-01-PLAN.md#/contract\n"
+            "plan_contract_ref: .grd/phases/01-benchmark/01-01-PLAN.md#/contract\n"
             "---\n\n"
             "# Verification\n",
             encoding="utf-8",
@@ -2051,8 +2051,8 @@ class TestReviewValidationCommands:
         payload = json.loads(result.output)
         assert "contract_results: required for contract-backed plan" in payload["errors"]
 
-    def test_validate_reproducibility_manifest_strict_command(self, gpd_project: Path) -> None:
-        manifest_path = gpd_project / "reproducibility-ready.json"
+    def test_validate_reproducibility_manifest_strict_command(self, grd_project: Path) -> None:
+        manifest_path = grd_project / "reproducibility-ready.json"
         manifest_path.write_text(
             json.dumps(
                 {
@@ -2107,8 +2107,8 @@ class TestReviewValidationCommands:
         assert payload["valid"] is True
         assert payload["ready_for_review"] is True
 
-    def test_validate_reproducibility_manifest_reports_shape_errors_without_traceback(self, gpd_project: Path) -> None:
-        manifest_path = gpd_project / "reproducibility-invalid.json"
+    def test_validate_reproducibility_manifest_reports_shape_errors_without_traceback(self, grd_project: Path) -> None:
+        manifest_path = grd_project / "reproducibility-invalid.json"
         manifest_path.write_text(
             json.dumps({"paper_title": "Bad Input", "environment": []}),
             encoding="utf-8",
@@ -2161,23 +2161,23 @@ class TestReviewValidationCommands:
 
 
 def test_cli_import_survives_runtime_help_lookup_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    import gpd as gpd_package
-    import gpd.adapters as adapters_module
+    import grd as grd_package
+    import grd.adapters as adapters_module
 
     def _raise_runtime_catalog() -> list[str]:
         raise RuntimeError("catalog offline")
 
-    original_cli = sys.modules.get("gpd.cli")
+    original_cli = sys.modules.get("grd.cli")
     monkeypatch.setattr(adapters_module, "list_runtimes", _raise_runtime_catalog)
-    sys.modules.pop("gpd.cli", None)
+    sys.modules.pop("grd.cli", None)
 
     try:
-        reloaded = importlib.import_module("gpd.cli")
+        reloaded = importlib.import_module("grd.cli")
         assert reloaded._runtime_override_help() == "Runtime name override"
     finally:
         if original_cli is not None:
-            sys.modules["gpd.cli"] = original_cli
-            gpd_package.cli = original_cli
+            sys.modules["grd.cli"] = original_cli
+            grd_package.cli = original_cli
 
 
 class TestNoDuplicateTestMethods:

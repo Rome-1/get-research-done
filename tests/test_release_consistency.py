@@ -39,7 +39,7 @@ def _python_release_version(repo_root: Path) -> str:
     pyproject = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
 
     package_version = str(package_json["version"])
-    python_version = str(package_json["gpdPythonVersion"])
+    python_version = str(package_json["grdPythonVersion"])
     pyproject_version = str(pyproject["project"]["version"])
 
     assert package_version == python_version == pyproject_version
@@ -56,8 +56,8 @@ def _build_public_release_artifacts(repo_root: Path, out_dir: Path) -> tuple[Pat
     )
     assert result.returncode == 0, result.stderr or result.stdout
 
-    wheel = next(out_dir.glob("get_physics_done-*.whl"))
-    sdist = next(out_dir.glob("get_physics_done-*.tar.gz"))
+    wheel = next(out_dir.glob("get_research_done-*.whl"))
+    sdist = next(out_dir.glob("get_research_done-*.tar.gz"))
     return wheel, sdist
 
 
@@ -94,7 +94,7 @@ def _npm_pack_dry_run(repo_root: Path, work_dir: Path) -> dict[str, object]:
 
 
 def _paper_template_paths(repo_root: Path) -> tuple[list[str], list[str]]:
-    template_root = repo_root / "src" / "gpd" / "mcp" / "paper" / "templates"
+    template_root = repo_root / "src" / "grd" / "mcp" / "paper" / "templates"
     relative_paths = sorted(path.relative_to(repo_root / "src").as_posix() for path in template_root.rglob("*_template.tex"))
     sdist_paths = [f"src/{path}" for path in relative_paths]
     return relative_paths, sdist_paths
@@ -200,19 +200,19 @@ def test_public_release_surfaces_share_copilot_positioning() -> None:
     pyproject = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
     installer = (repo_root / "bin" / "install.js").read_text(encoding="utf-8")
 
-    expected = "open-source ai copilot for physics research"
+    expected = "open-source ai copilot for research"
     assert expected in readme.lower()
     assert expected in package_json["description"].lower()
     assert expected in pyproject["project"]["description"].lower()
-    assert "Open-source AI copilot for physics research" in installer
+    assert "Open-source AI copilot for research" in installer
 
 
 def test_public_bootstrap_package_exposes_npx_installer() -> None:
     repo_root = _repo_root()
     package_json = json.loads((repo_root / "package.json").read_text(encoding="utf-8"))
 
-    assert package_json["name"] == "get-physics-done"
-    assert package_json.get("bin", {}).get("get-physics-done") == "bin/install.js"
+    assert package_json["name"] == "get-research-done"
+    assert package_json.get("bin", {}).get("get-research-done") == "bin/install.js"
     assert "bin/" in package_json.get("files", [])
     assert (repo_root / "bin" / "install.js").is_file()
 
@@ -222,7 +222,7 @@ def test_public_bootstrap_installer_uses_python_cli_without_uv() -> None:
     content = (repo_root / "bin" / "install.js").read_text(encoding="utf-8")
 
     assert "uv" not in content
-    assert "gpd.cli" in content
+    assert "grd.cli" in content
 
 
 def test_public_bootstrap_installer_pins_the_matching_python_release() -> None:
@@ -230,7 +230,7 @@ def test_public_bootstrap_installer_pins_the_matching_python_release() -> None:
     content = (repo_root / "bin" / "install.js").read_text(encoding="utf-8")
 
     assert 'require("../package.json")' in content
-    assert "gpdPythonVersion" in content
+    assert "grdPythonVersion" in content
     assert '["-m", "venv", "--help"]' in content
     assert "managed environment" in content
     assert 'const GITHUB_MAIN_BRANCH = "main"' in content
@@ -250,7 +250,7 @@ def test_public_bootstrap_installer_documents_public_flags_and_runtime_aliases()
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
     content = (repo_root / "bin" / "install.js").read_text(encoding="utf-8")
 
-    assert "npx -y get-physics-done" in readme
+    assert "npx -y get-research-done" in readme
     assert "`--claude`" in readme
     assert "`--claude-code`" in readme
     assert "`--gemini`" in readme
@@ -266,7 +266,7 @@ def test_public_bootstrap_installer_documents_public_flags_and_runtime_aliases()
     assert "`--force-statusline`" in readme
     assert "`--help`" in readme
     assert "`-h`" in readme
-    assert 'require("../src/gpd/adapters/runtime_catalog.json")' in content
+    assert 'require("../src/grd/adapters/runtime_catalog.json")' in content
     assert "runtimeInstallFlag(dollarCommandRuntime)" in content
     assert "runtimeConfigDirName(dollarCommandRuntime)" in content
     assert 'args.includes("--all")' in content
@@ -282,13 +282,13 @@ def test_public_bootstrap_installer_documents_reinstall_and_upgrade_paths() -> N
 
     assert "`--reinstall`" in readme
     assert "`--upgrade`" in readme
-    assert "~/.gpd/venv" in readme
+    assert "~/.grd/venv" in readme
     assert "latest GitHub `main` source" in readme
-    assert "github:psi-oss/get-physics-done --upgrade" in readme
+    assert "github:psi-oss/get-research-done --upgrade" in readme
     assert "--reinstall" in content
     assert "--upgrade" in content
-    assert "Reinstall the matching tagged GitHub source in ~/.gpd/venv" in content
-    assert "Upgrade ~/.gpd/venv from the latest GitHub main source" in content
+    assert "Reinstall the matching tagged GitHub source in ~/.grd/venv" in content
+    assert "Upgrade ~/.grd/venv from the latest GitHub main source" in content
 
 
 def test_public_bootstrap_installer_documents_uninstall_path() -> None:
@@ -297,12 +297,12 @@ def test_public_bootstrap_installer_documents_uninstall_path() -> None:
     content = (repo_root / "bin" / "install.js").read_text(encoding="utf-8")
 
     assert "## Uninstall" in readme
-    assert "Run `npx -y get-physics-done --uninstall`" in readme
+    assert "Run `npx -y get-research-done --uninstall`" in readme
     assert "`--uninstall`" in readme
     assert "non-interactive uninstall" in readme
     assert "`--global`" in readme
     assert "`--local`" in readme
-    assert "~/.gpd/venv/bin/gpd uninstall" not in readme
+    assert "~/.grd/venv/bin/grd uninstall" not in readme
     assert "--uninstall" in content
     assert "Uninstall from selected runtime config" in content
     assert '--uninstall ${primaryFlag} --global' in content
@@ -323,28 +323,28 @@ def test_readme_documents_runtime_specific_tier_model_formats() -> None:
 
 def test_export_workflow_uses_release_attribution_footer() -> None:
     repo_root = _repo_root()
-    content = (repo_root / "src" / "gpd" / "specs" / "workflows" / "export.md").read_text(encoding="utf-8")
+    content = (repo_root / "src" / "grd" / "specs" / "workflows" / "export.md").read_text(encoding="utf-8")
 
-    assert "<p><em>Generated with Get Physics Done (PSI)" in content
-    assert "{\\footnotesize\\textit{Generated with Get Physics Done (PSI)}}" in content
-    assert "Attribution: Generated with Get Physics Done (PSI)" in content
-    assert "Tool: GPD (Get Physics Done)" not in content
+    assert "<p><em>Generated with Get Research Done (PSI)" in content
+    assert "{\\footnotesize\\textit{Generated with Get Research Done (PSI)}}" in content
+    assert "Attribution: Generated with Get Research Done (PSI)" in content
+    assert "Tool: GRD (Get Research Done)" not in content
 
 
 def test_export_surfaces_use_visible_exports_directory() -> None:
     repo_root = _repo_root()
-    workflow = (repo_root / "src" / "gpd" / "specs" / "workflows" / "export.md").read_text(encoding="utf-8")
-    command = (repo_root / "src" / "gpd" / "commands" / "export.md").read_text(encoding="utf-8")
+    workflow = (repo_root / "src" / "grd" / "specs" / "workflows" / "export.md").read_text(encoding="utf-8")
+    command = (repo_root / "src" / "grd" / "commands" / "export.md").read_text(encoding="utf-8")
 
     assert "mkdir -p exports" in workflow
     assert "exports/results.html" in workflow
     assert "exports/results.tex" in workflow
     assert "exports/results.bib" in workflow
     assert "exports/results.zip" in workflow
-    assert ".gpd/exports" not in workflow
+    assert ".grd/exports" not in workflow
     assert "Write files to `exports/`." in command
     assert "Files written to exports/" in command
-    assert ".gpd/exports" not in command
+    assert ".grd/exports" not in command
 
 
 def test_public_cli_surface_is_unified() -> None:
@@ -352,18 +352,18 @@ def test_public_cli_surface_is_unified() -> None:
     script_lines = _project_script_lines(repo_root)
     script_names = [line.split("=", 1)[0].strip().strip('"') for line in script_lines]
 
-    assert 'gpd = "gpd.cli:entrypoint"' in script_lines
-    assert all(name == "gpd" or name.startswith("gpd-mcp-") for name in script_names)
-    assert sorted(path.name for path in (repo_root / "src" / "gpd").glob("cli*.py")) == ["cli.py"]
+    assert 'grd = "grd.cli:entrypoint"' in script_lines
+    assert all(name == "grd" or name.startswith("grd-mcp-") for name in script_names)
+    assert sorted(path.name for path in (repo_root / "src" / "grd").glob("cli*.py")) == ["cli.py"]
 
 
 def test_install_docs_use_only_public_npx_flow() -> None:
     repo_root = _repo_root()
-    npx_command = "npx -y get-physics-done"
+    npx_command = "npx -y get-research-done"
     disallowed_markers = (
         "uv tool install",
         "python3 -m pip install",
-        "gpd install",
+        "grd install",
     )
 
     for relative_path in ("README.md",):
@@ -381,7 +381,7 @@ def test_public_install_docs_list_bootstrap_prerequisites_and_current_layout() -
         assert "Node.js with `npm`/`npx`" in content
         assert "Python 3.11+ with the standard `venv` module" in content
         assert "npm and GitHub" in content
-        assert "~/.gpd/venv" in content
+        assert "~/.grd/venv" in content
 
     assert not (repo_root / "docs" / "USER-GUIDE.md").exists()
     assert not (repo_root / "MANUAL-TEST-PLAN.md").exists()
@@ -419,10 +419,10 @@ def test_public_docs_keep_runtime_surface_first() -> None:
     assert "## Advanced CLI Utilities" in readme
     assert readme.index("## Supported Runtimes") < readme.index("## Advanced CLI Utilities")
     assert "## Known Limitations" in readme
-    assert "After installing GPD, open your chosen runtime normally" in readme
+    assert "After installing GRD, open your chosen runtime normally" in readme
     assert "Observability and trace inspection" in readme
-    assert ".gpd/observability/" in readme
-    assert "`.gpd/STATE.md` | Concise human-readable continuity state" in readme
+    assert ".grd/observability/" in readme
+    assert "`.grd/STATE.md` | Concise human-readable continuity state" in readme
     assert "does not fabricate opaque provider internals" in readme
 
 
@@ -431,10 +431,10 @@ def test_public_runtime_docs_explain_runtime_specific_command_syntax() -> None:
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
 
     assert "## Supported Runtimes" in readme
-    assert "| Claude Code | `--claude` | `/gpd:help` | `/gpd:new-project` |" in readme
-    assert "| Gemini CLI | `--gemini` | `/gpd:help` | `/gpd:new-project` |" in readme
-    assert "| Codex | `--codex` | `$gpd-help` | `$gpd-new-project` |" in readme
-    assert "| OpenCode | `--opencode` | `/gpd-help` | `/gpd-new-project` |" in readme
+    assert "| Claude Code | `--claude` | `/grd:help` | `/grd:new-project` |" in readme
+    assert "| Gemini CLI | `--gemini` | `/grd:help` | `/grd:new-project` |" in readme
+    assert "| Codex | `--codex` | `$grd-help` | `$grd-new-project` |" in readme
+    assert "| OpenCode | `--opencode` | `/grd-help` | `/grd-new-project` |" in readme
     assert "Each runtime uses its own command prefix" in readme
 
 
@@ -443,7 +443,7 @@ def test_codex_runtime_docs_distinguish_public_skills_from_full_agent_install() 
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
 
     assert "Codex-specific note:" in readme
-    assert "exposes only public `gpd-*` agents there as discoverable skills" in readme
+    assert "exposes only public `grd-*` agents there as discoverable skills" in readme
     assert "the full agent catalog still installs under `.codex/agents/`" in readme
 
 
@@ -455,7 +455,7 @@ def test_public_runtime_notes_cover_all_runtime_specific_install_surfaces() -> N
     assert "Gemini-specific note:" in readme
     assert "Codex-specific note:" in readme
     assert "OpenCode-specific note:" in readme
-    assert "`policies/gpd-auto-edit.toml`" in readme
+    assert "`policies/grd-auto-edit.toml`" in readme
     assert "`CODEX_SKILLS_DIR`" in readme
 
 
@@ -463,9 +463,9 @@ def test_public_cli_docs_cover_project_contract_comparison_and_paper_build() -> 
     repo_root = _repo_root()
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
 
-    assert "`gpd validate project-contract <file.json or -> [--mode approved|draft]`" in readme
-    assert "| `/gpd:compare-results [phase, artifact, or comparison target]` |" in readme
-    assert "`gpd paper-build [PAPER-CONFIG.json] [--output-dir <dir>]`" in readme
+    assert "`grd validate project-contract <file.json or -> [--mode approved|draft]`" in readme
+    assert "| `/grd:compare-results [phase, artifact, or comparison target]` |" in readme
+    assert "`grd paper-build [PAPER-CONFIG.json] [--output-dir <dir>]`" in readme
 
 
 def test_public_runtime_command_table_has_unique_entries() -> None:
@@ -517,18 +517,18 @@ def test_public_runtime_dependency_surface_stays_curated() -> None:
 
 
 def test_infra_descriptors_reference_public_bootstrap_flow() -> None:
-    from gpd.mcp.builtin_servers import build_public_descriptors
+    from grd.mcp.builtin_servers import build_public_descriptors
 
     repo_root = _repo_root()
-    expected = "npx -y get-physics-done"
+    expected = "npx -y get-research-done"
     stale_markers = (
-        "packages/gpd",
+        "packages/grd",
         "uv pip install -e",
-        "pip install -e packages/gpd",
+        "pip install -e packages/grd",
     )
     expected_descriptors = build_public_descriptors()
 
-    for path in sorted((repo_root / "infra").glob("gpd-*.json")):
+    for path in sorted((repo_root / "infra").glob("grd-*.json")):
         content = path.read_text(encoding="utf-8")
         assert expected in content, f"{path.name} should reference the public bootstrap flow"
         for marker in stale_markers:
@@ -536,20 +536,20 @@ def test_infra_descriptors_reference_public_bootstrap_flow() -> None:
         assert json.loads(content) == expected_descriptors[path.stem]
 
     assert {
-        path.stem for path in (repo_root / "infra").glob("gpd-*.json")
+        path.stem for path in (repo_root / "infra").glob("grd-*.json")
     } == set(expected_descriptors)
 
 
-def test_public_gpd_infra_descriptors_use_entry_points_not_python() -> None:
+def test_public_grd_infra_descriptors_use_entry_points_not_python() -> None:
     repo_root = _repo_root()
 
-    for path in sorted((repo_root / "infra").glob("gpd-*.json")):
+    for path in sorted((repo_root / "infra").glob("grd-*.json")):
         descriptor = json.loads(path.read_text(encoding="utf-8"))
-        if path.stem == "gpd-arxiv":
+        if path.stem == "grd-arxiv":
             assert descriptor["command"] == "python"
             continue
 
-        assert descriptor["command"].startswith("gpd-mcp-")
+        assert descriptor["command"].startswith("grd-mcp-")
         assert descriptor["args"] == []
 
 
@@ -563,7 +563,7 @@ def test_contributing_docs_cover_release_validation_flow() -> None:
     assert 'npm_config_cache="$(mktemp -d)" npm pack --dry-run --json' in content
     assert "uv run python -m scripts.sync_repo_graph_contract" in content
     assert "temporary cache outside the repo" in content
-    assert "Public install docs should use `npx -y get-physics-done`." in content
+    assert "Public install docs should use `npx -y get-research-done`." in content
     assert "Keep public artifacts present and up to date" in content
     assert "direct pushes are blocked" in content
     assert "required `tests` workflow" in content
@@ -590,10 +590,10 @@ def test_npm_pack_dry_run_uses_temp_cache_outside_repo(tmp_path: Path) -> None:
     pack = _npm_pack_dry_run(repo_root, tmp_path)
     packed_paths = {str(item["path"]) for item in pack["files"]}
 
-    assert pack["name"] == "get-physics-done"
+    assert pack["name"] == "get-research-done"
     assert pack["version"] == _python_release_version(repo_root)
     assert "bin/install.js" in packed_paths
-    assert "src/gpd/adapters/runtime_catalog.json" in packed_paths
+    assert "src/grd/adapters/runtime_catalog.json" in packed_paths
     assert (tmp_path / "npm-cache").is_dir()
 
     if existed_before:
@@ -610,21 +610,21 @@ def test_fresh_built_release_artifacts_match_public_bootstrap_and_docs(tmp_path:
     wheel, sdist = _build_public_release_artifacts(repo_root, tmp_path / "dist")
     wheel_template_paths, sdist_template_paths = _paper_template_paths(repo_root)
 
-    assert wheel.name == f"get_physics_done-{version}-py3-none-any.whl"
-    assert sdist.name == f"get_physics_done-{version}.tar.gz"
+    assert wheel.name == f"get_research_done-{version}-py3-none-any.whl"
+    assert sdist.name == f"get_research_done-{version}.tar.gz"
 
     with zipfile.ZipFile(wheel) as wheel_zip:
         wheel_names = set(wheel_zip.namelist())
-        assert "gpd/cli.py" in wheel_names
-        assert "gpd/mcp/viewer/cli.py" not in wheel_names
+        assert "grd/cli.py" in wheel_names
+        assert "grd/mcp/viewer/cli.py" not in wheel_names
         for template_path in wheel_template_paths:
             assert template_path in wheel_names
-        entry_points = wheel_zip.read(f"get_physics_done-{version}.dist-info/entry_points.txt").decode("utf-8")
-        metadata = wheel_zip.read(f"get_physics_done-{version}.dist-info/METADATA").decode("utf-8")
-        assert "gpd = gpd.cli:entrypoint" in entry_points
+        entry_points = wheel_zip.read(f"get_research_done-{version}.dist-info/entry_points.txt").decode("utf-8")
+        metadata = wheel_zip.read(f"get_research_done-{version}.dist-info/METADATA").decode("utf-8")
+        assert "grd = grd.cli:entrypoint" in entry_points
         assert _wheel_dependency_names(metadata) == _expected_runtime_dependency_names()
 
-    sdist_prefix = f"get_physics_done-{version}/"
+    sdist_prefix = f"get_research_done-{version}/"
     with tarfile.open(sdist, "r:gz") as sdist_tar:
         sdist_names = set(sdist_tar.getnames())
         assert f"{sdist_prefix}README.md" in sdist_names
@@ -639,10 +639,10 @@ def test_fresh_built_release_artifacts_match_public_bootstrap_and_docs(tmp_path:
         assert install_js is not None
         install_content = install_js.read().decode("utf-8")
         assert 'require("../package.json")' in install_content
-        assert "gpdPythonVersion" in install_content
+        assert "grdPythonVersion" in install_content
         assert 'const GITHUB_MAIN_BRANCH = "main"' in install_content
         assert '"-m", "venv"' in install_content
-        assert '".gpd"' in install_content
+        assert '".grd"' in install_content
         assert "archive/refs/tags/v${version}.tar.gz" in install_content
         assert "archive/refs/heads/${GITHUB_MAIN_BRANCH}.tar.gz" in install_content
         assert "git+${repoGitUrl}@v${version}" in install_content

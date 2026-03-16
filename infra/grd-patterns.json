@@ -1,0 +1,36 @@
+{
+  "name": "grd-patterns",
+  "description": "GRD cross-project pattern library. Tools for searching, adding, promoting, and seeding physics error patterns across research projects.",
+  "transport": "stdio",
+  "command": "grd-mcp-patterns",
+  "args": [],
+  "env": {
+    "LOG_LEVEL": "${LOG_LEVEL:-WARNING}"
+  },
+  "capabilities": [
+    "lookup_pattern",
+    "add_pattern",
+    "promote_pattern",
+    "seed_patterns",
+    "list_domains"
+  ],
+  "registry_prefix": "grd_patterns",
+  "prerequisites": [
+    "Install GRD first: npx -y get-research-done"
+  ],
+  "health_check": {
+    "tool": "list_domains",
+    "input": {},
+    "expect": "contains qft"
+  },
+  "alternatives": {
+    "python_module": {
+      "command": "python",
+      "args": [
+        "-m",
+        "grd.mcp.servers.patterns_server"
+      ],
+      "notes": "Requires grd package installed"
+    }
+  }
+}

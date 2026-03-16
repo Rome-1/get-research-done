@@ -7,7 +7,7 @@ import subprocess
 from datetime import date
 from pathlib import Path
 
-from gpd.adapters.runtime_catalog import iter_runtime_descriptors
+from grd.adapters.runtime_catalog import iter_runtime_descriptors
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GRAPH_PATH = REPO_ROOT / "tests" / "README.md"
@@ -35,7 +35,7 @@ EXCLUDED_GRAPH_DIRS = (
     ".pytest_cache",
     ".mypy_cache",
     ".ruff_cache",
-    ".gpd",
+    ".grd",
     *_LOCAL_RUNTIME_MIRROR_EXCLUDES,
     "dist",
 )
@@ -43,16 +43,16 @@ EXCLUDED_GRAPH_DIRS = (
 GRAPH_SCOPE_LABELS = (
     "Live repo files analyzed in the current tree",
     "Python files under `src/` and `tests/`",
-    "`src/gpd/commands/*.md`",
-    "`src/gpd/agents/*.md`",
-    "`src/gpd/specs/workflows/*.md`",
-    "`src/gpd/specs/templates/**/*.md`",
-    "`src/gpd/specs/references/**/*.md`",
-    "`src/gpd/adapters/*.py`",
-    "`src/gpd/hooks/*.py`",
-    "`src/gpd/mcp/servers/*.py`",
+    "`src/grd/commands/*.md`",
+    "`src/grd/agents/*.md`",
+    "`src/grd/specs/workflows/*.md`",
+    "`src/grd/specs/templates/**/*.md`",
+    "`src/grd/specs/references/**/*.md`",
+    "`src/grd/adapters/*.py`",
+    "`src/grd/hooks/*.py`",
+    "`src/grd/mcp/servers/*.py`",
     "`tests/**` files",
-    "`infra/gpd-*.json`",
+    "`infra/grd-*.json`",
 )
 
 _NORMALIZED_SCOPE_LABELS = {
@@ -161,45 +161,45 @@ def expected_scope_counts(repo_root: Path = REPO_ROOT) -> dict[str, int]:
         "Python files under `src/` and `tests/`": sum(
             1 for path in repo_files if path.suffix == ".py" and path.parts and path.parts[0] in {"src", "tests"}
         ),
-        "`src/gpd/commands/*.md`": sum(
-            1 for path in repo_files if _has_parent(path, "src", "gpd", "commands") and path.suffix == ".md"
+        "`src/grd/commands/*.md`": sum(
+            1 for path in repo_files if _has_parent(path, "src", "grd", "commands") and path.suffix == ".md"
         ),
-        "`src/gpd/agents/*.md`": sum(
-            1 for path in repo_files if _has_parent(path, "src", "gpd", "agents") and path.suffix == ".md"
+        "`src/grd/agents/*.md`": sum(
+            1 for path in repo_files if _has_parent(path, "src", "grd", "agents") and path.suffix == ".md"
         ),
-        "`src/gpd/specs/workflows/*.md`": sum(
+        "`src/grd/specs/workflows/*.md`": sum(
             1
             for path in repo_files
-            if _has_parent(path, "src", "gpd", "specs", "workflows") and path.suffix == ".md"
+            if _has_parent(path, "src", "grd", "specs", "workflows") and path.suffix == ".md"
         ),
-        "`src/gpd/specs/templates/**/*.md`": sum(
+        "`src/grd/specs/templates/**/*.md`": sum(
             1
             for path in repo_files
-            if _is_under(path, "src", "gpd", "specs", "templates") and path.suffix == ".md"
+            if _is_under(path, "src", "grd", "specs", "templates") and path.suffix == ".md"
         ),
-        "`src/gpd/specs/references/**/*.md`": sum(
+        "`src/grd/specs/references/**/*.md`": sum(
             1
             for path in repo_files
-            if _is_under(path, "src", "gpd", "specs", "references") and path.suffix == ".md"
+            if _is_under(path, "src", "grd", "specs", "references") and path.suffix == ".md"
         ),
-        "`src/gpd/adapters/*.py`": sum(
-            1 for path in repo_files if _has_parent(path, "src", "gpd", "adapters") and path.suffix == ".py"
+        "`src/grd/adapters/*.py`": sum(
+            1 for path in repo_files if _has_parent(path, "src", "grd", "adapters") and path.suffix == ".py"
         ),
-        "`src/gpd/hooks/*.py`": sum(
-            1 for path in repo_files if _has_parent(path, "src", "gpd", "hooks") and path.suffix == ".py"
+        "`src/grd/hooks/*.py`": sum(
+            1 for path in repo_files if _has_parent(path, "src", "grd", "hooks") and path.suffix == ".py"
         ),
-        "`src/gpd/mcp/servers/*.py`": sum(
+        "`src/grd/mcp/servers/*.py`": sum(
             1
             for path in repo_files
-            if _has_parent(path, "src", "gpd", "mcp", "servers") and path.suffix == ".py"
+            if _has_parent(path, "src", "grd", "mcp", "servers") and path.suffix == ".py"
         ),
         "`tests/**` files": sum(
             1 for path in repo_files if _is_under(path, "tests")
         ),
-        "`infra/gpd-*.json`": sum(
+        "`infra/grd-*.json`": sum(
             1
             for path in repo_files
-            if _has_parent(path, "infra") and path.suffix == ".json" and path.name.startswith("gpd-")
+            if _has_parent(path, "infra") and path.suffix == ".json" and path.name.startswith("grd-")
         ),
     }
 
@@ -268,15 +268,15 @@ def render_scope_block(contract: dict[str, object]) -> str:
 def render_same_stem_command_workflow_block(repo_root: Path = REPO_ROOT) -> str:
     same_stems = ",".join(
         sorted(
-            {path.stem for path in (repo_root / "src" / "gpd" / "commands").glob("*.md")}
-            & {path.stem for path in (repo_root / "src" / "gpd" / "specs" / "workflows").glob("*.md")}
+            {path.stem for path in (repo_root / "src" / "grd" / "commands").glob("*.md")}
+            & {path.stem for path in (repo_root / "src" / "grd" / "specs" / "workflows").glob("*.md")}
         )
     )
 
     return "\n".join(
         (
             SAME_STEM_COMMAND_WORKFLOW_START,
-            f"- `src/gpd/commands/{{{same_stems}}}.md -> src/gpd/specs/workflows/{{same stems}}.md`",
+            f"- `src/grd/commands/{{{same_stems}}}.md -> src/grd/specs/workflows/{{same stems}}.md`",
             SAME_STEM_COMMAND_WORKFLOW_END,
         )
     )

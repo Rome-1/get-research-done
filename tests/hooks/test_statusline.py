@@ -1,4 +1,4 @@
-"""Tests for gpd/hooks/statusline.py edge cases.
+"""Tests for grd/hooks/statusline.py edge cases.
 
 Covers: empty input, missing fields, context_window boundary values,
 graceful degradation, and ANSI output correctness.
@@ -12,8 +12,8 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from gpd.hooks.runtime_detect import TodoCandidate
-from gpd.hooks.statusline import (
+from grd.hooks.runtime_detect import TodoCandidate
+from grd.hooks.statusline import (
     _check_update,
     _context_bar,
     _execution_badge,
@@ -32,11 +32,11 @@ def _todo_candidates(*paths: Path) -> list[TodoCandidate]:
 
 def _mark_complete_install(config_dir: Path, *, runtime: str | None = None, install_scope: str = "local") -> None:
     config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "get-physics-done").mkdir(parents=True, exist_ok=True)
+    (config_dir / "get-research-done").mkdir(parents=True, exist_ok=True)
     manifest: dict[str, object] = {"install_scope": install_scope}
     if runtime is not None:
         manifest["runtime"] = runtime
-    (config_dir / "gpd-file-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (config_dir / "grd-file-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
 # ─── _context_bar edge cases ───────────────────────────────────────────────
 
@@ -110,11 +110,11 @@ class TestStatusMetadata:
 
     def test_read_workspace_label_prefers_project_relative_path(self, tmp_path: Path) -> None:
         project = tmp_path / "project"
-        current = project / "src" / "gpd"
+        current = project / "src" / "grd"
         current.mkdir(parents=True)
 
         label = _read_workspace_label({"workspace": {"project_dir": str(project)}}, str(current))
-        assert label == "[project/src/gpd]"
+        assert label == "[project/src/grd]"
 
     def test_read_workspace_label_falls_back_to_directory_name(self, tmp_path: Path) -> None:
         current = tmp_path / "workspace"
@@ -144,14 +144,14 @@ class TestExecutionBadge:
         assert badge == "BLOCKED"
 
     def test_resume_badge_surfaces_resume_state(self) -> None:
-        badge = _execution_badge({"segment_status": "paused", "resume_file": ".gpd/phases/02/.continue-here.md"})
+        badge = _execution_badge({"segment_status": "paused", "resume_file": ".grd/phases/02/.continue-here.md"})
         assert badge == "RESUME"
 
     def test_review_badge_wins_over_resume_for_bounded_gate_state(self) -> None:
         badge = _execution_badge(
             {
                 "segment_status": "paused",
-                "resume_file": ".gpd/phases/02/.continue-here.md",
+                "resume_file": ".grd/phases/02/.continue-here.md",
                 "checkpoint_reason": "pre_fanout",
                 "pre_fanout_review_pending": True,
                 "downstream_locked": True,
@@ -206,48 +206,48 @@ class TestReadPosition:
         assert _read_position(str(tmp_path)) == ""
 
     def test_valid_state_with_phase_only(self, tmp_path: Path) -> None:
-        planning = tmp_path / ".gpd"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         state = {"position": {"current_phase": 3, "total_phases": 10}}
         (planning / "state.json").write_text(json.dumps(state))
         assert _read_position(str(tmp_path)) == "P3/10"
 
     def test_valid_state_with_phase_and_plan(self, tmp_path: Path) -> None:
-        planning = tmp_path / ".gpd"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         state = {"position": {"current_phase": 2, "total_phases": 5, "current_plan": 1, "total_plans_in_phase": 3}}
         (planning / "state.json").write_text(json.dumps(state))
         assert _read_position(str(tmp_path)) == "P2/5 plan 1/3"
 
     def test_empty_position_returns_empty(self, tmp_path: Path) -> None:
-        planning = tmp_path / ".gpd"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         state = {"position": {}}
         (planning / "state.json").write_text(json.dumps(state))
         assert _read_position(str(tmp_path)) == ""
 
     def test_missing_phase_returns_empty(self, tmp_path: Path) -> None:
-        planning = tmp_path / ".gpd"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         state = {"position": {"total_phases": 5}}
         (planning / "state.json").write_text(json.dumps(state))
         assert _read_position(str(tmp_path)) == ""
 
     def test_missing_total_phases_returns_empty(self, tmp_path: Path) -> None:
-        planning = tmp_path / ".gpd"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         state = {"position": {"current_phase": 3}}
         (planning / "state.json").write_text(json.dumps(state))
         assert _read_position(str(tmp_path)) == ""
 
     def test_corrupt_json_returns_empty(self, tmp_path: Path) -> None:
-        planning = tmp_path / ".gpd"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "state.json").write_text("not valid json{{{")
         assert _read_position(str(tmp_path)) == ""
 
     def test_no_position_key_returns_empty(self, tmp_path: Path) -> None:
-        planning = tmp_path / ".gpd"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "state.json").write_text(json.dumps({"other": "data"}))
         assert _read_position(str(tmp_path)) == ""
@@ -265,7 +265,7 @@ class TestReadCurrentTask:
     def test_no_matching_todo_files(self, tmp_path: Path) -> None:
         todo_dir = tmp_path / "todos"
         todo_dir.mkdir()
-        with patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
+        with patch("grd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
             assert _read_current_task("session-123") == ""
 
     def test_matching_file_with_in_progress_task(self, tmp_path: Path) -> None:
@@ -273,7 +273,7 @@ class TestReadCurrentTask:
         todo_dir.mkdir()
         todos = [{"status": "in_progress", "activeForm": "Running tests"}]
         (todo_dir / "session-123-agent-abc.json").write_text(json.dumps(todos))
-        with patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
+        with patch("grd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
             assert _read_current_task("session-123") == "Running tests"
 
     def test_matching_file_no_in_progress_task(self, tmp_path: Path) -> None:
@@ -281,7 +281,7 @@ class TestReadCurrentTask:
         todo_dir.mkdir()
         todos = [{"status": "completed", "activeForm": "Done"}]
         (todo_dir / "session-123-agent-abc.json").write_text(json.dumps(todos))
-        with patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
+        with patch("grd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
             assert _read_current_task("session-123") == ""
 
     def test_local_runtime_todo_file_is_discovered(self, tmp_path: Path) -> None:
@@ -292,8 +292,8 @@ class TestReadCurrentTask:
         (local_todo_dir / "session-123-agent-local.json").write_text(json.dumps(todos))
 
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=home),
         ):
             assert _read_current_task("session-123") == "Inspect local runtime"
 
@@ -309,8 +309,8 @@ class TestReadCurrentTask:
         elsewhere.mkdir()
 
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=home),
         ):
             assert _read_current_task("session-123", str(workspace)) == "Workspace-scoped task"
 
@@ -328,8 +328,8 @@ class TestReadCurrentTask:
         )
 
         with (
-            patch("gpd.hooks.statusline.__file__", str(hook_path)),
-            patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=[]),
+            patch("grd.hooks.statusline.__file__", str(hook_path)),
+            patch("grd.hooks.runtime_detect.get_todo_candidates", return_value=[]),
         ):
             assert _read_current_task("session-123") == "Explicit target task"
 
@@ -357,7 +357,7 @@ class TestReadCurrentTask:
         env["CODEX_SESSION"] = "1"
         with (
             patch.dict(os.environ, env, clear=True),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=home),
         ):
             assert _read_current_task("session-123", str(tmp_path)) == "Codex task"
 
@@ -380,7 +380,7 @@ class TestReadCurrentTask:
         global_file.touch()
 
         with patch(
-            "gpd.hooks.runtime_detect.get_todo_candidates",
+            "grd.hooks.runtime_detect.get_todo_candidates",
             return_value=_todo_candidates(local_todo_dir, global_todo_dir),
         ):
             assert _read_current_task("session-123") == "Do not prefer global"
@@ -389,12 +389,12 @@ class TestReadCurrentTask:
         todo_dir = tmp_path / "todos"
         todo_dir.mkdir()
         (todo_dir / "session-123-agent-abc.json").write_text("not json!")
-        with patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
+        with patch("grd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
             assert _read_current_task("session-123") == ""
 
     def test_nonexistent_todo_dirs(self) -> None:
         with patch(
-            "gpd.hooks.runtime_detect.get_todo_candidates",
+            "grd.hooks.runtime_detect.get_todo_candidates",
             return_value=_todo_candidates(Path("/nonexistent/todos")),
         ):
             assert _read_current_task("session-123") == ""
@@ -411,7 +411,7 @@ class TestReadCurrentTask:
             encoding="utf-8",
         )
 
-        with patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
+        with patch("grd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
             assert _read_current_task("session-1") == "Correct task"
 
 
@@ -423,84 +423,84 @@ class TestCheckUpdateHook:
 
     def test_no_cache_file_returns_empty(self, tmp_path: Path) -> None:
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
         ):
             assert _check_update() == ""
 
     def test_cache_with_update_available(self, tmp_path: Path) -> None:
-        gpd_cache = tmp_path / ".gpd" / "cache"
-        gpd_cache.mkdir(parents=True)
-        (gpd_cache / "gpd-update-check.json").write_text(json.dumps({"update_available": True}))
+        grd_cache = tmp_path / ".grd" / "cache"
+        grd_cache.mkdir(parents=True)
+        (grd_cache / "grd-update-check.json").write_text(json.dumps({"update_available": True}))
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install", return_value="claude-code"),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.detect_active_runtime_with_grd_install", return_value="claude-code"),
         ):
             result = _check_update()
-            assert "/gpd:update" in result
+            assert "/grd:update" in result
 
     def test_cache_with_no_update(self, tmp_path: Path) -> None:
-        gpd_cache = tmp_path / ".gpd" / "cache"
-        gpd_cache.mkdir(parents=True)
-        (gpd_cache / "gpd-update-check.json").write_text(json.dumps({"update_available": False}))
+        grd_cache = tmp_path / ".grd" / "cache"
+        grd_cache.mkdir(parents=True)
+        (grd_cache / "grd-update-check.json").write_text(json.dumps({"update_available": False}))
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path),
         ):
             assert _check_update() == ""
 
     def test_corrupt_cache_returns_empty(self, tmp_path: Path) -> None:
-        gpd_cache = tmp_path / ".gpd" / "cache"
-        gpd_cache.mkdir(parents=True)
-        (gpd_cache / "gpd-update-check.json").write_text("broken{json")
+        grd_cache = tmp_path / ".grd" / "cache"
+        grd_cache.mkdir(parents=True)
+        (grd_cache / "grd-update-check.json").write_text("broken{json")
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path),
         ):
             assert _check_update() == ""
 
     def test_non_mapping_cache_is_ignored_instead_of_crashing(self, tmp_path: Path) -> None:
-        gpd_cache = tmp_path / ".gpd" / "cache"
-        gpd_cache.mkdir(parents=True)
-        (gpd_cache / "gpd-update-check.json").write_text(json.dumps(["not", "a", "mapping"]), encoding="utf-8")
+        grd_cache = tmp_path / ".grd" / "cache"
+        grd_cache.mkdir(parents=True)
+        (grd_cache / "grd-update-check.json").write_text(json.dumps(["not", "a", "mapping"]), encoding="utf-8")
 
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
         ):
             assert _check_update() == ""
 
     def test_local_runtime_cache_can_override_stale_home_cache(self, tmp_path: Path) -> None:
         home = tmp_path / "home"
-        home_cache = home / ".gpd" / "cache"
+        home_cache = home / ".grd" / "cache"
         home_cache.mkdir(parents=True)
-        (home_cache / "gpd-update-check.json").write_text(
+        (home_cache / "grd-update-check.json").write_text(
             json.dumps({"update_available": False, "checked": 10}),
             encoding="utf-8",
         )
 
         local_cache = tmp_path / ".codex" / "cache"
         local_cache.mkdir(parents=True)
-        (local_cache / "gpd-update-check.json").write_text(
+        (local_cache / "grd-update-check.json").write_text(
             json.dumps({"update_available": True, "checked": 20}),
             encoding="utf-8",
         )
 
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
-            patch("gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install", return_value="claude-code"),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=home),
+            patch("grd.hooks.runtime_detect.detect_active_runtime_with_grd_install", return_value="claude-code"),
         ):
             result = _check_update()
 
-        assert "/gpd:update" in result
+        assert "/grd:update" in result
 
     def test_local_runtime_cache_uses_cache_runtime_when_install_exists(self, tmp_path: Path) -> None:
         home = tmp_path / "home"
-        home_cache = home / ".gpd" / "cache"
+        home_cache = home / ".grd" / "cache"
         home_cache.mkdir(parents=True)
-        (home_cache / "gpd-update-check.json").write_text(
+        (home_cache / "grd-update-check.json").write_text(
             json.dumps({"update_available": False, "checked": 10}),
             encoding="utf-8",
         )
@@ -509,19 +509,19 @@ class TestCheckUpdateHook:
         local_cache = local_runtime_dir / "cache"
         local_cache.mkdir(parents=True)
         _mark_complete_install(local_runtime_dir, runtime="codex")
-        (local_cache / "gpd-update-check.json").write_text(
+        (local_cache / "grd-update-check.json").write_text(
             json.dumps({"update_available": True, "checked": 20}),
             encoding="utf-8",
         )
 
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
-            patch("gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install", return_value="claude-code"),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=home),
+            patch("grd.hooks.runtime_detect.detect_active_runtime_with_grd_install", return_value="claude-code"),
         ):
             result = _check_update()
 
-        assert "$gpd-update" in result
+        assert "$grd-update" in result
 
     def test_active_runtime_cache_beats_newer_unrelated_runtime_cache(self, tmp_path: Path) -> None:
         home = tmp_path / "home"
@@ -530,7 +530,7 @@ class TestCheckUpdateHook:
         local_cache = local_runtime_dir / "cache"
         local_cache.mkdir(parents=True)
         _mark_complete_install(local_runtime_dir, runtime="codex")
-        (local_cache / "gpd-update-check.json").write_text(
+        (local_cache / "grd-update-check.json").write_text(
             json.dumps({"update_available": True, "checked": 20}),
             encoding="utf-8",
         )
@@ -539,20 +539,20 @@ class TestCheckUpdateHook:
         unrelated_cache = unrelated_runtime_dir / "cache"
         unrelated_cache.mkdir(parents=True)
         _mark_complete_install(unrelated_runtime_dir, runtime="claude-code", install_scope="global")
-        (unrelated_cache / "gpd-update-check.json").write_text(
+        (unrelated_cache / "grd-update-check.json").write_text(
             json.dumps({"update_available": True, "checked": 30}),
             encoding="utf-8",
         )
 
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
-            patch("gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install", return_value="codex"),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=home),
+            patch("grd.hooks.runtime_detect.detect_active_runtime_with_grd_install", return_value="codex"),
         ):
             result = _check_update()
 
-        assert "$gpd-update" in result
-        assert "/gpd:update" not in result
+        assert "$grd-update" in result
+        assert "/grd:update" not in result
 
     def test_installed_global_scope_cache_beats_stale_local_scope_cache(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
@@ -561,7 +561,7 @@ class TestCheckUpdateHook:
 
         local_cache = workspace / ".codex" / "cache"
         local_cache.mkdir(parents=True)
-        (local_cache / "gpd-update-check.json").write_text(
+        (local_cache / "grd-update-check.json").write_text(
             json.dumps({"update_available": True, "checked": 30}),
             encoding="utf-8",
         )
@@ -570,12 +570,12 @@ class TestCheckUpdateHook:
         global_cache = global_runtime_dir / "cache"
         global_cache.mkdir(parents=True)
         _mark_complete_install(global_runtime_dir, runtime="codex", install_scope="global")
-        (global_cache / "gpd-update-check.json").write_text(
+        (global_cache / "grd-update-check.json").write_text(
             json.dumps({"update_available": False, "checked": 10}),
             encoding="utf-8",
         )
 
-        with patch("gpd.hooks.runtime_detect.Path.home", return_value=home):
+        with patch("grd.hooks.runtime_detect.Path.home", return_value=home):
             assert _check_update(str(workspace)) == ""
 
     def test_workspace_dir_overrides_process_cwd_for_local_cache_selection(self, tmp_path: Path) -> None:
@@ -586,7 +586,7 @@ class TestCheckUpdateHook:
         local_cache = workspace / ".codex" / "cache"
         local_cache.mkdir(parents=True)
         _mark_complete_install(workspace / ".codex", runtime="codex")
-        (local_cache / "gpd-update-check.json").write_text(
+        (local_cache / "grd-update-check.json").write_text(
             json.dumps({"update_available": True, "checked": 20}),
             encoding="utf-8",
         )
@@ -595,26 +595,26 @@ class TestCheckUpdateHook:
         elsewhere.mkdir()
 
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=home),
         ):
             result = _check_update(str(workspace))
 
-        assert "$gpd-update" in result
+        assert "$grd-update" in result
 
     def test_explicit_target_hook_cache_uses_target_dir_update_command(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
         workspace.mkdir()
         explicit_target = tmp_path / "custom-runtime-dir"
         hook_path = explicit_target / "hooks" / "statusline.py"
-        cache_file = explicit_target / "cache" / "gpd-update-check.json"
+        cache_file = explicit_target / "cache" / "grd-update-check.json"
         hook_path.parent.mkdir(parents=True)
         cache_file.parent.mkdir(parents=True)
         hook_path.write_text("# hook\n", encoding="utf-8")
         _mark_complete_install(explicit_target, runtime="codex")
         cache_file.write_text(json.dumps({"update_available": True, "checked": 20}), encoding="utf-8")
 
-        with patch("gpd.hooks.statusline.__file__", str(hook_path)):
+        with patch("grd.hooks.statusline.__file__", str(hook_path)):
             result = _check_update(str(workspace))
 
         assert "--codex --local --target-dir" in result
@@ -625,17 +625,17 @@ class TestCheckUpdateHook:
         workspace.mkdir()
         explicit_target = tmp_path / "custom-runtime-dir"
         hook_path = explicit_target / "hooks" / "statusline.py"
-        cache_file = explicit_target / "cache" / "gpd-update-check.json"
+        cache_file = explicit_target / "cache" / "grd-update-check.json"
         hook_path.parent.mkdir(parents=True)
         cache_file.parent.mkdir(parents=True)
         hook_path.write_text("# hook\n", encoding="utf-8")
         _mark_complete_install(explicit_target)
         cache_file.write_text(json.dumps({"update_available": True, "checked": 20}), encoding="utf-8")
 
-        with patch("gpd.hooks.statusline.__file__", str(hook_path)):
+        with patch("grd.hooks.statusline.__file__", str(hook_path)):
             result = _check_update(str(workspace))
 
-        assert "npx -y get-physics-done" in result
+        assert "npx -y get-research-done" in result
 
     def test_runtime_directory_without_install_uses_bootstrap_update_command(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
@@ -646,18 +646,18 @@ class TestCheckUpdateHook:
 
         local_cache = workspace / ".codex" / "cache"
         local_cache.mkdir(parents=True)
-        (local_cache / "gpd-update-check.json").write_text(
+        (local_cache / "grd-update-check.json").write_text(
             json.dumps({"update_available": True, "checked": 20}),
             encoding="utf-8",
         )
 
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=home),
         ):
             result = _check_update(str(workspace))
 
-        assert "npx -y get-physics-done" in result
+        assert "npx -y get-research-done" in result
 
     def test_stale_uninstalled_runtime_cache_is_ignored_when_another_runtime_is_installed(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
@@ -666,7 +666,7 @@ class TestCheckUpdateHook:
 
         stale_cache = workspace / ".codex" / "cache"
         stale_cache.mkdir(parents=True)
-        (stale_cache / "gpd-update-check.json").write_text(
+        (stale_cache / "grd-update-check.json").write_text(
             json.dumps({"update_available": True, "checked": 20}),
             encoding="utf-8",
         )
@@ -674,7 +674,7 @@ class TestCheckUpdateHook:
         global_runtime_dir = home / ".claude"
         _mark_complete_install(global_runtime_dir, runtime="claude-code", install_scope="global")
 
-        with patch("gpd.hooks.runtime_detect.Path.home", return_value=home):
+        with patch("grd.hooks.runtime_detect.Path.home", return_value=home):
             assert _check_update(str(workspace)) == ""
 
     def test_default_check_update_ignores_uninstalled_runtime_cache_when_another_runtime_is_installed(
@@ -685,7 +685,7 @@ class TestCheckUpdateHook:
 
         stale_cache = tmp_path / ".claude" / "cache"
         stale_cache.mkdir(parents=True)
-        (stale_cache / "gpd-update-check.json").write_text(
+        (stale_cache / "grd-update-check.json").write_text(
             json.dumps({"update_available": True, "checked": 20}),
             encoding="utf-8",
         )
@@ -694,42 +694,42 @@ class TestCheckUpdateHook:
         global_cache = global_runtime_dir / "cache"
         global_cache.mkdir(parents=True)
         _mark_complete_install(global_runtime_dir, runtime="codex", install_scope="global")
-        (global_cache / "gpd-update-check.json").write_text(
+        (global_cache / "grd-update-check.json").write_text(
             json.dumps({"update_available": False, "checked": 10}),
             encoding="utf-8",
         )
 
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=home),
         ):
             assert _check_update() == ""
 
     def test_unknown_runtime_falls_back_to_bootstrap_update_command(self, tmp_path: Path) -> None:
-        gpd_cache = tmp_path / ".gpd" / "cache"
-        gpd_cache.mkdir(parents=True)
-        (gpd_cache / "gpd-update-check.json").write_text(json.dumps({"update_available": True}), encoding="utf-8")
+        grd_cache = tmp_path / ".grd" / "cache"
+        grd_cache.mkdir(parents=True)
+        (grd_cache / "grd-update-check.json").write_text(json.dumps({"update_available": True}), encoding="utf-8")
 
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install", return_value="unknown"),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.detect_active_runtime_with_grd_install", return_value="unknown"),
         ):
             result = _check_update()
 
-        assert "npx -y get-physics-done" in result
+        assert "npx -y get-research-done" in result
 
     def test_known_runtime_does_not_call_detect_install_scope(self, tmp_path: Path) -> None:
         """When get_adapter succeeds, detect_install_scope should not be called (lazy evaluation)."""
-        gpd_cache = tmp_path / ".gpd" / "cache"
-        gpd_cache.mkdir(parents=True)
-        (gpd_cache / "gpd-update-check.json").write_text(json.dumps({"update_available": True}))
+        grd_cache = tmp_path / ".grd" / "cache"
+        grd_cache.mkdir(parents=True)
+        (grd_cache / "grd-update-check.json").write_text(json.dumps({"update_available": True}))
 
         with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install", return_value="claude-code"),
-            patch("gpd.hooks.runtime_detect.detect_install_scope") as mock_scope,
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.detect_active_runtime_with_grd_install", return_value="claude-code"),
+            patch("grd.hooks.runtime_detect.detect_install_scope") as mock_scope,
         ):
             result = _check_update()
 
@@ -749,41 +749,41 @@ class TestMain:
         with (
             patch("sys.stdin", io.StringIO(json.dumps(input_data))),
             patch("sys.stdout", captured),
-            patch("gpd.hooks.statusline._read_position", return_value=""),
-            patch("gpd.hooks.statusline._read_current_task", return_value=""),
-            patch("gpd.hooks.statusline._read_execution_state", return_value={}),
-            patch("gpd.hooks.statusline._check_update", return_value=""),
+            patch("grd.hooks.statusline._read_position", return_value=""),
+            patch("grd.hooks.statusline._read_current_task", return_value=""),
+            patch("grd.hooks.statusline._read_execution_state", return_value={}),
+            patch("grd.hooks.statusline._check_update", return_value=""),
         ):
             main()
         return captured.getvalue()
 
     def test_empty_json_object_no_crash(self) -> None:
-        """Empty {} input should still render the GPD label."""
+        """Empty {} input should still render the GRD label."""
         output = self._run_main({})
-        assert "GPD" in output
+        assert "GRD" in output
 
     def test_missing_model_field_still_renders_gpd(self) -> None:
-        """Missing 'model' key should not affect the GPD label."""
+        """Missing 'model' key should not affect the GRD label."""
         output = self._run_main({"workspace": {"current_dir": "/tmp"}})
-        assert "GPD" in output
+        assert "GRD" in output
 
     def test_model_field_is_none_does_not_crash(self) -> None:
-        """model=None should still render the GPD label."""
+        """model=None should still render the GRD label."""
         output = self._run_main({"model": None})
-        assert "GPD" in output
+        assert "GRD" in output
 
     def test_empty_model_mapping_keeps_gpd_label(self) -> None:
         output = self._run_main({"model": {}})
-        assert "GPD" in output
+        assert "GRD" in output
 
     def test_with_valid_model_renders_model_label(self) -> None:
         output = self._run_main({"model": {"display_name": "GPT-4o"}, "context_window": {"context_window_size": 200_000}})
-        assert "GPD" in output
+        assert "GRD" in output
         assert "GPT-4o (200k context)" in output
 
     def test_model_name_field_is_used_as_fallback(self) -> None:
         output = self._run_main({"model": {"name": "Claude Sonnet"}})
-        assert "GPD" in output
+        assert "GRD" in output
         assert "Claude Sonnet" in output
 
     def test_context_window_remaining_zero(self) -> None:
@@ -812,12 +812,12 @@ class TestMain:
         with (
             patch("sys.stdin", io.StringIO(json.dumps({"workspace": str(workspace)}))),
             patch("sys.stdout", captured),
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=process_cwd),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
-            patch("gpd.hooks.statusline._read_position", return_value=""),
-            patch("gpd.hooks.statusline._read_current_task", return_value=""),
-            patch("gpd.hooks.statusline._read_execution_state", return_value={}),
-            patch("gpd.hooks.statusline._check_update", return_value=""),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=process_cwd),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=home),
+            patch("grd.hooks.statusline._read_position", return_value=""),
+            patch("grd.hooks.statusline._read_current_task", return_value=""),
+            patch("grd.hooks.statusline._read_execution_state", return_value={}),
+            patch("grd.hooks.statusline._check_update", return_value=""),
         ):
             main()
 
@@ -828,16 +828,16 @@ class TestMain:
         with (
             patch("sys.stdin", io.StringIO(json.dumps({"workspace": "/tmp/project"}))),
             patch("sys.stdout", captured),
-            patch("gpd.hooks.statusline._read_position", return_value=""),
-            patch("gpd.hooks.statusline._read_current_task", return_value="Todo task"),
+            patch("grd.hooks.statusline._read_position", return_value=""),
+            patch("grd.hooks.statusline._read_current_task", return_value="Todo task"),
             patch(
-                "gpd.hooks.statusline._read_execution_state",
+                "grd.hooks.statusline._read_execution_state",
                 return_value={
                     "segment_status": "waiting_review",
                     "current_task": "Live execution task",
                 },
             ),
-            patch("gpd.hooks.statusline._check_update", return_value=""),
+            patch("grd.hooks.statusline._check_update", return_value=""),
         ):
             main()
 
@@ -848,7 +848,7 @@ class TestMain:
     def test_no_context_window_field(self) -> None:
         """Missing context_window → no bar in output."""
         output = self._run_main({"model": {"display_name": "Test"}})
-        assert "GPD" in output
+        assert "GRD" in output
         assert "Test" in output
         # No percentage should appear
         assert "%" not in output
@@ -856,7 +856,7 @@ class TestMain:
     def test_context_window_is_none(self) -> None:
         """context_window=None → 'or {}' fallback, remaining is None → no bar."""
         output = self._run_main({"context_window": None})
-        assert "GPD" in output
+        assert "GRD" in output
         assert "%" not in output
 
     def test_context_window_supports_remaining_percent_alias(self) -> None:
@@ -871,7 +871,7 @@ class TestMain:
                 "context_window": "not-a-mapping",
             }
         )
-        assert "GPD" in output
+        assert "GRD" in output
         assert "gpt-5" in output
         assert "[research-project]" in output
 
@@ -880,51 +880,51 @@ class TestMain:
         with (
             patch("sys.stdin", io.StringIO(json.dumps({"workspace": "/tmp/research-project"}))),
             patch("sys.stdout", captured),
-            patch("gpd.hooks.statusline._read_position", return_value="") as mock_position,
-            patch("gpd.hooks.statusline._read_current_task", return_value="") as mock_task,
-            patch("gpd.hooks.statusline._read_execution_state", return_value={}),
-            patch("gpd.hooks.statusline._check_update", return_value="") as mock_update,
+            patch("grd.hooks.statusline._read_position", return_value="") as mock_position,
+            patch("grd.hooks.statusline._read_current_task", return_value="") as mock_task,
+            patch("grd.hooks.statusline._read_execution_state", return_value={}),
+            patch("grd.hooks.statusline._check_update", return_value="") as mock_update,
         ):
             main()
 
         mock_position.assert_called_once_with("/tmp/research-project")
         mock_task.assert_called_once_with("", "/tmp/research-project")
         mock_update.assert_called_once_with("/tmp/research-project")
-        assert "GPD" in captured.getvalue()
+        assert "GRD" in captured.getvalue()
 
     def test_workspace_mapping_accepts_cwd_field(self) -> None:
         captured = io.StringIO()
         with (
             patch("sys.stdin", io.StringIO(json.dumps({"workspace": {"cwd": "/tmp/alternate-workspace"}}))),
             patch("sys.stdout", captured),
-            patch("gpd.hooks.statusline._read_position", return_value="") as mock_position,
-            patch("gpd.hooks.statusline._read_current_task", return_value="") as mock_task,
-            patch("gpd.hooks.statusline._read_execution_state", return_value={}),
-            patch("gpd.hooks.statusline._check_update", return_value="") as mock_update,
+            patch("grd.hooks.statusline._read_position", return_value="") as mock_position,
+            patch("grd.hooks.statusline._read_current_task", return_value="") as mock_task,
+            patch("grd.hooks.statusline._read_execution_state", return_value={}),
+            patch("grd.hooks.statusline._check_update", return_value="") as mock_update,
         ):
             main()
 
         mock_position.assert_called_once_with("/tmp/alternate-workspace")
         mock_task.assert_called_once_with("", "/tmp/alternate-workspace")
         mock_update.assert_called_once_with("/tmp/alternate-workspace")
-        assert "GPD" in captured.getvalue()
+        assert "GRD" in captured.getvalue()
 
     def test_top_level_cwd_workspace_alias_is_forwarded_to_helpers(self) -> None:
         captured = io.StringIO()
         with (
             patch("sys.stdin", io.StringIO(json.dumps({"cwd": "/tmp/top-level-workspace"}))),
             patch("sys.stdout", captured),
-            patch("gpd.hooks.statusline._read_position", return_value="") as mock_position,
-            patch("gpd.hooks.statusline._read_current_task", return_value="") as mock_task,
-            patch("gpd.hooks.statusline._read_execution_state", return_value={}),
-            patch("gpd.hooks.statusline._check_update", return_value="") as mock_update,
+            patch("grd.hooks.statusline._read_position", return_value="") as mock_position,
+            patch("grd.hooks.statusline._read_current_task", return_value="") as mock_task,
+            patch("grd.hooks.statusline._read_execution_state", return_value={}),
+            patch("grd.hooks.statusline._check_update", return_value="") as mock_update,
         ):
             main()
 
         mock_position.assert_called_once_with("/tmp/top-level-workspace")
         mock_task.assert_called_once_with("", "/tmp/top-level-workspace")
         mock_update.assert_called_once_with("/tmp/top-level-workspace")
-        assert "GPD" in captured.getvalue()
+        assert "GRD" in captured.getvalue()
 
     def test_invalid_json_stdin_no_crash(self) -> None:
         """Invalid JSON on stdin → main() returns silently, no crash."""
@@ -942,10 +942,10 @@ class TestMain:
         with (
             patch("sys.stdin", io.StringIO(json.dumps({}))),
             patch("sys.stdout", captured),
-            patch("gpd.hooks.statusline._read_position", return_value=""),
-            patch("gpd.hooks.statusline._read_current_task", return_value="Running experiments"),
-            patch("gpd.hooks.statusline._read_execution_state", return_value={}),
-            patch("gpd.hooks.statusline._check_update", return_value=""),
+            patch("grd.hooks.statusline._read_position", return_value=""),
+            patch("grd.hooks.statusline._read_current_task", return_value="Running experiments"),
+            patch("grd.hooks.statusline._read_execution_state", return_value={}),
+            patch("grd.hooks.statusline._check_update", return_value=""),
         ):
             main()
         assert "Running experiments" in captured.getvalue()
@@ -956,10 +956,10 @@ class TestMain:
         with (
             patch("sys.stdin", io.StringIO(json.dumps({}))),
             patch("sys.stdout", captured),
-            patch("gpd.hooks.statusline._read_position", return_value="P3/10"),
-            patch("gpd.hooks.statusline._read_current_task", return_value=""),
-            patch("gpd.hooks.statusline._read_execution_state", return_value={}),
-            patch("gpd.hooks.statusline._check_update", return_value=""),
+            patch("grd.hooks.statusline._read_position", return_value="P3/10"),
+            patch("grd.hooks.statusline._read_current_task", return_value=""),
+            patch("grd.hooks.statusline._read_execution_state", return_value={}),
+            patch("grd.hooks.statusline._check_update", return_value=""),
         ):
             main()
         assert "P3/10" in captured.getvalue()
@@ -969,10 +969,10 @@ class TestMain:
         with (
             patch("sys.stdin", io.StringIO(json.dumps({}))),
             patch("sys.stdout", captured),
-            patch("gpd.hooks.statusline._read_position", return_value="P3/10"),
-            patch("gpd.hooks.statusline._read_current_task", return_value="Routine task"),
+            patch("grd.hooks.statusline._read_position", return_value="P3/10"),
+            patch("grd.hooks.statusline._read_current_task", return_value="Routine task"),
             patch(
-                "gpd.hooks.statusline._read_execution_state",
+                "grd.hooks.statusline._read_execution_state",
                 return_value={
                     "segment_status": "waiting_review",
                     "first_result_gate_pending": True,
@@ -980,7 +980,7 @@ class TestMain:
                     "last_result_label": "Benchmark reproduction",
                 },
             ),
-            patch("gpd.hooks.statusline._check_update", return_value=""),
+            patch("grd.hooks.statusline._check_update", return_value=""),
         ):
             main()
 
@@ -994,10 +994,10 @@ class TestMain:
         with (
             patch("sys.stdin", io.StringIO(json.dumps({}))),
             patch("sys.stdout", captured),
-            patch("gpd.hooks.statusline._read_position", return_value="P4/10"),
-            patch("gpd.hooks.statusline._read_current_task", return_value="Routine task"),
+            patch("grd.hooks.statusline._read_position", return_value="P4/10"),
+            patch("grd.hooks.statusline._read_current_task", return_value="Routine task"),
             patch(
-                "gpd.hooks.statusline._read_execution_state",
+                "grd.hooks.statusline._read_execution_state",
                 return_value={
                     "segment_status": "waiting_review",
                     "waiting_for_review": True,
@@ -1008,7 +1008,7 @@ class TestMain:
                     "last_result_label": "Proxy fit",
                 },
             ),
-            patch("gpd.hooks.statusline._check_update", return_value=""),
+            patch("grd.hooks.statusline._check_update", return_value=""),
         ):
             main()
 

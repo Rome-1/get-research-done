@@ -10,7 +10,7 @@ key-files:
     - figures/benchmark.png
   modified:
     - src/benchmark.py
-plan_contract_ref: .gpd/phases/01-benchmark/01-01-PLAN.md#/contract
+plan_contract_ref: .grd/phases/01-benchmark/01-01-PLAN.md#/contract
 contract_results:
   claims:
     claim-benchmark:
@@ -18,14 +18,14 @@ contract_results:
       summary: Benchmark claim verified against the decisive anchor.
       linked_ids: [deliv-figure, test-benchmark, ref-benchmark]
       evidence:
-        - verifier: gpd-verifier
+        - verifier: grd-verifier
           method: benchmark reproduction
           confidence: high
           claim_id: claim-benchmark
           deliverable_id: deliv-figure
           acceptance_test_id: test-benchmark
           reference_id: ref-benchmark
-          evidence_path: .gpd/phases/01-benchmark/01-VERIFICATION.md
+          evidence_path: .grd/phases/01-benchmark/01-VERIFICATION.md
   deliverables:
     deliv-figure:
       status: passed

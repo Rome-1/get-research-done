@@ -18,8 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from gpd.adapters import get_adapter
-from gpd.adapters.install_utils import MANIFEST_NAME, file_hash
+from grd.adapters import get_adapter
+from grd.adapters.install_utils import MANIFEST_NAME, file_hash
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -27,13 +27,13 @@ from gpd.adapters.install_utils import MANIFEST_NAME, file_hash
 
 
 @pytest.fixture()
-def gpd_root() -> Path:
-    """Return the GPD package data root (contains commands/, agents/, specs/, hooks/)."""
-    root = Path(__file__).resolve().parent.parent / "src" / "gpd"
-    assert (root / "commands").is_dir(), f"GPD commands dir not found at {root / 'commands'}"
-    assert (root / "agents").is_dir(), f"GPD agents dir not found at {root / 'agents'}"
-    assert (root / "specs").is_dir(), f"GPD specs dir not found at {root / 'specs'}"
-    assert (root / "hooks").is_dir(), f"GPD hooks dir not found at {root / 'hooks'}"
+def grd_root() -> Path:
+    """Return the GRD package data root (contains commands/, agents/, specs/, hooks/)."""
+    root = Path(__file__).resolve().parent.parent / "src" / "grd"
+    assert (root / "commands").is_dir(), f"GRD commands dir not found at {root / 'commands'}"
+    assert (root / "agents").is_dir(), f"GRD agents dir not found at {root / 'agents'}"
+    assert (root / "specs").is_dir(), f"GRD specs dir not found at {root / 'specs'}"
+    assert (root / "hooks").is_dir(), f"GRD hooks dir not found at {root / 'hooks'}"
     return root
 
 
@@ -45,15 +45,15 @@ def gpd_root() -> Path:
 class TestClaudeCodeLifecycle:
     """Full install → uninstall → reinstall for Claude Code adapter."""
 
-    def test_install_creates_expected_structure(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_install_creates_expected_structure(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         target.mkdir()
 
-        result = adapter.install(gpd_root, target, is_global=True)
+        result = adapter.install(grd_root, target, is_global=True)
 
         # Commands installed
-        commands_dir = target / "commands" / "gpd"
+        commands_dir = target / "commands" / "grd"
         assert commands_dir.is_dir()
         md_files = list(commands_dir.rglob("*.md"))
         assert len(md_files) > 0, "No command .md files installed"
@@ -62,13 +62,13 @@ class TestClaudeCodeLifecycle:
         # Agents installed
         agents_dir = target / "agents"
         assert agents_dir.is_dir()
-        agent_files = [f for f in agents_dir.iterdir() if f.name.startswith("gpd-") and f.suffix == ".md"]
-        assert len(agent_files) > 0, "No GPD agent files installed"
+        agent_files = [f for f in agents_dir.iterdir() if f.name.startswith("grd-") and f.suffix == ".md"]
+        assert len(agent_files) > 0, "No GRD agent files installed"
 
-        # get-physics-done content installed
-        gpd_dir = target / "get-physics-done"
-        assert gpd_dir.is_dir()
-        assert (gpd_dir / "VERSION").exists()
+        # get-research-done content installed
+        grd_dir = target / "get-research-done"
+        assert grd_dir.is_dir()
+        assert (grd_dir / "VERSION").exists()
 
         # Hooks installed
         hooks_dir = target / "hooks"
@@ -87,24 +87,24 @@ class TestClaudeCodeLifecycle:
         assert result["commands"] > 0
         assert result["agents"] > 0
 
-    def test_uninstall_removes_gpd_artifacts(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_uninstall_removes_grd_artifacts(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
         result = adapter.uninstall(target)
 
-        # GPD commands removed
-        assert not (target / "commands" / "gpd").exists()
+        # GRD commands removed
+        assert not (target / "commands" / "grd").exists()
 
-        # GPD agents removed
+        # GRD agents removed
         agents_dir = target / "agents"
-        gpd_agents = [f for f in agents_dir.iterdir() if f.name.startswith("gpd-")] if agents_dir.exists() else []
-        assert len(gpd_agents) == 0
+        grd_agents = [f for f in agents_dir.iterdir() if f.name.startswith("grd-")] if agents_dir.exists() else []
+        assert len(grd_agents) == 0
 
-        # get-physics-done removed
-        assert not (target / "get-physics-done").exists()
+        # get-research-done removed
+        assert not (target / "get-research-done").exists()
 
         # Manifest removed
         assert not (target / MANIFEST_NAME).exists()
@@ -112,31 +112,31 @@ class TestClaudeCodeLifecycle:
         # Result reports removals
         assert len(result["removed"]) > 0
 
-    def test_reinstall_after_uninstall(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_reinstall_after_uninstall(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         target.mkdir()
 
         # Install → uninstall → reinstall
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
         adapter.uninstall(target)
-        result = adapter.install(gpd_root, target, is_global=True)
+        result = adapter.install(grd_root, target, is_global=True)
 
         # Verify reinstall succeeded
-        assert (target / "commands" / "gpd").is_dir()
+        assert (target / "commands" / "grd").is_dir()
         agents_dir = target / "agents"
-        agent_files = [f for f in agents_dir.iterdir() if f.name.startswith("gpd-") and f.suffix == ".md"]
+        agent_files = [f for f in agents_dir.iterdir() if f.name.startswith("grd-") and f.suffix == ".md"]
         assert len(agent_files) > 0
-        assert (target / "get-physics-done" / "VERSION").exists()
+        assert (target / "get-research-done" / "VERSION").exists()
         assert (target / MANIFEST_NAME).exists()
         assert result["commands"] > 0
 
-    def test_manifest_hashes_match_files(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_manifest_hashes_match_files(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
 
         manifest = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
         for rel_path, expected_hash in manifest["files"].items():
@@ -145,18 +145,18 @@ class TestClaudeCodeLifecycle:
             actual_hash = file_hash(full_path)
             assert actual_hash == expected_hash, f"Hash mismatch for {rel_path}"
 
-    def test_slides_command_installed(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_slides_command_installed(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
 
-        slides_md = target / "commands" / "gpd" / "slides.md"
+        slides_md = target / "commands" / "grd" / "slides.md"
         assert slides_md.exists()
         content = slides_md.read_text(encoding="utf-8")
         assert "context_mode: projectless" in content
-        assert "/get-physics-done/workflows/slides.md" in content
+        assert "/get-research-done/workflows/slides.md" in content
 
 
 # ---------------------------------------------------------------------------
@@ -167,15 +167,15 @@ class TestClaudeCodeLifecycle:
 class TestGeminiLifecycle:
     """Full install → uninstall → reinstall for Gemini adapter."""
 
-    def test_install_creates_expected_structure(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_install_creates_expected_structure(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("gemini")
         target = tmp_path / ".gemini"
         target.mkdir()
 
-        result = adapter.install(gpd_root, target, is_global=True)
+        result = adapter.install(grd_root, target, is_global=True)
 
         # Commands as TOML (Gemini-specific)
-        commands_dir = target / "commands" / "gpd"
+        commands_dir = target / "commands" / "grd"
         assert commands_dir.is_dir()
         toml_files = list(commands_dir.rglob("*.toml"))
         assert len(toml_files) > 0, "No command .toml files installed"
@@ -184,13 +184,13 @@ class TestGeminiLifecycle:
         # Agents installed
         agents_dir = target / "agents"
         assert agents_dir.is_dir()
-        agent_files = [f for f in agents_dir.iterdir() if f.name.startswith("gpd-") and f.suffix == ".md"]
+        agent_files = [f for f in agents_dir.iterdir() if f.name.startswith("grd-") and f.suffix == ".md"]
         assert len(agent_files) > 0
 
-        # get-physics-done content
-        gpd_dir = target / "get-physics-done"
-        assert gpd_dir.is_dir()
-        assert (gpd_dir / "VERSION").exists()
+        # get-research-done content
+        grd_dir = target / "get-research-done"
+        assert grd_dir.is_dir()
+        assert (grd_dir / "VERSION").exists()
 
         # Hooks and manifest
         assert (target / "hooks").is_dir()
@@ -200,30 +200,30 @@ class TestGeminiLifecycle:
         assert result["runtime"] == "gemini"
         assert result["commands"] > 0
 
-    def test_gemini_agents_have_tools_not_allowed_tools(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_gemini_agents_have_tools_not_allowed_tools(self, tmp_path: Path, grd_root: Path) -> None:
         """Gemini agents should use `tools:` not `allowed-tools:` in frontmatter."""
         adapter = get_adapter("gemini")
         target = tmp_path / ".gemini"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
 
         agents_dir = target / "agents"
         for agent_file in agents_dir.iterdir():
-            if agent_file.name.startswith("gpd-") and agent_file.suffix == ".md":
+            if agent_file.name.startswith("grd-") and agent_file.suffix == ".md":
                 content = agent_file.read_text(encoding="utf-8")
                 assert "allowed-tools:" not in content, (
                     f"{agent_file.name} still has 'allowed-tools:' — should be 'tools:'"
                 )
 
-    def test_uninstall_removes_gpd_artifacts(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_uninstall_removes_grd_artifacts(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("gemini")
         target = tmp_path / ".gemini"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
 
-        # Write settings.json with GPD entries (install returns settings but doesn't write them)
+        # Write settings.json with GRD entries (install returns settings but doesn't write them)
         settings = {
             "statusLine": {"type": "command", "command": "python3 statusline.py"},
             "hooks": {
@@ -235,8 +235,8 @@ class TestGeminiLifecycle:
 
         adapter.uninstall(target)
 
-        assert not (target / "commands" / "gpd").exists()
-        assert not (target / "get-physics-done").exists()
+        assert not (target / "commands" / "grd").exists()
+        assert not (target / "get-research-done").exists()
         assert not (target / MANIFEST_NAME).exists()
 
         # Verify settings.json cleaned up
@@ -245,26 +245,26 @@ class TestGeminiLifecycle:
             assert "statusLine" not in cleaned
             assert "experimental" not in cleaned or not cleaned.get("experimental", {}).get("enableAgents")
 
-    def test_reinstall_after_uninstall(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_reinstall_after_uninstall(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("gemini")
         target = tmp_path / ".gemini"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
         adapter.uninstall(target)
-        result = adapter.install(gpd_root, target, is_global=True)
+        result = adapter.install(grd_root, target, is_global=True)
 
-        assert (target / "commands" / "gpd").is_dir()
-        assert (target / "get-physics-done" / "VERSION").exists()
+        assert (target / "commands" / "grd").is_dir()
+        assert (target / "get-research-done" / "VERSION").exists()
         assert (target / MANIFEST_NAME).exists()
         assert result["commands"] > 0
 
-    def test_manifest_hashes_match_files(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_manifest_hashes_match_files(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("gemini")
         target = tmp_path / ".gemini"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
 
         manifest = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
         for rel_path, expected_hash in manifest["files"].items():
@@ -272,14 +272,14 @@ class TestGeminiLifecycle:
             assert full_path.exists(), f"Manifest lists {rel_path} but file missing"
             assert file_hash(full_path) == expected_hash, f"Hash mismatch for {rel_path}"
 
-    def test_slides_command_installed(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_slides_command_installed(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("gemini")
         target = tmp_path / ".gemini"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
 
-        slides_toml = target / "commands" / "gpd" / "slides.toml"
+        slides_toml = target / "commands" / "grd" / "slides.toml"
         assert slides_toml.exists()
         content = slides_toml.read_text(encoding="utf-8")
         assert 'context_mode = "projectless"' in content
@@ -294,40 +294,40 @@ class TestGeminiLifecycle:
 class TestCodexLifecycle:
     """Full install → uninstall → reinstall for Codex adapter."""
 
-    def test_install_creates_expected_structure(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_install_creates_expected_structure(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("codex")
         target = tmp_path / ".codex"
         target.mkdir()
         skills_dir = tmp_path / ".agents" / "skills"
         skills_dir.mkdir(parents=True)
 
-        result = adapter.install(gpd_root, target, is_global=True, skills_dir=skills_dir)
+        result = adapter.install(grd_root, target, is_global=True, skills_dir=skills_dir)
 
         # Discoverable Codex skills installed (commands only).
-        gpd_skills = [d for d in skills_dir.iterdir() if d.is_dir() and d.name.startswith("gpd-")]
-        assert len(gpd_skills) > 0, "No GPD skill directories installed"
-        for skill_dir in gpd_skills:
+        grd_skills = [d for d in skills_dir.iterdir() if d.is_dir() and d.name.startswith("grd-")]
+        assert len(grd_skills) > 0, "No GRD skill directories installed"
+        for skill_dir in grd_skills:
             assert (skill_dir / "SKILL.md").exists(), f"Missing SKILL.md in {skill_dir.name}"
-        help_skill = skills_dir / "gpd-help" / "SKILL.md"
+        help_skill = skills_dir / "grd-help" / "SKILL.md"
         assert help_skill.exists()
         assert "context_mode:" in help_skill.read_text(encoding="utf-8")
-        assert not (skills_dir / "gpd-planner").exists()
+        assert not (skills_dir / "grd-planner").exists()
 
-        # The full GPD agent catalog still installs as agent .md files.
+        # The full GRD agent catalog still installs as agent .md files.
         agents_dir = target / "agents"
         assert agents_dir.is_dir()
-        assert (agents_dir / "gpd-planner.toml").exists()
+        assert (agents_dir / "grd-planner.toml").exists()
 
-        # get-physics-done content
-        assert (target / "get-physics-done").is_dir()
-        assert (target / "get-physics-done" / "VERSION").exists()
+        # get-research-done content
+        assert (target / "get-research-done").is_dir()
+        assert (target / "get-research-done" / "VERSION").exists()
 
         # config.toml with notify hook
         assert (target / "config.toml").exists()
         toml_content = (target / "config.toml").read_text(encoding="utf-8")
         assert "notify" in toml_content
         assert "multi_agent = true" in toml_content
-        assert "[agents.gpd-planner]" in toml_content
+        assert "[agents.grd-planner]" in toml_content
 
         # Manifest
         assert (target / MANIFEST_NAME).exists()
@@ -336,7 +336,7 @@ class TestCodexLifecycle:
         assert result["runtime"] == "codex"
         assert result["agentRoles"] > 0
 
-    def test_codex_skills_have_hyphen_names(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_codex_skills_have_hyphen_names(self, tmp_path: Path, grd_root: Path) -> None:
         """Codex skill names should be hyphen-case (a-z0-9-)."""
         adapter = get_adapter("codex")
         target = tmp_path / ".codex"
@@ -344,60 +344,60 @@ class TestCodexLifecycle:
         skills_dir = tmp_path / ".agents" / "skills"
         skills_dir.mkdir(parents=True)
 
-        adapter.install(gpd_root, target, is_global=True, skills_dir=skills_dir)
+        adapter.install(grd_root, target, is_global=True, skills_dir=skills_dir)
 
         for skill_dir in skills_dir.iterdir():
-            if skill_dir.is_dir() and skill_dir.name.startswith("gpd-"):
+            if skill_dir.is_dir() and skill_dir.name.startswith("grd-"):
                 # Skill directory name should only contain [a-z0-9-]
                 assert all(c.isalnum() or c == "-" for c in skill_dir.name), (
                     f"Skill name {skill_dir.name} has invalid characters"
                 )
 
-    def test_uninstall_removes_gpd_artifacts(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_uninstall_removes_grd_artifacts(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("codex")
         target = tmp_path / ".codex"
         target.mkdir()
         skills_dir = tmp_path / ".agents" / "skills"
         skills_dir.mkdir(parents=True)
 
-        adapter.install(gpd_root, target, is_global=True, skills_dir=skills_dir)
+        adapter.install(grd_root, target, is_global=True, skills_dir=skills_dir)
         result = adapter.uninstall(target, skills_dir=skills_dir)
 
         # Discoverable Codex skills removed
-        gpd_skills = [d for d in skills_dir.iterdir() if d.is_dir() and d.name.startswith("gpd-")]
-        assert len(gpd_skills) == 0, f"Skills not removed: {[d.name for d in gpd_skills]}"
+        grd_skills = [d for d in skills_dir.iterdir() if d.is_dir() and d.name.startswith("grd-")]
+        assert len(grd_skills) == 0, f"Skills not removed: {[d.name for d in grd_skills]}"
 
-        # get-physics-done removed
-        assert not (target / "get-physics-done").exists()
+        # get-research-done removed
+        assert not (target / "get-research-done").exists()
 
         # Manifest removed
         assert not (target / MANIFEST_NAME).exists()
 
-        # GPD agents removed
+        # GRD agents removed
         agents_dir = target / "agents"
-        gpd_agents = [f for f in agents_dir.iterdir() if f.name.startswith("gpd-")] if agents_dir.exists() else []
-        assert len(gpd_agents) == 0
+        grd_agents = [f for f in agents_dir.iterdir() if f.name.startswith("grd-")] if agents_dir.exists() else []
+        assert len(grd_agents) == 0
 
         # Result has counts
         assert result["skills"] > 0
 
-    def test_reinstall_after_uninstall(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_reinstall_after_uninstall(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("codex")
         target = tmp_path / ".codex"
         target.mkdir()
         skills_dir = tmp_path / ".agents" / "skills"
         skills_dir.mkdir(parents=True)
 
-        adapter.install(gpd_root, target, is_global=True, skills_dir=skills_dir)
+        adapter.install(grd_root, target, is_global=True, skills_dir=skills_dir)
         adapter.uninstall(target, skills_dir=skills_dir)
-        adapter.install(gpd_root, target, is_global=True, skills_dir=skills_dir)
+        adapter.install(grd_root, target, is_global=True, skills_dir=skills_dir)
 
-        gpd_skills = [d for d in skills_dir.iterdir() if d.is_dir() and d.name.startswith("gpd-")]
-        assert len(gpd_skills) > 0
-        assert (target / "get-physics-done" / "VERSION").exists()
+        grd_skills = [d for d in skills_dir.iterdir() if d.is_dir() and d.name.startswith("grd-")]
+        assert len(grd_skills) > 0
+        assert (target / "get-research-done" / "VERSION").exists()
         assert (target / MANIFEST_NAME).exists()
 
-    def test_manifest_includes_skills(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_manifest_includes_skills(self, tmp_path: Path, grd_root: Path) -> None:
         """Codex manifest should include discoverable skill SKILL.md hashes."""
         adapter = get_adapter("codex")
         target = tmp_path / ".codex"
@@ -405,22 +405,22 @@ class TestCodexLifecycle:
         skills_dir = tmp_path / ".agents" / "skills"
         skills_dir.mkdir(parents=True)
 
-        adapter.install(gpd_root, target, is_global=True, skills_dir=skills_dir)
+        adapter.install(grd_root, target, is_global=True, skills_dir=skills_dir)
 
         manifest = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
         skill_entries = [k for k in manifest["files"] if k.startswith("skills/")]
         assert len(skill_entries) > 0, "Manifest missing skill entries"
 
-    def test_slides_skill_installed(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_slides_skill_installed(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("codex")
         target = tmp_path / ".codex"
         target.mkdir()
         skills_dir = tmp_path / ".agents" / "skills"
         skills_dir.mkdir(parents=True)
 
-        adapter.install(gpd_root, target, is_global=True, skills_dir=skills_dir)
+        adapter.install(grd_root, target, is_global=True, skills_dir=skills_dir)
 
-        slides_skill = skills_dir / "gpd-slides" / "SKILL.md"
+        slides_skill = skills_dir / "grd-slides" / "SKILL.md"
         assert slides_skill.exists()
         content = slides_skill.read_text(encoding="utf-8")
         assert "context_mode: projectless" in content
@@ -435,26 +435,26 @@ class TestCodexLifecycle:
 class TestOpenCodeLifecycle:
     """Full install → uninstall → reinstall for OpenCode adapter."""
 
-    def test_install_creates_expected_structure(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_install_creates_expected_structure(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("opencode")
         target = tmp_path / ".opencode"
         target.mkdir()
 
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
 
-        # Flat command structure (command/gpd-*.md)
+        # Flat command structure (command/grd-*.md)
         command_dir = target / "command"
         assert command_dir.is_dir()
-        gpd_commands = [f for f in command_dir.iterdir() if f.name.startswith("gpd-") and f.suffix == ".md"]
-        assert len(gpd_commands) > 0, "No GPD command files installed"
+        grd_commands = [f for f in command_dir.iterdir() if f.name.startswith("grd-") and f.suffix == ".md"]
+        assert len(grd_commands) > 0, "No GRD command files installed"
 
         # Agents installed
         agents_dir = target / "agents"
         assert agents_dir.is_dir()
 
-        # get-physics-done content
-        assert (target / "get-physics-done").is_dir()
-        assert (target / "get-physics-done" / "VERSION").exists()
+        # get-research-done content
+        assert (target / "get-research-done").is_dir()
+        assert (target / "get-research-done" / "VERSION").exists()
 
         # opencode.json permissions
         assert (target / "opencode.json").exists()
@@ -466,70 +466,70 @@ class TestOpenCodeLifecycle:
 
         assert result["runtime"] == "opencode"
 
-    def test_slides_command_installed(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_slides_command_installed(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("opencode")
         target = tmp_path / ".opencode"
         target.mkdir()
 
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        slides_md = target / "command" / "gpd-slides.md"
+        slides_md = target / "command" / "grd-slides.md"
         assert slides_md.exists()
         content = slides_md.read_text(encoding="utf-8")
         assert "PRESENTATION-BRIEF.md" in content
 
-    def test_opencode_commands_are_flat(self, tmp_path: Path, gpd_root: Path) -> None:
-        """OpenCode uses flat command structure: command/gpd-help.md not commands/gpd/help.md."""
+    def test_opencode_commands_are_flat(self, tmp_path: Path, grd_root: Path) -> None:
+        """OpenCode uses flat command structure: command/grd-help.md not commands/grd/help.md."""
         adapter = get_adapter("opencode")
         target = tmp_path / ".opencode"
         target.mkdir()
 
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        # Should NOT have nested commands/gpd/ structure
-        assert not (target / "commands" / "gpd").exists()
+        # Should NOT have nested commands/grd/ structure
+        assert not (target / "commands" / "grd").exists()
         # Should have flat command/ structure
         command_dir = target / "command"
         assert command_dir.is_dir()
-        gpd_commands = [f for f in command_dir.iterdir() if f.name.startswith("gpd-")]
-        assert len(gpd_commands) > 0
+        grd_commands = [f for f in command_dir.iterdir() if f.name.startswith("grd-")]
+        assert len(grd_commands) > 0
 
-    def test_opencode_frontmatter_converted(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_opencode_frontmatter_converted(self, tmp_path: Path, grd_root: Path) -> None:
         """OpenCode commands should have frontmatter converted (no allowed-tools:, no name:)."""
         adapter = get_adapter("opencode")
         target = tmp_path / ".opencode"
         target.mkdir()
 
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         command_dir = target / "command"
         for cmd_file in command_dir.iterdir():
-            if cmd_file.name.startswith("gpd-") and cmd_file.suffix == ".md":
+            if cmd_file.name.startswith("grd-") and cmd_file.suffix == ".md":
                 content = cmd_file.read_text(encoding="utf-8")
                 # allowed-tools should be converted to tools
                 assert "allowed-tools:" not in content, f"{cmd_file.name} still has 'allowed-tools:'"
 
-    def test_uninstall_removes_gpd_artifacts(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_uninstall_removes_grd_artifacts(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("opencode")
         target = tmp_path / ".opencode"
         target.mkdir()
 
         # Patch global_config_dir to avoid touching real XDG dirs
 
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         # For uninstall, we need to make the opencode.json accessible within the target
-        from gpd.adapters.opencode import uninstall_opencode
+        from grd.adapters.opencode import uninstall_opencode
 
         uninstall_opencode(target, config_dir=target)
 
         # Flat commands removed
         command_dir = target / "command"
-        gpd_commands = [f for f in command_dir.iterdir() if f.name.startswith("gpd-")] if command_dir.exists() else []
-        assert len(gpd_commands) == 0
+        grd_commands = [f for f in command_dir.iterdir() if f.name.startswith("grd-")] if command_dir.exists() else []
+        assert len(grd_commands) == 0
 
-        # get-physics-done removed
-        assert not (target / "get-physics-done").exists()
+        # get-research-done removed
+        assert not (target / "get-research-done").exists()
 
         # Manifest removed
         assert not (target / MANIFEST_NAME).exists()
@@ -540,36 +540,36 @@ class TestOpenCodeLifecycle:
             perm = oc_config.get("permission", {})
             for perm_type in ("read", "external_directory"):
                 perm_dict = perm.get(perm_type, {})
-                gpd_keys = [k for k in perm_dict if "get-physics-done" in k]
-                assert len(gpd_keys) == 0, f"GPD permissions not cleaned from {perm_type}"
+                grd_keys = [k for k in perm_dict if "get-research-done" in k]
+                assert len(grd_keys) == 0, f"GRD permissions not cleaned from {perm_type}"
 
-    def test_reinstall_after_uninstall(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_reinstall_after_uninstall(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("opencode")
         target = tmp_path / ".opencode"
         target.mkdir()
 
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        from gpd.adapters.opencode import uninstall_opencode
+        from grd.adapters.opencode import uninstall_opencode
 
         uninstall_opencode(target, config_dir=target)
 
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
 
         command_dir = target / "command"
-        gpd_commands = [f for f in command_dir.iterdir() if f.name.startswith("gpd-") and f.suffix == ".md"]
-        assert len(gpd_commands) > 0
-        assert (target / "get-physics-done" / "VERSION").exists()
+        grd_commands = [f for f in command_dir.iterdir() if f.name.startswith("grd-") and f.suffix == ".md"]
+        assert len(grd_commands) > 0
+        assert (target / "get-research-done" / "VERSION").exists()
         assert (target / MANIFEST_NAME).exists()
         assert result["commands"] > 0
 
-    def test_manifest_uses_flat_command_paths(self, tmp_path: Path, gpd_root: Path) -> None:
-        """OpenCode manifest should reference command/gpd-*.md (flat) not commands/gpd/ (nested)."""
+    def test_manifest_uses_flat_command_paths(self, tmp_path: Path, grd_root: Path) -> None:
+        """OpenCode manifest should reference command/grd-*.md (flat) not commands/grd/ (nested)."""
         adapter = get_adapter("opencode")
         target = tmp_path / ".opencode"
         target.mkdir()
 
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         manifest = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
         command_entries = [k for k in manifest["files"] if k.startswith("command/")]
@@ -587,8 +587,8 @@ class TestManifestConsistency:
     """Verify manifest read/write is correct across install cycles."""
 
     @pytest.mark.parametrize("runtime", ["claude-code", "gemini"])
-    def test_manifest_version_matches_package(self, runtime: str, tmp_path: Path, gpd_root: Path) -> None:
-        from gpd.version import version_for_gpd_root
+    def test_manifest_version_matches_package(self, runtime: str, tmp_path: Path, grd_root: Path) -> None:
+        from grd.version import version_for_grd_root
 
         adapter = get_adapter(runtime)
         target = tmp_path / adapter.config_dir_name
@@ -597,36 +597,36 @@ class TestManifestConsistency:
         if runtime == "codex":
             skills_dir = tmp_path / ".agents" / "skills"
             skills_dir.mkdir(parents=True)
-            adapter.install(gpd_root, target, is_global=True, skills_dir=skills_dir)
+            adapter.install(grd_root, target, is_global=True, skills_dir=skills_dir)
         else:
-            adapter.install(gpd_root, target, is_global=True)
+            adapter.install(grd_root, target, is_global=True)
 
         manifest = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
-        assert manifest["version"] == version_for_gpd_root(gpd_root)
+        assert manifest["version"] == version_for_grd_root(grd_root)
 
     @pytest.mark.parametrize("runtime", ["claude-code", "gemini"])
-    def test_manifest_has_timestamp(self, runtime: str, tmp_path: Path, gpd_root: Path) -> None:
+    def test_manifest_has_timestamp(self, runtime: str, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter(runtime)
         target = tmp_path / adapter.config_dir_name
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
 
         manifest = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
         assert "timestamp" in manifest
         assert len(manifest["timestamp"]) > 10  # ISO 8601 format
 
-    def test_reinstall_overwrites_manifest(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_reinstall_overwrites_manifest(self, tmp_path: Path, grd_root: Path) -> None:
         """Second install should produce a fresh manifest (not append)."""
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
         manifest1 = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
 
         # Reinstall without uninstall
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
         manifest2 = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
 
         # Timestamps should differ (or at least manifest is valid)
@@ -641,7 +641,7 @@ class TestManifestConsistency:
         is_global: bool,
         expected_scope: str,
         tmp_path: Path,
-        gpd_root: Path,
+        grd_root: Path,
     ) -> None:
         adapter = get_adapter(runtime)
         target = tmp_path / adapter.config_dir_name
@@ -653,7 +653,7 @@ class TestManifestConsistency:
             skills_dir.mkdir(parents=True, exist_ok=True)
             install_kwargs["skills_dir"] = skills_dir
 
-        adapter.install(gpd_root, target, **install_kwargs)
+        adapter.install(grd_root, target, **install_kwargs)
 
         manifest = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
         assert manifest["runtime"] == runtime
@@ -675,7 +675,7 @@ class TestManifestConsistency:
         runtime: str,
         is_global: bool,
         tmp_path: Path,
-        gpd_root: Path,
+        grd_root: Path,
     ) -> None:
         adapter = get_adapter(runtime)
         target = tmp_path / "custom-targets" / adapter.config_dir_name
@@ -687,7 +687,7 @@ class TestManifestConsistency:
             skills_dir.mkdir(parents=True, exist_ok=True)
             install_kwargs["skills_dir"] = skills_dir
 
-        adapter.install(gpd_root, target, **install_kwargs)
+        adapter.install(grd_root, target, **install_kwargs)
 
         manifest = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
         assert manifest["install_target_dir"] == str(target)
@@ -700,62 +700,62 @@ class TestManifestConsistency:
 
 
 class TestPathReplacementInInstalledContent:
-    """Verify that {GPD_INSTALL_DIR} and ~/.claude/ are replaced in installed files."""
+    """Verify that {GRD_INSTALL_DIR} and ~/.claude/ are replaced in installed files."""
 
-    def test_claude_code_path_replacement(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_claude_code_path_replacement(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
 
         # Check a few installed files for unreplaced placeholders
-        for md_file in (target / "commands" / "gpd").rglob("*.md"):
+        for md_file in (target / "commands" / "grd").rglob("*.md"):
             content = md_file.read_text(encoding="utf-8")
-            assert "{GPD_INSTALL_DIR}" not in content, (
-                f"{md_file.relative_to(target)} has unreplaced {{GPD_INSTALL_DIR}}"
+            assert "{GRD_INSTALL_DIR}" not in content, (
+                f"{md_file.relative_to(target)} has unreplaced {{GRD_INSTALL_DIR}}"
             )
 
-    def test_gemini_no_unreplaced_placeholders(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_gemini_no_unreplaced_placeholders(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("gemini")
         target = tmp_path / ".gemini"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
 
-        for toml_file in (target / "commands" / "gpd").rglob("*.toml"):
+        for toml_file in (target / "commands" / "grd").rglob("*.toml"):
             content = toml_file.read_text(encoding="utf-8")
-            assert "{GPD_INSTALL_DIR}" not in content, (
-                f"{toml_file.relative_to(target)} has unreplaced {{GPD_INSTALL_DIR}}"
+            assert "{GRD_INSTALL_DIR}" not in content, (
+                f"{toml_file.relative_to(target)} has unreplaced {{GRD_INSTALL_DIR}}"
             )
 
-    def test_opencode_no_claude_paths(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_opencode_no_claude_paths(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("opencode")
         target = tmp_path / ".opencode"
         target.mkdir()
 
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         command_dir = target / "command"
         if command_dir.exists():
             for md_file in command_dir.iterdir():
                 if md_file.suffix == ".md":
                     content = md_file.read_text(encoding="utf-8")
-                    assert "{GPD_INSTALL_DIR}" not in content, f"{md_file.name} has unreplaced {{GPD_INSTALL_DIR}}"
+                    assert "{GRD_INSTALL_DIR}" not in content, f"{md_file.name} has unreplaced {{GRD_INSTALL_DIR}}"
 
 
-def test_reinstall_replaces_manifest_tracked_gpd_hook(tmp_path: Path, gpd_root: Path) -> None:
+def test_reinstall_replaces_manifest_tracked_gpd_hook(tmp_path: Path, grd_root: Path) -> None:
     adapter = get_adapter("claude-code")
     target = tmp_path / ".claude"
     target.mkdir()
 
-    adapter.install(gpd_root, target, is_global=True)
+    adapter.install(grd_root, target, is_global=True)
 
     managed_hook = target / "hooks" / "statusline.py"
     original = managed_hook.read_text(encoding="utf-8")
     managed_hook.write_text("# locally modified managed hook\n", encoding="utf-8")
 
-    adapter.install(gpd_root, target, is_global=True)
+    adapter.install(grd_root, target, is_global=True)
 
     assert managed_hook.read_text(encoding="utf-8") == original
 
@@ -768,67 +768,67 @@ def test_reinstall_replaces_manifest_tracked_gpd_hook(tmp_path: Path, gpd_root: 
 class TestInstallIdempotent:
     """Installing twice (without uninstall) should be safe and produce the same result."""
 
-    def test_claude_code_install_twice(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_claude_code_install_twice(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         target.mkdir()
 
-        result1 = adapter.install(gpd_root, target, is_global=True)
-        result2 = adapter.install(gpd_root, target, is_global=True)
+        result1 = adapter.install(grd_root, target, is_global=True)
+        result2 = adapter.install(grd_root, target, is_global=True)
 
         assert result1["commands"] == result2["commands"]
         assert result1["agents"] == result2["agents"]
-        assert (target / "commands" / "gpd").is_dir()
-        assert (target / "get-physics-done" / "VERSION").exists()
+        assert (target / "commands" / "grd").is_dir()
+        assert (target / "get-research-done" / "VERSION").exists()
         assert (target / MANIFEST_NAME).exists()
 
-    def test_gemini_install_twice(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_gemini_install_twice(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("gemini")
         target = tmp_path / ".gemini"
         target.mkdir()
 
-        result1 = adapter.install(gpd_root, target, is_global=True)
-        result2 = adapter.install(gpd_root, target, is_global=True)
+        result1 = adapter.install(grd_root, target, is_global=True)
+        result2 = adapter.install(grd_root, target, is_global=True)
 
         assert result1["commands"] == result2["commands"]
         assert result1["agents"] == result2["agents"]
-        assert (target / "commands" / "gpd").is_dir()
+        assert (target / "commands" / "grd").is_dir()
 
-    def test_codex_install_twice(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_codex_install_twice(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("codex")
         target = tmp_path / ".codex"
         target.mkdir()
         skills_dir = tmp_path / ".agents" / "skills"
         skills_dir.mkdir(parents=True)
 
-        result1 = adapter.install(gpd_root, target, is_global=True, skills_dir=skills_dir)
-        result2 = adapter.install(gpd_root, target, is_global=True, skills_dir=skills_dir)
+        result1 = adapter.install(grd_root, target, is_global=True, skills_dir=skills_dir)
+        result2 = adapter.install(grd_root, target, is_global=True, skills_dir=skills_dir)
 
         assert result1["commands"] == result2["commands"]
         assert result1["agents"] == result2["agents"]
-        gpd_skills = [d for d in skills_dir.iterdir() if d.is_dir() and d.name.startswith("gpd-")]
-        assert len(gpd_skills) > 0
+        grd_skills = [d for d in skills_dir.iterdir() if d.is_dir() and d.name.startswith("grd-")]
+        assert len(grd_skills) > 0
 
-    def test_opencode_install_twice(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_opencode_install_twice(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("opencode")
         target = tmp_path / ".opencode"
         target.mkdir()
 
-        result1 = adapter.install(gpd_root, target)
-        result2 = adapter.install(gpd_root, target)
+        result1 = adapter.install(grd_root, target)
+        result2 = adapter.install(grd_root, target)
 
         assert result1["commands"] == result2["commands"]
         assert result1["agents"] == result2["agents"]
         command_dir = target / "command"
-        gpd_commands = [f for f in command_dir.iterdir() if f.name.startswith("gpd-") and f.suffix == ".md"]
-        assert len(gpd_commands) > 0
+        grd_commands = [f for f in command_dir.iterdir() if f.name.startswith("grd-") and f.suffix == ".md"]
+        assert len(grd_commands) > 0
 
 
 class TestUpgradePrunesRemovedFiles:
     """Reinstall should remove files that were managed by an older version but are no longer shipped."""
 
     @pytest.mark.parametrize("runtime", ["claude-code", "gemini", "codex", "opencode"])
-    def test_reinstall_removes_manifest_tracked_stale_file(self, runtime: str, tmp_path: Path, gpd_root: Path) -> None:
+    def test_reinstall_removes_manifest_tracked_stale_file(self, runtime: str, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter(runtime)
         target = tmp_path / adapter.config_dir_name
         target.mkdir(parents=True, exist_ok=True)
@@ -841,17 +841,17 @@ class TestUpgradePrunesRemovedFiles:
         elif runtime == "opencode":
             install_kwargs = {}
 
-        adapter.install(gpd_root, target, **install_kwargs)
+        adapter.install(grd_root, target, **install_kwargs)
 
-        stale_file = target / "get-physics-done" / "STALE-ROOT.md"
+        stale_file = target / "get-research-done" / "STALE-ROOT.md"
         stale_file.write_text("stale\n", encoding="utf-8")
 
         manifest_path = target / MANIFEST_NAME
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        manifest["files"]["get-physics-done/STALE-ROOT.md"] = file_hash(stale_file)
+        manifest["files"]["get-research-done/STALE-ROOT.md"] = file_hash(stale_file)
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-        adapter.install(gpd_root, target, **install_kwargs)
+        adapter.install(grd_root, target, **install_kwargs)
 
         assert not stale_file.exists()
 
@@ -862,7 +862,7 @@ class TestUpgradePrunesRemovedFiles:
 
 
 class TestUninstallWhenNotInstalled:
-    """Uninstalling from a directory with no GPD artifacts should not crash."""
+    """Uninstalling from a directory with no GRD artifacts should not crash."""
 
     def test_claude_code_uninstall_empty(self, tmp_path: Path) -> None:
         adapter = get_adapter("claude-code")
@@ -891,7 +891,7 @@ class TestUninstallWhenNotInstalled:
         assert result["removed"] == []
 
     def test_opencode_uninstall_empty(self, tmp_path: Path) -> None:
-        from gpd.adapters.opencode import uninstall_opencode
+        from grd.adapters.opencode import uninstall_opencode
 
         target = tmp_path / ".opencode"
         target.mkdir()
@@ -908,11 +908,11 @@ class TestUninstallWhenNotInstalled:
         target = tmp_path / ".claude"
         target.mkdir()
         # Just put a random file in target
-        (target / "other.txt").write_text("not gpd", encoding="utf-8")
+        (target / "other.txt").write_text("not grd", encoding="utf-8")
 
         result = adapter.uninstall(target)
         assert result["removed"] == []
-        assert (target / "other.txt").exists()  # Non-GPD content preserved
+        assert (target / "other.txt").exists()  # Non-GRD content preserved
 
 
 # ---------------------------------------------------------------------------
@@ -923,39 +923,39 @@ class TestUninstallWhenNotInstalled:
 class TestInstallThenUninstallClean:
     """Install then immediate uninstall should leave a clean directory."""
 
-    def test_claude_code_clean_after_cycle(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_claude_code_clean_after_cycle(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
         adapter.uninstall(target)
 
-        # GPD artifacts gone
-        assert not (target / "commands" / "gpd").exists()
-        assert not (target / "get-physics-done").exists()
+        # GRD artifacts gone
+        assert not (target / "commands" / "grd").exists()
+        assert not (target / "get-research-done").exists()
         assert not (target / MANIFEST_NAME).exists()
-        assert not (target / "gpd-local-patches").exists()
-        # Agents dir may exist but no gpd-* files
+        assert not (target / "grd-local-patches").exists()
+        # Agents dir may exist but no grd-* files
         agents = target / "agents"
         if agents.exists():
-            gpd_agents = [f for f in agents.iterdir() if f.name.startswith("gpd-")]
-            assert len(gpd_agents) == 0
+            grd_agents = [f for f in agents.iterdir() if f.name.startswith("grd-")]
+            assert len(grd_agents) == 0
 
-    def test_codex_clean_after_cycle(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_codex_clean_after_cycle(self, tmp_path: Path, grd_root: Path) -> None:
         adapter = get_adapter("codex")
         target = tmp_path / ".codex"
         target.mkdir()
         skills_dir = tmp_path / ".agents" / "skills"
         skills_dir.mkdir(parents=True)
 
-        adapter.install(gpd_root, target, is_global=True, skills_dir=skills_dir)
+        adapter.install(grd_root, target, is_global=True, skills_dir=skills_dir)
         adapter.uninstall(target, skills_dir=skills_dir)
 
-        assert not (target / "get-physics-done").exists()
+        assert not (target / "get-research-done").exists()
         assert not (target / MANIFEST_NAME).exists()
-        gpd_skills = [d for d in skills_dir.iterdir() if d.is_dir() and d.name.startswith("gpd-")]
-        assert len(gpd_skills) == 0
+        grd_skills = [d for d in skills_dir.iterdir() if d.is_dir() and d.name.startswith("grd-")]
+        assert len(grd_skills) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -966,56 +966,56 @@ class TestInstallThenUninstallClean:
 class TestUninstallCorruptedConfigs:
     """Uninstall should not crash when config files are corrupted."""
 
-    def test_opencode_corrupted_settings_json(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_opencode_corrupted_settings_json(self, tmp_path: Path, grd_root: Path) -> None:
         """Corrupted settings.json should not prevent OpenCode uninstall."""
-        from gpd.adapters.opencode import uninstall_opencode
+        from grd.adapters.opencode import uninstall_opencode
 
         target = tmp_path / ".opencode"
         target.mkdir()
 
         adapter = get_adapter("opencode")
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         # Corrupt settings.json
         (target / "settings.json").write_text("{{{not valid json!!!", encoding="utf-8")
 
         # Uninstall should still succeed
         uninstall_opencode(target, config_dir=target)
-        assert not (target / "get-physics-done").exists()
+        assert not (target / "get-research-done").exists()
         # Commands should be cleaned
         command_dir = target / "command"
-        gpd_cmds = [f for f in command_dir.iterdir() if f.name.startswith("gpd-")] if command_dir.exists() else []
-        assert len(gpd_cmds) == 0
+        grd_cmds = [f for f in command_dir.iterdir() if f.name.startswith("grd-")] if command_dir.exists() else []
+        assert len(grd_cmds) == 0
 
-    def test_opencode_corrupted_opencode_json(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_opencode_corrupted_opencode_json(self, tmp_path: Path, grd_root: Path) -> None:
         """Corrupted opencode.json should not prevent OpenCode uninstall."""
-        from gpd.adapters.opencode import uninstall_opencode
+        from grd.adapters.opencode import uninstall_opencode
 
         target = tmp_path / ".opencode"
         target.mkdir()
 
         adapter = get_adapter("opencode")
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         # Corrupt opencode.json
         (target / "opencode.json").write_text("NOT JSON AT ALL", encoding="utf-8")
 
         # Uninstall should still succeed
         uninstall_opencode(target, config_dir=target)
-        assert not (target / "get-physics-done").exists()
+        assert not (target / "get-research-done").exists()
 
-    def test_gemini_corrupted_settings_json(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_gemini_corrupted_settings_json(self, tmp_path: Path, grd_root: Path) -> None:
         """Corrupted settings.json should not prevent Gemini uninstall."""
         adapter = get_adapter("gemini")
         target = tmp_path / ".gemini"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=True)
+        adapter.install(grd_root, target, is_global=True)
 
         # Corrupt settings.json (Gemini uses read_settings which handles this)
         (target / "settings.json").write_text("{{{broken", encoding="utf-8")
 
         # Should not crash
         adapter.uninstall(target)
-        assert not (target / "commands" / "gpd").exists()
-        assert not (target / "get-physics-done").exists()
+        assert not (target / "commands" / "grd").exists()
+        assert not (target / "get-research-done").exists()

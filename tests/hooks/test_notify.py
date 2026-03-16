@@ -1,4 +1,4 @@
-"""Tests for gpd/hooks/notify.py."""
+"""Tests for grd/hooks/notify.py."""
 
 from __future__ import annotations
 
@@ -7,29 +7,29 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from gpd.hooks.notify import _check_and_notify_update, _emit_execution_notification, _hook_payload_policy, main
+from grd.hooks.notify import _check_and_notify_update, _emit_execution_notification, _hook_payload_policy, main
 
 
 def _write_current_execution(workspace: Path, payload: dict[str, object]) -> None:
-    observability = workspace / ".gpd" / "observability"
+    observability = workspace / ".grd" / "observability"
     observability.mkdir(parents=True, exist_ok=True)
     (observability / "current-execution.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
 def _mark_complete_install(config_dir: Path, *, runtime: str | None = None, install_scope: str = "local") -> None:
     config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "get-physics-done").mkdir(parents=True, exist_ok=True)
+    (config_dir / "get-research-done").mkdir(parents=True, exist_ok=True)
     manifest: dict[str, object] = {"install_scope": install_scope}
     if runtime is not None:
         manifest["runtime"] = runtime
-    (config_dir / "gpd-file-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (config_dir / "grd-file-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
 
 def test_notify_uses_latest_local_cache_and_scoped_codex_install_command(tmp_path: Path) -> None:
     home = tmp_path / "home"
-    home_cache = home / ".gpd" / "cache"
+    home_cache = home / ".grd" / "cache"
     home_cache.mkdir(parents=True)
-    (home_cache / "gpd-update-check.json").write_text(
+    (home_cache / "grd-update-check.json").write_text(
         json.dumps({"update_available": False, "checked": 10}),
         encoding="utf-8",
     )
@@ -37,7 +37,7 @@ def test_notify_uses_latest_local_cache_and_scoped_codex_install_command(tmp_pat
     local_cache = tmp_path / ".codex" / "cache"
     local_cache.mkdir(parents=True)
     _mark_complete_install(tmp_path / ".codex", runtime="codex")
-    (local_cache / "gpd-update-check.json").write_text(
+    (local_cache / "grd-update-check.json").write_text(
         json.dumps(
             {
                 "update_available": True,
@@ -51,9 +51,9 @@ def test_notify_uses_latest_local_cache_and_scoped_codex_install_command(tmp_pat
 
     stderr = io.StringIO()
     with (
-        patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-        patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
-        patch("gpd.hooks.runtime_detect.detect_active_runtime", return_value="codex"),
+        patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+        patch("grd.hooks.runtime_detect.Path.home", return_value=home),
+        patch("grd.hooks.runtime_detect.detect_active_runtime", return_value="codex"),
         patch("sys.stderr", stderr),
     ):
         _check_and_notify_update()
@@ -61,7 +61,7 @@ def test_notify_uses_latest_local_cache_and_scoped_codex_install_command(tmp_pat
     output = stderr.getvalue()
     assert "Update available: v1.2.3" in output
     assert "v1.3.0" in output
-    assert "Run: npx -y get-physics-done --codex --local" in output
+    assert "Run: npx -y get-research-done --codex --local" in output
 
 
 def test_notify_prefers_active_runtime_cache_over_newer_unrelated_runtime_cache(tmp_path: Path) -> None:
@@ -71,7 +71,7 @@ def test_notify_prefers_active_runtime_cache_over_newer_unrelated_runtime_cache(
     local_cache = local_runtime_dir / "cache"
     local_cache.mkdir(parents=True)
     _mark_complete_install(local_runtime_dir, runtime="codex")
-    (local_cache / "gpd-update-check.json").write_text(
+    (local_cache / "grd-update-check.json").write_text(
         json.dumps(
             {
                 "update_available": True,
@@ -87,7 +87,7 @@ def test_notify_prefers_active_runtime_cache_over_newer_unrelated_runtime_cache(
     unrelated_cache = unrelated_runtime_dir / "cache"
     unrelated_cache.mkdir(parents=True)
     _mark_complete_install(unrelated_runtime_dir, runtime="claude-code", install_scope="global")
-    (unrelated_cache / "gpd-update-check.json").write_text(
+    (unrelated_cache / "grd-update-check.json").write_text(
         json.dumps(
             {
                 "update_available": True,
@@ -101,9 +101,9 @@ def test_notify_prefers_active_runtime_cache_over_newer_unrelated_runtime_cache(
 
     stderr = io.StringIO()
     with (
-        patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-        patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
-        patch("gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install", return_value="codex"),
+        patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+        patch("grd.hooks.runtime_detect.Path.home", return_value=home),
+        patch("grd.hooks.runtime_detect.detect_active_runtime_with_grd_install", return_value="codex"),
         patch("sys.stderr", stderr),
     ):
         _check_and_notify_update()
@@ -111,7 +111,7 @@ def test_notify_prefers_active_runtime_cache_over_newer_unrelated_runtime_cache(
     output = stderr.getvalue()
     assert "Update available: v1.2.3" in output
     assert "v9.0.0" not in output
-    assert "Run: npx -y get-physics-done --codex --local" in output
+    assert "Run: npx -y get-research-done --codex --local" in output
 
 
 def test_notify_prefers_installed_global_scope_cache_over_stale_local_scope_cache(tmp_path: Path) -> None:
@@ -121,7 +121,7 @@ def test_notify_prefers_installed_global_scope_cache_over_stale_local_scope_cach
 
     local_cache = workspace / ".codex" / "cache"
     local_cache.mkdir(parents=True)
-    (local_cache / "gpd-update-check.json").write_text(
+    (local_cache / "grd-update-check.json").write_text(
         json.dumps(
             {
                 "update_available": True,
@@ -137,7 +137,7 @@ def test_notify_prefers_installed_global_scope_cache_over_stale_local_scope_cach
     global_cache = global_runtime_dir / "cache"
     global_cache.mkdir(parents=True)
     _mark_complete_install(global_runtime_dir, runtime="codex", install_scope="global")
-    (global_cache / "gpd-update-check.json").write_text(
+    (global_cache / "grd-update-check.json").write_text(
         json.dumps(
             {
                 "update_available": False,
@@ -151,7 +151,7 @@ def test_notify_prefers_installed_global_scope_cache_over_stale_local_scope_cach
 
     stderr = io.StringIO()
     with (
-        patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+        patch("grd.hooks.runtime_detect.Path.home", return_value=home),
         patch("sys.stderr", stderr),
     ):
         _check_and_notify_update(str(workspace))
@@ -167,7 +167,7 @@ def test_notify_uses_explicit_workspace_cwd_over_process_cwd(tmp_path: Path) -> 
     local_cache = workspace / ".codex" / "cache"
     local_cache.mkdir(parents=True)
     _mark_complete_install(workspace / ".codex", runtime="codex")
-    (local_cache / "gpd-update-check.json").write_text(
+    (local_cache / "grd-update-check.json").write_text(
         json.dumps(
             {
                 "update_available": True,
@@ -185,15 +185,15 @@ def test_notify_uses_explicit_workspace_cwd_over_process_cwd(tmp_path: Path) -> 
 
     stderr = io.StringIO()
     with (
-        patch("gpd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
-        patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+        patch("grd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
+        patch("grd.hooks.runtime_detect.Path.home", return_value=home),
         patch("sys.stderr", stderr),
     ):
         _check_and_notify_update(str(workspace))
 
     output = stderr.getvalue()
     assert "Update available: v2.0.0" in output
-    assert "Run: npx -y get-physics-done --codex --local" in output
+    assert "Run: npx -y get-research-done --codex --local" in output
 
 
 def test_notify_prefers_explicit_target_hook_cache_and_target_dir_command(tmp_path: Path) -> None:
@@ -201,7 +201,7 @@ def test_notify_prefers_explicit_target_hook_cache_and_target_dir_command(tmp_pa
     workspace.mkdir()
     explicit_target = tmp_path / "custom-runtime-dir"
     hook_path = explicit_target / "hooks" / "notify.py"
-    cache_file = explicit_target / "cache" / "gpd-update-check.json"
+    cache_file = explicit_target / "cache" / "grd-update-check.json"
     hook_path.parent.mkdir(parents=True)
     cache_file.parent.mkdir(parents=True)
     hook_path.write_text("# hook\n", encoding="utf-8")
@@ -219,7 +219,7 @@ def test_notify_prefers_explicit_target_hook_cache_and_target_dir_command(tmp_pa
     )
     stderr = io.StringIO()
     with (
-        patch("gpd.hooks.notify.__file__", str(hook_path)),
+        patch("grd.hooks.notify.__file__", str(hook_path)),
         patch("sys.stderr", stderr),
     ):
         _check_and_notify_update(str(workspace))
@@ -235,12 +235,12 @@ def test_notify_keeps_target_dir_for_default_named_explicit_target(tmp_path: Pat
     workspace.mkdir()
     explicit_target = tmp_path / "custom-parent" / ".codex"
     hook_path = explicit_target / "hooks" / "notify.py"
-    cache_file = explicit_target / "cache" / "gpd-update-check.json"
+    cache_file = explicit_target / "cache" / "grd-update-check.json"
     hook_path.parent.mkdir(parents=True)
     cache_file.parent.mkdir(parents=True)
     hook_path.write_text("# hook\n", encoding="utf-8")
     _mark_complete_install(explicit_target, runtime="codex")
-    (explicit_target / "gpd-file-manifest.json").write_text(
+    (explicit_target / "grd-file-manifest.json").write_text(
         json.dumps(
             {
                 "install_scope": "local",
@@ -265,7 +265,7 @@ def test_notify_keeps_target_dir_for_default_named_explicit_target(tmp_path: Pat
 
     stderr = io.StringIO()
     with (
-        patch("gpd.hooks.notify.__file__", str(hook_path)),
+        patch("grd.hooks.notify.__file__", str(hook_path)),
         patch("sys.stderr", stderr),
     ):
         _check_and_notify_update(str(workspace))
@@ -280,7 +280,7 @@ def test_notify_explicit_target_without_runtime_metadata_falls_back_to_bootstrap
     workspace.mkdir()
     explicit_target = tmp_path / "custom-runtime-dir"
     hook_path = explicit_target / "hooks" / "notify.py"
-    cache_file = explicit_target / "cache" / "gpd-update-check.json"
+    cache_file = explicit_target / "cache" / "grd-update-check.json"
     hook_path.parent.mkdir(parents=True)
     cache_file.parent.mkdir(parents=True)
     hook_path.write_text("# hook\n", encoding="utf-8")
@@ -292,12 +292,12 @@ def test_notify_explicit_target_without_runtime_metadata_falls_back_to_bootstrap
 
     stderr = io.StringIO()
     with (
-        patch("gpd.hooks.notify.__file__", str(hook_path)),
+        patch("grd.hooks.notify.__file__", str(hook_path)),
         patch("sys.stderr", stderr),
     ):
         _check_and_notify_update(str(workspace))
 
-    assert "Run: npx -y get-physics-done" in stderr.getvalue()
+    assert "Run: npx -y get-research-done" in stderr.getvalue()
 
 
 def test_notify_runtime_directory_without_install_uses_bootstrap_command(tmp_path: Path) -> None:
@@ -307,7 +307,7 @@ def test_notify_runtime_directory_without_install_uses_bootstrap_command(tmp_pat
 
     local_cache = workspace / ".codex" / "cache"
     local_cache.mkdir(parents=True)
-    (local_cache / "gpd-update-check.json").write_text(
+    (local_cache / "grd-update-check.json").write_text(
         json.dumps(
             {
                 "update_available": True,
@@ -324,15 +324,15 @@ def test_notify_runtime_directory_without_install_uses_bootstrap_command(tmp_pat
 
     stderr = io.StringIO()
     with (
-        patch("gpd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
-        patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+        patch("grd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
+        patch("grd.hooks.runtime_detect.Path.home", return_value=home),
         patch("sys.stderr", stderr),
     ):
         _check_and_notify_update(str(workspace))
 
     output = stderr.getvalue()
     assert "Update available: v2.0.0" in output
-    assert "Run: npx -y get-physics-done" in output
+    assert "Run: npx -y get-research-done" in output
 
 
 def test_notify_ignores_stale_uninstalled_runtime_cache_when_other_runtime_is_installed(tmp_path: Path) -> None:
@@ -342,7 +342,7 @@ def test_notify_ignores_stale_uninstalled_runtime_cache_when_other_runtime_is_in
 
     stale_cache = workspace / ".codex" / "cache"
     stale_cache.mkdir(parents=True)
-    (stale_cache / "gpd-update-check.json").write_text(
+    (stale_cache / "grd-update-check.json").write_text(
         json.dumps(
             {
                 "update_available": True,
@@ -359,7 +359,7 @@ def test_notify_ignores_stale_uninstalled_runtime_cache_when_other_runtime_is_in
 
     stderr = io.StringIO()
     with (
-        patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+        patch("grd.hooks.runtime_detect.Path.home", return_value=home),
         patch("sys.stderr", stderr),
     ):
         _check_and_notify_update(str(workspace))
@@ -376,7 +376,7 @@ def test_hook_payload_policy_prefers_installed_runtime_over_stale_local_runtime_
     global_runtime_dir = home / ".claude"
     _mark_complete_install(global_runtime_dir, runtime="claude-code", install_scope="global")
 
-    with patch("gpd.hooks.runtime_detect.Path.home", return_value=home):
+    with patch("grd.hooks.runtime_detect.Path.home", return_value=home):
         policy = _hook_payload_policy(str(workspace))
 
     assert policy.notify_event_types == ()
@@ -398,10 +398,10 @@ def test_main_resolves_workspace_before_filtering_event_types(tmp_path: Path) ->
     payload = json.dumps({"type": "session-end", "workspace": str(workspace)})
     with (
         patch("sys.stdin", io.StringIO(payload)),
-        patch("gpd.hooks.runtime_detect.Path.cwd", return_value=process_cwd),
-        patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
-        patch("gpd.hooks.notify._trigger_update_check") as mock_trigger,
-        patch("gpd.hooks.notify._check_and_notify_update") as mock_notify,
+        patch("grd.hooks.runtime_detect.Path.cwd", return_value=process_cwd),
+        patch("grd.hooks.runtime_detect.Path.home", return_value=home),
+        patch("grd.hooks.notify._trigger_update_check") as mock_trigger,
+        patch("grd.hooks.notify._check_and_notify_update") as mock_notify,
     ):
         main()
 
@@ -412,8 +412,8 @@ def test_main_resolves_workspace_before_filtering_event_types(tmp_path: Path) ->
 def test_main_accepts_workspace_mapping_with_cwd_field() -> None:
     with (
         patch("sys.stdin", io.StringIO(json.dumps({"type": "agent-turn-complete", "workspace": {"cwd": "/tmp/project"}}))),
-        patch("gpd.hooks.notify._trigger_update_check") as mock_trigger,
-        patch("gpd.hooks.notify._check_and_notify_update") as mock_notify,
+        patch("grd.hooks.notify._trigger_update_check") as mock_trigger,
+        patch("grd.hooks.notify._check_and_notify_update") as mock_notify,
     ):
         main()
 
@@ -424,8 +424,8 @@ def test_main_accepts_workspace_mapping_with_cwd_field() -> None:
 def test_main_accepts_top_level_cwd_workspace_alias() -> None:
     with (
         patch("sys.stdin", io.StringIO(json.dumps({"type": "agent-turn-complete", "cwd": "/tmp/project"}))),
-        patch("gpd.hooks.notify._trigger_update_check") as mock_trigger,
-        patch("gpd.hooks.notify._check_and_notify_update") as mock_notify,
+        patch("grd.hooks.notify._trigger_update_check") as mock_trigger,
+        patch("grd.hooks.notify._check_and_notify_update") as mock_notify,
     ):
         main()
 
@@ -436,8 +436,8 @@ def test_main_accepts_top_level_cwd_workspace_alias() -> None:
 def test_main_accepts_string_workspace_payload() -> None:
     with (
         patch("sys.stdin", io.StringIO(json.dumps({"type": "agent-turn-complete", "workspace": "/tmp/project"}))),
-        patch("gpd.hooks.notify._trigger_update_check") as mock_trigger,
-        patch("gpd.hooks.notify._check_and_notify_update") as mock_notify,
+        patch("grd.hooks.notify._trigger_update_check") as mock_trigger,
+        patch("grd.hooks.notify._check_and_notify_update") as mock_notify,
     ):
         main()
 
@@ -451,8 +451,8 @@ def test_main_logs_handler_exception_instead_of_swallowing(tmp_path: Path) -> No
     stderr = io.StringIO()
     with (
         patch("sys.stdin", io.StringIO(payload)),
-        patch("gpd.hooks.notify._trigger_update_check", side_effect=RuntimeError("boom")),
-        patch.dict("os.environ", {"GPD_DEBUG": "1"}),
+        patch("grd.hooks.notify._trigger_update_check", side_effect=RuntimeError("boom")),
+        patch.dict("os.environ", {"GRD_DEBUG": "1"}),
         patch("sys.stderr", stderr),
     ):
         # Should not raise — the exception is caught and logged
@@ -517,7 +517,7 @@ def test_emit_execution_notification_prefers_review_over_resume_for_bounded_gate
             "plan": "03",
             "segment_id": "seg-9",
             "segment_status": "paused",
-            "resume_file": ".gpd/phases/05/.continue-here.md",
+            "resume_file": ".grd/phases/05/.continue-here.md",
             "checkpoint_reason": "pre_fanout",
             "pre_fanout_review_pending": True,
             "downstream_locked": True,
@@ -592,7 +592,7 @@ def test_emit_execution_notification_dedupes_repeated_resume_state(tmp_path: Pat
             "plan": "02",
             "segment_id": "seg-2",
             "segment_status": "paused",
-            "resume_file": ".gpd/phases/04/.continue-here.md",
+            "resume_file": ".grd/phases/04/.continue-here.md",
         },
     )
 

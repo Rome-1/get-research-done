@@ -1,4 +1,4 @@
-"""Regression tests for 4 bugs fixed in gpd.core.phases (audit batch).
+"""Regression tests for 4 bugs fixed in grd.core.phases (audit batch).
 
 Each test targets a specific fix:
 
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from gpd.core.phases import (
+from grd.core.phases import (
     PhaseValidationError,
     ProgressJsonResult,
     milestone_complete,
@@ -28,8 +28,8 @@ from gpd.core.phases import (
 
 
 def _setup_project(tmp_path: Path) -> Path:
-    """Create a minimal GPD project structure and return project root."""
-    planning = tmp_path / ".gpd"
+    """Create a minimal GRD project structure and return project root."""
+    planning = tmp_path / ".grd"
     planning.mkdir()
     (planning / "phases").mkdir()
     return tmp_path
@@ -37,14 +37,14 @@ def _setup_project(tmp_path: Path) -> Path:
 
 def _create_phase_dir(tmp_path: Path, name: str) -> Path:
     """Create a phase directory and return its path."""
-    phase_dir = tmp_path / ".gpd" / "phases" / name
+    phase_dir = tmp_path / ".grd" / "phases" / name
     phase_dir.mkdir(parents=True, exist_ok=True)
     return phase_dir
 
 
 def _create_roadmap(tmp_path: Path, content: str) -> Path:
     """Write ROADMAP.md and return its path."""
-    roadmap = tmp_path / ".gpd" / "ROADMAP.md"
+    roadmap = tmp_path / ".grd" / "ROADMAP.md"
     roadmap.parent.mkdir(parents=True, exist_ok=True)
     roadmap.write_text(textwrap.dedent(content))
     return roadmap
@@ -52,7 +52,7 @@ def _create_roadmap(tmp_path: Path, content: str) -> Path:
 
 def _create_state(tmp_path: Path, content: str) -> Path:
     """Write STATE.md and return its path."""
-    state = tmp_path / ".gpd" / "STATE.md"
+    state = tmp_path / ".grd" / "STATE.md"
     state.parent.mkdir(parents=True, exist_ok=True)
     state.write_text(textwrap.dedent(content))
     return state

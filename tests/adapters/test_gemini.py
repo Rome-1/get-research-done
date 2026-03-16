@@ -9,14 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from gpd.adapters.gemini import (
+from grd.adapters.gemini import (
     _GEMINI_APPROVED_CONTRACT_PATH,
     GeminiAdapter,
     _convert_frontmatter_to_gemini,
     _convert_gemini_tool_name,
     _convert_to_gemini_toml,
 )
-from gpd.adapters.install_utils import build_runtime_cli_bridge_command
+from grd.adapters.install_utils import build_runtime_cli_bridge_command
 
 
 def expected_gemini_bridge(target: Path) -> str:
@@ -45,7 +45,7 @@ class TestProperties:
         assert adapter.config_dir_name == ".gemini"
 
     def test_help_command(self, adapter: GeminiAdapter) -> None:
-        assert adapter.help_command == "/gpd:help"
+        assert adapter.help_command == "/grd:help"
 
 
 class TestConvertGeminiToolName:
@@ -238,24 +238,24 @@ class TestConvertToGeminiToml:
 
 
 class TestInstall:
-    def test_install_creates_toml_commands(self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_creates_toml_commands(self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        commands_dir = target / "commands" / "gpd"
+        commands_dir = target / "commands" / "grd"
         assert commands_dir.is_dir()
         toml_files = list(commands_dir.rglob("*.toml"))
         assert len(toml_files) > 0
 
     def test_update_command_inlines_workflow(self, adapter: GeminiAdapter, tmp_path: Path) -> None:
-        gpd_root = Path(__file__).resolve().parents[2] / "src" / "gpd"
+        grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        content = (target / "commands" / "gpd" / "update.toml").read_text(encoding="utf-8")
-        assert "Check for a newer GPD release" in content
+        content = (target / "commands" / "grd" / "update.toml").read_text(encoding="utf-8")
+        assert "Check for a newer GRD release" in content
         assert "<!-- [included: update.md] -->" in content
         assert re.search(r"^\s*@.*?/workflows/update\.md\s*$", content, flags=re.MULTILINE) is None
 
@@ -264,12 +264,12 @@ class TestInstall:
         adapter: GeminiAdapter,
         tmp_path: Path,
     ) -> None:
-        gpd_root = Path(__file__).resolve().parents[2] / "src" / "gpd"
+        grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        content = (target / "commands" / "gpd" / "complete-milestone.toml").read_text(encoding="utf-8")
+        content = (target / "commands" / "grd" / "complete-milestone.toml").read_text(encoding="utf-8")
         assert "<!-- [included: complete-milestone.md] -->" in content
         assert "<!-- [included: milestone-archive.md] -->" in content
         assert "Mark a completed research stage" in content
@@ -277,24 +277,24 @@ class TestInstall:
         assert re.search(r"^\s*-\s*@.*?/workflows/complete-milestone\.md.*$", content, flags=re.MULTILINE) is None
         assert re.search(r"^\s*-\s*@.*?/templates/milestone-archive\.md.*$", content, flags=re.MULTILINE) is None
 
-    def test_install_creates_agents(self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_creates_agents(self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         agents_dir = target / "agents"
         assert agents_dir.is_dir()
-        agent_files = list(agents_dir.glob("gpd-*.md"))
+        agent_files = list(agents_dir.glob("grd-*.md"))
         assert len(agent_files) >= 2
 
     def test_install_agents_have_converted_frontmatter(
-        self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path
+        self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        for agent_file in (target / "agents").glob("gpd-*.md"):
+        for agent_file in (target / "agents").glob("grd-*.md"):
             content = agent_file.read_text(encoding="utf-8")
             assert "color:" not in content
             assert "allowed-tools:" not in content
@@ -304,27 +304,27 @@ class TestInstall:
             assert "artifact_write_authority:" not in content
             assert "shared_state_authority:" not in content
 
-    def test_install_enables_experimental_agents(self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_enables_experimental_agents(self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finalize_install(result)
 
         settings_on_disk = json.loads((target / "settings.json").read_text(encoding="utf-8"))
-        manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+        manifest = json.loads((target / "grd-file-manifest.json").read_text(encoding="utf-8"))
         settings = result["settings"]
         assert settings.get("experimental", {}).get("enableAgents") is True
         assert settings_on_disk.get("experimental", {}).get("enableAgents") is True
         assert manifest["managed_config"]["experimental.enableAgents"] is True
         assert "tools.allowed" not in manifest["managed_config"]
         assert manifest["managed_config"]["policyPaths"] == [str((target / "policies").resolve())]
-        assert sorted(manifest["managed_runtime_files"]) == ["policies/gpd-auto-edit.toml"]
+        assert sorted(manifest["managed_runtime_files"]) == ["policies/grd-auto-edit.toml"]
         assert result["settingsWritten"] is True
 
     def test_install_does_not_claim_preexisting_experimental_agents(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".gemini"
@@ -334,17 +334,17 @@ class TestInstall:
             encoding="utf-8",
         )
 
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+        manifest = json.loads((target / "grd-file-manifest.json").read_text(encoding="utf-8"))
         assert "tools.allowed" not in manifest["managed_config"]
         assert manifest["managed_config"]["policyPaths"] == [str((target / "policies").resolve())]
         assert "experimental.enableAgents" not in manifest["managed_config"]
 
-    def test_install_configures_update_hook(self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_configures_update_hook(self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finalize_install(result)
 
         settings = result["settings"]
@@ -363,7 +363,7 @@ class TestInstall:
     def test_install_preserves_jsonc_settings_and_uses_current_interpreter(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -373,9 +373,9 @@ class TestInstall:
             '{\n  // keep user settings\n  "theme": "solarized",\n}\n',
             encoding="utf-8",
         )
-        monkeypatch.setattr("gpd.adapters.install_utils.sys.executable", "/custom/venv/bin/python")
+        monkeypatch.setattr("grd.adapters.install_utils.sys.executable", "/custom/venv/bin/python")
 
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finish_install(
             result["settingsPath"],
             result["settings"],
@@ -393,16 +393,16 @@ class TestInstall:
     def test_install_uses_gpd_python_override_for_hooks_and_mcp(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        monkeypatch.setenv("GPD_PYTHON", "/env/override/python")
-        monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: None)
+        monkeypatch.setenv("GRD_PYTHON", "/env/override/python")
+        monkeypatch.setattr("grd.version.checkout_root", lambda start=None: None)
 
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finalize_install(result)
 
         settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
@@ -410,12 +410,12 @@ class TestInstall:
         session_start = settings.get("hooks", {}).get("SessionStart", [])
         cmds = [h.get("command", "") for entry in session_start for h in (entry.get("hooks") or [])]
         assert "/env/override/python .gemini/hooks/check_update.py" in cmds
-        assert settings["mcpServers"]["gpd-state"]["command"] == "/env/override/python"
+        assert settings["mcpServers"]["grd-state"]["command"] == "/env/override/python"
 
     def test_reinstall_rewrites_stale_managed_update_hook(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -434,9 +434,9 @@ class TestInstall:
             ),
             encoding="utf-8",
         )
-        monkeypatch.setattr("gpd.adapters.install_utils.sys.executable", "/custom/venv/bin/python")
+        monkeypatch.setattr("grd.adapters.install_utils.sys.executable", "/custom/venv/bin/python")
 
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finalize_install(result)
 
         settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
@@ -445,10 +445,10 @@ class TestInstall:
         assert cmds.count("/custom/venv/bin/python .gemini/hooks/check_update.py") == 1
         assert "python3 .gemini/hooks/check_update.py" not in cmds
 
-    def test_install_preserves_non_gpd_check_update_hook(
+    def test_install_preserves_non_grd_check_update_hook(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / "target" / ".gemini"
@@ -466,7 +466,7 @@ class TestInstall:
             encoding="utf-8",
         )
 
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         settings = result["settings"]
         session_start = settings.get("hooks", {}).get("SessionStart", [])
         commands = [
@@ -483,13 +483,13 @@ class TestInstall:
     def test_install_with_explicit_target_uses_absolute_hook_paths(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / "custom-gemini"
         target.mkdir()
 
-        result = adapter.install(gpd_root, target, is_global=False, explicit_target=True)
+        result = adapter.install(grd_root, target, is_global=False, explicit_target=True)
         adapter.finish_install(
             result["settingsPath"],
             result["settings"],
@@ -506,10 +506,10 @@ class TestInstall:
     def test_install_preserves_existing_mcp_overrides(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
-        from gpd.mcp.builtin_servers import build_mcp_servers_dict
+        from grd.mcp.builtin_servers import build_mcp_servers_dict
 
         target = tmp_path / ".gemini"
         target.mkdir()
@@ -517,11 +517,11 @@ class TestInstall:
             json.dumps(
                 {
                     "mcpServers": {
-                        "gpd-state": {
+                        "grd-state": {
                             "command": "python3",
                             "args": ["-m", "old.state_server"],
                             "env": {"LOG_LEVEL": "INFO", "EXTRA_FLAG": "1"},
-                            "cwd": "/tmp/custom-gpd",
+                            "cwd": "/tmp/custom-grd",
                             "timeout": 15000,
                         },
                         "custom-server": {"command": "node", "args": ["custom.js"]},
@@ -533,17 +533,17 @@ class TestInstall:
             encoding="utf-8",
         )
 
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finalize_install(result)
 
         settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
-        expected = build_mcp_servers_dict(python_path=sys.executable)["gpd-state"]
-        server = settings["mcpServers"]["gpd-state"]
+        expected = build_mcp_servers_dict(python_path=sys.executable)["grd-state"]
+        server = settings["mcpServers"]["grd-state"]
         assert server["command"] == expected["command"]
         assert server["args"] == expected["args"]
         assert server["env"]["LOG_LEVEL"] == "INFO"
         assert server["env"]["EXTRA_FLAG"] == "1"
-        assert server["cwd"] == "/tmp/custom-gpd"
+        assert server["cwd"] == "/tmp/custom-grd"
         assert server["timeout"] == 15000
         assert server["trust"] is True
         assert settings["mcpServers"]["custom-server"] == {"command": "node", "args": ["custom.js"]}
@@ -551,20 +551,20 @@ class TestInstall:
     def test_install_adds_policy_path_shell_sentinel_and_policy_file(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
 
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finalize_install(result)
 
         settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
         assert settings["policyPaths"] == [str((target / "policies").resolve())]
         assert "tools" not in settings or "allowed" not in settings.get("tools", {})
 
-        policy_path = target / "policies" / "gpd-auto-edit.toml"
+        policy_path = target / "policies" / "grd-auto-edit.toml"
         assert policy_path.exists()
         policy = policy_path.read_text(encoding="utf-8")
         assert 'toolName = "run_shell_command"' in policy
@@ -576,7 +576,7 @@ class TestInstall:
     def test_install_preserves_existing_policy_paths_and_mcp_trust_choice(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".gemini"
@@ -588,7 +588,7 @@ class TestInstall:
                     "policyPaths": [existing_policy_path],
                     "tools": {"allowed": ["write_file"]},
                     "mcpServers": {
-                        "gpd-state": {
+                        "grd-state": {
                             "command": "python3",
                             "args": ["-m", "old.state_server"],
                             "trust": False,
@@ -599,62 +599,62 @@ class TestInstall:
             encoding="utf-8",
         )
 
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finalize_install(result)
 
         settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
         assert settings["policyPaths"] == [existing_policy_path, str((target / "policies").resolve())]
         assert settings["tools"]["allowed"] == ["write_file"]
-        assert settings["mcpServers"]["gpd-state"]["trust"] is False
+        assert settings["mcpServers"]["grd-state"]["trust"] is False
 
-    def test_install_writes_manifest(self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_writes_manifest(self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
-        assert (target / "gpd-file-manifest.json").exists()
+        adapter.install(grd_root, target)
+        assert (target / "grd-file-manifest.json").exists()
 
-    def test_install_returns_counts(self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_returns_counts(self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         assert result["runtime"] == "gemini"
         assert result["commands"] > 0
         assert result["agents"] > 0
 
-    def test_install_gpd_content_placeholder_replaced(
-        self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path
+    def test_install_grd_content_placeholder_replaced(
+        self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        for md_file in (target / "get-physics-done").rglob("*.md"):
+        for md_file in (target / "get-research-done").rglob("*.md"):
             content = md_file.read_text(encoding="utf-8")
-            assert "{GPD_INSTALL_DIR}" not in content
+            assert "{GRD_INSTALL_DIR}" not in content
 
-    def test_install_rewrites_gpd_cli_calls_to_runtime_cli_bridge(
+    def test_install_rewrites_grd_cli_calls_to_runtime_cli_bridge(
         self,
         adapter: GeminiAdapter,
         tmp_path: Path,
     ) -> None:
-        gpd_root = Path(__file__).resolve().parents[2] / "src" / "gpd"
+        grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
         target = tmp_path / ".gemini"
         target.mkdir()
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finalize_install(result)
 
         expected_bridge = expected_gemini_bridge(target)
-        command = (target / "commands" / "gpd" / "new-project.toml").read_text(encoding="utf-8")
-        workflow = (target / "get-physics-done" / "workflows" / "new-project.md").read_text(encoding="utf-8")
-        state_schema = (target / "get-physics-done" / "templates" / "state-json-schema.md").read_text(encoding="utf-8")
+        command = (target / "commands" / "grd" / "new-project.toml").read_text(encoding="utf-8")
+        workflow = (target / "get-research-done" / "workflows" / "new-project.md").read_text(encoding="utf-8")
+        state_schema = (target / "get-research-done" / "templates" / "state-json-schema.md").read_text(encoding="utf-8")
 
-        assert f"When shell steps call the GPD CLI, use {expected_bridge}" in command
+        assert f"When shell steps call the GRD CLI, use {expected_bridge}" in command
         assert "Run the init command as its own shell call in Gemini auto-edit mode." in workflow
-        assert "INIT=$(gpd init new-project)" not in workflow
+        assert "INIT=$(grd init new-project)" not in workflow
         assert f'INIT=$({expected_bridge} init new-project)' not in workflow
         assert f"{expected_bridge} init new-project" in workflow
         assert f"{expected_bridge} commit " in workflow
-        assert ' gpd commit "' not in workflow
+        assert ' grd commit "' not in workflow
         assert f"{expected_bridge} --raw validate project-contract {_GEMINI_APPROVED_CONTRACT_PATH}" in command
         assert f"{expected_bridge} state set-project-contract {_GEMINI_APPROVED_CONTRACT_PATH}" in command
         assert "PROJECT_CONTRACT_JSON" not in workflow
@@ -670,13 +670,13 @@ class TestInstall:
         adapter: GeminiAdapter,
         tmp_path: Path,
     ) -> None:
-        gpd_root = Path(__file__).resolve().parents[2] / "src" / "gpd"
+        grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
         target = tmp_path / ".gemini"
         target.mkdir()
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finalize_install(result)
 
-        content = (target / "commands" / "gpd" / "set-profile.toml").read_text(encoding="utf-8")
+        content = (target / "commands" / "grd" / "set-profile.toml").read_text(encoding="utf-8")
 
         assert "Run these as separate shell calls in Gemini auto-edit mode." in content
         assert "Do not combine them into one multi-line shell block." in content
@@ -687,23 +687,23 @@ class TestInstall:
 
 
     def test_install_agents_replace_runtime_placeholders(
-        self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path
+        self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
         """Regression: _copy_agents_gemini must pass runtime='gemini' to replace_placeholders."""
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        verifier = (target / "agents" / "gpd-verifier.md").read_text(encoding="utf-8")
-        assert "{GPD_CONFIG_DIR}" not in verifier
-        assert "{GPD_RUNTIME_FLAG}" not in verifier
+        verifier = (target / "agents" / "grd-verifier.md").read_text(encoding="utf-8")
+        assert "{GRD_CONFIG_DIR}" not in verifier
+        assert "{GRD_RUNTIME_FLAG}" not in verifier
         assert "--gemini" in verifier
 
     def test_install_sanitizes_shell_placeholders_in_agents(
-        self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path
+        self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
-        (gpd_root / "agents" / "gpd-shell-vars.md").write_text(
-            "---\nname: gpd-shell-vars\ndescription: shell vars\n---\n"
+        (grd_root / "agents" / "grd-shell-vars.md").write_text(
+            "---\nname: grd-shell-vars\ndescription: shell vars\n---\n"
             "Use ${PHASE_ARG} and $ARGUMENTS in prose.\n"
             'Inspect with `file_read("$artifact_path")`.\n'
             "```bash\n"
@@ -714,9 +714,9 @@ class TestInstall:
         )
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        checker = (target / "agents" / "gpd-shell-vars.md").read_text(encoding="utf-8")
+        checker = (target / "agents" / "grd-shell-vars.md").read_text(encoding="utf-8")
         assert "${PHASE_ARG}" not in checker
         assert "$ARGUMENTS" not in checker
         assert "$phase_dir" not in checker
@@ -730,7 +730,7 @@ class TestInstall:
         assert "Math stays $T$." in checker
 
     def test_install_does_not_call_finalize_internally(
-        self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path
+        self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
         """install() must not call finalize_install internally.
 
@@ -741,16 +741,16 @@ class TestInstall:
         """
         target = tmp_path / ".gemini"
         target.mkdir()
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
 
         # install() must NOT have written settings or set the settingsWritten flag
         assert result.get("settingsWritten") is not True
         assert not (target / "settings.json").exists()
 
     def test_force_statusline_forwarded_through_finalize(
-        self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path
+        self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
-        """force_statusline=True must override a pre-existing non-GPD statusline.
+        """force_statusline=True must override a pre-existing non-GRD statusline.
 
         Regression: previously install() called finalize_install internally
         without forwarding force_statusline, so the CLI's subsequent call
@@ -759,13 +759,13 @@ class TestInstall:
         target = tmp_path / ".gemini"
         target.mkdir()
 
-        # Pre-populate settings with a non-GPD statusline
+        # Pre-populate settings with a non-GRD statusline
         (target / "settings.json").write_text(
             json.dumps({"statusLine": {"type": "command", "command": "other-tool --status"}}),
             encoding="utf-8",
         )
 
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
 
         # Without force_statusline the existing statusline is preserved
         adapter.finalize_install(result, force_statusline=False)
@@ -775,81 +775,81 @@ class TestInstall:
         # Reset settingsWritten so finalize_install runs again
         result.pop("settingsWritten", None)
 
-        # With force_statusline the GPD statusline overwrites the existing one
+        # With force_statusline the GRD statusline overwrites the existing one
         adapter.finalize_install(result, force_statusline=True)
         settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
         assert "statusline.py" in settings["statusLine"]["command"]
 
     def test_install_agents_at_includes_receive_runtime(
-        self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path
+        self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
         """Regression: expand_at_includes in _copy_agents_gemini must receive runtime='gemini'.
 
-        Agents with @ includes pointing at specs that contain {GPD_CONFIG_DIR}
+        Agents with @ includes pointing at specs that contain {GRD_CONFIG_DIR}
         must have those placeholders replaced during include expansion.
         """
         # Create an agent that @-includes a spec with runtime placeholders
-        agents_src = gpd_root / "agents"
-        specs_dir = gpd_root / "specs" / "references"
+        agents_src = grd_root / "agents"
+        specs_dir = grd_root / "specs" / "references"
         (specs_dir / "runtime-ref.md").write_text(
-            "---\ndescription: ref\n---\nConfig: {GPD_CONFIG_DIR}\nFlag: {GPD_RUNTIME_FLAG}\n",
+            "---\ndescription: ref\n---\nConfig: {GRD_CONFIG_DIR}\nFlag: {GRD_RUNTIME_FLAG}\n",
             encoding="utf-8",
         )
-        (agents_src / "gpd-includer.md").write_text(
-            "---\nname: gpd-includer\ndescription: test\n---\n"
-            "@{GPD_INSTALL_DIR}/references/runtime-ref.md\n",
+        (agents_src / "grd-includer.md").write_text(
+            "---\nname: grd-includer\ndescription: test\n---\n"
+            "@{GRD_INSTALL_DIR}/references/runtime-ref.md\n",
             encoding="utf-8",
         )
 
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        includer = (target / "agents" / "gpd-includer.md").read_text(encoding="utf-8")
-        assert "{GPD_CONFIG_DIR}" not in includer
-        assert "{GPD_RUNTIME_FLAG}" not in includer
+        includer = (target / "agents" / "grd-includer.md").read_text(encoding="utf-8")
+        assert "{GRD_CONFIG_DIR}" not in includer
+        assert "{GRD_RUNTIME_FLAG}" not in includer
         assert "--gemini" in includer
 
     def test_install_agents_inline_gpd_agents_dir_includes(
-        self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path
+        self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
-        agents_src = gpd_root / "agents"
-        (agents_src / "gpd-shared.md").write_text(
-            "---\nname: gpd-shared\ndescription: shared\nsurface: internal\nrole_family: coordination\n---\n"
+        agents_src = grd_root / "agents"
+        (agents_src / "grd-shared.md").write_text(
+            "---\nname: grd-shared\ndescription: shared\nsurface: internal\nrole_family: coordination\n---\n"
             "Shared agent body.\n",
             encoding="utf-8",
         )
-        (agents_src / "gpd-main.md").write_text(
-            "---\nname: gpd-main\ndescription: main\nsurface: public\nrole_family: worker\n---\n"
-            "@{GPD_AGENTS_DIR}/gpd-shared.md\n",
+        (agents_src / "grd-main.md").write_text(
+            "---\nname: grd-main\ndescription: main\nsurface: public\nrole_family: worker\n---\n"
+            "@{GRD_AGENTS_DIR}/grd-shared.md\n",
             encoding="utf-8",
         )
 
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        content = (target / "agents" / "gpd-main.md").read_text(encoding="utf-8")
+        content = (target / "agents" / "grd-main.md").read_text(encoding="utf-8")
         assert "Shared agent body." in content
-        assert "<!-- [included: gpd-shared.md] -->" in content
+        assert "<!-- [included: grd-shared.md] -->" in content
         assert "@ include not resolved:" not in content.lower()
 
 
 class TestUninstall:
-    def test_uninstall_removes_gpd_dirs(self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_uninstall_removes_grd_dirs(self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
         adapter.uninstall(target)
 
-        assert not (target / "commands" / "gpd").exists()
-        assert not (target / "get-physics-done").exists()
-        assert not (target / "gpd-file-manifest.json").exists()
+        assert not (target / "commands" / "grd").exists()
+        assert not (target / "get-research-done").exists()
+        assert not (target / "grd-file-manifest.json").exists()
 
-    def test_uninstall_cleans_settings(self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_uninstall_cleans_settings(self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
 
         # Write settings with statusline and hooks via finish_install
         adapter.finish_install(
@@ -868,7 +868,7 @@ class TestUninstall:
     def test_uninstall_preserves_preexisting_experimental_agents(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".gemini"
@@ -878,7 +878,7 @@ class TestUninstall:
             encoding="utf-8",
         )
 
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finish_install(
             result["settingsPath"],
             result["settings"],
@@ -892,10 +892,10 @@ class TestUninstall:
         assert settings["experimental"]["enableAgents"] is True
         assert settings["theme"] == "solarized"
 
-    def test_uninstall_removes_gpd_mcp_servers(self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_uninstall_removes_grd_mcp_servers(self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finish_install(
             result["settingsPath"],
             result["settings"],
@@ -913,15 +913,15 @@ class TestUninstall:
         assert "mcpServers" in cleaned
         assert cleaned["mcpServers"] == {"custom-server": {"command": "node", "args": ["custom.js"]}}
 
-    def test_uninstall_removes_gpd_policy_path_and_policy_file(
+    def test_uninstall_removes_grd_policy_path_and_policy_file(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finish_install(
             result["settingsPath"],
             result["settings"],
@@ -939,18 +939,18 @@ class TestUninstall:
         cleaned = json.loads(settings_path.read_text(encoding="utf-8"))
         assert cleaned["policyPaths"] == ["/tmp/custom-policies"]
         assert "tools" not in cleaned
-        assert not (target / "bin" / "gpd").exists()
-        assert not (target / "policies" / "gpd-auto-edit.toml").exists()
+        assert not (target / "bin" / "grd").exists()
+        assert not (target / "policies" / "grd-auto-edit.toml").exists()
 
-    def test_uninstall_preserves_non_gpd_sessionstart_statusline_hook(
+    def test_uninstall_preserves_non_grd_sessionstart_statusline_hook(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finish_install(
             result["settingsPath"],
             result["settings"],
@@ -978,15 +978,15 @@ class TestUninstall:
         ]
         assert "python3 /tmp/third-party-statusline.py" in commands
 
-    def test_uninstall_preserves_non_gpd_sessionstart_check_update_hook(
+    def test_uninstall_preserves_non_grd_sessionstart_check_update_hook(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
         adapter.finish_install(
             result["settingsPath"],
             result["settings"],

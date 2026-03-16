@@ -1,10 +1,10 @@
-"""Edge-case stress tests for gpd.core.frontmatter parsing and writing."""
+"""Edge-case stress tests for grd.core.frontmatter parsing and writing."""
 
 from __future__ import annotations
 
 import pytest
 
-from gpd.core.frontmatter import (
+from grd.core.frontmatter import (
     FrontmatterParseError,
     deep_merge_frontmatter,
     extract_frontmatter,

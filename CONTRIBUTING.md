@@ -1,16 +1,16 @@
-# Contributing to GPD
+# Contributing to GRD
 
-Thanks for helping improve Get Physics Done.
+Thanks for helping improve Get Research Done.
 
-GPD is published by Physical Superintelligence PBC (PSI) as an open-source community contribution for physics research workflows. We welcome fixes, tests, documentation improvements, and carefully scoped feature work.
+GRD is published by Physical Superintelligence PBC (PSI) as an open-source community contribution for physics research workflows. We welcome fixes, tests, documentation improvements, and carefully scoped feature work.
 
 ## Contributor License Agreement (CLA)
 
 All contributors must sign a CLA before their pull requests can be merged.
 
-**Individual contributors:** Sign the CLA at https://cla-assistant.io/psi-oss/get-physics-done — the CLA Assistant bot will prompt you automatically when you open a pull request.
+**Individual contributors:** Sign the CLA at https://cla-assistant.io/psi-oss/get-research-done — the CLA Assistant bot will prompt you automatically when you open a pull request.
 
-**Corporate contributors** (if your employer owns your IP): Download [GPD_CLA_Corporate.pdf](CLA/GPD_CLA_Corporate.pdf), sign it, and email it to legal@psi.inc.
+**Corporate contributors** (if your employer owns your IP): Download [GRD_CLA_Corporate.pdf](CLA/GRD_CLA_Corporate.pdf), sign it, and email it to legal@psi.inc.
 
 ## Before You Start
 
@@ -29,8 +29,8 @@ source .venv/bin/activate
 
 Before we can accept a contribution, you must complete the applicable CLA:
 
-- Individual contributors should review `CLA/GPD_CLA_Individual.pdf`; signing is handled automatically via the CLA Assistant GitHub flow at https://cla-assistant.io/psi-oss/get-physics-done
-- Corporate contributors, or contributors whose employer owns their IP, should review `CLA/GPD_CLA_Corporate.pdf` and email the signed PDF to legal@psi.inc
+- Individual contributors should review `CLA/GRD_CLA_Individual.pdf`; signing is handled automatically via the CLA Assistant GitHub flow at https://cla-assistant.io/psi-oss/get-research-done
+- Corporate contributors, or contributors whose employer owns their IP, should review `CLA/GRD_CLA_Corporate.pdf` and email the signed PDF to legal@psi.inc
 - Corporate CLA submissions are collected manually and should be logged by the owner of contributor agreement tracking, Ted Grace
 - If your employer owns the intellectual property for your work, use the corporate CLA flow instead of the individual one
 
@@ -50,22 +50,22 @@ uv run pytest tests/ -v
 Cross-runtime release checks:
 
 - `tests/adapters/test_registry.py` and `tests/adapters/test_install_roundtrip.py` cover install-time translation across Claude Code, Gemini CLI, Codex, and OpenCode.
-- `tests/core/test_cli.py` covers the public `gpd` CLI surface.
+- `tests/core/test_cli.py` covers the public `grd` CLI surface.
 - `tests/test_metadata_consistency.py` covers public docs, inventory counts, and CLI/registry metadata alignment.
 - `tests/test_release_consistency.py` covers the public install flow, release artifacts, and release-facing messaging.
 - `uv build` validates the published Python wheel and sdist.
 - `npm pack --dry-run --json` validates the published `npx` bootstrap package surface before release. Use a temporary cache outside the repo so the worktree does not gain a local `.npm-cache/`.
-- Gemini installs are expected to be complete on disk after `GeminiAdapter.install()`: `.gemini/settings.json` should already exist with `experimental.enableAgents`, GPD hooks, GPD MCP servers, and `policyPaths` configured, and `policies/gpd-auto-edit.toml` should already be present.
-- OpenCode installs are expected to leave `opencode.json` complete on disk with GPD-managed `permission.read` / `permission.external_directory` entries and built-in MCP servers under the `mcp` key.
+- Gemini installs are expected to be complete on disk after `GeminiAdapter.install()`: `.gemini/settings.json` should already exist with `experimental.enableAgents`, GRD hooks, GRD MCP servers, and `policyPaths` configured, and `policies/grd-auto-edit.toml` should already be present.
+- OpenCode installs are expected to leave `opencode.json` complete on disk with GRD-managed `permission.read` / `permission.external_directory` entries and built-in MCP servers under the `mcp` key.
 
 ## Release-Facing Guardrails
 
-- Public install docs should use `npx -y get-physics-done`.
-- Do not reintroduce stale internal paths such as `packages/gpd` into docs or descriptors.
+- Public install docs should use `npx -y get-research-done`.
+- Do not reintroduce stale internal paths such as `packages/grd` into docs or descriptors.
 - Keep public artifacts present and up to date: `README.md`, `LICENSE`, `CITATION.cff`, `CONTRIBUTING.md`, `package.json`, and `pyproject.toml`.
 - Keep the `tests` workflow pinned to the minimum supported Python version (`3.11`) unless we intentionally broaden CI coverage.
-- Keep `infra/gpd-*.json` synced with the canonical descriptor builder in `src/gpd/mcp/builtin_servers.py`.
-- Keep user-facing validation docs aligned with the CLI surface in `gpd validate`, especially `consistency`, `project-contract`, `review-preflight`, `paper-quality`, `referee-decision`, and `reproducibility-manifest`.
+- Keep `infra/grd-*.json` synced with the canonical descriptor builder in `src/grd/mcp/builtin_servers.py`.
+- Keep user-facing validation docs aligned with the CLI surface in `grd validate`, especially `consistency`, `project-contract`, `review-preflight`, `paper-quality`, `referee-decision`, and `reproducibility-manifest`.
 - Do not commit secrets, private infrastructure details, internal strategy notes, or cached research outputs.
 
 ## Pull Request Checklist

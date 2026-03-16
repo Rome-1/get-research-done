@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gpd.core.frontmatter import validate_frontmatter, verify_summary
+from grd.core.frontmatter import validate_frontmatter, verify_summary
 
 FIXTURES_STAGE0 = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
 FIXTURES_STAGE4 = Path(__file__).resolve().parents[1] / "fixtures" / "stage4"
@@ -27,7 +27,7 @@ def test_validate_frontmatter_verification_accepts_contract_results() -> None:
 
 
 def test_validate_frontmatter_summary_with_source_path_checks_plan_alignment(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -57,7 +57,7 @@ def test_validate_frontmatter_summary_with_source_path_accepts_sibling_plan_cont
         (FIXTURES_STAGE4 / "summary_with_contract_results.md")
         .read_text(encoding="utf-8")
         .replace(
-            "plan_contract_ref: .gpd/phases/01-benchmark/01-01-PLAN.md#/contract",
+            "plan_contract_ref: .grd/phases/01-benchmark/01-01-PLAN.md#/contract",
             "plan_contract_ref: 01-01-PLAN.md#/contract",
             1,
         ),
@@ -71,7 +71,7 @@ def test_validate_frontmatter_summary_with_source_path_accepts_sibling_plan_cont
 
 
 def test_validate_frontmatter_summary_with_source_path_rejects_unknown_contract_ids(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -94,7 +94,7 @@ def test_validate_frontmatter_summary_with_source_path_rejects_unknown_contract_
 
 
 def test_validate_frontmatter_summary_with_source_path_rejects_unknown_linked_ids(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -119,7 +119,7 @@ def test_validate_frontmatter_summary_with_source_path_rejects_unknown_linked_id
 
 
 def test_validate_frontmatter_summary_with_source_path_rejects_unknown_evidence_bindings(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -146,7 +146,7 @@ def test_validate_frontmatter_summary_with_source_path_rejects_unknown_evidence_
 def test_validate_frontmatter_summary_with_source_path_ignores_blank_optional_links_and_evidence_ids(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -178,7 +178,7 @@ def test_validate_frontmatter_summary_with_source_path_ignores_blank_optional_li
 
 
 def test_validate_frontmatter_summary_with_source_path_reports_unresolved_plan_contract_ref(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text(
@@ -193,7 +193,7 @@ def test_validate_frontmatter_summary_with_source_path_reports_unresolved_plan_c
 
 
 def test_validate_frontmatter_verification_with_source_path_requires_contract_results(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -206,7 +206,7 @@ def test_validate_frontmatter_verification_with_source_path_requires_contract_re
         "verified: 2026-03-13T00:00:00Z\n"
         "status: passed\n"
         "score: 1/1 contract targets verified\n"
-        "plan_contract_ref: .gpd/phases/01-benchmark/01-01-PLAN.md#/contract\n"
+        "plan_contract_ref: .grd/phases/01-benchmark/01-01-PLAN.md#/contract\n"
         "---\n\n"
         "# Verification\n",
         encoding="utf-8",
@@ -234,7 +234,7 @@ def test_validate_frontmatter_verification_with_source_path_accepts_sibling_plan
         (FIXTURES_STAGE4 / "verification_with_contract_results.md")
         .read_text(encoding="utf-8")
         .replace(
-            "plan_contract_ref: .gpd/phases/01-benchmark/01-01-PLAN.md#/contract",
+            "plan_contract_ref: .grd/phases/01-benchmark/01-01-PLAN.md#/contract",
             "plan_contract_ref: 01-01-PLAN.md#/contract",
             1,
         ),
@@ -254,7 +254,7 @@ def test_validate_frontmatter_verification_with_source_path_accepts_sibling_plan
 def test_validate_frontmatter_verification_with_source_path_accepts_structured_suggested_contract_checks(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -291,7 +291,7 @@ def test_validate_frontmatter_verification_with_source_path_accepts_structured_s
             "    reason: The reported agreement depends on a normalization-sensitive benchmark that is not yet explicit\n"
             "    suggested_subject_kind: acceptance_test\n"
             "    suggested_subject_id: test-benchmark\n"
-            "    evidence_path: .gpd/phases/01-benchmark/01-VERIFICATION.md\n"
+            "    evidence_path: .grd/phases/01-benchmark/01-VERIFICATION.md\n"
             "comparison_verdicts:\n",
             1,
         ),
@@ -311,7 +311,7 @@ def test_validate_frontmatter_verification_with_source_path_accepts_structured_s
 def test_validate_frontmatter_verification_with_source_path_accepts_partial_results_with_inconclusive_verdict(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -351,7 +351,7 @@ def test_validate_frontmatter_verification_with_source_path_accepts_partial_resu
             "    reason: Need a decisive benchmark comparison before this target can pass.\n"
             "    suggested_subject_kind: acceptance_test\n"
             "    suggested_subject_id: test-benchmark\n"
-            "    evidence_path: .gpd/phases/01-benchmark/01-VERIFICATION.md\n"
+            "    evidence_path: .grd/phases/01-benchmark/01-VERIFICATION.md\n"
             "comparison_verdicts:\n",
             1,
         ),
@@ -371,7 +371,7 @@ def test_validate_frontmatter_verification_with_source_path_accepts_partial_resu
 def test_validate_frontmatter_verification_rejects_undocumented_suggested_contract_check_shape(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -420,7 +420,7 @@ def test_validate_frontmatter_verification_rejects_undocumented_suggested_contra
 def test_validate_frontmatter_summary_rejects_plan_contract_ref_that_points_to_different_plan(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -448,8 +448,8 @@ def test_verify_summary_rejects_unresolved_plan_contract_ref(tmp_path: Path) -> 
         (FIXTURES_STAGE4 / "summary_with_contract_results.md")
         .read_text(encoding="utf-8")
         .replace(
-            "plan_contract_ref: .gpd/phases/01-benchmark/01-01-PLAN.md#/contract",
-            "plan_contract_ref: .gpd/phases/01-benchmark/01-02-PLAN.md#/contract",
+            "plan_contract_ref: .grd/phases/01-benchmark/01-01-PLAN.md#/contract",
+            "plan_contract_ref: .grd/phases/01-benchmark/01-02-PLAN.md#/contract",
             1,
         ),
         encoding="utf-8",
@@ -462,7 +462,7 @@ def test_verify_summary_rejects_unresolved_plan_contract_ref(tmp_path: Path) -> 
 
 
 def test_validate_frontmatter_summary_rejects_contradictory_comparison_verdict(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -485,7 +485,7 @@ def test_validate_frontmatter_summary_rejects_contradictory_comparison_verdict(t
 def test_validate_frontmatter_verification_with_source_path_requires_suggested_contract_checks_for_partial_decisive_checks(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -554,7 +554,7 @@ def test_verify_summary_requires_plan_contract_ref_for_contract_backed_plan(tmp_
         (
             (FIXTURES_STAGE4 / "summary_with_contract_results.md")
             .read_text(encoding="utf-8")
-            .replace('plan_contract_ref: .gpd/phases/01-benchmark/01-01-PLAN.md#/contract\n', "")
+            .replace('plan_contract_ref: .grd/phases/01-benchmark/01-01-PLAN.md#/contract\n', "")
         ),
         encoding="utf-8",
     )
@@ -566,7 +566,7 @@ def test_verify_summary_requires_plan_contract_ref_for_contract_backed_plan(tmp_
 
 
 def test_verify_summary_rejects_unknown_contract_ids(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     plan_path = phase_dir / "01-01-PLAN.md"
     plan_path.write_text((FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"), encoding="utf-8")
@@ -589,7 +589,7 @@ def test_verify_summary_rejects_unknown_contract_ids(tmp_path: Path) -> None:
 
 
 def test_verify_summary_allows_explicit_incomplete_contract_results_statuses(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     plan_path = phase_dir / "01-01-PLAN.md"
     plan_path.write_text((FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"), encoding="utf-8")
@@ -635,7 +635,7 @@ def test_verify_summary_allows_explicit_incomplete_contract_results_statuses(tmp
 
 
 def test_validate_frontmatter_summary_rejects_missing_contract_results_coverage(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -663,7 +663,7 @@ def test_validate_frontmatter_summary_rejects_missing_contract_results_coverage(
 
 
 def test_validate_frontmatter_summary_rejects_mismatched_comparison_verdict_subject_kind(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -684,7 +684,7 @@ def test_validate_frontmatter_summary_rejects_mismatched_comparison_verdict_subj
 
 
 def test_validate_frontmatter_summary_rejects_contract_results_context_usage(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -711,7 +711,7 @@ def test_validate_frontmatter_summary_rejects_contract_results_context_usage(tmp
 
 
 def test_validate_frontmatter_summary_requires_decisive_verdict_even_when_comparison_not_attempted(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -741,7 +741,7 @@ def test_validate_frontmatter_summary_requires_decisive_verdict_even_when_compar
 def test_validate_frontmatter_verification_rejects_mismatched_suggested_contract_check_binding(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -776,7 +776,7 @@ def test_validate_frontmatter_verification_rejects_mismatched_suggested_contract
 
 
 def test_validate_frontmatter_verification_rejects_half_bound_suggested_contract_check(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -810,7 +810,7 @@ def test_validate_frontmatter_verification_rejects_half_bound_suggested_contract
 
 
 def test_verify_summary_requires_must_surface_reference_actions(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     plan_path = phase_dir / "01-01-PLAN.md"
     plan_path.write_text((FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"), encoding="utf-8")
@@ -833,7 +833,7 @@ def test_verify_summary_requires_must_surface_reference_actions(tmp_path: Path) 
 
 
 def test_verify_summary_requires_decisive_comparison_verdict_when_comparison_was_attempted(tmp_path: Path) -> None:
-    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     plan_path = phase_dir / "01-01-PLAN.md"
     plan_path.write_text((FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"), encoding="utf-8")

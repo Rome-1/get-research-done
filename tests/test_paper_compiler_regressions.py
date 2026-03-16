@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from gpd.mcp.paper.compiler import _compile_manual_multipass, _compile_with_latexmk
-from gpd.utils.latex import AutoFixResult
+from grd.mcp.paper.compiler import _compile_manual_multipass, _compile_with_latexmk
+from grd.utils.latex import AutoFixResult
 
 
 class _FakeProcess:
@@ -28,7 +28,7 @@ async def test_latexmk_rejects_pdf_when_exit_code_is_nonzero(tmp_path, monkeypat
     async def fake_create_subprocess_exec(*args, **kwargs):
         return _FakeProcess(returncode=2, stdout=b"latexmk stdout", stderr=b"latexmk stderr")
 
-    monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr("grd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
 
     result = await _compile_with_latexmk(tex_path, tmp_path, "pdflatex")
 
@@ -64,8 +64,8 @@ async def test_manual_multipass_succeeds_when_early_pass_fails_but_last_pass_ok(
             return "/usr/bin/pdflatex"
         return None
 
-    monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("grd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr("grd.mcp.paper.compiler.shutil.which", fake_which)
 
     result = await _compile_manual_multipass(tex_path, tmp_path, "pdflatex")
 
@@ -99,9 +99,9 @@ async def test_manual_multipass_rejects_bibtex_failure_even_when_final_pass_succ
             return "/usr/bin/bibtex"
         return None
 
-    monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
-    monkeypatch.setattr("gpd.utils.latex.try_autofix", lambda tex, log: AutoFixResult())
+    monkeypatch.setattr("grd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr("grd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("grd.utils.latex.try_autofix", lambda tex, log: AutoFixResult())
 
     result = await _compile_manual_multipass(tex_path, tmp_path, "pdflatex")
 
@@ -131,9 +131,9 @@ async def test_manual_multipass_rejects_stale_preexisting_pdf(
             return "/usr/bin/pdflatex"
         return None
 
-    monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
-    monkeypatch.setattr("gpd.utils.latex.try_autofix", lambda tex, log: AutoFixResult())
+    monkeypatch.setattr("grd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr("grd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("grd.utils.latex.try_autofix", lambda tex, log: AutoFixResult())
 
     result = await _compile_manual_multipass(tex_path, tmp_path, "pdflatex")
 
@@ -160,8 +160,8 @@ async def test_manual_multipass_fails_when_last_pass_nonzero_and_no_pdf(
             return "/usr/bin/pdflatex"
         return None
 
-    monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("grd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr("grd.mcp.paper.compiler.shutil.which", fake_which)
 
     result = await _compile_manual_multipass(tex_path, tmp_path, "pdflatex")
 
@@ -194,10 +194,10 @@ async def test_manual_multipass_applies_autofix_even_after_compile_errors(
             return "/usr/bin/pdflatex"
         return None
 
-    monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("grd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr("grd.mcp.paper.compiler.shutil.which", fake_which)
     monkeypatch.setattr(
-        "gpd.utils.latex.try_autofix",
+        "grd.utils.latex.try_autofix",
         lambda tex, log: AutoFixResult(
             fixed_content=r"\documentclass{article}\begin{document}fixed\end{document}",
             fixes_applied=("fixed",),
@@ -236,10 +236,10 @@ async def test_manual_multipass_autofix_requires_fresh_pdf_after_fix(
             return "/usr/bin/pdflatex"
         return None
 
-    monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("grd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr("grd.mcp.paper.compiler.shutil.which", fake_which)
     monkeypatch.setattr(
-        "gpd.utils.latex.try_autofix",
+        "grd.utils.latex.try_autofix",
         lambda tex, log: AutoFixResult(
             fixed_content=r"\documentclass{article}\begin{document}fixed\end{document}",
             fixes_applied=("fixed",),
@@ -261,7 +261,7 @@ async def test_manual_multipass_autofix_requires_fresh_pdf_after_fix(
 def test_figureref_is_importable_from_compiler_module() -> None:
     """FigureRef must be imported in compiler.py so the type annotation
     ``list[tuple[FigureRef, FigureRef]]`` resolves at runtime (Issue 1)."""
-    import gpd.mcp.paper.compiler as compiler_mod
+    import grd.mcp.paper.compiler as compiler_mod
 
     assert hasattr(compiler_mod, "FigureRef"), (
         "FigureRef should be importable from compiler module"
@@ -273,7 +273,7 @@ def test_no_original_figures_dead_code() -> None:
     Verify it no longer appears in the build_paper source (Issue 2)."""
     import inspect
 
-    from gpd.mcp.paper.compiler import build_paper
+    from grd.mcp.paper.compiler import build_paper
 
     source = inspect.getsource(build_paper)
     assert "original_figures" not in source, (

@@ -1,7 +1,7 @@
-"""Integration tests for all 7 GPD MCP servers.
+"""Integration tests for all 7 GRD MCP servers.
 
 Calls @mcp.tool() decorated functions with **real** project data on disk
-(not mocks).  Each test creates a realistic GPD project fixture with
+(not mocks).  Each test creates a realistic GRD project fixture with
 phases, conventions, and results, then exercises the tool functions
 against actual file I/O, parsing, and lookup logic.
 
@@ -78,7 +78,7 @@ _STATE_MD = """\
 
 ## Project Reference
 
-See: .gpd/PROJECT.md
+See: .grd/PROJECT.md
 
 **Core research question:** One-loop vacuum polarization in QED
 **Current focus:** Compute photon self-energy at NLO
@@ -128,12 +128,12 @@ None yet.
 
 
 @pytest.fixture()
-def gpd_project(tmp_path: Path) -> Path:
-    """Create a realistic GPD project directory tree.
+def grd_project(tmp_path: Path) -> Path:
+    """Create a realistic GRD project directory tree.
 
     Layout::
         <tmp>/
-          .gpd/
+          .grd/
             STATE.md
             state.json
             phases/
@@ -143,7 +143,7 @@ def gpd_project(tmp_path: Path) -> Path:
                 plan-03.md
                 summary-01.md
     """
-    planning = tmp_path / ".gpd"
+    planning = tmp_path / ".grd"
     planning.mkdir()
 
     # Write state files
@@ -168,10 +168,10 @@ def gpd_project(tmp_path: Path) -> Path:
 class TestConventionsServerIntegration:
     """Integration tests for conventions_server tools with real state files."""
 
-    def test_convention_set_stores_value(self, gpd_project: Path):
-        from gpd.mcp.servers.conventions_server import convention_set
+    def test_convention_set_stores_value(self, grd_project: Path):
+        from grd.mcp.servers.conventions_server import convention_set
 
-        result = convention_set(str(gpd_project), "regularization_scheme", "dim-reg")
+        result = convention_set(str(grd_project), "regularization_scheme", "dim-reg")
 
         assert result["status"] == "set"
         assert result["key"] == "regularization_scheme"
@@ -179,21 +179,21 @@ class TestConventionsServerIntegration:
         assert result["type"] == "standard"
 
         # Verify the value persisted in state.json
-        state = json.loads((gpd_project / ".gpd" / "state.json").read_text())
+        state = json.loads((grd_project / ".grd" / "state.json").read_text())
         assert state["convention_lock"]["regularization_scheme"] == "dim-reg"
 
-    def test_convention_set_already_set_rejects_overwrite(self, gpd_project: Path):
-        from gpd.mcp.servers.conventions_server import convention_set
+    def test_convention_set_already_set_rejects_overwrite(self, grd_project: Path):
+        from grd.mcp.servers.conventions_server import convention_set
 
         # metric_signature is already "(+,-,-,-)" in the fixture
-        result = convention_set(str(gpd_project), "metric_signature", "(-,+,+,+)")
+        result = convention_set(str(grd_project), "metric_signature", "(-,+,+,+)")
 
         assert result["status"] == "already_set"
         assert result["current_value"] == "(+,-,-,-)"
         assert result["requested_value"] == "mostly-plus"
 
-    def test_convention_check_real_lock(self, gpd_project: Path):
-        from gpd.mcp.servers.conventions_server import convention_check
+    def test_convention_check_real_lock(self, grd_project: Path):
+        from grd.mcp.servers.conventions_server import convention_check
 
         lock = _STATE_JSON["convention_lock"]
         result = convention_check(lock)
@@ -214,20 +214,20 @@ class TestConventionsServerIntegration:
 class TestStateServerIntegration:
     """Integration tests for state_server tools with real STATE.md / state.json."""
 
-    def test_get_state_returns_structured_data(self, gpd_project: Path):
-        from gpd.mcp.servers.state_server import get_state
+    def test_get_state_returns_structured_data(self, grd_project: Path):
+        from grd.mcp.servers.state_server import get_state
 
-        result = get_state(str(gpd_project))
+        result = get_state(str(grd_project))
 
         assert isinstance(result, dict)
         # Should return structured state, not raw markdown
         assert "position" in result
         assert "decisions" in result or "blockers" in result
 
-    def test_advance_plan_increments(self, gpd_project: Path):
-        from gpd.mcp.servers.state_server import advance_plan
+    def test_advance_plan_increments(self, grd_project: Path):
+        from grd.mcp.servers.state_server import advance_plan
 
-        result = advance_plan(str(gpd_project))
+        result = advance_plan(str(grd_project))
 
         assert isinstance(result, dict)
         # Plan 1 -> 2, should succeed
@@ -235,13 +235,13 @@ class TestStateServerIntegration:
         assert result.get("new_plan") == 2 or result.get("current_plan") == 2
 
         # Verify STATE.md was updated
-        md = (gpd_project / ".gpd" / "STATE.md").read_text()
+        md = (grd_project / ".grd" / "STATE.md").read_text()
         assert "**Current Plan:** 2" in md
 
-    def test_validate_state_on_realistic_project(self, gpd_project: Path):
-        from gpd.mcp.servers.state_server import validate_state
+    def test_validate_state_on_realistic_project(self, grd_project: Path):
+        from grd.mcp.servers.state_server import validate_state
 
-        result = validate_state(str(gpd_project))
+        result = validate_state(str(grd_project))
 
         assert isinstance(result, dict)
         assert "valid" in result
@@ -257,7 +257,7 @@ class TestVerificationServerIntegration:
     """Integration tests for verification_server tools (pure functions)."""
 
     def test_run_check_dimensional_on_qft_artifact(self):
-        from gpd.mcp.servers.verification_server import run_check
+        from grd.mcp.servers.verification_server import run_check
 
         artifact = (
             "The vacuum polarization tensor is "
@@ -277,7 +277,7 @@ class TestVerificationServerIntegration:
         assert not any("hbar" in issue for issue in result["automated_issues"])
 
     def test_run_check_flags_missing_hbar(self):
-        from gpd.mcp.servers.verification_server import run_check
+        from grd.mcp.servers.verification_server import run_check
 
         artifact = "Compute the quantum commutator [x, p] for a particle."
         result = run_check("5.1", "qft", artifact)
@@ -285,7 +285,7 @@ class TestVerificationServerIntegration:
         assert any("hbar" in issue for issue in result["automated_issues"])
 
     def test_dimensional_check_consistent_energy(self):
-        from gpd.mcp.servers.verification_server import dimensional_check
+        from grd.mcp.servers.verification_server import dimensional_check
 
         result = dimensional_check(["[M][L]^2[T]^-2 = [M][L]^2[T]^-2"])
 
@@ -295,7 +295,7 @@ class TestVerificationServerIntegration:
         assert result["results"][0]["valid"] is True
 
     def test_dimensional_check_catches_mismatch(self):
-        from gpd.mcp.servers.verification_server import dimensional_check
+        from grd.mcp.servers.verification_server import dimensional_check
 
         # Energy vs momentum: [M][L]^2[T]^-2  !=  [M][L][T]^-1
         result = dimensional_check(["[M][L]^2[T]^-2 = [M][L][T]^-1"])
@@ -306,7 +306,7 @@ class TestVerificationServerIntegration:
         assert "T" in mismatches
 
     def test_symmetry_check_with_real_symmetries(self):
-        from gpd.mcp.servers.verification_server import symmetry_check
+        from grd.mcp.servers.verification_server import symmetry_check
 
         result = symmetry_check(
             "M(s,t) = -i g^2 (delta_{ab} / (s - m^2))",
@@ -319,7 +319,7 @@ class TestVerificationServerIntegration:
             assert entry["strategy"] is not None
 
     def test_run_contract_check_fit_family_with_partial_metadata(self):
-        from gpd.mcp.servers.verification_server import run_contract_check
+        from grd.mcp.servers.verification_server import run_contract_check
 
         result = run_contract_check(
             {
@@ -344,8 +344,8 @@ class TestErrorsMcpIntegration:
 
     def test_list_error_classes_returns_real_data(self):
         # Force fresh store (reset singleton)
-        import gpd.mcp.servers.errors_mcp as _mod
-        from gpd.mcp.servers.errors_mcp import list_error_classes
+        import grd.mcp.servers.errors_mcp as _mod
+        from grd.mcp.servers.errors_mcp import list_error_classes
 
         _mod._store = None
 
@@ -362,7 +362,7 @@ class TestErrorsMcpIntegration:
         assert "domain" in entry
 
     def test_list_error_classes_filter_by_domain(self):
-        from gpd.mcp.servers.errors_mcp import list_error_classes
+        from grd.mcp.servers.errors_mcp import list_error_classes
 
         result = list_error_classes(domain="core")
 
@@ -372,7 +372,7 @@ class TestErrorsMcpIntegration:
             assert ec["domain"] == "core"
 
     def test_get_error_class_real_entry(self):
-        from gpd.mcp.servers.errors_mcp import get_error_class
+        from grd.mcp.servers.errors_mcp import get_error_class
 
         # Error class #1 should exist in the core catalog
         result = get_error_class(1)
@@ -386,7 +386,7 @@ class TestErrorsMcpIntegration:
         assert result["domain"] == "core"
 
     def test_get_error_class_not_found(self):
-        from gpd.mcp.servers.errors_mcp import get_error_class
+        from grd.mcp.servers.errors_mcp import get_error_class
 
         result = get_error_class(9999)
 
@@ -403,8 +403,8 @@ class TestProtocolsServerIntegration:
 
     def test_list_protocols_real_files(self):
         # Force fresh store (reset singleton)
-        import gpd.mcp.servers.protocols_server as _mod
-        from gpd.mcp.servers.protocols_server import list_protocols
+        import grd.mcp.servers.protocols_server as _mod
+        from grd.mcp.servers.protocols_server import list_protocols
 
         _mod._store = None
 
@@ -421,7 +421,7 @@ class TestProtocolsServerIntegration:
             assert key in proto, f"Missing key '{key}' in protocol entry"
 
     def test_list_protocols_filter_by_domain(self):
-        from gpd.mcp.servers.protocols_server import list_protocols
+        from grd.mcp.servers.protocols_server import list_protocols
 
         result = list_protocols(domain="core_derivation")
 
@@ -431,7 +431,7 @@ class TestProtocolsServerIntegration:
             assert proto["domain"] == "core_derivation"
 
     def test_get_protocol_perturbation_theory(self):
-        from gpd.mcp.servers.protocols_server import get_protocol
+        from grd.mcp.servers.protocols_server import get_protocol
 
         result = get_protocol("perturbation-theory")
 
@@ -447,7 +447,7 @@ class TestProtocolsServerIntegration:
         assert len(result["content"]) > 100
 
     def test_get_protocol_not_found(self):
-        from gpd.mcp.servers.protocols_server import get_protocol
+        from grd.mcp.servers.protocols_server import get_protocol
 
         result = get_protocol("nonexistent-protocol-xyz")
 
@@ -456,7 +456,7 @@ class TestProtocolsServerIntegration:
         assert len(result["available"]) > 0
 
     def test_route_protocol_finds_perturbation(self):
-        from gpd.mcp.servers.protocols_server import route_protocol
+        from grd.mcp.servers.protocols_server import route_protocol
 
         result = route_protocol("perturbative QCD one-loop calculation")
 
@@ -466,7 +466,7 @@ class TestProtocolsServerIntegration:
         assert "perturbation-theory" in names
 
     def test_route_protocol_finds_algebraic_qft(self):
-        from gpd.mcp.servers.protocols_server import route_protocol
+        from grd.mcp.servers.protocols_server import route_protocol
 
         result = route_protocol("Haag-Kastler net modular theory type III local algebras")
 
@@ -476,7 +476,7 @@ class TestProtocolsServerIntegration:
         assert "algebraic-qft" in names
 
     def test_route_protocol_finds_string_field_theory(self):
-        from gpd.mcp.servers.protocols_server import route_protocol
+        from grd.mcp.servers.protocols_server import route_protocol
 
         result = route_protocol("open superstring field theory tachyon condensation")
 
@@ -495,7 +495,7 @@ class TestPatternsServerIntegration:
     """Integration tests for patterns_server with real seed data."""
 
     def test_seed_patterns_idempotent(self, tmp_path: Path):
-        from gpd.core.patterns import pattern_seed
+        from grd.core.patterns import pattern_seed
 
         # Seed into a temp location
         result1 = pattern_seed(root=tmp_path / "patterns")
@@ -506,7 +506,7 @@ class TestPatternsServerIntegration:
         assert result2.added == 0
 
     def test_seed_patterns_via_mcp_tool(self, tmp_path: Path, monkeypatch):
-        from gpd.mcp.servers import patterns_server
+        from grd.mcp.servers import patterns_server
 
         monkeypatch.setattr(patterns_server, "_DEFAULT_PATTERNS_ROOT", tmp_path / "patterns")
         result = patterns_server.seed_patterns()
@@ -516,7 +516,7 @@ class TestPatternsServerIntegration:
         assert result["added"] > 0
 
     def test_lookup_pattern_after_seed(self, tmp_path: Path, monkeypatch):
-        from gpd.mcp.servers import patterns_server
+        from grd.mcp.servers import patterns_server
 
         lib_root = tmp_path / "patterns"
         monkeypatch.setattr(patterns_server, "_DEFAULT_PATTERNS_ROOT", lib_root)
@@ -532,7 +532,7 @@ class TestPatternsServerIntegration:
         assert len(result["patterns"]) >= 1
 
     def test_lookup_pattern_by_domain_after_seed(self, tmp_path: Path, monkeypatch):
-        from gpd.mcp.servers import patterns_server
+        from grd.mcp.servers import patterns_server
 
         lib_root = tmp_path / "patterns"
         monkeypatch.setattr(patterns_server, "_DEFAULT_PATTERNS_ROOT", lib_root)
@@ -547,7 +547,7 @@ class TestPatternsServerIntegration:
         assert result["count"] >= 1
 
     def test_list_domains_returns_real_data(self):
-        from gpd.mcp.servers.patterns_server import list_domains
+        from grd.mcp.servers.patterns_server import list_domains
 
         result = list_domains()
 
@@ -570,33 +570,33 @@ class TestSkillsServerIntegration:
     @pytest.fixture(autouse=True)
     def _reset_cache(self):
         """Clear the shared registry cache so each test loads current disk state."""
-        from gpd.registry import invalidate_cache
+        from grd.registry import invalidate_cache
 
         invalidate_cache()
         yield
         invalidate_cache()
 
     def test_list_skills_returns_real_canonical_skill_index(self):
-        from gpd.mcp.servers.skills_server import list_skills
+        from grd.mcp.servers.skills_server import list_skills
 
         result = list_skills()
 
         assert isinstance(result, dict)
-        assert result["count"] > 10  # we saw many gpd-* dirs
+        assert result["count"] > 10  # we saw many grd-* dirs
         names = {s["name"] for s in result["skills"]}
         # Spot-check known canonical command and agent-backed skills.
-        assert "gpd-debug" in names or "gpd-debugger" in names
-        assert "gpd-discover" in names
-        assert "gpd-peer-review" in names
+        assert "grd-debug" in names or "grd-debugger" in names
+        assert "grd-discover" in names
+        assert "grd-peer-review" in names
 
         # Each skill has expected shape
         for skill in result["skills"]:
             assert "name" in skill
             assert "category" in skill
-            assert skill["name"].startswith("gpd-")
+            assert skill["name"].startswith("grd-")
 
     def test_list_skills_filter_by_category(self):
-        from gpd.mcp.servers.skills_server import list_skills
+        from grd.mcp.servers.skills_server import list_skills
 
         result = list_skills(category="verification")
 
@@ -606,41 +606,41 @@ class TestSkillsServerIntegration:
             assert skill["category"] == "verification"
 
     def test_get_skill_real_agent_backed_canonical_skill(self):
-        from gpd.mcp.servers.skills_server import get_skill
+        from grd.mcp.servers.skills_server import get_skill
 
-        result = get_skill("gpd-debugger")
+        result = get_skill("grd-debugger")
 
         assert isinstance(result, dict)
-        assert "error" not in result, f"gpd-debugger skill not found: {result}"
-        assert result["name"] == "gpd-debugger"
+        assert "error" not in result, f"grd-debugger skill not found: {result}"
+        assert result["name"] == "grd-debugger"
         assert result["file_count"] >= 1
         assert len(result["content"]) > 0
 
     def test_get_skill_uses_canonical_command_content(self):
-        from gpd.mcp.servers.skills_server import get_skill
+        from grd.mcp.servers.skills_server import get_skill
 
-        result = get_skill("gpd-help")
+        result = get_skill("grd-help")
 
         assert isinstance(result, dict)
         assert "error" not in result
-        assert result["name"] == "gpd-help"
-        assert "gpd command reference" in result["content"].lower()
+        assert result["name"] == "grd-help"
+        assert "grd command reference" in result["content"].lower()
         assert result["file_count"] == 1
 
     def test_get_skill_resolves_package_spec_paths(self):
-        from gpd.mcp.servers.skills_server import get_skill
-        from gpd.registry import SPECS_DIR
+        from grd.mcp.servers.skills_server import get_skill
+        from grd.registry import SPECS_DIR
 
-        result = get_skill("gpd-plan-phase")
+        result = get_skill("grd-plan-phase")
 
         assert "error" not in result
-        assert "{GPD_INSTALL_DIR}" not in result["content"]
+        assert "{GRD_INSTALL_DIR}" not in result["content"]
         assert f"@{SPECS_DIR.resolve().as_posix()}/workflows/plan-phase.md" in result["content"]
 
     def test_get_skill_peer_review_surfaces_transitive_schema_refs_and_typed_contract(self):
-        from gpd.mcp.servers.skills_server import get_skill
+        from grd.mcp.servers.skills_server import get_skill
 
-        result = get_skill("gpd-peer-review")
+        result = get_skill("grd-peer-review")
 
         assert "error" not in result
         assert any(path.endswith("review-ledger-schema.md") for path in result["schema_references"])
@@ -650,42 +650,42 @@ class TestSkillsServerIntegration:
         assert result["context_mode"] == "project-required"
 
     def test_get_skill_not_found(self):
-        from gpd.mcp.servers.skills_server import get_skill
+        from grd.mcp.servers.skills_server import get_skill
 
-        result = get_skill("gpd-nonexistent-skill-xyz")
+        result = get_skill("grd-nonexistent-skill-xyz")
 
         assert isinstance(result, dict)
         assert "error" in result
         assert "available" in result
 
     def test_route_skill_selects_execution(self):
-        from gpd.mcp.servers.skills_server import route_skill
+        from grd.mcp.servers.skills_server import route_skill
 
         result = route_skill("execute the current phase")
 
         assert isinstance(result, dict)
-        assert result["suggestion"] == "gpd-execute-phase"
+        assert result["suggestion"] == "grd-execute-phase"
         assert result["confidence"] > 0
 
     def test_route_skill_selects_peer_review(self):
-        from gpd.mcp.servers.skills_server import route_skill
+        from grd.mcp.servers.skills_server import route_skill
 
         result = route_skill("peer review this manuscript like a referee")
 
         assert isinstance(result, dict)
-        assert result["suggestion"] == "gpd-peer-review"
+        assert result["suggestion"] == "grd-peer-review"
         assert result["confidence"] > 0
 
     def test_get_skill_index_complete(self):
-        from gpd.mcp.servers.skills_server import get_skill_index
+        from grd.mcp.servers.skills_server import get_skill_index
 
         result = get_skill_index()
 
         assert isinstance(result, dict)
         assert result["total_skills"] > 10
         assert "index_text" in result
-        assert "/gpd:" in result["index_text"]
-        assert "/gpd:peer-review" in result["index_text"]
-        assert "gpd-debugger" in result["index_text"]
-        assert "/gpd:debugger" not in result["index_text"]
+        assert "/grd:" in result["index_text"]
+        assert "/grd:peer-review" in result["index_text"]
+        assert "grd-debugger" in result["index_text"]
+        assert "/grd:debugger" not in result["index_text"]
         assert len(result["categories"]) > 3

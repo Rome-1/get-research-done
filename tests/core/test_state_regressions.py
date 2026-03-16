@@ -9,7 +9,7 @@ _SAMPLE_STATE_MD = """\
 
 ## Project Reference
 
-See: .gpd/PROJECT.md (updated 2026-03-08)
+See: .grd/PROJECT.md (updated 2026-03-08)
 
 **Core research question:** What is the mass gap in Yang-Mills theory?
 **Current focus:** Lattice simulations
@@ -79,9 +79,9 @@ None yet.
 
 
 def _make_state_md(tmp_path: Path) -> Path:
-    gpd_dir = tmp_path / ".gpd"
-    gpd_dir.mkdir(parents=True)
-    state_md = gpd_dir / "STATE.md"
+    grd_dir = tmp_path / ".grd"
+    grd_dir.mkdir(parents=True)
+    state_md = grd_dir / "STATE.md"
     state_md.write_text(
         "# State\n\n"
         "## Current Position\n\n"
@@ -90,12 +90,12 @@ def _make_state_md(tmp_path: Path) -> Path:
         "### Blockers/Concerns\nNone.\n",
         encoding="utf-8",
     )
-    (gpd_dir / "state.json").write_text("{}", encoding="utf-8")
+    (grd_dir / "state.json").write_text("{}", encoding="utf-8")
     return state_md
 
 
 def test_decision_newlines_are_sanitized(tmp_path: Path) -> None:
-    from gpd.core.state import state_add_decision
+    from grd.core.state import state_add_decision
 
     state_md = _make_state_md(tmp_path)
     result = state_add_decision(
@@ -111,7 +111,7 @@ def test_decision_newlines_are_sanitized(tmp_path: Path) -> None:
 
 
 def test_blocker_newlines_are_sanitized(tmp_path: Path) -> None:
-    from gpd.core.state import state_add_blocker
+    from grd.core.state import state_add_blocker
 
     state_md = _make_state_md(tmp_path)
     result = state_add_blocker(tmp_path, "Problem\nwith\nspacing")
@@ -121,7 +121,7 @@ def test_blocker_newlines_are_sanitized(tmp_path: Path) -> None:
 
 
 def test_decision_phase_none_round_trips_without_placeholder_leak() -> None:
-    from gpd.core.state import generate_state_markdown, parse_state_md
+    from grd.core.state import generate_state_markdown, parse_state_md
 
     state = {
         "project": {},
@@ -142,7 +142,7 @@ def test_decision_phase_none_round_trips_without_placeholder_leak() -> None:
 
 
 def test_strip_placeholder_returns_stripped_value() -> None:
-    from gpd.core.state import _strip_placeholder
+    from grd.core.state import _strip_placeholder
 
     assert _strip_placeholder("  some_value  ") == "some_value"
     assert _strip_placeholder("—") is None
@@ -151,7 +151,7 @@ def test_strip_placeholder_returns_stripped_value() -> None:
 
 
 def test_resume_file_none_round_trips_as_none() -> None:
-    from gpd.core.state import generate_state_markdown, parse_state_to_json
+    from grd.core.state import generate_state_markdown, parse_state_to_json
 
     state = {
         "project": {},
@@ -171,6 +171,6 @@ def test_resume_file_none_round_trips_as_none() -> None:
 
 
 def test_state_extract_field_treats_em_dash_as_missing() -> None:
-    from gpd.core.state import state_extract_field
+    from grd.core.state import state_extract_field
 
     assert state_extract_field("**Status:** —", "Status") is None

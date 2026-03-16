@@ -5,7 +5,7 @@
       "id": "key_aliases",
       "divergence_number": 3,
       "description": "Python accepts 13 short aliases (e.g., 'metric' -> 'metric_signature'). JS requires full field names.",
-      "rationale": "CLI ergonomics: physicists can type 'gpd convention set metric mostly-plus' instead of full field name.",
+      "rationale": "CLI ergonomics: physicists can type 'grd convention set metric mostly-plus' instead of full field name.",
       "aliases": {
         "metric": "metric_signature",
         "fourier": "fourier_convention",

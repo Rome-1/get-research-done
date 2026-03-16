@@ -1,0 +1,1550 @@
+"""OpenAI Codex CLI runtime adapter.
+
+Codex CLI separates discoverable skills from runtime configuration. GRD keeps
+that split explicit:
+
+- Commands become skill directories under repo-local ``.agents/skills/`` for
+  local installs and the shared user-level skills directory for global installs.
+- Agents install only as Codex roles under ``.codex/agents/`` plus
+  ``config.toml`` registrations.
+
+Config directory: CODEX_CONFIG_DIR env var > ~/.codex
+Global skills directory: CODEX_SKILLS_DIR env var > ~/.agents/skills/
+
+Hooks, feature flags, and agent role registrations go into config.toml
+(TOML format), not settings.json.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import re
+import shutil
+import tomllib
+from pathlib import Path
+
+from grd.adapters.base import RuntimeAdapter
+from grd.adapters.install_utils import (
+    HOOK_SCRIPTS,
+    MANIFEST_NAME,
+    PATCHES_DIR_NAME,
+    compile_markdown_for_runtime,
+    convert_tool_references_in_body,
+    expand_tilde,
+    get_global_dir,
+    hook_python_interpreter,
+    pre_install_cleanup,
+    remove_stale_agents,
+    render_markdown_frontmatter,
+    split_markdown_frontmatter,
+    verify_installed,
+    write_manifest,
+)
+from grd.adapters.tool_names import build_runtime_alias_map, reference_translation_map, translate_for_runtime
+from grd.core.constants import ENV_GRD_ACTIVE_RUNTIME
+from grd.core.observability import grd_span
+from grd.registry import AgentDef, load_agents_from_dir
+
+logger = logging.getLogger(__name__)
+
+_TOOL_NAME_MAP: dict[str, str] = {
+    "file_read": "read_file",
+    "file_write": "write_file",
+    "file_edit": "apply_patch",
+    "shell": "shell",
+    "search_files": "grep",
+    "find_files": "glob",
+    "web_search": "web_search",
+    "web_fetch": "web_fetch",
+    "notebook_edit": "notebook_edit",
+    "agent": "agent",
+    "ask_user": "ask_user",
+    "todo_write": "todo",
+    "task": "task",
+    "slash_command": "slash_command",
+    "tool_search": "tool_search",
+}
+_TOOL_ALIAS_MAP = build_runtime_alias_map(_TOOL_NAME_MAP)
+_AUTO_DISCOVERED_TOOLS = frozenset({"task"})
+_GRD_NOTIFY_COMMENT = "# GRD update notification"
+_GRD_NOTIFY_BACKUP_PREFIX = "# GRD original notify: "
+_GRD_NOTIFY_WRAPPER_MARKER = "grd-codex-notify-wrapper-v1"
+_GRD_MULTI_AGENT_COMMENT = "# GRD multi-agent support"
+_GRD_MULTI_AGENT_BACKUP_PREFIX = "# GRD original multi_agent: "
+_GRD_AGENT_ROLES_COMMENT = "# GRD agent roles"
+_MANIFEST_CODEX_SKILLS_DIR_KEY = "codex_skills_dir"
+_TOOL_REFERENCE_MAP = reference_translation_map(
+    _TOOL_NAME_MAP,
+    alias_map=_TOOL_ALIAS_MAP,
+    auto_discovered_tools=_AUTO_DISCOVERED_TOOLS,
+)
+_CODEX_MCP_STARTUP_TIMEOUT_SEC = 30
+_SHELL_FENCE_LANGUAGES = frozenset({"bash", "sh", "shell", "zsh"})
+_CODEX_COMMAND_RUNTIME_NOTE = (
+    "<codex_runtime_notes>\n"
+    "Codex shell compatibility:\n"
+    "- When shell steps call the GRD CLI, use {launcher} instead of the ambient `grd` on PATH.\n"
+    f"- If you intentionally need the repo environment, keep the runtime pin: `{ENV_GRD_ACTIVE_RUNTIME}=codex uv run grd ...`.\n"
+    "</codex_runtime_notes>\n\n"
+)
+_CODEX_QUESTION_MARKERS = (
+    "Use ask_user",
+    "ask_user(",
+    "ask_user([",
+    "Ask inline (freeform, NOT ask_user):",
+    "Ask ONE question inline (freeform, NOT ask_user):",
+)
+_CODEX_QUESTION_RUNTIME_NOTE = (
+    "<codex_questioning>\n"
+    "- Ask each user-facing question exactly once.\n"
+    "- Present options once.\n"
+    "- Do not restate the prompt or add meta narration.\n"
+    "</codex_questioning>\n\n"
+)
+_CODEX_ASK_USER_PLATFORM_NOTE_RE = re.compile(
+    r"(?m)^\s*>\s+\*\*Platform note:\*\* If `ask_user` is not available,[^\n]*\n(?:\s*\n)?"
+)
+
+
+# ─── Directory helpers ──────────────────────────────────────────────────────
+
+
+def get_codex_global_dir() -> Path:
+    """Get the global config directory for Codex CLI.
+
+    Priority: CODEX_CONFIG_DIR > ~/.codex
+    """
+    return Path(get_global_dir("codex"))
+
+
+def get_codex_skills_dir() -> Path:
+    """Get the global skills directory for Codex CLI.
+
+    Skills are stored in ~/.agents/skills/ (separate from config).
+    Priority: CODEX_SKILLS_DIR > ~/.agents/skills
+    """
+    env_dir = os.environ.get("CODEX_SKILLS_DIR")
+    if env_dir:
+        expanded = expand_tilde(env_dir) or env_dir
+        return Path(expanded)
+    return Path.home() / ".agents" / "skills"
+
+
+def _default_local_codex_skills_dir(target_dir: Path) -> Path:
+    """Return the repo-scoped Codex skills dir adjacent to *target_dir*."""
+    return target_dir.parent / ".agents" / "skills"
+
+
+def _resolve_codex_skills_dir(target_dir: Path, *, is_global: bool, skills_dir: Path | None = None) -> Path:
+    """Resolve the skills directory for an install/uninstall target.
+
+    Global installs default to the shared user-level skills directory. Local
+    installs default to a repo-scoped ``.agents/skills`` sibling so the skill
+    surface stays aligned with the matching ``.codex`` config tree.
+    """
+    if skills_dir is not None:
+        return skills_dir
+    if not is_global:
+        return _default_local_codex_skills_dir(target_dir)
+    return get_codex_skills_dir()
+
+
+def _load_manifest_codex_skills_dir(target_dir: Path) -> Path | None:
+    """Return the install-time Codex skills dir recorded in the local manifest."""
+    manifest_path = target_dir / MANIFEST_NAME
+    if not manifest_path.exists():
+        return None
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    if not isinstance(manifest, dict):
+        return None
+
+    manifest_skills_dir = manifest.get(_MANIFEST_CODEX_SKILLS_DIR_KEY)
+    if isinstance(manifest_skills_dir, str) and manifest_skills_dir:
+        return Path(manifest_skills_dir)
+
+    return None
+
+
+def _resolve_codex_uninstall_skills_dir(target_dir: Path, *, is_global: bool, skills_dir: Path | None = None) -> Path:
+    """Resolve the skills dir to clean during uninstall.
+
+    Prefer the install-time path captured in the manifest so global uninstalls
+    still remove the correct shared skills even if env vars drift later.
+    """
+    if skills_dir is not None:
+        return skills_dir
+
+    manifest_skills_dir = _load_manifest_codex_skills_dir(target_dir)
+    if manifest_skills_dir is not None:
+        return manifest_skills_dir
+
+    return _resolve_codex_skills_dir(target_dir, is_global=is_global)
+
+
+def _is_global_codex_target(target_dir: Path) -> bool:
+    """Return True when *target_dir* is the resolved global Codex config dir."""
+    try:
+        return target_dir.expanduser().resolve() == get_codex_global_dir().expanduser().resolve()
+    except OSError:
+        return target_dir.expanduser() == get_codex_global_dir().expanduser()
+
+
+# ─── Codex-specific content conversion ─────────────────────────────────────
+
+
+def _convert_codex_tool_name(tool_name: str) -> str | None:
+    """Convert a canonical GRD tool name or runtime alias to Codex format.
+
+    Returns ``None`` if the tool should be excluded (for example ``task``,
+    which Codex auto-discovers).
+    """
+    return translate_for_runtime(
+        tool_name,
+        _TOOL_NAME_MAP,
+        auto_discovered_tools=_AUTO_DISCOVERED_TOOLS,
+    )
+
+
+def _convert_to_codex_skill(content: str, skill_name: str) -> str:
+    """Convert Claude Code markdown command/agent to Codex SKILL.md format.
+
+    Codex skills use SKILL.md with YAML frontmatter:
+    - name: must be hyphen-case (a-z0-9-)
+    - description: primary triggering mechanism (1-1024 chars)
+    - allowed-tools: optional tool restrictions
+    - color: removed (not supported by Codex CLI)
+    """
+    # Replace /grd: with $grd- for Codex skill invocation syntax
+    converted = content.replace("/grd:", "$grd-")
+
+    preamble, frontmatter, separator, body = split_markdown_frontmatter(converted)
+    if not frontmatter:
+        return f"---\nname: {skill_name}\ndescription: GRD skill - {skill_name}\n---\n{converted}"
+
+    fm_lines = frontmatter.split("\n")
+    new_lines: list[str] = []
+    in_allowed_tools = False
+    tools: list[str] = []
+    has_name = False
+    has_description = False
+
+    for line in fm_lines:
+        trimmed = line.strip()
+
+        # Convert name to hyphen-case for Codex
+        if trimmed.startswith("name:"):
+            has_name = True
+            new_lines.append(f"name: {skill_name}")
+            continue
+
+        # Keep description
+        if trimmed.startswith("description:"):
+            has_description = True
+            new_lines.append(line)
+            continue
+
+        # Strip color field (not supported by Codex CLI)
+        if trimmed.startswith("color:"):
+            continue
+
+        # Convert allowed-tools YAML array
+        if trimmed.startswith("allowed-tools:"):
+            in_allowed_tools = True
+            continue
+
+        # Handle inline tools: field
+        if trimmed.startswith("tools:"):
+            tools_value = trimmed[6:].strip()
+            if tools_value:
+                parsed = [t.strip() for t in tools_value.split(",") if t.strip()]
+                for t in parsed:
+                    mapped = _convert_codex_tool_name(t)
+                    if mapped:
+                        tools.append(mapped)
+            else:
+                in_allowed_tools = True
+            continue
+
+        # Collect array items
+        if in_allowed_tools:
+            if trimmed.startswith("- "):
+                mapped = _convert_codex_tool_name(trimmed[2:].strip())
+                if mapped:
+                    tools.append(mapped)
+                continue
+            elif trimmed and not trimmed.startswith("-"):
+                in_allowed_tools = False
+
+        if not in_allowed_tools:
+            new_lines.append(line)
+
+    # Ensure required fields
+    if not has_name:
+        new_lines.insert(0, f"name: {skill_name}")
+    if not has_description:
+        new_lines.insert(1, f"description: GRD skill - {skill_name}")
+
+    # Deduplicate tools while preserving order
+    seen: set[str] = set()
+    unique_tools: list[str] = []
+    for tool in tools:
+        if tool not in seen:
+            seen.add(tool)
+            unique_tools.append(tool)
+
+    # Add allowed-tools as YAML array
+    if unique_tools:
+        new_lines.append("allowed-tools:")
+        for tool in unique_tools:
+            new_lines.append(f"  - {tool}")
+
+    new_frontmatter = "\n".join(new_lines).strip()
+    return render_markdown_frontmatter(preamble, new_frontmatter, separator or "\n", body)
+
+
+def _toml_string(value: str) -> str:
+    """Serialize a Python string as a TOML basic string."""
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _toml_value(value: object) -> str:
+    """Serialize a scalar Python value as TOML."""
+    if isinstance(value, str):
+        return _toml_string(value)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    raise TypeError(f"Unsupported TOML scalar value: {value!r}")
+
+
+def _inject_codex_command_runtime_note(content: str, launcher: str) -> str:
+    """Prepend Codex-specific shell guidance to installed command skills."""
+    note = _CODEX_COMMAND_RUNTIME_NOTE.format(launcher=launcher)
+    preamble, frontmatter, separator, body = split_markdown_frontmatter(content)
+    if not frontmatter:
+        return note + content
+    return render_markdown_frontmatter(preamble, frontmatter, separator, note + body)
+
+
+def _rewrite_codex_grd_cli_invocations(content: str, launcher: str) -> str:
+    """Rewrite direct shell ``grd`` calls to the shared runtime CLI bridge."""
+    rewritten: list[str] = []
+    in_shell_fence = False
+
+    for line in content.splitlines(keepends=True):
+        stripped = line.lstrip()
+        if stripped.startswith("```"):
+            if in_shell_fence:
+                in_shell_fence = False
+            else:
+                fence_language = stripped[3:].strip().lower()
+                in_shell_fence = fence_language in _SHELL_FENCE_LANGUAGES
+            rewritten.append(line)
+            continue
+
+        if in_shell_fence:
+            rewritten.append(_rewrite_codex_shell_line(line, launcher))
+            continue
+
+        rewritten.append(line)
+
+    return "".join(rewritten)
+
+
+def _normalize_codex_questioning(content: str) -> str:
+    """Rewrite mixed ask_user/freeform guidance into a single Codex style."""
+    if not any(marker in content for marker in _CODEX_QUESTION_MARKERS):
+        return content
+
+    rewritten = _CODEX_ASK_USER_PLATFORM_NOTE_RE.sub("", content)
+    rewritten = rewritten.replace(
+        "Ask ONE question inline (freeform, NOT ask_user):",
+        "Ask exactly one inline freeform question with no preamble or restatement:",
+    )
+    rewritten = rewritten.replace(
+        "Ask inline (freeform, NOT ask_user):",
+        "Ask one inline freeform question with no preamble or restatement:",
+    )
+    rewritten = re.sub(
+        r"\bUse ask_user\b(?!\s*\()",
+        "Ask the user once using a single compact prompt block",
+        rewritten,
+    )
+
+    preamble, frontmatter, separator, body = split_markdown_frontmatter(rewritten)
+    if _CODEX_QUESTION_RUNTIME_NOTE in body:
+        return rewritten
+    if not frontmatter:
+        return _CODEX_QUESTION_RUNTIME_NOTE + rewritten
+    return render_markdown_frontmatter(
+        preamble,
+        frontmatter,
+        separator,
+        _CODEX_QUESTION_RUNTIME_NOTE + body,
+    )
+
+
+def _rewrite_codex_shell_line(line: str, launcher: str) -> str:
+    """Rewrite only command-position ``grd`` tokens on a shell line."""
+    pieces: list[str] = []
+    index = 0
+    in_single = False
+    in_double = False
+
+    while index < len(line):
+        char = line[index]
+        previous = line[index - 1] if index > 0 else ""
+
+        if char == "'" and not in_double:
+            in_single = not in_single
+            pieces.append(char)
+            index += 1
+            continue
+
+        if char == '"' and not in_single and previous != "\\":
+            in_double = not in_double
+            pieces.append(char)
+            index += 1
+            continue
+
+        if (
+            not in_single
+            and not in_double
+            and line.startswith("grd", index)
+            and _is_grd_command_start(line, index)
+            and _is_grd_token_end(line, index + 3)
+        ):
+            pieces.append(launcher)
+            index += 3
+            continue
+
+        pieces.append(char)
+        index += 1
+
+    return "".join(pieces)
+
+
+def _is_grd_command_start(line: str, index: int) -> bool:
+    """Return whether ``grd`` starts a shell command token at *index*."""
+    probe = index - 1
+    while probe >= 0 and line[probe] in " \t":
+        probe -= 1
+
+    if probe < 0:
+        return True
+
+    if line[probe] in "|;(":
+        return True
+
+    if probe >= 1 and line[probe - 1 : probe + 1] in {"&&", "||", "$("}:
+        return True
+
+    return False
+
+
+def _is_grd_token_end(line: str, end_index: int) -> bool:
+    """Return whether the token ending at *end_index* is a standalone ``grd``."""
+    if end_index >= len(line):
+        return True
+    return line[end_index].isspace() or line[end_index] in {'"', "'", "`"}
+
+
+# ─── Adapter Class ───────────────────────────────────────────────────────────
+
+
+class CodexAdapter(RuntimeAdapter):
+    """Adapter for OpenAI Codex CLI.
+
+    Codex uses distinct discovery/configuration surfaces:
+    - Commands -> skill directories under repo/user .agents/skills/<name>/SKILL.md
+    - Agents -> agent .md + role .toml files under .codex/agents/
+    - Hooks -> config.toml ``notify`` array (not settings.json)
+    - Config -> ~/.codex/ (CODEX_CONFIG_DIR env var)
+    - Skills -> repo-local .agents/skills/ for local installs, ~/.agents/skills/ for global installs
+    """
+
+    tool_name_map = _TOOL_NAME_MAP
+    auto_discovered_tools = _AUTO_DISCOVERED_TOOLS
+    strip_sub_tags_in_shared_markdown = True
+
+    @property
+    def runtime_name(self) -> str:
+        return "codex"
+
+    def format_command(self, action: str) -> str:
+        return f"$grd-{action}"
+
+    def translate_shared_command_references(self, content: str) -> str:
+        return content.replace("/grd:", self.command_prefix)
+
+    def get_commit_attribution(self, *, explicit_config_dir: str | None = None) -> str | None:
+        """Codex uses the runtime default commit attribution behavior."""
+        return ""
+
+    def _grd_shell_launcher(self, target_dir: Path) -> str:
+        """Return the shared runtime CLI bridge command for installed shell calls."""
+        return self.runtime_cli_bridge_command(target_dir)
+
+    def install(
+        self,
+        grd_root: Path,
+        target_dir: Path,
+        *,
+        # is_global defaults to True here (base class defaults to False) because
+        # Codex CLI typically installs globally to ~/.codex + ~/.agents/skills/.
+        is_global: bool = True,
+        skills_dir: Path | None = None,
+        explicit_target: bool = False,
+    ) -> dict[str, object]:
+        """Full GRD installation into a Codex CLI configuration directory.
+
+        Stores *skills_dir* for use by template method hooks, then delegates
+        to the base class template method.
+        """
+        prev_skills_dir = getattr(self, "_skills_dir", None)
+        self._skills_dir = _resolve_codex_skills_dir(target_dir, is_global=is_global, skills_dir=skills_dir)
+        try:
+            return super().install(grd_root, target_dir, is_global=is_global, explicit_target=explicit_target)
+        finally:
+            self._skills_dir = prev_skills_dir
+
+    # --- Template method hooks ---
+
+    def _compute_path_prefix(self, target_dir: Path, is_global: bool) -> str:
+        if is_global or getattr(self, "_install_explicit_target", False):
+            return str(target_dir).replace("\\", "/") + "/"
+        return f"./{self.config_dir_name}/"
+
+    def _pre_cleanup(self, target_dir: Path) -> None:
+        pre_install_cleanup(target_dir, skills_dir=str(self._skills_dir))
+
+    def _install_commands(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
+        commands_src = grd_root / "commands"
+        launcher = self._grd_shell_launcher(target_dir)
+        self._skills_dir.mkdir(parents=True, exist_ok=True)
+        _copy_commands_as_skills(
+            commands_src,
+            self._skills_dir,
+            "grd",
+            path_prefix,
+            grd_root / "specs",
+            self._current_install_scope_flag(),
+            launcher=launcher,
+        )
+        if verify_installed(self._skills_dir, "command skills"):
+            logger.info("Installed command skills")
+        else:
+            failures.append("command skills")
+        skill_count = sum(1 for d in self._skills_dir.iterdir() if d.is_dir() and d.name.startswith("grd-"))
+        return skill_count
+
+    def _install_content(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> None:
+        """Install shared specs content with Codex runtime-aware shell rewrites."""
+        launcher = self._grd_shell_launcher(target_dir)
+
+        def _translate(content: str, prefix: str, install_scope: str | None = None) -> str:
+            translated = super(CodexAdapter, self).translate_shared_markdown(
+                content,
+                prefix,
+                install_scope=install_scope,
+            )
+            translated = _rewrite_codex_grd_cli_invocations(translated, launcher)
+            return _normalize_codex_questioning(translated)
+
+        from grd.adapters.install_utils import install_grd_content
+
+        failures.extend(
+            install_grd_content(
+                grd_root / "specs",
+                target_dir,
+                path_prefix,
+                self.runtime_name,
+                install_scope=self._current_install_scope_flag(),
+                markdown_transform=_translate,
+            )
+        )
+
+    def _install_agents(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
+        agents_src = grd_root / "agents"
+        grd_specs_root = grd_root / "specs"
+        launcher = self._grd_shell_launcher(target_dir)
+        runtime_agents = self.load_runtime_agents(grd_root)
+        agent_count = len(runtime_agents)
+
+        # Install agents only as Codex role briefs plus role config TOMLs.
+        if agents_src.is_dir():
+            agents_dest = target_dir / "agents"
+            _copy_agents_as_agent_files(
+                agents_src,
+                agents_dest,
+                path_prefix,
+                grd_specs_root,
+                self._current_install_scope_flag(),
+                launcher=launcher,
+            )
+            _write_codex_agent_role_files(agents_dest, runtime_agents)
+            if verify_installed(agents_dest, "agents"):
+                logger.info("Installed Codex agent role files")
+            else:
+                failures.append("agents")
+
+        return agent_count
+
+    def _install_version(self, target_dir: Path, version: str, failures: list[str]) -> None:
+        """Write VERSION into the shared GRD content tree."""
+        super()._install_version(target_dir, version, failures)
+
+    def _configure_runtime(self, target_dir: Path, is_global: bool) -> dict[str, object]:
+        _configure_config_toml(
+            target_dir,
+            is_global,
+            explicit_target=getattr(self, "_install_explicit_target", False),
+        )
+
+        # Wire MCP servers into config.toml.
+        from grd.mcp.builtin_servers import build_mcp_servers_dict
+
+        mcp_servers = build_mcp_servers_dict(python_path=hook_python_interpreter())
+        mcp_count = 0
+        if mcp_servers:
+            mcp_count = _write_mcp_servers_codex_toml(target_dir, mcp_servers)
+        agent_role_count = _write_codex_agent_roles_toml(target_dir)
+
+        return {
+            "target": str(target_dir),
+            "skills_dir": str(self._skills_dir),
+            "skills": sum(1 for d in self._skills_dir.iterdir() if d.is_dir() and d.name.startswith("grd-")),
+            "mcpServers": mcp_count,
+            "agentRoles": agent_role_count,
+        }
+
+    def _verify(self, target_dir: Path) -> None:
+        """Verify the Codex install includes its required role and config surfaces."""
+        super()._verify(target_dir)
+        agents_dir = target_dir / "agents"
+        installed_agent_names = {path.stem for path in agents_dir.glob("grd-*.md")}
+        installed_role_names = {path.stem for path in agents_dir.glob("grd-*.toml")}
+        if installed_agent_names and installed_role_names != installed_agent_names:
+            raise RuntimeError("Codex install incomplete: GRD agent role files are not installed")
+        config_toml = target_dir / "config.toml"
+        if not config_toml.exists():
+            raise RuntimeError("Codex install incomplete: config.toml is not installed")
+        try:
+            parsed = tomllib.loads(config_toml.read_text(encoding="utf-8"))
+        except tomllib.TOMLDecodeError as exc:
+            raise RuntimeError("Codex install incomplete: config.toml is invalid") from exc
+        agents = parsed.get("agents")
+        registered_roles = {
+            name for name, value in agents.items() if name.startswith("grd-") and isinstance(value, dict)
+        } if isinstance(agents, dict) else set()
+        if installed_agent_names and not installed_agent_names.issubset(registered_roles):
+            raise RuntimeError("Codex install incomplete: GRD agent roles are not registered")
+
+    def _write_manifest(self, target_dir: Path, version: str) -> None:
+        write_manifest(
+            target_dir,
+            version,
+            runtime=self.runtime_name,
+            skills_dir=str(self._skills_dir),
+            metadata={_MANIFEST_CODEX_SKILLS_DIR_KEY: str(self._skills_dir)},
+            install_scope=self._current_install_scope_flag(),
+        )
+
+    def uninstall(
+        self,
+        target_dir: Path,
+        *,
+        skills_dir: Path | None = None,
+    ) -> dict[str, object]:
+        """Uninstall GRD from a Codex CLI configuration directory.
+
+        Removes only GRD-specific files/directories, preserves user content.
+        """
+        if skills_dir is None:
+            skills_dir = _resolve_codex_uninstall_skills_dir(
+                target_dir,
+                is_global=_is_global_codex_target(target_dir),
+            )
+
+        with grd_span("adapter.uninstall", runtime=self.runtime_name, target=str(target_dir)) as span:
+            removed: list[str] = []
+            counts: dict[str, int] = {"skills": 0, "agents": 0, "hooks": 0}
+
+            # 1. Remove grd-* skill directories from skills_dir
+            if skills_dir.exists():
+                for entry in list(skills_dir.iterdir()):
+                    if entry.is_dir() and entry.name.startswith("grd-"):
+                        shutil.rmtree(entry)
+                        counts["skills"] += 1
+
+            # 2. Remove get-research-done directory
+            grd_dir = target_dir / "get-research-done"
+            if grd_dir.exists():
+                shutil.rmtree(grd_dir)
+                removed.append("get-research-done/")
+
+            # 3. Remove file manifest and local patches
+            manifest = target_dir / MANIFEST_NAME
+            if manifest.exists():
+                manifest.unlink()
+                removed.append(MANIFEST_NAME)
+            patches = target_dir / PATCHES_DIR_NAME
+            if patches.exists():
+                shutil.rmtree(patches)
+                removed.append(f"{PATCHES_DIR_NAME}/")
+
+            # 4. Remove GRD agent files (grd-*.md and managed role .toml files)
+            agents_dir = target_dir / "agents"
+            if agents_dir.exists():
+                for f in list(agents_dir.iterdir()):
+                    if f.is_file() and f.name.startswith("grd-") and f.suffix in {".md", ".toml"}:
+                        f.unlink()
+                        counts["agents"] += 1
+
+            # 5. Remove GRD hooks
+            hooks_dir = target_dir / "hooks"
+            if hooks_dir.exists():
+                for hook_path in hooks_dir.iterdir():
+                    if not hook_path.is_file():
+                        continue
+                    if hook_path.name in HOOK_SCRIPTS.values():
+                        hook_path.unlink()
+                        counts["hooks"] += 1
+
+            # 6. Remove GRD MCP servers from config.toml
+            config_toml_mcp = target_dir / "config.toml"
+            if config_toml_mcp.exists():
+                toml_mcp = config_toml_mcp.read_text(encoding="utf-8")
+                cleaned_mcp = _remove_grd_mcp_toml_sections(toml_mcp)
+                if cleaned_mcp != toml_mcp:
+                    config_toml_mcp.write_text(cleaned_mcp, encoding="utf-8")
+                    removed.append("config.toml MCP servers")
+
+            # 7. Clean up config.toml
+            config_toml = target_dir / "config.toml"
+            if config_toml.exists():
+                toml_content = config_toml.read_text(encoding="utf-8")
+                cleaned = _remove_grd_notify_config(toml_content, target_dir=target_dir)
+                cleaned = _remove_grd_multi_agent_config(cleaned)
+                cleaned = _remove_grd_agent_role_sections(cleaned)
+                if cleaned != toml_content:
+                    config_toml.write_text(cleaned, encoding="utf-8")
+                    removed.append("config.toml GRD entries")
+
+            # Build "removed" list matching base class return shape
+            if counts["skills"]:
+                removed.append(f"{counts['skills']} GRD skills")
+            if counts["agents"]:
+                removed.append(f"{counts['agents']} GRD agents")
+            if counts["hooks"]:
+                removed.append(f"{counts['hooks']} GRD hooks")
+
+            span.set_attribute("grd.removed_count", len(removed))
+            logger.info("Uninstalled GRD from %s: removed %d items", self.runtime_name, len(removed))
+
+            return {
+                "runtime": self.runtime_name,
+                "target": str(target_dir),
+                "removed": removed,
+                **counts,
+            }
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+
+def _copy_commands_as_skills(
+    src_dir: Path,
+    skills_dir: Path,
+    prefix: str,
+    path_prefix: str,
+    grd_src_root: Path | None = None,
+    install_scope: str | None = None,
+    *,
+    launcher: str,
+) -> None:
+    """Copy commands as Codex skill directories.
+
+    Codex expects: ~/.agents/skills/grd-help/SKILL.md
+    Source structure: commands/help.md -> grd-help/SKILL.md
+    Nested: commands/sub/help.md -> grd-sub-help/SKILL.md (preserves hierarchy)
+    """
+    if not src_dir.exists():
+        return
+
+    # Remove old grd-* skill directories before copying (clean slate)
+    if skills_dir.exists():
+        for entry in list(skills_dir.iterdir()):
+            if entry.is_dir() and entry.name.startswith(f"{prefix}-"):
+                shutil.rmtree(entry)
+    else:
+        skills_dir.mkdir(parents=True, exist_ok=True)
+
+    for entry in sorted(src_dir.iterdir()):
+        if entry.is_dir():
+            # Recurse into subdirectories, adding to prefix
+            _copy_commands_as_skills(
+                entry,
+                skills_dir,
+                f"{prefix}-{entry.name}",
+                path_prefix,
+                grd_src_root,
+                install_scope,
+                launcher=launcher,
+            )
+        elif entry.suffix == ".md":
+            base_name = entry.stem
+            skill_name = f"{prefix}-{base_name}"
+            skill_dir = skills_dir / skill_name
+            skill_dir.mkdir(parents=True, exist_ok=True)
+
+            content = compile_markdown_for_runtime(
+                entry.read_text(encoding="utf-8"),
+                runtime="codex",
+                path_prefix=path_prefix,
+                install_scope=install_scope,
+                src_root=grd_src_root,
+            )
+            content = _convert_to_codex_skill(content, skill_name)
+            content = convert_tool_references_in_body(content, _TOOL_REFERENCE_MAP)
+            content = _rewrite_codex_grd_cli_invocations(content, launcher)
+            content = _normalize_codex_questioning(content)
+            content = _inject_codex_command_runtime_note(content, launcher)
+
+            (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
+
+
+def _copy_agents_as_agent_files(
+    agents_src: Path,
+    agents_dest: Path,
+    path_prefix: str,
+    grd_content_dir: Path | None = None,
+    install_scope: str | None = None,
+    *,
+    launcher: str,
+) -> None:
+    """Copy agents as runtime agent markdown files for Codex.
+
+    Applies placeholder expansion, @-include expansion, and tool reference translation.
+    """
+    if not agents_src.exists():
+        return
+    agents_dest.mkdir(parents=True, exist_ok=True)
+    source_root = grd_content_dir or agents_src.parent / "specs"
+
+    new_agent_names: set[str] = set()
+
+    for entry in sorted(agents_src.iterdir()):
+        if not entry.is_file() or entry.suffix != ".md":
+            continue
+
+        content = compile_markdown_for_runtime(
+            entry.read_text(encoding="utf-8"),
+            runtime="codex",
+            path_prefix=path_prefix,
+            install_scope=install_scope,
+            src_root=source_root,
+            protect_agent_prompt_body=True,
+        )
+        content = convert_tool_references_in_body(content, _TOOL_REFERENCE_MAP)
+        content = _rewrite_codex_grd_cli_invocations(content, launcher)
+        content = _normalize_codex_questioning(content)
+
+        (agents_dest / entry.name).write_text(content, encoding="utf-8")
+        new_agent_names.add(entry.name)
+
+    remove_stale_agents(agents_dest, new_agent_names)
+
+
+_TOML_ASSIGNMENT_RE = re.compile(r"^([A-Za-z0-9_-]+)\s*=")
+
+
+def _toml_assignment_key(line: str) -> str | None:
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return None
+    match = _TOML_ASSIGNMENT_RE.match(stripped)
+    return match.group(1) if match else None
+
+
+def _parse_toml_string_assignment(line: str, key: str) -> str | None:
+    stripped = line.strip()
+    if not (stripped.startswith(f"{key} ") or stripped.startswith(f"{key}=")):
+        return None
+    try:
+        parsed = tomllib.loads(f"[section]\n{stripped}\n")
+    except tomllib.TOMLDecodeError:
+        return None
+    section = parsed.get("section")
+    if not isinstance(section, dict):
+        return None
+    value = section.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _split_preserved_toml_lines(
+    existing_lines: list[str] | None,
+    *,
+    managed_keys: set[str],
+) -> tuple[list[str], dict[str, str]]:
+    preserved_lines: list[str] = []
+    preserved_assignments: dict[str, str] = {}
+
+    if existing_lines is None:
+        return preserved_lines, preserved_assignments
+
+    for line in existing_lines:
+        key = _toml_assignment_key(line)
+        if key is not None and key in managed_keys:
+            preserved_assignments[key] = line.strip()
+            continue
+        preserved_lines.append(line)
+
+    while preserved_lines and preserved_lines[0] == "":
+        preserved_lines.pop(0)
+    while preserved_lines and preserved_lines[-1] == "":
+        preserved_lines.pop()
+
+    return preserved_lines, preserved_assignments
+
+
+def _build_codex_mcp_server_section_lines(
+    name: str,
+    entry: dict[str, object],
+    *,
+    existing_base_body: list[str] | None,
+    existing_env_body: list[str] | None,
+) -> list[str]:
+    base_section_name = f"mcp_servers.{name}"
+    managed_entry = dict(entry)
+    managed_entry.setdefault("startup_timeout_sec", _CODEX_MCP_STARTUP_TIMEOUT_SEC)
+
+    lines = [f"\n[{base_section_name}]"]
+    cmd = str(managed_entry.get("command", ""))
+    args = managed_entry.get("args", [])
+    args_list = list(args) if isinstance(args, list) else []
+    lines.append(f"command = {_toml_string(cmd)}")
+    args_toml = ", ".join(_toml_string(str(arg)) for arg in args_list)
+    lines.append(f"args = [{args_toml}]")
+
+    extra_keys = sorted(key for key in managed_entry if key not in {"command", "args", "env"})
+    preserved_base_lines, preserved_base_assignments = _split_preserved_toml_lines(
+        existing_base_body,
+        managed_keys={"command", "args", *extra_keys},
+    )
+    for key in extra_keys:
+        existing_line = preserved_base_assignments.get(key)
+        if existing_line is not None:
+            lines.append(existing_line)
+            continue
+        lines.append(f"{key} = {_toml_value(managed_entry[key])}")
+    lines.extend(preserved_base_lines)
+
+    raw_env = managed_entry.get("env", {})
+    managed_env = dict(raw_env) if isinstance(raw_env, dict) else {}
+    preserved_env_lines, preserved_env_assignments = _split_preserved_toml_lines(
+        existing_env_body,
+        managed_keys=set(managed_env),
+    )
+
+    env_lines: list[str] = []
+    for key, value in managed_env.items():
+        existing_line = preserved_env_assignments.get(key)
+        if existing_line is not None:
+            env_lines.append(existing_line)
+            continue
+        env_lines.append(f"{key} = {_toml_string(str(value))}")
+    env_lines.extend(preserved_env_lines)
+
+    if env_lines:
+        lines.append(f"\n[{base_section_name}.env]")
+        lines.extend(env_lines)
+
+    return lines
+
+
+def _codex_agent_role_config_rel_path(agent_name: str) -> str:
+    return f"agents/{agent_name}.toml"
+
+
+def _codex_agent_role_config_path(target_dir: Path, agent_name: str) -> Path:
+    return target_dir / "agents" / f"{agent_name}.toml"
+
+
+def _build_codex_agent_role_instructions(agent_name: str, agent_markdown_path: Path) -> str:
+    agent_path = agent_markdown_path.resolve(strict=False).as_posix()
+    return (
+        f"You are the `{agent_name}` role for Get Research Done (GRD).\n"
+        f'Before doing any substantive work, read and follow the installed role brief at "{agent_path}".\n'
+        "Treat that markdown file as the authoritative role contract for scope, workflow, and output expectations."
+    )
+
+
+def _write_codex_agent_role_files(agents_dest: Path, runtime_agents: tuple[AgentDef, ...]) -> None:
+    """Write role-specific Codex config layers alongside installed agent briefs."""
+    if not agents_dest.exists():
+        return
+
+    managed_role_names: set[str] = set()
+    for agent in runtime_agents:
+        role_path = agents_dest / f"{agent.name}.toml"
+        agent_markdown_path = agents_dest / f"{agent.name}.md"
+        lines = [
+            "# Managed by Get Research Done (GRD).",
+            'sandbox_mode = "workspace-write"',
+            f"developer_instructions = {_toml_string(_build_codex_agent_role_instructions(agent.name, agent_markdown_path))}",
+        ]
+        role_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        managed_role_names.add(role_path.name)
+
+    for existing in agents_dest.iterdir():
+        if (
+            existing.is_file()
+            and existing.name.startswith("grd-")
+            and existing.suffix == ".toml"
+            and existing.name not in managed_role_names
+        ):
+            existing.unlink()
+
+
+def _is_managed_codex_agent_role_section(existing_body: list[str] | None, agent_name: str) -> bool:
+    if existing_body is None:
+        return False
+    expected_config = _codex_agent_role_config_rel_path(agent_name)
+    for line in existing_body:
+        config_path = _parse_toml_string_assignment(line, "config_file")
+        if config_path == expected_config:
+            return True
+    return False
+
+
+def _build_codex_agent_role_section_lines(agent: AgentDef, *, existing_body: list[str] | None) -> list[str]:
+    preserved_lines, _ = _split_preserved_toml_lines(
+        existing_body,
+        managed_keys={"description", "config_file"},
+    )
+    lines = [f"\n[agents.{agent.name}]"]
+    lines.append(f"description = {_toml_string(agent.description)}")
+    lines.append(f"config_file = {_toml_string(_codex_agent_role_config_rel_path(agent.name))}")
+    lines.extend(preserved_lines)
+    return lines
+
+
+def _write_mcp_servers_codex_toml(target_dir: Path, servers: dict[str, dict[str, object]]) -> int:
+    """Append MCP server entries to Codex config.toml without clobbering user overrides."""
+    config_toml = target_dir / "config.toml"
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    content = ""
+    if config_toml.exists():
+        content = config_toml.read_text(encoding="utf-8")
+    existing_content = content
+
+    # Remove existing GRD MCP sections before rewriting.
+    content = _remove_grd_mcp_toml_sections(content)
+
+    # Append new MCP server sections.
+    lines: list[str] = []
+    if content and not content.endswith("\n"):
+        content += "\n"
+    lines.append("# GRD MCP servers")
+    for name, entry in sorted(servers.items()):
+        _, existing_base_body, _ = _split_toml_section(existing_content, f"mcp_servers.{name}")
+        _, existing_env_body, _ = _split_toml_section(existing_content, f"mcp_servers.{name}.env")
+        lines.extend(
+            _build_codex_mcp_server_section_lines(
+                name,
+                entry,
+                existing_base_body=existing_base_body,
+                existing_env_body=existing_env_body,
+            )
+        )
+
+    content += "\n".join(lines) + "\n"
+    config_toml.write_text(content, encoding="utf-8")
+    return len(servers)
+
+
+def _write_codex_agent_roles_toml(target_dir: Path) -> int:
+    """Ensure Codex agent role registrations exist for installed GRD agents."""
+    config_toml = target_dir / "config.toml"
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    content = ""
+    if config_toml.exists():
+        content = config_toml.read_text(encoding="utf-8")
+    existing_content = content
+    content = _remove_grd_agent_role_sections(content)
+
+    installed_agents = load_agents_from_dir(target_dir / "agents")
+    managed_sections: list[str] = []
+    for _, agent in sorted(installed_agents.items()):
+        _, existing_body, _ = _split_toml_section(existing_content, f"agents.{agent.name}")
+        if existing_body is not None and not _is_managed_codex_agent_role_section(existing_body, agent.name):
+            continue
+        if not managed_sections:
+            managed_sections.append(_GRD_AGENT_ROLES_COMMENT)
+        managed_sections.extend(
+            _build_codex_agent_role_section_lines(
+                agent,
+                existing_body=existing_body,
+            )
+        )
+
+    if content and managed_sections and not content.endswith("\n"):
+        content += "\n"
+    if managed_sections:
+        content += "\n".join(managed_sections) + "\n"
+    config_toml.write_text(content, encoding="utf-8")
+    return len(installed_agents)
+
+
+def _remove_grd_mcp_toml_sections(content: str) -> str:
+    """Remove GRD MCP server sections from TOML content."""
+    from grd.mcp.builtin_servers import GRD_MCP_SERVER_KEYS
+
+    # Remove the header comment and all [mcp_servers.grd-*] sections.
+    content = re.sub(r"^# GRD MCP servers\n", "", content, flags=re.MULTILINE)
+    for key in GRD_MCP_SERVER_KEYS:
+        escaped = re.escape(key)
+        # Remove [mcp_servers.key] and [mcp_servers.key.env] sections until the next section.
+        content = re.sub(
+            rf"^\[mcp_servers\.{escaped}(?:\.env)?\]\n(?:(?!\[)[^\n]*\n)*",
+            "",
+            content,
+            flags=re.MULTILINE,
+        )
+    # Clean up excessive blank lines.
+    content = re.sub(r"\n{3,}", "\n\n", content)
+    return content
+
+
+def _remove_grd_agent_role_sections(content: str) -> str:
+    """Remove GRD-managed Codex agent role registrations from TOML content."""
+    cleaned: list[str] = []
+    lines = content.splitlines()
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx]
+        stripped = line.strip()
+        if stripped == _GRD_AGENT_ROLES_COMMENT:
+            idx += 1
+            continue
+
+        section_name = _parse_section_name(line)
+        if section_name is not None and section_name.startswith("agents.grd-"):
+            end = len(lines)
+            for scan in range(idx + 1, len(lines)):
+                if _parse_section_name(lines[scan]) is not None:
+                    end = scan
+                    break
+            existing_body = lines[idx + 1 : end]
+            agent_name = section_name[len("agents.") :]
+            if _is_managed_codex_agent_role_section(existing_body, agent_name):
+                idx = end
+                continue
+
+        cleaned.append(line)
+        idx += 1
+
+    return re.sub(r"\n{3,}", "\n\n", _serialize_toml_lines(cleaned))
+
+
+def _parse_section_name(line: str) -> str | None:
+    stripped = line.strip()
+    if not stripped.startswith("[") or not stripped.endswith("]") or stripped.startswith("[["):
+        return None
+    return stripped[1:-1].strip()
+
+
+def _split_toml_section(toml_content: str, section_name: str) -> tuple[list[str], list[str] | None, list[str]]:
+    lines = toml_content.splitlines()
+    start: int | None = None
+
+    for idx, line in enumerate(lines):
+        if _parse_section_name(line) == section_name:
+            start = idx
+            break
+
+    if start is None:
+        return lines, None, []
+
+    end = len(lines)
+    for idx in range(start + 1, len(lines)):
+        if _parse_section_name(lines[idx]) is not None:
+            end = idx
+            break
+
+    return lines[:start], lines[start + 1 : end], lines[end:]
+
+
+def _parse_feature_bool_assignment(line: str, key: str) -> bool | None:
+    stripped = line.strip()
+    if not (stripped.startswith(f"{key} ") or stripped.startswith(f"{key}=")):
+        return None
+    try:
+        parsed = tomllib.loads(f"[features]\n{stripped}\n")
+    except tomllib.TOMLDecodeError:
+        return None
+    features = parsed.get("features")
+    if not isinstance(features, dict):
+        return None
+    value = features.get(key)
+    return value if isinstance(value, bool) else None
+
+
+def _build_multi_agent_block(
+    existing_line: str | None,
+    *,
+    had_managed_block: bool,
+    backup_line: str | None,
+) -> list[str]:
+    desired_line = "multi_agent = true"
+
+    if had_managed_block:
+        block = [_GRD_MULTI_AGENT_COMMENT]
+        if backup_line is not None:
+            block.append(_GRD_MULTI_AGENT_BACKUP_PREFIX + backup_line)
+        block.append(desired_line)
+        return block
+
+    if existing_line is None:
+        return [_GRD_MULTI_AGENT_COMMENT, desired_line]
+
+    if _parse_feature_bool_assignment(existing_line, "multi_agent") is True:
+        return [existing_line]
+
+    return [
+        _GRD_MULTI_AGENT_COMMENT,
+        _GRD_MULTI_AGENT_BACKUP_PREFIX + existing_line,
+        desired_line,
+    ]
+
+
+def _install_grd_multi_agent_config(toml_content: str) -> str:
+    before, body, after = _split_toml_section(toml_content, "features")
+    desired_line = "multi_agent = true"
+
+    if body is None:
+        lines = before[:]
+        if lines and lines[-1] != "":
+            lines.append("")
+        lines.extend(["[features]", _GRD_MULTI_AGENT_COMMENT, desired_line])
+        return _serialize_toml_lines(lines)
+
+    cleaned: list[str] = []
+    existing_line: str | None = None
+    backup_line: str | None = None
+    had_managed_block = False
+    pending_managed_block = False
+    insert_at: int | None = None
+
+    for line in body:
+        stripped = line.strip()
+        if stripped == _GRD_MULTI_AGENT_COMMENT:
+            had_managed_block = True
+            pending_managed_block = True
+            if insert_at is None:
+                insert_at = len(cleaned)
+            continue
+        if stripped.startswith(_GRD_MULTI_AGENT_BACKUP_PREFIX):
+            had_managed_block = True
+            pending_managed_block = True
+            backup_line = stripped[len(_GRD_MULTI_AGENT_BACKUP_PREFIX) :].strip()
+            if insert_at is None:
+                insert_at = len(cleaned)
+            continue
+        if _parse_feature_bool_assignment(line, "multi_agent") is not None:
+            if pending_managed_block:
+                had_managed_block = True
+                pending_managed_block = False
+                if insert_at is None:
+                    insert_at = len(cleaned)
+                continue
+            existing_line = stripped
+            if insert_at is None:
+                insert_at = len(cleaned)
+            continue
+        pending_managed_block = False
+        cleaned.append(line)
+
+    if insert_at is None:
+        insert_at = len(cleaned)
+    cleaned[insert_at:insert_at] = _build_multi_agent_block(
+        existing_line,
+        had_managed_block=had_managed_block,
+        backup_line=backup_line,
+    )
+    return _serialize_toml_lines(before + ["[features]"] + cleaned + after)
+
+
+def _remove_grd_multi_agent_config(toml_content: str) -> str:
+    before, body, after = _split_toml_section(toml_content, "features")
+    if body is None:
+        return toml_content
+
+    cleaned: list[str] = []
+    original_line: str | None = None
+    insert_at: int | None = None
+    had_managed_block = False
+    pending_managed_block = False
+
+    for line in body:
+        stripped = line.strip()
+        if stripped == _GRD_MULTI_AGENT_COMMENT:
+            had_managed_block = True
+            pending_managed_block = True
+            if insert_at is None:
+                insert_at = len(cleaned)
+            continue
+        if stripped.startswith(_GRD_MULTI_AGENT_BACKUP_PREFIX):
+            had_managed_block = True
+            pending_managed_block = True
+            original_line = stripped[len(_GRD_MULTI_AGENT_BACKUP_PREFIX) :].strip()
+            if insert_at is None:
+                insert_at = len(cleaned)
+            continue
+        if _parse_feature_bool_assignment(line, "multi_agent") is not None and pending_managed_block:
+            had_managed_block = True
+            pending_managed_block = False
+            if insert_at is None:
+                insert_at = len(cleaned)
+            continue
+        pending_managed_block = False
+        cleaned.append(line)
+
+    if not had_managed_block:
+        return toml_content
+
+    if original_line is not None:
+        position = insert_at if insert_at is not None else len(cleaned)
+        cleaned[position:position] = [original_line]
+
+    lines = before[:]
+    if any(line.strip() for line in cleaned):
+        lines.extend(["[features]", *cleaned])
+    lines.extend(after)
+    return re.sub(r"\n{3,}", "\n\n", _serialize_toml_lines(lines))
+
+
+def _configure_config_toml(
+    target_dir: Path,
+    is_global: bool,
+    *,
+    explicit_target: bool = False,
+) -> None:
+    """Configure GRD runtime settings in Codex config.toml."""
+    config_toml = target_dir / "config.toml"
+    toml_content = ""
+    if config_toml.exists():
+        toml_content = config_toml.read_text(encoding="utf-8")
+
+    notify_hook = HOOK_SCRIPTS["notify"]
+
+    if is_global or explicit_target:
+        desired_path = str(target_dir / "hooks" / notify_hook).replace("\\", "/")
+    else:
+        desired_path = f".codex/hooks/{notify_hook}"
+    configured = _install_grd_notify_config(
+        toml_content,
+        desired_path=desired_path,
+    )
+    config_toml.write_text(
+        _install_grd_multi_agent_config(configured),
+        encoding="utf-8",
+    )
+
+
+def _line_contains_grd_notify(line: str) -> bool:
+    parsed = _parse_notify_assignment(line)
+    return _notify_assignment_is_grd_managed(parsed)
+
+
+def _parse_notify_assignment(line: str) -> list[str] | None:
+    stripped = line.strip()
+    if not stripped.startswith("notify"):
+        return None
+    try:
+        parsed = tomllib.loads(stripped + "\n")
+    except tomllib.TOMLDecodeError:
+        return None
+    value = parsed.get("notify")
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return list(value)
+    return None
+
+
+def _build_notify_line(desired_path: str) -> str:
+    return f"notify = [{_toml_string(hook_python_interpreter())}, {_toml_string(desired_path)}]"
+
+
+def _build_notify_wrapper_line(existing_notify: list[str], desired_path: str) -> str:
+    wrapper_script = (
+        "import json, subprocess, sys\n"
+        "payload = sys.stdin.buffer.read()\n"
+        "existing = json.loads(sys.argv[1])\n"
+        "grd_path = sys.argv[2]\n"
+        "for command in (existing, [sys.executable, grd_path]):\n"
+        "    try:\n"
+        "        subprocess.run(command, input=payload, check=False)\n"
+        "    except OSError:\n"
+        "        pass\n"
+    )
+    parts = [
+        _toml_string(hook_python_interpreter()),
+        _toml_string("-c"),
+        _toml_string(wrapper_script),
+        _toml_string(json.dumps(existing_notify)),
+        _toml_string(desired_path),
+        _toml_string(_GRD_NOTIFY_WRAPPER_MARKER),
+    ]
+    return f"notify = [{', '.join(parts)}]"
+
+
+def _managed_notify_paths(target_dir: Path | None = None) -> set[str]:
+    paths = {".codex/hooks/notify.py"}
+    if target_dir is not None:
+        paths.add(str(target_dir / "hooks" / HOOK_SCRIPTS["notify"]).replace("\\", "/"))
+    return paths
+
+
+def _notify_assignment_is_grd_managed(parsed_notify: list[str] | None, *, target_dir: Path | None = None) -> bool:
+    if not parsed_notify:
+        return False
+    if _GRD_NOTIFY_WRAPPER_MARKER in parsed_notify:
+        return True
+
+    managed_paths = _managed_notify_paths(target_dir)
+    return len(parsed_notify) == 2 and parsed_notify[1] in managed_paths
+
+
+def _serialize_toml_lines(lines: list[str]) -> str:
+    content = "\n".join(lines).rstrip()
+    return f"{content}\n" if content else ""
+
+
+def _first_section_index(lines: list[str]) -> int:
+    """Return the index of the first TOML section header, or len(lines) if none."""
+    for idx, line in enumerate(lines):
+        if _parse_section_name(line) is not None:
+            return idx
+    return len(lines)
+
+
+def _install_grd_notify_config(
+    toml_content: str,
+    *,
+    desired_path: str,
+) -> str:
+    desired_line = _build_notify_line(desired_path)
+    cleaned_lines: list[str] = []
+    insert_at: int | None = None
+    existing_notify: list[str] | None = None
+    pending_managed_block = False
+
+    past_first_section = False
+    for line in toml_content.splitlines():
+        stripped = line.strip()
+        if _parse_section_name(stripped) is not None:
+            past_first_section = True
+        if not past_first_section and (
+            stripped == _GRD_NOTIFY_COMMENT or stripped.startswith(_GRD_NOTIFY_BACKUP_PREFIX)
+        ):
+            if insert_at is None:
+                insert_at = len(cleaned_lines)
+            pending_managed_block = True
+            continue
+        # Only match top-level notify (before any section header)
+        if not past_first_section and stripped.startswith("notify"):
+            if insert_at is None:
+                insert_at = len(cleaned_lines)
+            parsed = _parse_notify_assignment(line)
+            if pending_managed_block or _notify_assignment_is_grd_managed(parsed):
+                pending_managed_block = False
+                continue
+            if parsed is not None:
+                existing_notify = parsed
+                pending_managed_block = False
+                continue
+        pending_managed_block = False
+        cleaned_lines.append(line)
+
+    notify_block: list[str]
+    if existing_notify is not None:
+        notify_block = [
+            _GRD_NOTIFY_COMMENT,
+            _GRD_NOTIFY_BACKUP_PREFIX + json.dumps(existing_notify),
+            _build_notify_wrapper_line(existing_notify, desired_path),
+        ]
+    else:
+        notify_block = [_GRD_NOTIFY_COMMENT, desired_line]
+
+    if insert_at is not None:
+        # Ensure insert position is at root level (before first section header)
+        first_section = _first_section_index(cleaned_lines)
+        if insert_at > first_section:
+            insert_at = first_section
+        cleaned_lines[insert_at:insert_at] = notify_block
+    else:
+        # No existing notify — insert before first section header to stay at root level
+        first_section = _first_section_index(cleaned_lines)
+        if first_section > 0 and cleaned_lines[first_section - 1].strip() != "":
+            notify_block = [""] + notify_block
+        cleaned_lines[first_section:first_section] = notify_block + [""]
+
+    return _serialize_toml_lines(cleaned_lines)
+
+
+def _remove_grd_notify_config(toml_content: str, *, target_dir: Path | None = None) -> str:
+    cleaned_lines: list[str] = []
+    insert_at: int | None = None
+    original_notify: str | None = None
+    pending_managed_block = False
+
+    for line in toml_content.splitlines():
+        stripped = line.strip()
+        if stripped == _GRD_NOTIFY_COMMENT:
+            if insert_at is None:
+                insert_at = len(cleaned_lines)
+            pending_managed_block = True
+            continue
+        if stripped.startswith(_GRD_NOTIFY_BACKUP_PREFIX):
+            if insert_at is None:
+                insert_at = len(cleaned_lines)
+            original_notify = stripped[len(_GRD_NOTIFY_BACKUP_PREFIX) :].strip()
+            pending_managed_block = True
+            continue
+        parsed = _parse_notify_assignment(line)
+        if stripped.startswith("notify") and (
+            pending_managed_block or _notify_assignment_is_grd_managed(parsed, target_dir=target_dir)
+        ):
+            if insert_at is None:
+                insert_at = len(cleaned_lines)
+            pending_managed_block = False
+            continue
+        pending_managed_block = False
+        cleaned_lines.append(line)
+
+    if original_notify:
+        restore_line = f"notify = {original_notify}"
+        position = insert_at if insert_at is not None else len(cleaned_lines)
+        cleaned_lines[position:position] = [restore_line]
+
+    return _serialize_toml_lines(cleaned_lines)
+
+
+__all__ = [
+    "CodexAdapter",
+    "get_codex_global_dir",
+    "get_codex_skills_dir",
+]

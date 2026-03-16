@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-WORKFLOWS_DIR = REPO_ROOT / "src/gpd/specs/workflows"
-REFERENCES_DIR = REPO_ROOT / "src/gpd/specs/references"
-TEMPLATES_DIR = REPO_ROOT / "src/gpd/specs/templates"
+WORKFLOWS_DIR = REPO_ROOT / "src/grd/specs/workflows"
+REFERENCES_DIR = REPO_ROOT / "src/grd/specs/references"
+TEMPLATES_DIR = REPO_ROOT / "src/grd/specs/templates"
 
 RUNTIME_NOTE_FRAGMENT = "Runtime delegation:"
 MODEL_OMISSION_FRAGMENT = (
@@ -91,7 +91,7 @@ def _assert_runtime_note_present(path: Path) -> None:
 
 def _assert_prompt_bootstrap(task: TaskBlock, agent_name: str) -> None:
     assert f'subagent_type="{agent_name}"' in task.text
-    assert f"First, read {{GPD_AGENTS_DIR}}/{agent_name}.md for your role and instructions." in task.text
+    assert f"First, read {{GRD_AGENTS_DIR}}/{agent_name}.md for your role and instructions." in task.text
 
 
 def _extract_output_paths(task: TaskBlock) -> list[str]:
@@ -104,17 +104,17 @@ def test_agent_delegation_reference_defines_canonical_task_contract() -> None:
     blocks = [
         block
         for block in _extract_task_blocks(content)
-        if 'subagent_type="gpd-{agent}"' in block.text and 'description="{short description}"' in block.text
+        if 'subagent_type="grd-{agent}"' in block.text and 'description="{short description}"' in block.text
     ]
 
     assert len(blocks) == 1
     canonical = blocks[0].text
 
-    assert 'subagent_type="gpd-{agent}"' in canonical
+    assert 'subagent_type="grd-{agent}"' in canonical
     assert 'model="{AGENT_MODEL}"' in canonical
     assert READONLY_FALSE_FRAGMENT in canonical
     assert 'description="{short description}"' in canonical
-    assert "First, read {GPD_AGENTS_DIR}/gpd-{agent}.md for your role and instructions." in canonical
+    assert "First, read {GRD_AGENTS_DIR}/grd-{agent}.md for your role and instructions." in canonical
     assert "Do not use `@...` references inside task() prompt strings." in content
     assert "Assign an explicit write scope for every subagent." in content
     assert "Always set `readonly=false` for file-producing agents." in content
@@ -139,12 +139,12 @@ def test_agent_delegation_reference_defines_canonical_task_contract() -> None:
 
 def test_representative_workflows_keep_runtime_note_and_agent_prompt_bootstrap() -> None:
     coverage = {
-        "quick.md": ["gpd-planner", "gpd-executor"],
-        "plan-phase.md": ["gpd-phase-researcher", "gpd-planner", "gpd-plan-checker"],
-        "execute-phase.md": ["gpd-executor"],
-        "write-paper.md": ["gpd-paper-writer"],
-        "new-project.md": ["gpd-project-researcher"],
-        "peer-review.md": ["gpd-review-reader", "gpd-referee"],
+        "quick.md": ["grd-planner", "grd-executor"],
+        "plan-phase.md": ["grd-phase-researcher", "grd-planner", "grd-plan-checker"],
+        "execute-phase.md": ["grd-executor"],
+        "write-paper.md": ["grd-paper-writer"],
+        "new-project.md": ["grd-project-researcher"],
+        "peer-review.md": ["grd-review-reader", "grd-referee"],
     }
 
     for workflow_name, agent_names in coverage.items():
@@ -178,7 +178,7 @@ def test_plan_phase_reloads_research_from_disk_and_keeps_checker_advisory() -> N
 
 def test_execute_phase_requires_state_return_envelope_and_handoff_spot_checks() -> None:
     content = _read(WORKFLOWS_DIR / "execute-phase.md")
-    executor = _find_single_task(WORKFLOWS_DIR / "execute-phase.md", "gpd-executor")
+    executor = _find_single_task(WORKFLOWS_DIR / "execute-phase.md", "grd-executor")
 
     assert "Return state updates (position, decisions, metrics) in your response -- do NOT write STATE.md directly." in executor.text
     assert "State updates returned (NOT written to STATE.md directly)" in executor.text
@@ -188,7 +188,7 @@ def test_execute_phase_requires_state_return_envelope_and_handoff_spot_checks() 
 
 def test_parameter_sweep_executor_uses_spawn_contract_and_return_only_state_updates() -> None:
     path = WORKFLOWS_DIR / "parameter-sweep.md"
-    executor = _find_single_task(path, "gpd-executor")
+    executor = _find_single_task(path, "grd-executor")
 
     assert "Return state updates in your response -- do NOT write STATE.md directly." in executor.text
     assert "<spawn_contract>" in executor.text
@@ -215,14 +215,14 @@ def test_research_phase_verifies_research_artifact_before_accepting_handoff() ->
 
 def test_new_project_parallel_researchers_write_to_disjoint_artifacts() -> None:
     path = WORKFLOWS_DIR / "new-project.md"
-    tasks = _task_blocks_by_agent(path, "gpd-project-researcher")
+    tasks = _task_blocks_by_agent(path, "grd-project-researcher")
     outputs = {output for task in tasks for output in _extract_output_paths(task)}
 
     expected = {
-        ".gpd/research/PRIOR-WORK.md",
-        ".gpd/research/METHODS.md",
-        ".gpd/research/COMPUTATIONAL.md",
-        ".gpd/research/PITFALLS.md",
+        ".grd/research/PRIOR-WORK.md",
+        ".grd/research/METHODS.md",
+        ".grd/research/COMPUTATIONAL.md",
+        ".grd/research/PITFALLS.md",
     }
 
     assert expected <= outputs
@@ -235,9 +235,9 @@ def test_new_milestone_research_and_roadmapper_gate_success_path_artifacts() -> 
 
     assert content.count("<spawn_contract>") >= 3
     assert "Do not trust the runtime handoff status by itself." in content
-    assert "If a scout reports success but its `expected_artifacts` entry (`.gpd/research/{FILE}`) is missing" in content
-    assert "If the synthesizer reports success but `.gpd/research/SUMMARY.md` is missing" in content
-    assert "If the roadmapper reports `## ROADMAP CREATED` but `.gpd/ROADMAP.md` or `.gpd/STATE.md` is missing" in content
+    assert "If a scout reports success but its `expected_artifacts` entry (`.grd/research/{FILE}`) is missing" in content
+    assert "If the synthesizer reports success but `.grd/research/SUMMARY.md` is missing" in content
+    assert "If the roadmapper reports `## ROADMAP CREATED` but `.grd/ROADMAP.md` or `.grd/STATE.md` is missing" in content
     assert "shared_state_policy: return_only" in content
 
 
@@ -245,12 +245,12 @@ def test_peer_review_stages_use_fresh_context_and_stage_artifacts() -> None:
     path = WORKFLOWS_DIR / "peer-review.md"
     content = _read(path)
 
-    reader = _find_single_task(path, "gpd-review-reader")
-    literature = _find_single_task(path, "gpd-review-literature")
-    math = _find_single_task(path, "gpd-review-math")
-    physics = _find_single_task(path, "gpd-review-physics")
-    significance = _find_single_task(path, "gpd-review-significance")
-    referee = _find_single_task(path, "gpd-referee")
+    reader = _find_single_task(path, "grd-review-reader")
+    literature = _find_single_task(path, "grd-review-literature")
+    math = _find_single_task(path, "grd-review-math")
+    physics = _find_single_task(path, "grd-review-physics")
+    significance = _find_single_task(path, "grd-review-significance")
+    referee = _find_single_task(path, "grd-referee")
 
     assert "Spawn a fresh subagent for the task below." in content
     assert "This stage must start nearly fresh and remain manuscript-first." in reader.text
@@ -258,17 +258,17 @@ def test_peer_review_stages_use_fresh_context_and_stage_artifacts() -> None:
     assert "fresh context" in math.text
     assert "fresh context" in physics.text
     assert "fresh context" in significance.text
-    assert ".gpd/review/STAGE-literature{round_suffix}.json" in literature.text
-    assert ".gpd/review/STAGE-math{round_suffix}.json" in math.text
-    assert ".gpd/review/STAGE-physics{round_suffix}.json" in physics.text
-    assert ".gpd/review/STAGE-interestingness{round_suffix}.json" in significance.text
-    assert ".gpd/review/REVIEW-LEDGER{round_suffix}.json" in referee.text
-    assert ".gpd/review/REFEREE-DECISION{round_suffix}.json" in referee.text
-    assert ".gpd/REFEREE-REPORT{round_suffix}.md" in referee.text
+    assert ".grd/review/STAGE-literature{round_suffix}.json" in literature.text
+    assert ".grd/review/STAGE-math{round_suffix}.json" in math.text
+    assert ".grd/review/STAGE-physics{round_suffix}.json" in physics.text
+    assert ".grd/review/STAGE-interestingness{round_suffix}.json" in significance.text
+    assert ".grd/review/REVIEW-LEDGER{round_suffix}.json" in referee.text
+    assert ".grd/review/REFEREE-DECISION{round_suffix}.json" in referee.text
+    assert ".grd/REFEREE-REPORT{round_suffix}.md" in referee.text
 
 
 def test_all_workflow_task_blocks_include_readonly_false() -> None:
-    """Every task() block that spawns a GPD agent must include readonly=false.
+    """Every task() block that spawns a GRD agent must include readonly=false.
 
     Without this, some runtimes default subagents to read-only mode where
     file writes silently fail -- the agent reports success but no files are
@@ -281,11 +281,11 @@ def test_all_workflow_task_blocks_include_readonly_false() -> None:
             continue
         blocks = _extract_task_blocks(_read(workflow_path))
         for block in blocks:
-            if 'subagent_type="gpd-' not in block.text:
+            if 'subagent_type="grd-' not in block.text:
                 continue
             if READONLY_FALSE_FRAGMENT not in block.text:
                 agent = "unknown"
-                match = re.search(r'subagent_type="(gpd-[^"]+)"', block.text)
+                match = re.search(r'subagent_type="(grd-[^"]+)"', block.text)
                 if match:
                     agent = match.group(1)
                 failures.append(f"{workflow_path.name}:{block.start} ({agent})")
@@ -296,5 +296,5 @@ def test_all_workflow_task_blocks_include_readonly_false() -> None:
 def test_debug_subagent_template_continuations_use_explicit_file_reads() -> None:
     content = _read(TEMPLATES_DIR / "debug-subagent-prompt.md")
 
-    assert "Read the file at .gpd/debug/{slug}.md" in content
-    assert "@.gpd/debug/{slug}.md" not in content
+    assert "Read the file at .grd/debug/{slug}.md" in content
+    assert "@.grd/debug/{slug}.md" not in content

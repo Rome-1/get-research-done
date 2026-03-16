@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from gpd.mcp.paper.models import PaperConfig, Section
-from gpd.mcp.paper.template_registry import render_paper
-from gpd.utils.latex import clean_latex_fences
+from grd.mcp.paper.models import PaperConfig, Section
+from grd.mcp.paper.template_registry import render_paper
+from grd.utils.latex import clean_latex_fences
 
 
 def test_clean_latex_fences_preserves_prose_around_fenced_blocks() -> None:

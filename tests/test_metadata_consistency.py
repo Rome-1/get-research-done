@@ -7,12 +7,12 @@ import re
 import tomllib
 from pathlib import Path
 
-from gpd import registry as content_registry
-from gpd.contracts import ConventionLock
-from gpd.core.config import MODEL_PROFILES
-from gpd.core.health import _ALL_CHECKS
-from gpd.core.patterns import PatternDomain
-from gpd.registry import VALID_CONTEXT_MODES
+from grd import registry as content_registry
+from grd.contracts import ConventionLock
+from grd.core.config import MODEL_PROFILES
+from grd.core.health import _ALL_CHECKS
+from grd.core.patterns import PatternDomain
+from grd.registry import VALID_CONTEXT_MODES
 
 
 def _repo_root() -> Path:
@@ -101,12 +101,12 @@ def test_python_floor_is_consistent_across_install_surfaces() -> None:
 
 def test_canonical_registry_skill_inventory_counts_match_repo_contents() -> None:
     repo_root = _repo_root()
-    commands_count = len(list((repo_root / "src" / "gpd" / "commands").glob("*.md")))
-    agents_count = len(list((repo_root / "src" / "gpd" / "agents").glob("*.md")))
+    commands_count = len(list((repo_root / "src" / "grd" / "commands").glob("*.md")))
+    agents_count = len(list((repo_root / "src" / "grd" / "agents").glob("*.md")))
     content_registry.invalidate_cache()
     canonical_skills_count = len(content_registry.list_skills())
-    mcp_server_count = len([p for p in (repo_root / "src" / "gpd" / "mcp" / "servers").glob("*.py") if p.name != "__init__.py"])
-    mcp_script_count = sum(1 for line in _project_script_lines(repo_root) if line.startswith('"gpd-mcp-'))
+    mcp_server_count = len([p for p in (repo_root / "src" / "grd" / "mcp" / "servers").glob("*.py") if p.name != "__init__.py"])
+    mcp_script_count = sum(1 for line in _project_script_lines(repo_root) if line.startswith('"grd-mcp-'))
 
     assert commands_count >= 50
     # The canonical registry/MCP skill index remains commands + agents even
@@ -135,41 +135,41 @@ def test_convention_field_counts_match_source_of_truth() -> None:
     convention_count = len(ConventionLock.model_fields) - 1  # exclude custom_conventions
     assert convention_count == 18
 
-    assert f"Convention lock ({convention_count} physics fields + custom)" in _read("src/gpd/core/__init__.py")
-    assert f"locks conventions for up to {convention_count} physics fields" in _read("README.md")
+    assert f"Convention lock ({convention_count} research fields + custom)" in _read("src/grd/core/__init__.py")
+    assert f"locks conventions for up to {convention_count} research fields" in _read("README.md")
 
 
 def test_pattern_domain_counts_match_source_of_truth() -> None:
     domain_count = len(PatternDomain)
     assert domain_count == 13
 
-    assert f"Error pattern library (8 categories, {domain_count} domains)" in _read("src/gpd/core/__init__.py")
+    assert f"Error pattern library (8 categories, {domain_count} domains)" in _read("src/grd/core/__init__.py")
     assert f'pattern_app = typer.Typer(help="Error pattern library (8 categories, {domain_count} domains)")' in _read(
-        "src/gpd/cli.py"
+        "src/grd/cli.py"
     )
 
 
 def test_mcp_server_count_matches_public_entrypoints() -> None:
     repo_root = _repo_root()
-    mcp_server_count = len([p for p in (repo_root / "src" / "gpd" / "mcp" / "servers").glob("*.py") if p.name != "__init__.py"])
-    mcp_script_count = sum(1 for line in _project_script_lines(repo_root) if line.startswith('"gpd-mcp-'))
+    mcp_server_count = len([p for p in (repo_root / "src" / "grd" / "mcp" / "servers").glob("*.py") if p.name != "__init__.py"])
+    mcp_script_count = sum(1 for line in _project_script_lines(repo_root) if line.startswith('"grd-mcp-'))
     assert mcp_server_count == 7
     assert mcp_server_count == mcp_script_count
 
 
 def test_managed_mcp_server_keys_match_public_descriptors_and_infra_inventory() -> None:
-    from gpd.mcp.builtin_servers import GPD_MCP_SERVER_KEYS, build_public_descriptors
+    from grd.mcp.builtin_servers import GRD_MCP_SERVER_KEYS, build_public_descriptors
 
     repo_root = _repo_root()
     descriptor_keys = set(build_public_descriptors())
-    infra_keys = {path.stem for path in (repo_root / "infra").glob("gpd-*.json")}
+    infra_keys = {path.stem for path in (repo_root / "infra").glob("grd-*.json")}
 
-    assert GPD_MCP_SERVER_KEYS == descriptor_keys
-    assert GPD_MCP_SERVER_KEYS == infra_keys
+    assert GRD_MCP_SERVER_KEYS == descriptor_keys
+    assert GRD_MCP_SERVER_KEYS == infra_keys
 
 
 def test_public_mcp_descriptor_capabilities_match_server_tools() -> None:
-    from gpd.mcp.builtin_servers import build_public_descriptors
+    from grd.mcp.builtin_servers import build_public_descriptors
 
     descriptors = build_public_descriptors()
     for name, descriptor in descriptors.items():
@@ -184,7 +184,7 @@ def test_public_mcp_descriptor_capabilities_match_server_tools() -> None:
 
 
 def test_public_mcp_descriptor_entry_point_alternatives_match_pyproject_scripts() -> None:
-    from gpd.mcp.builtin_servers import build_public_descriptors
+    from grd.mcp.builtin_servers import build_public_descriptors
 
     repo_root = _repo_root()
     script_targets: dict[str, str] = {}
@@ -202,7 +202,7 @@ def test_public_mcp_descriptor_entry_point_alternatives_match_pyproject_scripts(
         script_name = descriptor.get("command")
         assert isinstance(script_name, str), name
         assert descriptor.get("args") == []
-        assert script_name.startswith("gpd-mcp-")
+        assert script_name.startswith("grd-mcp-")
         assert script_targets[script_name] == f"{module_name}:main"
 
         alternatives = descriptor.get("alternatives")
@@ -211,29 +211,29 @@ def test_public_mcp_descriptor_entry_point_alternatives_match_pyproject_scripts(
         assert isinstance(python_module, dict), name
         assert python_module.get("command") == "python"
         assert python_module.get("args") == ["-m", module_name]
-        assert python_module.get("notes") == "Requires gpd package installed"
+        assert python_module.get("notes") == "Requires grd package installed"
 
 
 def test_arxiv_descriptor_tracks_required_dependency_surface() -> None:
-    from gpd.mcp.builtin_servers import build_public_descriptors
+    from grd.mcp.builtin_servers import build_public_descriptors
 
     project = tomllib.loads(_read("pyproject.toml"))["project"]
     dependencies: list[str] = project["dependencies"]
     assert any(item.startswith("arxiv-mcp-server") for item in dependencies)
 
-    descriptor = build_public_descriptors()["gpd-arxiv"]
-    assert descriptor["prerequisites"] == ["Install GPD first: npx -y get-physics-done"]
+    descriptor = build_public_descriptors()["grd-arxiv"]
+    assert descriptor["prerequisites"] == ["Install GRD first: npx -y get-research-done"]
 
 
 def test_agent_count_matches_prompts_and_user_docs() -> None:
-    agents_count = len(list((_repo_root() / "src" / "gpd" / "agents").glob("*.md")))
+    agents_count = len(list((_repo_root() / "src" / "grd" / "agents").glob("*.md")))
     assert agents_count == len(MODEL_PROFILES)
     assert "specialist agents" in _read("README.md")
-    assert f"across all {agents_count} agents" in _read("src/gpd/specs/workflows/set-profile.md")
+    assert f"across all {agents_count} agents" in _read("src/grd/specs/workflows/set-profile.md")
 
 
 def test_settings_workflow_documents_runtime_native_model_override_guidance() -> None:
-    workflow = _read("src/gpd/specs/workflows/settings.md")
+    workflow = _read("src/grd/specs/workflows/settings.md")
 
     assert "model_overrides" in workflow
     assert "tier-1" in workflow
@@ -244,10 +244,10 @@ def test_settings_workflow_documents_runtime_native_model_override_guidance() ->
 
 
 def test_branching_strategy_docs_use_canonical_config_literals() -> None:
-    settings = _read("src/gpd/specs/workflows/settings.md")
-    planning = _read("src/gpd/specs/references/planning/planning-config.md")
-    execute_phase = _read("src/gpd/specs/workflows/execute-phase.md")
-    complete_milestone = _read("src/gpd/specs/workflows/complete-milestone.md")
+    settings = _read("src/grd/specs/workflows/settings.md")
+    planning = _read("src/grd/specs/references/planning/planning-config.md")
+    execute_phase = _read("src/grd/specs/workflows/execute-phase.md")
+    complete_milestone = _read("src/grd/specs/workflows/complete-milestone.md")
 
     assert '"branching_strategy": "none" | "per-phase" | "per-milestone"' in settings
     assert 'Git branching approach: `"none"`, `"per-phase"`, or `"per-milestone"`' in planning
@@ -264,13 +264,13 @@ def test_health_check_count_matches_skill_documentation() -> None:
     health_check_count = len(_ALL_CHECKS)
     assert health_check_count == 13
 
-    command = _read("src/gpd/commands/health.md")
+    command = _read("src/grd/commands/health.md")
     assert "All {total} health checks passed." in command
     assert "All checks reported with status" in command
 
 
 def test_every_command_declares_valid_context_mode() -> None:
-    commands_dir = _repo_root() / "src" / "gpd" / "commands"
+    commands_dir = _repo_root() / "src" / "grd" / "commands"
     pattern = re.compile(r"^context_mode:\s*(.+?)\s*$", re.MULTILINE)
 
     missing: list[str] = []
@@ -291,16 +291,16 @@ def test_every_command_declares_valid_context_mode() -> None:
 
 
 def test_update_workflow_uses_runtime_placeholders_for_cache_paths() -> None:
-    workflow = _read("src/gpd/specs/workflows/update.md")
+    workflow = _read("src/grd/specs/workflows/update.md")
 
-    assert "<GPD_CONFIG_DIR>" not in workflow
-    assert '"{GPD_CONFIG_DIR}/cache/gpd-update-check.json"' in workflow
+    assert "<GRD_CONFIG_DIR>" not in workflow
+    assert '"{GRD_CONFIG_DIR}/cache/grd-update-check.json"' in workflow
 
 
 def test_referee_response_round_suffix_convention_is_consistent() -> None:
-    peer_review = _read("src/gpd/specs/workflows/peer-review.md")
-    respond = _read("src/gpd/specs/workflows/respond-to-referees.md")
-    template = _read("src/gpd/specs/templates/paper/referee-response.md")
+    peer_review = _read("src/grd/specs/workflows/peer-review.md")
+    respond = _read("src/grd/specs/workflows/respond-to-referees.md")
+    template = _read("src/grd/specs/templates/paper/referee-response.md")
 
     assert 'ROUND_SUFFIX="-R2"' in peer_review
     assert 'ROUND_SUFFIX="-R3"' in peer_review
@@ -312,7 +312,7 @@ def test_referee_response_round_suffix_convention_is_consistent() -> None:
 
 
 def test_bibliography_template_tracks_live_references_bib_path() -> None:
-    template = _read("src/gpd/specs/templates/bibliography.md")
+    template = _read("src/grd/specs/templates/bibliography.md")
 
     assert "references/references.bib" in template
-    assert ".gpd/references.bib" not in template
+    assert ".grd/references.bib" not in template

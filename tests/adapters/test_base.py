@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from gpd.adapters import get_adapter
+from grd.adapters import get_adapter
 
 
 class TestResolveTargetDir:
@@ -29,42 +29,42 @@ class TestResolveTargetDir:
 class TestUninstallBase:
     """Test the base uninstall method (used by Claude Code adapter)."""
 
-    def test_removes_commands_gpd(self, tmp_path: Path) -> None:
+    def test_removes_commands_grd(self, tmp_path: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
-        (target / "commands" / "gpd").mkdir(parents=True)
-        (target / "commands" / "gpd" / "help.md").write_text("help", encoding="utf-8")
+        (target / "commands" / "grd").mkdir(parents=True)
+        (target / "commands" / "grd" / "help.md").write_text("help", encoding="utf-8")
 
         result = adapter.uninstall(target)
-        assert not (target / "commands" / "gpd").exists()
-        assert "commands/gpd/" in result["removed"]
+        assert not (target / "commands" / "grd").exists()
+        assert "commands/grd/" in result["removed"]
 
-    def test_removes_get_physics_done(self, tmp_path: Path) -> None:
+    def test_removes_get_research_done(self, tmp_path: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
-        (target / "get-physics-done").mkdir(parents=True)
-        (target / "get-physics-done" / "file.md").write_text("x", encoding="utf-8")
+        (target / "get-research-done").mkdir(parents=True)
+        (target / "get-research-done" / "file.md").write_text("x", encoding="utf-8")
 
         result = adapter.uninstall(target)
-        assert not (target / "get-physics-done").exists()
-        assert "get-physics-done/" in result["removed"]
+        assert not (target / "get-research-done").exists()
+        assert "get-research-done/" in result["removed"]
 
     def test_removes_only_gpd_agents(self, tmp_path: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         agents = target / "agents"
         agents.mkdir(parents=True)
-        (agents / "gpd-verifier.md").write_text("v", encoding="utf-8")
-        (agents / "gpd-executor.md").write_text("e", encoding="utf-8")
+        (agents / "grd-verifier.md").write_text("v", encoding="utf-8")
+        (agents / "grd-executor.md").write_text("e", encoding="utf-8")
         (agents / "custom-agent.md").write_text("c", encoding="utf-8")
 
         adapter.uninstall(target)
 
-        assert not (agents / "gpd-verifier.md").exists()
-        assert not (agents / "gpd-executor.md").exists()
+        assert not (agents / "grd-verifier.md").exists()
+        assert not (agents / "grd-executor.md").exists()
         assert (agents / "custom-agent.md").exists()
 
-    def test_removes_gpd_hooks(self, tmp_path: Path) -> None:
+    def test_removes_grd_hooks(self, tmp_path: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         hooks = target / "hooks"
@@ -83,15 +83,15 @@ class TestUninstallBase:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         target.mkdir(parents=True)
-        (target / "gpd-file-manifest.json").write_text("{}", encoding="utf-8")
+        (target / "grd-file-manifest.json").write_text("{}", encoding="utf-8")
 
         adapter.uninstall(target)
-        assert not (target / "gpd-file-manifest.json").exists()
+        assert not (target / "grd-file-manifest.json").exists()
 
     def test_removes_patches_dir(self, tmp_path: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
-        patches = target / "gpd-local-patches"
+        patches = target / "grd-local-patches"
         patches.mkdir(parents=True)
         (patches / "backup.md").write_text("b", encoding="utf-8")
 
@@ -154,10 +154,10 @@ class TestAdapterConformance:
     @pytest.mark.parametrize(
         ("runtime", "expected"),
         [
-            ("claude-code", "/gpd:help"),
-            ("gemini", "/gpd:help"),
-            ("codex", "$gpd-help"),
-            ("opencode", "/gpd-help"),
+            ("claude-code", "/grd:help"),
+            ("gemini", "/grd:help"),
+            ("codex", "$grd-help"),
+            ("opencode", "/grd-help"),
         ],
     )
     def test_help_command_uses_runtime_formatter(self, runtime: str, expected: str) -> None:

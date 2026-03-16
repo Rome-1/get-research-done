@@ -1,11 +1,11 @@
-"""Tests for gpd.core.conventions — convention lock management."""
+"""Tests for grd.core.conventions — convention lock management."""
 
 from __future__ import annotations
 
 import pytest
 
-from gpd.contracts import ConventionLock
-from gpd.core.conventions import (
+from grd.contracts import ConventionLock
+from grd.core.conventions import (
     KNOWN_CONVENTIONS,
     AssertionMismatch,
     ConventionCheckResult,
@@ -24,7 +24,7 @@ from gpd.core.conventions import (
     sanitize_value,
     validate_assertions,
 )
-from gpd.core.errors import ConventionError
+from grd.core.errors import ConventionError
 
 # ─── normalize_key ────────────────────────────────────────────────────────────
 
@@ -448,9 +448,9 @@ class TestConventionDiffPhases:
 
     def test_missing_phase_ids_returns_empty(self, tmp_path):
         """convention_diff_phases with missing phase IDs returns empty result."""
-        from gpd.core.conventions import convention_diff_phases
-        gpd_dir = tmp_path / ".gpd"
-        gpd_dir.mkdir()
+        from grd.core.conventions import convention_diff_phases
+        grd_dir = tmp_path / ".grd"
+        grd_dir.mkdir()
 
         result = convention_diff_phases(tmp_path, phase1=None, phase2="1")
         assert result.changed == []
@@ -459,9 +459,9 @@ class TestConventionDiffPhases:
 
     def test_nonexistent_phases_returns_empty(self, tmp_path):
         """convention_diff_phases with nonexistent phases returns empty result."""
-        from gpd.core.conventions import convention_diff_phases
-        gpd_dir = tmp_path / ".gpd" / "phases"
-        gpd_dir.mkdir(parents=True)
+        from grd.core.conventions import convention_diff_phases
+        grd_dir = tmp_path / ".grd" / "phases"
+        grd_dir.mkdir(parents=True)
 
         result = convention_diff_phases(tmp_path, phase1="99", phase2="98")
         assert result.changed == []

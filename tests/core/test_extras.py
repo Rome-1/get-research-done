@@ -1,11 +1,11 @@
-"""Tests for gpd.core.extras — approximations, uncertainties, questions, calculations."""
+"""Tests for grd.core.extras — approximations, uncertainties, questions, calculations."""
 
 from __future__ import annotations
 
 import pytest
 
-from gpd.core.errors import DuplicateApproximationError, ExtrasError
-from gpd.core.extras import (
+from grd.core.errors import DuplicateApproximationError, ExtrasError
+from grd.core.extras import (
     Approximation,
     ApproximationCheckResult,
     Uncertainty,

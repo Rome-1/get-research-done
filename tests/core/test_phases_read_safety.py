@@ -46,7 +46,7 @@ def _has_try_ancestor(node: ast.AST, parents: dict, stop_at: ast.AST) -> bool:
 
 def test_read_text_calls_inside_try_blocks():
     """Ensure read_text() calls followed by _extract_frontmatter are protected by try/except."""
-    source_path = Path(__file__).resolve().parents[2] / "src" / "gpd" / "core" / "phases.py"
+    source_path = Path(__file__).resolve().parents[2] / "src" / "grd" / "core" / "phases.py"
     source = source_path.read_text()
     tree = ast.parse(source)
     parents = _build_parent_map(tree)

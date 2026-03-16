@@ -1,0 +1,12 @@
+# Convention fields for this domain.
+# Each field defines a notation or methodology choice that should be locked
+# per-project to prevent drift.
+
+fields: []
+  # Example:
+  # - name: my_convention
+  #   label: "My Convention"
+  #   description: "What this convention controls"
+  #   aliases: ["myconv"]
+  #   value_aliases:
+  #     "variant_a": "canonical-form-a"

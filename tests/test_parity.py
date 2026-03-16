@@ -1,4 +1,4 @@
-"""Cross-language parity tests for JS <-> Python GPD state operations.
+"""Cross-language parity tests for JS <-> Python GRD state operations.
 
 Loads shared JSON fixtures from tests/fixtures/parity/ and validates that
 Python produces results matching the expected outputs. The same fixtures
@@ -33,8 +33,8 @@ from pathlib import Path
 
 import pytest
 
-from gpd.contracts import ConventionLock
-from gpd.core.conventions import (
+from grd.contracts import ConventionLock
+from grd.core.conventions import (
     CONVENTION_LABELS,
     KEY_ALIASES,
     KNOWN_CONVENTIONS,
@@ -47,7 +47,7 @@ from gpd.core.conventions import (
     normalize_value,
     parse_assert_conventions,
 )
-from gpd.core.results import _auto_generate_id, _int_to_base36
+from grd.core.results import _auto_generate_id, _int_to_base36
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "parity"
 

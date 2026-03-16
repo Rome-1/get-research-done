@@ -1,0 +1,35 @@
+{
+  "name": "grd-skills",
+  "description": "GRD skill discovery and routing. Tools for listing, retrieving, auto-routing, and indexing GRD workflow skills for agent prompt injection.",
+  "transport": "stdio",
+  "command": "grd-mcp-skills",
+  "args": [],
+  "env": {
+    "LOG_LEVEL": "${LOG_LEVEL:-WARNING}"
+  },
+  "capabilities": [
+    "list_skills",
+    "get_skill",
+    "route_skill",
+    "get_skill_index"
+  ],
+  "registry_prefix": "grd_skills",
+  "prerequisites": [
+    "Install GRD first: npx -y get-research-done"
+  ],
+  "health_check": {
+    "tool": "list_skills",
+    "input": {},
+    "expect": "contains grd-execute-phase"
+  },
+  "alternatives": {
+    "python_module": {
+      "command": "python",
+      "args": [
+        "-m",
+        "grd.mcp.servers.skills_server"
+      ],
+      "notes": "Requires grd package installed"
+    }
+  }
+}
