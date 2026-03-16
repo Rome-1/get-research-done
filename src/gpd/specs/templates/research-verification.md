@@ -43,7 +43,7 @@ session_status: validating | completed | diagnosed
 
 number: [N]
 name: [check name]
-check_subject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]
+check_subject_kind: [claim | deliverable | acceptance_test | reference]
 subject_id: [contract id or ""]
 claim_id: [claim-id or ""]
 deliverable_id: [deliverable-id or ""]
@@ -68,7 +68,7 @@ awaiting: researcher response
 
 ### 1. [Check Name]
 
-check_subject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]
+check_subject_kind: [claim | deliverable | acceptance_test | reference]
 subject_id: [contract id or ""]
 claim_id: [claim-id or ""]
 deliverable_id: [deliverable-id or ""]
@@ -146,7 +146,7 @@ The frontmatter `comparison_verdicts` ledger is authoritative; this section is a
 
 <!-- YAML format for plan-phase --gaps consumption -->
 
-- gap_subject_kind: "claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check"
+- gap_subject_kind: "claim | deliverable | acceptance_test | reference"
   subject_id: "contract-id"
   expectation: "[expected physics property from check]"
   expected_check: "[expected physics property from check]"
@@ -198,6 +198,7 @@ The frontmatter `comparison_verdicts` ledger is authoritative; this section is a
 - If skipped: add `reason` if provided
 - Use `check_subject_kind` for body-only verification checkpoints so it cannot be confused with frontmatter `comparison_verdicts.subject_kind`
 - Every check should carry `check_subject_kind` / `subject_id` when the PLAN contract provides one
+- Keep `check_subject_kind` and `gap_subject_kind` aligned with the canonical frontmatter-safe subject vocabulary
 - Use `forbidden_proxy_id` for explicit proxy-rejection checks
 - Use `comparison_kind` / `comparison_reference_id` when the check should later emit a comparison verdict
 - Use `suggested_contract_checks` only when the verifier believes the contract omitted a decisive check, or when a decisive benchmark / cross-method check remains partial, not attempted, or still lacks a decisive verdict
@@ -227,6 +228,7 @@ The frontmatter `comparison_verdicts` ledger is authoritative; this section is a
 
 - APPEND only when issue found (YAML format)
 - Use `gap_subject_kind` for the body scaffold that feeds `/gpd:plan-phase --gaps`; reserve bare `subject_kind` for canonical frontmatter ledgers such as `comparison_verdicts`
+- Keep `gap_subject_kind` to `claim | deliverable | acceptance_test | reference`; use `forbidden_proxy_id` for explicit proxy-rejection gaps and `suggested_contract_checks` for missing decisive work
 - After diagnosis: fill `root_cause`, `artifacts`, `missing`, `debug_session`
 - This section feeds directly into /gpd:plan-phase --gaps
 

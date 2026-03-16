@@ -1023,11 +1023,15 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
 def test_research_verification_body_scaffold_keeps_body_only_subject_labels_distinct() -> None:
     research_verification = (TEMPLATES_DIR / "research-verification.md").read_text(encoding="utf-8")
 
-    assert "check_subject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" in research_verification
-    assert 'gap_subject_kind: "claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check"' in research_verification
+    assert "check_subject_kind: [claim | deliverable | acceptance_test | reference]" in research_verification
+    assert 'gap_subject_kind: "claim | deliverable | acceptance_test | reference"' in research_verification
     assert "Use `check_subject_kind` for body-only verification checkpoints" in research_verification
     assert "Use `gap_subject_kind` for the body scaffold" in research_verification
+    assert "Keep `check_subject_kind` and `gap_subject_kind` aligned with the canonical frontmatter-safe subject vocabulary" in research_verification
+    assert "use `forbidden_proxy_id` for explicit proxy-rejection gaps" in research_verification
     assert "\nsubject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in research_verification
+    assert "check_subject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in research_verification
+    assert 'gap_subject_kind: "claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check"' not in research_verification
 
 
 def test_verify_work_workflow_uses_body_only_subject_kind_fields() -> None:
