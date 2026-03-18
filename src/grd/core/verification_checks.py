@@ -289,6 +289,9 @@ VERIFICATION_CHECKS: dict[str, dict[str, object]] = {
 VERIFICATION_CHECK_IDS: tuple[str, ...] = tuple(spec.check_id for spec in VERIFICATION_CHECK_DEFS)
 
 
+# TODO(domain-agnostic): These error class mappings are physics-specific.
+# They should eventually move into the physics domain pack as a data file
+# and be loaded via DomainContext, similar to how conventions were refactored.
 ERROR_CLASS_COVERAGE_DEFS: tuple[ErrorClassCoverageDef, ...] = (
     ErrorClassCoverageDef(
         error_class_id=1,

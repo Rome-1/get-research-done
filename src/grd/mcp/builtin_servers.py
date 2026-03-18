@@ -85,15 +85,15 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
         ],
         "registry_prefix": "grd_conventions",
         "health_check": {
-            "tool": "subfield_defaults",
-            "input": {"domain": "qft"},
-            "expect": "contains metric_signature",
+            "tool": "convention_lock_status",
+            "input": {"project_dir": "."},
+            "expect": "contains set_count",
         },
     },
     "grd-errors": {
         "description": (
-            "LLM physics error catalog and traceability matrix for GRD verification. "
-            "104 error classes with detection strategies mapped to 8 verification check categories."
+            "LLM error catalog and traceability matrix for GRD verification. "
+            "Domain-specific error classes with detection strategies mapped to verification check categories."
         ),
         "capabilities": [
             "get_error_class",
@@ -112,7 +112,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
     "grd-patterns": {
         "description": (
             "GRD cross-project pattern library. Tools for searching, adding, promoting, "
-            "and seeding physics error patterns across research projects."
+            "and seeding domain error patterns across research projects."
         ),
         "capabilities": [
             "lookup_pattern",
@@ -125,13 +125,13 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
         "health_check": {
             "tool": "list_domains",
             "input": {},
-            "expect": "contains qft",
+            "expect": "contains domains",
         },
     },
     "grd-protocols": {
         "description": (
-            "Physics computation protocols for GRD research workflows. Provides step-by-step methodology, "
-            "verification checkpoints, and auto-routing for 47 physics domains."
+            "Computation protocols for GRD research workflows. Provides step-by-step methodology, "
+            "verification checkpoints, and auto-routing for domain-specific topics."
         ),
         "capabilities": [
             "get_protocol",

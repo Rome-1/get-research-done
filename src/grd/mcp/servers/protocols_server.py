@@ -333,7 +333,7 @@ mcp = FastMCP("grd-protocols")
 
 @mcp.tool()
 def get_protocol(name: str) -> dict[str, object]:
-    """Get a physics computation protocol by name.
+    """Get a computation protocol by name.
 
     Returns the full protocol content including steps, checkpoints,
     and the raw markdown body.
@@ -363,7 +363,7 @@ def get_protocol(name: str) -> dict[str, object]:
 
 @mcp.tool()
 def list_protocols(domain: str | None = None) -> dict[str, object]:
-    """List available physics computation protocols.
+    """List available computation protocols.
 
     Args:
         domain: Optional domain filter. Available domains include:

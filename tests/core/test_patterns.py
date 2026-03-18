@@ -156,9 +156,10 @@ class TestPatternAdd:
         with pytest.raises(PatternError, match="already exists"):
             pattern_add(domain="qft", title="Dup Test", root=lib_root)
 
-    def test_invalid_domain_raises(self, lib_root: Path):
-        with pytest.raises(PatternError, match="Invalid domain"):
-            pattern_add(domain="bogus", title="X", root=lib_root)
+    def test_unknown_domain_warns_but_succeeds(self, lib_root: Path):
+        """Unknown domains are accepted with a warning (domain-agnostic)."""
+        result = pattern_add(domain="bogus", title="Unknown domain pattern", root=lib_root)
+        assert result.id.startswith("bogus-")
 
     def test_invalid_category_raises(self, lib_root: Path):
         with pytest.raises(PatternError, match="Invalid category"):

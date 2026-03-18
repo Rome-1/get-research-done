@@ -1,6 +1,6 @@
-"""Cross-project physics pattern library management.
+"""Cross-project pattern library management.
 
-Manages a library of learned error patterns organized by physics domain.
+Manages a library of learned error patterns organized by domain.
 Patterns capture sign errors, factor errors, convention pitfalls, and other
 recurring issues that persist across GRD projects.
 
@@ -17,7 +17,7 @@ pattern_add      — add a new pattern
 pattern_list     — list with optional filters
 pattern_search   — keyword search
 pattern_promote  — promote confidence level
-pattern_seed     — initialize with canonical physics patterns
+pattern_seed     — initialize with canonical domain patterns
 """
 
 from __future__ import annotations
@@ -76,7 +76,12 @@ __all__ = [
 
 
 class PatternDomain(StrEnum):
-    """Physics domains for pattern classification."""
+    """Well-known pattern domains (physics subfields kept for backward compat).
+
+    The pattern library accepts ANY string domain — this enum provides
+    convenience constants for the physics domain pack.  Non-physics domain
+    packs define their own domains via subfield directories.
+    """
 
     QFT = "qft"
     CONDENSED_MATTER = "condensed-matter"
@@ -124,7 +129,26 @@ class ConfidenceLevel(StrEnum):
 
 
 #: Convenience sets for validation.
+#: VALID_DOMAINS includes physics enum values plus any domains discovered from
+#: the active domain pack's subfields directory at pattern_add time.
 VALID_DOMAINS: frozenset[str] = frozenset(e.value for e in PatternDomain)
+
+
+def _get_valid_domains() -> frozenset[str]:
+    """Return valid pattern domains: enum values + active domain pack subfields."""
+    domains = set(VALID_DOMAINS)
+    try:
+        from grd.domains.loader import load_domain
+        ctx = load_domain(os.environ.get("GRD_DOMAIN", "physics"))
+        if ctx is not None:
+            sf_dir = ctx.content_dir("subfields")
+            if sf_dir is not None and sf_dir.is_dir():
+                for p in sf_dir.iterdir():
+                    if p.suffix == ".md":
+                        domains.add(p.stem)
+    except Exception:
+        pass
+    return frozenset(domains)
 VALID_CATEGORIES: frozenset[str] = frozenset(e.value for e in PatternCategory)
 VALID_SEVERITIES: tuple[str, ...] = tuple(e.value for e in PatternSeverity)
 CONFIDENCE_LEVELS: tuple[str, ...] = tuple(e.value for e in ConfidenceLevel)
@@ -332,7 +356,7 @@ def ensure_library(root: Path | None = None) -> Path:
 
     root.mkdir(parents=True, exist_ok=True)
     domains_dir = root / PATTERNS_BY_DOMAIN_DIR
-    for domain in VALID_DOMAINS:
+    for domain in _get_valid_domains():
         (domains_dir / domain).mkdir(parents=True, exist_ok=True)
 
     index_path = root / PATTERNS_INDEX_FILENAME
@@ -368,8 +392,9 @@ def pattern_add(
     Raises:
         ValueError: On invalid domain/category/severity or duplicate ID.
     """
-    if domain not in VALID_DOMAINS:
-        raise PatternError(f"Invalid domain {domain!r}. Valid: {sorted(VALID_DOMAINS)}")
+    valid = _get_valid_domains()
+    if domain not in valid:
+        logger.warning("Unknown pattern domain %r (known: %s)", domain, sorted(valid))
     if category not in VALID_CATEGORIES:
         raise PatternError(f"Invalid category {category!r}. Valid: {sorted(VALID_CATEGORIES)}")
     if severity not in VALID_SEVERITIES:

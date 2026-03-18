@@ -301,7 +301,7 @@ def _resolve_errors_dir() -> Path:
                 return edir
     except Exception:  # noqa: BLE001
         pass
-    logger.warning("No errors directory found for domain '%s'", domain_name)
+    logger.warning("No errors directory found for domain '%s'; falling back to physics", domain_name)
     return Path(__file__).resolve().parent.parent.parent / "domains" / "physics" / "verification" / "errors"
 
 
@@ -321,7 +321,7 @@ mcp = FastMCP("grd-errors")
 
 @mcp.tool()
 def get_error_class(error_id: int) -> dict[str, object]:
-    """Get full details of a physics error class by ID.
+    """Get full details of an error class by ID.
 
     Returns the error name, description, detection strategy, and example.
 
@@ -347,7 +347,7 @@ def get_error_class(error_id: int) -> dict[str, object]:
 def check_error_classes(computation_desc: str) -> dict[str, object]:
     """Identify error classes relevant to a computation description.
 
-    Given a description of the physics computation being performed, finds the
+    Given a description of the computation being performed, finds the
     most relevant error classes by matching against error names and descriptions.
 
     Args:
@@ -371,7 +371,7 @@ def check_error_classes(computation_desc: str) -> dict[str, object]:
 def get_detection_strategy(error_id: int) -> dict[str, object]:
     """Get the detection strategy for a specific error class.
 
-    Returns the specific tests and checks to detect this type of physics error.
+    Returns the specific tests and checks to detect this type of error.
 
     Args:
         error_id: Numeric error class ID (1-104).
@@ -440,7 +440,7 @@ def get_traceability(error_id: int) -> dict[str, object]:
 
 @mcp.tool()
 def list_error_classes(domain: str | None = None) -> dict[str, object]:
-    """List all physics error classes, optionally filtered by domain.
+    """List all error classes, optionally filtered by domain.
 
     Args:
         domain: Optional domain filter. Available domains:

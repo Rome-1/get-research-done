@@ -549,7 +549,7 @@ class _GRDTyper(typer.Typer):
 
 app = _GRDTyper(
     name="grd",
-    help="GRD — Get Research Done: unified physics research CLI",
+    help="GRD — Get Research Done: domain-agnostic research CLI",
     no_args_is_help=True,
     add_completion=True,
 )
