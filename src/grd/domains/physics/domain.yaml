@@ -6,9 +6,14 @@ description: >
 version: 1
 
 conventions_file: conventions/convention-fields.yaml
-subfields_dir: subfields
-protocols_dir: protocols
-errors_dir: verification/errors
+
+content:
+  subfields: subfields
+  protocols: protocols
+  errors: verification/errors
+  project_types: project-types
+  bundles: bundles
+  verification: verification
 
 publication:
   journal_templates: publication/journal-templates.yaml

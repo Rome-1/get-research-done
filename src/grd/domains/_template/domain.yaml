@@ -5,9 +5,13 @@ description: >
 version: 1
 
 conventions_file: conventions/convention-fields.yaml
-subfields_dir: subfields
-protocols_dir: protocols
-errors_dir: errors
+
+# Declare active content types and their directory paths (relative to pack root).
+# Only list content types that this domain actually provides.
+content:
+  subfields: subfields
+  protocols: protocols
+  errors: errors
 
 branding:
   tagline: "Your tagline here"
