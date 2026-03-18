@@ -145,6 +145,14 @@ class _KnownConventions(list):
         self._ensure()
         return super().__repr__()
 
+    def __bool__(self):
+        self._ensure()
+        return len(self) > 0
+
+    def __add__(self, other):
+        self._ensure()
+        return super().__add__(other)
+
 
 KNOWN_CONVENTIONS: list[str] = _KnownConventions()
 
@@ -201,6 +209,14 @@ class _LazyDict(dict):
     def __repr__(self):
         self._ensure()
         return super().__repr__()
+
+    def __bool__(self):
+        self._ensure()
+        return len(self) > 0
+
+    def copy(self):
+        self._ensure()
+        return super().copy()
 
 
 CONVENTION_LABELS: dict[str, str] = _LazyDict("labels")

@@ -494,3 +494,114 @@ class TestConventionDiffPhases:
         assert result.changed == []
         assert result.added == []
         assert result.removed == []
+
+
+# ─── Lazy-loading proxy backward compatibility ─────────────────────────────
+
+
+class TestLazyProxyBackwardCompat:
+    """Tests for _KnownConventions and _LazyDict lazy-loading behavior."""
+
+    def test_known_conventions_bool_is_truthy(self):
+        """KNOWN_CONVENTIONS must be truthy (triggers lazy load)."""
+        assert bool(KNOWN_CONVENTIONS) is True
+
+    def test_known_conventions_add(self):
+        """KNOWN_CONVENTIONS + list must include all known conventions."""
+        result = KNOWN_CONVENTIONS + ["extra"]
+        assert "extra" in result
+        assert len(result) == len(KNOWN_CONVENTIONS) + 1
+
+    def test_lazy_dict_bool_is_truthy(self):
+        """KEY_ALIASES must be truthy (triggers lazy load)."""
+        from grd.core.conventions import KEY_ALIASES
+        assert bool(KEY_ALIASES) is True
+
+    def test_lazy_dict_copy(self):
+        """_LazyDict.copy() returns a plain dict with all loaded entries."""
+        from grd.core.conventions import KEY_ALIASES
+        copied = KEY_ALIASES.copy()
+        assert isinstance(copied, dict)
+        assert len(copied) == len(KEY_ALIASES)
+        assert copied == dict(KEY_ALIASES)
+
+    def test_convention_labels_bool_is_truthy(self):
+        """CONVENTION_LABELS must be truthy (triggers lazy load)."""
+        from grd.core.conventions import CONVENTION_LABELS
+        assert bool(CONVENTION_LABELS) is True
+
+    def test_value_aliases_bool_is_truthy(self):
+        """VALUE_ALIASES must be truthy (triggers lazy load)."""
+        from grd.core.conventions import VALUE_ALIASES
+        assert bool(VALUE_ALIASES) is True
+
+
+class TestLazyPhysicsProxyDegradation:
+    """Tests for _LazyPhysicsProxy graceful degradation."""
+
+    def test_proxy_returns_empty_on_load_failure(self, monkeypatch):
+        """When physics domain fails to load, proxy returns empty collections."""
+        from grd.core import conventions as conv_mod
+
+        proxy = conv_mod._LazyPhysicsProxy()
+        monkeypatch.setattr(conv_mod, "_load_physics_defaults", lambda: None)
+        assert proxy.known_conventions == []
+        assert proxy.labels == {}
+        assert proxy.key_aliases == {}
+        assert proxy.value_aliases == {}
+
+    def test_proxy_only_loads_once(self, monkeypatch):
+        """The proxy calls _load_physics_defaults exactly once."""
+        from grd.core import conventions as conv_mod
+
+        call_count = 0
+        original = conv_mod._load_physics_defaults
+
+        def counting_loader():
+            nonlocal call_count
+            call_count += 1
+            return original()
+
+        proxy = conv_mod._LazyPhysicsProxy()
+        monkeypatch.setattr(conv_mod, "_load_physics_defaults", counting_loader)
+        _ = proxy.known_conventions
+        _ = proxy.labels
+        _ = proxy.key_aliases
+        _ = proxy.value_aliases
+        assert call_count == 1
+
+
+# ─── Legacy migration edge cases ──────────────────────────────────────────
+
+
+class TestLegacyMigrationEdgeCases:
+    """Edge cases for ConventionLock._migrate_legacy_format."""
+
+    def test_conventions_dict_takes_precedence_over_flat_field(self):
+        """Explicit conventions dict value wins over flat physics field."""
+        lock = ConventionLock(**{
+            "conventions": {"metric_signature": "mostly-minus"},
+            "metric_signature": "mostly-plus",
+        })
+        assert lock.conventions["metric_signature"] == "mostly-minus"
+
+    def test_custom_conventions_none_values_filtered(self):
+        """None values in custom_conventions are not migrated."""
+        lock = ConventionLock(**{
+            "custom_conventions": {"keep": "value", "drop": None},
+        })
+        assert lock.conventions["keep"] == "value"
+        assert "drop" not in lock.conventions
+
+    def test_empty_conventions_with_flat_fields(self):
+        """Empty conventions dict still receives migrated flat fields."""
+        lock = ConventionLock(**{
+            "conventions": {},
+            "gauge_choice": "Lorenz",
+        })
+        assert lock.conventions["gauge_choice"] == "Lorenz"
+
+    def test_non_dict_data_passes_through(self):
+        """Non-dict data is returned unchanged by the validator."""
+        lock = ConventionLock()
+        assert lock.conventions == {}
