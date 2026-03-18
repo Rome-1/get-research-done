@@ -110,12 +110,14 @@ class TestPhysicsDomainContext:
         assert physics_ctx.convention_labels == CONVENTION_LABELS
 
     def test_physics_content_types(self, physics_ctx: DomainContext) -> None:
-        assert set(physics_ctx.content_types) == {"subfields", "protocols", "errors"}
+        assert set(physics_ctx.content_types) == {
+            "subfields", "protocols", "errors", "project_types", "bundles", "verification",
+        }
 
     def test_physics_content_dir_accessor(self, physics_ctx: DomainContext) -> None:
         pack_path = physics_ctx.pack_path
         assert physics_ctx.content_dir("protocols") == pack_path / "protocols"
-        assert physics_ctx.content_dir("errors") == pack_path / "errors"
+        assert physics_ctx.content_dir("errors") == pack_path / "verification" / "errors"
         assert physics_ctx.content_dir("subfields") == pack_path / "subfields"
 
     def test_physics_content_dir_unknown_returns_none(self, physics_ctx: DomainContext) -> None:
@@ -125,7 +127,7 @@ class TestPhysicsDomainContext:
         """The convenience .protocols_dir / .errors_dir / .subfields_dir still work."""
         pack_path = physics_ctx.pack_path
         assert physics_ctx.protocols_dir == pack_path / "protocols"
-        assert physics_ctx.errors_dir == pack_path / "errors"
+        assert physics_ctx.errors_dir == pack_path / "verification" / "errors"
         assert physics_ctx.subfields_dir == pack_path / "subfields"
 
 
