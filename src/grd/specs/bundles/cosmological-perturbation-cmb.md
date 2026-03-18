@@ -32,18 +32,18 @@ assets:
     - path: templates/project-types/cosmology.md
       required: true
   subfield_guides:
-    - path: references/subfields/gr-cosmology.md
+    - path: domains/physics/subfields/gr-cosmology.md
       required: true
   verification_domains:
-    - path: references/verification/domains/verification-domain-gr-cosmology.md
+    - path: domains/physics/verification/domains/verification-domain-gr-cosmology.md
       required: true
   protocols_core:
-    - path: references/protocols/cosmological-perturbation-theory.md
+    - path: domains/physics/protocols/cosmological-perturbation-theory.md
       required: true
-    - path: references/protocols/numerical-computation.md
+    - path: domains/physics/protocols/numerical-computation.md
   protocols_optional:
-    - path: references/protocols/de-sitter-space.md
-    - path: references/protocols/effective-field-theory.md
+    - path: domains/physics/protocols/de-sitter-space.md
+    - path: domains/physics/protocols/effective-field-theory.md
   execution_guides:
     - path: references/execution/executor-subfield-guide.md
 anchor_prompts:

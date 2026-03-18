@@ -32,19 +32,19 @@ assets:
     - path: templates/project-types/fluid-plasma.md
       required: true
   subfield_guides:
-    - path: references/subfields/fluid-plasma.md
+    - path: domains/physics/subfields/fluid-plasma.md
       required: true
   verification_domains:
-    - path: references/verification/domains/verification-domain-fluid-plasma.md
+    - path: domains/physics/verification/domains/verification-domain-fluid-plasma.md
       required: true
   protocols_core:
-    - path: references/protocols/fluid-dynamics-mhd.md
+    - path: domains/physics/protocols/fluid-dynamics-mhd.md
       required: true
-    - path: references/protocols/numerical-computation.md
+    - path: domains/physics/protocols/numerical-computation.md
   protocols_optional:
-    - path: references/protocols/non-equilibrium-transport.md
-    - path: references/protocols/stochastic-processes.md
-    - path: references/protocols/kinetic-theory.md
+    - path: domains/physics/protocols/non-equilibrium-transport.md
+    - path: domains/physics/protocols/stochastic-processes.md
+    - path: domains/physics/protocols/kinetic-theory.md
   execution_guides:
     - path: references/execution/executor-subfield-guide.md
 anchor_prompts:

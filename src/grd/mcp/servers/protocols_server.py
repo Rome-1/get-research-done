@@ -1,8 +1,7 @@
 """GRD Protocols MCP server — exposes domain computation protocols via MCP tools.
 
-Loads protocol files from the active domain pack's protocols directory (or falls
-back to specs/references/protocols/ for the built-in physics domain), parses YAML
-frontmatter and markdown body, and serves them via FastMCP tools.
+Loads protocol files from the active domain pack's protocols directory, parses
+YAML frontmatter and markdown body, and serves them via FastMCP tools.
 
 Set GRD_DOMAIN env var to select a domain pack (default: "physics").
 
@@ -20,13 +19,10 @@ from mcp.server.fastmcp import FastMCP
 
 from grd.core.observability import grd_span
 from grd.mcp.servers import parse_frontmatter_safe, run_mcp_server
-from grd.specs import SPECS_DIR
 
 # MCP stdio uses stdout for JSON-RPC — redirect logging to stderr
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(name)s %(levelname)s: %(message)s")
 logger = logging.getLogger("grd-protocols")
-
-PROTOCOLS_DIR = SPECS_DIR / "references" / "protocols"
 
 # ---------------------------------------------------------------------------
 # Parsing
@@ -303,11 +299,7 @@ _store_lock = threading.Lock()
 
 
 def _resolve_protocols_dir() -> Path:
-    """Resolve the protocols directory, preferring domain pack if available.
-
-    Falls back to the built-in specs directory when the domain pack's protocols
-    directory is missing or empty (i.e. content hasn't been migrated yet).
-    """
+    """Resolve the protocols directory from the active domain pack."""
     import os
 
     domain_name = os.environ.get("GRD_DOMAIN", "physics")
@@ -321,7 +313,8 @@ def _resolve_protocols_dir() -> Path:
                 return pdir
     except Exception:  # noqa: BLE001
         pass
-    return PROTOCOLS_DIR
+    logger.warning("No protocols directory found for domain '%s'", domain_name)
+    return Path(__file__).resolve().parent.parent.parent / "domains" / "physics" / "protocols"
 
 
 def _get_store() -> ProtocolStore:

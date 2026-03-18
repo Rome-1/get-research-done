@@ -233,11 +233,11 @@ If not set in config.json, default to `balanced`.
 <references>
 - `@{GRD_INSTALL_DIR}/references/shared/shared-protocols.md` -- Shared protocols: forbidden files, source hierarchy, convention tracking, physics verification
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md` -- Shared infrastructure: data boundary, context pressure, commit protocol
-- `@{GRD_INSTALL_DIR}/references/protocols/order-of-limits.md` -- Non-commuting limits protocol
+- `@{GRD_INSTALL_DIR}/domains/physics/protocols/order-of-limits.md` -- Non-commuting limits protocol
 
 **On-demand references:**
 - `{GRD_INSTALL_DIR}/references/methods/approximation-selection.md` -- Decision framework for choosing approximation methods (load when planning tasks that involve non-trivial method selection)
-- `{GRD_INSTALL_DIR}/references/verification/core/code-testing-physics.md` -- Physics-specific testing patterns (load when planning TDD tasks or verification-heavy plans)
+- `{GRD_INSTALL_DIR}/domains/physics/verification/core/code-testing-physics.md` -- Physics-specific testing patterns (load when planning TDD tasks or verification-heavy plans)
 - `{GRD_INSTALL_DIR}/templates/parameter-table.md` -- Template for `.grd/analysis/PARAMETERS.md` (load when planning numerical/computational phases that introduce physical parameters)
 </references>
 
@@ -1494,8 +1494,8 @@ Loaded from shared-protocols.md reference. See `<references>` section above.
 
 For subfield-specific priority checks, red flags, and standard benchmarks, consult the selected protocol bundle context first. If no bundle is selected or the bundle is incomplete, fall back to:
 
-- `@{GRD_INSTALL_DIR}/references/physics-subfields.md` -- Methods, tools, validation per subfield
-- `@{GRD_INSTALL_DIR}/references/verification/core/verification-core.md` -- Universal verification checks and quick-reference priority checks
+- `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md` -- Methods, tools, validation per subfield
+- `@{GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md` -- Universal verification checks and quick-reference priority checks
 - `@{GRD_INSTALL_DIR}/references/orchestration/checkpoints.md` -- Checkpoint types, when to use, and structuring guidance
 
 When planning verification tasks, include the verifier extensions, estimator policies, and decisive artifact guidance from the selected protocol bundles when present. Use the subfield selection guide only as a fallback when bundle metadata is absent or insufficient.
@@ -1603,7 +1603,7 @@ Why bad: Verification fatigue. Use automated physics checks (dimensions, limits)
 
 <hypothesis_driven>
 
-**On-demand reference:** `{GRD_INSTALL_DIR}/references/protocols/hypothesis-driven-research.md` — Load when a phase involves calculations with known limiting cases, competing theoretical predictions, or parameter-dependent regime changes. Hypothesis-driven plans require 2-3x more tasks (predict-derive-verify cycle) but produce more robust results.
+**On-demand reference:** `{GRD_INSTALL_DIR}/domains/physics/protocols/hypothesis-driven-research.md` — Load when a phase involves calculations with known limiting cases, competing theoretical predictions, or parameter-dependent regime changes. Hypothesis-driven plans require 2-3x more tasks (predict-derive-verify cycle) but produce more robust results.
 
 </hypothesis_driven>
 

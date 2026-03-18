@@ -287,7 +287,7 @@ Agents should handle the empty-library case gracefully: no patterns found means 
 
 ## Bootstrap Patterns
 
-Seed patterns derived from common LLM physics error classes (see `references/verification/errors/llm-physics-errors.md`). These provide immediate value even before the automated library infrastructure is in place.
+Seed patterns derived from common LLM physics error classes (see `domains/physics/verification/errors/llm-physics-errors.md`). These provide immediate value even before the automated library infrastructure is in place.
 
 ### Pattern 1: Sign Error in Fourier Convention Switch
 
@@ -371,7 +371,7 @@ Seed patterns derived from common LLM physics error classes (see `references/ver
 
 **Detection:** Check that the final expression has correct SI dimensions. Evaluate numerically in both unit systems and compare.
 
-**Prevention:** Use the systematic procedure: identify mass dimension in natural units, then restore [energy] = [M][c²], [length] = [ℏ]/([M][c]), [time] = [ℏ]/([M][c²]). See error class 33 in `references/verification/errors/llm-physics-errors.md` for worked examples.
+**Prevention:** Use the systematic procedure: identify mass dimension in natural units, then restore [energy] = [M][c²], [length] = [ℏ]/([M][c]), [time] = [ℏ]/([M][c²]). See error class 33 in `domains/physics/verification/errors/llm-physics-errors.md` for worked examples.
 
 ### Pattern 8: Wrong Sign in Wick Rotation
 

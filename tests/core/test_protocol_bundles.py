@@ -238,7 +238,7 @@ def test_get_protocol_bundle_returns_verifier_extensions() -> None:
     assert bundle is not None
     assert bundle.trigger.min_term_matches == 2
     assert bundle.trigger.min_tag_matches == 1
-    assert bundle.assets.subfield_guides[0].path == "references/subfields/stat-mech.md"
+    assert bundle.assets.subfield_guides[0].path == "domains/physics/subfields/stat-mech.md"
     assert bundle.verifier_extensions[0].check_ids == ["5.4", "5.14", "5.16"]
 
 
@@ -263,7 +263,7 @@ def test_select_protocol_bundles_uses_project_metadata_and_contract() -> None:
     assert [bundle.bundle_id for bundle in selected] == ["stat-mech-simulation"]
     assert "acceptance-kind:benchmark" in selected[0].matched_tags
     assert "finite-size scaling" in selected[0].matched_terms
-    assert "references/protocols/monte-carlo.md" in selected[0].asset_paths
+    assert "domains/physics/protocols/monte-carlo.md" in selected[0].asset_paths
 
 
 def test_render_protocol_bundle_context_is_explicit_when_none_selected() -> None:
@@ -286,7 +286,7 @@ def test_render_protocol_bundle_context_surfaces_guidance() -> None:
     assert "Selection tags:" in rendered
     assert "Estimator policies:" in rendered
     assert "Verifier extensions:" in rendered
-    assert "{GRD_INSTALL_DIR}/references/protocols/monte-carlo.md" in rendered
+    assert "{GRD_INSTALL_DIR}/domains/physics/protocols/monte-carlo.md" in rendered
 
 
 def test_select_protocol_bundles_lattice_gauge_excludes_stat_mech_when_both_match() -> None:
@@ -378,7 +378,7 @@ trigger:
                 reference_why="Benchmark waveform and remnant data anchor the strong-field result.",
                 forbidden_proxy="Smooth-looking waveforms without converged constraints or benchmark agreement",
             ),
-            "references/protocols/numerical-relativity.md",
+            "domains/physics/protocols/numerical-relativity.md",
             "bssn",
         ),
         (
@@ -402,7 +402,7 @@ trigger:
                 reference_why="Benchmark ensembles and reference scales anchor the lattice comparison.",
                 forbidden_proxy="Pretty correlator plateaus without topology, scale-setting, or continuum checks",
             ),
-            "references/protocols/lattice-gauge-theory.md",
+            "domains/physics/protocols/lattice-gauge-theory.md",
             "lattice qcd",
         ),
         (
@@ -426,7 +426,7 @@ trigger:
                 reference_why="Benchmark data anchors the reliable finite-chi time window.",
                 forbidden_proxy="Late-time traces shown after entanglement saturation without benchmarked validity window",
             ),
-            "references/protocols/tensor-networks.md",
+            "domains/physics/protocols/tensor-networks.md",
             "tebd",
         ),
         (
@@ -450,7 +450,7 @@ trigger:
                 reference_why="Benchmark spectra and conventions anchor the cosmological comparison.",
                 forbidden_proxy="Background-only agreement without transfer-function or CMB benchmark parity",
             ),
-            "references/protocols/cosmological-perturbation-theory.md",
+            "domains/physics/protocols/cosmological-perturbation-theory.md",
             "class",
         ),
         (
@@ -474,7 +474,7 @@ trigger:
                 reference_why="Benchmark flow behavior anchors regime-specific validation.",
                 forbidden_proxy="Visually plausible flow fields without regime checks, conservation diagnostics, or benchmark comparisons",
             ),
-            "references/protocols/fluid-dynamics-mhd.md",
+            "domains/physics/protocols/fluid-dynamics-mhd.md",
             "alfven wave",
         ),
         (
@@ -498,7 +498,7 @@ trigger:
                 reference_why="Benchmark observables anchor the DFT comparison and expose proxy-versus-direct gaps.",
                 forbidden_proxy="Single-shot Kohn-Sham output treated as final without convergence or benchmark comparison",
             ),
-            "references/protocols/density-functional-theory.md",
+            "domains/physics/protocols/density-functional-theory.md",
             "kohn sham",
         ),
     ],

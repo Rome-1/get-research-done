@@ -8,7 +8,7 @@ version: 1
 conventions_file: conventions/convention-fields.yaml
 subfields_dir: subfields
 protocols_dir: protocols
-errors_dir: errors
+errors_dir: verification/errors
 
 publication:
   journal_templates: publication/journal-templates.yaml

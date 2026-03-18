@@ -285,11 +285,11 @@ Query pattern: `"[topic]" review` on arXiv or Google Scholar, sort by citations.
 
 ## Physics Verification
 
-For the complete verification hierarchy and check procedures, see `references/verification/core/verification-core.md` (universal checks) and the domain-specific verification files (13 domains — see table below). For a compact checklist, see `references/verification/core/verification-quick-reference.md`. For HIGH-risk error class priorities, see `references/verification/audits/verification-gap-summary.md`.
+For the complete verification hierarchy and check procedures, see `domains/physics/verification/core/verification-core.md` (universal checks) and the domain-specific verification files (13 domains — see table below). For a compact checklist, see `domains/physics/verification/core/verification-quick-reference.md`. For HIGH-risk error class priorities, see `domains/physics/verification/audits/verification-gap-summary.md`.
 
-For LLM-specific physics error patterns and detection strategies, see `references/verification/errors/llm-physics-errors.md`. For a lightweight traceability matrix, see `references/verification/errors/llm-errors-traceability.md`.
+For LLM-specific physics error patterns and detection strategies, see `domains/physics/verification/errors/llm-physics-errors.md`. For a lightweight traceability matrix, see `domains/physics/verification/errors/llm-errors-traceability.md`.
 
-For convention declarations, see `../conventions/conventions-quick-reference.md` (compact) or the Convention Tracking Protocol section above (full).
+For convention declarations, see `domains/physics/conventions/conventions-quick-reference.md` (compact) or the Convention Tracking Protocol section above (full).
 
 **Quick reference** — verification priority order:
 1. Dimensional analysis (catches ~40% of errors)
@@ -306,96 +306,96 @@ Each protocol below provides step-by-step procedures for a specific computationa
 
 | Protocol | File | When to Use |
 |---|---|---|
-| Derivation Discipline | `references/protocols/derivation-discipline.md` | Every derivation — sign tracking, convention annotation, checkpointing |
-| Integral Evaluation | `references/protocols/integral-evaluation.md` | Any integral — convergence, contour, regularization |
-| Perturbation Theory | `references/protocols/perturbation-theory.md` | Any perturbative expansion — combinatorics, Ward identities, divergences |
-| Renormalization Group | `references/protocols/renormalization-group.md` | RG flows, beta functions, fixed points, critical exponents |
-| Path Integrals | `references/protocols/path-integrals.md` | Path integral evaluation — measure, saddle points, anomalies |
-| Effective Field Theory | `references/protocols/effective-field-theory.md` | EFT construction — power counting, matching, running |
-| Electrodynamics | `references/protocols/electrodynamics.md` | EM calculations — unit systems, Maxwell equations, radiation, Lienard-Wiechert, duality |
-| Analytic Continuation | `references/protocols/analytic-continuation.md` | Wick rotation, Matsubara sums, numerical continuation, dispersion relations |
-| Order of Limits | `references/protocols/order-of-limits.md` | Any calculation with multiple limits — non-commuting limit detection |
-| Classical Mechanics | `references/protocols/classical-mechanics.md` | Lagrangian/Newtonian mechanics — constraints, conserved quantities, oscillations |
-| Hamiltonian Mechanics | `references/protocols/hamiltonian-mechanics.md` | Canonical transformations, Poisson brackets, Hamilton-Jacobi, action-angle variables |
-| Scattering Theory | `references/protocols/scattering-theory.md` | Cross sections, phase shifts, S-matrix, partial waves, optical theorem |
-| Phenomenology | `references/protocols/phenomenology.md` | Likelihoods, global fits, EFT validity, recasting, correlated uncertainties, public reinterpretation |
-| Supersymmetry | `references/protocols/supersymmetry.md` | SUSY algebra, BPS bounds, localization, Seiberg-Witten/duality, soft breaking, supergravity caveats |
-| String Field Theory | `references/protocols/string-field-theory.md` | BRST string fields, star product, BV, `A_infinity` / `L_infinity`, tachyon condensation |
-| Cosmological Perturbation Theory | `references/protocols/cosmological-perturbation-theory.md` | Inflation, scalar/tensor perturbations, gauge choices, power spectra |
-| de Sitter Space | `references/protocols/de-sitter-space.md` | Positive cosmological constant, cosmological horizons, dS/CFT, static patch holography |
-| Holography / AdS-CFT | `references/protocols/holography-ads-cft.md` | AdS/CFT dictionary, holographic renormalization, entanglement entropy |
-| Quantum Error Correction | `references/protocols/quantum-error-correction.md` | Stabilizer codes, surface codes, fault tolerance, threshold theorems |
-| Resummation | `references/protocols/resummation.md` | Borel summation, Pade approximants, conformal mapping, optimized perturbation theory |
+| Derivation Discipline | `domains/physics/protocols/derivation-discipline.md` | Every derivation — sign tracking, convention annotation, checkpointing |
+| Integral Evaluation | `domains/physics/protocols/integral-evaluation.md` | Any integral — convergence, contour, regularization |
+| Perturbation Theory | `domains/physics/protocols/perturbation-theory.md` | Any perturbative expansion — combinatorics, Ward identities, divergences |
+| Renormalization Group | `domains/physics/protocols/renormalization-group.md` | RG flows, beta functions, fixed points, critical exponents |
+| Path Integrals | `domains/physics/protocols/path-integrals.md` | Path integral evaluation — measure, saddle points, anomalies |
+| Effective Field Theory | `domains/physics/protocols/effective-field-theory.md` | EFT construction — power counting, matching, running |
+| Electrodynamics | `domains/physics/protocols/electrodynamics.md` | EM calculations — unit systems, Maxwell equations, radiation, Lienard-Wiechert, duality |
+| Analytic Continuation | `domains/physics/protocols/analytic-continuation.md` | Wick rotation, Matsubara sums, numerical continuation, dispersion relations |
+| Order of Limits | `domains/physics/protocols/order-of-limits.md` | Any calculation with multiple limits — non-commuting limit detection |
+| Classical Mechanics | `domains/physics/protocols/classical-mechanics.md` | Lagrangian/Newtonian mechanics — constraints, conserved quantities, oscillations |
+| Hamiltonian Mechanics | `domains/physics/protocols/hamiltonian-mechanics.md` | Canonical transformations, Poisson brackets, Hamilton-Jacobi, action-angle variables |
+| Scattering Theory | `domains/physics/protocols/scattering-theory.md` | Cross sections, phase shifts, S-matrix, partial waves, optical theorem |
+| Phenomenology | `domains/physics/protocols/phenomenology.md` | Likelihoods, global fits, EFT validity, recasting, correlated uncertainties, public reinterpretation |
+| Supersymmetry | `domains/physics/protocols/supersymmetry.md` | SUSY algebra, BPS bounds, localization, Seiberg-Witten/duality, soft breaking, supergravity caveats |
+| String Field Theory | `domains/physics/protocols/string-field-theory.md` | BRST string fields, star product, BV, `A_infinity` / `L_infinity`, tachyon condensation |
+| Cosmological Perturbation Theory | `domains/physics/protocols/cosmological-perturbation-theory.md` | Inflation, scalar/tensor perturbations, gauge choices, power spectra |
+| de Sitter Space | `domains/physics/protocols/de-sitter-space.md` | Positive cosmological constant, cosmological horizons, dS/CFT, static patch holography |
+| Holography / AdS-CFT | `domains/physics/protocols/holography-ads-cft.md` | AdS/CFT dictionary, holographic renormalization, entanglement entropy |
+| Quantum Error Correction | `domains/physics/protocols/quantum-error-correction.md` | Stabilizer codes, surface codes, fault tolerance, threshold theorems |
+| Resummation | `domains/physics/protocols/resummation.md` | Borel summation, Pade approximants, conformal mapping, optimized perturbation theory |
 
 ### Computational Method Protocols
 
 | Protocol | File | When to Use |
 |---|---|---|
-| Monte Carlo Methods | `references/protocols/monte-carlo.md` | MC simulations — thermalization, autocorrelation, error estimation, sign problem |
-| Variational Methods | `references/protocols/variational-methods.md` | Variational calculations — ansatz design, optimization, VMC, coupled cluster |
-| Density Functional Theory | `references/protocols/density-functional-theory.md` | DFT calculations — functional selection, convergence, band gaps, vdW |
-| Lattice Gauge Theory | `references/protocols/lattice-gauge-theory.md` | Lattice QCD/QFT — fermion discretization, topology, continuum extrapolation |
-| Tensor Networks | `references/protocols/tensor-networks.md` | MPS/DMRG/PEPS — bond dimension convergence, entanglement, time evolution |
-| Symmetry Analysis | `references/protocols/symmetry-analysis.md` | Symmetry identification, representations, selection rules, SSB, anomalies |
-| Asymptotic Symmetries | `references/protocols/asymptotic-symmetries.md` | Bondi gauge, null infinity, large gauge transformations, BMS charges, soft/memory checks |
-| Generalized Symmetries | `references/protocols/generalized-symmetries.md` | Higher-form symmetries, center symmetry, higher-group structure, non-invertible defects, anomaly checks |
-| Non-Equilibrium Transport | `references/protocols/non-equilibrium-transport.md` | Kubo formulas, Keldysh formalism, Boltzmann equation, Mori-Zwanzig |
-| Finite-Temperature Field Theory | `references/protocols/finite-temperature-field-theory.md` | Matsubara frequencies, Schwinger-Keldysh, HTL resummation, IR problems |
-| Conformal Bootstrap | `references/protocols/conformal-bootstrap.md` | Crossing symmetry, OPE, unitarity bounds, SDPB, extremal functionals |
-| Numerical Relativity | `references/protocols/numerical-relativity.md` | 3+1 decomposition, BSSN, gauge conditions, constraint monitoring, GW extraction |
-| Exact Diagonalization | `references/protocols/exact-diagonalization.md` | Lanczos, Hilbert space truncation, symmetry sectors, spectral functions |
-| Many-Body Perturbation Theory | `references/protocols/many-body-perturbation-theory.md` | GW approximation, Bethe-Salpeter, quasiparticle self-energy, vertex corrections |
-| Molecular Dynamics | `references/protocols/molecular-dynamics.md` | MD simulations, force fields, thermostats, barostats, integration schemes |
-| Machine Learning for Physics | `references/protocols/machine-learning-physics.md` | Neural network potentials, physics-informed ML, generative models, symmetry equivariance |
-| Stochastic Processes | `references/protocols/stochastic-processes.md` | Langevin equation, Fokker-Planck, master equations, stochastic calculus |
-| Kinetic Theory | `references/protocols/kinetic-theory.md` | Boltzmann equation, collision integrals, Chapman-Enskog, transport coefficients |
-| Bethe Ansatz | `references/protocols/bethe-ansatz.md` | Coordinate/algebraic/thermodynamic Bethe ansatz, integrable models, spin chains |
-| Random Matrix Theory | `references/protocols/random-matrix-theory.md` | GOE/GUE/GSE ensembles, level spacing, Tracy-Widom, quantum chaos diagnostics |
+| Monte Carlo Methods | `domains/physics/protocols/monte-carlo.md` | MC simulations — thermalization, autocorrelation, error estimation, sign problem |
+| Variational Methods | `domains/physics/protocols/variational-methods.md` | Variational calculations — ansatz design, optimization, VMC, coupled cluster |
+| Density Functional Theory | `domains/physics/protocols/density-functional-theory.md` | DFT calculations — functional selection, convergence, band gaps, vdW |
+| Lattice Gauge Theory | `domains/physics/protocols/lattice-gauge-theory.md` | Lattice QCD/QFT — fermion discretization, topology, continuum extrapolation |
+| Tensor Networks | `domains/physics/protocols/tensor-networks.md` | MPS/DMRG/PEPS — bond dimension convergence, entanglement, time evolution |
+| Symmetry Analysis | `domains/physics/protocols/symmetry-analysis.md` | Symmetry identification, representations, selection rules, SSB, anomalies |
+| Asymptotic Symmetries | `domains/physics/protocols/asymptotic-symmetries.md` | Bondi gauge, null infinity, large gauge transformations, BMS charges, soft/memory checks |
+| Generalized Symmetries | `domains/physics/protocols/generalized-symmetries.md` | Higher-form symmetries, center symmetry, higher-group structure, non-invertible defects, anomaly checks |
+| Non-Equilibrium Transport | `domains/physics/protocols/non-equilibrium-transport.md` | Kubo formulas, Keldysh formalism, Boltzmann equation, Mori-Zwanzig |
+| Finite-Temperature Field Theory | `domains/physics/protocols/finite-temperature-field-theory.md` | Matsubara frequencies, Schwinger-Keldysh, HTL resummation, IR problems |
+| Conformal Bootstrap | `domains/physics/protocols/conformal-bootstrap.md` | Crossing symmetry, OPE, unitarity bounds, SDPB, extremal functionals |
+| Numerical Relativity | `domains/physics/protocols/numerical-relativity.md` | 3+1 decomposition, BSSN, gauge conditions, constraint monitoring, GW extraction |
+| Exact Diagonalization | `domains/physics/protocols/exact-diagonalization.md` | Lanczos, Hilbert space truncation, symmetry sectors, spectral functions |
+| Many-Body Perturbation Theory | `domains/physics/protocols/many-body-perturbation-theory.md` | GW approximation, Bethe-Salpeter, quasiparticle self-energy, vertex corrections |
+| Molecular Dynamics | `domains/physics/protocols/molecular-dynamics.md` | MD simulations, force fields, thermostats, barostats, integration schemes |
+| Machine Learning for Physics | `domains/physics/protocols/machine-learning-physics.md` | Neural network potentials, physics-informed ML, generative models, symmetry equivariance |
+| Stochastic Processes | `domains/physics/protocols/stochastic-processes.md` | Langevin equation, Fokker-Planck, master equations, stochastic calculus |
+| Kinetic Theory | `domains/physics/protocols/kinetic-theory.md` | Boltzmann equation, collision integrals, Chapman-Enskog, transport coefficients |
+| Bethe Ansatz | `domains/physics/protocols/bethe-ansatz.md` | Coordinate/algebraic/thermodynamic Bethe ansatz, integrable models, spin chains |
+| Random Matrix Theory | `domains/physics/protocols/random-matrix-theory.md` | GOE/GUE/GSE ensembles, level spacing, Tracy-Widom, quantum chaos diagnostics |
 
 ### Mathematical Method Protocols
 
 | Protocol | File | When to Use |
 |---|---|---|
-| Algebraic QFT | `references/protocols/algebraic-qft.md` | Haag-Kastler nets, modular theory, DHR sectors, factor types, split and duality properties |
-| Group Theory | `references/protocols/group-theory.md` | Representations, Clebsch-Gordan coefficients, character tables, selection rules |
-| Topological Methods | `references/protocols/topological-methods.md` | Berry phase, Chern numbers, topological invariants, edge states, bulk-boundary |
-| Green's Functions | `references/protocols/green-functions.md` | Retarded/advanced/Matsubara propagators, spectral functions, Dyson equation, analytic continuation |
-| WKB & Semiclassical | `references/protocols/wkb-semiclassical.md` | WKB approximation, Bohr-Sommerfeld, tunneling, connection formulas, semiclassical limit |
-| Large-N Expansion | `references/protocols/large-n-expansion.md` | 1/N expansion, 't Hooft limit, saddle-point, planar diagrams, matrix models |
+| Algebraic QFT | `domains/physics/protocols/algebraic-qft.md` | Haag-Kastler nets, modular theory, DHR sectors, factor types, split and duality properties |
+| Group Theory | `domains/physics/protocols/group-theory.md` | Representations, Clebsch-Gordan coefficients, character tables, selection rules |
+| Topological Methods | `domains/physics/protocols/topological-methods.md` | Berry phase, Chern numbers, topological invariants, edge states, bulk-boundary |
+| Green's Functions | `domains/physics/protocols/green-functions.md` | Retarded/advanced/Matsubara propagators, spectral functions, Dyson equation, analytic continuation |
+| WKB & Semiclassical | `domains/physics/protocols/wkb-semiclassical.md` | WKB approximation, Bohr-Sommerfeld, tunneling, connection formulas, semiclassical limit |
+| Large-N Expansion | `domains/physics/protocols/large-n-expansion.md` | 1/N expansion, 't Hooft limit, saddle-point, planar diagrams, matrix models |
 
 ### Domain-Specific Verification
 
 | Domain | File | What It Covers |
 |---|---|---|
-| QFT / Particle / GR | `references/verification/domains/verification-domain-qft.md` | Ward identities, unitarity, crossing symmetry, gauge invariance |
-| Condensed Matter | `references/verification/domains/verification-domain-condmat.md` | f-sum rule, Luttinger theorem, Kramers-Kronig, Goldstone modes |
-| Statistical Mechanics / Cosmology | `references/verification/domains/verification-domain-statmech.md` | Detailed balance, thermodynamic limit, finite-size scaling, critical exponents |
-| Fluid Dynamics / Plasma Physics | `references/verification/domains/verification-domain-fluid-plasma.md` | MHD equilibrium, Alfven waves, reconnection, turbulence spectra, conservation laws, CFL, div(B) |
-| General Relativity / Cosmology | `references/verification/domains/verification-domain-gr-cosmology.md` | Coordinate invariance, ADM consistency, energy conditions, Friedmann equations |
-| AMO Physics | `references/verification/domains/verification-domain-amo.md` | RWA validity, selection rules, dipole approximation, AC Stark shifts |
-| Nuclear / Particle Physics | `references/verification/domains/verification-domain-nuclear-particle.md` | Magic numbers, shell model, parton sum rules, CKM unitarity |
-| Astrophysics | `references/verification/domains/verification-domain-astrophysics.md` | Eddington luminosity, stellar structure, Jeans mass, opacity |
-| Mathematical Physics | `references/verification/domains/verification-domain-mathematical-physics.md` | Analyticity, spectral theory, asymptotics, distribution theory |
-| Algebraic QFT | `references/verification/domains/verification-domain-algebraic-qft.md` | Haag-Kastler nets, modular theory, type `I/II/III`, DHR sectors, split and duality checks |
-| String Field Theory | `references/verification/domains/verification-domain-string-field-theory.md` | BRST nilpotency, ghost/picture counting, BPZ cyclicity, truncation convergence |
-| Quantum Information | `references/verification/domains/verification-domain-quantum-info.md` | CPTP maps, entanglement measures, information bounds, channel capacity |
-| Soft Matter / Biophysics | `references/verification/domains/verification-domain-soft-matter.md` | Equilibration, scaling laws, force fields, finite-size analysis |
+| QFT / Particle / GR | `domains/physics/verification/domains/verification-domain-qft.md` | Ward identities, unitarity, crossing symmetry, gauge invariance |
+| Condensed Matter | `domains/physics/verification/domains/verification-domain-condmat.md` | f-sum rule, Luttinger theorem, Kramers-Kronig, Goldstone modes |
+| Statistical Mechanics / Cosmology | `domains/physics/verification/domains/verification-domain-statmech.md` | Detailed balance, thermodynamic limit, finite-size scaling, critical exponents |
+| Fluid Dynamics / Plasma Physics | `domains/physics/verification/domains/verification-domain-fluid-plasma.md` | MHD equilibrium, Alfven waves, reconnection, turbulence spectra, conservation laws, CFL, div(B) |
+| General Relativity / Cosmology | `domains/physics/verification/domains/verification-domain-gr-cosmology.md` | Coordinate invariance, ADM consistency, energy conditions, Friedmann equations |
+| AMO Physics | `domains/physics/verification/domains/verification-domain-amo.md` | RWA validity, selection rules, dipole approximation, AC Stark shifts |
+| Nuclear / Particle Physics | `domains/physics/verification/domains/verification-domain-nuclear-particle.md` | Magic numbers, shell model, parton sum rules, CKM unitarity |
+| Astrophysics | `domains/physics/verification/domains/verification-domain-astrophysics.md` | Eddington luminosity, stellar structure, Jeans mass, opacity |
+| Mathematical Physics | `domains/physics/verification/domains/verification-domain-mathematical-physics.md` | Analyticity, spectral theory, asymptotics, distribution theory |
+| Algebraic QFT | `domains/physics/verification/domains/verification-domain-algebraic-qft.md` | Haag-Kastler nets, modular theory, type `I/II/III`, DHR sectors, split and duality checks |
+| String Field Theory | `domains/physics/verification/domains/verification-domain-string-field-theory.md` | BRST nilpotency, ghost/picture counting, BPZ cyclicity, truncation convergence |
+| Quantum Information | `domains/physics/verification/domains/verification-domain-quantum-info.md` | CPTP maps, entanglement measures, information bounds, channel capacity |
+| Soft Matter / Biophysics | `domains/physics/verification/domains/verification-domain-soft-matter.md` | Equilibration, scaling laws, force fields, finite-size analysis |
 
 ### Numerical and Translation Protocols
 
 | Protocol | File | When to Use |
 |---|---|---|
-| Numerical Computation | `references/protocols/numerical-computation.md` | Numerical stability, convergence testing, error propagation |
-| Symbolic to Numerical | `references/protocols/symbolic-to-numerical.md` | Converting analytic results to numerical code |
+| Numerical Computation | `domains/physics/protocols/numerical-computation.md` | Numerical stability, convergence testing, error propagation |
+| Symbolic to Numerical | `domains/physics/protocols/symbolic-to-numerical.md` | Converting analytic results to numerical code |
 
 ### LLM-Specific Error Guards
 
 | Reference | File | When to Use |
 |---|---|---|
-| LLM Physics Error Catalog | `references/verification/errors/llm-physics-errors.md` | Index to 104 systematic error classes across 4 part files with detection strategies |
-| Verification Gap Summary | `references/verification/audits/verification-gap-summary.md` | HIGH-risk error classes for routine verification prioritization (compact summary) |
+| LLM Physics Error Catalog | `domains/physics/verification/errors/llm-physics-errors.md` | Index to 104 systematic error classes across 4 part files with detection strategies |
+| Verification Gap Summary | `domains/physics/verification/audits/verification-gap-summary.md` | HIGH-risk error classes for routine verification prioritization (compact summary) |
 
-The LLM Physics Error Catalog documents error patterns specific to language model outputs (wrong CG coefficients, hallucinated identities, Grassmann sign errors, etc.) and should be consulted as a checklist when verifying LLM-produced calculations. The catalog is split into 4 files for context efficiency: `references/verification/errors/llm-errors-core.md` (#1-25), `references/verification/errors/llm-errors-field-theory.md` (#26-51), `references/verification/errors/llm-errors-extended.md` (#52-81, #102-104), `references/verification/errors/llm-errors-deep.md` (#82-101).
+The LLM Physics Error Catalog documents error patterns specific to language model outputs (wrong CG coefficients, hallucinated identities, Grassmann sign errors, etc.) and should be consulted as a checklist when verifying LLM-produced calculations. The catalog is split into 4 files for context efficiency: `domains/physics/verification/errors/llm-errors-core.md` (#1-25), `domains/physics/verification/errors/llm-errors-field-theory.md` (#26-51), `domains/physics/verification/errors/llm-errors-extended.md` (#52-81, #102-104), `domains/physics/verification/errors/llm-errors-deep.md` (#82-101).
 
 ## Research Agent Shared Protocol
 

@@ -29,19 +29,19 @@ assets:
     - path: templates/project-types/stat-mech-simulation.md
       required: true
   subfield_guides:
-    - path: references/subfields/stat-mech.md
+    - path: domains/physics/subfields/stat-mech.md
       required: true
   verification_domains:
-    - path: references/verification/domains/verification-domain-statmech.md
+    - path: domains/physics/verification/domains/verification-domain-statmech.md
       required: true
   protocols_core:
-    - path: references/protocols/monte-carlo.md
+    - path: domains/physics/protocols/monte-carlo.md
       required: true
-    - path: references/protocols/stochastic-processes.md
-    - path: references/protocols/numerical-computation.md
+    - path: domains/physics/protocols/stochastic-processes.md
+    - path: domains/physics/protocols/numerical-computation.md
   protocols_optional:
-    - path: references/protocols/statistical-inference.md
-    - path: references/protocols/renormalization-group.md
+    - path: domains/physics/protocols/statistical-inference.md
+    - path: domains/physics/protocols/renormalization-group.md
   execution_guides:
     - path: references/execution/executor-subfield-guide.md
 anchor_prompts:

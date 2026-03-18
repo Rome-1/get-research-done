@@ -423,24 +423,36 @@ class TestErrorsMcp:
         with patch("grd.mcp.servers.errors_mcp._get_store", return_value=mock):
             yield
 
-    def test_catalog_files_live_under_verification_errors_subtree(self):
-        from grd.mcp.servers.errors_mcp import ERROR_CATALOG_FILES, REFERENCES_DIR, TRACEABILITY_FILE
+    def test_catalog_files_live_under_physics_domain_errors(self):
+        from grd.mcp.servers.errors_mcp import ERROR_CATALOG_FILES, TRACEABILITY_FILE
+
+        from grd.domains.loader import resolve_domain_pack_path
+
+        physics_pack = resolve_domain_pack_path("physics")
+        assert physics_pack is not None
+        errors_dir = physics_pack / "verification" / "errors"
 
         assert ERROR_CATALOG_FILES == [
-            "verification/errors/llm-errors-core.md",
-            "verification/errors/llm-errors-field-theory.md",
-            "verification/errors/llm-errors-extended.md",
-            "verification/errors/llm-errors-deep.md",
+            "llm-errors-core.md",
+            "llm-errors-field-theory.md",
+            "llm-errors-extended.md",
+            "llm-errors-deep.md",
         ]
-        assert TRACEABILITY_FILE == "verification/errors/llm-errors-traceability.md"
+        assert TRACEABILITY_FILE == "llm-errors-traceability.md"
 
-        for rel_path in [*ERROR_CATALOG_FILES, TRACEABILITY_FILE]:
-            assert (REFERENCES_DIR / rel_path).is_file(), rel_path
+        for filename in [*ERROR_CATALOG_FILES, TRACEABILITY_FILE]:
+            assert (errors_dir / filename).is_file(), filename
 
     def test_real_error_store_uses_new_catalog_paths_and_stable_basenames(self):
-        from grd.mcp.servers.errors_mcp import REFERENCES_DIR, ErrorStore
+        from grd.mcp.servers.errors_mcp import ErrorStore
 
-        store = ErrorStore(REFERENCES_DIR)
+        from grd.domains.loader import resolve_domain_pack_path
+
+        physics_pack = resolve_domain_pack_path("physics")
+        assert physics_pack is not None
+        errors_dir = physics_pack / "verification" / "errors"
+
+        store = ErrorStore(errors_dir)
         error = store.get(1)
 
         assert error is not None

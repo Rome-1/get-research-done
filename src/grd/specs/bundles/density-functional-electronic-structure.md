@@ -32,18 +32,18 @@ assets:
     - path: templates/project-types/condensed-matter.md
       required: true
   subfield_guides:
-    - path: references/subfields/condensed-matter.md
+    - path: domains/physics/subfields/condensed-matter.md
       required: true
   verification_domains:
-    - path: references/verification/domains/verification-domain-condmat.md
+    - path: domains/physics/verification/domains/verification-domain-condmat.md
       required: true
   protocols_core:
-    - path: references/protocols/density-functional-theory.md
+    - path: domains/physics/protocols/density-functional-theory.md
       required: true
-    - path: references/protocols/numerical-computation.md
+    - path: domains/physics/protocols/numerical-computation.md
   protocols_optional:
-    - path: references/protocols/variational-methods.md
-    - path: references/protocols/many-body-perturbation-theory.md
+    - path: domains/physics/protocols/variational-methods.md
+    - path: domains/physics/protocols/many-body-perturbation-theory.md
   execution_guides:
     - path: references/execution/executor-subfield-guide.md
 anchor_prompts:

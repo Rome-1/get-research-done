@@ -48,6 +48,7 @@ GRAPH_SCOPE_LABELS = (
     "`src/grd/specs/workflows/*.md`",
     "`src/grd/specs/templates/**/*.md`",
     "`src/grd/specs/references/**/*.md`",
+    "`src/grd/domains/**/*.md`",
     "`src/grd/adapters/*.py`",
     "`src/grd/hooks/*.py`",
     "`src/grd/mcp/servers/*.py`",
@@ -181,6 +182,11 @@ def expected_scope_counts(repo_root: Path = REPO_ROOT) -> dict[str, int]:
             1
             for path in repo_files
             if _is_under(path, "src", "grd", "specs", "references") and path.suffix == ".md"
+        ),
+        "`src/grd/domains/**/*.md`": sum(
+            1
+            for path in repo_files
+            if _is_under(path, "src", "grd", "domains") and path.suffix == ".md"
         ),
         "`src/grd/adapters/*.py`": sum(
             1 for path in repo_files if _has_parent(path, "src", "grd", "adapters") and path.suffix == ".py"

@@ -93,7 +93,7 @@ def test_graph_captures_staged_review_prompt_edges() -> None:
         "`src/grd/commands/peer-review.md -> src/grd/agents/{grd-review-reader,grd-review-literature,grd-review-math,grd-review-physics,grd-review-significance,grd-referee}.md`",
         "`src/grd/specs/workflows/write-paper.md -> src/grd/specs/workflows/peer-review.md`",
         "`src/grd/specs/workflows/peer-review.md -> src/grd/agents/{grd-review-reader,grd-review-literature,grd-review-math,grd-review-physics,grd-review-significance,grd-referee}.md`",
-        "`src/grd/agents/{grd-review-reader,grd-review-literature,grd-review-math,grd-review-physics,grd-review-significance,grd-referee}.md -> src/grd/specs/references/publication/peer-review-panel.md`",
+        "`src/grd/agents/{grd-review-reader,grd-review-literature,grd-review-math,grd-review-physics,grd-review-significance,grd-referee}.md -> src/grd/domains/physics/publication/peer-review-panel.md`",
     ]
 
     for edge in expected_edges:

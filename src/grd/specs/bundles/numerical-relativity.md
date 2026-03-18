@@ -29,20 +29,20 @@ assets:
     - path: templates/project-types/general-relativity.md
       required: true
   subfield_guides:
-    - path: references/subfields/gr-cosmology.md
+    - path: domains/physics/subfields/gr-cosmology.md
       required: true
   verification_domains:
-    - path: references/verification/domains/verification-domain-gr-cosmology.md
+    - path: domains/physics/verification/domains/verification-domain-gr-cosmology.md
       required: true
   protocols_core:
-    - path: references/protocols/numerical-relativity.md
+    - path: domains/physics/protocols/numerical-relativity.md
       required: true
-    - path: references/protocols/numerical-computation.md
+    - path: domains/physics/protocols/numerical-computation.md
       required: true
   protocols_optional:
-    - path: references/protocols/general-relativity.md
-    - path: references/protocols/asymptotic-symmetries.md
-    - path: references/protocols/order-of-limits.md
+    - path: domains/physics/protocols/general-relativity.md
+    - path: domains/physics/protocols/asymptotic-symmetries.md
+    - path: domains/physics/protocols/order-of-limits.md
   execution_guides:
     - path: references/execution/executor-subfield-guide.md
 anchor_prompts:

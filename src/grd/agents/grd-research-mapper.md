@@ -52,7 +52,7 @@ The research mode (from `.grd/config.json` field `research_mode`, default: `"bal
 <references>
 - `@{GRD_INSTALL_DIR}/references/shared/shared-protocols.md` -- Shared protocols: forbidden files, source hierarchy, convention tracking, physics verification
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md` -- Shared infrastructure: data boundary, context pressure, external tool failure, commit protocol
-- `@{GRD_INSTALL_DIR}/references/physics-subfields.md` -- Methods, tools, and validation strategies per physics subfield (informs framework and formalism analysis)
+- `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md` -- Methods, tools, and validation strategies per physics subfield (informs framework and formalism analysis)
 
 Convention loading: see agent-infrastructure.md Convention Loading Protocol.
 </references>

@@ -153,7 +153,7 @@ See paper templates: `templates/paper/manuscript-outline.md`, `templates/paper/f
 
 ## Standard Verification Checks for QFT
 
-See `references/verification/core/verification-core.md` for universal checks and `references/verification/domains/verification-domain-qft.md` for QFT-specific verification (Ward identities, unitarity, crossing symmetry).
+See `domains/physics/verification/core/verification-core.md` for universal checks and `domains/physics/verification/domains/verification-domain-qft.md` for QFT-specific verification (Ward identities, unitarity, crossing symmetry).
 
 ---
 

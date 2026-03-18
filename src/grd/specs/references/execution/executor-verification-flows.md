@@ -39,7 +39,7 @@ Load this reference during task execution when verification is needed.
 4. **Completeness:** All relevant data shown; no missing curves or data points
 5. **Readability:** Font sizes appropriate, colors distinguishable, resolution sufficient
 
-**Subfield-specific verification:** For priority checks, red flags, standard benchmarks, and recommended software per physics subfield, consult `references/physics-subfields.md`.
+**Subfield-specific verification:** For priority checks, red flags, standard benchmarks, and recommended software per physics subfield, consult `domains/physics/physics-subfields.md`.
 
 ## Mandatory Computational Evidence
 
@@ -69,7 +69,7 @@ Load this reference during task execution when verification is needed.
 
 ### Templates
 
-See `references/verification/core/computational-verification-templates.md` for copy-paste-ready templates covering: dimensional analysis, limiting case evaluation, numerical spot-check, identity verification, and convergence testing.
+See `domains/physics/verification/core/computational-verification-templates.md` for copy-paste-ready templates covering: dimensional analysis, limiting case evaluation, numerical spot-check, identity verification, and convergence testing.
 
 ## Research Log Protocol
 
