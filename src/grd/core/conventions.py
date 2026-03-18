@@ -74,7 +74,7 @@ class _LazyPhysicsProxy:
     """Lazy proxy that loads physics domain defaults on first access."""
 
     def __init__(self) -> None:
-        self._ctx: object | None = None
+        self._ctx: DomainContext | None = None
         self._loaded = False
 
     def _ensure(self) -> object | None:
@@ -114,7 +114,9 @@ _PHYSICS = _LazyPhysicsProxy()
 class _KnownConventions(list):
     """List subclass that lazy-loads from physics domain on first iteration."""
 
-    _loaded = False
+    def __init__(self) -> None:
+        super().__init__()
+        self._loaded = False
 
     def _ensure(self) -> None:
         if not self._loaded:
@@ -144,6 +146,10 @@ class _KnownConventions(list):
     def __repr__(self):
         self._ensure()
         return super().__repr__()
+
+    def copy(self):
+        self._ensure()
+        return list(self)
 
 
 KNOWN_CONVENTIONS: list[str] = _KnownConventions()
@@ -201,6 +207,10 @@ class _LazyDict(dict):
     def __repr__(self):
         self._ensure()
         return super().__repr__()
+
+    def copy(self):
+        self._ensure()
+        return dict(self)
 
 
 CONVENTION_LABELS: dict[str, str] = _LazyDict("labels")

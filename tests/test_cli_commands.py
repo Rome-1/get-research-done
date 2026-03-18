@@ -213,7 +213,7 @@ class TestConventionCommands:
     def test_set_persists(self, grd_project: Path) -> None:
         _invoke("convention", "set", "fourier_convention", "physics")
         state = json.loads((grd_project / ".grd" / "state.json").read_text())
-        assert state["convention_lock"]["fourier_convention"] == "physics"
+        assert state["convention_lock"]["conventions"]["fourier_convention"] == "physics"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
