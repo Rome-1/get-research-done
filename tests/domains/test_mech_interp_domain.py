@@ -94,7 +94,7 @@ class TestMechInterpConventionOps:
         assert normalize_value("sae_architecture", "topk", domain_ctx=mi_ctx) == "topk-sae"
 
     def test_convention_set_goes_to_custom(self, mi_ctx: DomainContext) -> None:
-        """Mech-interp fields are not on ConventionLock model — they go to custom_conventions."""
+        """Mech-interp fields are stored in the unified conventions dict."""
         lock = ConventionLock()
         result = convention_set(lock, "model", "transformer", domain_ctx=mi_ctx)
         assert result.updated is True

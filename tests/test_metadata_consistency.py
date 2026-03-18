@@ -8,7 +8,6 @@ import tomllib
 from pathlib import Path
 
 from grd import registry as content_registry
-from grd.contracts import ConventionLock
 from grd.core.config import MODEL_PROFILES
 from grd.core.health import _ALL_CHECKS
 from grd.core.patterns import PatternDomain
@@ -132,7 +131,11 @@ def test_agent_metadata_inventory_uses_valid_enums_without_changing_canonical_sk
 
 
 def test_convention_field_counts_match_source_of_truth() -> None:
-    convention_count = len(ConventionLock.model_fields) - 1  # exclude custom_conventions
+    from grd.domains.loader import load_domain
+
+    physics_ctx = load_domain("physics")
+    assert physics_ctx is not None, "physics domain pack must be loadable"
+    convention_count = len(physics_ctx.convention_fields)
     assert convention_count == 18
 
     assert f"Convention lock ({convention_count} research fields + custom)" in _read("src/grd/core/__init__.py")

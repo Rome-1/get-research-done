@@ -54,10 +54,13 @@ mcp = FastMCP("grd-conventions")
 
 def _get_domain_ctx():
     """Load the active domain context from GRD_DOMAIN env var."""
-    from grd.domains.loader import DomainContext, load_domain
+    from grd.domains.loader import load_domain
 
     domain_name = os.environ.get("GRD_DOMAIN", "physics")
-    return load_domain(domain_name)
+    ctx = load_domain(domain_name)
+    if ctx is None:
+        logger.warning("Domain pack '%s' not found; convention helpers will use empty defaults", domain_name)
+    return ctx
 
 
 def _get_convention_options(ctx=None) -> dict[str, list[str]]:
