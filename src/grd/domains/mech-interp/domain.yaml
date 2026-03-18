@@ -1,16 +1,19 @@
 name: mech-interp
 display_name: Mechanistic Interpretability
 description: >
-  Mechanistic interpretability research: circuit discovery, feature extraction,
-  activation patching, superposition analysis, SAE training, and causal tracing
-  in neural networks.
+  Mechanistic interpretability research: circuit discovery, sparse autoencoders,
+  activation patching, causal tracing, probing classifiers, feature analysis,
+  polysemanticity, superposition, and neural network reverse-engineering.
 version: 1
 
 conventions_file: conventions/convention-fields.yaml
 subfields_dir: subfields
 protocols_dir: protocols
 errors_dir: errors
+project_types_dir: project-types
+bundles_dir: bundles
+verification_dir: verification
 
 branding:
-  tagline: "Reverse-engineering neural computation"
+  tagline: "Reverse-engineering neural networks from weights to mechanisms"
   color: purple

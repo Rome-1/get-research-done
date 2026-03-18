@@ -1,133 +1,128 @@
-# Mechanistic Interpretability convention fields
-# These define the domain-specific conventions that can be locked per-project.
+# Mechanistic interpretability convention fields
+# Each field defines a methodology or notation choice that should be locked
+# per-project to prevent drift across experiments and analyses.
 
 fields:
   - name: model_family
     label: "Model family"
-    description: "Target model architecture family"
+    description: "Target model architecture family (transformer, MLP, CNN, SSM)"
     aliases: ["model"]
     value_aliases:
-      "gpt2": "gpt2-small"
-      "gpt-2": "gpt2-small"
-      "pythia-70m": "pythia-70m"
-      "llama": "llama-2"
+      "gpt": "transformer"
+      "gpt2": "transformer"
+      "llama": "transformer"
+      "bert": "transformer"
+      "vit": "vision-transformer"
 
-  - name: activation_site
-    label: "Activation site"
-    description: "Default hook point for activation capture (resid_pre, resid_post, mlp_out, attn_out)"
-    aliases: ["hook", "hookpoint"]
+  - name: activation_space
+    label: "Activation space"
+    description: "Whether analysis uses neuron basis, residual stream, or learned feature basis"
+    aliases: ["basis", "space"]
     value_aliases:
-      "residual_pre": "resid_pre"
-      "residual_post": "resid_post"
-      "residual": "resid_post"
-      "mlp": "mlp_out"
-      "attention": "attn_out"
-
-  - name: feature_method
-    label: "Feature extraction method"
-    description: "Method for extracting interpretable features (SAE, PCA, NMF, probing)"
-    aliases: ["features", "extraction"]
-    value_aliases:
-      "sparse_autoencoder": "sae"
-      "sparse-autoencoder": "sae"
-      "principal_components": "pca"
-
-  - name: sae_architecture
-    label: "SAE architecture"
-    description: "Sparse autoencoder variant (vanilla, top-k, gated, jump-relu)"
-    aliases: ["sae_arch", "sae_type"]
-    value_aliases:
-      "standard": "vanilla"
-      "basic": "vanilla"
-      "topk": "top-k"
-      "top_k": "top-k"
-      "jump_relu": "jump-relu"
-      "jumprelu": "jump-relu"
+      "neuron": "neuron-basis"
+      "neurons": "neuron-basis"
+      "residual": "residual-stream"
+      "resid": "residual-stream"
+      "feature": "learned-basis"
+      "sae": "learned-basis"
+      "svd": "svd-basis"
+      "pca": "pca-basis"
 
   - name: patching_method
     label: "Patching method"
-    description: "Activation patching variant (activation, path, causal-scrubbing, attribution)"
+    description: "Activation patching variant (zero, mean, resample, noising, denoising)"
     aliases: ["patching"]
     value_aliases:
-      "act_patch": "activation-patching"
-      "actpatch": "activation-patching"
-      "path_patch": "path-patching"
-      "pathpatch": "path-patching"
-      "causal_scrub": "causal-scrubbing"
+      "zero_ablation": "zero-ablation"
+      "mean_ablation": "mean-ablation"
+      "resample_ablation": "resample-ablation"
+      "activation_patching": "denoising"
+      "causal_scrubbing": "resample-ablation"
 
-  - name: ablation_type
-    label: "Ablation type"
-    description: "Default ablation method (zero, mean, resample, noise)"
-    aliases: ["ablation"]
+  - name: attribution_method
+    label: "Attribution method"
+    description: "Method for computing feature importance or component contribution"
+    aliases: ["attribution"]
     value_aliases:
-      "zero_ablation": "zero"
-      "mean_ablation": "mean"
-      "resample_ablation": "resample"
-      "resampling": "resample"
-      "gaussian": "noise"
+      "ig": "integrated-gradients"
+      "integrated_gradients": "integrated-gradients"
+      "grad_x_act": "gradient-times-activation"
+      "direct_logit": "direct-logit-attribution"
+      "dla": "direct-logit-attribution"
 
-  - name: tokenizer
-    label: "Tokenizer"
-    description: "Tokenizer used for input processing"
-    aliases: ["tok"]
-
-  - name: metric
-    label: "Evaluation metric"
-    description: "Primary metric for measuring circuit/feature quality (logit-diff, loss, accuracy, KL-divergence)"
-    aliases: ["eval_metric"]
+  - name: sae_architecture
+    label: "SAE architecture"
+    description: "Sparse autoencoder variant (vanilla, top-k, Gated, JumpReLU)"
+    aliases: ["sae_type", "sae_variant"]
     value_aliases:
-      "logit_diff": "logit-diff"
-      "logitdiff": "logit-diff"
-      "kl_div": "kl-divergence"
-      "kl": "kl-divergence"
-      "cross_entropy": "ce-loss"
-      "ce": "ce-loss"
+      "vanilla": "relu-sae"
+      "standard": "relu-sae"
+      "gated": "gated-sae"
+      "jumprelu": "jumprelu-sae"
+      "topk": "topk-sae"
+      "top_k": "topk-sae"
 
-  - name: layer_indexing
-    label: "Layer indexing"
-    description: "Layer numbering convention (0-indexed vs 1-indexed)"
-    aliases: ["indexing"]
-    value_aliases:
-      "zero": "0-indexed"
-      "zero_indexed": "0-indexed"
-      "one": "1-indexed"
-      "one_indexed": "1-indexed"
+  - name: sae_normalization
+    label: "SAE normalization"
+    description: "How activations are normalized before SAE training (layer norm, none, centered)"
+    aliases: ["sae_norm"]
 
-  - name: component_notation
-    label: "Component notation"
-    description: "Notation for referencing model components (e.g., L3H7 vs layer3.head7)"
-    aliases: ["notation"]
-    value_aliases:
-      "compact": "LxHy"
-      "LH": "LxHy"
-      "dotted": "layer.head"
-      "verbose": "layer.head"
-
-  - name: direction_convention
-    label: "Direction convention"
-    description: "How feature directions are represented (unit-norm, unnormalized, cosine-sim)"
-    aliases: ["direction"]
-
-  - name: dataset
-    label: "Default dataset"
-    description: "Primary dataset for activation collection and evaluation"
-    aliases: ["data"]
-
-  - name: dtype
-    label: "Computation dtype"
-    description: "Default floating-point precision for computations (float32, float16, bfloat16)"
-    aliases: ["precision"]
-    value_aliases:
-      "fp32": "float32"
-      "fp16": "float16"
-      "bf16": "bfloat16"
-      "half": "float16"
-
-  - name: library
-    label: "Interpretability library"
-    description: "Primary library/framework for interpretability (TransformerLens, nnsight, baukit)"
-    aliases: ["framework", "lib"]
+  - name: hook_point_convention
+    label: "Hook point convention"
+    description: "Naming convention for model hook points (TransformerLens, nnsight, custom)"
+    aliases: ["hooks"]
     value_aliases:
       "tl": "transformer-lens"
       "transformerlens": "transformer-lens"
-      "lens": "transformer-lens"
+      "nnsight": "nnsight"
+
+  - name: layer_indexing
+    label: "Layer indexing"
+    description: "Layer numbering convention (0-indexed vs 1-indexed, embed as layer 0 or not)"
+    aliases: ["indexing"]
+    value_aliases:
+      "0-indexed": "zero-indexed"
+      "1-indexed": "one-indexed"
+
+  - name: logit_attribution_direction
+    label: "Logit attribution direction"
+    description: "Whether logit attribution uses logit difference, log-prob, or raw logit"
+    aliases: ["logit_metric"]
+    value_aliases:
+      "logit_diff": "logit-difference"
+      "log_prob": "log-probability"
+      "prob": "probability"
+
+  - name: position_encoding
+    label: "Position encoding"
+    description: "Whether positional embeddings are folded into residual stream analysis"
+    aliases: ["pos_embed"]
+
+  - name: attention_pattern_format
+    label: "Attention pattern format"
+    description: "How attention patterns are stored and visualized (softmax output, pre-softmax logits)"
+    aliases: ["attn_format"]
+    value_aliases:
+      "post_softmax": "attention-weights"
+      "pre_softmax": "attention-logits"
+      "qk": "attention-logits"
+
+  - name: feature_density_metric
+    label: "Feature density metric"
+    description: "How feature activation frequency is measured (L0, firing rate, activation fraction)"
+    aliases: ["density_metric"]
+
+  - name: ablation_baseline
+    label: "Ablation baseline"
+    description: "Reference distribution for ablation experiments (zero, mean, corrupted, resampled)"
+    aliases: ["baseline"]
+
+  - name: circuit_completeness_criterion
+    label: "Circuit completeness criterion"
+    description: "Threshold for circuit faithfulness (e.g., recovers 95% of logit difference)"
+    aliases: ["completeness"]
+
+  - name: tokenizer
+    label: "Tokenizer"
+    description: "Tokenizer used for input processing (GPT-2 BPE, SentencePiece, tiktoken)"
+    aliases: ["tok"]
