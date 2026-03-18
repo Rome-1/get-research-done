@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import json
-import tempfile
-from pathlib import Path
-
-import pytest
+from datetime import UTC, datetime
 
 from gpd.core.kernel import (
     KERNEL_VERSION,
@@ -16,7 +12,6 @@ from gpd.core.kernel import (
     Result,
     run,
 )
-
 
 # -- Result type --
 
@@ -155,11 +150,11 @@ class TestKernelRun:
     def test_verdict_hash_is_content_addressed(self):
         reg = self._make_registry(b"stable")
         preds = {"a": lambda _: Pass("fixed")}
-        v1 = run(reg, preds)
-        v2 = run(reg, preds)
-        # Timestamps differ, so verdict_hash will differ, but
-        # the structure is deterministic minus timestamp
+        v1 = run(reg, preds, generated_at=datetime(2026, 3, 18, 12, 0, tzinfo=UTC))
+        v2 = run(reg, preds, generated_at=datetime(2026, 3, 18, 12, 5, tzinfo=UTC))
+        assert v1["verdict_hash"] == v2["verdict_hash"]
         assert v1["registry_hash"] == v2["registry_hash"]
+        assert v1["timestamp"] != v2["timestamp"]
 
     def test_verdict_registry_stats(self):
         class MyReg(RegistryBase):

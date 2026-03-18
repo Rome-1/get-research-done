@@ -31,10 +31,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
 
 __all__ = [
     "KERNEL_VERSION",
@@ -47,6 +47,17 @@ __all__ = [
 ]
 
 KERNEL_VERSION = "0.1.0"
+
+
+def _content_address(payload: object) -> str:
+    """Return a stable SHA-256 address for a JSON-serializable payload."""
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 # -----------------------------------------------------------------------
@@ -92,9 +103,12 @@ class RegistryBase:
         self._raw_bytes = raw_bytes
 
     @staticmethod
-    def load_records(directory: Path, factory: Callable[[dict], Any]) -> list:
+    def load_records(
+        directory: Path,
+        factory: Callable[[dict[str, object]], object],
+    ) -> list[object]:
         """Load JSON records from a directory using a factory function."""
-        records: list[Any] = []
+        records: list[object] = []
         if not directory.exists():
             return records
         for f in sorted(directory.glob("*.json")):
@@ -133,7 +147,7 @@ class RegistryBase:
 # -----------------------------------------------------------------------
 
 #: Type alias for a predicate catalog.
-PredicateMap = dict[str, Callable[[Any], Result]]
+PredicateMap = Mapping[str, Callable[[RegistryBase], Result]]
 
 
 def run(
@@ -141,7 +155,8 @@ def run(
     predicates: PredicateMap,
     *,
     predicates_source: Path | None = None,
-) -> dict:
+    generated_at: datetime | None = None,
+) -> dict[str, object]:
     """Run all predicates against the registry and return a verdict dict.
 
     Parameters
@@ -158,7 +173,7 @@ def run(
     dict
         A content-addressed verdict with pass/fail per predicate.
     """
-    results: dict[str, dict] = {}
+    results: dict[str, dict[str, object]] = {}
     for name, pred in predicates.items():
         result = pred(registry)
         results[name] = {
@@ -170,13 +185,13 @@ def run(
 
     pred_hash = ""
     if predicates_source and predicates_source.exists():
-        pred_hash = "sha256:" + hashlib.sha256(
-            predicates_source.read_bytes()
-        ).hexdigest()
+        pred_hash = _content_address(predicates_source.read_text(encoding="utf-8"))
 
-    verdict: dict[str, Any] = {
+    timestamp = (generated_at or datetime.now(UTC)).isoformat()
+
+    verdict: dict[str, object] = {
         "kernel_version": KERNEL_VERSION,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": timestamp,
         "registry_hash": registry.content_hash(),
         "predicates_hash": pred_hash,
         "registry_stats": registry.stats(),
@@ -187,9 +202,10 @@ def run(
         "overall": overall,
     }
 
-    # Content-address the verdict itself
-    verdict_bytes = json.dumps(verdict, sort_keys=True).encode()
-    verdict["verdict_hash"] = "sha256:" + hashlib.sha256(verdict_bytes).hexdigest()
+    # Keep the generation timestamp visible while hashing only the stable content.
+    verdict["verdict_hash"] = _content_address(
+        {key: value for key, value in verdict.items() if key != "timestamp"}
+    )
 
     return verdict
 
