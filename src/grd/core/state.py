@@ -1382,28 +1382,31 @@ def generate_state_markdown(raw: dict) -> str:
     p("")
     cl = s.get("convention_lock") or {}
 
-    set_conventions = [(k, label) for k, label in _CONVENTION_LABELS.items() if not is_bogus_value(cl.get(k))]
+    # Support both new format ({"conventions": {...}}) and legacy flat format
+    conv_data = cl.get("conventions") if isinstance(cl.get("conventions"), dict) else cl
 
-    # Collect custom conventions
-    custom_convs = cl.get("custom_conventions") or {}
+    set_conventions = [(k, label) for k, label in _CONVENTION_LABELS.items() if not is_bogus_value(conv_data.get(k))]
+
+    # Collect custom conventions (non-standard keys in the conventions dict)
     custom_entries: list[tuple[str, str, object]] = []
-    for key, value in custom_convs.items():
-        if not is_bogus_value(value):
-            label = key.replace("_", " ").title()
-            custom_entries.append((key, label, value))
-
-    # Also collect custom flat keys not covered by the standard labels
-    for key, value in cl.items():
-        if key not in _CONVENTION_LABELS and key != "custom_conventions" and not is_bogus_value(value):
+    for key, value in conv_data.items():
+        if key not in _CONVENTION_LABELS and not is_bogus_value(value):
             if not any(k == key for k, _, _ in custom_entries):
                 label = key.replace("_", " ").title()
                 custom_entries.append((key, label, value))
+
+    # Also check legacy custom_conventions dict for backward compat
+    custom_convs = cl.get("custom_conventions") or {}
+    for key, value in custom_convs.items():
+        if not is_bogus_value(value) and not any(k == key for k, _, _ in custom_entries):
+            label = key.replace("_", " ").title()
+            custom_entries.append((key, label, value))
 
     if not set_conventions and not custom_entries:
         p("No conventions locked yet.")
     else:
         for key, label in set_conventions:
-            p(f"- {label}: {cl[key]}")
+            p(f"- {label}: {conv_data[key]}")
         if custom_entries:
             if set_conventions:
                 p("")
@@ -2438,8 +2441,9 @@ def state_validate(cwd: Path, integrity_mode: str = "standard") -> StateValidate
     # Convention lock completeness
     if state_json and isinstance(state_json.get("convention_lock"), dict):
         cl = state_json["convention_lock"]
-        set_fields = [k for k in KNOWN_CONVENTIONS if not is_bogus_value(cl.get(k))]
-        unset = [k for k in KNOWN_CONVENTIONS if is_bogus_value(cl.get(k))]
+        conv_data = cl.get("conventions") if isinstance(cl.get("conventions"), dict) else cl
+        set_fields = [k for k in KNOWN_CONVENTIONS if not is_bogus_value(conv_data.get(k))]
+        unset = [k for k in KNOWN_CONVENTIONS if is_bogus_value(conv_data.get(k))]
         if set_fields and unset:
             warnings.append(f"convention_lock: {len(unset)} conventions unset ({', '.join(unset)})")
 

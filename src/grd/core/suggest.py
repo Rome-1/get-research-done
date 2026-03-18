@@ -51,7 +51,20 @@ __all__ = [
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-CORE_CONVENTIONS = ("metric_signature", "natural_units", "coordinate_system")
+def _core_conventions() -> tuple[str, ...]:
+    """Return critical convention fields from the active domain."""
+    try:
+        import os
+        from grd.domains.loader import load_domain
+        domain_name = os.environ.get("GRD_DOMAIN", "physics")
+        ctx = load_domain(domain_name)
+        if ctx is not None and ctx.critical_fields:
+            return tuple(ctx.critical_fields)
+    except Exception:
+        pass
+    return ()
+
+CORE_CONVENTIONS = _core_conventions()
 
 # Paper search paths relative to cwd
 PAPER_PATHS = ("paper/main.tex", "manuscript/main.tex", "draft/main.tex")

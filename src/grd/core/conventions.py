@@ -10,9 +10,9 @@ from the domain pack.  When omitted, the built-in physics defaults are used
 for backward compatibility.
 
 Key features:
-- KEY_ALIASES: short aliases (e.g., "metric" -> "metric_signature")
-  for CLI ergonomics.
-- VALUE_ALIASES: Normalizes variant notations (e.g., "+---" -> "mostly-minus").
+- Key aliases: short aliases (e.g., "metric" -> "metric_signature")
+  for CLI ergonomics, loaded from domain packs.
+- Value aliases: Normalizes variant notations (e.g., "+---" -> "mostly-minus").
 - ASSERT_CONVENTION parsing: Scans file content for convention assertions in
   Markdown/LaTeX/Python comments.
 """
@@ -56,69 +56,157 @@ __all__ = [
     "validate_assertions",
 ]
 
-# --- Canonical Convention Fields (18) ---
-# Derived from ConventionLock model fields to prevent drift.
 
-KNOWN_CONVENTIONS: list[str] = [name for name in ConventionLock.model_fields if name != "custom_conventions"]
+# ─── Backward-Compatible Physics Defaults ─────────────────────────────────────
+# These are kept for code that imports them directly.  New code should use
+# DomainContext instead.
 
-# Explicit label map (not auto-generated from field names, which would produce
-# incorrect casing like "Levi civita sign" instead of "Levi-Civita sign").
-CONVENTION_LABELS: dict[str, str] = {
-    "metric_signature": "Metric signature",
-    "fourier_convention": "Fourier convention",
-    "natural_units": "Natural units",
-    "gauge_choice": "Gauge choice",
-    "regularization_scheme": "Regularization scheme",
-    "renormalization_scheme": "Renormalization scheme",
-    "coordinate_system": "Coordinate system",
-    "spin_basis": "Spin basis",
-    "state_normalization": "State normalization",
-    "coupling_convention": "Coupling convention",
-    "index_positioning": "Index positioning",
-    "time_ordering": "Time ordering",
-    "commutation_convention": "Commutation convention",
-    "levi_civita_sign": "Levi-Civita sign",
-    "generator_normalization": "Generator normalization",
-    "covariant_derivative_sign": "Covariant derivative sign",
-    "gamma_matrix_convention": "Gamma matrix convention",
-    "creation_annihilation_order": "Creation/annihilation order",
-}
+def _load_physics_defaults() -> "DomainContext | None":
+    """Lazy-load the bundled physics domain pack for backward compatibility."""
+    try:
+        from grd.domains.loader import load_domain
+        return load_domain("physics")
+    except Exception:
+        return None
 
-# Short aliases (physicist-friendly) -> canonical convention_lock field names.
-KEY_ALIASES: dict[str, str] = {
-    "metric": "metric_signature",
-    "fourier": "fourier_convention",
-    "units": "natural_units",
-    "gauge": "gauge_choice",
-    "regularization": "regularization_scheme",
-    "renorm": "renormalization_scheme",
-    "renormalization": "renormalization_scheme",
-    "coordinates": "coordinate_system",
-    "spin": "spin_basis",
-    "normalization": "state_normalization",
-    "coupling": "coupling_convention",
-    "index": "index_positioning",
-    "ordering": "time_ordering",
-    "commutator": "commutation_convention",
-}
 
-# Per-field value normalization: variant notations -> canonical form.
-# Physicists write metric signatures as (+,-,-,-) or (-,+,+,+) but the
-# canonical form in the lock may be "mostly-plus" or "mostly-minus".
-VALUE_ALIASES: dict[str, dict[str, str]] = {
-    "metric_signature": {
-        "(+,-,-,-)": "mostly-minus",
-        "(+,\u2212,\u2212,\u2212)": "mostly-minus",
-        "+---": "mostly-minus",
-        "mostly_minus": "mostly-minus",
-        "(-,+,+,+)": "mostly-plus",
-        "(\u2212,+,+,+)": "mostly-plus",
-        "-+++": "mostly-plus",
-        "mostly_plus": "mostly-plus",
-        "(+,+,+,+)": "euclidean",
-        "++++": "euclidean",
-    },
-}
+class _LazyPhysicsProxy:
+    """Lazy proxy that loads physics domain defaults on first access."""
+
+    def __init__(self) -> None:
+        self._ctx: object | None = None
+        self._loaded = False
+
+    def _ensure(self) -> object | None:
+        if not self._loaded:
+            self._ctx = _load_physics_defaults()
+            self._loaded = True
+        return self._ctx
+
+    @property
+    def known_conventions(self) -> list[str]:
+        ctx = self._ensure()
+        return ctx.known_convention_names if ctx else []
+
+    @property
+    def labels(self) -> dict[str, str]:
+        ctx = self._ensure()
+        return ctx.convention_labels if ctx else {}
+
+    @property
+    def key_aliases(self) -> dict[str, str]:
+        ctx = self._ensure()
+        return ctx.key_aliases if ctx else {}
+
+    @property
+    def value_aliases(self) -> dict[str, dict[str, str]]:
+        ctx = self._ensure()
+        return ctx.value_aliases if ctx else {}
+
+
+_PHYSICS = _LazyPhysicsProxy()
+
+# Module-level constants — lazy-evaluated on first access for backward compat.
+# These are descriptor-like properties on a module, but since Python doesn't
+# support that natively, we use a simple class wrapper.
+
+
+class _KnownConventions(list):
+    """List subclass that lazy-loads from physics domain on first iteration."""
+
+    _loaded = False
+
+    def _ensure(self) -> None:
+        if not self._loaded:
+            self.extend(_PHYSICS.known_conventions)
+            self._loaded = True
+
+    def __iter__(self):
+        self._ensure()
+        return super().__iter__()
+
+    def __len__(self):
+        self._ensure()
+        return super().__len__()
+
+    def __contains__(self, item):
+        self._ensure()
+        return super().__contains__(item)
+
+    def __getitem__(self, index):
+        self._ensure()
+        return super().__getitem__(index)
+
+    def __eq__(self, other):
+        self._ensure()
+        return super().__eq__(other)
+
+    def __repr__(self):
+        self._ensure()
+        return super().__repr__()
+
+
+KNOWN_CONVENTIONS: list[str] = _KnownConventions()
+
+
+class _LazyDict(dict):
+    """Dict subclass that lazy-loads from a source on first access."""
+
+    def __init__(self, source_attr: str) -> None:
+        super().__init__()
+        self._source_attr = source_attr
+        self._loaded = False
+
+    def _ensure(self) -> None:
+        if not self._loaded:
+            self.update(getattr(_PHYSICS, self._source_attr))
+            self._loaded = True
+
+    def __getitem__(self, key):
+        self._ensure()
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        self._ensure()
+        return super().get(key, default)
+
+    def __contains__(self, key):
+        self._ensure()
+        return super().__contains__(key)
+
+    def __iter__(self):
+        self._ensure()
+        return super().__iter__()
+
+    def __len__(self):
+        self._ensure()
+        return super().__len__()
+
+    def items(self):
+        self._ensure()
+        return super().items()
+
+    def keys(self):
+        self._ensure()
+        return super().keys()
+
+    def values(self):
+        self._ensure()
+        return super().values()
+
+    def __eq__(self, other):
+        self._ensure()
+        return super().__eq__(other)
+
+    def __repr__(self):
+        self._ensure()
+        return super().__repr__()
+
+
+CONVENTION_LABELS: dict[str, str] = _LazyDict("labels")
+KEY_ALIASES: dict[str, str] = _LazyDict("key_aliases")
+VALUE_ALIASES: dict[str, dict[str, str]] = _LazyDict("value_aliases")
+
 
 # Values that should be treated as "unset" (prevent string-vs-null confusion)
 _BOGUS_VALUES = frozenset({"", "null", "undefined", "none"})
@@ -321,15 +409,8 @@ def convention_set(
     cleaned = normalize_value(canonical_key, cleaned, domain_ctx=domain_ctx)
     known = _resolve_known_conventions(domain_ctx)
     is_custom = canonical_key not in known
-    # A key may be "known" for the domain but absent from the Pydantic model
-    # (e.g. a biology convention on a physics-era ConventionLock).  Route those
-    # through custom_conventions so Pydantic doesn't reject the setattr.
-    is_model_field = canonical_key in ConventionLock.model_fields
 
-    if is_model_field:
-        previous = getattr(lock, canonical_key, None)
-    else:
-        previous = lock.custom_conventions.get(canonical_key)
+    previous = lock.conventions.get(canonical_key)
 
     # Immutability gate: require force to overwrite existing non-null convention
     if previous is not None and not is_bogus_value(previous) and previous != cleaned and not force:
@@ -343,11 +424,7 @@ def convention_set(
             hint="Use force=True to overwrite an existing convention",
         )
 
-    # Apply the update
-    if is_model_field:
-        setattr(lock, canonical_key, cleaned)
-    else:
-        lock.custom_conventions[canonical_key] = cleaned
+    lock.conventions[canonical_key] = cleaned
 
     return ConventionSetResult(
         updated=True,
@@ -366,10 +443,7 @@ def convention_list(lock: ConventionLock, *, domain_ctx: object | None = None) -
 
     # Canonical conventions
     for key in known:
-        val = getattr(lock, key, None)
-        # If not a model field, check custom_conventions
-        if val is None and key not in ConventionLock.model_fields:
-            val = lock.custom_conventions.get(key)
+        val = lock.conventions.get(key)
         conventions[key] = ConventionEntry(
             key=key,
             label=labels.get(key, key.replace("_", " ").title()),
@@ -378,8 +452,8 @@ def convention_list(lock: ConventionLock, *, domain_ctx: object | None = None) -
             canonical=True,
         )
 
-    # Custom conventions (keys not already covered by known)
-    for key, val in lock.custom_conventions.items():
+    # Extra conventions (keys in lock.conventions not in the known set)
+    for key, val in lock.conventions.items():
         if key in conventions:
             continue
         label = key.replace("_", " ").title()
@@ -409,24 +483,10 @@ def convention_diff(lock_a: ConventionLock, lock_b: ConventionLock) -> Conventio
     added: list[ConventionDiff] = []
     removed: list[ConventionDiff] = []
 
-    # Compare canonical fields
-    for key in KNOWN_CONVENTIONS:
-        val_a = getattr(lock_a, key, None)
-        val_b = getattr(lock_b, key, None)
-        norm_a = normalize_value(key, val_a) if val_a is not None else None
-        norm_b = normalize_value(key, val_b) if val_b is not None else None
-        if norm_a is None and norm_b is not None:
-            added.append(ConventionDiff(key=key, to_value=norm_b))
-        elif norm_a is not None and norm_b is None:
-            removed.append(ConventionDiff(key=key, from_value=norm_a))
-        elif norm_a is not None and norm_b is not None and norm_a != norm_b:
-            changed.append(ConventionDiff(key=key, from_value=norm_a, to_value=norm_b))
-
-    # Compare custom conventions
-    all_custom_keys = set(lock_a.custom_conventions) | set(lock_b.custom_conventions)
-    for key in sorted(all_custom_keys):
-        val_a = lock_a.custom_conventions.get(key)
-        val_b = lock_b.custom_conventions.get(key)
+    all_keys = sorted(set(lock_a.conventions) | set(lock_b.conventions))
+    for key in all_keys:
+        val_a = lock_a.conventions.get(key)
+        val_b = lock_b.conventions.get(key)
         norm_a = normalize_value(key, val_a) if val_a is not None else None
         norm_b = normalize_value(key, val_b) if val_b is not None else None
         if norm_a is None and norm_b is not None:
@@ -440,14 +500,7 @@ def convention_diff(lock_a: ConventionLock, lock_b: ConventionLock) -> Conventio
 
 
 def _extract_phase_conventions(cwd: Path, phase_id: str) -> dict[str, str] | None:
-    """Extract convention mentions from a phase's SUMMARY frontmatter and body.
-
-    Extracts convention mentions from frontmatter and body text:
-    1. Parse YAML frontmatter for conventions/convention_lock fields
-    2. Scan body text for "Convention Label: value" patterns
-
-    Returns a dict of convention key -> value, or None if phase not found.
-    """
+    """Extract convention mentions from a phase's SUMMARY frontmatter and body."""
     from grd.core.frontmatter import FrontmatterParseError, extract_frontmatter
     from grd.core.phases import find_phase
 
@@ -485,8 +538,13 @@ def _extract_phase_conventions(cwd: Path, phase_id: str) -> dict[str, str] | Non
 
         fm_lock = fm.get("convention_lock")
         if isinstance(fm_lock, dict):
+            # New format: conventions dict
+            conv_data = fm_lock.get("conventions")
+            if isinstance(conv_data, dict):
+                conventions.update({k: str(v) for k, v in conv_data.items() if v is not None})
+            # Legacy: flat physics fields
             for k, v in fm_lock.items():
-                if k != "custom_conventions":
+                if k not in ("conventions", "custom_conventions"):
                     if v is not None:
                         conventions[k] = str(v)
             custom = fm_lock.get("custom_conventions")
@@ -494,8 +552,10 @@ def _extract_phase_conventions(cwd: Path, phase_id: str) -> dict[str, str] | Non
                 conventions.update({k: str(v) for k, v in custom.items() if v is not None})
 
         # Scan body for "Convention Label: value" patterns
-        for key in KNOWN_CONVENTIONS:
-            label = CONVENTION_LABELS.get(key, key.replace("_", " ").title())
+        known = _resolve_known_conventions()
+        labels = _resolve_labels()
+        for key in known:
+            label = labels.get(key, key.replace("_", " ").title())
             escaped = re.escape(label)
             pattern = re.compile(
                 rf"(?:^|\n)\s*[-*]?\s*{escaped}:\s*(.+?)\s*$",
@@ -514,12 +574,7 @@ def convention_diff_phases(
     phase1: str | None = None,
     phase2: str | None = None,
 ) -> ConventionDiffResult:
-    """Diff convention mentions across two phase SUMMARYs.
-
-    Extracts conventions from phase summary frontmatter and body text,
-    then computes the diff. Falls back to current state convention_lock
-    if no convention data is found in either phase.
-    """
+    """Diff convention mentions across two phase SUMMARYs."""
     import json
 
     from grd.core.state import load_state_json
@@ -589,17 +644,14 @@ def convention_check(lock: ConventionLock, *, domain_ctx: object | None = None) 
     custom: list[ConventionEntry] = []
 
     for key in known:
-        val = getattr(lock, key, None)
-        # If not a model field, check custom_conventions
-        if val is None and key not in ConventionLock.model_fields:
-            val = lock.custom_conventions.get(key)
+        val = lock.conventions.get(key)
         label = labels.get(key, key.replace("_", " ").title())
         if is_bogus_value(val):
             missing.append(ConventionEntry(key=key, label=label, is_set=False, canonical=True))
         else:
             set_conventions.append(ConventionEntry(key=key, label=label, value=val, is_set=True, canonical=True))
 
-    for key, val in lock.custom_conventions.items():
+    for key, val in lock.conventions.items():
         if key in known:
             continue  # already counted above
         if val is not None and not is_bogus_value(val):
@@ -621,20 +673,10 @@ def convention_check(lock: ConventionLock, *, domain_ctx: object | None = None) 
 
 
 def parse_assert_conventions(content: str) -> list[tuple[str, str]]:
-    """Parse ASSERT_CONVENTION directives from file content.
-
-    Supports three comment formats:
-        <!-- ASSERT_CONVENTION: key=value, key=value -->  (Markdown/HTML)
-        % ASSERT_CONVENTION: key=value, key=value         (LaTeX)
-        # ASSERT_CONVENTION: key=value, key=value         (Python)
-
-    Returns a list of (canonical_key, value) pairs.
-    """
+    """Parse ASSERT_CONVENTION directives from file content."""
     pairs: list[tuple[str, str]] = []
     for match in _ASSERT_LINE_RE.finditer(content):
         payload = match.group(1)
-        # Split on commas followed by a key= pattern to avoid splitting
-        # values that contain commas (e.g., metric=(-,+,+,+))
         raw_pairs = re.split(r",\s*(?=\w+=)", payload)
         for raw in raw_pairs:
             raw = raw.strip()
@@ -654,26 +696,16 @@ def validate_assertions(
     *,
     filename: str = "<unknown>",
 ) -> list[AssertionMismatch]:
-    """Validate ASSERT_CONVENTION directives in file content against a lock.
-
-    Returns a list of mismatches (empty = all assertions match or no assertions found).
-    """
+    """Validate ASSERT_CONVENTION directives in file content against a lock."""
     mismatches: list[AssertionMismatch] = []
     assertions = parse_assert_conventions(content)
 
     for key, asserted_value in assertions:
-        # Look up the lock value: canonical field, then custom_conventions
-        lock_value: str | None = None
-        if key in KNOWN_CONVENTIONS:
-            lock_value = getattr(lock, key, None)
-        if lock_value is None:
-            lock_value = lock.custom_conventions.get(key)
+        lock_value = lock.conventions.get(key)
 
         if lock_value is None:
-            # Convention not set in lock — skip (can't validate)
             continue
 
-        # Normalize both values for comparison
         norm_lock = normalize_value(key, str(lock_value).strip())
         norm_asserted = normalize_value(key, asserted_value)
 

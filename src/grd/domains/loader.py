@@ -59,7 +59,9 @@ class ConventionFieldDef:
     name: str
     label: str
     description: str = ""
+    critical: bool = False
     aliases: tuple[str, ...] = ()
+    options: tuple[str, ...] = ()
     value_aliases: dict[str, str] = field(default_factory=dict)
 
 
@@ -126,12 +128,17 @@ class DomainContext:
             value_aliases = entry.get("value_aliases", {})
             if not isinstance(value_aliases, dict):
                 value_aliases = {}
+            options = entry.get("options", [])
+            if isinstance(options, str):
+                options = [options]
             result.append(
                 ConventionFieldDef(
                     name=entry["name"],
                     label=entry.get("label", entry["name"].replace("_", " ").title()),
                     description=entry.get("description", ""),
+                    critical=bool(entry.get("critical", False)),
                     aliases=tuple(aliases),
+                    options=tuple(options) if isinstance(options, list) else (),
                     value_aliases=value_aliases,
                 )
             )
@@ -160,6 +167,34 @@ class DomainContext:
     def value_aliases(self) -> dict[str, dict[str, str]]:
         """Return field → {variant: canonical} value alias mapping."""
         return {f.name: f.value_aliases for f in self.convention_fields if f.value_aliases}
+
+    @cached_property
+    def critical_fields(self) -> list[str]:
+        """Return convention field names marked as critical."""
+        return [f.name for f in self.convention_fields if f.critical]
+
+    @cached_property
+    def convention_options(self) -> dict[str, list[str]]:
+        """Return field → list of suggested values."""
+        return {f.name: list(f.options) for f in self.convention_fields if f.options}
+
+    @cached_property
+    def subfield_defaults(self) -> dict[str, dict[str, str]]:
+        """Load subfield default conventions from the domain pack."""
+        defaults_path = self._pack.pack_path / "conventions" / "subfield-defaults.yaml"
+        if not defaults_path.is_file():
+            return {}
+        try:
+            data = yaml.safe_load(defaults_path.read_text(encoding="utf-8"))
+        except (yaml.YAMLError, OSError) as exc:
+            logger.warning("Failed to load subfield defaults from %s: %s", defaults_path, exc)
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        raw = data.get("subfields", {})
+        if not isinstance(raw, dict):
+            return {}
+        return {str(k): {str(kk): str(vv) for kk, vv in v.items()} for k, v in raw.items() if isinstance(v, dict)}
 
     def content_dir(self, content_type: str) -> Path | None:
         """Return the resolved path for a declared content type, or None."""

@@ -99,7 +99,7 @@ def test_convention_set_canonical():
     assert result.updated is True
     assert result.key == "metric_signature"
     assert result.value == "mostly-plus"
-    assert lock.metric_signature == "mostly-plus"
+    assert lock.conventions["metric_signature"] == "mostly-plus"
 
 
 def test_convention_set_alias():
@@ -107,7 +107,7 @@ def test_convention_set_alias():
     result = convention_set(lock, "metric", "mostly-minus")
     assert result.updated is True
     assert result.key == "metric_signature"
-    assert lock.metric_signature == "mostly-minus"
+    assert lock.conventions["metric_signature"] == "mostly-minus"
 
 
 def test_convention_set_immutability_gate():
@@ -116,7 +116,7 @@ def test_convention_set_immutability_gate():
     result = convention_set(lock, "metric_signature", "mostly-minus")
     assert result.updated is False
     assert result.reason == "convention_already_set"
-    assert lock.metric_signature == "mostly-plus"
+    assert lock.conventions["metric_signature"] == "mostly-plus"
 
 
 def test_convention_set_force_overwrite():
@@ -124,7 +124,7 @@ def test_convention_set_force_overwrite():
     convention_set(lock, "metric_signature", "mostly-plus")
     result = convention_set(lock, "metric_signature", "mostly-minus", force=True)
     assert result.updated is True
-    assert lock.metric_signature == "mostly-minus"
+    assert lock.conventions["metric_signature"] == "mostly-minus"
 
 
 def test_convention_set_custom():
@@ -132,7 +132,7 @@ def test_convention_set_custom():
     result = convention_set(lock, "my_custom_convention", "some-value")
     assert result.updated is True
     assert result.custom is True
-    assert lock.custom_conventions["my_custom_convention"] == "some-value"
+    assert lock.conventions["my_custom_convention"] == "some-value"
 
 
 # ─── convention_list ─────────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ def test_convention_check_incomplete():
 
 def test_convention_check_with_custom():
     lock = ConventionLock()
-    lock.custom_conventions["my_custom"] = "value"
+    lock.conventions["my_custom"] = "value"
     result = convention_check(lock)
     assert result.custom_count == 1
 
@@ -302,7 +302,7 @@ def test_convention_set_unicode_key_as_custom():
     result = convention_set(lock, "\u00e9lectrique", "oui")
     assert result.updated is True
     assert result.custom is True
-    assert lock.custom_conventions["\u00e9lectrique"] == "oui"
+    assert lock.conventions["\u00e9lectrique"] == "oui"
 
 
 def test_convention_set_very_long_value():
@@ -311,7 +311,7 @@ def test_convention_set_very_long_value():
     long_val = "x" * 10_000
     result = convention_set(lock, "metric_signature", long_val)
     assert result.updated is True
-    assert lock.metric_signature == long_val
+    assert lock.conventions["metric_signature"] == long_val
 
 
 def test_is_bogus_value_case_insensitive():
@@ -340,7 +340,7 @@ def test_sanitize_value_rejects_none_variants():
 
 
 def test_convention_check_all_18_set():
-    """When all 18 canonical fields are set, check reports complete."""
+    """When all 18 canonical physics fields are set, check reports complete."""
     lock = ConventionLock(
         metric_signature="mostly-plus",
         fourier_convention="physics",
@@ -375,6 +375,33 @@ def test_convention_check_partial():
     assert result.complete is False
     assert result.set_count == 2
     assert result.missing_count == 16
+
+
+# ─── Legacy format migration ────────────────────────────────────────────────
+
+
+def test_legacy_flat_format_migration():
+    """ConventionLock auto-migrates flat physics fields into conventions dict."""
+    lock = ConventionLock(**{
+        "metric_signature": "mostly-plus",
+        "fourier_convention": "physics",
+        "custom_conventions": {"my_field": "my_value"},
+    })
+    assert lock.conventions["metric_signature"] == "mostly-plus"
+    assert lock.conventions["fourier_convention"] == "physics"
+    assert lock.conventions["my_field"] == "my_value"
+
+
+def test_new_format_passthrough():
+    """New format with conventions dict passes through unchanged."""
+    lock = ConventionLock(**{
+        "conventions": {
+            "metric_signature": "mostly-plus",
+            "my_field": "my_value",
+        }
+    })
+    assert lock.conventions["metric_signature"] == "mostly-plus"
+    assert lock.conventions["my_field"] == "my_value"
 
 
 # ─── Edge cases: parse_assert_conventions with indentation ───────────────
@@ -437,7 +464,7 @@ def test_convention_set_custom_force_overwrite():
     convention_set(lock, "my_custom", "value1")
     result = convention_set(lock, "my_custom", "value2", force=True)
     assert result.updated is True
-    assert lock.custom_conventions["my_custom"] == "value2"
+    assert lock.conventions["my_custom"] == "value2"
 
 
 # ─── convention_diff_phases ──────────────────────────────────────────────────

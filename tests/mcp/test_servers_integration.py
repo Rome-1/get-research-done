@@ -180,7 +180,7 @@ class TestConventionsServerIntegration:
 
         # Verify the value persisted in state.json
         state = json.loads((grd_project / ".grd" / "state.json").read_text())
-        assert state["convention_lock"]["regularization_scheme"] == "dim-reg"
+        assert state["convention_lock"]["conventions"]["regularization_scheme"] == "dim-reg"
 
     def test_convention_set_already_set_rejects_overwrite(self, grd_project: Path):
         from grd.mcp.servers.conventions_server import convention_set

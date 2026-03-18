@@ -1,0 +1,81 @@
+# Default convention values per physics subfield.
+# Used by MCP tools and CLI to suggest sensible starting points.
+
+subfields:
+  qft:
+    natural_units: "natural"
+    metric_signature: "mostly-minus"
+    fourier_convention: "physics"
+    index_positioning: "Einstein"
+    state_normalization: "relativistic"
+    levi_civita_sign: "+1"
+    generator_normalization: "delta/2"
+    creation_annihilation_order: "normal"
+
+  condensed_matter:
+    natural_units: "natural"
+    metric_signature: "euclidean"
+    fourier_convention: "physics"
+    state_normalization: "non-relativistic"
+    creation_annihilation_order: "normal"
+
+  stat_mech:
+    natural_units: "natural"
+    fourier_convention: "physics"
+    state_normalization: "non-relativistic"
+
+  gr_cosmology:
+    natural_units: "natural"
+    metric_signature: "mostly-plus"
+    fourier_convention: "physics"
+    index_positioning: "Einstein"
+    coordinate_system: "spherical"
+
+  amo:
+    natural_units: "SI"
+    state_normalization: "non-relativistic"
+    coordinate_system: "spherical"
+
+  nuclear_particle:
+    natural_units: "natural"
+    metric_signature: "mostly-minus"
+    fourier_convention: "physics"
+    state_normalization: "relativistic"
+    levi_civita_sign: "+1"
+
+  astrophysics:
+    natural_units: "CGS"
+    coordinate_system: "spherical"
+
+  mathematical_physics:
+    natural_units: "natural"
+    index_positioning: "Einstein"
+
+  algebraic_qft:
+    natural_units: "natural"
+    metric_signature: "mostly-minus"
+    fourier_convention: "physics"
+    index_positioning: "Einstein"
+    state_normalization: "relativistic"
+
+  string_field_theory:
+    natural_units: "natural"
+    fourier_convention: "physics"
+    index_positioning: "Einstein"
+    creation_annihilation_order: "normal"
+
+  quantum_info:
+    natural_units: "natural"
+    state_normalization: "non-relativistic"
+
+  soft_matter:
+    natural_units: "SI"
+    coordinate_system: "Cartesian"
+
+  fluid_plasma:
+    natural_units: "CGS"
+    coordinate_system: "Cartesian"
+
+  classical_mechanics:
+    natural_units: "SI"
+    coordinate_system: "Cartesian"

@@ -156,8 +156,8 @@ def test_sync_state_json_core_preserves_markdown_round_trip_sections(tmp_path: P
             "status": "valid",
         }
     ]
-    assert result["convention_lock"]["metric_signature"] == "-+++"
-    assert result["convention_lock"]["custom_conventions"] == {"branch_cut": "principal"}
+    assert result["convention_lock"]["conventions"]["metric_signature"] == "-+++"
+    assert result["convention_lock"]["conventions"]["branch_cut"] == "principal"
     assert result["propagated_uncertainties"] == [
         {
             "quantity": "m",
@@ -254,8 +254,8 @@ None yet.
     result = sync_state_json_core(cwd, markdown_without_structured_blocks)
 
     assert result["approximations"] == existing["approximations"]
-    assert result["convention_lock"]["metric_signature"] == "-+++"
-    assert result["convention_lock"]["custom_conventions"] == {"branch_cut": "principal"}
+    assert result["convention_lock"]["conventions"]["metric_signature"] == "-+++"
+    assert result["convention_lock"]["conventions"]["branch_cut"] == "principal"
     assert result["propagated_uncertainties"] == existing["propagated_uncertainties"]
     assert result["pending_todos"] == existing["pending_todos"]
 

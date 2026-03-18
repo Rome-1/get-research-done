@@ -144,7 +144,7 @@ class TestPhysicsDomainConventionOps:
         result = convention_set(lock, "metric", "mostly-minus", domain_ctx=physics_ctx)
         assert result.updated is True
         assert result.key == "metric_signature"
-        assert lock.metric_signature == "mostly-minus"
+        assert lock.conventions["metric_signature"] == "mostly-minus"
 
     def test_convention_list_with_physics_ctx(self, physics_ctx: DomainContext) -> None:
         lock = ConventionLock(metric_signature="mostly-minus")
@@ -185,17 +185,16 @@ class TestCustomDomainConventionOps:
         assert normalize_value("organism", "worm", domain_ctx=biology_domain) == "c-elegans"
 
     def test_convention_set_biology_field_goes_to_custom(self, biology_domain: DomainContext) -> None:
-        """Biology fields are not in ConventionLock model — they go to custom_conventions."""
+        """Biology fields are stored in the unified conventions dict."""
         lock = ConventionLock()
         result = convention_set(lock, "species", "fruit fly", domain_ctx=biology_domain)
         assert result.updated is True
         assert result.key == "organism"
-        # Since "organism" is not a ConventionLock model field, it goes to custom_conventions
-        assert lock.custom_conventions.get("organism") == "drosophila-melanogaster"
+        assert lock.conventions.get("organism") == "drosophila-melanogaster"
 
     def test_convention_list_biology_shows_3_canonical(self, biology_domain: DomainContext) -> None:
         lock = ConventionLock()
-        lock.custom_conventions["organism"] = "drosophila-melanogaster"
+        lock.conventions["organism"] = "drosophila-melanogaster"
         result = convention_list(lock, domain_ctx=biology_domain)
         assert result.canonical_total == 3
         assert result.set_count == 1
@@ -211,9 +210,9 @@ class TestCustomDomainConventionOps:
 
     def test_convention_check_biology_complete(self, biology_domain: DomainContext) -> None:
         lock = ConventionLock()
-        lock.custom_conventions["organism"] = "drosophila-melanogaster"
-        lock.custom_conventions["sequence_format"] = "FASTA"
-        lock.custom_conventions["alignment_tool"] = "BLAST"
+        lock.conventions["organism"] = "drosophila-melanogaster"
+        lock.conventions["sequence_format"] = "FASTA"
+        lock.conventions["alignment_tool"] = "BLAST"
         result = convention_check(lock, domain_ctx=biology_domain)
         assert result.total == 3
         assert result.set_count == 3
@@ -247,7 +246,7 @@ class TestNoDomainContext:
         lock = ConventionLock()
         result = convention_set(lock, "metric", "mostly-minus")
         assert result.updated is True
-        assert lock.metric_signature == "mostly-minus"
+        assert lock.conventions["metric_signature"] == "mostly-minus"
 
     def test_convention_list_no_ctx(self) -> None:
         lock = ConventionLock(metric_signature="mostly-minus")

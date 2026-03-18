@@ -5,7 +5,9 @@ fields:
   - name: metric_signature
     label: "Metric signature"
     description: "Spacetime metric sign convention"
+    critical: true
     aliases: ["metric"]
+    options: ["(+,-,-,-)", "(-,+,+,+)", "Euclidean (+,+,+,+)", "mostly-minus", "mostly-plus", "euclidean"]
     value_aliases:
       "(+,-,-,-)": "mostly-minus"
       "(+,\u2212,\u2212,\u2212)": "mostly-minus"
@@ -21,79 +23,98 @@ fields:
   - name: fourier_convention
     label: "Fourier convention"
     description: "Choice of Fourier transform normalization"
+    critical: true
     aliases: ["fourier"]
+    options: ["physics", "math", "symmetric", "QFT"]
 
   - name: natural_units
     label: "Natural units"
     description: "Unit system (hbar=c=kB=1 vs SI vs Planck vs lattice)"
+    critical: true
     aliases: ["units"]
+    options: ["natural", "SI", "CGS", "lattice"]
 
   - name: gauge_choice
     label: "Gauge choice"
     description: "Gauge fixing convention (Coulomb, axial, temporal, Lorenz)"
     aliases: ["gauge"]
+    options: ["Coulomb", "Lorenz", "axial", "Feynman", "light-cone"]
 
   - name: regularization_scheme
     label: "Regularization scheme"
     description: "Regularization method (cutoff, dimensional, PV, lattice)"
     aliases: ["regularization"]
+    options: ["dim-reg", "cutoff", "lattice", "zeta", "PV"]
 
   - name: renormalization_scheme
     label: "Renormalization scheme"
     description: "Renormalization prescription (MS, MSbar, on-shell)"
     aliases: ["renorm", "renormalization"]
+    options: ["MS-bar", "on-shell", "MOM", "lattice"]
 
   - name: coordinate_system
     label: "Coordinate system"
     description: "Coordinate convention (Cartesian, spherical, lightcone)"
     aliases: ["coordinates"]
+    options: ["Cartesian", "spherical", "cylindrical", "light-cone"]
 
   - name: spin_basis
     label: "Spin basis"
     description: "Spinor representation (Weyl, Majorana, Dirac)"
     aliases: ["spin"]
+    options: ["Dirac", "Weyl", "Majorana"]
 
   - name: state_normalization
     label: "State normalization"
     description: "Quantum state normalization convention"
     aliases: ["normalization"]
+    options: ["relativistic", "non-relativistic", "box"]
 
   - name: coupling_convention
     label: "Coupling convention"
     description: "Coupling constant convention (e vs e/(4pi), g vs g/2)"
     aliases: ["coupling"]
+    options: ["g", "g^2", "g^2/(4pi)", "alpha=g^2/(4pi)"]
 
   - name: index_positioning
     label: "Index positioning"
     description: "Tensor index convention (upper/lower vs abstract)"
     aliases: ["index"]
+    options: ["Einstein", "explicit"]
 
   - name: time_ordering
     label: "Time ordering"
     description: "Time ordering prescription (contour ordering, i-epsilon)"
     aliases: ["ordering"]
+    options: ["time-ordered", "anti-time-ordered", "path-ordered"]
 
   - name: commutation_convention
     label: "Commutation convention"
     description: "Commutator/anticommutator notation"
     aliases: ["commutator"]
+    options: ["canonical", "anti-canonical"]
 
   - name: levi_civita_sign
     label: "Levi-Civita sign"
     description: "Levi-Civita tensor sign convention with metric"
+    options: ["+1", "-1"]
 
   - name: generator_normalization
     label: "Generator normalization"
     description: "Lie algebra generator normalization (Tr(T_a T_b) = ...)"
+    options: ["delta/2", "delta"]
 
   - name: covariant_derivative_sign
     label: "Covariant derivative sign"
     description: "Sign in covariant derivative (+ig vs -ig)"
+    options: ["D=d-igA", "D=d+igA"]
 
   - name: gamma_matrix_convention
     label: "Gamma matrix convention"
     description: "Dirac gamma matrix anticommutation convention"
+    options: ["Dirac", "Weyl", "Majorana"]
 
   - name: creation_annihilation_order
     label: "Creation/annihilation order"
     description: "Commutation relation sign for creation/annihilation operators"
+    options: ["normal", "anti-normal", "Weyl"]

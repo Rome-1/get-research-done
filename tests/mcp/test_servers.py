@@ -130,23 +130,25 @@ class TestConventionsServer:
         assert result["valid"] is True
         assert result["missing_critical"] == []
 
-    def test_convention_check_consistency_issues(self):
+    def test_convention_check_partial_lock(self):
         from grd.mcp.servers.conventions_server import convention_check
 
         lock = {"renormalization_scheme": "MS-bar"}
         result = convention_check(lock)
-        assert any("Renormalization scheme" in i for i in result["issues"])
+        assert result["valid"] is False
+        assert "renormalization_scheme" in result["set_fields"]
+        assert result["completeness_percent"] > 0
 
-    def test_convention_check_euclidean_qft_warning(self):
+    def test_convention_check_critical_fields_missing(self):
         from grd.mcp.servers.conventions_server import convention_check
 
         lock = {
-            "metric_signature": "Euclidean (+,+,+,+)",
+            "metric_signature": "euclidean",
             "fourier_convention": "QFT",
-            "natural_units": "natural",
         }
         result = convention_check(lock)
-        assert any("Euclidean" in i for i in result["issues"])
+        # natural_units is a critical field and is missing
+        assert "natural_units" in result["missing_critical"]
 
     def test_convention_diff_identical(self):
         from grd.mcp.servers.conventions_server import convention_diff
@@ -231,9 +233,10 @@ class TestConventionsServer:
         assert "available_domains" in result
 
     def test_subfield_defaults_all_domains_valid(self):
-        from grd.mcp.servers.conventions_server import SUBFIELD_DEFAULTS, subfield_defaults
+        from grd.mcp.servers.conventions_server import _get_subfield_defaults, subfield_defaults
 
-        for domain in SUBFIELD_DEFAULTS:
+        all_defaults = _get_subfield_defaults()
+        for domain in all_defaults:
             result = subfield_defaults(domain)
             assert result["found"] is True, f"Domain {domain} should be found"
 
@@ -303,7 +306,7 @@ class TestConventionsServer:
         planning.mkdir()
         (planning / "state.json").write_text(json.dumps([1, 2, 3]))
         lock = _load_lock_from_project(str(tmp_path))
-        assert lock.metric_signature is None
+        assert lock.conventions == {}
 
     def test_load_lock_string_state_json(self, tmp_path):
         """If state.json contains a bare string, return empty lock."""
@@ -313,7 +316,7 @@ class TestConventionsServer:
         planning.mkdir()
         (planning / "state.json").write_text(json.dumps("just a string"))
         lock = _load_lock_from_project(str(tmp_path))
-        assert lock.metric_signature is None
+        assert lock.conventions == {}
 
     def test_update_lock_non_dict_state_json(self, tmp_path):
         """If state.json contains a non-dict, _update_lock_in_project resets raw to {}."""
@@ -323,9 +326,9 @@ class TestConventionsServer:
         planning.mkdir()
         (planning / "state.json").write_text(json.dumps([1, 2, 3]))
         lock, result = _update_lock_in_project(
-            str(tmp_path), lambda lk: lk.metric_signature
+            str(tmp_path), lambda lk: lk.conventions.get("metric_signature")
         )
-        assert lock.metric_signature is None
+        assert lock.conventions == {}
         assert result is None
 
     def test_convention_set_returns_error_on_malformed_state_json(self, tmp_path):

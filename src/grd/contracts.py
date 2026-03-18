@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
 __all__ = [
@@ -75,28 +75,45 @@ def _normalize_mapping_field(value: object) -> object:
     return value
 
 
+# Legacy physics field names — used only for migration from the old flat format.
+_LEGACY_PHYSICS_FIELDS = frozenset({
+    "metric_signature", "fourier_convention", "natural_units", "gauge_choice",
+    "regularization_scheme", "renormalization_scheme", "coordinate_system",
+    "spin_basis", "state_normalization", "coupling_convention", "index_positioning",
+    "time_ordering", "commutation_convention", "levi_civita_sign",
+    "generator_normalization", "covariant_derivative_sign",
+    "gamma_matrix_convention", "creation_annihilation_order",
+})
+
+
 class ConventionLock(BaseModel):
+    """Domain-agnostic convention lock.
+
+    All convention key-value pairs are stored in a single ``conventions`` dict.
+    The domain pack defines which keys are canonical for a given domain.
+    """
+
     model_config = ConfigDict(validate_assignment=True)
 
-    metric_signature: str | None = None
-    fourier_convention: str | None = None
-    natural_units: str | None = None
-    gauge_choice: str | None = None
-    regularization_scheme: str | None = None
-    renormalization_scheme: str | None = None
-    coordinate_system: str | None = None
-    spin_basis: str | None = None
-    state_normalization: str | None = None
-    coupling_convention: str | None = None
-    index_positioning: str | None = None
-    time_ordering: str | None = None
-    commutation_convention: str | None = None
-    levi_civita_sign: str | None = None
-    generator_normalization: str | None = None
-    covariant_derivative_sign: str | None = None
-    gamma_matrix_convention: str | None = None
-    creation_annihilation_order: str | None = None
-    custom_conventions: dict[str, str] = Field(default_factory=dict)
+    conventions: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_format(cls, data: object) -> object:
+        """Auto-migrate flat physics fields and custom_conventions into unified dict."""
+        if not isinstance(data, dict):
+            return data
+        conventions: dict[str, str] = dict(data.get("conventions") or {})
+        # Merge legacy custom_conventions
+        custom = data.get("custom_conventions")
+        if isinstance(custom, dict):
+            conventions.update({str(k): str(v) for k, v in custom.items() if v is not None})
+        # Merge legacy flat physics fields
+        for key in _LEGACY_PHYSICS_FIELDS:
+            val = data.get(key)
+            if val is not None and key not in conventions:
+                conventions[key] = str(val)
+        return {"conventions": conventions}
 
 
 class VerificationEvidence(BaseModel):

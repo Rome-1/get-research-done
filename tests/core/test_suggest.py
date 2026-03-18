@@ -392,7 +392,6 @@ def test_missing_conventions_suggest_set(tmp_path: Path) -> None:
     actions = [s.action for s in result.suggestions]
     assert "set-conventions" in actions
     assert "natural_units" in result.context.missing_conventions
-    assert "coordinate_system" in result.context.missing_conventions
 
 
 # ─── Paper Pipeline ────────────────────────────────────────────────────────────

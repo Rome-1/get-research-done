@@ -99,13 +99,13 @@ class TestMechInterpConventionOps:
         result = convention_set(lock, "model", "transformer", domain_ctx=mi_ctx)
         assert result.updated is True
         assert result.key == "model_family"
-        assert lock.custom_conventions.get("model_family") == "transformer"
+        assert lock.conventions.get("model_family") == "transformer"
 
     def test_convention_set_with_value_alias(self, mi_ctx: DomainContext) -> None:
         lock = ConventionLock()
         result = convention_set(lock, "basis", "residual", domain_ctx=mi_ctx)
         assert result.updated is True
-        assert lock.custom_conventions.get("activation_space") == "residual-stream"
+        assert lock.conventions.get("activation_space") == "residual-stream"
 
     def test_convention_set_immutability(self, mi_ctx: DomainContext) -> None:
         lock = ConventionLock()
@@ -119,8 +119,8 @@ class TestMechInterpConventionOps:
 
     def test_convention_list(self, mi_ctx: DomainContext) -> None:
         lock = ConventionLock()
-        lock.custom_conventions["model_family"] = "transformer"
-        lock.custom_conventions["activation_space"] = "residual-stream"
+        lock.conventions["model_family"] = "transformer"
+        lock.conventions["activation_space"] = "residual-stream"
         result = convention_list(lock, domain_ctx=mi_ctx)
         assert result.canonical_total == 15
         assert result.set_count == 2
@@ -135,7 +135,7 @@ class TestMechInterpConventionOps:
     def test_convention_check_complete(self, mi_ctx: DomainContext) -> None:
         lock = ConventionLock()
         for name in mi_ctx.known_convention_names:
-            lock.custom_conventions[name] = f"test-value-{name}"
+            lock.conventions[name] = f"test-value-{name}"
         result = convention_check(lock, domain_ctx=mi_ctx)
         assert result.total == 15
         assert result.set_count == 15

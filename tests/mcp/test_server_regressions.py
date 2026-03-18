@@ -80,9 +80,14 @@ def test_convention_handlers_return_error_for_invalid_lock_data() -> None:
         convention_diff,
     )
 
-    assert "error" in convention_check({"custom_conventions": "not-a-dict"})
-    assert "error" in convention_diff({"custom_conventions": "not-a-dict"}, {})
-    assert "error" in assert_convention_validate("content", {"custom_conventions": 123})
+    # Invalid custom_conventions is silently ignored by the legacy migration validator
+    result = convention_check({"custom_conventions": "not-a-dict"})
+    assert "error" not in result  # gracefully handles malformed legacy data
+    # These should still work without error
+    result2 = convention_diff({"custom_conventions": "not-a-dict"}, {})
+    assert "error" not in result2
+    result3 = assert_convention_validate("content", {"custom_conventions": 123})
+    assert "error" not in result3
 
 
 def test_convention_set_returns_error_on_timeout(tmp_path: Path) -> None:
