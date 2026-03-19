@@ -76,6 +76,7 @@ class DomainPack:
     pack_path: Path
     conventions_file: str = "conventions/convention-fields.yaml"
     content_dirs: dict[str, str] = field(default_factory=dict)
+    result_metadata_fields: list[dict[str, str]] = field(default_factory=list)
     publication_config: dict[str, str] = field(default_factory=dict)
     branding: dict[str, str] = field(default_factory=dict)
 
@@ -275,6 +276,19 @@ class DomainContext:
         return [entry for entry in raw if isinstance(entry, dict)]
 
     @cached_property
+    def result_metadata_fields(self) -> list[dict[str, str]]:
+        """Return result metadata field definitions from the domain pack.
+
+        Each entry has keys: key, label, help.
+        """
+        return list(self._pack.result_metadata_fields)
+
+    @cached_property
+    def result_metadata_keys(self) -> list[str]:
+        """Return the list of valid result metadata keys for this domain."""
+        return [f["key"] for f in self.result_metadata_fields]
+
+    @cached_property
     def subfields_dir(self) -> Path:
         return self.content_dir("subfields") or self._pack.pack_path / "subfields"
 
@@ -355,6 +369,19 @@ def _parse_domain_yaml(pack_path: Path) -> DomainPack:
     branding = data.get("branding", {})
     if not isinstance(branding, dict):
         branding = {}
+    # Parse result_metadata_fields
+    raw_meta_fields = data.get("result_metadata_fields", [])
+    if not isinstance(raw_meta_fields, list):
+        raw_meta_fields = []
+    meta_fields = []
+    for entry in raw_meta_fields:
+        if isinstance(entry, dict) and "key" in entry:
+            meta_fields.append({
+                "key": str(entry["key"]),
+                "label": str(entry.get("label", entry["key"])),
+                "help": str(entry.get("help", "")),
+            })
+
     return DomainPack(
         name=str(data.get("name", pack_path.name)),
         display_name=str(data.get("display_name", data.get("name", pack_path.name))),
@@ -363,6 +390,7 @@ def _parse_domain_yaml(pack_path: Path) -> DomainPack:
         pack_path=pack_path,
         conventions_file=str(data.get("conventions_file", "conventions/convention-fields.yaml")),
         content_dirs=_parse_content_dirs(data),
+        result_metadata_fields=meta_fields,
         publication_config=pub,
         branding=branding,
     )

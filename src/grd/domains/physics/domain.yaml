@@ -15,6 +15,17 @@ content:
   bundles: bundles
   verification: verification
 
+result_metadata_fields:
+  - key: equation
+    label: "LaTeX equation"
+    help: "LaTeX equation for this result"
+  - key: units
+    label: "Physical units"
+    help: "Physical units of this result"
+  - key: validity
+    label: "Validity range"
+    help: "Parameter range where this result is valid"
+
 publication:
   journal_templates: publication/journal-templates.yaml
   review_stages: publication/review-stages.yaml

@@ -50,6 +50,7 @@ class IntermediateResult(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     verified: bool = False
     verification_records: list[VerificationEvidence] = Field(default_factory=list)
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 
 class ResultDeps(BaseModel):
@@ -75,7 +76,7 @@ class MissingDep(BaseModel):
 # --- Helpers ---
 
 RESULT_FIELDS = frozenset(
-    {"equation", "description", "units", "validity", "phase", "depends_on", "verified", "verification_records"}
+    {"equation", "description", "units", "validity", "phase", "depends_on", "verified", "verification_records", "metadata"}
 )
 
 
@@ -181,6 +182,7 @@ def result_add(
     verified: bool = False,
     verification_records: list[VerificationEvidence | dict[str, object]] | None = None,
     result_id: str | None = None,
+    metadata: dict[str, str] | None = None,
 ) -> IntermediateResult:
     """Add an intermediate result to state.
 
@@ -231,6 +233,7 @@ def result_add(
         "depends_on": deps,
         "verified": verified or bool(normalized_records),
         "verification_records": [record.model_dump() for record in normalized_records],
+        "metadata": dict(metadata) if metadata else {},
     }
 
     state["intermediate_results"].append(result_dict)

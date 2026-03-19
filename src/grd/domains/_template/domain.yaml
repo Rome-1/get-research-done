@@ -13,5 +13,12 @@ content:
   protocols: protocols
   errors: errors
 
+# Result metadata fields — domain-specific fields for intermediate results.
+# Each entry defines a --meta key that users can pass to `grd result add/update`.
+# result_metadata_fields:
+#   - key: equation
+#     label: "LaTeX equation"
+#     help: "LaTeX equation for this result"
+
 branding:
   tagline: "Your tagline here"

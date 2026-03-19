@@ -1,0 +1,80 @@
+# Machine learning convention fields — canonical convention lock fields
+# These define the domain-specific conventions that can be locked per-project.
+
+fields:
+  - name: optimizer
+    label: "Optimizer"
+    description: "Optimization algorithm"
+    critical: true
+    aliases: ["optim"]
+    options: ["SGD", "Adam", "AdamW", "RMSProp", "LAMB", "Adafactor", "Lion"]
+
+  - name: loss_function
+    label: "Loss function"
+    description: "Primary loss/objective function"
+    critical: true
+    aliases: ["loss", "objective"]
+    options: ["cross-entropy", "MSE", "MAE", "binary-cross-entropy", "hinge", "contrastive", "triplet", "focal"]
+
+  - name: lr_schedule
+    label: "Learning rate schedule"
+    description: "Learning rate scheduling strategy"
+    aliases: ["lr_scheduler", "schedule"]
+    options: ["constant", "cosine", "linear-warmup", "step-decay", "one-cycle", "cosine-warmup", "exponential"]
+
+  - name: batch_norm
+    label: "Normalization layer"
+    description: "Normalization technique used in model architecture"
+    aliases: ["normalization", "norm"]
+    options: ["batch-norm", "layer-norm", "group-norm", "instance-norm", "RMSNorm", "none"]
+
+  - name: weight_init
+    label: "Weight initialization"
+    description: "Parameter initialization strategy"
+    aliases: ["init", "initialization"]
+    options: ["xavier-uniform", "xavier-normal", "kaiming-uniform", "kaiming-normal", "orthogonal", "truncated-normal"]
+
+  - name: activation_function
+    label: "Activation function"
+    description: "Non-linearity used in network layers"
+    aliases: ["activation", "nonlinearity"]
+    options: ["ReLU", "GELU", "SiLU", "Swish", "Mish", "tanh", "sigmoid", "LeakyReLU"]
+
+  - name: regularization
+    label: "Regularization"
+    description: "Regularization techniques applied"
+    aliases: ["reg"]
+    options: ["dropout", "weight-decay", "L1", "L2", "label-smoothing", "mixup", "cutout", "none"]
+
+  - name: precision_format
+    label: "Precision format"
+    description: "Numerical precision for training/inference"
+    critical: true
+    aliases: ["precision", "dtype"]
+    options: ["fp32", "fp16", "bf16", "mixed-fp16", "mixed-bf16", "int8", "int4"]
+
+  - name: random_seed_policy
+    label: "Random seed policy"
+    description: "How random seeds are managed for reproducibility"
+    critical: true
+    aliases: ["seed", "seed_policy"]
+    options: ["fixed", "per-run-unique", "deterministic-mode"]
+
+  - name: evaluation_metric
+    label: "Evaluation metric"
+    description: "Primary metric used for model selection and comparison"
+    critical: true
+    aliases: ["metric", "eval_metric"]
+    options: ["accuracy", "F1", "AUC-ROC", "BLEU", "ROUGE", "perplexity", "FID", "mAP", "MSE", "R-squared"]
+
+  - name: data_split_strategy
+    label: "Data split strategy"
+    description: "How data is divided into train/val/test sets"
+    aliases: ["split", "data_split"]
+    options: ["random", "stratified", "temporal", "k-fold", "leave-one-out", "group-split"]
+
+  - name: gradient_clipping
+    label: "Gradient clipping"
+    description: "Gradient clipping strategy to prevent exploding gradients"
+    aliases: ["clip", "grad_clip"]
+    options: ["norm-1.0", "norm-0.5", "value-1.0", "none"]

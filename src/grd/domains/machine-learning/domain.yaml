@@ -1,0 +1,29 @@
+name: machine-learning
+display_name: Machine Learning
+description: >
+  Machine learning research: supervised/unsupervised learning, deep learning,
+  reinforcement learning, NLP, computer vision, generative models, and more.
+version: 1
+
+conventions_file: conventions/convention-fields.yaml
+
+content:
+  subfields: subfields
+  protocols: protocols
+  errors: verification/errors
+  verification: verification
+
+result_metadata_fields:
+  - key: metric_name
+    label: "Evaluation metric"
+    help: "Primary evaluation metric for this result (e.g., accuracy, F1, BLEU)"
+  - key: dataset
+    label: "Dataset"
+    help: "Dataset used to obtain this result"
+  - key: baseline
+    label: "Baseline comparison"
+    help: "Baseline model or method this result is compared against"
+
+branding:
+  tagline: "Rigorous ML research, reproducibly"
+  color: green

@@ -1044,6 +1044,22 @@ result_app = typer.Typer(help="Intermediate results with dependency tracking")
 app.add_typer(result_app, name="result")
 
 
+def _parse_meta_options(meta: list[str] | None) -> dict[str, str]:
+    """Parse --meta key=value pairs into a dict."""
+    if not meta:
+        return {}
+    result: dict[str, str] = {}
+    for item in meta:
+        if "=" not in item:
+            raise typer.BadParameter(f"--meta must be key=value, got: {item!r}")
+        key, _, value = item.partition("=")
+        key = key.strip()
+        if not key:
+            raise typer.BadParameter(f"--meta key must be non-empty, got: {item!r}")
+        result[key] = value
+    return result
+
+
 @result_app.command("add")
 def result_add(
     id: str | None = typer.Option(None, "--id", help="Result ID"),
@@ -1054,6 +1070,7 @@ def result_add(
     phase: str | None = typer.Option(None, "--phase", help="Phase number"),
     depends_on: str | None = typer.Option(None, "--depends-on", help="Comma-separated dependency IDs"),
     verified: bool = typer.Option(False, "--verified", help="Mark as verified"),
+    meta: list[str] | None = typer.Option(None, "--meta", help="Domain metadata as key=value (repeatable)"),
 ) -> None:
     """Add an intermediate result to the results registry."""
     import json as _json
@@ -1064,6 +1081,7 @@ def result_add(
     from grd.core.utils import file_lock
 
     deps = depends_on.split(",") if depends_on else []
+    metadata = _parse_meta_options(meta)
     cwd = _get_cwd()
     state_path = ProjectLayout(cwd).state_json
 
@@ -1084,6 +1102,7 @@ def result_add(
             phase=phase,
             depends_on=deps,
             verified=verified,
+            metadata=metadata or None,
         )
         save_state_json_locked(cwd, state)
     _output(res)
@@ -1168,6 +1187,7 @@ def result_update(
     phase: str | None = typer.Option(None, "--phase", help="Phase number"),
     depends_on: str | None = typer.Option(None, "--depends-on", help="Comma-separated dependency IDs"),
     verified: bool | None = typer.Option(None, "--verified/--no-verified", help="Mark as verified or un-verify"),
+    meta: list[str] | None = typer.Option(None, "--meta", help="Domain metadata as key=value (repeatable)"),
 ) -> None:
     """Update an existing result."""
     import json as _json
@@ -1192,6 +1212,9 @@ def result_update(
         opts["depends_on"] = depends_on.split(",")
     if verified is not None:
         opts["verified"] = verified
+    metadata = _parse_meta_options(meta)
+    if metadata:
+        opts["metadata"] = metadata
 
     cwd = _get_cwd()
     state_path = ProjectLayout(cwd).state_json

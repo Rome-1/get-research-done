@@ -1,0 +1,140 @@
+# Machine learning domain bootstrap patterns for cross-project pattern library seeding.
+# Each entry defines a known error pattern that recurs across ML projects.
+# These are seeded into the pattern library on first use.
+
+patterns:
+  - domain: supervised-learning
+    category: data-leakage
+    severity: critical
+    title: "Train-test data leakage through preprocessing"
+    slug: preprocessing-data-leakage
+    domains_extra: [deep-learning, nlp]
+    description: >
+      Fitting preprocessing (normalization, feature selection, tokenization) on
+      the full dataset before splitting leaks test distribution into training.
+    detection: >
+      Check if any fit/transform step uses test data. Verify preprocessing
+      pipeline is fitted only on training fold.
+    prevention: >
+      Always split data before any preprocessing. Use sklearn Pipeline or
+      equivalent to ensure transforms are fit only on training data.
+    tags: [data-leakage, preprocessing, train-test-split, normalization]
+
+  - domain: deep-learning
+    category: training-error
+    severity: critical
+    title: "Learning rate too high after warmup"
+    slug: lr-warmup-overshoot
+    domains_extra: [nlp, computer-vision]
+    description: >
+      Peak learning rate after warmup is set too high for the model size,
+      causing loss spikes or divergence mid-training.
+    detection: >
+      Monitor loss curve for sudden spikes after warmup phase completes.
+      Check if gradient norms increase sharply.
+    prevention: >
+      Use learning rate finder. Scale LR with batch size (linear or sqrt scaling).
+      Start with published baselines for the architecture.
+    tags: [learning-rate, warmup, divergence, training-stability]
+
+  - domain: supervised-learning
+    category: evaluation-error
+    severity: critical
+    title: "Metric mismatch between optimization and evaluation"
+    slug: metric-objective-mismatch
+    domains_extra: [deep-learning, reinforcement-learning]
+    description: >
+      Training optimizes a proxy loss (e.g., cross-entropy) but evaluation
+      uses a different metric (e.g., F1, BLEU) that doesn't correlate well.
+    detection: >
+      Compare training loss improvement with evaluation metric improvement.
+      Check for cases where loss decreases but eval metric stagnates.
+    prevention: >
+      Document the relationship between training objective and eval metric.
+      Consider directly optimizing the evaluation metric when feasible.
+    tags: [metric, loss-function, evaluation, proxy-objective]
+
+  - domain: deep-learning
+    category: reproducibility-error
+    severity: high
+    title: "Non-deterministic results from missing seed control"
+    slug: missing-seed-control
+    domains_extra: [reinforcement-learning]
+    description: >
+      Results vary across runs because random seeds are not controlled for
+      all sources of randomness (weight init, data shuffling, dropout, CUDA ops).
+    detection: >
+      Run identical configuration twice and compare results.
+      Check if torch.backends.cudnn.deterministic is set.
+    prevention: >
+      Set seeds for all RNG sources. Enable deterministic mode.
+      Document which operations remain non-deterministic.
+    tags: [reproducibility, random-seed, determinism, cuda]
+
+  - domain: deep-learning
+    category: data-error
+    severity: high
+    title: "Distribution shift between training and deployment"
+    slug: train-deploy-distribution-shift
+    domains_extra: [computer-vision, nlp]
+    description: >
+      Model trained on one data distribution is deployed on a different
+      distribution, causing silent accuracy degradation.
+    detection: >
+      Monitor prediction confidence distribution in production.
+      Compare input feature statistics between training and serving data.
+    prevention: >
+      Build monitoring for data drift. Maintain held-out test sets that
+      represent deployment distribution. Retrain on recent data.
+    tags: [distribution-shift, deployment, monitoring, data-drift]
+
+  - domain: supervised-learning
+    category: evaluation-error
+    severity: high
+    title: "Overfitting to validation set through repeated tuning"
+    slug: validation-set-overfitting
+    domains_extra: [deep-learning]
+    description: >
+      Hyperparameter tuning over many iterations on the same validation set
+      effectively leaks validation data into model selection.
+    detection: >
+      Compare final test set performance with best validation performance.
+      Large gap suggests validation overfitting.
+    prevention: >
+      Use a held-out test set never used during development. Use nested
+      cross-validation for hyperparameter search. Report test performance once.
+    tags: [overfitting, validation, hyperparameter-tuning, test-set]
+
+  - domain: deep-learning
+    category: numerical-error
+    severity: high
+    title: "Loss of precision in mixed-precision training"
+    slug: mixed-precision-underflow
+    domains_extra: [nlp]
+    description: >
+      Small gradient values underflow to zero in fp16, causing stalled
+      training or subtle accuracy loss.
+    detection: >
+      Monitor the fraction of zero gradients. Check if loss scale is
+      frequently reduced. Compare fp32 vs mixed-precision final metrics.
+    prevention: >
+      Use dynamic loss scaling. Keep certain operations in fp32 (softmax,
+      layer norm, loss computation). Use bf16 where hardware supports it.
+    tags: [mixed-precision, fp16, underflow, gradient, loss-scaling]
+
+  - domain: supervised-learning
+    category: data-error
+    severity: high
+    title: "Label noise corrupting model learning"
+    slug: label-noise-corruption
+    domains_extra: [computer-vision, nlp]
+    description: >
+      Noisy or incorrect labels in training data cause the model to learn
+      wrong associations, reducing generalization.
+    detection: >
+      Inspect samples with highest loss after initial training. Check
+      inter-annotator agreement. Look for label distribution anomalies.
+    prevention: >
+      Use label smoothing. Apply confident learning to identify mislabeled
+      examples. Implement multi-annotator workflows with adjudication.
+    tags: [label-noise, data-quality, annotation, label-smoothing]
