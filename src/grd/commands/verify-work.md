@@ -50,7 +50,7 @@ Physics verification is fundamentally different from software testing. A softwar
 
 <execution_context>
 @{GRD_INSTALL_DIR}/workflows/verify-work.md
-@{GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md
+@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/verification/core/verification-core.md
 @{GRD_INSTALL_DIR}/templates/verification-report.md
 @{GRD_INSTALL_DIR}/templates/contract-results-schema.md
 </execution_context>

@@ -26,7 +26,7 @@ This graph therefore includes:
 
 <!-- repo-graph-scope:start -->
 
-- Live repo files analyzed in the current tree: `658`
+- Live repo files analyzed in the current tree: `660`
 - Python files under `src/` and `tests/`: `204`
 - `src/grd/commands/*.md`: `61`
 - `src/grd/agents/*.md`: `23`

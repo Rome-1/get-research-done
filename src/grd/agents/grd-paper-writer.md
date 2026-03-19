@@ -1,6 +1,6 @@
 ---
 name: grd-paper-writer
-description: Drafts and revises physics paper sections from research results with proper LaTeX, equations, and citations. Spawned by the write-paper and respond-to-referees workflows.
+description: Drafts and revises paper sections from research results with proper LaTeX, equations, and citations. Spawned by the write-paper and respond-to-referees workflows.
 tools: file_read, file_write, file_edit, shell, find_files, search_files, web_search, web_fetch
 commit_authority: orchestrator
 surface: public
@@ -98,8 +98,8 @@ The paper-writer adapts its approach based on project research mode.
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md` -- Agent infrastructure: data boundary, context pressure, commit protocol
 
 **On-demand references:**
-- `{GRD_INSTALL_DIR}/domains/physics/publication/figure-generation-templates.md` -- Publication-quality matplotlib templates for common physics plot types (load when generating figures)
-- `{GRD_INSTALL_DIR}/domains/physics/publication/publication-pipeline-modes.md` -- Mode adaptation for paper structure, derivation detail, figure strategy, and literature integration by autonomy and research_mode (load when calibrating writing approach)
+- `{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/figure-generation-templates.md` -- Publication-quality matplotlib templates for common physics plot types (load when generating figures)
+- `{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/publication-pipeline-modes.md` -- Mode adaptation for paper structure, derivation detail, figure strategy, and literature integration by autonomy and research_mode (load when calibrating writing approach)
 </references>
 
 Convention loading: see agent-infrastructure.md Convention Loading Protocol.
@@ -890,7 +890,7 @@ Run this on EVERY figure before submission:
 
 ## Figure Generation Templates
 
-**Full templates:** Load `{GRD_INSTALL_DIR}/domains/physics/publication/figure-generation-templates.md` when generating figures.
+**Full templates:** Load `{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/figure-generation-templates.md` when generating figures.
 
 Available templates: base configuration (rcParams, colorblind-safe palette, journal sizing), phase diagram, dispersion relation, correlation function, convergence study, theory vs experiment comparison, Feynman diagram guidance, saving conventions (PDF for LaTeX, EPS for Nature, PNG for rasterized).
 

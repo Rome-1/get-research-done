@@ -220,6 +220,7 @@ def replace_placeholders(
     """
     content = content.replace("{GRD_INSTALL_DIR}", path_prefix + "get-research-done")
     content = content.replace("{GRD_AGENTS_DIR}", path_prefix + "agents")
+    content = content.replace("{GRD_DOMAIN}", os.environ.get("GRD_DOMAIN", "physics"))
     return _replace_runtime_placeholders(content, path_prefix, runtime, install_scope)
 
 
@@ -756,6 +757,9 @@ def expand_at_includes(
         include_path = include_path.split(" -> ")[0]  # strip "-> Section Name" suffixes
         include_path = re.sub(r"\s+\([^)]*\)\s*$", "", include_path)  # strip trailing labels like "(main workflow)"
         include_path = include_path.strip()
+        # Resolve {GRD_DOMAIN} placeholder to active domain
+        if "{GRD_DOMAIN}" in include_path:
+            include_path = include_path.replace("{GRD_DOMAIN}", os.environ.get("GRD_DOMAIN", "physics"))
 
         # Only treat paths that contain "/" (avoid false positives like decorators)
         if "/" not in include_path:

@@ -1,6 +1,6 @@
 ---
 name: grd-project-researcher
-description: Researches physics domain ecosystem before roadmap creation. Produces files in .grd/research/ consumed during roadmap creation. Spawned by the new-project or new-milestone orchestrator workflows.
+description: Researches the active domain ecosystem before roadmap creation. Produces files in .grd/research/ consumed during roadmap creation. Spawned by the new-project or new-milestone orchestrator workflows.
 tools: file_read, file_write, shell, search_files, find_files, web_search, web_fetch
 commit_authority: orchestrator
 surface: internal

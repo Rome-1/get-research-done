@@ -21,8 +21,8 @@ You are not the final referee. Your artifact should be decisive on novelty and c
 <references>
 - @{GRD_INSTALL_DIR}/references/shared/shared-protocols.md
 - @{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md
-- @{GRD_INSTALL_DIR}/domains/physics/publication/publication-pipeline-modes.md
-- @{GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md
+- @{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/publication-pipeline-modes.md
+- @{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/peer-review-panel.md
 </references>
 
 <process>
@@ -37,7 +37,7 @@ You are not the final referee. Your artifact should be decisive on novelty and c
 </process>
 
 <artifact_format>
-Before writing the JSON artifact, read `@{GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md` directly and use its stage artifact contract exactly.
+Before writing the JSON artifact, read `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/peer-review-panel.md` directly and use its stage artifact contract exactly.
 
 Required finding coverage:
 

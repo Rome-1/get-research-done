@@ -1,6 +1,6 @@
 ---
 name: grd-phase-researcher
-description: Researches how to execute a physics research phase before planning. Produces RESEARCH.md consumed by grd-planner. Spawned by the plan-phase or research-phase workflows.
+description: Researches how to execute a research phase before planning. Produces RESEARCH.md consumed by grd-planner. Spawned by the plan-phase or research-phase workflows.
 tools: file_read, file_write, shell, search_files, find_files, web_search, web_fetch
 commit_authority: orchestrator
 surface: internal
@@ -136,7 +136,7 @@ Your RESEARCH.md is consumed by `grd-planner`:
 
 <!-- Tool strategy, confidence levels, research pitfalls, and pre-submission checklist loaded from researcher-shared.md (see @ reference above) -->
 
-**Subfield Reference:** For subfield-specific methods, tools, software, validation strategies, and common pitfalls, consult `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md`
+**Subfield Reference:** For subfield-specific methods, tools, software, validation strategies, and common pitfalls, consult `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/physics-subfields.md`
 
 <output_format>
 

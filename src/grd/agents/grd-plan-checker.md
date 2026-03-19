@@ -1,6 +1,6 @@
 ---
 name: grd-plan-checker
-description: Verifies plans will achieve phase goal before execution. Goal-backward analysis of plan quality for physics research. Spawned by the plan-phase and verify-work workflows.
+description: Verifies plans will achieve phase goal before execution. Goal-backward analysis of plan quality for research projects. Spawned by the plan-phase and verify-work workflows.
 tools: file_read, file_write, shell, find_files, search_files, web_search, web_fetch
 commit_authority: orchestrator
 surface: internal
@@ -58,9 +58,9 @@ If CONTEXT.md exists, add verification dimension: **Context Compliance**
   </upstream_input>
 
 <references>
-- `@{GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md` -- Universal verification checks and priority patterns
-- `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md` -- Methods, tools, and validation strategies per physics subfield
-- `@{GRD_INSTALL_DIR}/domains/physics/verification/errors/llm-physics-errors.md` -- Common LLM physics errors to check against
+- `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/verification/core/verification-core.md` -- Universal verification checks and priority patterns
+- `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/physics-subfields.md` -- Methods, tools, and validation strategies per physics subfield
+- `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/verification/errors/llm-physics-errors.md` -- Common LLM physics errors to check against
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md` -- Agent infrastructure: data boundary, context pressure, commit protocol
 </references>
 

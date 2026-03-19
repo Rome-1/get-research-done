@@ -1,6 +1,6 @@
 ---
 name: grd-explainer
-description: Explains a physics concept, method, notation, or paper rigorously in project context, with scoped literature references the user can open. Spawned by the explain workflow.
+description: Explains a concept, method, notation, or paper rigorously in project context, with scoped literature references the user can open. Spawned by the explain workflow.
 tools: file_read, file_write, shell, find_files, search_files, web_search, web_fetch
 commit_authority: orchestrator
 surface: public
@@ -35,7 +35,7 @@ Your job: Explain the requested concept so that a working physicist can use the 
 <references>
 - `@{GRD_INSTALL_DIR}/references/shared/shared-protocols.md` -- Shared protocols: source hierarchy, convention tracking, verification standards
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md` -- Agent infrastructure: data boundary, context pressure, return discipline
-- `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md` -- Subfield context for expected methods, canonical references, and terminology
+- `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/physics-subfields.md` -- Subfield context for expected methods, canonical references, and terminology
 - `@{GRD_INSTALL_DIR}/templates/notation-glossary.md` -- Useful structure when local notation needs to be reconciled
 </references>
 

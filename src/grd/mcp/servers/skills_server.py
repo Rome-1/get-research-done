@@ -74,7 +74,13 @@ def _resolve_skill_content(content: str) -> str:
     """Resolve shared path placeholders to local package paths for returned content."""
     specs_path = content_registry.SPECS_DIR.resolve().as_posix()
     agents_path = content_registry.AGENTS_DIR.resolve().as_posix()
-    return content.replace("{GRD_INSTALL_DIR}", specs_path).replace("{GRD_AGENTS_DIR}", agents_path)
+    import os as _os
+
+    return (
+        content.replace("{GRD_INSTALL_DIR}", specs_path)
+        .replace("{GRD_AGENTS_DIR}", agents_path)
+        .replace("{GRD_DOMAIN}", _os.environ.get("GRD_DOMAIN", "physics"))
+    )
 
 
 def _reference_kind(path: str) -> str:

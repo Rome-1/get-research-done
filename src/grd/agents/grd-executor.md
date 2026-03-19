@@ -1,6 +1,6 @@
 ---
 name: grd-executor
-description: Default writable implementation agent for GRD research execution. Executes PLAN.md files or bounded implementation tasks with atomic research steps, deviation handling, checkpoint protocols, and state management. Applies rigorous physics reasoning protocols — derivation discipline, convention propagation, integral evaluation, perturbation theory, numerical computation, symbolic-to-numerical translation, renormalization group, path integrals, and effective field theory — to every task. Includes automatic failure escalation for repeated approximation breakdowns, context pressure, and persistent convergence failures. Spawned by execute-phase, execute-plan, quick, and parameter-sweep workflows.
+description: Default writable implementation agent for GRD research execution. Executes PLAN.md files or bounded implementation tasks with atomic research steps, deviation handling, checkpoint protocols, and state management. Applies rigorous domain-specific reasoning protocols — derivation discipline, convention propagation, numerical computation, symbolic-to-numerical translation, and domain methodology — to every task. Includes automatic failure escalation for repeated approximation breakdowns, context pressure, and persistent convergence failures. Spawned by execute-phase, execute-plan, quick, and parameter-sweep workflows.
 tools: file_read, file_write, file_edit, shell, search_files, find_files
 commit_authority: direct
 surface: public
@@ -214,9 +214,9 @@ If no `<context_hint>` is provided, use `standard` allocation.
 </context_hint_awareness>
 
 @{GRD_INSTALL_DIR}/references/shared/shared-protocols.md
-@{GRD_INSTALL_DIR}/domains/physics/verification/errors/llm-physics-errors.md
+@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/verification/errors/llm-physics-errors.md
 @{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md
-@{GRD_INSTALL_DIR}/domains/physics/protocols/order-of-limits.md
+@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/protocols/order-of-limits.md
 
 <protocol_loading>
 
@@ -640,7 +640,7 @@ For detailed subfield-specific protocols (QFT, condensed matter, stat mech, GR, 
 
 **file_read:** `{GRD_INSTALL_DIR}/references/execution/executor-subfield-guide.md`
 
-Also consult: `{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md` for priority checks, red flags, and recommended software per subfield.
+Also consult: `{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/physics-subfields.md` for priority checks, red flags, and recommended software per subfield.
 
 Load during `load_plan` step if the phase involves a specific subfield. The Protocol Loading Map above handles the physics reasoning protocols; this guide adds subfield-specific execution heuristics on top of those.
 
@@ -1143,7 +1143,7 @@ Load these when you need more detail beyond the inline protocols:
 - **Deviation rules (expanded):** `{GRD_INSTALL_DIR}/references/execution/executor-deviation-rules.md` — Full rules, examples, and escalation protocols beyond the inline summary
 - **Task checkpoints (expanded):** `{GRD_INSTALL_DIR}/references/execution/executor-task-checkpoints.md` — Full checkpoint protocol with examples beyond the inline commit type list
 - **Approximation selection:** `{GRD_INSTALL_DIR}/references/methods/approximation-selection.md` — Decision framework for choosing approximation methods when a task involves non-trivial method selection
-- **Physics code testing:** `{GRD_INSTALL_DIR}/domains/physics/verification/core/code-testing-physics.md` — Patterns for writing tests that catch physics errors (load for TDD tasks)
+- **Physics code testing:** `{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/verification/core/code-testing-physics.md` — Patterns for writing tests that catch physics errors (load for TDD tasks)
 - **Cross-project patterns:** `{GRD_INSTALL_DIR}/references/shared/cross-project-patterns.md` — Pattern library design and lifecycle (runtime integration handled by `consult_cross_project_patterns` step above)
 
 </on_demand_references>

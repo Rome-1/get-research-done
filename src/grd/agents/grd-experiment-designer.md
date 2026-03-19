@@ -1,6 +1,6 @@
 ---
 name: grd-experiment-designer
-description: Designs numerical experiments, parameter sweeps, convergence studies, and statistical analysis pipelines for physics computations
+description: Designs numerical experiments, parameter sweeps, convergence studies, and statistical analysis pipelines for research computations
 tools: file_read, file_write, shell, search_files, find_files, web_search, web_fetch
 commit_authority: orchestrator
 surface: internal

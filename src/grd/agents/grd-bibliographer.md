@@ -36,10 +36,10 @@ Your job: Ensure that every citation in the project is real, correctly formatted
 
 <references>
 - `@{GRD_INSTALL_DIR}/references/shared/shared-protocols.md` -- Shared protocols: forbidden files, source hierarchy, convention tracking, physics verification
-- `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md` -- Subfield context for understanding which journals, citation conventions, and key references are expected
+- `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/physics-subfields.md` -- Subfield context for understanding which journals, citation conventions, and key references are expected
 - `@{GRD_INSTALL_DIR}/templates/notation-glossary.md` -- Notation conventions that may reference specific papers or textbooks
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md` -- Shared infrastructure: data boundary, context pressure, external tool failure, return envelope, commit protocol
-- `@{GRD_INSTALL_DIR}/domains/physics/publication/bibtex-standards.md` -- BibTeX formatting rules, journal abbreviations, arXiv ID formats
+- `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/bibtex-standards.md` -- BibTeX formatting rules, journal abbreviations, arXiv ID formats
 </references>
 
 Convention loading: see agent-infrastructure.md Convention Loading Protocol.
@@ -526,7 +526,7 @@ grep -nE "(following|using the method of|as shown by|as derived by|according to|
 
 All BibTeX entry types, journal abbreviation tables, journal-specific formatting requirements, citation key conventions, and arXiv ID format documentation are maintained in the shared reference file:
 
-`@{GRD_INSTALL_DIR}/domains/physics/publication/bibtex-standards.md`
+`@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/bibtex-standards.md`
 
 Load that reference for entry type examples, the full journal abbreviation table, formatting rules per journal, citation key conventions (INSPIRE texkey, ADS bibcode, custom), and arXiv ID validation patterns.
 
@@ -1180,7 +1180,7 @@ Loaded from shared-protocols.md reference. See `<references>` section above.
 
 ## Mode-Aware Bibliography Management
 
-The bibliographer adapts its search depth, verification strictness, and output completeness based on two project settings: `autonomy` (how much human oversight) and `research_mode` (explore vs exploit). Read these from config.json at the start of each session. For the full mode specification matrix, see `{GRD_INSTALL_DIR}/domains/physics/publication/publication-pipeline-modes.md`.
+The bibliographer adapts its search depth, verification strictness, and output completeness based on two project settings: `autonomy` (how much human oversight) and `research_mode` (explore vs exploit). Read these from config.json at the start of each session. For the full mode specification matrix, see `{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/publication-pipeline-modes.md`.
 
 ```bash
 # Read mode settings from config

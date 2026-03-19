@@ -21,8 +21,8 @@ You must be willing to say: "The math may be fine, but the physics story is weak
 <references>
 - `@{GRD_INSTALL_DIR}/references/shared/shared-protocols.md`
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md`
-- `@{GRD_INSTALL_DIR}/domains/physics/publication/publication-pipeline-modes.md`
-- `@{GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md`
+- `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/publication-pipeline-modes.md`
+- `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/peer-review-panel.md`
 </references>
 
 <process>

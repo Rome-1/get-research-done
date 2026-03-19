@@ -54,7 +54,7 @@ EXPECTED_VERIFICATION_DIRS = {
 }
 
 REFERENCE_TOKEN_RE = re.compile(r"references/[A-Za-z0-9_./-]+\.md")
-DOMAIN_TOKEN_RE = re.compile(r"domains/physics/[A-Za-z0-9_./-]+\.md")
+DOMAIN_TOKEN_RE = re.compile(r"domains/(?:physics|\{GRD_DOMAIN\})/[A-Za-z0-9_./-]+\.md")
 INLINE_DOC_TOKEN_RE = re.compile(r"`((?:references/|\.{1,2}/)[A-Za-z0-9_./-]+\.md(?:#[^`]+)?)`")
 NON_SPEC_REFERENCE_TOKENS = {
     "references/references-pending.md",
@@ -246,7 +246,9 @@ def test_source_files_only_reference_existing_content_files() -> None:
         assert resolved.is_file(), f"missing ref: {token}"
 
     for token in sorted(referenced_domains):
-        resolved = REPO_ROOT / "src/grd" / token
+        # Resolve {GRD_DOMAIN} placeholder to "physics" (default domain) for file checks
+        resolved_token = token.replace("{GRD_DOMAIN}", "physics")
+        resolved = REPO_ROOT / "src/grd" / resolved_token
         assert resolved.is_file(), f"missing domain content: {token}"
 
 

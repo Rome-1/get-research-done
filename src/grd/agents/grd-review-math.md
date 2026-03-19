@@ -20,9 +20,9 @@ Your output must give later reviewers a concise statement of what is mathematica
 
 <references>
 - `@{GRD_INSTALL_DIR}/references/shared/shared-protocols.md`
-- `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md`
-- `@{GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md`
-- `@{GRD_INSTALL_DIR}/domains/physics/publication/peer-review-panel.md`
+- `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/physics-subfields.md`
+- `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/verification/core/verification-core.md`
+- `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/peer-review-panel.md`
 </references>
 
 <process>

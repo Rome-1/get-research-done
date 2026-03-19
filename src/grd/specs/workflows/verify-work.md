@@ -16,7 +16,7 @@ The AI does not just present what the research SHOULD show — it COMPUTES what 
 
 Walk through derivation logic, perform numerical spot-checks, re-derive limiting cases, probe edge cases with actual computations. No formal review forms. Just: "Here is what I independently computed. Does your result match?"
 
-**Verification independence:** Derive validation checks from the phase goal, the PLAN `contract`, and the actual research artifacts — not from SUMMARY.md claims about what was accomplished. SUMMARY.md `contract_results` and `comparison_verdicts` tell you WHERE evidence lives, but expected physics outcomes come from the phase goal, contract IDs, and domain knowledge. See @{GRD_INSTALL_DIR}/domains/physics/verification/meta/verification-independence.md.
+**Verification independence:** Derive validation checks from the phase goal, the PLAN `contract`, and the actual research artifacts — not from SUMMARY.md claims about what was accomplished. SUMMARY.md `contract_results` and `comparison_verdicts` tell you WHERE evidence lives, but expected physics outcomes come from the phase goal, contract IDs, and domain knowledge. See @{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/verification/meta/verification-independence.md.
 </philosophy>
 
 <template>
@@ -26,7 +26,7 @@ Walk through derivation logic, perform numerical spot-checks, re-derive limiting
 Use the researcher-session body scaffold from `research-verification.md`, but keep the frontmatter contract compatible with `@{GRD_INSTALL_DIR}/templates/verification-report.md` and `@{GRD_INSTALL_DIR}/templates/contract-results-schema.md`.
 
 <required_reading>
-@{GRD_INSTALL_DIR}/domains/physics/protocols/error-propagation-protocol.md
+@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/protocols/error-propagation-protocol.md
 </required_reading>
 
 <process>

@@ -1,6 +1,6 @@
 ---
 name: grd-debugger
-description: Investigates errors, inconsistencies, and discrepancies in physics calculations using systematic scientific method. Manages debugging sessions, handles checkpoints. Spawned by the debug orchestrator workflow.
+description: Investigates errors, inconsistencies, and discrepancies in research calculations using systematic scientific method. Manages debugging sessions, handles checkpoints. Spawned by the debug orchestrator workflow.
 tools: file_read, file_write, file_edit, shell, search_files, find_files, web_search, web_fetch
 commit_authority: direct
 surface: public
@@ -68,8 +68,8 @@ The active model profile (from `.grd/config.json`) controls not just which model
 </autonomy_awareness>
 
 <references>
-- `@{GRD_INSTALL_DIR}/domains/physics/verification/core/verification-core.md` -- Verification checks that may have failed, universal patterns to understand what went wrong
-- `@{GRD_INSTALL_DIR}/domains/physics/physics-subfields.md` -- Subfield context for understanding domain-specific error patterns and conventions
+- `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/verification/core/verification-core.md` -- Verification checks that may have failed, universal patterns to understand what went wrong
+- `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/physics-subfields.md` -- Subfield context for understanding domain-specific error patterns and conventions
 - `@{GRD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md` -- Shared infrastructure: data boundary, context pressure, external tool failure, commit protocol
 
 **On-demand references:**
