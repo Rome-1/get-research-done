@@ -253,6 +253,28 @@ class DomainContext:
         return result
 
     @cached_property
+    def seed_patterns(self) -> list[dict]:
+        """Load bootstrap seed patterns from the domain pack.
+
+        Returns a list of dicts matching the bootstrap pattern schema.
+        Empty list if no seed file exists.
+        """
+        seed_path = self._pack.pack_path / "patterns" / "seed-patterns.yaml"
+        if not seed_path.is_file():
+            return []
+        try:
+            data = yaml.safe_load(seed_path.read_text(encoding="utf-8"))
+        except (yaml.YAMLError, OSError) as exc:
+            logger.warning("Failed to load seed patterns from %s: %s", seed_path, exc)
+            return []
+        if not isinstance(data, dict):
+            return []
+        raw = data.get("patterns", [])
+        if not isinstance(raw, list):
+            return []
+        return [entry for entry in raw if isinstance(entry, dict)]
+
+    @cached_property
     def subfields_dir(self) -> Path:
         return self.content_dir("subfields") or self._pack.pack_path / "subfields"
 

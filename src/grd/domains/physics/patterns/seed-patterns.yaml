@@ -1,0 +1,121 @@
+# Physics domain bootstrap patterns for cross-project pattern library seeding.
+# Each entry defines a known error pattern that recurs across physics projects.
+# These are seeded into the pattern library on first use.
+
+patterns:
+  - domain: qft
+    category: sign-error
+    severity: critical
+    title: "Sign error in Fourier convention switch"
+    slug: fourier-convention-switch
+    domains_extra: [condensed-matter]
+    description: >
+      When combining expressions derived with different Fourier conventions,
+      sign errors appear in interference terms, propagators, and response functions.
+    detection: >
+      Check the sign of the imaginary part of response functions.
+      Verify retarded/advanced structure.
+    prevention: >
+      Lock Fourier convention at project start.
+      Insert explicit conversion factors when combining.
+    tags: [fourier, sign, convention, propagator, response-function]
+
+  - domain: condensed-matter
+    category: factor-error
+    severity: high
+    title: "Missing factor of 2pi in density of states"
+    slug: density-of-states-2pi
+    domains_extra: [stat-mech, qft]
+    description: >
+      The density of states picks up factors of 2pi from Fourier convention
+      and momentum measure.
+    detection: >
+      Check dimensional analysis. Verify free-particle DOS reproduces known results.
+    prevention: >
+      Always write momentum integration measure explicitly with (2pi)^d factor.
+    tags: [density-of-states, factor, 2pi, momentum, integration-measure]
+
+  - domain: qft
+    category: conceptual-error
+    severity: critical
+    title: "Wrong branch cut in analytic continuation"
+    slug: analytic-continuation-branch-cut
+    domains_extra: [condensed-matter]
+    description: >
+      Choosing the wrong Riemann sheet when analytically continuing flips the sign of Im[G].
+    detection: >
+      Check spectral function positivity A(k,w) >= 0. Check causality G^R(t<0) = 0.
+    prevention: >
+      Always continue iwn -> w + ie for retarded functions.
+      Verify poles in lower half-plane.
+    tags: [analytic-continuation, matsubara, branch-cut, retarded, spectral-function]
+
+  - domain: qft
+    category: sign-error
+    severity: critical
+    title: "Metric signature mismatch in propagator"
+    slug: metric-signature-mismatch
+    description: >
+      Mixing (+,-,-,-) and (-,+,+,+) conventions in the same calculation.
+    detection: >
+      Check what k^2 = m^2 means. If on-shell condition looks wrong, suspect signature mismatch.
+    prevention: >
+      State metric signature at top of every derivation. Check external source conventions.
+    tags: [metric, signature, propagator, sign, east-coast, west-coast]
+
+  - domain: stat-mech
+    category: factor-error
+    severity: high
+    title: "Missing 1/N! for identical particles"
+    slug: gibbs-factor-overcounting
+    domains_extra: [qft]
+    description: >
+      Classical partition function for N identical particles requires 1/N! Gibbs factor.
+    detection: >
+      Check entropy extensivity. Check mixing entropy vanishes for identical gases.
+    prevention: >
+      Always include 1/(N! h^{3N}) in classical partition functions.
+    tags: [gibbs, overcounting, partition-function, symmetry-factor]
+
+  - domain: qft
+    category: factor-error
+    severity: high
+    title: "Confusing coupling constant conventions"
+    slug: coupling-constant-conventions
+    description: >
+      Different sources define coupling as g, g^2, g^2/(4pi), alpha.
+      Combining without converting gives wrong coefficients.
+    detection: >
+      Check tree-level amplitude. Verify alpha ~ 1/137.
+    prevention: >
+      Convert all couplings to single convention before combining.
+    tags: [coupling, alpha, convention, fine-structure, normalization]
+
+  - domain: qft
+    category: dimensional-error
+    severity: high
+    title: "Dimensional mismatch when restoring hbar and c"
+    slug: natural-units-restoration
+    domains_extra: [gr, condensed-matter, stat-mech]
+    description: >
+      When converting from natural units to SI, each quantity needs specific powers of hbar and c.
+    detection: >
+      Check final expression has correct SI dimensions. Evaluate numerically in both systems.
+    prevention: >
+      Use systematic procedure based on mass dimension.
+    tags: [natural-units, hbar, dimensional-analysis, unit-conversion]
+
+  - domain: qft
+    category: sign-error
+    severity: critical
+    title: "Wrong sign in Wick rotation"
+    slug: wick-rotation-sign
+    description: >
+      Wick rotation t -> -i*tau must respect pole structure.
+      Direction depends on metric signature.
+    detection: >
+      Check Euclidean action is bounded below. Verify Euclidean propagator is positive.
+    prevention: >
+      With (+,-,-,-), rotate k0 -> ik4 counterclockwise.
+      Verify Minkowski -> Euclidean mapping.
+    tags: [wick-rotation, euclidean, sign, pole, analytic-continuation]
