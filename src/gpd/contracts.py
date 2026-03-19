@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import inspect
 from collections import defaultdict
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 __all__ = [
     "ConventionLock",
@@ -54,6 +53,9 @@ def _normalize_required_str(value: object) -> object:
 
 
 def _normalize_string_list(value: object) -> object:
+    if isinstance(value, str):
+        stripped = value.strip()
+        return [stripped] if stripped else []
     if not isinstance(value, list):
         return value
     normalized: list[str] = []
@@ -74,26 +76,38 @@ class _StrictContractResultsInput(dict[str, object]):
     """Marker mapping for strict contract-results validation contexts."""
 
 
-_STRICT_CONTRACT_RESULTS_CALLERS = {"gpd.core.commands", "gpd.core.frontmatter"}
-_NON_STRICT_CONTRACT_RESULTS_CALLERS = {"gpd.core.paper_quality_artifacts"}
+def _normalize_literal_choice(value: object, choices: tuple[str, ...]) -> object:
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return stripped
+        for choice in choices:
+            if stripped.casefold() == choice.casefold():
+                return choice
+        return stripped
+    return value
 
 
-def _contract_results_callers() -> set[str]:
-    """Return module names in the active call stack for contract-results parsing."""
+def _normalize_literal_choice_list(value: object, choices: tuple[str, ...]) -> object:
+    normalized = _normalize_string_list(value)
+    if not isinstance(normalized, list):
+        return normalized
 
-    frame = inspect.currentframe()
-    callers: set[str] = set()
-    try:
-        caller = frame.f_back if frame is not None else None
-        while caller is not None:
-            module_name = caller.f_globals.get("__name__")
-            if isinstance(module_name, str):
-                callers.add(module_name)
-            caller = caller.f_back
-    finally:
-        del caller
-        del frame
-    return callers
+    canonicalized: list[object] = []
+    seen: set[str] = set()
+    for item in normalized:
+        if not isinstance(item, str):
+            canonicalized.append(item)
+            continue
+        choice = _normalize_literal_choice(item, choices)
+        if not isinstance(choice, str):
+            canonicalized.append(choice)
+            continue
+        if choice in seen:
+            continue
+        seen.add(choice)
+        canonicalized.append(choice)
+    return canonicalized
 
 
 def normalize_contract_results_input(value: object, *, strict: bool | None = None) -> object:
@@ -108,11 +122,7 @@ def normalize_contract_results_input(value: object, *, strict: bool | None = Non
         return value
 
     normalized = dict(value)
-    callers = _contract_results_callers()
-    if callers & _NON_STRICT_CONTRACT_RESULTS_CALLERS:
-        strict = False
-    elif strict is None:
-        strict = bool(callers & _STRICT_CONTRACT_RESULTS_CALLERS)
+    strict = bool(strict)
     if not strict:
         for field_name in ("claims", "deliverables", "acceptance_tests", "references", "forbidden_proxies"):
             section_value = normalized.get(field_name)
@@ -217,6 +227,11 @@ class VerificationEvidence(BaseModel):
     def _normalize_optional_contract_id(cls, value: object) -> object:
         return _normalize_optional_str(value)
 
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _normalize_confidence(cls, value: object) -> object:
+        return _normalize_literal_choice(value, ("high", "medium", "low", "unreliable"))
+
 
 ContractEvidenceStatus = Literal["passed", "partial", "failed", "blocked", "not_attempted"]
 ContractReferenceAction = Literal["read", "use", "compare", "cite", "avoid"]
@@ -244,6 +259,11 @@ class ContractResultEntry(ContractEvidenceEntry):
     def _normalize_linked_ids(cls, value: object) -> object:
         return _normalize_string_list(value)
 
+    @field_validator("status", mode="before")
+    @classmethod
+    def _normalize_status(cls, value: object) -> object:
+        return _normalize_literal_choice(value, ("passed", "partial", "failed", "blocked", "not_attempted"))
+
 
 ContractReferenceActionStatus = Literal["completed", "missing", "not_applicable"]
 
@@ -262,7 +282,12 @@ class ContractReferenceUsage(BaseModel):
     @field_validator("completed_actions", "missing_actions", mode="before")
     @classmethod
     def _normalize_action_lists(cls, value: object) -> object:
-        return _normalize_string_list(value)
+        return _normalize_literal_choice_list(value, ("read", "use", "compare", "cite", "avoid"))
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _normalize_status(cls, value: object) -> object:
+        return _normalize_literal_choice(value, ("completed", "missing", "not_applicable"))
 
     @model_validator(mode="after")
     def _validate_action_status(self) -> ContractReferenceUsage:
@@ -299,6 +324,11 @@ class ContractForbiddenProxyResult(BaseModel):
     status: ContractForbiddenProxyStatus = "unresolved"
     notes: str | None = None
     evidence: list[VerificationEvidence] = Field(default_factory=list)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _normalize_status(cls, value: object) -> object:
+        return _normalize_literal_choice(value, ("rejected", "violated", "unresolved", "not_applicable"))
 
 
 class ContractResults(BaseModel):
@@ -352,7 +382,10 @@ class SuggestedContractCheck(BaseModel):
     @field_validator("suggested_subject_kind", mode="before")
     @classmethod
     def _normalize_optional_kind(cls, value: object) -> object:
-        return _normalize_optional_str(value)
+        return _normalize_literal_choice(
+            _normalize_optional_str(value),
+            ("claim", "deliverable", "acceptance_test", "reference"),
+        )
 
     @field_validator("suggested_subject_id", "evidence_path", mode="before")
     @classmethod
@@ -383,8 +416,15 @@ class ComparisonVerdict(BaseModel):
 
     @field_validator("subject_kind", "subject_role", "comparison_kind", "verdict", mode="before")
     @classmethod
-    def _normalize_required_literals(cls, value: object) -> object:
-        return _normalize_required_str(value)
+    def _normalize_required_literals(cls, value: object, info: ValidationInfo) -> object:
+        normalized = _normalize_required_str(value)
+        field_choices = {
+            "subject_kind": ("claim", "deliverable", "acceptance_test", "reference"),
+            "subject_role": ("decisive", "supporting", "supplemental", "other"),
+            "comparison_kind": ("benchmark", "prior_work", "experiment", "cross_method", "baseline", "other"),
+            "verdict": ("pass", "tension", "fail", "inconclusive"),
+        }
+        return _normalize_literal_choice(normalized, field_choices[info.field_name])
 
     @field_validator("reference_id", "metric", "threshold", "recommended_action", "notes", mode="before")
     @classmethod
@@ -503,6 +543,14 @@ class ContractObservable(BaseModel):
     def _normalize_optional_fields(cls, value: object) -> object:
         return _normalize_optional_str(value)
 
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _normalize_kind(cls, value: object) -> object:
+        return _normalize_literal_choice(
+            _normalize_required_str(value),
+            ("scalar", "curve", "map", "classification", "proof_obligation", "other"),
+        )
+
 
 class ContractClaim(BaseModel):
     """A statement the phase must establish."""
@@ -542,6 +590,14 @@ class ContractDeliverable(BaseModel):
     @classmethod
     def _normalize_required_fields(cls, value: object) -> object:
         return _normalize_required_str(value)
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _normalize_kind(cls, value: object) -> object:
+        return _normalize_literal_choice(
+            _normalize_required_str(value),
+            ("figure", "table", "dataset", "data", "derivation", "code", "note", "report", "other"),
+        )
 
     @field_validator("path", mode="before")
     @classmethod
@@ -587,6 +643,34 @@ class ContractAcceptanceTest(BaseModel):
     def _normalize_required_fields(cls, value: object) -> object:
         return _normalize_required_str(value)
 
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _normalize_kind(cls, value: object) -> object:
+        return _normalize_literal_choice(
+            _normalize_required_str(value),
+            (
+                "existence",
+                "schema",
+                "benchmark",
+                "consistency",
+                "cross_method",
+                "limiting_case",
+                "symmetry",
+                "dimensional_analysis",
+                "convergence",
+                "oracle",
+                "proxy",
+                "reproducibility",
+                "human_review",
+                "other",
+            ),
+        )
+
+    @field_validator("automation", mode="before")
+    @classmethod
+    def _normalize_automation(cls, value: object) -> object:
+        return _normalize_literal_choice(_normalize_required_str(value), ("automated", "hybrid", "human"))
+
     @field_validator("evidence_required", mode="before")
     @classmethod
     def _normalize_evidence_required(cls, value: object) -> object:
@@ -614,6 +698,20 @@ class ContractReference(BaseModel):
     def _normalize_required_fields(cls, value: object) -> object:
         return _normalize_required_str(value)
 
+    @field_validator("kind", "role", mode="before")
+    @classmethod
+    def _normalize_literal_fields(cls, value: object, info: ValidationInfo) -> object:
+        normalized = _normalize_required_str(value)
+        if info.field_name == "kind":
+            return _normalize_literal_choice(
+                normalized,
+                ("paper", "dataset", "prior_artifact", "spec", "user_anchor", "other"),
+            )
+        return _normalize_literal_choice(
+            normalized,
+            ("definition", "benchmark", "method", "must_consider", "background", "other"),
+        )
+
     @field_validator("aliases", "applies_to", "carry_forward_to", mode="before")
     @classmethod
     def _normalize_reference_lists(cls, value: object) -> object:
@@ -622,7 +720,7 @@ class ContractReference(BaseModel):
     @field_validator("required_actions", mode="before")
     @classmethod
     def _normalize_required_actions(cls, value: object) -> object:
-        return _normalize_string_list(value)
+        return _normalize_literal_choice_list(value, ("read", "use", "compare", "cite", "avoid"))
 
 
 class ContractForbiddenProxy(BaseModel):
@@ -656,6 +754,14 @@ class ContractLink(BaseModel):
     @classmethod
     def _normalize_required_fields(cls, value: object) -> object:
         return _normalize_required_str(value)
+
+    @field_validator("relation", mode="before")
+    @classmethod
+    def _normalize_relation(cls, value: object) -> object:
+        return _normalize_literal_choice(
+            _normalize_required_str(value),
+            ("supports", "computes", "visualizes", "benchmarks", "depends_on", "evaluated_by", "other"),
+        )
 
     @field_validator("verified_by", mode="before")
     @classmethod

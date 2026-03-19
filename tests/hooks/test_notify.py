@@ -288,6 +288,61 @@ def test_notify_prefers_explicit_target_hook_cache_and_target_dir_command(tmp_pa
     assert expected in output
 
 
+def test_notify_ignores_unrelated_self_config_cache_when_workspace_has_active_install(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    home = tmp_path / "home"
+
+    workspace_runtime_dir = workspace / ".codex"
+    workspace_cache = workspace_runtime_dir / "cache"
+    workspace_cache.mkdir(parents=True)
+    _mark_complete_install(workspace_runtime_dir, runtime="codex")
+    (workspace_cache / "gpd-update-check.json").write_text(
+        json.dumps(
+            {
+                "update_available": True,
+                "installed": "1.2.3",
+                "latest": "1.3.0",
+                "checked": 20,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    unrelated_runtime_dir = tmp_path / "custom-runtime-dir"
+    hook_path = unrelated_runtime_dir / "hooks" / "notify.py"
+    unrelated_cache = unrelated_runtime_dir / "cache"
+    hook_path.parent.mkdir(parents=True)
+    unrelated_cache.mkdir(parents=True)
+    hook_path.write_text("# hook\n", encoding="utf-8")
+    _mark_complete_install(unrelated_runtime_dir, runtime="codex")
+    (unrelated_cache / "gpd-update-check.json").write_text(
+        json.dumps(
+            {
+                "update_available": True,
+                "installed": "9.0.0",
+                "latest": "9.1.0",
+                "checked": 30,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    stderr = io.StringIO()
+    with (
+        patch("gpd.hooks.notify.__file__", str(hook_path)),
+        patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+        patch("sys.stderr", stderr),
+    ):
+        _check_and_notify_update(str(workspace))
+
+    output = stderr.getvalue()
+    assert "Update available: v1.2.3" in output
+    assert "v9.0.0" not in output
+    expected = _repair_command("codex", install_scope="local", target_dir=workspace_runtime_dir, explicit_target=False)
+    assert expected in output
+
+
 def test_notify_keeps_target_dir_for_default_named_explicit_target(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()

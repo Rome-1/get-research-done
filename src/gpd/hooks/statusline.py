@@ -253,6 +253,7 @@ def _read_current_task(session_id: str, workspace_dir: str | None = None) -> str
         TodoCandidate,
         detect_active_runtime_with_gpd_install,
         detect_runtime_for_gpd_use,
+        detect_runtime_install_target,
         get_todo_candidates,
         should_consider_todo_candidate,
     )
@@ -262,7 +263,14 @@ def _read_current_task(session_id: str, workspace_dir: str | None = None) -> str
     preferred_runtime = detect_runtime_for_gpd_use(cwd=workspace_path)
     todo_candidates = get_todo_candidates(cwd=workspace_path, preferred_runtime=preferred_runtime)
     self_config_dir = _self_config_dir()
-    if self_config_dir is not None:
+    active_install_target = (
+        detect_runtime_install_target(active_installed_runtime, cwd=workspace_path)
+        if active_installed_runtime not in (None, "", "unknown")
+        else None
+    )
+    if self_config_dir is not None and (
+        active_install_target is None or self_config_dir == active_install_target.config_dir
+    ):
         self_candidate = TodoCandidate(
             self_config_dir / "todos",
             runtime=installed_runtime(self_config_dir),

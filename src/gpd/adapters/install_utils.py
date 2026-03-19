@@ -1249,7 +1249,8 @@ def save_local_patches(
             manifest_version = str(manifest.get("version", "unknown"))
             raw_files = manifest.get("files") or {}
             if isinstance(raw_files, dict) and all(
-                isinstance(rel_path, str) and isinstance(original_hash, str) for rel_path, original_hash in raw_files.items()
+                isinstance(rel_path, str) and isinstance(original_hash, str)
+                for rel_path, original_hash in raw_files.items()
             ):
                 tracked_files = raw_files
             else:
@@ -1374,12 +1375,13 @@ def validate_package_integrity(gpd_root: Path) -> None:
     for required in ("commands", "agents", "hooks", "specs"):
         if not (gpd_root / required).is_dir():
             raise FileNotFoundError(
-                f"Package integrity check failed: missing {required}/. "
-                "Try reinstalling: npx -y get-physics-done"
+                f"Package integrity check failed: missing {required}/. Try reinstalling: npx -y get-physics-done"
             )
 
 
-def compute_path_prefix(target_dir: Path, config_dir_name: str, *, is_global: bool, explicit_target: bool = False) -> str:
+def compute_path_prefix(
+    target_dir: Path, config_dir_name: str, *, is_global: bool, explicit_target: bool = False
+) -> str:
     """Compute the path prefix for placeholder replacement.
 
     Global installs use absolute path; local installs use ``./.<config_dir>/``.
@@ -1577,6 +1579,15 @@ def _is_hook_command_for_script(
     return False
 
 
+def _is_managed_statusline_command(command: object, *, target_dir: Path) -> bool:
+    """Return True when *command* points at the GPD-managed statusline hook."""
+    return _is_hook_command_for_script(
+        command,
+        HOOK_SCRIPTS["statusline"],
+        target_dir=target_dir,
+    )
+
+
 def ensure_update_hook(
     settings: dict[str, object],
     update_check_command: str,
@@ -1677,10 +1688,11 @@ def finish_install(
     if should_install_statusline:
         status_line = settings.get("statusLine")
         existing_cmd = status_line.get("command") if isinstance(status_line, dict) else None
+        config_dir = Path(settings_path).expanduser().resolve(strict=False).parent
 
         if (
             isinstance(existing_cmd, str)
-            and "statusline.py" not in existing_cmd
+            and not _is_managed_statusline_command(existing_cmd, target_dir=config_dir)
             and not force_statusline
         ):
             _install_logger.warning("Skipping statusline (already configured by another tool)")

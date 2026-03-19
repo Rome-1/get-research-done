@@ -88,6 +88,7 @@ _CODEX_COMMAND_RUNTIME_NOTE = (
     "- The bridge already pins Codex and validates the install contract, so keep using it for normal CLI execution.\n"
     "</codex_runtime_notes>\n\n"
 )
+_INLINE_GPD_COMMAND_RE = re.compile(r"`(?P<command>gpd(?=\s)[^`]*?)`")
 _CODEX_QUESTION_MARKERS = (
     "Use ask_user",
     "ask_user(",
@@ -374,9 +375,14 @@ def _rewrite_codex_gpd_cli_invocations(content: str, launcher: str) -> str:
             rewritten.append(_rewrite_codex_shell_line(line, launcher))
             continue
 
-        rewritten.append(line)
+        rewritten.append(_rewrite_codex_inline_gpd_commands(line, launcher))
 
     return "".join(rewritten)
+
+
+def _rewrite_codex_inline_gpd_commands(content: str, launcher: str) -> str:
+    """Rewrite inline markdown code spans that execute ``gpd`` commands."""
+    return _INLINE_GPD_COMMAND_RE.sub(lambda match: f"`{launcher}{match.group('command')[3:]}`", content)
 
 
 def _normalize_codex_questioning(content: str) -> str:

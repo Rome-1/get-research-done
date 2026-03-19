@@ -304,16 +304,11 @@ If selected protocol bundles informed the comparison design, record them in `pro
 
 The `comparison_verdicts` block is the authoritative machine-readable ledger. The tables and prose explain it; they do not replace it.
 
-Save to:
-
-- **Phase-scoped** (if running within a phase context and `phase_dir` is set): `${phase_dir}/COMPARISON-{slug}.md`
-- **Standalone** (no phase context):
+Set `COMPARISON_OUTPUT_PATH=".gpd/comparisons/[slug]-COMPARISON.md"` and write the report there.
 
 ```bash
-mkdir -p .gpd/analysis
+mkdir -p .gpd/comparisons
 ```
-
-Write to `.gpd/analysis/comparison-{slug}.md`
 
 ## 6. Generate Comparison Figures
 
@@ -368,12 +363,12 @@ gpd commit \
   --files "${COMPARISON_OUTPUT_PATH}"
 ```
 
-Where `${COMPARISON_OUTPUT_PATH}` is the path chosen in step 5 (phase-scoped or standalone).
+Where `${COMPARISON_OUTPUT_PATH}` is `.gpd/comparisons/[slug]-COMPARISON.md`.
 
 </process>
 
 <output>
-COMPARISON.md written to `.gpd/analysis/comparison-{slug}.md` with full quantified comparison.
+COMPARISON.md written to `${COMPARISON_OUTPUT_PATH}` with full quantified comparison.
 </output>
 
 <success_criteria>

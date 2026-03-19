@@ -52,6 +52,34 @@ def test_sync_state_json_core_uses_markdown_bullet_sections_as_authority(tmp_pat
     assert stored["open_questions"] == []
 
 
+def test_state_validate_flags_mirrored_markdown_drift_beyond_position(tmp_path: Path) -> None:
+    cwd = _bootstrap_project(tmp_path)
+    planning = cwd / ".gpd"
+
+    state_json = default_state_dict()
+    state_json["position"]["current_phase"] = "03"
+    state_json["position"]["status"] = "Executing"
+    state_json["decisions"] = [{"phase": "03", "summary": "Keep cutoff fixed", "rationale": "baseline"}]
+    state_json["blockers"] = ["Waiting on benchmark data"]
+    state_json["open_questions"] = ["Does the fitted exponent drift?"]
+    (planning / "state.json").write_text(json.dumps(state_json, indent=2), encoding="utf-8")
+
+    state_md = default_state_dict()
+    state_md["position"]["current_phase"] = "03"
+    state_md["position"]["status"] = "Executing"
+    state_md["decisions"] = [{"phase": "03", "summary": "Relax cutoff scan", "rationale": "new evidence"}]
+    state_md["blockers"] = ["Waiting on regenerated benchmark data"]
+    state_md["open_questions"] = ["Does the fitted exponent stabilize under rebinning?"]
+    (planning / "STATE.md").write_text(generate_state_markdown(state_md), encoding="utf-8")
+
+    result = state_validate(cwd)
+
+    assert result.valid is False
+    assert "decisions mismatch between state.json and STATE.md" in result.issues
+    assert "blockers mismatch between state.json and STATE.md" in result.issues
+    assert "open_questions mismatch between state.json and STATE.md" in result.issues
+
+
 def test_sync_state_json_core_preserves_user_edits_to_structured_result_bullets(tmp_path: Path) -> None:
     cwd = _bootstrap_project(tmp_path)
     planning = cwd / ".gpd"

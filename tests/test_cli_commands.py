@@ -326,7 +326,7 @@ class TestStateCommands:
         assert payload["valid"] is False
         assert any("weakest_anchors" in error for error in payload["errors"])
 
-    def test_set_project_contract_rejects_schema_drifted_contract(self, gpd_project: Path) -> None:
+    def test_set_project_contract_accepts_singleton_list_normalization(self, gpd_project: Path) -> None:
         contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
         contract["context_intake"]["must_read_refs"] = "ref-benchmark"
         contract_path = gpd_project / "invalid-contract.json"
@@ -338,12 +338,12 @@ class TestStateCommands:
             catch_exceptions=False,
         )
 
-        assert result.exit_code == 1, result.output
+        assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["valid"] is False
-        assert "context_intake.must_read_refs: Input should be a valid list" in payload["errors"]
+        assert payload["updated"] is True
+        assert payload["warnings"] == []
         state = json.loads((gpd_project / ".gpd" / "state.json").read_text(encoding="utf-8"))
-        assert state["project_contract"] is None
+        assert state["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2475,7 +2475,41 @@ def test_install_command_reports_runtime_adapter_failure_during_interactive_sele
 
     assert result.exit_code == 1, result.output
     payload = json.loads(result.output)
-    assert payload["error"] == "Runtime adapter unavailable for 'codex' during install runtime selection: adapter offline"
+    assert payload["error"] == "Raw install requires one or more runtimes or --all"
+    assert "Traceback" not in result.output
+
+
+def test_raw_install_requires_runtime_selection_without_prompt(gpd_project: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["--raw", "--cwd", str(gpd_project), "install"],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.output)
+    assert payload["error"] == "Raw install requires one or more runtimes or --all"
+    assert "Traceback" not in result.output
+
+
+def test_raw_install_requires_location_selection_without_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+    gpd_project: Path,
+) -> None:
+    import gpd.adapters as adapters_module
+
+    monkeypatch.setattr(adapters_module, "list_runtimes", lambda: ["codex"])
+    monkeypatch.setattr(adapters_module, "get_adapter", lambda runtime_name: object())
+
+    result = runner.invoke(
+        app,
+        ["--raw", "--cwd", str(gpd_project), "install", "codex"],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.output)
+    assert payload["error"] == "Raw install requires --local, --global, or --target-dir"
     assert "Traceback" not in result.output
 
 
@@ -2502,6 +2536,40 @@ def test_uninstall_command_reports_runtime_catalog_failure_without_traceback(
     assert "Traceback" not in result.output
 
 
+def test_raw_uninstall_requires_runtime_selection_without_prompt(gpd_project: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["--raw", "--cwd", str(gpd_project), "uninstall"],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.output)
+    assert payload["error"] == "Raw uninstall requires one or more runtimes or --all"
+    assert "Traceback" not in result.output
+
+
+def test_raw_uninstall_requires_location_selection_without_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+    gpd_project: Path,
+) -> None:
+    import gpd.adapters as adapters_module
+
+    monkeypatch.setattr(adapters_module, "list_runtimes", lambda: ["codex"])
+    monkeypatch.setattr(adapters_module, "get_adapter", lambda runtime_name: object())
+
+    result = runner.invoke(
+        app,
+        ["--raw", "--cwd", str(gpd_project), "uninstall", "codex"],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.output)
+    assert payload["error"] == "Raw uninstall requires --local, --global, or --target-dir"
+    assert "Traceback" not in result.output
+
+
 def test_uninstall_command_reports_runtime_adapter_failure_without_traceback(
     monkeypatch: pytest.MonkeyPatch,
     gpd_project: Path,
@@ -2525,6 +2593,42 @@ def test_uninstall_command_reports_runtime_adapter_failure_without_traceback(
     payload = json.loads(result.output)
     assert payload["error"] == "Runtime adapter unavailable for 'codex' during uninstall: adapter offline"
     assert "Traceback" not in result.output
+
+
+def test_resolve_model_normalizes_runtime_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
+    import gpd.cli as cli_module
+    import gpd.core.config as config_module
+
+    monkeypatch.setattr(cli_module, "_supported_runtime_names", lambda: ["claude-code", "gemini", "codex", "opencode"])
+    monkeypatch.setattr(config_module, "validate_agent_name", lambda agent_name: None)
+    monkeypatch.setattr(config_module, "resolve_model", lambda cwd, agent_name, runtime=None: runtime)
+
+    result = runner.invoke(app, ["resolve-model", "gpd-executor", "--runtime", "claude"], catch_exceptions=False)
+
+    assert result.exit_code == 0, result.output
+    assert "claude-code" in result.output
+
+
+def test_target_dir_scope_detection_uses_canonical_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    import gpd.cli as cli_module
+
+    cwd = tmp_path / "workspace"
+    cwd.mkdir()
+    global_dir = tmp_path / "global"
+    global_dir.mkdir()
+    canonical_target = global_dir / ".codex"
+    canonical_target.mkdir()
+    tricky_target = global_dir / "nested" / ".." / ".codex"
+
+    class _FakeAdapter:
+        def resolve_target_dir(self, is_global: bool, cwd: Path | None = None) -> Path:
+            del cwd
+            return canonical_target if is_global else tmp_path / "workspace" / ".codex"
+
+    monkeypatch.setattr(cli_module, "_get_cwd", lambda: cwd)
+    monkeypatch.setattr(cli_module, "_get_adapter_or_error", lambda runtime_name, action: _FakeAdapter())
+
+    assert cli_module._target_dir_matches_global("codex", str(tricky_target), action="install") is True
 
 
 class TestNoDuplicateTestMethods:

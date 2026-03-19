@@ -680,7 +680,7 @@ def validate_project_contract(
         parsed, schema_findings = salvage_project_contract(contract)
         schema_warnings, schema_errors = _split_project_contract_schema_findings(
             schema_findings,
-            allow_singleton_defaults=mode != "approved",
+            allow_singleton_defaults=False,
         )
         if parsed is None:
             if schema_errors:

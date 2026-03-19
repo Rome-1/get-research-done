@@ -96,6 +96,7 @@ def _latest_update_cache(cwd: str | None = None) -> tuple[dict[str, object] | No
 
     from gpd.hooks.runtime_detect import (
         detect_active_runtime_with_gpd_install,
+        detect_runtime_install_target,
         get_update_cache_candidates,
         should_consider_update_cache_candidate,
     )
@@ -103,7 +104,14 @@ def _latest_update_cache(cwd: str | None = None) -> tuple[dict[str, object] | No
     workspace_path = resolve_project_root(cwd) if cwd else None
     active_installed_runtime = detect_active_runtime_with_gpd_install(cwd=workspace_path)
     self_config_dir = _self_config_dir()
-    if self_config_dir is not None:
+    active_install_target = (
+        detect_runtime_install_target(active_installed_runtime, cwd=workspace_path)
+        if active_installed_runtime not in (None, "", "unknown")
+        else None
+    )
+    if self_config_dir is not None and (
+        active_install_target is None or self_config_dir == active_install_target.config_dir
+    ):
         cache_file = self_config_dir / "cache" / "gpd-update-check.json"
         if cache_file.exists():
             try:

@@ -5,10 +5,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from gpd.adapters import get_adapter, iter_adapters
+from gpd.adapters import get_adapter
 from gpd.adapters.install_utils import build_runtime_install_repair_command
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
-from gpd.hooks.runtime_detect import RUNTIME_UNKNOWN, SCOPE_LOCAL, _runtime_from_manifest_or_path
+from gpd.hooks.runtime_detect import (
+    RUNTIME_UNKNOWN,
+    SCOPE_LOCAL,
+    _runtime_from_manifest_or_path,
+    normalize_runtime_name,
+)
 
 
 def load_install_manifest(config_dir: Path) -> dict[str, object]:
@@ -66,8 +71,9 @@ def _infer_runtime_from_manifest(config_dir: Path) -> str | None:
         normalized_runtime = runtime.strip()
         if not normalized_runtime:
             return None
-        if normalized_runtime in {descriptor.runtime_name for descriptor in iter_runtime_descriptors()}:
-            return normalized_runtime
+        canonical_runtime = normalize_runtime_name(normalized_runtime)
+        if canonical_runtime is not None:
+            return canonical_runtime
         return None
 
     files = manifest.get("files")
@@ -80,13 +86,6 @@ def _infer_runtime_from_manifest(config_dir: Path) -> str | None:
                 for prefix in descriptor.manifest_file_prefixes
             ):
                 return descriptor.runtime_name
-    return None
-
-
-def _infer_runtime_from_config_dir(config_dir: Path) -> str | None:
-    for adapter in iter_adapters():
-        if config_dir.name == adapter.local_config_dir_name:
-            return adapter.runtime_name
     return None
 
 

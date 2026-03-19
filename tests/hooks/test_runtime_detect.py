@@ -19,8 +19,8 @@ from gpd.hooks.runtime_detect import (
     SCOPE_GLOBAL,
     SCOPE_LOCAL,
     SOURCE_ENV,
-    SOURCE_GLOBAL,
     SOURCE_LOCAL,
+    SOURCE_UNKNOWN,
     TodoCandidate,
     UpdateCacheCandidate,
     _has_gpd_install,
@@ -187,10 +187,9 @@ class TestDetectActiveRuntime:
             assert detect_active_runtime() == RUNTIME_CLAUDE
 
     def test_multiple_dirs_picks_first_in_priority(self, tmp_path: Path) -> None:
-        """When multiple runtime dirs exist, picks first in priority order (claude > gemini > codex > opencode)."""
+        """Bare runtime dirs should not count as active without a verified install."""
         (tmp_path / ".codex").mkdir()
         (tmp_path / ".gemini").mkdir()
-        # No .claude dir → gemini is first match in ALL_RUNTIMES priority
 
         env = _clean_runtime_env()
         with (
@@ -198,10 +197,10 @@ class TestDetectActiveRuntime:
             patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path),
             patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
         ):
-            assert detect_active_runtime() == RUNTIME_GEMINI
+            assert detect_active_runtime() == RUNTIME_UNKNOWN
 
     def test_claude_dir_wins_over_codex(self, tmp_path: Path) -> None:
-        """When both .claude and .codex exist, .claude wins (first in priority)."""
+        """Bare config dirs alone should not produce a runtime selection."""
         (tmp_path / ".claude").mkdir()
         (tmp_path / ".codex").mkdir()
         workspace = tmp_path / "workspace"
@@ -213,10 +212,10 @@ class TestDetectActiveRuntime:
             patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path),
             patch("gpd.hooks.runtime_detect.Path.cwd", return_value=workspace),
         ):
-            assert detect_active_runtime() == RUNTIME_CLAUDE
+            assert detect_active_runtime() == RUNTIME_UNKNOWN
 
     def test_only_opencode_dir(self, tmp_path: Path) -> None:
-        """When only .config/opencode exists, detects opencode."""
+        """Bare OpenCode config dirs should not count without a verified install."""
         oc_dir = tmp_path / ".config" / "opencode"
         oc_dir.mkdir(parents=True)
 
@@ -226,7 +225,7 @@ class TestDetectActiveRuntime:
             patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path),
             patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
         ):
-            assert detect_active_runtime() == RUNTIME_OPENCODE
+            assert detect_active_runtime() == RUNTIME_UNKNOWN
 
     def test_multiple_env_vars_first_wins(self) -> None:
         """When multiple env vars set, first in signal list wins (claude > codex)."""
@@ -251,7 +250,7 @@ class TestDetectActiveRuntime:
             patch("gpd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
             patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
         ):
-            assert detect_active_runtime(cwd=workspace) == RUNTIME_GEMINI
+            assert detect_active_runtime(cwd=workspace) == RUNTIME_UNKNOWN
 
     def test_local_runtime_dirs_outrank_global_runtime_dirs(self, tmp_path: Path) -> None:
         """Local runtime detection wins even when the global runtime has higher name priority."""
@@ -265,7 +264,7 @@ class TestDetectActiveRuntime:
             patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
             patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
         ):
-            assert detect_active_runtime() == RUNTIME_GEMINI
+            assert detect_active_runtime() == RUNTIME_UNKNOWN
 
 
 class TestResolveEffectiveRuntime:
@@ -307,9 +306,32 @@ class TestResolveEffectiveRuntime:
         ):
             result = resolve_effective_runtime()
 
-        assert result.runtime == RUNTIME_CLAUDE
-        assert result.source == SOURCE_GLOBAL
+        assert result.runtime == RUNTIME_UNKNOWN
+        assert result.source == SOURCE_UNKNOWN
         assert result.has_gpd_install is False
+
+    def test_manifest_runtime_alias_is_normalized_for_installed_runtime(self, tmp_path: Path) -> None:
+        workspace = tmp_path / "workspace"
+        home = tmp_path / "home"
+        workspace.mkdir()
+        runtime_dir = workspace / ".codex"
+        _mark_gpd_install(runtime_dir)
+        manifest_path = runtime_dir / "gpd-file-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["runtime"] = "Codex"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        env = _clean_runtime_env()
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=workspace),
+        ):
+            result = resolve_effective_runtime()
+
+        assert result.runtime == RUNTIME_CODEX
+        assert result.source == SOURCE_LOCAL
+        assert result.has_gpd_install is True
 
     def test_invalid_manifest_runtime_falls_back_to_path_inference(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
@@ -455,7 +477,7 @@ class TestDetectRuntimeForGpdUse:
             patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
             patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
         ):
-            assert detect_runtime_for_gpd_use() == RUNTIME_GEMINI
+            assert detect_runtime_for_gpd_use() == RUNTIME_UNKNOWN
 
     def test_explicit_target_install_is_detected_for_gpd_surfaces(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
@@ -752,7 +774,7 @@ class TestUpdateCacheFiles:
         assert files[0] == workspace / ".codex" / "cache" / "gpd-update-check.json"
         assert files[1] == home / ".codex" / "cache" / "gpd-update-check.json"
 
-    def test_unknown_preferred_runtime_falls_back_to_detected_workspace_runtime(self, tmp_path: Path) -> None:
+    def test_unknown_preferred_runtime_uses_canonical_runtime_order_without_install(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
         home = tmp_path / "home"
         workspace.mkdir()
@@ -761,8 +783,8 @@ class TestUpdateCacheFiles:
 
         files = get_update_cache_files(cwd=workspace, home=home, preferred_runtime=RUNTIME_UNKNOWN)
 
-        assert files[0] == workspace / ".codex" / "cache" / "gpd-update-check.json"
-        assert files[1] == home / ".codex" / "cache" / "gpd-update-check.json"
+        assert files[0] == workspace / ".claude" / "cache" / "gpd-update-check.json"
+        assert files[1] == home / ".claude" / "cache" / "gpd-update-check.json"
 
     def test_unknown_preferred_runtime_uses_installed_runtime_for_gpd_surfaces(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"

@@ -1484,6 +1484,7 @@ def test_stage8_surfaces_decisive_comparisons_paper_quality_artifacts_and_profil
 
     assert "emit decisive verdicts" in compare_command
     assert ".gpd/comparisons/[slug]-COMPARISON.md" in compare_workflow
+    assert ".gpd/analysis/comparison-{slug}.md" not in compare_workflow
     assert "comparison_verdicts" in internal_template
     assert "figure_registry" in figure_tracker
     assert "role: smoking_gun|benchmark|comparison|sanity_check|publication_polish|other" in figure_tracker
@@ -1500,6 +1501,19 @@ def test_stage8_surfaces_decisive_comparisons_paper_quality_artifacts_and_profil
     assert "Do NOT change conventions mid-project without an explicit checkpoint" in planner
     assert "Required first-result, anchor, and pre-fanout gates still apply even in yolo mode" in executor
     assert "live machine source of truth is the verifier registry" in verifier_agent
+
+
+def test_publication_workflows_refresh_bibliography_audit_after_bibliography_changes() -> None:
+    write_paper = (WORKFLOWS_DIR / "write-paper.md").read_text(encoding="utf-8")
+    respond = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
+    peer_review = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
+
+    assert "If the bibliography changed after the last audit, refresh `paper/BIBLIOGRAPHY-AUDIT.json` before strict review." in write_paper
+    assert "Refresh `paper/BIBLIOGRAPHY-AUDIT.json` after the bibliography changes before entering strict review or `pre_submission_review`." in write_paper
+    assert "If the manuscript bibliography or citation set changed after the last audit, refresh `paper/BIBLIOGRAPHY-AUDIT.json` before building the reproducibility manifest." in write_paper
+    assert "refresh `paper/BIBLIOGRAPHY-AUDIT.json` before generating the response letter or proceeding to final review" in respond
+    assert "If the manuscript bibliography changed after the last audit, refresh `BIBLIOGRAPHY_AUDIT_PATH` before proceeding." in peer_review
+    assert "absent, stale, or not review-ready" in peer_review
 
 
 def test_stage9_adaptive_mode_and_review_cadence_docs_stay_aligned() -> None:

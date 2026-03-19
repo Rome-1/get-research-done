@@ -408,6 +408,38 @@ class TestReadCurrentTask:
         ):
             assert _read_current_task("session-123") == "Explicit target task"
 
+    def test_unrelated_self_config_todo_dir_does_not_override_workspace_install(self, tmp_path: Path) -> None:
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        home = tmp_path / "home"
+
+        workspace_runtime_dir = workspace / ".codex"
+        workspace_todo_dir = workspace_runtime_dir / "todos"
+        workspace_todo_dir.mkdir(parents=True)
+        _mark_complete_install(workspace_runtime_dir, runtime="codex")
+        (workspace_todo_dir / "session-123-agent-workspace.json").write_text(
+            json.dumps([{"status": "in_progress", "activeForm": "Workspace task"}]),
+            encoding="utf-8",
+        )
+
+        unrelated_runtime_dir = tmp_path / "custom-runtime-dir"
+        hook_path = unrelated_runtime_dir / "hooks" / "statusline.py"
+        unrelated_todo_dir = unrelated_runtime_dir / "todos"
+        hook_path.parent.mkdir(parents=True)
+        unrelated_todo_dir.mkdir(parents=True)
+        hook_path.write_text("# hook\n", encoding="utf-8")
+        _mark_complete_install(unrelated_runtime_dir, runtime="codex")
+        (unrelated_todo_dir / "session-123-agent-self.json").write_text(
+            json.dumps([{"status": "in_progress", "activeForm": "Self task"}]),
+            encoding="utf-8",
+        )
+
+        with (
+            patch("gpd.hooks.statusline.__file__", str(hook_path)),
+            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+        ):
+            assert _read_current_task("session-123", str(workspace)) == "Workspace task"
+
     def test_active_runtime_todo_dir_beats_other_runtime_with_same_session_id(self, tmp_path: Path) -> None:
         home = tmp_path / "home"
         claude_todo_dir = tmp_path / ".claude" / "todos"

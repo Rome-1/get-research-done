@@ -22,6 +22,7 @@ from gpd.adapters.install_utils import (
     copy_with_path_replacement,
     ensure_update_hook,
     expand_at_includes,
+    finish_install,
     generate_manifest,
     get_global_dir,
     hook_python_interpreter,
@@ -39,6 +40,7 @@ from gpd.adapters.install_utils import (
 
 def _bundled_hook_text(name: str) -> str:
     return (Path(__file__).resolve().parents[1] / "src" / "gpd" / "hooks" / name).read_text(encoding="utf-8")
+
 
 # =========================================================================
 # 1. expand_at_includes
@@ -284,7 +286,7 @@ class TestProtectRuntimeAgentPrompt:
             "```\n"
             "\n"
             "Physics prose keeps $T$ and $T_N = 0.17(1)$ untouched outside shell examples.\n"
-            'Inline math examples like `$sin(x)$` stay intact.\n'
+            "Inline math examples like `$sin(x)$` stay intact.\n"
         )
 
         for runtime in ("gemini", "opencode"):
@@ -350,13 +352,7 @@ class TestTranslateFrontmatterToolNames:
         assert "tools:\n  - file_read\n  - file_edit" in translated
 
     def test_frontmatter_with_literal_delimiter_text_keeps_frontmatter_vars_intact(self) -> None:
-        content = (
-            "---\n"
-            "name: gpd:test\n"
-            "description: keep --- and $HOME literal\n"
-            "---\n"
-            "Body uses $USER.\n"
-        )
+        content = "---\nname: gpd:test\ndescription: keep --- and $HOME literal\n---\nBody uses $USER.\n"
 
         for runtime in ("gemini", "opencode"):
             result = protect_runtime_agent_prompt(content, runtime)
@@ -533,6 +529,63 @@ class TestBuildHookCommand:
         monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: Path("/repo"))
 
         assert hook_python_interpreter() == "/repo/.venv/bin/python"
+
+
+class TestFinishInstall:
+    """Tests for finish_install: preserve third-party statuslines unless forced."""
+
+    def test_preserves_third_party_statusline_commands(self, tmp_path: Path) -> None:
+        settings_path = tmp_path / ".claude" / "settings.json"
+        settings_path.parent.mkdir(parents=True)
+        settings_path.write_text(
+            json.dumps(
+                {
+                    "statusLine": {
+                        "type": "command",
+                        "command": "python3 /opt/thirdparty/statusline.py --mode other",
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        settings = read_settings(settings_path)
+        finish_install(
+            settings_path,
+            settings,
+            "python3 .claude/hooks/statusline.py",
+            True,
+        )
+
+        updated = json.loads(settings_path.read_text(encoding="utf-8"))
+        assert updated["statusLine"]["command"] == "python3 /opt/thirdparty/statusline.py --mode other"
+
+    def test_forced_install_overwrites_third_party_statusline_commands(self, tmp_path: Path) -> None:
+        settings_path = tmp_path / ".claude" / "settings.json"
+        settings_path.parent.mkdir(parents=True)
+        settings_path.write_text(
+            json.dumps(
+                {
+                    "statusLine": {
+                        "type": "command",
+                        "command": "python3 /opt/thirdparty/statusline.py --mode other",
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        settings = read_settings(settings_path)
+        finish_install(
+            settings_path,
+            settings,
+            "python3 .claude/hooks/statusline.py",
+            True,
+            force_statusline=True,
+        )
+
+        updated = json.loads(settings_path.read_text(encoding="utf-8"))
+        assert updated["statusLine"]["command"] == "python3 .claude/hooks/statusline.py"
 
 
 class TestEnsureUpdateHook:
@@ -771,8 +824,8 @@ class TestCopyWithPathReplacement:
         (src / "workflow.md").write_text(
             'Use ask_user([{"label": "Yes"}])\n'
             'Launch task(prompt="Run it")\n'
-            'Search with web_search then web_fetch.\n'
-            'Run /gpd:plan-phase 3 next.\n',
+            "Search with web_search then web_fetch.\n"
+            "Run /gpd:plan-phase 3 next.\n",
             encoding="utf-8",
         )
 

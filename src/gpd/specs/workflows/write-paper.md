@@ -394,6 +394,7 @@ ls .gpd/literature/*-REVIEW.md 2>/dev/null
 1. Does a project bibliography exist (`references/references.bib` or `paper/references.bib`)?
 2. Does at least one `.gpd/literature/*-REVIEW.md` or phase `RESEARCH.md` exist?
 3. Are key prior works identified (the research digest's "Prior Work" or literature review)?
+4. If the bibliography changed after the last audit, refresh `paper/BIBLIOGRAPHY-AUDIT.json` before strict review. The JSON audit is the review contract artifact; `paper/CITATION-AUDIT.md` is only the human-readable report.
 
 **No bibliography file and no literature review** → WARNING (citations will need to be built from scratch).
 
@@ -838,10 +839,12 @@ Return BIBLIOGRAPHY UPDATED or CITATION ISSUES FOUND."
 - Apply metadata corrections to .bib entries
 - Add missing citations identified by the bibliographer
 - Re-run the audit if substantial changes were made
+- Refresh `paper/BIBLIOGRAPHY-AUDIT.json` after the bibliography changes before entering strict review or `pre_submission_review`.
 
 **If BIBLIOGRAPHY UPDATED:**
 
 - Corrections already applied to .bib by bibliographer
+- Refresh `paper/BIBLIOGRAPHY-AUDIT.json` so downstream strict review reads the current bibliography state.
 - Review the changes summary, proceed to final review
   </step>
 
@@ -865,6 +868,8 @@ Minimum required inputs:
 - `paper/BIBLIOGRAPHY-AUDIT.json`
 - `.gpd/paper/FIGURE_TRACKER.md`
 - contract-backed `SUMMARY.md` / `VERIFICATION.md` evidence for decisive claims, figures, and comparisons
+
+If the manuscript bibliography or citation set changed after the last audit, refresh `paper/BIBLIOGRAPHY-AUDIT.json` before building the reproducibility manifest. Stale bibliography audits are not acceptable review inputs.
 
 Validate it before entering strict review:
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from gpd.core.paper_quality import VerificationConfidence, score_paper_quality
+from gpd.core.paper_quality import score_paper_quality
 from gpd.core.paper_quality_artifacts import build_paper_quality_input
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage4"
@@ -248,13 +248,9 @@ contract_results:
 
     result = build_paper_quality_input(tmp_path)
 
-    assert result.verification.contract_targets_verified.satisfied == 3
+    assert result.verification.contract_targets_verified.satisfied == 0
     assert result.verification.contract_targets_verified.total == 3
-    assert result.verification.key_result_confidences == [
-        VerificationConfidence.independently_confirmed,
-        VerificationConfidence.independently_confirmed,
-        VerificationConfidence.independently_confirmed,
-    ]
+    assert result.verification.key_result_confidences == []
 
 
 def test_build_paper_quality_input_is_conservative_when_artifacts_are_missing(tmp_path: Path) -> None:
@@ -611,6 +607,27 @@ def test_build_paper_quality_input_ignores_mixed_contract_results_ledger_for_cov
       summary: Invalid claim id
   deliverables:
 """,
+        1,
+    )
+    _write(plan_dir / "01-SUMMARY.md", summary)
+
+    result = build_paper_quality_input(tmp_path)
+
+    assert result.verification.contract_targets_verified.satisfied == 0
+    assert result.verification.contract_targets_verified.total == 3
+    assert result.verification.key_result_confidences == []
+
+
+def test_build_paper_quality_input_ignores_invalid_contract_results_ledger_for_coverage_and_confidence(
+    tmp_path: Path,
+) -> None:
+    plan_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    _write(plan_dir / "01-01-PLAN.md", (STAGE0_FIXTURES_DIR / "plan_with_contract.md").read_text(encoding="utf-8"))
+
+    summary = (FIXTURES_DIR / "summary_with_contract_results.md").read_text(encoding="utf-8")
+    summary = summary.replace(
+        "  uncertainty_markers:\n    weakest_anchors: [Reference tolerance interpretation]\n    disconfirming_observations: [Benchmark agreement disappears once normalization is fixed]\n",
+        "",
         1,
     )
     _write(plan_dir / "01-SUMMARY.md", summary)

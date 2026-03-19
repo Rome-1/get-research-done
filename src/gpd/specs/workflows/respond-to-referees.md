@@ -443,6 +443,7 @@ pdflatex -interaction=nonstopmode main.tex 2>&1 | tail -5
 4. Check cross-references to new or renumbered equations/figures
 5. Resolve any `MISSING:` citation markers left by the paper-writer (see write-paper workflow for the resolution protocol)
 6. Re-check any decisive `comparison_verdicts` or benchmark anchors touched by the revision. If protocol bundles are selected, use them only as an additive reminder of which decisive comparisons or estimator caveats must remain visible after revision.
+7. If the revision touched bibliography files or citation commands, refresh `paper/BIBLIOGRAPHY-AUDIT.json` before generating the response letter or proceeding to final review. Stale bibliography audits are not acceptable in a referee-response round.
 
 **If inconsistencies found and iteration < 3:**
 

@@ -1365,7 +1365,7 @@ class TestInitProgress:
         assert ctx["project_contract"] is not None
         assert ctx["project_contract"]["claims"][0]["id"] == "claim-benchmark"
         assert "notes" not in ctx["project_contract"]["claims"][0]
-        assert ctx["project_contract"]["references"][0]["aliases"] == []
+        assert ctx["project_contract"]["references"][0]["aliases"] == ["not-a-list"]
         assert "Recover known limiting behavior" in ctx["active_reference_context"]
 
     def test_progress_matches_state_loader_for_recoverably_normalized_project_contract(
@@ -1381,7 +1381,7 @@ class TestInitProgress:
 
         assert loaded.state["project_contract"] == ctx["project_contract"]
         assert loaded.state["project_contract"]["claims"][0]["id"] == "claim-benchmark"
-        assert loaded.state["project_contract"]["references"][0]["aliases"] == []
+        assert loaded.state["project_contract"]["references"][0]["aliases"] == ["not-a-list"]
         assert "notes" not in loaded.state["project_contract"]["claims"][0]
 
     def test_load_project_contract_fallback_salvages_nested_metadata_must_surface(

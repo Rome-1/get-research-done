@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from gpd.contracts import ContractResults, ResearchContract
+from gpd.contracts import ContractResults, ResearchContract, normalize_contract_results_input
 from gpd.core.contract_validation import validate_project_contract
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
@@ -384,11 +384,26 @@ def test_validate_project_contract_rejects_must_surface_reference_without_requir
 
 def test_validate_project_contract_normalizes_reference_required_actions_whitespace_and_duplicates() -> None:
     contract = _load_contract_fixture()
-    contract["references"][0]["required_actions"] = [" read ", "compare", "read", "  ", " cite "]
+    contract["references"][0]["required_actions"] = [" Read ", "compare", "read", "  ", " Cite "]
 
     parsed = ResearchContract.model_validate(contract)
     result = validate_project_contract(contract)
 
+    assert parsed.references[0].required_actions == ["read", "compare", "cite"]
+    assert result.valid is True
+
+
+def test_validate_project_contract_normalizes_singleton_list_strings_and_case_variant_literals() -> None:
+    contract = _load_contract_fixture()
+    contract["context_intake"]["must_include_prior_outputs"] = ".gpd/phases/00-baseline/00-01-SUMMARY.md"
+    contract["references"][0]["role"] = "Benchmark"
+    contract["references"][0]["required_actions"] = ["Read", "Compare", "Cite"]
+
+    parsed = ResearchContract.model_validate(contract)
+    result = validate_project_contract(contract, mode="approved")
+
+    assert parsed.context_intake.must_include_prior_outputs == [".gpd/phases/00-baseline/00-01-SUMMARY.md"]
+    assert parsed.references[0].role == "benchmark"
     assert parsed.references[0].required_actions == ["read", "compare", "cite"]
     assert result.valid is True
 
@@ -488,10 +503,12 @@ def test_validate_project_contract_salvages_schema_drift_and_preserves_semantic_
     contract = _load_contract_fixture()
     contract["references"][0]["aliases"] = "not-a-list"
 
+    parsed = ResearchContract.model_validate(contract)
     result = validate_project_contract(contract)
 
     assert result.valid is True
-    assert "references.0.aliases: Input should be a valid list" in result.warnings
+    assert parsed.references[0].aliases == ["not-a-list"]
+    assert result.warnings == []
     assert result.question == "What benchmark must the project recover?"
     assert result.decisive_target_count > 0
     assert result.reference_count == 1
@@ -633,16 +650,22 @@ def test_validate_project_contract_warns_when_optional_sections_are_missing_but_
     assert "no forbidden_proxies recorded yet" in result.warnings
 
 
-def test_validate_project_contract_approved_mode_rejects_whole_singleton_defaulting() -> None:
+@pytest.mark.parametrize("mode", ["draft", "approved"])
+def test_validate_project_contract_rejects_whole_singleton_defaulting(mode: str) -> None:
     for field_name in ("context_intake", "approach_policy", "uncertainty_markers"):
         contract = _load_contract_fixture()
         contract[field_name] = "not-a-dict"
 
-        result = validate_project_contract(contract, mode="approved")
+        result = validate_project_contract(contract, mode=mode)
 
         assert result.valid is False
-        assert result.mode == "approved"
+        assert result.mode == mode
         assert f"{field_name} must be an object, not str" in result.errors
+
+
+def test_contract_results_strict_mode_requires_explicit_uncertainty_markers() -> None:
+    with pytest.raises(ValidationError, match="uncertainty_markers"):
+        ContractResults.model_validate(normalize_contract_results_input({"claims": {}}, strict=True))
 
 
 def test_plan_contract_schema_uses_supported_contract_enum_values() -> None:

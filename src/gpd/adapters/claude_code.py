@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -29,6 +30,7 @@ from gpd.adapters.install_utils import (
 logger = logging.getLogger(__name__)
 
 _SHELL_FENCE_LANGUAGES = frozenset({"bash", "sh", "shell", "zsh"})
+_INLINE_GPD_COMMAND_RE = re.compile(r"`(?P<command>gpd(?=\s)[^`]*?)`")
 
 _TOOL_NAME_MAP: dict[str, str] = {
     "file_read": "Read",
@@ -408,9 +410,14 @@ def _rewrite_gpd_cli_invocations(content: str, command: str) -> str:
             rewritten.append(_rewrite_gpd_shell_line(line, command))
             continue
 
-        rewritten.append(line)
+        rewritten.append(_rewrite_inline_gpd_command_spans(line, command))
 
     return "".join(rewritten)
+
+
+def _rewrite_inline_gpd_command_spans(content: str, command: str) -> str:
+    """Rewrite inline markdown code spans that execute ``gpd`` commands."""
+    return _INLINE_GPD_COMMAND_RE.sub(lambda match: f"`{command}{match.group('command')[3:]}`", content)
 
 
 def _rewrite_gpd_shell_line(line: str, command: str) -> str:

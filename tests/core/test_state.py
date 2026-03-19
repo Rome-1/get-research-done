@@ -390,7 +390,7 @@ def test_ensure_state_schema_malformed_project_contract_singleton_field_preserve
     result = ensure_state_schema({"project_contract": contract})
 
     assert result["project_contract"] is not None
-    assert result["project_contract"]["context_intake"]["must_read_refs"] == []
+    assert result["project_contract"]["context_intake"]["must_read_refs"] == ["not-a-list"]
     assert result["project_contract"]["context_intake"]["known_good_baselines"] == ["baseline-A"]
     assert result["project_contract"]["context_intake"]["crucial_inputs"] == [
         "normalize with published convention"
@@ -405,7 +405,7 @@ def test_ensure_state_schema_salvages_scope_list_drift_without_dropping_contract
 
     assert result["project_contract"] is not None
     assert result["project_contract"]["scope"]["question"] == "What benchmark must the project recover?"
-    assert result["project_contract"]["scope"]["unresolved_questions"] == []
+    assert result["project_contract"]["scope"]["unresolved_questions"] == ["not-a-list"]
 
 
 def test_ensure_state_schema_salvages_reference_optional_field_without_dropping_reference():
@@ -420,7 +420,7 @@ def test_ensure_state_schema_salvages_reference_optional_field_without_dropping_
             "id": "ref-benchmark",
             "kind": "paper",
             "locator": "Author et al., Journal, 2024",
-            "aliases": [],
+            "aliases": ["not-a-list"],
             "role": "benchmark",
             "why_it_matters": "Published comparison target",
             "applies_to": ["claim-benchmark"],
@@ -565,20 +565,19 @@ def test_state_set_project_contract_rejects_contract_missing_skeptical_fields(tm
     assert saved["project_contract"] is None
 
 
-def test_state_set_project_contract_rejects_schema_drifted_contract(tmp_path: Path):
+def test_state_set_project_contract_accepts_singleton_list_normalization(tmp_path: Path):
     contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
     contract["context_intake"]["must_read_refs"] = "ref-benchmark"
     save_state_json(tmp_path, default_state_dict())
 
     result = state_set_project_contract(tmp_path, contract)
 
-    assert result.updated is False
-    assert result.reason is not None
-    assert "Invalid project contract schema:" in result.reason
-    assert "context_intake.must_read_refs" in result.reason
+    assert result.updated is True
+    assert result.reason is None
     saved = load_state_json(tmp_path)
     assert saved is not None
-    assert saved["project_contract"] is None
+    assert saved["project_contract"] is not None
+    assert saved["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
 
 
 def test_state_set_project_contract_accepts_recoverable_schema_normalization(tmp_path: Path):
@@ -590,13 +589,13 @@ def test_state_set_project_contract_accepts_recoverable_schema_normalization(tmp
     result = state_set_project_contract(tmp_path, contract)
 
     assert result.updated is True
-    assert any("references.0.aliases" in warning for warning in result.warnings)
+    assert result.warnings == ["claims.0.notes: Extra inputs are not permitted"]
     saved = load_state_json(tmp_path)
     assert saved is not None
     assert saved["project_contract"] is not None
     assert saved["project_contract"]["claims"][0]["id"] == "claim-benchmark"
     assert "notes" not in saved["project_contract"]["claims"][0]
-    assert saved["project_contract"]["references"][0]["aliases"] == []
+    assert saved["project_contract"]["references"][0]["aliases"] == ["not-a-list"]
 
 
 def test_state_set_project_contract_surfaces_approved_mode_warnings_on_success(tmp_path: Path):
@@ -627,7 +626,7 @@ def test_state_set_project_contract_rejects_whole_singleton_defaulting(tmp_path:
         assert saved["project_contract"] is None
 
 
-def test_save_state_json_drops_malformed_project_contract_instead_of_salvaging(tmp_path: Path):
+def test_save_state_json_normalizes_singleton_list_project_contract_fields(tmp_path: Path):
     contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
     contract["context_intake"]["must_read_refs"] = "ref-benchmark"
 
@@ -641,7 +640,8 @@ def test_save_state_json_drops_malformed_project_contract_instead_of_salvaging(t
 
     layout = ProjectLayout(tmp_path)
     persisted = json.loads(layout.state_json.read_text(encoding="utf-8"))
-    assert persisted["project_contract"] is None
+    assert persisted["project_contract"] is not None
+    assert persisted["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
     assert persisted["open_questions"] == ["Keep this question"]
 
 
@@ -659,10 +659,10 @@ def test_save_state_json_preserves_recoverable_warning_only_project_contract_dri
     layout = ProjectLayout(tmp_path)
     persisted = json.loads(layout.state_json.read_text(encoding="utf-8"))
     assert persisted["project_contract"] is not None
-    assert persisted["project_contract"]["references"][0]["aliases"] == []
+    assert persisted["project_contract"]["references"][0]["aliases"] == ["not-a-list"]
 
 
-def test_save_state_markdown_drops_existing_malformed_project_contract_instead_of_salvaging(tmp_path: Path):
+def test_save_state_markdown_preserves_normalized_singleton_list_project_contract_fields(tmp_path: Path):
     state = default_state_dict()
     state["position"]["current_phase"] = "2"
     state["position"]["status"] = "Executing"
@@ -679,13 +679,15 @@ def test_save_state_markdown_drops_existing_malformed_project_contract_instead_o
     md_content = layout.state_md.read_text(encoding="utf-8").replace("**Status:** Executing", "**Status:** Paused", 1)
     result = save_state_markdown(tmp_path, md_content)
 
-    assert result["project_contract"] is None
+    assert result["project_contract"] is not None
+    assert result["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
     persisted = json.loads(layout.state_json.read_text(encoding="utf-8"))
-    assert persisted["project_contract"] is None
+    assert persisted["project_contract"] is not None
+    assert persisted["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
     assert persisted["position"]["status"] == "Paused"
 
 
-def test_load_state_json_backup_restore_drops_malformed_project_contract_instead_of_salvaging(tmp_path: Path):
+def test_load_state_json_backup_restore_normalizes_singleton_list_project_contract_fields(tmp_path: Path):
     state = default_state_dict()
     state["position"]["current_phase"] = "2"
     state["position"]["status"] = "Executing"
@@ -710,15 +712,17 @@ def test_load_state_json_backup_restore_drops_malformed_project_contract_instead
     loaded = load_state_json(tmp_path)
 
     assert loaded is not None
-    assert loaded["project_contract"] is None
+    assert loaded["project_contract"] is not None
+    assert loaded["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
     assert loaded["position"]["current_phase"] == "9"
     assert loaded["open_questions"] == ["Recovered from backup"]
 
     restored = json.loads(layout.state_json.read_text(encoding="utf-8"))
-    assert restored["project_contract"] is None
+    assert restored["project_contract"] is not None
+    assert restored["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
 
 
-def test_load_state_json_primary_file_drops_malformed_project_contract_instead_of_salvaging(tmp_path: Path):
+def test_load_state_json_primary_file_normalizes_singleton_list_project_contract_fields(tmp_path: Path):
     state = default_state_dict()
     state["position"]["current_phase"] = "2"
     state["position"]["status"] = "Executing"
@@ -735,7 +739,8 @@ def test_load_state_json_primary_file_drops_malformed_project_contract_instead_o
     loaded = load_state_json(tmp_path)
 
     assert loaded is not None
-    assert loaded["project_contract"] is None
+    assert loaded["project_contract"] is not None
+    assert loaded["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
     assert loaded["position"]["current_phase"] == "2"
 
 
@@ -757,7 +762,7 @@ def test_load_state_json_preserves_recoverable_warning_only_project_contract_dri
 
     assert loaded is not None
     assert loaded["project_contract"] is not None
-    assert loaded["project_contract"]["references"][0]["aliases"] == []
+    assert loaded["project_contract"]["references"][0]["aliases"] == ["not-a-list"]
 
 
 def test_state_load_matches_context_progress_for_recoverably_normalized_project_contract(
@@ -789,7 +794,7 @@ def test_state_load_matches_context_progress_for_recoverably_normalized_project_
     ctx = init_progress(tmp_path)
 
     assert loaded.state["project_contract"] == ctx["project_contract"]
-    assert loaded.state["project_contract"]["references"][0]["aliases"] == []
+    assert loaded.state["project_contract"]["references"][0]["aliases"] == ["not-a-list"]
     assert "notes" not in loaded.state["project_contract"]["claims"][0]
 
 
@@ -1005,9 +1010,9 @@ def test_state_validate_matches_load_for_recoverable_project_contract_warning_dr
 
     assert loaded is not None
     assert loaded["project_contract"] is not None
-    assert loaded["project_contract"]["references"][0]["aliases"] == []
+    assert loaded["project_contract"]["references"][0]["aliases"] == ["not-a-list"]
     assert validation.valid is True
-    assert any("references.0.aliases" in warning for warning in validation.warnings)
+    assert not any("references.0.aliases" in warning for warning in validation.warnings)
 
 
 def test_state_validate_review_blocks_missing_evidence_file(tmp_path):

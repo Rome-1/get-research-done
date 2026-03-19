@@ -20,7 +20,7 @@ import pytest
 from typer.testing import CliRunner
 
 from gpd.adapters import get_adapter, iter_runtime_descriptors
-from gpd.adapters.install_utils import MANIFEST_NAME, file_hash
+from gpd.adapters.install_utils import MANIFEST_NAME, build_runtime_cli_bridge_command, file_hash
 from gpd.cli import app
 
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
@@ -44,6 +44,22 @@ def _install_and_finalize(adapter, gpd_root: Path, target: Path, **install_kwarg
     result = adapter.install(gpd_root, target, **install_kwargs)
     adapter.finalize_install(result)
     return result
+
+
+def _expected_bridge_for_install(
+    adapter,
+    target: Path,
+    *,
+    is_global: bool,
+    explicit_target: bool = False,
+) -> str:
+    return build_runtime_cli_bridge_command(
+        adapter.runtime_name,
+        target_dir=target,
+        config_dir_name=adapter.config_dir_name,
+        is_global=is_global,
+        explicit_target=explicit_target,
+    )
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -182,6 +198,19 @@ class TestClaudeCodeLifecycle:
         assert "context_mode: projectless" in content
         assert "/get-physics-done/workflows/slides.md" in content
 
+    def test_inline_gpd_commands_are_rewritten_to_the_bridge(self, tmp_path: Path, gpd_root: Path) -> None:
+        adapter = get_adapter("claude-code")
+        target = tmp_path / ".claude"
+        target.mkdir()
+
+        _install_and_finalize(adapter, gpd_root, target, is_global=True)
+
+        bridge_command = _expected_bridge_for_install(adapter, target, is_global=True)
+        content = (target / "commands" / "gpd" / "suggest-next.md").read_text(encoding="utf-8")
+        assert bridge_command in content
+        assert "Uses `gpd --raw suggest`" not in content
+        assert "`gpd --raw suggest`" not in content
+
 
 # ---------------------------------------------------------------------------
 # Gemini lifecycle
@@ -239,6 +268,20 @@ class TestGeminiLifecycle:
                 assert "allowed-tools:" not in content, (
                     f"{agent_file.name} still has 'allowed-tools:' — should be 'tools:'"
                 )
+
+    def test_gemini_command_prompts_do_not_keep_shell_captures(self, tmp_path: Path, gpd_root: Path) -> None:
+        adapter = get_adapter("gemini")
+        target = tmp_path / ".gemini"
+        target.mkdir()
+
+        _install_and_finalize(adapter, gpd_root, target, is_global=True)
+
+        bridge_command = _expected_bridge_for_install(adapter, target, is_global=True)
+        content = (target / "commands" / "gpd" / "write-paper.toml").read_text(encoding="utf-8")
+        assert bridge_command in content
+        assert "$(gpd" not in content
+        assert "CONV_CHECK=$(gpd" not in content
+        assert "QUALITY=$(gpd" not in content
 
     def test_uninstall_removes_gpd_artifacts(self, tmp_path: Path, gpd_root: Path) -> None:
         adapter = get_adapter("gemini")
@@ -450,6 +493,21 @@ class TestCodexLifecycle:
         assert "context_mode: projectless" in content
         assert "<!-- [included: slides.md] -->" in content
 
+    def test_inline_gpd_commands_are_rewritten_to_the_bridge(self, tmp_path: Path, gpd_root: Path) -> None:
+        adapter = get_adapter("codex")
+        target = tmp_path / ".codex"
+        target.mkdir()
+        skills_dir = tmp_path / ".agents" / "skills"
+        skills_dir.mkdir(parents=True)
+
+        _install_and_finalize(adapter, gpd_root, target, is_global=True, skills_dir=skills_dir)
+
+        bridge_command = _expected_bridge_for_install(adapter, target, is_global=True)
+        content = (skills_dir / "gpd-suggest-next" / "SKILL.md").read_text(encoding="utf-8")
+        assert bridge_command in content
+        assert "Uses `gpd --raw suggest`" not in content
+        assert "`gpd --raw suggest`" not in content
+
 
 # ---------------------------------------------------------------------------
 # OpenCode lifecycle
@@ -532,6 +590,19 @@ class TestOpenCodeLifecycle:
                 content = cmd_file.read_text(encoding="utf-8")
                 # allowed-tools should be converted to tools
                 assert "allowed-tools:" not in content, f"{cmd_file.name} still has 'allowed-tools:'"
+
+    def test_inline_gpd_commands_are_rewritten_to_the_bridge(self, tmp_path: Path, gpd_root: Path) -> None:
+        adapter = get_adapter("opencode")
+        target = tmp_path / ".opencode"
+        target.mkdir()
+
+        _install_and_finalize(adapter, gpd_root, target)
+
+        bridge_command = adapter.runtime_cli_bridge_command(target)
+        content = (target / "command" / "gpd-suggest-next.md").read_text(encoding="utf-8")
+        assert bridge_command in content
+        assert "Uses `gpd --raw suggest`" not in content
+        assert "`gpd --raw suggest`" not in content
 
     def test_uninstall_removes_gpd_artifacts(self, tmp_path: Path, gpd_root: Path) -> None:
         adapter = get_adapter("opencode")

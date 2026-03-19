@@ -762,6 +762,21 @@ def test_hook_install_metadata_uses_adapter_detection_rules(tmp_path: Path):
     adapter.has_complete_install.assert_called_once_with(config_dir)
 
 
+def test_hook_install_metadata_rejects_codex_surface_missing_config_toml(tmp_path: Path):
+    """A half-installed Codex tree should not count as complete just because markers exist."""
+    from gpd.hooks.install_metadata import config_dir_has_complete_install
+
+    config_dir = tmp_path / ".codex"
+    config_dir.mkdir()
+    (config_dir / "get-physics-done").mkdir()
+    (config_dir / "gpd-file-manifest.json").write_text(
+        json.dumps({"runtime": "codex", "install_scope": "local"}),
+        encoding="utf-8",
+    )
+
+    assert config_dir_has_complete_install(config_dir) is False
+
+
 def test_uninstall_resolves_relative_target_dir_against_cli_cwd(tmp_path: Path):
     """Relative uninstall --target-dir should be anchored to --cwd."""
     cli_cwd = tmp_path / "workspace"

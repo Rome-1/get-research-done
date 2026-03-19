@@ -113,6 +113,39 @@ def test_summary_extract_normalizes_reference_action_ledgers(tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize(
+    ("status", "completed_actions", "missing_actions", "expected_completed", "expected_missing"),
+    [
+        ("Completed", "Read", "[]", ["read"], []),
+        ("Missing", "[]", "Compare", [], ["compare"]),
+    ],
+)
+def test_summary_extract_normalizes_singleton_and_case_variant_reference_action_ledgers(
+    tmp_path: Path,
+    status: str,
+    completed_actions: str,
+    missing_actions: str,
+    expected_completed: list[str],
+    expected_missing: list[str],
+) -> None:
+    summary_path = tmp_path / "01-SUMMARY.md"
+    summary_path.write_text(
+        _summary_with_reference_usage(
+            status=status,
+            completed_actions=completed_actions,
+            missing_actions=missing_actions,
+        ),
+        encoding="utf-8",
+    )
+
+    result = cmd_summary_extract(tmp_path, "01-SUMMARY.md")
+
+    assert result.contract_results is not None
+    assert result.contract_results.references["ref-benchmark"].status == status.casefold()
+    assert result.contract_results.references["ref-benchmark"].completed_actions == expected_completed
+    assert result.contract_results.references["ref-benchmark"].missing_actions == expected_missing
+
+
+@pytest.mark.parametrize(
     ("status", "completed_actions", "missing_actions", "message"),
     [
         ("completed", "[]", "[]", "status=completed requires completed_actions"),

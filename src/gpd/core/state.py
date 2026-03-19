@@ -1331,6 +1331,80 @@ def _integrity_status_from(issues: list[str], warnings: list[str], mode: str) ->
     return "healthy"
 
 
+_STATE_MD_MIRRORED_FIELDS: dict[str, tuple[str, ...] | None] = {
+    "project_reference": ("core_research_question", "current_focus", "project_md_updated"),
+    "position": (
+        "current_phase",
+        "current_phase_name",
+        "total_phases",
+        "current_plan",
+        "total_plans_in_phase",
+        "status",
+        "last_activity",
+        "last_activity_desc",
+        "progress_percent",
+        "paused_at",
+    ),
+    "session": ("last_date", "stopped_at", "resume_file"),
+    "decisions": None,
+    "blockers": None,
+    "performance_metrics": ("rows",),
+    "active_calculations": None,
+    "open_questions": None,
+    "approximations": None,
+    "convention_lock": None,
+    "propagated_uncertainties": None,
+    "pending_todos": None,
+}
+
+
+def _state_md_comparison_payload(section: str, value: object) -> object:
+    """Return the STATE.md-mirrored comparison payload for one top-level section."""
+
+    if section == "convention_lock" and isinstance(value, dict):
+        normalized = {
+            key: item
+            for key, item in value.items()
+            if key == "custom_conventions"
+            or (key in KNOWN_CONVENTIONS and not is_bogus_value(item))
+        }
+        if not normalized.get("custom_conventions"):
+            normalized.pop("custom_conventions", None)
+        return normalized
+
+    mirrored_fields = _STATE_MD_MIRRORED_FIELDS.get(section)
+    if mirrored_fields is None or not isinstance(value, dict):
+        return value
+
+    payload = {field: value.get(field) for field in mirrored_fields}
+    if section == "position":
+        for field in ("current_phase", "current_phase_name"):
+            current = payload.get(field)
+            if current is not None:
+                payload[field] = phase_normalize(str(current))
+    return payload
+
+
+def _state_md_mirror_mismatches(state_json: dict[str, object], state_md: dict[str, object]) -> list[str]:
+    """Return mismatches between ``state.json`` and the editable ``STATE.md`` mirror."""
+
+    mismatches: list[str] = []
+    for section in _STATE_MD_MIRRORED_FIELDS:
+        json_value = _state_md_comparison_payload(section, state_json.get(section))
+        md_value = _state_md_comparison_payload(section, state_md.get(section))
+        if json_value is None or md_value is None:
+            continue
+
+        if json.dumps(json_value, sort_keys=True, ensure_ascii=False) != json.dumps(
+            md_value,
+            sort_keys=True,
+            ensure_ascii=False,
+        ):
+            mismatches.append(f"{section} mismatch between state.json and STATE.md")
+
+    return mismatches
+
+
 def generate_state_markdown(raw: dict) -> str:
     """Generate STATE.md content from a state dict."""
     s = ensure_state_schema(raw)
@@ -2582,34 +2656,10 @@ def state_validate(cwd: Path, integrity_mode: str = "standard") -> StateValidate
                 if warning not in warnings:
                     warnings.append(warning)
 
-    # Cross-check position fields
+    if isinstance(state_json, dict) and isinstance(state_md, dict):
+        issues.extend(_state_md_mirror_mismatches(state_json, state_md))
+
     json_pos = state_json.get("position") if isinstance(state_json, dict) else None
-    md_pos = state_md.get("position") if isinstance(state_md, dict) else None
-    if isinstance(json_pos, dict) and isinstance(md_pos, dict):
-        pos_fields = [
-            "current_phase",
-            "current_phase_name",
-            "status",
-            "current_plan",
-            "total_phases",
-            "total_plans_in_phase",
-            "last_activity",
-            "last_activity_desc",
-            "paused_at",
-        ]
-        phase_fields = {"current_phase", "current_phase_name"}
-        for field in pos_fields:
-            json_val = json_pos.get(field)
-            md_val = md_pos.get(field)
-            if json_val is not None and md_val is not None:
-                if field in phase_fields:
-                    j_str = phase_normalize(str(json_val))
-                    m_str = phase_normalize(str(md_val))
-                else:
-                    j_str = str(json_val)
-                    m_str = str(md_val)
-                if j_str != m_str:
-                    issues.append(f'position.{field} mismatch: json="{json_val}" vs md="{md_val}"')
 
     # Convention lock completeness
     if state_json and isinstance(state_json.get("convention_lock"), dict):

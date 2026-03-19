@@ -163,9 +163,7 @@ def _manifest_runtime_value(config_dir: Path) -> str | None:
     normalized = runtime.strip()
     if not normalized:
         return None
-    if normalized in ALL_RUNTIMES:
-        return normalized
-    return None
+    return normalize_runtime_name(normalized)
 
 
 def _runtime_from_manifest_or_path(config_dir: Path, *, home: Path | None = None) -> str | None:
@@ -299,50 +297,27 @@ def resolve_effective_runtime(
                         install_scope=install_scope,
                     )
 
-    if require_gpd_install:
-        for runtime in ordered_runtimes:
-            local_dir = _local_runtime_dir(runtime, resolved_cwd)
-            if _has_gpd_install(local_dir, home=resolved_home):
-                return EffectiveRuntimeResolution(
-                    runtime=runtime,
-                    source=SOURCE_LOCAL,
-                    has_gpd_install=True,
-                    install_scope=_manifest_install_scope(local_dir) or SCOPE_LOCAL,
-                )
-
-            global_dir = _global_runtime_dir(runtime, home=resolved_home)
-            if _has_gpd_install(global_dir, home=resolved_home):
-                return EffectiveRuntimeResolution(
-                    runtime=runtime,
-                    source=SOURCE_GLOBAL,
-                    has_gpd_install=True,
-                    install_scope=_manifest_install_scope(global_dir) or SCOPE_GLOBAL,
-                )
-        return EffectiveRuntimeResolution()
-
     for runtime in ordered_runtimes:
         local_dir = _local_runtime_dir(runtime, resolved_cwd)
-        if local_dir.is_dir():
-            install_scope = detect_install_scope(runtime, cwd=resolved_cwd, home=resolved_home)
-            has_install = install_scope is not None
+        if _has_gpd_install(local_dir, home=resolved_home):
             return EffectiveRuntimeResolution(
                 runtime=runtime,
                 source=SOURCE_LOCAL,
-                has_gpd_install=has_install,
-                install_scope=install_scope,
+                has_gpd_install=True,
+                install_scope=_manifest_install_scope(local_dir) or SCOPE_LOCAL,
             )
 
-    for runtime in ordered_runtimes:
         global_dir = _global_runtime_dir(runtime, home=resolved_home)
-        if global_dir.is_dir():
-            install_scope = detect_install_scope(runtime, cwd=resolved_cwd, home=resolved_home)
-            has_install = install_scope is not None
+        if _has_gpd_install(global_dir, home=resolved_home):
             return EffectiveRuntimeResolution(
                 runtime=runtime,
                 source=SOURCE_GLOBAL,
-                has_gpd_install=has_install,
-                install_scope=install_scope,
+                has_gpd_install=True,
+                install_scope=_manifest_install_scope(global_dir) or SCOPE_GLOBAL,
             )
+
+    if require_gpd_install:
+        return EffectiveRuntimeResolution()
 
     return EffectiveRuntimeResolution()
 
@@ -375,6 +350,16 @@ def detect_runtime_for_gpd_use(*, cwd: Path | None = None, home: Path | None = N
     if installed_runtime != RUNTIME_UNKNOWN:
         return installed_runtime
     return detect_active_runtime(cwd=cwd, home=home)
+
+
+def detect_runtime_install_target(
+    runtime: str,
+    *,
+    cwd: Path | None = None,
+    home: Path | None = None,
+) -> RuntimeInstallTarget | None:
+    """Return the concrete config dir currently serving *runtime*, if any."""
+    return _detect_runtime_install_target(runtime, cwd=cwd, home=home)
 
 
 def detect_install_scope(
@@ -751,6 +736,7 @@ __all__ = [
     "detect_active_runtime",
     "detect_active_runtime_with_gpd_install",
     "detect_runtime_for_gpd_use",
+    "detect_runtime_install_target",
     "get_cache_dirs",
     "get_update_cache_candidates",
     "get_gpd_install_dirs",

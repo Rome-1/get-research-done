@@ -89,6 +89,7 @@ _COLOR_NAME_TO_HEX: dict[str, str] = {
 
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{3}$|^#[0-9a-fA-F]{6}$")
 _SHELL_FENCE_LANGUAGES = frozenset({"bash", "sh", "shell", "zsh"})
+_INLINE_GPD_COMMAND_RE = re.compile(r"`(?P<command>gpd(?=\s)[^`]*?)`")
 
 # ---------------------------------------------------------------------------
 # XDG config directory resolution
@@ -235,9 +236,14 @@ def _rewrite_gpd_cli_invocations(content: str, bridge_command: str) -> str:
             rewritten.append(_rewrite_gpd_shell_line(line, bridge_command))
             continue
 
-        rewritten.append(line)
+        rewritten.append(_rewrite_inline_gpd_command_spans(line, bridge_command))
 
     return "".join(rewritten)
+
+
+def _rewrite_inline_gpd_command_spans(content: str, bridge_command: str) -> str:
+    """Rewrite inline markdown code spans that execute ``gpd`` commands."""
+    return _INLINE_GPD_COMMAND_RE.sub(lambda match: f"`{bridge_command}{match.group('command')[3:]}`", content)
 
 
 def _rewrite_gpd_shell_line(line: str, bridge_command: str) -> str:

@@ -3668,6 +3668,12 @@ def resolve_model_cmd(
     from gpd.hooks.runtime_detect import detect_runtime_for_gpd_use
 
     supported_runtimes = _supported_runtime_names()
+    if runtime is not None:
+        canonical_runtime = normalize_runtime_name(runtime)
+        if canonical_runtime is None:
+            supported = ", ".join(supported_runtimes)
+            _error(f"Unknown runtime {runtime!r}. Supported: {supported}")
+        runtime = canonical_runtime
     if runtime is not None and supported_runtimes and runtime not in supported_runtimes:
         supported = ", ".join(supported_runtimes)
         _error(f"Unknown runtime {runtime!r}. Supported: {supported}")
@@ -4134,8 +4140,8 @@ def _resolve_cli_target_dir(target_dir: str) -> Path:
     """Resolve a CLI target-dir argument relative to the active --cwd."""
     resolved = Path(target_dir).expanduser()
     if resolved.is_absolute():
-        return resolved
-    return _get_cwd() / resolved
+        return resolved.resolve(strict=False)
+    return (_get_cwd() / resolved).resolve(strict=False)
 
 
 def _target_dir_matches_global(runtime_name: str, target_dir: str, *, action: str) -> bool:
@@ -4144,7 +4150,9 @@ def _target_dir_matches_global(runtime_name: str, target_dir: str, *, action: st
     resolve_target_dir = getattr(adapter, "resolve_target_dir", None)
     if not callable(resolve_target_dir):
         return False
-    return _resolve_cli_target_dir(target_dir) == resolve_target_dir(True, _get_cwd())
+    return _resolve_cli_target_dir(target_dir) == resolve_target_dir(True, _get_cwd()).expanduser().resolve(
+        strict=False
+    )
 
 
 @app.command("install")
@@ -4183,6 +4191,8 @@ def install(
         selected = _list_runtimes_or_error(action="install")
     elif runtimes:
         selected = _normalize_runtime_selection(list(runtimes), action="install")
+    elif _raw:
+        _error("Raw install requires one or more runtimes or --all")
     else:
         # Interactive mode
         from gpd.version import resolve_active_version
@@ -4210,6 +4220,8 @@ def install(
         is_global = True
     elif local_install:
         is_global = False
+    elif _raw:
+        _error("Raw install requires --local, --global, or --target-dir")
     elif not runtimes and not install_all:
         # Interactive mode — ask for location
         is_global = _prompt_location(selected)
@@ -4292,6 +4304,8 @@ def uninstall(
         selected = _list_runtimes_or_error(action="uninstall")
     elif runtimes:
         selected = _normalize_runtime_selection(list(runtimes), action="uninstall")
+    elif _raw:
+        _error("Raw uninstall requires one or more runtimes or --all")
     else:
         selected = _prompt_runtimes(action="uninstall")
 
@@ -4305,12 +4319,18 @@ def uninstall(
             is_global = False
         else:
             is_global = _target_dir_matches_global(selected[0], target_dir, action="uninstall")
+    elif global_uninstall:
+        is_global = True
+    elif local_uninstall:
+        is_global = False
+    elif _raw:
+        _error("Raw uninstall requires --local, --global, or --target-dir")
     elif not global_uninstall and not local_uninstall:
         is_global = _prompt_location(selected, action="uninstall")
     else:
         is_global = global_uninstall
 
-    if not target_dir:
+    if not _raw and not target_dir:
         location_label = "global" if is_global else "local"
         runtime_names = _format_runtime_list(selected)
         if not Confirm.ask(f"Remove GPD from {runtime_names} ({location_label})?", default=False):

@@ -104,6 +104,7 @@ _GEMINI_COMMAND_RUNTIME_NOTE = (
     "Gemini shell compatibility:\n"
     "- When shell steps call the GPD CLI, use {launcher} instead of the ambient `gpd` on PATH.\n"
     "- Gemini policy checks are syntactic in headless auto-edit mode. Prefer direct commands and reason over stdout instead of wrapping approved commands in shell variables, `$(...)`, heredocs, or extra chained blocks.\n"
+    "- Any remaining `VAR=$(...)` examples in rendered workflow guidance are non-runnable shorthand; do not copy them into Gemini auto-edit mode.\n"
     "- Keep contract JSON in-memory or under `.gpd/`. Do not write approved contracts to `/tmp`.\n"
     "</gemini_runtime_notes>\n\n"
 )
@@ -256,7 +257,208 @@ def _rewrite_gemini_shell_workflow_guidance(content: str) -> str:
         "Do not write `/tmp` intermediates for the approved contract. Prefer piping the exact approved JSON directly to `gpd ... -`. Only write a file if the user explicitly wants a durable saved copy, and if so place it under the project, not an OS temp directory.",
         _GEMINI_CONTRACT_FILE_NOTE,
     )
+    content = _rewrite_gemini_capture_and_check_blocks(content)
     return content
+
+
+def _rewrite_gemini_capture_and_check_blocks(content: str) -> str:
+    """Rewrite Gemini-hostile shell capture examples into direct command guidance."""
+    content = content.replace(
+        """```bash
+CONV_CHECK=$(gpd --raw convention check 2>/dev/null)
+if [ $? -ne 0 ]; then
+  echo "WARNING: Convention verification failed — unit mismatches between theory and experiment are the #1 source of false discrepancies"
+  echo "$CONV_CHECK"
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run convention verification directly instead of capturing it in CONV_CHECK.
+gpd --raw convention check 2>/dev/null
+```""",
+    )
+    content = content.replace(
+        """```bash
+CONV_CHECK=$(gpd --raw convention check 2>/dev/null)
+if [ $? -ne 0 ]; then
+  echo "WARNING: Convention verification failed — unit mismatches between theory and experiment are the #1 source of false discrepancies"
+  echo "$CONV_CHECK"
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run convention verification directly instead of capturing it in CONV_CHECK.
+gpd --raw convention check 2>/dev/null
+```""",
+    )
+    content = content.replace(
+        """```bash
+CONV_CHECK=$(gpd --raw convention check 2>/dev/null)
+if [ $? -ne 0 ]; then
+  echo "WARNING: Convention verification failed — review before writing paper"
+  echo "$CONV_CHECK"
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run convention verification directly instead of capturing it in CONV_CHECK.
+gpd --raw convention check 2>/dev/null
+```""",
+    )
+    content = content.replace(
+        """```bash
+CONTEXT=$(gpd --raw validate command-context validate-conventions "$ARGUMENTS")
+if [ $? -ne 0 ]; then
+  echo "$CONTEXT"
+  exit 1
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run the command-context validation directly instead of capturing it in CONTEXT.
+gpd --raw validate command-context validate-conventions "$ARGUMENTS"
+```""",
+    )
+    content = content.replace(
+        """```bash
+CONTEXT=$(gpd --raw validate command-context write-paper "$ARGUMENTS")
+if [ $? -ne 0 ]; then
+  echo "$CONTEXT"
+  exit 1
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run the command-context validation directly instead of capturing it in CONTEXT.
+gpd --raw validate command-context write-paper "$ARGUMENTS"
+```""",
+    )
+    content = content.replace(
+        """```bash
+QUALITY=$(gpd --raw validate paper-quality --from-project . 2>/dev/null)
+```""",
+        """```bash
+# Gemini auto-edit: run paper-quality validation directly instead of capturing it in QUALITY.
+gpd --raw validate paper-quality --from-project . 2>/dev/null
+```""",
+    )
+    content = content.replace(
+        """```bash
+PRE_CHECK=$(gpd pre-commit-check --files "${COMPARISON_OUTPUT_PATH}" 2>&1) || true
+echo "$PRE_CHECK"
+
+gpd commit \
+  "docs: theory-experiment comparison for {slug}" \
+  --files "${COMPARISON_OUTPUT_PATH}"
+```""",
+        """```bash
+# Gemini auto-edit: run the pre-check directly; if it fails, inspect the output before committing.
+gpd pre-commit-check --files "${COMPARISON_OUTPUT_PATH}" 2>&1 || true
+
+gpd commit \
+  "docs: theory-experiment comparison for {slug}" \
+  --files "${COMPARISON_OUTPUT_PATH}"
+```""",
+    )
+    content = content.replace(
+        """```bash
+PRE_CHECK=$(gpd pre-commit-check --files .gpd/DEPENDENCY-GRAPH.md 2>&1) || true
+echo "$PRE_CHECK"
+
+gpd commit "docs: generate dependency graph" --files .gpd/DEPENDENCY-GRAPH.md
+```""",
+        """```bash
+# Gemini auto-edit: run the pre-check directly; if it fails, inspect the output before committing.
+gpd pre-commit-check --files .gpd/DEPENDENCY-GRAPH.md 2>&1 || true
+
+gpd commit "docs: generate dependency graph" --files .gpd/DEPENDENCY-GRAPH.md
+```""",
+    )
+    content = content.replace(
+        """```bash
+INIT=$(gpd init phase-op)
+if [ $? -ne 0 ]; then
+  echo "ERROR: gpd initialization failed: $INIT"
+  # STOP — display the error to the user and do not proceed.
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run initialization directly instead of capturing it in INIT.
+gpd init phase-op
+```""",
+    )
+    content = content.replace(
+        """```bash
+INIT=$(gpd init progress --include state,roadmap,config)
+if [ $? -ne 0 ]; then
+  echo "ERROR: gpd initialization failed: $INIT"
+  # STOP — display the error to the user and do not proceed.
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run initialization directly instead of capturing it in INIT.
+gpd init progress --include state,roadmap,config
+```""",
+    )
+    content = content.replace(
+        """```bash
+INIT=$(gpd init progress --include state)
+if [ $? -ne 0 ]; then
+  echo "ERROR: gpd initialization failed: $INIT"
+  # STOP — display the error to the user and do not proceed.
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run initialization directly instead of capturing it in INIT.
+gpd init progress --include state
+```""",
+    )
+    content = content.replace(
+        """```bash
+INIT=$(gpd init phase-op --include state,config "${PHASE_ARG:-}")
+if [ $? -ne 0 ]; then
+  echo "ERROR: gpd initialization failed: $INIT"
+  # STOP — display the error to the user and do not proceed.
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run initialization directly instead of capturing it in INIT.
+gpd init phase-op --include state,config "${PHASE_ARG:-}"
+```""",
+    )
+    content = content.replace(
+        """```bash
+INIT=$(gpd init progress --include state,config)
+if [ $? -ne 0 ]; then
+  echo "ERROR: gpd initialization failed: $INIT"
+  # STOP — display the error to the user and do not proceed.
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run initialization directly instead of capturing it in INIT.
+gpd init progress --include state,config
+```""",
+    )
+    return _rewrite_gemini_capture_assignments(content)
+
+
+_GEMINI_CAPTURE_ASSIGNMENT_RE = re.compile(
+    r"^(?P<indent>[ \t]*)(?P<var>[A-Z][A-Z0-9_]*)=\$\((?P<command>gpd[^\n]*)\)(?P<suffix>[ \t]*(?:\|\|\s*true)?)$",
+    re.MULTILINE,
+)
+
+
+def _rewrite_gemini_capture_assignments(content: str) -> str:
+    """Rewrite single-line Gemini shell capture examples into direct commands."""
+
+    def _replace(match: re.Match[str]) -> str:
+        indent = match.group("indent")
+        var = match.group("var")
+        command = match.group("command").strip()
+        suffix = match.group("suffix") or ""
+        suffix = suffix.strip()
+        comment = f"{indent}# Gemini auto-edit: run the command directly instead of capturing it in {var}."
+        rewritten = f"{indent}{command}"
+        if suffix:
+            rewritten = f"{rewritten} {suffix}"
+        return f"{comment}\n{rewritten}"
+
+    return _GEMINI_CAPTURE_ASSIGNMENT_RE.sub(_replace, content)
 
 
 # ---------------------------------------------------------------------------
