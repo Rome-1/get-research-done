@@ -218,6 +218,41 @@ class DomainContext:
         return self.content_dir("errors") or self._pack.pack_path / "errors"
 
     @cached_property
+    def error_class_coverage_defs(self) -> list[dict]:
+        """Load error class coverage definitions from the domain pack.
+
+        Returns a list of dicts with keys: error_class_id, name, primary_checks, domains.
+        Empty list if no coverage file exists (non-physics domains default to empty).
+        """
+        verification_dir = self.content_dir("verification")
+        if verification_dir is None:
+            verification_dir = self._pack.pack_path / "verification"
+        coverage_path = verification_dir / "error-class-coverage.yaml"
+        if not coverage_path.is_file():
+            return []
+        try:
+            data = yaml.safe_load(coverage_path.read_text(encoding="utf-8"))
+        except (yaml.YAMLError, OSError) as exc:
+            logger.warning("Failed to load error class coverage from %s: %s", coverage_path, exc)
+            return []
+        if not isinstance(data, dict):
+            return []
+        raw = data.get("error_classes", [])
+        if not isinstance(raw, list):
+            return []
+        result = []
+        for entry in raw:
+            if not isinstance(entry, dict) or "error_class_id" not in entry:
+                continue
+            result.append({
+                "error_class_id": int(entry["error_class_id"]),
+                "name": str(entry.get("name", "")),
+                "primary_checks": list(entry.get("primary_checks", [])),
+                "domains": list(entry.get("domains", [])),
+            })
+        return result
+
+    @cached_property
     def subfields_dir(self) -> Path:
         return self.content_dir("subfields") or self._pack.pack_path / "subfields"
 

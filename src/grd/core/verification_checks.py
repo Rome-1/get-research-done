@@ -289,131 +289,35 @@ VERIFICATION_CHECKS: dict[str, dict[str, object]] = {
 VERIFICATION_CHECK_IDS: tuple[str, ...] = tuple(spec.check_id for spec in VERIFICATION_CHECK_DEFS)
 
 
-# TODO(domain-agnostic): These error class mappings are physics-specific.
-# They should eventually move into the physics domain pack as a data file
-# and be loaded via DomainContext, similar to how conventions were refactored.
-ERROR_CLASS_COVERAGE_DEFS: tuple[ErrorClassCoverageDef, ...] = (
-    ErrorClassCoverageDef(
-        error_class_id=1,
-        name="Wrong CG coefficients",
-        primary_checks=["5.2"],
-        domains=["qft", "nuclear_particle"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=2,
-        name="N-particle symmetrization",
-        primary_checks=["5.3"],
-        domains=["stat_mech", "qft"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=3,
-        name="Green's function confusion",
-        primary_checks=["5.11", "5.13"],
-        domains=["condensed_matter", "qft"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=5,
-        name="Incorrect asymptotic expansions",
-        primary_checks=["5.3"],
-        domains=["qft", "mathematical_physics"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=7,
-        name="Wrong phase conventions",
-        primary_checks=["5.2", "5.3"],
-        domains=["qft"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=9,
-        name="Incorrect thermal field theory",
-        primary_checks=["5.13", "5.14"],
-        domains=["qft", "stat_mech"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=11,
-        name="Hallucinated identities",
-        primary_checks=["5.2"],
-        domains=["mathematical_physics"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=13,
-        name="Boundary condition hallucination",
-        primary_checks=["5.3"],
-        domains=["mathematical_physics"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=15,
-        name="Dimensional analysis failures",
-        primary_checks=["5.1"],
-        domains=["all"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=33,
-        name="Natural unit restoration errors",
-        primary_checks=["5.1"],
-        domains=["all"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=37,
-        name="Metric signature inconsistency",
-        primary_checks=["5.1", "5.3"],
-        domains=["qft", "gr_cosmology"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=52,
-        name="NR constraint violation",
-        primary_checks=["5.8", "5.5"],
-        domains=["gr_cosmology"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=63,
-        name="GW template mismatch",
-        primary_checks=["5.6", "5.2"],
-        domains=["gr_cosmology"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=71,
-        name="Missing Berry phase",
-        primary_checks=["5.3", "5.4"],
-        domains=["condensed_matter", "amo"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=87,
-        name="Wrong reconnection topology",
-        primary_checks=["5.6", "5.8"],
-        domains=["fluid_plasma"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=95,
-        name="Asymptotic mismatch",
-        primary_checks=["5.15"],
-        domains=["all"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=96,
-        name="Benchmark reproduction failure",
-        primary_checks=["5.16"],
-        domains=["all"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=97,
-        name="Proxy-only success path",
-        primary_checks=["5.17"],
-        domains=["all"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=98,
-        name="Fit family mismatch",
-        primary_checks=["5.18"],
-        domains=["all"],
-    ),
-    ErrorClassCoverageDef(
-        error_class_id=99,
-        name="Estimator family mismatch",
-        primary_checks=["5.19"],
-        domains=["all"],
-    ),
-)
+def _load_error_class_coverage_defs() -> tuple[ErrorClassCoverageDef, ...]:
+    """Load error class coverage definitions from the active domain pack.
+
+    Falls back to an empty tuple if no domain pack or coverage file is found.
+    """
+    import os
+
+    try:
+        from grd.domains.loader import load_domain
+    except ImportError:
+        return ()
+
+    domain_name = os.environ.get("GRD_DOMAIN", "physics")
+    ctx = load_domain(domain_name)
+    if ctx is None:
+        return ()
+
+    return tuple(
+        ErrorClassCoverageDef(
+            error_class_id=entry["error_class_id"],
+            name=entry["name"],
+            primary_checks=entry["primary_checks"],
+            domains=entry["domains"],
+        )
+        for entry in ctx.error_class_coverage_defs
+    )
+
+
+ERROR_CLASS_COVERAGE_DEFS: tuple[ErrorClassCoverageDef, ...] = _load_error_class_coverage_defs()
 
 
 ERROR_CLASS_COVERAGE: dict[int, dict[str, object]] = {
