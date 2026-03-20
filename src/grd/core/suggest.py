@@ -55,6 +55,7 @@ def _core_conventions() -> tuple[str, ...]:
     """Return critical convention fields from the active domain."""
     try:
         import os
+
         from grd.domains.loader import load_domain
         domain_name = os.environ.get("GRD_DOMAIN", "physics")
         ctx = load_domain(domain_name)

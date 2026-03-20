@@ -22,12 +22,16 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from grd.contracts import ConventionLock
 from grd.core.errors import ConventionError
 from grd.core.observability import instrument_grd_function
+
+if TYPE_CHECKING:
+    from grd.domains.loader import DomainContext
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +65,7 @@ __all__ = [
 # These are kept for code that imports them directly.  New code should use
 # DomainContext instead.
 
-def _load_physics_defaults() -> "DomainContext | None":
+def _load_physics_defaults() -> DomainContext | None:
     """Lazy-load the bundled physics domain pack for backward compatibility."""
     try:
         from grd.domains.loader import load_domain
@@ -447,6 +451,12 @@ def convention_set(
         )
 
     lock.conventions[canonical_key] = cleaned
+
+    # Warn about unknown keys when a domain context is available.
+    if domain_ctx is not None:
+        warnings = ConventionLock.validate_keys(domain_ctx, {canonical_key: cleaned})
+        for w in warnings:
+            logger.warning("%s", w)
 
     return ConventionSetResult(
         updated=True,

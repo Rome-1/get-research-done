@@ -427,9 +427,8 @@ class TestErrorsMcp:
             yield
 
     def test_catalog_files_live_under_physics_domain_errors(self):
-        from grd.mcp.servers.errors_mcp import ERROR_CATALOG_FILES, TRACEABILITY_FILE
-
         from grd.domains.loader import resolve_domain_pack_path
+        from grd.mcp.servers.errors_mcp import ERROR_CATALOG_FILES, TRACEABILITY_FILE
 
         physics_pack = resolve_domain_pack_path("physics")
         assert physics_pack is not None
@@ -447,9 +446,8 @@ class TestErrorsMcp:
             assert (errors_dir / filename).is_file(), filename
 
     def test_real_error_store_uses_new_catalog_paths_and_stable_basenames(self):
-        from grd.mcp.servers.errors_mcp import ErrorStore
-
         from grd.domains.loader import resolve_domain_pack_path
+        from grd.mcp.servers.errors_mcp import ErrorStore
 
         physics_pack = resolve_domain_pack_path("physics")
         assert physics_pack is not None

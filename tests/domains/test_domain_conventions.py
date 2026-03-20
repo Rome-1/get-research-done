@@ -21,13 +21,11 @@ from grd.core.conventions import (
     normalize_value,
 )
 from grd.domains.loader import (
-    ContentHealthError,
     DomainContext,
     DomainPack,
     check_content_health,
     load_domain,
 )
-
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 

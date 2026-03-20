@@ -20,11 +20,12 @@ from grd.adapters.base import RuntimeAdapter
 from grd.adapters.install_utils import (
     HOOK_SCRIPTS,
     MANIFEST_NAME,
-    _is_hook_command_for_script,
     build_hook_command,
+    cleanup_settings_hooks,
     compile_markdown_for_runtime,
     convert_tool_references_in_body,
     ensure_update_hook,
+    entry_has_grd_hook,
     hook_python_interpreter,
     process_attribution,
     protect_runtime_agent_prompt,
@@ -36,9 +37,6 @@ from grd.adapters.install_utils import (
     verify_installed,
     write_manifest,
     write_settings,
-)
-from grd.adapters.install_utils import (
-    finish_install as _finish_install,
 )
 from grd.adapters.tool_names import build_runtime_alias_map, reference_translation_map, translate_for_runtime
 
@@ -854,24 +852,6 @@ class GeminiAdapter(RuntimeAdapter):
             install_scope=self._current_install_scope_flag(),
         )
 
-    def finish_install(
-        self,
-        settings_path: str | Path,
-        settings: dict[str, object],
-        statusline_command: str,
-        should_install_statusline: bool,
-        *,
-        force_statusline: bool = False,
-    ) -> None:
-        """Apply statusline config and write settings atomically."""
-        _finish_install(
-            settings_path,
-            settings,
-            statusline_command,
-            should_install_statusline,
-            force_statusline=force_statusline,
-        )
-
     def finalize_install(
         self,
         install_result: dict[str, object],
@@ -882,18 +862,8 @@ class GeminiAdapter(RuntimeAdapter):
         if install_result.get("settingsWritten"):
             return
 
-        settings_path = install_result.get("settingsPath")
-        settings = install_result.get("settings")
-        statusline_command = install_result.get("statuslineCommand")
-        if isinstance(settings_path, (str, Path)) and isinstance(settings, dict) and isinstance(statusline_command, str):
-            self.finish_install(
-                settings_path,
-                settings,
-                statusline_command,
-                True,
-                force_statusline=force_statusline,
-            )
-            install_result["settingsWritten"] = True
+        super().finalize_install(install_result, force_statusline=force_statusline)
+        install_result["settingsWritten"] = True
 
     def uninstall(self, target_dir: Path) -> dict[str, object]:
         """Remove GRD from a Gemini CLI .gemini/ directory.
@@ -915,38 +885,11 @@ class GeminiAdapter(RuntimeAdapter):
         settings_path = target_dir / "settings.json"
         if settings_path.exists():
             settings = read_settings(settings_path)
-            modified = False
-
-            # Remove GRD statusline
-            status_line = settings.get("statusLine")
-            if isinstance(status_line, dict):
-                cmd = status_line.get("command", "")
-                if _is_hook_command_for_script(
-                    cmd,
-                    HOOK_SCRIPTS["statusline"],
-                    target_dir=target_dir,
-                    config_dir_name=self.config_dir_name,
-                ):
-                    del settings["statusLine"]
-                    modified = True
-
-            # Remove GRD hooks from SessionStart
-            hooks = settings.get("hooks")
-            if isinstance(hooks, dict):
-                session_start = hooks.get("SessionStart")
-                if isinstance(session_start, list):
-                    before = len(session_start)
-                    session_start[:] = [
-                        entry
-                        for entry in session_start
-                        if not _entry_has_gpd_hook(entry, target_dir=target_dir, config_dir_name=self.config_dir_name)
-                    ]
-                    if len(session_start) < before:
-                        modified = True
-                    if not session_start:
-                        del hooks["SessionStart"]
-                    if not hooks:
-                        del settings["hooks"]
+            modified = cleanup_settings_hooks(
+                settings,
+                target_dir=target_dir,
+                config_dir_name=self.config_dir_name,
+            )
 
             # Remove experimental.enableAgents only when GRD introduced it.
             experimental = settings.get("experimental")
@@ -1064,21 +1007,11 @@ def _entry_has_gpd_hook(
     config_dir_name: str | None,
 ) -> bool:
     """Check if a hook entry contains the GRD-managed Gemini update hook."""
-    if not isinstance(entry, dict):
-        return False
-    entry_hooks = entry.get("hooks")
-    if not isinstance(entry_hooks, list):
-        return False
-    return any(
-        isinstance(h, dict)
-        and isinstance(h.get("command"), str)
-        and _is_hook_command_for_script(
-            h["command"],
-            HOOK_SCRIPTS["check_update"],
-            target_dir=target_dir,
-            config_dir_name=config_dir_name,
-        )
-        for h in entry_hooks
+    return entry_has_grd_hook(
+        entry,
+        target_dir=target_dir,
+        config_dir_name=config_dir_name,
+        hook_scripts=(HOOK_SCRIPTS["check_update"],),
     )
 
 

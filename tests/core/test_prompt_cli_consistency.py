@@ -8,7 +8,7 @@ from pathlib import Path
 from grd.registry import VALID_CONTEXT_MODES, _parse_frontmatter
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CLI_PATH = REPO_ROOT / "src/grd/cli.py"
+CLI_DIR = REPO_ROOT / "src/grd/cli"
 PROMPT_ROOTS = (
     REPO_ROOT / "src/grd/commands",
     REPO_ROOT / "src/grd/agents",
@@ -34,13 +34,25 @@ def _iter_prompt_sources() -> list[Path]:
     return files
 
 
+def _read_all_cli_sources() -> str:
+    """Read all CLI source files (supports both monolithic cli.py and split cli/ package)."""
+    parts: list[str] = []
+    if CLI_DIR.is_dir():
+        for py in sorted(CLI_DIR.rglob("*.py")):
+            parts.append(py.read_text(encoding="utf-8"))
+    else:
+        # Fallback for monolithic cli.py
+        parts.append(CLI_DIR.with_suffix(".py").read_text(encoding="utf-8"))
+    return "\n".join(parts)
+
+
 def _declared_init_subcommands() -> set[str]:
-    content = CLI_PATH.read_text(encoding="utf-8")
+    content = _read_all_cli_sources()
     return set(INIT_COMMAND_RE.findall(content))
 
 
 def _declared_validate_subcommands() -> set[str]:
-    content = CLI_PATH.read_text(encoding="utf-8")
+    content = _read_all_cli_sources()
     return set(VALIDATE_COMMAND_RE.findall(content))
 
 

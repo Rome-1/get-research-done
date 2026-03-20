@@ -1713,3 +1713,193 @@ def _iso_now() -> str:
     from datetime import UTC, datetime
 
     return datetime.now(UTC).isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Shell-fence-aware GRD CLI rewriting
+# ---------------------------------------------------------------------------
+
+_SHELL_FENCE_LANGUAGES = frozenset({"bash", "sh", "shell", "zsh"})
+
+
+def rewrite_grd_cli_in_shell_fences(content: str, bridge_command: str) -> str:
+    """Rewrite shell-command ``grd`` invocations to the shared CLI bridge.
+
+    Restrict rewrites to fenced shell code blocks and only when ``grd`` appears
+    in a command position. This keeps user-facing prose and quoted shell
+    strings like ``echo "ERROR: grd initialization failed"`` intact.
+    """
+    rewritten: list[str] = []
+    in_shell_fence = False
+
+    for line in content.splitlines(keepends=True):
+        stripped = line.lstrip()
+        if stripped.startswith("```"):
+            if in_shell_fence:
+                in_shell_fence = False
+            else:
+                fence_language = stripped[3:].strip().lower()
+                in_shell_fence = fence_language in _SHELL_FENCE_LANGUAGES
+            rewritten.append(line)
+            continue
+
+        if in_shell_fence:
+            rewritten.append(_rewrite_grd_shell_line(line, bridge_command))
+            continue
+
+        rewritten.append(line)
+
+    return "".join(rewritten)
+
+
+def _rewrite_grd_shell_line(line: str, command: str) -> str:
+    """Rewrite only command-position ``grd`` tokens on a shell line."""
+    pieces: list[str] = []
+    index = 0
+    in_single = False
+    in_double = False
+
+    while index < len(line):
+        char = line[index]
+        previous = line[index - 1] if index > 0 else ""
+
+        if char == "'" and not in_double:
+            in_single = not in_single
+            pieces.append(char)
+            index += 1
+            continue
+
+        if char == '"' and not in_single and previous != "\\":
+            in_double = not in_double
+            pieces.append(char)
+            index += 1
+            continue
+
+        if (
+            not in_single
+            and not in_double
+            and line.startswith("grd", index)
+            and _is_grd_command_start(line, index)
+            and _is_grd_token_end(line, index + 3)
+        ):
+            pieces.append(command)
+            index += 3
+            continue
+
+        pieces.append(char)
+        index += 1
+
+    return "".join(pieces)
+
+
+def _is_grd_command_start(line: str, index: int) -> bool:
+    """Return whether ``grd`` starts a shell command token at *index*."""
+    probe = index - 1
+    while probe >= 0 and line[probe] in " \t":
+        probe -= 1
+
+    if probe < 0:
+        return True
+
+    if line[probe] in "|;(":
+        return True
+
+    if probe >= 1 and line[probe - 1 : probe + 1] in {"&&", "||", "$("}:
+        return True
+
+    return False
+
+
+def _is_grd_token_end(line: str, end_index: int) -> bool:
+    """Return whether the token ending at *end_index* is a standalone ``grd``."""
+    if end_index >= len(line):
+        return True
+    return line[end_index].isspace() or line[end_index] in {'"', "'", "`"}
+
+
+# ---------------------------------------------------------------------------
+# Hook entry detection
+# ---------------------------------------------------------------------------
+
+
+def cleanup_settings_hooks(
+    settings: dict[str, object],
+    *,
+    target_dir: Path | None,
+    config_dir_name: str | None,
+) -> bool:
+    """Remove GRD-managed statusLine and SessionStart hooks from settings.
+
+    Returns True if any modifications were made.
+    """
+    modified = False
+
+    status_line = settings.get("statusLine")
+    if isinstance(status_line, dict):
+        cmd = status_line.get("command", "")
+        if _is_hook_command_for_script(
+            cmd,
+            HOOK_SCRIPTS["statusline"],
+            target_dir=target_dir,
+            config_dir_name=config_dir_name,
+        ):
+            del settings["statusLine"]
+            modified = True
+
+    hooks = settings.get("hooks")
+    if isinstance(hooks, dict):
+        session_start = hooks.get("SessionStart")
+        if isinstance(session_start, list):
+            before = len(session_start)
+            session_start[:] = [
+                entry
+                for entry in session_start
+                if not entry_has_grd_hook(
+                    entry,
+                    target_dir=target_dir,
+                    config_dir_name=config_dir_name,
+                )
+            ]
+            if len(session_start) < before:
+                modified = True
+            if not session_start:
+                del hooks["SessionStart"]
+            if not hooks:
+                del settings["hooks"]
+
+    return modified
+
+
+def entry_has_grd_hook(
+    entry: object,
+    *,
+    target_dir: Path | None,
+    config_dir_name: str | None,
+    hook_scripts: tuple[str, ...] | None = None,
+) -> bool:
+    """Check if a settings.json hook entry points at GRD-managed hooks.
+
+    By default checks both ``check_update`` and ``statusline`` hook scripts.
+    Pass *hook_scripts* to narrow the check to specific scripts.
+    """
+    if not isinstance(entry, dict):
+        return False
+    entry_hooks = entry.get("hooks")
+    if not isinstance(entry_hooks, list):
+        return False
+    if hook_scripts is None:
+        hook_scripts = (HOOK_SCRIPTS["check_update"], HOOK_SCRIPTS["statusline"])
+    return any(
+        isinstance(hook, dict)
+        and isinstance(hook.get("command"), str)
+        and any(
+            _is_hook_command_for_script(
+                hook["command"],
+                script,
+                target_dir=target_dir,
+                config_dir_name=config_dir_name,
+            )
+            for script in hook_scripts
+        )
+        for hook in entry_hooks
+    )

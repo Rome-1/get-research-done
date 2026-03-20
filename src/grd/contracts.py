@@ -115,6 +115,38 @@ class ConventionLock(BaseModel):
                 conventions[key] = str(val)
         return {"conventions": conventions}
 
+    @classmethod
+    def validate_keys(
+        cls,
+        domain_ctx: object,
+        conventions: dict[str, str],
+    ) -> list[str]:
+        """Return warning strings for convention keys not known to *domain_ctx*.
+
+        This is an opt-in validation helper — it never raises.  Unknown keys
+        are still accepted; callers decide whether to log the warnings.
+
+        Parameters
+        ----------
+        domain_ctx:
+            A :class:`~grd.domains.loader.DomainContext` (or any object with a
+            ``known_convention_names`` attribute).
+        conventions:
+            The conventions dict to validate.
+        """
+        known_names: list[str] | None = getattr(domain_ctx, "known_convention_names", None)
+        if known_names is None:
+            return []
+        known_set = set(known_names)
+        warnings: list[str] = []
+        for key in sorted(conventions):
+            if key not in known_set:
+                warnings.append(
+                    f"Convention key '{key}' is not defined in the "
+                    f"'{getattr(domain_ctx, 'name', 'unknown')}' domain pack"
+                )
+        return warnings
+
 
 class VerificationEvidence(BaseModel):
     """Structured provenance for a verification event attached to a result."""

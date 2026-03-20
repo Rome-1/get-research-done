@@ -354,7 +354,8 @@ def test_public_cli_surface_is_unified() -> None:
 
     assert 'grd = "grd.cli:entrypoint"' in script_lines
     assert all(name == "grd" or name.startswith("grd-mcp-") for name in script_names)
-    assert sorted(path.name for path in (repo_root / "src" / "grd").glob("cli*.py")) == ["cli.py"]
+    cli_path = repo_root / "src" / "grd" / "cli"
+    assert cli_path.is_dir() or (repo_root / "src" / "grd" / "cli.py").is_file()
 
 
 def test_install_docs_use_only_public_npx_flow() -> None:
@@ -615,7 +616,7 @@ def test_fresh_built_release_artifacts_match_public_bootstrap_and_docs(tmp_path:
 
     with zipfile.ZipFile(wheel) as wheel_zip:
         wheel_names = set(wheel_zip.namelist())
-        assert "grd/cli.py" in wheel_names
+        assert "grd/cli/__init__.py" in wheel_names
         assert "grd/mcp/viewer/cli.py" not in wheel_names
         for template_path in wheel_template_paths:
             assert template_path in wheel_names

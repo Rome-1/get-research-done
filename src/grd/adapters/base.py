@@ -30,6 +30,9 @@ from grd.adapters.install_utils import (
     write_manifest,
     write_version_file,
 )
+from grd.adapters.install_utils import (
+    finish_install as _finish_install,
+)
 from grd.adapters.runtime_catalog import get_runtime_descriptor, resolve_global_config_dir
 from grd.adapters.tool_names import (
     build_runtime_alias_map,
@@ -405,13 +408,47 @@ class RuntimeAdapter(abc.ABC):
             joined = ", ".join(missing)
             raise RuntimeError(f"{self.display_name} install incomplete: missing {joined}")
 
-    def finalize_install(  # noqa: B027
+    def finish_install(
+        self,
+        settings_path: str | Path,
+        settings: dict[str, object],
+        statusline_command: str,
+        should_install_statusline: bool,
+        *,
+        force_statusline: bool = False,
+    ) -> None:
+        """Apply statusline config and write settings atomically."""
+        _finish_install(
+            settings_path,
+            settings,
+            statusline_command,
+            should_install_statusline,
+            force_statusline=force_statusline,
+        )
+
+    def finalize_install(
         self,
         install_result: dict[str, object],
         *,
         force_statusline: bool = False,
     ) -> None:
-        """Apply any runtime-specific post-install finalization."""
+        """Apply any runtime-specific post-install finalization.
+
+        Default implementation persists settings.json-backed configuration
+        when ``_configure_runtime`` returned ``settingsPath``, ``settings``,
+        and ``statuslineCommand`` in the install result.
+        """
+        settings_path = install_result.get("settingsPath")
+        settings = install_result.get("settings")
+        statusline_command = install_result.get("statuslineCommand")
+        if isinstance(settings_path, (str, Path)) and isinstance(settings, dict) and isinstance(statusline_command, str):
+            self.finish_install(
+                settings_path,
+                settings,
+                statusline_command,
+                True,
+                force_statusline=force_statusline,
+            )
 
     def _cleanup_runtime_config(self, target_dir: Path) -> list[str]:
         """Remove runtime-managed config entries outside shared GRD files."""

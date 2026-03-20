@@ -131,7 +131,7 @@ def test_install_all_continues_on_failure(tmp_path: Path):
         raise RuntimeError(f"Simulated failure for {runtime_name}")
 
     with (
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.get_adapter") as mock_get,
     ):
         mock_adapter = MagicMock()
@@ -151,7 +151,7 @@ def test_install_all_success_exits_0(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path)}
 
     with (
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.get_adapter") as mock_get,
     ):
         mock_adapter = MagicMock()
@@ -170,7 +170,7 @@ def test_install_banner_uses_display_names(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path / ".claude")}
 
     with (
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.get_adapter") as mock_get,
     ):
         mock_adapter = MagicMock()
@@ -211,7 +211,7 @@ def test_install_summary_formats_target_relative_to_cwd(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(target)}
 
     with (
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.get_adapter") as mock_get,
     ):
         mock_adapter = MagicMock()
@@ -234,7 +234,7 @@ def test_install_summary_leaves_blank_line_after_next_steps(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(target)}
 
     with (
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.get_adapter") as mock_get,
     ):
         mock_adapter = MagicMock()
@@ -286,7 +286,7 @@ def test_install_summary_lists_runtime_specific_help_for_multi_runtime_install(t
     }
 
     with (
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.get_adapter", side_effect=lambda runtime: adapters[runtime]),
     ):
         result = runner.invoke(app, ["install", "claude-code", "gemini", "--local"])
@@ -359,7 +359,7 @@ def test_install_no_args_uses_interactive_defaults(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path)}
 
     with (
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.get_adapter") as mock_get,
         patch("grd.adapters.list_runtimes", return_value=["claude-code"]),
     ):
@@ -396,7 +396,7 @@ def test_install_raw_outputs_json(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path)}
 
     with (
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.get_adapter") as mock_get,
     ):
         mock_adapter = MagicMock()
@@ -424,7 +424,7 @@ def test_install_raw_includes_failures(tmp_path: Path):
         raise RuntimeError("boom")
 
     with (
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.get_adapter") as mock_get,
         patch("grd.adapters.list_runtimes", return_value=["claude-code", "gemini"]),
     ):
@@ -454,7 +454,7 @@ def test_install_raw_finalize_failure_not_reported_as_installed(tmp_path: Path):
             raise RuntimeError("finalize boom")
 
     with (
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.get_adapter", return_value=FailingFinalizeAdapter()),
     ):
         result = runner.invoke(app, ["--raw", "install", "claude-code", "--local"])
@@ -521,7 +521,7 @@ def test_install_single_runtime_forwards_is_global(tmp_path: Path):
 
     with (
         patch("grd.adapters.get_adapter", return_value=SpyAdapter()),
-        patch("grd.cli._get_cwd", return_value=tmp_path),
+        patch("grd.cli.install._get_cwd", return_value=tmp_path),
     ):
         _install_single_runtime("claude-code", is_global=True)
 
@@ -532,7 +532,7 @@ def test_install_single_runtime_forwards_is_global(tmp_path: Path):
     captured_calls.clear()
     with (
         patch("grd.adapters.get_adapter", return_value=SpyAdapter()),
-        patch("grd.cli._get_cwd", return_value=tmp_path),
+        patch("grd.cli.install._get_cwd", return_value=tmp_path),
     ):
         _install_single_runtime("claude-code", is_global=False)
 
@@ -566,7 +566,7 @@ def test_install_single_runtime_prefers_checkout_source_tree(tmp_path: Path):
 
     with (
         patch("grd.adapters.get_adapter", return_value=SpyAdapter()),
-        patch("grd.cli._get_cwd", return_value=checkout),
+        patch("grd.cli.install._get_cwd", return_value=checkout),
     ):
         _install_single_runtime("claude-code", is_global=False)
 
@@ -638,7 +638,8 @@ def test_install_single_runtime_resolves_relative_target_dir_against_cli_cwd(tmp
 
     with (
         patch("grd.adapters.get_adapter", return_value=SpyAdapter()),
-        patch("grd.cli._get_cwd", return_value=cli_cwd),
+        patch("grd.cli.install._get_cwd", return_value=cli_cwd),
+        patch("grd.cli._helpers._get_cwd", return_value=cli_cwd),
     ):
         _install_single_runtime("claude-code", is_global=False, target_dir_override="relative-target")
 
@@ -665,7 +666,8 @@ def test_uninstall_resolves_relative_target_dir_against_cli_cwd(tmp_path: Path):
 
     with (
         patch("grd.adapters.get_adapter", return_value=SpyAdapter()),
-        patch("grd.cli._get_cwd", return_value=cli_cwd),
+        patch("grd.cli.install._get_cwd", return_value=cli_cwd),
+        patch("grd.cli._helpers._get_cwd", return_value=cli_cwd),
     ):
         result = runner.invoke(app, ["uninstall", "claude-code", "--target-dir", "relative-target"])
 
@@ -708,7 +710,7 @@ def test_install_interactive_accepts_unique_fuzzy_runtime_name(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path / runtime_name)}
 
     with (
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.list_runtimes", return_value=["claude-code", "codex", "opencode"]),
         patch("grd.adapters.get_adapter") as mock_get,
     ):
@@ -740,7 +742,7 @@ def test_install_interactive_rejects_invalid_location_choice(tmp_path: Path):
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path / runtime_name)}
 
     with (
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.get_adapter") as mock_get,
         patch("grd.adapters.list_runtimes", return_value=["claude-code"]),
     ):
@@ -788,7 +790,7 @@ def test_install_local_option_never_forwards_global_scope(
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path / runtime_name)}
 
     with (
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.get_adapter") as mock_get,
         patch("grd.adapters.list_runtimes", return_value=supported_runtimes),
     ):
@@ -828,7 +830,7 @@ def test_install_global_and_local_conflict():
 def test_install_rejects_explicit_runtimes_with_all() -> None:
     """`--all` cannot be combined with explicit runtime arguments on install."""
     with (
-        patch("grd.cli._install_single_runtime") as mock_install_single,
+        patch("grd.cli.install._install_single_runtime") as mock_install_single,
         patch("grd.adapters.list_runtimes") as mock_list_runtimes,
     ):
         result = runner.invoke(app, ["install", "claude-code", "--all", "--local"])
@@ -872,7 +874,7 @@ def test_install_deduplicates_repeated_runtime_args(tmp_path: Path) -> None:
 
     with (
         patch("grd.adapters.list_runtimes", return_value=["claude-code", "gemini"]),
-        patch("grd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch("grd.cli.install._install_single_runtime", side_effect=mock_install_single),
         patch("grd.adapters.get_adapter") as mock_get_adapter,
     ):
         mock_adapter = MagicMock()
