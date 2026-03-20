@@ -1,6 +1,6 @@
 {
   "name": "grd-errors",
-  "description": "LLM physics error catalog and traceability matrix for GRD verification. 104 error classes with detection strategies mapped to 8 verification check categories.",
+  "description": "LLM error catalog and traceability matrix for GRD verification. Domain-specific error classes with detection strategies mapped to verification check categories.",
   "transport": "stdio",
   "command": "grd-mcp-errors",
   "args": [],

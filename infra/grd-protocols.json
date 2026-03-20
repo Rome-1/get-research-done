@@ -1,6 +1,6 @@
 {
   "name": "grd-protocols",
-  "description": "Physics computation protocols for GRD research workflows. Provides step-by-step methodology, verification checkpoints, and auto-routing for 47 physics domains.",
+  "description": "Computation protocols for GRD research workflows. Provides step-by-step methodology, verification checkpoints, and auto-routing for domain-specific topics.",
   "transport": "stdio",
   "command": "grd-mcp-protocols",
   "args": [],

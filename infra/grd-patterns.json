@@ -1,6 +1,6 @@
 {
   "name": "grd-patterns",
-  "description": "GRD cross-project pattern library. Tools for searching, adding, promoting, and seeding physics error patterns across research projects.",
+  "description": "GRD cross-project pattern library. Tools for searching, adding, promoting, and seeding domain error patterns across research projects.",
   "transport": "stdio",
   "command": "grd-mcp-patterns",
   "args": [],
@@ -21,7 +21,7 @@
   "health_check": {
     "tool": "list_domains",
     "input": {},
-    "expect": "contains qft"
+    "expect": "contains domains"
   },
   "alternatives": {
     "python_module": {

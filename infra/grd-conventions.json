@@ -20,11 +20,11 @@
     "Install GRD first: npx -y get-research-done"
   ],
   "health_check": {
-    "tool": "subfield_defaults",
+    "tool": "convention_lock_status",
     "input": {
-      "domain": "qft"
+      "project_dir": "."
     },
-    "expect": "contains metric_signature"
+    "expect": "contains set_count"
   },
   "alternatives": {
     "python_module": {
