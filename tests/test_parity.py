@@ -61,9 +61,11 @@ def _load_fixture(name: str) -> dict:
 def _make_lock(data: dict) -> ConventionLock:
     """Create a ConventionLock from fixture data."""
     custom = data.pop("custom_conventions", {})
-    lock = ConventionLock(**data)
-    lock.custom_conventions.update(custom)
-    return lock
+    if custom:
+        conventions = dict(data.get("conventions") or {})
+        conventions.update(custom)
+        data["conventions"] = conventions
+    return ConventionLock(**data)
 
 
 # --- Divergence 1 (FIXED): Convention label casing ---
