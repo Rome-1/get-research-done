@@ -139,38 +139,38 @@ def _manifest_install_scope(config_dir: Path) -> str | None:
     return scope if scope in (SCOPE_LOCAL, SCOPE_GLOBAL) else None
 
 
-def _manifest_runtime_value(config_dir: Path) -> str | None:
-    """Return the manifest runtime when explicitly recorded."""
+def _manifest_runtime_status(config_dir: Path) -> tuple[str | None, bool]:
+    """Return the normalized manifest runtime and whether a runtime key exists."""
     manifest_path = config_dir / MANIFEST_NAME
     if not manifest_path.exists():
-        return None
+        return None, False
 
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return None
+        return None, False
 
     if not isinstance(manifest, dict):
-        return None
+        return None, False
 
     if "runtime" not in manifest:
-        return None
+        return None, False
 
     runtime = manifest.get("runtime")
     if not isinstance(runtime, str):
-        return None
+        return None, True
 
     normalized = runtime.strip()
     if not normalized:
-        return None
-    return normalize_runtime_name(normalized)
+        return None, True
+    return normalize_runtime_name(normalized), True
 
 
 def _runtime_from_manifest_or_path(config_dir: Path, *, home: Path | None = None) -> str | None:
     """Infer the owning runtime for *config_dir* from its manifest or path."""
-    manifest_runtime = _manifest_runtime_value(config_dir)
-    if manifest_runtime is not None:
-        return manifest_runtime
+    manifest_runtime, manifest_has_runtime = _manifest_runtime_status(config_dir)
+    if manifest_has_runtime:
+        return manifest_runtime or RUNTIME_UNKNOWN
 
     for runtime in ALL_RUNTIMES:
         adapter = _adapter(runtime)
@@ -623,9 +623,13 @@ def should_consider_update_cache_candidate(
     if runtime not in ALL_RUNTIMES:
         return True
 
+    candidate_config_dir = candidate.path.parent.parent
+    manifest_runtime, manifest_has_runtime = _manifest_runtime_status(candidate_config_dir)
+    if manifest_has_runtime and manifest_runtime is None:
+        return False
+
     install_target = _detect_runtime_install_target(runtime, cwd=cwd, home=home)
     if install_target is not None:
-        candidate_config_dir = candidate.path.parent.parent
         if candidate_config_dir != install_target.config_dir:
             return False
         return candidate.scope in (None, install_target.install_scope)
@@ -654,9 +658,13 @@ def should_consider_todo_candidate(
     if runtime not in ALL_RUNTIMES:
         return True
 
+    candidate_config_dir = candidate.path.parent
+    manifest_runtime, manifest_has_runtime = _manifest_runtime_status(candidate_config_dir)
+    if manifest_has_runtime and manifest_runtime is None:
+        return False
+
     install_target = _detect_runtime_install_target(runtime, cwd=cwd, home=home)
     if install_target is not None:
-        candidate_config_dir = candidate.path.parent
         if candidate_config_dir != install_target.config_dir:
             return False
         return candidate.scope in (None, install_target.install_scope)

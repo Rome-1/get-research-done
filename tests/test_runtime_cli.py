@@ -18,6 +18,14 @@ from gpd.runtime_cli import _parse_args, _resolve_cli_cwd_from_argv, main
 
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
 _RUNTIME_NAMES = tuple(descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS)
+_RUNTIME_CANONICALIZATION_TOKENS: list[tuple[str, str, str]] = []
+for descriptor in _RUNTIME_DESCRIPTORS:
+    if descriptor.display_name.strip() and descriptor.display_name.casefold() != descriptor.runtime_name.casefold():
+        _RUNTIME_CANONICALIZATION_TOKENS.append((descriptor.runtime_name, descriptor.display_name, "display_name"))
+    if descriptor.selection_aliases:
+        alias = descriptor.selection_aliases[0]
+        if alias.strip() and alias.casefold() != descriptor.runtime_name.casefold():
+            _RUNTIME_CANONICALIZATION_TOKENS.append((descriptor.runtime_name, alias, "selection_alias"))
 GPD_ROOT = Path(__file__).resolve().parent.parent / "src" / "gpd"
 
 
@@ -164,6 +172,50 @@ def test_runtime_cli_dispatches_with_runtime_pin(monkeypatch, tmp_path: Path, de
     assert observed["argv"] == ["gpd", "state", "load"]
     assert observed["runtime"] == descriptor.runtime_name
     assert observed["disable_reexec"] == "1"
+
+
+@pytest.mark.parametrize(
+    ("runtime_name", "runtime_token", "token_kind"),
+    _RUNTIME_CANONICALIZATION_TOKENS,
+)
+def test_runtime_cli_canonicalizes_display_names_and_aliases(
+    monkeypatch,
+    tmp_path: Path,
+    runtime_name: str,
+    runtime_token: str,
+    token_kind: str,
+) -> None:
+    adapter = get_adapter(runtime_name)
+    config_dir = tmp_path / adapter.config_dir_name
+    _mark_complete_install(config_dir, runtime=runtime_name)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: None)
+
+    observed: dict[str, object] = {}
+
+    def fake_entrypoint() -> int:
+        observed["argv"] = list(sys.argv)
+        observed["runtime"] = os.environ.get(ENV_GPD_ACTIVE_RUNTIME)
+        return 0
+
+    monkeypatch.setattr("gpd.cli.entrypoint", fake_entrypoint)
+
+    exit_code = main(
+        [
+            "--runtime",
+            runtime_token,
+            "--config-dir",
+            f"./{adapter.config_dir_name}",
+            "--install-scope",
+            "local",
+            "state",
+            "load",
+        ]
+    )
+
+    assert exit_code == 0, token_kind
+    assert observed["argv"] == ["gpd", "state", "load"]
+    assert observed["runtime"] == runtime_name
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
@@ -570,7 +622,11 @@ def test_runtime_cli_fails_when_resolved_local_config_dir_manifest_runtime_misma
     foreign_runtime = next(name for name in _RUNTIME_NAMES if name != descriptor.runtime_name)
     adapter = get_adapter(descriptor.runtime_name)
     config_dir = tmp_path / adapter.config_dir_name
-    _mark_complete_install(config_dir, runtime=foreign_runtime)
+    _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
+    manifest_path = config_dir / "gpd-file-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["runtime"] = foreign_runtime
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("gpd.runtime_cli._maybe_reexec_from_checkout", lambda *_args, **_kwargs: None)
 
@@ -604,7 +660,11 @@ def test_runtime_cli_fails_when_explicit_target_manifest_runtime_mismatches(
     foreign_runtime = next(name for name in _RUNTIME_NAMES if name != descriptor.runtime_name)
     adapter = get_adapter(descriptor.runtime_name)
     config_dir = tmp_path / f"custom-{descriptor.runtime_name}-dir"
-    _mark_complete_install(config_dir, runtime=foreign_runtime)
+    _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
+    manifest_path = config_dir / "gpd-file-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["runtime"] = foreign_runtime
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("gpd.runtime_cli._maybe_reexec_from_checkout", lambda *_args, **_kwargs: None)
 

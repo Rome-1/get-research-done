@@ -149,6 +149,14 @@ def _runtime_display_name(runtime: str) -> str:
         return runtime
 
 
+def _canonical_runtime_name(runtime: str) -> str:
+    """Return the canonical runtime id for aliases and display names."""
+    normalized = normalize_runtime_name(runtime)
+    if normalized is not None:
+        return normalized
+    return runtime.strip()
+
+
 def _paths_equal(left: Path, right: Path) -> bool:
     """Return whether two paths resolve to the same location when comparable."""
     try:
@@ -329,20 +337,21 @@ def main(argv: list[str] | None = None) -> int:
     """Validate the install contract, then dispatch into ``gpd.cli``."""
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     options, gpd_args = _parse_args(raw_argv)
+    runtime = _canonical_runtime_name(options.runtime)
     cli_cwd = _resolve_cli_cwd_from_argv(gpd_args)
     _maybe_reexec_from_checkout(raw_argv, cli_cwd=cli_cwd)
     config_dir = _resolve_config_dir(
         options.config_dir,
-        runtime=options.runtime,
+        runtime=runtime,
         install_scope=options.install_scope,
         explicit_target=bool(options.explicit_target),
         cli_cwd=cli_cwd,
     )
     manifest_runtime = _manifest_runtime(config_dir)
-    if manifest_runtime is not None and manifest_runtime != options.runtime:
+    if manifest_runtime is not None and manifest_runtime != runtime:
         sys.stderr.write(
             _runtime_mismatch_error_message(
-                runtime=options.runtime,
+                runtime=runtime,
                 manifest_runtime=manifest_runtime,
                 raw_config_dir=options.config_dir,
                 config_dir=config_dir,
@@ -353,7 +362,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 127
 
-    adapter = get_adapter(options.runtime)
+    adapter = get_adapter(runtime)
     missing = adapter.missing_install_artifacts(config_dir)
     if missing:
         sys.stderr.write(

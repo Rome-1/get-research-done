@@ -132,6 +132,43 @@ class TestRegistry:
         assert adapters_module.list_runtimes() == ["beta-runtime", "alpha-runtime"]
         assert adapters_module.get_adapter("alpha-runtime").runtime_name == "alpha-runtime"
 
+    def test_loader_rejects_duplicate_runtime_names(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        duplicate_descriptor = RuntimeDescriptor(
+            runtime_name="duplicate-runtime",
+            display_name="Duplicate Runtime",
+            priority=10,
+            config_dir_name=".duplicate",
+            install_flag="--duplicate",
+            launch_command="duplicate",
+            command_prefix="/gpd:",
+            activation_env_vars=(),
+            selection_flags=("--duplicate",),
+            selection_aliases=("duplicate-runtime",),
+            global_config=GlobalConfigPolicy(strategy="env_or_home", home_subpath=".duplicate"),
+            hook_payload=HookPayloadPolicy(),
+        )
+
+        class DuplicateAdapter(RuntimeAdapter):
+            @property
+            def runtime_name(self) -> str:
+                return "duplicate-runtime"
+
+        monkeypatch.setattr(
+            adapters_module,
+            "iter_runtime_descriptors",
+            lambda: (duplicate_descriptor, duplicate_descriptor),
+        )
+        monkeypatch.setattr(
+            adapters_module,
+            "import_module",
+            lambda name: SimpleNamespace(DuplicateAdapter=DuplicateAdapter),
+        )
+        monkeypatch.setattr(adapters_module, "_REGISTRY", {})
+        monkeypatch.setattr(adapters_module, "_LOADED", False)
+
+        with pytest.raises(RuntimeError, match="Duplicate runtime name in runtime catalog"):
+            adapters_module._ensure_loaded()
+
 
 class TestToolNames:
     """Tests for tool_names canonical/translate functions."""
