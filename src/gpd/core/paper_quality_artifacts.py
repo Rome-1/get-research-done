@@ -76,6 +76,7 @@ class _ContractCoverage(BaseModel):
     confidences: list[VerificationConfidence] = Field(default_factory=list)
     latest_report_passed: bool = False
     requires_decisive_comparison: bool = False
+    comparison_verdicts_valid: bool = True
 
 
 def _coverage_metric(satisfied: int, total: int) -> CoverageMetric:
@@ -193,18 +194,27 @@ def _load_figure_registry(project_root: Path) -> list[_FigureTrackerEntry]:
     return entries
 
 
-def _parse_comparison_verdict_entries(value: object) -> list[ComparisonVerdict]:
+def _parse_comparison_verdict_entries(
+    value: object,
+    *,
+    errors: list[str] | None = None,
+) -> list[ComparisonVerdict]:
     if not isinstance(value, list):
+        if errors is not None and value is not None:
+            errors.append(f"comparison_verdicts must be a list, not {type(value).__name__}")
         return []
 
     verdicts: list[ComparisonVerdict] = []
-    for item in value:
+    for index, item in enumerate(value):
         if not isinstance(item, dict):
+            if errors is not None:
+                errors.append(f"comparison_verdicts[{index}] must be an object, not {type(item).__name__}")
             continue
         try:
             verdicts.append(ComparisonVerdict.model_validate(item))
-        except PydanticValidationError:
-            continue
+        except PydanticValidationError as exc:
+            if errors is not None:
+                errors.append(f"comparison_verdicts[{index}]: {exc}")
     return verdicts
 
 
@@ -231,8 +241,9 @@ def _merge_comparison_verdict(existing: ComparisonVerdict, incoming: ComparisonV
     return existing.model_copy(update=updates) if updates else existing
 
 
-def _collect_comparison_verdicts(project_root: Path) -> list[ComparisonVerdict]:
+def _collect_comparison_verdicts(project_root: Path) -> tuple[list[ComparisonVerdict], bool]:
     verdicts_by_key: dict[tuple[str, str | None, str | None, str], ComparisonVerdict] = {}
+    parse_errors: list[str] = []
 
     candidate_roots = [
         project_root / ".gpd" / "phases",
@@ -244,11 +255,11 @@ def _collect_comparison_verdicts(project_root: Path) -> list[ComparisonVerdict]:
             continue
         for path in sorted(root.rglob("*.md")):
             meta = _extract_meta(path)
-            for verdict in _parse_comparison_verdict_entries(meta.get("comparison_verdicts")):
+            for verdict in _parse_comparison_verdict_entries(meta.get("comparison_verdicts"), errors=parse_errors):
                 key = _comparison_verdict_key(verdict)
                 existing = verdicts_by_key.get(key)
                 verdicts_by_key[key] = verdict if existing is None else _merge_comparison_verdict(existing, verdict)
-    return list(verdicts_by_key.values())
+    return list(verdicts_by_key.values()), not parse_errors
 
 
 def _resolve_paper_journal(artifact_manifest: ArtifactManifest | None, paper_config: dict[str, object]) -> str:
@@ -280,6 +291,7 @@ def _collect_contract_coverage(project_root: Path) -> _ContractCoverage:
     latest_verified_at = ""
     latest_report_passed = False
     requires_decisive_comparison = False
+    comparison_verdicts_valid = True
 
     phases_root = project_root / ".gpd" / "phases"
     if not phases_root.exists():
@@ -322,6 +334,8 @@ def _collect_contract_coverage(project_root: Path) -> _ContractCoverage:
                         contract_results,
                         comparison_verdicts,
                     )
+                if comparison_verdicts and contract_alignment_errors:
+                    comparison_verdicts_valid = False
 
                 if not contract_alignment_errors:
                     expected_claim_ids = {claim.id for claim in plan_contract.claims}
@@ -376,6 +390,7 @@ def _collect_contract_coverage(project_root: Path) -> _ContractCoverage:
         confidences=confidences,
         latest_report_passed=latest_report_passed,
         requires_decisive_comparison=requires_decisive_comparison,
+        comparison_verdicts_valid=comparison_verdicts_valid,
     )
 
 
@@ -522,7 +537,7 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
     journal = _resolve_paper_journal(artifact_manifest, paper_config)
 
     figure_registry = _load_figure_registry(root)
-    verdicts = _collect_comparison_verdicts(root)
+    verdicts, verdicts_parse_ok = _collect_comparison_verdicts(root)
     contract_coverage = _collect_contract_coverage(root)
     figures, results = _build_figures_input(
         figure_registry,
@@ -558,6 +573,12 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
     else:
         citation_key_coverage = CoverageMetric()
 
+    journal_extra_checks: dict[str, bool] = {}
+    raw_journal_extra_checks = paper_config.get("journal_extra_checks")
+    if isinstance(raw_journal_extra_checks, dict):
+        journal_extra_checks.update(raw_journal_extra_checks)
+    journal_extra_checks["comparison_verdicts_valid"] = verdicts_parse_ok and contract_coverage.comparison_verdicts_valid
+
     citations = CitationsQualityInput(
         citation_keys_resolve=citation_key_coverage,
         missing_placeholders=BinaryCheck(passed=missing_cites == 0),
@@ -589,4 +610,5 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
         completeness=completeness,
         verification=verification,
         results=results,
+        journal_extra_checks=journal_extra_checks,
     )

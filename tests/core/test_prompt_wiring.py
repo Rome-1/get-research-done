@@ -870,9 +870,15 @@ def test_reference_workflows_require_anchor_registry_propagation() -> None:
     mapper_agent = (AGENTS_DIR / "gpd-research-mapper.md").read_text(encoding="utf-8")
 
     assert "contract-critical anchors" in literature_workflow
+    assert "project_contract_load_info" in literature_workflow
+    assert "project_contract_validation" in literature_workflow
+    assert "authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes" in literature_workflow
     assert "Active Anchor Registry" in literature_command
     assert "active_anchors" in literature_agent
     assert "active_reference_context" in map_workflow
+    assert "project_contract_load_info" in map_workflow
+    assert "project_contract_validation" in map_workflow
+    assert "authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes" in map_workflow
     assert "Contract-critical anchors, decisive benchmarks, prior artifacts" in map_command
     assert "REFERENCES.md is an anchor registry" in mapper_agent
 
@@ -1006,6 +1012,9 @@ def test_stage4_templates_and_workflows_surface_contract_results_and_verdict_led
     assert "supported_binding_fields" in verify_phase
     assert "run_contract_check(request=...)" in verify_phase
     assert "comparison_verdicts" in compare_workflow
+    assert "project_contract_load_info" in compare_workflow
+    assert "project_contract_validation" in compare_workflow
+    assert "authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes" in compare_workflow
     assert "selected_protocol_bundle_ids" in compare_workflow
     assert "protocol_bundle_context" in compare_workflow
     assert "active_reference_context" in compare_workflow
@@ -1013,6 +1022,9 @@ def test_stage4_templates_and_workflows_surface_contract_results_and_verdict_led
     assert "bundle_expectations (optional):" in compare_workflow
     assert "comparison_kind: benchmark|prior_work|experiment|cross_method|baseline|other" in compare_workflow
     assert "comparison_kind: benchmark|prior_work|experiment|cross_method|baseline|other" in comparison_template
+    assert "`comparison_verdicts` is a closed schema" in comparison_template
+    internal_comparison_template = (TEMPLATES_DIR / "paper" / "internal-comparison.md").read_text(encoding="utf-8")
+    assert "`comparison_verdicts` is a closed schema" in internal_comparison_template
     assert "subject_role" in comparison_template
     assert "Profiles and autonomy modes may compress prose or cadence, but they do NOT relax contract-result emission" in executor_agent
     assert "Use claim IDs, deliverable IDs, acceptance test IDs, reference IDs, and forbidden proxy IDs directly from the `contract` block." in verifier_agent

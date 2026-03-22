@@ -699,6 +699,7 @@ def test_build_paper_quality_input_ignores_mixed_comparison_verdict_ledger_for_c
     assert result.verification.contract_targets_verified.satisfied == 0
     assert result.verification.contract_targets_verified.total == 3
     assert result.verification.key_result_confidences == []
+    assert result.journal_extra_checks["comparison_verdicts_valid"] is False
 
 
 def test_build_paper_quality_input_ignores_invalid_verification_ledger_for_report_passed(tmp_path: Path) -> None:

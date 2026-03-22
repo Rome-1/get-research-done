@@ -47,7 +47,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Extract from init JSON: `mapper_model`, `commit_docs`, `research_map_dir`, `existing_maps`, `has_maps`, `research_map_dir_exists`, `project_contract`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`.
+Extract from init JSON: `mapper_model`, `commit_docs`, `research_map_dir`, `existing_maps`, `has_maps`, `research_map_dir_exists`, `project_contract`, `project_contract_load_info`, `project_contract_validation`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`.
 
 **Read mode settings:**
 
@@ -64,6 +64,7 @@ RESEARCH_MODE=$(gpd --raw config get research_mode 2>/dev/null | gpd json get .v
 - Use `reference_artifacts_content` when the existing literature/research-map artifacts already contain stable citations, prior-output paths, or benchmark wording that should be preserved verbatim.
 - Preserve stable anchor identity when you rewrite or merge references: every durable anchor in `REFERENCES.md` should carry a reusable `Anchor ID` and a concrete `Source / Locator`.
 - Keep workflow carry-forward scope separate from canonical contract subject linkage. `Carry Forward To` names workflow stages; if exact claim/deliverable IDs are known, record them in a dedicated `Contract Subject IDs` field instead of overloading the stage field.
+- Treat `project_contract` as authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes. If either gate is blocked, keep the contract visible as context but do not treat it as approved mapping truth.
 </step>
 
 <step name="check_existing">

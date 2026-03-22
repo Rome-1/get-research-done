@@ -170,3 +170,5 @@ _Data: [sources with years]_
 - Comparing lattice results at finite spacing/volume with continuum experimental values
 
 When the comparison is decisive for a contract-backed claim or deliverable, the `comparison_verdicts` block is required. It is the machine-readable answer to "did the decisive output pass its benchmark?". Use contract IDs only: if the comparison is about a figure, dataset, or table, point the verdict at the owning deliverable or reference ID rather than inventing an `artifact` subject kind. Only `subject_role: decisive` closes a decisive requirement; `supporting` and `supplemental` verdicts are context, not standalone blockers. If selected protocol bundles informed the comparison design, record them in `protocol_bundle_ids` / `bundle_expectations` as additive provenance only; they do not replace contract IDs, benchmark anchors, or pass/fail thresholds.
+
+`comparison_verdicts` is a closed schema. Use only the documented keys above, do not invent extra fields, and keep every verdict row schema-tight before writing the ledger.
