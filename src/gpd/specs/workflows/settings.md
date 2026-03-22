@@ -1,5 +1,5 @@
 <purpose>
-Interactive configuration of GPD workflow agents (research, plan_checker, verifier), research profile selection, runtime-specific tier model overrides, review cadence, and git branching via multi-question prompt. Updates `.gpd/config.json` with user preferences including model profile, optional `model_overrides`, workflow toggles, execution cadence, and branching strategy.
+Interactive configuration of GPD workflow agents (research, plan_checker, verifier), research profile selection, runtime-specific tier model overrides, review cadence, git branching, and runtime-permission sync guidance. Updates `.gpd/config.json` with user preferences including model profile, optional `model_overrides`, workflow toggles, execution cadence, and branching strategy.
 </purpose>
 
 <required_reading>
@@ -67,13 +67,13 @@ Use ask_user with current values pre-selected:
 ```
 ask_user([
   {
-    question: "How much autonomy should the AI have? Supervised pauses constantly, Balanced handles routine work but still pauses on important physics or scope decisions, and YOLO only stops on hard failures.",
+    question: "How much autonomy should the AI have? Supervised pauses constantly, Balanced handles routine work but still pauses on important physics or scope decisions, and YOLO only stops on hard failures after runtime permissions are synced.",
     header: "Autonomy",
     multiSelect: false,
     options: [
       { label: "Supervised", description: "Checkpoint after every important step. You approve each physics-bearing move." },
       { label: "Balanced (Recommended)", description: "AI handles routine work and pauses on important physics decisions, ambiguities, blockers, or scope changes." },
-      { label: "YOLO", description: "Fastest mode. AI auto-approves checkpoints and only stops on hard failures." }
+      { label: "YOLO", description: "Fastest mode. AI auto-approves checkpoints, syncs the runtime to its most autonomous permission mode when supported, and only stops on hard failures." }
     ]
   },
   {
@@ -233,6 +233,19 @@ Merge new settings into existing config.json:
 ```
 
 Write updated config to `.gpd/config.json`.
+
+Then immediately sync runtime-owned permissions against the selected autonomy:
+
+```bash
+PERMISSIONS_SYNC=$(gpd --raw permissions sync --autonomy "$SELECTED_AUTONOMY" 2>/dev/null || true)
+echo "$PERMISSIONS_SYNC"
+```
+
+Interpret the sync payload:
+
+- Always surface `message` in the final confirmation.
+- If `requires_relaunch` is `true`, surface `next_step` verbatim so the user knows whether the runtime must be restarted or relaunched through a generated wrapper command.
+- If runtime detection or install resolution fails, explain that `.gpd/config.json` was still updated but the runtime itself was not synchronized yet.
 </step>
 
 <step name="confirm">
@@ -254,10 +267,15 @@ Display:
 | Review Cadence       | {Dense/Adaptive/Sparse} |
 | Parallelization      | {On/Off} |
 | Git Branching        | {None/Per Phase/Per Milestone} |
+| Runtime Permissions  | {aligned / changed / manual follow-up required} |
 
 These settings apply to future /gpd:plan-phase and /gpd:execute-phase runs.
 
 Concrete tier model strings are passed through to the active runtime unchanged, so they should always use that runtime's native model syntax.
+
+Runtime sync:
+- {permissions_sync.message}
+- {permissions_sync.next_step if present}
 
 Project conventions still live in `.gpd/CONVENTIONS.md` and `.gpd/state.json` (`convention_lock`), not in `.gpd/config.json`.
 
@@ -291,6 +309,7 @@ Project conventions propagate separately through `.gpd/CONVENTIONS.md` and `.gpd
 - [ ] Active runtime inferred or explicitly confirmed before model override guidance
 - [ ] User presented with profile, runtime-specific tier-model handling, workflow toggles, review cadence, and git branching
 - [ ] Config updated with model_profile, optional model_overrides, workflow, execution, and git sections
+- [ ] Runtime permissions sync attempted after autonomy is written, with relaunch guidance surfaced when required
 - [ ] No stale `physics` section written into `.gpd/config.json`
 - [ ] Concrete tier model strings stored in runtime-native format when the user chooses explicit overrides
 - [ ] Changes confirmed to user

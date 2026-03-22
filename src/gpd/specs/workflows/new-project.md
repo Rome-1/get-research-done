@@ -1012,7 +1012,7 @@ Run this step after scope approval and before the first project-artifact commit 
 Use ask_user:
 
 - header: "Workflow Setup"
-- question: "How would you like to write `.gpd/config.json`? Recommended defaults set `autonomy=balanced`, `research_mode=balanced`, `parallelization=true`, `commit_docs=true`, `model_profile=review`, and enable `workflow.research`, `workflow.plan_checker`, and `workflow.verifier`."
+- question: "How would you like to write `.gpd/config.json`? Recommended defaults set `autonomy=balanced`, `research_mode=balanced`, `parallelization=true`, `commit_docs=true`, `model_profile=review`, and enable `workflow.research`, `workflow.plan_checker`, and `workflow.verifier`. After writing config, also sync runtime permissions so yolo behaves correctly in the active runtime."
 - options:
   - "Use recommended defaults (Recommended)" — write those exact values now. Saves 3-5 minutes.
   - "Customize settings" — choose `autonomy`, `research_mode`, `parallelization`, `commit_docs`, workflow agents, and `model_profile` individually
@@ -1057,7 +1057,7 @@ questions: [
     multiSelect: false,
     options: [
       { label: "Balanced (Recommended)", description: "Routine work is automatic; pause on important physics decisions, ambiguities, blockers, or scope changes" },
-      { label: "YOLO", description: "Fastest mode. Auto-approve checkpoints and keep going unless a hard stop fires" },
+      { label: "YOLO", description: "Fastest mode. Auto-approve checkpoints, sync the active runtime to its most autonomous permission mode when supported, and keep going unless a hard stop fires" },
       { label: "Supervised", description: "Confirm each major step before proceeding" }
     ]
   },
@@ -1175,6 +1175,21 @@ Create `.gpd/config.json` with all settings:
 
 - No additional gitignore entries needed
 
+**Sync runtime permissions after writing config.json:**
+
+Run this regardless of whether the user chose recommended defaults or custom settings. For `autonomy=yolo`, this should persist or prepare the runtime's most autonomous permission mode. For non-yolo autonomy, it should restore any earlier GPD-managed yolo override.
+
+```bash
+PERMISSIONS_SYNC=$(gpd --raw permissions sync --autonomy "$SELECTED_AUTONOMY" 2>/dev/null || true)
+echo "$PERMISSIONS_SYNC"
+```
+
+Interpret the sync payload before continuing:
+
+- If `message` is present, summarize it in plain language.
+- If `requires_relaunch` is `true`, show `next_step` verbatim before moving on so the user knows whether the runtime must be restarted or relaunched through a generated command or wrapper.
+- If sync fails because no runtime install could be resolved, explain that the project config was still created successfully and the user can run `gpd permissions sync --runtime <name>` later.
+
 **Commit config.json:**
 
 ```bash
@@ -1188,11 +1203,11 @@ gpd commit "chore: add project config" --files .gpd/config.json
 
 ```bash
 cat > .gpd/init-progress.json << CHECKPOINT
-{"step": 5, "completed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "description": "config.json created and committed"}
+{"step": 5, "completed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "description": "config.json created, runtime permissions synced, and config committed"}
 CHECKPOINT
 ```
 
-**Note:** Run `/gpd:settings` anytime to update these preferences.
+**Note:** Run `/gpd:settings` anytime to update these preferences and re-sync runtime permissions.
 
 ## 5.5. Resolve Model Profile
 

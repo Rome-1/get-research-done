@@ -616,6 +616,18 @@ def test_new_project_recommended_autonomy_matches_balanced_default() -> None:
     assert "Config: YOLO autonomy | Balanced research mode | Parallel | All agents | Review profile" not in workflow_text
 
 
+def test_settings_and_new_project_surface_runtime_permission_sync_for_yolo() -> None:
+    new_project = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
+    settings = (WORKFLOWS_DIR / "settings.md").read_text(encoding="utf-8")
+
+    assert 'gpd --raw permissions sync --autonomy "$SELECTED_AUTONOMY"' in new_project
+    assert 'gpd --raw permissions sync --autonomy "$SELECTED_AUTONOMY"' in settings
+    assert "sync the active runtime to its most autonomous permission mode when supported" in new_project
+    assert "syncs the runtime to its most autonomous permission mode when supported" in settings
+    assert "| Runtime Permissions  | {aligned / changed / manual follow-up required} |" in settings
+    assert "If `requires_relaunch` is `true`, show `next_step` verbatim" in new_project
+
+
 def test_new_project_requires_scoping_contract_across_setup_modes() -> None:
     workflow_text = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     command_text = (COMMANDS_DIR / "new-project.md").read_text(encoding="utf-8")

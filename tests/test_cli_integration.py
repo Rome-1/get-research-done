@@ -616,6 +616,106 @@ class TestConfigCommands:
         assert "brave_search" not in config
         assert "search_gitignored" not in config
 
+    def test_permissions_sync_updates_installed_runtime(self, gpd_project: Path) -> None:
+        from gpd.adapters.claude_code import ClaudeCodeAdapter
+
+        target = gpd_project / ".claude"
+        target.mkdir()
+        gpd_root = Path(__file__).resolve().parents[1] / "src" / "gpd"
+        ClaudeCodeAdapter().install(gpd_root, target)
+
+        result = _invoke("--raw", "permissions", "sync", "--runtime", "claude-code", "--autonomy", "yolo")
+        parsed = json.loads(result.output)
+        settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
+
+        assert parsed["runtime"] == "claude-code"
+        assert parsed["sync_applied"] is True
+        assert settings["permissions"]["defaultMode"] == "bypassPermissions"
+
+    def test_config_set_autonomy_attempts_runtime_permission_sync(
+        self,
+        gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from gpd.adapters.claude_code import ClaudeCodeAdapter
+
+        target = gpd_project / ".claude"
+        target.mkdir()
+        gpd_root = Path(__file__).resolve().parents[1] / "src" / "gpd"
+        adapter = ClaudeCodeAdapter()
+        adapter.install(gpd_root, target)
+        adapter.sync_runtime_permissions(target, autonomy="yolo")
+        monkeypatch.setenv("GPD_ACTIVE_RUNTIME", "claude-code")
+
+        result = _invoke("--raw", "config", "set", "autonomy", "balanced")
+        parsed = json.loads(result.output)
+        settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
+
+        assert parsed["value"] == "balanced"
+        assert parsed["runtime_permissions"]["runtime"] == "claude-code"
+        assert parsed["runtime_permissions"]["sync_applied"] is True
+        assert settings.get("permissions", {}).get("defaultMode") != "bypassPermissions"
+
+    def test_permissions_sync_prefers_active_runtime_over_other_installed_runtime(
+        self,
+        gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from gpd.adapters.codex import CodexAdapter
+
+        target = gpd_project / ".codex"
+        target.mkdir()
+        gpd_root = Path(__file__).resolve().parents[1] / "src" / "gpd"
+        CodexAdapter().install(gpd_root, target)
+        fake_home = gpd_project / "_fake_home_permissions"
+        fake_home.mkdir()
+        monkeypatch.setenv("CLAUDE_CODE_SESSION", "active")
+
+        with patch("pathlib.Path.home", return_value=fake_home):
+            result = _invoke("--raw", "permissions", "sync", "--autonomy", "yolo", expect_ok=False)
+
+        parsed = json.loads(result.output)
+        manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+        config_toml = (target / "config.toml").read_text(encoding="utf-8")
+
+        assert parsed["error"] == "No GPD install found for runtime 'claude-code'. Run `gpd install claude-code` first."
+        assert "gpd_runtime_permissions" not in manifest
+        assert 'approval_policy = "never"' not in config_toml
+        assert 'sandbox_mode = "danger-full-access"' not in config_toml
+
+    def test_config_set_autonomy_does_not_sync_other_installed_runtime(
+        self,
+        gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from gpd.adapters.codex import CodexAdapter
+
+        target = gpd_project / ".codex"
+        target.mkdir()
+        gpd_root = Path(__file__).resolve().parents[1] / "src" / "gpd"
+        CodexAdapter().install(gpd_root, target)
+        fake_home = gpd_project / "_fake_home_config_set"
+        fake_home.mkdir()
+        monkeypatch.setenv("CLAUDE_CODE_SESSION", "active")
+
+        with patch("pathlib.Path.home", return_value=fake_home):
+            result = _invoke("--raw", "config", "set", "autonomy", "yolo")
+
+        parsed = json.loads(result.output)
+        manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+        config_toml = (target / "config.toml").read_text(encoding="utf-8")
+
+        assert parsed["value"] == "yolo"
+        assert parsed["runtime_permissions"]["runtime"] == "claude-code"
+        assert parsed["runtime_permissions"]["sync_applied"] is False
+        assert parsed["runtime_permissions"]["changed"] is False
+        assert parsed["runtime_permissions"]["message"] == (
+            "No GPD install found for runtime 'claude-code'. Run `gpd install claude-code` first."
+        )
+        assert "gpd_runtime_permissions" not in manifest
+        assert 'approval_policy = "never"' not in config_toml
+        assert 'sandbox_mode = "danger-full-access"' not in config_toml
+
     def test_config_help(self) -> None:
         result = _invoke("config", "--help")
         assert "get" in result.output

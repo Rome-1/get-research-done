@@ -78,8 +78,15 @@ _GPD_NOTIFY_BACKUP_PREFIX = "# GPD original notify: "
 _GPD_NOTIFY_WRAPPER_MARKER = "gpd-codex-notify-wrapper-v1"
 _GPD_MULTI_AGENT_COMMENT = "# GPD multi-agent support"
 _GPD_MULTI_AGENT_BACKUP_PREFIX = "# GPD original multi_agent: "
+_GPD_APPROVAL_POLICY_COMMENT = "# GPD runtime approval policy"
+_GPD_APPROVAL_POLICY_BACKUP_PREFIX = "# GPD original approval_policy: "
+_GPD_SANDBOX_MODE_COMMENT = "# GPD runtime sandbox mode"
+_GPD_SANDBOX_MODE_BACKUP_PREFIX = "# GPD original sandbox_mode: "
 _GPD_AGENT_ROLES_COMMENT = "# GPD agent roles"
 _MANIFEST_CODEX_SKILLS_DIR_KEY = "codex_skills_dir"
+_CODEX_DEFAULT_SANDBOX_MODE = "workspace-write"
+_CODEX_YOLO_APPROVAL_POLICY = "never"
+_CODEX_YOLO_SANDBOX_MODE = "danger-full-access"
 _TOOL_REFERENCE_MAP = reference_translation_map(
     _TOOL_NAME_MAP,
     alias_map=_TOOL_ALIAS_MAP,
@@ -666,6 +673,25 @@ class CodexAdapter(RuntimeAdapter):
             is_global,
             explicit_target=getattr(self, "_install_explicit_target", False),
         )
+        config_toml = target_dir / "config.toml"
+        sandbox_mode = _CODEX_DEFAULT_SANDBOX_MODE
+        approval_policy: str | None = None
+        if config_toml.exists():
+            try:
+                parsed = tomllib.loads(config_toml.read_text(encoding="utf-8"))
+            except (OSError, tomllib.TOMLDecodeError):
+                parsed = {}
+            sandbox_value = parsed.get("sandbox_mode")
+            approval_value = parsed.get("approval_policy")
+            if isinstance(sandbox_value, str):
+                sandbox_mode = sandbox_value
+            if isinstance(approval_value, str):
+                approval_policy = approval_value
+        _rewrite_codex_agent_role_runtime_modes(
+            target_dir / "agents",
+            sandbox_mode=sandbox_mode,
+            approval_policy=approval_policy,
+        )
 
         # Wire MCP servers into config.toml.
         from gpd.mcp.builtin_servers import build_mcp_servers_dict
@@ -683,6 +709,187 @@ class CodexAdapter(RuntimeAdapter):
             "mcpServers": mcp_count,
             "agentRoles": agent_role_count,
         }
+
+    def runtime_permissions_status(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
+        """Report whether Codex approvals/sandbox are aligned with GPD autonomy."""
+        config_path = target_dir / "config.toml"
+        approval_policy: str | None = None
+        sandbox_mode: str = _CODEX_DEFAULT_SANDBOX_MODE
+        root_managed = False
+        if config_path.exists():
+            content = config_path.read_text(encoding="utf-8")
+            try:
+                parsed = tomllib.loads(content)
+            except tomllib.TOMLDecodeError:
+                parsed = {}
+            approval_value = parsed.get("approval_policy")
+            sandbox_value = parsed.get("sandbox_mode")
+            if isinstance(approval_value, str):
+                approval_policy = approval_value
+            if isinstance(sandbox_value, str):
+                sandbox_mode = sandbox_value
+            root_managed = _root_assignment_has_gpd_marker(
+                content,
+                _GPD_APPROVAL_POLICY_COMMENT,
+                _GPD_APPROVAL_POLICY_BACKUP_PREFIX,
+            ) or _root_assignment_has_gpd_marker(
+                content,
+                _GPD_SANDBOX_MODE_COMMENT,
+                _GPD_SANDBOX_MODE_BACKUP_PREFIX,
+            )
+
+        agents_dir = target_dir / "agents"
+        role_sandbox_mode, role_approval_policy = _codex_agent_role_runtime_summary(agents_dir)
+        has_role_files = any(agents_dir.glob("gpd-*.toml")) if agents_dir.exists() else False
+        desired_mode = "yolo" if autonomy == "yolo" else "default"
+        managed_state = self._runtime_permissions_manifest_state(target_dir) or {}
+        managed_by_gpd = managed_state.get("mode") == "yolo" or root_managed
+
+        if desired_mode == "yolo":
+            root_aligned = (
+                approval_policy == _CODEX_YOLO_APPROVAL_POLICY
+                and sandbox_mode == _CODEX_YOLO_SANDBOX_MODE
+            )
+            roles_aligned = (
+                not has_role_files
+                or (
+                    role_sandbox_mode == _CODEX_YOLO_SANDBOX_MODE
+                    and role_approval_policy == _CODEX_YOLO_APPROVAL_POLICY
+                )
+            )
+            config_aligned = root_aligned and roles_aligned
+            if config_aligned:
+                message = (
+                    "Codex is configured for prompt-free approvals and danger-full-access sandboxing "
+                    "for the next session."
+                )
+            elif not root_aligned and not roles_aligned:
+                message = (
+                    "Codex is not yet configured for yolo mode in either config.toml or the GPD-managed role files."
+                )
+            elif not root_aligned:
+                message = "Codex root config.toml is not yet configured for yolo approval and sandbox settings."
+            else:
+                message = "Codex GPD-managed role files are not yet configured for yolo approval and sandbox settings."
+        else:
+            config_aligned = not managed_by_gpd
+            if managed_by_gpd:
+                message = (
+                    "Codex is still pinned to GPD-managed never/danger-full-access defaults from an earlier yolo sync."
+                )
+            elif approval_policy == _CODEX_YOLO_APPROVAL_POLICY and sandbox_mode == _CODEX_YOLO_SANDBOX_MODE:
+                message = (
+                    "Codex is still configured for never/danger-full-access, but GPD left it untouched because "
+                    "that setting was not created by a prior GPD yolo sync."
+                )
+            else:
+                message = "Codex is using its normal approval and sandbox defaults."
+
+        configured_mode = (
+            "yolo"
+            if approval_policy == _CODEX_YOLO_APPROVAL_POLICY and sandbox_mode == _CODEX_YOLO_SANDBOX_MODE
+            else f"{approval_policy or 'unset'}/{sandbox_mode}"
+        )
+        return {
+            "runtime": self.runtime_name,
+            "desired_mode": desired_mode,
+            "configured_mode": configured_mode,
+            "config_aligned": config_aligned,
+            "managed_by_gpd": managed_by_gpd,
+            "settings_path": str(config_path),
+            "approval_policy": approval_policy or "unset",
+            "sandbox_mode": sandbox_mode,
+            "agent_role_approval_policy": role_approval_policy or "unset",
+            "agent_role_sandbox_mode": role_sandbox_mode or "mixed",
+            "message": message,
+        }
+
+    def sync_runtime_permissions(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
+        """Align Codex approvals/sandbox settings with the requested autonomy."""
+        config_path = target_dir / "config.toml"
+        toml_content = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+        changed = False
+        if autonomy == "yolo":
+            updated = toml_content
+            if _root_assignment_line(updated, "approval_policy") != f'approval_policy = "{_CODEX_YOLO_APPROVAL_POLICY}"':
+                updated = _install_gpd_root_string_setting(
+                    updated,
+                    key="approval_policy",
+                    value=_CODEX_YOLO_APPROVAL_POLICY,
+                    comment=_GPD_APPROVAL_POLICY_COMMENT,
+                    backup_prefix=_GPD_APPROVAL_POLICY_BACKUP_PREFIX,
+                )
+            if _root_assignment_line(updated, "sandbox_mode") != f'sandbox_mode = "{_CODEX_YOLO_SANDBOX_MODE}"':
+                updated = _install_gpd_root_string_setting(
+                    updated,
+                    key="sandbox_mode",
+                    value=_CODEX_YOLO_SANDBOX_MODE,
+                    comment=_GPD_SANDBOX_MODE_COMMENT,
+                    backup_prefix=_GPD_SANDBOX_MODE_BACKUP_PREFIX,
+                )
+            if updated != toml_content:
+                config_path.write_text(updated, encoding="utf-8")
+                changed = True
+
+            roles_changed = _rewrite_codex_agent_role_runtime_modes(
+                target_dir / "agents",
+                sandbox_mode=_CODEX_YOLO_SANDBOX_MODE,
+                approval_policy=_CODEX_YOLO_APPROVAL_POLICY,
+            )
+            changed = changed or roles_changed
+            if changed:
+                self._set_runtime_permissions_manifest_state(target_dir, {"mode": "yolo"})
+
+            status = self.runtime_permissions_status(target_dir, autonomy=autonomy)
+            sync_applied = bool(status.get("config_aligned"))
+            return {
+                **status,
+                "changed": changed,
+                "sync_applied": sync_applied,
+                "requires_relaunch": changed,
+                "next_step": (
+                    "Restart Codex so the current session picks up the persisted yolo approval and sandbox settings."
+                )
+                if changed
+                else None,
+            }
+
+        managed_state = self._runtime_permissions_manifest_state(target_dir) or {}
+        if managed_state.get("mode") == "yolo":
+            updated = _remove_gpd_root_string_setting(
+                toml_content,
+                key="approval_policy",
+                comment=_GPD_APPROVAL_POLICY_COMMENT,
+                backup_prefix=_GPD_APPROVAL_POLICY_BACKUP_PREFIX,
+            )
+            updated = _remove_gpd_root_string_setting(
+                updated,
+                key="sandbox_mode",
+                comment=_GPD_SANDBOX_MODE_COMMENT,
+                backup_prefix=_GPD_SANDBOX_MODE_BACKUP_PREFIX,
+            )
+            if updated != toml_content:
+                config_path.write_text(updated, encoding="utf-8")
+                changed = True
+            roles_changed = _rewrite_codex_agent_role_runtime_modes(
+                target_dir / "agents",
+                sandbox_mode=_CODEX_DEFAULT_SANDBOX_MODE,
+                approval_policy=None,
+            )
+            changed = changed or roles_changed
+            self._set_runtime_permissions_manifest_state(target_dir, None)
+
+        status = self.runtime_permissions_status(target_dir, autonomy=autonomy)
+        sync_applied = bool(status.get("config_aligned"))
+        result = {
+            **status,
+            "changed": changed,
+            "sync_applied": sync_applied,
+            "requires_relaunch": changed,
+        }
+        if changed:
+            result["next_step"] = "Restart Codex to return the session to its normal approval and sandbox defaults."
+        return result
 
     def _verify(self, target_dir: Path) -> None:
         """Verify the Codex install includes its required role and config surfaces."""
@@ -834,6 +1041,18 @@ class CodexAdapter(RuntimeAdapter):
                 toml_content = config_toml.read_text(encoding="utf-8")
                 cleaned = _remove_gpd_notify_config(toml_content, target_dir=target_dir)
                 cleaned = _remove_gpd_multi_agent_config(cleaned)
+                cleaned = _remove_gpd_root_string_setting(
+                    cleaned,
+                    key="approval_policy",
+                    comment=_GPD_APPROVAL_POLICY_COMMENT,
+                    backup_prefix=_GPD_APPROVAL_POLICY_BACKUP_PREFIX,
+                )
+                cleaned = _remove_gpd_root_string_setting(
+                    cleaned,
+                    key="sandbox_mode",
+                    comment=_GPD_SANDBOX_MODE_COMMENT,
+                    backup_prefix=_GPD_SANDBOX_MODE_BACKUP_PREFIX,
+                )
                 cleaned = _remove_gpd_agent_role_sections(cleaned)
                 if cleaned != toml_content:
                     config_toml.write_text(cleaned, encoding="utf-8")
@@ -1160,7 +1379,29 @@ def _build_codex_agent_role_instructions(agent_name: str, agent_markdown_path: P
     )
 
 
-def _write_codex_agent_role_files(agents_dest: Path, runtime_agents: tuple[AgentDef, ...]) -> None:
+def _render_codex_agent_role_lines(
+    *,
+    developer_instructions: str,
+    sandbox_mode: str = "workspace-write",
+    approval_policy: str | None = None,
+) -> list[str]:
+    lines = [
+        "# Managed by Get Physics Done (GPD).",
+        f'sandbox_mode = "{sandbox_mode}"',
+    ]
+    if approval_policy:
+        lines.append(f'approval_policy = "{approval_policy}"')
+    lines.append(f"developer_instructions = {_toml_string(developer_instructions)}")
+    return lines
+
+
+def _write_codex_agent_role_files(
+    agents_dest: Path,
+    runtime_agents: tuple[AgentDef, ...],
+    *,
+    sandbox_mode: str = "workspace-write",
+    approval_policy: str | None = None,
+) -> None:
     """Write role-specific Codex config layers alongside installed agent briefs."""
     if not agents_dest.exists():
         return
@@ -1169,11 +1410,11 @@ def _write_codex_agent_role_files(agents_dest: Path, runtime_agents: tuple[Agent
     for agent in runtime_agents:
         role_path = agents_dest / f"{agent.name}.toml"
         agent_markdown_path = agents_dest / f"{agent.name}.md"
-        lines = [
-            "# Managed by Get Physics Done (GPD).",
-            'sandbox_mode = "workspace-write"',
-            f"developer_instructions = {_toml_string(_build_codex_agent_role_instructions(agent.name, agent_markdown_path))}",
-        ]
+        lines = _render_codex_agent_role_lines(
+            developer_instructions=_build_codex_agent_role_instructions(agent.name, agent_markdown_path),
+            sandbox_mode=sandbox_mode,
+            approval_policy=approval_policy,
+        )
         role_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         managed_role_names.add(role_path.name)
 
@@ -1185,6 +1426,63 @@ def _write_codex_agent_role_files(agents_dest: Path, runtime_agents: tuple[Agent
             and existing.name not in managed_role_names
         ):
             existing.unlink()
+
+
+def _rewrite_codex_agent_role_runtime_modes(
+    agents_dest: Path,
+    *,
+    sandbox_mode: str,
+    approval_policy: str | None,
+) -> bool:
+    """Rewrite installed GPD role TOMLs to the requested sandbox/approval mode."""
+    changed = False
+    if not agents_dest.exists():
+        return changed
+
+    for role_path in sorted(agents_dest.glob("gpd-*.toml")):
+        try:
+            content = role_path.read_text(encoding="utf-8")
+            parsed = tomllib.loads(content)
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        developer_instructions = parsed.get("developer_instructions")
+        if not isinstance(developer_instructions, str):
+            continue
+        rendered = "\n".join(
+            _render_codex_agent_role_lines(
+                developer_instructions=developer_instructions,
+                sandbox_mode=sandbox_mode,
+                approval_policy=approval_policy,
+            )
+        ) + "\n"
+        if content != rendered:
+            role_path.write_text(rendered, encoding="utf-8")
+            changed = True
+    return changed
+
+
+def _codex_agent_role_runtime_summary(agents_dest: Path) -> tuple[str | None, str | None]:
+    """Return shared sandbox/approval settings when all GPD role files agree."""
+    if not agents_dest.exists():
+        return None, None
+
+    sandbox_modes: set[str] = set()
+    approval_policies: set[str] = set()
+    for role_path in sorted(agents_dest.glob("gpd-*.toml")):
+        try:
+            parsed = tomllib.loads(role_path.read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        sandbox_mode = parsed.get("sandbox_mode")
+        approval_policy_value = parsed.get("approval_policy")
+        if isinstance(sandbox_mode, str):
+            sandbox_modes.add(sandbox_mode)
+        if isinstance(approval_policy_value, str):
+            approval_policies.add(approval_policy_value)
+
+    sandbox_summary = sandbox_modes.pop() if len(sandbox_modes) == 1 else None
+    approval_summary = approval_policies.pop() if len(approval_policies) == 1 else None
+    return sandbox_summary, approval_summary
 
 
 def _is_managed_codex_agent_role_section(existing_body: list[str] | None, agent_name: str) -> bool:
@@ -1505,6 +1803,121 @@ def _remove_gpd_multi_agent_config(toml_content: str) -> str:
         lines.extend(["[features]", *cleaned])
     lines.extend(after)
     return re.sub(r"\n{3,}", "\n\n", _serialize_toml_lines(lines))
+
+
+def _root_assignment_line(toml_content: str, key: str) -> str | None:
+    """Return the top-level assignment line for *key*, if present."""
+    for line in toml_content.splitlines():
+        stripped = line.strip()
+        if _parse_section_name(stripped) is not None:
+            break
+        if _toml_assignment_key(stripped) == key:
+            return stripped
+    return None
+
+
+def _root_assignment_has_gpd_marker(toml_content: str, comment: str, backup_prefix: str) -> bool:
+    """Return True when a GPD-managed root assignment block is present."""
+    for line in toml_content.splitlines():
+        stripped = line.strip()
+        if _parse_section_name(stripped) is not None:
+            break
+        if stripped == comment or stripped.startswith(backup_prefix):
+            return True
+    return False
+
+
+def _install_gpd_root_string_setting(
+    toml_content: str,
+    *,
+    key: str,
+    value: str,
+    comment: str,
+    backup_prefix: str,
+) -> str:
+    """Install a managed top-level string assignment while preserving the original line."""
+    desired_line = f'{key} = "{value}"'
+    cleaned_lines: list[str] = []
+    insert_at: int | None = None
+    original_line: str | None = None
+
+    past_first_section = False
+    for line in toml_content.splitlines():
+        stripped = line.strip()
+        if _parse_section_name(stripped) is not None:
+            past_first_section = True
+        if not past_first_section and _toml_assignment_key(stripped) == key:
+            if insert_at is None:
+                insert_at = len(cleaned_lines)
+            original_line = stripped
+            continue
+        cleaned_lines.append(line)
+
+    block: list[str] = [comment]
+    if original_line is not None:
+        block.append(backup_prefix + original_line)
+    block.append(desired_line)
+
+    if insert_at is None:
+        insert_at = _first_section_index(cleaned_lines)
+        if insert_at > 0 and cleaned_lines[insert_at - 1].strip() != "":
+            block = [""] + block
+        cleaned_lines[insert_at:insert_at] = block + [""]
+    else:
+        cleaned_lines[insert_at:insert_at] = block
+
+    return _serialize_toml_lines(cleaned_lines)
+
+
+def _remove_gpd_root_string_setting(
+    toml_content: str,
+    *,
+    key: str,
+    comment: str,
+    backup_prefix: str,
+) -> str:
+    """Remove a managed top-level string assignment and restore its backup when present."""
+    cleaned_lines: list[str] = []
+    insert_at: int | None = None
+    original_line: str | None = None
+    pending_managed_block = False
+    past_first_section = False
+    had_managed_block = False
+
+    for line in toml_content.splitlines():
+        stripped = line.strip()
+        if _parse_section_name(stripped) is not None:
+            past_first_section = True
+        if not past_first_section and stripped == comment:
+            had_managed_block = True
+            pending_managed_block = True
+            if insert_at is None:
+                insert_at = len(cleaned_lines)
+            continue
+        if not past_first_section and stripped.startswith(backup_prefix):
+            had_managed_block = True
+            pending_managed_block = True
+            original_line = stripped[len(backup_prefix) :].strip()
+            if insert_at is None:
+                insert_at = len(cleaned_lines)
+            continue
+        if not past_first_section and _toml_assignment_key(stripped) == key and pending_managed_block:
+            had_managed_block = True
+            pending_managed_block = False
+            if insert_at is None:
+                insert_at = len(cleaned_lines)
+            continue
+        pending_managed_block = False
+        cleaned_lines.append(line)
+
+    if not had_managed_block:
+        return toml_content
+
+    if original_line is not None:
+        position = insert_at if insert_at is not None else len(cleaned_lines)
+        cleaned_lines[position:position] = [original_line]
+
+    return re.sub(r"\n{3,}", "\n\n", _serialize_toml_lines(cleaned_lines))
 
 
 def _configure_config_toml(

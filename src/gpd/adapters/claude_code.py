@@ -203,6 +203,130 @@ class ClaudeCodeAdapter(RuntimeAdapter):
             "mcpServers": mcp_count,
         }
 
+    def runtime_permissions_status(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
+        """Report whether Claude Code is configured for GPD autonomy alignment."""
+        settings_path = target_dir / "settings.json"
+        settings = read_settings(settings_path)
+        permissions = settings.get("permissions")
+        permissions_dict = permissions if isinstance(permissions, dict) else {}
+        default_mode = permissions_dict.get("defaultMode") if isinstance(permissions_dict.get("defaultMode"), str) else None
+        bypass_disabled = permissions_dict.get("disableBypassPermissionsMode") == "disable"
+        desired_mode = "yolo" if autonomy == "yolo" else "default"
+        managed_state = self._runtime_permissions_manifest_state(target_dir) or {}
+        managed_by_gpd = managed_state.get("mode") == "yolo"
+        config_aligned = default_mode == "bypassPermissions" if desired_mode == "yolo" else not managed_by_gpd
+        message = "Claude Code is using its normal permission mode."
+        if desired_mode == "yolo":
+            if bypass_disabled:
+                config_aligned = False
+                message = (
+                    "Claude Code bypassPermissions is disabled by managed settings, so GPD cannot enable "
+                    "prompt-free runtime mode automatically."
+                )
+            elif default_mode == "bypassPermissions":
+                message = "Claude Code will open in bypassPermissions mode on the next launch."
+            else:
+                message = "Claude Code is not yet configured to open in bypassPermissions mode."
+        elif managed_by_gpd:
+            message = "Claude Code is still pinned to a GPD-managed bypassPermissions default from an earlier yolo sync."
+        return {
+            "runtime": self.runtime_name,
+            "desired_mode": desired_mode,
+            "configured_mode": default_mode or "default",
+            "config_aligned": config_aligned,
+            "managed_by_gpd": managed_by_gpd,
+            "settings_path": str(settings_path),
+            "message": message,
+        }
+
+    def sync_runtime_permissions(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
+        """Align Claude Code defaultMode with GPD autonomy."""
+        settings_path = target_dir / "settings.json"
+        settings = read_settings(settings_path)
+        permissions = settings.get("permissions")
+        permissions_dict = dict(permissions) if isinstance(permissions, dict) else {}
+        settings_had_permissions = isinstance(permissions, dict)
+        managed_state = self._runtime_permissions_manifest_state(target_dir) or {}
+        changed = False
+        sync_applied = False
+
+        if autonomy == "yolo":
+            if permissions_dict.get("disableBypassPermissionsMode") == "disable":
+                status = self.runtime_permissions_status(target_dir, autonomy=autonomy)
+                return {
+                    **status,
+                    "changed": False,
+                    "sync_applied": False,
+                    "requires_relaunch": False,
+                    "warning": (
+                        "Claude Code bypassPermissions is disabled by managed settings; switch runtimes or "
+                        "remove the managed restriction to get uninterrupted yolo execution."
+                    ),
+                }
+            current_mode = permissions_dict.get("defaultMode") if isinstance(permissions_dict.get("defaultMode"), str) else None
+            if current_mode != "bypassPermissions":
+                restore_state = {
+                    "had_permissions": settings_had_permissions,
+                    "had_default_mode": "defaultMode" in permissions_dict,
+                    "default_mode": permissions_dict.get("defaultMode"),
+                }
+                permissions_dict["defaultMode"] = "bypassPermissions"
+                settings["permissions"] = permissions_dict
+                write_settings(settings_path, settings)
+                self._set_runtime_permissions_manifest_state(
+                    target_dir,
+                    {
+                        "mode": "yolo",
+                        "restore": restore_state,
+                    },
+                )
+                changed = True
+            status = self.runtime_permissions_status(target_dir, autonomy=autonomy)
+            sync_applied = bool(status.get("config_aligned"))
+            return {
+                **status,
+                "changed": changed,
+                "sync_applied": sync_applied,
+                "requires_relaunch": changed,
+                "next_step": (
+                    "Restart the Claude Code session, or switch the current session to bypassPermissions, "
+                    "before expecting uninterrupted yolo execution."
+                )
+                if changed
+                else None,
+            }
+
+        restore_state = managed_state.get("restore") if isinstance(managed_state, dict) else None
+        if managed_state.get("mode") == "yolo" and isinstance(restore_state, dict):
+            if restore_state.get("had_default_mode"):
+                permissions_dict["defaultMode"] = restore_state.get("default_mode")
+            else:
+                permissions_dict.pop("defaultMode", None)
+            if permissions_dict:
+                settings["permissions"] = permissions_dict
+            elif settings_had_permissions:
+                settings.pop("permissions", None)
+            write_settings(settings_path, settings)
+            self._set_runtime_permissions_manifest_state(target_dir, None)
+            changed = True
+
+        status = self.runtime_permissions_status(target_dir, autonomy=autonomy)
+        sync_applied = bool(status.get("config_aligned"))
+        result = {
+            **status,
+            "changed": changed,
+            "sync_applied": sync_applied,
+            "requires_relaunch": changed,
+        }
+        if changed:
+            result["next_step"] = "Restart Claude Code to return the current session to its normal permission mode."
+        elif status.get("configured_mode") == "bypassPermissions":
+            result["message"] = (
+                "Claude Code is still configured for bypassPermissions, but GPD left it untouched because "
+                "that setting was not created by a prior GPD yolo sync."
+            )
+        return result
+
     def finish_install(
         self,
         settings_path: str | Path,
@@ -260,6 +384,25 @@ class ClaudeCodeAdapter(RuntimeAdapter):
         if settings_path.exists():
             settings = read_settings(settings_path)
             modified = False
+
+            runtime_permission_state = manifest.get("gpd_runtime_permissions")
+            restore_state = (
+                runtime_permission_state.get("restore")
+                if isinstance(runtime_permission_state, dict) and runtime_permission_state.get("mode") == "yolo"
+                else None
+            )
+            if isinstance(restore_state, dict):
+                permissions = settings.get("permissions")
+                permissions_dict = dict(permissions) if isinstance(permissions, dict) else {}
+                if restore_state.get("had_default_mode"):
+                    permissions_dict["defaultMode"] = restore_state.get("default_mode")
+                else:
+                    permissions_dict.pop("defaultMode", None)
+                if permissions_dict:
+                    settings["permissions"] = permissions_dict
+                else:
+                    settings.pop("permissions", None)
+                modified = True
 
             status_line = settings.get("statusLine")
             if isinstance(status_line, dict):

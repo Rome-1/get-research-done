@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shlex
 import shutil
 from pathlib import Path
 
@@ -93,6 +94,8 @@ _TOOL_REFERENCE_MAP = reference_translation_map(
 
 _GEMINI_POLICY_DIR_NAME = "policies"
 _GEMINI_POLICY_FILE_NAME = "gpd-auto-edit.toml"
+_GEMINI_RUNTIME_BIN_DIR_NAME = "bin"
+_GEMINI_YOLO_WRAPPER_NAME = "gemini-gpd-yolo"
 _GEMINI_APPROVED_CONTRACT_PATH = ".gpd/.approved-project-contract.json"
 _GEMINI_STATIC_POLICY_COMMAND_PREFIXES: tuple[str, ...] = (
     "git init",
@@ -596,6 +599,16 @@ def _managed_gemini_policy_path(target_dir: Path) -> Path:
     return target_dir / _GEMINI_POLICY_DIR_NAME / _GEMINI_POLICY_FILE_NAME
 
 
+def _managed_gemini_yolo_wrapper_path(target_dir: Path) -> Path:
+    """Return the GPD-managed Gemini launch wrapper for yolo sessions."""
+    return target_dir / "get-physics-done" / _GEMINI_RUNTIME_BIN_DIR_NAME / _GEMINI_YOLO_WRAPPER_NAME
+
+
+def _render_gemini_yolo_wrapper() -> str:
+    """Render a small launcher that starts Gemini in yolo approval mode."""
+    return "#!/bin/sh\nexec gemini --approval-mode=yolo \"$@\"\n"
+
+
 def _render_gemini_policy_toml(bridge_command: str) -> str:
     """Render the Gemini policy file GPD installs for headless auto-edit flows."""
     rendered_prefixes: list[str] = []
@@ -1043,6 +1056,64 @@ class GeminiAdapter(RuntimeAdapter):
             "statuslineCommand": statusline_cmd,
             "mcpServers": len(mcp_servers),
         }
+
+    def runtime_permissions_status(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
+        """Report whether a Gemini yolo launcher is ready for the next session."""
+        wrapper_path = _managed_gemini_yolo_wrapper_path(target_dir)
+        wrapper_exists = wrapper_path.is_file()
+        desired_mode = "yolo" if autonomy == "yolo" else "default"
+        message = "Gemini is using its normal approval-mode defaults."
+        if desired_mode == "yolo":
+            if wrapper_exists:
+                message = (
+                    "Gemini only supports yolo at launch time. The GPD launcher is ready for the next session."
+                )
+            else:
+                message = (
+                    "Gemini only supports yolo at launch time. Generate and use the GPD launcher before "
+                    "expecting uninterrupted yolo execution."
+                )
+        return {
+            "runtime": self.runtime_name,
+            "desired_mode": desired_mode,
+            "configured_mode": "launch-wrapper" if wrapper_exists else "default",
+            "config_aligned": wrapper_exists if desired_mode == "yolo" else True,
+            "managed_by_gpd": wrapper_exists,
+            "launch_command": shlex.quote(str(wrapper_path)) if wrapper_exists else None,
+            "message": message,
+        }
+
+    def sync_runtime_permissions(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
+        """Create or remove the Gemini yolo launcher for the requested autonomy."""
+        wrapper_path = _managed_gemini_yolo_wrapper_path(target_dir)
+        changed = False
+        if autonomy == "yolo":
+            wrapper_path.parent.mkdir(parents=True, exist_ok=True)
+            content = _render_gemini_yolo_wrapper()
+            current = wrapper_path.read_text(encoding="utf-8") if wrapper_path.exists() else None
+            if current != content:
+                wrapper_path.write_text(content, encoding="utf-8")
+                wrapper_path.chmod(0o755)
+                changed = True
+        elif wrapper_path.exists():
+            wrapper_path.unlink()
+            changed = True
+
+        status = self.runtime_permissions_status(target_dir, autonomy=autonomy)
+        result = {
+            **status,
+            "changed": changed,
+            "sync_applied": bool(status.get("config_aligned")),
+            "requires_relaunch": autonomy == "yolo",
+        }
+        if autonomy == "yolo" and status.get("launch_command"):
+            result["next_step"] = (
+                "Exit the current Gemini session and relaunch with "
+                f"{status['launch_command']} so the runtime itself starts in yolo mode."
+            )
+        elif changed:
+            result["next_step"] = "Future Gemini sessions will use the normal approval mode unless you re-enable yolo."
+        return result
 
     def _write_manifest(self, target_dir: Path, version: str) -> None:
         """Record manifest metadata for shared config keys GPD actually introduced."""

@@ -358,6 +358,66 @@ class RuntimeAdapter(abc.ABC):
             explicit_target=getattr(self, "_install_explicit_target", False),
         )
 
+    def _read_install_manifest(self, target_dir: Path) -> dict[str, object]:
+        """Return the install manifest payload for *target_dir* when present."""
+        manifest_path = target_dir / MANIFEST_NAME
+        try:
+            parsed = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+    def _write_install_manifest_payload(self, target_dir: Path, manifest: dict[str, object]) -> None:
+        """Persist a normalized install manifest payload."""
+        manifest_path = target_dir / MANIFEST_NAME
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+    def _runtime_permissions_manifest_state(self, target_dir: Path) -> dict[str, object] | None:
+        """Return GPD-managed runtime-permission state from the install manifest."""
+        state = self._read_install_manifest(target_dir).get("gpd_runtime_permissions")
+        return state if isinstance(state, dict) else None
+
+    def _set_runtime_permissions_manifest_state(
+        self,
+        target_dir: Path,
+        state: dict[str, object] | None,
+    ) -> None:
+        """Update the install manifest with GPD-managed runtime-permission state."""
+        manifest = self._read_install_manifest(target_dir)
+        if not manifest:
+            return
+        if state:
+            manifest["gpd_runtime_permissions"] = state
+        else:
+            manifest.pop("gpd_runtime_permissions", None)
+        self._write_install_manifest_payload(target_dir, manifest)
+
+    def runtime_permissions_status(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
+        """Return runtime-specific status for autonomy/prompt alignment.
+
+        The default implementation reports that no runtime-owned sync surface is
+        available. Adapters with documented approval/permission controls should
+        override this method.
+        """
+        return {
+            "runtime": self.runtime_name,
+            "desired_mode": "yolo" if autonomy == "yolo" else "default",
+            "configured_mode": "unsupported",
+            "config_aligned": autonomy != "yolo",
+            "requires_relaunch": False,
+            "managed_by_gpd": False,
+            "message": f"{self.display_name} does not expose a GPD runtime-permissions sync surface.",
+        }
+
+    def sync_runtime_permissions(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
+        """Align runtime-owned approval settings with the requested autonomy mode."""
+        status = self.runtime_permissions_status(target_dir, autonomy=autonomy)
+        return {
+            **status,
+            "changed": False,
+            "sync_applied": False,
+        }
+
     # ---------------------------------------------------------------------------
     # Template method: install pipeline
     # ---------------------------------------------------------------------------

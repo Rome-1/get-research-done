@@ -851,6 +851,44 @@ class TestInstall:
         assert "@ include not resolved:" not in content.lower()
 
 
+class TestRuntimePermissions:
+    def test_sync_runtime_permissions_yolo_creates_launcher_wrapper(
+        self,
+        adapter: GeminiAdapter,
+        gpd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".gemini"
+        target.mkdir()
+        adapter.install(gpd_root, target)
+
+        result = adapter.sync_runtime_permissions(target, autonomy="yolo")
+        wrapper = target / "get-physics-done" / "bin" / "gemini-gpd-yolo"
+
+        assert wrapper.exists()
+        assert '--approval-mode=yolo "$@"' in wrapper.read_text(encoding="utf-8")
+        assert result["sync_applied"] is True
+        assert result["launch_command"] == str(wrapper)
+        assert result["requires_relaunch"] is True
+
+    def test_sync_runtime_permissions_non_yolo_removes_launcher_wrapper(
+        self,
+        adapter: GeminiAdapter,
+        gpd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".gemini"
+        target.mkdir()
+        adapter.install(gpd_root, target)
+        adapter.sync_runtime_permissions(target, autonomy="yolo")
+
+        result = adapter.sync_runtime_permissions(target, autonomy="balanced")
+        wrapper = target / "get-physics-done" / "bin" / "gemini-gpd-yolo"
+
+        assert not wrapper.exists()
+        assert result["sync_applied"] is True
+
+
 class TestUninstall:
     def test_uninstall_removes_gpd_dirs(self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".gemini"

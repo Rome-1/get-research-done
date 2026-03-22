@@ -1154,13 +1154,13 @@ def _detect_platform(cwd: Path | None = None) -> str:
     try:
         from gpd.hooks.runtime_detect import detect_active_runtime, detect_runtime_for_gpd_use
 
-        detected = detect_runtime_for_gpd_use(cwd=resolved_cwd)
-        if detected != "unknown":
-            return detected
-
         active = detect_active_runtime(cwd=resolved_cwd)
         if active != "unknown":
             return active
+
+        detected = detect_runtime_for_gpd_use(cwd=resolved_cwd)
+        if detected != "unknown":
+            return detected
     except Exception:
         pass
 

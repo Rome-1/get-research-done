@@ -496,6 +496,68 @@ class TestInstall:
         workflow = (target / "get-physics-done" / "workflows" / "set-profile.md").read_text(encoding="utf-8")
         assert expected_codex_bridge(target, explicit_target=True) + " config ensure-section" in workflow
 
+
+class TestRuntimePermissions:
+    def test_sync_runtime_permissions_yolo_updates_codex_root_and_role_configs(
+        self,
+        adapter: CodexAdapter,
+        gpd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".codex"
+        target.mkdir()
+        skills = tmp_path / "skills"
+        skills.mkdir()
+        adapter.install(gpd_root, target, skills_dir=skills)
+
+        result = adapter.sync_runtime_permissions(target, autonomy="yolo")
+
+        parsed = tomllib.loads((target / "config.toml").read_text(encoding="utf-8"))
+        role = tomllib.loads((target / "agents" / "gpd-executor.toml").read_text(encoding="utf-8"))
+        manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+
+        assert parsed["approval_policy"] == "never"
+        assert parsed["sandbox_mode"] == "danger-full-access"
+        assert role["approval_policy"] == "never"
+        assert role["sandbox_mode"] == "danger-full-access"
+        assert manifest["gpd_runtime_permissions"]["mode"] == "yolo"
+        assert result["sync_applied"] is True
+        assert result["requires_relaunch"] is True
+
+    def test_sync_runtime_permissions_restores_previous_codex_settings(
+        self,
+        adapter: CodexAdapter,
+        gpd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".codex"
+        target.mkdir()
+        (target / "config.toml").write_text(
+            'approval_policy = "on-request"\n'
+            'sandbox_mode = "workspace-write"\n',
+            encoding="utf-8",
+        )
+        skills = tmp_path / "skills"
+        skills.mkdir()
+        adapter.install(gpd_root, target, skills_dir=skills)
+
+        adapter.sync_runtime_permissions(target, autonomy="yolo")
+        result = adapter.sync_runtime_permissions(target, autonomy="balanced")
+
+        parsed = tomllib.loads((target / "config.toml").read_text(encoding="utf-8"))
+        role = tomllib.loads((target / "agents" / "gpd-executor.toml").read_text(encoding="utf-8"))
+        content = (target / "config.toml").read_text(encoding="utf-8")
+        manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+
+        assert parsed["approval_policy"] == "on-request"
+        assert parsed["sandbox_mode"] == "workspace-write"
+        assert "approval_policy" not in role
+        assert role["sandbox_mode"] == "workspace-write"
+        assert "GPD runtime approval policy" not in content
+        assert "GPD runtime sandbox mode" not in content
+        assert "gpd_runtime_permissions" not in manifest
+        assert result["sync_applied"] is True
+
     def test_reinstall_rewrites_stale_managed_notify_interpreter(
         self,
         adapter: CodexAdapter,

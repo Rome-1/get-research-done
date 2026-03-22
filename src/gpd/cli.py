@@ -2155,6 +2155,189 @@ config_app = typer.Typer(help="GPD configuration")
 app.add_typer(config_app, name="config")
 
 
+class _PermissionsResolutionError(RuntimeError):
+    """Internal error used to report non-fatal permissions resolution failures."""
+
+
+def _raise_permissions_resolution_error(message: str, *, strict: bool) -> None:
+    """Raise a permissions-resolution error, surfacing it only when requested."""
+    if strict:
+        _error(message)
+    raise _PermissionsResolutionError(message)
+
+
+def _resolve_permissions_runtime_name(runtime: str | None, *, strict: bool = True) -> str:
+    """Resolve the runtime to use for permission status/sync commands."""
+    from gpd.hooks.runtime_detect import RUNTIME_UNKNOWN, detect_active_runtime
+
+    supported = _supported_runtime_names()
+    if runtime is not None:
+        normalized = runtime.strip().lower()
+        if normalized not in supported:
+            _raise_permissions_resolution_error(
+                f"Unknown runtime {runtime!r}. Supported: {', '.join(supported)}",
+                strict=strict,
+            )
+        return normalized
+
+    detected = detect_active_runtime(cwd=_get_cwd())
+    if detected == RUNTIME_UNKNOWN:
+        _raise_permissions_resolution_error("No active runtime was detected. Pass --runtime explicitly.", strict=strict)
+    return detected
+
+
+def _resolve_permissions_autonomy(autonomy: str | None, *, strict: bool = True) -> str:
+    """Resolve the autonomy value used for runtime-permission sync."""
+    from gpd.core.config import AutonomyMode, load_config
+
+    if autonomy is None:
+        return load_config(_get_cwd()).autonomy.value
+
+    normalized = autonomy.strip().lower()
+    valid_values = {mode.value for mode in AutonomyMode}
+    if normalized not in valid_values:
+        _raise_permissions_resolution_error(
+            f"Unknown autonomy {autonomy!r}. Supported: {', '.join(sorted(valid_values))}",
+            strict=strict,
+        )
+    return normalized
+
+
+def _resolve_permissions_target_dir(runtime_name: str, *, target_dir: str | None, strict: bool = True) -> Path:
+    """Resolve the installed config directory targeted by a permissions command."""
+    from gpd.adapters import get_adapter
+    from gpd.hooks.runtime_detect import detect_install_scope
+
+    adapter = get_adapter(runtime_name)
+    if target_dir:
+        resolved = _resolve_cli_target_dir(target_dir)
+    else:
+        install_scope = detect_install_scope(runtime_name, cwd=_get_cwd())
+        if install_scope == "global":
+            resolved = adapter.resolve_target_dir(True, _get_cwd())
+        elif install_scope == "local":
+            resolved = adapter.resolve_target_dir(False, _get_cwd())
+        else:
+            local_target = adapter.resolve_target_dir(False, _get_cwd())
+            global_target = adapter.resolve_target_dir(True, _get_cwd())
+            if adapter.has_complete_install(local_target):
+                resolved = local_target
+            elif adapter.has_complete_install(global_target):
+                resolved = global_target
+            else:
+                _raise_permissions_resolution_error(
+                    f"No GPD install found for runtime {runtime_name!r}. Run `gpd install {runtime_name}` first.",
+                    strict=strict,
+                )
+
+    if not adapter.has_complete_install(resolved):
+        _raise_permissions_resolution_error(
+            f"No complete GPD install found at {_format_display_path(resolved)}.",
+            strict=strict,
+        )
+    return resolved
+
+
+def _runtime_permissions_payload(
+    *,
+    runtime: str | None,
+    autonomy: str | None,
+    target_dir: str | None,
+    apply_sync: bool,
+    strict: bool,
+) -> dict[str, object]:
+    """Return runtime-permissions status or sync payload for the selected runtime."""
+    from gpd.adapters import get_adapter
+    from gpd.hooks.runtime_detect import RUNTIME_UNKNOWN
+
+    try:
+        runtime_name = _resolve_permissions_runtime_name(runtime, strict=strict)
+    except _PermissionsResolutionError as exc:
+        return {
+            "runtime": None,
+            "target": None,
+            "sync_applied": False,
+            "changed": False,
+            "message": str(exc),
+        }
+
+    if runtime is None and runtime_name == RUNTIME_UNKNOWN:
+        if strict:
+            _error("No active runtime was detected. Pass --runtime explicitly.")
+        return {
+            "runtime": None,
+            "target": None,
+            "sync_applied": False,
+            "changed": False,
+            "message": "No active runtime was detected. Run `gpd permissions sync --runtime <name>` after installing GPD into a runtime.",
+        }
+
+    try:
+        resolved_target_dir = _resolve_permissions_target_dir(runtime_name, target_dir=target_dir, strict=strict)
+    except _PermissionsResolutionError as exc:
+        return {
+            "runtime": runtime_name,
+            "target": None if target_dir is None else str(_resolve_cli_target_dir(target_dir)),
+            "sync_applied": False,
+            "changed": False,
+            "message": str(exc),
+        }
+
+    autonomy_value = _resolve_permissions_autonomy(autonomy, strict=strict)
+    adapter = get_adapter(runtime_name)
+    payload = (
+        adapter.sync_runtime_permissions(resolved_target_dir, autonomy=autonomy_value)
+        if apply_sync
+        else adapter.runtime_permissions_status(resolved_target_dir, autonomy=autonomy_value)
+    )
+    return {
+        "runtime": runtime_name,
+        "target": str(resolved_target_dir),
+        "autonomy": autonomy_value,
+        **payload,
+    }
+
+
+permissions_app = typer.Typer(help="Runtime permission sync for autonomy")
+app.add_typer(permissions_app, name="permissions")
+
+
+@permissions_app.command("status")
+def permissions_status(
+    runtime: str | None = typer.Option(None, "--runtime", help="Runtime name to inspect"),
+    autonomy: str | None = typer.Option(None, "--autonomy", help="Autonomy to compare against"),
+    target_dir: str | None = typer.Option(None, "--target-dir", help="Explicit runtime config directory"),
+) -> None:
+    """Show whether runtime-owned permissions match the requested autonomy."""
+    _output(
+        _runtime_permissions_payload(
+            runtime=runtime,
+            autonomy=autonomy,
+            target_dir=target_dir,
+            apply_sync=False,
+            strict=True,
+        )
+    )
+
+
+@permissions_app.command("sync")
+def permissions_sync(
+    runtime: str | None = typer.Option(None, "--runtime", help="Runtime name to update"),
+    autonomy: str | None = typer.Option(None, "--autonomy", help="Autonomy to apply"),
+    target_dir: str | None = typer.Option(None, "--target-dir", help="Explicit runtime config directory"),
+) -> None:
+    """Persist runtime-owned permission settings for the requested autonomy."""
+    _output(
+        _runtime_permissions_payload(
+            runtime=runtime,
+            autonomy=autonomy,
+            target_dir=target_dir,
+            apply_sync=True,
+            strict=True,
+        )
+    )
+
+
 @config_app.command("get")
 def config_get(
     key: str = typer.Argument(..., help="Config key path (dot-separated)"),
@@ -2208,7 +2391,16 @@ def config_set(
 
     config = load_config(_get_cwd())
     _found, effective_value = effective_config_value(config, key)
-    _output({"key": key, "canonical_key": canonical_key, "value": effective_value, "updated": True})
+    result: dict[str, object] = {"key": key, "canonical_key": canonical_key, "value": effective_value, "updated": True}
+    if canonical_key == "autonomy":
+        result["runtime_permissions"] = _runtime_permissions_payload(
+            runtime=None,
+            autonomy=str(effective_value),
+            target_dir=None,
+            apply_sync=True,
+            strict=False,
+        )
+    _output(result)
 
 
 @config_app.command("ensure-section")

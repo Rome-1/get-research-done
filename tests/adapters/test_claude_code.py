@@ -514,6 +514,52 @@ class TestInstall:
         assert "Math stays $T$." in checker
 
 
+class TestRuntimePermissions:
+    def test_sync_runtime_permissions_yolo_sets_bypass_permissions(
+        self,
+        adapter: ClaudeCodeAdapter,
+        gpd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".claude"
+        target.mkdir()
+        adapter.install(gpd_root, target)
+
+        result = adapter.sync_runtime_permissions(target, autonomy="yolo")
+
+        settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
+        manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+
+        assert settings["permissions"]["defaultMode"] == "bypassPermissions"
+        assert manifest["gpd_runtime_permissions"]["mode"] == "yolo"
+        assert result["sync_applied"] is True
+        assert result["requires_relaunch"] is True
+
+    def test_sync_runtime_permissions_restores_prior_claude_mode(
+        self,
+        adapter: ClaudeCodeAdapter,
+        gpd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".claude"
+        target.mkdir()
+        (target / "settings.json").write_text(
+            json.dumps({"permissions": {"defaultMode": "acceptEdits"}}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        adapter.install(gpd_root, target)
+
+        adapter.sync_runtime_permissions(target, autonomy="yolo")
+        result = adapter.sync_runtime_permissions(target, autonomy="balanced")
+
+        settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
+        manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+
+        assert settings["permissions"]["defaultMode"] == "acceptEdits"
+        assert "gpd_runtime_permissions" not in manifest
+        assert result["sync_applied"] is True
+
+
 class TestUninstall:
     """Test uninstall cleans up GPD artifacts."""
 
