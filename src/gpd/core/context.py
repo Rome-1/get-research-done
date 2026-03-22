@@ -895,9 +895,9 @@ def _try_get_milestone_info(cwd: Path) -> dict:
 def _detect_platform(cwd: Path | None = None) -> str:
     """Detect the active AI runtime, if any."""
     try:
-        from gpd.hooks.runtime_detect import detect_runtime_for_gpd_use
+        from gpd.hooks.runtime_detect import detect_active_runtime
 
-        return detect_runtime_for_gpd_use(cwd=cwd)
+        return detect_active_runtime(cwd=cwd)
     except Exception:
         return "unknown"
 
