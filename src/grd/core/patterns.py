@@ -623,12 +623,35 @@ def _load_bootstrap_patterns() -> list[dict[str, object]]:
 _BOOTSTRAP_PATTERNS: list[dict[str, object]] = _load_bootstrap_patterns()
 
 
+def _load_patterns_for_domain(domain_name: str | None = None) -> list[dict[str, object]]:
+    """Load bootstrap patterns for a specific domain (or active domain)."""
+    import os
+
+    try:
+        from grd.domains.loader import load_domain
+    except ImportError:
+        return []
+
+    name = domain_name or os.environ.get("GRD_DOMAIN", "physics")
+    ctx = load_domain(name)
+    if ctx is None:
+        return []
+    return ctx.seed_patterns
+
+
 @instrument_grd_function("patterns.seed")
-def pattern_seed(*, root: Path | None = None) -> PatternSeedResult:
-    """Seed the library with canonical physics bootstrap patterns.
+def pattern_seed(*, root: Path | None = None, domain_name: str | None = None) -> PatternSeedResult:
+    """Seed the library with bootstrap patterns for the active domain.
 
     Idempotent — skips patterns that already exist.
+    When *domain_name* is provided, seeds patterns from that domain pack
+    instead of the default (GRD_DOMAIN env or 'physics').
     """
+    bootstrap = _load_patterns_for_domain(domain_name) if domain_name else _BOOTSTRAP_PATTERNS
+    if not bootstrap and domain_name:
+        # Domain has no seed patterns — fall back to module-level default
+        bootstrap = _BOOTSTRAP_PATTERNS
+
     lib_root = ensure_library(root)
     index = _load_index(lib_root) or PatternIndex()
     today = _today_iso()
@@ -638,7 +661,7 @@ def pattern_seed(*, root: Path | None = None) -> PatternSeedResult:
     skipped = 0
 
     with grd_span("patterns.seed"):
-        for bp in _BOOTSTRAP_PATTERNS:
+        for bp in bootstrap:
             domain = str(bp["domain"])
             category = str(bp["category"])
             slug = str(bp.get("slug", ""))

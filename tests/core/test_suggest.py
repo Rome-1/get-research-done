@@ -140,7 +140,7 @@ def test_no_project_with_runtime_dir_but_no_install_uses_plain_gpd_command(tmp_p
         result = suggest_next(workspace)
 
     assert result.top_action is not None
-    assert result.top_action.command == "grd new-project"
+    assert result.top_action.command == "grd context new-project"
 
 
 # ─── Empty Project ─────────────────────────────────────────────────────────────
@@ -296,7 +296,7 @@ def test_unverified_results_suggest_verification(tmp_path: Path) -> None:
     result = suggest_next(root)
     verify_results = next((s for s in result.suggestions if s.action == "verify-results"), None)
     assert verify_results is not None
-    assert verify_results.command == "grd verify-work 01"
+    assert verify_results.command == "grd context verify-work 01"
     assert verify_results.phase == "01"
     assert result.context.unverified_results == 1
 

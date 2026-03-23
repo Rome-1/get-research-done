@@ -201,6 +201,13 @@ def _load_config(cwd: Path) -> dict[str, object]:
     }
 
 
+_CONTEXT_ACTIONS = frozenset({
+    "new-project", "new-milestone", "plan-phase", "execute-phase",
+    "quick", "resume", "verify-work", "progress", "map-research",
+    "todos", "phase-op", "milestone-op", "resume-work",
+})
+
+
 def _format_command(action: str, *, cwd: Path | None = None) -> str:
     """Format a GRD command name."""
     try:
@@ -212,9 +219,14 @@ def _format_command(action: str, *, cwd: Path | None = None) -> str:
 
         runtime = detect_active_runtime_with_grd_install(cwd=cwd)
         if runtime == RUNTIME_UNKNOWN:
+            # Context-assembly actions live under 'grd context <action>'
+            if action in _CONTEXT_ACTIONS:
+                return f"grd context {action}"
             return f"grd {action}"
         return get_adapter(runtime).format_command(action)
     except Exception:
+        if action in _CONTEXT_ACTIONS:
+            return f"grd context {action}"
         return f"grd {action}"
 
 

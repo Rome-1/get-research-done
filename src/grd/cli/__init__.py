@@ -17,6 +17,8 @@ from __future__ import annotations
 import os  # noqa: F401 — re-exported for test monkeypatching
 import sys
 
+import typer
+
 from grd.cli._helpers import (
     _format_install_header_lines,
     _get_cwd,  # noqa: F401 — re-exported for test patching
@@ -31,6 +33,7 @@ from grd.cli.commands import (  # noqa: E402
     approx_app,
     calculation_app,
     config_app,
+    context_app,
     init_app,
     json_app,
     milestone_app,
@@ -41,6 +44,7 @@ from grd.cli.commands import (  # noqa: E402
     trace_app,
     uncertainty_app,
 )
+from grd.cli.domain import domain_app  # noqa: E402
 from grd.cli.convention import convention_app  # noqa: E402
 from grd.cli.frontmatter import frontmatter_app  # noqa: E402
 from grd.cli.pattern import pattern_app  # noqa: E402
@@ -68,7 +72,9 @@ app.add_typer(validate_app, name="validate")
 app.add_typer(query_app, name="query")
 app.add_typer(roadmap_app, name="roadmap")
 app.add_typer(milestone_app, name="milestone")
-app.add_typer(init_app, name="init")
+app.add_typer(context_app, name="context")
+app.add_typer(init_app, name="init", hidden=True)  # backward-compatible alias
+app.add_typer(domain_app, name="domain")
 app.add_typer(approx_app, name="approximation")
 app.add_typer(uncertainty_app, name="uncertainty")
 app.add_typer(question_app, name="question")
@@ -86,6 +92,36 @@ import grd.cli.commands  # noqa: F401, E402 — registers @app.command() entries
 import grd.cli.install  # noqa: F401, E402
 import grd.cli.paper  # noqa: F401, E402
 from grd.cli.install import _install_single_runtime  # noqa: F401, E402 — re-exported for tests
+
+
+# ─── Top-level aliases ─────────────────────────────────────────────────────
+
+
+@app.command("search")
+def search(
+    provides: str | None = typer.Option(None, "--provides", help="Search by provides"),
+    requires: str | None = typer.Option(None, "--requires", help="Search by requires"),
+    affects: str | None = typer.Option(None, "--affects", help="Search by affects"),
+    equation: str | None = typer.Option(None, "--equation", help="Search by equation"),
+    text: str | None = typer.Option(None, "--text", help="Full-text search"),
+    phase_range: str | None = typer.Option(None, "--phase-range", help="Phase range filter (e.g. 10-20)"),
+) -> None:
+    """Search across phases (alias for 'query search')."""
+    from grd.core.query import query as query_search
+
+    from grd.cli._helpers import _output  # noqa: F811
+
+    _output(
+        query_search(
+            _get_cwd(),
+            provides=provides,
+            requires=requires,
+            affects=affects,
+            equation=equation,
+            text=text,
+            phase_range=phase_range,
+        )
+    )
 
 
 def entrypoint() -> int | None:

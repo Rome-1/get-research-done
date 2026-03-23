@@ -2,8 +2,8 @@
 
 ### AI copilot for structured research
 
-[![CI](https://github.com/psi-oss/get-research-done/actions/workflows/test.yml/badge.svg)](https://github.com/psi-oss/get-research-done/actions/workflows/test.yml)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/psi-oss/get-research-done/blob/main/LICENSE)
+[![CI](https://github.com/Rome-1/get-research-done/actions/workflows/test.yml/badge.svg)](https://github.com/Rome-1/get-research-done/actions/workflows/test.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/Rome-1/get-research-done/blob/main/LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![npm](https://img.shields.io/npm/v/get-research-done)](https://www.npmjs.com/package/get-research-done)
 
@@ -19,6 +19,15 @@ It is designed for long-horizon projects that require rigorous verification, str
 
 
 We welcome contributions and feedback via GitHub issues or pull requests; if GRD is useful in your work, please star the repo, and share it with colleagues who might benefit.
+
+### Two interfaces
+
+GRD has two command surfaces:
+
+- **In-runtime commands** (primary) — slash commands inside your AI runtime (Claude Code, Gemini CLI, Codex, OpenCode). Example: `/grd:new-project`, `/grd:plan-phase`. These drive the research workflow.
+- **`grd` CLI** (standalone terminal tool) — for validation, inspection, and configuration outside the runtime. Example: `grd health`, `grd search`, `grd domain list`.
+
+Most research work happens through in-runtime commands. The standalone CLI is for diagnostics, querying, and project management.
 
 ## Quick Start
 

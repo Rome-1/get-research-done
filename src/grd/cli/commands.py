@@ -80,19 +80,22 @@ def query_search(
     phase_range: str | None = typer.Option(None, "--phase-range", help="Phase range filter (e.g. 10-20)"),
 ) -> None:
     """Search across phases by provides/requires/text."""
+    from grd.cli._helpers import _raw, err_console
     from grd.core.query import query as query_search
 
-    _output(
-        query_search(
-            _get_cwd(),
-            provides=provides,
-            requires=requires,
-            affects=affects,
-            equation=equation,
-            text=text,
-            phase_range=phase_range,
-        )
+    result = query_search(
+        _get_cwd(),
+        provides=provides,
+        requires=requires,
+        affects=affects,
+        equation=equation,
+        text=text,
+        phase_range=phase_range,
     )
+    if not _raw and result.total == 0:
+        err_console.print("[dim]No matches found. Search scans phase PLAN and SUMMARY frontmatter.[/]")
+        err_console.print("[dim]Hint: Use 'grd phase add' to create phases, then 'grd search --text <term>' to search.[/]")
+    _output(result)
 
 
 @query_app.command("deps")
@@ -198,7 +201,8 @@ def progress(
 # init — Workflow context assembly
 # ═══════════════════════════════════════════════════════════════════════════
 
-init_app = typer.Typer(help="Assemble context for AI agent workflows")
+context_app = typer.Typer(help="Assemble context for AI agent workflows")
+init_app = context_app  # backward-compatible alias
 
 
 @init_app.command("execute-phase")

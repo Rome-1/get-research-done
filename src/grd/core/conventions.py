@@ -294,6 +294,8 @@ class ConventionSetResult(BaseModel):
     custom: bool = False
     reason: str | None = None
     hint: str | None = None
+    key_alias_resolved: str | None = None  # original key if alias was applied
+    value_alias_resolved: str | None = None  # original value if alias was applied
 
 
 class ConventionEntry(BaseModel):
@@ -432,7 +434,13 @@ def convention_set(
     """
     cleaned = sanitize_value(value)
     canonical_key = normalize_key(key, domain_ctx=domain_ctx)
-    cleaned = normalize_value(canonical_key, cleaned, domain_ctx=domain_ctx)
+    normalized_value = normalize_value(canonical_key, cleaned, domain_ctx=domain_ctx)
+
+    # Track alias resolution for user feedback
+    key_alias = key if canonical_key != key else None
+    value_alias = cleaned if normalized_value != cleaned else None
+    cleaned = normalized_value
+
     known = _resolve_known_conventions(domain_ctx)
     is_custom = canonical_key not in known
 
@@ -448,6 +456,8 @@ def convention_set(
             custom=is_custom,
             reason="convention_already_set",
             hint="Use force=True to overwrite an existing convention",
+            key_alias_resolved=key_alias,
+            value_alias_resolved=value_alias,
         )
 
     lock.conventions[canonical_key] = cleaned
@@ -464,6 +474,8 @@ def convention_set(
         value=cleaned,
         previous=previous,
         custom=is_custom,
+        key_alias_resolved=key_alias,
+        value_alias_resolved=value_alias,
     )
 
 

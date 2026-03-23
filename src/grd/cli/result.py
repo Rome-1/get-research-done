@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from grd.cli._helpers import _error, _get_cwd, _load_state_dict, _output, _parse_meta_options
+from grd.cli._helpers import _error, _get_cwd, _load_state_dict, _output, _parse_meta_options, console
 
 result_app = typer.Typer(help="Intermediate results with dependency tracking")
 
@@ -68,7 +68,16 @@ def result_list(
 
     if verified and unverified:
         _error("--verified and --unverified are mutually exclusive")
-    _output(result_list(_load_state_dict(), phase=phase, verified=verified, unverified=unverified))
+    results = result_list(_load_state_dict(), phase=phase, verified=verified, unverified=unverified)
+    if not results:
+        from grd.cli._helpers import _raw
+
+        if _raw:
+            _output(results)
+        else:
+            console.print("[dim]No results found. Use 'grd result add' to register intermediate results.[/]")
+        return
+    _output(results)
 
 
 @result_app.command("deps")
