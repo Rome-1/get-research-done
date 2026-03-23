@@ -1,0 +1,288 @@
+{
+  "project_reference": {
+    "project_md_updated": null,
+    "core_research_question": null,
+    "current_focus": null
+  },
+  "project_contract": {
+    "schema_version": 1,
+    "scope": {
+      "question": "What are the most effective and efficient methods for detecting and parametrizing low-dimensional manifold substructures within high-dimensional point clouds, and how do spectral methods (Laplacian eigenfunctions, heat kernels) compare to modern alternatives in terms of theoretical guarantees and computational scalability?",
+      "in_scope": [
+        "Survey and systematize methods for manifold detection in high-dimensional spaces: spectral (Laplacian eigenmaps, diffusion maps, heat kernel embeddings), geometric (local PCA, tangent space estimation), and topological (persistent homology)",
+        "Analyze the Jones-Maggioni-Schul heat triangulation theorem and its implications for practical manifold parametrization",
+        "Characterize computational complexity and scalability of manifold detection methods as dimension and sample size grow",
+        "Identify connections to mechanistic interpretability: detecting manifold structure in neural network activation spaces",
+        "Compare theoretical guarantees (bi-Lipschitz bounds, distortion, robustness to noise) across method families"
+      ],
+      "out_of_scope": [
+        "Implementation of production-scale manifold learning software",
+        "Training or fine-tuning neural networks",
+        "Experimental data collection from physical systems",
+        "Full proofs of new theorems (survey and synthesis focus)"
+      ],
+      "unresolved_questions": [
+        "Which specific neural network architectures and layers are most promising for manifold analysis in mechanistic interpretability?",
+        "What is the practical gap between heat-kernel-based methods with bi-Lipschitz guarantees and heuristic methods like t-SNE/UMAP that lack such guarantees?"
+      ]
+    },
+    "context_intake": {
+      "must_read_refs": [
+        "ref-jms2008"
+      ],
+      "must_include_prior_outputs": [],
+      "user_asserted_anchors": [
+        "Jones-Maggioni-Schul heat triangulation theorem provides bi-Lipschitz coordinate systems via heat kernels"
+      ],
+      "known_good_baselines": [],
+      "context_gaps": [
+        "No baseline computation or prior experimental output exists yet; this is a fresh literature survey and synthesis"
+      ],
+      "crucial_inputs": [
+        "Jones-Maggioni-Schul 2008 PNAS paper as foundational reference"
+      ]
+    },
+    "approach_policy": {
+      "formulations": [
+        "Spectral geometry on graphs and manifolds",
+        "Heat kernel methods on discrete point clouds",
+        "Diffusion maps framework"
+      ],
+      "allowed_estimator_families": [
+        "Graph Laplacian eigenvectors",
+        "Heat kernel approximations",
+        "Local PCA / tangent space estimators",
+        "Persistent homology"
+      ],
+      "forbidden_estimator_families": [
+        "Methods without any theoretical convergence or distortion guarantees used as sole evidence"
+      ],
+      "allowed_fit_families": [
+        "Intrinsic dimensionality estimators with convergence rates"
+      ],
+      "forbidden_fit_families": [
+        "Purely visual/qualitative dimensionality reduction without quantitative evaluation"
+      ],
+      "stop_and_rethink_conditions": [
+        "If the survey reveals that heat-kernel methods are computationally intractable for realistic problem sizes without approximation, reassess scope to focus on efficient approximations"
+      ]
+    },
+    "observables": [
+      {
+        "id": "obs-method-comparison",
+        "name": "Comparative analysis of manifold detection methods",
+        "kind": "classification",
+        "definition": "Systematic comparison table of manifold detection methods by: theoretical guarantees (bi-Lipschitz, distortion bounds), computational complexity, noise robustness, and applicability to high-dimensional point clouds",
+        "regime": null,
+        "units": null
+      },
+      {
+        "id": "obs-scalability",
+        "name": "Scalability analysis",
+        "kind": "curve",
+        "definition": "Computational complexity as a function of ambient dimension D, intrinsic dimension d, and sample size N for each method family",
+        "regime": null,
+        "units": null
+      },
+      {
+        "id": "obs-interp-connection",
+        "name": "Mechanistic interpretability connection map",
+        "kind": "classification",
+        "definition": "Mapping of which manifold detection methods are applicable to neural network activation analysis and what they reveal about network structure",
+        "regime": null,
+        "units": null
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim-survey",
+        "statement": "Produce a structured survey identifying the most effective methods for detecting manifold substructures in high-dimensional point clouds, with explicit comparison of theoretical guarantees and computational efficiency",
+        "observables": [
+          "obs-method-comparison",
+          "obs-scalability"
+        ],
+        "deliverables": [
+          "deliv-survey-report"
+        ],
+        "acceptance_tests": [
+          "test-completeness"
+        ],
+        "references": [
+          "ref-jms2008"
+        ]
+      },
+      {
+        "id": "claim-bridge",
+        "statement": "Identify concrete connections between spectral manifold methods and mechanistic interpretability, specifying which methods are most promising for analyzing neural network activation geometry",
+        "observables": [
+          "obs-interp-connection"
+        ],
+        "deliverables": [
+          "deliv-bridge-note"
+        ],
+        "acceptance_tests": [
+          "test-bridge-specificity"
+        ],
+        "references": [
+          "ref-jms2008"
+        ]
+      }
+    ],
+    "deliverables": [
+      {
+        "id": "deliv-survey-report",
+        "kind": "report",
+        "path": null,
+        "description": "Structured research report covering manifold detection methods, their theoretical properties, computational complexity, and comparative analysis",
+        "must_contain": [
+          "Method taxonomy",
+          "Complexity comparison table",
+          "Theoretical guarantee summary",
+          "Connection to Jones-Maggioni-Schul results"
+        ]
+      },
+      {
+        "id": "deliv-bridge-note",
+        "kind": "note",
+        "path": null,
+        "description": "Research note connecting manifold analysis methods to mechanistic interpretability applications",
+        "must_contain": [
+          "Specific method recommendations for activation space analysis",
+          "Open problems at the intersection"
+        ]
+      }
+    ],
+    "acceptance_tests": [
+      {
+        "id": "test-completeness",
+        "subject": "claim-survey",
+        "kind": "human_review",
+        "procedure": "Verify survey covers at minimum: spectral methods (Laplacian eigenmaps, diffusion maps, heat kernel embeddings), geometric methods (local PCA, ISOMAP), topological methods (persistent homology), and includes the Jones-Maggioni-Schul results as a theoretical anchor",
+        "pass_condition": "All major method families covered with complexity analysis and guarantee characterization",
+        "evidence_required": [
+          "deliv-survey-report"
+        ],
+        "automation": "human"
+      },
+      {
+        "id": "test-bridge-specificity",
+        "subject": "claim-bridge",
+        "kind": "human_review",
+        "procedure": "Verify the bridge note identifies at least 2 specific, actionable connections between manifold methods and mechanistic interpretability, not just vague analogies",
+        "pass_condition": "Connections are specific enough to guide a follow-up implementation project",
+        "evidence_required": [
+          "deliv-bridge-note"
+        ],
+        "automation": "human"
+      }
+    ],
+    "references": [
+      {
+        "id": "ref-jms2008",
+        "kind": "paper",
+        "locator": "Jones PW, Maggioni M, Schul R (2008) Manifold parametrizations by eigenfunctions of the Laplacian and heat kernels. PNAS 105(6):1803-1808",
+        "aliases": [
+          "JMS2008",
+          "heat-triangulation-paper"
+        ],
+        "role": "benchmark",
+        "why_it_matters": "Establishes that heat kernels and Laplacian eigenfunctions provide bi-Lipschitz local coordinate systems on manifolds \u2014 the theoretical foundation for spectral manifold detection",
+        "applies_to": [
+          "claim-survey"
+        ],
+        "carry_forward_to": [
+          "planning",
+          "execution",
+          "verification",
+          "writing"
+        ],
+        "must_surface": true,
+        "required_actions": [
+          "read",
+          "cite"
+        ]
+      }
+    ],
+    "forbidden_proxies": [
+      {
+        "id": "fp-visual-only",
+        "subject": "claim-survey",
+        "proxy": "Listing methods with only qualitative descriptions and no complexity or guarantee analysis",
+        "reason": "The priority is finding manifolds efficiently \u2014 methods must be compared on computational and theoretical grounds, not just described"
+      }
+    ],
+    "links": [
+      {
+        "id": "link-survey-to-report",
+        "source": "claim-survey",
+        "target": "deliv-survey-report",
+        "relation": "supports",
+        "verified_by": [
+          "test-completeness"
+        ]
+      },
+      {
+        "id": "link-bridge-to-note",
+        "source": "claim-bridge",
+        "target": "deliv-bridge-note",
+        "relation": "supports",
+        "verified_by": [
+          "test-bridge-specificity"
+        ]
+      }
+    ],
+    "uncertainty_markers": {
+      "weakest_anchors": [
+        "The connection between spectral manifold methods and mechanistic interpretability is exploratory \u2014 no established benchmark exists for evaluating manifold detection quality in neural activation spaces"
+      ],
+      "unvalidated_assumptions": [
+        "That neural network activations actually lie on or near smooth low-dimensional manifolds amenable to these methods"
+      ],
+      "competing_explanations": [
+        "Alternative view that neural representations are better characterized by polytopes, simplicial complexes, or other non-manifold structures"
+      ],
+      "disconfirming_observations": [
+        "If systematic review shows that all efficient manifold detection methods sacrifice the bi-Lipschitz guarantees that make heat-kernel methods theoretically attractive, the framing of efficiency-vs-guarantees tradeoff would need revision"
+      ]
+    }
+  },
+  "position": {
+    "current_phase": "01",
+    "current_phase_name": "Spectral Methods Survey",
+    "total_phases": null,
+    "current_plan": null,
+    "total_plans_in_phase": null,
+    "status": "Ready to execute",
+    "last_activity": null,
+    "last_activity_desc": null,
+    "progress_percent": 0,
+    "paused_at": null
+  },
+  "active_calculations": [],
+  "intermediate_results": [],
+  "open_questions": [
+    "Which specific neural network architectures and layers are most promising for manifold analysis in mechanistic interpretability?",
+    "What is the practical gap between heat-kernel-based methods with bi-Lipschitz guarantees and heuristic methods like t-SNE/UMAP that lack such guarantees?"
+  ],
+  "performance_metrics": {
+    "rows": []
+  },
+  "decisions": [],
+  "approximations": [],
+  "convention_lock": {
+    "conventions": {
+      "coordinate_system": "Euclidean R^d ambient space, Riemannian manifold M with induced metric",
+      "natural_units": "Dimensionless (mathematical framework)"
+    }
+  },
+  "propagated_uncertainties": [],
+  "pending_todos": [],
+  "blockers": [],
+  "session": {
+    "last_date": null,
+    "stopped_at": null,
+    "resume_file": null
+  },
+  "_version": 1,
+  "_synced_at": "2026-03-23T18:46:20.660495+00:00"
+}
