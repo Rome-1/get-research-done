@@ -953,7 +953,15 @@ def commit(
     """
     from grd.core.git_ops import cmd_commit
 
+    from grd.cli._helpers import _raw, err_console
+
     result = cmd_commit(_get_cwd(), message, files=_collect_file_option_args(ctx, files) or None)
+    if not _raw and getattr(result, "skipped", False) and getattr(result, "reason", "") == "commit_docs_disabled":
+        err_console.print(
+            "[yellow]Skipped:[/] commit_docs is disabled in project config. "
+            "Enable with: grd config set commit_docs true",
+            highlight=False,
+        )
     _output(result)
     if not result.committed and not getattr(result, "skipped", False):
         raise typer.Exit(code=1)
@@ -1002,9 +1010,11 @@ def timestamp(
     fmt: str = typer.Argument("full", help="Format: date, filename, or full"),
 ) -> None:
     """Return current timestamp in the requested format."""
+    from grd.cli._helpers import _raw
     from grd.core.commands import cmd_current_timestamp
 
-    _output(cmd_current_timestamp(fmt))
+    result = cmd_current_timestamp(fmt)
+    _json_cli_output(result)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1017,9 +1027,11 @@ def slug(
     text: str = typer.Argument(..., help="Text to convert to a slug"),
 ) -> None:
     """Generate a URL-safe slug from text."""
+    from grd.cli._helpers import _raw
     from grd.core.commands import cmd_generate_slug
 
-    _output(cmd_generate_slug(text))
+    result = cmd_generate_slug(text)
+    _json_cli_output(result)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

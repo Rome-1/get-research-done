@@ -351,11 +351,22 @@ def _version_option_callback(ctx: typer.Context, _: typer.CallbackParam, value: 
 
 
 def _json_cli_output(data: object) -> None:
-    """Emit literal JSON for the lightweight JSON subcommands."""
-    if _raw:
-        console.print_json(json.dumps(data, default=str))
+    """Emit literal JSON for the lightweight JSON subcommands.
+
+    In --raw mode, serializes as JSON (with Pydantic/dataclass support).
+    In non-raw mode, prints plain text (no Rich table wrapper).
+    """
+    if hasattr(data, "model_dump"):
+        serializable = data.model_dump(mode="json", by_alias=True)
+    elif dataclasses.is_dataclass(data) and not isinstance(data, type):
+        serializable = dataclasses.asdict(data)
     else:
-        console.print(data, highlight=False)
+        serializable = data
+
+    if _raw:
+        console.print_json(json.dumps(serializable, default=str))
+    else:
+        console.print(serializable, highlight=False)
 
 
 def _format_pydantic_schema_error(error: dict[str, object], *, root_label: str) -> str:
