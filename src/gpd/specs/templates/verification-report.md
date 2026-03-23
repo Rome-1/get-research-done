@@ -118,7 +118,7 @@ suggested_contract_checks:
   - check: "Add decisive normalization benchmark comparison"
     reason: "The reported agreement depends on a normalization-sensitive benchmark that is not yet explicit."
     suggested_subject_kind: acceptance_test
-    suggested_subject_id: test-benchmark
+    suggested_subject_id: acceptance-test-id
     evidence_path: .gpd/phases/01-benchmark/benchmark-comparison.csv
 ---
 

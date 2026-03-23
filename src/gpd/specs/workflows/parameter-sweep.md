@@ -173,6 +173,10 @@ files_modified:
 contract:
   scope:
     question: "What does {observable} evaluate to at {param_name}={p_i}?"
+  context_intake:
+    must_read_refs: [ref-sweep-anchor]
+    must_include_prior_outputs: ["Phase-level sweep baseline"]
+    user_asserted_anchors: ["The observable stays within the approved regime"]
   claims:
     - id: claim-sweep-point
       statement: "{observable} computed at {param_name}={p_i}"

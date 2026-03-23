@@ -32,7 +32,6 @@ from gpd.core.constants import (
     SUMMARY_SUFFIX,
 )
 from gpd.core.contract_validation import (
-    _collect_list_shape_drift_errors,
     _format_schema_error,
     _sanitize_contract_scalars,
     _split_project_contract_schema_findings,
@@ -246,13 +245,12 @@ def _validate_contract_mapping(
     if not isinstance(contract_data, dict):
         return _PlanContractResolution(errors=["expected an object"])
 
-    list_shape_drift_errors = _collect_list_shape_drift_errors(contract_data)
     scalar_errors: list[str] = []
     sanitized_contract_data = _sanitize_contract_scalars(contract_data, errors=scalar_errors)
     if not isinstance(sanitized_contract_data, dict):
         return _PlanContractResolution(errors=["expected an object"])
-    if scalar_errors or list_shape_drift_errors:
-        return _PlanContractResolution(errors=list(dict.fromkeys([*scalar_errors, *list_shape_drift_errors])))
+    if scalar_errors:
+        return _PlanContractResolution(errors=list(dict.fromkeys(scalar_errors)))
 
     normalized_contract, schema_findings = salvage_project_contract(sanitized_contract_data)
     schema_warnings, schema_errors = _split_project_contract_schema_findings(
@@ -1008,6 +1006,17 @@ def _verification_status_errors(
         errors.append(
             "status: passed is inconsistent with non-passed contract_results targets: "
             + ", ".join(sorted(non_passed_subjects))
+        )
+
+    non_completed_references = [
+        f"reference {entry_id}"
+        for entry_id, entry in contract_results.references.items()
+        if entry.status != "completed"
+    ]
+    if non_completed_references:
+        errors.append(
+            "status: passed is inconsistent with non-completed contract_results references: "
+            + ", ".join(sorted(non_completed_references))
         )
 
     unresolved_proxies = [

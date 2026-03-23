@@ -3893,7 +3893,7 @@ comparison_verdicts:    # Required when a decisive comparison was required or at
   - subject_kind: claim|deliverable|acceptance_test|reference
     subject_id: "claim-id"
     subject_role: decisive|supporting|supplemental|other
-    reference_id: "ref-id"
+    reference_id: "reference-id"
     comparison_kind: benchmark|prior_work|experiment|cross_method|baseline|other
     verdict: pass|tension|fail|inconclusive
     metric: "relative_error"
@@ -3904,7 +3904,7 @@ suggested_contract_checks:
   - check: "Add explicit benchmark comparison for decisive observable"
     reason: "Phase conclusion depends on agreement with prior work but the contract does not name the comparison"
     suggested_subject_kind: acceptance_test
-    suggested_subject_id: "test-benchmark"
+    suggested_subject_id: "acceptance-test-id"
     evidence_path: "path/to/artifact"
 expert_verification:    # Only if status: expert_needed | human_needed
   - check: "..."

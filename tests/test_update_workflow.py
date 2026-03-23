@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from gpd.adapters import get_adapter
-from gpd.adapters.runtime_catalog import iter_runtime_descriptors
+from gpd.adapters.runtime_catalog import iter_runtime_descriptors, resolve_global_config_dir
 from gpd.hooks.install_metadata import installed_update_command
 
 GPD_ROOT = Path(__file__).resolve().parent.parent / "src" / "gpd"
@@ -141,6 +141,54 @@ def test_explicit_target_global_install_keeps_global_update_scope(tmp_path: Path
     assert manifest["install_scope"] == "global"
     assert manifest["explicit_target"] is True
     assert command == f"{adapter.update_command} --global --target-dir {target.as_posix()}"
+
+
+@pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+def test_legacy_global_install_without_explicit_target_ignores_current_env_override(
+    tmp_path: Path,
+    descriptor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = get_adapter(descriptor.runtime_name)
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    canonical_target = resolve_global_config_dir(descriptor, home=home_dir, environ={})
+    canonical_target.mkdir(parents=True)
+
+    install_kwargs: dict[str, object] = {"is_global": True}
+    if "skills/" in descriptor.manifest_file_prefixes:
+        skills_dir = tmp_path / "legacy-global" / "skills"
+        skills_dir.mkdir(parents=True)
+        install_kwargs["skills_dir"] = skills_dir
+
+    with monkeypatch.context() as ctx:
+        ctx.setattr("gpd.hooks.install_metadata.Path.home", lambda: home_dir)
+        _install_and_finalize(adapter, GPD_ROOT, canonical_target, **install_kwargs)
+
+    manifest_path = canonical_target / "gpd-file-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.pop("explicit_target", None)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    if descriptor.global_config.strategy == "env_or_home":
+        assert descriptor.global_config.env_var is not None
+        monkeypatch.setenv(descriptor.global_config.env_var, str(tmp_path / "override-config"))
+    elif descriptor.global_config.strategy == "xdg_app":
+        if descriptor.global_config.env_dir_var is not None:
+            monkeypatch.setenv(descriptor.global_config.env_dir_var, str(tmp_path / "override-config"))
+        elif descriptor.global_config.env_file_var is not None:
+            monkeypatch.setenv(descriptor.global_config.env_file_var, str(tmp_path / "override-config" / "config.json"))
+        else:
+            monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "override-config"))
+    else:
+        pytest.fail(f"Unsupported global config strategy: {descriptor.global_config.strategy}")
+
+    with monkeypatch.context() as ctx:
+        ctx.setattr("gpd.hooks.install_metadata.Path.home", lambda: home_dir)
+        command = installed_update_command(canonical_target)
+
+    assert command == f"{adapter.update_command} --global"
+    assert "--target-dir" not in command
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)

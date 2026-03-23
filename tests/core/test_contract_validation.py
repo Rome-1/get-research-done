@@ -555,7 +555,7 @@ def test_validate_project_contract_normalizes_reference_required_actions_whitesp
     assert result.valid is True
 
 
-def test_validate_project_contract_rejects_singleton_list_string_drift_at_validation_boundary() -> None:
+def test_validate_project_contract_accepts_singleton_list_string_drift_at_validation_boundary() -> None:
     contract = _load_contract_fixture()
     contract["context_intake"]["must_include_prior_outputs"] = ".gpd/phases/00-baseline/00-01-SUMMARY.md"
     contract["references"][0]["role"] = "Benchmark"
@@ -567,8 +567,8 @@ def test_validate_project_contract_rejects_singleton_list_string_drift_at_valida
     assert parsed.context_intake.must_include_prior_outputs == [".gpd/phases/00-baseline/00-01-SUMMARY.md"]
     assert parsed.references[0].role == "benchmark"
     assert parsed.references[0].required_actions == ["read", "compare", "cite"]
-    assert result.valid is False
-    assert "context_intake.must_include_prior_outputs must be a list, not str" in result.errors
+    assert result.valid is True
+    assert result.errors == []
 
 
 def test_validate_project_contract_rejects_coercive_reference_must_surface_scalar() -> None:
@@ -662,26 +662,26 @@ def test_validate_project_contract_propagates_schema_errors() -> None:
     assert "project contract must include at least one observable, claim, or deliverable" in result.errors
 
 
-def test_validate_project_contract_rejects_reference_aliases_list_shape_drift_at_validation_boundary() -> None:
+def test_validate_project_contract_accepts_reference_aliases_list_shape_drift_at_validation_boundary() -> None:
     contract = _load_contract_fixture()
     contract["references"][0]["aliases"] = "not-a-list"
 
     parsed = ResearchContract.model_validate(contract)
     result = validate_project_contract(contract)
 
-    assert result.valid is False
+    assert result.valid is True
     assert parsed.references[0].aliases == ["not-a-list"]
-    assert "references.0.aliases must be a list, not str" in result.errors
+    assert result.errors == []
 
 
-def test_validate_project_contract_rejects_nested_claim_reference_list_shape_drift() -> None:
+def test_validate_project_contract_accepts_nested_claim_reference_list_shape_drift() -> None:
     contract = _load_contract_fixture()
     contract["claims"][0]["references"] = "ref-benchmark"
 
     result = validate_project_contract(contract)
 
-    assert result.valid is False
-    assert "claims.0.references must be a list, not str" in result.errors
+    assert result.valid is True
+    assert result.errors == []
 
 
 def test_validate_project_contract_reports_extra_item_keys_without_dropping_semantic_counts() -> None:

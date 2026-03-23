@@ -298,6 +298,13 @@ class RuntimeAdapter(abc.ABC):
         )
 
         manifest_state, manifest = load_install_manifest_state(target_dir)
+        explicit_target = getattr(self, "_install_explicit_target", False)
+        if explicit_target and manifest_state in {"corrupt", "invalid"}:
+            raise RuntimeError(
+                f"Refusing to {action} `{target_dir}` because its GPD manifest cannot be trusted.\n"
+                "Ownership cannot be determined safely."
+            )
+
         inferred_runtime = installed_runtime(target_dir)
         if inferred_runtime is not None:
             if inferred_runtime == self.runtime_name:
@@ -307,13 +314,15 @@ class RuntimeAdapter(abc.ABC):
             except KeyError:
                 other_runtime = inferred_runtime
             raise RuntimeError(
-                f"Refusing to {action} `{target_dir}` because its GPD install belongs to "
-                f"{other_runtime} (`{inferred_runtime}`), not {self.display_name} (`{self.runtime_name}`)."
+                f"Refusing to {action} `{target_dir}`.\n"
+                f"Its GPD install belongs to {other_runtime} (`{inferred_runtime}`), "
+                f"not {self.display_name} (`{self.runtime_name}`)."
             )
 
         if manifest_state in {"corrupt", "invalid"}:
             raise RuntimeError(
-                f"Refusing to {action} `{target_dir}` because its GPD manifest cannot be trusted and ownership cannot be determined safely."
+                f"Refusing to {action} `{target_dir}` because its GPD manifest cannot be trusted.\n"
+                "Ownership cannot be determined safely."
             )
 
         has_gpd_markers = any(
@@ -339,8 +348,9 @@ class RuntimeAdapter(abc.ABC):
             except KeyError:
                 other_runtime_label = other_runtime
             raise RuntimeError(
-                f"Refusing to {action} `{target_dir}` because its GPD manifest belongs to "
-                f"{other_runtime_label} (`{other_runtime}`), not {self.display_name} (`{self.runtime_name}`)."
+                f"Refusing to {action} `{target_dir}`.\n"
+                f"Its GPD manifest belongs to {other_runtime_label} (`{other_runtime}`), "
+                f"not {self.display_name} (`{self.runtime_name}`)."
             )
 
         if config_dir_has_complete_install(target_dir):

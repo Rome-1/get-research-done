@@ -54,7 +54,7 @@ comparison_verdicts:
   - subject_id: claim-main
     subject_kind: claim
     subject_role: decisive
-    reference_id: ref-main
+    reference_id: reference-main
     comparison_kind: benchmark
     metric: relative_error
     threshold: "<= 0.01"
@@ -65,7 +65,7 @@ suggested_contract_checks:
   - check: "[missing decisive benchmark comparison]"
     reason: "[why the missing check matters]"
     suggested_subject_kind: acceptance_test
-    suggested_subject_id: test-benchmark
+    suggested_subject_id: acceptance-test-main
     evidence_path: [artifact path or expected evidence path]
   - check: "[missing decisive reference comparison]"
     reason: "[why the missing compare-required reference matters]"
@@ -189,7 +189,7 @@ Only `subject_role: decisive` closes a required decisive comparison; the other r
 - check: "Add decisive normalization benchmark comparison"
   reason: "The phase conclusion depends on an explicit benchmark acceptance test that is not yet named in the contract."
   suggested_subject_kind: acceptance_test
-  suggested_subject_id: "test-benchmark"
+  suggested_subject_id: "acceptance-test-main"
   evidence_path: ".gpd/phases/01-benchmark/benchmark-comparison.csv"
 
 ## Gaps

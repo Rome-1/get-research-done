@@ -504,7 +504,12 @@ def _collect_list_shape_drift_errors(contract: dict[str, object]) -> list[str]:
 
     errors: list[str] = []
 
-    def _check_mapping_lists(mapping: object, *, path_prefix: str, field_names: tuple[str, ...]) -> None:
+    def _check_mapping_lists(
+        mapping: object,
+        *,
+        path_prefix: str,
+        field_names: tuple[str, ...],
+    ) -> None:
         if not isinstance(mapping, dict):
             return
         for field_name in field_names:
@@ -523,7 +528,11 @@ def _collect_list_shape_drift_errors(contract: dict[str, object]) -> list[str]:
         for index, item in enumerate(raw_collection):
             if not isinstance(item, dict):
                 continue
-            _check_mapping_lists(item, path_prefix=f"{collection_name}.{index}", field_names=field_names)
+            _check_mapping_lists(
+                item,
+                path_prefix=f"{collection_name}.{index}",
+                field_names=field_names,
+            )
 
     _check_mapping_lists(contract, path_prefix="", field_names=_TOP_LEVEL_LIST_FIELDS)
     _check_mapping_lists(contract.get("scope"), path_prefix="scope", field_names=_SCOPE_LIST_FIELDS)
@@ -774,7 +783,8 @@ def validate_project_contract(
             schema_findings,
             allow_singleton_defaults=False,
         )
-        schema_errors = _dedupe_findings([*schema_errors, *list_shape_drift_errors])
+        schema_warnings = _dedupe_findings([*schema_warnings, *list_shape_drift_errors])
+        schema_errors = _dedupe_findings(schema_errors)
         if parsed is None:
             if schema_errors:
                 return ProjectContractValidationResult(valid=False, errors=schema_errors, mode=mode)

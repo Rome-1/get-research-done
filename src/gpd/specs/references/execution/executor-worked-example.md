@@ -243,29 +243,38 @@ contract_results:
   claims:
     claim-mass-counterterm:
       status: passed
-      evidence:
-        - verifier: "gpd-executor"
-          method: "pole extraction"
-          confidence: high
-          evidence_path: "derivations/self_energy.tex"
-          notes: "Pole extraction gives the expected coefficient."
+      summary: "Pole extraction reproduced the expected electron mass counterterm coefficient."
+      linked_ids: [deliverable-self-energy-derivation, acceptance-test-pole, reference-qed-benchmark]
     claim-massless-limit:
       status: passed
-      evidence:
-        - verifier: "gpd-executor"
-          method: "massless-limit spot-check"
-          confidence: high
-          evidence_path: "checks/massless_limit.py"
-          notes: "Spot-check confirms no additive mass term at m=0."
-  acceptance_tests:
-    test-pole:
+      summary: "The m→0 limit preserved the expected chiral behavior."
+      linked_ids: [deliverable-massless-limit-check, reference-qed-benchmark]
+  deliverables:
+    deliverable-self-energy-derivation:
       status: passed
-      evidence:
-        - verifier: "gpd-executor"
-          method: "benchmark comparison"
-          confidence: high
-          evidence_path: "checks/pole_limit.py"
-          notes: "Pole limit matches the published coefficient."
+      path: "derivations/self_energy.tex"
+      summary: "One-loop self-energy derivation with explicit form-factor decomposition."
+      linked_ids: [claim-mass-counterterm, claim-massless-limit, acceptance-test-pole]
+    deliverable-massless-limit-check:
+      status: passed
+      path: "checks/massless_limit.py"
+      summary: "Spot-check used to confirm the m→0 limit in the worked example."
+      linked_ids: [claim-massless-limit, acceptance-test-pole]
+  acceptance_tests:
+    acceptance-test-pole:
+      status: passed
+      summary: "Pole extraction matched the published coefficient."
+      linked_ids: [claim-mass-counterterm, deliverable-self-energy-derivation, reference-qed-benchmark]
+  references:
+    reference-qed-benchmark:
+      status: completed
+      completed_actions: [read, compare, cite]
+      missing_actions: []
+      summary: "Benchmark anchor for the one-loop self-energy coefficient and limit discussion."
+  forbidden_proxies:
+    fp-summary-only:
+      status: rejected
+      notes: "A file existing without benchmark comparison was not accepted as success."
   uncertainty_markers:
     weakest_anchors: ["finite-term mass matching"]
     unvalidated_assumptions: ["general-gauge-independence"]
@@ -275,7 +284,7 @@ comparison_verdicts:
   - subject_id: "claim-mass-counterterm"
     subject_kind: "claim"
     subject_role: "decisive"
-    reference_id: "ref-qed-benchmark"
+    reference_id: "reference-qed-benchmark"
     comparison_kind: "benchmark"
     metric: "coefficient_match"
     threshold: "exact"

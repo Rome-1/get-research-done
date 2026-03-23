@@ -18,7 +18,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from gpd.adapters.install_utils import AGENTS_DIR_NAME, FLAT_COMMANDS_DIR_NAME, GPD_INSTALL_DIR_NAME, HOOKS_DIR_NAME
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
-from gpd.contracts import ResearchContract, collect_contract_integrity_errors, contract_from_data
+from gpd.contracts import ResearchContract, collect_contract_integrity_errors
 from gpd.core.config import GPDProjectConfig
 from gpd.core.config import load_config as _load_config_structured
 from gpd.core.config import resolve_model as _resolve_model_canonical
@@ -88,12 +88,22 @@ _REFERENCE_ROLE_PRIORITY = {
 }
 
 # Directories to skip when scanning for research files.
+_RUNTIME_IGNORED_SCAN_PATHS = frozenset(
+    {
+        (descriptor.config_dir_name,)
+        for descriptor in iter_runtime_descriptors()
+    }
+    | {
+        (".config", descriptor.global_config.xdg_subdir)
+        for descriptor in iter_runtime_descriptors()
+        if descriptor.global_config.xdg_subdir
+    }
+)
 _IGNORE_DIRS = frozenset(
     {
         ".git",
         PLANNING_DIR_NAME,
         *_RUNTIME_CONFIG_DIRS,
-        ".config",
         ".venv",
         ".tox",
         ".pytest_cache",
@@ -270,15 +280,15 @@ def _load_raw_project_contract_payload(cwd: Path) -> tuple[Path, object] | None:
             return backup_payload
         return source_path, raw_contract
 
-    list_shape_drift_errors = _collect_list_shape_drift_errors(raw_contract)
     normalized_contract, schema_findings = salvage_project_contract(raw_contract)
-    schema_findings = list(dict.fromkeys([*schema_findings, *list_shape_drift_errors]))
     _schema_warnings, schema_errors = _split_project_contract_schema_findings(
         schema_findings,
         allow_singleton_defaults=False,
     )
     if schema_errors or normalized_contract is None:
-        backup_payload = _backup_project_contract("the primary state.json project_contract required blocking schema normalization")
+        backup_payload = _backup_project_contract(
+            "the primary state.json project_contract required blocking schema normalization"
+        )
         if backup_payload is not None and backup_payload[1] is not None:
             return backup_payload
         return source_path, raw_contract
@@ -311,66 +321,92 @@ def _project_contract_load_payload(
     }
 
 
+def _classify_project_contract_payload(
+    *,
+    cwd: Path,
+    source_path: Path,
+    raw_contract: object,
+) -> tuple[ResearchContract | None, dict[str, object]]:
+    """Classify a raw project contract payload into a load result."""
+
+    source_label = _project_contract_source_path(cwd, source_path)
+    if raw_contract is None:
+        return None, _project_contract_load_payload(status="missing", source_path=source_label)
+    if not isinstance(raw_contract, dict):
+        logger.warning("Skipping project_contract from %s because it is not a JSON object", source_path)
+        return None, _project_contract_load_payload(
+            status="blocked_type",
+            source_path=source_label,
+            errors=["project contract must be a JSON object"],
+        )
+
+    list_shape_drift_errors = _collect_list_shape_drift_errors(raw_contract)
+    normalized_contract, schema_findings = salvage_project_contract(raw_contract)
+    schema_warnings, schema_errors = _split_project_contract_schema_findings(
+        schema_findings,
+        allow_singleton_defaults=False,
+    )
+    schema_warnings = list(dict.fromkeys([*schema_warnings, *list_shape_drift_errors]))
+    if schema_errors or normalized_contract is None:
+        logger.warning(
+            "Skipping project_contract from %s because blocking schema normalization would be required: %s",
+            source_path,
+            "; ".join(schema_errors) if schema_errors else "validation failed",
+        )
+        return None, _project_contract_load_payload(
+            status="blocked_schema",
+            source_path=source_label,
+            errors=schema_errors or ["blocking schema normalization would be required"],
+            warnings=schema_warnings,
+        )
+
+    integrity_errors = collect_contract_integrity_errors(normalized_contract)
+    if integrity_errors:
+        logger.warning(
+            "Skipping project_contract from %s because semantic integrity checks failed: %s",
+            source_path,
+            "; ".join(integrity_errors),
+        )
+        return None, _project_contract_load_payload(
+            status="blocked_integrity",
+            source_path=source_label,
+            errors=integrity_errors,
+            warnings=schema_warnings,
+        )
+
+    if schema_warnings:
+        logger.warning(
+            "Loaded project_contract from %s after recoverable schema normalization: %s",
+            source_path,
+            "; ".join(schema_warnings),
+        )
+    contract = normalized_contract
+    load_info = _project_contract_load_payload(
+        status="loaded",
+        source_path=source_label,
+        warnings=schema_warnings,
+    )
+    approval_validation = validate_project_contract(contract, mode="approved")
+    if not approval_validation.valid:
+        logger.warning(
+            "Loaded project_contract from %s with approval blockers: %s",
+            source_path,
+            "; ".join(approval_validation.errors) if approval_validation.errors else "validation failed",
+        )
+        load_info["status"] = "loaded_with_approval_blockers"
+    return contract, load_info
+
+
 def _load_project_contract(cwd: Path) -> tuple[ResearchContract | None, dict[str, object]]:
     """Load the canonical project contract and return load diagnostics."""
     layout = ProjectLayout(cwd)
     raw_payload = _load_raw_project_contract_payload(cwd)
     if raw_payload is not None:
         source_path, raw_contract = raw_payload
-        source_label = _project_contract_source_path(cwd, source_path)
-        if raw_contract is None:
-            return None, _project_contract_load_payload(status="missing", source_path=source_label)
-        if not isinstance(raw_contract, dict):
-            logger.warning("Skipping project_contract from %s because it is not a JSON object", source_path)
-            return None, _project_contract_load_payload(
-                status="blocked_type",
-                source_path=source_label,
-                errors=["project contract must be a JSON object"],
-            )
-
-        list_shape_drift_errors = _collect_list_shape_drift_errors(raw_contract)
-        normalized_contract, schema_findings = salvage_project_contract(raw_contract)
-        schema_findings = list(dict.fromkeys([*schema_findings, *list_shape_drift_errors]))
-        schema_warnings, schema_errors = _split_project_contract_schema_findings(
-            schema_findings,
-            allow_singleton_defaults=False,
-        )
-        if schema_errors or normalized_contract is None:
-            logger.warning(
-                "Skipping project_contract from %s because blocking schema normalization would be required: %s",
-                source_path,
-                "; ".join(schema_errors) if schema_errors else "validation failed",
-            )
-            return None, _project_contract_load_payload(
-                status="blocked_schema",
-                source_path=source_label,
-                errors=schema_errors or ["blocking schema normalization would be required"],
-                warnings=schema_warnings,
-            )
-        integrity_errors = collect_contract_integrity_errors(normalized_contract)
-        if integrity_errors:
-            logger.warning(
-                "Skipping project_contract from %s because semantic integrity checks failed: %s",
-                source_path,
-                "; ".join(integrity_errors),
-            )
-            return None, _project_contract_load_payload(
-                status="blocked_integrity",
-                source_path=source_label,
-                errors=integrity_errors,
-                warnings=schema_warnings,
-            )
-        if schema_warnings:
-            logger.warning(
-                "Loaded project_contract from %s after recoverable schema normalization: %s",
-                source_path,
-                "; ".join(schema_warnings),
-            )
-        contract = normalized_contract
-        load_info = _project_contract_load_payload(
-            status="loaded",
-            source_path=source_label,
-            warnings=schema_warnings,
+        contract, load_info = _classify_project_contract_payload(
+            cwd=cwd,
+            source_path=source_path,
+            raw_contract=raw_contract,
         )
     else:
         state, _state_issues, state_source = _peek_state_json(cwd)
@@ -385,20 +421,11 @@ def _load_project_contract(cwd: Path) -> tuple[ResearchContract | None, dict[str
             if state_source == "state.json.bak"
             else layout.state_md
         )
-        source_label = _project_contract_source_path(cwd, source_path)
-        contract = contract_from_data(state.get("project_contract"))
-        if contract is None:
-            return None, _project_contract_load_payload(status="missing", source_path=source_label)
-        load_info = _project_contract_load_payload(status="loaded", source_path=source_label)
-
-    approval_validation = validate_project_contract(contract, mode="approved")
-    if not approval_validation.valid:
-        logger.warning(
-            "Loaded project_contract from %s with approval blockers: %s",
-            source_path,
-            "; ".join(approval_validation.errors) if approval_validation.errors else "validation failed",
+        contract, load_info = _classify_project_contract_payload(
+            cwd=cwd,
+            source_path=source_path,
+            raw_contract=state.get("project_contract"),
         )
-        load_info["status"] = "loaded_with_approval_blockers"
     return contract, load_info
 
 
@@ -453,6 +480,26 @@ def _append_unique_strings(target: list[str], values: list[object] | tuple[objec
         text = str(value).strip()
         if text and text not in target:
             target.append(text)
+
+
+def _should_skip_research_scan_entry(cwd: Path, entry: Path) -> bool:
+    """Return whether *entry* should be skipped during research-file discovery."""
+
+    if entry.name in _IGNORE_DIRS:
+        return True
+
+    try:
+        relative_parts = entry.relative_to(cwd).parts
+    except ValueError:
+        return False
+    for ignored_parts in _RUNTIME_IGNORED_SCAN_PATHS:
+        ignored_length = len(ignored_parts)
+        if ignored_length == 0 or len(relative_parts) < ignored_length:
+            continue
+        for offset in range(len(relative_parts) - ignored_length + 1):
+            if relative_parts[offset : offset + ignored_length] == ignored_parts:
+                return True
+    return False
 
 
 def _reference_identity_tokens(values: list[object]) -> set[str]:
@@ -1373,7 +1420,7 @@ def init_new_project(cwd: Path) -> dict:
         for entry in entries:
             if found_count >= 5:
                 return
-            if entry.name in _IGNORE_DIRS:
+            if _should_skip_research_scan_entry(cwd, entry):
                 continue
             if entry.is_dir():
                 _walk(entry, depth + 1)

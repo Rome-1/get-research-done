@@ -7,7 +7,7 @@ from pathlib import Path
 
 from gpd.adapters import get_adapter
 from gpd.adapters.install_utils import build_runtime_install_repair_command
-from gpd.adapters.runtime_catalog import iter_runtime_descriptors
+from gpd.adapters.runtime_catalog import iter_runtime_descriptors, resolve_global_config_dir
 from gpd.hooks.runtime_detect import (
     RUNTIME_UNKNOWN,
     SCOPE_LOCAL,
@@ -144,7 +144,8 @@ def _infer_explicit_target(
         if not _paths_equal(install_target, config_dir):
             return True
         return config_dir.name != adapter.local_config_dir_name
-    return not _paths_equal(install_target, adapter.global_config_dir)
+    canonical_global_dir = resolve_global_config_dir(adapter.runtime_descriptor, home=Path.home(), environ={})
+    return not _paths_equal(install_target, canonical_global_dir)
 
 
 def config_dir_has_complete_install(config_dir: Path) -> bool:

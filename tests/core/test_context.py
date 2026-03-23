@@ -854,6 +854,15 @@ class TestInitNewProject:
         assert ctx["has_research_files"] is False
         assert ctx["has_existing_project"] is False
 
+    def test_detects_non_runtime_config_research_files(self, tmp_path: Path) -> None:
+        (tmp_path / ".config").mkdir()
+        (tmp_path / ".config" / "notes.py").write_text("print('research notes')", encoding="utf-8")
+
+        ctx = init_new_project(tmp_path)
+
+        assert ctx["has_research_files"] is True
+        assert ctx["has_existing_project"] is True
+
     def test_detects_manifest(self, tmp_path: Path) -> None:
         (tmp_path / "pyproject.toml").write_text("[project]")
         ctx = init_new_project(tmp_path)
@@ -1464,7 +1473,29 @@ class TestInitProgress:
         assert ctx["project_contract"]["scope"]["question"] == "Recovered from schema-corrupt backup state"
         assert ctx["project_contract_load_info"]["source_path"].endswith("state.json.bak")
 
-    def test_load_project_contract_rejects_list_shape_drift_from_raw_state(self, tmp_path: Path) -> None:
+    def test_load_project_contract_surfaces_blocked_status_for_invalid_state_backed_contract(
+        self, tmp_path: Path
+    ) -> None:
+        _setup_project(tmp_path)
+
+        from gpd.core.state import default_state_dict
+
+        state = default_state_dict()
+        contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+        contract["references"] = ["bad"]
+        state["project_contract"] = contract
+        (tmp_path / ".gpd" / "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+        loaded, load_info = _load_project_contract(tmp_path)
+        ctx = init_progress(tmp_path)
+
+        assert loaded is None
+        assert load_info["status"] == "blocked_schema"
+        assert ctx["project_contract"] is None
+        assert ctx["project_contract_load_info"]["status"] == "blocked_schema"
+        assert ctx["project_contract_load_info"]["source_path"].endswith("state.json")
+
+    def test_load_project_contract_accepts_list_shape_drift_from_raw_state(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
 
         from gpd.core.state import default_state_dict
@@ -1477,9 +1508,9 @@ class TestInitProgress:
 
         loaded, load_info = _load_project_contract(tmp_path)
 
-        assert loaded is None
-        assert load_info["status"] == "blocked_schema"
-        assert any("references.0.aliases must be a list, not str" in error for error in load_info["errors"])
+        assert loaded is not None
+        assert load_info["status"] in {"loaded", "loaded_with_approval_blockers"}
+        assert load_info["errors"] == []
 
     def test_load_project_contract_fallback_salvages_nested_metadata_must_surface(
         self,

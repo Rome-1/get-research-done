@@ -342,7 +342,7 @@ class TestStateCommands:
         assert payload["valid"] is False
         assert any("weakest_anchors" in error for error in payload["errors"])
 
-    def test_set_project_contract_rejects_singleton_list_drift(self, gpd_project: Path) -> None:
+    def test_set_project_contract_accepts_singleton_list_drift(self, gpd_project: Path) -> None:
         contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
         contract["context_intake"]["must_read_refs"] = "ref-benchmark"
         contract_path = gpd_project / "invalid-contract.json"
@@ -354,11 +354,12 @@ class TestStateCommands:
             catch_exceptions=False,
         )
 
-        assert result.exit_code == 1
+        assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["valid"] is False
-        assert payload["warnings"] == []
-        assert any("must_read_refs must be a list, not str" in error for error in payload["errors"])
+        assert payload["updated"] is True
+        assert any("must_read_refs" in warning for warning in payload["warnings"])
+        state = json.loads((gpd_project / ".gpd" / "state.json").read_text(encoding="utf-8"))
+        assert state["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
 
     def test_set_project_contract_raw_accepts_schema_valid_contract_with_approval_blockers(
         self,

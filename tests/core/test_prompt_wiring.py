@@ -1153,9 +1153,9 @@ def test_verification_prompts_keep_suggested_contract_check_bindings_schema_tigh
     assert 'suggested_subject_id: [contract id or ""]' not in verify_workflow
     assert "suggested_subject_id: [matching contract id]" in research_verification
     assert "suggested_subject_id: [matching contract id]" in verify_workflow
-    assert "test-benchmark" in verification_template
-    assert "test-benchmark" in research_verification
-    assert "test-benchmark" in verifier_agent
+    assert "acceptance-test-id" in verification_template
+    assert "acceptance-test-main" in research_verification
+    assert "acceptance-test-id" in verifier_agent
     assert "omit both keys instead of leaving one blank" in verification_template
     assert "omit both keys instead of leaving one blank" in research_verification
     assert "verification-side `suggested_contract_checks`" in verification_template
@@ -1166,6 +1166,39 @@ def test_verification_prompts_keep_suggested_contract_check_bindings_schema_tigh
     assert "Each gap has: `gap_subject_kind`" in verifier_agent
     assert "Each gap has: `subject_kind`" not in verifier_agent
     assert "Verification Status:** {passed | gaps_found | expert_needed | human_needed}" in verifier_agent
+
+
+def test_lane5_prompt_examples_keep_schema_valid_contract_fields_visible() -> None:
+    planner = (AGENTS_DIR / "gpd-planner.md").read_text(encoding="utf-8")
+    plan_checker = (AGENTS_DIR / "gpd-plan-checker.md").read_text(encoding="utf-8")
+    parameter_sweep = (WORKFLOWS_DIR / "parameter-sweep.md").read_text(encoding="utf-8")
+    research_verification = (TEMPLATES_DIR / "research-verification.md").read_text(encoding="utf-8")
+    verify_work = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
+    verifier = (AGENTS_DIR / "gpd-verifier.md").read_text(encoding="utf-8")
+    executor_example = (REFERENCES_DIR / "execution" / "executor-worked-example.md").read_text(encoding="utf-8")
+
+    assert "context_intake:" in planner
+    assert 'must_read_refs: ["ref-textbook"]' in planner
+    assert "references: [ref-uehling]" in planner
+    assert "context_intake:" in plan_checker
+    assert "why_it_matters:" in plan_checker
+    assert "required_actions: [read, compare, cite]" in plan_checker
+    assert "procedure: \"Compare the computed value against the benchmark anchor within tolerance.\"" in plan_checker
+    assert "context_intake:" in parameter_sweep
+    assert "must_read_refs: [ref-sweep-anchor]" in parameter_sweep
+    assert "reference-main" in research_verification
+    assert "acceptance-test-main" in research_verification
+    assert "test-benchmark" not in research_verification
+    assert "reference-id" in verify_work
+    assert "acceptance-test-id" in verify_work
+    assert "test-benchmark" not in verify_work
+    assert "reference-id" in verifier
+    assert "acceptance-test-id" in verifier
+    assert "test-benchmark" not in verifier
+    assert "deliverables:" in executor_example
+    assert "references:" in executor_example
+    assert 'reference_id: "reference-qed-benchmark"' in executor_example
+    assert "deliverable-self-energy-derivation" in executor_example
 
 
 def test_verification_prompt_wiring_rejects_invalid_reference_and_proxy_scaffolds(tmp_path: Path) -> None:

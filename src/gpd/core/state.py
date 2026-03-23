@@ -1143,8 +1143,10 @@ def _normalize_project_contract_section(
 
     list_shape_drift_errors = _collect_list_shape_drift_errors(value)
     normalized_contract, errors = salvage_project_contract(value)
-    combined_errors = list(dict.fromkeys([*errors, *list_shape_drift_errors]))
+    combined_errors = list(dict.fromkeys(errors))
     normalized_contract_dump = normalized_contract.model_dump() if normalized_contract is not None else None
+    if list_shape_drift_errors:
+        integrity_issues.extend(_integrity_issue_from_contract_error(error) for error in list_shape_drift_errors)
     if not combined_errors:
         return normalized_contract_dump
 
@@ -2418,13 +2420,16 @@ def state_set_project_contract(cwd: Path, contract_data: dict[str, object] | Res
             schema_findings,
             allow_singleton_defaults=False,
         )
-        schema_errors = list(dict.fromkeys([*schema_errors, *list_shape_drift_errors]))
+        schema_errors = list(dict.fromkeys(schema_errors))
         if schema_errors:
             return StateUpdateResult(
                 updated=False,
                 reason="Invalid project contract schema: " + "; ".join(schema_errors),
             )
         warning_messages.extend(schema_warnings)
+        warning_messages.extend(
+            _integrity_issue_from_contract_error(error) for error in list_shape_drift_errors
+        )
         if normalized_contract is None:
             parsed = ResearchContract.model_validate(contract_payload)
         else:

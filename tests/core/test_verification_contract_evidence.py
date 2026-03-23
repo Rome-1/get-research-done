@@ -74,6 +74,31 @@ def test_validate_frontmatter_verification_accepts_contract_results() -> None:
     assert result.errors == []
 
 
+def test_validate_frontmatter_verification_rejects_status_passed_with_incomplete_reference_ledger(
+    tmp_path: Path,
+) -> None:
+    phase_dir = tmp_path / ".gpd" / "phases" / "01-benchmark"
+    phase_dir.mkdir(parents=True)
+    (phase_dir / "01-01-PLAN.md").write_text((FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"), encoding="utf-8")
+    verification_path = phase_dir / "01-VERIFICATION.md"
+    content = _verification_with_contract_results().replace(
+        "    ref-benchmark:\n"
+        "      status: completed\n"
+        "      completed_actions: [read, compare, cite]\n"
+        "      missing_actions: []\n",
+        "    ref-benchmark:\n"
+        "      status: not_applicable\n"
+        "      completed_actions: []\n"
+        "      missing_actions: []\n",
+        1,
+    )
+
+    result = validate_frontmatter(content, "verification", source_path=verification_path)
+
+    assert result.valid is False
+    assert any("status: passed is inconsistent with non-completed contract_results references" in error for error in result.errors)
+
+
 def test_validate_frontmatter_verification_rejects_missing_uncertainty_markers_for_contract_backed_verification() -> None:
     content = (FIXTURES_STAGE4 / "verification_with_contract_results.md").read_text(encoding="utf-8").replace(
         "  uncertainty_markers:\n"

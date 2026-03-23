@@ -317,6 +317,33 @@ class TestCrossRuntimeManifestOwnershipRefusal:
         assert preserved.read_text(encoding="utf-8") == "keep\n"
         assert json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))["runtime"] == foreign_runtime
 
+    @pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
+    def test_install_refuses_corrupt_manifest_on_explicit_target_named_like_runtime_default(
+        self, tmp_path: Path, runtime: str
+    ) -> None:
+        gpd_root = _make_gpd_root(tmp_path)
+        adapter = get_adapter(runtime)
+        target = tmp_path / adapter.config_dir_name
+        target.mkdir()
+        preserved = target / "get-physics-done" / "keep.md"
+        preserved.parent.mkdir(parents=True, exist_ok=True)
+        preserved.write_text("keep\n", encoding="utf-8")
+        (target / MANIFEST_NAME).write_text("{not valid json", encoding="utf-8")
+
+        install_kwargs: dict[str, object] = {"is_global": True, "explicit_target": True}
+        if runtime == "codex":
+            skills_dir = tmp_path / "skills"
+            skills_dir.mkdir()
+            install_kwargs["skills_dir"] = skills_dir
+
+        with pytest.raises(RuntimeError) as excinfo:
+            adapter.install(gpd_root, target, **install_kwargs)
+
+        message = str(excinfo.value)
+        assert f"Refusing to install into `{target}`" in message
+        assert "manifest cannot be trusted" in message
+        assert preserved.read_text(encoding="utf-8") == "keep\n"
+
     @pytest.mark.parametrize("manifest_state", ["missing", "corrupt", "unknown"])
     def test_install_refuses_ambiguous_target_when_manifest_cannot_prove_ownership(
         self, tmp_path: Path, manifest_state: str
