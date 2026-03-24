@@ -265,6 +265,16 @@ def test_peer_review_stages_use_fresh_context_and_stage_artifacts() -> None:
     assert "GPD/review/REVIEW-LEDGER{round_suffix}.json" in referee.text
     assert "GPD/review/REFEREE-DECISION{round_suffix}.json" in referee.text
     assert "GPD/REFEREE-REPORT{round_suffix}.md" in referee.text
+    assert "GPD/REFEREE-REPORT{round_suffix}.tex" in referee.text
+
+
+def test_referee_response_template_uses_round_suffixed_decision_artifacts() -> None:
+    content = _read(TEMPLATES_DIR / "paper" / "referee-response.md")
+
+    assert "REFEREE-DECISION{round_suffix}.json" in content
+    assert "REVIEW-LEDGER{round_suffix}.json" in content
+    assert "REFEREE-REPORT{round_suffix}.md" in content
+    assert "REFEREE-REPORT.md" not in content
 
 
 def test_all_workflow_task_blocks_include_readonly_false() -> None:

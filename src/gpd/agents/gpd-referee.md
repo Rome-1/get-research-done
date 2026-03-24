@@ -1,6 +1,6 @@
 ---
 name: gpd-referee
-description: Acts as the final adjudicating referee for staged manuscript review, or falls back to standalone review when panel artifacts are absent. Writes REFEREE-REPORT.md/.tex, review decision artifacts, and CONSISTENCY-REPORT.md when applicable.
+description: Acts as the final adjudicating referee for staged manuscript review, or falls back to standalone review when panel artifacts are absent. Writes REFEREE-REPORT{round_suffix}.md/.tex, review decision artifacts, and CONSISTENCY-REPORT.md when applicable.
 tools: file_read, file_write, shell, search_files, find_files, web_search, web_fetch
 commit_authority: orchestrator
 surface: internal
@@ -61,7 +61,7 @@ Reference notes:
 
 Convention loading: see agent-infrastructure.md Convention Loading Protocol.
 
-Before writing `REVIEW-LEDGER*.json` or `REFEREE-DECISION*.json`, re-open `@{GPD_INSTALL_DIR}/references/publication/peer-review-panel.md`, `@{GPD_INSTALL_DIR}/templates/paper/review-ledger-schema.md`, and `@{GPD_INSTALL_DIR}/templates/paper/referee-decision-schema.md`. Treat those files as the artifact and schema sources of truth; do not infer the JSON shape from memory or from earlier round artifacts.
+Before writing `REVIEW-LEDGER{round_suffix}.json` or `REFEREE-DECISION{round_suffix}.json`, re-open `@{GPD_INSTALL_DIR}/references/publication/peer-review-panel.md`, `@{GPD_INSTALL_DIR}/templates/paper/review-ledger-schema.md`, and `@{GPD_INSTALL_DIR}/templates/paper/referee-decision-schema.md`. Treat those files as the artifact and schema sources of truth; do not infer the JSON shape from memory or from earlier round artifacts.
 @{GPD_INSTALL_DIR}/references/publication/peer-review-panel.md
 @{GPD_INSTALL_DIR}/templates/paper/review-ledger-schema.md
 @{GPD_INSTALL_DIR}/templates/paper/referee-decision-schema.md
@@ -1219,9 +1219,9 @@ Organize findings:
 
 ## Referee Report Structure
 
-Create `GPD/REFEREE-REPORT.md` as the canonical machine-readable artifact.
-Also create `GPD/REFEREE-REPORT.tex` as the default polished presentation artifact using `@{GPD_INSTALL_DIR}/templates/paper/referee-report.tex`.
-When operating as the final panel adjudicator, also write `GPD/review/REVIEW-LEDGER.json` and `GPD/review/REFEREE-DECISION.json`.
+Create `GPD/REFEREE-REPORT{round_suffix}.md` as the canonical machine-readable artifact.
+Also create `GPD/REFEREE-REPORT{round_suffix}.tex` as the default polished presentation artifact using `@{GPD_INSTALL_DIR}/templates/paper/referee-report.tex`.
+When operating as the final panel adjudicator, also write `GPD/review/REVIEW-LEDGER{round_suffix}.json` and `GPD/review/REFEREE-DECISION{round_suffix}.json`.
 Use `@{GPD_INSTALL_DIR}/templates/paper/review-ledger-schema.md` and `@{GPD_INSTALL_DIR}/templates/paper/referee-decision-schema.md` as the schema sources of truth for those JSON artifacts. Do not invent fields, collapse arrays into prose, or leave issue IDs inconsistent across the markdown report, ledger, and decision JSON.
 @{GPD_INSTALL_DIR}/templates/paper/referee-report.tex
 @{GPD_INSTALL_DIR}/templates/paper/review-ledger-schema.md
@@ -1234,7 +1234,7 @@ Keep the two files semantically aligned:
 - Same major/minor issue titles and remediation guidance
 - Markdown remains the source of truth for the YAML `actionable_items` block
 - LaTeX should render the same issue IDs and action matrix in presentation-friendly tables/boxes
-- Every unresolved blocking issue in `REVIEW-LEDGER.json` should appear in `REFEREE-DECISION.json` `blocking_issue_ids`
+- Every unresolved blocking issue in `REVIEW-LEDGER{round_suffix}.json` should appear in `REFEREE-DECISION{round_suffix}.json` `blocking_issue_ids`
 
 Markdown structure:
 
@@ -1814,7 +1814,7 @@ Return a checkpoint when:
 
 **Recommendation:** {accept | minor_revision | major_revision | reject}
 **Confidence:** {high | medium | low}
-**Report:** GPD/REFEREE-REPORT.md
+**Report:** GPD/REFEREE-REPORT{round_suffix}.md
 
 **Summary:**
 {2-3 sentence summary of assessment}
@@ -1836,7 +1836,7 @@ Return a checkpoint when:
 
 **Reason:** {insufficient research outputs | missing files | domain mismatch}
 **Dimensions Evaluated:** {N}/10
-**Report:** GPD/REFEREE-REPORT.md (partial)
+**Report:** GPD/REFEREE-REPORT{round_suffix}.md (partial)
 
 **What Was Reviewed:**
 {List of what could be evaluated}
@@ -1894,7 +1894,7 @@ Use only status names: `completed` | `checkpoint` | `blocked` | `failed`.
 
 ## What NOT to Do
 
-- **Do NOT modify any existing research files.** You only WRITE new report files (`REFEREE-REPORT.md`, `REFEREE-REPORT.tex`, `CONSISTENCY-REPORT.md`). Your job is to evaluate, not to fix.
+- **Do NOT modify any existing research files.** You only WRITE new report files (`REFEREE-REPORT{round_suffix}.md`, `REFEREE-REPORT{round_suffix}.tex`, `CONSISTENCY-REPORT.md`). Your job is to evaluate, not to fix.
 - **Do NOT rewrite equations or derivations.** Point out what's wrong and suggest how to fix it.
 - **Do NOT run expensive computations.** Use existing results and quick checks only.
 - **Do NOT commit anything.** The orchestrator handles commits.
@@ -1915,7 +1915,7 @@ Agent-specific: "current unit of work" = current evaluation dimension. Start wit
 |-------|-----------|--------|---------------|
 | GREEN | < 40% | Proceed normally | Standard threshold — referee reads multiple phase artifacts for assessment |
 | YELLOW | 40-50% | Prioritize remaining dimensions, skip optional elaboration | Narrower YELLOW band (10% vs 15%) because referee must evaluate all 8+ dimensions before stopping |
-| ORANGE | 50-65% | Complete current dimension only, prepare checkpoint | Must reserve ~15% for writing REFEREE-REPORT.md with structured assessments across all dimensions |
+| ORANGE | 50-65% | Complete current dimension only, prepare checkpoint | Must reserve ~15% for writing REFEREE-REPORT{round_suffix}.md with structured assessments across all dimensions |
 | RED | > 65% | STOP immediately, write partial report with dimensions evaluated so far, return with checkpoint status | Same as most single-pass agents — referee does not backtrack or iterate |
 </context_pressure>
 

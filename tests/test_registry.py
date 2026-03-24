@@ -408,8 +408,23 @@ class TestParseCommandFile:
             "research_artifacts",
             "manuscript",
         ]
-        assert "GPD/REFEREE-REPORT.md" in cmd.review_contract.required_outputs
-        assert "GPD/REFEREE-REPORT.tex" in cmd.review_contract.required_outputs
+        assert "GPD/review/REVIEW-LEDGER{round_suffix}.json" in cmd.review_contract.required_outputs
+        assert "GPD/review/REFEREE-DECISION{round_suffix}.json" in cmd.review_contract.required_outputs
+        assert "GPD/REFEREE-REPORT{round_suffix}.md" in cmd.review_contract.required_outputs
+        assert "GPD/REFEREE-REPORT{round_suffix}.tex" in cmd.review_contract.required_outputs
+        assert "GPD/REFEREE-REPORT.md" not in cmd.review_contract.required_outputs
+        assert "GPD/REFEREE-REPORT.tex" not in cmd.review_contract.required_outputs
+        assert cmd.review_contract.stage_artifacts == [
+            "GPD/review/CLAIMS.json",
+            "GPD/review/STAGE-reader.json",
+            "GPD/review/STAGE-literature.json",
+            "GPD/review/STAGE-math.json",
+            "GPD/review/STAGE-physics.json",
+            "GPD/review/STAGE-interestingness.json",
+            "GPD/review/REVIEW-LEDGER{round_suffix}.json",
+            "GPD/review/REFEREE-DECISION{round_suffix}.json",
+        ]
+        assert cmd.review_contract.final_decision_output == "GPD/review/REFEREE-DECISION{round_suffix}.json"
 
     def test_command_review_contract_parses_false_string_for_fresh_context(self, tmp_path: Path) -> None:
         f = tmp_path / "review-contract-false.md"
