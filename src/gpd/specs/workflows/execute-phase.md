@@ -564,9 +564,32 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
    - Bad: "Wave 2 complete. Proceeding to Wave 3."
    - Good: "Spin-chain spectrum computed -- Bethe ansatz solution yields N-magnon energies with correct Heisenberg limit. Finite-size scaling exponents match CFT prediction (nu = 1.00 +/- 0.02). Transport coefficient calculation (Wave 3) can now use these eigenstates."
 
-7. **Handle failures** -- see `wave_failure_handling` below.
+7. **Artifact summary** -- surface key artifacts produced in the completed wave.
 
-8. **Execute checkpoint plans between waves** -- see `<checkpoint_handling>`.
+   After verifying wave completion, collect the artifacts from each plan's SUMMARY.md (`key-files.created`, `key-files.modified`) and emit a compact summary with review priorities. See `references/orchestration/artifact-surfacing.md` for artifact class definitions and review priority rules.
+
+   ```
+   ## Artifacts: Wave {N}
+
+   | Path | Class | Review |
+   |------|-------|--------|
+   | {relative_path} | {artifact_class} | {required | optional | final-deliverable} |
+   ...
+
+   Required review: {count} artifact(s) -- inspect before Wave {N+1}
+   ```
+
+   **Classification rules:**
+   - Assign artifact class from file extension and path (see artifact-surfacing.md section 1)
+   - Mark as `required` if the artifact is a load-bearing derivation, numerical result consumed by later waves, or contract deliverable tagged as an acceptance test
+   - Mark as `final-deliverable` for completed manuscript outputs, compiled PDFs, and peer review reports
+   - Mark as `optional` for supporting plots, intermediate notebooks, and literature notes
+
+   **If any artifacts are marked `required`:** Include their paths in the wave completion report so the researcher can prioritize review. Do not block execution for optional artifacts.
+
+8. **Handle failures** -- see `wave_failure_handling` below.
+
+9. **Execute checkpoint plans between waves** -- see `<checkpoint_handling>`.
 
    Before unlocking downstream dependent waves, confirm that risky-wave plans passed the first meaningful review point:
 
@@ -593,7 +616,7 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
 
    For `pre_fanout`, the matching gate-clear and `fanout unlock` are separate transitions: the clear records the review outcome, the unlock releases downstream work. Keep the segment live on status, notify, and resume surfaces until both have been observed. Do not silently continue on "looks fine" prose alone.
 
-9. **Inter-wave verification gate (if more waves remain):**
+10. **Inter-wave verification gate (if more waves remain):**
 
    Before spawning the next wave, run lightweight verification on the just-completed wave's outputs. This catches errors cheaply before they propagate to downstream waves.
 
@@ -724,11 +747,11 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
 
    Present options and wait for user response (or auto-continue in YOLO mode if both are warnings, not errors — unless `YOLO_RESTRICTIONS` includes `no_skip_inter_wave`, in which case always present).
 
-   **If disabled:** Skip verification gate, proceed directly to step 10. Exception: if `YOLO_RESTRICTIONS` includes `no_skip_inter_wave`, the gate runs even when disabled by config.
+   **If disabled:** Skip verification gate, proceed directly to step 11. Exception: if `YOLO_RESTRICTIONS` includes `no_skip_inter_wave`, the gate runs even when disabled by config.
 
    **Cost:** ~2-5k tokens per inter-wave gate. For a 4-wave phase with deep-theory profile, this is ~10-15k tokens overhead — negligible compared to the cost of a sign error propagating through 3 subsequent waves.
 
-10. **Inter-wave transition display:**
+11. **Inter-wave transition display:**
 
    Before spawning the next wave, display a physics-meaningful progress update that connects what was just computed to what comes next:
 
@@ -744,7 +767,7 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
 
    Extract the "Completed" summary from the wave N completion report (step 6 above). Extract "Enables" and "Starting" from the wave N+1 plan objectives. Keep each line to one sentence.
 
-11. **Proceed to next wave.**
+12. **Proceed to next wave.**
    </step>
 
 <step name="wave_failure_handling">
