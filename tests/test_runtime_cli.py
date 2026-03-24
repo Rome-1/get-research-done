@@ -706,7 +706,6 @@ def test_runtime_cli_resolves_local_config_dir_from_ancestor_workspace(
     tmp_path: Path,
     descriptor,
 ) -> None:
-    adapter = get_adapter(descriptor.runtime_name)
     config_dir = tmp_path / descriptor.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
     nested_cwd = tmp_path / "research" / "notes"
@@ -748,7 +747,6 @@ def test_runtime_cli_rejects_local_config_dir_from_ancestor_workspace_without_ma
     capsys,
     descriptor,
 ) -> None:
-    adapter = get_adapter(descriptor.runtime_name)
     config_dir = tmp_path / descriptor.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
     manifest_path = config_dir / "gpd-file-manifest.json"
@@ -821,7 +819,6 @@ def test_runtime_cli_rejects_corrupt_manifest_before_dispatch(
     capsys,
     descriptor,
 ) -> None:
-    adapter = get_adapter(descriptor.runtime_name)
     config_dir = tmp_path / descriptor.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
     (config_dir / "gpd-file-manifest.json").write_text("not-json", encoding="utf-8")
@@ -895,7 +892,6 @@ def test_runtime_cli_rejects_non_utf8_manifest_before_dispatch(
     capsys,
     descriptor,
 ) -> None:
-    adapter = get_adapter(descriptor.runtime_name)
     config_dir = tmp_path / descriptor.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
     (config_dir / "gpd-file-manifest.json").write_bytes(b"\xff")

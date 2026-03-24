@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.core.context import (
     _generate_slug,
     _is_phase_complete,
@@ -27,7 +28,6 @@ from gpd.core.context import (
     init_verify_work,
     load_config,
 )
-from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.core.errors import ConfigError, ValidationError
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"

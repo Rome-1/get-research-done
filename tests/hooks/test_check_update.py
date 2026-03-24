@@ -6,10 +6,10 @@ logic, background spawn failure, and graceful degradation.
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import time
-import inspect
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 

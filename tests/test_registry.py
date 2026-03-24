@@ -8,10 +8,10 @@ import pytest
 
 from gpd import registry
 from gpd.registry import (
+    _DEFAULT_REVIEW_CONTRACTS,
     AgentDef,
     CommandDef,
     SkillDef,
-    _DEFAULT_REVIEW_CONTRACTS,
     _parse_agent_file,
     _parse_command_file,
     _parse_frontmatter,

@@ -17,10 +17,10 @@ from unittest.mock import patch
 import pytest
 
 from gpd.adapters.install_utils import (
+    _is_hook_command_for_script,
     build_hook_command,
     convert_tool_references_in_body,
     copy_with_path_replacement,
-    _is_hook_command_for_script,
     ensure_update_hook,
     expand_at_includes,
     finish_install,

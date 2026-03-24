@@ -10,7 +10,6 @@ from gpd.core import context as context_module
 from gpd.core.context import init_resume
 from gpd.core.state import default_state_dict, generate_state_markdown
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 

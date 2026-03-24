@@ -20,8 +20,8 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from gpd.adapters.tool_names import canonical
 from gpd import registry as content_registry
+from gpd.adapters.tool_names import canonical
 from gpd.command_labels import rewrite_runtime_command_surfaces
 from gpd.core.errors import GPDError
 from gpd.core.observability import gpd_span

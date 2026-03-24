@@ -14,8 +14,8 @@ import copy
 import json
 import logging
 import os
-import re
 import platform as py_platform
+import re
 import socket
 from datetime import UTC, datetime
 from pathlib import Path

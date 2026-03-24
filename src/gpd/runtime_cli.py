@@ -22,7 +22,6 @@ from gpd.adapters.install_utils import (
     COMMANDS_DIR_NAME,
     FLAT_COMMANDS_DIR_NAME,
     GPD_INSTALL_DIR_NAME,
-    MANIFEST_NAME,
     build_runtime_install_repair_command,
 )
 from gpd.adapters.runtime_catalog import resolve_global_config_dir

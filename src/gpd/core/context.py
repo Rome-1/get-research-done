@@ -55,9 +55,8 @@ from gpd.core.contract_validation import (
 from gpd.core.errors import ValidationError
 from gpd.core.protocol_bundles import render_protocol_bundle_context, select_protocol_bundles
 from gpd.core.reference_ingestion import ingest_reference_artifacts
-from gpd.core.state import EM_DASH, _load_state_json_with_integrity_issues
+from gpd.core.state import EM_DASH, _current_machine_identity, _load_state_json_with_integrity_issues
 from gpd.core.state import peek_state_json as _peek_state_json
-from gpd.core.state import _current_machine_identity
 from gpd.core.utils import (
     generate_slug as _generate_slug_impl,
 )
@@ -1056,7 +1055,6 @@ def _build_execution_runtime_context(cwd: Path) -> dict[str, object]:
     current_execution_payload = snapshot.model_dump(mode="json") if snapshot is not None else None
     if isinstance(current_execution_payload, dict):
         current_execution_payload["resume_file"] = current_execution_resume_file
-    execution_resume_file = current_execution_resume_file or session_resume_file
     execution_resume_file_source = (
         "current_execution"
         if current_execution_resume_file
