@@ -73,6 +73,22 @@ Plans:
 
 - [ ] 04-01: [TBD — created during /grd:plan-phase]
 
+### Phase 5: Multi-Manifold Detection
+
+**Goal:** Develop a pipeline for detecting multiple overlapping manifolds in activation spaces, matching them across samples, and scoring variation
+**Depends on:** Phase 1-4 (all survey results)
+**Requirements:** [EXTD — extension work]
+**Success Criteria** (what must be TRUE):
+
+1. Multi-manifold decomposition method (SMCE) analyzed with recovery conditions and complexity
+2. Cross-sample manifold matching pipeline designed with formal matching cost
+3. Variation scoring with statistical significance testing
+4. Full pipeline complexity analysis showing tractability for mech interp regime
+
+Plans:
+
+- [x] 05-01: Multi-manifold detection and cross-sample variation analysis
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -81,3 +97,4 @@ Plans:
 | 2. Geometric & Topological Methods | 1/1 | Complete | 2026-03-23 |
 | 3. Comparative Analysis | 1/1 | Complete | 2026-03-23 |
 | 4. Synthesis & Bridge | 1/1 | Complete | 2026-03-23 |
+| 5. Multi-Manifold Detection | 1/1 | Complete | 2026-03-24 |
