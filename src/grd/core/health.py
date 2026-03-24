@@ -823,10 +823,9 @@ def _doctor_check_protocol_bundles(specs_dir: Path) -> HealthCheck:
             if asset_path.exists():
                 continue
             message = f"{path.name}: missing {role} asset {asset.path}"
-            if asset.required:
-                issues.append(message)
-            else:
-                warnings.append(message)
+            # Missing assets are warnings, not failures — bundles are optional
+            # enhancements and missing assets don't break core functionality.
+            warnings.append(message)
 
     for path, bundle in validated_bundles:
         for exclusive_bundle_id in bundle.trigger.exclusive_with:

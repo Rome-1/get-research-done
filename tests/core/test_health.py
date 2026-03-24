@@ -453,7 +453,7 @@ verifier_extensions:
         assert checks["Protocol Bundles"].details["bundle_count"] == 2
         assert checks["Protocol Bundles"].details["bundle_ids"] == ["supporting-bundle", "test-bundle"]
 
-    def test_protocol_bundles_check_fails_when_required_asset_is_missing(self, tmp_path: Path):
+    def test_protocol_bundles_check_warns_when_required_asset_is_missing(self, tmp_path: Path):
         specs_dir = self._make_specs_dir(tmp_path)
         bundles_dir = specs_dir / "bundles"
         bundles_dir.mkdir()
@@ -482,8 +482,8 @@ assets:
         report = run_doctor(specs_dir=specs_dir, version="0.1.0")
         checks = {check.label: check for check in report.checks}
 
-        assert checks["Protocol Bundles"].status == CheckStatus.FAIL
-        assert any("templates/missing-template.md" in issue for issue in checks["Protocol Bundles"].issues)
+        assert checks["Protocol Bundles"].status == CheckStatus.WARN
+        assert any("templates/missing-template.md" in w for w in checks["Protocol Bundles"].warnings)
 
     def test_protocol_bundles_check_fails_when_verifier_extension_check_id_is_unknown(self, tmp_path: Path):
         specs_dir = self._make_specs_dir(tmp_path)

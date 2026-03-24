@@ -57,10 +57,43 @@ def health(
 @app.command("doctor")
 def doctor() -> None:
     """Check GRD installation and environment health."""
+    from grd.cli._helpers import _raw, console as _console
     from grd.core.health import run_doctor
     from grd.specs import SPECS_DIR
 
-    _output(run_doctor(specs_dir=SPECS_DIR))
+    report = run_doctor(specs_dir=SPECS_DIR)
+    if _raw:
+        _output(report)
+    else:
+        from rich.table import Table
+
+        _console.print(f"\n[bold]GRD Doctor[/]  v{report.version or '?'}\n")
+
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("Check")
+        table.add_column("Status", justify="center")
+        table.add_column("Details")
+
+        status_style = {"ok": "[green]\u2713 ok[/]", "warn": "[yellow]\u26a0 warn[/]", "fail": "[red]\u2717 fail[/]"}
+        for check in report.checks:
+            details_parts = []
+            for k, v in check.details.items():
+                details_parts.append(f"{k}: {v}")
+            for issue in check.issues:
+                details_parts.append(f"[red]{issue}[/]")
+            for warning in check.warnings:
+                details_parts.append(f"[yellow]{warning}[/]")
+            detail_str = "\n".join(details_parts[:5])
+            if len(details_parts) > 5:
+                detail_str += f"\n[dim]... and {len(details_parts) - 5} more[/]"
+            table.add_row(check.label, status_style.get(check.status, check.status), detail_str)
+
+        _console.print(table)
+        s = report.summary
+        _console.print(f"\n[bold]Summary:[/] {s.ok} ok, {s.warn} warnings, {s.fail} failures ({s.total} checks)")
+
+    if report.overall == "fail":
+        raise typer.Exit(code=1)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -588,6 +621,46 @@ def calculation_complete(
 # ═══════════════════════════════════════════════════════════════════════════
 
 config_app = typer.Typer(help="GRD configuration")
+
+
+@config_app.command("list")
+def config_list() -> None:
+    """List all configuration settings with current values."""
+    from grd.cli._helpers import _raw, console as _console
+    from grd.core.config import effective_config_value, load_config, supported_config_keys
+
+    try:
+        config = load_config(_get_cwd())
+    except ConfigError:
+        config = None
+
+    keys = supported_config_keys()
+    if _raw:
+        entries = {}
+        for key in keys:
+            if config:
+                found, value = effective_config_value(config, key)
+                entries[key] = value if found else None
+            else:
+                entries[key] = None
+        _output(entries)
+        return
+
+    from rich.table import Table
+
+    table = Table(title="Configuration", show_header=True, header_style="bold cyan")
+    table.add_column("Key")
+    table.add_column("Value")
+
+    for key in keys:
+        if config:
+            found, value = effective_config_value(config, key)
+            val_str = str(value) if found else "[dim]unset[/]"
+        else:
+            val_str = "[dim]no config[/]"
+        table.add_row(key, val_str)
+
+    _console.print(table)
 
 
 @config_app.command("get")
