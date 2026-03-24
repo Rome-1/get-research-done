@@ -797,6 +797,45 @@ class TestConfigCommands:
         assert parsed_sync["sync_applied"] is True
         assert settings["permissions"]["defaultMode"] == "bypassPermissions"
 
+    @pytest.mark.parametrize("command", ["status", "sync"])
+    def test_permissions_reject_foreign_manifest_target(
+        self,
+        gpd_project: Path,
+        command: str,
+    ) -> None:
+        from gpd.adapters.claude_code import ClaudeCodeAdapter
+
+        target = gpd_project / ".claude"
+        target.mkdir()
+        gpd_root = Path(__file__).resolve().parents[1] / "src" / "gpd"
+        ClaudeCodeAdapter().install(gpd_root, target)
+
+        manifest_before = (target / "gpd-file-manifest.json").read_text(encoding="utf-8")
+        config_toml = target / "config.toml"
+        config_toml_existed_before = config_toml.exists()
+        action = "sync" if command == "sync" else "inspect"
+
+        result = _invoke(
+            "--raw",
+            "permissions",
+            command,
+            "--runtime",
+            "codex",
+            "--target-dir",
+            str(target),
+            "--autonomy",
+            "yolo",
+            expect_ok=False,
+        )
+        parsed = json.loads(result.output)
+
+        assert result.exit_code == 1
+        assert parsed["error"].startswith(f"Refusing to {action} runtime permissions on")
+        assert "`claude-code`" in parsed["error"]
+        assert "`codex`" in parsed["error"]
+        assert (target / "gpd-file-manifest.json").read_text(encoding="utf-8") == manifest_before
+        assert config_toml.exists() == config_toml_existed_before
+
     def test_config_set_autonomy_attempts_runtime_permission_sync(
         self,
         gpd_project: Path,

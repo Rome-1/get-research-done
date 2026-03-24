@@ -626,7 +626,10 @@ class TestRuntimePermissions:
         skills.mkdir()
         adapter.install(gpd_root, target, skills_dir=skills)
 
-        assert (target / "gpd-file-manifest.json").exists()
+        manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+        assert manifest["codex_skills_dir"] == str(skills)
+        assert manifest["codex_generated_skill_dirs"]
+        assert all(name.startswith("gpd-") for name in manifest["codex_generated_skill_dirs"])
 
     def test_install_returns_counts(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"
@@ -881,6 +884,29 @@ class TestUninstall:
         gpd_skills = [d for d in skills.iterdir() if d.is_dir() and d.name.startswith("gpd-")] if skills.exists() else []
         assert len(gpd_skills) == 0
         assert any("skills" in item for item in result["removed"])
+
+    def test_uninstall_preserves_untracked_gpd_skill_dir(
+        self,
+        adapter: CodexAdapter,
+        gpd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".codex"
+        target.mkdir()
+        skills = tmp_path / "skills"
+        skills.mkdir()
+
+        adapter.install(gpd_root, target, skills_dir=skills)
+        manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+        tracked_skill_names = set(manifest["codex_generated_skill_dirs"])
+        preserved_skill = skills / "gpd-user-keep"
+        preserved_skill.mkdir()
+        (preserved_skill / "SKILL.md").write_text("keep", encoding="utf-8")
+
+        adapter.uninstall(target, skills_dir=skills)
+
+        assert (preserved_skill / "SKILL.md").exists()
+        assert "gpd-user-keep" not in tracked_skill_names
 
     def test_uninstall_removes_agents(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"

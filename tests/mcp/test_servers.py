@@ -945,6 +945,7 @@ class TestSkillsServer:
         assert result["name"] == "gpd-execute-phase"
         assert "Canonical execute command" in result["content"]
         assert result["file_count"] == 1
+        assert result["allowed_tools_surface"] == "command.allowed-tools"
 
     def test_get_skill_surfaces_referenced_files(self):
         from gpd.mcp.servers.skills_server import get_skill
@@ -953,6 +954,7 @@ class TestSkillsServer:
 
         assert result["reference_count"] >= 1
         assert any(entry["kind"] == "workflow" for entry in result["referenced_files"])
+        assert all(not entry["path"].startswith("/") for entry in result["referenced_files"])
 
     def test_get_skill_surfaces_schema_references(self):
         from gpd.mcp.servers.skills_server import get_skill
@@ -973,6 +975,8 @@ class TestSkillsServer:
         assert result["context_mode"] == "project-required"
         assert result["review_contract"] is not None
         assert result["review_contract"]["review_mode"] == "publication"
+        assert all(not entry["path"].startswith("/") for entry in result["schema_documents"])
+        assert all(not entry["path"].startswith("/") for entry in result["contract_documents"])
 
     def test_get_skill_agent_uses_primary_agent_content(self):
         from gpd.mcp.servers.skills_server import get_skill
@@ -997,10 +1001,9 @@ class TestSkillsServer:
 
         result = get_skill("gpd-plan-phase")
 
-        assert "{GPD_INSTALL_DIR}" not in result["content"]
-        assert "{GPD_AGENTS_DIR}" not in result["content"]
-        assert f"@{SPECS_DIR.resolve().as_posix()}/workflows/plan-phase.md" in result["content"]
-        assert f"{AGENTS_DIR.resolve().as_posix()}/gpd-planner.md" in result["content"]
+        assert str(SPECS_DIR.resolve()) not in result["content"]
+        assert str(AGENTS_DIR.resolve()) not in result["content"]
+        assert "@{GPD_INSTALL_DIR}/workflows/plan-phase.md" in result["content"]
 
     def test_get_skill_resolves_slides_workflow_placeholder(self):
         from gpd.mcp.servers.skills_server import get_skill
@@ -1008,8 +1011,8 @@ class TestSkillsServer:
 
         result = get_skill("gpd-slides")
 
-        assert "{GPD_INSTALL_DIR}" not in result["content"]
-        assert f"@{SPECS_DIR.resolve().as_posix()}/workflows/slides.md" in result["content"]
+        assert str(SPECS_DIR.resolve()) not in result["content"]
+        assert "@{GPD_INSTALL_DIR}/workflows/slides.md" in result["content"]
 
     def test_get_skill_not_found(self):
         from gpd.mcp.servers.skills_server import get_skill

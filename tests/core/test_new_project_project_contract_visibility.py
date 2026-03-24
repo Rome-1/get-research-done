@@ -16,6 +16,11 @@ def test_new_project_prompt_surfaces_the_canonical_state_schema_for_project_cont
     assert "templates/state-json-schema.md" in new_project_text
     assert "Before you ask for approval, build the raw contract as a literal JSON object that follows `templates/state-json-schema.md` exactly:" in new_project_text
     assert "Do not approve a scoping contract that strips decisive outputs, anchors, prior outputs, or review/stop triggers down to generic placeholders." in new_project_text
+    assert "project_contract_load_info" in new_project_text
+    assert "project_contract_validation" in new_project_text
+    assert "Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `project_exists`, `has_research_map`, `planning_exists`, `has_research_files`, `has_project_manifest`, `has_existing_project`, `needs_research_map`, `has_git`, `project_contract`, `project_contract_load_info`, `project_contract_validation`." in new_project_text
+    assert "If `project_contract` is present in the init JSON, keep `project_contract`, `project_contract_load_info`, and `project_contract_validation` visible while deciding whether this is fresh work or a continuation." in new_project_text
+    assert "If the init JSON already contains `project_contract`, `project_contract_load_info`, or `project_contract_validation`, preserve that state in the approval gate and continuation decision." in new_project_text
 
 
 def test_state_schema_surfaces_the_exact_approved_mode_grounding_rule() -> None:

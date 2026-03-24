@@ -163,6 +163,13 @@ def test_graph_captures_checkpoint_feature_edges() -> None:
         assert edge not in graph
 
 
+def test_graph_does_not_reference_removed_verify_between_waves_knob() -> None:
+    graph = read_graph_text()
+
+    assert "workflow.verify_between_waves" not in graph
+    assert "verify_between_waves" not in graph
+
+
 def test_graph_test_file_references_exist() -> None:
     missing = sorted(
         {

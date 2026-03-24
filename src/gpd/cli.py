@@ -2252,7 +2252,13 @@ def _resolve_permissions_autonomy(autonomy: str | None, *, strict: bool = True) 
     return normalized
 
 
-def _resolve_permissions_target_dir(runtime_name: str, *, target_dir: str | None, strict: bool = True) -> Path:
+def _resolve_permissions_target_dir(
+    runtime_name: str,
+    *,
+    target_dir: str | None,
+    strict: bool = True,
+    action: str = "inspect runtime permissions on",
+) -> Path:
     """Resolve the installed config directory targeted by a permissions command."""
     from gpd.adapters import get_adapter
     from gpd.hooks.runtime_detect import detect_install_scope, detect_runtime_install_target
@@ -2260,6 +2266,10 @@ def _resolve_permissions_target_dir(runtime_name: str, *, target_dir: str | None
     adapter = get_adapter(runtime_name)
     if target_dir:
         resolved = _resolve_cli_target_dir(target_dir)
+        try:
+            adapter._validate_target_runtime(resolved, action=action)
+        except RuntimeError as exc:
+            _error(str(exc))
     else:
         install_target = detect_runtime_install_target(runtime_name, cwd=_get_cwd())
         if install_target is not None:
@@ -2326,7 +2336,12 @@ def _runtime_permissions_payload(
         }
 
     try:
-        resolved_target_dir = _resolve_permissions_target_dir(runtime_name, target_dir=target_dir, strict=strict)
+        resolved_target_dir = _resolve_permissions_target_dir(
+            runtime_name,
+            target_dir=target_dir,
+            strict=strict,
+            action=("sync" if apply_sync else "inspect") + " runtime permissions on",
+        )
     except _PermissionsResolutionError as exc:
         return {
             "runtime": runtime_name,
@@ -2336,8 +2351,8 @@ def _runtime_permissions_payload(
             "message": str(exc),
         }
 
-    autonomy_value = _resolve_permissions_autonomy(autonomy, strict=strict)
     adapter = get_adapter(runtime_name)
+    autonomy_value = _resolve_permissions_autonomy(autonomy, strict=strict)
     payload = (
         adapter.sync_runtime_permissions(resolved_target_dir, autonomy=autonomy_value)
         if apply_sync

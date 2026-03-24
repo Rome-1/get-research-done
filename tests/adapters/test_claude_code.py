@@ -738,3 +738,42 @@ class TestUninstall:
             if isinstance(hook, dict) and isinstance(hook.get("command"), str)
         ]
         assert "python3 /tmp/third-party-statusline.py" in commands
+
+    def test_uninstall_preserves_third_party_hooks_inside_hooks_dirs(
+        self,
+        adapter: ClaudeCodeAdapter,
+        gpd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".claude"
+        target.mkdir()
+        result = adapter.install(gpd_root, target)
+        adapter.finish_install(
+            result["settingsPath"],
+            result["settings"],
+            result["statuslineCommand"],
+            True,
+        )
+
+        settings_path = target / "settings.json"
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        settings["statusLine"] = {"type": "command", "command": "python3 /tmp/third-party/hooks/statusline.py"}
+        session_start = settings.setdefault("hooks", {}).setdefault("SessionStart", [])
+        session_start.append({"hooks": [{"type": "command", "command": "python3 /tmp/third-party/hooks/check_update.py"}]})
+        session_start.append({"hooks": [{"type": "command", "command": "python3 .claude/hooks/check_update.py"}]})
+        settings_path.write_text(json.dumps(settings), encoding="utf-8")
+
+        adapter.uninstall(target)
+
+        cleaned = json.loads(settings_path.read_text(encoding="utf-8"))
+        assert cleaned["statusLine"]["command"] == "python3 /tmp/third-party/hooks/statusline.py"
+        session_start = cleaned.get("hooks", {}).get("SessionStart", [])
+        commands = [
+            hook["command"]
+            for entry in session_start
+            if isinstance(entry, dict)
+            for hook in entry.get("hooks", [])
+            if isinstance(hook, dict) and isinstance(hook.get("command"), str)
+        ]
+        assert "python3 /tmp/third-party/hooks/check_update.py" in commands
+        assert "python3 .claude/hooks/check_update.py" not in commands

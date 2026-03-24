@@ -417,11 +417,32 @@ def test_public_descriptors_surface_contract_and_optional_dependency_visibility(
     assert "ASSERT_CONVENTION validation" in conventions["description"]
     assert "Every derivation artifact must carry at least one ASSERT_CONVENTION header" in conventions["description"]
 
+    protocols = descriptors["gpd-protocols"]
+    assert "live protocol catalog" in protocols["description"]
+    assert "47 physics domains" not in protocols["description"]
+
     arxiv = descriptors["gpd-arxiv"]
     assert arxiv["optional"] is True
     assert arxiv["availability"] == "conditional"
     assert "optional Python module 'arxiv_mcp_server'" in arxiv["availability_condition"]
     assert "Optional/conditional arXiv paper search and retrieval" in arxiv["description"]
+
+
+def test_public_protocols_infra_descriptor_matches_live_catalog_surface() -> None:
+    descriptor = json.loads((Path(__file__).resolve().parents[2] / "infra" / "gpd-protocols.json").read_text(encoding="utf-8"))
+
+    description = descriptor["description"]
+    assert "live protocol catalog" in description
+    assert "47 physics domains" not in description
+
+
+def test_get_checklist_tool_description_mentions_full_live_registry() -> None:
+    from gpd.mcp.servers.verification_server import mcp
+
+    description = _tool_description(mcp, "get_checklist")
+
+    assert "currently 5.1-5.19" in description
+    assert "5.1-5.14" not in description
 
 
 def test_public_verification_infra_descriptor_surfaces_semantic_contract_rules() -> None:

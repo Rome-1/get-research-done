@@ -139,6 +139,7 @@ Build a canonical scoping contract from the extracted input.
 If the user does not know the anchor yet, preserve that explicitly in `scope.unresolved_questions`, `context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors` rather than inventing a paper, benchmark, or baseline.
 Prefer explicit missing-anchor wording such as `Which reference should serve as the decisive benchmark anchor?`, `Benchmark reference not yet selected`, `need grounding before the decisive anchor is chosen`, `decisive target not yet chosen`, or `baseline comparison is TBD`.
 Do not force a phase list just to make the scoping contract look complete. If decomposition is still unclear, record that uncertainty and let `ROADMAP.md` start with a single coarse phase or first grounded investigation chunk.
+If the init JSON already contains `project_contract`, `project_contract_load_info`, or `project_contract_validation`, preserve that state in the approval gate and continuation decision. Do not collapse a visible-but-blocked contract into a blank slate when deciding whether this is a fresh project or a continuation.
 
 If a blocking field is missing, ask exactly one repair prompt that targets only the missing field. Do not silently continue with placeholders.
 
@@ -566,7 +567,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `project_exists`, `has_research_map`, `planning_exists`, `has_research_files`, `has_project_manifest`, `has_existing_project`, `needs_research_map`, `has_git`.
+Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `project_exists`, `has_research_map`, `planning_exists`, `has_research_files`, `has_project_manifest`, `has_existing_project`, `needs_research_map`, `has_git`, `project_contract`, `project_contract_load_info`, `project_contract_validation`.
 
 **Mode-aware behavior:**
 - `autonomy=supervised`: Pause for user confirmation after each major step (questioning, scoping contract, research, roadmap). Show summaries and wait for approval before proceeding.
@@ -657,6 +658,8 @@ Run `/gpd:map-research` first, then return to `/gpd:new-project`
 ```
 
 Exit command.
+
+If `project_contract` is present in the init JSON, keep `project_contract`, `project_contract_load_info`, and `project_contract_validation` visible while deciding whether this is fresh work or a continuation. Preserve blockers, warnings, and approval state rather than flattening them into a blank-slate prompt.
 
 **If "Skip mapping" OR `needs_research_map` is false:** Continue to Step 3.
 

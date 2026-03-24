@@ -661,6 +661,9 @@ def test_new_project_wiring_mentions_contract_persistence_and_contract_first_dow
     assert "gpd state set-project-contract -" in workflow_text
     assert "/tmp/gpd-project-contract.json" not in workflow_text
     assert "temporary JSON file if needed" not in workflow_text
+    assert "Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `project_exists`, `has_research_map`, `planning_exists`, `has_research_files`, `has_project_manifest`, `has_existing_project`, `needs_research_map`, `has_git`, `project_contract`, `project_contract_load_info`, `project_contract_validation`." in workflow_text
+    assert "If `project_contract` is present in the init JSON, keep `project_contract`, `project_contract_load_info`, and `project_contract_validation` visible while deciding whether this is fresh work or a continuation." in workflow_text
+    assert "If the init JSON already contains `project_contract`, `project_contract_load_info`, or `project_contract_validation`, preserve that state in the approval gate and continuation decision." in workflow_text
     assert "Read PROJECT.md and `GPD/state.json` and extract" in workflow_text
     assert "Derive phases from requirements AND the approved project contract" in workflow_text
     assert "If auto mode and `autonomy` is not `supervised`" in workflow_text

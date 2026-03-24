@@ -20,6 +20,7 @@ from gpd.adapters.install_utils import (
     build_hook_command,
     convert_tool_references_in_body,
     copy_with_path_replacement,
+    _is_hook_command_for_script,
     ensure_update_hook,
     expand_at_includes,
     finish_install,
@@ -606,6 +607,30 @@ class TestFinishInstall:
 class TestEnsureUpdateHook:
     """Tests for managed update-hook repair and deduplication."""
 
+    def test_runtime_context_requires_exact_managed_hook_path_match(self, tmp_path: Path) -> None:
+        target_dir = tmp_path / ".claude"
+        managed_hook = target_dir / "hooks" / "check_update.py"
+        managed_hook.parent.mkdir(parents=True)
+
+        assert _is_hook_command_for_script(
+            f"python3 {managed_hook}",
+            "check_update.py",
+            target_dir=target_dir,
+            config_dir_name=".claude",
+        ) is True
+        assert _is_hook_command_for_script(
+            "python3 check_update.py",
+            "check_update.py",
+            target_dir=target_dir,
+            config_dir_name=".claude",
+        ) is False
+        assert _is_hook_command_for_script(
+            "python3 /tmp/third-party/hooks/check_update.py",
+            "check_update.py",
+            target_dir=target_dir,
+            config_dir_name=".claude",
+        ) is False
+
     def test_rewrites_stale_managed_command_and_preserves_other_hooks(self) -> None:
         settings = {
             "hooks": {
@@ -635,6 +660,42 @@ class TestEnsureUpdateHook:
         assert commands == [
             "/custom/venv/bin/python .claude/hooks/check_update.py",
             "echo keep-me",
+        ]
+
+    def test_preserves_third_party_hook_paths_when_runtime_context_is_known(self, tmp_path: Path) -> None:
+        target_dir = tmp_path / ".claude"
+        target_dir.mkdir(parents=True)
+        settings = {
+            "hooks": {
+                "SessionStart": [
+                    {
+                        "hooks": [
+                            {"type": "command", "command": "python3 /tmp/third-party/hooks/check_update.py"},
+                            {"type": "command", "command": "python3 .claude/hooks/check_update.py"},
+                        ]
+                    }
+                ]
+            }
+        }
+
+        ensure_update_hook(
+            settings,
+            "/custom/venv/bin/python .claude/hooks/check_update.py",
+            target_dir=target_dir,
+            config_dir_name=".claude",
+        )
+
+        session_start = settings["hooks"]["SessionStart"]
+        commands = [
+            hook["command"]
+            for entry in session_start
+            if isinstance(entry, dict)
+            for hook in entry.get("hooks", [])
+            if isinstance(hook, dict) and isinstance(hook.get("command"), str)
+        ]
+        assert commands == [
+            "python3 /tmp/third-party/hooks/check_update.py",
+            "/custom/venv/bin/python .claude/hooks/check_update.py",
         ]
 
 

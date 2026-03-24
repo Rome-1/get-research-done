@@ -695,7 +695,7 @@ flowchart TD
 - `src/gpd/agents/gpd-verifier.md -> src/gpd/specs/{references/verification/meta/verification-hierarchy-mapping.md,references/verification/core/computational-verification-templates.md,references/verification/domains/verification-domain-{qft,condmat,statmech,gr-cosmology,amo,nuclear-particle,astrophysics,fluid-plasma,mathematical-physics,algebraic-qft,string-field-theory,quantum-info,soft-matter}.md}`
   `conditional-include`
 
-- `GPD/config.json::{autonomy,research_mode,workflow.research,workflow.plan_checker,workflow.verifier,workflow.verify_between_waves,model_profile} -> src/gpd/specs/workflows/{plan-phase,execute-phase,verify-work,new-project,write-paper}.md`
+- `GPD/config.json::{autonomy,research_mode,execution.review_cadence,workflow.research,workflow.plan_checker,workflow.verifier,model_profile} -> src/gpd/specs/workflows/{plan-phase,execute-phase,verify-work,new-project,write-paper}.md`
   `selector-input`
 
 - `STATE.md/state.json::convention_lock -> src/gpd/specs/workflows/{execute-phase,validate-conventions,new-project}.md`

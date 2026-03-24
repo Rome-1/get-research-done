@@ -1635,6 +1635,8 @@ def _is_hook_command_for_script(
         if any(token.replace("\\", "/") in managed_path_set for token in command_tokens):
             return True
 
+        return False
+
     for token in command_tokens:
         normalized_token = token.replace("\\", "/")
         if normalized_token == hook_filename:

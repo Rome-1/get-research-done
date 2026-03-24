@@ -27,9 +27,11 @@ from gpd.core.context import (
     init_verify_work,
     load_config,
 )
+from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.core.errors import ConfigError, ValidationError
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
+_RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -63,6 +65,18 @@ def _create_roadmap(tmp_path: Path, content: str) -> Path:
     roadmap.parent.mkdir(parents=True, exist_ok=True)
     roadmap.write_text(content)
     return roadmap
+
+
+def _runtime_mirror_dirs(root: Path) -> tuple[Path, ...]:
+    """Return runtime-owned mirror directories derived from the catalog."""
+    paths: list[Path] = []
+    for descriptor in _RUNTIME_DESCRIPTORS:
+        paths.append(root / descriptor.config_dir_name)
+        if descriptor.global_config.home_subpath:
+            paths.append(root / descriptor.global_config.home_subpath)
+        if descriptor.global_config.xdg_subdir:
+            paths.append(root / ".config" / descriptor.global_config.xdg_subdir)
+    return tuple(dict.fromkeys(paths))
 
 
 def _write_project_contract_state(tmp_path: Path) -> None:
@@ -842,12 +856,9 @@ class TestInitNewProject:
         assert ctx["has_existing_project"] is True
 
     def test_ignores_runtime_owned_dirs_when_detecting_research_files(self, tmp_path: Path) -> None:
-        (tmp_path / ".codex").mkdir()
-        (tmp_path / ".codex" / "calc.py").write_text("print('runtime mirror')", encoding="utf-8")
-        (tmp_path / ".claude").mkdir()
-        (tmp_path / ".claude" / "notes.py").write_text("print('runtime mirror')", encoding="utf-8")
-        (tmp_path / ".config" / "opencode").mkdir(parents=True)
-        (tmp_path / ".config" / "opencode" / "script.py").write_text("print('runtime mirror')", encoding="utf-8")
+        for runtime_dir in _runtime_mirror_dirs(tmp_path):
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            (runtime_dir / "mirror.py").write_text("print('runtime mirror')", encoding="utf-8")
 
         ctx = init_new_project(tmp_path)
 
@@ -867,6 +878,19 @@ class TestInitNewProject:
         (tmp_path / "pyproject.toml").write_text("[project]")
         ctx = init_new_project(tmp_path)
         assert ctx["has_project_manifest"] is True
+
+    def test_surfaces_project_contract_state_and_validation(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _write_project_contract_state(tmp_path)
+
+        ctx = init_new_project(tmp_path)
+
+        assert ctx["project_contract"] is not None
+        assert ctx["project_contract"]["scope"]["question"] == "What benchmark must the project recover?"
+        assert ctx["project_contract_load_info"]["status"] in {"loaded", "loaded_with_approval_blockers"}
+        assert ctx["project_contract_load_info"]["source_path"].endswith("state.json")
+        assert ctx["project_contract_validation"] is not None
+        assert "valid" in ctx["project_contract_validation"]
 
 
 # ─── init_new_milestone ───────────────────────────────────────────────────────

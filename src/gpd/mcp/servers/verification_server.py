@@ -3279,7 +3279,7 @@ def get_checklist(domain: str) -> dict:
     """Return the domain-specific verification checklist.
 
     Provides the complete list of checks recommended for a physics domain,
-    including which universal checks (5.1-5.14) each maps to.
+    including which live verifier-registry checks (currently 5.1-5.19) each maps to.
     """
     with gpd_span("mcp.verification.checklist", domain=domain):
         try:

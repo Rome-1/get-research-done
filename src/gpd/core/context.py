@@ -1442,6 +1442,8 @@ def init_new_project(cwd: Path) -> dict:
         and not _path_exists(cwd, f"{PLANNING_DIR_NAME}/{RESEARCH_MAP_DIR_NAME}"),
         # Git state
         "has_git": _path_exists(cwd, ".git"),
+        # Contract-backed context
+        **_build_reference_runtime_context(cwd),
         # Platform
         "platform": _detect_platform(cwd),
     }

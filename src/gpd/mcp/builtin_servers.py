@@ -148,7 +148,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
     "gpd-protocols": {
         "description": (
             "Physics computation protocols for GPD research workflows. Provides step-by-step methodology, "
-            "verification checkpoints, and auto-routing for 47 physics domains."
+            "verification checkpoints, and auto-routing across the live protocol catalog."
         ),
         "capabilities": [
             "get_protocol",

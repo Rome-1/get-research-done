@@ -403,7 +403,9 @@ class TestCodexLifecycle:
         assert "[agents.gpd-planner]" in toml_content
 
         # Manifest
-        assert (target / MANIFEST_NAME).exists()
+        manifest = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
+        assert manifest["codex_generated_skill_dirs"]
+        assert all(name.startswith("gpd-") for name in manifest["codex_generated_skill_dirs"])
 
         # Result dict
         assert result["runtime"] == "codex"
@@ -453,6 +455,27 @@ class TestCodexLifecycle:
 
         # Result has counts
         assert result["skills"] > 0
+
+    def test_uninstall_preserves_user_owned_gpd_skill_dir(self, tmp_path: Path, gpd_root: Path) -> None:
+        adapter = get_adapter("codex")
+        target = tmp_path / ".codex"
+        target.mkdir()
+        skills_dir = tmp_path / ".agents" / "skills"
+        skills_dir.mkdir(parents=True)
+
+        _install_and_finalize(adapter, gpd_root, target, is_global=True, skills_dir=skills_dir)
+        manifest = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
+        tracked_skill_names = set(manifest["codex_generated_skill_dirs"])
+
+        preserved_skill = skills_dir / "gpd-user-keep"
+        preserved_skill.mkdir()
+        (preserved_skill / "SKILL.md").write_text("keep", encoding="utf-8")
+
+        adapter.uninstall(target, skills_dir=skills_dir)
+
+        assert (preserved_skill / "SKILL.md").exists()
+        assert "gpd-user-keep" not in tracked_skill_names
+        assert not any((skills_dir / name).exists() for name in tracked_skill_names)
 
     def test_reinstall_after_uninstall(self, tmp_path: Path, gpd_root: Path) -> None:
         adapter = get_adapter("codex")

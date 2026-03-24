@@ -661,16 +661,18 @@ class TestSkillsServerIntegration:
         assert "gpd validate command-context gpd:<name>" in result["content"]
         assert "gpd-new-project" in result["content"]
         assert result["file_count"] == 1
+        assert result["allowed_tools_surface"] == "command.allowed-tools"
 
     def test_get_skill_resolves_package_spec_paths(self):
         from gpd.mcp.servers.skills_server import get_skill
-        from gpd.registry import SPECS_DIR
 
         result = get_skill("gpd-plan-phase")
 
         assert "error" not in result
-        assert "{GPD_INSTALL_DIR}" not in result["content"]
-        assert f"@{SPECS_DIR.resolve().as_posix()}/workflows/plan-phase.md" in result["content"]
+        assert "@{GPD_INSTALL_DIR}/workflows/plan-phase.md" in result["content"]
+        assert all(not entry["path"].startswith("/") for entry in result["referenced_files"])
+        assert all(not entry["path"].startswith("/") for entry in result["schema_documents"])
+        assert all(not entry["path"].startswith("/") for entry in result["contract_documents"])
 
     def test_get_skill_peer_review_surfaces_transitive_schema_refs_and_typed_contract(self):
         from gpd.mcp.servers.skills_server import get_skill
@@ -735,6 +737,8 @@ class TestSkillsServerIntegration:
         assert "error" not in result
         assert result["schema_documents"]
         assert result["contract_documents"]
+        assert all(not entry["path"].startswith("/") for entry in result["schema_documents"])
+        assert all(not entry["path"].startswith("/") for entry in result["contract_documents"])
         for name, marker in expected_schema_docs.items():
             assert name in schema_documents
             assert marker in schema_documents[name]["body"]

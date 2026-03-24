@@ -118,27 +118,21 @@ def _normalize_literal_choice_list(value: object, choices: tuple[str, ...]) -> o
     return canonicalized
 
 
-def normalize_contract_results_input(value: object, *, strict: bool | None = None) -> object:
+def normalize_contract_results_input(value: object, *, strict: bool = True) -> object:
     """Preserve contract-results shape before strict ``ContractResults`` validation.
 
-    The shared model boundary no longer coerces placeholder mappings such as
-    ``null`` or ``[]`` into empty ledgers. Frontmatter and command parsing mark
-    the input as strict so explicit ledgers are required there, while the
-    paper-quality aggregation path stays permissive for legacy fixture reuse.
+    Legacy permissive normalization is intentionally unsupported. All live
+    contract-results entry points validate strict contract-backed ledgers, so
+    this helper now rejects ``strict=False`` rather than silently reintroducing
+    coercive compatibility behavior.
     """
     if not isinstance(value, dict):
         return value
 
-    normalized = dict(value)
-    strict = bool(strict)
-    if not strict:
-        for field_name in ("claims", "deliverables", "acceptance_tests", "references", "forbidden_proxies"):
-            section_value = normalized.get(field_name)
-            if section_value is None or isinstance(section_value, list):
-                normalized[field_name] = {}
-    if strict:
-        return _StrictContractResultsInput(normalized)
-    return normalized
+    if strict is not True:
+        raise ValueError("normalize_contract_results_input only supports strict=True")
+
+    return _StrictContractResultsInput(dict(value))
 
 
 def _collect_strict_contract_results_errors(value: _StrictContractResultsInput) -> list[str]:

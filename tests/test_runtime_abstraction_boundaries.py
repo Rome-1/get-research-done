@@ -150,13 +150,20 @@ _SHARED_RUNTIME_AGNOSTIC_PATHS = (
     REPO_ROOT / "src/gpd/registry.py",
     REPO_ROOT / "src/gpd/mcp/servers/skills_server.py",
 )
-_SHARED_TEST_RUNTIME_SURFACE_PATHS = (
-    REPO_ROOT / "tests/test_bootstrap_installer.py",
-    REPO_ROOT / "tests/test_install_lifecycle.py",
-    REPO_ROOT / "tests/core/test_prompt_tool_name_consistency.py",
-    REPO_ROOT / "tests/core/test_prompt_wiring.py",
-    REPO_ROOT / "tests/test_update_workflow.py",
-)
+def _shared_runtime_facing_test_paths() -> tuple[Path, ...]:
+    paths: list[Path] = []
+    for path in sorted((REPO_ROOT / "tests").rglob("*.py")):
+        rel_path = path.relative_to(REPO_ROOT)
+        if rel_path == Path("tests/test_runtime_abstraction_boundaries.py"):
+            continue
+        if rel_path.parts[:2] in {("tests", "adapters"), ("tests", "hooks")}:
+            continue
+        if rel_path.parts[:2] == ("tests", "core") or (len(rel_path.parts) == 2 and rel_path.name.startswith("test_")):
+            paths.append(path)
+    return tuple(paths)
+
+
+_SHARED_TEST_RUNTIME_SURFACE_PATHS = _shared_runtime_facing_test_paths()
 _TEXT_SURFACE_SUFFIXES = {".json", ".md", ".py"}
 
 

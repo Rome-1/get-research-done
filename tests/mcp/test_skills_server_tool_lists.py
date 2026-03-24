@@ -10,7 +10,7 @@ from gpd.registry import AgentDef, CommandDef, SkillDef
 def test_get_skill_command_allowed_tools_are_defensive_copies() -> None:
     from gpd.mcp.servers.skills_server import get_skill
 
-    command_tools = ["file_read", "shell"]
+    command_tools = ["file_read", "shell", "shell"]
     command = CommandDef(
         name="gpd:help",
         description="Help.",
@@ -39,14 +39,15 @@ def test_get_skill_command_allowed_tools_are_defensive_copies() -> None:
 
     assert result["allowed_tools"] == ["file_read", "shell"]
     assert result["allowed_tools"] is not command.allowed_tools
+    assert result["allowed_tools_surface"] == "command.allowed-tools"
     result["allowed_tools"].append("network")
-    assert command.allowed_tools == ["file_read", "shell"]
+    assert command.allowed_tools == ["file_read", "shell", "shell"]
 
 
 def test_get_skill_agent_surfaces_allowed_tools() -> None:
     from gpd.mcp.servers.skills_server import get_skill
 
-    agent_tools = ["shell", "file_read"]
+    agent_tools = ["shell", "file_read", "shell"]
     agent = AgentDef(
         name="gpd-debugger",
         description="Debugger.",
@@ -74,5 +75,6 @@ def test_get_skill_agent_surfaces_allowed_tools() -> None:
 
     assert result["allowed_tools"] == ["shell", "file_read"]
     assert result["allowed_tools"] is not agent.tools
+    assert result["allowed_tools_surface"] == "agent.tools"
     result["allowed_tools"].append("network")
-    assert agent.tools == ["shell", "file_read"]
+    assert agent.tools == ["shell", "file_read", "shell"]

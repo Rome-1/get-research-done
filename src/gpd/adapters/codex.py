@@ -24,7 +24,7 @@ import re
 import shutil
 import tempfile
 import tomllib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from gpd.adapters.base import RuntimeAdapter
 from gpd.adapters.install_utils import (
@@ -84,6 +84,7 @@ _GPD_SANDBOX_MODE_COMMENT = "# GPD runtime sandbox mode"
 _GPD_SANDBOX_MODE_BACKUP_PREFIX = "# GPD original sandbox_mode: "
 _GPD_AGENT_ROLES_COMMENT = "# GPD agent roles"
 _MANIFEST_CODEX_SKILLS_DIR_KEY = "codex_skills_dir"
+_MANIFEST_CODEX_GENERATED_SKILL_DIRS_KEY = "codex_generated_skill_dirs"
 _CODEX_DEFAULT_SANDBOX_MODE = "workspace-write"
 _CODEX_YOLO_APPROVAL_POLICY = "never"
 _CODEX_YOLO_SANDBOX_MODE = "danger-full-access"
@@ -185,6 +186,41 @@ def _load_manifest_codex_skills_dir(target_dir: Path) -> Path | None:
         return Path(manifest_skills_dir)
 
     return None
+
+
+def _load_manifest_codex_generated_skill_dirs(target_dir: Path) -> tuple[str, ...]:
+    """Return tracked Codex skill directory names from the local manifest."""
+    manifest_path = target_dir / MANIFEST_NAME
+    if not manifest_path.exists():
+        return ()
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return ()
+
+    if not isinstance(manifest, dict):
+        return ()
+
+    metadata_dirs = manifest.get(_MANIFEST_CODEX_GENERATED_SKILL_DIRS_KEY)
+    if isinstance(metadata_dirs, list):
+        names = [str(name) for name in metadata_dirs if isinstance(name, str) and name.strip()]
+        if names:
+            return tuple(dict.fromkeys(names))
+
+    raw_files = manifest.get("files")
+    if not isinstance(raw_files, dict):
+        return ()
+
+    names: list[str] = []
+    for rel_path in raw_files:
+        if not isinstance(rel_path, str):
+            continue
+        rel = PurePosixPath(rel_path)
+        parts = rel.parts
+        if len(parts) == 3 and parts[0] == "skills" and parts[2] == "SKILL.md" and parts[1]:
+            names.append(parts[1])
+    return tuple(dict.fromkeys(names))
 
 
 def _load_manifest_install_scope(target_dir: Path) -> str | None:
@@ -581,11 +617,14 @@ class CodexAdapter(RuntimeAdapter):
         to the base class template method.
         """
         prev_skills_dir = getattr(self, "_skills_dir", None)
+        prev_generated_skill_dirs = getattr(self, "_generated_skill_dirs", None)
         self._skills_dir = _resolve_codex_skills_dir(target_dir, is_global=is_global, skills_dir=skills_dir)
+        self._generated_skill_dirs = ()
         try:
             return super().install(gpd_root, target_dir, is_global=is_global, explicit_target=explicit_target)
         finally:
             self._skills_dir = prev_skills_dir
+            self._generated_skill_dirs = prev_generated_skill_dirs
 
     # --- Template method hooks ---
 
@@ -601,7 +640,7 @@ class CodexAdapter(RuntimeAdapter):
         commands_src = gpd_root / "commands"
         launcher = self._gpd_shell_launcher(target_dir)
         self._skills_dir.mkdir(parents=True, exist_ok=True)
-        _copy_commands_as_skills(
+        generated_skill_dirs = _copy_commands_as_skills(
             commands_src,
             self._skills_dir,
             "gpd",
@@ -610,6 +649,7 @@ class CodexAdapter(RuntimeAdapter):
             self._current_install_scope_flag(),
             launcher=launcher,
         )
+        self._generated_skill_dirs = tuple(sorted(generated_skill_dirs))
         if verify_installed(self._skills_dir, "command skills"):
             logger.info("Installed command skills")
         else:
@@ -935,10 +975,14 @@ class CodexAdapter(RuntimeAdapter):
                 is_global=manifest_install_scope == "global" if manifest_install_scope is not None else _is_global_codex_target(target_dir),
             )
 
+        tracked_skill_dirs = _load_manifest_codex_generated_skill_dirs(target_dir)
         try:
-            has_gpd_skills = skills_dir.is_dir() and any(
-                entry.is_dir() and entry.name.startswith("gpd-") for entry in skills_dir.iterdir()
-            )
+            if tracked_skill_dirs:
+                has_gpd_skills = skills_dir.is_dir() and all((skills_dir / name).is_dir() for name in tracked_skill_dirs)
+            else:
+                has_gpd_skills = skills_dir.is_dir() and any(
+                    entry.is_dir() and entry.name.startswith("gpd-") for entry in skills_dir.iterdir()
+                )
         except OSError:
             has_gpd_skills = False
 
@@ -953,7 +997,10 @@ class CodexAdapter(RuntimeAdapter):
             version,
             runtime=self.runtime_name,
             skills_dir=str(self._skills_dir),
-            metadata={_MANIFEST_CODEX_SKILLS_DIR_KEY: str(self._skills_dir)},
+            metadata={
+                _MANIFEST_CODEX_SKILLS_DIR_KEY: str(self._skills_dir),
+                _MANIFEST_CODEX_GENERATED_SKILL_DIRS_KEY: list(getattr(self, "_generated_skill_dirs", ())),
+            },
             install_scope=self._current_install_scope_flag(),
             explicit_target=getattr(self, "_install_explicit_target", False),
         )
@@ -978,11 +1025,13 @@ class CodexAdapter(RuntimeAdapter):
             removed: list[str] = []
             counts: dict[str, int] = {"skills": 0, "agents": 0, "hooks": 0}
             managed_hooks = managed_hook_paths(target_dir)
+            tracked_skill_dirs = _load_manifest_codex_generated_skill_dirs(target_dir)
 
-            # 1. Remove gpd-* skill directories from skills_dir
-            if skills_dir.exists():
-                for entry in list(skills_dir.iterdir()):
-                    if entry.is_dir() and entry.name.startswith("gpd-"):
+            # 1. Remove only skill directories tracked as generated in the manifest.
+            if skills_dir.exists() and tracked_skill_dirs:
+                for skill_name in tracked_skill_dirs:
+                    entry = skills_dir / skill_name
+                    if entry.is_dir():
                         shutil.rmtree(entry)
                         counts["skills"] += 1
 
@@ -1108,7 +1157,7 @@ def _copy_commands_as_skills(
     install_scope: str | None = None,
     *,
     launcher: str,
-) -> None:
+) -> set[str]:
     """Copy commands as Codex skill directories.
 
     Codex expects: ~/.agents/skills/gpd-help/SKILL.md
@@ -1116,7 +1165,7 @@ def _copy_commands_as_skills(
     Nested: commands/sub/help.md -> gpd-sub-help/SKILL.md (preserves hierarchy)
     """
     if not src_dir.exists():
-        return
+        return set()
 
     skills_parent = skills_dir.parent
     skills_parent.mkdir(parents=True, exist_ok=True)
@@ -1126,6 +1175,7 @@ def _copy_commands_as_skills(
     staged_skills_dir.mkdir(parents=True, exist_ok=True)
 
     live_backup: Path | None = None
+    generated_skill_dirs: set[str] = set()
     try:
         if skills_dir.exists():
             for entry in sorted(skills_dir.iterdir()):
@@ -1133,7 +1183,7 @@ def _copy_commands_as_skills(
                     continue
                 _copy_preserved_skill_entry(entry, staged_skills_dir / entry.name)
 
-        _render_commands_as_skills(
+        generated_skill_dirs = _render_commands_as_skills(
             src_dir,
             staged_skills_dir,
             prefix,
@@ -1162,6 +1212,7 @@ def _copy_commands_as_skills(
                 shutil.rmtree(staging_root)
             except OSError:
                 logger.warning("Failed to clean staging skills dir %s", staging_root)
+    return generated_skill_dirs
 
 
 def _copy_preserved_skill_entry(src: Path, dest: Path) -> None:
@@ -1184,24 +1235,28 @@ def _render_commands_as_skills(
     install_scope: str | None = None,
     *,
     launcher: str,
-) -> None:
+) -> set[str]:
     """Render command markdown into a skills directory without mutating the live tree."""
+    generated_skill_dirs: set[str] = set()
     for entry in sorted(src_dir.iterdir()):
         if entry.is_dir():
-            _render_commands_as_skills(
-                entry,
-                skills_dir,
-                f"{prefix}-{entry.name}",
-                path_prefix,
-                gpd_src_root,
-                install_scope,
-                launcher=launcher,
+            generated_skill_dirs.update(
+                _render_commands_as_skills(
+                    entry,
+                    skills_dir,
+                    f"{prefix}-{entry.name}",
+                    path_prefix,
+                    gpd_src_root,
+                    install_scope,
+                    launcher=launcher,
+                )
             )
         elif entry.suffix == ".md":
             base_name = entry.stem
             skill_name = f"{prefix}-{base_name}"
             skill_dir = skills_dir / skill_name
             skill_dir.mkdir(parents=True, exist_ok=True)
+            generated_skill_dirs.add(skill_name)
 
             content = compile_markdown_for_runtime(
                 entry.read_text(encoding="utf-8"),
@@ -1219,6 +1274,7 @@ def _render_commands_as_skills(
                 content = _rewrite_codex_help_wording(content)
 
             (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
+    return generated_skill_dirs
 
 
 def _copy_agents_as_agent_files(

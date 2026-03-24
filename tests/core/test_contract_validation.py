@@ -914,7 +914,7 @@ def test_contract_results_strict_mode_rejects_scalar_string_list_drift(
         ContractResults.model_validate(normalize_contract_results_input(payload, strict=True))
 
 
-def test_contract_results_non_strict_mode_preserves_existing_scalar_to_list_normalization() -> None:
+def test_contract_results_non_strict_mode_is_rejected() -> None:
     payload = {
         "claims": {
             "claim-main": {
@@ -934,10 +934,8 @@ def test_contract_results_non_strict_mode_preserves_existing_scalar_to_list_norm
         },
     }
 
-    parsed = ContractResults.model_validate(normalize_contract_results_input(payload, strict=False))
-
-    assert parsed.claims["claim-main"].linked_ids == ["deliv-main"]
-    assert parsed.references["ref-main"].completed_actions == ["compare"]
+    with pytest.raises(ValueError, match=re.escape("normalize_contract_results_input only supports strict=True")):
+        normalize_contract_results_input(payload, strict=False)
 
 
 def test_plan_contract_schema_uses_supported_contract_enum_values() -> None:
