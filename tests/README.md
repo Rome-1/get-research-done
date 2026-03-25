@@ -7,7 +7,7 @@ The final section of this README keeps the full checked-in repository interdepen
 ## Repository Interdependency Graph
 
 <!-- repo-graph-generated-on:start -->
-Generated on `2026-03-23` from the current worktree.
+Generated on `2026-03-25` from the current worktree.
 <!-- repo-graph-generated-on:end -->
 
 ## Status
@@ -26,8 +26,8 @@ This graph therefore includes:
 
 <!-- repo-graph-scope:start -->
 
-- Live repo files analyzed in the current tree: `689`
-- Python files under `src/` and `tests/`: `218`
+- Live repo files analyzed in the current tree: `690`
+- Python files under `src/` and `tests/`: `219`
 - `src/grd/commands/*.md`: `61`
 - `src/grd/agents/*.md`: `23`
 - `src/grd/specs/workflows/*.md`: `62`
@@ -37,7 +37,7 @@ This graph therefore includes:
 - `src/grd/adapters/*.py`: `9`
 - `src/grd/hooks/*.py`: `6`
 - `src/grd/mcp/servers/*.py`: `8`
-- `tests/**` files: `137`
+- `tests/**` files: `138`
 - `infra/grd-*.json`: `8`
 
 Excluded as noise from node counting, but still modeled where contractually relevant:

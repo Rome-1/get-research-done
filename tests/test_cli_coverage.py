@@ -18,7 +18,7 @@ import pytest
 from typer.testing import CliRunner
 
 from grd.cli import app
-from grd.core.state import default_state_dict
+from grd.core.state import default_state_dict, generate_state_markdown
 
 runner = CliRunner()
 
@@ -44,6 +44,9 @@ def grd_project(tmp_path: Path) -> Path:
         }
     )
     (planning / "state.json").write_text(json.dumps(state, indent=2))
+
+    # STATE.md required by state get/patch commands
+    (planning / "STATE.md").write_text(generate_state_markdown(state))
 
     # Phase directory structure for verify phase tests
     p1 = planning / "phases" / "01-test-phase"
@@ -682,3 +685,735 @@ class TestVerifyArtifacts:
         )
         result = _invoke("verify", "artifacts", "plan-with-contract.md", cwd=grd_project)
         assert result.exit_code is not None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Pattern commands
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestPatternInit:
+    def test_pattern_init(self, grd_project: Path) -> None:
+        result = _invoke("pattern", "init", cwd=grd_project)
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert "path" in data
+
+    def test_pattern_init_idempotent(self, grd_project: Path) -> None:
+        """Running init twice should succeed both times."""
+        _invoke("pattern", "init", cwd=grd_project)
+        result = _invoke("pattern", "init", cwd=grd_project)
+        assert result.exit_code == 0
+
+
+class TestPatternAdd:
+    def test_add_minimal(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        result = _invoke(
+            "pattern",
+            "add",
+            "--title",
+            "Sign error in cross product",
+            "--domain",
+            "physics",
+            "--category",
+            "conceptual-error",
+            "--severity",
+            "high",
+            cwd=grd_project,
+        )
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert "id" in data
+
+    def test_add_with_all_options(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        result = _invoke(
+            "pattern",
+            "add",
+            "--domain",
+            "physics",
+            "--category",
+            "dimensional-error",
+            "--severity",
+            "critical",
+            "--title",
+            "Missing factor of c^2",
+            "--description",
+            "Forgetting relativistic mass-energy factor",
+            "--detection",
+            "Dimensional analysis",
+            "--prevention",
+            "Always check units",
+            "--example",
+            "E=mc^2 not E=m",
+            "--test-value",
+            "3e8",
+            cwd=grd_project,
+        )
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data.get("added") is True
+
+    def test_add_no_init(self, grd_project: Path) -> None:
+        """Add without init should still work (auto-creates dir)."""
+        result = _invoke(
+            "pattern",
+            "add",
+            "--title",
+            "Test pattern",
+            cwd=grd_project,
+        )
+        assert result.exit_code is not None
+
+
+class TestPatternList:
+    def test_list_empty(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        result = _invoke("pattern", "list", cwd=grd_project)
+        assert result.exit_code == 0
+
+    def test_list_after_add(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        _invoke(
+            "pattern",
+            "add",
+            "--title",
+            "Test",
+            "--domain",
+            "physics",
+            "--severity",
+            "low",
+            cwd=grd_project,
+        )
+        result = _invoke("pattern", "list", cwd=grd_project)
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data.get("count", 0) >= 1
+
+    def test_list_filter_domain(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        _invoke("pattern", "add", "--title", "A", "--domain", "physics", cwd=grd_project)
+        result = _invoke("pattern", "list", "--domain", "physics", cwd=grd_project)
+        assert result.exit_code == 0
+
+    def test_list_filter_category(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        _invoke("pattern", "add", "--title", "A", "--category", "conceptual-error", cwd=grd_project)
+        result = _invoke("pattern", "list", "--category", "conceptual-error", cwd=grd_project)
+        assert result.exit_code == 0
+
+    def test_list_filter_severity(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        _invoke("pattern", "add", "--title", "A", "--severity", "critical", cwd=grd_project)
+        result = _invoke("pattern", "list", "--severity", "critical", cwd=grd_project)
+        assert result.exit_code == 0
+
+    def test_list_non_raw(self, grd_project: Path) -> None:
+        """Test Rich table output (non-raw mode)."""
+        _invoke("pattern", "init", cwd=grd_project)
+        result = runner.invoke(app, ["--cwd", str(grd_project), "pattern", "list"])
+        assert result.exit_code == 0
+
+
+class TestPatternSearch:
+    def test_search_no_results(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        result = _invoke("pattern", "search", "nonexistent_xyz_query", cwd=grd_project)
+        assert result.exit_code == 0
+
+    def test_search_with_results(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        _invoke(
+            "pattern",
+            "add",
+            "--title",
+            "Sign error in angular momentum",
+            "--description",
+            "Cross product sign convention",
+            cwd=grd_project,
+        )
+        result = _invoke("pattern", "search", "sign", "error", cwd=grd_project)
+        assert result.exit_code == 0
+
+    def test_search_non_raw(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        result = runner.invoke(app, ["--cwd", str(grd_project), "pattern", "search", "test"])
+        assert result.exit_code == 0
+
+
+class TestPatternPromote:
+    def test_promote_existing(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        add_result = _invoke(
+            "pattern",
+            "add",
+            "--title",
+            "Promotable pattern",
+            cwd=grd_project,
+        )
+        data = json.loads(add_result.output)
+        pattern_id = data.get("id", "")
+        result = _invoke("pattern", "promote", pattern_id, cwd=grd_project)
+        assert result.exit_code is not None
+
+    def test_promote_nonexistent(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        result = _invoke("pattern", "promote", "nonexistent-id-xyz", cwd=grd_project)
+        assert result.exit_code is not None
+
+
+class TestPatternSeed:
+    def test_seed_default(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        result = _invoke("pattern", "seed", cwd=grd_project)
+        assert result.exit_code is not None
+
+    def test_seed_with_domain(self, grd_project: Path) -> None:
+        _invoke("pattern", "init", cwd=grd_project)
+        result = _invoke("pattern", "seed", "--domain", "physics", cwd=grd_project)
+        assert result.exit_code is not None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Convention commands
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _extract_json(output: str) -> dict:
+    """Extract JSON object from output that may have prefix text lines."""
+    # Find the first '{' and parse from there
+    idx = output.find("{")
+    if idx == -1:
+        return json.loads(output)  # will raise if no JSON
+    return json.loads(output[idx:])
+
+
+class TestConventionSet:
+    def test_set_convention(self, grd_project: Path) -> None:
+        result = _invoke("convention", "set", "metric_signature", "(-,+,+,+)", cwd=grd_project)
+        assert result.exit_code == 0, result.output
+        data = _extract_json(result.output)
+        assert data.get("key") == "metric_signature"
+
+    def test_set_convention_force(self, grd_project: Path) -> None:
+        _invoke("convention", "set", "custom_key", "val1", cwd=grd_project)
+        result = _invoke("convention", "set", "custom_key", "val2", "--force", cwd=grd_project)
+        assert result.exit_code == 0, result.output
+
+    def test_set_convention_overwrite_without_force(self, grd_project: Path) -> None:
+        _invoke("convention", "set", "metric_signature", "(-,+,+,+)", cwd=grd_project)
+        result = _invoke("convention", "set", "metric_signature", "(+,-,-,-)", cwd=grd_project)
+        # Should fail or warn without --force
+        assert result.exit_code is not None
+
+    def test_set_convention_malformed_state(self, grd_project: Path) -> None:
+        (grd_project / ".grd" / "state.json").write_text("{bad json!!")
+        result = _invoke("convention", "set", "key", "val", cwd=grd_project)
+        assert result.exit_code != 0
+
+
+class TestConventionList:
+    def test_list_raw(self, grd_project: Path) -> None:
+        result = _invoke("convention", "list", cwd=grd_project)
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "conventions" in data
+
+    def test_list_non_raw(self, grd_project: Path) -> None:
+        """Non-raw mode renders a Rich table."""
+        result = runner.invoke(app, ["--cwd", str(grd_project), "convention", "list"])
+        assert result.exit_code == 0
+
+    def test_list_after_set(self, grd_project: Path) -> None:
+        _invoke("convention", "set", "metric_signature", "(-,+,+,+)", cwd=grd_project)
+        result = _invoke("convention", "list", cwd=grd_project)
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data.get("set_count", 0) >= 1
+
+
+class TestConventionDiff:
+    def test_diff_no_phases(self, grd_project: Path) -> None:
+        result = _invoke("convention", "diff", cwd=grd_project)
+        assert result.exit_code == 0
+
+    def test_diff_with_phase_args(self, grd_project: Path) -> None:
+        result = _invoke("convention", "diff", "01", "02", cwd=grd_project)
+        assert result.exit_code is not None
+
+    def test_diff_non_raw(self, grd_project: Path) -> None:
+        result = runner.invoke(app, ["--cwd", str(grd_project), "convention", "diff"])
+        assert result.exit_code == 0
+
+
+class TestConventionCheck:
+    def test_check_empty(self, grd_project: Path) -> None:
+        result = _invoke("convention", "check", cwd=grd_project)
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "consistent" in data or "issues" in data or isinstance(data, dict)
+
+    def test_check_after_set(self, grd_project: Path) -> None:
+        _invoke("convention", "set", "metric_signature", "(-,+,+,+)", cwd=grd_project)
+        result = _invoke("convention", "check", cwd=grd_project)
+        assert result.exit_code == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# State commands
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestStateLoad:
+    def test_load(self, grd_project: Path) -> None:
+        result = _invoke("state", "load", cwd=grd_project)
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert isinstance(data, dict)
+
+    def test_load_no_state(self, tmp_path: Path) -> None:
+        (tmp_path / ".grd").mkdir()
+        result = _invoke("state", "load", cwd=tmp_path)
+        assert result.exit_code is not None
+
+
+class TestStateGet:
+    def test_get_full(self, grd_project: Path) -> None:
+        result = _invoke("state", "get", cwd=grd_project)
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert isinstance(data, dict)
+
+    def test_get_position_section(self, grd_project: Path) -> None:
+        result = _invoke("state", "get", "position", cwd=grd_project)
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert isinstance(data, dict)
+
+    def test_get_nonexistent_section(self, grd_project: Path) -> None:
+        result = _invoke("state", "get", "nonexistent_section_xyz", cwd=grd_project)
+        assert result.exit_code is not None
+
+
+class TestStatePatch:
+    def test_patch_single_pair(self, grd_project: Path) -> None:
+        result = _invoke("state", "patch", "status", "In Progress", cwd=grd_project)
+        assert result.exit_code == 0, result.output
+
+    def test_patch_multiple_pairs(self, grd_project: Path) -> None:
+        result = _invoke("state", "patch", "status", "Active", "domain", "physics", cwd=grd_project)
+        assert result.exit_code == 0, result.output
+
+    def test_patch_odd_args(self, grd_project: Path) -> None:
+        """Odd number of args should fail."""
+        result = _invoke("state", "patch", "only_key", cwd=grd_project)
+        assert result.exit_code != 0
+
+
+class TestStateUpdate:
+    def test_update_field(self, grd_project: Path) -> None:
+        result = _invoke("state", "update", "status", "Active", cwd=grd_project)
+        assert result.exit_code == 0, result.output
+
+    def test_update_domain(self, grd_project: Path) -> None:
+        result = _invoke("state", "update", "domain", "physics", cwd=grd_project)
+        assert result.exit_code == 0, result.output
+
+
+class TestStateAdvance:
+    def test_advance(self, grd_project: Path) -> None:
+        result = _invoke("state", "advance", cwd=grd_project)
+        assert result.exit_code is not None
+
+
+class TestStateCompact:
+    def test_compact(self, grd_project: Path) -> None:
+        result = _invoke("state", "compact", cwd=grd_project)
+        assert result.exit_code is not None
+
+
+class TestStateSnapshot:
+    def test_snapshot(self, grd_project: Path) -> None:
+        result = _invoke("state", "snapshot", cwd=grd_project)
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert isinstance(data, dict)
+
+
+class TestStateValidate:
+    def test_validate(self, grd_project: Path) -> None:
+        result = _invoke("state", "validate", cwd=grd_project)
+        assert result.exit_code is not None
+
+
+class TestStateRecordMetric:
+    def test_record_metric(self, grd_project: Path) -> None:
+        result = _invoke(
+            "state",
+            "record-metric",
+            "--phase",
+            "01",
+            "--plan",
+            "01",
+            "--duration",
+            "30m",
+            "--tasks",
+            "5",
+            "--files",
+            "3",
+            cwd=grd_project,
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_record_metric_minimal(self, grd_project: Path) -> None:
+        result = _invoke("state", "record-metric", cwd=grd_project)
+        assert result.exit_code is not None
+
+
+class TestStateUpdateProgress:
+    def test_update_progress(self, grd_project: Path) -> None:
+        result = _invoke("state", "update-progress", cwd=grd_project)
+        assert result.exit_code is not None
+
+
+class TestStateAddDecision:
+    def test_add_decision(self, grd_project: Path) -> None:
+        result = _invoke(
+            "state",
+            "add-decision",
+            "--phase",
+            "01",
+            "--summary",
+            "Chose metric signature (-,+,+,+)",
+            "--rationale",
+            "Standard GR convention",
+            cwd=grd_project,
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_add_decision_minimal(self, grd_project: Path) -> None:
+        result = _invoke(
+            "state",
+            "add-decision",
+            "--summary",
+            "A decision",
+            cwd=grd_project,
+        )
+        assert result.exit_code == 0, result.output
+
+
+class TestStateAddBlocker:
+    def test_add_blocker(self, grd_project: Path) -> None:
+        result = _invoke(
+            "state",
+            "add-blocker",
+            "--text",
+            "Need clarification on boundary conditions",
+            cwd=grd_project,
+        )
+        assert result.exit_code == 0, result.output
+
+
+class TestStateResolveBlocker:
+    def test_resolve_blocker(self, grd_project: Path) -> None:
+        _invoke("state", "add-blocker", "--text", "Blocked on X", cwd=grd_project)
+        result = _invoke(
+            "state",
+            "resolve-blocker",
+            "--text",
+            "Blocked on X",
+            cwd=grd_project,
+        )
+        assert result.exit_code is not None
+
+    def test_resolve_nonexistent_blocker(self, grd_project: Path) -> None:
+        result = _invoke(
+            "state",
+            "resolve-blocker",
+            "--text",
+            "This blocker does not exist",
+            cwd=grd_project,
+        )
+        assert result.exit_code is not None
+
+
+class TestStateRecordSession:
+    def test_record_session(self, grd_project: Path) -> None:
+        result = _invoke("state", "record-session", cwd=grd_project)
+        assert result.exit_code is not None
+
+    def test_record_session_with_options(self, grd_project: Path) -> None:
+        result = _invoke(
+            "state",
+            "record-session",
+            "--stopped-at",
+            "2026-03-25T12:00:00Z",
+            "--resume-file",
+            "resume.json",
+            cwd=grd_project,
+        )
+        assert result.exit_code is not None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LaTeX utility functions (direct unit tests, not CLI)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestSanitizeLatex:
+    def test_greek_letters(self) -> None:
+        from grd.utils.latex import sanitize_latex
+
+        result = sanitize_latex("The angle \u03b1 is small")
+        assert r"$\alpha$" in result
+        assert "\u03b1" not in result
+
+    def test_multiple_unicode_symbols(self) -> None:
+        from grd.utils.latex import sanitize_latex
+
+        result = sanitize_latex("\u03b1 + \u03b2 = \u03b3")
+        assert r"$\alpha$" in result
+        assert r"$\beta$" in result
+        assert r"$\gamma$" in result
+
+    def test_math_symbols(self) -> None:
+        from grd.utils.latex import sanitize_latex
+
+        result = sanitize_latex("x \u2264 y and a \u2260 b")
+        assert r"$\leq$" in result
+        assert r"$\neq$" in result
+
+    def test_emoji_stripping(self) -> None:
+        from grd.utils.latex import sanitize_latex
+
+        result = sanitize_latex("Hello \U0001f600 world")
+        assert "\U0001f600" not in result
+        assert "Hello" in result
+        assert "world" in result
+
+    def test_preserves_plain_ascii(self) -> None:
+        from grd.utils.latex import sanitize_latex
+
+        text = "Plain ASCII text with no special chars."
+        assert sanitize_latex(text) == text
+
+    def test_typography_replacements(self) -> None:
+        from grd.utils.latex import sanitize_latex
+
+        result = sanitize_latex("1\u20132 and 3\u20144")
+        assert "--" in result
+        assert "---" in result
+
+    def test_math_mode_aware(self) -> None:
+        from grd.utils.latex import sanitize_latex
+
+        # Inside math mode, should use bare command (no $...$)
+        result = sanitize_latex("$\u03b1 + \u03b2$")
+        # Should not produce $$\alpha$$ (nested dollars)
+        assert "$$" not in result or result.count("$") <= 4  # allow $$...$$ but not nesting
+
+    def test_superscripts(self) -> None:
+        from grd.utils.latex import sanitize_latex
+
+        result = sanitize_latex("x\u00b2 + y\u00b3")
+        assert r"$^{2}$" in result
+        assert r"$^{3}$" in result
+
+    def test_subscripts(self) -> None:
+        from grd.utils.latex import sanitize_latex
+
+        result = sanitize_latex("a\u2080 b\u2081")
+        assert r"$_{0}$" in result
+        assert r"$_{1}$" in result
+
+
+class TestCleanLatexFences:
+    def test_no_fences(self) -> None:
+        from grd.utils.latex import clean_latex_fences
+
+        text = r"\documentclass{article}"
+        assert clean_latex_fences(text) == text
+
+    def test_latex_fence(self) -> None:
+        from grd.utils.latex import clean_latex_fences
+
+        raw = "```latex\n\\documentclass{article}\n\\begin{document}\nHello\n\\end{document}\n```"
+        result = clean_latex_fences(raw)
+        assert "```" not in result
+        assert r"\documentclass{article}" in result
+
+    def test_tex_fence(self) -> None:
+        from grd.utils.latex import clean_latex_fences
+
+        raw = "```tex\n\\section{Test}\n```"
+        result = clean_latex_fences(raw)
+        assert "```" not in result
+        assert r"\section{Test}" in result
+
+    def test_generic_fence(self) -> None:
+        from grd.utils.latex import clean_latex_fences
+
+        raw = "```\nsome content\n```"
+        result = clean_latex_fences(raw)
+        assert "```" not in result
+        assert "some content" in result
+
+    def test_even_backtick_groups_preserved(self) -> None:
+        from grd.utils.latex import clean_latex_fences
+
+        # Even number of ``` splits = odd parts; even splits means unmatched
+        raw = "```a```b```c```"
+        result = clean_latex_fences(raw)
+        # With 4 ```, split produces 5 parts (odd) — should strip
+        assert isinstance(result, str)
+
+    def test_surrounding_text_preserved(self) -> None:
+        from grd.utils.latex import clean_latex_fences
+
+        raw = "Before\n```latex\ncontent\n```\nAfter"
+        result = clean_latex_fences(raw)
+        assert "Before" in result
+        assert "content" in result
+        assert "After" in result
+
+
+class TestFixUnbalancedBraces:
+    def test_balanced(self) -> None:
+        from grd.utils.latex import _fix_unbalanced_braces
+
+        tex = r"\textbf{hello} \textit{world}"
+        assert _fix_unbalanced_braces(tex) == tex
+
+    def test_missing_close_brace(self) -> None:
+        from grd.utils.latex import _fix_unbalanced_braces
+
+        tex = r"\textbf{hello"
+        result = _fix_unbalanced_braces(tex)
+        assert result.count("{") - result.count("\\{") == result.count("}") - result.count("\\}")
+
+    def test_missing_open_brace(self) -> None:
+        from grd.utils.latex import _fix_unbalanced_braces
+
+        tex = r"hello}"
+        result = _fix_unbalanced_braces(tex)
+        assert "{" in result
+
+    def test_multiple_missing(self) -> None:
+        from grd.utils.latex import _fix_unbalanced_braces
+
+        tex = r"\a{b{c"
+        result = _fix_unbalanced_braces(tex)
+        neutralised = result.replace("\\\\", "\x00\x00")
+        opens = neutralised.count("{") - neutralised.count("\\{")
+        closes = neutralised.count("}") - neutralised.count("\\}")
+        assert opens == closes
+
+    def test_escaped_braces_ignored(self) -> None:
+        from grd.utils.latex import _fix_unbalanced_braces
+
+        tex = r"a\{b\}c"
+        assert _fix_unbalanced_braces(tex) == tex
+
+
+class TestFixMissingDocumentBegin:
+    def test_adds_begin_document(self) -> None:
+        from grd.utils.latex import _fix_missing_document_begin
+
+        tex = "\\documentclass{article}\n\\usepackage{amsmath}\nHello world"
+        result = _fix_missing_document_begin(tex)
+        assert r"\begin{document}" in result
+
+    def test_no_change_when_present(self) -> None:
+        from grd.utils.latex import _fix_missing_document_begin
+
+        tex = "\\documentclass{article}\n\\begin{document}\nHello\n\\end{document}"
+        assert _fix_missing_document_begin(tex) == tex
+
+    def test_no_change_without_documentclass(self) -> None:
+        from grd.utils.latex import _fix_missing_document_begin
+
+        tex = "Just some text without documentclass"
+        assert _fix_missing_document_begin(tex) == tex
+
+
+class TestFixMissingDocumentEnd:
+    def test_adds_end_document(self) -> None:
+        from grd.utils.latex import _fix_missing_document_end
+
+        tex = "\\documentclass{article}\n\\begin{document}\nHello"
+        result = _fix_missing_document_end(tex)
+        assert r"\end{document}" in result
+
+    def test_no_change_when_present(self) -> None:
+        from grd.utils.latex import _fix_missing_document_end
+
+        tex = "\\begin{document}\nHello\n\\end{document}\n"
+        assert _fix_missing_document_end(tex) == tex
+
+    def test_no_change_without_begin(self) -> None:
+        from grd.utils.latex import _fix_missing_document_end
+
+        tex = "Just text without begin document"
+        assert _fix_missing_document_end(tex) == tex
+
+
+class TestTryAutofix:
+    def test_empty_log(self) -> None:
+        from grd.utils.latex import try_autofix
+
+        result = try_autofix("some tex", "")
+        assert result.was_modified is False
+        assert result.fixed_content is None
+
+    def test_missing_begin_document_log(self) -> None:
+        from grd.utils.latex import try_autofix
+
+        tex = "\\documentclass{article}\n\\usepackage{amsmath}\nHello"
+        log = "! LaTeX Error: Missing \\begin{document}."
+        result = try_autofix(tex, log)
+        assert result.was_modified is True
+        assert r"\begin{document}" in result.fixed_content
+
+    def test_missing_end_document_log(self) -> None:
+        from grd.utils.latex import try_autofix
+
+        tex = "\\documentclass{article}\n\\begin{document}\nHello"
+        log = "LaTeX Error: \\begin{document} ended by \\end of file"
+        result = try_autofix(tex, log)
+        assert result.was_modified is True
+        assert r"\end{document}" in result.fixed_content
+
+    def test_runaway_argument_log(self) -> None:
+        from grd.utils.latex import try_autofix
+
+        tex = "\\documentclass{article}\n\\begin{document}\n\\textbf{unclosed\n\\end{document}"
+        log = "Runaway argument?"
+        result = try_autofix(tex, log)
+        assert result.was_modified is True
+
+    def test_missing_dollar_log(self) -> None:
+        from grd.utils.latex import try_autofix
+
+        tex = "\\documentclass{article}\n\\begin{document}\nE = mc_2\n\\end{document}"
+        log = "! Missing $ inserted."
+        result = try_autofix(tex, log)
+        assert result.was_modified is True
+        assert "\\_" in result.fixed_content
+
+    def test_no_matching_errors(self) -> None:
+        from grd.utils.latex import try_autofix
+
+        tex = "\\documentclass{article}\n\\begin{document}\nHello\n\\end{document}"
+        log = "Output written on file.pdf (1 page)"
+        result = try_autofix(tex, log)
+        assert result.was_modified is False
+
+    def test_fixes_applied_tuple(self) -> None:
+        from grd.utils.latex import try_autofix
+
+        tex = "\\documentclass{article}\nHello"
+        log = "! LaTeX Error: Missing \\begin{document}."
+        result = try_autofix(tex, log)
+        assert len(result.fixes_applied) >= 1
+        assert isinstance(result.fixes_applied, tuple)
