@@ -355,8 +355,7 @@ class GRDProjectConfig(BaseModel):
         for runtime, tier_map in value.items():
             if runtime not in valid_runtime_names:
                 raise ValueError(
-                    f"model_overrides contains unknown runtime {runtime!r}; "
-                    f"expected one of: {supported_runtimes}"
+                    f"model_overrides contains unknown runtime {runtime!r}; expected one of: {supported_runtimes}"
                 )
             if not isinstance(tier_map, dict):
                 raise TypeError(f"model_overrides[{runtime!r}] must be an object mapping tiers to model ids")
@@ -369,9 +368,7 @@ class GRDProjectConfig(BaseModel):
                         f"expected one of: {supported_tiers}"
                     )
                 if not isinstance(model, str) or not model.strip():
-                    raise ValueError(
-                        f"model_overrides[{runtime!r}][{tier!r}] must be a non-empty string"
-                    )
+                    raise ValueError(f"model_overrides[{runtime!r}][{tier!r}] must be a non-empty string")
                 normalized_runtime[tier] = model.strip()
 
             if normalized_runtime:
@@ -398,9 +395,7 @@ def _enum_value(value: object) -> object:
 _EFFECTIVE_CONFIG_LEAVES: dict[str, Callable[[GRDProjectConfig], object]] = {
     "autonomy": lambda config: _enum_value(config.autonomy),
     "branching_strategy": lambda config: _enum_value(config.branching_strategy),
-    "checkpoint_after_first_load_bearing_result": (
-        lambda config: config.checkpoint_after_first_load_bearing_result
-    ),
+    "checkpoint_after_first_load_bearing_result": (lambda config: config.checkpoint_after_first_load_bearing_result),
     "checkpoint_after_n_tasks": lambda config: config.checkpoint_after_n_tasks,
     "checkpoint_before_downstream_dependent_tasks": (
         lambda config: config.checkpoint_before_downstream_dependent_tasks
@@ -500,8 +495,7 @@ _ALIASES_BY_CANONICAL_KEY: dict[str, tuple[str, ...]] = {}
 for _alias, _canonical_key in _CONFIG_KEY_ALIASES.items():
     _ALIASES_BY_CANONICAL_KEY.setdefault(_canonical_key, []).append(_alias)
 _ALIASES_BY_CANONICAL_KEY = {
-    canonical_key: tuple(sorted(set(aliases)))
-    for canonical_key, aliases in _ALIASES_BY_CANONICAL_KEY.items()
+    canonical_key: tuple(sorted(set(aliases))) for canonical_key, aliases in _ALIASES_BY_CANONICAL_KEY.items()
 }
 
 
@@ -684,11 +678,7 @@ def _unsupported_config_keys(parsed: dict[str, object]) -> list[str]:
         if allowed_nested is None or not isinstance(value, dict):
             continue
 
-        unsupported.extend(
-            f"{key}.{nested_key}"
-            for nested_key in value
-            if nested_key not in allowed_nested
-        )
+        unsupported.extend(f"{key}.{nested_key}" for nested_key in value if nested_key not in allowed_nested)
 
     return sorted(unsupported)
 
@@ -807,9 +797,7 @@ def _model_from_parsed_config(parsed: dict[str, object]) -> GRDProjectConfig:
             ),
         )
     except (ValueError, TypeError) as e:
-        raise ConfigError(
-            f"Invalid config.json values: {e}. Fix or delete {PLANNING_DIR_NAME}/config.json"
-        ) from e
+        raise ConfigError(f"Invalid config.json values: {e}. Fix or delete {PLANNING_DIR_NAME}/config.json") from e
 
 
 @instrument_grd_function("config.load")

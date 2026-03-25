@@ -85,6 +85,7 @@ def _valid_plan_contract_frontmatter(
         "---\n\n"
     )
 
+
 # ---------------------------------------------------------------------------
 # extract_frontmatter
 # ---------------------------------------------------------------------------
@@ -226,13 +227,7 @@ class TestParseContractBlock:
         assert contract.scope.question == "What benchmark must this plan recover?"
 
     def test_invalid_contract_raises(self):
-        content = (
-            "---\n"
-            "contract:\n"
-            "  scope:\n"
-            "    in_scope: [benchmark]\n"
-            "---\n\nBody."
-        )
+        content = "---\ncontract:\n  scope:\n    in_scope: [benchmark]\n---\n\nBody."
         with pytest.raises(FrontmatterValidationError, match="Invalid contract frontmatter"):
             parse_contract_block(content)
 
@@ -430,7 +425,7 @@ class TestValidateFrontmatter:
             "contract:\n"
             "  scope:\n"
             "    question: What setup output should be ready for later comparison?\n"
-            "    unresolved_questions: [\"Which benchmark will be authoritative?\"]\n"
+            '    unresolved_questions: ["Which benchmark will be authoritative?"]\n'
             "  context_intake:\n"
             "    must_include_prior_outputs: [.grd/phases/00-setup/00-01-SUMMARY.md]\n"
             "    known_good_baselines: [Smoke-test CLI output]\n"
@@ -934,9 +929,12 @@ class TestVerifyArtifacts:
         (tmp_path / "figures").mkdir()
         (tmp_path / "figures" / "main.png").write_text("benchmark evidence\nreference within tolerance\n")
         f = tmp_path / "plan.md"
-        content = _valid_plan_contract_frontmatter(
-            deliverable_must_contain=["benchmark evidence", "reference within tolerance"]
-        ) + "Body.\n"
+        content = (
+            _valid_plan_contract_frontmatter(
+                deliverable_must_contain=["benchmark evidence", "reference within tolerance"]
+            )
+            + "Body.\n"
+        )
         f.write_text(content)
         result = verify_artifacts(tmp_path, f)
         assert result.all_passed is True
@@ -947,9 +945,12 @@ class TestVerifyArtifacts:
         (tmp_path / "figures").mkdir()
         (tmp_path / "figures" / "main.png").write_text("benchmark evidence only\n")
         f = tmp_path / "plan.md"
-        content = _valid_plan_contract_frontmatter(
-            deliverable_must_contain=["benchmark evidence", "reference within tolerance"]
-        ) + "Body.\n"
+        content = (
+            _valid_plan_contract_frontmatter(
+                deliverable_must_contain=["benchmark evidence", "reference within tolerance"]
+            )
+            + "Body.\n"
+        )
         f.write_text(content)
         result = verify_artifacts(tmp_path, f)
         assert result.all_passed is False
@@ -1073,13 +1074,7 @@ class TestVerifyPlanStructure:
     def test_task_missing_name(self, tmp_path):
         from grd.core.frontmatter import verify_plan_structure
 
-        content = (
-            _valid_plan_contract_frontmatter()
-            +
-            '<task type="code">\n'
-            "  <action>Do something</action>\n"
-            "</task>\n"
-        )
+        content = _valid_plan_contract_frontmatter() + '<task type="code">\n  <action>Do something</action>\n</task>\n'
         f = tmp_path / "plan.md"
         f.write_text(content)
         result = verify_plan_structure(tmp_path, f)
@@ -1098,9 +1093,7 @@ class TestVerifyPlanStructure:
         from grd.core.frontmatter import verify_plan_structure
 
         content = (
-            _valid_plan_contract_frontmatter()
-            +
-            '<task type="checkpoint">\n'
+            _valid_plan_contract_frontmatter() + '<task type="checkpoint">\n'
             "  <name>Review</name>\n"
             "  <action>Review code</action>\n"
             "</task>\n"
@@ -1114,9 +1107,7 @@ class TestVerifyPlanStructure:
         from grd.core.frontmatter import verify_plan_structure
 
         content = (
-            _valid_plan_contract_frontmatter(interactive="true")
-            +
-            '<task type="code">\n'
+            _valid_plan_contract_frontmatter(interactive="true") + '<task type="code">\n'
             "  <name>Implement feature</name>\n"
             "  <files>src/main.py</files>\n"
             "  <action>Write the code</action>\n"
@@ -1246,7 +1237,6 @@ class TestVerifyPlanStructure:
         result = verify_plan_structure(tmp_path, f)
         assert result.valid is False
         assert any("Unsupported frontmatter field: must_haves" in error for error in result.errors)
-
 
 
 # ---------------------------------------------------------------------------

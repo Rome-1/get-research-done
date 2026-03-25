@@ -1069,7 +1069,9 @@ def _normalize_intermediate_results_section(value: object, integrity_issues: lis
             changed = True
         except PydanticValidationError as exc:
             detail = _first_validation_issue(exc)
-            integrity_issues.append(f'schema normalization: dropped malformed "intermediate_results[{index}]": {detail}')
+            integrity_issues.append(
+                f'schema normalization: dropped malformed "intermediate_results[{index}]": {detail}'
+            )
             changed = True
 
     return normalized_results if changed else value
@@ -1181,11 +1183,7 @@ def _merge_intermediate_result_markdown_text(existing_item: object, markdown_ite
     metadata_match = re.search(r"\s*\((?P<meta>[^()]*)\)\s*$", body)
     if metadata_match is not None:
         body = body[: metadata_match.start()].rstrip()
-        metadata_tokens = [
-            token.strip()
-            for token in metadata_match.group("meta").split(",")
-            if token.strip()
-        ]
+        metadata_tokens = [token.strip() for token in metadata_match.group("meta").split(",") if token.strip()]
 
     description = body
     equation = None
@@ -1737,7 +1735,9 @@ def load_state_json(cwd: Path, integrity_mode: str = "standard") -> dict | None:
                 bak_raw = bak_path.read_text(encoding="utf-8")
                 restored, integrity_issues = _normalize_state_schema(json.loads(bak_raw))
                 if integrity_mode == "review" and integrity_issues:
-                    logger.warning("state.json backup failed review-mode integrity checks: %s", "; ".join(integrity_issues))
+                    logger.warning(
+                        "state.json backup failed review-mode integrity checks: %s", "; ".join(integrity_issues)
+                    )
                     return None
                 atomic_write(json_path, json.dumps(restored, indent=2) + "\n")
                 return restored
@@ -1818,10 +1818,7 @@ def state_get(cwd: Path, section: str | None = None) -> StateGetResult:
     md_path = _state_md_path(cwd)
     content = safe_read_file(md_path)
     if content is None:
-        raise StateError(
-            f"STATE.md not found at {md_path}. "
-            "Run 'grd init' to create the project state file."
-        )
+        raise StateError(f"STATE.md not found at {md_path}. Run 'grd init' to create the project state file.")
 
     if not section:
         return StateGetResult(content=content)
@@ -1892,8 +1889,7 @@ def state_patch(cwd: Path, patches: dict[str, str]) -> StatePatchResult:
     md_path = _state_md_path(cwd)
     if not md_path.exists():
         raise StateError(
-            f"STATE.md not found at {md_path}. "
-            "Run 'grd init' to create the project state file before patching."
+            f"STATE.md not found at {md_path}. Run 'grd init' to create the project state file before patching."
         )
 
     with _state_lock(cwd):
@@ -1968,9 +1964,7 @@ def state_set_project_contract(cwd: Path, contract_data: dict[str, object] | Res
     unresolved = [question.strip() for question in parsed.scope.unresolved_questions if question and question.strip()]
     if unresolved:
         existing_questions = {
-            item.strip()
-            for item in state_obj.get("open_questions", [])
-            if isinstance(item, str) and item.strip()
+            item.strip() for item in state_obj.get("open_questions", []) if isinstance(item, str) and item.strip()
         }
         for question in unresolved:
             if question not in existing_questions:
@@ -2510,9 +2504,9 @@ def state_validate(cwd: Path, integrity_mode: str = "standard") -> StateValidate
             records = r.get("verification_records") or []
             if r.get("verified") and not records:
                 target = issues if integrity_mode == "review" else warnings
-                target.append(f'intermediate_results[{rid}]: verified=true but no verification_records present')
+                target.append(f"intermediate_results[{rid}]: verified=true but no verification_records present")
             if records and not r.get("verified"):
-                warnings.append(f'intermediate_results[{rid}]: verification_records present while verified=false')
+                warnings.append(f"intermediate_results[{rid}]: verification_records present while verified=false")
 
             for index, record in enumerate(records):
                 if not isinstance(record, dict):
@@ -2523,9 +2517,7 @@ def state_validate(cwd: Path, integrity_mode: str = "standard") -> StateValidate
                     evidence_file = Path(cwd) / str(evidence_path)
                     if not evidence_file.exists():
                         target = issues if integrity_mode == "review" else warnings
-                        target.append(
-                            f'intermediate_results[{rid}]: evidence_path "{evidence_path}" does not exist'
-                        )
+                        target.append(f'intermediate_results[{rid}]: evidence_path "{evidence_path}" does not exist')
 
     # Cross-check: phase directory exists
     current_phase = json_pos.get("current_phase") if isinstance(json_pos, dict) else None

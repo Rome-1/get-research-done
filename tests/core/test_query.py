@@ -487,7 +487,4 @@ class TestQueryAssumptions:
 
         result = query_assumptions(project_dir, "adiabatic switching")
 
-        assert any(
-            a.phase in ("5", "05") and "frontmatter" in a.found_in
-            for a in result.affected_phases
-        )
+        assert any(a.phase in ("5", "05") and "frontmatter" in a.found_in for a in result.affected_phases)

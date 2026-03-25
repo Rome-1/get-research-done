@@ -22,7 +22,10 @@ def test_prl_weak_significance_cannot_receive_minor_revision():
             manuscript_path="paper/main.tex",
             target_journal="prl",
             final_recommendation=ReviewRecommendation.minor_revision,
-            stage_artifacts=[f".grd/review/STAGE-{name}.json" for name in ("reader", "literature", "math", "physics", "interestingness")],
+            stage_artifacts=[
+                f".grd/review/STAGE-{name}.json"
+                for name in ("reader", "literature", "math", "physics", "interestingness")
+            ],
             significance=ReviewAdequacy.weak,
             novelty=ReviewAdequacy.adequate,
             venue_fit=ReviewAdequacy.weak,
@@ -40,7 +43,10 @@ def test_fixable_overclaim_caps_standard_venue_at_major_revision():
             manuscript_path="paper/main.tex",
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
-            stage_artifacts=[f".grd/review/STAGE-{name}.json" for name in ("reader", "literature", "math", "physics", "interestingness")],
+            stage_artifacts=[
+                f".grd/review/STAGE-{name}.json"
+                for name in ("reader", "literature", "math", "physics", "interestingness")
+            ],
             claim_scope_proportionate_to_evidence=False,
             reframing_possible_without_new_results=True,
             significance=ReviewAdequacy.weak,
@@ -60,7 +66,10 @@ def test_minor_revision_allowed_only_for_minor_follow_up():
             manuscript_path="paper/main.tex",
             target_journal="prd",
             final_recommendation=ReviewRecommendation.minor_revision,
-            stage_artifacts=[f".grd/review/STAGE-{name}.json" for name in ("reader", "literature", "math", "physics", "interestingness")],
+            stage_artifacts=[
+                f".grd/review/STAGE-{name}.json"
+                for name in ("reader", "literature", "math", "physics", "interestingness")
+            ],
             unresolved_minor_issues=2,
             novelty=ReviewAdequacy.adequate,
             significance=ReviewAdequacy.adequate,
@@ -80,7 +89,10 @@ def test_review_ledger_consistency_rejects_unknown_blocking_issue_ids():
             manuscript_path="paper/main.tex",
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
-            stage_artifacts=[f".grd/review/STAGE-{name}.json" for name in ("reader", "literature", "math", "physics", "interestingness")],
+            stage_artifacts=[
+                f".grd/review/STAGE-{name}.json"
+                for name in ("reader", "literature", "math", "physics", "interestingness")
+            ],
             blocking_issue_ids=["REF-999"],
         ),
         strict=True,
@@ -136,7 +148,10 @@ def test_unresolved_critical_ledger_issues_count_toward_major_issue_total():
             manuscript_path="paper/main.tex",
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
-            stage_artifacts=[f".grd/review/STAGE-{name}.json" for name in ("reader", "literature", "math", "physics", "interestingness")],
+            stage_artifacts=[
+                f".grd/review/STAGE-{name}.json"
+                for name in ("reader", "literature", "math", "physics", "interestingness")
+            ],
             unresolved_major_issues=0,
         ),
         strict=True,
@@ -165,7 +180,10 @@ def test_manuscript_path_comparison_normalizes_equivalent_paths():
             manuscript_path="./paper//main.tex",
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
-            stage_artifacts=[f".grd/review/STAGE-{name}.json" for name in ("reader", "literature", "math", "physics", "interestingness")],
+            stage_artifacts=[
+                f".grd/review/STAGE-{name}.json"
+                for name in ("reader", "literature", "math", "physics", "interestingness")
+            ],
         ),
         strict=True,
         review_ledger=ReviewLedger(

@@ -260,6 +260,7 @@ class TestConfigureOpenCodePermissions:
         modified = configure_opencode_permissions(tmp_path)
         assert modified is False
 
+
 class TestInstall:
     def test_local_install_uses_relative_gpd_paths(
         self,

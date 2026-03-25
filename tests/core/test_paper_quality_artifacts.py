@@ -426,9 +426,7 @@ def test_publication_review_surfaces_keep_protocol_bundle_guidance_additive() ->
     write_paper = (repo_root / "src/grd/specs/workflows/write-paper.md").read_text(encoding="utf-8")
     peer_review = (repo_root / "src/grd/specs/workflows/peer-review.md").read_text(encoding="utf-8")
     respond = (repo_root / "src/grd/specs/workflows/respond-to-referees.md").read_text(encoding="utf-8")
-    internal_template = (repo_root / "src/grd/specs/templates/paper/internal-comparison.md").read_text(
-        encoding="utf-8"
-    )
+    internal_template = (repo_root / "src/grd/specs/templates/paper/internal-comparison.md").read_text(encoding="utf-8")
 
     assert "protocol_bundle_context" in write_paper
     assert "additive specialized-publication guidance" in write_paper
@@ -446,7 +444,10 @@ def test_publication_review_surfaces_keep_protocol_bundle_guidance_additive() ->
     assert "protocol_bundle_context" in respond
     assert "missing decisive evidence we already owed" in respond
     assert "prefer fulfilling that existing obligation or narrowing the claim" in respond
-    assert "Treat referee requests beyond the manuscript's honest scope as optional unless they expose a real support gap" in respond
+    assert (
+        "Treat referee requests beyond the manuscript's honest scope as optional unless they expose a real support gap"
+        in respond
+    )
 
     assert "protocol_bundle_ids (optional):" in internal_template
     assert "bundle_expectations (optional):" in internal_template

@@ -66,18 +66,14 @@ def test_phase_normalize_after_unpad_is_idempotent():
     """phase_normalize(phase_unpad(x)) == phase_normalize(x) for valid phases."""
     for _ in range(200):
         phase = _random_phase_string()
-        assert phase_normalize(phase_unpad(phase)) == phase_normalize(phase), (
-            f"Failed for phase={phase!r}"
-        )
+        assert phase_normalize(phase_unpad(phase)) == phase_normalize(phase), f"Failed for phase={phase!r}"
 
 
 def test_phase_normalize_after_unpad_known_cases():
     """Known cases for the normalize-after-unpad property."""
     cases = ["1", "01", "3.1.2", "08.1.1", "12", "0", "00", "99.99.99", "003"]
     for phase in cases:
-        assert phase_normalize(phase_unpad(phase)) == phase_normalize(phase), (
-            f"Failed for phase={phase!r}"
-        )
+        assert phase_normalize(phase_unpad(phase)) == phase_normalize(phase), f"Failed for phase={phase!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -107,9 +103,7 @@ def test_frontmatter_roundtrip_preserves_body_content():
         reconstructed = reconstruct_frontmatter(meta, body)
         _, extracted_body = extract_frontmatter(reconstructed)
         # The body should contain the original text (may have leading/trailing whitespace diffs)
-        assert body.strip() in extracted_body.strip(), (
-            "Body content lost during roundtrip"
-        )
+        assert body.strip() in extracted_body.strip(), "Body content lost during roundtrip"
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +259,7 @@ def test_generate_slug_empty_and_whitespace():
 def test_safe_parse_int_roundtrip():
     """safe_parse_int(str(n)) == n for integers."""
     for _ in range(200):
-        n = _RNG.randint(-10**9, 10**9)
+        n = _RNG.randint(-(10**9), 10**9)
         assert safe_parse_int(str(n)) == n, f"Roundtrip failed for n={n}"
 
 

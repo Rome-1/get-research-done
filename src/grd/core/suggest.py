@@ -51,12 +51,14 @@ __all__ = [
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
+
 def _core_conventions() -> tuple[str, ...]:
     """Return critical convention fields from the active domain."""
     try:
         import os
 
         from grd.domains.loader import load_domain
+
         domain_name = os.environ.get("GRD_DOMAIN", "physics")
         ctx = load_domain(domain_name)
         if ctx is not None and ctx.critical_fields:
@@ -64,6 +66,7 @@ def _core_conventions() -> tuple[str, ...]:
     except Exception:
         pass
     return ()
+
 
 CORE_CONVENTIONS = _core_conventions()
 
@@ -181,10 +184,6 @@ def _is_verification_file(name: str) -> bool:
     return name.endswith(VERIFICATION_SUFFIX) or name == STANDALONE_VERIFICATION
 
 
-
-
-
-
 def _load_config(cwd: Path) -> dict[str, object]:
     """Load project config.json, preserving canonical validation behavior.
 
@@ -201,11 +200,23 @@ def _load_config(cwd: Path) -> dict[str, object]:
     }
 
 
-_CONTEXT_ACTIONS = frozenset({
-    "new-project", "new-milestone", "plan-phase", "execute-phase",
-    "quick", "resume", "verify-work", "progress", "map-research",
-    "todos", "phase-op", "milestone-op", "resume-work",
-})
+_CONTEXT_ACTIONS = frozenset(
+    {
+        "new-project",
+        "new-milestone",
+        "plan-phase",
+        "execute-phase",
+        "quick",
+        "resume",
+        "verify-work",
+        "progress",
+        "map-research",
+        "todos",
+        "phase-op",
+        "milestone-op",
+        "resume-work",
+    }
+)
 
 
 def _format_command(action: str, *, cwd: Path | None = None) -> str:
@@ -288,7 +299,6 @@ def _scan_phases(cwd: Path) -> list[_PhaseAnalysis]:
         )
 
     return results
-
 
 
 def _phase_label(phase: _PhaseAnalysis) -> str:
@@ -389,7 +399,9 @@ def _has_adaptive_lock_signal(cwd: Path) -> bool:
         "approach_validated: true",
     )
     decisive_pass_re = re.compile(r"subject_role:\s*decisive[\s\S]{0,400}?verdict:\s*pass\b", re.IGNORECASE)
-    decisive_failure_re = re.compile(r"subject_role:\s*decisive[\s\S]{0,400}?verdict:\s*(?:tension|fail)\b", re.IGNORECASE)
+    decisive_failure_re = re.compile(
+        r"subject_role:\s*decisive[\s\S]{0,400}?verdict:\s*(?:tension|fail)\b", re.IGNORECASE
+    )
     passed_status_re = re.compile(r"^status:\s*passed\b", re.IGNORECASE | re.MULTILINE)
     for path in sorted(phases_dir.rglob("*.md")):
         if not path.is_file():
@@ -469,6 +481,7 @@ def suggest_next(cwd: Path, *, limit: int = 5) -> SuggestResult:
     """
     suggestions: list[_MutableRecommendation] = []
     ctx_kwargs: dict[str, object] = {}
+
     def format_command(action):
         return _format_command(action, cwd=cwd)
 
@@ -689,7 +702,9 @@ def suggest_next(cwd: Path, *, limit: int = 5) -> SuggestResult:
         if isinstance(convention_lock, dict):
             from grd.core.conventions import is_bogus_value
 
-            missing = [k for k in CORE_CONVENTIONS if not convention_lock.get(k) or is_bogus_value(convention_lock.get(k))]
+            missing = [
+                k for k in CORE_CONVENTIONS if not convention_lock.get(k) or is_bogus_value(convention_lock.get(k))
+            ]
             if missing:
                 ctx_kwargs["missing_conventions"] = tuple(missing)
                 suggestions.append(

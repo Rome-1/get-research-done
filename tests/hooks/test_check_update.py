@@ -24,6 +24,7 @@ from grd.hooks.runtime_detect import UpdateCacheCandidate
 def _cache_candidate(path: Path) -> UpdateCacheCandidate:
     return UpdateCacheCandidate(path=path)
 
+
 # ─── _is_older_than ────────────────────────────────────────────────────────
 
 

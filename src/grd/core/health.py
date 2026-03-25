@@ -610,9 +610,7 @@ def check_checkpoint_tags(cwd: Path) -> HealthCheck:
 
         details["stale_tags"] = stale_tags
         if stale_tags:
-            warnings.append(
-                f"{len(stale_tags)} checkpoint tag(s) older than {STALE_CHECKPOINT_TAG_MAX_AGE_DAYS} days"
-            )
+            warnings.append(f"{len(stale_tags)} checkpoint tag(s) older than {STALE_CHECKPOINT_TAG_MAX_AGE_DAYS} days")
     except (FileNotFoundError, subprocess.TimeoutExpired):
         details["repo_detected"] = False
         warnings.append("git tag check failed")
@@ -646,8 +644,7 @@ def _apply_fixes(cwd: Path, checks: list[HealthCheck]) -> list[str]:
     # Fix 2: Create config.json if missing or malformed
     config_check = next((c for c in checks if c.label == "Config"), None)
     if config_check and (
-        any("not found" in w for w in config_check.warnings)
-        or any("parse error" in i for i in config_check.issues)
+        any("not found" in w for w in config_check.warnings) or any("parse error" in i for i in config_check.issues)
     ):
         config_path = layout.config_json
         try:
@@ -670,6 +667,7 @@ def _apply_fixes(cwd: Path, checks: list[HealthCheck]) -> list[str]:
             config_path.parent.mkdir(parents=True, exist_ok=True)
             if config_path.exists():
                 import shutil
+
                 shutil.copy2(config_path, config_path.with_suffix(".json.bak"))
             atomic_write(config_path, json.dumps(config_dict, indent=2) + "\n")
             fixes.append("Created default config.json")

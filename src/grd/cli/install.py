@@ -114,7 +114,9 @@ def _prompt_location(runtimes: list[str], *, action: str = "install") -> bool:
     global_example = _location_example(runtimes, is_global=True)
     label_width = max(len("Local"), len("Global"))
     console.print(f"\n[bold {_INSTALL_TITLE_COLOR}]{label} location[/]\n")
-    console.print(_render_install_option_line(1, "Local", "current project only", local_example, label_width=label_width))
+    console.print(
+        _render_install_option_line(1, "Local", "current project only", local_example, label_width=label_width)
+    )
     console.print(_render_install_option_line(2, "Global", "all projects", global_example, label_width=label_width))
 
     console.print()
@@ -159,7 +161,12 @@ def _print_install_summary(results: list[tuple[str, dict[str, object]]]) -> None
     from grd.adapters import get_adapter
 
     console.print()
-    table = Table(title="Install Summary", title_style=f"italic {_INSTALL_ACCENT_COLOR}", show_header=True, header_style=f"bold {_INSTALL_ACCENT_COLOR}")
+    table = Table(
+        title="Install Summary",
+        title_style=f"italic {_INSTALL_ACCENT_COLOR}",
+        show_header=True,
+        header_style=f"bold {_INSTALL_ACCENT_COLOR}",
+    )
     table.add_column("Runtime", style="bold")
     table.add_column("Target")
     table.add_column("Status")
@@ -217,7 +224,13 @@ def _print_install_summary(results: list[tuple[str, dict[str, object]]]) -> None
                 soft_wrap=True,
             )
         else:
-            for display_name, launch_command, help_command, new_project_command, map_research_command in next_step_entries:
+            for (
+                display_name,
+                launch_command,
+                help_command,
+                new_project_command,
+                map_research_command,
+            ) in next_step_entries:
                 console.print(
                     f"- {display_name} "
                     f"([{_INSTALL_ACCENT_COLOR} bold]{launch_command}[/]), then "
@@ -413,10 +426,14 @@ def uninstall(
     removed_results: list[tuple[str, dict[str, object]]] = []
     for rt in selected:
         adapter = get_adapter(rt)
-        target = _resolve_cli_target_dir(target_dir) if target_dir else adapter.resolve_target_dir(is_global, _get_cwd())
+        target = (
+            _resolve_cli_target_dir(target_dir) if target_dir else adapter.resolve_target_dir(is_global, _get_cwd())
+        )
         if not target.is_dir():
             if not _cli_helpers._raw:
-                console.print(f"  [yellow]\u2298[/] {adapter.display_name} \u2014 not installed at {_format_display_path(target)}")
+                console.print(
+                    f"  [yellow]\u2298[/] {adapter.display_name} \u2014 not installed at {_format_display_path(target)}"
+                )
             continue
         result = adapter.uninstall(target)
         removed_items = result.get("removed", [])

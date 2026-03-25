@@ -15,20 +15,12 @@ def _build_parent_map(tree: ast.AST) -> dict[ast.AST, ast.AST]:
 
 def _is_read_text_call(node: ast.AST) -> bool:
     """Return True if *node* is a call like ``something.read_text(...)``."""
-    return (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "read_text"
-    )
+    return isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "read_text"
 
 
 def _is_extract_frontmatter(node: ast.AST) -> bool:
     """Return True if *node* is a call like ``_extract_frontmatter(...)``."""
-    return (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "_extract_frontmatter"
-    )
+    return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_extract_frontmatter"
 
 
 def _has_try_ancestor(node: ast.AST, parents: dict, stop_at: ast.AST) -> bool:
@@ -83,6 +75,5 @@ def test_read_text_calls_inside_try_blocks():
 
     assert not violations, (
         "read_text() calls must be inside try/except blocks when followed by "
-        "_extract_frontmatter parsing. Unprotected calls:\n"
-        + "\n".join(f"  - {v}" for v in violations)
+        "_extract_frontmatter parsing. Unprotected calls:\n" + "\n".join(f"  - {v}" for v in violations)
     )

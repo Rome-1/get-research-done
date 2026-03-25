@@ -65,10 +65,12 @@ __all__ = [
 # These are kept for code that imports them directly.  New code should use
 # DomainContext instead.
 
+
 def _load_physics_defaults() -> DomainContext | None:
     """Lazy-load the bundled physics domain pack for backward compatibility."""
     try:
         from grd.domains.loader import load_domain
+
         return load_domain("physics")
     except Exception:
         return None
@@ -267,6 +269,7 @@ def _resolve_value_aliases(domain_ctx: object | None = None) -> dict[str, dict[s
     if domain_ctx is not None:
         return domain_ctx.value_aliases
     return VALUE_ALIASES
+
 
 # Regex for ASSERT_CONVENTION lines:
 #   <!-- ASSERT_CONVENTION: key=value, key=value -->  (Markdown)

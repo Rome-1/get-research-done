@@ -199,41 +199,56 @@ class TestToolNames:
         assert translate("file_read", {}, alias_map=_canonical_alias_map()) == "file_read"
 
     def test_translate_unknown_tool_fallback(self) -> None:
-        assert translate("custom_tool", _runtime_tool_maps()["claude-code"], alias_map=_canonical_alias_map()) == "custom_tool"
+        assert (
+            translate("custom_tool", _runtime_tool_maps()["claude-code"], alias_map=_canonical_alias_map())
+            == "custom_tool"
+        )
 
     def test_translate_for_runtime_drops_auto_discovered_tools(self) -> None:
         runtime_maps = _runtime_tool_maps()
         alias_map = _canonical_alias_map()
-        assert translate_for_runtime(
-            "task",
-            runtime_maps["codex"],
-            alias_map=alias_map,
-            auto_discovered_tools=get_adapter("codex").auto_discovered_tools,
-        ) is None
-        assert translate_for_runtime(
-            "Task",
-            runtime_maps["gemini"],
-            alias_map=alias_map,
-            auto_discovered_tools=get_adapter("gemini").auto_discovered_tools,
-            drop_mcp_frontmatter_tools=get_adapter("gemini").drop_mcp_frontmatter_tools,
-        ) is None
+        assert (
+            translate_for_runtime(
+                "task",
+                runtime_maps["codex"],
+                alias_map=alias_map,
+                auto_discovered_tools=get_adapter("codex").auto_discovered_tools,
+            )
+            is None
+        )
+        assert (
+            translate_for_runtime(
+                "Task",
+                runtime_maps["gemini"],
+                alias_map=alias_map,
+                auto_discovered_tools=get_adapter("gemini").auto_discovered_tools,
+                drop_mcp_frontmatter_tools=get_adapter("gemini").drop_mcp_frontmatter_tools,
+            )
+            is None
+        )
 
     def test_translate_for_runtime_handles_mcp_policy(self) -> None:
         runtime_maps = _runtime_tool_maps()
         alias_map = _canonical_alias_map()
-        assert translate_for_runtime(
-            "mcp__physics",
-            runtime_maps["gemini"],
-            alias_map=alias_map,
-            auto_discovered_tools=get_adapter("gemini").auto_discovered_tools,
-            drop_mcp_frontmatter_tools=get_adapter("gemini").drop_mcp_frontmatter_tools,
-        ) is None
-        assert translate_for_runtime(
-            "mcp__physics",
-            runtime_maps["codex"],
-            alias_map=alias_map,
-            auto_discovered_tools=get_adapter("codex").auto_discovered_tools,
-        ) == "mcp__physics"
+        assert (
+            translate_for_runtime(
+                "mcp__physics",
+                runtime_maps["gemini"],
+                alias_map=alias_map,
+                auto_discovered_tools=get_adapter("gemini").auto_discovered_tools,
+                drop_mcp_frontmatter_tools=get_adapter("gemini").drop_mcp_frontmatter_tools,
+            )
+            is None
+        )
+        assert (
+            translate_for_runtime(
+                "mcp__physics",
+                runtime_maps["codex"],
+                alias_map=alias_map,
+                auto_discovered_tools=get_adapter("codex").auto_discovered_tools,
+            )
+            == "mcp__physics"
+        )
 
     def test_reference_translation_map_uses_only_canonical_source_names(self) -> None:
         mapping = reference_translation_map(_runtime_tool_maps()["opencode"], alias_map=_canonical_alias_map())

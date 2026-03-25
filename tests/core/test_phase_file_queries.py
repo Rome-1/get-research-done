@@ -31,9 +31,7 @@ class TestVerifyPhaseCompleteness:
         assert result.summary_count == 1
         assert result.incomplete_plans == []
 
-    def test_incomplete_phase_reports_missing_summaries(
-        self, tmp_path: Path, state_project_factory
-    ) -> None:
+    def test_incomplete_phase_reports_missing_summaries(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path, current_phase="02", status="Planning")
         phase_dir = _create_phase_dir(cwd, "02-core")
         (phase_dir / "02-core-01-PLAN.md").write_text("---\nwave: 1\n---\n# Plan 1\n", encoding="utf-8")

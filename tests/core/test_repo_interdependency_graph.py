@@ -139,11 +139,7 @@ def test_graph_captures_hook_runtime_wiring_edges() -> None:
 
 def test_graph_test_file_references_exist() -> None:
     missing = sorted(
-        {
-            ref
-            for ref in re.findall(r"tests/[A-Za-z0-9_./-]+\.py", read_graph_text())
-            if not (REPO_ROOT / ref).is_file()
-        }
+        {ref for ref in re.findall(r"tests/[A-Za-z0-9_./-]+\.py", read_graph_text()) if not (REPO_ROOT / ref).is_file()}
     )
 
     assert missing == []

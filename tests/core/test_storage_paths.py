@@ -45,9 +45,7 @@ def test_internal_and_scratch_roots_are_project_local(tmp_path: Path) -> None:
         (DurableOutputKind.SLIDES, "slides"),
     ],
 )
-def test_output_dir_maps_each_durable_kind(
-    tmp_path: Path, kind: DurableOutputKind, expected_name: str
-) -> None:
+def test_output_dir_maps_each_durable_kind(tmp_path: Path, kind: DurableOutputKind, expected_name: str) -> None:
     layout = _make_layout(tmp_path)
 
     assert layout.output_dir(kind) == layout.root / expected_name
@@ -128,9 +126,7 @@ def test_temp_roots_uses_environment_overrides_and_deduplicates(
     assert roots[0] == Path(tempfile.gettempdir()).resolve(strict=False)
 
 
-def test_project_root_is_temporary_detects_temp_projects(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_project_root_is_temporary_detects_temp_projects(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     temp_root = tmp_path / "runtime-temp"
     temp_root.mkdir()
     controlled_temp_roots = (temp_root.resolve(strict=False),)
@@ -262,7 +258,9 @@ def test_validate_commit_target_allows_internal_docs_but_rejects_internal_artifa
         layout.validate_commit_target("tmp/final.csv")
 
 
-def test_check_user_output_reports_warning_without_raising_for_off_policy_but_project_local_paths(tmp_path: Path) -> None:
+def test_check_user_output_reports_warning_without_raising_for_off_policy_but_project_local_paths(
+    tmp_path: Path,
+) -> None:
     layout = _make_layout(tmp_path)
 
     check = layout.check_user_output("release-paper", kind=DurableOutputKind.PAPER)

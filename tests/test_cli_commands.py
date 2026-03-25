@@ -104,9 +104,19 @@ def grd_project(tmp_path: Path) -> Path:
 
     paper_dir = tmp_path / "paper"
     paper_dir.mkdir()
-    (paper_dir / "main.tex").write_text("\\documentclass{article}\n\\begin{document}\nTest manuscript.\n\\end{document}\n")
+    (paper_dir / "main.tex").write_text(
+        "\\documentclass{article}\n\\begin{document}\nTest manuscript.\n\\end{document}\n"
+    )
     (paper_dir / "ARTIFACT-MANIFEST.json").write_text(
-        json.dumps({"version": 1, "paper_title": "Test", "journal": "prl", "created_at": "2026-03-10T00:00:00+00:00", "artifacts": []}),
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Test",
+                "journal": "prl",
+                "created_at": "2026-03-10T00:00:00+00:00",
+                "artifacts": [],
+            }
+        ),
         encoding="utf-8",
     )
     (paper_dir / "BIBLIOGRAPHY-AUDIT.json").write_text(
@@ -136,7 +146,9 @@ def grd_project(tmp_path: Path) -> Path:
                     "system_requirements": {},
                 },
                 "execution_steps": [{"name": "run", "command": "python scripts/run.py"}],
-                "expected_results": [{"quantity": "x", "expected_value": "1", "tolerance": "0.1", "script": "scripts/run.py"}],
+                "expected_results": [
+                    {"quantity": "x", "expected_value": "1", "tolerance": "0.1", "script": "scripts/run.py"}
+                ],
                 "output_files": [{"path": "results/out.json", "checksum_sha256": "a" * 64}],
                 "resource_requirements": [{"step": "run", "cpu_cores": 1, "memory_gb": 1.0}],
                 "verification_steps": ["rerun", "compare", "inspect"],
@@ -379,7 +391,10 @@ review_summary:
         assert payload["derived_active_reference_count"] >= 2
         assert "Benchmark Ref 2024" in payload["active_reference_context"]
         assert ".grd/phases/01-test-phase/01-SUMMARY.md" in payload["active_reference_context"]
-        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in payload["effective_reference_intake"]["must_include_prior_outputs"]
+        assert (
+            ".grd/phases/01-test-phase/01-SUMMARY.md"
+            in payload["effective_reference_intake"]["must_include_prior_outputs"]
+        )
 
     def test_new_milestone_surfaces_contract_and_effective_reference_context(self, grd_project: Path) -> None:
         (grd_project / ".grd" / "ROADMAP.md").write_text(
@@ -402,8 +417,7 @@ review_summary:
         map_dir = grd_project / ".grd" / "research-map"
         map_dir.mkdir(parents=True)
         (map_dir / "CONCERNS.md").write_text(
-            "## Prior Outputs\n\n"
-            "- `.grd/phases/01-test-phase/01-SUMMARY.md`\n",
+            "## Prior Outputs\n\n- `.grd/phases/01-test-phase/01-SUMMARY.md`\n",
             encoding="utf-8",
         )
 
@@ -414,7 +428,10 @@ review_summary:
         assert payload["current_milestone"] == "v1.1"
         assert payload["project_contract"]["references"][0]["id"] == "ref-benchmark"
         assert "Benchmark Ref 2024" in payload["active_reference_context"]
-        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in payload["effective_reference_intake"]["must_include_prior_outputs"]
+        assert (
+            ".grd/phases/01-test-phase/01-SUMMARY.md"
+            in payload["effective_reference_intake"]["must_include_prior_outputs"]
+        )
         assert ".grd/research-map/CONCERNS.md" in payload["research_map_reference_files"]
 
 
@@ -688,9 +705,7 @@ class TestReviewValidationCommands:
         assert payload["command"] == "grd:progress"
         assert payload["context_mode"] == "project-required"
         assert payload["passed"] is False
-        assert payload["guidance"] == (
-            "This command requires an initialized GRD project. Run `grd init new-project`."
-        )
+        assert payload["guidance"] == ("This command requires an initialized GRD project. Run `grd init new-project`.")
 
     def test_command_context_projectless_passes_without_project(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -975,7 +990,13 @@ class TestReviewValidationCommands:
         planning = grd_project / ".grd"
         state = json.loads((planning / "state.json").read_text(encoding="utf-8"))
         state["intermediate_results"] = [
-            {"id": "R-01", "description": "Unbacked claim", "depends_on": [], "verified": True, "verification_records": []}
+            {
+                "id": "R-01",
+                "description": "Unbacked claim",
+                "depends_on": [],
+                "verified": True,
+                "verification_records": [],
+            }
         ]
         (planning / "state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
 
@@ -1139,7 +1160,6 @@ class TestReviewValidationCommands:
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["manuscript"]["passed"] is False
 
-
     def test_review_preflight_peer_review_strict_requires_artifact_audits(self, grd_project: Path) -> None:
         paper_dir = grd_project / "paper"
         (paper_dir / "ARTIFACT-MANIFEST.json").unlink()
@@ -1166,7 +1186,9 @@ class TestReviewValidationCommands:
             encoding="utf-8",
         )
         for artifact_name in ("ARTIFACT-MANIFEST.json", "BIBLIOGRAPHY-AUDIT.json", "reproducibility-manifest.json"):
-            (review_dir / artifact_name).write_text((paper_dir / artifact_name).read_text(encoding="utf-8"), encoding="utf-8")
+            (review_dir / artifact_name).write_text(
+                (paper_dir / artifact_name).read_text(encoding="utf-8"), encoding="utf-8"
+            )
 
         result = runner.invoke(
             app,
@@ -1245,7 +1267,9 @@ class TestReviewValidationCommands:
         assert checks["bibliography_audit"]["passed"] is True
         assert checks["bibliography_audit_clean"]["passed"] is False
 
-    def test_review_preflight_peer_review_strict_blocks_non_ready_reproducibility_manifest(self, grd_project: Path) -> None:
+    def test_review_preflight_peer_review_strict_blocks_non_ready_reproducibility_manifest(
+        self, grd_project: Path
+    ) -> None:
         paper_dir = grd_project / "paper"
         manifest = json.loads((paper_dir / "reproducibility-manifest.json").read_text(encoding="utf-8"))
         manifest["last_verified"] = ""
@@ -2078,7 +2102,9 @@ class TestReviewValidationCommands:
                         {"name": "prepare", "command": "python scripts/prepare.py"},
                         {"name": "sample", "command": "python scripts/run.py", "stochastic": True},
                     ],
-                    "expected_results": [{"quantity": "x", "expected_value": "1", "tolerance": "0.1", "script": "scripts/run.py"}],
+                    "expected_results": [
+                        {"quantity": "x", "expected_value": "1", "tolerance": "0.1", "script": "scripts/run.py"}
+                    ],
                     "output_files": [{"path": "results/out.json", "checksum_sha256": "c" * 64}],
                     "resource_requirements": [
                         {"step": "prepare", "cpu_cores": 1, "memory_gb": 1.0},
@@ -2123,7 +2149,9 @@ class TestReviewValidationCommands:
         assert result.exit_code == 1, result.output
         payload = json.loads(result.output)
         assert payload["valid"] is False
-        assert any(issue["field"] == "environment" and "object" in issue["message"].lower() for issue in payload["issues"])
+        assert any(
+            issue["field"] == "environment" and "object" in issue["message"].lower() for issue in payload["issues"]
+        )
 
     def test_validate_reproducibility_manifest_stdin_strict_fails_when_not_review_ready(self) -> None:
         manifest = {
@@ -2137,7 +2165,9 @@ class TestReviewValidationCommands:
                 "system_requirements": {},
             },
             "execution_steps": [{"name": "run", "command": "python scripts/run.py"}],
-            "expected_results": [{"quantity": "x", "expected_value": "1", "tolerance": "0.1", "script": "scripts/run.py"}],
+            "expected_results": [
+                {"quantity": "x", "expected_value": "1", "tolerance": "0.1", "script": "scripts/run.py"}
+            ],
             "output_files": [{"path": "results/out.json", "checksum_sha256": "a" * 64}],
             "resource_requirements": [],
             "verification_steps": ["rerun"],

@@ -72,18 +72,18 @@ def test_ingest_reference_artifacts_parses_literature_and_reference_map(tmp_path
         "---\n"
         "review_summary:\n"
         "  active_anchors:\n"
-        "    - anchor_id: \"ref-benchmark\"\n"
-        "      anchor: \"Ref Benchmark\"\n"
-        "      locator: \"Benchmark Paper\"\n"
-        "      type: \"benchmark\"\n"
-        "      why_it_matters: \"Decisive benchmark\"\n"
-        "      contract_subject_ids: [\"claim-anchor\"]\n"
-        "      required_action: \"read/use/compare\"\n"
-        "      carry_forward_to: \"planning/verification\"\n"
+        '    - anchor_id: "ref-benchmark"\n'
+        '      anchor: "Ref Benchmark"\n'
+        '      locator: "Benchmark Paper"\n'
+        '      type: "benchmark"\n'
+        '      why_it_matters: "Decisive benchmark"\n'
+        '      contract_subject_ids: ["claim-anchor"]\n'
+        '      required_action: "read/use/compare"\n'
+        '      carry_forward_to: "planning/verification"\n'
         "  benchmark_values:\n"
-        "    - quantity: \"critical exponent\"\n"
-        "      value: \"1.23\"\n"
-        "      source: \"Benchmark Paper\"\n"
+        '    - quantity: "critical exponent"\n'
+        '      value: "1.23"\n'
+        '      source: "Benchmark Paper"\n'
         "---\n"
         "```\n",
         encoding="utf-8",
@@ -135,13 +135,13 @@ def test_ingest_reference_artifacts_ignores_legacy_review_summary_aliases(tmp_pa
         "---\n"
         "review_summary:\n"
         "  active_references:\n"
-        "    - anchor_id: \"ref-legacy\"\n"
-        "      anchor: \"Legacy Benchmark\"\n"
-        "      locator: \"Legacy Paper\"\n"
-        "      type: \"benchmark\"\n"
+        '    - anchor_id: "ref-legacy"\n'
+        '      anchor: "Legacy Benchmark"\n'
+        '      locator: "Legacy Paper"\n'
+        '      type: "benchmark"\n'
         "  known_good_baselines:\n"
-        "    - \"critical exponent — 1.23 — source: Legacy Paper\"\n"
-        "  must_read_references: [\"ref-legacy\"]\n"
+        '    - "critical exponent — 1.23 — source: Legacy Paper"\n'
+        '  must_read_references: ["ref-legacy"]\n'
         "---\n"
         "```\n",
         encoding="utf-8",
@@ -247,9 +247,7 @@ def test_context_discovers_additional_research_map_reference_artifacts(tmp_path:
     research_map_dir = tmp_path / ".grd" / "research-map"
     research_map_dir.mkdir(parents=True)
     (research_map_dir / "CONCERNS.md").write_text(
-        "# Reference Context\n\n"
-        "## Prior Outputs\n\n"
-        "- `.grd/phases/00-baseline/00-SUMMARY.md`\n",
+        "# Reference Context\n\n## Prior Outputs\n\n- `.grd/phases/00-baseline/00-SUMMARY.md`\n",
         encoding="utf-8",
     )
 

@@ -280,10 +280,12 @@ class TestEnsureStateSchema:
 
     def test_nested_bad_types_progressive_removal(self) -> None:
         """Nested validation errors trigger progressive key removal."""
-        result = ensure_state_schema({
-            "position": {"current_phase": "01"},
-            "session": {"last_date": 12345},  # wrong type (int vs str)
-        })
+        result = ensure_state_schema(
+            {
+                "position": {"current_phase": "01"},
+                "session": {"last_date": 12345},  # wrong type (int vs str)
+            }
+        )
         # Should still have valid position data
         assert result["position"]["current_phase"] == "01"
         # Session should be either corrected or defaulted
@@ -450,9 +452,7 @@ class TestSyncStateJsonCorrupt:
         # Write valid bak
         bak_state = default_state_dict()
         bak_state["position"]["current_phase"] = "04"
-        layout.state_json.with_suffix(".json.bak").write_text(
-            json.dumps(bak_state, indent=2), encoding="utf-8"
-        )
+        layout.state_json.with_suffix(".json.bak").write_text(json.dumps(bak_state, indent=2), encoding="utf-8")
 
         result = sync_state_json(cwd, MINIMAL_STATE_MD)
         assert result is not None
@@ -655,6 +655,7 @@ class TestConfigErrorHandling:
         config_path.write_text("{}", encoding="utf-8")
         config = load_config(cwd)
         assert config == GRDProjectConfig()
+
 
 # ===================================================================
 # health.py: check_* functions graceful degradation

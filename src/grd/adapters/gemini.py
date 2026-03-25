@@ -235,11 +235,11 @@ def _rewrite_gemini_shell_workflow_guidance(content: str) -> str:
         content,
     )
     content = content.replace(
-        'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd --raw validate project-contract -',
+        "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd --raw validate project-contract -",
         f"grd --raw validate project-contract {_GEMINI_APPROVED_CONTRACT_PATH}",
     )
     content = content.replace(
-        'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd state set-project-contract -',
+        "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd state set-project-contract -",
         f"grd state set-project-contract {_GEMINI_APPROVED_CONTRACT_PATH}",
     )
     content = content.replace(
@@ -807,7 +807,9 @@ class GeminiAdapter(RuntimeAdapter):
         ]
 
         policy_dir_setting = str(policy_path.parent.resolve())
-        merged_policy_paths, added_policy_paths = _merge_unique_strings(settings.get("policyPaths"), [policy_dir_setting])
+        merged_policy_paths, added_policy_paths = _merge_unique_strings(
+            settings.get("policyPaths"), [policy_dir_setting]
+        )
         if merged_policy_paths:
             settings["policyPaths"] = merged_policy_paths
         self._managed_policy_paths = added_policy_paths

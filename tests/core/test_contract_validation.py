@@ -56,10 +56,7 @@ def test_validate_project_contract_rejects_missing_decisive_targets_and_skeptici
     assert result.valid is False
     assert "project contract must include at least one observable, claim, or deliverable" in result.errors
     assert "uncertainty_markers.weakest_anchors must identify what is least certain" in result.errors
-    assert (
-        "uncertainty_markers.disconfirming_observations must identify what would force a rethink"
-        in result.errors
-    )
+    assert "uncertainty_markers.disconfirming_observations must identify what would force a rethink" in result.errors
 
 
 def test_validate_project_contract_warns_when_user_guidance_signals_are_missing() -> None:
@@ -135,7 +132,9 @@ def test_validate_project_contract_approved_mode_accepts_not_yet_selected_anchor
     contract = _load_contract_fixture()
     contract["references"] = []
     _remove_incidental_grounding(contract)
-    contract["context_intake"]["context_gaps"] = ["Benchmark reference not yet selected; still to identify the decisive anchor"]
+    contract["context_intake"]["context_gaps"] = [
+        "Benchmark reference not yet selected; still to identify the decisive anchor"
+    ]
     contract["scope"]["unresolved_questions"] = []
 
     result = validate_project_contract(contract, mode="approved")

@@ -43,16 +43,19 @@ def biology_domain(tmp_path: Path) -> DomainContext:
     """Create a synthetic biology domain pack for testing."""
     domain_dir = tmp_path / "biology"
     domain_dir.mkdir()
-    (domain_dir / "domain.yaml").write_text(dedent("""\
+    (domain_dir / "domain.yaml").write_text(
+        dedent("""\
         name: biology
         display_name: Biology
         description: Molecular and cell biology research domain.
         version: 1
         conventions_file: conventions/convention-fields.yaml
-    """))
+    """)
+    )
     conv_dir = domain_dir / "conventions"
     conv_dir.mkdir()
-    (conv_dir / "convention-fields.yaml").write_text(dedent("""\
+    (conv_dir / "convention-fields.yaml").write_text(
+        dedent("""\
         fields:
           - name: organism
             label: "Model organism"
@@ -69,7 +72,8 @@ def biology_domain(tmp_path: Path) -> DomainContext:
           - name: alignment_tool
             label: "Alignment tool"
             description: "Sequence alignment tool"
-    """))
+    """)
+    )
     pack = DomainPack(
         name="biology",
         display_name="Biology",
@@ -109,7 +113,12 @@ class TestPhysicsDomainContext:
 
     def test_physics_content_types(self, physics_ctx: DomainContext) -> None:
         assert set(physics_ctx.content_types) == {
-            "subfields", "protocols", "errors", "project_types", "bundles", "verification",
+            "subfields",
+            "protocols",
+            "errors",
+            "project_types",
+            "bundles",
+            "verification",
         }
 
     def test_physics_content_dir_accessor(self, physics_ctx: DomainContext) -> None:
@@ -280,12 +289,14 @@ class TestDomainLoading:
         """A project-local .grd/domain/ pack overrides bundled packs."""
         domain_dir = tmp_path / ".grd" / "domain"
         domain_dir.mkdir(parents=True)
-        (domain_dir / "domain.yaml").write_text(dedent("""\
+        (domain_dir / "domain.yaml").write_text(
+            dedent("""\
             name: custom-project
             display_name: Custom Project Domain
             description: Project-specific domain override.
             version: 1
-        """))
+        """)
+        )
         from grd.domains.loader import resolve_domain_pack_path
 
         # With project_root, should find the project-local pack
@@ -298,7 +309,8 @@ class TestDomainLoading:
 
         domain_dir = tmp_path / "test-domain"
         domain_dir.mkdir()
-        (domain_dir / "domain.yaml").write_text(dedent("""\
+        (domain_dir / "domain.yaml").write_text(
+            dedent("""\
             name: test-domain
             display_name: Test Domain
             description: A test domain.
@@ -307,7 +319,8 @@ class TestDomainLoading:
               protocols: protocols
               errors: errors
               verification: verification
-        """))
+        """)
+        )
         pack = _parse_domain_yaml(domain_dir)
         assert pack.content_dirs == {
             "protocols": "protocols",
@@ -321,7 +334,8 @@ class TestDomainLoading:
 
         domain_dir = tmp_path / "legacy-domain"
         domain_dir.mkdir()
-        (domain_dir / "domain.yaml").write_text(dedent("""\
+        (domain_dir / "domain.yaml").write_text(
+            dedent("""\
             name: legacy-domain
             display_name: Legacy Domain
             description: A domain using old-style *_dir fields.
@@ -329,7 +343,8 @@ class TestDomainLoading:
             subfields_dir: my-subfields
             protocols_dir: my-protocols
             errors_dir: my-errors
-        """))
+        """)
+        )
         pack = _parse_domain_yaml(domain_dir)
         assert pack.content_dirs == {
             "subfields": "my-subfields",
@@ -343,7 +358,8 @@ class TestDomainLoading:
 
         domain_dir = tmp_path / "mixed-domain"
         domain_dir.mkdir()
-        (domain_dir / "domain.yaml").write_text(dedent("""\
+        (domain_dir / "domain.yaml").write_text(
+            dedent("""\
             name: mixed-domain
             display_name: Mixed Domain
             description: A domain with both old and new fields.
@@ -351,7 +367,8 @@ class TestDomainLoading:
             protocols_dir: old-protocols
             content:
               protocols: new-protocols
-        """))
+        """)
+        )
         pack = _parse_domain_yaml(domain_dir)
         assert pack.content_dirs == {"protocols": "new-protocols"}
 

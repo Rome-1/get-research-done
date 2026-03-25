@@ -402,8 +402,12 @@ def _build_figures_input(
 
     figures = FiguresQualityInput(
         axes_labeled_with_units=_coverage_metric(sum(1 for entry in figure_registry if entry.has_units), total_figures),
-        error_bars_present=_coverage_metric(sum(1 for entry in figure_registry if entry.has_uncertainty), total_figures),
-        referenced_in_text=_coverage_metric(sum(1 for entry in figure_registry if entry.referenced_in_text), total_figures),
+        error_bars_present=_coverage_metric(
+            sum(1 for entry in figure_registry if entry.has_uncertainty), total_figures
+        ),
+        referenced_in_text=_coverage_metric(
+            sum(1 for entry in figure_registry if entry.referenced_in_text), total_figures
+        ),
         captions_self_contained=_coverage_metric(
             sum(1 for entry in figure_registry if entry.caption_self_contained),
             total_figures,
@@ -473,7 +477,9 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
     bibliography_audit = _load_json(paper_dir / "BIBLIOGRAPHY-AUDIT.json")
 
     tex_files, tex_content = _collect_tex_content(paper_dir)
-    title = str(artifact_manifest.get("paper_title") or paper_config.get("title") or paper_config.get("paper_title") or "")
+    title = str(
+        artifact_manifest.get("paper_title") or paper_config.get("title") or paper_config.get("paper_title") or ""
+    )
     journal = str(artifact_manifest.get("journal") or paper_config.get("journal") or "generic")
 
     figure_registry = _load_figure_registry(root)
@@ -488,7 +494,11 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
 
     placeholder_count = len(_PLACEHOLDER_RE.findall(tex_content))
     missing_cites = len(_MISSING_CITE_RE.findall(tex_content))
-    cite_keys = list(dict.fromkeys(part.strip() for match in _CITE_RE.findall(tex_content) for part in match.split(",") if part.strip()))
+    cite_keys = list(
+        dict.fromkeys(
+            part.strip() for match in _CITE_RE.findall(tex_content) for part in match.split(",") if part.strip()
+        )
+    )
     required_sections = 3
     present_sections = 0
     if _ABSTRACT_RE.search(tex_content):
@@ -524,7 +534,9 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
     )
     completeness = CompletenessQualityInput(
         abstract_written_last=BinaryCheck(),
-        required_sections_present=_coverage_metric(present_sections, required_sections) if tex_files else CoverageMetric(),
+        required_sections_present=_coverage_metric(present_sections, required_sections)
+        if tex_files
+        else CoverageMetric(),
         placeholders_cleared=BinaryCheck(passed=placeholder_count == 0),
         supplemental_cross_referenced=BinaryCheck(passed=bool(_SUPPLEMENT_RE.search(tex_content))),
     )

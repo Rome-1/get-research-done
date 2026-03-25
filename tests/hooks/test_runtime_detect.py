@@ -101,6 +101,7 @@ def _write_install_manifest(config_dir: Path, *, install_scope: str) -> None:
         encoding="utf-8",
     )
 
+
 # ─── detect_active_runtime ─────────────────────────────────────────────────
 
 
@@ -331,7 +332,9 @@ class TestDetectActiveRuntimeWithInstall:
         ):
             assert detect_active_runtime_with_grd_install() == RUNTIME_CODEX
 
-    def test_higher_priority_runtime_without_install_does_not_mask_lower_installed_runtime(self, tmp_path: Path) -> None:
+    def test_higher_priority_runtime_without_install_does_not_mask_lower_installed_runtime(
+        self, tmp_path: Path
+    ) -> None:
         (tmp_path / ".claude").mkdir()
         _mark_grd_install(tmp_path / ".codex")
 
@@ -395,6 +398,7 @@ class TestDetectRuntimeForGpdUse:
             patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
         ):
             assert detect_runtime_for_grd_use() == RUNTIME_CODEX
+
 
 # ─── all_runtime_dirs ──────────────────────────────────────────────────────
 
@@ -499,7 +503,9 @@ class TestHelperDirs:
         assert dirs[0] == tmp_path / ".codex" / "todos"
         assert dirs[1] == home / ".codex" / "todos"
 
-    def test_todo_dirs_prefer_installed_runtime_when_higher_priority_runtime_is_uninstalled(self, tmp_path: Path) -> None:
+    def test_todo_dirs_prefer_installed_runtime_when_higher_priority_runtime_is_uninstalled(
+        self, tmp_path: Path
+    ) -> None:
         home = tmp_path / "home"
         (tmp_path / ".claude").mkdir()
         _mark_grd_install(tmp_path / ".codex")
@@ -636,7 +642,9 @@ class TestGRDInstallDirs:
         assert tmp_path / "gemini-custom" / "get-research-done" in dirs
         assert tmp_path / "opencode-custom" / "get-research-done" in dirs
 
-    def test_prefer_active_uses_installed_runtime_when_higher_priority_runtime_is_uninstalled(self, tmp_path: Path) -> None:
+    def test_prefer_active_uses_installed_runtime_when_higher_priority_runtime_is_uninstalled(
+        self, tmp_path: Path
+    ) -> None:
         home = tmp_path / "home"
         (tmp_path / ".claude").mkdir()
         _mark_grd_install(tmp_path / ".codex")

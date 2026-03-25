@@ -168,9 +168,7 @@ def main() -> None:
     ]
     if active_installed_runtime in (None, "", "unknown") and preferred_runtime in ALL_RUNTIMES:
         relevant_candidates = [
-            candidate
-            for candidate in relevant_candidates
-            if candidate.runtime in (None, preferred_runtime)
+            candidate for candidate in relevant_candidates if candidate.runtime in (None, preferred_runtime)
         ]
     cache_file = (
         relevant_candidates[0].path

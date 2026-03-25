@@ -460,9 +460,7 @@ def approximation_check(state: dict) -> ApproximationCheckResult:
         else:
             invalid.append(approx)
 
-    return ApproximationCheckResult(
-        valid=valid, marginal=marginal, invalid=invalid, unchecked=unchecked
-    )
+    return ApproximationCheckResult(valid=valid, marginal=marginal, invalid=invalid, unchecked=unchecked)
 
 
 # ─── Uncertainty Commands ────────────────────────────────────────────────────────

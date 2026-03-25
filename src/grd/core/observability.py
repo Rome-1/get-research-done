@@ -519,7 +519,9 @@ def _apply_automatic_execution_guards(
         )
 
 
-def _clear_execution_after_event(snapshot: CurrentExecutionState, payload: ObservabilityEvent, execution: dict[str, object]) -> bool:
+def _clear_execution_after_event(
+    snapshot: CurrentExecutionState, payload: ObservabilityEvent, execution: dict[str, object]
+) -> bool:
     if _bool_or_none(execution.get("preserve_current")):
         return False
 
@@ -663,13 +665,10 @@ def _updated_execution_state(
         if current.get("checkpoint_reason") in {"pre_fanout", "pre-fanout"}:
             current["pre_fanout_review_pending"] = True
             current["pre_fanout_review_cleared"] = False
-        if (
-            "skeptical_requestioning_required" not in execution
-            and (
-                current.get("skeptical_requestioning_summary")
-                or current.get("weakest_unchecked_anchor")
-                or current.get("disconfirming_observation")
-            )
+        if "skeptical_requestioning_required" not in execution and (
+            current.get("skeptical_requestioning_summary")
+            or current.get("weakest_unchecked_anchor")
+            or current.get("disconfirming_observation")
         ):
             current["skeptical_requestioning_required"] = True
         if "downstream_locked" not in execution:
@@ -731,7 +730,11 @@ def _updated_execution_state(
     if current.get("skeptical_requestioning_required") and not current.get("waiting_for_review"):
         current["waiting_for_review"] = True
         current["review_required"] = True
-    if current.get("pre_fanout_review_pending") and current.get("pre_fanout_review_cleared") and not current.get("downstream_locked"):
+    if (
+        current.get("pre_fanout_review_pending")
+        and current.get("pre_fanout_review_cleared")
+        and not current.get("downstream_locked")
+    ):
         current["pre_fanout_review_pending"] = False
         current["pre_fanout_review_cleared"] = False
         _refresh_checkpoint_reason(current)
@@ -1042,7 +1045,9 @@ def _finalize_session(
     ended_at: str,
     ended_by: dict[str, object],
 ) -> ObservabilitySession:
-    final_session = _updated_session(session, timestamp=ended_at, command=session.command, status=status, ended_at=ended_at)
+    final_session = _updated_session(
+        session, timestamp=ended_at, command=session.command, status=status, ended_at=ended_at
+    )
     finish_event = _session_finish_event(final_session, status=status, ended_at=ended_at, ended_by=ended_by)
     _append_event(_session_log(layout, final_session.session_id), finish_event.model_dump(mode="json"))
     _save_current_session(layout, final_session)
@@ -1182,6 +1187,7 @@ def instrument_grd_function(
         name = span_name or f"{func.__module__}.{func.__qualname__}"
 
         if inspect.isgeneratorfunction(func):
+
             @functools.wraps(func)
             def gen_wrapper(*args: object, **kwargs: object) -> object:
                 return func(*args, **kwargs)

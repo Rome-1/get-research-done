@@ -104,9 +104,7 @@ class TestCheckStoragePaths:
         assert result.status == CheckStatus.OK
         assert result.details["warning_count"] == 0
 
-    def test_temp_root_project_warns_even_without_hidden_artifacts(
-        self, tmp_path: Path, monkeypatch
-    ) -> None:
+    def test_temp_root_project_warns_even_without_hidden_artifacts(self, tmp_path: Path, monkeypatch) -> None:
         temp_root = tmp_path / "runtime-temp"
         temp_root.mkdir()
         monkeypatch.setattr(ProjectStorageLayout, "temp_roots", lambda self: (temp_root.resolve(strict=False),))
@@ -391,10 +389,7 @@ class TestRunDoctor:
         checks = {check.label: check for check in report.checks}
 
         assert checks["Key References"].status == CheckStatus.WARN
-        assert any(
-            "references/shared/shared-protocols.md" in warning
-            for warning in checks["Key References"].warnings
-        )
+        assert any("references/shared/shared-protocols.md" in warning for warning in checks["Key References"].warnings)
 
     def test_protocol_bundles_check_validates_existing_bundle_assets(self, tmp_path: Path):
         specs_dir = self._make_specs_dir(tmp_path)
@@ -546,7 +541,9 @@ trigger:
         checks = {check.label: check for check in report.checks}
 
         assert checks["Protocol Bundles"].status == CheckStatus.FAIL
-        assert any("unknown exclusive_with bundle missing-bundle" in issue for issue in checks["Protocol Bundles"].issues)
+        assert any(
+            "unknown exclusive_with bundle missing-bundle" in issue for issue in checks["Protocol Bundles"].issues
+        )
 
 
 def _bootstrap_health_project(tmp_path: Path) -> Path:

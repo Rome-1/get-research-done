@@ -95,7 +95,9 @@ def _npm_pack_dry_run(repo_root: Path, work_dir: Path) -> dict[str, object]:
 
 def _paper_template_paths(repo_root: Path) -> tuple[list[str], list[str]]:
     template_root = repo_root / "src" / "grd" / "mcp" / "paper" / "templates"
-    relative_paths = sorted(path.relative_to(repo_root / "src").as_posix() for path in template_root.rglob("*_template.tex"))
+    relative_paths = sorted(
+        path.relative_to(repo_root / "src").as_posix() for path in template_root.rglob("*_template.tex")
+    )
     sdist_paths = [f"src/{path}" for path in relative_paths]
     return relative_paths, sdist_paths
 
@@ -130,9 +132,7 @@ def _normalized_dependency_names(requirements: list[str]) -> set[str]:
 
 def _wheel_dependency_names(metadata: str) -> set[str]:
     requirements = [
-        line.split(":", 1)[1].strip()
-        for line in metadata.splitlines()
-        if line.startswith("Requires-Dist:")
+        line.split(":", 1)[1].strip() for line in metadata.splitlines() if line.startswith("Requires-Dist:")
     ]
     return _normalized_dependency_names(requirements)
 
@@ -305,7 +305,7 @@ def test_public_bootstrap_installer_documents_uninstall_path() -> None:
     assert "~/.grd/venv/bin/grd uninstall" not in readme
     assert "--uninstall" in content
     assert "Uninstall from selected runtime config" in content
-    assert '--uninstall ${primaryFlag} --global' in content
+    assert "--uninstall ${primaryFlag} --global" in content
 
 
 def test_readme_documents_runtime_specific_tier_model_formats() -> None:
@@ -498,9 +498,7 @@ def test_claude_sdk_is_not_shipped_in_public_install() -> None:
 
     assert not any(item.startswith("claude-agent-sdk") for item in dependencies)
     assert "claude-subagents" not in optional
-    assert not any(
-        item.startswith("claude-agent-sdk") for items in optional.values() for item in items
-    )
+    assert not any(item.startswith("claude-agent-sdk") for items in optional.values() for item in items)
     assert "scientific" not in optional
 
 
@@ -512,9 +510,6 @@ def test_public_runtime_dependency_surface_stays_curated() -> None:
 
     assert _normalized_dependency_names(dependencies) == _expected_runtime_dependency_names()
     assert optional == {}
-
-
-
 
 
 def test_infra_descriptors_reference_public_bootstrap_flow() -> None:
@@ -536,9 +531,7 @@ def test_infra_descriptors_reference_public_bootstrap_flow() -> None:
             assert marker not in content, f"{path.name} should not mention {marker!r}"
         assert json.loads(content) == expected_descriptors[path.stem]
 
-    assert {
-        path.stem for path in (repo_root / "infra").glob("grd-*.json")
-    } == set(expected_descriptors)
+    assert {path.stem for path in (repo_root / "infra").glob("grd-*.json")} == set(expected_descriptors)
 
 
 def test_public_grd_infra_descriptors_use_entry_points_not_python() -> None:
@@ -583,9 +576,7 @@ def test_npm_pack_dry_run_uses_temp_cache_outside_repo(tmp_path: Path) -> None:
     repo_cache = repo_root / ".npm-cache"
     existed_before = repo_cache.exists()
     before_paths = (
-        sorted(path.relative_to(repo_cache).as_posix() for path in repo_cache.rglob("*"))
-        if existed_before
-        else []
+        sorted(path.relative_to(repo_cache).as_posix() for path in repo_cache.rglob("*")) if existed_before else []
     )
 
     pack = _npm_pack_dry_run(repo_root, tmp_path)
@@ -602,7 +593,6 @@ def test_npm_pack_dry_run_uses_temp_cache_outside_repo(tmp_path: Path) -> None:
         assert after_paths == before_paths
     else:
         assert not repo_cache.exists()
-
 
 
 def test_fresh_built_release_artifacts_match_public_bootstrap_and_docs(tmp_path: Path) -> None:

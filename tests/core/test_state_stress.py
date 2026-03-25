@@ -63,9 +63,7 @@ def _bootstrap_project(tmp_path: Path, state_dict: dict | None = None) -> Path:
 
     md = generate_state_markdown(state)
     (planning / "STATE.md").write_text(md, encoding="utf-8")
-    (planning / "state.json").write_text(
-        json.dumps(state, indent=2) + "\n", encoding="utf-8"
-    )
+    (planning / "state.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
     return tmp_path
 
 
@@ -332,8 +330,7 @@ class TestVeryLargeState:
         state["position"]["progress_percent"] = 50
 
         state["decisions"] = [
-            {"phase": str(i % 10), "summary": f"Decision #{i}", "rationale": f"Reason {i}"}
-            for i in range(100)
+            {"phase": str(i % 10), "summary": f"Decision #{i}", "rationale": f"Reason {i}"} for i in range(100)
         ]
         state["blockers"] = [f"Blocker #{i}: need verification" for i in range(50)]
         state["performance_metrics"] = {
@@ -354,10 +351,7 @@ class TestVeryLargeState:
         state = default_state_dict()
         state["position"]["current_phase"] = "05"
         state["position"]["status"] = "Executing"
-        state["decisions"] = [
-            {"phase": str(i), "summary": f"Dec-{i}", "rationale": None}
-            for i in range(100)
-        ]
+        state["decisions"] = [{"phase": str(i), "summary": f"Dec-{i}", "rationale": None} for i in range(100)]
         state["blockers"] = [f"Blocker-{i}" for i in range(50)]
         cwd = _bootstrap_project(tmp_path, state_dict=state)
 
@@ -535,9 +529,7 @@ class TestMissingSections:
         (planning / "phases").mkdir()
         raw = {"decisions": [], "blockers": ["Something"]}
         (planning / "state.json").write_text(json.dumps(raw))
-        (planning / "STATE.md").write_text(
-            generate_state_markdown(default_state_dict())
-        )
+        (planning / "STATE.md").write_text(generate_state_markdown(default_state_dict()))
         loaded = load_state_json(tmp_path)
         assert loaded is not None
         assert "position" in loaded

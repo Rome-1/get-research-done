@@ -238,6 +238,7 @@ GRD_MCP_SERVER_KEYS = frozenset(_BUILTIN_SERVERS.keys())
 
 def _resolve_env(value: str) -> str:
     """Resolve ${VAR:-default} patterns in a string."""
+
     def _replace(match: re.Match[str]) -> str:
         var_name = match.group(1)
         default = match.group(2)

@@ -84,7 +84,9 @@ class TestBuildPaper:
         assert "tex-paper" in artifact_ids
         assert "bib-references" in artifact_ids
         assert "pdf-main" in artifact_ids
-        bib_artifact = next(artifact for artifact in manifest_content["artifacts"] if artifact["artifact_id"] == "bib-references")
+        bib_artifact = next(
+            artifact for artifact in manifest_content["artifacts"] if artifact["artifact_id"] == "bib-references"
+        )
         assert bib_artifact["metadata"]["entry_source"] == "bib_data"
 
     @pytest.mark.asyncio
@@ -135,7 +137,9 @@ class TestBuildPaper:
         assert output.bibliography_audit is not None
         assert output.bibliography_audit.entries[0].key == "bohr1913"
         assert output.manifest is not None
-        bib_artifact = next(artifact for artifact in output.manifest.artifacts if artifact.artifact_id == "bib-references")
+        bib_artifact = next(
+            artifact for artifact in output.manifest.artifacts if artifact.artifact_id == "bib-references"
+        )
         assert bib_artifact.metadata["entry_source"] == "bib_data+citation_sources"
 
     @pytest.mark.asyncio
@@ -218,7 +222,9 @@ class TestBuildPaper:
         assert output.bibliography_audit.total_sources == 1
         manifest_ids = {artifact.artifact_id for artifact in output.manifest.artifacts}
         assert "audit-bibliography" in manifest_ids
-        bib_artifact = next(artifact for artifact in output.manifest.artifacts if artifact.artifact_id == "bib-references")
+        bib_artifact = next(
+            artifact for artifact in output.manifest.artifacts if artifact.artifact_id == "bib-references"
+        )
         assert bib_artifact.metadata["entry_source"] == "citation_sources"
 
     @pytest.mark.asyncio

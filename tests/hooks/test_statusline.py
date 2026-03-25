@@ -38,6 +38,7 @@ def _mark_complete_install(config_dir: Path, *, runtime: str | None = None, inst
         manifest["runtime"] = runtime
     (config_dir / "grd-file-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
+
 # ─── _context_bar edge cases ───────────────────────────────────────────────
 
 
@@ -105,7 +106,9 @@ class TestStatusMetadata:
         assert _format_context_window_size(200_000) == "200k context"
 
     def test_read_model_label_combines_display_name_and_context_size(self) -> None:
-        label = _read_model_label({"model": {"display_name": "Opus 4.6"}, "context_window": {"context_window_size": 1_000_000}})
+        label = _read_model_label(
+            {"model": {"display_name": "Opus 4.6"}, "context_window": {"context_window_size": 1_000_000}}
+        )
         assert label == "Opus 4.6 (1M context)"
 
     def test_read_workspace_label_prefers_project_relative_path(self, tmp_path: Path) -> None:
@@ -777,7 +780,9 @@ class TestMain:
         assert "GRD" in output
 
     def test_with_valid_model_renders_model_label(self) -> None:
-        output = self._run_main({"model": {"display_name": "GPT-4o"}, "context_window": {"context_window_size": 200_000}})
+        output = self._run_main(
+            {"model": {"display_name": "GPT-4o"}, "context_window": {"context_window_size": 200_000}}
+        )
         assert "GRD" in output
         assert "GPT-4o (200k context)" in output
 

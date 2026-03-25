@@ -205,7 +205,11 @@ def audit_citation_source(
                 for field in ("title", "authors", "year")
                 if (
                     (field == "authors" and not getattr(source, field) and getattr(resolved, field))
-                    or (field != "authors" and not str(getattr(source, field)).strip() and str(getattr(resolved, field)).strip())
+                    or (
+                        field != "authors"
+                        and not str(getattr(source, field)).strip()
+                        and str(getattr(resolved, field)).strip()
+                    )
                 )
             ]
             resolution_status = "enriched" if not _core_missing_fields(resolved) else "incomplete"

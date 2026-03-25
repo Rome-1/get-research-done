@@ -148,7 +148,6 @@ def _normalize_phase_name(phase: str) -> str:
     return _phase_normalize_impl(phase)
 
 
-
 def _find_phase_artifact(phase_dir: Path, suffix: str, standalone: str) -> str | None:
     """Find file content matching a suffix pattern in a phase directory (truncated)."""
     if not phase_dir.is_dir():
@@ -200,9 +199,7 @@ def _load_project_contract(cwd: Path) -> ResearchContract | None:
 def _sorted_markdown_files(directory: Path) -> list[Path]:
     """Return markdown files in a directory, sorted by name."""
     try:
-        return sorted(
-            path for path in directory.iterdir() if path.is_file() and path.suffix == ".md"
-        )
+        return sorted(path for path in directory.iterdir() if path.is_file() and path.suffix == ".md")
     except FileNotFoundError:
         return []
 
@@ -442,7 +439,9 @@ def _merge_contract_reference_payload(
     elif existing_why and derived_why and derived_why not in existing_why:
         payload["why_it_matters"] = f"{existing_why}; {derived_why}"
 
-    merged_applies_to: list[str] = [item for item in list(payload.get("applies_to") or []) if item in allowed_subject_ids]
+    merged_applies_to: list[str] = [
+        item for item in list(payload.get("applies_to") or []) if item in allowed_subject_ids
+    ]
     _append_unique_strings(
         merged_applies_to,
         [item for item in list(derived.get("applies_to") or []) if item in allowed_subject_ids],
@@ -516,11 +515,7 @@ def _canonicalize_project_contract(
         active_references,
         allowed_subject_ids=allowed_subject_ids,
     )
-    refs_by_id = {
-        str(ref.get("id") or "").strip(): ref
-        for ref in canonical_refs
-        if str(ref.get("id") or "").strip()
-    }
+    refs_by_id = {str(ref.get("id") or "").strip(): ref for ref in canonical_refs if str(ref.get("id") or "").strip()}
     refs_by_locator = {
         str(ref.get("locator") or "").strip().casefold(): ref
         for ref in canonical_refs
@@ -712,7 +707,9 @@ def _build_reference_runtime_context(cwd: Path) -> dict[str, object]:
 
     return {
         "project_contract": canonical_contract.model_dump(mode="json") if canonical_contract is not None else None,
-        "contract_intake": canonical_contract.context_intake.model_dump(mode="json") if canonical_contract is not None else None,
+        "contract_intake": canonical_contract.context_intake.model_dump(mode="json")
+        if canonical_contract is not None
+        else None,
         "effective_reference_intake": effective_reference_intake,
         "derived_active_references": derived_references,
         "derived_active_reference_count": len(derived_references),
@@ -768,9 +765,7 @@ def _build_execution_runtime_context(cwd: Path) -> dict[str, object]:
             )
         ),
         "execution_pre_fanout_review_pending": bool(snapshot and snapshot.pre_fanout_review_pending),
-        "execution_skeptical_requestioning_required": bool(
-            snapshot and snapshot.skeptical_requestioning_required
-        ),
+        "execution_skeptical_requestioning_required": bool(snapshot and snapshot.skeptical_requestioning_required),
         "execution_downstream_locked": bool(snapshot and snapshot.downstream_locked),
         "execution_blocked": bool(snapshot and snapshot.blocked_reason),
         "execution_resumable": is_resumable,
@@ -915,8 +910,7 @@ def init_execute_phase(cwd: Path, phase: str | None, includes: set[str] | None =
     """
     if not phase:
         raise ValidationError(
-            "phase is required for init execute-phase. "
-            "Provide a phase identifier such as '1', '03', or '3.1'."
+            "phase is required for init execute-phase. Provide a phase identifier such as '1', '03', or '3.1'."
         )
 
     includes = includes or set()
@@ -1000,8 +994,7 @@ def init_plan_phase(cwd: Path, phase: str | None, includes: set[str] | None = No
     """
     if not phase:
         raise ValidationError(
-            "phase is required for init plan-phase. "
-            "Provide a phase identifier such as '1', '03', or '3.1'."
+            "phase is required for init plan-phase. Provide a phase identifier such as '1', '03', or '3.1'."
         )
 
     includes = includes or set()
@@ -1289,8 +1282,7 @@ def init_verify_work(cwd: Path, phase: str | None) -> dict:
     """Assemble context for work verification."""
     if not phase:
         raise ValidationError(
-            "phase is required for init verify-work. "
-            "Provide a phase identifier such as '1', '03', or '3.1'."
+            "phase is required for init verify-work. Provide a phase identifier such as '1', '03', or '3.1'."
         )
 
     config = load_config(cwd)

@@ -22,7 +22,15 @@ from grd.core.paper_quality import (
     score_paper_quality,
 )
 
-TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "src" / "grd" / "specs" / "templates" / "paper" / "paper-quality-input-schema.md"
+TEMPLATE_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "src"
+    / "grd"
+    / "specs"
+    / "templates"
+    / "paper"
+    / "paper-quality-input-schema.md"
+)
 
 
 def _full_metric(total: int) -> CoverageMetric:
@@ -293,8 +301,7 @@ def test_category_max_scores_match_constant():
 
     for name, cat in report.categories.items():
         assert cat.max_score == CATEGORY_MAX[name], (
-            f"Category {name!r}: max_score={cat.max_score} does not match "
-            f"CATEGORY_MAX[{name!r}]={CATEGORY_MAX[name]}"
+            f"Category {name!r}: max_score={cat.max_score} does not match CATEGORY_MAX[{name!r}]={CATEGORY_MAX[name]}"
         )
 
 

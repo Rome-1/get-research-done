@@ -75,7 +75,12 @@ def _pattern_table(patterns: list, title: str = "Error Patterns") -> None:
     for p in patterns:
         entry = p if isinstance(p, dict) else (p.model_dump() if hasattr(p, "model_dump") else vars(p))
         sev = entry.get("severity", "")
-        sev_styled = {"critical": "[red]critical[/]", "high": "[yellow]high[/]", "medium": "medium", "low": "[dim]low[/]"}.get(sev, sev)
+        sev_styled = {
+            "critical": "[red]critical[/]",
+            "high": "[yellow]high[/]",
+            "medium": "medium",
+            "low": "[dim]low[/]",
+        }.get(sev, sev)
         table.add_row(
             entry.get("id", ""),
             entry.get("domain", ""),
@@ -139,7 +144,9 @@ def pattern_promote(
 
 @pattern_app.command("seed")
 def pattern_seed(
-    domain: str | None = typer.Option(None, "--domain", help="Domain pack to seed patterns from (default: active domain)"),
+    domain: str | None = typer.Option(
+        None, "--domain", help="Domain pack to seed patterns from (default: active domain)"
+    ),
 ) -> None:
     """Seed the pattern library with common error patterns for the active domain."""
     from grd.core.patterns import pattern_seed

@@ -553,9 +553,11 @@ class CodexAdapter(RuntimeAdapter):
         except tomllib.TOMLDecodeError as exc:
             raise RuntimeError("Codex install incomplete: config.toml is invalid") from exc
         agents = parsed.get("agents")
-        registered_roles = {
-            name for name, value in agents.items() if name.startswith("grd-") and isinstance(value, dict)
-        } if isinstance(agents, dict) else set()
+        registered_roles = (
+            {name for name, value in agents.items() if name.startswith("grd-") and isinstance(value, dict)}
+            if isinstance(agents, dict)
+            else set()
+        )
         if installed_agent_names and not installed_agent_names.issubset(registered_roles):
             raise RuntimeError("Codex install incomplete: GRD agent roles are not registered")
 

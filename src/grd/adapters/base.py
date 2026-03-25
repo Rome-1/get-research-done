@@ -441,7 +441,11 @@ class RuntimeAdapter(abc.ABC):
         settings_path = install_result.get("settingsPath")
         settings = install_result.get("settings")
         statusline_command = install_result.get("statuslineCommand")
-        if isinstance(settings_path, (str, Path)) and isinstance(settings, dict) and isinstance(statusline_command, str):
+        if (
+            isinstance(settings_path, (str, Path))
+            and isinstance(settings, dict)
+            and isinstance(statusline_command, str)
+        ):
             self.finish_install(
                 settings_path,
                 settings,

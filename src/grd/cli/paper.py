@@ -97,10 +97,11 @@ def paper_build(
     bib_data = None
     if bib_source is not None:
         from pybtex.database import parse_file
+
         try:
             bib_data = parse_file(str(bib_source))
         except Exception as exc:  # noqa: BLE001
-            raise GRDError(f"Failed to parse bibliography { _format_display_path(bib_source) }: {exc}") from exc
+            raise GRDError(f"Failed to parse bibliography {_format_display_path(bib_source)}: {exc}") from exc
 
     citation_payload = None
     citation_source_path: Path | None = None

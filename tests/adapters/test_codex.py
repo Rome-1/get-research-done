@@ -128,17 +128,7 @@ class TestConvertToCodexSkill:
 
     def test_duplicate_tools_deduplicated(self) -> None:
         """Tools appearing in both tools: and allowed-tools: are deduplicated."""
-        content = (
-            "---\n"
-            "name: test\n"
-            "description: D\n"
-            "tools: Read, Bash\n"
-            "allowed-tools:\n"
-            "  - Read\n"
-            "  - Write\n"
-            "---\n"
-            "Body"
-        )
+        content = "---\nname: test\ndescription: D\ntools: Read, Bash\nallowed-tools:\n  - Read\n  - Write\n---\nBody"
         result = _convert_to_codex_skill(content, "grd-test")
         # Extract allowed-tools entries from the frontmatter
         fm = result.split("---")[1]
@@ -147,17 +137,7 @@ class TestConvertToCodexSkill:
 
     def test_duplicate_tools_in_allowed_tools_only(self) -> None:
         """Duplicate entries within allowed-tools: alone are deduplicated."""
-        content = (
-            "---\n"
-            "name: test\n"
-            "description: D\n"
-            "allowed-tools:\n"
-            "  - Read\n"
-            "  - Bash\n"
-            "  - Read\n"
-            "---\n"
-            "Body"
-        )
+        content = "---\nname: test\ndescription: D\nallowed-tools:\n  - Read\n  - Bash\n  - Read\n---\nBody"
         result = _convert_to_codex_skill(content, "grd-test")
         fm = result.split("---")[1]
         tool_entries = [line.strip()[2:] for line in fm.splitlines() if line.strip().startswith("- ")]
@@ -220,7 +200,7 @@ class TestInstall:
         assert f"When shell steps call the GRD CLI, use {expected_bridge}" in skill
         assert "`GRD_ACTIVE_RUNTIME=codex uv run grd ...`" in skill
         assert expected_bridge + " config ensure-section" in skill
-        assert f'INIT=$({expected_bridge} init progress --include state,config)' in skill
+        assert f"INIT=$({expected_bridge} init progress --include state,config)" in skill
         assert 'echo "ERROR: grd initialization failed: $INIT"' in skill
         assert expected_bridge + " config ensure-section" in workflow
         assert f'INIT=$({expected_bridge} init plan-phase "${{PHASE}}")' in agent
@@ -328,10 +308,7 @@ class TestInstall:
         assert config_toml.exists()
         content = config_toml.read_text(encoding="utf-8")
         escaped_exe = (sys.executable or "python3").replace("\\", "\\\\")
-        expected_notify = (
-            f'notify = ["{escaped_exe}", '
-            f'"{(target / "hooks" / "notify.py").as_posix()}"]'
-        )
+        expected_notify = f'notify = ["{escaped_exe}", "{(target / "hooks" / "notify.py").as_posix()}"]'
         assert "# GRD update notification" in content
         assert expected_notify in content
         assert "[features]" in content
@@ -646,10 +623,7 @@ class TestUninstall:
 
         adapter.uninstall(target)
 
-        assert not any(
-            entry.is_dir() and entry.name.startswith("grd-")
-            for entry in original_shared_skills.iterdir()
-        )
+        assert not any(entry.is_dir() and entry.name.startswith("grd-") for entry in original_shared_skills.iterdir())
         assert (preserved_skill / "SKILL.md").exists()
 
     def test_local_uninstall_uses_repo_scoped_skills_dir_by_default(
@@ -735,7 +709,7 @@ class TestUninstall:
         config_toml = target / "config.toml"
         config_toml.write_text(
             'model = "gpt-4"\n'
-            '# My notes about grd-style naming\n'
+            "# My notes about grd-style naming\n"
             'custom = "my-grd-tool"\n'
             f'notify = ["{sys.executable or "python3"}", "/path/notify.py"]\n',
             encoding="utf-8",
@@ -756,9 +730,7 @@ class TestUninstall:
         target = tmp_path / ".codex"
         target.mkdir()
         (target / "config.toml").write_text(
-            '[agents.reviewer]\n'
-            'description = "Code reviewer"\n'
-            'config_file = "agents/reviewer.toml"\n',
+            '[agents.reviewer]\ndescription = "Code reviewer"\nconfig_file = "agents/reviewer.toml"\n',
             encoding="utf-8",
         )
         skills = tmp_path / "skills"
@@ -806,8 +778,7 @@ class TestNotifyConfiguration:
         (target / "hooks").mkdir()
         config_toml = target / "config.toml"
         config_toml.write_text(
-            'model = "gpt-5"\n'
-            'notify = ["toolctl", "/path/to/my-tool"]\n',
+            'model = "gpt-5"\nnotify = ["toolctl", "/path/to/my-tool"]\n',
             encoding="utf-8",
         )
 
@@ -891,13 +862,13 @@ class TestNotifyConfiguration:
         target = tmp_path / ".codex"
         target.mkdir()
         (target / "config.toml").write_text(
-            '[mcp_servers.grd-state]\n'
+            "[mcp_servers.grd-state]\n"
             'command = "python3"\n'
             'args = ["-m", "old.server"]\n'
-            'startup_timeout_sec = 45\n'
+            "startup_timeout_sec = 45\n"
             'cwd = "/tmp/custom-grd"\n'
-            '\n'
-            '[mcp_servers.grd-state.env]\n'
+            "\n"
+            "[mcp_servers.grd-state.env]\n"
             'LOG_LEVEL = "INFO"\n'
             'EXTRA_FLAG = "1"\n',
             encoding="utf-8",
@@ -935,8 +906,7 @@ class TestNotifyConfiguration:
         (target / "hooks").mkdir()
         config_toml = target / "config.toml"
         config_toml.write_text(
-            '[features]\n'
-            'multi_agent = false\n',
+            "[features]\nmulti_agent = false\n",
             encoding="utf-8",
         )
 

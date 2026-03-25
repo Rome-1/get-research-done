@@ -48,8 +48,13 @@ def test_verify_work_review_contract_uses_phase_scoped_output_path() -> None:
 def test_summary_template_surfaces_plan_contract_ref_rule_for_contract_ledgers() -> None:
     summary_template = (TEMPLATES_DIR / "summary.md").read_text(encoding="utf-8")
 
-    assert "If `contract_results` or `comparison_verdicts` are present, `plan_contract_ref` is also required." in summary_template
-    assert "plan_contract_ref (required when `contract_results` or `comparison_verdicts` are present)" in summary_template
+    assert (
+        "If `contract_results` or `comparison_verdicts` are present, `plan_contract_ref` is also required."
+        in summary_template
+    )
+    assert (
+        "plan_contract_ref (required when `contract_results` or `comparison_verdicts` are present)" in summary_template
+    )
     assert "For contract-backed summaries, `contract_results` is required" in summary_template
 
 

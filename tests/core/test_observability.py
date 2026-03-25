@@ -79,7 +79,9 @@ def test_observe_event_appends_session_event_and_finish_marker(tmp_path: Path, m
     assert events[2]["status"] == "ok"
     assert events[2]["data"]["ended_by"]["name"] == "trace_stop"
 
-    current_session = json.loads((project / ".grd" / "observability" / "current-session.json").read_text(encoding="utf-8"))
+    current_session = json.loads(
+        (project / ".grd" / "observability" / "current-session.json").read_text(encoding="utf-8")
+    )
     assert current_session["session_id"] == session.session_id
     assert current_session["status"] == "ok"
 
@@ -356,7 +358,13 @@ def test_fanout_unlock_does_not_clear_pre_fanout_review_without_gate_clear(tmp_p
         phase="06",
         plan="02",
         session_id=session.session_id,
-        data={"execution": {"checkpoint_reason": "pre_fanout", "pre_fanout_review_pending": True, "downstream_locked": True}},
+        data={
+            "execution": {
+                "checkpoint_reason": "pre_fanout",
+                "pre_fanout_review_pending": True,
+                "downstream_locked": True,
+            }
+        },
     )
     observe_event(
         project,
@@ -399,7 +407,13 @@ def test_unrelated_gate_clear_preserves_pre_fanout_and_skeptical_state(tmp_path:
         phase="07",
         plan="01",
         session_id=session.session_id,
-        data={"execution": {"checkpoint_reason": "first_result", "first_result_gate_pending": True, "downstream_locked": True}},
+        data={
+            "execution": {
+                "checkpoint_reason": "first_result",
+                "first_result_gate_pending": True,
+                "downstream_locked": True,
+            }
+        },
     )
     observe_event(
         project,
@@ -620,9 +634,7 @@ def test_foreign_session_cannot_clear_live_review_gate(tmp_path: Path, monkeypat
     assert snapshot.downstream_locked is True
 
 
-def test_observe_event_reuses_persisted_active_session_when_contextvars_are_empty(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_observe_event_reuses_persisted_active_session_when_contextvars_are_empty(tmp_path: Path, monkeypatch) -> None:
     project = _bootstrap_project(tmp_path)
     monkeypatch.chdir(project)
 
@@ -658,7 +670,9 @@ def test_observe_event_reuses_persisted_active_session_when_contextvars_are_empt
     assert events[1]["name"] == "resume"
     assert events[1]["command"] == "resume-work"
 
-    current_session = json.loads((project / ".grd" / "observability" / "current-session.json").read_text(encoding="utf-8"))
+    current_session = json.loads(
+        (project / ".grd" / "observability" / "current-session.json").read_text(encoding="utf-8")
+    )
     assert current_session["session_id"] == session.session_id
     assert current_session["status"] == "active"
     assert current_session["command"] == "resume-work"
@@ -697,7 +711,9 @@ def test_late_observe_event_on_finished_session_does_not_reactivate_current_poin
 
     assert late_result.recorded is True
 
-    current_session = json.loads((project / ".grd" / "observability" / "current-session.json").read_text(encoding="utf-8"))
+    current_session = json.loads(
+        (project / ".grd" / "observability" / "current-session.json").read_text(encoding="utf-8")
+    )
     assert current_session["session_id"] == session.session_id
     assert current_session["status"] == "ok"
 

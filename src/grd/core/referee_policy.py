@@ -121,7 +121,9 @@ def _review_ledger_consistency_errors(data: RefereeDecisionInput, review_ledger:
     errors: list[str] = []
 
     normalized_decision_path = _normalize_path_label(data.manuscript_path) if data.manuscript_path.strip() else ""
-    normalized_ledger_path = _normalize_path_label(review_ledger.manuscript_path) if review_ledger.manuscript_path.strip() else ""
+    normalized_ledger_path = (
+        _normalize_path_label(review_ledger.manuscript_path) if review_ledger.manuscript_path.strip() else ""
+    )
     if normalized_decision_path and normalized_ledger_path and normalized_decision_path != normalized_ledger_path:
         errors.append("referee decision manuscript_path does not match review ledger manuscript_path")
 
@@ -141,7 +143,9 @@ def _review_ledger_consistency_errors(data: RefereeDecisionInput, review_ledger:
         for issue in review_ledger.issues
         if issue.blocking and issue.status != ReviewIssueStatus.resolved
     )
-    missing_blocking_issue_ids = [issue_id for issue_id in unresolved_blocking_issue_ids if issue_id not in blocking_issue_ids]
+    missing_blocking_issue_ids = [
+        issue_id for issue_id in unresolved_blocking_issue_ids if issue_id not in blocking_issue_ids
+    ]
     if missing_blocking_issue_ids:
         errors.append(
             "unresolved blocking review-ledger issues missing from blocking_issue_ids: "
@@ -190,7 +194,9 @@ def evaluate_referee_decision(
     consistency_errors: list[str] = []
 
     if strict and len(data.stage_artifacts) < 5:
-        consistency_errors.append("Strict staged peer review requires at least five specialist stage artifacts before adjudication.")
+        consistency_errors.append(
+            "Strict staged peer review requires at least five specialist stage artifacts before adjudication."
+        )
         allowed = _worse_recommendation(allowed, ReviewRecommendation.major_revision)
     elif not data.stage_artifacts:
         warnings.append("No staged review artifacts were listed in the final decision input.")
@@ -213,10 +219,14 @@ def evaluate_referee_decision(
 
     if not data.physical_assumptions_justified:
         if data.unsupported_claims_are_central and not data.reframing_possible_without_new_results:
-            reasons.append("Physical assumptions adjacent to the main claims are unjustified and not salvageable by reframing alone.")
+            reasons.append(
+                "Physical assumptions adjacent to the main claims are unjustified and not salvageable by reframing alone."
+            )
             allowed = _worse_recommendation(allowed, ReviewRecommendation.reject)
         else:
-            reasons.append("Physical assumptions adjacent to the mathematics require substantive justification or restriction.")
+            reasons.append(
+                "Physical assumptions adjacent to the mathematics require substantive justification or restriction."
+            )
             allowed = _worse_recommendation(allowed, ReviewRecommendation.major_revision)
 
     if _at_or_below(data.significance, ReviewAdequacy.insufficient):
@@ -228,7 +238,9 @@ def evaluate_referee_decision(
         )
         allowed = _worse_recommendation(
             allowed,
-            ReviewRecommendation.reject if high_impact or not data.reframing_possible_without_new_results else ReviewRecommendation.major_revision,
+            ReviewRecommendation.reject
+            if high_impact or not data.reframing_possible_without_new_results
+            else ReviewRecommendation.major_revision,
         )
 
     if _at_or_below(data.novelty, ReviewAdequacy.insufficient):
@@ -238,7 +250,9 @@ def evaluate_referee_decision(
         reasons.append("Weak or poorly positioned novelty requires at least a major revision.")
         allowed = _worse_recommendation(
             allowed,
-            ReviewRecommendation.reject if high_impact or not data.reframing_possible_without_new_results else ReviewRecommendation.major_revision,
+            ReviewRecommendation.reject
+            if high_impact or not data.reframing_possible_without_new_results
+            else ReviewRecommendation.major_revision,
         )
 
     if _at_or_below(data.venue_fit, ReviewAdequacy.insufficient):
@@ -248,7 +262,9 @@ def evaluate_referee_decision(
         reasons.append("Venue fit is too weak for acceptance without major reframing.")
         allowed = _worse_recommendation(
             allowed,
-            ReviewRecommendation.reject if high_impact or not data.reframing_possible_without_new_results else ReviewRecommendation.major_revision,
+            ReviewRecommendation.reject
+            if high_impact or not data.reframing_possible_without_new_results
+            else ReviewRecommendation.major_revision,
         )
 
     if _at_or_below(data.literature_positioning, ReviewAdequacy.insufficient):
@@ -279,7 +295,9 @@ def evaluate_referee_decision(
     if review_ledger is not None:
         consistency_errors.extend(_review_ledger_consistency_errors(data, review_ledger))
 
-    recommendation_valid = _RECOMMENDATION_ORDER.get(data.final_recommendation, 99) >= _RECOMMENDATION_ORDER.get(allowed, 99)
+    recommendation_valid = _RECOMMENDATION_ORDER.get(data.final_recommendation, 99) >= _RECOMMENDATION_ORDER.get(
+        allowed, 99
+    )
     valid = recommendation_valid and not consistency_errors
 
     if not recommendation_valid:

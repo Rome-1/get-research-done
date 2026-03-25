@@ -236,15 +236,14 @@ class TestTraceShow:
         assert isinstance(result, TraceListResult)
         assert len(result.available_traces) >= 1
 
-
     def test_show_phase_with_spaces(self, project: Path) -> None:
         """Phase names with spaces should match trace files (uses _safe_trace_component)."""
-        trace_start(project, 'phase one', 'plan-01')
-        trace_log(project, 'info')
+        trace_start(project, "phase one", "plan-01")
+        trace_log(project, "info")
         trace_stop(project)
         # The trace file is named 'phase-one-plan-01.jsonl'.
         # Filtering by phase='phase one' must sanitise the input to 'phase-one'.
-        result = trace_show(project, phase='phase one')
+        result = trace_show(project, phase="phase one")
         assert isinstance(result, TraceShowResult)
         assert result.count >= 3  # start + info + stop
 
@@ -302,7 +301,9 @@ class TestTraceEdgeCases:
         assert moved_trace_file.exists()
         assert not original_trace_file.exists()
 
-        events = [json.loads(line) for line in moved_trace_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+        events = [
+            json.loads(line) for line in moved_trace_file.read_text(encoding="utf-8").splitlines() if line.strip()
+        ]
         assert [event["type"] for event in events] == ["trace_start", "checkpoint", "trace_stop"]
         assert events[1]["data"]["step"] == "after-rename"
 
@@ -324,7 +325,9 @@ class TestTraceEdgeCases:
         assert isinstance(show_result, TraceShowResult)
         assert show_result.count == 5  # start + 3 logs + stop
 
-    def test_trace_mirrors_events_to_observability_helpers(self, project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_trace_mirrors_events_to_observability_helpers(
+        self, project: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         calls: list[tuple[str, dict[str, object]]] = []
 
         def fake_helper(helper_name: str, *, cwd: Path | None = None, **kwargs: object) -> object | None:

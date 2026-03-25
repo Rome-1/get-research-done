@@ -12,7 +12,9 @@ FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage4"
 
 def test_summary_extract_parses_contract_results_and_comparison_verdicts(tmp_path: Path) -> None:
     summary_path = tmp_path / "01-SUMMARY.md"
-    summary_path.write_text((FIXTURES_DIR / "summary_with_contract_results.md").read_text(encoding="utf-8"), encoding="utf-8")
+    summary_path.write_text(
+        (FIXTURES_DIR / "summary_with_contract_results.md").read_text(encoding="utf-8"), encoding="utf-8"
+    )
 
     result = cmd_summary_extract(tmp_path, "01-SUMMARY.md")
 
@@ -29,7 +31,9 @@ def test_summary_extract_parses_contract_results_and_comparison_verdicts(tmp_pat
 
 def test_summary_extract_field_filter_returns_contract_results(tmp_path: Path) -> None:
     summary_path = tmp_path / "01-SUMMARY.md"
-    summary_path.write_text((FIXTURES_DIR / "summary_with_contract_results.md").read_text(encoding="utf-8"), encoding="utf-8")
+    summary_path.write_text(
+        (FIXTURES_DIR / "summary_with_contract_results.md").read_text(encoding="utf-8"), encoding="utf-8"
+    )
 
     result = cmd_summary_extract(tmp_path, "01-SUMMARY.md", fields=["contract_results", "comparison_verdicts"])
 

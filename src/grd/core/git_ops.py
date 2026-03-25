@@ -219,9 +219,7 @@ def _line_has_nonfinite_data_cell(line: str) -> bool:
     if not nonempty or not any(_token_is_nonfinite(cell) for cell in nonempty):
         return False
 
-    numericish_count = sum(
-        1 for cell in nonempty if _token_is_nonfinite(cell) or _is_numericish_token(cell)
-    )
+    numericish_count = sum(1 for cell in nonempty if _token_is_nonfinite(cell) or _is_numericish_token(cell))
     return numericish_count >= max(2, len(nonempty) - 1)
 
 

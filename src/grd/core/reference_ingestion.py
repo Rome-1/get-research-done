@@ -648,7 +648,9 @@ def _ingest_benchmark_section(section: str, result: ArtifactReferenceIngestion) 
                 lower = detail_text.lower()
                 if lower.startswith("source:"):
                     source = _clean_text(detail_text.split(":", 1)[1])
-                elif lower.startswith("compared in:") or lower.startswith("comparison in:") or lower.startswith("file:"):
+                elif (
+                    lower.startswith("compared in:") or lower.startswith("comparison in:") or lower.startswith("file:")
+                ):
                     compared_in = _clean_text(detail_text.split(":", 1)[1])
                 elif lower.startswith("status:"):
                     status = _clean_text(detail_text.split(":", 1)[1])

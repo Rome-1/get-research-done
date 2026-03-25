@@ -139,6 +139,7 @@ def _get_valid_domains() -> frozenset[str]:
     domains = set(VALID_DOMAINS)
     try:
         from grd.domains.loader import load_domain
+
         ctx = load_domain(os.environ.get("GRD_DOMAIN", "physics"))
         if ctx is not None:
             sf_dir = ctx.content_dir("subfields")
@@ -149,6 +150,8 @@ def _get_valid_domains() -> frozenset[str]:
     except Exception:
         pass
     return frozenset(domains)
+
+
 VALID_CATEGORIES: frozenset[str] = frozenset(e.value for e in PatternCategory)
 VALID_SEVERITIES: tuple[str, ...] = tuple(e.value for e in PatternSeverity)
 CONFIDENCE_LEVELS: tuple[str, ...] = tuple(e.value for e in ConfidenceLevel)
@@ -599,6 +602,7 @@ def _update_pattern_frontmatter(root: Path, entry: PatternEntry) -> None:
 
 
 # ─── Seed — bootstrap patterns ───────────────────────────────────────────────
+
 
 def _load_bootstrap_patterns() -> list[dict[str, object]]:
     """Load bootstrap patterns from the active domain pack.

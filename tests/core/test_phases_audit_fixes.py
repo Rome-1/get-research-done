@@ -86,21 +86,13 @@ class TestProgressRenderNoMisleadingField:
 
         # Phase 1 -- two plans, one completed
         p1 = _create_phase_dir(tmp_path, "01-setup")
-        (p1 / "a-PLAN.md").write_text(
-            "---\nwave: 1\nfiles_modified: []\ndepends_on: []\n---\n# Plan A\n"
-        )
-        (p1 / "a-SUMMARY.md").write_text(
-            "---\none-liner: Done A\nstatus: complete\n---\n# Summary A\n"
-        )
-        (p1 / "b-PLAN.md").write_text(
-            "---\nwave: 1\nfiles_modified: []\ndepends_on: []\n---\n# Plan B\n"
-        )
+        (p1 / "a-PLAN.md").write_text("---\nwave: 1\nfiles_modified: []\ndepends_on: []\n---\n# Plan A\n")
+        (p1 / "a-SUMMARY.md").write_text("---\none-liner: Done A\nstatus: complete\n---\n# Summary A\n")
+        (p1 / "b-PLAN.md").write_text("---\nwave: 1\nfiles_modified: []\ndepends_on: []\n---\n# Plan B\n")
 
         # Phase 2 -- one plan, not completed
         p2 = _create_phase_dir(tmp_path, "02-work")
-        (p2 / "c-PLAN.md").write_text(
-            "---\nwave: 1\nfiles_modified: []\ndepends_on: []\n---\n# Plan C\n"
-        )
+        (p2 / "c-PLAN.md").write_text("---\nwave: 1\nfiles_modified: []\ndepends_on: []\n---\n# Plan C\n")
 
         result = progress_render(tmp_path, "json")
 
@@ -131,9 +123,7 @@ class TestValidatePhaseWavesUnreadablePlan:
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
 
         # Write a valid plan so the phase is discovered
-        (phase_dir / "a-PLAN.md").write_text(
-            "---\nwave: 1\nfiles_modified: []\ndepends_on: []\n---\n# Valid plan\n"
-        )
+        (phase_dir / "a-PLAN.md").write_text("---\nwave: 1\nfiles_modified: []\ndepends_on: []\n---\n# Valid plan\n")
 
         # Write a binary-garbage plan that cannot be decoded as UTF-8
         (phase_dir / "b-PLAN.md").write_bytes(b"\x80\x81\x82")
@@ -159,9 +149,7 @@ class TestPhasePlanIndexUnreadablePlan:
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
 
         # One valid plan
-        (phase_dir / "a-PLAN.md").write_text(
-            "---\nwave: 1\nfiles_modified: []\ndepends_on: []\n---\n# Valid plan\n"
-        )
+        (phase_dir / "a-PLAN.md").write_text("---\nwave: 1\nfiles_modified: []\ndepends_on: []\n---\n# Valid plan\n")
 
         # One corrupt plan
         (phase_dir / "b-PLAN.md").write_bytes(b"\x80\x81\x82")
@@ -196,9 +184,7 @@ class TestMilestoneCompleteUnreadableSummary:
         )
 
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
-        (phase_dir / "a-PLAN.md").write_text(
-            "---\nwave: 1\nfiles_modified: []\ndepends_on: []\n---\n# Plan\n"
-        )
+        (phase_dir / "a-PLAN.md").write_text("---\nwave: 1\nfiles_modified: []\ndepends_on: []\n---\n# Plan\n")
 
         # Write a summary that looks correct to the file-system (right name,
         # matched plan) but contains invalid UTF-8 bytes so read_text will fail.

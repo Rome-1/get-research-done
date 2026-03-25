@@ -146,7 +146,9 @@ def convention_diff(
     if isinstance(data, dict) and not data.get("changed") and not data.get("added") and not data.get("removed"):
         console.print("[dim]No convention differences found.[/]")
         if not phase1 and not phase2:
-            console.print("[dim]Hint: Convention diff compares conventions across phases. Use 'grd phase add' to create phases first.[/]")
+            console.print(
+                "[dim]Hint: Convention diff compares conventions across phases. Use 'grd phase add' to create phases first.[/]"
+            )
         return
     _output(result)
 

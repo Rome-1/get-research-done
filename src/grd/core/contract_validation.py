@@ -472,8 +472,10 @@ def validate_project_contract(
 
     errors.extend(_light_contract_consistency_errors(parsed))
 
-    if mode == "approved" and decisive_target_count > 0 and not (
-        _has_approved_grounding_signal(parsed) or _has_explicit_anchor_unknown(parsed)
+    if (
+        mode == "approved"
+        and decisive_target_count > 0
+        and not (_has_approved_grounding_signal(parsed) or _has_explicit_anchor_unknown(parsed))
     ):
         errors.append(
             "approved project contract requires at least one concrete anchor/reference/prior-output/baseline or an explicit 'anchor unknown' blocker"

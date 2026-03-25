@@ -174,9 +174,7 @@ def test_references_nested_directories_exist() -> None:
 
 
 def test_physics_verification_directories_exist() -> None:
-    verification_dirs = {
-        path.name for path in (PHYSICS_DIR / "verification").iterdir() if path.is_dir()
-    }
+    verification_dirs = {path.name for path in (PHYSICS_DIR / "verification").iterdir() if path.is_dir()}
     assert EXPECTED_VERIFICATION_DIRS <= verification_dirs
 
 

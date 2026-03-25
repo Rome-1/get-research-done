@@ -472,7 +472,9 @@ class TestInitExecutePhase:
         assert ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["active_reference_context"]
         assert ".grd/research-map/REFERENCES.md" in ctx["active_reference_context"]
         assert "critical slope" in "\n".join(ctx["effective_reference_intake"]["known_good_baselines"])
-        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
+        assert (
+            ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
+        )
 
     def test_surfaces_live_execution_context(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -535,8 +537,7 @@ class TestInitExecutePhase:
         assert "selected_protocol_bundles" not in ctx
         assert "protocol_bundle_asset_paths" not in ctx
         assert any(
-            extension["bundle_id"] == "stat-mech-simulation"
-            for extension in ctx["protocol_bundle_verifier_extensions"]
+            extension["bundle_id"] == "stat-mech-simulation" for extension in ctx["protocol_bundle_verifier_extensions"]
         )
 
     def test_surfaces_numerical_relativity_protocol_bundle(self, tmp_path: Path) -> None:
@@ -551,8 +552,7 @@ class TestInitExecutePhase:
         assert "numerical-relativity" in ctx["selected_protocol_bundle_ids"]
         assert "numerical-relativity.md" in ctx["protocol_bundle_context"]
         assert any(
-            extension["bundle_id"] == "numerical-relativity"
-            for extension in ctx["protocol_bundle_verifier_extensions"]
+            extension["bundle_id"] == "numerical-relativity" for extension in ctx["protocol_bundle_verifier_extensions"]
         )
 
     def test_protocol_bundle_verifier_extensions_match_mcp_bundle_checklist(self, tmp_path: Path) -> None:
@@ -632,7 +632,9 @@ class TestInitPlanPhase:
         assert "ref-benchmark" in ctx["effective_reference_intake"]["must_read_refs"]
         assert "lit-anchor-benchmark-ref-2024" in ctx["effective_reference_intake"]["must_read_refs"]
         assert "benchmark-paper" not in ctx["effective_reference_intake"]["must_read_refs"]
-        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
+        assert (
+            ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
+        )
         assert ctx["active_reference_count"] >= ctx["derived_active_reference_count"]
         assert ".grd/research-map/REFERENCES.md" in ctx["active_reference_context"]
         assert "unresolved reference token" not in ctx["active_reference_context"]
@@ -759,7 +761,9 @@ class TestInitNewMilestone:
         assert ctx["project_contract"]["scope"]["question"] == "What benchmark must the project recover?"
         assert ctx["contract_intake"]["must_read_refs"] == ["ref-benchmark", "lit-anchor-benchmark-ref-2024"]
         assert "ref-benchmark" in ctx["effective_reference_intake"]["must_read_refs"]
-        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
+        assert (
+            ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
+        )
         assert "Benchmark Ref 2024" in ctx["active_reference_context"]
         assert ".grd/research-map/REFERENCES.md" in ctx["reference_artifact_files"]
 
@@ -1110,7 +1114,9 @@ class TestInitMapResearch:
         assert ctx["project_contract"] is None
         assert ctx["derived_active_reference_count"] >= 2
         assert "Benchmark Ref 2024" in ctx["active_reference_context"]
-        assert ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
+        assert (
+            ".grd/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
+        )
 
 
 # ─── init_progress ────────────────────────────────────────────────────────────
@@ -1162,9 +1168,7 @@ class TestInitProgress:
 
     def test_detects_paused_state(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
-        (tmp_path / ".grd" / "STATE.md").write_text(
-            "# State\n**Status:** Paused\n**Stopped at:** 2026-03-01T12:00:00Z"
-        )
+        (tmp_path / ".grd" / "STATE.md").write_text("# State\n**Status:** Paused\n**Stopped at:** 2026-03-01T12:00:00Z")
 
         ctx = init_progress(tmp_path)
         assert ctx["paused_at"] == "2026-03-01T12:00:00Z"
@@ -1278,6 +1282,7 @@ class TestInitPhaseOp:
     def test_no_phase_returns_phase_found_false(self, tmp_path):
         """init_phase_op with no phase should set phase_found=False."""
         from grd.core.context import init_phase_op
+
         grd_dir = tmp_path / ".grd"
         grd_dir.mkdir()
         (grd_dir / "config.json").write_text("{}", encoding="utf-8")
@@ -1289,6 +1294,7 @@ class TestInitPhaseOp:
     def test_with_phase_directory(self, tmp_path):
         """init_phase_op with existing phase should set phase_found=True."""
         from grd.core.context import init_phase_op
+
         grd_dir = tmp_path / ".grd"
         phases_dir = grd_dir / "phases" / "01-test"
         phases_dir.mkdir(parents=True)

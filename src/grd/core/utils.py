@@ -109,8 +109,8 @@ def compare_phase_numbers(a: str, b: str) -> int:
         if a_val != b_val:
             return a_val - b_val
     # Fall back to lexicographic comparison of non-numeric suffixes only
-    a_suffix = a[a_match.end():] if a_match else a
-    b_suffix = b[b_match.end():] if b_match else b
+    a_suffix = a[a_match.end() :] if a_match else a
+    b_suffix = b[b_match.end() :] if b_match else b
     if a_suffix < b_suffix:
         return -1
     if a_suffix > b_suffix:
@@ -166,7 +166,6 @@ def safe_parse_int(value: object, default: int | None = 0) -> int | None:
         return int(str(value))
     except (ValueError, TypeError):
         return default
-
 
 
 # ─── File Helpers ───────────────────────────────────────────────────────────────

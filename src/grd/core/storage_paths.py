@@ -122,12 +122,7 @@ def _is_relative_to(path: Path, parent: Path) -> bool:
 
 
 def _safe_component(value: str) -> str:
-    cleaned = "".join(
-        char
-        if (char.isascii() and char.isalnum()) or char in "._-"
-        else "-"
-        for char in value.strip()
-    )
+    cleaned = "".join(char if (char.isascii() and char.isalnum()) or char in "._-" else "-" for char in value.strip())
     collapsed = cleaned.strip("-")
     return collapsed or "unnamed"
 
@@ -164,11 +159,7 @@ class ProjectStorageLayout:
         return self.root / _DURABLE_DIR_NAMES[kind]
 
     def phase_artifacts_dir(self, phase_name: str) -> Path:
-        return (
-            self.output_dir(DurableOutputKind.ARTIFACTS)
-            / "phases"
-            / _safe_component(phase_name)
-        )
+        return self.output_dir(DurableOutputKind.ARTIFACTS) / "phases" / _safe_component(phase_name)
 
     def phase_operation_dir(self, phase_name: str, operation: str, *, slug: str | None = None) -> Path:
         path = self.phase_artifacts_dir(phase_name) / _safe_component(operation)
@@ -201,9 +192,8 @@ class ProjectStorageLayout:
             return f"Suspicious durable-artifact path under internal storage: {rel}"
 
         if (
-            (_is_relative_to(path, self.grd / "phases") or _is_relative_to(path, self.grd / "paper"))
-            and suffix in _SUSPICIOUS_DURABLE_SUFFIXES
-        ):
+            _is_relative_to(path, self.grd / "phases") or _is_relative_to(path, self.grd / "paper")
+        ) and suffix in _SUSPICIOUS_DURABLE_SUFFIXES:
             return f"Artifact-like file stored under internal metadata directories: {rel}"
 
         return None
@@ -256,9 +246,7 @@ class ProjectStorageLayout:
                 f"got {resolved} ({classification})."
             )
         if kind is not None and not _is_relative_to(resolved, self.output_dir(kind)):
-            raise StoragePathError(
-                f"Expected a {kind.value} output under {self.output_dir(kind)}, got {resolved}."
-            )
+            raise StoragePathError(f"Expected a {kind.value} output under {self.output_dir(kind)}, got {resolved}.")
         return resolved
 
     def validate_final_output(self, path: Path | str) -> Path:
@@ -269,7 +257,9 @@ class ProjectStorageLayout:
         if classification == StorageClass.INTERNAL_DURABLE:
             raise StoragePathError(f"Final durable outputs must not be written under internal storage: {display_path}")
         if classification == StorageClass.SCRATCH or self._is_project_local_scratch_path(resolved):
-            raise StoragePathError(f"Final durable outputs must not be written under scratch directories: {display_path}")
+            raise StoragePathError(
+                f"Final durable outputs must not be written under scratch directories: {display_path}"
+            )
         if classification == StorageClass.TEMP_ROOT:
             raise StoragePathError(f"Final durable outputs must not be written under an OS temp root: {display_path}")
         if classification == StorageClass.EXTERNAL:
@@ -316,7 +306,9 @@ class ProjectStorageLayout:
                 f"got {resolved}."
             )
         elif classification == StorageClass.PROJECT_LOCAL_OTHER:
-            preferred_label = ", ".join(str(path.relative_to(self.root)) for path in preferred_dirs) or "named durable roots"
+            preferred_label = (
+                ", ".join(str(path.relative_to(self.root)) for path in preferred_dirs) or "named durable roots"
+            )
             warnings.append(
                 f"Output is in a custom project directory; prefer {preferred_label} for discoverability, got {resolved}."
             )
@@ -367,6 +359,8 @@ class ProjectStorageLayout:
                     continue
                 if path.suffix.lower() in _SCRATCH_TEMP_SUFFIXES:
                     continue
-                warnings.append(f"Project scratch directory should not hold final outputs: {path.relative_to(self.root)}")
+                warnings.append(
+                    f"Project scratch directory should not hold final outputs: {path.relative_to(self.root)}"
+                )
 
         return tuple(dict.fromkeys(warnings))

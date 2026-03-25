@@ -113,9 +113,7 @@ async def test_manual_multipass_rejects_bibtex_failure_even_when_final_pass_succ
 
 
 @pytest.mark.asyncio
-async def test_manual_multipass_rejects_stale_preexisting_pdf(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_manual_multipass_rejects_stale_preexisting_pdf(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     tex_path = tmp_path / "paper.tex"
     tex_path.write_text(r"\documentclass{article}\begin{document}test\end{document}", encoding="utf-8")
     pdf_path = tmp_path / "paper.pdf"
@@ -263,9 +261,7 @@ def test_figureref_is_importable_from_compiler_module() -> None:
     ``list[tuple[FigureRef, FigureRef]]`` resolves at runtime (Issue 1)."""
     import grd.mcp.paper.compiler as compiler_mod
 
-    assert hasattr(compiler_mod, "FigureRef"), (
-        "FigureRef should be importable from compiler module"
-    )
+    assert hasattr(compiler_mod, "FigureRef"), "FigureRef should be importable from compiler module"
 
 
 def test_no_original_figures_dead_code() -> None:
@@ -276,6 +272,4 @@ def test_no_original_figures_dead_code() -> None:
     from grd.mcp.paper.compiler import build_paper
 
     source = inspect.getsource(build_paper)
-    assert "original_figures" not in source, (
-        "Dead-code variable 'original_figures' should have been removed"
-    )
+    assert "original_figures" not in source, "Dead-code variable 'original_figures' should have been removed"

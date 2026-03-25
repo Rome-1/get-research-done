@@ -248,23 +248,11 @@ def test_protocol_store_defaults_invalid_tier_for_sorting(tmp_path: Path) -> Non
     protocols_dir = tmp_path / "protocols"
     protocols_dir.mkdir()
     (protocols_dir / "bad-tier.md").write_text(
-        "---\n"
-        "tier: high\n"
-        "load_when:\n"
-        "  - asymptotic\n"
-        "---\n"
-        "# Bad Tier\n"
-        "- First step\n",
+        "---\ntier: high\nload_when:\n  - asymptotic\n---\n# Bad Tier\n- First step\n",
         encoding="utf-8",
     )
     (protocols_dir / "good-tier.md").write_text(
-        "---\n"
-        "tier: 1\n"
-        "load_when:\n"
-        "  - perturbative\n"
-        "---\n"
-        "# Good Tier\n"
-        "- First step\n",
+        "---\ntier: 1\nload_when:\n  - perturbative\n---\n# Good Tier\n- First step\n",
         encoding="utf-8",
     )
 
@@ -281,11 +269,7 @@ def test_protocol_not_found_tolerates_invalid_tier_catalog(tmp_path: Path) -> No
     protocols_dir = tmp_path / "protocols"
     protocols_dir.mkdir()
     (protocols_dir / "bad-tier.md").write_text(
-        "---\n"
-        "tier: high\n"
-        "---\n"
-        "# Bad Tier\n"
-        "- First step\n",
+        "---\ntier: high\n---\n# Bad Tier\n- First step\n",
         encoding="utf-8",
     )
     store = ProtocolStore(protocols_dir)

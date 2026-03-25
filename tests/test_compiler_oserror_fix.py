@@ -65,7 +65,4 @@ async def test_build_paper_catches_oserror_from_figure_preparation(
     assert result.success is False
     # The caught OSError should appear in the errors list.
     fig_errors = [e for e in result.errors if "Permission denied" in e]
-    assert fig_errors, (
-        f"Expected an error mentioning 'Permission denied' in result.errors, "
-        f"got: {result.errors}"
-    )
+    assert fig_errors, f"Expected an error mentioning 'Permission denied' in result.errors, got: {result.errors}"

@@ -245,12 +245,14 @@ class DomainContext:
         for entry in raw:
             if not isinstance(entry, dict) or "error_class_id" not in entry:
                 continue
-            result.append({
-                "error_class_id": int(entry["error_class_id"]),
-                "name": str(entry.get("name", "")),
-                "primary_checks": list(entry.get("primary_checks", [])),
-                "domains": list(entry.get("domains", [])),
-            })
+            result.append(
+                {
+                    "error_class_id": int(entry["error_class_id"]),
+                    "name": str(entry.get("name", "")),
+                    "primary_checks": list(entry.get("primary_checks", [])),
+                    "domains": list(entry.get("domains", [])),
+                }
+            )
         return result
 
     @cached_property
@@ -376,11 +378,13 @@ def _parse_domain_yaml(pack_path: Path) -> DomainPack:
     meta_fields = []
     for entry in raw_meta_fields:
         if isinstance(entry, dict) and "key" in entry:
-            meta_fields.append({
-                "key": str(entry["key"]),
-                "label": str(entry.get("label", entry["key"])),
-                "help": str(entry.get("help", "")),
-            })
+            meta_fields.append(
+                {
+                    "key": str(entry["key"]),
+                    "label": str(entry.get("label", entry["key"])),
+                    "help": str(entry.get("help", "")),
+                }
+            )
 
     return DomainPack(
         name=str(data.get("name", pack_path.name)),

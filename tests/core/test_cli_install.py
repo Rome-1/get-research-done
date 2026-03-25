@@ -252,8 +252,7 @@ def test_install_summary_leaves_blank_line_after_next_steps(tmp_path: Path):
     assert "1. Open Claude Code from your system terminal (claude)." in result.output
     assert "2. Run /grd:help for the command list." in result.output
     assert (
-        "3. Start with /grd:new-project for a new project or /grd:map-research for existing work.\n\n"
-        in result.output
+        "3. Start with /grd:new-project for a new project or /grd:map-research for existing work.\n\n" in result.output
     )
 
 
@@ -366,8 +365,8 @@ def test_install_no_args_uses_interactive_defaults(tmp_path: Path):
         mock_adapter = MagicMock()
         mock_adapter.display_name = "Claude Code"
         mock_adapter.help_command = "/grd:help"
-        mock_adapter.resolve_target_dir.side_effect = (
-            lambda is_global, cwd=None: tmp_path / (".claude-global" if is_global else ".claude")
+        mock_adapter.resolve_target_dir.side_effect = lambda is_global, cwd=None: (
+            tmp_path / (".claude-global" if is_global else ".claude")
         )
         mock_get.return_value = mock_adapter
 

@@ -68,9 +68,7 @@ class TestSyncStateJson:
         assert isinstance(result, dict)
         assert isinstance(stored, dict)
 
-    def test_sync_core_uses_backup_when_primary_json_is_corrupt(
-        self, tmp_path: Path, state_project_factory
-    ) -> None:
+    def test_sync_core_uses_backup_when_primary_json_is_corrupt(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
         planning = cwd / ".grd"
 
@@ -83,9 +81,7 @@ class TestSyncStateJson:
 
         assert result["from_backup"] is True
 
-    def test_sync_updates_position_from_markdown(
-        self, tmp_path: Path, state_project_factory
-    ) -> None:
+    def test_sync_updates_position_from_markdown(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path, status="Planning")
 
         result = sync_state_json(cwd, (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8"))

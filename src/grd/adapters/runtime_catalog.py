@@ -169,7 +169,9 @@ def get_hook_payload_policy(runtime: str | None = None) -> HookPayloadPolicy:
         context_window_size_keys=_merge_unique(
             descriptor.hook_payload.context_window_size_keys for descriptor in descriptors
         ),
-        context_remaining_keys=_merge_unique(descriptor.hook_payload.context_remaining_keys for descriptor in descriptors),
+        context_remaining_keys=_merge_unique(
+            descriptor.hook_payload.context_remaining_keys for descriptor in descriptors
+        ),
     )
 
 

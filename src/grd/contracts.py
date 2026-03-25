@@ -76,14 +76,28 @@ def _normalize_mapping_field(value: object) -> object:
 
 
 # Legacy physics field names — used only for migration from the old flat format.
-_LEGACY_PHYSICS_FIELDS = frozenset({
-    "metric_signature", "fourier_convention", "natural_units", "gauge_choice",
-    "regularization_scheme", "renormalization_scheme", "coordinate_system",
-    "spin_basis", "state_normalization", "coupling_convention", "index_positioning",
-    "time_ordering", "commutation_convention", "levi_civita_sign",
-    "generator_normalization", "covariant_derivative_sign",
-    "gamma_matrix_convention", "creation_annihilation_order",
-})
+_LEGACY_PHYSICS_FIELDS = frozenset(
+    {
+        "metric_signature",
+        "fourier_convention",
+        "natural_units",
+        "gauge_choice",
+        "regularization_scheme",
+        "renormalization_scheme",
+        "coordinate_system",
+        "spin_basis",
+        "state_normalization",
+        "coupling_convention",
+        "index_positioning",
+        "time_ordering",
+        "commutation_convention",
+        "levi_civita_sign",
+        "generator_normalization",
+        "covariant_derivative_sign",
+        "gamma_matrix_convention",
+        "creation_annihilation_order",
+    }
+)
 
 
 class ConventionLock(BaseModel):
@@ -541,7 +555,9 @@ class ContractLink(BaseModel):
     id: str
     source: str
     target: str
-    relation: Literal["supports", "computes", "visualizes", "benchmarks", "depends_on", "evaluated_by", "other"] = "other"
+    relation: Literal["supports", "computes", "visualizes", "benchmarks", "depends_on", "evaluated_by", "other"] = (
+        "other"
+    )
     verified_by: list[str] = Field(default_factory=list)
 
     @field_validator("id", "source", "target", mode="before")

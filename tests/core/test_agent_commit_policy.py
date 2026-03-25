@@ -40,11 +40,7 @@ def test_every_agent_frontmatter_declares_commit_authority() -> None:
 
 
 def test_registry_exposes_exact_direct_commit_allowlist() -> None:
-    direct = {
-        name
-        for name in registry.list_agents()
-        if registry.get_agent(name).commit_authority == "direct"
-    }
+    direct = {name for name in registry.list_agents() if registry.get_agent(name).commit_authority == "direct"}
 
     assert direct == DIRECT_AGENTS
 

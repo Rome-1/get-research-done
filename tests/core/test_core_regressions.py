@@ -24,13 +24,7 @@ def _write_state_md(tmp_path: Path, decisions_body: str) -> Path:
     planning = tmp_path / ".grd"
     planning.mkdir(exist_ok=True)
     (planning / "STATE.md").write_text(
-        "# State\n\n"
-        "## Position\n\n"
-        "Current Phase: 05\n\n"
-        "### Decisions\n"
-        f"{decisions_body}\n\n"
-        "### Blockers\n\n"
-        "None.\n",
+        f"# State\n\n## Position\n\nCurrent Phase: 05\n\n### Decisions\n{decisions_body}\n\n### Blockers\n\nNone.\n",
         encoding="utf-8",
     )
     return tmp_path
@@ -230,11 +224,7 @@ def test_result_update_wraps_validation_error_as_result_error() -> None:
     from grd.core.errors import ResultError
     from grd.core.results import result_update
 
-    state = {
-        "intermediate_results": [
-            {"result_id": "R-01-001", "description": "test", "value": "1.0", "phase": "01"}
-        ]
-    }
+    state = {"intermediate_results": [{"result_id": "R-01-001", "description": "test", "value": "1.0", "phase": "01"}]}
 
     with pytest.raises(ResultError):
         result_update(state, "R-01-001", depends_on=[123])

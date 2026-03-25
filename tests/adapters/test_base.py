@@ -110,8 +110,8 @@ class TestUninstallBase:
         target = tmp_path / ".claude"
         target.mkdir(parents=True)
         (target / "settings.json").write_text(
-            '{\n'
-            '  // user comment\n'
+            "{\n"
+            "  // user comment\n"
             '  "statusLine": {"type": "command", "command": "python .claude/hooks/statusline.py"},\n'
             '  "hooks": {\n'
             '    "SessionStart": [\n'

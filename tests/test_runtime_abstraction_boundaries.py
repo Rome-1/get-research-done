@@ -98,11 +98,16 @@ def _is_doc(rel_path: Path) -> bool:
 
 
 def _is_installed_shared_markdown(rel_path: Path) -> bool:
-    return rel_path.parts[:3] == ("src", "grd", "commands") or rel_path.parts[:3] == (
-        "src",
-        "grd",
-        "agents",
-    ) or rel_path.parts[:3] == ("src", "grd", "specs")
+    return (
+        rel_path.parts[:3] == ("src", "grd", "commands")
+        or rel_path.parts[:3]
+        == (
+            "src",
+            "grd",
+            "agents",
+        )
+        or rel_path.parts[:3] == ("src", "grd", "specs")
+    )
 
 
 def _is_test(rel_path: Path) -> bool:
@@ -134,7 +139,9 @@ def _scan_paths_for_pattern(paths: tuple[Path, ...], pattern: re.Pattern[str]) -
             candidates = [path]
         else:
             candidates = sorted(
-                candidate for candidate in path.rglob("*") if candidate.is_file() and candidate.suffix in _TEXT_SURFACE_SUFFIXES
+                candidate
+                for candidate in path.rglob("*")
+                if candidate.is_file() and candidate.suffix in _TEXT_SURFACE_SUFFIXES
             )
         for candidate in candidates:
             if candidate.suffix not in _TEXT_SURFACE_SUFFIXES:
@@ -156,8 +163,7 @@ def test_runtime_specific_terms_are_confined_to_explicit_boundary_files() -> Non
     ]
 
     assert leaks == [], (
-        "Runtime-specific hardcoding leaked outside adapter/runtime boundary files:\n"
-        f"{_format_failures(leaks)}"
+        f"Runtime-specific hardcoding leaked outside adapter/runtime boundary files:\n{_format_failures(leaks)}"
     )
 
 
@@ -185,8 +191,7 @@ def test_shared_adapter_infrastructure_avoids_runtime_specific_hardcoding() -> N
     ]
 
     assert leaks == [], (
-        "Shared adapter infrastructure should not hardcode runtime-specific terms:\n"
-        f"{_format_failures(leaks)}"
+        f"Shared adapter infrastructure should not hardcode runtime-specific terms:\n{_format_failures(leaks)}"
     )
 
 
@@ -194,13 +199,11 @@ def test_shared_adapter_infrastructure_stays_runtime_agnostic() -> None:
     leaks = [
         (path, line_no, snippet)
         for path, line_no, snippet in _git_grep(_SHARED_ADAPTER_RUNTIME_BRANCH_PATTERN)
-        if path.parts[:3] == ("src", "grd", "adapters")
-        and path.as_posix() not in _ALLOWED_RUNTIME_ADAPTER_FILES
+        if path.parts[:3] == ("src", "grd", "adapters") and path.as_posix() not in _ALLOWED_RUNTIME_ADAPTER_FILES
     ]
 
     assert leaks == [], (
-        "Shared adapter infrastructure should not hardcode runtime-specific terms:\n"
-        f"{_format_failures(leaks)}"
+        f"Shared adapter infrastructure should not hardcode runtime-specific terms:\n{_format_failures(leaks)}"
     )
 
 

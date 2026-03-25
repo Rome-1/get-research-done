@@ -411,7 +411,9 @@ def test_main_resolves_workspace_before_filtering_event_types(tmp_path: Path) ->
 
 def test_main_accepts_workspace_mapping_with_cwd_field() -> None:
     with (
-        patch("sys.stdin", io.StringIO(json.dumps({"type": "agent-turn-complete", "workspace": {"cwd": "/tmp/project"}}))),
+        patch(
+            "sys.stdin", io.StringIO(json.dumps({"type": "agent-turn-complete", "workspace": {"cwd": "/tmp/project"}}))
+        ),
         patch("grd.hooks.notify._trigger_update_check") as mock_trigger,
         patch("grd.hooks.notify._check_and_notify_update") as mock_notify,
     ):

@@ -103,6 +103,7 @@ def _multi_claim_contract_fixture() -> dict[str, object]:
         },
     }
 
+
 # ---------------------------------------------------------------------------
 # 1. Conventions server
 # ---------------------------------------------------------------------------
@@ -297,7 +298,6 @@ class TestConventionsServer:
         assert result["status"] == "set"
         assert result["type"] == "custom"
 
-
     def test_load_lock_non_dict_state_json(self, tmp_path):
         """If state.json contains a non-dict (e.g. a list), return empty lock."""
         from grd.mcp.servers.conventions_server import _load_lock_from_project
@@ -325,9 +325,7 @@ class TestConventionsServer:
         planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "state.json").write_text(json.dumps([1, 2, 3]))
-        lock, result = _update_lock_in_project(
-            str(tmp_path), lambda lk: lk.conventions.get("metric_signature")
-        )
+        lock, result = _update_lock_in_project(str(tmp_path), lambda lk: lk.conventions.get("metric_signature"))
         assert lock.conventions == {}
         assert result is None
 
@@ -390,6 +388,7 @@ class TestConventionsServer:
 
         result = convention_lock_status(str(tmp_path))
         assert "error" in result
+
 
 # ---------------------------------------------------------------------------
 # 2. Errors MCP server
@@ -777,12 +776,7 @@ class TestSkillsServer:
             encoding="utf-8",
         )
         (agents_dir / "grd-debugger.md").write_text(
-            "---\n"
-            "name: grd-debugger\n"
-            "description: Canonical debugger agent.\n"
-            "---\n"
-            "\n"
-            "Primary debugger agent.\n",
+            "---\nname: grd-debugger\ndescription: Canonical debugger agent.\n---\n\nPrimary debugger agent.\n",
             encoding="utf-8",
         )
 
@@ -1748,7 +1742,9 @@ class TestVerificationServer:
 
         assert "contract.benchmark_reproduction" in suggested
         assert "contract.direct_proxy_consistency" in suggested
-        benchmark = next(entry for entry in result["suggested_checks"] if entry["check_key"] == "contract.benchmark_reproduction")
+        benchmark = next(
+            entry for entry in result["suggested_checks"] if entry["check_key"] == "contract.benchmark_reproduction"
+        )
         assert benchmark["binding_targets"] == ["claim", "deliverable", "acceptance_test", "reference"]
         assert benchmark["required_request_fields"] == [
             "metadata.source_reference_id",
@@ -1767,11 +1763,15 @@ class TestVerificationServer:
         contract = json.loads(fixture.read_text(encoding="utf-8"))
 
         first = suggest_contract_checks(contract)
-        benchmark = next(entry for entry in first["suggested_checks"] if entry["check_key"] == "contract.benchmark_reproduction")
+        benchmark = next(
+            entry for entry in first["suggested_checks"] if entry["check_key"] == "contract.benchmark_reproduction"
+        )
         benchmark["request_template"]["metadata"]["source_reference_id"] = "poisoned"
 
         second = suggest_contract_checks(contract)
-        fresh = next(entry for entry in second["suggested_checks"] if entry["check_key"] == "contract.benchmark_reproduction")
+        fresh = next(
+            entry for entry in second["suggested_checks"] if entry["check_key"] == "contract.benchmark_reproduction"
+        )
 
         assert fresh["request_template"]["metadata"]["source_reference_id"] == "ref-benchmark"
 
@@ -1787,7 +1787,9 @@ class TestVerificationServer:
         assert result["universal_check_count"] == 19
         assert result["universal_checks"][0]["check_id"] == "5.1"
         assert "evidence_kind" in result["universal_checks"][0]
-        contract_check = next(entry for entry in result["universal_checks"] if entry["check_key"] == "contract.limit_recovery")
+        contract_check = next(
+            entry for entry in result["universal_checks"] if entry["check_key"] == "contract.limit_recovery"
+        )
         assert contract_check["required_request_fields"] == ["metadata.regime_label", "metadata.expected_behavior"]
         assert contract_check["request_template"]["metadata"]["regime_label"] == "infrared limit"
 
@@ -1904,7 +1906,6 @@ class TestVerificationServer:
             ),
         )
         assert "Full coverage" in result["recommendation"]
-
 
     # --- _parse_dimensions helper ---
 

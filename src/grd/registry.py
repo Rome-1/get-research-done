@@ -100,7 +100,7 @@ class SkillDef:
 
 def _parse_frontmatter(text: str) -> tuple[dict[str, object], str]:
     """Parse YAML frontmatter from markdown text. Returns (meta, body)."""
-    text = text.lstrip('﻿')
+    text = text.lstrip("﻿")
     frontmatter_candidate = _LEADING_BLANK_LINES_BEFORE_FRONTMATTER_RE.sub("", text, count=1)
     frontmatter_parts = _split_frontmatter_block(frontmatter_candidate)
     if frontmatter_parts is None:
@@ -477,7 +477,9 @@ def _parse_command_file(path: Path, source: str) -> CommandDef:
         allowed_tools_raw = []
 
     try:
-        review_contract = _parse_review_contract(meta.get("review-contract"), str(meta.get("name", path.stem)), requires)
+        review_contract = _parse_review_contract(
+            meta.get("review-contract"), str(meta.get("name", path.stem)), requires
+        )
     except ValueError as exc:
         raise ValueError(f"Invalid review-contract in {path}: {exc}") from exc
 

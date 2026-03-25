@@ -57,7 +57,8 @@ def health(
 @app.command("doctor")
 def doctor() -> None:
     """Check GRD installation and environment health."""
-    from grd.cli._helpers import _raw, console as _console
+    from grd.cli._helpers import _raw
+    from grd.cli._helpers import console as _console
     from grd.core.health import run_doctor
     from grd.specs import SPECS_DIR
 
@@ -127,7 +128,9 @@ def query_search(
     )
     if not _raw and result.total == 0:
         err_console.print("[dim]No matches found. Search scans phase PLAN and SUMMARY frontmatter.[/]")
-        err_console.print("[dim]Hint: Use 'grd phase add' to create phases, then 'grd search --text <term>' to search.[/]")
+        err_console.print(
+            "[dim]Hint: Use 'grd phase add' to create phases, then 'grd search --text <term>' to search.[/]"
+        )
     _output(result)
 
 
@@ -626,7 +629,8 @@ config_app = typer.Typer(help="GRD configuration")
 @config_app.command("list")
 def config_list() -> None:
     """List all configuration settings with current values."""
-    from grd.cli._helpers import _raw, console as _console
+    from grd.cli._helpers import _raw
+    from grd.cli._helpers import console as _console
     from grd.core.config import effective_config_value, load_config, supported_config_keys
 
     try:
@@ -1024,9 +1028,8 @@ def commit(
         grd commit "docs: initialize research project" --files .grd/PROJECT.md .grd/state.json
         grd commit "wip: phase 3 progress"
     """
-    from grd.core.git_ops import cmd_commit
-
     from grd.cli._helpers import _raw, err_console
+    from grd.core.git_ops import cmd_commit
 
     result = cmd_commit(_get_cwd(), message, files=_collect_file_option_args(ctx, files) or None)
     if not _raw and getattr(result, "skipped", False) and getattr(result, "reason", "") == "commit_docs_disabled":
@@ -1083,7 +1086,6 @@ def timestamp(
     fmt: str = typer.Argument("full", help="Format: date, filename, or full"),
 ) -> None:
     """Return current timestamp in the requested format."""
-    from grd.cli._helpers import _raw
     from grd.core.commands import cmd_current_timestamp
 
     result = cmd_current_timestamp(fmt)
@@ -1100,7 +1102,6 @@ def slug(
     text: str = typer.Argument(..., help="Text to convert to a slug"),
 ) -> None:
     """Generate a URL-safe slug from text."""
-    from grd.cli._helpers import _raw
     from grd.core.commands import cmd_generate_slug
 
     result = cmd_generate_slug(text)

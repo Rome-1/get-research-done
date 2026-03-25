@@ -305,7 +305,7 @@ class TestParseCommandFile:
     def test_command_uses_default_peer_review_contract(self, tmp_path: Path) -> None:
         f = tmp_path / "peer-review.md"
         f.write_text(
-            "---\nname: grd:peer-review\ndescription: Peer review\nrequires:\n  files: [\"paper/*.tex\"]\n---\nBody.",
+            '---\nname: grd:peer-review\ndescription: Peer review\nrequires:\n  files: ["paper/*.tex"]\n---\nBody.',
             encoding="utf-8",
         )
         cmd = _parse_command_file(f, source="commands")
@@ -460,9 +460,7 @@ class TestDiscovery:
 class TestSkillDiscovery:
     """Tests for canonical skills derived from primary commands and agents."""
 
-    def test_skills_use_primary_commands_and_agents_only(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_skills_use_primary_commands_and_agents_only(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
         (commands_dir / "help.md").write_text(
@@ -625,6 +623,7 @@ class TestPublicAPI:
     def _clean_cache(self):
         """Ensure registry cache is invalidated before and after each test."""
         from grd import registry
+
         registry.invalidate_cache()
         yield
         registry.invalidate_cache()
@@ -707,7 +706,9 @@ class TestPublicAPI:
 
         assert registry.list_skills() == ["grd-debugger", "grd-plan-phase"]
 
-    def test_list_review_commands_returns_only_review_commands(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_list_review_commands_returns_only_review_commands(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
         (commands_dir / "peer-review.md").write_text(
@@ -974,7 +975,6 @@ class TestSkillCategoryMap:
         """
         import ast
         import inspect
-
 
         source = inspect.getsource(registry)
         tree = ast.parse(source)

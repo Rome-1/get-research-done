@@ -47,8 +47,10 @@ def test_init_context_uses_runtime_detect_directory_fallback(monkeypatch: pytest
         _clear_runtime_env(runtime_env)
         (tmp_path / ".codex").mkdir()
 
-        with patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path), \
-             patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path):
+        with (
+            patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+        ):
             module = importlib.reload(context_module)
             ctx = module.init_new_project(tmp_path)
             assert ctx["platform"] == "codex"
@@ -56,17 +58,17 @@ def test_init_context_uses_runtime_detect_directory_fallback(monkeypatch: pytest
     importlib.reload(context_module)
 
 
-def test_init_context_prefers_explicit_gpd_runtime_override(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_init_context_prefers_explicit_gpd_runtime_override(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     with monkeypatch.context() as runtime_env:
         _clear_runtime_env(runtime_env)
         runtime_env.setenv("GRD_ACTIVE_RUNTIME", "codex")
         (tmp_path / ".claude" / "get-research-done").mkdir(parents=True)
         (tmp_path / ".codex" / "get-research-done").mkdir(parents=True)
 
-        with patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path), \
-             patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path):
+        with (
+            patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+        ):
             module = importlib.reload(context_module)
             ctx = module.init_progress(tmp_path)
             assert ctx["platform"] == "codex"

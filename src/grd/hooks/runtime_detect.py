@@ -482,7 +482,9 @@ def get_todo_dirs(
     """Return todo directories for local and global runtime installs."""
     if prefer_active:
         preferred_runtime = detect_runtime_for_grd_use(cwd=cwd, home=home)
-        return [candidate.path for candidate in get_todo_candidates(cwd=cwd, home=home, preferred_runtime=preferred_runtime)]
+        return [
+            candidate.path for candidate in get_todo_candidates(cwd=cwd, home=home, preferred_runtime=preferred_runtime)
+        ]
     return [d / TODOS_DIR_NAME for d in all_runtime_dirs(include_local=True, cwd=cwd, home=home)]
 
 
@@ -542,7 +544,10 @@ def get_update_cache_files(
     preferred_runtime: str | None = None,
 ) -> list[Path]:
     """Return all candidate update-cache files in priority scan order."""
-    return [candidate.path for candidate in get_update_cache_candidates(cwd=cwd, home=home, preferred_runtime=preferred_runtime)]
+    return [
+        candidate.path
+        for candidate in get_update_cache_candidates(cwd=cwd, home=home, preferred_runtime=preferred_runtime)
+    ]
 
 
 def get_update_cache_candidates(
@@ -654,7 +659,9 @@ def should_consider_todo_candidate(
     return False
 
 
-def get_grd_install_dirs(*, prefer_active: bool = False, cwd: Path | None = None, home: Path | None = None) -> list[Path]:
+def get_grd_install_dirs(
+    *, prefer_active: bool = False, cwd: Path | None = None, home: Path | None = None
+) -> list[Path]:
     """Return GRD installation directories for all known runtimes."""
     if not prefer_active:
         return [d / GRD_INSTALL_DIR_NAME for d in all_runtime_dirs(include_local=True, cwd=cwd, home=home)]

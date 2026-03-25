@@ -48,6 +48,7 @@ def _event_name(event: dict[str, object]) -> str | None:
             return value
     return None
 
+
 # ─── default_state_dict ──────────────────────────────────────────────────────
 
 
@@ -260,9 +261,7 @@ def test_generate_state_markdown_shows_verification_evidence_count():
             "equation": "p^2 = m^2",
             "depends_on": [],
             "verified": True,
-            "verification_records": [
-                {"verifier": "grd-verifier", "method": "limit-check", "confidence": "high"}
-            ],
+            "verification_records": [{"verifier": "grd-verifier", "method": "limit-check", "confidence": "high"}],
         }
     )
     md = generate_state_markdown(state)
@@ -391,9 +390,7 @@ def test_ensure_state_schema_malformed_project_contract_singleton_field_preserve
     assert result["project_contract"] is not None
     assert result["project_contract"]["context_intake"]["must_read_refs"] == []
     assert result["project_contract"]["context_intake"]["known_good_baselines"] == ["baseline-A"]
-    assert result["project_contract"]["context_intake"]["crucial_inputs"] == [
-        "normalize with published convention"
-    ]
+    assert result["project_contract"]["context_intake"]["crucial_inputs"] == ["normalize with published convention"]
 
 
 def test_ensure_state_schema_salvages_scope_list_drift_without_dropping_contract():
@@ -479,7 +476,9 @@ def test_ensure_state_schema_malformed_verification_record_preserves_intermediat
 
     ids = [item["id"] for item in result["intermediate_results"] if isinstance(item, dict)]
     assert ids == ["good-1", "bad-1", "good-2"]
-    bad_result = next(item for item in result["intermediate_results"] if isinstance(item, dict) and item["id"] == "bad-1")
+    bad_result = next(
+        item for item in result["intermediate_results"] if isinstance(item, dict) and item["id"] == "bad-1"
+    )
     assert bad_result["verification_records"] == []
 
 
@@ -550,10 +549,12 @@ def test_state_set_project_contract_accepts_self_healable_contract(tmp_path: Pat
 
 def test_ensure_state_schema_preserves_good_fields_when_one_is_bad():
     """When one top-level key has type errors, other valid keys survive."""
-    result = ensure_state_schema({
-        "position": {"status": 42},  # bad: int for str
-        "blockers": ["still valid"],
-    })
+    result = ensure_state_schema(
+        {
+            "position": {"status": 42},  # bad: int for str
+            "blockers": ["still valid"],
+        }
+    )
     assert result["blockers"] == ["still valid"]
 
 
@@ -922,9 +923,7 @@ def _bootstrap_project_with_state(
     if extra_lines > 0:
         md += "\n" + "\n".join(f"<!-- padding line {i} -->" for i in range(extra_lines))
     (planning / "STATE.md").write_text(md, encoding="utf-8")
-    (planning / "state.json").write_text(
-        json.dumps(state, indent=2) + "\n", encoding="utf-8"
-    )
+    (planning / "state.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
     return tmp_path
 
 
@@ -952,10 +951,7 @@ def test_state_compact_recovers_intent_before_reading(tmp_path):
     pos["progress_percent"] = 50
 
     # Add many old decisions so there is content to compact
-    state["decisions"] = [
-        {"phase": str((i % 3) + 1), "summary": f"Old decision {i}"}
-        for i in range(40)
-    ]
+    state["decisions"] = [{"phase": str((i % 3) + 1), "summary": f"Old decision {i}"} for i in range(40)]
 
     md = generate_state_markdown(state)
     md += "\n" + "\n".join(f"<!-- padding {i} -->" for i in range(100))
@@ -970,9 +966,7 @@ def test_state_compact_recovers_intent_before_reading(tmp_path):
     stale_state = default_state_dict()
     stale_state["position"]["current_phase"] = "01"
     stale_state["position"]["status"] = "Executing"
-    (planning / "state.json").write_text(
-        json.dumps(stale_state, indent=2) + "\n", encoding="utf-8"
-    )
+    (planning / "state.json").write_text(json.dumps(stale_state, indent=2) + "\n", encoding="utf-8")
     (planning / "STATE.md").write_text(md, encoding="utf-8")
 
     # Create temp files that _recover_intent_locked will promote —
@@ -1070,9 +1064,7 @@ def test_advance_plan_marks_phase_complete_on_last_plan(tmp_path):
 
     md = generate_state_markdown(state)
     (planning / "STATE.md").write_text(md, encoding="utf-8")
-    (planning / "state.json").write_text(
-        json.dumps(state, indent=2) + "\n", encoding="utf-8"
-    )
+    (planning / "state.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 
     result = state_advance_plan(tmp_path)
     assert result.advanced is False

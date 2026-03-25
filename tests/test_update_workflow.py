@@ -77,7 +77,7 @@ def test_explicit_target_local_install_keeps_local_update_scope(tmp_path: Path, 
     assert 'INSTALL_SCOPE="--local"' in content
     assert f'GRD_CONFIG_DIR="{target.as_posix()}"' in content
     assert "{GRD_INSTALL_SCOPE_FLAG}" not in content
-    assert "TARGET_DIR_ARG=$(python3 - \"$GRD_CONFIG_DIR\"" in content
+    assert 'TARGET_DIR_ARG=$(python3 - "$GRD_CONFIG_DIR"' in content
 
 
 @pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])

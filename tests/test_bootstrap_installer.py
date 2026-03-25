@@ -294,7 +294,9 @@ def test_bootstrap_uses_managed_virtualenv_and_skips_host_pip(tmp_path: Path) ->
     assert managed_pip_installs[0]["argv"][-1] == PYPI_SPEC
 
     managed_runtime_installs = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", "codex", "--local"]
+        entry
+        for entry in entries
+        if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", "codex", "--local"]
     ]
     assert len(managed_runtime_installs) == 1
 
@@ -306,10 +308,7 @@ def test_bootstrap_uses_managed_virtualenv_and_skips_host_pip(tmp_path: Path) ->
     assert "Next steps" in result.stdout
     assert "1. Open Codex from your system terminal (codex)." in result.stdout
     assert "2. Run $grd-help for the command list." in result.stdout
-    assert (
-        "3. Start with $grd-new-project for a new project or $grd-map-research for existing work."
-        in result.stdout
-    )
+    assert "3. Start with $grd-new-project for a new project or $grd-map-research for existing work." in result.stdout
     assert "Installing GRD for Codex (local)..." not in result.stdout
     assert "Installed GRD for Codex (local)." not in result.stdout
 
@@ -339,12 +338,17 @@ def test_bootstrap_uninstall_routes_to_runtime_uninstall(tmp_path: Path) -> None
     assert managed_pip_installs[0]["argv"][-1] == PYPI_SPEC
 
     managed_runtime_uninstalls = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "codex", "--local"]
+        entry
+        for entry in entries
+        if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "codex", "--local"]
     ]
     assert len(managed_runtime_uninstalls) == 1
 
     assert (home / ".grd" / "venv" / "bin" / "python").exists()
-    assert f"Preparing managed GRD CLI from PyPI (get-research-done=={PYTHON_PACKAGE_VERSION}) into the managed environment..." in result.stdout
+    assert (
+        f"Preparing managed GRD CLI from PyPI (get-research-done=={PYTHON_PACKAGE_VERSION}) into the managed environment..."
+        in result.stdout
+    )
     assert "Uninstalling GRD from Codex (local)..." in result.stdout
     assert "runtime uninstall ok" in result.stdout
 
@@ -361,7 +365,9 @@ def test_bootstrap_uninstall_subcommand_alias_routes_to_runtime_uninstall(tmp_pa
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_runtime_uninstalls = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "--all", "--local"]
+        entry
+        for entry in entries
+        if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "--all", "--local"]
     ]
 
     assert len(managed_runtime_uninstalls) == 1
@@ -384,7 +390,9 @@ def test_bootstrap_install_subcommand_accepts_positional_runtime_alias(tmp_path:
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_runtime_installs = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", "codex", "--local"]
+        entry
+        for entry in entries
+        if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", "codex", "--local"]
     ]
 
     assert len(managed_runtime_installs) == 1
@@ -405,7 +413,9 @@ def test_bootstrap_supports_all_runtime_uninstall_in_one_pass(tmp_path: Path) ->
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_runtime_uninstalls = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "--all", "--global"]
+        entry
+        for entry in entries
+        if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "--all", "--global"]
     ]
 
     assert len(managed_runtime_uninstalls) == 1
@@ -534,7 +544,10 @@ def test_bootstrap_reinstall_force_reinstalls_matching_release(tmp_path: Path) -
     assert len(managed_pip_installs) == 1
     assert "--force-reinstall" in managed_pip_installs[0]["argv"]
     assert managed_pip_installs[0]["argv"][-1] == PYPI_SPEC
-    assert f"Reinstalling GRD from PyPI (get-research-done=={PYTHON_PACKAGE_VERSION}) into the managed environment..." in result.stdout
+    assert (
+        f"Reinstalling GRD from PyPI (get-research-done=={PYTHON_PACKAGE_VERSION}) into the managed environment..."
+        in result.stdout
+    )
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -572,7 +585,9 @@ def test_bootstrap_upgrade_falls_back_to_main_git_checkout(tmp_path: Path) -> No
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_pip_targets = [
-        entry["argv"][-1] for entry in entries if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
+        entry["argv"][-1]
+        for entry in entries
+        if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
     ]
 
     assert managed_pip_targets == [
@@ -608,14 +623,18 @@ def test_bootstrap_upgrade_prefers_preflighted_git_checkout_when_archive_is_inac
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_pip_targets = [
-        entry["argv"][-1] for entry in entries if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
+        entry["argv"][-1]
+        for entry in entries
+        if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
     ]
 
     assert managed_pip_targets == [MAIN_HTTPS_GIT_SPEC]
     assert "Detected that current main branch source archive is unavailable: HTTP 404." in result.stdout
     assert "Using HTTPS git checkout of main for the main-branch upgrade." in result.stdout
     assert "HTTP error 404 while getting branch archive" not in result.stderr
-    assert "current main branch source archive failed. Falling back to HTTPS git checkout of main..." not in result.stdout
+    assert (
+        "current main branch source archive failed. Falling back to HTTPS git checkout of main..." not in result.stdout
+    )
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -634,7 +653,9 @@ def test_bootstrap_upgrade_fails_closed_without_falling_back_to_release_sources(
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_pip_targets = [
-        entry["argv"][-1] for entry in entries if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
+        entry["argv"][-1]
+        for entry in entries
+        if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
     ]
     managed_runtime_installs = [
         entry for entry in entries if entry["managed"] and entry["argv"][:3] == ["-m", "grd.cli", "install"]
@@ -661,7 +682,9 @@ def test_bootstrap_supports_all_runtime_install_in_one_pass(tmp_path: Path) -> N
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_runtime_installs = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", "--all", "--global"]
+        entry
+        for entry in entries
+        if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", "--all", "--global"]
     ]
 
     assert len(managed_runtime_installs) == 1
@@ -686,7 +709,9 @@ def test_bootstrap_falls_back_to_tag_git_when_tag_archive_install_fails(tmp_path
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_pip_targets = [
-        entry["argv"][-1] for entry in entries if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
+        entry["argv"][-1]
+        for entry in entries
+        if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
     ]
 
     assert managed_pip_targets == [
@@ -727,13 +752,20 @@ def test_bootstrap_prefers_preflighted_tag_git_candidate_when_tag_archive_is_ina
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_pip_targets = [
-        entry["argv"][-1] for entry in entries if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
+        entry["argv"][-1]
+        for entry in entries
+        if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
     ]
 
     assert managed_pip_targets == [PYPI_SPEC, TAG_HTTPS_GIT_SPEC]
     assert "PyPI install failed. Falling back to GitHub source..." in result.stdout
-    assert f"Detected that GitHub source archive for v{PYTHON_PACKAGE_VERSION} is unavailable: HTTP 404." in result.stdout
-    assert f"Installing GRD from HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} into the managed environment..." in result.stdout
+    assert (
+        f"Detected that GitHub source archive for v{PYTHON_PACKAGE_VERSION} is unavailable: HTTP 404." in result.stdout
+    )
+    assert (
+        f"Installing GRD from HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} into the managed environment..."
+        in result.stdout
+    )
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -770,8 +802,13 @@ def test_bootstrap_release_install_fails_closed_without_falling_back_to_main_sou
     ]
 
     assert len(managed_pip_installs) == 1  # PyPI attempted but failed
-    assert f"Detected that GitHub source archive for v{PYTHON_PACKAGE_VERSION} is unavailable: HTTP 404." in result.stdout
-    assert f"Detected that HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} is unavailable: tag v{PYTHON_PACKAGE_VERSION} is not published." in result.stdout
+    assert (
+        f"Detected that GitHub source archive for v{PYTHON_PACKAGE_VERSION} is unavailable: HTTP 404." in result.stdout
+    )
+    assert (
+        f"Detected that HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} is unavailable: tag v{PYTHON_PACKAGE_VERSION} is not published."
+        in result.stdout
+    )
     assert "No accessible tagged GitHub release source candidate was detected." in result.stdout
     assert "main branch" not in result.stdout
     assert f"Failed to install GRD v{PYTHON_PACKAGE_VERSION} from GitHub sources." in result.stderr
@@ -811,8 +848,12 @@ def test_bootstrap_fails_closed_when_probes_mark_all_public_sources_unavailable(
     ]
 
     assert len(managed_pip_installs) == 1  # PyPI attempted but failed
-    assert f"Detected that GitHub source archive for v{PYTHON_PACKAGE_VERSION} is unavailable: HTTP 404." in result.stdout
-    assert f"Detected that HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} is unavailable: git exit 2." in result.stdout
+    assert (
+        f"Detected that GitHub source archive for v{PYTHON_PACKAGE_VERSION} is unavailable: HTTP 404." in result.stdout
+    )
+    assert (
+        f"Detected that HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} is unavailable: git exit 2." in result.stdout
+    )
     assert "No accessible tagged GitHub release source candidate was detected." in result.stdout
     assert "main branch" not in result.stdout
     assert f"Failed to install GRD v{PYTHON_PACKAGE_VERSION}" in result.stderr
@@ -834,7 +875,9 @@ def test_bootstrap_fails_closed_when_all_release_sources_fail(tmp_path: Path) ->
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_pip_targets = [
-        entry["argv"][-1] for entry in entries if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
+        entry["argv"][-1]
+        for entry in entries
+        if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
     ]
 
     assert managed_pip_targets == [

@@ -44,9 +44,11 @@ def _output(data: object) -> None:
             console.print_json(json.dumps({"result": None}))
         elif isinstance(data, (list, tuple)):
             items = [
-                item.model_dump(mode="json", by_alias=True) if hasattr(item, "model_dump") else
-                dataclasses.asdict(item) if dataclasses.is_dataclass(item) and not isinstance(item, type) else
-                item
+                item.model_dump(mode="json", by_alias=True)
+                if hasattr(item, "model_dump")
+                else dataclasses.asdict(item)
+                if dataclasses.is_dataclass(item) and not isinstance(item, type)
+                else item
                 for item in data
             ]
             console.print_json(json.dumps(items, default=str))
@@ -192,7 +194,9 @@ def _maybe_reexec_from_checkout(argv: list[str] | None = None) -> None:
     checkout_src = str((root / "src").resolve(strict=False))
     existing_pythonpath = [entry for entry in env.get("PYTHONPATH", "").split(os.pathsep) if entry]
     if checkout_src not in existing_pythonpath:
-        env["PYTHONPATH"] = os.pathsep.join([checkout_src, *existing_pythonpath]) if existing_pythonpath else checkout_src
+        env["PYTHONPATH"] = (
+            os.pathsep.join([checkout_src, *existing_pythonpath]) if existing_pythonpath else checkout_src
+        )
     env[ENV_GRD_DISABLE_CHECKOUT_REEXEC] = "1"
     os.execve(sys.executable, [sys.executable, "-m", "grd.cli", *effective_argv], env)
 

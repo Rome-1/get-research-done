@@ -153,8 +153,8 @@ def test_prompt_sources_use_summary_extract_field_flag_not_fields() -> None:
 def test_new_project_prompt_uses_stdin_for_contract_validation_and_persistence() -> None:
     workflow = (REPO_ROOT / "src/grd/specs/workflows/new-project.md").read_text(encoding="utf-8")
 
-    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd --raw validate project-contract -' in workflow
-    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd state set-project-contract -' in workflow
+    assert "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd --raw validate project-contract -" in workflow
+    assert "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd state set-project-contract -" in workflow
     assert "/tmp/grd-project-contract.json" not in workflow
     assert "temporary JSON file if needed" not in workflow
 
@@ -162,8 +162,8 @@ def test_new_project_prompt_uses_stdin_for_contract_validation_and_persistence()
 def test_state_json_schema_stays_aligned_with_stdin_contract_persistence_flow() -> None:
     schema = (REPO_ROOT / "src/grd/specs/templates/state-json-schema.md").read_text(encoding="utf-8")
 
-    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd --raw validate project-contract -' in schema
-    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd state set-project-contract -' in schema
+    assert "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd --raw validate project-contract -" in schema
+    assert "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd state set-project-contract -" in schema
     assert "Preferred write path: `grd state set-project-contract <path-to-contract.json>`." not in schema
 
 

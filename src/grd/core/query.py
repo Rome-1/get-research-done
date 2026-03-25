@@ -132,7 +132,6 @@ class AssumptionsResult(BaseModel):
 # ─── Internal Helpers ────────────────────────────────────────────────────────
 
 
-
 def _is_valid_phase_str(s: str) -> bool:
     """Check whether a string is a valid dotted-numeric phase number."""
     return bool(re.match(r"^\d+(\.\d+)*$", s))

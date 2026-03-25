@@ -86,7 +86,9 @@ def test_build_artifact_manifest_captures_tex_and_optional_bib(tmp_path) -> None
     from grd.mcp.paper.models import Author, PaperConfig, Section
 
     tex_path = tmp_path / "paper.tex"
-    tex_path.write_text("\\documentclass{article}\\begin{document}\\bibliography{refs}\\end{document}", encoding="utf-8")
+    tex_path.write_text(
+        "\\documentclass{article}\\begin{document}\\bibliography{refs}\\end{document}", encoding="utf-8"
+    )
     bib_path = tmp_path / "refs.bib"
     bib_path.write_text("@article{test2024, author={Test}, title={Title}, year={2024}}", encoding="utf-8")
 

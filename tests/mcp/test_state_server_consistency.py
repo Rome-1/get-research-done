@@ -1,4 +1,5 @@
 """Consistency test: all state_server MCP tools must have error handling."""
+
 import ast
 from pathlib import Path
 
@@ -42,14 +43,7 @@ REQUIRED_EXCEPTIONS = {"GRDError", "OSError", "ValueError"}
 
 def test_all_state_server_tools_have_error_handling():
     """Every @mcp.tool() in state_server.py must catch GRDError, OSError, ValueError."""
-    source_path = (
-        Path(__file__).resolve().parents[2]
-        / "src"
-        / "grd"
-        / "mcp"
-        / "servers"
-        / "state_server.py"
-    )
+    source_path = Path(__file__).resolve().parents[2] / "src" / "grd" / "mcp" / "servers" / "state_server.py"
     source = source_path.read_text()
     tree = ast.parse(source, filename=str(source_path))
 
@@ -89,26 +83,14 @@ def test_all_state_server_tools_have_error_handling():
     for name in missing_try:
         errors.append(f"  {name}(): missing try/except entirely")
     for name, missing in sorted(missing_exceptions.items()):
-        errors.append(
-            f"  {name}(): except handler does not catch {', '.join(sorted(missing))}"
-        )
+        errors.append(f"  {name}(): except handler does not catch {', '.join(sorted(missing))}")
 
-    assert not errors, (
-        "MCP tool functions in state_server.py lack required error handling:\n"
-        + "\n".join(errors)
-    )
+    assert not errors, "MCP tool functions in state_server.py lack required error handling:\n" + "\n".join(errors)
 
 
 def test_state_server_has_expected_tool_count():
     """Guard against accidentally removing tools — expect at least 7."""
-    source_path = (
-        Path(__file__).resolve().parents[2]
-        / "src"
-        / "grd"
-        / "mcp"
-        / "servers"
-        / "state_server.py"
-    )
+    source_path = Path(__file__).resolve().parents[2] / "src" / "grd" / "mcp" / "servers" / "state_server.py"
     source = source_path.read_text()
     tree = ast.parse(source, filename=str(source_path))
 
@@ -121,6 +103,5 @@ def test_state_server_has_expected_tool_count():
                     break
 
     assert tool_count >= 7, (
-        f"Expected at least 7 @mcp.tool() functions, found {tool_count}. "
-        "Was a tool accidentally removed?"
+        f"Expected at least 7 @mcp.tool() functions, found {tool_count}. Was a tool accidentally removed?"
     )

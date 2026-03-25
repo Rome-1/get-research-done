@@ -1195,7 +1195,8 @@ def save_local_patches(
             manifest_version = str(manifest.get("version", "unknown"))
             raw_files = manifest.get("files") or {}
             if isinstance(raw_files, dict) and all(
-                isinstance(rel_path, str) and isinstance(original_hash, str) for rel_path, original_hash in raw_files.items()
+                isinstance(rel_path, str) and isinstance(original_hash, str)
+                for rel_path, original_hash in raw_files.items()
             ):
                 tracked_files = raw_files
             else:
@@ -1310,12 +1311,13 @@ def validate_package_integrity(grd_root: Path) -> None:
     for required in ("commands", "agents", "hooks", "specs"):
         if not (grd_root / required).is_dir():
             raise FileNotFoundError(
-                f"Package integrity check failed: missing {required}/. "
-                "Try reinstalling: npx -y get-research-done"
+                f"Package integrity check failed: missing {required}/. Try reinstalling: npx -y get-research-done"
             )
 
 
-def compute_path_prefix(target_dir: Path, config_dir_name: str, *, is_global: bool, explicit_target: bool = False) -> str:
+def compute_path_prefix(
+    target_dir: Path, config_dir_name: str, *, is_global: bool, explicit_target: bool = False
+) -> str:
     """Compute the path prefix for placeholder replacement.
 
     Global installs use absolute path; local installs use ``./.<config_dir>/``.
@@ -1611,11 +1613,7 @@ def finish_install(
         status_line = settings.get("statusLine")
         existing_cmd = status_line.get("command") if isinstance(status_line, dict) else None
 
-        if (
-            isinstance(existing_cmd, str)
-            and "statusline.py" not in existing_cmd
-            and not force_statusline
-        ):
+        if isinstance(existing_cmd, str) and "statusline.py" not in existing_cmd and not force_statusline:
             _install_logger.warning("Skipping statusline (already configured by another tool)")
         else:
             settings["statusLine"] = {"type": "command", "command": statusline_command}

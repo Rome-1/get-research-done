@@ -1,4 +1,5 @@
 """Regression test: ProgressJsonResult should not have misleading extra fields."""
+
 from __future__ import annotations
 
 from grd.core.phases import ProgressJsonResult

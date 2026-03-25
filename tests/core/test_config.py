@@ -238,9 +238,7 @@ class TestLoadConfig:
 
     def test_invalid_model_overrides_tier_raises(self, tmp_path: Path):
         (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(
-            json.dumps({"model_overrides": {"codex": {"tier-x": "foo"}}})
-        )
+        (tmp_path / ".grd" / "config.json").write_text(json.dumps({"model_overrides": {"codex": {"tier-x": "foo"}}}))
         with pytest.raises(ConfigError, match="model_overrides\\['codex'\\] contains unknown tier"):
             load_config(tmp_path)
 
@@ -250,9 +248,7 @@ class TestLoadConfig:
         monkeypatch: pytest.MonkeyPatch,
     ):
         (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(
-            json.dumps({"model_overrides": {"codex": {"tier-1": "gpt-5"}}})
-        )
+        (tmp_path / ".grd" / "config.json").write_text(json.dumps({"model_overrides": {"codex": {"tier-1": "gpt-5"}}}))
 
         _valid_runtime_names.cache_clear()
 
@@ -265,6 +261,7 @@ class TestLoadConfig:
             load_config(tmp_path)
 
         _valid_runtime_names.cache_clear()
+
 
 # ─── resolve_agent_tier ─────────────────────────────────────────────────────────
 
@@ -337,8 +334,6 @@ class TestResolveModel:
 class TestResolveTier:
     def test_project_resolve_tier_uses_profile(self, tmp_path: Path):
         (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(
-            json.dumps({"model_profile": "paper-writing"})
-        )
+        (tmp_path / ".grd" / "config.json").write_text(json.dumps({"model_profile": "paper-writing"}))
         tier = resolve_tier(tmp_path, "grd-project-researcher")
         assert tier == ModelTier.TIER_3

@@ -112,9 +112,7 @@ def test_project_layout_strip_summary_suffix(filename: str, expected: str, tmp_p
         ("verification_file", "01-VERIFICATION.md"),
     ],
 )
-def test_project_layout_phase_artifact_paths(
-    method_name: str, expected_name: str, tmp_path: Path
-) -> None:
+def test_project_layout_phase_artifact_paths(method_name: str, expected_name: str, tmp_path: Path) -> None:
     layout = ProjectLayout(tmp_path)
     path = getattr(layout, method_name)("01-setup", "01")
 

@@ -463,7 +463,6 @@ def _strip_suffix(name: str, suffix: str) -> str:
     return name
 
 
-
 def _sorted_phases(dirs: list[str]) -> list[str]:
     """Sort phase directory names by numeric segments."""
     return sorted(dirs, key=_phase_sort_key)
@@ -1047,9 +1046,7 @@ def roadmap_analyze(cwd: Path) -> RoadmapAnalysis:
             contract_advances = _coverage_items(section, "Advances")
             contract_anchor_coverage = _coverage_items(section, "Anchor coverage")
             contract_forbidden_proxies = _coverage_items(section, "Forbidden proxies")
-            has_contract_coverage = bool(
-                contract_advances or contract_anchor_coverage or contract_forbidden_proxies
-            )
+            has_contract_coverage = bool(contract_advances or contract_anchor_coverage or contract_forbidden_proxies)
 
             # Check disk status
             normalized = phase_normalize(phase_num)
@@ -1478,7 +1475,9 @@ def phase_remove(cwd: Path, target_phase: str, *, force: bool = False) -> PhaseR
             if target_dir and not force:
                 target_path = phases_dir / target_dir
                 summaries = [
-                    f.name for f in target_path.iterdir() if f.name.endswith(SUMMARY_SUFFIX) or f.name == STANDALONE_SUMMARY
+                    f.name
+                    for f in target_path.iterdir()
+                    if f.name.endswith(SUMMARY_SUFFIX) or f.name == STANDALONE_SUMMARY
                 ]
                 if summaries:
                     raise PhaseValidationError(
@@ -1879,7 +1878,9 @@ def phase_complete(cwd: Path, phase_num: str) -> PhaseCompleteResult:
 
                     state_content = _replace_state_field(state_content, "Current Phase", next_phase_num or phase_num)
 
-                    phase_name_display = next_phase_name.replace('-', ' ') if next_phase_name else (next_phase_num or "\u2014")
+                    phase_name_display = (
+                        next_phase_name.replace("-", " ") if next_phase_name else (next_phase_num or "\u2014")
+                    )
                     state_content = _replace_state_field(state_content, "Current Phase Name", phase_name_display)
                     state_content = _replace_state_field(
                         state_content,

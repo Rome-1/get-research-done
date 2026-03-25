@@ -439,13 +439,7 @@ class TestNestedDelimiters:
         assert "This is not frontmatter." in body
 
     def test_code_block_with_frontmatter_like_content(self):
-        body_text = (
-            "```markdown\n"
-            "---\n"
-            "title: Fake\n"
-            "---\n"
-            "```\n"
-        )
+        body_text = "```markdown\n---\ntitle: Fake\n---\n```\n"
         content = f"---\ntitle: Real\n---\n\n{body_text}"
         meta, body = extract_frontmatter(content)
         assert meta == {"title": "Real"}
@@ -453,13 +447,7 @@ class TestNestedDelimiters:
         assert "```" in body
 
     def test_yaml_code_block_in_body(self):
-        body_text = (
-            "```yaml\n"
-            "---\n"
-            "key: value\n"
-            "---\n"
-            "```\n"
-        )
+        body_text = "```yaml\n---\nkey: value\n---\n```\n"
         content = f"---\ntitle: Actual\n---\n\n{body_text}"
         meta, body = extract_frontmatter(content)
         assert meta["title"] == "Actual"
@@ -583,6 +571,7 @@ class TestMiscEdgeCases:
         meta, body = extract_frontmatter(content)
         # PyYAML safe_load parses YYYY-MM-DD as datetime.date
         from datetime import date
+
         assert meta["completed"] == date(2025, 1, 15)
 
     def test_quoted_date_stays_string(self):

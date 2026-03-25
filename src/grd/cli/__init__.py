@@ -44,8 +44,8 @@ from grd.cli.commands import (  # noqa: E402
     trace_app,
     uncertainty_app,
 )
-from grd.cli.domain import domain_app  # noqa: E402
 from grd.cli.convention import convention_app  # noqa: E402
+from grd.cli.domain import domain_app  # noqa: E402
 from grd.cli.frontmatter import frontmatter_app  # noqa: E402
 from grd.cli.pattern import pattern_app  # noqa: E402
 from grd.cli.phase import phase_app  # noqa: E402
@@ -93,7 +93,6 @@ import grd.cli.install  # noqa: F401, E402
 import grd.cli.paper  # noqa: F401, E402
 from grd.cli.install import _install_single_runtime  # noqa: F401, E402 — re-exported for tests
 
-
 # ─── Top-level aliases ─────────────────────────────────────────────────────
 
 
@@ -107,9 +106,8 @@ def search(
     phase_range: str | None = typer.Option(None, "--phase-range", help="Phase range filter (e.g. 10-20)"),
 ) -> None:
     """Search across phases (alias for 'query search')."""
-    from grd.core.query import query as query_search
-
     from grd.cli._helpers import _output  # noqa: F811
+    from grd.core.query import query as query_search
 
     _output(
         query_search(

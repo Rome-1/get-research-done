@@ -44,20 +44,20 @@ class TestDiscovery:
         for name in EXPECTED_BUNDLED_DOMAINS:
             pack_dir = bundled / name
             assert pack_dir.is_dir(), f"Bundled domain dir missing: {pack_dir}"
-            assert (pack_dir / "domain.yaml").is_file(), (
-                f"domain.yaml missing in {pack_dir}"
-            )
+            assert (pack_dir / "domain.yaml").is_file(), f"domain.yaml missing in {pack_dir}"
 
     def test_discovery_order_project_local_wins(self, tmp_path: Path) -> None:
         """A project-local .grd/domain/ pack overrides bundled packs."""
         domain_dir = tmp_path / ".grd" / "domain"
         domain_dir.mkdir(parents=True)
-        (domain_dir / "domain.yaml").write_text(dedent("""\
+        (domain_dir / "domain.yaml").write_text(
+            dedent("""\
             name: physics
             display_name: Project Physics Override
             description: Local override of the physics domain.
             version: 99
-        """))
+        """)
+        )
         path = resolve_domain_pack_path("physics", project_root=tmp_path)
         assert path == domain_dir
 
@@ -66,23 +66,21 @@ class TestDiscovery:
         assert ctx is not None
         assert ctx.display_name == "Project Physics Override"
 
-    def test_discovery_order_user_dir_wins_over_bundled(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_discovery_order_user_dir_wins_over_bundled(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """A user-level domain pack (~/.grd/domains/<name>) wins over bundled."""
         user_domains = tmp_path / "user_domains"
         physics_dir = user_domains / "physics"
         physics_dir.mkdir(parents=True)
-        (physics_dir / "domain.yaml").write_text(dedent("""\
+        (physics_dir / "domain.yaml").write_text(
+            dedent("""\
             name: physics
             display_name: User Physics Override
             description: User-level override.
             version: 42
-        """))
-
-        monkeypatch.setattr(
-            "grd.domains.loader._USER_DOMAINS_DIR", user_domains
+        """)
         )
+
+        monkeypatch.setattr("grd.domains.loader._USER_DOMAINS_DIR", user_domains)
 
         path = resolve_domain_pack_path("physics")
         assert path == physics_dir
@@ -119,9 +117,7 @@ class TestLoading:
         ]
         for attr_name in lazy_attrs:
             descriptor = getattr(DomainContext, attr_name)
-            assert isinstance(descriptor, cached_property), (
-                f"DomainContext.{attr_name} should be a cached_property"
-            )
+            assert isinstance(descriptor, cached_property), f"DomainContext.{attr_name} should be a cached_property"
 
     def test_domain_context_content_dirs_resolve(self) -> None:
         """Content dirs on physics domain resolve to Path objects.
@@ -137,9 +133,7 @@ class TestLoading:
             resolved = ctx.content_dir(ctype)
             assert resolved is not None, f"content_dir('{ctype}') returned None"
             if ctype in must_exist:
-                assert resolved.is_dir(), (
-                    f"Core content dir '{ctype}' not found: {resolved}"
-                )
+                assert resolved.is_dir(), f"Core content dir '{ctype}' not found: {resolved}"
 
 
 # ─── Convention field tests ──────────────────────────────────────────────────
@@ -161,8 +155,7 @@ class TestConventionFields:
         assert ctx is not None
         names = [f.name for f in ctx.convention_fields]
         assert len(names) == len(set(names)), (
-            f"Duplicate convention names in '{domain_name}': "
-            f"{[n for n in names if names.count(n) > 1]}"
+            f"Duplicate convention names in '{domain_name}': {[n for n in names if names.count(n) > 1]}"
         )
 
     @pytest.mark.parametrize("domain_name", EXPECTED_BUNDLED_DOMAINS)
@@ -188,8 +181,7 @@ class TestConventionFields:
         canonical_names = set(ctx.known_convention_names)
         for field_name in ctx.value_aliases:
             assert field_name in canonical_names, (
-                f"Value alias key '{field_name}' in domain '{domain_name}' "
-                f"is not a canonical convention name"
+                f"Value alias key '{field_name}' in domain '{domain_name}' is not a canonical convention name"
             )
 
 
@@ -211,9 +203,8 @@ class TestContentHealth:
         errors = check_content_health(ctx)
         core_types = {"subfields", "protocols", "errors", "verification"}
         core_errors = [e for e in errors if e.content_type in core_types]
-        assert core_errors == [], (
-            f"Core content health errors in '{domain_name}': "
-            + "; ".join(e.message for e in core_errors)
+        assert core_errors == [], f"Core content health errors in '{domain_name}': " + "; ".join(
+            e.message for e in core_errors
         )
 
     def test_check_content_health_detects_missing_dir(self, tmp_path: Path) -> None:
@@ -258,9 +249,7 @@ class TestEdgeCases:
         with pytest.raises(ValueError, match="must be a YAML mapping"):
             _parse_domain_yaml(domain_dir)
 
-    def test_convention_fields_yaml_missing_gracefully_returns_empty(
-        self, tmp_path: Path
-    ) -> None:
+    def test_convention_fields_yaml_missing_gracefully_returns_empty(self, tmp_path: Path) -> None:
         """If conventions_file doesn't exist, convention_fields should be empty."""
         domain_dir = tmp_path / "no-conventions"
         domain_dir.mkdir()
@@ -290,9 +279,7 @@ class TestEdgeCases:
         # Template should have a conventions file reference.
         assert "convention-fields" in pack.conventions_file
 
-    def test_malformed_convention_fields_yaml_returns_empty(
-        self, tmp_path: Path
-    ) -> None:
+    def test_malformed_convention_fields_yaml_returns_empty(self, tmp_path: Path) -> None:
         """If the conventions YAML is malformed, convention_fields returns []."""
         domain_dir = tmp_path / "bad-conv"
         domain_dir.mkdir()
@@ -309,9 +296,7 @@ class TestEdgeCases:
         ctx = DomainContext(pack)
         assert ctx.convention_fields == []
 
-    def test_convention_fields_yaml_with_non_dict_returns_empty(
-        self, tmp_path: Path
-    ) -> None:
+    def test_convention_fields_yaml_with_non_dict_returns_empty(self, tmp_path: Path) -> None:
         """If conventions YAML parses to a non-dict, convention_fields returns []."""
         domain_dir = tmp_path / "list-conv"
         domain_dir.mkdir()

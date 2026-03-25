@@ -55,19 +55,25 @@ def test_translate_for_runtime_uses_adapter_owned_omission_policy() -> None:
     codex = get_adapter("codex")
     gemini = get_adapter("gemini")
 
-    assert translate_for_runtime(
-        "task",
-        codex.tool_name_map,
-        alias_map=_alias_map(),
-        auto_discovered_tools=codex.auto_discovered_tools,
-    ) is None
-    assert translate_for_runtime(
-        "mcp__physics",
-        gemini.tool_name_map,
-        alias_map=_alias_map(),
-        auto_discovered_tools=gemini.auto_discovered_tools,
-        drop_mcp_frontmatter_tools=gemini.drop_mcp_frontmatter_tools,
-    ) is None
+    assert (
+        translate_for_runtime(
+            "task",
+            codex.tool_name_map,
+            alias_map=_alias_map(),
+            auto_discovered_tools=codex.auto_discovered_tools,
+        )
+        is None
+    )
+    assert (
+        translate_for_runtime(
+            "mcp__physics",
+            gemini.tool_name_map,
+            alias_map=_alias_map(),
+            auto_discovered_tools=gemini.auto_discovered_tools,
+            drop_mcp_frontmatter_tools=gemini.drop_mcp_frontmatter_tools,
+        )
+        is None
+    )
 
 
 def test_reference_translation_map_comes_from_adapter_policy() -> None:

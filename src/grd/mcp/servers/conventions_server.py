@@ -112,7 +112,6 @@ def _load_lock_from_project(project_dir: str) -> ConventionLock:
     except json.JSONDecodeError as e:
         raise ConventionError(f"Malformed state.json: {e}") from e
 
-
     if not isinstance(raw, dict):
         return ConventionLock()
     lock_data = raw.get("convention_lock", {})
@@ -139,7 +138,6 @@ def _update_lock_in_project(
             raw = {}
         except json.JSONDecodeError as e:
             raise ConventionError(f"Malformed state.json: {e}") from e
-
 
         if not isinstance(raw, dict):
             raw = {}
@@ -214,13 +212,13 @@ def convention_set(
 
             # Validate custom key eagerly (before acquiring the file lock).
             if key.startswith("custom:"):
-                custom_key = key[len("custom:"):]
+                custom_key = key[len("custom:") :]
                 if not custom_key:
                     raise ConventionError("Custom convention key cannot be empty")
 
             def _mutate(lock: ConventionLock) -> ConventionSetResult:
                 if key.startswith("custom:"):
-                    return _convention_set(lock, key[len("custom:"):], value, force=force, domain_ctx=ctx)
+                    return _convention_set(lock, key[len("custom:") :], value, force=force, domain_ctx=ctx)
                 return _convention_set(lock, key, value, force=force, domain_ctx=ctx)
 
             # Atomic read-modify-write under file lock to prevent TOCTOU races.
@@ -407,9 +405,7 @@ def subfield_defaults(domain: str) -> dict:
         "defaults": defaults,
         "field_count": len(defaults),
         "unset_fields": [f for f in known if f not in defaults],
-        "message": (
-            f"Recommended conventions for {domain}. Sets {len(defaults)} of {len(known)} standard fields."
-        ),
+        "message": (f"Recommended conventions for {domain}. Sets {len(defaults)} of {len(known)} standard fields."),
     }
 
 

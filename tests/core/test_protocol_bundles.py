@@ -213,7 +213,9 @@ def _bundle_contract(
             ],
             "uncertainty_markers": {
                 "weakest_anchors": ["Benchmark comparability under the stated conventions"],
-                "disconfirming_observations": ["Benchmark agreement fails once the decisive comparison is made explicit"],
+                "disconfirming_observations": [
+                    "Benchmark agreement fails once the decisive comparison is made explicit"
+                ],
             },
         }
     )

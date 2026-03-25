@@ -114,6 +114,7 @@ def _read_compare_experiment_command(tmp_path: Path, target: Path, runtime: str)
 
     raise AssertionError(f"Unsupported runtime {runtime}")
 
+
 # ---------------------------------------------------------------------------
 # Claude Code: install → read back → compare
 # ---------------------------------------------------------------------------
@@ -243,7 +244,7 @@ class TestGeminiRoundtrip:
         (grd_root / "commands" / "progress.md").write_text(
             "---\n"
             "name: grd:progress\n"
-            'description: Check research progress\n'
+            "description: Check research progress\n"
             'argument-hint: "[--brief] [--full] [--reconcile]"\n'
             "context_mode: project-required\n"
             "requires:\n"
@@ -265,7 +266,7 @@ class TestGeminiRoundtrip:
         parsed = tomllib.loads(content)
 
         assert "# Source frontmatter preserved for parity:" in content
-        assert '# name: grd:progress' in content
+        assert "# name: grd:progress" in content
         assert '# argument-hint: "[--brief] [--full] [--reconcile]"' in content
         assert "# requires:" in content
         assert '#   files: [".grd/ROADMAP.md"]' in content

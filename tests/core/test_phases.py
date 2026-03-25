@@ -353,7 +353,9 @@ def test_phase_add_no_roadmap(tmp_path: Path) -> None:
         phase_add(tmp_path, "Something")
 
 
-def test_phase_add_leaves_state_files_unchanged_when_atomic_state_save_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_phase_add_leaves_state_files_unchanged_when_atomic_state_save_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _setup_project(tmp_path)
     _create_roadmap(
         tmp_path,

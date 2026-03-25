@@ -93,7 +93,9 @@ def test_paper_build_explicit_nonstandard_output_dir_warns_but_builds(tmp_path: 
     output_dir = tmp_path / "release-paper"
     output_dir.mkdir()
 
-    with patch("grd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=_build_result(output_dir))) as mock_build:
+    with patch(
+        "grd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=_build_result(output_dir))
+    ) as mock_build:
         result = runner.invoke(
             app,
             ["--raw", "--cwd", str(tmp_path), "paper-build", "--output-dir", str(output_dir)],
@@ -116,7 +118,9 @@ def test_paper_build_manuscript_family_output_has_no_storage_warnings(
     output_dir = tmp_path / dirname
     output_dir.mkdir()
 
-    with patch("grd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=_build_result(output_dir))) as mock_build:
+    with patch(
+        "grd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=_build_result(output_dir))
+    ) as mock_build:
         result = runner.invoke(
             app,
             ["--raw", "--cwd", str(tmp_path), "paper-build", "--output-dir", str(output_dir)],

@@ -80,7 +80,9 @@ def iter_adapters() -> list[RuntimeAdapter]:
 def list_runtimes() -> list[str]:
     """Return all supported runtime names."""
     _ensure_loaded()
-    return [descriptor.runtime_name for descriptor in iter_runtime_descriptors() if descriptor.runtime_name in _REGISTRY]
+    return [
+        descriptor.runtime_name for descriptor in iter_runtime_descriptors() if descriptor.runtime_name in _REGISTRY
+    ]
 
 
 __all__ = [

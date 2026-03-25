@@ -21,10 +21,7 @@ SCOPE_END = "<!-- repo-graph-scope:end -->"
 SAME_STEM_COMMAND_WORKFLOW_START = "<!-- repo-graph-same-stem-command-workflow:start -->"
 SAME_STEM_COMMAND_WORKFLOW_END = "<!-- repo-graph-same-stem-command-workflow:end -->"
 
-_LOCAL_RUNTIME_MIRROR_EXCLUDES = tuple(
-    descriptor.config_dir_name
-    for descriptor in iter_runtime_descriptors()
-)
+_LOCAL_RUNTIME_MIRROR_EXCLUDES = tuple(descriptor.config_dir_name for descriptor in iter_runtime_descriptors())
 
 EXCLUDED_GRAPH_DIRS = (
     ".git",
@@ -57,8 +54,7 @@ GRAPH_SCOPE_LABELS = (
 )
 
 _NORMALIZED_SCOPE_LABELS = {
-    label[1:-1] if label.startswith("`") and label.endswith("`") else label: label
-    for label in GRAPH_SCOPE_LABELS
+    label[1:-1] if label.startswith("`") and label.endswith("`") else label: label for label in GRAPH_SCOPE_LABELS
 }
 
 
@@ -91,11 +87,7 @@ def _tracked_repo_files(repo_root: Path) -> list[Path] | None:
 def _repo_files_in_scope(repo_root: Path) -> list[Path]:
     tracked_files = _tracked_repo_files(repo_root)
     if tracked_files is not None:
-        return [
-            path
-            for path in tracked_files
-            if not _is_excluded_path(path) and (repo_root / path).is_file()
-        ]
+        return [path for path in tracked_files if not _is_excluded_path(path) and (repo_root / path).is_file()]
 
     return [
         path.relative_to(repo_root)
@@ -169,24 +161,16 @@ def expected_scope_counts(repo_root: Path = REPO_ROOT) -> dict[str, int]:
             1 for path in repo_files if _has_parent(path, "src", "grd", "agents") and path.suffix == ".md"
         ),
         "`src/grd/specs/workflows/*.md`": sum(
-            1
-            for path in repo_files
-            if _has_parent(path, "src", "grd", "specs", "workflows") and path.suffix == ".md"
+            1 for path in repo_files if _has_parent(path, "src", "grd", "specs", "workflows") and path.suffix == ".md"
         ),
         "`src/grd/specs/templates/**/*.md`": sum(
-            1
-            for path in repo_files
-            if _is_under(path, "src", "grd", "specs", "templates") and path.suffix == ".md"
+            1 for path in repo_files if _is_under(path, "src", "grd", "specs", "templates") and path.suffix == ".md"
         ),
         "`src/grd/specs/references/**/*.md`": sum(
-            1
-            for path in repo_files
-            if _is_under(path, "src", "grd", "specs", "references") and path.suffix == ".md"
+            1 for path in repo_files if _is_under(path, "src", "grd", "specs", "references") and path.suffix == ".md"
         ),
         "`src/grd/domains/**/*.md`": sum(
-            1
-            for path in repo_files
-            if _is_under(path, "src", "grd", "domains") and path.suffix == ".md"
+            1 for path in repo_files if _is_under(path, "src", "grd", "domains") and path.suffix == ".md"
         ),
         "`src/grd/adapters/*.py`": sum(
             1 for path in repo_files if _has_parent(path, "src", "grd", "adapters") and path.suffix == ".py"
@@ -195,13 +179,9 @@ def expected_scope_counts(repo_root: Path = REPO_ROOT) -> dict[str, int]:
             1 for path in repo_files if _has_parent(path, "src", "grd", "hooks") and path.suffix == ".py"
         ),
         "`src/grd/mcp/servers/*.py`": sum(
-            1
-            for path in repo_files
-            if _has_parent(path, "src", "grd", "mcp", "servers") and path.suffix == ".py"
+            1 for path in repo_files if _has_parent(path, "src", "grd", "mcp", "servers") and path.suffix == ".py"
         ),
-        "`tests/**` files": sum(
-            1 for path in repo_files if _is_under(path, "tests")
-        ),
+        "`tests/**` files": sum(1 for path in repo_files if _is_under(path, "tests")),
         "`infra/grd-*.json`": sum(
             1
             for path in repo_files

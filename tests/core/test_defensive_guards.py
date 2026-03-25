@@ -162,9 +162,7 @@ class TestNormalizeVerificationRecordsBadData:
 
     def test_valid_dict_is_normalized(self):
         """A well-formed dict should be converted to VerificationEvidence."""
-        records = _normalize_verification_records(
-            [{"verifier": "test", "method": "manual", "confidence": "high"}]
-        )
+        records = _normalize_verification_records([{"verifier": "test", "method": "manual", "confidence": "high"}])
         assert len(records) == 1
         assert isinstance(records[0], VerificationEvidence)
         assert records[0].verifier == "test"
@@ -219,9 +217,7 @@ class TestNormalizeVerificationRecordsBadData:
     def test_malformed_dict_is_skipped_with_warning(self, caplog):
         """A dict with invalid VerificationEvidence fields should be skipped."""
         with caplog.at_level(logging.WARNING):
-            result = _normalize_verification_records(
-                [{"confidence": "INVALID_LEVEL"}]
-            )
+            result = _normalize_verification_records([{"confidence": "INVALID_LEVEL"}])
         assert result == []
         assert "Skipping" in caplog.text or "malformed" in caplog.text.lower()
 

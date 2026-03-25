@@ -142,7 +142,9 @@ def _fix_unbalanced_braces(tex: str) -> str:
         # Insert missing open braces after \begin{document} if possible
         begin_doc = tex.find("\\begin{document}")
         if begin_doc != -1:
-            insert_pos = tex.index("\n", begin_doc) + 1 if "\n" in tex[begin_doc:] else begin_doc + len("\\begin{document}")
+            insert_pos = (
+                tex.index("\n", begin_doc) + 1 if "\n" in tex[begin_doc:] else begin_doc + len("\\begin{document}")
+            )
             tex = tex[:insert_pos] + ("{" * missing) + tex[insert_pos:]
         else:
             tex = ("{" * missing) + tex
@@ -290,20 +292,20 @@ _UNICODE_TO_LATEX: dict[str, str] = {
     "\u00bc": r"$\frac{1}{4}$",
     "\u00be": r"$\frac{3}{4}$",
     # Astrophysics / miscellaneous symbols (must be mapped before emoji strip)
-    "\u2605": r"$\bigstar$",       # ★ black star
-    "\u2606": r"$\star$",          # ☆ white star
-    "\u2609": r"$\odot$",          # ☉ solar symbol
-    "\u263f": r"$\mercury$",       # ☿ Mercury  (wasysym)
-    "\u2640": r"$\venus$",         # ♀ Venus    (wasysym)
-    "\u2641": r"$\earth$",         # ♁ Earth    (wasysym)
-    "\u2642": r"$\mars$",          # ♂ Mars     (wasysym)
-    "\u2643": r"$\jupiter$",       # ♃ Jupiter  (wasysym)
-    "\u2644": r"$\saturn$",        # ♄ Saturn   (wasysym)
-    "\u2645": r"$\uranus$",        # ♅ Uranus   (wasysym)
-    "\u2646": r"$\neptune$",       # ♆ Neptune  (wasysym)
-    "\u2647": r"$\pluto$",         # ♇ Pluto    (wasysym)
-    "\u2713": r"$\checkmark$",     # ✓ check mark
-    "\u2717": r"$\times$",         # ✗ ballot X
+    "\u2605": r"$\bigstar$",  # ★ black star
+    "\u2606": r"$\star$",  # ☆ white star
+    "\u2609": r"$\odot$",  # ☉ solar symbol
+    "\u263f": r"$\mercury$",  # ☿ Mercury  (wasysym)
+    "\u2640": r"$\venus$",  # ♀ Venus    (wasysym)
+    "\u2641": r"$\earth$",  # ♁ Earth    (wasysym)
+    "\u2642": r"$\mars$",  # ♂ Mars     (wasysym)
+    "\u2643": r"$\jupiter$",  # ♃ Jupiter  (wasysym)
+    "\u2644": r"$\saturn$",  # ♄ Saturn   (wasysym)
+    "\u2645": r"$\uranus$",  # ♅ Uranus   (wasysym)
+    "\u2646": r"$\neptune$",  # ♆ Neptune  (wasysym)
+    "\u2647": r"$\pluto$",  # ♇ Pluto    (wasysym)
+    "\u2713": r"$\checkmark$",  # ✓ check mark
+    "\u2717": r"$\times$",  # ✗ ballot X
     # Typography
     "\u2013": "--",
     "\u2014": "---",
@@ -330,26 +332,26 @@ _EMOJI_RE = re.compile(
     "\U00002718-\U000027bf"  # dingbats after ✗
     "\U00002b50-\U00002b55"  # additional stars and circles
     "\U0000fe00-\U0000fe0f"  # variation selectors
-    "\U0000200d"             # zero-width joiner
+    "\U0000200d"  # zero-width joiner
     "\U000023e9-\U000023f3"  # media control symbols
     "\U000023f8-\U000023fa"  # additional media controls
     "\U0000231a-\U0000231b"  # watch, hourglass
     "\U00002934-\U00002935"  # curved arrows
     "\U000025aa-\U000025ab"  # small squares
-    "\U000025b6"             # play button
-    "\U000025c0"             # reverse button
+    "\U000025b6"  # play button
+    "\U000025c0"  # reverse button
     "\U000025fb-\U000025fe"  # medium squares
     # U+2614-2615 and U+2648-2653 already covered by ranges above
-    "\U0001f004"             # mahjong tile
-    "\U0001f0cf"             # joker
+    "\U0001f004"  # mahjong tile
+    "\U0001f0cf"  # joker
     "\U0001f170-\U0001f171"  # negative squared letters
     "\U0001f17e-\U0001f17f"  # negative squared O, P
-    "\U0001f18e"             # negative squared AB
+    "\U0001f18e"  # negative squared AB
     "\U0001f191-\U0001f19a"  # squared CL, etc.
     "\U0001f1e6-\U0001f1ff"  # regional indicators
     "\U0001f201-\U0001f202"  # squared katakana
-    "\U0001f21a"             # squared CJK
-    "\U0001f22f"             # squared CJK
+    "\U0001f21a"  # squared CJK
+    "\U0001f22f"  # squared CJK
     "\U0001f232-\U0001f23a"  # squared CJK
     "\U0001f250-\U0001f251"  # circled ideograph
     "\U0001f3fb-\U0001f3ff"  # skin tone modifiers
@@ -406,7 +408,7 @@ def clean_latex_fences(raw: str) -> str:
         for index, part in enumerate(parts):
             content = part
             if index % 2 == 1:
-                first_newline = content.find('\n')
+                first_newline = content.find("\n")
                 if first_newline > 0:
                     first_line = content[:first_newline].strip().lower()
                     if first_line in ("latex", "tex", "plaintex"):

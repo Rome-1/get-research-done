@@ -234,7 +234,9 @@ def _build_project_bundle_signals(project_text: str | None, contract: ResearchCo
 
         for observable in contract.observables:
             tags.add(f"observable-kind:{observable.kind}")
-            text_parts.extend(filter(None, [observable.name, observable.definition, observable.regime, observable.units]))
+            text_parts.extend(
+                filter(None, [observable.name, observable.definition, observable.regime, observable.units])
+            )
         for claim in contract.claims:
             text_parts.append(claim.statement)
         for deliverable in contract.deliverables:
@@ -249,7 +251,9 @@ def _build_project_bundle_signals(project_text: str | None, contract: ResearchCo
             )
         for reference in contract.references:
             tags.add(f"reference-role:{reference.role}")
-            text_parts.extend([reference.locator, reference.why_it_matters, *reference.required_actions, *reference.applies_to])
+            text_parts.extend(
+                [reference.locator, reference.why_it_matters, *reference.required_actions, *reference.applies_to]
+            )
         for proxy in contract.forbidden_proxies:
             text_parts.extend([proxy.proxy, proxy.reason])
         text_parts.extend(contract.uncertainty_markers.weakest_anchors)

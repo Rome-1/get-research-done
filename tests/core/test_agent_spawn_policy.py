@@ -42,8 +42,7 @@ def test_orchestrator_owned_agents_include_edit_capable_writers() -> None:
     orchestrator_editors = {
         name
         for name in registry.list_agents()
-        if registry.get_agent(name).commit_authority == "orchestrator"
-        and "file_edit" in registry.get_agent(name).tools
+        if registry.get_agent(name).commit_authority == "orchestrator" and "file_edit" in registry.get_agent(name).tools
     }
 
     assert orchestrator_editors

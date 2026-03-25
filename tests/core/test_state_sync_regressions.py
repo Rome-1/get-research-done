@@ -100,9 +100,7 @@ def test_sync_state_json_core_bootstrap_preserves_progress_and_metrics(tmp_path:
     state["position"]["status"] = "Executing"
     state["position"]["progress_percent"] = 42
     state["project_reference"]["project_md_updated"] = "2026-03-10"
-    state["performance_metrics"]["rows"] = [
-        {"label": "Phase 03 P01", "duration": "12m", "tasks": "3", "files": "2"}
-    ]
+    state["performance_metrics"]["rows"] = [{"label": "Phase 03 P01", "duration": "12m", "tasks": "3", "files": "2"}]
 
     result = sync_state_json_core(cwd, generate_state_markdown(state))
     stored = json.loads((planning / "state.json").read_text(encoding="utf-8"))
@@ -272,9 +270,7 @@ def test_sync_state_json_core_placeholder_fields_clear_stale_json_values(tmp_pat
     existing["session"]["last_date"] = "2026-03-01T10:00:00+00:00"
     existing["session"]["stopped_at"] = "Old stop"
     existing["session"]["resume_file"] = "resume.md"
-    existing["performance_metrics"]["rows"] = [
-        {"label": "Phase 03 P01", "duration": "20m", "tasks": "4", "files": "2"}
-    ]
+    existing["performance_metrics"]["rows"] = [{"label": "Phase 03 P01", "duration": "20m", "tasks": "4", "files": "2"}]
     (planning / "state.json").write_text(json.dumps(existing, indent=2), encoding="utf-8")
 
     markdown_state = default_state_dict()

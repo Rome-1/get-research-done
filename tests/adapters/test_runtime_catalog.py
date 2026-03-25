@@ -42,7 +42,9 @@ def test_resolve_global_config_dir_xdg_app_respects_explicit_empty_environ(monke
 def test_runtime_catalog_explicit_priority_order() -> None:
     descriptors = iter_runtime_descriptors()
     assert [descriptor.runtime_name for descriptor in descriptors] == list_runtime_names()
-    assert [descriptor.priority for descriptor in descriptors] == sorted(descriptor.priority for descriptor in descriptors)
+    assert [descriptor.priority for descriptor in descriptors] == sorted(
+        descriptor.priority for descriptor in descriptors
+    )
 
 
 def test_runtime_catalog_records_native_include_support() -> None:

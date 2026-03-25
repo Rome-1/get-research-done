@@ -206,9 +206,7 @@ def parse_contract_block(content: str) -> ResearchContract | None:
         raise FrontmatterValidationError(f"Invalid contract frontmatter: {exc}") from exc
     issues = _validate_plan_contract(contract)
     if issues:
-        raise FrontmatterValidationError(
-            "Invalid contract frontmatter: " + "; ".join(issues)
-        )
+        raise FrontmatterValidationError("Invalid contract frontmatter: " + "; ".join(issues))
     return contract
 
 
@@ -312,7 +310,17 @@ def _is_exploratory_contract(contract: ResearchContract) -> bool:
         "convergence",
         "other",
     }
-    exploratory_deliverable_kinds = {"code", "note", "report", "derivation", "figure", "table", "dataset", "data", "other"}
+    exploratory_deliverable_kinds = {
+        "code",
+        "note",
+        "report",
+        "derivation",
+        "figure",
+        "table",
+        "dataset",
+        "data",
+        "other",
+    }
 
     return (
         not _is_scoping_contract(contract)
@@ -334,7 +342,9 @@ def _validate_plan_contract(contract: ResearchContract) -> list[str]:
         issues.append("missing deliverables")
     if not contract.acceptance_tests and not scoping_contract:
         issues.append("missing acceptance_tests")
-    if not contract.references and not (_has_contract_grounding_context(contract) or exploratory_contract or scoping_contract):
+    if not contract.references and not (
+        _has_contract_grounding_context(contract) or exploratory_contract or scoping_contract
+    ):
         issues.append("missing references or explicit grounding context")
     if not contract.forbidden_proxies and not (exploratory_contract or scoping_contract):
         issues.append("missing forbidden_proxies")
@@ -416,9 +426,7 @@ def _validate_plan_contract(contract: ResearchContract) -> list[str]:
 
     for forbidden_proxy in contract.forbidden_proxies:
         if forbidden_proxy.subject not in claim_ids and forbidden_proxy.subject not in deliverable_ids:
-            issues.append(
-                f"forbidden proxy {forbidden_proxy.id} targets unknown subject {forbidden_proxy.subject}"
-            )
+            issues.append(f"forbidden proxy {forbidden_proxy.id} targets unknown subject {forbidden_proxy.subject}")
 
     for link in contract.links:
         if link.source not in known_ids:
@@ -574,9 +582,7 @@ def _summary_contract_errors(
         completed = set(usage.completed_actions)
         missing = set(reference.required_actions) - completed
         if reference.must_surface and missing:
-            errors.append(
-                f"Reference {reference.id} missing required_actions in summary: {', '.join(sorted(missing))}"
-            )
+            errors.append(f"Reference {reference.id} missing required_actions in summary: {', '.join(sorted(missing))}")
 
     for verdict in comparison_verdicts:
         if verdict.subject_id not in known_subject_ids:
@@ -745,9 +751,7 @@ def _verification_status_errors(
         errors.append("status: passed is inconsistent with non-empty suggested_contract_checks")
 
     non_passed_subjects = [
-        f"claim {entry_id}"
-        for entry_id, entry in contract_results.claims.items()
-        if entry.status != "passed"
+        f"claim {entry_id}" for entry_id, entry in contract_results.claims.items() if entry.status != "passed"
     ]
     non_passed_subjects.extend(
         f"deliverable {entry_id}"
@@ -772,8 +776,7 @@ def _verification_status_errors(
     ]
     if unresolved_proxies:
         errors.append(
-            "status: passed is inconsistent with unresolved forbidden_proxies: "
-            + ", ".join(sorted(unresolved_proxies))
+            "status: passed is inconsistent with unresolved forbidden_proxies: " + ", ".join(sorted(unresolved_proxies))
         )
 
     return errors
@@ -1189,7 +1192,9 @@ def verify_summary(
     if self_check == "failed":
         errors.append("Self-check section indicates failure")
 
-    passed = len(errors) == 0 and len(missing_files) == 0 and self_check != "failed" and not (not commits_exist and hashes)
+    passed = (
+        len(errors) == 0 and len(missing_files) == 0 and self_check != "failed" and not (not commits_exist and hashes)
+    )
     return SummaryVerification(
         passed=passed,
         summary_exists=True,

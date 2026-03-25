@@ -341,7 +341,9 @@ class TestInstall:
         )
 
         settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
-        assert settings["statusLine"]["command"] == f"{sys.executable or 'python3'} {(target / 'hooks' / 'statusline.py')}"
+        assert (
+            settings["statusLine"]["command"] == f"{sys.executable or 'python3'} {(target / 'hooks' / 'statusline.py')}"
+        )
         session_start = settings.get("hooks", {}).get("SessionStart", [])
         cmds = [h.get("command", "") for entry in session_start for h in (entry.get("hooks") or [])]
         assert f"{sys.executable or 'python3'} {(target / 'hooks' / 'check_update.py')}" in cmds
@@ -441,7 +443,6 @@ class TestInstall:
 
         assert not (agents_dir / "grd-old-agent.md").exists()
         assert (agents_dir / "custom-agent.md").exists()
-
 
     def test_install_agents_replace_runtime_placeholders(
         self, adapter: ClaudeCodeAdapter, grd_root: Path, tmp_path: Path
@@ -603,7 +604,9 @@ class TestUninstall:
         assert "custom-server" in workspace_cleaned["mcpServers"]
         assert "MCP servers from .mcp.json" not in result["removed"]
 
-    def test_local_uninstall_cleans_jsonc_workspace_mcp_config(self, adapter: ClaudeCodeAdapter, tmp_path: Path) -> None:
+    def test_local_uninstall_cleans_jsonc_workspace_mcp_config(
+        self, adapter: ClaudeCodeAdapter, tmp_path: Path
+    ) -> None:
         target = tmp_path / "workspace" / ".claude"
         target.mkdir(parents=True)
 

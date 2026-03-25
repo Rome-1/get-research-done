@@ -60,11 +60,7 @@ def _infer_runtime_from_manifest(config_dir: Path) -> str | None:
     if isinstance(files, dict):
         file_keys = [str(key) for key in files]
         for descriptor in iter_runtime_descriptors():
-            if any(
-                key.startswith(prefix)
-                for key in file_keys
-                for prefix in descriptor.manifest_file_prefixes
-            ):
+            if any(key.startswith(prefix) for key in file_keys for prefix in descriptor.manifest_file_prefixes):
                 return descriptor.runtime_name
     return None
 

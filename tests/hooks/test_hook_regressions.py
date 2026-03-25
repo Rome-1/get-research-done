@@ -25,9 +25,12 @@ def test_notify_update_skips_non_dict_or_invalid_cache_files(tmp_path: Path, cac
     cache_file = tmp_path / "grd-update-check.json"
     cache_file.write_text(cache_content, encoding="utf-8")
 
-    with patch("grd.hooks.runtime_detect.get_update_cache_files", return_value=[cache_file]), patch(
-        "grd.hooks.runtime_detect.detect_active_runtime",
-        return_value="unknown",
+    with (
+        patch("grd.hooks.runtime_detect.get_update_cache_files", return_value=[cache_file]),
+        patch(
+            "grd.hooks.runtime_detect.detect_active_runtime",
+            return_value="unknown",
+        ),
     ):
         _check_and_notify_update()
 
@@ -38,10 +41,14 @@ def test_check_update_passes_cache_file_via_sys_argv() -> None:
 
     cache_path = Path("/tmp/test-cache.json")
 
-    with patch(
-        "grd.hooks.runtime_detect.get_update_cache_candidates",
-        return_value=[UpdateCacheCandidate(path=cache_path)],
-    ), patch("grd.hooks.check_update.subprocess.Popen") as mock_popen, patch.object(Path, "exists", return_value=False):
+    with (
+        patch(
+            "grd.hooks.runtime_detect.get_update_cache_candidates",
+            return_value=[UpdateCacheCandidate(path=cache_path)],
+        ),
+        patch("grd.hooks.check_update.subprocess.Popen") as mock_popen,
+        patch.object(Path, "exists", return_value=False),
+    ):
         mock_popen.return_value = MagicMock()
         main()
 
@@ -101,7 +108,10 @@ def test_update_cache_helpers_prefer_candidate_order_over_newer_unrelated_cache(
     unrelated_candidate = SimpleNamespace(path=unrelated_cache, runtime="claude-code", scope="global")
 
     with (
-        patch("grd.hooks.runtime_detect.get_update_cache_candidates", return_value=[preferred_candidate, unrelated_candidate]),
+        patch(
+            "grd.hooks.runtime_detect.get_update_cache_candidates",
+            return_value=[preferred_candidate, unrelated_candidate],
+        ),
         patch("grd.hooks.runtime_detect.detect_active_runtime_with_grd_install", return_value="codex"),
         patch("grd.hooks.runtime_detect.should_consider_update_cache_candidate", return_value=True),
         patch(

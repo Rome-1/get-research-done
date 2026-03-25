@@ -252,7 +252,5 @@ def test_approximate_checksum_counts_toward_coverage():
 
     assert result.checksum_coverage_percent == 100.0
     # The informational warning should still be emitted
-    approx_warnings = [
-        w for w in result.warnings if "approximate checksum" in w.message
-    ]
+    approx_warnings = [w for w in result.warnings if "approximate checksum" in w.message]
     assert len(approx_warnings) == 1

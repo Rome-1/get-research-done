@@ -211,9 +211,9 @@ class TestCommit:
         ):
             # git add succeeds, diff --cached shows changes, commit succeeds, rev-parse returns SHA
             mock_git.side_effect = [
-                (0, "", ""),       # git add
-                (1, "", ""),       # git diff --cached --quiet (1 = has changes)
-                (0, "", ""),       # git commit
+                (0, "", ""),  # git add
+                (1, "", ""),  # git diff --cached --quiet (1 = has changes)
+                (0, "", ""),  # git commit
                 (0, "abc1234", ""),  # git rev-parse
             ]
             result = cmd_commit(tmp_path, "test: commit message", files=[".grd/STATE.md"])
@@ -268,8 +268,8 @@ class TestCommit:
             patch("grd.core.git_ops._exec_git") as mock_git,
         ):
             mock_git.side_effect = [
-                (0, "", ""),     # git add
-                (1, "", ""),     # diff --cached (has changes)
+                (0, "", ""),  # git add
+                (1, "", ""),  # diff --cached (has changes)
                 (1, "", "error: something went wrong"),  # git commit fails
             ]
             result = cmd_commit(tmp_path, "test: failing commit")
@@ -287,9 +287,9 @@ class TestCommit:
             patch("grd.core.git_ops._exec_git") as mock_git,
         ):
             mock_git.side_effect = [
-                (0, "", ""),       # git add
-                (1, "", ""),       # diff --cached
-                (0, "", ""),       # git commit
+                (0, "", ""),  # git add
+                (1, "", ""),  # diff --cached
+                (0, "", ""),  # git commit
                 (0, "def5678", ""),  # rev-parse
             ]
             cmd_commit(tmp_path, "test: default staging")
@@ -308,9 +308,9 @@ class TestCommit:
             patch("grd.core.git_ops._exec_git") as mock_git,
         ):
             mock_git.side_effect = [
-                (0, "", ""),       # git add
-                (1, "", ""),       # diff --cached
-                (0, "", ""),       # git commit
+                (0, "", ""),  # git add
+                (1, "", ""),  # diff --cached
+                (0, "", ""),  # git commit
                 (0, "def5678", ""),  # rev-parse
             ]
             cmd_commit(tmp_path, "test: default staging", files=[])

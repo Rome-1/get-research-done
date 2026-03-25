@@ -9,9 +9,7 @@ from grd.core.state import state_add_decision, state_record_metric, state_record
 
 
 class TestStateAddDecision:
-    def test_add_decision_persists_to_markdown_and_json(
-        self, tmp_path: Path, state_project_factory
-    ) -> None:
+    def test_add_decision_persists_to_markdown_and_json(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
 
         result = state_add_decision(cwd, summary="Use SI units", phase="1")
@@ -25,9 +23,7 @@ class TestStateAddDecision:
         assert "Use SI units" in markdown
         assert stored["decisions"] == [{"phase": "1", "summary": "Use SI units", "rationale": None}]
 
-    def test_add_decision_with_rationale_persists_rationale(
-        self, tmp_path: Path, state_project_factory
-    ) -> None:
+    def test_add_decision_with_rationale_persists_rationale(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
 
         result = state_add_decision(
@@ -46,9 +42,7 @@ class TestStateAddDecision:
         assert "Better stability" in markdown
         assert stored["decisions"][0]["rationale"] == "Better stability"
 
-    def test_add_decision_without_phase_uses_placeholder(
-        self, tmp_path: Path, state_project_factory
-    ) -> None:
+    def test_add_decision_without_phase_uses_placeholder(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
 
         result = state_add_decision(cwd, summary="Adopt natural units")
@@ -57,9 +51,7 @@ class TestStateAddDecision:
         assert result.decision == "- [Phase ?]: Adopt natural units"
 
     @pytest.mark.parametrize("summary", [None, ""])
-    def test_add_decision_requires_summary(
-        self, tmp_path: Path, state_project_factory, summary: str | None
-    ) -> None:
+    def test_add_decision_requires_summary(self, tmp_path: Path, state_project_factory, summary: str | None) -> None:
         cwd = state_project_factory(tmp_path)
 
         result = state_add_decision(cwd, summary=summary)
@@ -73,9 +65,7 @@ class TestStateAddDecision:
         assert result.added is False
         assert "not found" in (result.error or "").lower()
 
-    def test_add_multiple_decisions_appends_entries(
-        self, tmp_path: Path, state_project_factory
-    ) -> None:
+    def test_add_multiple_decisions_appends_entries(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
 
         state_add_decision(cwd, summary="Decision A", phase="1")
@@ -86,9 +76,7 @@ class TestStateAddDecision:
 
         assert summaries == ["Decision A", "Decision B"]
 
-    def test_add_decision_removes_decision_placeholder(
-        self, tmp_path: Path, state_project_factory
-    ) -> None:
+    def test_add_decision_removes_decision_placeholder(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
         before = (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8")
         assert "None yet." in before
@@ -107,9 +95,7 @@ class TestStateAddDecision:
 
 
 class TestStateRecordMetric:
-    def test_record_metric_persists_to_markdown_and_json(
-        self, tmp_path: Path, state_project_factory
-    ) -> None:
+    def test_record_metric_persists_to_markdown_and_json(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
 
         result = state_record_metric(
@@ -166,9 +152,7 @@ class TestStateRecordMetric:
         assert result.recorded is False
         assert "not found" in (result.error or "").lower()
 
-    def test_record_multiple_metrics_keeps_existing_rows(
-        self, tmp_path: Path, state_project_factory
-    ) -> None:
+    def test_record_multiple_metrics_keeps_existing_rows(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
 
         state_record_metric(cwd, phase="03", plan="01", duration="20min")
@@ -196,9 +180,7 @@ class TestStateRecordMetric:
 
 
 class TestStateRecordSession:
-    def test_record_session_updates_markdown_and_json(
-        self, tmp_path: Path, session_state_project_factory
-    ) -> None:
+    def test_record_session_updates_markdown_and_json(self, tmp_path: Path, session_state_project_factory) -> None:
         cwd = session_state_project_factory(tmp_path)
 
         result = state_record_session(cwd, stopped_at="Phase 03 Plan 2", resume_file="next-step.md")

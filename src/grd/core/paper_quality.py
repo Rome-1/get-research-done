@@ -104,9 +104,7 @@ class FiguresQualityInput(BaseModel):
     decisive_artifacts_referenced_in_text: CoverageMetric = Field(
         default_factory=lambda: CoverageMetric(not_applicable=True)
     )
-    decisive_artifact_roles_clear: CoverageMetric = Field(
-        default_factory=lambda: CoverageMetric(not_applicable=True)
-    )
+    decisive_artifact_roles_clear: CoverageMetric = Field(default_factory=lambda: CoverageMetric(not_applicable=True))
 
 
 class CitationsQualityInput(BaseModel):
@@ -316,7 +314,9 @@ def _status_for_score(score: float) -> str:
     return "not_ready"
 
 
-def _metric_issue(category: str, check: str, points: float, max_points: float, summary: str) -> PaperQualityIssue | None:
+def _metric_issue(
+    category: str, check: str, points: float, max_points: float, summary: str
+) -> PaperQualityIssue | None:
     if points >= max_points:
         return None
     severity = Severity.major if points == 0 else Severity.minor
@@ -348,9 +348,7 @@ def score_paper_quality(data: PaperQualityInput) -> PaperQualityReport:
     if not data.results.decisive_comparison_failures_scoped.not_applicable:
         decisive_result_ratios.append(data.results.decisive_comparison_failures_scoped.ratio)
     comparison_ratio = (
-        min(decisive_result_ratios)
-        if decisive_result_ratios
-        else data.results.comparison_with_prior_work_present.ratio
+        min(decisive_result_ratios) if decisive_result_ratios else data.results.comparison_with_prior_work_present.ratio
     )
 
     eq_checks = {
@@ -379,7 +377,9 @@ def score_paper_quality(data: PaperQualityInput) -> PaperQualityReport:
         "notation_consistent": 5.0 * data.conventions.notation_consistent.ratio,
     }
 
-    unreliable_count = sum(1 for c in data.verification.key_result_confidences if c == VerificationConfidence.unreliable)
+    unreliable_count = sum(
+        1 for c in data.verification.key_result_confidences if c == VerificationConfidence.unreliable
+    )
     verification_checks = {
         "report_passed": 5.0 * data.verification.report_passed.ratio,
         "contract_targets_verified": _ratio_points(data.verification.contract_targets_verified.ratio, 5.0),
@@ -399,8 +399,12 @@ def score_paper_quality(data: PaperQualityInput) -> PaperQualityReport:
     }
 
     categories = {
-        "equations": CategoryScore(name="equations", score=sum(eq_checks.values()), max_score=CATEGORY_MAX["equations"], checks=eq_checks),
-        "figures": CategoryScore(name="figures", score=sum(figures_checks.values()), max_score=CATEGORY_MAX["figures"], checks=figures_checks),
+        "equations": CategoryScore(
+            name="equations", score=sum(eq_checks.values()), max_score=CATEGORY_MAX["equations"], checks=eq_checks
+        ),
+        "figures": CategoryScore(
+            name="figures", score=sum(figures_checks.values()), max_score=CATEGORY_MAX["figures"], checks=figures_checks
+        ),
         "citations": CategoryScore(
             name="citations",
             score=sum(citation_checks.values()),
@@ -425,7 +429,9 @@ def score_paper_quality(data: PaperQualityInput) -> PaperQualityReport:
             max_score=CATEGORY_MAX["completeness"],
             checks=completeness_checks,
         ),
-        "results": CategoryScore(name="results", score=sum(results_checks.values()), max_score=CATEGORY_MAX["results"], checks=results_checks),
+        "results": CategoryScore(
+            name="results", score=sum(results_checks.values()), max_score=CATEGORY_MAX["results"], checks=results_checks
+        ),
     }
 
     issues.extend(

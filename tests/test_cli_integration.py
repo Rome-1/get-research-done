@@ -50,19 +50,13 @@ def grd_project(tmp_path: Path) -> Path:
     )
     (planning / "state.json").write_text(json.dumps(state, indent=2))
     (planning / "STATE.md").write_text(generate_state_markdown(state))
-    (planning / "PROJECT.md").write_text(
-        "# Test Project\n\n## Core Research Question\nWhat is physics?\n"
-    )
-    (planning / "REQUIREMENTS.md").write_text(
-        "# Requirements\n\n- [ ] **REQ-01**: Do the thing\n"
-    )
+    (planning / "PROJECT.md").write_text("# Test Project\n\n## Core Research Question\nWhat is physics?\n")
+    (planning / "REQUIREMENTS.md").write_text("# Requirements\n\n- [ ] **REQ-01**: Do the thing\n")
     (planning / "ROADMAP.md").write_text(
         "# Roadmap\n\n## Phase 1: Test Phase\nGoal: Test\nRequirements: REQ-01\n"
         "\n## Phase 2: Phase Two\nGoal: More tests\nRequirements: REQ-01\n"
     )
-    (planning / "CONVENTIONS.md").write_text(
-        "# Conventions\n\n- Metric: (-,+,+,+)\n- Coordinates: Cartesian\n"
-    )
+    (planning / "CONVENTIONS.md").write_text("# Conventions\n\n- Metric: (-,+,+,+)\n- Coordinates: Cartesian\n")
     (planning / "config.json").write_text(
         json.dumps(
             {
@@ -84,9 +78,7 @@ def grd_project(tmp_path: Path) -> Path:
     p1 = planning / "phases" / "01-test-phase"
     p1.mkdir(parents=True)
     (p1 / "README.md").write_text("# Phase 1: Test Phase\n")
-    (p1 / "01-PLAN.md").write_text(
-        "---\nphase: '01'\nplan: '01'\nwave: 1\n---\n\n# Plan A\n\n## Tasks\n\n- Task 1\n"
-    )
+    (p1 / "01-PLAN.md").write_text("---\nphase: '01'\nplan: '01'\nwave: 1\n---\n\n# Plan A\n\n## Tasks\n\n- Task 1\n")
     (p1 / "01-SUMMARY.md").write_text(
         '---\nphase: "01"\nplan: "01"\none-liner: "Set up project"\n'
         "key-files:\n  - src/main.py\n"
@@ -116,9 +108,7 @@ def _invoke(*args: str, expect_ok: bool = True) -> object:
     """Invoke a grd CLI command and return the CliRunner result."""
     result = runner.invoke(app, list(args), catch_exceptions=False)
     if expect_ok:
-        assert result.exit_code == 0, (
-            f"grd {' '.join(args)} failed (exit {result.exit_code}):\n{result.output}"
-        )
+        assert result.exit_code == 0, f"grd {' '.join(args)} failed (exit {result.exit_code}):\n{result.output}"
     return result
 
 
@@ -326,7 +316,9 @@ class TestObserve:
         parsed = json.loads(result.output)
         assert parsed["category"] == "workflow"
         assert parsed["name"] == "wave-start"
-        observed = json.loads(_invoke("--raw", "observe", "show", "--category", "workflow", "--name", "wave-start").output)
+        observed = json.loads(
+            _invoke("--raw", "observe", "show", "--category", "workflow", "--name", "wave-start").output
+        )
         assert observed["count"] >= 1
         assert any(event.get("data", {}).get("wave") == 1 for event in observed["events"])
 
@@ -384,9 +376,7 @@ class TestRegressionCheck:
         # Make phase 2 look completed with a conflicting convention
         (p2 / "01-PLAN.md").write_text("---\nphase: '02'\n---\n# Plan\n")
         (p2 / "01-SUMMARY.md").write_text(
-            '---\nphase: "02"\nplan: "01"\n'
-            "conventions:\n  metric: (+,-,-,-)\n"
-            "---\n\n# Summary\n"
+            '---\nphase: "02"\nplan: "01"\nconventions:\n  metric: (+,-,-,-)\n---\n\n# Summary\n'
         )
 
         result = runner.invoke(app, ["--raw", "regression-check"], catch_exceptions=False)
@@ -422,10 +412,7 @@ class TestValidateReturn:
     def test_validate_return_missing_fields(self, grd_project: Path) -> None:
         """A file with missing required fields should fail."""
         return_file = grd_project / "incomplete_return.md"
-        return_file.write_text(
-            "# Summary\n\n```yaml\ngrd_return:\n"
-            '  status: completed\n```\n'
-        )
+        return_file.write_text("# Summary\n\n```yaml\ngrd_return:\n  status: completed\n```\n")
         result = runner.invoke(
             app,
             ["--raw", "validate-return", str(return_file)],
@@ -595,17 +582,13 @@ class TestJsonCommands:
     def test_json_get(self) -> None:
         """json get should extract a value from stdin JSON."""
         input_json = json.dumps({"name": "physics", "version": 2})
-        result = runner.invoke(
-            app, ["json", "get", ".name"], input=input_json, catch_exceptions=False
-        )
+        result = runner.invoke(app, ["json", "get", ".name"], input=input_json, catch_exceptions=False)
         assert result.exit_code == 0
         assert "physics" in result.output
 
     def test_json_get_nested(self) -> None:
         input_json = json.dumps({"a": {"b": {"c": "deep"}}})
-        result = runner.invoke(
-            app, ["json", "get", ".a.b.c"], input=input_json, catch_exceptions=False
-        )
+        result = runner.invoke(app, ["json", "get", ".a.b.c"], input=input_json, catch_exceptions=False)
         assert result.exit_code == 0
         assert "deep" in result.output
 
@@ -622,9 +605,7 @@ class TestJsonCommands:
 
     def test_json_keys(self) -> None:
         input_json = json.dumps({"waves": {"w1": 1, "w2": 2, "w3": 3}})
-        result = runner.invoke(
-            app, ["json", "keys", ".waves"], input=input_json, catch_exceptions=False
-        )
+        result = runner.invoke(app, ["json", "keys", ".waves"], input=input_json, catch_exceptions=False)
         assert result.exit_code == 0
         assert "w1" in result.output
         assert "w2" in result.output
@@ -632,18 +613,14 @@ class TestJsonCommands:
 
     def test_json_list(self) -> None:
         input_json = json.dumps({"items": ["alpha", "beta", "gamma"]})
-        result = runner.invoke(
-            app, ["json", "list", ".items"], input=input_json, catch_exceptions=False
-        )
+        result = runner.invoke(app, ["json", "list", ".items"], input=input_json, catch_exceptions=False)
         assert result.exit_code == 0
         assert "alpha" in result.output
         assert "beta" in result.output
         assert "gamma" in result.output
 
     def test_json_pluck(self) -> None:
-        input_json = json.dumps(
-            {"phases": [{"name": "setup"}, {"name": "compute"}, {"name": "verify"}]}
-        )
+        input_json = json.dumps({"phases": [{"name": "setup"}, {"name": "compute"}, {"name": "verify"}]})
         result = runner.invoke(
             app,
             ["json", "pluck", ".phases", "name"],
@@ -689,9 +666,7 @@ class TestJsonCommands:
         assert merged_data == {"a": 1, "b": 2, "c": 3, "d": 4}
 
     def test_json_sum_lengths(self) -> None:
-        input_json = json.dumps(
-            {"items": [1, 2, 3], "tags": ["a", "b"]}
-        )
+        input_json = json.dumps({"items": [1, 2, 3], "tags": ["a", "b"]})
         result = runner.invoke(
             app,
             ["json", "sum-lengths", ".items", ".tags"],
@@ -713,6 +688,7 @@ class TestJsonCommands:
 # ═══════════════════════════════════════════════════════════════════════════
 # Extra coverage: summary-extract, resolve-model
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSummaryExtractCommand:
     def test_summary_extract(self) -> None:

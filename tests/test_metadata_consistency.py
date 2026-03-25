@@ -104,7 +104,9 @@ def test_canonical_registry_skill_inventory_counts_match_repo_contents() -> None
     agents_count = len(list((repo_root / "src" / "grd" / "agents").glob("*.md")))
     content_registry.invalidate_cache()
     canonical_skills_count = len(content_registry.list_skills())
-    mcp_server_count = len([p for p in (repo_root / "src" / "grd" / "mcp" / "servers").glob("*.py") if p.name != "__init__.py"])
+    mcp_server_count = len(
+        [p for p in (repo_root / "src" / "grd" / "mcp" / "servers").glob("*.py") if p.name != "__init__.py"]
+    )
     mcp_script_count = sum(1 for line in _project_script_lines(repo_root) if line.startswith('"grd-mcp-'))
 
     assert commands_count >= 50
@@ -154,7 +156,9 @@ def test_pattern_domain_counts_match_source_of_truth() -> None:
 
 def test_mcp_server_count_matches_public_entrypoints() -> None:
     repo_root = _repo_root()
-    mcp_server_count = len([p for p in (repo_root / "src" / "grd" / "mcp" / "servers").glob("*.py") if p.name != "__init__.py"])
+    mcp_server_count = len(
+        [p for p in (repo_root / "src" / "grd" / "mcp" / "servers").glob("*.py") if p.name != "__init__.py"]
+    )
     mcp_script_count = sum(1 for line in _project_script_lines(repo_root) if line.startswith('"grd-mcp-'))
     assert mcp_server_count == 7
     assert mcp_server_count == mcp_script_count

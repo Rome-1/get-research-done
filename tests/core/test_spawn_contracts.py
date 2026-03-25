@@ -180,7 +180,10 @@ def test_execute_phase_requires_state_return_envelope_and_handoff_spot_checks() 
     content = _read(WORKFLOWS_DIR / "execute-phase.md")
     executor = _find_single_task(WORKFLOWS_DIR / "execute-phase.md", "grd-executor")
 
-    assert "Return state updates (position, decisions, metrics) in your response -- do NOT write STATE.md directly." in executor.text
+    assert (
+        "Return state updates (position, decisions, metrics) in your response -- do NOT write STATE.md directly."
+        in executor.text
+    )
     assert "State updates returned (NOT written to STATE.md directly)" in executor.text
     assert "Executor subagents MUST NOT write STATE.md directly." in content
     assert "Verify expected output files, the structured return envelope, and git commits" in content
@@ -204,10 +207,16 @@ def test_parameter_sweep_executor_uses_spawn_contract_and_return_only_state_upda
 def test_research_phase_verifies_research_artifact_before_accepting_handoff() -> None:
     content = _read(WORKFLOWS_DIR / "research-phase.md")
 
-    assert "Accept the researcher handoff automatically only once `expected_artifacts` exist and pass the artifact check." in content
+    assert (
+        "Accept the researcher handoff automatically only once `expected_artifacts` exist and pass the artifact check."
+        in content
+    )
     assert "Do not trust the runtime handoff status by itself." in content
     assert "Artifact gate:" in content
-    assert "If the researcher reports `## RESEARCH COMPLETE` but the `expected_artifacts` entry (`RESEARCH.md`) is missing" in content
+    assert (
+        "If the researcher reports `## RESEARCH COMPLETE` but the `expected_artifacts` entry (`RESEARCH.md`) is missing"
+        in content
+    )
     assert "<spawn_contract>" in content
     assert "expected_artifacts:" in content
     assert "shared_state_policy: return_only" in content
@@ -235,9 +244,13 @@ def test_new_milestone_research_and_roadmapper_gate_success_path_artifacts() -> 
 
     assert content.count("<spawn_contract>") >= 3
     assert "Do not trust the runtime handoff status by itself." in content
-    assert "If a scout reports success but its `expected_artifacts` entry (`.grd/research/{FILE}`) is missing" in content
+    assert (
+        "If a scout reports success but its `expected_artifacts` entry (`.grd/research/{FILE}`) is missing" in content
+    )
     assert "If the synthesizer reports success but `.grd/research/SUMMARY.md` is missing" in content
-    assert "If the roadmapper reports `## ROADMAP CREATED` but `.grd/ROADMAP.md` or `.grd/STATE.md` is missing" in content
+    assert (
+        "If the roadmapper reports `## ROADMAP CREATED` but `.grd/ROADMAP.md` or `.grd/STATE.md` is missing" in content
+    )
     assert "shared_state_policy: return_only" in content
 
 

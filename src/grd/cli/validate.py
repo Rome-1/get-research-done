@@ -34,6 +34,7 @@ validate_app = typer.Typer(help="Validation checks")
 
 # ─── Internal preflight helpers ─────────────────────────────────────────────
 
+
 def _find_manuscript_main(cwd: Path) -> Path | None:
     """Locate the primary manuscript entry point if one exists."""
     for rel_path in ("paper/main.tex", "manuscript/main.tex", "draft/main.tex"):
@@ -117,10 +118,9 @@ def _review_preflight_check_is_blocking(contract: object, check_name: str) -> bo
     blocking_conditions = _normalized_contract_entries(getattr(contract, "blocking_conditions", []))
     required_evidence = _normalized_contract_entries(getattr(contract, "required_evidence", []))
 
-    return (
-        any(alias in blocking_conditions for alias in _REVIEW_PRECHECK_BLOCKING_CONDITIONS.get(check_name, ()))
-        or any(alias in required_evidence for alias in _REVIEW_PRECHECK_REQUIRED_EVIDENCE.get(check_name, ()))
-    )
+    return any(
+        alias in blocking_conditions for alias in _REVIEW_PRECHECK_BLOCKING_CONDITIONS.get(check_name, ())
+    ) or any(alias in required_evidence for alias in _REVIEW_PRECHECK_REQUIRED_EVIDENCE.get(check_name, ()))
 
 
 def _evaluate_review_required_state(
@@ -164,8 +164,7 @@ def _evaluate_review_required_state(
     if target_phase and current_phase and target_phase == current_phase:
         if current_status_normalized in _PHASE_EXECUTED_STATUSES:
             return True, (
-                f'required_state=phase_executed satisfied for current phase {current_phase} '
-                f'(status "{current_status}")'
+                f'required_state=phase_executed satisfied for current phase {current_phase} (status "{current_status}")'
             )
         expected_statuses = "Phase complete \u2014 ready for verification, Verifying, Complete, or Milestone complete"
         return False, (
@@ -173,7 +172,9 @@ def _evaluate_review_required_state(
             f'{expected_statuses}; found "{current_status or "unknown"}"'
         )
 
-    resolved_phase_info = phase_info if phase_info is not None else (find_phase(cwd, target_phase) if target_phase else None)
+    resolved_phase_info = (
+        phase_info if phase_info is not None else (find_phase(cwd, target_phase) if target_phase else None)
+    )
     if resolved_phase_info is not None:
         summary_count = len(getattr(resolved_phase_info, "summaries", []))
         has_verification = bool(getattr(resolved_phase_info, "has_verification", False))
@@ -276,11 +277,7 @@ def _build_command_context_preflight(
         add_check(
             "project_context",
             True,
-            (
-                "initialized project detected"
-                if project_exists
-                else "no initialized project required"
-            ),
+            ("initialized project detected" if project_exists else "no initialized project required"),
             blocking=False,
         )
         return CommandContextPreflightResult(
@@ -304,9 +301,7 @@ def _build_command_context_preflight(
             ),
         )
         guidance = (
-            ""
-            if project_exists
-            else "This command requires an initialized GRD project. Run `grd init new-project`."
+            "" if project_exists else "This command requires an initialized GRD project. Run `grd init new-project`."
         )
         return CommandContextPreflightResult(
             command=public_command_name,
@@ -320,7 +315,10 @@ def _build_command_context_preflight(
 
     explicit_inputs, predicate = _PROJECT_AWARE_EXPLICIT_INPUTS.get(
         command.name,
-        ([command.argument_hint.strip()] if command.argument_hint.strip() else ["explicit command inputs"], _has_simple_positional_inputs),
+        (
+            [command.argument_hint.strip()] if command.argument_hint.strip() else ["explicit command inputs"],
+            _has_simple_positional_inputs,
+        ),
     )
     explicit_inputs_ok = predicate(arguments)
     add_check(
@@ -378,7 +376,9 @@ def _build_review_preflight(
     phase_subject = subject
     if phase_subject is None and "phase_artifacts" in contract.preflight_checks:
         phase_subject = _current_review_phase_subject(cwd)
-    phase_info = find_phase(cwd, phase_subject) if phase_subject and "phase_artifacts" in contract.preflight_checks else None
+    phase_info = (
+        find_phase(cwd, phase_subject) if phase_subject and "phase_artifacts" in contract.preflight_checks else None
+    )
 
     def add_check(name: str, passed: bool, detail: str, *, blocking: bool | None = None) -> None:
         checks.append(
@@ -579,7 +579,9 @@ def _build_review_preflight(
                 except Exception as exc:  # pragma: no cover - defensive parsing guard
                     add_check("reproducibility_ready", False, f"could not validate reproducibility manifest: {exc}")
                 else:
-                    ready = repro_validation.valid and repro_validation.ready_for_review and not repro_validation.warnings
+                    ready = (
+                        repro_validation.valid and repro_validation.ready_for_review and not repro_validation.warnings
+                    )
                     detail = (
                         "reproducibility manifest is review-ready"
                         if ready
@@ -614,7 +616,11 @@ def _build_review_preflight(
                     ),
                 )
         else:
-            summary_exists = bool(getattr(phase_info, "summaries", [])) if phase_info is not None else _has_any_phase_summary(layout.phases_dir)
+            summary_exists = (
+                bool(getattr(phase_info, "summaries", []))
+                if phase_info is not None
+                else _has_any_phase_summary(layout.phases_dir)
+            )
             add_check(
                 "phase_summaries",
                 summary_exists,

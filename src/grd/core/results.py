@@ -76,7 +76,17 @@ class MissingDep(BaseModel):
 # --- Helpers ---
 
 RESULT_FIELDS = frozenset(
-    {"equation", "description", "units", "validity", "phase", "depends_on", "verified", "verification_records", "metadata"}
+    {
+        "equation",
+        "description",
+        "units",
+        "validity",
+        "phase",
+        "depends_on",
+        "verified",
+        "verification_records",
+        "metadata",
+    }
 )
 
 
@@ -437,7 +447,9 @@ def result_update(
         if records_raw is None:
             updates["verification_records"] = []
         elif isinstance(records_raw, list):
-            updates["verification_records"] = [record.model_dump() for record in _normalize_verification_records(records_raw)]
+            updates["verification_records"] = [
+                record.model_dump() for record in _normalize_verification_records(records_raw)
+            ]
         else:
             raise ResultError("verification_records must be a list of verification records")
         has_records = bool(updates["verification_records"])

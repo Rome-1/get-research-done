@@ -498,7 +498,9 @@ class TestInstall:
         )
 
         settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
-        assert settings["statusLine"]["command"] == f"{sys.executable or 'python3'} {(target / 'hooks' / 'statusline.py')}"
+        assert (
+            settings["statusLine"]["command"] == f"{sys.executable or 'python3'} {(target / 'hooks' / 'statusline.py')}"
+        )
         session_start = settings.get("hooks", {}).get("SessionStart", [])
         cmds = [h.get("command", "") for entry in session_start for h in (entry.get("hooks") or [])]
         assert f"{sys.executable or 'python3'} {(target / 'hooks' / 'check_update.py')}" in cmds
@@ -651,7 +653,7 @@ class TestInstall:
         assert f"When shell steps call the GRD CLI, use {expected_bridge}" in command
         assert "Run the init command as its own shell call in Gemini auto-edit mode." in workflow
         assert "INIT=$(grd init new-project)" not in workflow
-        assert f'INIT=$({expected_bridge} init new-project)' not in workflow
+        assert f"INIT=$({expected_bridge} init new-project)" not in workflow
         assert f"{expected_bridge} init new-project" in workflow
         assert f"{expected_bridge} commit " in workflow
         assert ' grd commit "' not in workflow
@@ -684,7 +686,6 @@ class TestInstall:
         assert "if [ $? -ne 0 ]" not in content
         assert expected_gemini_bridge(target) + " config ensure-section" in content
         assert expected_gemini_bridge(target) + " init progress --include state,config" in content
-
 
     def test_install_agents_replace_runtime_placeholders(
         self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path
@@ -796,8 +797,7 @@ class TestInstall:
             encoding="utf-8",
         )
         (agents_src / "grd-includer.md").write_text(
-            "---\nname: grd-includer\ndescription: test\n---\n"
-            "@{GRD_INSTALL_DIR}/references/runtime-ref.md\n",
+            "---\nname: grd-includer\ndescription: test\n---\n@{GRD_INSTALL_DIR}/references/runtime-ref.md\n",
             encoding="utf-8",
         )
 

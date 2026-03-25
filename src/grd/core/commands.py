@@ -360,7 +360,9 @@ def cmd_summary_extract(
         if field in fm
     ]
     if unsupported_summary_fields:
-        raise ValidationError(f"Unsupported summary frontmatter in {summary_path}: {'; '.join(unsupported_summary_fields)}")
+        raise ValidationError(
+            f"Unsupported summary frontmatter in {summary_path}: {'; '.join(unsupported_summary_fields)}"
+        )
 
     # Extract one-liner: frontmatter first, fall back to body bold text
     one_liner = fm.get("one-liner")
@@ -439,7 +441,9 @@ def cmd_history_digest(cwd: Path) -> HistoryDigestResult:
     for dir_path in phase_dirs:
         dir_name = dir_path.name
         summaries = [
-            f for f in dir_path.iterdir() if f.is_file() and (f.name.endswith(SUMMARY_SUFFIX) or f.name == STANDALONE_SUMMARY)
+            f
+            for f in dir_path.iterdir()
+            if f.is_file() and (f.name.endswith(SUMMARY_SUFFIX) or f.name == STANDALONE_SUMMARY)
         ]
 
         for summary_file in summaries:
@@ -750,9 +754,7 @@ def cmd_validate_return(file_path: Path) -> ValidateReturnResult:
 
     # Validate status value
     if raw_status and status_lower not in VALID_RETURN_STATUSES:
-        errors.append(
-            f"Invalid status '{raw_status}'. Must be one of: {', '.join(sorted(VALID_RETURN_STATUSES))}"
-        )
+        errors.append(f"Invalid status '{raw_status}'. Must be one of: {', '.join(sorted(VALID_RETURN_STATUSES))}")
 
     # Validate task counts are numbers
     for count_field in ("tasks_completed", "tasks_total"):

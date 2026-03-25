@@ -153,7 +153,9 @@ def test_validate_project_contract_command_blocks_background_only_reference_in_a
     payload = json.loads(result.output)
     assert payload["valid"] is False
     assert payload["mode"] == "approved"
-    assert any("approved project contract requires at least one concrete anchor" in error for error in payload["errors"])
+    assert any(
+        "approved project contract requires at least one concrete anchor" in error for error in payload["errors"]
+    )
 
 
 def test_validate_project_contract_command_blocks_background_must_read_ref_without_real_anchor(tmp_path: Path) -> None:
@@ -192,7 +194,9 @@ def test_validate_project_contract_command_blocks_background_must_read_ref_witho
     payload = json.loads(result.output)
     assert payload["valid"] is False
     assert payload["mode"] == "approved"
-    assert any("approved project contract requires at least one concrete anchor" in error for error in payload["errors"])
+    assert any(
+        "approved project contract requires at least one concrete anchor" in error for error in payload["errors"]
+    )
 
 
 def test_validate_project_contract_command_reports_shape_errors_without_traceback(tmp_path: Path) -> None:
