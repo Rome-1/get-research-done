@@ -566,14 +566,17 @@ def pattern_search(query: str, *, root: Path | None = None) -> PatternSearchResu
         for p in index.patterns:
             searchable = " ".join([p.title, p.domain, p.category, *p.tags]).lower()
             score = 0
+            matched_all = True
             for term in terms:
                 if term in searchable:
                     score += 1
+                else:
+                    matched_all = False
                 if term in p.tags:
                     score += 2
                 if p.domain == term or p.category == term:
                     score += 3
-            if score > 0:
+            if score > 0 and matched_all:
                 scored.append((score, p))
 
         scored.sort(key=lambda x: -x[0])
