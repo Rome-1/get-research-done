@@ -100,6 +100,10 @@ class DomainContext:
         return self._pack.display_name
 
     @property
+    def pack(self) -> DomainPack:
+        return self._pack
+
+    @property
     def pack_path(self) -> Path:
         return self._pack.pack_path
 

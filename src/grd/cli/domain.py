@@ -62,7 +62,7 @@ def domain_info(
         "seed_pattern_count": len(ctx.seed_patterns) if ctx.seed_patterns else 0,
     }
     if pack.result_metadata_fields:
-        info["result_metadata_fields"] = [f.name for f in pack.result_metadata_fields]
+        info["result_metadata_fields"] = [f["key"] for f in pack.result_metadata_fields]
 
     _output(info)
 

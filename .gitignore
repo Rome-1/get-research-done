@@ -11,6 +11,8 @@ build/
 .grd/
 .ruff_cache/
 .pytest_cache/
+.coverage
+htmlcov/
 .mypy_cache/
 .npm-cache/
 .mcp.json
