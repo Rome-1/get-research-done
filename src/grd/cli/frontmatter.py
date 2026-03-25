@@ -38,6 +38,9 @@ def frontmatter_set(
     value: str | None = typer.Option(None, "--value", help="Field value (omit to clear)"),
 ) -> None:
     """Set a frontmatter field."""
+    if not field or not field.strip():
+        _error("--field must not be empty or whitespace-only")
+
     from grd.core.frontmatter import splice_frontmatter
 
     file_path = _get_cwd() / file

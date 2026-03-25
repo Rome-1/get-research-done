@@ -1089,7 +1089,7 @@ def timestamp(
     from grd.core.commands import cmd_current_timestamp
 
     result = cmd_current_timestamp(fmt)
-    _json_cli_output(result)
+    _output(result)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1105,7 +1105,7 @@ def slug(
     from grd.core.commands import cmd_generate_slug
 
     result = cmd_generate_slug(text)
-    _json_cli_output(result)
+    _output(result)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

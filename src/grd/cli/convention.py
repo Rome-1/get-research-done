@@ -74,7 +74,10 @@ def convention_set(
         lock = ConventionLock(**lock_data)
 
         result = convention_set(lock, key, value, force=force, domain_ctx=_load_domain_ctx())
-        if result.updated:
+        if result.updated and result.custom and not force:
+            # Non-canonical key without --force: reject before persisting.
+            pass
+        elif result.updated:
             raw["convention_lock"] = lock.model_dump(exclude_none=True)
             save_state_json_locked(cwd, raw)
 
@@ -95,6 +98,8 @@ def convention_set(
             "Use --force if this is intentional.",
             highlight=False,
         )
+        if not force:
+            _error(f"'{result.key}' is not a recognized convention. Use --force to set it anyway.")
     _output(result)
 
 

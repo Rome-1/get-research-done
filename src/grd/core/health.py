@@ -358,11 +358,17 @@ def check_convention_lock(cwd: Path) -> HealthCheck:
             details={},
         )
 
+    # Conventions are nested under cl["conventions"] (ConventionLock schema).
+    # Also check top-level keys for backward compatibility with older state files.
+    conventions = cl.get("conventions", {})
+    if not isinstance(conventions, dict):
+        conventions = {}
+
     set_count = 0
     total_count = 0
     for key in KNOWN_CONVENTIONS:
         total_count += 1
-        val = cl.get(key)
+        val = conventions.get(key) or cl.get(key)
         if not is_bogus_value(val):
             set_count += 1
 

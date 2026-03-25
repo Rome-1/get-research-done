@@ -356,6 +356,19 @@ class TestFrontmatterSet:
         data = json.loads(result.output)
         assert data["value"] is None
 
+    def test_set_empty_field_name(self, grd_project: Path, md_file: Path) -> None:
+        result = _invoke(
+            "frontmatter",
+            "set",
+            "test-doc.md",
+            "--field",
+            "",
+            "--value",
+            "x",
+            cwd=grd_project,
+        )
+        assert result.exit_code != 0
+
     def test_set_file_not_found(self, grd_project: Path) -> None:
         result = _invoke(
             "frontmatter",
@@ -897,7 +910,7 @@ class TestConventionSet:
         assert data.get("key") == "metric_signature"
 
     def test_set_convention_force(self, grd_project: Path) -> None:
-        _invoke("convention", "set", "custom_key", "val1", cwd=grd_project)
+        _invoke("convention", "set", "custom_key", "val1", "--force", cwd=grd_project)
         result = _invoke("convention", "set", "custom_key", "val2", "--force", cwd=grd_project)
         assert result.exit_code == 0, result.output
 
@@ -911,6 +924,11 @@ class TestConventionSet:
         (grd_project / ".grd" / "state.json").write_text("{bad json!!")
         result = _invoke("convention", "set", "key", "val", cwd=grd_project)
         assert result.exit_code != 0
+
+    def test_set_noncanonical_key_without_force_fails(self, grd_project: Path) -> None:
+        """Setting a non-canonical key without --force should fail."""
+        result = _invoke("convention", "set", "nonexistent_key", "value", cwd=grd_project)
+        assert result.exit_code != 0, f"Expected failure but got exit_code={result.exit_code}"
 
 
 class TestConventionList:
