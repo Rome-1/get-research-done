@@ -11,6 +11,7 @@ from pathlib import Path
 
 from gpd.adapters.install_utils import CACHE_DIR_NAME, GPD_INSTALL_DIR_NAME, UPDATE_CACHE_FILENAME
 from gpd.core.constants import ENV_GPD_DEBUG, PLANNING_DIR_NAME
+from gpd.hooks.install_metadata import config_dir_has_complete_install
 
 SECONDS_PER_HOUR = 3600
 UPDATE_CHECK_TTL_SECONDS = 12 * SECONDS_PER_HOUR
@@ -84,7 +85,14 @@ def _version_files() -> list[Path]:
     if self_config_dir is not None:
         return [self_config_dir / GPD_INSTALL_DIR_NAME / "VERSION"]
 
-    return [install_dir / "VERSION" for install_dir in get_gpd_install_dirs(prefer_active=True)]
+    version_files: list[Path] = []
+    for install_dir in get_gpd_install_dirs(prefer_active=True):
+        config_dir = install_dir.parent
+        if not config_dir_has_complete_install(config_dir):
+            _debug(f"Skipping non-authoritative VERSION file candidate {install_dir / 'VERSION'}")
+            continue
+        version_files.append(install_dir / "VERSION")
+    return version_files
 
 
 def _read_installed_version() -> str:

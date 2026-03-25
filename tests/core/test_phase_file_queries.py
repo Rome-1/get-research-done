@@ -31,6 +31,20 @@ class TestVerifyPhaseCompleteness:
         assert result.summary_count == 1
         assert result.incomplete_plans == []
 
+    def test_complete_standalone_phase(self, tmp_path: Path, state_project_factory) -> None:
+        cwd = state_project_factory(tmp_path, current_phase="01", status="Planning")
+        phase_dir = _create_phase_dir(cwd, "01-setup")
+        (phase_dir / "PLAN.md").write_text("# Plan\n", encoding="utf-8")
+        (phase_dir / "SUMMARY.md").write_text("# Summary\nDone.\n", encoding="utf-8")
+        _write_roadmap(cwd, "# Roadmap\n\n### Phase 1: Setup\n**Goal:** Initial setup\n")
+
+        result = verify_phase_completeness(cwd, "1")
+
+        assert result.complete is True
+        assert result.plan_count == 1
+        assert result.summary_count == 1
+        assert result.incomplete_plans == []
+
     def test_incomplete_phase_reports_missing_summaries(
         self, tmp_path: Path, state_project_factory
     ) -> None:

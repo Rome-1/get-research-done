@@ -22,9 +22,9 @@ from gpd.core.constants import (
     PLANNING_DIR_NAME,
     REQUIRED_RETURN_FIELDS,
     STANDALONE_PLAN,
-    SUMMARY_SUFFIX,
     VALID_RETURN_STATUSES,
     VERIFICATION_SUFFIX,
+    ProjectLayout,
 )
 from gpd.core.errors import ValidationError
 from gpd.core.frontmatter import (
@@ -38,6 +38,7 @@ from gpd.core.utils import (
     compare_phase_numbers,
     generate_slug,
     is_phase_complete,
+    matching_phase_artifact_count,
     safe_read_file,
 )
 
@@ -421,7 +422,7 @@ def _merge_list_or_string(target_set: set[str], value: object) -> None:
 def cmd_history_digest(cwd: Path) -> HistoryDigestResult:
     """Build a digest of project history from phase SUMMARY files.
 
-    Scans GPD/phases/*/*-SUMMARY.md for frontmatter fields:
+    Scans GPD/phases/*/*SUMMARY.md for frontmatter fields:
     dependency-graph.provides, dependency-graph.affects, patterns-established,
     key-decisions, and methods.added.
     """
@@ -432,6 +433,7 @@ def cmd_history_digest(cwd: Path) -> HistoryDigestResult:
 
     if not phases_dir.is_dir():
         return digest
+    layout = ProjectLayout(cwd)
 
     phase_dirs = sorted(
         [d for d in phases_dir.iterdir() if d.is_dir()],
@@ -440,9 +442,7 @@ def cmd_history_digest(cwd: Path) -> HistoryDigestResult:
 
     for dir_path in phase_dirs:
         dir_name = dir_path.name
-        summaries = [
-            f for f in dir_path.iterdir() if f.is_file() and f.name.endswith(SUMMARY_SUFFIX)
-        ]
+        summaries = [f for f in dir_path.iterdir() if f.is_file() and layout.is_summary_file(f.name)]
 
         for summary_file in summaries:
             content = safe_read_file(summary_file)
@@ -546,17 +546,17 @@ def cmd_regression_check(cwd: Path, *, phase: str | None = None, quick: bool = F
     except FileNotFoundError:
         return RegressionCheckResult(passed=True, issues=[], phases_checked=0)
 
+    layout = ProjectLayout(cwd)
     completed_dirs: list[Path] = []
     for d in all_dirs:
         files = [f.name for f in d.iterdir() if f.is_file()]
         plans = [f for f in files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN]
-        summaries = [f for f in files if f.endswith(SUMMARY_SUFFIX)]
-        if is_phase_complete(len(plans), len(summaries)):
+        summaries = [f for f in files if layout.is_summary_file(f)]
+        if is_phase_complete(len(plans), matching_phase_artifact_count(plans, summaries)):
             completed_dirs.append(d)
 
     if not completed_dirs:
         return RegressionCheckResult(passed=True, issues=[], phases_checked=0)
-
     completed_dirs = [d for d in completed_dirs if _matches_phase_scope(d.name, phase)]
     if not completed_dirs:
         return RegressionCheckResult(passed=True, issues=[], phases_checked=0)
@@ -567,7 +567,7 @@ def cmd_regression_check(cwd: Path, *, phase: str | None = None, quick: bool = F
     # 1. Convention redefinitions across SUMMARYs
     conventions_by_symbol: dict[str, list[dict[str, str]]] = {}
     for d in completed_dirs:
-        summaries = [f for f in d.iterdir() if f.is_file() and f.name.endswith(SUMMARY_SUFFIX)]
+        summaries = [f for f in d.iterdir() if f.is_file() and layout.is_summary_file(f.name)]
         for summary_file in summaries:
             content = safe_read_file(summary_file)
             if content is None:

@@ -287,6 +287,43 @@ def replace_placeholders(
     return _replace_runtime_placeholders(content, path_prefix, runtime, install_scope)
 
 
+def _materialize_workflow_paths(
+    content: str,
+    *,
+    target_dir: Path,
+    runtime: str,
+    install_scope: str | None,
+) -> str:
+    """Rewrite workflow bootstrap variables to authoritative absolute paths."""
+    resolved_target = target_dir.expanduser().resolve(strict=False)
+    config_dir = resolved_target.as_posix()
+    install_dir = (resolved_target / GPD_INSTALL_DIR_NAME).as_posix()
+    # Keep the canonical runtime-global directory distinct from an explicit
+    # global install target so update/reapply workflows can still detect when
+    # ``--target-dir`` is required.
+    descriptor = get_runtime_descriptor(runtime)
+    global_config_dir = resolve_global_config_dir(descriptor, home=Path.home()).as_posix()
+    relative_config_prefix = f"./{descriptor.config_dir_name}/"
+
+    replacements = {
+        "GPD_INSTALL_DIR": install_dir,
+        "GPD_CONFIG_DIR": config_dir,
+        "GPD_GLOBAL_CONFIG_DIR": global_config_dir,
+        "PATCHES_DIR": f"{config_dir}/gpd-local-patches",
+        "GLOBAL_PATCHES_DIR": f"{global_config_dir}/gpd-local-patches",
+    }
+    for var, value in replacements.items():
+        content = re.sub(
+            rf"(?m)^(?P<indent>\s*){re.escape(var)}=\"[^\"]*\"$",
+            lambda match, replacement=value, name=var: f'{match.group("indent")}{name}="{replacement}"',
+            content,
+            count=1,
+        )
+    content = content.replace(f"@{relative_config_prefix}get-physics-done/", f"@{config_dir}/get-physics-done/")
+    content = content.replace(f"@{relative_config_prefix}agents/", f"@{config_dir}/agents/")
+    return content
+
+
 def materialize_first_round_review_schema_headings(content: str) -> str:
     """Render staged-review schema headings with first-round filenames.
 
@@ -755,6 +792,7 @@ def compile_markdown_for_runtime(
     path_prefix: str,
     install_scope: str | None = None,
     src_root: str | Path | None = None,
+    workflow_target_dir: Path | None = None,
     protect_agent_prompt_body: bool = False,
 ) -> str:
     """Compile canonical markdown into a runtime-specific installed form.
@@ -782,6 +820,14 @@ def compile_markdown_for_runtime(
 
     if protect_agent_prompt_body:
         content = protect_runtime_agent_prompt(content, runtime)
+
+    if workflow_target_dir is not None:
+        content = _materialize_workflow_paths(
+            content,
+            target_dir=workflow_target_dir,
+            runtime=runtime,
+            install_scope=install_scope,
+        )
 
     return content
 
@@ -979,6 +1025,9 @@ def copy_with_path_replacement(
     runtime: str,
     install_scope: str | None = None,
     markdown_transform: Callable[[str, str, str | None], str] | None = None,
+    *,
+    workflow_paths: bool = False,
+    workflow_target_dir: Path | None = None,
 ) -> None:
     """Safely copy *src_dir* to *dest_dir* with path replacement in ``.md`` files.
 
@@ -1017,6 +1066,8 @@ def copy_with_path_replacement(
             runtime,
             install_scope,
             markdown_transform=markdown_transform,
+            workflow_paths=workflow_paths,
+            workflow_target_dir=workflow_target_dir,
         )
 
         # Swap into place
@@ -1050,6 +1101,9 @@ def _copy_dir_contents(
     runtime: str,
     install_scope: str | None = None,
     markdown_transform: Callable[[str, str, str | None], str] | None = None,
+    *,
+    workflow_paths: bool = False,
+    workflow_target_dir: Path | None = None,
 ) -> None:
     """Recursively copy directory contents with runtime translation in .md files.
 
@@ -1070,11 +1124,20 @@ def _copy_dir_contents(
                 runtime,
                 install_scope,
                 markdown_transform=markdown_transform,
+                workflow_paths=workflow_paths,
+                workflow_target_dir=workflow_target_dir,
             )
         elif entry.suffix == ".md":
             content = entry.read_text(encoding="utf-8")
             active_transform = markdown_transform or _default_markdown_transform(runtime)
             content = active_transform(content, path_prefix, install_scope=install_scope)
+            if workflow_paths:
+                content = _materialize_workflow_paths(
+                    content,
+                    target_dir=workflow_target_dir or target_dir,
+                    runtime=runtime,
+                    install_scope=install_scope,
+                )
             dest.write_text(content, encoding="utf-8")
         else:
             # Binary copy
@@ -1536,6 +1599,8 @@ def install_gpd_content(
                 runtime,
                 install_scope,
                 markdown_transform=markdown_transform,
+                workflow_paths=subdir_name == "workflows",
+                workflow_target_dir=target_dir,
             )
 
     if verify_installed(gpd_dest, "get-physics-done"):

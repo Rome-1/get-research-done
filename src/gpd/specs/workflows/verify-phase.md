@@ -89,13 +89,13 @@ Extract **phase goal** from ROADMAP.md (the research outcome to verify, not task
 **EXCLUDE from verification context:**
 
 - Full PLAN.md body (task breakdowns, implementation details)
-- SUMMARY.md files (what executors claimed they did)
+- Summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`) (what executors claimed they did)
 - Execution logs or agent conversation history
 
 Extract the contract target definition from frontmatter only:
 
 ```bash
-for plan in "$phase_dir"/*-PLAN.md; do
+for plan in "$phase_dir"/PLAN.md "$phase_dir"/*-PLAN.md; do
   gpd frontmatter get "$plan" --field contract
 done
 ```
@@ -198,7 +198,7 @@ If the limits you compute do not match known results -> FAILED. If some supporti
 Use gpd for initial artifact structural verification:
 
 ```bash
-for plan in "$phase_dir"/*-PLAN.md; do
+for plan in "$phase_dir"/PLAN.md "$phase_dir"/*-PLAN.md; do
   ARTIFACT_RESULT=$(gpd verify artifacts "$plan")
   echo "=== $plan ===" && echo "$ARTIFACT_RESULT"
 done
@@ -441,7 +441,7 @@ For each numerical result, record:
   </step>
 
 <step name="scan_antipatterns">
-Extract files modified in this phase from SUMMARY.md, scan each:
+Extract files modified in this phase from summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`), scan each:
 
 | Pattern                    | Search                                                                | Severity |
 | -------------------------- | --------------------------------------------------------------------- | -------- |
@@ -460,19 +460,19 @@ Categorize: Blocker (prevents research goal) | Warning (incomplete) | Info (nota
 
 Skip this step if `phase_number` is the first phase (no prior phase to compare against).
 
-Otherwise, locate the previous phase's SUMMARY.md and read the current phase's SUMMARY.md:
+Otherwise, locate the previous phase's summary artifact and read the current phase's summary artifact:
 
 ```bash
 # Find previous phase summary (phase N-1)
 PREV_PHASE_DIR=$(ls -d GPD/phases/*/ | sort | grep -B1 "$phase_dir" | head -1)
-PREV_SUMMARY=$(ls "$PREV_PHASE_DIR"/*-SUMMARY.md 2>/dev/null | tail -1)
-CURR_SUMMARY=$(ls "$phase_dir"/*-SUMMARY.md 2>/dev/null | tail -1)
+PREV_SUMMARY=$(ls "$PREV_PHASE_DIR"/SUMMARY.md "$PREV_PHASE_DIR"/*-SUMMARY.md 2>/dev/null | tail -1)
+CURR_SUMMARY=$(ls "$phase_dir"/SUMMARY.md "$phase_dir"/*-SUMMARY.md 2>/dev/null | tail -1)
 ```
 
 If both summaries exist, check for cross-phase consistency by reading:
 
-1. **Current SUMMARY.md** — "Cross-Phase Dependencies" section (consumed results, convention changes)
-2. **Previous SUMMARY.md** — "Approximations Used" table and "Key Results" / "Equations Derived"
+1. **Current summary artifact** — "Cross-Phase Dependencies" section (consumed results, convention changes)
+2. **Previous summary artifact** — "Approximations Used" table and "Key Results" / "Equations Derived"
 3. **STATE.md** — "Active Approximations" table and "Convention Lock"
 
 Reference: @{GPD_INSTALL_DIR}/references/verification/core/verification-core.md (+ relevant domain verification file)

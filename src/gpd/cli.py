@@ -33,6 +33,15 @@ from rich.table import Table
 from rich.text import Text
 
 from gpd.command_labels import canonical_command_label
+from gpd.core.cli_args import (
+    normalize_root_global_cli_options as _normalize_root_global_cli_options,
+)
+from gpd.core.cli_args import (
+    resolve_root_global_cli_cwd_from_argv as _resolve_root_global_cli_cwd_from_argv,
+)
+from gpd.core.cli_args import (
+    split_root_global_cli_options as _split_root_global_cli_options,
+)
 from gpd.core.constants import ENV_GPD_DISABLE_CHECKOUT_REEXEC
 from gpd.core.errors import ConfigError, GPDError
 from gpd.hooks.runtime_detect import detect_runtime_for_gpd_use, normalize_runtime_name
@@ -110,75 +119,18 @@ def _get_cwd() -> Path:
 
 
 def _split_global_cli_options(argv: list[str]) -> tuple[list[str], list[str]]:
-    """Partition root-global CLI options from the rest of the argv stream.
-
-    This keeps ``--raw`` and ``--cwd`` usable even when agents append them after
-    the subcommand, while still respecting the ``--`` end-of-options marker.
-    """
-    global_args: list[str] = []
-    remaining_args: list[str] = []
-    passthrough = False
-    index = 0
-
-    while index < len(argv):
-        arg = str(argv[index])
-        if passthrough:
-            remaining_args.append(arg)
-            index += 1
-            continue
-
-        if arg == "--":
-            passthrough = True
-            remaining_args.append(arg)
-            index += 1
-            continue
-
-        if arg == "--raw":
-            global_args.append(arg)
-            index += 1
-            continue
-
-        if arg == "--cwd":
-            global_args.append(arg)
-            if index + 1 < len(argv):
-                global_args.append(str(argv[index + 1]))
-                index += 2
-            else:
-                index += 1
-            continue
-
-        if arg.startswith("--cwd="):
-            global_args.append(arg)
-            index += 1
-            continue
-
-        remaining_args.append(arg)
-        index += 1
-
-    return global_args, remaining_args
+    """Partition root-global CLI options from the rest of the argv stream."""
+    return _split_root_global_cli_options(argv)
 
 
 def _normalize_global_cli_options(argv: list[str]) -> list[str]:
     """Move root-global options to the front of the argv stream."""
-    global_args, remaining_args = _split_global_cli_options(argv)
-    return [*global_args, *remaining_args]
+    return _normalize_root_global_cli_options(argv)
 
 
 def _resolve_cli_cwd_from_argv(argv: list[str]) -> Path:
     """Resolve the effective CLI cwd from raw argv before Typer parses it."""
-    raw_cwd = "."
-    global_args, _ = _split_global_cli_options(argv)
-    for index, arg in enumerate(global_args):
-        if arg == "--cwd" and index + 1 < len(global_args):
-            raw_cwd = global_args[index + 1]
-            continue
-        if arg.startswith("--cwd="):
-            raw_cwd = arg.split("=", 1)[1]
-
-    candidate = Path(raw_cwd).expanduser()
-    if candidate.is_absolute():
-        return candidate.resolve(strict=False)
-    return (Path.cwd() / candidate).resolve(strict=False)
+    return _resolve_root_global_cli_cwd_from_argv(argv)
 
 
 def _maybe_reexec_from_checkout(argv: list[str] | None = None) -> None:

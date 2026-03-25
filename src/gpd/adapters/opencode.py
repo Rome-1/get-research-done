@@ -334,6 +334,7 @@ def copy_flattened_commands(
     dest_dir: Path,
     prefix: str,
     path_prefix: str,
+    workflow_target_dir: Path | None = None,
     gpd_src_root: Path | None = None,
     install_scope: str | None = None,
     bridge_command: str | None = None,
@@ -364,6 +365,7 @@ def copy_flattened_commands(
                 dest_dir,
                 f"{prefix}-{entry.name}",
                 path_prefix,
+                workflow_target_dir,
                 gpd_src_root,
                 install_scope,
                 bridge_command,
@@ -379,6 +381,7 @@ def copy_flattened_commands(
                 path_prefix=path_prefix,
                 install_scope=install_scope,
                 src_root=gpd_src_root,
+                workflow_target_dir=workflow_target_dir,
             )
             if bridge_command:
                 content = _rewrite_gpd_cli_invocations(content, bridge_command)
@@ -962,6 +965,7 @@ class OpenCodeAdapter(RuntimeAdapter):
             command_dir,
             "gpd",
             path_prefix,
+            target_dir,
             gpd_root / "specs",
             self._current_install_scope_flag(),
             bridge_command,

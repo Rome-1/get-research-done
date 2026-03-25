@@ -39,7 +39,7 @@ from gpd.core.contract_validation import (
 )
 from gpd.core.errors import GPDError
 from gpd.core.observability import instrument_gpd_function, resolve_project_root
-from gpd.core.utils import safe_read_file
+from gpd.core.utils import matching_phase_artifact_count, phase_artifact_display_name, phase_artifact_id, safe_read_file
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -1626,22 +1626,13 @@ def verify_phase_completeness(cwd: Path, phase: str) -> PhaseCompleteness:
     plans = [f for f in files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN]
     summaries = [f for f in files if f.endswith(SUMMARY_SUFFIX) or f == STANDALONE_SUMMARY]
 
-    # Extract plan IDs
-    def plan_id(p: str) -> str:
-        if p == STANDALONE_PLAN:
-            return "_standalone"
-        return p.removesuffix(PLAN_SUFFIX) if p.endswith(PLAN_SUFFIX) else p
+    plan_ids = {phase_artifact_id(p, PLAN_SUFFIX, STANDALONE_PLAN) for p in plans}
+    summary_ids = {phase_artifact_id(s, SUMMARY_SUFFIX, STANDALONE_SUMMARY) for s in summaries}
 
-    def summary_id(s: str) -> str:
-        if s == STANDALONE_SUMMARY:
-            return "_standalone"
-        return s.removesuffix(SUMMARY_SUFFIX) if s.endswith(SUMMARY_SUFFIX) else s
-
-    plan_ids = {plan_id(p) for p in plans}
-    summary_ids = {summary_id(s) for s in summaries}
-
-    incomplete = sorted(plan_ids - summary_ids)
-    orphans = sorted(summary_ids - plan_ids)
+    incomplete = sorted(phase_artifact_display_name(plan_id, STANDALONE_PLAN) for plan_id in (plan_ids - summary_ids))
+    orphans = sorted(
+        phase_artifact_display_name(summary_id, STANDALONE_SUMMARY) for summary_id in (summary_ids - plan_ids)
+    )
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -1654,7 +1645,7 @@ def verify_phase_completeness(cwd: Path, phase: str) -> PhaseCompleteness:
         complete=len(errors) == 0,
         phase_number=phase_info.phase_number,
         plan_count=len(plans),
-        summary_count=len(summaries),
+        summary_count=matching_phase_artifact_count(plans, summaries),
         incomplete_plans=incomplete,
         orphan_summaries=orphans,
         errors=errors,

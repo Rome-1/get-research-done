@@ -86,6 +86,8 @@ class ClaudeCodeAdapter(RuntimeAdapter):
             self.runtime_name,
             self._current_install_scope_flag(),
             markdown_transform=_translate,
+            workflow_paths=True,
+            workflow_target_dir=target_dir,
         )
         if verify_installed(commands_dest, "commands/gpd"):
             logger.info("Installed commands/gpd")

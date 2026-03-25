@@ -796,6 +796,7 @@ def _install_commands_as_toml(
     commands_src: Path,
     commands_dest: Path,
     path_prefix: str,
+    workflow_target_dir: Path,
     gpd_src_root: Path,
     attribution: str | None = "",
     install_scope: str | None = None,
@@ -818,6 +819,7 @@ def _install_commands_as_toml(
         commands_src,
         commands_dest,
         path_prefix,
+        workflow_target_dir,
         attribution,
         gpd_src_root,
         install_scope,
@@ -829,6 +831,7 @@ def _copy_commands_recursive(
     src_dir: Path,
     dest_dir: Path,
     path_prefix: str,
+    workflow_target_dir: Path,
     attribution: str | None,
     gpd_src_root: Path,
     install_scope: str | None = None,
@@ -844,6 +847,7 @@ def _copy_commands_recursive(
                 entry,
                 sub_dest,
                 path_prefix,
+                workflow_target_dir,
                 attribution,
                 gpd_src_root,
                 install_scope,
@@ -856,6 +860,7 @@ def _copy_commands_recursive(
                 path_prefix=path_prefix,
                 install_scope=install_scope,
                 src_root=gpd_src_root,
+                workflow_target_dir=workflow_target_dir,
             )
             content = process_attribution(content, attribution)
             content = strip_sub_tags(content)
@@ -927,6 +932,7 @@ class GeminiAdapter(RuntimeAdapter):
             commands_src,
             commands_dest,
             path_prefix,
+            target_dir,
             gpd_root / "specs",
             attribution=self.get_commit_attribution(),
             install_scope=self._current_install_scope_flag(),

@@ -42,8 +42,8 @@ ls -la "${phase_dir}/" 2>/dev/null
 
 Categorize files into:
 
-- **Plans:** `*-PLAN.md`
-- **Summaries:** `*-SUMMARY.md`
+- **Plans:** `PLAN.md` and `*-PLAN.md`
+- **Summaries:** `SUMMARY.md` and `*-SUMMARY.md`
 - **Context:** `*-CONTEXT.md`
 - **Research:** `*-RESEARCH.md`
 - **Discovery:** `DISCOVERY.md`
@@ -75,10 +75,10 @@ Find this phase in the phases array to get `disk_status` (complete/partial/plann
 <step name="plan_completion">
 **Check plan completion status:**
 
-For each PLAN.md file found:
+For each plan artifact found (`PLAN.md` or `*-PLAN.md`):
 
 1. Extract the plan number and name from filename and frontmatter
-2. Check if a matching `*-SUMMARY.md` exists
+2. Check if a matching summary artifact exists (`PLAN.md` <-> `SUMMARY.md`, numbered plan <-> numbered summary)
 3. Mark as: completed (has SUMMARY), pending (no SUMMARY)
 
 Present as table:
@@ -98,7 +98,7 @@ Present as table:
 <step name="key_results">
 **Extract key results from completed plans:**
 
-For each `*-SUMMARY.md`:
+For each summary artifact (`SUMMARY.md` or `*-SUMMARY.md`):
 
 ```bash
 gpd summary-extract <path> --field one_liner --field key_results --field equations
@@ -126,7 +126,7 @@ Present:
 - Key: [key result 1]
 ```
 
-If no SUMMARYs exist: "No results yet (no plans executed)."
+If no summary artifacts exist: "No results yet (no plans executed)."
 </step>
 
 <step name="verification_status">
@@ -156,7 +156,7 @@ If no verification files: "No verification performed yet. Run /gpd:verify-work {
 <step name="convention_changes">
 **Check for convention changes introduced in this phase:**
 
-For each `*-SUMMARY.md`, check frontmatter for `affects` field.
+For each summary artifact (`SUMMARY.md` or `*-SUMMARY.md`), check frontmatter for `affects` field.
 
 The `affects` field lists conventions or definitions that were established or changed:
 
@@ -239,8 +239,8 @@ Present with human-readable sizes:
 - [ ] Phase validated against roadmap
 - [ ] Phase directory contents loaded and categorized
 - [ ] Roadmap description and goal extracted
-- [ ] Plan completion table showing SUMMARY Y/N per plan
-- [ ] Key results extracted from SUMMARYs (equations, quantities)
+- [ ] Plan completion table showing summary-artifact Y/N per plan
+- [ ] Key results extracted from summary artifacts (equations, quantities)
 - [ ] Verification/validation status shown
 - [ ] Convention changes from `affects` fields listed
 - [ ] All files listed with sizes

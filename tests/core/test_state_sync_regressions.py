@@ -450,7 +450,7 @@ def test_state_update_progress_ignores_orphan_summaries_and_caps_percent(tmp_pat
     phase_one = planning / "phases" / "01-foundations"
     phase_one.mkdir(parents=True)
     (phase_one / "PLAN.md").write_text("# plan\n", encoding="utf-8")
-    (phase_one / "01-SUMMARY.md").write_text("# summary\n", encoding="utf-8")
+    (phase_one / "SUMMARY.md").write_text("# summary\n", encoding="utf-8")
 
     phase_two = planning / "phases" / "02-orphan-summary"
     phase_two.mkdir(parents=True)
@@ -480,12 +480,12 @@ def test_state_update_progress_leaves_checkpoint_shelf_artifacts_unchanged(tmp_p
     phase_one = planning / "phases" / "01-foundations"
     phase_one.mkdir(parents=True)
     (phase_one / "PLAN.md").write_text("# plan\n", encoding="utf-8")
-    (phase_one / "01-SUMMARY.md").write_text("# summary\n", encoding="utf-8")
+    (phase_one / "SUMMARY.md").write_text("# summary\n", encoding="utf-8")
 
     phase_two = planning / "phases" / "02-analysis"
     phase_two.mkdir(parents=True)
     (phase_two / "PLAN.md").write_text("# plan\n", encoding="utf-8")
-    (phase_two / "02-SUMMARY.md").write_text("# summary\n", encoding="utf-8")
+    (phase_two / "SUMMARY.md").write_text("# summary\n", encoding="utf-8")
 
     checkpoint_dir = cwd / "GPD" / "phase-checkpoints"
     checkpoint_dir.mkdir()

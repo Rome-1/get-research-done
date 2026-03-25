@@ -32,6 +32,7 @@ from gpd.core.constants import (
     STANDALONE_CONTEXT,
     STANDALONE_PLAN,
     STANDALONE_RESEARCH,
+    STANDALONE_SUMMARY,
     STANDALONE_VALIDATION,
     SUMMARY_SUFFIX,
     VALIDATION_SUFFIX,
@@ -47,6 +48,9 @@ from gpd.core.utils import (
     file_lock,
     generate_slug,
     is_phase_complete,
+    matching_phase_artifact_count,
+    phase_artifact_display_name,
+    phase_artifact_id,
     phase_normalize,
     phase_unpad,
     safe_parse_int,
@@ -549,7 +553,8 @@ def find_phase(cwd: Path, phase: str) -> PhaseInfo | None:
     if not phase:
         return None
 
-    phases_dir = _phases_dir(cwd)
+    layout = ProjectLayout(cwd)
+    phases_dir = layout.phases_dir
     normalized = phase_normalize(phase)
 
     if not phases_dir.is_dir():
@@ -587,17 +592,15 @@ def find_phase(cwd: Path, phase: str) -> PhaseInfo | None:
         phase_files = sorted(f.name for f in phase_dir.iterdir() if f.is_file())
 
         plans = sorted(f for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN)
-        summaries = sorted(f for f in phase_files if f.endswith(SUMMARY_SUFFIX))
+        summaries = sorted(f for f in phase_files if layout.is_summary_file(f))
         has_research = any(f.endswith(RESEARCH_SUFFIX) or f == STANDALONE_RESEARCH for f in phase_files)
         has_context = any(f.endswith(CONTEXT_SUFFIX) or f == STANDALONE_CONTEXT for f in phase_files)
         has_verification = any(f.endswith(VERIFICATION_SUFFIX) for f in phase_files)
         has_validation = any(f.endswith(VALIDATION_SUFFIX) or f == STANDALONE_VALIDATION for f in phase_files)
 
         # Determine incomplete plans (plans without matching summaries)
-        completed_plan_ids = {_strip_suffix(s, SUMMARY_SUFFIX) for s in summaries}
-        incomplete_plans = [
-            p for p in plans if _strip_suffix(_strip_suffix(p, PLAN_SUFFIX), STANDALONE_PLAN) not in completed_plan_ids
-        ]
+        completed_plan_ids = {phase_artifact_id(s, SUMMARY_SUFFIX, STANDALONE_SUMMARY) for s in summaries}
+        incomplete_plans = [p for p in plans if phase_artifact_id(p, PLAN_SUFFIX, STANDALONE_PLAN) not in completed_plan_ids]
 
         # Build slug
         phase_slug = None
@@ -654,7 +657,8 @@ def list_phase_files(cwd: Path, file_type: str, phase: str | None = None) -> Pha
         phase: Optional phase filter.
     """
     with gpd_span("phases.list_files", file_type=file_type):
-        phases_dir = _phases_dir(cwd)
+        layout = ProjectLayout(cwd)
+        phases_dir = layout.phases_dir
         if not phases_dir.is_dir():
             return PhaseFilesResult()
 
@@ -676,7 +680,7 @@ def list_phase_files(cwd: Path, file_type: str, phase: str | None = None) -> Pha
             if file_type == "plans":
                 filtered = [f for f in dir_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN]
             elif file_type == "summaries":
-                filtered = [f for f in dir_files if f.endswith(SUMMARY_SUFFIX)]
+                filtered = [f for f in dir_files if layout.is_summary_file(f)]
             else:
                 filtered = dir_files
 
@@ -909,7 +913,8 @@ def validate_phase_waves(cwd: Path, phase: str) -> PhaseWaveValidationResult:
         plans: list[PlanEntry] = []
         errors: list[str] = []
         for plan_file in phase_info.plans:
-            plan_id = _strip_suffix(_strip_suffix(plan_file, PLAN_SUFFIX), STANDALONE_PLAN)
+            plan_key = phase_artifact_id(plan_file, PLAN_SUFFIX, STANDALONE_PLAN)
+            plan_id = phase_artifact_display_name(plan_key, STANDALONE_PLAN)
             try:
                 content = (phase_dir / plan_file).read_text(encoding="utf-8")
                 fm = _extract_frontmatter(content)
@@ -943,9 +948,7 @@ def phase_plan_index(cwd: Path, phase: str) -> PhasePlanIndex:
     with gpd_span("phases.plan_index", phase=normalized):
         phase_dir = cwd / phase_info.directory
 
-        completed_plan_ids = {
-            _strip_suffix(s, SUMMARY_SUFFIX) for s in phase_info.summaries
-        }
+        completed_plan_ids = {phase_artifact_id(s, SUMMARY_SUFFIX, STANDALONE_SUMMARY) for s in phase_info.summaries}
 
         plans: list[PlanEntry] = []
         waves: dict[str, list[str]] = {}
@@ -954,7 +957,8 @@ def phase_plan_index(cwd: Path, phase: str) -> PhasePlanIndex:
         validation_errors: list[str] = []
 
         for plan_file in phase_info.plans:
-            plan_id = _strip_suffix(_strip_suffix(plan_file, PLAN_SUFFIX), STANDALONE_PLAN)
+            plan_key = phase_artifact_id(plan_file, PLAN_SUFFIX, STANDALONE_PLAN)
+            plan_id = phase_artifact_display_name(plan_key, STANDALONE_PLAN)
             try:
                 content = (phase_dir / plan_file).read_text(encoding="utf-8")
                 fm = _extract_frontmatter(content)
@@ -976,7 +980,7 @@ def phase_plan_index(cwd: Path, phase: str) -> PhasePlanIndex:
             if interactive or _CHECKPOINT_TASK_RE.search(content):
                 has_checkpoints = True
 
-            has_summary = plan_id in completed_plan_ids
+            has_summary = plan_key in completed_plan_ids
             if not has_summary:
                 incomplete.append(plan_id)
 
@@ -1022,7 +1026,8 @@ def roadmap_analyze(cwd: Path) -> RoadmapAnalysis:
         return RoadmapAnalysis()
 
     with gpd_span("roadmap.analyze"):
-        phases_dir = _phases_dir(cwd)
+        layout = ProjectLayout(cwd)
+        phases_dir = layout.phases_dir
 
         # Read phase directories once
         phase_dir_names: list[str] = []
@@ -1081,8 +1086,10 @@ def roadmap_analyze(cwd: Path) -> RoadmapAnalysis:
 
             if dir_match_name:
                 phase_files = [f.name for f in (phases_dir / dir_match_name).iterdir() if f.is_file()]
-                plan_count = sum(1 for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN)
-                summary_count = sum(1 for f in phase_files if f.endswith(SUMMARY_SUFFIX))
+                plans = [f for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN]
+                summaries = [f for f in phase_files if layout.is_summary_file(f)]
+                plan_count = len(plans)
+                summary_count = matching_phase_artifact_count(plans, summaries)
                 has_context = any(f.endswith(CONTEXT_SUFFIX) or f == STANDALONE_CONTEXT for f in phase_files)
                 has_research = any(f.endswith(RESEARCH_SUFFIX) or f == STANDALONE_RESEARCH for f in phase_files)
 
@@ -1467,7 +1474,8 @@ def phase_remove(cwd: Path, target_phase: str, *, force: bool = False) -> PhaseR
     _validate_phase_number(target_phase)
 
     roadmap_path = _roadmap_path(cwd)
-    phases_dir = _phases_dir(cwd)
+    layout = ProjectLayout(cwd)
+    phases_dir = layout.phases_dir
 
     if not roadmap_path.exists():
         raise RoadmapNotFoundError("ROADMAP.md not found")
@@ -1492,9 +1500,7 @@ def phase_remove(cwd: Path, target_phase: str, *, force: bool = False) -> PhaseR
             # Check for executed work (inside lock to avoid TOCTOU race)
             if target_dir and not force:
                 target_path = phases_dir / target_dir
-                summaries = [
-                    f.name for f in target_path.iterdir() if f.name.endswith(SUMMARY_SUFFIX)
-                ]
+                summaries = [f.name for f in target_path.iterdir() if layout.is_summary_file(f.name)]
                 if summaries:
                     raise PhaseValidationError(
                         f"Phase {target_phase} has {len(summaries)} executed plan(s). Use force=True to remove anyway."
@@ -1847,7 +1853,7 @@ def phase_complete(cwd: Path, phase_num: str) -> PhaseCompleteResult:
                 raise PhaseValidationError(f"Phase {phase_num} has no plans. Run plan-phase {phase_num} first.")
 
             plan_count = len(phase_info.plans)
-            summary_count = len(phase_info.summaries)
+            summary_count = matching_phase_artifact_count(phase_info.plans, phase_info.summaries)
 
             if not is_phase_complete(plan_count, summary_count):
                 raise PhaseIncompleteError(phase_num, summary_count, plan_count)
@@ -2002,7 +2008,7 @@ def milestone_complete(cwd: Path, version: str, *, name: str | None = None) -> M
             if phase_info is None:
                 continue
 
-            if is_phase_complete(len(phase_info.plans), len(phase_info.summaries)):
+            if is_phase_complete(len(phase_info.plans), matching_phase_artifact_count(phase_info.plans, phase_info.summaries)):
                 completed_phase_count += 1
 
             phase_dir = phases_dir / Path(phase_info.directory).name
@@ -2112,7 +2118,8 @@ def progress_render(cwd: Path, fmt: str = "json") -> ProgressJsonResult | Progre
              or ``"table"`` (markdown table).
     """
     with gpd_span("progress.render", format=fmt):
-        phases_dir = _phases_dir(cwd)
+        layout = ProjectLayout(cwd)
+        phases_dir = layout.phases_dir
         milestone = get_milestone_info(cwd)
 
         phases: list[PhaseProgress] = []
@@ -2127,8 +2134,10 @@ def progress_render(cwd: Path, fmt: str = "json") -> ProgressJsonResult | Progre
                 phase_name = dm.group(2).replace("-", " ") if dm and dm.group(2) else ""
 
                 phase_files = [f.name for f in (phases_dir / d).iterdir() if f.is_file()]
-                plan_count = sum(1 for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN)
-                summary_count = sum(1 for f in phase_files if f.endswith(SUMMARY_SUFFIX))
+                plans = [f for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN]
+                summaries = [f for f in phase_files if layout.is_summary_file(f)]
+                plan_count = len(plans)
+                summary_count = matching_phase_artifact_count(plans, summaries)
 
                 total_plans += plan_count
                 total_summaries += summary_count

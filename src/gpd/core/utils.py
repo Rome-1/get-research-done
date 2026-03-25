@@ -9,11 +9,18 @@ import os
 import re
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from gpd.core.constants import DEFAULT_MAX_INCLUDE_CHARS, ENV_MAX_INCLUDE_CHARS
+from gpd.core.constants import (
+    DEFAULT_MAX_INCLUDE_CHARS,
+    ENV_MAX_INCLUDE_CHARS,
+    PLAN_SUFFIX,
+    STANDALONE_PLAN,
+    STANDALONE_SUMMARY,
+    SUMMARY_SUFFIX,
+)
 
 try:
     import fcntl
@@ -32,7 +39,10 @@ __all__ = [
     "file_lock",
     "generate_slug",
     "is_phase_complete",
+    "matching_phase_artifact_count",
     "phase_normalize",
+    "phase_artifact_id",
+    "phase_artifact_display_name",
     "phase_sort_key",
     "phase_unpad",
     "safe_parse_int",
@@ -121,6 +131,27 @@ def compare_phase_numbers(a: str, b: str) -> int:
 def is_phase_complete(plan_count: int, summary_count: int) -> bool:
     """A phase is complete when it has at least one plan and every plan has a summary."""
     return plan_count > 0 and summary_count >= plan_count
+
+
+def phase_artifact_id(filename: str, suffix: str, standalone: str) -> str:
+    """Return the comparison key for a phase artifact filename."""
+    if filename == standalone:
+        return ""
+    if filename.endswith(suffix):
+        return filename[: -len(suffix)]
+    return filename
+
+
+def phase_artifact_display_name(identifier: str, standalone: str) -> str:
+    """Return the user-facing name for a phase artifact identity."""
+    return standalone if not identifier or identifier == "_standalone" else identifier
+
+
+def matching_phase_artifact_count(plan_files: Iterable[str], summary_files: Iterable[str]) -> int:
+    """Return how many plans have a matching summary by artifact identity."""
+    plan_ids = {phase_artifact_id(filename, PLAN_SUFFIX, STANDALONE_PLAN) for filename in plan_files}
+    summary_ids = {phase_artifact_id(filename, SUMMARY_SUFFIX, STANDALONE_SUMMARY) for filename in summary_files}
+    return len(plan_ids & summary_ids)
 
 
 def phase_sort_key(name: str) -> list[int]:

@@ -198,6 +198,46 @@ class TestStatusMetadata:
         assert label == "[workspace]"
 
 
+def test_read_current_task_uses_shared_todo_directory_constant_for_self_owned_install(
+    tmp_path: Path,
+) -> None:
+    from gpd.hooks import statusline
+
+    self_config_dir = tmp_path / "runtime"
+    sentinel_todos = self_config_dir / "sentinel-todos"
+    sentinel_todos.mkdir(parents=True)
+    todo_file = sentinel_todos / "session-agent-1.json"
+    todo_file.write_text(
+        json.dumps(
+            [
+                {
+                    "status": "in_progress",
+                    "activeForm": "working from sentinel todos",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    manifest = {
+        "runtime": "codex",
+        "install_scope": "local",
+        "explicit_target": True,
+        "install_target_dir": str(self_config_dir),
+    }
+    self_config_dir.mkdir(parents=True, exist_ok=True)
+    (self_config_dir / "gpd-file-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    with (
+        patch.object(statusline, "_self_config_dir", return_value=self_config_dir),
+        patch.object(statusline, "TODOS_DIR_NAME", "sentinel-todos"),
+        patch("gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install", return_value="unknown"),
+        patch("gpd.hooks.runtime_detect.detect_runtime_for_gpd_use", return_value="unknown"),
+        patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=[]),
+        patch("gpd.hooks.runtime_detect.should_consider_todo_candidate", return_value=True),
+    ):
+        assert _read_current_task("session") == "working from sentinel todos"
+
+
 class TestExecutionBadge:
     def test_first_result_gate_badge_wins(self) -> None:
         badge = _execution_badge(

@@ -145,12 +145,12 @@ def test_get_progress_does_not_mutate_checkpoint_shelf_artifacts(tmp_path: Path)
     phase_one = planning / "phases" / "01-foundations"
     phase_one.mkdir()
     (phase_one / "PLAN.md").write_text("# plan\n", encoding="utf-8")
-    (phase_one / "01-SUMMARY.md").write_text("# summary\n", encoding="utf-8")
+    (phase_one / "SUMMARY.md").write_text("# summary\n", encoding="utf-8")
 
     phase_two = planning / "phases" / "02-analysis"
     phase_two.mkdir()
     (phase_two / "PLAN.md").write_text("# plan\n", encoding="utf-8")
-    (phase_two / "02-SUMMARY.md").write_text("# summary\n", encoding="utf-8")
+    (phase_two / "SUMMARY.md").write_text("# summary\n", encoding="utf-8")
 
     checkpoint_dir = cwd / "GPD" / "phase-checkpoints"
     checkpoint_dir.mkdir()

@@ -575,7 +575,7 @@ class TestEdgeStandalonePlan:
         assert "PLAN.md" in info.plans
         assert len(info.plans) == 1
 
-    def test_standalone_summary_does_not_complete_standalone_plan(self, tmp_path: Path) -> None:
+    def test_standalone_plan_and_summary_complete_phase(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         d = _create_phase(tmp_path, "01-setup")
         (d / "PLAN.md").write_text("plan")
@@ -583,4 +583,4 @@ class TestEdgeStandalonePlan:
 
         info = find_phase(tmp_path, "1")
         assert info is not None
-        assert info.incomplete_plans == ["PLAN.md"]
+        assert info.incomplete_plans == []

@@ -26,6 +26,7 @@ from gpd.hooks.runtime_detect import (
     TodoCandidate,
     UpdateCacheCandidate,
     _has_gpd_install,
+    _runtime_from_manifest_or_path,
     all_runtime_dirs,
     detect_active_runtime,
     detect_active_runtime_with_gpd_install,
@@ -564,6 +565,21 @@ class TestDetectActiveRuntimeWithInstall:
             patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
         ):
             assert installed_runtime(canonical_local_dir) is None
+
+    def test_runtime_from_manifest_or_path_does_not_fall_back_to_manifestless_local_path(
+        self, tmp_path: Path
+    ) -> None:
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        candidate = workspace / ".codex"
+        candidate.mkdir()
+
+        with (
+            patch.dict(os.environ, _clean_runtime_env(), clear=True),
+            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=workspace),
+            patch("gpd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
+        ):
+            assert _runtime_from_manifest_or_path(candidate, cwd=workspace, home=tmp_path / "home") is None
 
     def test_installed_runtime_fails_closed_for_runtime_less_manifest_without_prefix_evidence(
         self, tmp_path: Path

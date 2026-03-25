@@ -633,6 +633,7 @@ class CodexAdapter(RuntimeAdapter):
             self._skills_dir,
             "gpd",
             path_prefix,
+            target_dir,
             gpd_root / "specs",
             self._current_install_scope_flag(),
             launcher=launcher,
@@ -1138,6 +1139,7 @@ def _copy_commands_as_skills(
     skills_dir: Path,
     prefix: str,
     path_prefix: str,
+    workflow_target_dir: Path,
     gpd_src_root: Path | None = None,
     install_scope: str | None = None,
     *,
@@ -1173,6 +1175,7 @@ def _copy_commands_as_skills(
             staged_skills_dir,
             prefix,
             path_prefix,
+            workflow_target_dir,
             gpd_src_root,
             install_scope,
             launcher=launcher,
@@ -1216,6 +1219,7 @@ def _render_commands_as_skills(
     skills_dir: Path,
     prefix: str,
     path_prefix: str,
+    workflow_target_dir: Path,
     gpd_src_root: Path | None = None,
     install_scope: str | None = None,
     *,
@@ -1231,6 +1235,7 @@ def _render_commands_as_skills(
                     skills_dir,
                     f"{prefix}-{entry.name}",
                     path_prefix,
+                    workflow_target_dir,
                     gpd_src_root,
                     install_scope,
                     launcher=launcher,
@@ -1249,6 +1254,7 @@ def _render_commands_as_skills(
                 path_prefix=path_prefix,
                 install_scope=install_scope,
                 src_root=gpd_src_root,
+                workflow_target_dir=workflow_target_dir,
             )
             content = _convert_to_codex_skill(content, skill_name)
             content = convert_tool_references_in_body(content, _TOOL_REFERENCE_MAP)

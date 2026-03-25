@@ -2158,7 +2158,7 @@ class TestVerificationServer:
 
         assert result == {"error": expected_error, "schema_version": 1}
 
-    def test_run_contract_check_salvages_mildly_drifted_contract_payload(self):
+    def test_run_contract_check_rejects_unknown_nested_contract_fields(self):
         from gpd.mcp.servers.verification_server import run_contract_check
 
         contract = copy.deepcopy(_load_project_contract_fixture())
@@ -2174,8 +2174,10 @@ class TestVerificationServer:
             }
         )
 
-        assert result["status"] == "pass"
-        assert any("salvaged before verification" in issue for issue in result["automated_issues"])
+        assert result == {
+            "error": "Invalid contract payload: claims.0.notes: Extra inputs are not permitted",
+            "schema_version": 1,
+        }
 
     def test_suggest_contract_checks_from_contract(self):
         import json
@@ -2220,7 +2222,7 @@ class TestVerificationServer:
 
         assert fresh["request_template"]["metadata"]["source_reference_id"] == "ref-benchmark"
 
-    def test_suggest_contract_checks_salvages_mildly_drifted_contract_payload(self):
+    def test_suggest_contract_checks_rejects_unknown_nested_contract_fields(self):
         from gpd.mcp.servers.verification_server import suggest_contract_checks
 
         contract = copy.deepcopy(_load_project_contract_fixture())
@@ -2228,8 +2230,10 @@ class TestVerificationServer:
 
         result = suggest_contract_checks(contract)
 
-        assert "error" not in result
-        assert any(entry["check_key"] == "contract.benchmark_reproduction" for entry in result["suggested_checks"])
+        assert result == {
+            "error": "Invalid contract payload: references.0.notes: Extra inputs are not permitted",
+            "schema_version": 1,
+        }
 
     @pytest.mark.parametrize("payload", ["not-a-dict", ["claim-benchmark"], 3])
     def test_suggest_contract_checks_rejects_non_mapping_payloads(self, payload):

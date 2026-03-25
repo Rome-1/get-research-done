@@ -203,6 +203,7 @@ class TestReadInstalledVersion:
         codex_version.parent.mkdir(parents=True)
         claude_version.write_text("1.0.0\n")
         codex_version.write_text("2.0.0\n")
+        _mark_complete_install(codex_version.parent.parent, runtime="codex")
 
         with (
             patch("gpd.version.__version__", "0.0.0-dev"),
@@ -229,6 +230,29 @@ class TestReadInstalledVersion:
             patch("gpd.hooks.runtime_detect.detect_active_runtime", return_value="claude-code"),
             patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
             patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+        ):
+            assert _read_installed_version() == "2.0.0"
+
+    def test_version_file_fallback_ignores_manifestless_candidate_when_authoritative_install_exists(
+        self, tmp_path: Path
+    ) -> None:
+        stale_install_dir = tmp_path / ".codex" / "get-physics-done"
+        trusted_install_dir = tmp_path / ".claude" / "get-physics-done"
+        stale_version = stale_install_dir / "VERSION"
+        trusted_version = trusted_install_dir / "VERSION"
+        stale_version.parent.mkdir(parents=True, exist_ok=True)
+        trusted_version.parent.mkdir(parents=True, exist_ok=True)
+        stale_version.write_text("9.9.9\n", encoding="utf-8")
+        trusted_version.write_text("2.0.0\n", encoding="utf-8")
+        _mark_complete_install(trusted_install_dir.parent, runtime="claude-code")
+
+        with (
+            patch("gpd.version.__version__", "0.0.0-dev"),
+            patch("gpd.hooks.check_update._self_config_dir", return_value=None),
+            patch(
+                "gpd.hooks.runtime_detect.get_gpd_install_dirs",
+                return_value=[stale_install_dir, trusted_install_dir],
+            ),
         ):
             assert _read_installed_version() == "2.0.0"
 

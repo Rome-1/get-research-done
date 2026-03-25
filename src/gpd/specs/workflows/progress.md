@@ -141,7 +141,7 @@ Use this instead of manually reading/parsing ROADMAP.md.
 <step name="recent">
 **Gather recent work context:**
 
-- Find the 2-3 most recent SUMMARY.md files
+- Find the 2-3 most recent summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`)
 - Use `summary-extract` for efficient parsing:
   ```bash
   gpd summary-extract <path> --field one_liner
@@ -243,7 +243,7 @@ List files in the current phase directory:
 
 ```bash
 ls -1 GPD/phases/[current-phase-dir]/*-PLAN.md 2>/dev/null | wc -l
-ls -1 GPD/phases/[current-phase-dir]/*-SUMMARY.md 2>/dev/null | wc -l
+ls -1 GPD/phases/[current-phase-dir]/*SUMMARY.md 2>/dev/null | wc -l
 ls -1 GPD/phases/[current-phase-dir]/*-VERIFICATION.md 2>/dev/null | wc -l
 ```
 

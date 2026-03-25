@@ -16,8 +16,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from typer.testing import CliRunner
 
 import gpd.cli as cli_module
+import gpd.runtime_cli as runtime_cli
 from gpd.adapters import list_runtimes
 from gpd.cli import app
+from gpd.core import cli_args as cli_args_module
 
 runner = CliRunner()
 
@@ -320,6 +322,21 @@ def test_resolve_cli_cwd_from_argv_supports_trailing_cwd(tmp_path: Path) -> None
     resolved = cli_module._resolve_cli_cwd_from_argv(["progress", "bar", "--cwd", str(tmp_path)])
 
     assert resolved == tmp_path.resolve()
+
+
+def test_shared_root_global_cli_helpers_match_cli_and_bridge_wrappers(tmp_path: Path, monkeypatch) -> None:
+    launcher = tmp_path / "launcher"
+    launcher.mkdir()
+    nested = tmp_path / "workspace" / "nested"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(launcher)
+
+    argv = ["state", "load", "--cwd", str(nested), "--raw"]
+
+    assert cli_args_module.split_root_global_cli_options(argv) == cli_module._split_global_cli_options(argv)
+    assert cli_args_module.normalize_root_global_cli_options(argv) == cli_module._normalize_global_cli_options(argv)
+    assert cli_args_module.resolve_root_global_cli_cwd_from_argv(argv) == cli_module._resolve_cli_cwd_from_argv(argv)
+    assert cli_args_module.resolve_root_global_cli_cwd_from_argv(argv) == runtime_cli._resolve_cli_cwd_from_argv(argv)
 
 
 def test_entrypoint_normalizes_trailing_global_options(monkeypatch) -> None:

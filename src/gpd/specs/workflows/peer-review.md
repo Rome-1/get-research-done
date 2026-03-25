@@ -86,7 +86,7 @@ fi
 Use `protocol_bundle_context` from init JSON as additive review guidance.
 
 - If `selected_protocol_bundle_ids` is non-empty, treat the bundle summary as a quick map of which decisive artifacts, benchmark anchors, estimator caveats, or specialized comparisons the manuscript should make visible.
-- Use bundle guidance to sharpen skepticism about missing evidence; do **not** use it to invent claims, waive missing comparisons, or overrule the manuscript, `project_contract`, `GPD/comparisons/*-COMPARISON.md`, `GPD/paper/FIGURE_TRACKER.md`, or phase summary / verification evidence (`GPD/phases/*/*-SUMMARY.md`, `GPD/phases/*/*-VERIFICATION.md`).
+- Use bundle guidance to sharpen skepticism about missing evidence; do **not** use it to invent claims, waive missing comparisons, or overrule the manuscript, `project_contract`, `GPD/comparisons/*-COMPARISON.md`, `GPD/paper/FIGURE_TRACKER.md`, or phase summary / verification evidence (`GPD/phases/*/*SUMMARY.md`, `GPD/phases/*/*-VERIFICATION.md`).
 - Judge the paper by reader-visible claims and surfaced evidence first. Review-support artifacts are scaffolding, not substitutes for contract-backed evidence.
 - Read `@{GPD_INSTALL_DIR}/references/publication/peer-review-reliability.md` for the canonical failure-recovery and round-suffix conventions that keep this workflow fail-closed without falling back to legacy recovery paths.
 - If no bundle is selected, run the same review pipeline against the manuscript and contract-backed artifacts without any specialized overlay.
@@ -114,7 +114,7 @@ Load the following files:
 - The resolved manuscript main file and all nearby `*.tex` section files
 - `GPD/STATE.md`
 - `GPD/ROADMAP.md`
-- All summary artifacts matching `GPD/phases/*/*-SUMMARY.md`
+- All summary artifacts matching `GPD/phases/*/*SUMMARY.md`
 - All `GPD/phases/*/*-VERIFICATION.md` files
 - `GPD/comparisons/*-COMPARISON.md` if present
 - `GPD/paper/FIGURE_TRACKER.md` if present
@@ -334,7 +334,7 @@ Files to read:
 - Resolved manuscript main file and all nearby section .tex files
 - `GPD/review/CLAIMS{round_suffix}.json`
 - `GPD/review/STAGE-reader{round_suffix}.json`
-- Summary artifacts matching `GPD/phases/*/*-SUMMARY.md`
+- Summary artifacts matching `GPD/phases/*/*SUMMARY.md`
 - `GPD/phases/*/*-VERIFICATION.md`
 - `${ARTIFACT_MANIFEST_PATH}` if present
 - `${REPRODUCIBILITY_MANIFEST_PATH}` if present
@@ -415,7 +415,7 @@ Files to read:
 - `GPD/review/STAGE-reader{round_suffix}.json`
 - `GPD/review/STAGE-math{round_suffix}.json`
 - `GPD/review/STAGE-literature{round_suffix}.json`
-- Summary artifacts matching `GPD/phases/*/*-SUMMARY.md`
+- Summary artifacts matching `GPD/phases/*/*SUMMARY.md`
 - `GPD/phases/*/*-VERIFICATION.md`
 - `GPD/comparisons/*-COMPARISON.md` if present
 - `GPD/paper/FIGURE_TRACKER.md` if present
@@ -585,7 +585,7 @@ Files to read:
 - `${REPRODUCIBILITY_MANIFEST_PATH}` if present
 - `GPD/STATE.md`
 - `GPD/ROADMAP.md`
-- Summary artifacts matching `GPD/phases/*/*-SUMMARY.md`
+- Summary artifacts matching `GPD/phases/*/*SUMMARY.md`
 - `GPD/phases/*/*-VERIFICATION.md`
 
 If this is a revision round, also read the latest `REFEREE-REPORT*.md` and matching `AUTHOR-RESPONSE*.md`.

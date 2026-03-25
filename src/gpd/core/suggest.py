@@ -32,6 +32,7 @@ from gpd.core.constants import (
 from gpd.core.utils import (
     is_phase_complete as _is_phase_complete,
 )
+from gpd.core.utils import matching_phase_artifact_count as _matching_phase_artifact_count
 from gpd.core.utils import (
     phase_sort_key as _phase_sort_key,
 )
@@ -259,7 +260,7 @@ def _scan_phases(cwd: Path) -> list[_PhaseAnalysis]:
         has_verification = any(_is_verification_file(f) for f in files)
 
         plan_count = len(plans)
-        summary_count = len(summaries)
+        summary_count = _matching_phase_artifact_count(plans, summaries)
         complete = _is_phase_complete(plan_count, summary_count)
 
         if complete:
@@ -367,7 +368,11 @@ def _has_referee_report(cwd: Path) -> bool:
         cwd / "paper" / "referee-reports",
     )
     for directory in candidate_dirs:
-        if directory.is_dir() and any(f.name.startswith("REFEREE-REPORT") for f in directory.iterdir() if f.is_file()):
+        if directory.is_dir() and any(
+            f.name.casefold().startswith("referee-report") and f.name.casefold().endswith(".md")
+            for f in directory.iterdir()
+            if f.is_file()
+        ):
             return True
     return False
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import warnings
 from pathlib import Path
 
@@ -31,6 +32,7 @@ from gpd.core.state import (
     state_snapshot,
     state_update_progress,
     state_validate,
+    sync_state_json,
     validate_state_transition,
 )
 
@@ -85,6 +87,12 @@ def _write_intent_recovery_state(
     md_tmp.write_text(generate_state_markdown(recovered_state), encoding="utf-8")
     layout.state_intent.write_text(f"{json_tmp}\n{md_tmp}\n", encoding="utf-8")
     return layout
+
+
+def _project_contract_with_question(question: str) -> dict[str, object]:
+    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+    contract["scope"]["question"] = question
+    return contract
 
 # ─── default_state_dict ──────────────────────────────────────────────────────
 
@@ -1229,6 +1237,161 @@ def test_state_snapshot_does_not_consume_intent_marker(tmp_path: Path) -> None:
     assert layout.state_intent.read_text(encoding="utf-8") == before_intent
 
 
+def test_load_state_json_discards_stale_intent_when_current_state_files_are_newer(tmp_path: Path) -> None:
+    stale_state = default_state_dict()
+    stale_state["position"]["current_phase"] = "01"
+
+    recovered_state = default_state_dict()
+    recovered_state["position"]["current_phase"] = "05"
+    recovered_state["position"]["status"] = "Executing"
+
+    layout = _write_intent_recovery_state(tmp_path, stale_state=stale_state, recovered_state=recovered_state)
+    json_tmp = layout.gpd / ".state-json-tmp"
+    md_tmp = layout.gpd / ".state-md-tmp"
+    os.utime(json_tmp, ns=(1_000_000_000, 1_000_000_000))
+    os.utime(md_tmp, ns=(1_000_000_000, 1_000_000_000))
+
+    repaired_state = default_state_dict()
+    repaired_state["position"]["current_phase"] = "09"
+    repaired_state["position"]["status"] = "Paused"
+    layout.state_json.write_text(json.dumps(repaired_state, indent=2) + "\n", encoding="utf-8")
+    layout.state_md.write_text(generate_state_markdown(repaired_state), encoding="utf-8")
+    os.utime(layout.state_json, ns=(2_000_000_000, 2_000_000_000))
+    os.utime(layout.state_md, ns=(2_000_000_000, 2_000_000_000))
+
+    loaded = load_state_json(tmp_path)
+
+    assert loaded is not None
+    assert loaded["position"]["current_phase"] == "09"
+    assert json.loads(layout.state_json.read_text(encoding="utf-8"))["position"]["current_phase"] == "09"
+    assert not layout.state_intent.exists()
+    assert not json_tmp.exists()
+    assert not md_tmp.exists()
+
+
+def test_peek_state_json_fallback_does_not_consume_intent_marker(tmp_path: Path) -> None:
+    stale_state = default_state_dict()
+    stale_state["position"]["current_phase"] = "01"
+
+    recovered_state = default_state_dict()
+    recovered_state["position"]["current_phase"] = "05"
+    recovered_state["position"]["status"] = "Executing"
+
+    layout = _write_intent_recovery_state(tmp_path, stale_state=stale_state, recovered_state=recovered_state)
+    layout.state_json.unlink()
+    layout.state_json_backup.unlink()
+    before_intent = layout.state_intent.read_text(encoding="utf-8")
+
+    loaded, issues, state_source = peek_state_json(tmp_path, recover_intent=False)
+
+    assert loaded is not None
+    assert loaded["position"]["current_phase"] == "01"
+    assert issues == ["state.json root was recovered from STATE.md after primary state.json was unavailable or unreadable"]
+    assert state_source == "STATE.md"
+    assert layout.state_intent.exists()
+    assert layout.state_intent.read_text(encoding="utf-8") == before_intent
+
+
+def test_save_state_markdown_does_not_resurrect_backup_only_json_fields_when_primary_is_unreadable(tmp_path: Path) -> None:
+    baseline = default_state_dict()
+    save_state_json(tmp_path, baseline)
+    layout = ProjectLayout(tmp_path)
+
+    backup_state = default_state_dict()
+    backup_state["project_contract"] = _project_contract_with_question("backup-only contract")
+    backup_state["session"]["resume_file"] = "backup-resume.md"
+    layout.state_json_backup.write_text(json.dumps(backup_state, indent=2) + "\n", encoding="utf-8")
+    layout.state_json.write_text("{bad json\n", encoding="utf-8")
+
+    md_state = default_state_dict()
+    md_state["position"]["current_phase"] = "06"
+    md_state["position"]["status"] = "Paused"
+
+    result = save_state_markdown(tmp_path, generate_state_markdown(md_state))
+    stored = json.loads(layout.state_json.read_text(encoding="utf-8"))
+
+    assert result["project_contract"] is None
+    assert result["session"]["resume_file"] is None
+    assert stored["project_contract"] is None
+    assert stored["session"]["resume_file"] is None
+
+
+def test_save_state_markdown_recovers_pending_intent_before_merging_existing_state(tmp_path: Path) -> None:
+    stale_state = default_state_dict()
+    stale_state["position"]["current_phase"] = "01"
+    stale_state["project_contract"] = _project_contract_with_question("stale contract")
+
+    recovered_state = default_state_dict()
+    recovered_state["position"]["current_phase"] = "05"
+    recovered_state["position"]["status"] = "Executing"
+    recovered_state["project_contract"] = _project_contract_with_question("recovered contract")
+
+    layout = _write_intent_recovery_state(tmp_path, stale_state=stale_state, recovered_state=recovered_state)
+
+    md_state = default_state_dict()
+    md_state["position"]["current_phase"] = "06"
+    md_state["position"]["status"] = "Paused"
+
+    result = save_state_markdown(tmp_path, generate_state_markdown(md_state))
+
+    stored = json.loads(layout.state_json.read_text(encoding="utf-8"))
+
+    assert result["position"]["current_phase"] == "06"
+    assert stored["position"]["current_phase"] == "06"
+    assert stored["project_contract"]["scope"]["question"] == "recovered contract"
+    assert not layout.state_intent.exists()
+
+
+def test_sync_state_json_does_not_resurrect_backup_only_json_fields_when_primary_is_unreadable(tmp_path: Path) -> None:
+    baseline = default_state_dict()
+    save_state_json(tmp_path, baseline)
+    layout = ProjectLayout(tmp_path)
+
+    backup_state = default_state_dict()
+    backup_state["project_contract"] = _project_contract_with_question("backup-only contract")
+    backup_state["session"]["resume_file"] = "backup-resume.md"
+    layout.state_json_backup.write_text(json.dumps(backup_state, indent=2) + "\n", encoding="utf-8")
+    layout.state_json.write_text("{bad json\n", encoding="utf-8")
+
+    md_state = default_state_dict()
+    md_state["position"]["current_phase"] = "07"
+    md_state["position"]["status"] = "Executing"
+
+    result = sync_state_json(tmp_path, generate_state_markdown(md_state))
+    stored = json.loads(layout.state_json.read_text(encoding="utf-8"))
+
+    assert result["project_contract"] is None
+    assert result["session"]["resume_file"] is None
+    assert stored["project_contract"] is None
+    assert stored["session"]["resume_file"] is None
+
+
+def test_sync_state_json_recovers_pending_intent_before_merging_markdown(tmp_path: Path) -> None:
+    stale_state = default_state_dict()
+    stale_state["position"]["current_phase"] = "01"
+    stale_state["project_contract"] = _project_contract_with_question("stale contract")
+
+    recovered_state = default_state_dict()
+    recovered_state["position"]["current_phase"] = "05"
+    recovered_state["position"]["status"] = "Executing"
+    recovered_state["project_contract"] = _project_contract_with_question("recovered contract")
+
+    layout = _write_intent_recovery_state(tmp_path, stale_state=stale_state, recovered_state=recovered_state)
+
+    md_state = default_state_dict()
+    md_state["position"]["current_phase"] = "07"
+    md_state["position"]["status"] = "Executing"
+
+    result = sync_state_json(tmp_path, generate_state_markdown(md_state))
+
+    stored = json.loads(layout.state_json.read_text(encoding="utf-8"))
+
+    assert result["position"]["current_phase"] == "07"
+    assert stored["position"]["current_phase"] == "07"
+    assert stored["project_contract"]["scope"]["question"] == "recovered contract"
+    assert not layout.state_intent.exists()
+
+
 def test_load_state_json_review_blocks_on_schema_normalization(tmp_path):
     layout = ProjectLayout(tmp_path)
     layout.gpd.mkdir(parents=True, exist_ok=True)
@@ -1468,12 +1631,12 @@ def test_state_validate_warns_when_primary_project_contract_is_blocked(tmp_path:
 
     assert validation.valid is True
     assert validation.integrity_status == "warning"
+    assert validation.state_source == "state.json"
     assert any(
-        "state.json root was recovered from state.json.bak after primary state.json required normalization"
-        in warning
+        'dropped "project_contract" because contract schema required normalization' in warning
         for warning in validation.warnings
     )
-    assert validation.state_source == "state.json.bak"
+    assert not any("state.json root was recovered from state.json.bak" in warning for warning in validation.warnings)
 
 
 def test_state_load_recovers_backup_project_contract_when_primary_contract_is_blocked(tmp_path: Path) -> None:
@@ -1497,16 +1660,18 @@ def test_state_load_recovers_backup_project_contract_when_primary_contract_is_bl
 
     loaded = state_load(tmp_path)
 
-    assert loaded.state["project_contract"]["scope"]["question"] == "What benchmark must the project recover?"
-    assert loaded.state_source == "state.json.bak"
+    assert loaded.state["project_contract"] is None
+    assert loaded.state_source == "state.json"
     assert any(
-        "state.json root was recovered from state.json.bak after primary state.json required normalization"
+        "project_contract.references.0.must_surface must be a boolean"
         in issue
         for issue in loaded.integrity_issues
     )
-    assert not any(
-        "project_contract.references.0.must_surface must be a boolean" in issue for issue in loaded.integrity_issues
+    assert any(
+        'dropped "project_contract" because authoritative scalar fields required normalization' in issue
+        for issue in loaded.integrity_issues
     )
+    assert not any("state.json root was recovered from state.json.bak" in issue for issue in loaded.integrity_issues)
 
 
 def test_save_state_json_clears_project_contract_without_resurrecting_previous_value(tmp_path: Path) -> None:
@@ -1533,6 +1698,36 @@ def test_state_update_progress_omits_checkpoint_files_from_result_api(tmp_path: 
 
     assert not hasattr(result, "checkpoint_files")
     assert "checkpoint_files" not in result.model_dump()
+
+
+def test_state_update_progress_does_not_match_numbered_plan_with_bare_summary(tmp_path: Path) -> None:
+    cwd = _bootstrap_project_with_state(tmp_path)
+    phase_dir = cwd / "GPD" / "phases" / "01-alpha"
+    phase_dir.mkdir()
+    (phase_dir / "01-01-PLAN.md").write_text("# Plan\n", encoding="utf-8")
+    (phase_dir / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+
+    result = state_update_progress(cwd)
+
+    assert result.updated is True
+    assert result.total == 1
+    assert result.completed == 0
+    assert result.percent == 0
+
+
+def test_state_update_progress_counts_standalone_plan_summary_pair(tmp_path: Path) -> None:
+    cwd = _bootstrap_project_with_state(tmp_path)
+    phase_dir = cwd / "GPD" / "phases" / "01-alpha"
+    phase_dir.mkdir()
+    (phase_dir / "PLAN.md").write_text("# Plan\n", encoding="utf-8")
+    (phase_dir / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+
+    result = state_update_progress(cwd)
+
+    assert result.updated is True
+    assert result.total == 1
+    assert result.completed == 1
+    assert result.percent == 100
 
 
 def test_state_validate_recovers_backup_when_primary_root_is_not_an_object(tmp_path: Path) -> None:
@@ -1591,6 +1786,39 @@ def test_state_validate_recovers_backup_root_without_project_contract(tmp_path: 
     assert not any("project_contract was recovered from state.json.bak" in warning for warning in validation.warnings)
 
 
+def test_state_load_recovers_backup_session_without_replacing_newer_primary_fields(
+    tmp_path: Path,
+) -> None:
+    primary_state = default_state_dict()
+    primary_state["position"]["current_phase"] = "05"
+    primary_state["position"]["status"] = "Executing"
+    primary_state["project_contract"] = _project_contract_with_question("newer primary contract")
+    save_state_json(tmp_path, primary_state)
+    save_state_markdown(tmp_path, generate_state_markdown(primary_state))
+    layout = ProjectLayout(tmp_path)
+
+    broken_state = json.loads(layout.state_json.read_text(encoding="utf-8"))
+    broken_state["session"] = "bad"
+    layout.state_json.write_text(json.dumps(broken_state, indent=2) + "\n", encoding="utf-8")
+
+    backup_state = default_state_dict()
+    backup_state["position"]["current_phase"] = "02"
+    backup_state["position"]["status"] = "Planning"
+    backup_state["session"]["resume_file"] = "backup-resume.md"
+    backup_state["project_contract"] = _project_contract_with_question("backup contract")
+    backup_state["project_contract"]["references"][0]["must_surface"] = "yes"
+    layout.state_json_backup.write_text(json.dumps(backup_state, indent=2) + "\n", encoding="utf-8")
+
+    loaded = state_load(tmp_path)
+
+    assert loaded.state["position"]["current_phase"] == "05"
+    assert loaded.state["position"]["status"] == "Executing"
+    assert loaded.state["project_contract"]["scope"]["question"] == "newer primary contract"
+    assert loaded.state["session"]["resume_file"] == "backup-resume.md"
+    assert loaded.state_source == "state.json"
+    assert json.loads(layout.state_json.read_text(encoding="utf-8"))["session"]["resume_file"] == "backup-resume.md"
+
+
 def test_state_validate_review_blocks_when_primary_project_contract_requires_blocking_normalization(
     tmp_path: Path,
 ) -> None:
@@ -1613,12 +1841,13 @@ def test_state_validate_review_blocks_when_primary_project_contract_requires_blo
 
     assert validation.valid is False
     assert validation.integrity_status == "blocked"
+    assert validation.state_source == "state.json"
     assert any(
-        "state.json root was recovered from state.json.bak after primary state.json required normalization"
+        'dropped "project_contract" because contract schema required normalization'
         in issue
         for issue in validation.issues
     )
-    assert validation.state_source == "state.json.bak"
+    assert not any("state.json root was recovered from state.json.bak" in issue for issue in validation.issues)
 
 
 def test_state_validate_review_blocks_when_state_root_is_recovered_from_backup_without_project_contract(

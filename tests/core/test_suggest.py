@@ -286,11 +286,26 @@ def test_in_progress_phase_suggests_execute(tmp_path: Path) -> None:
     assert exec_rec.phase == "01"
 
 
-def test_standalone_summary_file_counts_as_phase_completion(tmp_path: Path) -> None:
-    """Standalone SUMMARY.md should complete a phase the same way numbered summaries do."""
+def test_numbered_plans_are_not_completed_by_bare_summary(tmp_path: Path) -> None:
+    """A bare SUMMARY.md must not complete numbered plan files."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
     phase_dir = _create_phase(root, "01-setup", plans=1, summaries=0)
+    (phase_dir / "SUMMARY.md").write_text("Summary\n", encoding="utf-8")
+
+    result = suggest_next(root)
+
+    assert result.context.phase_count == 1
+    assert result.context.completed_phases == 0
+    assert any(s.action == "execute-phase" for s in result.suggestions)
+
+
+def test_standalone_plan_and_summary_count_as_phase_completion(tmp_path: Path) -> None:
+    """Standalone PLAN.md and SUMMARY.md should remain a valid completion pair."""
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    phase_dir = _create_phase(root, "01-setup", plans=0, summaries=0)
+    (phase_dir / "PLAN.md").write_text("Plan\n", encoding="utf-8")
     (phase_dir / "SUMMARY.md").write_text("Summary\n", encoding="utf-8")
 
     result = suggest_next(root)
@@ -512,6 +527,37 @@ def test_referee_report_in_paper_referee_reports_dir_suggests_response(tmp_path:
 
     assert "respond-to-referees" in actions
     assert "peer-review" not in actions
+
+
+def test_referee_report_in_paper_dir_lowercase_filename_suggests_response(tmp_path: Path) -> None:
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    paper_dir = root / "GPD" / "paper"
+    paper_dir.mkdir(parents=True)
+    (root / "paper").mkdir(parents=True)
+    (root / "paper" / "main.tex").write_text("\\documentclass{article}\n")
+    (paper_dir / "referee-report-1.md").write_text("Major revision needed.\n")
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "respond-to-referees" in actions
+    assert "peer-review" not in actions
+
+
+def test_non_markdown_referee_report_does_not_trigger_response(tmp_path: Path) -> None:
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    reports_dir = root / "paper" / "referee-reports"
+    reports_dir.mkdir(parents=True)
+    (root / "paper" / "main.tex").write_text("\\documentclass{article}\n")
+    (reports_dir / "REFEREE-REPORT-1.txt").write_text("Major revision needed.\n")
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "respond-to-referees" not in actions
+    assert "peer-review" in actions
 
 
 def test_literature_review_suggested_when_all_complete(tmp_path: Path) -> None:

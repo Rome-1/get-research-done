@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from gpd.adapters.install_utils import CACHE_DIR_NAME, UPDATE_CACHE_FILENAME
-from gpd.core.constants import ENV_GPD_DEBUG, PLANNING_DIR_NAME, STATE_JSON_FILENAME
+from gpd.core.constants import ENV_GPD_DEBUG, PLANNING_DIR_NAME, STATE_JSON_FILENAME, TODOS_DIR_NAME
 from gpd.core.observability import resolve_project_root
 from gpd.hooks.install_metadata import (
     config_dir_has_complete_install,
@@ -274,10 +274,10 @@ def _read_current_task(session_id: str, workspace_dir: str | None = None) -> str
     if self_config_dir is not None and active_install_target is not None and self_config_dir != active_install_target.config_dir:
         prefer_self_todos = not (
             workspace_path is not None and getattr(active_install_target, "install_scope", None) == "local"
-        )
+    )
     if self_config_dir is not None and prefer_self_todos:
         self_candidate = TodoCandidate(
-            self_config_dir / "todos",
+            self_config_dir / TODOS_DIR_NAME,
             runtime=installed_runtime(self_config_dir),
             scope=_self_install_scope(self_config_dir),
         )

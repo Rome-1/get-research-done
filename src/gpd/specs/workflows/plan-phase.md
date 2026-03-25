@@ -211,7 +211,7 @@ elif [ "$RESEARCH_MODE" = "exploit" ]; then
   fi
 elif [ "$RESEARCH_MODE" = "adaptive" ]; then
   # Adaptive: narrow only after prior decisive evidence or an explicit approach lock
-  VALIDATED=$(ls GPD/phases/*/*-SUMMARY.md 2>/dev/null | xargs grep -El "approach_validated: true|comparison_verdicts:|contract_results:" 2>/dev/null | head -1)
+  VALIDATED=$(ls GPD/phases/*/*SUMMARY.md 2>/dev/null | xargs grep -El "approach_validated: true|comparison_verdicts:|contract_results:" 2>/dev/null | head -1)
   if [ -n "$VALIDATED" ]; then
     echo "Research mode: adaptive — prior decisive evidence found, using existing research as the starting point"
     # Skip to step 6

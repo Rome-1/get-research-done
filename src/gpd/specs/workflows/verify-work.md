@@ -16,7 +16,7 @@ The AI does not just present what the research SHOULD show — it COMPUTES what 
 
 Walk through derivation logic, perform numerical spot-checks, re-derive limiting cases, probe edge cases with actual computations. No formal review forms. Just: "Here is what I independently computed. Does your result match?"
 
-**Verification independence:** Derive validation checks from the phase goal, the PLAN `contract`, and the actual research artifacts — not from phase-summary claims about what was accomplished. `*-SUMMARY.md` `contract_results` and `comparison_verdicts` tell you WHERE evidence lives, but expected physics outcomes come from the phase goal, contract IDs, and domain knowledge. See @{GPD_INSTALL_DIR}/references/verification/meta/verification-independence.md.
+**Verification independence:** Derive validation checks from the phase goal, the PLAN `contract`, and the actual research artifacts — not from phase-summary claims about what was accomplished. Summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`) `contract_results` and `comparison_verdicts` tell you WHERE evidence lives, but expected physics outcomes come from the phase goal, contract IDs, and domain knowledge. See @{GPD_INSTALL_DIR}/references/verification/meta/verification-independence.md.
 </philosophy>
 
 <template>
@@ -41,7 +41,7 @@ Parse `$ARGUMENTS` for specific check flags:
 - `--dimensional` — Run only dimensional analysis checks
 - `--limits` — Run only limiting case checks
 - `--convergence` — Run only numerical convergence checks
-- `--regression` — Run regression scan (check `*-SUMMARY.md`/`*-VERIFICATION.md` frontmatter for convention conflicts and verification-state issues)
+- `--regression` — Run regression scan (check summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`) / `*-VERIFICATION.md` frontmatter for convention conflicts and verification-state issues)
 - `--all` or no flags — Run full verification suite
 
 This allows targeted verification without running the full suite.
@@ -175,7 +175,7 @@ Continue to `create_verification_file`.
 Use `phase_dir` from init (or run init if not already done).
 
 ```bash
-ls "$phase_dir"/*-SUMMARY.md 2>/dev/null
+ls "$phase_dir"/*SUMMARY.md 2>/dev/null
 ```
 
 Read each phase-summary artifact to extract **deliverable names, file paths, and evidence locations only**. Do NOT trust phase-summary claims about correctness, convergence, or agreement with literature — those are exactly what you are validating. Use the phase summary as a map to find artifacts and comparison evidence, not as evidence that they are correct.
@@ -714,7 +714,7 @@ Read phase summary files (current and prior phases). Find quantities consumed by
 
 ```bash
 # Check if prior phases declared uncertainty budgets
-for PRIOR_SUMMARY in $(ls GPD/phases/*/*-SUMMARY.md 2>/dev/null | sort); do
+for PRIOR_SUMMARY in $(ls GPD/phases/*/*SUMMARY.md 2>/dev/null | sort); do
   grep -l "Uncertainty Budget\|uncertainty\|±\|\\\\pm" "$PRIOR_SUMMARY" 2>/dev/null
 done
 ```

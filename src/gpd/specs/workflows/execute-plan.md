@@ -1,5 +1,5 @@
 <purpose>
-Execute a research plan (PLAN.md) -- carry out derivations, calculations, simulations, or analysis -- and create the outcome summary (SUMMARY.md).
+Execute a research plan (`PLAN.md` or `*-PLAN.md`) -- carry out derivations, calculations, simulations, or analysis -- and create the matching outcome summary (`SUMMARY.md` or `*-SUMMARY.md`).
 </purpose>
 
 <required_reading>
@@ -89,11 +89,11 @@ Single source of truth is `state.json` convention_lock. Before using any equatio
 <step name="identify_plan">
 ```bash
 # Use plans/summaries from INIT JSON, or list files
-ls "${phase_dir}"/*-PLAN.md 2>/dev/null | sort
-ls "${phase_dir}"/*-SUMMARY.md 2>/dev/null | sort
+ls "${phase_dir}"/PLAN.md "${phase_dir}"/*-PLAN.md 2>/dev/null | sort
+ls "${phase_dir}"/SUMMARY.md "${phase_dir}"/*-SUMMARY.md 2>/dev/null | sort
 ```
 
-Find first PLAN without matching SUMMARY. Decimal phases supported (`01.1-hotfix/`):
+Find the first plan artifact without a matching summary artifact. Canonical standalone pairing is `PLAN.md` <-> `SUMMARY.md`; numbered plans still pair by shared stem. Decimal phases are still supported for numbered files (`01.1-hotfix/`):
 
 ```bash
 phase=$(echo "$PLAN_PATH" | grep -oE '[0-9]+(\.[0-9]+)?-[0-9]+')
@@ -277,7 +277,7 @@ This IS the execution instructions. Follow exactly. If plan references CONTEXT.m
 
 <step name="previous_phase_check">
 ```bash
-ls GPD/phases/*/*-SUMMARY.md 2>/dev/null | sort -r | head -2 | tail -1
+ls GPD/phases/*/*SUMMARY.md 2>/dev/null | sort -r | head -2 | tail -1
 ```
 > **Platform note:** If `ask_user` is not available, present these options in plain text and wait for the user's freeform response.
 
@@ -529,6 +529,8 @@ Create `${phase}-${plan}-SUMMARY.md` at `${phase_dir}/`. Use `{GPD_INSTALL_DIR}/
 
 Note: DERIVATION-STATE.md is updated by /gpd:pause-work for session handoff. On natural completion (no pause), key equations and results are captured in SUMMARY.md instead. If you want cumulative derivation state across sessions, run /gpd:pause-work before ending.
 
+If the selected plan artifact is the standalone `PLAN.md`, write the canonical standalone summary as `SUMMARY.md`. Where this workflow shows numbered examples like `${phase}-${plan}-SUMMARY.md`, substitute the standalone `SUMMARY.md` filename instead.
+
 **Frontmatter:** phase, plan, depth (minimal/standard/full/complex), subsystem, tags | requires/provides/affects | methods.added/approximations | key-files.created/modified | key-decisions | duration ($DURATION), completed ($PLAN_END_TIME date).
 
 **Contract-backed plans:** if the PLAN frontmatter includes `contract`, SUMMARY frontmatter must also include:
@@ -693,8 +695,8 @@ git tag -d "${CHECKPOINT_TAG}" 2>/dev/null
 <step name="offer_next">
 
 ```bash
-ls -1 "${phase_dir}"/*-PLAN.md 2>/dev/null | wc -l
-ls -1 "${phase_dir}"/*-SUMMARY.md 2>/dev/null | wc -l
+ls -1 "${phase_dir}"/PLAN.md "${phase_dir}"/*-PLAN.md 2>/dev/null | wc -l
+ls -1 "${phase_dir}"/SUMMARY.md "${phase_dir}"/*-SUMMARY.md 2>/dev/null | wc -l
 ```
 
 | Condition                                  | Route                 | Action                                                                                                                                                  |

@@ -3,7 +3,7 @@ Run the lightweight regression audit implemented by `gpd regression-check`.
 
 This workflow does **not** re-run physics, numerical, dimensional, or contract verification. It scans already-recorded phase artifacts for frontmatter-level regressions:
 
-- conflicting `conventions` definitions across completed `*-SUMMARY.md` artifacts
+- conflicting `conventions` definitions across completed summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`)
 - missing, invalid, or non-canonical `*-VERIFICATION.md` statuses
 - completed phases whose `*-VERIFICATION.md` still reports unresolved gaps
 
@@ -33,10 +33,10 @@ Determine scope:
 <step name="discover_completed_phases">
 Identify completed phase directories under `GPD/phases`.
 
-A phase counts as completed when it contains at least one plan artifact (`PLAN.md` or `*-PLAN.md`) and at least one summary artifact (`*-SUMMARY.md`).
+A phase counts as completed when it contains at least one plan artifact (`PLAN.md` or `*-PLAN.md`) and at least one summary artifact (`SUMMARY.md` or `*-SUMMARY.md`).
 
 ```bash
-find GPD/phases -type f -name "*-SUMMARY.md" 2>/dev/null | sort
+find GPD/phases -type f -name "*SUMMARY.md" 2>/dev/null | sort
 ```
 
 Filter the discovered directories by the optional phase argument. If quick mode is active, keep only the two most recent completed phases after filtering.
@@ -47,7 +47,7 @@ If no completed phases remain after filtering, return a passing result with `pha
 <step name="scan_summary_frontmatter">
 Scan the selected summary artifacts for convention conflicts.
 
-Each selected completed phase should expose a `*-SUMMARY.md` file. Read the frontmatter and inspect the `conventions` field.
+Each selected completed phase should expose a summary artifact (`SUMMARY.md` or `*-SUMMARY.md`). Read the frontmatter and inspect the `conventions` field.
 
 Accepted frontmatter shapes:
 

@@ -63,8 +63,37 @@ def _schema_anyof_string(schema_fragment: dict[str, object]) -> dict[str, object
     raise AssertionError(f"No string branch found in {schema_fragment!r}")
 
 
-def _assert_open_object(schema_fragment: dict[str, object], *, label: str) -> None:
-    assert schema_fragment["additionalProperties"] is True, f"{label} must remain salvage-friendly"
+def _assert_string_or_string_list_schema(schema_fragment: dict[str, object], *, label: str) -> None:
+    assert len(schema_fragment["anyOf"]) == 2, f"{label} must publish string-or-list recovery boundary"
+    string_branch = _schema_anyof_string(schema_fragment)
+    assert string_branch["minLength"] == 1
+    assert string_branch["pattern"] == r"\S"
+
+    array_branch = next(
+        branch for branch in schema_fragment["anyOf"] if isinstance(branch, dict) and branch.get("type") == "array"
+    )
+    assert array_branch["items"]["type"] == "string"
+    assert array_branch["items"]["minLength"] == 1
+    assert array_branch["items"]["pattern"] == r"\S"
+
+
+def _assert_enum_string_or_string_list_schema(
+    schema_fragment: dict[str, object],
+    *,
+    label: str,
+    enum_values: list[str],
+) -> None:
+    assert len(schema_fragment["anyOf"]) == 2, f"{label} must publish enum-string-or-list recovery boundary"
+    enum_branch = next(
+        branch for branch in schema_fragment["anyOf"] if isinstance(branch, dict) and branch.get("type") == "string"
+    )
+    assert enum_branch["enum"] == enum_values
+
+    array_branch = next(
+        branch for branch in schema_fragment["anyOf"] if isinstance(branch, dict) and branch.get("type") == "array"
+    )
+    assert array_branch["items"]["type"] == "string"
+    assert array_branch["items"]["enum"] == enum_values
 
 
 def _assert_closed_object(schema_fragment: dict[str, object], *, label: str) -> None:
@@ -89,6 +118,169 @@ def _binding_condition_for_check(run_request_schema: dict[str, object], check_id
                     if isinstance(binding_schema, dict):
                         return _schema_anyof_object(binding_schema)
     raise AssertionError(f"No binding condition found for {check_identifier!r}")
+
+
+def _assert_contract_schema_sections_closed(contract_schema: dict[str, object]) -> None:
+    _assert_closed_object(contract_schema, label="contract")
+    assert {"schema_version", "scope", "claims", "references"} <= set(contract_schema["properties"])
+
+    scope = _schema_object(contract_schema, contract_schema["properties"]["scope"])
+    _assert_closed_object(scope, label="contract.scope")
+    assert scope["required"] == ["question"]
+    assert scope["properties"]["question"]["minLength"] == 1
+    assert scope["properties"]["question"]["pattern"] == r"\S"
+    for field_name in ("in_scope", "out_of_scope", "unresolved_questions"):
+        _assert_string_or_string_list_schema(scope["properties"][field_name], label=f"contract.scope.{field_name}")
+
+    context_intake = _schema_object(contract_schema, contract_schema["properties"]["context_intake"])
+    _assert_closed_object(context_intake, label="contract.context_intake")
+    for field_name in (
+        "must_read_refs",
+        "must_include_prior_outputs",
+        "user_asserted_anchors",
+        "known_good_baselines",
+        "context_gaps",
+        "crucial_inputs",
+    ):
+        _assert_string_or_string_list_schema(
+            context_intake["properties"][field_name],
+            label=f"contract.context_intake.{field_name}",
+        )
+
+    approach_policy = _schema_object(contract_schema, contract_schema["properties"]["approach_policy"])
+    _assert_closed_object(approach_policy, label="contract.approach_policy")
+    for field_name in (
+        "formulations",
+        "allowed_estimator_families",
+        "forbidden_estimator_families",
+        "allowed_fit_families",
+        "forbidden_fit_families",
+        "stop_and_rethink_conditions",
+    ):
+        _assert_string_or_string_list_schema(
+            approach_policy["properties"][field_name],
+            label=f"contract.approach_policy.{field_name}",
+        )
+
+    claims = contract_schema["properties"]["claims"]["items"]
+    _assert_closed_object(claims, label="contract.claims[]")
+    assert claims["required"] == ["id", "statement"]
+    assert claims["properties"]["id"]["minLength"] == 1
+    assert claims["properties"]["id"]["pattern"] == r"\S"
+    for field_name in ("observables", "deliverables", "acceptance_tests", "references"):
+        _assert_string_or_string_list_schema(claims["properties"][field_name], label=f"contract.claims[].{field_name}")
+
+    observables = contract_schema["properties"]["observables"]["items"]
+    _assert_closed_object(observables, label="contract.observables[]")
+    assert observables["properties"]["kind"]["enum"] == [
+        "scalar",
+        "curve",
+        "map",
+        "classification",
+        "proof_obligation",
+        "other",
+    ]
+
+    deliverables = contract_schema["properties"]["deliverables"]["items"]
+    _assert_closed_object(deliverables, label="contract.deliverables[]")
+    assert deliverables["properties"]["kind"]["enum"] == [
+        "figure",
+        "table",
+        "dataset",
+        "data",
+        "derivation",
+        "code",
+        "note",
+        "report",
+        "other",
+    ]
+    _assert_string_or_string_list_schema(
+        deliverables["properties"]["must_contain"],
+        label="contract.deliverables[].must_contain",
+    )
+
+    acceptance_tests = contract_schema["properties"]["acceptance_tests"]["items"]
+    _assert_closed_object(acceptance_tests, label="contract.acceptance_tests[]")
+    assert acceptance_tests["properties"]["kind"]["enum"] == [
+        "existence",
+        "schema",
+        "benchmark",
+        "consistency",
+        "cross_method",
+        "limiting_case",
+        "symmetry",
+        "dimensional_analysis",
+        "convergence",
+        "oracle",
+        "proxy",
+        "reproducibility",
+        "human_review",
+        "other",
+    ]
+    assert acceptance_tests["properties"]["automation"]["enum"] == ["automated", "hybrid", "human"]
+    _assert_string_or_string_list_schema(
+        acceptance_tests["properties"]["evidence_required"],
+        label="contract.acceptance_tests[].evidence_required",
+    )
+
+    references = contract_schema["properties"]["references"]["items"]
+    _assert_closed_object(references, label="contract.references[]")
+    assert references["required"] == ["id", "locator", "why_it_matters"]
+    assert references["properties"]["kind"]["enum"] == [
+        "paper",
+        "dataset",
+        "prior_artifact",
+        "spec",
+        "user_anchor",
+        "other",
+    ]
+    assert references["properties"]["role"]["enum"] == [
+        "definition",
+        "benchmark",
+        "method",
+        "must_consider",
+        "background",
+        "other",
+    ]
+    for field_name in ("aliases", "applies_to", "carry_forward_to"):
+        _assert_string_or_string_list_schema(
+            references["properties"][field_name],
+            label=f"contract.references[].{field_name}",
+        )
+    _assert_enum_string_or_string_list_schema(
+        references["properties"]["required_actions"],
+        label="contract.references[].required_actions",
+        enum_values=["read", "use", "compare", "cite", "avoid"],
+    )
+
+    links = contract_schema["properties"]["links"]["items"]
+    _assert_closed_object(links, label="contract.links[]")
+    assert links["properties"]["relation"]["enum"] == [
+        "supports",
+        "computes",
+        "visualizes",
+        "benchmarks",
+        "depends_on",
+        "evaluated_by",
+        "other",
+    ]
+    _assert_string_or_string_list_schema(links["properties"]["verified_by"], label="contract.links[].verified_by")
+
+    forbidden_proxies = contract_schema["properties"]["forbidden_proxies"]["items"]
+    _assert_closed_object(forbidden_proxies, label="contract.forbidden_proxies[]")
+
+    uncertainty_markers = _schema_object(contract_schema, contract_schema["properties"]["uncertainty_markers"])
+    _assert_closed_object(uncertainty_markers, label="contract.uncertainty_markers")
+    for field_name in (
+        "weakest_anchors",
+        "unvalidated_assumptions",
+        "competing_explanations",
+        "disconfirming_observations",
+    ):
+        _assert_string_or_string_list_schema(
+            uncertainty_markers["properties"][field_name],
+            label=f"contract.uncertainty_markers.{field_name}",
+        )
 
 
 def _identity_condition_for_check(run_request_schema: dict[str, object], check_identifier: str) -> list[tuple[str, list[str]]]:
@@ -224,128 +416,11 @@ def test_contract_tools_list_tools_expose_structured_request_schemas() -> None:
     assert artifact_content["pattern"] == r"\S"
 
     contract_schema = _schema_anyof_object(run_request["properties"]["contract"])
-    _assert_closed_object(contract_schema, label="contract")
-    assert {"schema_version", "scope", "claims", "references"} <= set(contract_schema["properties"])
-    scope = _schema_object(contract_schema, contract_schema["properties"]["scope"])
-    _assert_open_object(scope, label="contract.scope")
-    assert scope["required"] == ["question"]
-    assert scope["properties"]["question"]["minLength"] == 1
-    assert scope["properties"]["question"]["pattern"] == r"\S"
-    assert scope["properties"]["in_scope"]["type"] == "array"
-    assert scope["properties"]["in_scope"]["items"]["minLength"] == 1
-    assert scope["properties"]["in_scope"]["items"]["pattern"] == r"\S"
-
-    context_intake = _schema_object(contract_schema, contract_schema["properties"]["context_intake"])
-    _assert_open_object(context_intake, label="contract.context_intake")
-
-    approach_policy = _schema_object(contract_schema, contract_schema["properties"]["approach_policy"])
-    _assert_open_object(approach_policy, label="contract.approach_policy")
-
-    claims = contract_schema["properties"]["claims"]["items"]
-    _assert_open_object(claims, label="contract.claims[]")
-    assert claims["required"] == ["id", "statement"]
-    assert claims["properties"]["id"]["minLength"] == 1
-    assert claims["properties"]["id"]["pattern"] == r"\S"
-    assert claims["properties"]["observables"]["items"]["minLength"] == 1
-    assert claims["properties"]["observables"]["items"]["pattern"] == r"\S"
-
-    observables = contract_schema["properties"]["observables"]["items"]
-    _assert_open_object(observables, label="contract.observables[]")
-    assert observables["properties"]["kind"]["enum"] == [
-        "scalar",
-        "curve",
-        "map",
-        "classification",
-        "proof_obligation",
-        "other",
-    ]
-
-    deliverables = contract_schema["properties"]["deliverables"]["items"]
-    _assert_open_object(deliverables, label="contract.deliverables[]")
-    assert deliverables["properties"]["kind"]["enum"] == [
-        "figure",
-        "table",
-        "dataset",
-        "data",
-        "derivation",
-        "code",
-        "note",
-        "report",
-        "other",
-    ]
-
-    acceptance_tests = contract_schema["properties"]["acceptance_tests"]["items"]
-    _assert_open_object(acceptance_tests, label="contract.acceptance_tests[]")
-    assert acceptance_tests["properties"]["kind"]["enum"] == [
-        "existence",
-        "schema",
-        "benchmark",
-        "consistency",
-        "cross_method",
-        "limiting_case",
-        "symmetry",
-        "dimensional_analysis",
-        "convergence",
-        "oracle",
-        "proxy",
-        "reproducibility",
-        "human_review",
-        "other",
-    ]
-    assert acceptance_tests["properties"]["automation"]["enum"] == ["automated", "hybrid", "human"]
-
-    references = contract_schema["properties"]["references"]["items"]
-    _assert_open_object(references, label="contract.references[]")
-    assert references["required"] == ["id", "locator", "why_it_matters"]
-    assert references["properties"]["kind"]["enum"] == [
-        "paper",
-        "dataset",
-        "prior_artifact",
-        "spec",
-        "user_anchor",
-        "other",
-    ]
-    assert references["properties"]["role"]["enum"] == [
-        "definition",
-        "benchmark",
-        "method",
-        "must_consider",
-        "background",
-        "other",
-    ]
-    assert references["properties"]["carry_forward_to"]["items"]["minLength"] == 1
-    assert references["properties"]["required_actions"]["items"]["enum"] == ["read", "use", "compare", "cite", "avoid"]
-
-    links = contract_schema["properties"]["links"]["items"]
-    _assert_open_object(links, label="contract.links[]")
-    assert links["properties"]["relation"]["enum"] == [
-        "supports",
-        "computes",
-        "visualizes",
-        "benchmarks",
-        "depends_on",
-        "evaluated_by",
-        "other",
-    ]
-
-    forbidden_proxies = contract_schema["properties"]["forbidden_proxies"]["items"]
-    _assert_open_object(forbidden_proxies, label="contract.forbidden_proxies[]")
-
-    uncertainty_markers = _schema_object(contract_schema, contract_schema["properties"]["uncertainty_markers"])
-    _assert_open_object(uncertainty_markers, label="contract.uncertainty_markers")
+    _assert_contract_schema_sections_closed(contract_schema)
 
     suggest_schema = _tool_input_schema(mcp, "suggest_contract_checks")
     contract_schema = _schema_anyof_object(suggest_schema["properties"]["contract"])
-    _assert_closed_object(contract_schema, label="suggest_contract_checks.contract")
-    assert {"schema_version", "scope", "claims", "references"} <= set(contract_schema["properties"])
-    assert contract_schema["properties"]["scope"]["required"] == ["question"]
-    assert contract_schema["properties"]["references"]["items"]["properties"]["required_actions"]["items"]["enum"] == [
-        "read",
-        "use",
-        "compare",
-        "cite",
-        "avoid",
-    ]
+    _assert_contract_schema_sections_closed(contract_schema)
     active_checks = suggest_schema["properties"]["active_checks"]
     assert active_checks["anyOf"][0]["type"] == "array"
     assert active_checks["anyOf"][0]["items"]["type"] == "string"

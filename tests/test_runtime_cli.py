@@ -12,6 +12,7 @@ import pytest
 import gpd.cli as cli_module
 import gpd.runtime_cli as runtime_cli
 from gpd.adapters import get_adapter
+from gpd.adapters.install_utils import AGENTS_DIR_NAME, HOOKS_DIR_NAME
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors, resolve_global_config_dir
 from gpd.core.constants import ENV_GPD_ACTIVE_RUNTIME, ENV_GPD_DISABLE_CHECKOUT_REEXEC
 from gpd.runtime_cli import _parse_args, _resolve_cli_cwd_from_argv, main
@@ -921,6 +922,49 @@ def test_runtime_cli_rejects_manifestless_ancestor_local_candidate_before_dispat
     assert "GPD runtime bridge rejected missing install manifest" in captured.err
     assert str(config_dir) in captured.err
     assert str(nested_cwd / descriptor.config_dir_name) not in captured.err
+
+
+@pytest.mark.parametrize("managed_surface", [AGENTS_DIR_NAME, HOOKS_DIR_NAME])
+@pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+def test_runtime_cli_rejects_manifestless_torn_managed_surface_before_dispatch(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+    descriptor,
+    managed_surface,
+) -> None:
+    config_dir = tmp_path / descriptor.config_dir_name
+    surface_dir = config_dir / managed_surface
+    surface_dir.mkdir(parents=True)
+    (surface_dir / "placeholder.txt").write_text("managed-surface", encoding="utf-8")
+    nested_cwd = tmp_path / "research" / "notes"
+    nested_cwd.mkdir(parents=True)
+    monkeypatch.chdir(nested_cwd)
+    monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: None)
+    monkeypatch.setattr(
+        "gpd.cli.entrypoint",
+        lambda: (_ for _ in ()).throw(AssertionError("entrypoint should not run for torn managed installs")),
+    )
+
+    exit_code = main(
+        [
+            "--runtime",
+            descriptor.runtime_name,
+            "--config-dir",
+            f"./{descriptor.config_dir_name}",
+            "--install-scope",
+            "local",
+            "state",
+            "load",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 127
+    assert "GPD runtime bridge rejected missing install manifest" in captured.err
+    assert str(config_dir) in captured.err
+    assert str(nested_cwd / descriptor.config_dir_name) not in captured.err
+    assert "GPD runtime bridge rejected incomplete install manifest" not in captured.err
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)

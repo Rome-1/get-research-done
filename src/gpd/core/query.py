@@ -1,7 +1,8 @@
 """Cross-phase result query commands for GPD.
 
-Searches across all phase SUMMARY files to find results by provides, requires,
-affects, equation, text, and assumption references.
+Searches across all phase summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`)
+to find results by provides, requires, affects, equation, text, and assumption
+references.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from gpd.core.constants import SUMMARY_SUFFIX, ProjectLayout
+from gpd.core.constants import ProjectLayout
 from gpd.core.errors import QueryError
 from gpd.core.frontmatter import FrontmatterParseError, extract_frontmatter
 from gpd.core.observability import instrument_gpd_function
@@ -319,7 +320,8 @@ def _serialize_search_value(value: object) -> str:
 @instrument_gpd_function("query.collect_summaries")
 def collect_summaries(cwd: Path) -> list[SummaryEntry]:
     """Enumerate all phase directories and collect parsed SUMMARY files."""
-    phases_dir = ProjectLayout(cwd).phases_dir
+    layout = ProjectLayout(cwd)
+    phases_dir = layout.phases_dir
     results: list[SummaryEntry] = []
 
     if not phases_dir.is_dir():
@@ -339,7 +341,7 @@ def collect_summaries(cwd: Path) -> list[SummaryEntry]:
         except OSError:
             continue
 
-        summaries = [f for f in files if f.name.endswith(SUMMARY_SUFFIX)]
+        summaries = [f for f in files if layout.is_summary_file(f.name)]
 
         for summary_file in summaries:
             try:
@@ -359,9 +361,7 @@ def collect_summaries(cwd: Path) -> list[SummaryEntry]:
 
             # Derive plan identifier from filename
             plan_id = summary_file.name
-            if plan_id.upper().endswith(SUMMARY_SUFFIX.upper()):
-                plan_id = plan_id[: -len(SUMMARY_SUFFIX)]
-            plan_id = plan_id or None
+            plan_id = layout.strip_summary_suffix(summary_file.name) or None
 
             results.append(
                 SummaryEntry(

@@ -119,7 +119,7 @@ ls GPD/review/REVIEW-LEDGER*.json 2>/dev/null
 ls GPD/review/REFEREE-DECISION*.json 2>/dev/null
 ```
 
-If matching round-specific files exist, load them as structured context. Use `REFEREE-REPORT*.md` as the canonical issue-ID source, and use `REVIEW-LEDGER*.json` / `REFEREE-DECISION*.json` to identify blocking issues, unsupported-claim findings, recommendation floors, and the referee's stated rationale. Keep `project_contract`, `project_contract_load_info`, `project_contract_validation`, and `active_reference_context` visible together when drafting the response letter.
+If matching round-specific files exist, load them as structured context. Use `GPD/REFEREE-REPORT{round_suffix}.md` as the canonical issue-ID source, and use `REVIEW-LEDGER*.json` / `REFEREE-DECISION*.json` to identify blocking issues, unsupported-claim findings, recommendation floors, and the referee's stated rationale. Keep `project_contract`, `project_contract_load_info`, `project_contract_validation`, and `active_reference_context` visible together when drafting the response letter.
 
 Set `round_suffix` to match the peer-review artifact convention:
 
@@ -135,7 +135,7 @@ Use `protocol_bundle_context` from init JSON as additive revision guidance.
 
 - If `selected_protocol_bundle_ids` is non-empty, keep the bundle's decisive artifact expectations, benchmark anchors, estimator caveats, and reference prompts visible while triaging referee requests.
 - Use bundle guidance to distinguish "missing decisive evidence we already owed" from "new side quest the referee is asking for."
-- Do **not** let bundle guidance justify broader claims, waive review-ledger blockers, or replace the manuscript's actual evidence trail in `GPD/comparisons/*-COMPARISON.md`, `GPD/paper/FIGURE_TRACKER.md`, phase `SUMMARY.md`, or `VERIFICATION.md`.
+- Do **not** let bundle guidance justify broader claims, waive review-ledger blockers, or replace the manuscript's actual evidence trail in `GPD/comparisons/*-COMPARISON.md`, `GPD/paper/FIGURE_TRACKER.md`, phase summary artifacts, or `VERIFICATION.md`.
 - Keep revisions tied to claims the manuscript still intends to make. Review ledgers and bundle hints help prioritize, but they do not force new side analyses once honest claim narrowing resolves the concern.
 </step>
 
@@ -146,7 +146,7 @@ Ask the user to provide referee reports via one of:
 
 1. **Paste directly** -- user pastes report text into the conversation
 2. **File path** -- user provides a path to the report file(s)
-3. **Existing file** -- check `GPD/paper/referee-report-*.md` or `paper/referee-reports/`
+3. **Existing file** -- prefer canonical `GPD/REFEREE-REPORT{round_suffix}.md`; if it is absent, fall back to lowercase markdown legacy locations `GPD/paper/referee-report-*.md` or `paper/referee-reports/*.md`
 
 **Parse each referee's comments into structured items:**
 
@@ -167,7 +167,7 @@ For each comment, extract:
 - Blocking issues and unresolved issue IDs from `REVIEW-LEDGER*.json`
 - Any finding that the paper's claim scope outruns the evidence, that physical interpretation is unsupported, or that venue fit/significance is inadequate
 
-Do not invent new `REF-*` identifiers from the JSON artifacts. Instead, use them to prioritize and calibrate the responses to the issues already surfaced in `REFEREE-REPORT*.md`.
+Do not invent new `REF-*` identifiers from the JSON artifacts. Instead, use them to prioritize and calibrate the responses to the issues already surfaced in the canonical `GPD/REFEREE-REPORT{round_suffix}.md` (or a lowercase markdown legacy fallback when present).
 
 Present the parsed structure for user confirmation:
 

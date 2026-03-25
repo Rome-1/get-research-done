@@ -25,6 +25,7 @@ from gpd.adapters.install_utils import (
     translate_frontmatter_tool_names,
 )
 from gpd.adapters.opencode import OpenCodeAdapter
+from gpd.adapters.runtime_catalog import resolve_global_config_dir
 from gpd.adapters.tool_names import build_canonical_alias_map
 from gpd.registry import load_agents_from_dir
 
@@ -151,10 +152,48 @@ def _read_runtime_command_prompt(tmp_path: Path, target: Path, runtime: str, com
     raise AssertionError(f"Unsupported runtime {runtime}")
 
 
+def _read_runtime_update_surface(tmp_path: Path, target: Path, runtime: str) -> str:
+    if runtime == "claude-code":
+        return (target / "commands" / "gpd" / "update.md").read_text(encoding="utf-8")
+
+    if runtime == "codex":
+        return (tmp_path / "skills" / "gpd-update" / "SKILL.md").read_text(encoding="utf-8")
+
+    if runtime == "gemini":
+        parsed = tomllib.loads((target / "commands" / "gpd" / "update.toml").read_text(encoding="utf-8"))
+        prompt = parsed.get("prompt")
+        assert isinstance(prompt, str)
+        return prompt
+
+    if runtime == "opencode":
+        return (target / "command" / "gpd-update.md").read_text(encoding="utf-8")
+
+    raise AssertionError(f"Unsupported runtime {runtime}")
+
+
 def _read_runtime_agent_prompt(target: Path, runtime: str, agent_name: str) -> str:
     if runtime in {"claude-code", "codex", "gemini", "opencode"}:
         return (target / "agents" / f"{agent_name}.md").read_text(encoding="utf-8")
     raise AssertionError(f"Unsupported runtime {runtime}")
+
+
+@pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
+def test_update_surface_materializes_workflow_paths_in_compiled_artifacts(
+    tmp_path: Path,
+    runtime: str,
+) -> None:
+    target = _install_real_repo_for_runtime(tmp_path, runtime)
+    adapter = next(adapter for adapter in iter_adapters() if adapter.runtime_name == runtime)
+    canonical_global_dir = resolve_global_config_dir(adapter.runtime_descriptor)
+    content = _read_runtime_update_surface(tmp_path, target, runtime)
+
+    if runtime == "claude-code":
+        assert f"@{target.as_posix()}/get-physics-done/workflows/update.md" in content
+        assert "{GPD_CONFIG_DIR}" not in content
+    else:
+        assert f'GPD_CONFIG_DIR="{target.as_posix()}"' in content
+        assert f'GPD_GLOBAL_CONFIG_DIR="{canonical_global_dir.as_posix()}"' in content
+        assert "TARGET_DIR_ARG=$(" in content
 
 # ---------------------------------------------------------------------------
 # Claude Code: install → read back → compare

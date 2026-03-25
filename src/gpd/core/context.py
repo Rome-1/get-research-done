@@ -40,7 +40,6 @@ from gpd.core.constants import (
     STANDALONE_RESEARCH,
     STANDALONE_VALIDATION,
     STATE_MD_FILENAME,
-    SUMMARY_SUFFIX,
     TODOS_DIR_NAME,
     VALIDATION_SUFFIX,
     VERIFICATION_SUFFIX,
@@ -61,6 +60,7 @@ from gpd.core.utils import (
     generate_slug as _generate_slug_impl,
 )
 from gpd.core.utils import is_phase_complete as _is_phase_complete
+from gpd.core.utils import matching_phase_artifact_count as _matching_phase_artifact_count
 from gpd.core.utils import phase_normalize as _phase_normalize_impl
 from gpd.core.utils import phase_sort_key as _phase_sort_key
 from gpd.core.utils import safe_read_file as _safe_read_file
@@ -1850,7 +1850,8 @@ def init_milestone_op(cwd: Path) -> dict:
     milestone = _try_get_milestone_info(cwd)
 
     # Count phases
-    phases_dir = cwd / PLANNING_DIR_NAME / PHASES_DIR_NAME
+    layout = ProjectLayout(cwd)
+    phases_dir = layout.phases_dir
     phase_count = 0
     completed_phases = 0
     try:
@@ -1860,8 +1861,8 @@ def init_milestone_op(cwd: Path) -> dict:
             phase_count += 1
             phase_files = [f.name for f in d.iterdir() if f.is_file()]
             plans = [f for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN]
-            summaries = [f for f in phase_files if f.endswith(SUMMARY_SUFFIX)]
-            if _is_phase_complete(len(plans), len(summaries)):
+            summaries = [f for f in phase_files if layout.is_summary_file(f)]
+            if _is_phase_complete(len(plans), _matching_phase_artifact_count(plans, summaries)):
                 completed_phases += 1
     except FileNotFoundError:
         pass
@@ -1951,7 +1952,8 @@ def init_progress(cwd: Path, includes: set[str] | None = None) -> dict:
     milestone = _try_get_milestone_info(cwd)
 
     # Analyze phases
-    phases_dir = cwd / PLANNING_DIR_NAME / PHASES_DIR_NAME
+    layout = ProjectLayout(cwd)
+    phases_dir = layout.phases_dir
     phases: list[dict[str, object]] = []
     current_phase: dict[str, object] | None = None
     next_phase: dict[str, object] | None = None
@@ -1970,10 +1972,12 @@ def init_progress(cwd: Path, includes: set[str] | None = None) -> dict:
             phase_files = [f.name for f in phase_path.iterdir() if f.is_file()]
 
             plans = [f for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN]
-            summaries = [f for f in phase_files if f.endswith(SUMMARY_SUFFIX)]
+            summaries = [f for f in phase_files if layout.is_summary_file(f)]
             has_research = any(f.endswith(RESEARCH_SUFFIX) or f == STANDALONE_RESEARCH for f in phase_files)
 
-            if _is_phase_complete(len(plans), len(summaries)):
+            summary_count = _matching_phase_artifact_count(plans, summaries)
+
+            if _is_phase_complete(len(plans), summary_count):
                 status = "complete"
             elif plans:
                 status = "in_progress"
@@ -1988,7 +1992,7 @@ def init_progress(cwd: Path, includes: set[str] | None = None) -> dict:
                 "directory": f"{PLANNING_DIR_NAME}/{PHASES_DIR_NAME}/{dir_name}",
                 "status": status,
                 "plan_count": len(plans),
-                "summary_count": len(summaries),
+                "summary_count": summary_count,
                 "has_research": has_research,
             }
             phases.append(phase_entry)

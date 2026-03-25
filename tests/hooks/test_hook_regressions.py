@@ -170,6 +170,31 @@ def test_update_cache_helpers_prefer_runtime_tagged_candidate_over_runtimeless_f
     assert candidate is runtime_candidate
 
 
+def test_notify_latest_update_cache_uses_shared_cache_constants_for_self_owned_install(
+    tmp_path: Path,
+) -> None:
+    from gpd.hooks import notify
+
+    self_config_dir = tmp_path / "runtime"
+    cache_dir = self_config_dir / "sentinel-cache"
+    cache_dir.mkdir(parents=True)
+    cache_file = cache_dir / "sentinel-update.json"
+    cache_file.write_text(json.dumps({"update_available": True, "checked": 10}), encoding="utf-8")
+
+    with (
+        patch.object(notify, "_self_config_dir", return_value=self_config_dir),
+        patch.object(notify, "CACHE_DIR_NAME", "sentinel-cache"),
+        patch.object(notify, "UPDATE_CACHE_FILENAME", "sentinel-update.json"),
+        patch("gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install", return_value="unknown"),
+        patch("gpd.hooks.runtime_detect.get_update_cache_candidates", return_value=[]),
+    ):
+        cache, candidate = notify._latest_update_cache()
+
+    assert cache == {"update_available": True, "checked": 10}
+    assert candidate is not None
+    assert candidate.path == cache_file
+
+
 def test_installed_update_command_uses_manifest_runtime_metadata_for_custom_targets(tmp_path: Path) -> None:
     from gpd.hooks.install_metadata import installed_update_command
 

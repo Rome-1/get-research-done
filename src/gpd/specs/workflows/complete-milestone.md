@@ -128,11 +128,11 @@ Milestone Stats:
 
 <step name="extract_accomplishments">
 
-Extract one-liners from SUMMARY.md files using summary-extract:
+Extract one-liners from summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`) using summary-extract:
 
 ```bash
 # For each phase in milestone, extract one-liner
-for summary in GPD/phases/*-*/*-SUMMARY.md; do
+for summary in GPD/phases/*/*SUMMARY.md; do
   gpd summary-extract "$summary" --field one_liner | gpd json get .one_liner --default ""
 done
 ```
@@ -152,7 +152,7 @@ Key accomplishments for this milestone:
 
 <step name="create_milestone_entry">
 
-**Note:** MILESTONES.md entry is now created automatically by `gpd milestone complete` in the archive_milestone step. The entry includes version, date, phase/plan/task counts, and accomplishments extracted from SUMMARY.md files.
+**Note:** MILESTONES.md entry is now created automatically by `gpd milestone complete` in the archive_milestone step. The entry includes version, date, phase/plan/task counts, and accomplishments extracted from summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`).
 
 If additional details are needed (e.g., researcher-provided "Key Findings" summary, git range, LOC stats), add them manually after the CLI creates the base entry.
 
@@ -162,10 +162,10 @@ If additional details are needed (e.g., researcher-provided "Key Findings" summa
 
 Full PROJECT.md evolution review at milestone completion.
 
-Read all phase summaries:
+Read all phase summary artifacts:
 
 ```bash
-cat GPD/phases/*-*/*-SUMMARY.md
+cat GPD/phases/*/*SUMMARY.md
 ```
 
 **Full review checklist:**
@@ -329,8 +329,8 @@ This returns per-phase summaries with one-liners, provides/requires, and depende
 **Step 2 -- Read source materials:**
 
 ```bash
-# All SUMMARY.md files from this milestone's phases
-cat GPD/phases/*-*/*-SUMMARY.md
+# All summary artifacts from this milestone's phases
+cat GPD/phases/*/*SUMMARY.md
 
 # Research state
 cat GPD/state.json

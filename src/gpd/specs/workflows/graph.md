@@ -1,5 +1,5 @@
 <purpose>
-Build and visualize the dependency graph across all research phases. Shows how results flow between phases via provides/requires/affects frontmatter in SUMMARY.md files and phase definitions in ROADMAP.md. Identifies gaps where a phase requires something no other phase provides, and highlights the critical path through the research.
+Build and visualize the dependency graph across all research phases. Shows how results flow between phases via provides/requires/affects frontmatter in summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`) and phase definitions in ROADMAP.md. Identifies gaps where a phase requires something no other phase provides, and highlights the critical path through the research.
 </purpose>
 
 <required_reading>
@@ -40,15 +40,15 @@ Exit.
 </step>
 
 <step name="scan_frontmatter">
-**Read all SUMMARY.md frontmatter for dependency metadata:**
+**Read all summary-artifact frontmatter for dependency metadata:**
 
-For each phase directory, find all `*-SUMMARY.md` files:
+For each phase directory, find all summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`):
 
 ```bash
-ls GPD/phases/*/*-SUMMARY.md 2>/dev/null
+ls GPD/phases/*/*SUMMARY.md 2>/dev/null
 ```
 
-For each SUMMARY.md, extract YAML frontmatter fields:
+For each summary artifact, extract YAML frontmatter fields:
 
 - **provides:** List of results/quantities this plan produces (e.g., `effective-hamiltonian`, `dispersion-relation`, `transport-coefficients`)
 - **requires:** List of results/quantities this plan needs from earlier phases (e.g., `band-structure`, `coupling-constants`)
@@ -94,7 +94,7 @@ graph TD
 
 **Node styling by status:**
 
-- `complete` -- green: all plans have SUMMARYs
+- `complete` -- green: all plans have matching summary artifacts
 - `partial` -- orange: some plans complete
 - `planned` -- blue: plans exist but none executed
 - `empty` -- grey: no plans created yet
@@ -238,13 +238,13 @@ gpd commit "docs: generate dependency graph" --files GPD/DEPENDENCY-GRAPH.md
 - Don't generate broken Mermaid syntax (test node IDs are valid: alphanumeric, no spaces)
 - Don't ignore ROADMAP.md dependencies when SUMMARY frontmatter is absent
 - Don't report orphaned provides as high severity -- unused results are normal in early phases
-- Don't silently skip phases with no SUMMARY -- include them as nodes with planned/empty status
+- Don't silently skip phases with no summary artifact -- include them as nodes with planned/empty status
   </anti_patterns>
 
 <success_criteria>
 Dependency graph is complete when:
 
-- [ ] All SUMMARY.md frontmatter parsed for provides/requires/affects
+- [ ] All summary-artifact frontmatter parsed for provides/requires/affects
 - [ ] ROADMAP.md phase dependencies included
 - [ ] Directed graph constructed with labeled edges
 - [ ] Valid Mermaid diagram generated with status-based coloring

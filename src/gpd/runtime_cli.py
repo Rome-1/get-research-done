@@ -19,12 +19,15 @@ from pathlib import Path
 
 from gpd.adapters import get_adapter
 from gpd.adapters.install_utils import (
+    AGENTS_DIR_NAME,
     COMMANDS_DIR_NAME,
     FLAT_COMMANDS_DIR_NAME,
     GPD_INSTALL_DIR_NAME,
+    HOOKS_DIR_NAME,
     build_runtime_install_repair_command,
 )
 from gpd.adapters.runtime_catalog import resolve_global_config_dir
+from gpd.core.cli_args import resolve_root_global_cli_cwd_from_argv as _resolve_cli_cwd_from_argv
 from gpd.core.constants import ENV_GPD_ACTIVE_RUNTIME, ENV_GPD_DISABLE_CHECKOUT_REEXEC
 from gpd.hooks.install_metadata import load_install_manifest_state
 from gpd.hooks.runtime_detect import normalize_runtime_name
@@ -62,68 +65,6 @@ def _parse_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
     if gpd_args[:1] == ["--"]:
         gpd_args = gpd_args[1:]
     return options, gpd_args
-
-
-def _split_global_cli_options(argv: list[str]) -> tuple[list[str], list[str]]:
-    """Partition root-global CLI options from the rest of the argv stream."""
-    global_args: list[str] = []
-    remaining_args: list[str] = []
-    passthrough = False
-    index = 0
-
-    while index < len(argv):
-        arg = str(argv[index])
-        if passthrough:
-            remaining_args.append(arg)
-            index += 1
-            continue
-
-        if arg == "--":
-            passthrough = True
-            remaining_args.append(arg)
-            index += 1
-            continue
-
-        if arg == "--raw":
-            global_args.append(arg)
-            index += 1
-            continue
-
-        if arg == "--cwd":
-            global_args.append(arg)
-            if index + 1 < len(argv):
-                global_args.append(str(argv[index + 1]))
-                index += 2
-            else:
-                index += 1
-            continue
-
-        if arg.startswith("--cwd="):
-            global_args.append(arg)
-            index += 1
-            continue
-
-        remaining_args.append(arg)
-        index += 1
-
-    return global_args, remaining_args
-
-
-def _resolve_cli_cwd_from_argv(argv: list[str]) -> Path:
-    """Resolve the effective CLI cwd from raw argv before Typer parses it."""
-    raw_cwd = "."
-    global_args, _ = _split_global_cli_options(argv)
-    for index, arg in enumerate(global_args):
-        if arg == "--cwd" and index + 1 < len(global_args):
-            raw_cwd = global_args[index + 1]
-            continue
-        if arg.startswith("--cwd="):
-            raw_cwd = arg.split("=", 1)[1]
-
-    candidate = Path(raw_cwd).expanduser()
-    if candidate.is_absolute():
-        return candidate.resolve(strict=False)
-    return (Path.cwd() / candidate).resolve(strict=False)
 
 
 def _load_install_manifest(config_dir: Path) -> dict[str, object]:
@@ -206,13 +147,7 @@ def _is_matching_local_install_candidate(candidate: Path, *, runtime: str, cli_c
             return False
         return True
 
-    has_install_markers = any(
-        (
-            (candidate / GPD_INSTALL_DIR_NAME).is_dir(),
-            (candidate / COMMANDS_DIR_NAME / "gpd").is_dir(),
-            (candidate / FLAT_COMMANDS_DIR_NAME).is_dir(),
-        )
-    )
+    has_install_markers = _has_managed_install_markers(candidate)
     if not has_install_markers:
         return False
     if _paths_equal(candidate, canonical_global_dir):
@@ -227,6 +162,8 @@ def _has_managed_install_markers(config_dir: Path) -> bool:
             (config_dir / GPD_INSTALL_DIR_NAME).is_dir(),
             (config_dir / COMMANDS_DIR_NAME / "gpd").is_dir(),
             (config_dir / FLAT_COMMANDS_DIR_NAME).is_dir(),
+            (config_dir / AGENTS_DIR_NAME).is_dir(),
+            (config_dir / HOOKS_DIR_NAME).is_dir(),
         )
     )
 

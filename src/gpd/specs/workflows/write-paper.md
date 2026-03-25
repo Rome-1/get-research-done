@@ -225,7 +225,7 @@ If the digest is incomplete or missing sections, note which paper sections will 
 
 ```bash
 # Fall back to raw sources if digest is insufficient
-cat GPD/phases/*-*/*-SUMMARY.md
+cat GPD/phases/*/*SUMMARY.md
 cat GPD/state.json
 ```
 
@@ -237,7 +237,7 @@ Display a clear warning explaining why and offering alternatives:
 ⚠ No RESEARCH-DIGEST.md found in GPD/milestones/.
 
 Research digests are generated during /gpd:complete-milestone. Without a digest,
-the paper will be built from raw phase data (SUMMARY.md files, STATE.md, state.json).
+the paper will be built from raw phase data (summary artifacts, STATE.md, state.json).
 This works but produces a less structured starting point — the digest provides
 a curated narrative arc, convention timeline, and figure registry.
 
@@ -248,17 +248,17 @@ Options:
      /gpd:write-paper --from-phases 1,2,3,5
 ```
 
-**If `--from-phases` flag is present:** Read SUMMARY.md and research artifacts only from the specified phase directories. Skip milestone digest lookup entirely. This is useful for writing papers that cover a subset of phases or when milestones haven't been completed yet.
+**If `--from-phases` flag is present:** Read summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`) and research artifacts only from the specified phase directories. Skip milestone digest lookup entirely. This is useful for writing papers that cover a subset of phases or when milestones haven't been completed yet.
 
 ```bash
 # Example: --from-phases 1,3,5
 for PHASE_NUM in $(echo "$FROM_PHASES" | tr ',' ' '); do
   PHASE_DIR=$(ls -d GPD/phases/*/ | grep "^GPD/phases/0*${PHASE_NUM}-")
-  cat "$PHASE_DIR"/*-SUMMARY.md 2>/dev/null
+  cat "$PHASE_DIR"/*SUMMARY.md 2>/dev/null
 done
 ```
 
-Proceed to establish_scope and catalog_artifacts, which will gather research context from raw phase data, SUMMARY.md files, and state.json directly.
+Proceed to establish_scope and catalog_artifacts, which will gather research context from raw phase data, summary artifacts, and state.json directly.
 
 </step>
 
@@ -328,25 +328,25 @@ else
 fi
 ```
 
-### Check 1: SUMMARY.md completeness
+### Check 1: summary-artifact completeness
 
-Every contributing phase must have a SUMMARY.md that tells the paper what user-visible result it contributes. For contract-backed phases, `contract_results` and any decisive `comparison_verdicts` are the readiness anchors; generic `verification_status` / `confidence` tags are optional hints, not gates.
+Every contributing phase must have a summary artifact (`SUMMARY.md` or `*-SUMMARY.md`) that tells the paper what user-visible result it contributes. For contract-backed phases, `contract_results` and any decisive `comparison_verdicts` are the readiness anchors; generic `verification_status` / `confidence` tags are optional hints, not gates.
 
 For each phase directory:
 
-1. Verify SUMMARY.md exists
+1. Verify a summary artifact exists
 2. If the phase is contract-backed and supports a paper claim, check for `plan_contract_ref` and `contract_results`
 3. If a contract-backed target depends on a decisive comparison, check for the corresponding `comparison_verdicts` entry and an evidence path the manuscript can surface
 4. Confirm the summary or verification artifacts identify where the substantive evidence lives
 
-**Missing SUMMARY.md** → CRITICAL gap (phase results not summarized).
+**Missing summary artifact** → CRITICAL gap (phase results not summarized).
 **Contract-backed phase missing `contract_results` for a paper-relevant target** → CRITICAL gap.
 **Decisive comparison required by the contract but no verdict/evidence path is surfaced** → CRITICAL gap.
 **Missing generic `verification_status` / `confidence` tags alone are not blockers.**
 
 ### Check 2: Convention consistency
 
-Read the convention declarations from each phase's SUMMARY.md or derivation files and compare:
+Read the convention declarations from each phase's summary artifact or derivation files and compare:
 
 1. Metric signature — must be identical across all phases
 2. Fourier convention — must be identical across all phases
@@ -360,7 +360,7 @@ Also check `convention_lock` in STATE.md or state.json. If a convention lock exi
 
 For each key result listed in the research digest (or `intermediate_results` in state.json):
 
-1. Locate the value in its source phase SUMMARY.md
+1. Locate the value in its source phase summary artifact
 2. Compare with any cross-references in other phases
 3. Flag values that appear in multiple places with different magnitudes
 
@@ -734,7 +734,7 @@ grep -rn "RESULT PENDING" "${PAPER_DIR}"/*.tex
 
 For each `% [RESULT PENDING: phase N, task M -- description]`:
 
-1. Read the referenced phase's SUMMARY.md for the completed result
+1. Read the referenced phase's summary artifact for the completed result
 2. If the result is available: replace `\text{[PENDING]}` with the actual value and remove the `% [RESULT PENDING: ...]` comment
 3. If the result is still unavailable: flag as a blocker — the paper cannot be finalized with pending placeholders
 
@@ -885,7 +885,7 @@ Minimum required inputs:
 - `${PAPER_DIR}/ARTIFACT-MANIFEST.json`
 - `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json`
 - `GPD/paper/FIGURE_TRACKER.md`
-- contract-backed `SUMMARY.md` / `VERIFICATION.md` evidence for decisive claims, figures, and comparisons
+- contract-backed summary-artifact / `VERIFICATION.md` evidence for decisive claims, figures, and comparisons
 
 If the manuscript bibliography or citation set changed after the last audit, refresh `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` before building the reproducibility manifest. Stale bibliography audits are not acceptable review inputs.
 Default bootstrap wording: `If the manuscript bibliography or citation set changed after the last audit, refresh `paper/BIBLIOGRAPHY-AUDIT.json` before building the reproducibility manifest.`
@@ -955,7 +955,7 @@ The score should be artifact-driven, not manually estimated. Use:
 - `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json`
 - `GPD/paper/FIGURE_TRACKER.md` frontmatter `figure_registry`
 - `GPD/comparisons/*-COMPARISON.md`
-- phase `SUMMARY.md` / `VERIFICATION.md` `contract_results` and `comparison_verdicts`
+- phase summary-artifact / `VERIFICATION.md` `contract_results` and `comparison_verdicts`
 
 Treat paper-support artifacts as scaffolding, not as proof that a claim is established. Missing decisive comparison evidence still blocks a strong submission recommendation even if manifests and audits are complete.
 

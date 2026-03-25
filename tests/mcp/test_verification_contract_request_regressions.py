@@ -71,6 +71,29 @@ def test_run_contract_check_accepts_semantically_equivalent_check_key_and_check_
     assert _call_verification_tool("run_contract_check", {"request": request_payload}) == expected
 
 
+@pytest.mark.parametrize(
+    ("request_payload", "expected_error"),
+    [
+        (
+            {"check_key": " contract.benchmark_reproduction "},
+            {"error": "check_key must not include leading or trailing whitespace", "schema_version": 1},
+        ),
+        (
+            {"check_id": " 5.16 "},
+            {"error": "check_id must not include leading or trailing whitespace", "schema_version": 1},
+        ),
+    ],
+)
+def test_run_contract_check_rejects_non_exact_check_identifiers(
+    request_payload: dict[str, object],
+    expected_error: dict[str, object],
+) -> None:
+    from gpd.mcp.servers.verification_server import run_contract_check
+
+    assert run_contract_check(request_payload) == expected_error
+    assert _call_verification_tool("run_contract_check", {"request": request_payload}) == expected_error
+
+
 def test_run_contract_check_accepts_typed_nested_request_objects() -> None:
     from gpd.contracts import ResearchContract
     from gpd.mcp.servers.verification_server import (

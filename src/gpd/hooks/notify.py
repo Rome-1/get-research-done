@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from gpd.adapters.install_utils import CACHE_DIR_NAME, UPDATE_CACHE_FILENAME
 from gpd.core.constants import ENV_GPD_DEBUG
 from gpd.core.observability import resolve_project_root
 from gpd.core.utils import atomic_write, file_lock
@@ -114,9 +115,9 @@ def _latest_update_cache(cwd: str | None = None) -> tuple[dict[str, object] | No
     if self_config_dir is not None and active_install_target is not None and self_config_dir != active_install_target.config_dir:
         prefer_self_cache = not (
             workspace_path is not None and getattr(active_install_target, "install_scope", None) == "local"
-        )
+    )
     if self_config_dir is not None and prefer_self_cache:
-        cache_file = self_config_dir / "cache" / "gpd-update-check.json"
+        cache_file = self_config_dir / CACHE_DIR_NAME / UPDATE_CACHE_FILENAME
         if cache_file.exists():
             try:
                 cache = json.loads(cache_file.read_text(encoding="utf-8"))

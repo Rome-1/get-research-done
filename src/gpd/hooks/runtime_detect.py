@@ -98,29 +98,6 @@ def _paths_equal(left: Path, right: Path) -> bool:
         return left.expanduser() == right.expanduser()
 
 
-def _is_workspace_local_runtime_dir(
-    config_dir: Path,
-    *,
-    runtime: str,
-    cwd: Path | None = None,
-) -> bool:
-    """Return whether *config_dir* is the canonical local runtime dir for one workspace root.
-
-    Manifestless explicit targets must not claim ownership merely because their
-    basename matches a runtime's local config dir. Only directories anchored to
-    the current workspace ancestry qualify for local-path ownership fallback.
-    """
-    adapter = _adapter(runtime)
-    if adapter is None or config_dir.name != adapter.local_config_dir_name:
-        return False
-
-    resolved_cwd = cwd or Path.cwd()
-    for base in (resolved_cwd, *resolved_cwd.parents):
-        if _paths_equal(config_dir, adapter.resolve_local_config_dir(base)):
-            return True
-    return False
-
-
 def _explicit_runtime_override() -> str | None:
     """Return an explicit runtime override supplied by GPD-owned shell surfaces."""
     return normalize_runtime_name(os.environ.get(ENV_GPD_ACTIVE_RUNTIME))
@@ -202,7 +179,6 @@ def _runtime_from_manifest_or_path(
     *,
     cwd: Path | None = None,
     home: Path | None = None,
-    allow_local_path_fallback: bool = True,
 ) -> str | None:
     """Infer the owning runtime for *config_dir* from its manifest or path."""
     manifest_state, manifest_runtime = _manifest_runtime_status(config_dir)
@@ -211,14 +187,11 @@ def _runtime_from_manifest_or_path(
     if manifest_state != "missing":
         return None
 
-    resolved_cwd = cwd or Path.cwd()
     resolved_home = home or Path.home()
     for runtime in ALL_RUNTIMES:
         adapter = _adapter(runtime)
         if adapter is None:
             continue
-        if allow_local_path_fallback and _is_workspace_local_runtime_dir(config_dir, runtime=runtime, cwd=resolved_cwd):
-            return runtime
         # Explicit config-dir ownership should remain stable even when the
         # current process carries unrelated runtime/XDG override env vars.
         canonical_global_dir = _resolve_global_config_dir(adapter.runtime_descriptor, home=resolved_home, environ={})

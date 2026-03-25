@@ -90,13 +90,13 @@ def test_find_phase_with_summary(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     phase_dir = _create_phase_dir(tmp_path, "02-compute")
     (phase_dir / "a-PLAN.md").write_text("plan")
-    (phase_dir / "a-SUMMARY.md").write_text("summary")
+    (phase_dir / "SUMMARY.md").write_text("summary")
 
     result = find_phase(tmp_path, "2")
     assert result is not None
     assert result.plans == ["a-PLAN.md"]
-    assert result.summaries == ["a-SUMMARY.md"]
-    assert result.incomplete_plans == []
+    assert result.summaries == ["SUMMARY.md"]
+    assert result.incomplete_plans == ["a-PLAN.md"]
 
 
 def test_find_phase_not_found(tmp_path: Path) -> None:
@@ -547,7 +547,7 @@ def test_phase_remove_with_summaries_needs_force(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     _create_roadmap(tmp_path, "### Phase 1: X\n**Goal:** x\n")
     phase_dir = _create_phase_dir(tmp_path, "01-x")
-    (phase_dir / "a-SUMMARY.md").write_text("done")
+    (phase_dir / "SUMMARY.md").write_text("done")
 
     with pytest.raises(PhaseValidationError, match="force"):
         phase_remove(tmp_path, "1")

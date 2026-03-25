@@ -258,14 +258,16 @@ class TestCollectSummaries:
         s03 = next(s for s in summaries if s.phase in ("3", "03"))
         assert s03.plan == "03-01"
 
-    def test_ignores_legacy_standalone_summary_files(self, tmp_path: Path) -> None:
+    def test_collects_standalone_summary_files(self, tmp_path: Path) -> None:
         phase_dir = tmp_path / "GPD" / "phases" / "01-legacy"
         phase_dir.mkdir(parents=True)
         (phase_dir / "SUMMARY.md").write_text("# legacy summary\n", encoding="utf-8")
 
         summaries = collect_summaries(tmp_path)
 
-        assert summaries == []
+        assert len(summaries) == 1
+        assert summaries[0].file == "SUMMARY.md"
+        assert summaries[0].plan is None
 
     def test_skips_parse_errors(self, tmp_path: Path) -> None:
         phases_dir = tmp_path / "GPD" / "phases" / "01-test"

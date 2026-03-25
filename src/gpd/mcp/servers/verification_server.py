@@ -292,6 +292,22 @@ def _string_or_string_list_schema(*, min_items: int | None = None) -> dict[str, 
     }
 
 
+def _enum_string_list_schema(values: Iterable[str], *, min_items: int | None = None) -> dict[str, object]:
+    schema: dict[str, object] = {"type": "array", "items": _enum_string_schema(values)}
+    if min_items is not None:
+        schema["minItems"] = min_items
+    return schema
+
+
+def _enum_string_or_string_list_schema(values: Iterable[str], *, min_items: int | None = None) -> dict[str, object]:
+    return {
+        "anyOf": [
+            _enum_string_schema(values),
+            _enum_string_list_schema(values, min_items=min_items),
+        ]
+    }
+
+
 def _boolean_or_null_schema() -> dict[str, object]:
     return {"anyOf": [{"type": "boolean"}, {"type": "null"}]}
 
@@ -315,18 +331,6 @@ def _object_schema(
     if required_list:
         schema["required"] = required_list
     return schema
-
-
-def _open_object_schema(
-    properties: dict[str, object],
-    *,
-    required: Iterable[str] = (),
-) -> dict[str, object]:
-    return _object_schema(
-        properties,
-        required=required,
-        additional_properties=True,
-    )
 
 
 def _enum_string_schema(values: Iterable[str]) -> dict[str, object]:
@@ -460,36 +464,39 @@ _CONTRACT_OBSERVED_INPUT_SCHEMA: dict[str, object] = _object_schema(
     },
     additional_properties=False,
 )
-_CONTRACT_SCOPE_INPUT_SCHEMA: dict[str, object] = _open_object_schema(
+_CONTRACT_SCOPE_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
         "question": _non_empty_string_schema(),
-        "in_scope": _string_list_schema(),
-        "out_of_scope": _string_list_schema(),
-        "unresolved_questions": _string_list_schema(),
+        "in_scope": _string_or_string_list_schema(),
+        "out_of_scope": _string_or_string_list_schema(),
+        "unresolved_questions": _string_or_string_list_schema(),
     },
     required=("question",),
+    additional_properties=False,
 )
-_CONTRACT_CONTEXT_INTAKE_INPUT_SCHEMA: dict[str, object] = _open_object_schema(
+_CONTRACT_CONTEXT_INTAKE_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
-        "must_read_refs": _string_list_schema(),
-        "must_include_prior_outputs": _string_list_schema(),
-        "user_asserted_anchors": _string_list_schema(),
-        "known_good_baselines": _string_list_schema(),
-        "context_gaps": _string_list_schema(),
-        "crucial_inputs": _string_list_schema(),
-    }
+        "must_read_refs": _string_or_string_list_schema(),
+        "must_include_prior_outputs": _string_or_string_list_schema(),
+        "user_asserted_anchors": _string_or_string_list_schema(),
+        "known_good_baselines": _string_or_string_list_schema(),
+        "context_gaps": _string_or_string_list_schema(),
+        "crucial_inputs": _string_or_string_list_schema(),
+    },
+    additional_properties=False,
 )
-_CONTRACT_APPROACH_POLICY_INPUT_SCHEMA: dict[str, object] = _open_object_schema(
+_CONTRACT_APPROACH_POLICY_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
-        "formulations": _string_list_schema(),
-        "allowed_estimator_families": _string_list_schema(),
-        "forbidden_estimator_families": _string_list_schema(),
-        "allowed_fit_families": _string_list_schema(),
-        "forbidden_fit_families": _string_list_schema(),
-        "stop_and_rethink_conditions": _string_list_schema(),
-    }
+        "formulations": _string_or_string_list_schema(),
+        "allowed_estimator_families": _string_or_string_list_schema(),
+        "forbidden_estimator_families": _string_or_string_list_schema(),
+        "allowed_fit_families": _string_or_string_list_schema(),
+        "forbidden_fit_families": _string_or_string_list_schema(),
+        "stop_and_rethink_conditions": _string_or_string_list_schema(),
+    },
+    additional_properties=False,
 )
-_CONTRACT_OBSERVABLE_INPUT_SCHEMA: dict[str, object] = _open_object_schema(
+_CONTRACT_OBSERVABLE_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
         "id": _non_empty_string_schema(),
         "name": _non_empty_string_schema(),
@@ -499,59 +506,61 @@ _CONTRACT_OBSERVABLE_INPUT_SCHEMA: dict[str, object] = _open_object_schema(
         "units": _non_empty_string_or_null_schema(),
     },
     required=("id", "name", "definition"),
+    additional_properties=False,
 )
-_CONTRACT_CLAIM_INPUT_SCHEMA: dict[str, object] = _open_object_schema(
+_CONTRACT_CLAIM_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
         "id": _non_empty_string_schema(),
         "statement": _non_empty_string_schema(),
-        "observables": _string_list_schema(),
-        "deliverables": _string_list_schema(),
-        "acceptance_tests": _string_list_schema(),
-        "references": _string_list_schema(),
+        "observables": _string_or_string_list_schema(),
+        "deliverables": _string_or_string_list_schema(),
+        "acceptance_tests": _string_or_string_list_schema(),
+        "references": _string_or_string_list_schema(),
     },
     required=("id", "statement"),
+    additional_properties=False,
 )
-_CONTRACT_DELIVERABLE_INPUT_SCHEMA: dict[str, object] = _open_object_schema(
+_CONTRACT_DELIVERABLE_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
         "id": _non_empty_string_schema(),
         "kind": _enum_string_schema(_CONTRACT_DELIVERABLE_KIND_VALUES),
         "path": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "description": _non_empty_string_schema(),
-        "must_contain": _string_list_schema(),
+        "must_contain": _string_or_string_list_schema(),
     },
     required=("id", "description"),
+    additional_properties=False,
 )
-_CONTRACT_ACCEPTANCE_TEST_INPUT_SCHEMA: dict[str, object] = _open_object_schema(
+_CONTRACT_ACCEPTANCE_TEST_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
         "id": _non_empty_string_schema(),
         "subject": _non_empty_string_schema(),
         "kind": _enum_string_schema(_CONTRACT_ACCEPTANCE_TEST_KIND_VALUES),
         "procedure": _non_empty_string_schema(),
         "pass_condition": _non_empty_string_schema(),
-        "evidence_required": _string_list_schema(),
+        "evidence_required": _string_or_string_list_schema(),
         "automation": _enum_string_schema(_CONTRACT_ACCEPTANCE_AUTOMATION_VALUES),
     },
     required=("id", "subject", "procedure", "pass_condition"),
+    additional_properties=False,
 )
-_CONTRACT_REFERENCE_INPUT_SCHEMA: dict[str, object] = _open_object_schema(
+_CONTRACT_REFERENCE_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
         "id": _non_empty_string_schema(),
         "kind": _enum_string_schema(_CONTRACT_REFERENCE_KIND_VALUES),
         "locator": _non_empty_string_schema(),
-        "aliases": _string_list_schema(),
+        "aliases": _string_or_string_list_schema(),
         "role": _enum_string_schema(_CONTRACT_REFERENCE_ROLE_VALUES),
         "why_it_matters": _non_empty_string_schema(),
-        "applies_to": _string_list_schema(),
-        "carry_forward_to": _string_list_schema(),
+        "applies_to": _string_or_string_list_schema(),
+        "carry_forward_to": _string_or_string_list_schema(),
         "must_surface": {"type": "boolean"},
-        "required_actions": {
-            "type": "array",
-            "items": _enum_string_schema(_CONTRACT_REFERENCE_ACTION_VALUES),
-        },
+        "required_actions": _enum_string_or_string_list_schema(_CONTRACT_REFERENCE_ACTION_VALUES),
     },
     required=("id", "locator", "why_it_matters"),
+    additional_properties=False,
 )
-_CONTRACT_FORBIDDEN_PROXY_INPUT_SCHEMA: dict[str, object] = _open_object_schema(
+_CONTRACT_FORBIDDEN_PROXY_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
         "id": _non_empty_string_schema(),
         "subject": _non_empty_string_schema(),
@@ -559,24 +568,27 @@ _CONTRACT_FORBIDDEN_PROXY_INPUT_SCHEMA: dict[str, object] = _open_object_schema(
         "reason": _non_empty_string_schema(),
     },
     required=("id", "subject", "proxy", "reason"),
+    additional_properties=False,
 )
-_CONTRACT_LINK_INPUT_SCHEMA: dict[str, object] = _open_object_schema(
+_CONTRACT_LINK_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
         "id": _non_empty_string_schema(),
         "source": _non_empty_string_schema(),
         "target": _non_empty_string_schema(),
         "relation": _enum_string_schema(_CONTRACT_LINK_RELATION_VALUES),
-        "verified_by": _string_list_schema(),
+        "verified_by": _string_or_string_list_schema(),
     },
     required=("id", "source", "target"),
+    additional_properties=False,
 )
-_CONTRACT_UNCERTAINTY_MARKERS_INPUT_SCHEMA: dict[str, object] = _open_object_schema(
+_CONTRACT_UNCERTAINTY_MARKERS_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
-        "weakest_anchors": _string_list_schema(),
-        "unvalidated_assumptions": _string_list_schema(),
-        "competing_explanations": _string_list_schema(),
-        "disconfirming_observations": _string_list_schema(),
-    }
+        "weakest_anchors": _string_or_string_list_schema(),
+        "unvalidated_assumptions": _string_or_string_list_schema(),
+        "competing_explanations": _string_or_string_list_schema(),
+        "disconfirming_observations": _string_or_string_list_schema(),
+    },
+    additional_properties=False,
 )
 _CONTRACT_PAYLOAD_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
@@ -944,6 +956,93 @@ def _normalize_optional_scalar_str(value: object) -> object:
     return stripped or None
 
 
+def _schema_branch_for_value(schema_fragment: dict[str, object], value: object) -> dict[str, object]:
+    any_of = schema_fragment.get("anyOf")
+    if not isinstance(any_of, list):
+        return schema_fragment
+
+    for branch in any_of:
+        if not isinstance(branch, dict):
+            continue
+        branch_type = branch.get("type")
+        if branch_type == "object" and isinstance(value, dict):
+            return branch
+        if branch_type == "array" and isinstance(value, list):
+            return branch
+        if branch_type == "string" and isinstance(value, str):
+            return branch
+        if branch_type == "null" and value is None:
+            return branch
+        if branch_type == "boolean" and isinstance(value, bool):
+            return branch
+        if branch_type == "integer" and isinstance(value, int) and not isinstance(value, bool):
+            return branch
+        if branch_type == "number" and isinstance(value, (int, float)) and not isinstance(value, bool):
+            return branch
+    return schema_fragment
+
+
+def _collect_contract_schema_alignment_errors(
+    value: object,
+    schema_fragment: dict[str, object],
+    *,
+    path_prefix: str = "",
+) -> list[str]:
+    schema = _schema_branch_for_value(schema_fragment, value)
+    errors: list[str] = []
+
+    if schema.get("type") == "object" and isinstance(value, dict):
+        properties = schema.get("properties", {})
+        if schema.get("additionalProperties") is False:
+            for key in value:
+                if key in properties:
+                    continue
+                location = f"{path_prefix}.{key}" if path_prefix else str(key)
+                errors.append(f"{location}: Extra inputs are not permitted")
+        for key, child_schema in properties.items():
+            if key not in value or not isinstance(child_schema, dict):
+                continue
+            child_prefix = f"{path_prefix}.{key}" if path_prefix else key
+            errors.extend(
+                _collect_contract_schema_alignment_errors(
+                    value[key],
+                    child_schema,
+                    path_prefix=child_prefix,
+                )
+            )
+        return errors
+
+    if schema.get("type") == "array" and isinstance(value, list):
+        item_schema = schema.get("items")
+        if not isinstance(item_schema, dict):
+            return errors
+        for index, item in enumerate(value):
+            item_prefix = f"{path_prefix}.{index}" if path_prefix else str(index)
+            errors.extend(
+                _collect_contract_schema_alignment_errors(
+                    item,
+                    item_schema,
+                    path_prefix=item_prefix,
+                )
+            )
+        return errors
+
+    enum_values = schema.get("enum")
+    if isinstance(enum_values, list) and isinstance(value, str) and value not in enum_values:
+        enum_text = ", ".join(str(entry) for entry in enum_values)
+        errors.append(f"{path_prefix} must be one of {enum_text}")
+    return errors
+
+
+def _validate_contract_schema_alignment(contract_raw: dict[str, object]) -> dict[str, object] | None:
+    """Reject contract payload drift that the published closed schema does not advertise."""
+
+    errors = _collect_contract_schema_alignment_errors(contract_raw, _CONTRACT_PAYLOAD_INPUT_SCHEMA)
+    if not errors:
+        return None
+    return _contract_payload_error(errors)
+
+
 def _validate_optional_string(value: object, *, field_name: str) -> tuple[str | None, str | None]:
     if value is None:
         return None, None
@@ -1243,6 +1342,22 @@ def _validate_string_list(value: object, *, field_name: str) -> tuple[list[str] 
             return None, _error_result(f"{field_name}[{index}] must be a non-empty string")
         validated.append(stripped)
     return validated, None
+
+
+def _validate_check_identifier(value: object, *, field_name: str) -> tuple[str | None, dict[str, object] | None]:
+    """Return an exact contract-check identifier without canonicalizing whitespace."""
+
+    if value is None:
+        return None, None
+    if not isinstance(value, str):
+        return None, _error_result(f"{field_name} must be a string")
+    if not value:
+        return None, None
+    if not value.strip():
+        return None, _error_result(f"{field_name} must be a non-empty string")
+    if value != value.strip():
+        return None, _error_result(f"{field_name} must not include leading or trailing whitespace")
+    return value, None
 
 
 def _normalize_active_checks(active_checks: list[str]) -> list[str]:
@@ -2425,6 +2540,9 @@ def _parse_contract_payload(contract_raw: dict[str, object]) -> tuple[ResearchCo
     list_member_error = _validate_contract_list_members(contract_raw)
     if list_member_error is not None:
         return None, [], list_member_error
+    schema_alignment_error = _validate_contract_schema_alignment(contract_raw)
+    if schema_alignment_error is not None:
+        return None, [], schema_alignment_error
     try:
         contract = ResearchContract.model_validate(contract_raw)
         integrity_error = _validate_contract_integrity(contract)
@@ -2782,8 +2900,12 @@ def run_contract_check(request: RunContractCheckPayload) -> dict:
             request_key_error = _validate_run_contract_check_request_keys(request)
             if request_key_error is not None:
                 return _error_result(request_key_error)
-            check_key_value = _normalize_optional_scalar_str(request.get("check_key"))
-            check_id_value = _normalize_optional_scalar_str(request.get("check_id"))
+            check_key_value, error = _validate_check_identifier(request.get("check_key"), field_name="check_key")
+            if error is not None:
+                return error
+            check_id_value, error = _validate_check_identifier(request.get("check_id"), field_name="check_id")
+            if error is not None:
+                return error
             has_check_key = isinstance(check_key_value, str) and bool(check_key_value)
             has_check_id = isinstance(check_id_value, str) and bool(check_id_value)
             check_key_meta = get_verification_check(check_key_value) if has_check_key else None
@@ -2795,7 +2917,7 @@ def run_contract_check(request: RunContractCheckPayload) -> dict:
             else:
                 check_meta = check_key_meta or check_id_meta
             if check_meta is None:
-                check_id = str(check_key_value or check_id_value or "").strip()
+                check_id = str(check_key_value or check_id_value or "")
                 if not check_id:
                     return _error_result("Missing check_key or check_id")
                 return _error_result(f"Unknown contract check: {check_id}")
