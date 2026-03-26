@@ -594,10 +594,15 @@ def _known_agent_names() -> frozenset[str]:
     known = set(MODEL_PROFILES) | set(AGENT_DEFAULT_TIERS)
     try:
         from gpd import registry as content_registry
+    except (ImportError, ModuleNotFoundError):
+        return frozenset(known)
 
+    try:
         known.update(content_registry.list_agents())
-    except Exception:
-        pass
+    except AttributeError:
+        return frozenset(known)
+    except Exception as exc:
+        raise ConfigError("Unable to resolve known agent names from registry") from exc
     return frozenset(known)
 
 

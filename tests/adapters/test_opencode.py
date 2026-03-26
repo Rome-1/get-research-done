@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from gpd.adapters.install_utils import build_runtime_cli_bridge_command
+from gpd.adapters.install_utils import build_runtime_cli_bridge_command, compile_markdown_for_runtime
 from gpd.adapters.opencode import (
     OpenCodeAdapter,
     configure_opencode_permissions,
@@ -139,6 +139,30 @@ class TestConvertFrontmatter:
         assert "description: before --- after" in result
         assert "read_file: true" in result
         assert result.rstrip().endswith("Body")
+
+    def test_review_contract_is_prepended_to_prompt_body(self) -> None:
+        content = compile_markdown_for_runtime(
+            (
+                "---\n"
+                "description: D\n"
+                "review-contract:\n"
+                "  review_mode: publication\n"
+                "  schema_version: 1\n"
+                "  required_outputs:\n"
+                "    - GPD/review/REFEREE-DECISION{round_suffix}.json\n"
+                "---\n"
+                "Prompt body"
+            ),
+            runtime="opencode",
+            path_prefix="/prefix/",
+        )
+
+        result = convert_claude_to_opencode_frontmatter(content)
+
+        assert "## Review Contract" in result
+        assert "review-contract:" in result
+        assert "review_mode: publication" in result
+        assert result.index("## Review Contract") < result.index("Prompt body")
 
 
 class TestCopyFlattenedCommands:

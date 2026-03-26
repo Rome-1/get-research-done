@@ -214,7 +214,11 @@ def check_state_validity(cwd: Path) -> HealthCheck:
 
     state_obj, state_source = _peek_normalized_state_for_health(cwd)
     if isinstance(state_obj, dict) and state_obj.get("project_contract") is not None:
-        approval_validation = validate_project_contract(state_obj["project_contract"], mode="approved")
+        approval_validation = validate_project_contract(
+            state_obj["project_contract"],
+            mode="approved",
+            project_root=cwd,
+        )
         if not approval_validation.valid:
             for error in approval_validation.errors:
                 issue = f"project_contract: {error}"

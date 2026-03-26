@@ -285,7 +285,7 @@ def main(argv: list[str] | None = None) -> None:
             )
         ]
         if active_installed_runtime in (None, "", RUNTIME_UNKNOWN) and preferred_runtime in ALL_RUNTIMES:
-            preferred_candidates = [candidate for candidate in cache_candidates if candidate.runtime == preferred_runtime]
+            preferred_candidates = [candidate for candidate in relevant_candidates if candidate.runtime == preferred_runtime]
             fallback_candidates = [candidate for candidate in relevant_candidates if candidate.runtime is None]
             if preferred_candidates:
                 seen_paths: set[Path] = set()

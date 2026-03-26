@@ -18,7 +18,7 @@ from gpd.adapters.gemini import (
     _render_gemini_policy_toml,
     _rewrite_gpd_cli_invocations,
 )
-from gpd.adapters.install_utils import build_runtime_cli_bridge_command
+from gpd.adapters.install_utils import build_runtime_cli_bridge_command, compile_markdown_for_runtime
 
 
 def expected_gemini_bridge(target: Path) -> str:
@@ -224,6 +224,31 @@ class TestConvertToGeminiToml:
         content = "---\nname: test\ncontext_mode: project-aware\n---\nPrompt body"
         result = _convert_to_gemini_toml(content)
         assert 'context_mode = "project-aware"' in result
+
+    def test_prepends_review_contract_to_prompt(self) -> None:
+        content = compile_markdown_for_runtime(
+            (
+                "---\n"
+                "name: gpd:peer-review\n"
+                "review-contract:\n"
+                "  review_mode: publication\n"
+                "  schema_version: 1\n"
+                "  required_outputs:\n"
+                "    - GPD/review/REFEREE-DECISION{round_suffix}.json\n"
+                "---\n"
+                "Prompt body"
+            ),
+            runtime="gemini",
+            path_prefix="/prefix/",
+        )
+
+        result = _convert_to_gemini_toml(content)
+
+        assert "## Review Contract" in result
+        assert "review-contract:" in result
+        assert "review_mode: publication" in result
+        assert "GPD/review/REFEREE-DECISION{round_suffix}.json" in result
+        assert result.index("## Review Contract") < result.index("Prompt body")
 
     def test_uses_multiline_literal_string(self) -> None:
         content = "---\ndescription: D\n---\nMultiline\nprompt"
@@ -993,6 +1018,38 @@ class TestUninstall:
         assert "tools" not in cleaned
         assert not (target / "bin" / "gpd").exists()
         assert not (target / "policies" / "gpd-auto-edit.toml").exists()
+
+    def test_uninstall_removes_legacy_tools_allowed_entries(
+        self,
+        adapter: GeminiAdapter,
+        gpd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".gemini"
+        target.mkdir()
+        result = adapter.install(gpd_root, target)
+        adapter.finish_install(
+            result["settingsPath"],
+            result["settings"],
+            result["statuslineCommand"],
+            True,
+        )
+
+        settings_path = target / "settings.json"
+        manifest_path = target / "gpd-file-manifest.json"
+
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        settings["tools"] = {"allowed": ["read_file", "custom_tool"]}
+        settings_path.write_text(json.dumps(settings), encoding="utf-8")
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest.setdefault("managed_config", {})["tools.allowed"] = ["read_file"]
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        adapter.uninstall(target)
+
+        cleaned = json.loads(settings_path.read_text(encoding="utf-8"))
+        assert cleaned["tools"]["allowed"] == ["custom_tool"]
 
     def test_uninstall_preserves_non_gpd_sessionstart_statusline_hook(
         self,

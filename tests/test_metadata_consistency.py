@@ -211,7 +211,7 @@ def test_public_mcp_descriptor_entry_point_alternatives_match_pyproject_scripts(
         assert isinstance(alternatives, dict), name
         python_module = alternatives.get("python_module")
         assert isinstance(python_module, dict), name
-        assert python_module.get("command") == "python"
+        assert python_module.get("command") == "python3"
         assert python_module.get("args") == ["-m", module_name]
         assert python_module.get("notes") == "Requires gpd package installed and Python >=3.11"
 

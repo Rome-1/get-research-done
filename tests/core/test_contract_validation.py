@@ -201,24 +201,33 @@ def test_validate_project_contract_approved_mode_rejects_anchor_unknown_in_weake
     assert any("approved project contract requires at least one concrete anchor" in error for error in result.errors)
 
 
-def test_validate_project_contract_approved_mode_accepts_prior_output_grounding() -> None:
+def test_validate_project_contract_approved_mode_accepts_prior_output_grounding(tmp_path: Path) -> None:
     contract = _load_contract_fixture()
     contract["references"] = []
     _remove_incidental_grounding(contract)
+    prior_output = tmp_path / "GPD" / "phases" / "00-baseline" / "00-01-SUMMARY.md"
+    prior_output.parent.mkdir(parents=True)
+    prior_output.write_text("# Summary\n", encoding="utf-8")
     contract["context_intake"]["must_include_prior_outputs"] = ["GPD/phases/00-baseline/00-01-SUMMARY.md"]
     contract["scope"]["unresolved_questions"] = []
 
-    result = validate_project_contract(contract, mode="approved")
+    result = validate_project_contract(contract, mode="approved", project_root=tmp_path)
 
     assert result.valid is True
     assert result.mode == "approved"
 
 
 @pytest.mark.parametrize(
-    "locator",
-    ["doi:10.1234/example", "arXiv:2401.12345", "Table 2", "Fig. 3", "artifacts/benchmark/report.json"],
+    ("reference_kind", "locator"),
+    [
+        ("paper", "doi:10.1234/example"),
+        ("paper", "arXiv:2401.12345"),
+        ("paper", "Table 2"),
+        ("paper", "Fig. 3"),
+    ],
 )
 def test_validate_project_contract_approved_mode_accepts_concrete_reference_locator_grounding(
+    reference_kind: str,
     locator: str,
 ) -> None:
     contract = _load_contract_fixture()
@@ -226,7 +235,7 @@ def test_validate_project_contract_approved_mode_accepts_concrete_reference_loca
     contract["references"] = [
         {
             "id": "ref-anchor",
-            "kind": "paper",
+            "kind": reference_kind,
             "locator": locator,
             "aliases": [],
             "role": "background",
@@ -240,6 +249,34 @@ def test_validate_project_contract_approved_mode_accepts_concrete_reference_loca
     contract["scope"]["unresolved_questions"] = []
 
     result = validate_project_contract(contract, mode="approved")
+
+    assert result.valid is True
+    assert result.mode == "approved"
+
+
+def test_validate_project_contract_approved_mode_accepts_project_local_prior_artifact_locator(tmp_path: Path) -> None:
+    contract = _load_contract_fixture()
+    _remove_incidental_grounding(contract)
+    artifact = tmp_path / "artifacts" / "benchmark" / "report.json"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_text("{}", encoding="utf-8")
+    contract["references"] = [
+        {
+            "id": "ref-anchor",
+            "kind": "prior_artifact",
+            "locator": "artifacts/benchmark/report.json",
+            "aliases": [],
+            "role": "background",
+            "why_it_matters": "Concrete prior artifact should ground approved mode.",
+            "applies_to": ["claim-benchmark"],
+            "carry_forward_to": [],
+            "must_surface": True,
+            "required_actions": ["read"],
+        }
+    ]
+    contract["scope"]["unresolved_questions"] = []
+
+    result = validate_project_contract(contract, mode="approved", project_root=tmp_path)
 
     assert result.valid is True
     assert result.mode == "approved"
@@ -388,17 +425,35 @@ def test_validate_project_contract_approved_mode_rejects_placeholder_reference_l
     assert any("approved project contract requires at least one concrete anchor" in error for error in result.errors)
 
 
-def test_validate_project_contract_approved_mode_accepts_non_reference_grounding_when_must_surface_is_missing() -> None:
+def test_validate_project_contract_approved_mode_accepts_non_reference_grounding_when_must_surface_is_missing(
+    tmp_path: Path,
+) -> None:
     contract = _load_contract_fixture()
     contract["references"][0]["must_surface"] = False
+    prior_output = tmp_path / "GPD" / "phases" / "00-baseline" / "00-01-SUMMARY.md"
+    prior_output.parent.mkdir(parents=True)
+    prior_output.write_text("# Summary\n", encoding="utf-8")
     contract["context_intake"]["must_include_prior_outputs"] = ["GPD/phases/00-baseline/00-01-SUMMARY.md"]
     contract["scope"]["unresolved_questions"] = []
 
-    result = validate_project_contract(contract, mode="approved")
+    result = validate_project_contract(contract, mode="approved", project_root=tmp_path)
 
     assert result.valid is True
     assert result.mode == "approved"
     assert "references must include at least one must_surface=true anchor" in result.warnings
+
+
+def test_validate_project_contract_approved_mode_rejects_nonexistent_prior_output_grounding(tmp_path: Path) -> None:
+    contract = _load_contract_fixture()
+    contract["references"] = []
+    _remove_incidental_grounding(contract)
+    contract["context_intake"]["must_include_prior_outputs"] = ["fake/path"]
+    contract["scope"]["unresolved_questions"] = []
+
+    result = validate_project_contract(contract, mode="approved", project_root=tmp_path)
+
+    assert result.valid is False
+    assert any("approved project contract requires at least one concrete anchor" in error for error in result.errors)
 
 
 @pytest.mark.parametrize("field_name", ["must_include_prior_outputs", "known_good_baselines"])

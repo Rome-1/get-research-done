@@ -694,6 +694,9 @@ class TestSkillsServerIntegration:
         assert result["review_contract"] is not None
         assert result["review_contract"]["review_mode"] == "publication"
         assert result["context_mode"] == "project-required"
+        assert "## Review Contract" in result["content"]
+        assert "review_contract:" in result["content"]
+        assert "inject `review_contract` alongside `content`" in result["loading_hint"]
 
     @pytest.mark.parametrize(
         ("skill_name", "expected_schema_docs", "expected_contract_docs", "expected_review_mode"),

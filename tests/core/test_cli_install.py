@@ -39,6 +39,25 @@ _ENV_OVERRIDE_INSTALL_DESCRIPTOR = next(
 )
 
 
+def _descriptor_with_selection_alias_fragment(fragment: str):
+    matches = [
+        descriptor
+        for descriptor in _INSTALL_TEST_DESCRIPTORS
+        if any(fragment in alias for alias in descriptor.selection_aliases)
+    ]
+    if len(matches) != 1:
+        raise AssertionError(f"Expected exactly one runtime descriptor to match '{fragment}', got {len(matches)}")
+    return matches[0]
+
+
+def _descriptors_with_selection_alias_fragment(fragment: str) -> tuple:
+    return tuple(
+        descriptor
+        for descriptor in _INSTALL_TEST_DESCRIPTORS
+        if any(fragment in alias for alias in descriptor.selection_aliases)
+    )
+
+
 def _install_target(tmp_path: Path, descriptor=_PRIMARY_INSTALL_DESCRIPTOR) -> Path:
     return tmp_path / descriptor.config_dir_name
 
@@ -808,6 +827,7 @@ def test_install_single_runtime_marks_explicit_target(tmp_path: Path):
 
 def test_install_target_dir_preserves_explicit_global_scope(tmp_path: Path) -> None:
     """A global install should stay global even when a target dir is explicit."""
+    target_descriptor = _PRIMARY_INSTALL_DESCRIPTOR
     captured_calls: list[dict[str, object]] = []
     target = tmp_path / "custom-runtime-dir"
 
@@ -822,9 +842,9 @@ def test_install_target_dir_preserves_explicit_global_scope(tmp_path: Path) -> N
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(target)}
 
     mock_adapter = MagicMock(
-        display_name="Claude Code",
+        display_name=target_descriptor.display_name,
         help_command="/gpd:help",
-        launch_command="claude",
+        launch_command=_install_adapter(target_descriptor).launch_command,
         new_project_command="/gpd:new-project",
         map_research_command="/gpd:map-research",
     )
@@ -1196,14 +1216,17 @@ def test_uninstall_rejects_target_dir_with_foreign_manifest_without_wrapping(tmp
 
 def test_install_interactive_rejects_ambiguous_runtime_name(tmp_path: Path):
     """Substring matches that hit multiple runtimes should fail closed."""
+    ambiguous_descriptors = _descriptors_with_selection_alias_fragment("code")
     with (
-        patch("gpd.adapters.list_runtimes", return_value=["claude-code", "codex", "opencode"]),
+        patch("gpd.adapters.list_runtimes", return_value=[descriptor.runtime_name for descriptor in ambiguous_descriptors]),
         patch("gpd.adapters.get_adapter") as mock_get,
     ):
         adapters = {
-            "claude-code": MagicMock(display_name="Claude Code", selection_aliases=("claude", "claude code")),
-            "codex": MagicMock(display_name="Codex", selection_aliases=("codex",)),
-            "opencode": MagicMock(display_name="OpenCode", selection_aliases=("opencode", "open code")),
+            descriptor.runtime_name: MagicMock(
+                display_name=descriptor.display_name,
+                selection_aliases=descriptor.selection_aliases,
+            )
+            for descriptor in ambiguous_descriptors
         }
         mock_get.side_effect = lambda runtime: adapters[runtime]
 
@@ -1215,6 +1238,7 @@ def test_install_interactive_rejects_ambiguous_runtime_name(tmp_path: Path):
 
 def test_install_interactive_accepts_unique_fuzzy_runtime_name(tmp_path: Path):
     """A unique substring match should select that runtime and continue."""
+    target_descriptor = _descriptor_with_selection_alias_fragment("open")
 
     captured_calls: list[dict[str, object]] = []
 
@@ -1230,13 +1254,15 @@ def test_install_interactive_accepts_unique_fuzzy_runtime_name(tmp_path: Path):
 
     with (
         patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
-        patch("gpd.adapters.list_runtimes", return_value=["claude-code", "codex", "opencode"]),
+        patch("gpd.adapters.list_runtimes", return_value=[descriptor.runtime_name for descriptor in _INSTALL_TEST_DESCRIPTORS]),
         patch("gpd.adapters.get_adapter") as mock_get,
     ):
         adapters = {
-            "claude-code": MagicMock(display_name="Claude Code", selection_aliases=("claude", "claude code")),
-            "codex": MagicMock(display_name="Codex", selection_aliases=("codex",)),
-            "opencode": MagicMock(display_name="OpenCode", selection_aliases=("opencode", "open code")),
+            descriptor.runtime_name: MagicMock(
+                display_name=descriptor.display_name,
+                selection_aliases=descriptor.selection_aliases,
+            )
+            for descriptor in _INSTALL_TEST_DESCRIPTORS
         }
         for adapter in adapters.values():
             adapter.help_command = "/gpd:help"
@@ -1247,7 +1273,7 @@ def test_install_interactive_accepts_unique_fuzzy_runtime_name(tmp_path: Path):
     assert result.exit_code == 0
     assert captured_calls == [
         {
-            "runtime": "opencode",
+            "runtime": target_descriptor.runtime_name,
             "is_global": False,
             "target_dir_override": None,
         }
@@ -1256,6 +1282,7 @@ def test_install_interactive_accepts_unique_fuzzy_runtime_name(tmp_path: Path):
 
 def test_install_accepts_runtime_display_name_alias(tmp_path: Path) -> None:
     """Non-interactive install should accept runtime display-name aliases."""
+    target_descriptor = _PRIMARY_INSTALL_DESCRIPTOR
     captured_calls: list[dict[str, object]] = []
 
     def mock_install_single(runtime_name, *, is_global, target_dir_override=None):
@@ -1269,9 +1296,9 @@ def test_install_accepts_runtime_display_name_alias(tmp_path: Path) -> None:
         return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path / runtime_name)}
 
     mock_adapter = MagicMock(
-        display_name="Claude Code",
+        display_name=target_descriptor.display_name,
         help_command="/gpd:help",
-        launch_command="claude",
+        launch_command=_install_adapter(target_descriptor).launch_command,
         new_project_command="/gpd:new-project",
         map_research_command="/gpd:map-research",
     )
@@ -1280,12 +1307,12 @@ def test_install_accepts_runtime_display_name_alias(tmp_path: Path) -> None:
         patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
         patch("gpd.adapters.get_adapter", return_value=mock_adapter),
     ):
-        result = runner.invoke(app, ["install", "Claude Code", "--local"])
+        result = runner.invoke(app, ["install", target_descriptor.display_name, "--local"])
 
     assert result.exit_code == 0
     assert captured_calls == [
         {
-            "runtime": "claude-code",
+            "runtime": target_descriptor.runtime_name,
             "is_global": False,
             "target_dir_override": None,
         }
@@ -1294,16 +1321,17 @@ def test_install_accepts_runtime_display_name_alias(tmp_path: Path) -> None:
 
 def test_uninstall_accepts_runtime_selection_alias(tmp_path: Path) -> None:
     """Non-interactive uninstall should accept runtime selection aliases."""
-    target = tmp_path / ".opencode"
+    target_descriptor = _descriptor_with_selection_alias_fragment("open code")
+    target = tmp_path / target_descriptor.config_dir_name
     target.mkdir()
     captured_targets: list[Path] = []
 
     class SpyAdapter:
-        display_name = "OpenCode"
+        display_name = target_descriptor.display_name
 
         def uninstall(self, target_dir):
             captured_targets.append(target_dir)
-            return {"runtime": "opencode", "removed": []}
+            return {"runtime": target_descriptor.runtime_name, "removed": []}
 
     with patch("gpd.adapters.get_adapter", return_value=SpyAdapter()):
         result = runner.invoke(app, ["uninstall", "open code", "--target-dir", str(target)])

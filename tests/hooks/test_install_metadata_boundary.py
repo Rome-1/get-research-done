@@ -16,7 +16,6 @@ from gpd.hooks.install_metadata import (
     load_install_manifest_state,
 )
 from gpd.hooks.runtime_detect import _manifest_runtime_status as runtime_detect_manifest_runtime_status
-from gpd.runtime_cli import _manifest_runtime_status as runtime_cli_manifest_runtime_status
 
 
 def _seed_anonymous_install_tree(config_dir: Path, *, hook_filename: str) -> Path:
@@ -96,14 +95,11 @@ def test_install_manifest_runtime_status_is_shared_across_surfaces(
 
     metadata_state, metadata_payload, metadata_runtime = load_install_manifest_runtime_status(config_dir)
     detect_state, detect_runtime = runtime_detect_manifest_runtime_status(config_dir)
-    cli_runtime, cli_state = runtime_cli_manifest_runtime_status(config_dir)
 
     assert metadata_state == expected_state
     assert metadata_runtime == expected_runtime
     assert detect_state == expected_state
     assert detect_runtime == expected_runtime
-    assert cli_state == expected_state
-    assert cli_runtime == expected_runtime
     if expected_state in {"ok", "missing_runtime", "malformed_runtime"}:
         assert metadata_payload == json.loads(manifest_path.read_text(encoding="utf-8"))
     else:
@@ -170,3 +166,12 @@ def test_runtime_detect_uses_shared_manifest_scope_helper() -> None:
 
     assert "install_scope_from_manifest" in source
     assert "_manifest_install_scope" not in source
+
+
+def test_runtime_cli_uses_shared_manifest_runtime_helper() -> None:
+    import gpd.runtime_cli as runtime_cli
+
+    source = inspect.getsource(runtime_cli)
+
+    assert "load_install_manifest_runtime_status" in source
+    assert "def _manifest_runtime_status" not in source

@@ -38,6 +38,22 @@ def test_review_grade_commands_surface_registry_contract_requirements_in_source(
             assert f"required_state: {contract.required_state}" in source
 
 
+def test_review_grade_commands_prepend_model_visible_review_contract_to_registry_content() -> None:
+    command_names = ("write-paper", "respond-to-referees", "verify-work", "arxiv-submission", "peer-review")
+
+    for command_name in command_names:
+        command = registry.get_command(command_name)
+        contract = command.review_contract
+
+        assert contract is not None
+        assert command.content.startswith("## Review Contract\n")
+        assert "## Review Contract" in command.content
+        assert "review_contract:" in command.content
+        assert f"review_mode: {contract.review_mode}" in command.content
+        for output in contract.required_outputs:
+            assert output in command.content
+
+
 def test_verify_work_review_contract_uses_phase_scoped_output_path() -> None:
     contract = registry.get_command("verify-work").review_contract
 

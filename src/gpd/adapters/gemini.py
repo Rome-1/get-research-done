@@ -778,8 +778,6 @@ def _convert_to_gemini_toml(content: str) -> str:
         toml += f"prompt = '''\n{body}\n'''\n"
 
     return toml
-
-
 def _render_preserved_frontmatter_comments(frontmatter: str) -> str:
     """Render non-runtime frontmatter metadata as TOML comments.
 

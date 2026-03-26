@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -63,6 +64,32 @@ def test_check_update_reexecs_current_script_with_cache_file_arg(tmp_path: Path)
     assert args[1] == str(hook_path)
     assert args[2] == "--cache-file"
     assert args[3] == str(cache_path)
+
+
+def test_check_update_ignores_rejected_preferred_runtime_cache_when_no_runtime_is_active(
+    tmp_path: Path,
+) -> None:
+    from gpd.hooks.check_update import main
+    from gpd.hooks.runtime_detect import UpdateCacheCandidate
+
+    cache_path = tmp_path / "preferred-runtime-cache.json"
+    cache_path.write_text(json.dumps({"checked": int(time.time())}), encoding="utf-8")
+
+    preferred_candidate = UpdateCacheCandidate(path=cache_path, runtime="codex", scope="local")
+
+    with (
+        patch("gpd.hooks.runtime_detect.get_update_cache_candidates", return_value=[preferred_candidate]),
+        patch("gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install", return_value="unknown"),
+        patch("gpd.hooks.runtime_detect.detect_runtime_for_gpd_use", return_value="codex"),
+        patch("gpd.hooks.runtime_detect.should_consider_update_cache_candidate", return_value=False),
+        patch("gpd.hooks.check_update._claim_inflight_marker", return_value=True) as mock_claim,
+        patch("gpd.hooks.check_update.subprocess.Popen") as mock_popen,
+    ):
+        mock_popen.return_value = MagicMock()
+        main()
+
+    mock_claim.assert_called_once()
+    mock_popen.assert_called_once()
 
 
 def test_runtime_detect_does_not_keep_dead_private_lookup_helpers() -> None:

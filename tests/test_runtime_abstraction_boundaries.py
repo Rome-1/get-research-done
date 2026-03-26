@@ -158,7 +158,9 @@ def _shared_runtime_facing_test_paths() -> tuple[Path, ...]:
             continue
         if rel_path.parts[:2] in {("tests", "adapters"), ("tests", "hooks")}:
             continue
-        if rel_path.parts[:2] == ("tests", "core") or (len(rel_path.parts) == 2 and rel_path.name.startswith("test_")):
+        if rel_path.parts[:2] in {("tests", "core"), ("tests", "mcp")} or (
+            len(rel_path.parts) == 2 and rel_path.name.startswith("test_")
+        ):
             paths.append(path)
     return tuple(paths)
 
@@ -241,6 +243,46 @@ def _scan_paths_for_pattern(paths: tuple[Path, ...], pattern: re.Pattern[str]) -
 def _runtime_literal_sequence_pattern(values: tuple[str, ...]) -> re.Pattern[str]:
     quoted_values = [rf'["\']{re.escape(value)}["\']' for value in values]
     return re.compile(r"[\[(]\s*" + r"\s*,\s*".join(quoted_values) + r"\s*[\])]", re.DOTALL)
+
+
+def _runtime_fixture_values() -> tuple[str, ...]:
+    values: set[str] = set()
+    for descriptor in _RUNTIME_DESCRIPTORS:
+        for value in (
+            descriptor.runtime_name,
+            descriptor.display_name,
+            descriptor.config_dir_name,
+            descriptor.launch_command,
+            descriptor.install_flag,
+            descriptor.command_prefix,
+            *descriptor.selection_aliases,
+            *descriptor.selection_flags,
+        ):
+            if value:
+                values.add(value)
+    return tuple(sorted(values))
+
+
+def _runtime_fixture_literal_findings(content: str) -> list[str]:
+    fixture_values = _runtime_fixture_values()
+    block_pattern = re.compile(r"(?s)(\[[^\[\]]*\]|\{[^\{\}]*\}|\([^\(\)]*\))")
+    findings: list[str] = []
+    seen_blocks: set[str] = set()
+    for match in block_pattern.finditer(content):
+        block = match.group(0)
+        if block in seen_blocks:
+            continue
+        seen_blocks.add(block)
+        matched_values = {
+            value
+            for value in fixture_values
+            if re.search(rf'["\']{re.escape(value)}["\']', block)
+        }
+        # Flag partial runtime fixture blocks once they contain more than one
+        # catalog token, even if the test does not mirror the full runtime list.
+        if len(matched_values) >= 2:
+            findings.append(block.replace("\n", " "))
+    return findings
 
 
 def test_runtime_specific_terms_are_confined_to_explicit_boundary_files() -> None:
@@ -345,18 +387,11 @@ def test_shared_builtin_server_descriptors_do_not_hardcode_bootstrap_commands() 
 
 
 def test_shared_runtime_facing_tests_do_not_duplicate_runtime_catalog_literals() -> None:
-    runtime_names = tuple(descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS)
-    install_flags = tuple(descriptor.install_flag for descriptor in _RUNTIME_DESCRIPTORS)
-    name_pattern = _runtime_literal_sequence_pattern(runtime_names)
-    flag_pattern = _runtime_literal_sequence_pattern(install_flags)
-
     leaks: list[tuple[Path, int, str]] = []
     for path in _SHARED_TEST_RUNTIME_SURFACE_PATHS:
         content = path.read_text(encoding="utf-8")
-        if name_pattern.search(content):
-            leaks.append((path, 0, "hard-coded supported runtime name tuple/list literal"))
-        if flag_pattern.search(content):
-            leaks.append((path, 0, "hard-coded supported runtime flag tuple/list literal"))
+        for block in _runtime_fixture_literal_findings(content):
+            leaks.append((path, 0, f"hard-coded runtime fixture block: {block[:160]}"))
 
     assert leaks == [], (
         "Shared runtime-facing tests should derive supported runtime sets from the runtime catalog:\n"

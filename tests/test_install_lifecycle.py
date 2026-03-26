@@ -1,6 +1,6 @@
 """Install → uninstall → reinstall lifecycle tests for each runtime adapter.
 
-Exercises the full lifecycle for claude-code, gemini, codex, and opencode:
+Exercises the full lifecycle for every supported runtime:
 1. Install to a temp directory
 2. Verify expected files exist
 3. Uninstall
@@ -25,6 +25,12 @@ from gpd.cli import app
 
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
 _ALL_RUNTIMES = tuple(descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS)
+_CLAUDE_CODE_DESCRIPTOR = next(descriptor for descriptor in iter_runtime_descriptors() if descriptor.runtime_name == "claude-code")
+_CLAUDE_MANIFEST_RUNTIME_COMPAT_VALUES = tuple(
+    value
+    for value in (_CLAUDE_CODE_DESCRIPTOR.display_name, *_CLAUDE_CODE_DESCRIPTOR.selection_aliases)
+    if value != _CLAUDE_CODE_DESCRIPTOR.runtime_name
+)
 runner = CliRunner()
 
 
@@ -796,7 +802,7 @@ class TestManifestConsistency:
         assert manifest["install_target_dir"] == str(target)
         assert manifest["explicit_target"] is True
 
-    @pytest.mark.parametrize("manifest_runtime", ["Claude Code", "claude"])
+    @pytest.mark.parametrize("manifest_runtime", _CLAUDE_MANIFEST_RUNTIME_COMPAT_VALUES)
     def test_uninstall_accepts_display_name_and_alias_manifest_runtime(
         self,
         manifest_runtime: str,

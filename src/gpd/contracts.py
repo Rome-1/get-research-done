@@ -194,45 +194,6 @@ def _collect_strict_contract_results_errors(value: _StrictContractResultsInput) 
     return errors
 
 
-def _collect_contract_scalar_errors(
-    value: object,
-    *,
-    path_prefix: str = "",
-    errors: list[str] | None = None,
-) -> list[str]:
-    """Return explicit scalar drift that strict contract loaders must reject."""
-
-    sink = errors if errors is not None else []
-
-    if isinstance(value, dict):
-        for raw_key, raw_item in value.items():
-            key = str(raw_key)
-            location = f"{path_prefix}.{key}" if path_prefix else key
-
-            if key == "schema_version":
-                if type(raw_item) is not int:
-                    sink.append("schema_version must be the integer 1")
-                    continue
-                if raw_item != 1:
-                    sink.append("schema_version: Input should be 1")
-                    continue
-
-            if key == "must_surface":
-                if type(raw_item) is not bool:
-                    sink.append(f"{location} must be a boolean")
-                    continue
-
-            _collect_contract_scalar_errors(raw_item, path_prefix=location, errors=sink)
-        return sink
-
-    if isinstance(value, list):
-        for index, item in enumerate(value):
-            child_prefix = f"{path_prefix}.{index}" if path_prefix else str(index)
-            _collect_contract_scalar_errors(item, path_prefix=child_prefix, errors=sink)
-
-    return sink
-
-
 class ConventionLock(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
 
@@ -935,7 +896,11 @@ def collect_contract_integrity_errors(contract: ResearchContract) -> list[str]:
     return errors
 
 
-def contract_from_data(data: object) -> ResearchContract | None:
+def contract_from_data(
+    data: object,
+    *,
+    allow_recoverable_warnings: bool = True,
+) -> ResearchContract | None:
     """Return a validated :class:`ResearchContract` when *data* is a mapping.
 
     Malformed mappings degrade to ``None`` so callers can treat this helper as a
@@ -952,6 +917,8 @@ def contract_from_data(data: object) -> ResearchContract | None:
         allow_singleton_defaults=False,
     )
     if schema_errors or contract is None:
+        return None
+    if not allow_recoverable_warnings and _schema_warnings:
         return None
     if collect_contract_integrity_errors(contract):
         return None

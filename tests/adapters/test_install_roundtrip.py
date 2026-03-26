@@ -964,6 +964,8 @@ def test_real_installed_contract_and_review_surfaces_keep_required_schema_bodies
     assert "\nsubject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in verify_work
     assert "check_subject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in verify_work
     assert "# state.json Schema" in sync_state
+    assert "## Review Contract" in write_paper
+    assert write_paper.index("## Review Contract") < write_paper.index("Reproducibility Manifest Template")
     assert "Reproducibility Manifest Template" in write_paper
     assert "Peer Review Panel Protocol" in review_literature
     assert '"stage_id": "reader | literature | math | physics | interestingness"' in review_literature

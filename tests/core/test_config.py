@@ -1,5 +1,6 @@
 """Tests for gpd.core.config."""
 
+import builtins
 import json
 import re
 from pathlib import Path
@@ -295,6 +296,34 @@ class TestResolveAgentTier:
         tier = resolve_agent_tier("gpd-registry-only", "review")
 
         assert tier == ModelTier.TIER_2
+
+    def test_registry_import_failure_falls_back_to_default_agent_names(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        original_import = builtins.__import__
+
+        def _missing_registry(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "gpd.registry":
+                raise ModuleNotFoundError("No module named 'gpd.registry'")
+            return original_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", _missing_registry)
+
+        tier = resolve_agent_tier("gpd-planner", "review")
+
+        assert tier == ModelTier.TIER_1
+
+    def test_registry_runtime_failure_surfaces_config_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import gpd.registry as content_registry
+
+        monkeypatch.setattr(content_registry, "list_agents", lambda: (_ for _ in ()).throw(RuntimeError("registry boom")))
+
+        with pytest.raises(ConfigError, match="Unable to resolve known agent names from registry"):
+            resolve_agent_tier("gpd-planner", "review")
 
 
 # ─── resolve_model ──────────────────────────────────────────────────────────────

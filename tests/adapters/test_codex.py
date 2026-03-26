@@ -17,7 +17,7 @@ from gpd.adapters.codex import (
     _convert_to_codex_skill,
     _normalize_codex_questioning,
 )
-from gpd.adapters.install_utils import build_runtime_cli_bridge_command
+from gpd.adapters.install_utils import build_runtime_cli_bridge_command, compile_markdown_for_runtime
 from gpd.registry import load_agents_from_dir
 
 
@@ -167,6 +167,31 @@ class TestConvertToCodexSkill:
         fm = result.split("---")[1]
         tool_entries = [line.strip()[2:] for line in fm.splitlines() if line.strip().startswith("- ")]
         assert tool_entries == ["read_file", "shell"]
+
+    def test_review_contract_is_prepended_to_skill_body(self) -> None:
+        content = compile_markdown_for_runtime(
+            (
+                "---\n"
+                "name: test\n"
+                "description: D\n"
+                "review-contract:\n"
+                "  review_mode: publication\n"
+                "  schema_version: 1\n"
+                "  required_outputs:\n"
+                "    - GPD/review/REFEREE-DECISION{round_suffix}.json\n"
+                "---\n"
+                "Prompt body"
+            ),
+            runtime="codex",
+            path_prefix="/prefix/",
+        )
+
+        result = _convert_to_codex_skill(content, "gpd-test")
+
+        assert "## Review Contract" in result
+        assert "review-contract:" in result
+        assert "review_mode: publication" in result
+        assert result.index("## Review Contract") < result.index("Prompt body")
 
 
 class TestInstall:

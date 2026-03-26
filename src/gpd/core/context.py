@@ -357,7 +357,7 @@ def _classify_project_contract_payload(
         source_path=source_label,
         warnings=schema_warnings,
     )
-    approval_validation = validate_project_contract(contract, mode="approved")
+    approval_validation = validate_project_contract(contract, mode="approved", project_root=cwd)
     if not approval_validation.valid:
         logger.warning(
             "Loaded project_contract from %s with approval blockers: %s",
@@ -400,12 +400,16 @@ def _load_project_contract(cwd: Path) -> tuple[ResearchContract | None, dict[str
     return contract, load_info
 
 
-def _project_contract_validation_payload(contract: ResearchContract | None) -> dict[str, object] | None:
+def _project_contract_validation_payload(
+    contract: ResearchContract | None,
+    *,
+    cwd: Path,
+) -> dict[str, object] | None:
     """Return approval-mode validation metadata for a loaded project contract."""
 
     if contract is None:
         return None
-    return validate_project_contract(contract, mode="approved").model_dump(mode="json")
+    return validate_project_contract(contract, mode="approved", project_root=cwd).model_dump(mode="json")
 
 
 def _sorted_markdown_files(directory: Path) -> list[Path]:
@@ -982,7 +986,7 @@ def _build_reference_runtime_context(cwd: Path) -> dict[str, object]:
             **project_contract_load_info,
             "warnings": [*list(project_contract_load_info.get("warnings") or []), *canonicalization_warnings],
         }
-    project_contract_validation = _project_contract_validation_payload(canonical_contract)
+    project_contract_validation = _project_contract_validation_payload(canonical_contract, cwd=cwd)
     project_text = _safe_read_file(cwd / PLANNING_DIR_NAME / PROJECT_FILENAME)
     selected_protocol_bundles = select_protocol_bundles(project_text, canonical_contract)
 

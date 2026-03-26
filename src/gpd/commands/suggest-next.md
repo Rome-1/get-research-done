@@ -1,7 +1,7 @@
 ---
 name: gpd:suggest-next
 description: Suggest the most impactful next action based on current project state
-context_mode: project-required
+context_mode: projectless
 allowed-tools:
   - file_read
   - shell

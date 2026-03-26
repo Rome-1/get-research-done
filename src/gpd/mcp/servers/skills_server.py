@@ -371,6 +371,11 @@ def get_skill(name: str) -> dict:
                 referenced_files,
                 predicate=_is_contract_reference,
             )
+            loading_hint = (
+                "schema_documents and contract_documents already include the expanded canonical bodies. Use referenced_files for any additional workflow/context docs."
+                if referenced_files
+                else "No external markdown dependencies detected in the canonical skill body."
+            )
             payload = {
                 "name": skill.name,
                 "category": skill.category,
@@ -383,19 +388,22 @@ def get_skill(name: str) -> dict:
                 "schema_documents": schema_documents,
                 "contract_references": contract_references,
                 "contract_documents": contract_documents,
-                "loading_hint": (
-                    "schema_documents and contract_documents already include the expanded canonical bodies. Use referenced_files for any additional workflow/context docs."
-                    if referenced_files
-                    else "No external markdown dependencies detected in the canonical skill body."
-                ),
+                "loading_hint": loading_hint,
             }
             if skill.source_kind == "command":
                 command = content_registry.get_command(skill.registry_name)
                 allowed_tools = _normalize_allowed_tools(command.allowed_tools)
+                command_loading_hint = loading_hint
+                if command.review_contract is not None:
+                    command_loading_hint += (
+                        " The content field already includes a model-visible `Review Contract` section; "
+                        "if you also pass structured metadata, inject `review_contract` alongside `content`."
+                    )
                 payload.update(
                     {
                         "context_mode": command.context_mode,
                         "argument_hint": command.argument_hint,
+                        "loading_hint": command_loading_hint,
                         "review_contract": (
                             dataclasses.asdict(command.review_contract) if command.review_contract is not None else None
                         ),

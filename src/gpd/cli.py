@@ -651,7 +651,7 @@ def state_set_project_contract_cmd(
 
     contract_data = _load_json_document(source)
 
-    validation = validate_project_contract(contract_data, mode="draft")
+    validation = validate_project_contract(contract_data, mode="draft", project_root=_get_cwd())
     if not validation.valid:
         _output(validation)
         raise typer.Exit(code=1)
@@ -3864,7 +3864,8 @@ def validate_project_contract_cmd(
         raise GPDError(f"Invalid --mode {mode!r}. Expected 'draft' or 'approved'.")
 
     payload = _load_json_document(input_path)
-    result = validate_project_contract(payload, mode=normalized_mode)
+    project_root = _get_cwd() if input_path == "-" else Path(input_path).expanduser().resolve(strict=False).parent
+    result = validate_project_contract(payload, mode=normalized_mode, project_root=project_root)
     _output(result)
     if not result.valid:
         raise typer.Exit(code=1)

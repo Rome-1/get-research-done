@@ -2475,7 +2475,7 @@ def state_set_project_contract(cwd: Path, contract_data: dict[str, object] | Res
         message = first_error.get("msg", "validation failed")
         return StateUpdateResult(updated=False, reason=f"Invalid project contract at {location}: {message}")
 
-    draft_validation = validate_project_contract(parsed, mode="draft")
+    draft_validation = validate_project_contract(parsed, mode="draft", project_root=cwd)
     if not draft_validation.valid:
         return StateUpdateResult(
             updated=False,
@@ -2485,7 +2485,7 @@ def state_set_project_contract(cwd: Path, contract_data: dict[str, object] | Res
         if warning not in warning_messages:
             warning_messages.append(warning)
 
-    approval_validation = validate_project_contract(parsed, mode="approved")
+    approval_validation = validate_project_contract(parsed, mode="approved", project_root=cwd)
     for warning in approval_validation.warnings:
         if warning not in warning_messages:
             warning_messages.append(warning)
@@ -3017,13 +3017,17 @@ def state_validate(
     if isinstance(state_json, dict) and state_json.get("project_contract") is not None:
         contract_payload = state_json.get("project_contract")
         contract_validation_mode = "approved" if integrity_mode == "review" else "draft"
-        contract_validation = validate_project_contract(contract_payload, mode=contract_validation_mode)
+        contract_validation = validate_project_contract(
+            contract_payload,
+            mode=contract_validation_mode,
+            project_root=cwd,
+        )
         if contract_validation.errors:
             issues.extend(f"project_contract: {error}" for error in contract_validation.errors)
         if contract_validation.warnings:
             warnings.extend(f"project_contract: {warning}" for warning in contract_validation.warnings)
         if integrity_mode != "review":
-            approval_validation = validate_project_contract(contract_payload, mode="approved")
+            approval_validation = validate_project_contract(contract_payload, mode="approved", project_root=cwd)
             for error in approval_validation.errors:
                 warning = f"project_contract: {error}"
                 if warning not in warnings and warning not in issues:

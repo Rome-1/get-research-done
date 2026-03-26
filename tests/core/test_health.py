@@ -439,6 +439,30 @@ class TestCheckStateValidityProjectContract:
         assert any(issue.startswith("project_contract: ") for issue in result.issues)
         assert not any(warning in result.warnings for warning in fake_state_validation.warnings)
 
+    def test_accepts_project_local_prior_artifact_grounding(self, tmp_path: Path) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+        artifact = cwd / "artifacts" / "benchmark" / "report.json"
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text('{"status": "ok"}\n', encoding="utf-8")
+
+        contract["references"][0]["kind"] = "prior_artifact"
+        contract["references"][0]["locator"] = "artifacts/benchmark/report.json"
+        contract["references"][0]["role"] = "benchmark"
+        contract["references"][0]["must_surface"] = True
+        contract["references"][0]["applies_to"] = ["claim-benchmark"]
+        contract["references"][0]["required_actions"] = ["compare"]
+
+        state = default_state_dict()
+        state["project_contract"] = contract
+        save_state_json(cwd, state)
+        (cwd / "GPD" / "STATE.md").write_text(generate_state_markdown(state), encoding="utf-8")
+
+        result = check_state_validity(cwd)
+
+        assert not any(issue.startswith("project_contract: ") for issue in result.issues)
+        assert not any(warning.startswith("project_contract: ") for warning in result.warnings)
+
 
 class TestCheckStateValidity:
     def test_no_state_files(self, tmp_path: Path):

@@ -1087,6 +1087,24 @@ class TestReviewValidationCommands:
         assert payload["passed"] is True
         assert f"public `{codex_command_prefix}*` runtime command surface" in payload["dispatch_note"]
 
+    @pytest.mark.parametrize("command_name", ["health", "suggest-next"])
+    def test_command_context_projectless_recovery_commands_pass_without_project(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command_name: str
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(
+            app,
+            ["--raw", "validate", "command-context", command_name],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["command"] == f"gpd:{command_name}"
+        assert payload["context_mode"] == "projectless"
+        assert payload["passed"] is True
+
     def test_command_context_surfaces_runtime_command_dispatch_note(self, codex_command_prefix: str) -> None:
         result = runner.invoke(
             app,
