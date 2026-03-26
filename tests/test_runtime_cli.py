@@ -861,7 +861,6 @@ def test_runtime_cli_rejects_local_candidate_with_file_prefixes_but_no_runtime(
     assert runtime_cli._is_matching_local_install_candidate(
         candidate,
         runtime=descriptor.runtime_name,
-        cli_cwd=tmp_path,
     ) is False
 
 

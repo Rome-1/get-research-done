@@ -66,12 +66,6 @@ def _parse_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
     return options, gpd_args
 
 
-def _manifest_runtime_status(config_dir: Path) -> tuple[str | None, str]:
-    """Return the persisted runtime plus the manifest contract status."""
-    manifest_state, _manifest, runtime = load_install_manifest_runtime_status(config_dir)
-    return runtime, manifest_state
-
-
 def _runtime_display_name(runtime: str) -> str:
     """Return a human-readable runtime label when the runtime is known."""
     try:
@@ -103,7 +97,7 @@ def _paths_equal(left: Path, right: Path) -> bool:
         return left.expanduser() == right.expanduser()
 
 
-def _is_matching_local_install_candidate(candidate: Path, *, runtime: str, cli_cwd: Path) -> bool:
+def _is_matching_local_install_candidate(candidate: Path, *, runtime: str) -> bool:
     """Return whether *candidate* should satisfy a local bridge config-dir lookup."""
     if not candidate.is_dir():
         return False
@@ -151,9 +145,9 @@ def _resolve_local_config_dir(raw_value: str, *, runtime: str, cli_cwd: Path) ->
     adapter = get_adapter(runtime)
     for base in (resolved_cwd, *resolved_cwd.parents):
         candidate = (base / relative).resolve(strict=False)
-        if not _is_matching_local_install_candidate(candidate, runtime=runtime, cli_cwd=resolved_cwd):
+        if not _is_matching_local_install_candidate(candidate, runtime=runtime):
             continue
-        _, manifest_status = _manifest_runtime_status(candidate)
+        manifest_status, _, _ = load_install_manifest_runtime_status(candidate)
         if manifest_status == "ok" and adapter.has_complete_install(candidate):
             return candidate
         if fallback is None:

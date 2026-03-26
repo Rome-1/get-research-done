@@ -64,6 +64,10 @@ def _hook_payload_policy(cwd: str | None = None):
     from gpd.adapters.runtime_catalog import get_hook_payload_policy
     from gpd.hooks.runtime_detect import RUNTIME_UNKNOWN, detect_active_runtime_with_gpd_install
 
+    self_install = hook_layout.detect_self_owned_install(__file__)
+    if self_install is not None:
+        return get_hook_payload_policy(self_install.runtime)
+
     workspace_path = resolve_project_root(cwd) if cwd else None
     runtime = detect_active_runtime_with_gpd_install(cwd=workspace_path)
     return get_hook_payload_policy(None if runtime == RUNTIME_UNKNOWN else runtime)
