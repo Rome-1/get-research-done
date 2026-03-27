@@ -2280,6 +2280,7 @@ def test_help_command_keeps_static_quick_start_while_workflow_owns_full_referenc
         "/gpd:resume-work",
         "gpd resume --recent",
         "/gpd:suggest-next",
+        "/gpd:tangent",
         "/gpd:settings",
         "/gpd:help --all",
     ):
@@ -2295,6 +2296,24 @@ def test_help_workflow_state_aware_variant_surfaces_paused_resume_branch() -> No
     assert "/gpd:resume-work" in help_workflow
     assert "/gpd:progress" in help_workflow
     assert "/gpd:suggest-next" in help_workflow
+    assert "/gpd:tangent" in help_workflow
+
+
+def test_help_and_execution_surfaces_wire_tangent_control_path() -> None:
+    help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
+    plan_phase = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
+    execute_phase = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
+    tangent_workflow = (WORKFLOWS_DIR / "tangent.md").read_text(encoding="utf-8")
+
+    assert "/gpd:tangent" in help_workflow
+    assert re.search(r"/gpd:tangent[^\n]*?(?:tangent|side investigation|alternative direction|parallel)", help_workflow, re.I)
+    assert "/gpd:tangent" in plan_phase
+    assert re.search(r"/gpd:tangent.*?(?:side|alternative|parallel|branch)", plan_phase, re.I | re.S)
+    assert "/gpd:tangent" in execute_phase
+    assert re.search(r"/gpd:tangent.*?(?:branch|follow-up|alternative)", execute_phase, re.I | re.S)
+    assert "{GPD_INSTALL_DIR}/workflows/quick.md" in tangent_workflow
+    assert "{GPD_INSTALL_DIR}/workflows/add-todo.md" in tangent_workflow
+    assert "{GPD_INSTALL_DIR}/workflows/branch-hypothesis.md" in tangent_workflow
 
 
 def test_help_surfaces_describe_regression_check_as_metadata_scan_not_full_reverification() -> None:

@@ -598,6 +598,7 @@ def test_public_help_default_quick_start_keeps_runtime_surface_readiness_path() 
     assert "**New work**" in quick_start
     assert "**Existing work**" in quick_start
     assert "**Returning work**" in quick_start
+    assert "**Tangents**" in quick_start
     assert "**Unattended / autonomy setup**" in quick_start
     assert "/gpd:new-project" in quick_start
     assert "/gpd:new-project --minimal" in quick_start
@@ -606,6 +607,7 @@ def test_public_help_default_quick_start_keeps_runtime_surface_readiness_path() 
     assert "gpd resume --recent" in quick_start
     assert "/gpd:progress" in quick_start
     assert "/gpd:suggest-next" in quick_start
+    assert "/gpd:tangent" in quick_start
     assert "/gpd:settings" in quick_start
     assert "/gpd:help --all" in quick_start
     assert "**Core workflow:**" in quick_start
@@ -637,6 +639,9 @@ def test_public_readme_quick_start_surfaces_step_one_entry_points() -> None:
     assert "| Existing research folder or codebase | `map-research` |" in quick_start
     assert "gpd resume --recent" in quick_start
     assert "Guided unattended configuration path: use `settings` after startup" in quick_start
+    assert "use `tangent` when GPD surfaces an alternative path worth checking" in quick_start
+    assert "`tangent` is the lightweight chooser for stay / quick / defer / branch" in quick_start
+    assert "`branch-hypothesis` only when you want the explicit git-backed alternative path" in quick_start
     assert "For model choice, the safe default is `review` plus runtime defaults." in quick_start
     assert "Use `settings` to move toward `Max quality`, `Balanced`, or `Budget-aware` only if you want to trade off quality against cost or model access." in quick_start
     assert "Use the exact runtime-specific command syntax below for your first command." in quick_start
@@ -690,6 +695,20 @@ def test_public_readme_recovery_surfaces_keep_runtime_pause_and_resume_roles_dis
     assert "| `/gpd:resume-work` | Resume research from the previous session with full context restoration |" in readme
     assert "| `/gpd:pause-work` | Create a context handoff when pausing research mid-phase |" in readme
     assert "gpd resume --recent" in readme
+
+
+def test_public_readme_and_help_surfaces_keep_tangent_discoverable() -> None:
+    repo_root = _repo_root()
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    help_command = (repo_root / "src/gpd/commands/help.md").read_text(encoding="utf-8")
+    help_workflow = (repo_root / "src/gpd/specs/workflows/help.md").read_text(encoding="utf-8")
+
+    assert "#### Tangents & Hypothesis Branches" in readme
+    assert re.search(r"\| `/gpd:tangent(?: [^`]*)?` \| .*?(?:tangent|side investigation|alternative direction|parallel)", readme, re.I)
+    assert re.search(r"\*\*`/gpd:tangent(?: [^`]*)?`\*\*", help_command)
+    assert re.search(r"\*\*`/gpd:tangent(?: [^`]*)?`\*\*", help_workflow)
+    assert "Chooser for stay / quick / defer / branch" in help_command
+    assert "Chooser for stay / quick / defer / branch" in help_workflow
 
 
 def test_public_help_surfaces_keep_settings_as_guided_post_startup_path() -> None:

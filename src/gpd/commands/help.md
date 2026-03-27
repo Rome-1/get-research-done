@@ -63,6 +63,10 @@ Choose the path that matches your starting point:
 
 Before stepping away mid-phase, run `/gpd:pause-work` so `/gpd:resume-work` has an explicit handoff to restore. If you are not sure which repo to reopen, use `gpd resume --recent` first to find it, then continue inside that workspace.
 
+**Tangents**
+1. `/gpd:tangent` — Choose stay / quick / defer / branch when a side investigation appears
+2. `/gpd:branch-hypothesis` — Explicit git-backed alternative path when that tangent needs isolated branch state
+
 **Unattended / autonomy setup**
 1. `/gpd:settings` — Primary guided setup for autonomy, runtime permission sync, and unattended budgets (`Balanced` recommended)
 2. `/gpd:help --all` — Full command reference
@@ -74,7 +78,7 @@ Before stepping away mid-phase, run `/gpd:pause-work` so `/gpd:resume-work` has 
 **Core workflow:** new-project → discuss-phase → plan-phase → execute-phase → verify-work → repeat → complete-milestone
 **Publication:** write-paper → peer-review → respond-to-referees → arxiv-submission
 
-Run `/gpd:help --all` for all 61 commands.
+Run `/gpd:help --all` for all 62 commands.
 
 --- END of default output. STOP here. ---
 
@@ -121,6 +125,10 @@ Choose the path that matches your starting point:
 4. `/gpd:suggest-next` - Fastest next-action hint without the full progress report
 
 Before stepping away mid-phase, run `/gpd:pause-work` so `/gpd:resume-work` has an explicit handoff to restore. Use `gpd resume` from your normal system terminal when you want a read-only local recovery summary for the current project. Use `gpd resume --recent` first if you need to find the right project before resuming it.
+
+**Tangents**
+1. `/gpd:tangent` - Chooser for stay / quick / defer / branch when a side investigation appears
+2. `/gpd:branch-hypothesis` - Explicit git-backed alternative path with isolated `GPD/` state when the tangent needs to diverge cleanly
 
 ## Core Workflow
 
@@ -642,14 +650,23 @@ Explain a concept, method, notation, result, or paper in project context or from
 
 Usage: `/gpd:explain "Ward identity"`
 
-### Hypothesis Branches
+### Tangents & Hypothesis Branches
+
+**`/gpd:tangent [description]`**
+Choose what to do with a possible side investigation without immediately committing to a git branch.
+
+- Acts as the tangent chooser: stay on the current line, do a quick tangent, defer it, or escalate to a branch
+- Use when an interesting sub-question appears but you have not yet decided whether it deserves isolated branch state
+- Keeps hypothesis branching as an explicit follow-on decision rather than the default for every tangent
+
+Usage: `/gpd:tangent "Check whether the 2D case is degenerate before branching"`
 
 **`/gpd:branch-hypothesis <description>`**
 Create a hypothesis branch for parallel investigation of an alternative approach.
 
 - Creates git branch with isolated `GPD/` state
 - Allows exploring alternative methods without disrupting main line
-- Use when two valid approaches exist and you want to compare
+- Use when the tangent should become an explicit git-backed alternative path you intend to compare
 
 Usage: `/gpd:branch-hypothesis "Try perturbative RG instead of exact RG"`
 

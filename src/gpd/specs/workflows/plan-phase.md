@@ -34,8 +34,9 @@ Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_
 - `autonomy=balanced` (default): Write the plan and pause only if the plan-checker raises issues or the planning choices need user judgment.
 - `autonomy=yolo`: Write the plan and proceed without pausing.
 - `research_mode=explore`: Always run research step even if research exists. Expand wave count for thorough coverage.
-- `research_mode=exploit`: Reuse existing research only when it already covers the exact method family, anchors, and decisive evidence path for this phase. Otherwise run targeted research.
+- `research_mode=exploit`: Reuse existing research only when it already covers the exact method family, anchors, and decisive evidence path for this phase. Otherwise run targeted research. Suppress optional tangents unless the user explicitly asks for them.
 - `research_mode=adaptive`: Start broad until prior decisive evidence or an explicit approach lock justifies narrowing. Do not infer “safe to narrow” from phase number alone.
+- Tangent policy: when multiple viable approaches or optional side questions appear, do NOT silently branch or widen the plan. Surface the 4-way tangent decision model instead: (1) branch as an alternative hypothesis via `/gpd:tangent` or `/gpd:branch-hypothesis`, (2) run a bounded side investigation now via `/gpd:quick`, (3) capture and defer via `/gpd:add-todo`, or (4) stay on the main line and plan only the selected primary approach.
 - All modes still require contract completeness, decisive outputs, required anchors, forbidden-proxy handling, and disconfirming paths before execution starts.
 
 **Set shell variables from init JSON:**
@@ -73,8 +74,14 @@ When `--inline-discuss` is present, combine discuss-phase and plan-phase into a 
    - "What formalism/method do you envision for this phase?" (if multiple valid approaches exist)
    - "Are there any constraints or conventions from prior phases that should carry through?" (if phase has dependencies)
    - "What precision level is acceptable?" (for numerical/computational phases)
-3. Record responses as a lightweight CONTEXT.md in the phase directory (same format as discuss-phase output, but with only the critical decisions — skip the full Socratic dialogue)
-4. Proceed to step 5 with the context populated
+3. If those questions reveal multiple viable approaches or optional side questions, stop and present the tangent decision model explicitly instead of assuming extra plans or branches:
+   - `Branch as alternative hypothesis` -> route through `/gpd:tangent` or `/gpd:branch-hypothesis`
+   - `Run a bounded side investigation now` -> route through `/gpd:quick`
+   - `Capture and defer` -> route through `/gpd:add-todo`
+   - `Stay on the main line` -> continue planning around the chosen primary approach only
+4. Record any explicit tangent decision in the lightweight CONTEXT.md so downstream agents see whether the user chose to stay on the main line, branch, quick-check, or defer.
+5. Record responses as a lightweight CONTEXT.md in the phase directory (same format as discuss-phase output, but with only the critical decisions — skip the full Socratic dialogue)
+6. Proceed to step 5 with the context populated
 
 This is NOT the full discuss-phase flow — just the 2-3 most impactful questions. If the phase is complex enough to need full discussion, the researcher should run `/gpd:discuss-phase` separately.
 
@@ -171,6 +178,21 @@ fi
 
 If the check fails, warn the user before spawning the researcher or planner. Convention mismatches in the plan will propagate into every task during execution.
 
+## 4.6. Tangent Control During Planning
+
+When planning reveals multiple viable approaches or optional side questions, treat them as tangent candidates rather than silently branching the plan.
+
+**Required 4-way tangent decision model:**
+
+1. `Branch as alternative hypothesis` -> route through `/gpd:tangent` or `/gpd:branch-hypothesis`
+2. `Run a bounded side investigation now` -> route through `/gpd:quick`
+3. `Capture and defer` -> route through `/gpd:add-todo`
+4. `Stay on the main line` -> continue planning only the selected primary approach
+
+**Workflow rule:** Do NOT silently create branch-like alternative plans, speculative side tasks, or comparison-only detours unless the user has already chosen one of the tangent paths above.
+
+**Exploit-mode rule:** If `research_mode=exploit`, suppress optional tangents entirely unless the user explicitly requests them or the current approach is blocked by contract, anchor, or physics-validity failure.
+
 ## 5. Handle Research
 
 **Skip if:** `--gaps` flag, `--skip-research` flag, or `research_enabled` is false (from init) without `--research` override.
@@ -187,8 +209,8 @@ RESEARCH_MODE=$(echo "$INIT" | gpd json get .research_mode --default balanced)
 |------|-------------------|--------------------|--------------------|
 | **explore** | Re-research always (expand scope, compare alternatives, refresh anchors) | Research (comprehensive — multiple methods, broad survey) | Research (comprehensive) |
 | **balanced** (default) | Skip by default, but re-research if inputs look stale or missing for the current contract slice | Research (standard) | Research (standard) |
-| **exploit** | Skip only if the existing research already covers the exact method family, anchor set, and decisive evidence path; otherwise run targeted method research | Research (minimal — method-specific only, no broad survey) | Research (minimal) |
-| **adaptive** | Reuse existing research only after prior decisive evidence or explicit approach-lock markers show the method is stable; otherwise refresh research in a balanced or explore-style pass | Research (broad enough to choose and lock an approach) | Research (standard) |
+| **exploit** | Skip only if the existing research already covers the exact method family, anchor set, and decisive evidence path; otherwise run targeted method research | Research (minimal — method-specific only, no broad survey, no optional tangent surfacing unless explicitly requested) | Research (minimal) |
+| **adaptive** | Reuse existing research only after prior decisive evidence or explicit approach-lock markers show the method is stable; otherwise refresh research in a balanced or explore-style pass while surfacing unresolved alternatives as tangent candidates rather than silent branches | Research (broad enough to choose and lock an approach) | Research (standard) |
 
 **If `has_research` is true (from init) AND no `--research` flag:**
 
@@ -287,10 +309,15 @@ IMPORTANT: If CONTEXT.md exists below, it contains user decisions from /gpd:disc
 <physics_research_focus>
 
 **Research depth by mode:**
-- **explore:** COMPREHENSIVE — survey ALL viable methods, compare 3+ approaches, include failed approaches from literature, broad literature search (10+ papers), identify unexplored angles
+- **explore:** COMPREHENSIVE — survey ALL viable methods, compare 3+ approaches, include failed approaches from literature, broad literature search (10+ papers), identify unexplored angles. Surface independent alternatives as tangent candidates; do NOT assume they all become branch-like plans.
 - **balanced** (default): STANDARD — identify best approach, document known difficulties, targeted literature (5-7 key papers)
-- **exploit:** MINIMAL — method-specific details only (parameters, convergence criteria, implementation notes). Skip broad survey. Only papers directly relevant to the exact computation.
-- **adaptive:** Use explore-style until prior decisive evidence or an explicit approach lock shows the method family is stable. Then narrow to a balanced or exploit-style pass for the locked method.
+- **exploit:** MINIMAL — method-specific details only (parameters, convergence criteria, implementation notes). Skip broad survey. Only papers directly relevant to the exact computation. Suppress optional side questions unless the user explicitly asks to explore them.
+- **adaptive:** Use explore-style until prior decisive evidence or an explicit approach lock shows the method family is stable. Then narrow to a balanced or exploit-style pass for the locked method, treating unresolved alternatives as tangent candidates instead of implicit branches.
+
+**Tangent control while researching:**
+- If you find multiple viable approaches, present them as tangent candidates for the planner's 4-way decision model rather than assuming extra branches or side plans.
+- If a side question is optional rather than contract-critical, label it clearly as optional.
+- In exploit mode, mention optional tangents only when the user explicitly requested them or the main approach is blocked.
 
 **Core research areas (all modes):**
 - **Mathematical framework:** Identify the governing equations, symmetry groups, relevant Hilbert spaces, or variational principles
@@ -535,6 +562,16 @@ IMPORTANT: If context exists below, it contains USER DECISIONS from /gpd:discuss
 **Research:** {research_content}
 **Experiment Design (if exists):** {experiment_design_content}
 **Gap Closure (if --gaps):** {verification_content} {validation_content}
+
+**Tangent Control:**
+- When multiple viable approaches or optional side questions appear, do NOT silently branch, emit branch-like alternative plans, or widen scope.
+- Use this 4-way decision model:
+  1. `Branch as alternative hypothesis` -> route through `/gpd:tangent` or `/gpd:branch-hypothesis`
+  2. `Run a bounded side investigation now` -> route through `/gpd:quick`
+  3. `Capture and defer` -> route through `/gpd:add-todo`
+  4. `Stay on the main line` -> plan only the selected primary approach
+- If no explicit tangent decision already exists in context and more than one viable path remains live, return `## CHECKPOINT REACHED` with the four options above instead of silently branching.
+- If `research_mode=exploit`, suppress optional tangents unless the user explicitly requested them or the current approach is blocked by physics, contract, or anchor failure.
 </planning_context>
 
 <physics_planning_requirements>
@@ -545,6 +582,7 @@ Each plan MUST include:
 - **Order-of-magnitude estimates:** Before any detailed calculation, estimate the expected scale of the answer
 - **Error budget:** For numerical work, specify target precision and identify dominant error sources
 - **Consistency checks:** Cross-checks between independent methods or approaches where possible
+- **Tangent discipline:** Independent alternatives and optional side questions require an explicit tangent decision before they become separate workstreams
 - **Anchor discipline:** If a benchmark, paper, dataset, or prior artifact is contract-critical, surface it in the plan instead of treating it as optional background
 - **Contract completeness:** Every plan must include claims, deliverables, references, acceptance tests, forbidden proxies, and uncertainty markers in frontmatter
 - **Protocol bundle coverage:** If protocol bundles are selected, carry their estimator policies, decisive artifact guidance, and verifier extensions into the plan explicitly

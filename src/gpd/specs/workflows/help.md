@@ -29,6 +29,7 @@ Returning to work:
   /gpd:progress            — Review the broader project snapshot
   /gpd:suggest-next        — Ask for the fastest next-action recommendation
   gpd observe execution    — Read-only live status from your normal terminal; use this for progress / waiting state, not runtime hotkeys
+  /gpd:tangent             — Choose stay / quick / defer / branch when a side investigation appears
 ```
 
 **Project exists, no plans yet:**
@@ -128,6 +129,10 @@ Choose the path that matches your starting point:
 1. `/gpd:new-project` - Full project setup (deep questioning, literature survey, requirements, roadmap)
 2. `/gpd:new-project --minimal` - Fast path from a single description to a working GPD project
 3. `/gpd:settings` - Primary guided unattended/autonomy setup after project creation; review budgets and sync runtime permissions here
+
+**Tangents**
+1. `/gpd:tangent` - Chooser for stay / quick / defer / branch when a side investigation appears
+2. `/gpd:branch-hypothesis` - Explicit git-backed alternative path with isolated `GPD/` state when the tangent needs to diverge cleanly
 
 **Optional workflow add-ons**
 1. `Paper/manuscript workflows` - First supported optional workflow add-on for `write-paper`, `paper-build`, `peer-review`, and `arxiv-submission`
@@ -684,14 +689,23 @@ Structured literature review for a physics research topic.
 
 Usage: `/gpd:literature-review "Sachdev-Ye-Kitaev model thermodynamics"`
 
-### Hypothesis Branches
+### Tangents & Hypothesis Branches
+
+**`/gpd:tangent [description]`**
+Choose what to do with a possible side investigation without immediately committing to a git branch.
+
+- Acts as the tangent chooser: stay on the current line, do a quick tangent, defer it, or escalate to a branch
+- Use when an interesting sub-question appears but you have not yet decided whether it deserves isolated branch state
+- Keeps hypothesis branching as an explicit follow-on decision rather than the default for every tangent
+
+Usage: `/gpd:tangent "Check whether the 2D case is degenerate before branching"`
 
 **`/gpd:branch-hypothesis <description>`**
 Create a hypothesis branch for parallel investigation of an alternative approach.
 
 - Creates git branch with isolated `GPD/` state
 - Allows exploring alternative methods without disrupting main line
-- Use when two valid approaches exist and you want to compare
+- Use when the tangent should become an explicit git-backed alternative path you intend to compare
 
 Usage: `/gpd:branch-hypothesis "Try perturbative RG instead of exact RG"`
 

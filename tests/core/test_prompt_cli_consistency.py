@@ -157,6 +157,7 @@ def test_help_prompt_default_quick_start_stays_runtime_surface_focused() -> None
         "**New work**",
         "**Existing work**",
         "**Returning work**",
+        "**Tangents**",
         "**Unattended / autonomy setup**",
     ):
         assert section in quick_start
@@ -168,6 +169,7 @@ def test_help_prompt_default_quick_start_stays_runtime_surface_focused() -> None
         "gpd resume --recent",
         "/gpd:progress",
         "/gpd:suggest-next",
+        "/gpd:tangent",
         "/gpd:settings",
         "/gpd:help --all",
     ):
@@ -184,6 +186,28 @@ def test_suggest_next_prompt_uses_real_cli_subcommand() -> None:
     assert "Uses `gpd --raw suggest`" in suggest_prompt
     assert "Local CLI fallback: `gpd --raw suggest`" in suggest_prompt
     assert "gpd suggest-next to scan" not in suggest_prompt
+
+
+def test_tangent_prompt_routes_into_existing_workflows() -> None:
+    tangent_command = (COMMANDS_DIR / "tangent.md").read_text(encoding="utf-8")
+    tangent_workflow = (WORKFLOWS_DIR / "tangent.md").read_text(encoding="utf-8")
+
+    assert "name: gpd:tangent" in tangent_command
+    assert "@{GPD_INSTALL_DIR}/workflows/tangent.md" in tangent_command
+    assert "/gpd:quick" in tangent_command
+    assert "/gpd:add-todo" in tangent_command
+    assert "/gpd:branch-hypothesis" in tangent_command
+
+    for token in (
+        "Stay on the main path",
+        "Run a bounded quick check now",
+        "Capture and defer",
+        "Open a hypothesis branch",
+        "{GPD_INSTALL_DIR}/workflows/quick.md",
+        "{GPD_INSTALL_DIR}/workflows/add-todo.md",
+        "{GPD_INSTALL_DIR}/workflows/branch-hypothesis.md",
+    ):
+        assert token in tangent_workflow
 
 
 def test_progress_prompt_runs_preflight_after_init_context() -> None:
@@ -281,6 +305,15 @@ def test_compare_branches_prompt_keeps_branch_summary_extraction_in_memory() -> 
     assert "do not write it to `GPD/tmp/` just to run a path-based extractor." in workflow
     assert "Keep branch-summary extraction in memory/stdout only" in workflow
     assert "do not use `GPD/tmp/`, `/tmp`, or another temp root for this step." in workflow
+
+
+def test_help_prompts_surface_tangent_command_for_side_investigations() -> None:
+    help_command = (COMMANDS_DIR / "help.md").read_text(encoding="utf-8")
+    help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
+
+    for content in (help_command, help_workflow):
+        assert "/gpd:tangent" in content
+        assert re.search(r"/gpd:tangent[^\n]*?(?:tangent|side investigation|alternative direction|parallel)", content, re.I)
 
 
 def test_regression_check_prompt_examples_include_optional_phase_before_quick_flag() -> None:

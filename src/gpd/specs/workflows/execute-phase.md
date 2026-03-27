@@ -46,7 +46,7 @@ When `parallelization` is false, plans within a wave execute sequentially.
 - `autonomy=balanced` (default): Execute waves automatically and pause only if errors, ambiguities, or scope-changing decisions arise at a wave boundary.
 - `autonomy=yolo`: Execute all waves without user prompts on clean passes. Do NOT skip required correctness gates, first-result sanity checks, skeptical review stops, or anchor-gated fanout reviews. A clean pass may auto-continue only after the gate is explicitly cleared.
 - `research_mode=explore`: Favor thoroughness — always run verification, expand context budget.
-- `research_mode=exploit`: Favor speed — skip optional research steps, tighter context budget, but never skip required first-result, skeptical, or pre-fanout review gates.
+- `research_mode=exploit`: Favor speed — skip optional research steps, tighter context budget, suppress optional tangents unless the user explicitly requested them, but never skip required first-result, skeptical, or pre-fanout review gates.
 - `research_mode=adaptive`: Start with explore-style coverage, then narrow only after prior decisive `contract_results`, decisive `comparison_verdicts`, or an explicit approach lock show that the method family is stable. Do NOT narrow just because a wave advanced or one proxy passed.
 - Model profile and research mode may change depth, task granularity, or prose volume. They do NOT waive first-result, skeptical, or pre-fanout review gates.
 - `review_cadence`: Controls when bounded review gates appear. `autonomy` controls who must approve or inspect those gates. These are separate axes.
@@ -364,6 +364,7 @@ Translate cadence config plus wave risk into concrete execution boundaries befor
 
 ```bash
 REVIEW_CADENCE=$(echo "$INIT" | gpd json get .review_cadence --default adaptive)
+RESEARCH_MODE=$(echo "$INIT" | gpd json get .research_mode --default balanced)
 MAX_UNATTENDED_MINUTES_PER_PLAN=$(echo "$INIT" | gpd json get .max_unattended_minutes_per_plan --default 45)
 MAX_UNATTENDED_MINUTES_PER_WAVE=$(echo "$INIT" | gpd json get .max_unattended_minutes_per_wave --default 90)
 CHECKPOINT_AFTER_N_TASKS=$(echo "$INIT" | gpd json get .checkpoint_after_n_tasks --default 3)
@@ -402,6 +403,17 @@ When a wave is not risky:
 - what still looks assumed rather than verified
 - the disconfirming observation that would most quickly break the current path
 - which downstream plans would become wasted work if that decisive evidence failed
+
+**Proposal-first tangent control:** if an unexpected but non-blocking alternative path appears during execution, do not silently pursue it. Treat it as a tangent proposal and classify it using exactly one of these four decisions at the existing review stop:
+
+- `ignore` — not a real tangent; continue the approved mainline plan
+- `defer` — record it briefly in the wave report / SUMMARY as future follow-up, then continue the mainline plan
+- `branch_later` — recommend `/gpd:tangent ...` or `/gpd:branch-hypothesis ...` for explicit follow-up, but do not create new side work during this execution pass
+- `pursue_now` — only when the user explicitly requested tangent exploration or the approved contract already includes that alternative path
+
+This is proposal-first, not a new execution state machine. Tangent proposals ride on the existing first-result / skeptical / pre-fanout review stops.
+
+When `RESEARCH_MODE=exploit`, suppress optional tangents by default: classify them as `ignore` or `defer` unless the prompt or the user explicitly asked for tangent exploration.
 </step>
 
 <step name="execute_waves">
@@ -453,6 +465,8 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
 
    - First launch each risky plan only to its first-result gate or bounded segment boundary
    - Collect first-result sanity outcomes, decisive-evidence status, and anchor status
+   - If an executor surfaces an unexpected but non-blocking alternative path, treat it as a tangent proposal, not permission for silent side exploration
+   - Resolve tangent proposals with the four-way decision model (`ignore | defer | branch_later | pursue_now`) before any extra side work, branch work, or follow-on fanout is allowed
    - Only unlock the remainder of the wave when those gates pass with decisive evidence or the remaining work is explicitly independent of the unresolved comparison
    - If any plan fails the gate or requires re-questioning, STOP the wave before spawning more downstream work
 
@@ -478,6 +492,7 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
 
        <context_hint>{EXECUTOR_CONTEXT_HINT}</context_hint>
        <phase_class>{PHASE_CLASSES}</phase_class>
+       <research_mode>{RESEARCH_MODE}</research_mode>
        <protocol_bundles>{selected_protocol_bundle_ids}</protocol_bundles>
        <protocol_bundle_context>{protocol_bundle_context}</protocol_bundle_context>
        <review_cadence>{REVIEW_CADENCE}</review_cadence>
@@ -487,6 +502,12 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
        <first_result_gate>{FIRST_RESULT_GATE_REQUIRED}</first_result_gate>
        <checkpoint_before_downstream>{CHECKPOINT_BEFORE_DOWNSTREAM}</checkpoint_before_downstream>
        <bounded_execution>{true}</bounded_execution>
+       <tangent_control>
+       Proposal-first. If an unexpected but non-blocking alternative path appears, classify it as `ignore`, `defer`, `branch_later`, or `pursue_now`.
+       Do not silently pursue optional tangents.
+       `pursue_now` requires explicit user request or existing approved scope.
+       If `research_mode=exploit`, suppress optional tangents unless tangent exploration was explicitly requested.
+       </tangent_control>
 
        <files_to_read>
        Read these files at execution start using the file_read tool:
@@ -621,6 +642,15 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
    Gate clears are reason-scoped: clearing `first_result` must not erase `pre_fanout` or skeptical review flags, and skeptical re-questioning should be cleared explicitly when it is resolved.
 
    For `pre_fanout`, the matching gate-clear and `fanout unlock` are separate transitions: the clear records the review outcome, the unlock releases downstream work. Keep the segment live on status, notify, and resume surfaces until both have been observed. Do not silently continue on "looks fine" prose alone.
+
+   **Tangent proposals at the same stop:** if the first result suggests an unexpected but non-blocking alternative path, keep it inside the same review conversation rather than spawning extra work. Resolve it with one of:
+
+   - `ignore` — continue mainline execution unchanged
+   - `defer` — note it in outputs as future work and continue
+   - `branch_later` — recommend an explicit `/gpd:tangent ...` or `/gpd:branch-hypothesis ...` follow-up after the bounded stop
+   - `pursue_now` — only if the user explicitly asked for tangent exploration or the approved contract already covers it
+
+   Do not create a new branch, child plan, or side subagent from executor initiative alone. In `research_mode=exploit`, treat optional tangent proposals as suppressed unless explicit request overrides that default.
 
 10. **Inter-wave verification gate (if more waves remain):**
 

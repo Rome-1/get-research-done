@@ -64,6 +64,8 @@ Leave / return path: run `pause-work` inside the runtime before stepping away mi
 
 For read-only long-run visibility from your normal system terminal, use `gpd observe execution`. It is the passive status surface for progress and waiting state; if it cannot prove the run is healthy, it will conservatively say `possibly stalled` instead of relying on runtime hotkeys.
 
+For side investigations, use `tangent` when GPD surfaces an alternative path worth checking. `tangent` is the lightweight chooser for stay / quick / defer / branch. Use `branch-hypothesis` only when you want the explicit git-backed alternative path with isolated `GPD/` state.
+
 Guided unattended configuration path: use `settings` after startup when you want to tune workflow toggles, tier models, research preferences, or autonomy. Start there if you are deciding how much unattended execution to allow or what model-cost posture you want.
 
 For model choice, the safe default is `review` plus runtime defaults. Use `settings` to move toward `Max quality`, `Balanced`, or `Budget-aware` only if you want to trade off quality against cost or model access.
@@ -448,10 +450,11 @@ The full command reference below uses Claude Code / Gemini CLI syntax. Codex use
 | `/gpd:arxiv-submission` | Prepare a paper for arXiv submission with validation and packaging |
 | `/gpd:literature-review [topic]` | Structured literature review for a physics research topic with citation network analysis and open question identification |
 
-#### Hypothesis Branches
+#### Tangents & Hypothesis Branches
 
 | Command | What it does |
 |---------|--------------|
+| `/gpd:tangent [description]` | Choose whether to stay on the main line, run a quick tangent, defer it, or escalate to a git-backed hypothesis branch |
 | `/gpd:branch-hypothesis <description>` | Create a hypothesis branch for parallel investigation of an alternative approach |
 | `/gpd:compare-branches` | Compare results across hypothesis branches side-by-side |
 
