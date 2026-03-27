@@ -20,6 +20,9 @@ __all__ = [
     "CONFIG_FILENAME",
     "CONTEXT_SUFFIX",
     "CONVENTIONS_FILENAME",
+    "COST_LEDGER_DIR_NAME",
+    "COST_LEDGER_RECORDS_FILENAME",
+    "COST_PRICING_SNAPSHOT_FILENAME",
     "DECISION_THRESHOLD",
     "DEFAULT_MAX_INCLUDE_CHARS",
     "ENV_DATA_DIR",
@@ -165,6 +168,15 @@ RECENT_PROJECTS_DIR_NAME = "recent-projects"
 
 RECENT_PROJECTS_INDEX_FILENAME = "index.json"
 """Index filename for the machine-local recent-project advisory cache."""
+
+COST_LEDGER_DIR_NAME = "cost"
+"""Subdirectory under the home GPD data root for machine-local usage/cost records."""
+
+COST_LEDGER_RECORDS_FILENAME = "usage.jsonl"
+"""Append-only JSONL ledger filename for measured usage/cost records."""
+
+COST_PRICING_SNAPSHOT_FILENAME = "pricing-snapshot.json"
+"""Optional machine-local pricing snapshot used for conservative USD estimates."""
 
 SCRATCH_DIR_NAME = "tmp"
 """Subdirectory under GPD/ for transient scratch files."""

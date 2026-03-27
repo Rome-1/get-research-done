@@ -73,6 +73,31 @@ def _hook_payload_policy(cwd: str | None = None):
     return get_hook_payload_policy(None if runtime == RUNTIME_UNKNOWN else runtime)
 
 
+def _payload_runtime(cwd: str | None = None) -> str | None:
+    """Return the active installed runtime for one payload workspace, when known."""
+    from gpd.hooks.runtime_detect import RUNTIME_UNKNOWN, detect_active_runtime_with_gpd_install
+
+    self_install = hook_layout.detect_self_owned_install(__file__)
+    if self_install is not None:
+        return self_install.runtime
+
+    workspace_path = resolve_project_root(cwd) if cwd else None
+    runtime = detect_active_runtime_with_gpd_install(cwd=workspace_path)
+    return None if runtime == RUNTIME_UNKNOWN else runtime
+
+
+def _record_usage_telemetry(data: dict[str, object], *, cwd: str) -> None:
+    """Persist measured usage/cost telemetry when the runtime payload exposes it."""
+    from gpd.core.costs import record_usage_from_runtime_payload
+
+    try:
+        runtime = _payload_runtime(cwd)
+        record_usage_from_runtime_payload(data, runtime=runtime, cwd=Path(cwd))
+    except Exception as exc:
+        # Usage telemetry is advisory only and must never break the notify hook.
+        _debug(f"usage telemetry skipped: {exc}")
+
+
 def _latest_update_cache(cwd: str | None = None) -> tuple[dict[str, object] | None, object | None]:
     """Return the highest-priority valid update cache and its candidate metadata."""
     from gpd.hooks.runtime_detect import (
@@ -305,6 +330,7 @@ def main() -> None:
         allowed_event_types = hook_payload.notify_event_types
         if allowed_event_types and data.get("type") not in (*allowed_event_types, None):
             return
+        _record_usage_telemetry(data, cwd=cwd)
         _trigger_update_check(cwd)
         _check_and_notify_update(cwd)
         _emit_execution_notification(cwd)

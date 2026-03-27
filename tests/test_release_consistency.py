@@ -607,6 +607,7 @@ def test_public_help_default_quick_start_keeps_runtime_surface_readiness_path() 
     assert "gpd resume --recent" in quick_start
     assert "/gpd:progress" in quick_start
     assert "/gpd:suggest-next" in quick_start
+    assert "gpd cost" in quick_start
     assert "/gpd:tangent" in quick_start
     assert "/gpd:settings" in quick_start
     assert "/gpd:help --all" in quick_start
@@ -649,6 +650,7 @@ def test_public_readme_quick_start_surfaces_step_one_entry_points() -> None:
     assert "Use your runtime-specific `settings` command to move toward `Max quality`, `Balanced`, or `Budget-aware`" in quick_start
     assert "Use the exact runtime-specific command syntax below for your first command." in quick_start
     assert "If you are starting from existing work, run your runtime's `map-research` command first" in quick_start
+    assert "gpd cost" in quick_start
     assert "/gpd:new-project --minimal" in quick_start
     assert "$gpd-resume-work" in quick_start
     assert "/gpd:map-research" in quick_start
@@ -796,8 +798,11 @@ def test_public_readme_observability_surface_keeps_execution_guidance_in_command
     assert "| `gpd observe show [--session ...] [--category ...] [--name ...] [--action ...] [--status ...] [--command ...] [--phase ...] [--plan ...] [--last N]` | Show logged observability events with filters |" in readme
     assert "| `gpd observe event <category> <name> [--action ...] [--status ...] [--command ...] [--phase ...] [--plan ...] [--session ...] [--data <json>]` | Append an explicit observability event with optional structured metadata |" in readme
     assert "| `gpd observe execution` | Show read-only live execution status for the current workspace, including progress / waiting state and conservative `possibly stalled` wording |" in readme
+    assert "| `gpd cost` | Show the read-only machine-local usage / cost summary from recorded local telemetry; advisory only, not live budget enforcement or provider billing truth |" in readme
     assert "gpd observe execution" in readme
     assert "For read-only long-run visibility from your normal system terminal, use `gpd observe execution`." in readme
+    assert "gpd cost" in readme
+    assert "For a read-only machine-local usage / cost summary from your normal system terminal, use `gpd cost`." in readme
 
 
 def test_public_local_cli_help_and_install_summary_keep_readiness_diagnostics_emphasis() -> None:
@@ -807,6 +812,7 @@ def test_public_local_cli_help_and_install_summary_keep_readiness_diagnostics_em
     assert "Use the local CLI for install, readiness checks, permissions, observability, validation, and diagnostics." in cli
     assert "gpd doctor --runtime <runtime> --local" in cli
     assert "gpd observe execution" in cli
+    assert "gpd cost" in cli
     assert "gpd resume --recent" in cli
     assert "review autonomy, workflow defaults, and model-cost posture" in cli
 

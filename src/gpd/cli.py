@@ -582,6 +582,7 @@ app = _GPDTyper(
         "  gpd doctor --runtime <runtime> --local\n"
         "  gpd permissions status --runtime <runtime> --autonomy balanced\n"
         "  gpd observe execution\n"
+        "  gpd cost\n"
         "  gpd resume --recent\n"
         "  gpd validate command-context gpd:new-project"
     ),
@@ -2498,6 +2499,136 @@ def observe_show(
             last=last,
         )
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# cost — Machine-local usage and cost summaries
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _format_cost_tokens(value: int) -> str:
+    return f"{value:,}"
+
+
+def _format_cost_money(value: float | None) -> str:
+    if value is None:
+        return "unavailable"
+    return f"${value:,.4f}"
+
+
+def _render_cost_rollup(label: str, rollup: object, *, project_root: str | None = None, session_id: str | None = None) -> None:
+    summary = Table.grid(padding=(0, 2))
+    summary.add_column(style=f"bold {_INSTALL_ACCENT_COLOR}")
+    summary.add_column()
+    if project_root:
+        summary.add_row("Project", _format_display_path(project_root))
+    if session_id:
+        summary.add_row("Session", session_id)
+    summary.add_row("Usage status", str(getattr(rollup, "usage_status", "unavailable")))
+    summary.add_row("Cost status", str(getattr(rollup, "cost_status", "unavailable")))
+    summary.add_row("Records", str(int(getattr(rollup, "record_count", 0) or 0)))
+    summary.add_row("Input tokens", _format_cost_tokens(int(getattr(rollup, "input_tokens", 0) or 0)))
+    summary.add_row("Output tokens", _format_cost_tokens(int(getattr(rollup, "output_tokens", 0) or 0)))
+    summary.add_row("Total tokens", _format_cost_tokens(int(getattr(rollup, "total_tokens", 0) or 0)))
+    summary.add_row("Cached input tokens", _format_cost_tokens(int(getattr(rollup, "cached_input_tokens", 0) or 0)))
+    summary.add_row(
+        "Cache write tokens",
+        _format_cost_tokens(int(getattr(rollup, "cache_write_input_tokens", 0) or 0)),
+    )
+    summary.add_row("USD cost", _format_cost_money(getattr(rollup, "cost_usd", None)))
+    summary.add_row("Last recorded", str(getattr(rollup, "last_recorded_at", None) or "—"))
+    runtimes = ", ".join(getattr(rollup, "runtimes", []) or []) or "—"
+    models = ", ".join(getattr(rollup, "models", []) or []) or "—"
+    summary.add_row("Runtimes", runtimes)
+    summary.add_row("Models", models)
+    console.print(f"[bold]{label}[/]")
+    console.print(summary)
+
+
+def _render_cost_summary(summary: object, *, last_sessions: int) -> None:
+    console.print("[bold]Cost Summary[/]")
+    console.print(
+        "[dim]Read-only machine-local usage/cost summary. GPD reports measured telemetry when available and clearly labels estimates or unavailable values.[/]"
+    )
+    console.print()
+
+    model_table = Table.grid(padding=(0, 2))
+    model_table.add_column(style=f"bold {_INSTALL_ACCENT_COLOR}")
+    model_table.add_column()
+    model_table.add_row("Workspace", _format_display_path(str(getattr(summary, "workspace_root", _get_cwd()))))
+    model_table.add_row("Active runtime", str(getattr(summary, "active_runtime", None) or "unknown"))
+    model_table.add_row("Model profile", str(getattr(summary, "model_profile", None) or "unknown"))
+    model_table.add_row("Runtime model selection", str(getattr(summary, "runtime_model_selection", None) or "unknown"))
+    model_table.add_row("Current session", str(getattr(summary, "current_session_id", None) or "none"))
+    pricing_snapshot_configured = bool(getattr(summary, "pricing_snapshot_configured", False))
+    snapshot_state = "configured" if pricing_snapshot_configured else "not configured"
+    snapshot_source = getattr(summary, "pricing_snapshot_source", None)
+    snapshot_as_of = getattr(summary, "pricing_snapshot_as_of", None)
+    if snapshot_source or snapshot_as_of:
+        extra = ", ".join(part for part in (snapshot_source, snapshot_as_of) if part)
+        snapshot_state = f"{snapshot_state} ({extra})"
+    model_table.add_row("Pricing snapshot", snapshot_state)
+    console.print("[bold]Current posture[/]")
+    console.print(model_table)
+    console.print()
+
+    project_rollup = getattr(summary, "project")
+    _render_cost_rollup("Current project", project_rollup, project_root=getattr(project_rollup, "project_root", None))
+    console.print()
+
+    current_session = getattr(summary, "current_session", None)
+    if current_session is not None:
+        _render_cost_rollup(
+            "Current session",
+            current_session,
+            project_root=getattr(current_session, "project_root", None),
+            session_id=getattr(current_session, "session_id", None),
+        )
+        console.print()
+
+    recent_sessions = list(getattr(summary, "recent_sessions", []) or [])
+    if recent_sessions:
+        console.print(f"[bold]Recent sessions[/] [dim](last {last_sessions})[/]")
+        table = Table(show_header=True, header_style=f"bold {_INSTALL_ACCENT_COLOR}")
+        table.add_column("Session")
+        table.add_column("Project")
+        table.add_column("Usage")
+        table.add_column("Cost")
+        table.add_column("Total Tokens")
+        table.add_column("USD")
+        table.add_column("Last Recorded")
+        for row in recent_sessions:
+            table.add_row(
+                str(getattr(row, "session_id", "")),
+                _format_display_path(str(getattr(row, "project_root", "") or "")) if getattr(row, "project_root", None) else "—",
+                str(getattr(row, "usage_status", "unavailable")),
+                str(getattr(row, "cost_status", "unavailable")),
+                _format_cost_tokens(int(getattr(row, "total_tokens", 0) or 0)),
+                _format_cost_money(getattr(row, "cost_usd", None)),
+                str(getattr(row, "last_recorded_at", None) or "—"),
+            )
+        console.print(table)
+        console.print()
+
+    guidance = list(getattr(summary, "guidance", []) or [])
+    if guidance:
+        console.print("[bold]Guidance[/]")
+        for item in guidance:
+            console.print(f"- {item}")
+
+
+@app.command("cost")
+def cost(
+    last_sessions: int = typer.Option(5, "--last-sessions", help="Show the most recent N recorded usage sessions"),
+) -> None:
+    """Show machine-local usage and cost summaries for the current workspace and recent sessions."""
+    from gpd.core.costs import build_cost_summary
+
+    summary = build_cost_summary(_get_cwd(), last_sessions=last_sessions)
+    if _raw:
+        _output(summary)
+        return
+    _render_cost_summary(summary, last_sessions=max(last_sessions, 0))
 
 
 # ═══════════════════════════════════════════════════════════════════════════

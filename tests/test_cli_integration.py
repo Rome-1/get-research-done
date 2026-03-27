@@ -21,6 +21,8 @@ from gpd.adapters import get_adapter
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.cli import app
 from gpd.core.constants import AGENT_ID_FILENAME
+from gpd.core.constants import ENV_DATA_DIR
+from gpd.core.costs import UsageRecord, usage_ledger_path
 from gpd.core.state import default_state_dict, generate_state_markdown
 from tests.runtime_install_helpers import seed_complete_runtime_install
 
@@ -1566,3 +1568,71 @@ class TestResolveModelCommand:
         )
         parsed = json.loads(result.output)
         assert parsed["error"] == "Unknown agent 'not-an-agent'"
+
+
+def test_cost_human_output_without_usage_ledger_stays_read_only_and_advisory(
+    gpd_project: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_root = tmp_path / "machine-data"
+    monkeypatch.setenv(ENV_DATA_DIR, str(data_root))
+    ledger_path = usage_ledger_path(data_root)
+    config_path = gpd_project / "GPD" / "config.json"
+    config_before = config_path.read_text(encoding="utf-8")
+
+    result = _invoke("cost")
+    normalized_output = " ".join(result.output.split())
+
+    assert "Cost Summary" in result.output
+    assert "Read-only machine-local usage/cost summary." in normalized_output
+    assert "GPD reports measured telemetry when available" in normalized_output
+    assert "clearly labels estimates or unavailable values." in normalized_output
+    assert "No measured usage telemetry is recorded for this workspace yet." in result.output
+    assert not ledger_path.exists()
+    assert config_path.read_text(encoding="utf-8") == config_before
+
+
+def test_cost_raw_keeps_tokens_measured_but_usd_unavailable_without_pricing_snapshot(
+    gpd_project: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_root = tmp_path / "machine-data"
+    monkeypatch.setenv(ENV_DATA_DIR, str(data_root))
+    ledger_path = usage_ledger_path(data_root)
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    workspace_root = gpd_project.resolve(strict=False).as_posix()
+    record = UsageRecord(
+        record_id="usage-1",
+        recorded_at="2026-03-27T00:00:00+00:00",
+        runtime="codex",
+        provider="openai",
+        model="gpt-5.4",
+        session_id="session-1",
+        workspace_root=workspace_root,
+        project_root=workspace_root,
+        usage_status="measured",
+        cost_status="unavailable",
+        input_tokens=1200,
+        output_tokens=300,
+        total_tokens=1500,
+    )
+    ledger_path.write_text(record.model_dump_json() + "\n", encoding="utf-8")
+    ledger_before = ledger_path.read_text(encoding="utf-8")
+
+    result = _invoke("--raw", "cost", "--last-sessions", "1")
+    payload = json.loads(result.output)
+
+    assert payload["workspace_root"] == workspace_root
+    assert payload["project"]["record_count"] == 1
+    assert payload["project"]["usage_status"] == "measured"
+    assert payload["project"]["cost_status"] == "unavailable"
+    assert payload["project"]["total_tokens"] == 1500
+    assert payload["project"]["cost_usd"] is None
+    assert payload["recent_sessions"][0]["session_id"] == "session-1"
+    assert payload["recent_sessions"][0]["usage_status"] == "measured"
+    assert payload["recent_sessions"][0]["cost_status"] == "unavailable"
+    assert payload["recent_sessions"][0]["cost_usd"] is None
+    assert any("no pricing snapshot is configured" in item for item in payload["guidance"])
+    assert ledger_path.read_text(encoding="utf-8") == ledger_before

@@ -29,6 +29,7 @@ Returning to work:
   /gpd:progress            — Review the broader project snapshot
   /gpd:suggest-next        — Ask for the fastest next-action recommendation
   gpd observe execution    — Read-only live status from your normal terminal; use this for progress / waiting state, not runtime hotkeys
+  gpd cost                 — Read-only machine-local usage / cost summary from recorded local telemetry
   /gpd:tangent             — Choose stay / quick / defer / branch when a side investigation appears
 ```
 
@@ -120,6 +121,7 @@ This reference lists canonical in-runtime slash-command names in `/gpd:*` form.
 - The bootstrap installer owns Node.js / Python / `venv` prerequisites. The local `gpd` CLI may expose different `gpd ...` subcommands and grouping. Use `gpd --help` to inspect the executable local install/readiness/permissions/diagnostics surface directly.
 - If you need to validate whether a slash-command can run in the current workspace, use `gpd validate command-context gpd:<name>`.
 - For a normal-terminal, read-only recovery snapshot without launching the runtime, use `gpd resume`.
+- For a normal-terminal, read-only machine-local usage / cost summary, use `gpd cost`.
 
 ## Quick Start
 
@@ -148,6 +150,7 @@ Choose the path that matches your starting point:
 3. `/gpd:progress` - Secondary manual status check; use `--brief` when you only need a short snapshot
 4. `/gpd:suggest-next` - Fastest next-action hint without the full progress report
 5. `gpd observe execution` - Read-only long-run visibility from your normal terminal; use this for progress / waiting state and conservative `possibly stalled` wording
+6. `gpd cost` - Read-only machine-local usage / cost summary from recorded local telemetry; advisory only, not live budget enforcement or provider billing truth
 
 Before stepping away mid-phase, run `/gpd:pause-work` so `/gpd:resume-work` has an explicit handoff to restore. Use `gpd resume` from your normal system terminal when you want a read-only local recovery summary for the current project. Use `gpd resume --recent` first if you need to find the right project before resuming it.
 
@@ -1025,6 +1028,12 @@ gpd resume --recent    # Find a recently used GPD project when you are not sure 
 
 ```
 gpd resume
+```
+
+**Normal terminal, read-only machine-local usage / cost summary:**
+
+```
+gpd cost
 ```
 
 **Adding urgent mid-milestone work:**

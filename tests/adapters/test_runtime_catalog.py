@@ -76,3 +76,49 @@ def test_hook_payload_policy_uses_runtime_specific_overrides_and_merged_fallback
     assert codex_policy.notify_event_types == ("agent-turn-complete",)
     assert "agent-turn-complete" in merged_policy.notify_event_types
     assert "cwd" in merged_policy.workspace_keys
+
+
+def test_hook_payload_policy_exposes_usage_alias_fields_for_cost_telemetry() -> None:
+    codex_policy = get_hook_payload_policy("codex")
+    merged_policy = get_hook_payload_policy()
+    merged_aliases = {
+        *merged_policy.usage_keys,
+        *merged_policy.input_tokens_keys,
+        *merged_policy.output_tokens_keys,
+        *merged_policy.cached_input_tokens_keys,
+        *merged_policy.cache_write_input_tokens_keys,
+        *merged_policy.cost_usd_keys,
+    }
+
+    assert codex_policy.usage_keys == ("usage", "token_usage", "tokens")
+    assert codex_policy.input_tokens_keys == ("input_tokens", "prompt_tokens", "inputTokens", "promptTokens")
+    assert codex_policy.output_tokens_keys == (
+        "output_tokens",
+        "completion_tokens",
+        "outputTokens",
+        "completionTokens",
+    )
+    assert codex_policy.cached_input_tokens_keys == (
+        "cached_input_tokens",
+        "cache_read_input_tokens",
+        "cachedInputTokens",
+        "cacheReadInputTokens",
+    )
+    assert codex_policy.cache_write_input_tokens_keys == (
+        "cache_write_input_tokens",
+        "cache_creation_input_tokens",
+        "cacheWriteInputTokens",
+        "cacheCreationInputTokens",
+    )
+    assert codex_policy.cost_usd_keys == ("cost_usd", "costUsd", "usd_cost", "usdCost")
+
+    for alias in (
+        "token_usage",
+        "tokens",
+        "promptTokens",
+        "completionTokens",
+        "cacheReadInputTokens",
+        "cacheCreationInputTokens",
+        "usdCost",
+    ):
+        assert alias in merged_aliases

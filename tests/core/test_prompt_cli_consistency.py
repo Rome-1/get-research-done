@@ -168,6 +168,7 @@ def test_help_prompt_default_quick_start_stays_runtime_surface_focused() -> None
         "/gpd:resume-work",
         "gpd resume --recent",
         "gpd observe execution",
+        "gpd cost",
         "/gpd:progress",
         "/gpd:suggest-next",
         "/gpd:tangent",
@@ -394,6 +395,19 @@ def test_help_prompt_workflow_modes_match_current_settings_vocabulary() -> None:
         assert "planning.commit_docs" in content
         assert "git.branching_strategy" in content
         assert "gpd observe execution" in content
+        assert "gpd cost" in content
+
+
+def test_help_prompt_keeps_cost_surface_on_local_cli_not_runtime_slash_command() -> None:
+    help_command = (COMMANDS_DIR / "help.md").read_text(encoding="utf-8")
+    help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
+
+    for content in (help_command, help_workflow):
+        assert "gpd cost" in content
+        assert "/gpd:cost" not in content
+        assert "machine-local usage / cost summary" in content
+        assert "recorded local telemetry" in content
+        assert "not live budget enforcement or provider billing truth" in content
 
 
 def test_help_prompt_session_management_keeps_pause_before_leave_and_resume_on_return() -> None:

@@ -20,6 +20,7 @@ import gpd.runtime_cli as runtime_cli
 from gpd.adapters import list_runtimes
 from gpd.cli import app
 from gpd.core import cli_args as cli_args_module
+from gpd.core.costs import CostProjectSummary, CostSessionSummary, CostSummary
 
 runner = CliRunner()
 
@@ -154,6 +155,102 @@ def test_help_surfaces_permissions_readiness_commands() -> None:
     assert "gpd permissions status --runtime <runtime> --autonomy balanced" in normalized_output
     assert "gpd observe execution" in normalized_output
     assert "gpd resume --recent" in normalized_output
+
+
+def _sample_cost_summary(workspace: Path) -> CostSummary:
+    workspace_text = str(workspace)
+    project = CostProjectSummary(
+        project_root=workspace_text,
+        record_count=2,
+        usage_status="measured",
+        cost_status="unavailable",
+        input_tokens=1200,
+        output_tokens=300,
+        total_tokens=1500,
+        cost_usd=None,
+        last_recorded_at="2026-03-27T00:00:00+00:00",
+        runtimes=["codex"],
+        models=["gpt-5.4"],
+    )
+    current_session = CostSessionSummary(
+        session_id="session-123",
+        project_root=workspace_text,
+        record_count=1,
+        usage_status="measured",
+        cost_status="unavailable",
+        input_tokens=800,
+        output_tokens=200,
+        total_tokens=1000,
+        cost_usd=None,
+        last_recorded_at="2026-03-27T00:00:00+00:00",
+        runtimes=["codex"],
+        models=["gpt-5.4"],
+    )
+    return CostSummary(
+        workspace_root=workspace_text,
+        active_runtime="codex",
+        model_profile="review",
+        runtime_model_selection="runtime defaults",
+        current_session_id="session-123",
+        project=project,
+        current_session=current_session,
+        recent_sessions=[current_session],
+        guidance=[
+            "Measured tokens are available, but no pricing snapshot is configured at the machine-local cost root, so USD cost is unavailable.",
+            "Current model posture: profile `review` with codex runtime defaults. Use the runtime `settings` command only if you want explicit tier-model overrides.",
+        ],
+    )
+
+
+def test_cost_help_surfaces_machine_local_advisory_role() -> None:
+    result = runner.invoke(app, ["cost", "--help"])
+    assert result.exit_code == 0
+    normalized_output = " ".join(result.output.split())
+    assert "Show machine-local usage and cost summaries" in normalized_output
+    assert "--last-sessions" in result.output
+    assert "Show the most recent N recorded usage" in normalized_output
+    assert "[default: 5]" in normalized_output
+
+
+def test_cost_raw_outputs_summary_payload(tmp_path: Path) -> None:
+    summary = _sample_cost_summary(tmp_path)
+
+    with patch("gpd.core.costs.build_cost_summary", return_value=summary) as mock_build:
+        result = runner.invoke(app, ["--cwd", str(tmp_path), "--raw", "cost", "--last-sessions", "2"])
+
+    assert result.exit_code == 0
+    mock_build.assert_called_once_with(tmp_path, last_sessions=2)
+    payload = json.loads(result.output)
+    assert payload["workspace_root"] == str(tmp_path)
+    assert payload["active_runtime"] == "codex"
+    assert payload["model_profile"] == "review"
+    assert payload["runtime_model_selection"] == "runtime defaults"
+    assert payload["project"]["usage_status"] == "measured"
+    assert payload["project"]["cost_status"] == "unavailable"
+    assert payload["project"]["total_tokens"] == 1500
+    assert payload["project"]["cost_usd"] is None
+    assert payload["recent_sessions"][0]["session_id"] == "session-123"
+    assert payload["recent_sessions"][0]["total_tokens"] == 1000
+    assert any("no pricing snapshot is configured" in item for item in payload["guidance"])
+
+
+def test_cost_human_output_stays_read_only_and_advisory(tmp_path: Path) -> None:
+    summary = _sample_cost_summary(tmp_path)
+
+    with patch("gpd.core.costs.build_cost_summary", return_value=summary):
+        result = runner.invoke(app, ["--cwd", str(tmp_path), "cost", "--last-sessions", "1"])
+
+    assert result.exit_code == 0
+    assert "Cost Summary" in result.output
+    assert "Read-only machine-local usage/cost summary." in result.output
+    assert "clearly labels estimates or unavailable values" in result.output
+    assert "Current posture" in result.output
+    assert "Pricing snapshot" in result.output
+    assert "not configured" in result.output
+    assert "Current project" in result.output
+    assert "Recent sessions" in result.output
+    assert "Measured tokens are available, but no pricing snapshot is configured" in result.output
+    assert "Current model posture: profile `review` with codex runtime defaults." in result.output
 
 
 def test_observe_help_surfaces_read_only_execution_snapshot_command() -> None:

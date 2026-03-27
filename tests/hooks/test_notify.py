@@ -17,6 +17,7 @@ from gpd.adapters import get_adapter
 from gpd.adapters.install_utils import build_runtime_install_repair_command
 from gpd.adapters.runtime_catalog import get_hook_payload_policy, iter_runtime_descriptors
 from gpd.core.constants import ProjectLayout
+from gpd.core.costs import usage_ledger_path
 from gpd.hooks.notify import _check_and_notify_update, _emit_execution_notification, _hook_payload_policy, main
 from gpd.hooks.runtime_detect import update_command_for_runtime
 
@@ -767,6 +768,74 @@ def test_main_accepts_string_workspace_payload() -> None:
     mock_notify.assert_called_once_with(expected)
 
 
+def test_main_records_usage_telemetry_from_alias_fields(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    data_root = tmp_path / "data-root"
+    payload = {
+        "type": "agent-turn-complete",
+        "workspace": str(workspace),
+        "model": {"id": "gpt-5", "provider": "openai"},
+        "tokens": {
+            "promptTokens": 120,
+            "completionTokens": 30,
+            "cacheReadInputTokens": 12,
+            "cacheCreationInputTokens": 5,
+            "usdCost": 0.42,
+        },
+    }
+
+    with (
+        patch.dict("os.environ", {"GPD_DATA_DIR": str(data_root)}),
+        patch("sys.stdin", io.StringIO(json.dumps(payload))),
+        patch("gpd.hooks.notify._payload_runtime", return_value="codex"),
+        patch("gpd.hooks.notify._trigger_update_check"),
+        patch("gpd.hooks.notify._check_and_notify_update"),
+        patch("gpd.hooks.notify._emit_execution_notification"),
+    ):
+        main()
+
+    ledger_path = usage_ledger_path(data_root)
+    rows = [json.loads(line) for line in ledger_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["runtime"] == "codex"
+    assert row["provider"] == "openai"
+    assert row["model"] == "gpt-5"
+    assert row["input_tokens"] == 120
+    assert row["output_tokens"] == 30
+    assert row["total_tokens"] == 150
+    assert row["cached_input_tokens"] == 12
+    assert row["cache_write_input_tokens"] == 5
+    assert row["cost_usd"] == 0.42
+    assert row["cost_status"] == "measured"
+
+
+def test_main_does_not_record_usage_when_usage_container_has_no_token_or_cost_signal(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    data_root = tmp_path / "data-root"
+    payload = {
+        "type": "agent-turn-complete",
+        "workspace": str(workspace),
+        "model": {"id": "gpt-5", "provider": "openai"},
+        "token_usage": {"requestCount": 1},
+    }
+
+    with (
+        patch.dict("os.environ", {"GPD_DATA_DIR": str(data_root)}),
+        patch("sys.stdin", io.StringIO(json.dumps(payload))),
+        patch("gpd.hooks.notify._payload_runtime", return_value="codex"),
+        patch("gpd.hooks.notify._trigger_update_check"),
+        patch("gpd.hooks.notify._check_and_notify_update"),
+        patch("gpd.hooks.notify._emit_execution_notification"),
+    ):
+        main()
+
+    assert not usage_ledger_path(data_root).exists()
+
+
 def test_main_logs_handler_exception_instead_of_swallowing(tmp_path: Path) -> None:
     """Exceptions in _trigger_update_check / _check_and_notify_update are logged via _debug."""
     payload = json.dumps({"type": "agent-turn-complete", "workspace": "/tmp/project"})
@@ -782,6 +851,27 @@ def test_main_logs_handler_exception_instead_of_swallowing(tmp_path: Path) -> No
 
     output = stderr.getvalue()
     assert "notify handler failed: boom" in output
+
+
+def test_main_treats_usage_telemetry_failures_as_advisory(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    payload = json.dumps({"type": "agent-turn-complete", "workspace": str(workspace)})
+    stderr = io.StringIO()
+    with (
+        patch("sys.stdin", io.StringIO(payload)),
+        patch("gpd.hooks.notify._payload_runtime", return_value="codex"),
+        patch("gpd.core.costs.record_usage_from_runtime_payload", side_effect=RuntimeError("telemetry boom")),
+        patch("gpd.hooks.notify._trigger_update_check"),
+        patch("gpd.hooks.notify._check_and_notify_update"),
+        patch("gpd.hooks.notify._emit_execution_notification") as mock_emit,
+        patch.dict("os.environ", {"GPD_DEBUG": "1"}),
+        patch("sys.stderr", stderr),
+    ):
+        main()
+
+    assert "usage telemetry skipped: telemetry boom" in stderr.getvalue()
+    mock_emit.assert_called_once_with(str(workspace.resolve(strict=False)))
 
 
 def test_main_logs_workspace_resolution_exception_instead_of_raising() -> None:

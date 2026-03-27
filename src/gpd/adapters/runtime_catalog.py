@@ -26,6 +26,14 @@ class HookPayloadPolicy:
     workspace_keys: tuple[str, ...] = ()
     project_dir_keys: tuple[str, ...] = ()
     model_keys: tuple[str, ...] = ()
+    provider_keys: tuple[str, ...] = ()
+    usage_keys: tuple[str, ...] = ()
+    input_tokens_keys: tuple[str, ...] = ()
+    output_tokens_keys: tuple[str, ...] = ()
+    total_tokens_keys: tuple[str, ...] = ()
+    cached_input_tokens_keys: tuple[str, ...] = ()
+    cache_write_input_tokens_keys: tuple[str, ...] = ()
+    cost_usd_keys: tuple[str, ...] = ()
     context_window_size_keys: tuple[str, ...] = ()
     context_remaining_keys: tuple[str, ...] = ()
 
@@ -94,6 +102,48 @@ def _load_catalog() -> tuple[RuntimeDescriptor, ...]:
                     model_keys=_tuple_of_str(
                         hook_payload_entry.get("model_keys"),
                         ("display_name", "name", "id"),
+                    ),
+                    provider_keys=_tuple_of_str(
+                        hook_payload_entry.get("provider_keys"),
+                        ("provider", "vendor"),
+                    ),
+                    usage_keys=_tuple_of_str(
+                        hook_payload_entry.get("usage_keys"),
+                        ("usage", "token_usage", "tokens"),
+                    ),
+                    input_tokens_keys=_tuple_of_str(
+                        hook_payload_entry.get("input_tokens_keys"),
+                        ("input_tokens", "prompt_tokens", "inputTokens", "promptTokens"),
+                    ),
+                    output_tokens_keys=_tuple_of_str(
+                        hook_payload_entry.get("output_tokens_keys"),
+                        ("output_tokens", "completion_tokens", "outputTokens", "completionTokens"),
+                    ),
+                    total_tokens_keys=_tuple_of_str(
+                        hook_payload_entry.get("total_tokens_keys"),
+                        ("total_tokens", "totalTokens"),
+                    ),
+                    cached_input_tokens_keys=_tuple_of_str(
+                        hook_payload_entry.get("cached_input_tokens_keys"),
+                        (
+                            "cached_input_tokens",
+                            "cache_read_input_tokens",
+                            "cachedInputTokens",
+                            "cacheReadInputTokens",
+                        ),
+                    ),
+                    cache_write_input_tokens_keys=_tuple_of_str(
+                        hook_payload_entry.get("cache_write_input_tokens_keys"),
+                        (
+                            "cache_write_input_tokens",
+                            "cache_creation_input_tokens",
+                            "cacheWriteInputTokens",
+                            "cacheCreationInputTokens",
+                        ),
+                    ),
+                    cost_usd_keys=_tuple_of_str(
+                        hook_payload_entry.get("cost_usd_keys"),
+                        ("cost_usd", "costUsd", "usd_cost", "usdCost"),
                     ),
                     context_window_size_keys=_tuple_of_str(
                         hook_payload_entry.get("context_window_size_keys"),
@@ -166,6 +216,18 @@ def get_hook_payload_policy(runtime: str | None = None) -> HookPayloadPolicy:
         workspace_keys=_merge_unique(descriptor.hook_payload.workspace_keys for descriptor in descriptors),
         project_dir_keys=_merge_unique(descriptor.hook_payload.project_dir_keys for descriptor in descriptors),
         model_keys=_merge_unique(descriptor.hook_payload.model_keys for descriptor in descriptors),
+        provider_keys=_merge_unique(descriptor.hook_payload.provider_keys for descriptor in descriptors),
+        usage_keys=_merge_unique(descriptor.hook_payload.usage_keys for descriptor in descriptors),
+        input_tokens_keys=_merge_unique(descriptor.hook_payload.input_tokens_keys for descriptor in descriptors),
+        output_tokens_keys=_merge_unique(descriptor.hook_payload.output_tokens_keys for descriptor in descriptors),
+        total_tokens_keys=_merge_unique(descriptor.hook_payload.total_tokens_keys for descriptor in descriptors),
+        cached_input_tokens_keys=_merge_unique(
+            descriptor.hook_payload.cached_input_tokens_keys for descriptor in descriptors
+        ),
+        cache_write_input_tokens_keys=_merge_unique(
+            descriptor.hook_payload.cache_write_input_tokens_keys for descriptor in descriptors
+        ),
+        cost_usd_keys=_merge_unique(descriptor.hook_payload.cost_usd_keys for descriptor in descriptors),
         context_window_size_keys=_merge_unique(
             descriptor.hook_payload.context_window_size_keys for descriptor in descriptors
         ),
