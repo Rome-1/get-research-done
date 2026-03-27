@@ -26,6 +26,7 @@ Returning to work:
   /gpd:resume-work         — Restore the last handoff and continue
   /gpd:progress            — Review the broader project snapshot
   /gpd:suggest-next        — Ask for the fastest next-action recommendation
+  gpd observe execution    — Read-only live status from your normal terminal; use this for progress / waiting state, not runtime hotkeys
 ```
 
 **Project exists, no plans yet:**

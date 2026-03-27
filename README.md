@@ -61,6 +61,8 @@ Then choose the path that matches your starting point:
 
 Leave / return path: run `pause-work` inside the runtime before stepping away mid-phase, then use `resume-work` when you return inside the runtime. If you only need a local, read-only recovery snapshot from your normal system terminal, use `gpd resume`.
 
+For read-only long-run visibility from your normal system terminal, use `gpd observe execution`. It is the passive status surface for progress and waiting state; if it cannot prove the run is healthy, it will conservatively say `possibly stalled` instead of relying on runtime hotkeys.
+
 Guided unattended configuration path: use `settings` after startup when you want to tune workflow toggles, tier models, research preferences, or autonomy. Start there if you are deciding how much unattended execution to allow or what model-cost posture you want.
 
 For model choice, the safe default is `review` plus runtime defaults. Use `settings` to move toward `Max quality`, `Balanced`, or `Budget-aware` only if you want to trade off quality against cost or model access.
@@ -597,6 +599,7 @@ GPD stores project-local observability under `GPD/observability/` and detailed p
 |---------|--------------|
 | `gpd observe sessions [--status ...] [--command ...] [--last N]` | List recorded observability sessions |
 | `gpd observe show [--session ...] [--category ...] [--name ...] [--action ...] [--status ...] [--command ...] [--phase ...] [--plan ...] [--last N]` | Show logged observability events with filters |
+| `gpd observe execution` | Show read-only live execution status for the current workspace, including progress / waiting state and conservative `possibly stalled` wording |
 | `gpd observe event <category> <name> [--action ...] [--status ...] [--command ...] [--phase ...] [--plan ...] [--session ...] [--data <json>]` | Append an explicit observability event with optional structured metadata |
 | `gpd trace start <phase> <plan>` | Start a plan-local trace session |
 | `gpd trace log <event> [--data <json>]` | Append an event to the active trace |

@@ -58,6 +58,7 @@ Choose the path that matches your starting point:
 1. `/gpd:resume-work` — Restore context and continue from the current project state
 2. `/gpd:progress` — Secondary status check; use `--brief` when you only need a short snapshot
 3. `/gpd:suggest-next` — Fastest next-action hint without the full progress report
+4. `gpd observe execution` — Read-only long-run visibility from your normal terminal; shows progress / waiting state and may say `possibly stalled`
 
 Before stepping away mid-phase, run `/gpd:pause-work` so `/gpd:resume-work` has an explicit handoff to restore.
 
