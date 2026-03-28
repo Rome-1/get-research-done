@@ -225,6 +225,34 @@ def test_help_prompt_keeps_workflow_preset_readiness_on_local_cli_surface() -> N
         assert "Workflow preset tooling is layered on top of the base install; it does not change runtime permission alignment." in content
 
 
+def test_prompt_docs_keep_wolfram_as_shared_capability_not_runtime_config_surface() -> None:
+    help_command = (COMMANDS_DIR / "help.md").read_text(encoding="utf-8")
+    help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
+    settings_workflow = (WORKFLOWS_DIR / "settings.md").read_text(encoding="utf-8")
+    tooling_ref = (REPO_ROOT / "src/gpd/specs/references/tooling/tool-integration.md").read_text(encoding="utf-8")
+
+    forbidden_tokens = (
+        "gpd-wolfram",
+        "gpd-mcp-wolfram",
+        "GPD_WOLFRAM_MCP_API_KEY",
+        "GPD_WOLFRAM_MCP_ENDPOINT",
+        "WOLFRAM_MCP_SERVICE_API_KEY",
+    )
+    for content in (help_command, help_workflow, settings_workflow):
+        for token in forbidden_tokens:
+            assert token not in content
+
+    for content in (help_command, help_workflow):
+        assert "gpd validate plan-preflight <PLAN.md>" in content
+        assert "gpd integrations status wolfram" in content
+        assert "gpd integrations enable wolfram" in content
+        assert "gpd integrations disable wolfram" in content
+
+    assert "Mathematica / Wolfram Language" in tooling_ref
+    assert "declare it as `tool: wolfram` in `tool_requirements`" in tooling_ref
+    assert "gpd validate plan-preflight" in tooling_ref
+
+
 def test_suggest_next_prompt_uses_real_cli_subcommand() -> None:
     suggest_prompt = (REPO_ROOT / "src/gpd/commands/suggest-next.md").read_text(encoding="utf-8")
 

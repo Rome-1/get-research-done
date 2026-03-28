@@ -108,6 +108,15 @@ _ALLOWED_RUNTIME_FILES = {
 _ALLOWED_SHARED_PYTHON_RUNTIME_FILES = {
     "src/gpd/hooks/runtime_detect.py",
 }
+_WOLFRAM_INTEGRATION_BOUNDARY_FILES = {
+    "src/gpd/core/tool_preflight.py",
+    "src/gpd/cli.py",
+    "src/gpd/mcp/managed_integrations.py",
+}
+_WOLFRAM_INTEGRATION_BOUNDARY_PREFIXES = (
+    "src/gpd/adapters/",
+    "src/gpd/mcp/integrations/",
+)
 _SHARED_ADAPTER_INFRA_FILES = {
     "src/gpd/adapters/__init__.py",
     "src/gpd/adapters/base.py",
@@ -382,6 +391,25 @@ def test_shared_builtin_server_descriptors_do_not_hardcode_bootstrap_commands() 
 
     assert leaks == [], (
         "Shared built-in MCP descriptors should not hardcode runtime-specific bootstrap commands:\n"
+        f"{_format_failures(leaks)}"
+    )
+
+
+def test_shared_python_modules_keep_wolfram_integration_tokens_out_of_non_boundary_files() -> None:
+    wolfram_pattern = re.compile(
+        r"(gpd-wolfram|gpd-mcp-wolfram|GPD_WOLFRAM_MCP_API_KEY|GPD_WOLFRAM_MCP_ENDPOINT|WOLFRAM_MCP_SERVICE_API_KEY)"
+    )
+    leaks = [
+        (path, line_no, snippet)
+        for path, line_no, snippet in _git_grep(wolfram_pattern.pattern)
+        if path.suffix == ".py"
+        and path.parts[:2] == ("src", "gpd")
+        and not any(path.as_posix().startswith(prefix) for prefix in _WOLFRAM_INTEGRATION_BOUNDARY_PREFIXES)
+        and path.as_posix() not in _WOLFRAM_INTEGRATION_BOUNDARY_FILES
+    ]
+
+    assert leaks == [], (
+        "Shared Python modules should keep Wolfram integration keys inside explicit boundary files:\n"
         f"{_format_failures(leaks)}"
     )
 
