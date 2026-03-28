@@ -631,7 +631,8 @@ def test_public_help_surfaces_keep_publication_workflows_visible_for_optional_ad
     for content in (help_command, help_workflow):
         assert "**`/gpd:write-paper [title or topic] [--from-phases 1,2,3]`**" in content
         assert "**`/gpd:arxiv-submission`**" in content
-        assert "LaTeX validation and compilation check" in content
+        assert "Drafts the manuscript and uses `gpd paper-build` for the canonical scaffold/build contract" in content
+        assert "Prepare a completed paper for arXiv submission with validation and packaging." in content
 
 
 def test_public_readme_quick_start_surfaces_step_one_entry_points() -> None:
@@ -693,13 +694,57 @@ def test_public_readme_and_bootstrap_surface_optional_workflow_add_on_guidance()
     assert "The first supported workflow preset is paper/manuscript workflows" in readme
     assert "preview one bundle before choosing it" in readme
     assert "gpd presets apply <preset> --dry-run" in readme
-    assert "check runtime-local LaTeX preset readiness on this machine" in readme
+    assert "check runtime-local paper-toolchain readiness on this machine" in readme
     assert "Missing preset tooling degrades that preset; it does not block the base GPD install." in readme
+    assert "check runtime-local paper-toolchain readiness before relying on `write-paper`, `paper-build`, `peer-review`, or `arxiv-submission`" in readme
+    assert "`write-paper` remains usable when readiness is degraded, but `paper-build` defines the manuscript build contract" in readme
     assert "Workflow presets: if you plan paper/manuscript workflows, rerun " in installer
     assert "Use `gpd doctor` for install/readiness checks and `gpd permissions status` for runtime-owned permission alignment." in installer
     assert "check whether `Workflow Presets` is `ready` or `degraded`." in installer
     assert "Without LaTeX, the paper/manuscript and full research presets remain usable for `write-paper` and `peer-review`" in installer
     assert "`paper-build` and `arxiv-submission` require the `LaTeX Toolchain`." in installer
+
+
+def test_public_paper_toolchain_capability_model_stays_consistent_across_surfaces() -> None:
+    repo_root = _repo_root()
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    help_command = (repo_root / "src/gpd/commands/help.md").read_text(encoding="utf-8")
+    help_workflow = (repo_root / "src/gpd/specs/workflows/help.md").read_text(encoding="utf-8")
+    installer = (repo_root / "bin/install.js").read_text(encoding="utf-8")
+
+    readme_readiness_snippet = (
+        "Use `gpd doctor` for the selected install target and runtime-local readiness signals; "
+        "use `gpd permissions ...` for runtime-owned approval/alignment only."
+    )
+    help_readiness_snippet = (
+        "`gpd doctor` checks the selected install target and runtime-local readiness signals; "
+        "`gpd permissions ...` checks runtime-owned approval/alignment only."
+    )
+    readme_preset_snippet = "Workflow presets are workflow-specific extra capabilities that sit on top of the base install."
+    readme_preset_degrade_snippet = "Missing preset tooling degrades that preset; it does not block the base GPD install."
+    help_preset_snippet = "Paper/manuscript workflows"
+    help_preset_degrade_snippet = (
+        "Check runtime-local paper-toolchain readiness from your normal terminal before using that preset; "
+        "failed preset rows degrade `write-paper`, but `paper-build` remains the build contract and "
+        "`arxiv-submission` requires the built manuscript"
+    )
+    installer_readiness_snippet = (
+        "Use `gpd doctor` for install/readiness checks and `gpd permissions status` for runtime-owned permission alignment."
+    )
+    assert readme_readiness_snippet in readme
+    for content in (help_command, help_workflow):
+        assert help_readiness_snippet in content
+    assert installer_readiness_snippet in installer
+    assert readme_preset_snippet in readme
+    assert readme_preset_degrade_snippet in readme
+    for content in (help_command, help_workflow):
+        assert help_preset_snippet in content
+        assert help_preset_degrade_snippet in content
+        assert "gpd doctor --runtime <runtime> --local|--global" in content
+    assert "Workflow presets: if you plan paper/manuscript workflows, rerun " in installer
+    assert "check whether `Workflow Presets` is `ready` or `degraded`." in installer
+    assert "Without LaTeX, the paper/manuscript and full research presets remain usable for `write-paper` and `peer-review`" in installer
+    assert "but `paper-build` and `arxiv-submission` require the `LaTeX Toolchain`." in installer
 
 
 def test_public_readme_keeps_bootstrap_prerequisites_and_runtime_doctor_scopes_distinct() -> None:
@@ -775,7 +820,11 @@ def test_public_help_surfaces_keep_settings_as_guided_post_startup_path() -> Non
         assert "gpd --help" in content
         assert "gpd permissions status --runtime <runtime> --autonomy balanced" in content
         assert "gpd permissions sync --runtime <runtime> --autonomy balanced" in content
-        assert "failed preset rows degrade that workflow rather than blocking the base install" in content
+        assert (
+            "Check runtime-local paper-toolchain readiness from your normal terminal before using that preset; "
+            "failed preset rows degrade `write-paper`, but `paper-build` remains the build contract and "
+            "`arxiv-submission` requires the built manuscript"
+        ) in content
         assert "gpd observe execution" in content
         assert "The bootstrap installer owns Node.js / Python / `venv` prerequisites." in content
 

@@ -633,6 +633,22 @@ def test_publication_commands_accept_documented_manuscript_layouts() -> None:
     assert 'find . -name "main.tex"' not in arxiv
 
 
+def test_write_paper_and_arxiv_submission_keep_the_build_boundary_explicit() -> None:
+    write_paper = (WORKFLOWS_DIR / "write-paper.md").read_text(encoding="utf-8")
+    arxiv = (WORKFLOWS_DIR / "arxiv-submission.md").read_text(encoding="utf-8")
+
+    assert 'gpd paper-build "${PAPER_DIR}/PAPER-CONFIG.json" --output-dir "${PAPER_DIR}"' in write_paper
+    assert "This emits `${PAPER_DIR}/main.tex`, writes the artifact manifest" in write_paper
+    assert (
+        "The workflow continues without local compilation smoke checks — .tex file generation does not require "
+        "pdflatex, and `gpd paper-build` remains the canonical manuscript scaffold contract."
+    ) in write_paper
+    assert 'gpd paper-build "${PAPER_DIR}/PAPER-CONFIG.json" --output-dir "${PAPER_DIR}"' in arxiv
+    assert "WARNING: pdflatex is not available, so local compilation smoke checks will be skipped." in arxiv
+    assert "The paper-build artifact contract still allows packaging to continue." in arxiv
+    assert "Do not treat manual `pdflatex` runs as the source of build truth." in arxiv
+
+
 def test_remove_phase_workflow_stages_checkpoint_shelf_updates() -> None:
     workflow = (WORKFLOWS_DIR / "remove-phase.md").read_text(encoding="utf-8")
 

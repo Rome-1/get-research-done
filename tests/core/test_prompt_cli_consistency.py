@@ -202,7 +202,7 @@ def test_help_prompt_keeps_workflow_preset_readiness_on_local_cli_surface() -> N
     assert "gpd presets list" in quick_start
     assert "gpd presets show <preset>" in quick_start
     assert "gpd presets apply <preset>" in quick_start
-    assert "runtime-local LaTeX preset readiness" in quick_start
+    assert "runtime-local paper-toolchain readiness" in quick_start
     for content in (help_command, help_workflow):
         assert (
             "Use `gpd --help` to inspect the executable local install/readiness/permissions/diagnostics surface directly."
@@ -216,7 +216,11 @@ def test_help_prompt_keeps_workflow_preset_readiness_on_local_cli_surface() -> N
         assert "gpd presets show <preset>" in content
         assert "gpd presets apply <preset>" in content
         assert "not stored as a separate preset block" in content
-        assert "failed preset rows degrade that workflow rather than blocking the base install" in content
+        assert (
+            "Check runtime-local paper-toolchain readiness from your normal terminal before using that preset; "
+            "failed preset rows degrade `write-paper`, but `paper-build` remains the build contract and "
+            "`arxiv-submission` requires the built manuscript"
+        ) in content
         assert "Workflow preset tooling is layered on top of the base install; it does not change runtime permission alignment." in content
 
 
@@ -437,7 +441,11 @@ def test_help_prompt_surfaces_workflow_presets_on_the_local_cli_surface() -> Non
         assert "gpd presets show <preset>" in content
         assert "gpd presets apply <preset>" in content
         assert "not stored as a separate preset block" in content
-        assert "failed preset rows degrade that workflow rather than blocking the base install" in content
+        assert (
+            "Check runtime-local paper-toolchain readiness from your normal terminal before using that preset; "
+            "failed preset rows degrade `write-paper`, but `paper-build` remains the build contract and "
+            "`arxiv-submission` requires the built manuscript"
+        ) in content
         assert "/gpd:settings" in content
         assert "/gpd:set-profile" in content
 
