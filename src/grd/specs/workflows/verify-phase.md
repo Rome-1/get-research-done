@@ -3,7 +3,7 @@ Verify research phase goal achievement through computational verification. Check
 
 Executed by a verification subagent spawned from execute-phase.md.
 
-Can also be invoked directly via `/grd:verify-work` for re-verification after manual fixes. When invoked standalone, the workflow runs identically but returns results to the user instead of to the execute-phase orchestrator.
+The standalone `/grd:verify-work` workflow reuses the same verification criteria through `verify-work.md`; this file itself is executed by the execute-phase orchestrator.
 </purpose>
 
 <core_principle>
@@ -33,10 +33,12 @@ Then verify each level against the actual research artifacts — **by doing phys
 </core_principle>
 
 <required_reading>
-@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/verification/core/verification-core.md
-@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/verification/core/verification-numerical.md
-@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/protocols/error-propagation-protocol.md
+@{GRD_INSTALL_DIR}/references/verification/core/verification-core.md
+@{GRD_INSTALL_DIR}/references/verification/core/verification-numerical.md
+@{GRD_INSTALL_DIR}/references/verification/meta/verification-independence.md
+@{GRD_INSTALL_DIR}/references/protocols/error-propagation-protocol.md
 @{GRD_INSTALL_DIR}/templates/verification-report.md
+@{GRD_INSTALL_DIR}/templates/contract-results-schema.md
 </required_reading>
 
 <process>
@@ -74,7 +76,7 @@ grep -E "^| ${phase_number}" .grd/REQUIREMENTS.md 2>/dev/null
 
 Extract **phase goal** from ROADMAP.md (the research outcome to verify, not tasks) and **requirements** from REQUIREMENTS.md if it exists.
 
-**Verification independence:** Load only what the verifier needs to judge results on their own merits. See @{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/verification/meta/verification-independence.md.
+**Verification independence:** Load only what the verifier needs to judge results on their own merits. See @{GRD_INSTALL_DIR}/references/verification/meta/verification-independence.md.
 
 **INCLUDE in verification context:**
 
@@ -87,13 +89,13 @@ Extract **phase goal** from ROADMAP.md (the research outcome to verify, not task
 **EXCLUDE from verification context:**
 
 - Full PLAN.md body (task breakdowns, implementation details)
-- SUMMARY.md files (what executors claimed they did)
+- Summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`) (what executors claimed they did)
 - Execution logs or agent conversation history
 
 Extract the contract target definition from frontmatter only:
 
 ```bash
-for plan in "$phase_dir"/*-PLAN.md; do
+for plan in "$phase_dir"/PLAN.md "$phase_dir"/*-PLAN.md; do
   grd frontmatter get "$plan" --field contract
 done
 ```
@@ -115,7 +117,7 @@ Treat these as separate verification obligations:
 - `forbidden_proxies` -> determine whether tempting but non-decisive substitutes were explicitly rejected
 
 If the phase depends on a decisive comparison (benchmark, prior work, experiment, cross-method, baseline), emit a `comparison_verdicts` entry in the report keyed to the relevant contract IDs. Missing or purely implicit comparison evidence keeps the supported target below VERIFIED. If the comparison was attempted but not closed, record that honestly with `verdict: inconclusive` or `verdict: tension` instead of omitting the entry.
-Before finalizing the check list, call `suggest_contract_checks(contract)` through the verification server and fold the returned contract-aware checks into the verification plan unless they are clearly inapplicable.
+Before finalizing the check list, call `suggest_contract_checks(contract)` through the verification server and fold the returned contract-aware checks into the verification plan unless they are clearly inapplicable. For each returned check, start from the `request_template`, satisfy the `required_request_fields`, use only the returned `supported_binding_fields` for bindings, and then execute `run_contract_check(request=...)` so the contract-aware check is actually run.
 
 **Option B: Derive contract-like targets from phase goal**
 
@@ -131,7 +133,7 @@ If no `contract` is available in frontmatter:
 
 **Important: every derived claim must be testable by substituting values, taking limits, or performing an independent computation. Outcomes that can only be checked by grepping are process claims, not verification targets.**
 
-If the plan contract is materially incomplete but the verifier can see an obvious decisive check that should exist, record it as a `suggested_contract_check` in the report rather than silently ignoring the gap.
+If the plan contract is materially incomplete but the verifier can see an obvious decisive check that should exist, record it as a structured `suggested_contract_checks` entry in the report rather than silently ignoring the gap.
 Record `suggested_contract_checks` only for clearly decisive, user-visible gaps. Do not use them for administrative preferences, nicer formatting, or generic paperwork. Every such entry must stay structured with `check`, `reason`, `suggested_subject_kind`, `suggested_subject_id` when known, and `evidence_path`.
 </step>
 
@@ -196,7 +198,7 @@ If the limits you compute do not match known results -> FAILED. If some supporti
 Use grd for initial artifact structural verification:
 
 ```bash
-for plan in "$phase_dir"/*-PLAN.md; do
+for plan in "$phase_dir"/PLAN.md "$phase_dir"/*-PLAN.md; do
   ARTIFACT_RESULT=$(grd verify artifacts "$plan")
   echo "=== $plan ===" && echo "$ARTIFACT_RESULT"
 done
@@ -439,7 +441,7 @@ For each numerical result, record:
   </step>
 
 <step name="scan_antipatterns">
-Extract files modified in this phase from SUMMARY.md, scan each:
+Extract files modified in this phase from summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`), scan each:
 
 | Pattern                    | Search                                                                | Severity |
 | -------------------------- | --------------------------------------------------------------------- | -------- |
@@ -458,22 +460,22 @@ Categorize: Blocker (prevents research goal) | Warning (incomplete) | Info (nota
 
 Skip this step if `phase_number` is the first phase (no prior phase to compare against).
 
-Otherwise, locate the previous phase's SUMMARY.md and read the current phase's SUMMARY.md:
+Otherwise, locate the previous phase's summary artifact and read the current phase's summary artifact:
 
 ```bash
 # Find previous phase summary (phase N-1)
 PREV_PHASE_DIR=$(ls -d .grd/phases/*/ | sort | grep -B1 "$phase_dir" | head -1)
-PREV_SUMMARY=$(ls "$PREV_PHASE_DIR"/*-SUMMARY.md 2>/dev/null | tail -1)
-CURR_SUMMARY=$(ls "$phase_dir"/*-SUMMARY.md 2>/dev/null | tail -1)
+PREV_SUMMARY=$(ls "$PREV_PHASE_DIR"/SUMMARY.md "$PREV_PHASE_DIR"/*-SUMMARY.md 2>/dev/null | tail -1)
+CURR_SUMMARY=$(ls "$phase_dir"/SUMMARY.md "$phase_dir"/*-SUMMARY.md 2>/dev/null | tail -1)
 ```
 
 If both summaries exist, check for cross-phase consistency by reading:
 
-1. **Current SUMMARY.md** — "Cross-Phase Dependencies" section (consumed results, convention changes)
-2. **Previous SUMMARY.md** — "Approximations Used" table and "Key Results" / "Equations Derived"
+1. **Current summary artifact** — "Cross-Phase Dependencies" section (consumed results, convention changes)
+2. **Previous summary artifact** — "Approximations Used" table and "Key Results" / "Equations Derived"
 3. **STATE.md** — "Active Approximations" table and "Convention Lock"
 
-Reference: @{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/verification/core/verification-core.md (+ relevant domain verification file)
+Reference: @{GRD_INSTALL_DIR}/references/verification/core/verification-core.md (+ relevant domain verification file)
 
 **Check the four most common cross-phase errors:**
 
@@ -506,7 +508,9 @@ Format each as: Check Name -> What to verify -> Expected result -> Why cannot ve
 
 **gaps_found:** Any decisive contract target FAILED, artifact MISSING/INCOMPLETE/INCORRECT, required comparison verdict missing/FAIL/TENSION without resolution, required reference action missing, forbidden proxy VIOLATED/UNRESOLVED, physics check NOT_PERFORMED/FAILED, blocker anti-pattern found, cross-phase blocker found, or an omitted decisive check is recorded in `suggested_contract_checks` without an equivalent closing check elsewhere.
 
-**human_needed:** All automated and computational checks pass but expert verification items remain.
+**expert_needed:** All automated and computational checks pass but domain-expert verification items remain.
+
+**human_needed:** All automated and computational checks pass but non-expert human review or user decision remains.
 
 **Score:** `verified_contract_targets / total_contract_targets`
 **Independently confirmed:** `independently_confirmed_checks / total_applicable_checks`
@@ -529,7 +533,7 @@ If gaps_found:
 REPORT_PATH="$phase_dir/${phase_number}-VERIFICATION.md"
 ```
 
-Fill template sections: frontmatter (phase/timestamp/status/score/plan_contract_ref/contract_results/comparison_verdicts/suggested_contract_checks/independently_confirmed), goal achievement, contract targets table, artifact table, computational verification details (spot-checks, limits re-derived, cross-checks, dimensional analysis traces), physics checks table, requirements coverage, anti-patterns, cross-phase consistency, expert verification, gaps summary with computation evidence, fix plans (if gaps_found), metadata. The contract targets table should read like a user-visible outcome ledger, not a workflow checklist.
+Fill template sections: frontmatter (phase/timestamp/status/score/plan_contract_ref/contract_results including `uncertainty_markers`/comparison_verdicts/suggested_contract_checks/independently_confirmed), goal achievement, contract targets table, artifact table, computational verification details (spot-checks, limits re-derived, cross-checks, dimensional analysis traces), physics checks table, requirements coverage, anti-patterns, cross-phase consistency, expert verification, gaps summary with computation evidence, fix plans (if gaps_found), metadata. The contract targets table should read like a user-visible outcome ledger, not a workflow checklist.
 
 If the verifier identifies a decisive check that the contract omitted but downstream work clearly depends on, record it under `suggested_contract_checks` with a reason and recommended evidence path. Do not hide this by marking the parent target VERIFIED; keep the target PARTIAL or FAILED until the missing decisive check is resolved or explicitly re-scoped.
 
@@ -543,7 +547,7 @@ Scan the written VERIFICATION.md for evidence of actual code execution:
 
 ```bash
 # Check for code output blocks in VERIFICATION.md
-VERIFICATION_FILE="${phase_dir}/${phase}-VERIFICATION.md"
+VERIFICATION_FILE="${phase_dir}/${phase_number}-VERIFICATION.md"
 if [ -f "$VERIFICATION_FILE" ]; then
   # Look for output blocks (```output or **Output:** followed by ```)
   HAS_OUTPUT=$(grep -cE '(^\*\*Output:?\*\*|^```(output|text)|computed=|PASS|FAIL|match=True|match=False)' "$VERIFICATION_FILE")
@@ -563,12 +567,13 @@ This gate enforces the principle that verification must involve external computa
 </step>
 
 <step name="return_to_orchestrator">
-Return status (`passed` | `gaps_found` | `human_needed`), score (N/M contract targets), independently confirmed count (K/M), report path.
+Return status (`passed` | `gaps_found` | `expert_needed` | `human_needed`), score (N/M contract targets), independently confirmed count (K/M), report path.
 
 If gaps_found: list gaps with contract IDs, computation evidence, comparison verdict failures or forbidden-proxy violations, and recommended fix plan names.
-If human_needed: list items requiring expert review with explanation of why computational verification was insufficient.
+If expert_needed: list items requiring expert review with explanation of why computational verification was insufficient.
+If human_needed: list items requiring non-expert human review with explanation of why computational verification was insufficient.
 
-Orchestrator routes: `passed` -> update_roadmap | `gaps_found` -> create/execute fixes, re-verify | `human_needed` -> present to researcher.
+Orchestrator routes: `passed` -> update_roadmap | `gaps_found` -> create/execute fixes, re-verify | `expert_needed` -> present to researcher/expert review | `human_needed` -> present to researcher.
 </step>
 
 </process>

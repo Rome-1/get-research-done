@@ -39,7 +39,7 @@ from grd.core.state import default_state_dict, generate_state_markdown
 
 def _setup_project(tmp_path: Path) -> Path:
     """Create a minimal GRD project structure and return project root."""
-    planning = tmp_path / ".grd"
+    planning = tmp_path / "GRD"
     planning.mkdir()
     (planning / "phases").mkdir()
     return tmp_path
@@ -47,14 +47,14 @@ def _setup_project(tmp_path: Path) -> Path:
 
 def _create_phase_dir(tmp_path: Path, name: str) -> Path:
     """Create a phase directory and return its path."""
-    phase_dir = tmp_path / ".grd" / "phases" / name
+    phase_dir = tmp_path / "GRD" / "phases" / name
     phase_dir.mkdir(parents=True, exist_ok=True)
     return phase_dir
 
 
 def _create_roadmap(tmp_path: Path, content: str) -> Path:
     """Write ROADMAP.md and return its path."""
-    roadmap = tmp_path / ".grd" / "ROADMAP.md"
+    roadmap = tmp_path / "GRD" / "ROADMAP.md"
     roadmap.parent.mkdir(parents=True, exist_ok=True)
     roadmap.write_text(textwrap.dedent(content))
     return roadmap
@@ -62,7 +62,7 @@ def _create_roadmap(tmp_path: Path, content: str) -> Path:
 
 def _create_state(tmp_path: Path, content: str) -> Path:
     """Write STATE.md and return its path."""
-    state = tmp_path / ".grd" / "STATE.md"
+    state = tmp_path / "GRD" / "STATE.md"
     state.parent.mkdir(parents=True, exist_ok=True)
     state.write_text(textwrap.dedent(content))
     return state
@@ -90,13 +90,13 @@ def test_find_phase_with_summary(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     phase_dir = _create_phase_dir(tmp_path, "02-compute")
     (phase_dir / "a-PLAN.md").write_text("plan")
-    (phase_dir / "a-SUMMARY.md").write_text("summary")
+    (phase_dir / "SUMMARY.md").write_text("summary")
 
     result = find_phase(tmp_path, "2")
     assert result is not None
     assert result.plans == ["a-PLAN.md"]
-    assert result.summaries == ["a-SUMMARY.md"]
-    assert result.incomplete_plans == []
+    assert result.summaries == ["SUMMARY.md"]
+    assert result.incomplete_plans == ["a-PLAN.md"]
 
 
 def test_find_phase_not_found(tmp_path: Path) -> None:
@@ -335,7 +335,7 @@ def test_phase_add(tmp_path: Path) -> None:
     assert "new-feature" in result.slug
     assert (tmp_path / result.directory).is_dir()
 
-    roadmap = (tmp_path / ".grd" / "ROADMAP.md").read_text()
+    roadmap = (tmp_path / "GRD" / "ROADMAP.md").read_text()
     assert "Phase 2: New Feature" in roadmap
 
 
@@ -374,10 +374,10 @@ def test_phase_add_leaves_state_files_unchanged_when_atomic_state_save_fails(
     state["position"]["status"] = "Ready to plan"
     state_md = generate_state_markdown(state)
     _create_state(tmp_path, state_md)
-    (tmp_path / ".grd" / "state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+    (tmp_path / "GRD" / "state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
 
-    before_md = (tmp_path / ".grd" / "STATE.md").read_text(encoding="utf-8")
-    before_json = (tmp_path / ".grd" / "state.json").read_text(encoding="utf-8")
+    before_md = (tmp_path / "GRD" / "STATE.md").read_text(encoding="utf-8")
+    before_json = (tmp_path / "GRD" / "state.json").read_text(encoding="utf-8")
 
     def _boom(_cwd: Path, _state_content: str) -> None:
         raise RuntimeError("sync exploded")
@@ -387,8 +387,8 @@ def test_phase_add_leaves_state_files_unchanged_when_atomic_state_save_fails(
     with pytest.raises(RuntimeError, match="sync exploded"):
         phase_add(tmp_path, "New Feature")
 
-    assert (tmp_path / ".grd" / "STATE.md").read_text(encoding="utf-8") == before_md
-    assert (tmp_path / ".grd" / "state.json").read_text(encoding="utf-8") == before_json
+    assert (tmp_path / "GRD" / "STATE.md").read_text(encoding="utf-8") == before_md
+    assert (tmp_path / "GRD" / "state.json").read_text(encoding="utf-8") == before_json
 
 
 # ─── phase_insert ────────────────────────────────────────────────────────────────
@@ -470,7 +470,7 @@ def test_phase_remove_basic(tmp_path: Path) -> None:
     assert result.removed == "2"
     assert result.roadmap_updated is True
 
-    roadmap = (tmp_path / ".grd" / "ROADMAP.md").read_text()
+    roadmap = (tmp_path / "GRD" / "ROADMAP.md").read_text()
     assert "Phase 2: Second" not in roadmap
 
 
@@ -497,7 +497,7 @@ def test_phase_remove_renumber_same_slug(tmp_path: Path) -> None:
         **Goal:** third
         """,
     )
-    phases_dir = tmp_path / ".grd" / "phases"
+    phases_dir = tmp_path / "GRD" / "phases"
     for i in range(1, 4):
         d = _create_phase_dir(tmp_path, f"{str(i).zfill(2)}-work")
         (d / f"{str(i).zfill(2)}-PLAN.md").write_text("plan")
@@ -531,7 +531,7 @@ def test_phase_remove_decimal_renumber_same_slug(tmp_path: Path) -> None:
         **Goal:** fix3
         """,
     )
-    phases_dir = tmp_path / ".grd" / "phases"
+    phases_dir = tmp_path / "GRD" / "phases"
     _create_phase_dir(tmp_path, "03-base")
     for i in range(1, 4):
         d = _create_phase_dir(tmp_path, f"03.{i}-fix")
@@ -549,7 +549,7 @@ def test_phase_remove_with_summaries_needs_force(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     _create_roadmap(tmp_path, "### Phase 1: X\n**Goal:** x\n")
     phase_dir = _create_phase_dir(tmp_path, "01-x")
-    (phase_dir / "a-SUMMARY.md").write_text("done")
+    (phase_dir / "SUMMARY.md").write_text("done")
 
     with pytest.raises(PhaseValidationError, match="force"):
         phase_remove(tmp_path, "1")
@@ -622,7 +622,7 @@ def test_phase_complete_uses_roadmap_for_unscaffolded_next_phase(tmp_path: Path)
     assert result.next_phase_name == "Build"
     assert result.is_last_phase is False
 
-    state = (tmp_path / ".grd" / "STATE.md").read_text()
+    state = (tmp_path / "GRD" / "STATE.md").read_text()
     assert "**Current Phase:** 02" in state
     assert "**Current Phase Name:** Build" in state
     assert "**Status:** Ready to plan" in state
@@ -740,14 +740,14 @@ def test_phase_remove_remaps_current_phase_state_after_renumbering(tmp_path: Pat
 
     phase_remove(tmp_path, "2")
 
-    state = (tmp_path / ".grd" / "STATE.md").read_text()
+    state = (tmp_path / "GRD" / "STATE.md").read_text()
     assert "**Current Phase:** 02" in state
     assert "**Current Phase Name:** Validation" in state
     assert "**Total Phases:** 2" in state
     assert "**Current Plan:** \u2014" in state
     assert "**Total Plans in Phase:** 1" in state
 
-    state_json = json.loads((tmp_path / ".grd" / "state.json").read_text())
+    state_json = json.loads((tmp_path / "GRD" / "state.json").read_text())
     assert state_json["position"]["current_phase"] == "02"
     assert state_json["position"]["current_phase_name"] == "Validation"
     assert state_json["position"]["total_phases"] == 2
@@ -793,7 +793,7 @@ def test_phase_remove_integer_renumbers_decimal_roadmap_references(tmp_path: Pat
 
     phase_remove(tmp_path, "1")
 
-    roadmap = (tmp_path / ".grd" / "ROADMAP.md").read_text()
+    roadmap = (tmp_path / "GRD" / "ROADMAP.md").read_text()
     assert "### Phase 1: Main" in roadmap
     assert "### Phase 1.1: Hotfix" in roadmap
     assert "- [ ] Phase 1.1: Hotfix" in roadmap
@@ -891,6 +891,27 @@ def test_phase_plan_index_rejects_scalar_dependency_fields(tmp_path: Path) -> No
     assert any("depends_on" in error for error in result.validation.errors)
 
 
+def test_phase_plan_index_detects_checkpoint_tasks_without_interactive_flag(tmp_path: Path) -> None:
+    _setup_project(tmp_path)
+    phase_dir = _create_phase_dir(tmp_path, "01-setup")
+    (phase_dir / "a-PLAN.md").write_text(
+        textwrap.dedent(
+            """\
+            ---
+            wave: 1
+            ---
+            <task type="checkpoint">
+              <name>Review the checkpoint</name>
+            </task>
+            """
+        )
+    )
+
+    result = phase_plan_index(tmp_path, "1")
+
+    assert result.has_checkpoints is True
+
+
 def test_validate_phase_waves_reports_malformed_frontmatter(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     phase_dir = _create_phase_dir(tmp_path, "01-setup")
@@ -946,7 +967,7 @@ def test_phase_complete_sets_current_plan_to_em_dash(tmp_path: Path) -> None:
 
     phase_complete(tmp_path, "1")
 
-    state = (tmp_path / ".grd" / "STATE.md").read_text()
+    state = (tmp_path / "GRD" / "STATE.md").read_text()
     assert "**Current Plan:** \u2014" in state
     assert "Not started" not in state
 

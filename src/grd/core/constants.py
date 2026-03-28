@@ -16,6 +16,7 @@ __all__ = [
     "ACTIVE_TRACE_FILENAME",
     "ANALYSIS_DIR_NAME",
     "AGENT_ID_FILENAME",
+    "CHECKPOINTS_FILENAME",
     "CONFIG_FILENAME",
     "CONTEXT_SUFFIX",
     "CONVENTIONS_FILENAME",
@@ -27,6 +28,7 @@ __all__ = [
     "ENV_GRD_DEBUG",
     "ENV_MAX_INCLUDE_CHARS",
     "ENV_PATTERNS_ROOT",
+    "HOME_DATA_DIR_NAME",
     "LITERATURE_DIR_NAME",
     "MILESTONES_DIR_NAME",
     "MILESTONES_FILENAME",
@@ -40,6 +42,7 @@ __all__ = [
     "PATTERNS_DIR_NAME",
     "PATTERNS_INDEX_FILENAME",
     "PHASES_DIR_NAME",
+    "PHASE_CHECKPOINTS_DIR_NAME",
     "PLANNING_DIR_NAME",
     "PLAN_SUFFIX",
     "PROJECT_FILENAME",
@@ -110,11 +113,17 @@ REQUIREMENTS_FILENAME = "REQUIREMENTS.md"
 MILESTONES_FILENAME = "MILESTONES.md"
 """Milestone tracking document."""
 
+CHECKPOINTS_FILENAME = "CHECKPOINTS.md"
+"""Generated human-facing checkpoint index under .grd/."""
+
 AGENT_ID_FILENAME = "current-agent-id.txt"
 """File storing the current agent's identifier for resume detection."""
 
 PHASES_DIR_NAME = "phases"
 """Subdirectory under .grd/ containing per-phase directories."""
+
+PHASE_CHECKPOINTS_DIR_NAME = "phase-checkpoints"
+"""Generated checkpoint shelf under .grd/ with one document per phase."""
 
 ANALYSIS_DIR_NAME = "analysis"
 """Subdirectory under .grd/ for internal analysis/provenance reports."""
@@ -133,6 +142,9 @@ OBSERVABILITY_CURRENT_SESSION_FILENAME = "current-session.json"
 
 OBSERVABILITY_CURRENT_EXECUTION_FILENAME = "current-execution.json"
 """Pointer to the latest active or resumable execution-state snapshot."""
+
+OBSERVABILITY_LAST_NOTIFY_FILENAME = "last-notify.json"
+"""Marker used by notify hooks to suppress duplicate execution notifications."""
 
 MILESTONES_DIR_NAME = "milestones"
 """Subdirectory under .grd/ for archived milestone snapshots."""
@@ -226,6 +238,9 @@ PATTERNS_INDEX_FILENAME = "index.json"
 
 PATTERNS_BY_DOMAIN_DIR = "patterns-by-domain"
 """Subdirectory containing domain-organized pattern files."""
+
+HOME_DATA_DIR_NAME = ".grd"
+"""Hidden home-directory data root for cross-project caches and managed runtime state."""
 
 
 # ─── Environment Variable Names ──────────────────────────────────────────────
@@ -323,16 +338,16 @@ class ProjectLayout:
     """Configurable project directory structure.
 
     Centralizes ALL path construction for a GRD project so that no module
-    needs to hardcode ``".grd"`` or filename strings.  Every path-
+    needs to hardcode ``"GRD"`` or filename strings.  Every path-
     producing helper in state.py, phases.py, health.py, trace.py, config.py,
     and query.py should delegate to an instance of this class.
 
     Example::
 
         layout = ProjectLayout(project_root)
-        state_json = layout.state_json        # project_root / ".grd" / "state.json"
-        traces      = layout.traces_dir              # project_root / ".grd" / "traces"
-        sessions    = layout.observability_sessions_dir  # project_root / ".grd" / "observability" / "sessions"
+        state_json = layout.state_json        # project_root / "GRD" / "state.json"
+        traces      = layout.traces_dir              # project_root / "GRD" / "traces"
+        sessions    = layout.observability_sessions_dir  # project_root / "GRD" / "observability" / "sessions"
         current_obs = layout.current_observability_session
         phase_dir   = layout.phase_dir("01-setup")
     """
@@ -390,6 +405,10 @@ class ProjectLayout:
         return self.grd / MILESTONES_FILENAME
 
     @property
+    def checkpoints_md(self) -> Path:
+        return self.grd / CHECKPOINTS_FILENAME
+
+    @property
     def agent_id_file(self) -> Path:
         return self.grd / AGENT_ID_FILENAME
 
@@ -398,6 +417,10 @@ class ProjectLayout:
     @property
     def phases_dir(self) -> Path:
         return self.grd / PHASES_DIR_NAME
+
+    @property
+    def phase_checkpoints_dir(self) -> Path:
+        return self.grd / PHASE_CHECKPOINTS_DIR_NAME
 
     @property
     def analysis_dir(self) -> Path:
@@ -422,6 +445,10 @@ class ProjectLayout:
     @property
     def current_observability_execution(self) -> Path:
         return self.observability_dir / OBSERVABILITY_CURRENT_EXECUTION_FILENAME
+
+    @property
+    def last_observability_notification(self) -> Path:
+        return self.observability_dir / OBSERVABILITY_LAST_NOTIFY_FILENAME
 
     @property
     def milestones_dir(self) -> Path:
@@ -457,6 +484,10 @@ class ProjectLayout:
     def phase_dir(self, phase_name: str) -> Path:
         """Return path to a specific phase directory."""
         return self.phases_dir / phase_name
+
+    def phase_checkpoint_file(self, phase_name: str) -> Path:
+        """Return the generated checkpoint note path for a phase directory."""
+        return self.phase_checkpoints_dir / f"{phase_name}.md"
 
     def trace_file(self, phase: str, plan: str) -> Path:
         """Return path to a trace JSONL file for a given phase+plan."""

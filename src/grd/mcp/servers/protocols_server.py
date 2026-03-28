@@ -1,9 +1,7 @@
-"""GRD Protocols MCP server — exposes domain computation protocols via MCP tools.
+"""GRD Protocols MCP server — exposes physics computation protocols via MCP tools.
 
-Loads protocol files from the active domain pack's protocols directory, parses
-YAML frontmatter and markdown body, and serves them via FastMCP tools.
-
-Set GRD_DOMAIN env var to select a domain pack (default: "physics").
+Loads protocol files from specs/references/protocols/, parses YAML frontmatter
+and markdown body, and serves them via FastMCP tools.
 
 Entry point: python -m grd.mcp.servers.protocols_server
 Console script: grd-mcp-protocols
@@ -18,11 +16,19 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from grd.core.observability import grd_span
-from grd.mcp.servers import parse_frontmatter_safe, run_mcp_server
+from grd.mcp.servers import (
+    parse_frontmatter_safe,
+    run_mcp_server,
+    stable_mcp_error,
+    stable_mcp_response,
+)
+from grd.specs import SPECS_DIR
 
 # MCP stdio uses stdout for JSON-RPC — redirect logging to stderr
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(name)s %(levelname)s: %(message)s")
 logger = logging.getLogger("grd-protocols")
+
+PROTOCOLS_DIR = SPECS_DIR / "references" / "protocols"
 
 # ---------------------------------------------------------------------------
 # Parsing
@@ -298,25 +304,6 @@ _store: ProtocolStore | None = None
 _store_lock = threading.Lock()
 
 
-def _resolve_protocols_dir() -> Path:
-    """Resolve the protocols directory from the active domain pack."""
-    import os
-
-    domain_name = os.environ.get("GRD_DOMAIN", "physics")
-    try:
-        from grd.domains.loader import load_domain
-
-        ctx = load_domain(domain_name)
-        if ctx is not None:
-            pdir = ctx.protocols_dir
-            if pdir.is_dir() and any(pdir.glob("*.md")):
-                return pdir
-    except Exception:  # noqa: BLE001
-        pass
-    logger.warning("No protocols directory found for domain '%s'", domain_name)
-    return Path(__file__).resolve().parent.parent.parent / "domains" / "physics" / "protocols"
-
-
 def _get_store() -> ProtocolStore:
     """Return the lazily-initialised protocol store (thread-safe)."""
     global _store  # noqa: PLW0603
@@ -324,7 +311,7 @@ def _get_store() -> ProtocolStore:
         return _store
     with _store_lock:
         if _store is None:
-            _store = ProtocolStore(_resolve_protocols_dir())
+            _store = ProtocolStore(PROTOCOLS_DIR)
         return _store
 
 
@@ -333,7 +320,7 @@ mcp = FastMCP("grd-protocols")
 
 @mcp.tool()
 def get_protocol(name: str) -> dict[str, object]:
-    """Get a computation protocol by name.
+    """Get a physics computation protocol by name.
 
     Returns the full protocol content including steps, checkpoints,
     and the raw markdown body.
@@ -343,27 +330,32 @@ def get_protocol(name: str) -> dict[str, object]:
               Use the stem of the .md filename without extension.
     """
     with grd_span("mcp.protocols.get", protocol_name=name):
-        store = _get_store()
-        protocol = store.get(name)
-        if protocol is None:
-            available = [str(p["name"]) for p in store.list_all()]
-            return {"error": f"Protocol '{name}' not found", "available": available}
-        return {
-            "name": protocol["name"],
-            "title": protocol["title"],
-            "domain": protocol["domain"],
-            "tier": protocol["tier"],
-            "context_cost": protocol["context_cost"],
-            "load_when": protocol["load_when"],
-            "steps": protocol["steps"],
-            "checkpoints": protocol["checkpoints"],
-            "content": protocol["body"],
-        }
+        try:
+            store = _get_store()
+            protocol = store.get(name)
+            if protocol is None:
+                available = [str(p["name"]) for p in store.list_all()]
+                return stable_mcp_response({"available": available}, error=f"Protocol '{name}' not found")
+            return stable_mcp_response(
+                {
+                    "name": protocol["name"],
+                    "title": protocol["title"],
+                    "domain": protocol["domain"],
+                    "tier": protocol["tier"],
+                    "context_cost": protocol["context_cost"],
+                    "load_when": protocol["load_when"],
+                    "steps": protocol["steps"],
+                    "checkpoints": protocol["checkpoints"],
+                    "content": protocol["body"],
+                }
+            )
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
 
 @mcp.tool()
 def list_protocols(domain: str | None = None) -> dict[str, object]:
-    """List available computation protocols.
+    """List available physics computation protocols.
 
     Args:
         domain: Optional domain filter. Available domains include:
@@ -372,13 +364,18 @@ def list_protocols(domain: str | None = None) -> dict[str, object]:
                 "quantum_info", "condensed_matter", "general".
     """
     with grd_span("mcp.protocols.list", domain=domain or "all"):
-        store = _get_store()
-        protocols = store.list_all(domain)
-        return {
-            "count": len(protocols),
-            "protocols": protocols,
-            "available_domains": store.domains,
-        }
+        try:
+            store = _get_store()
+            protocols = store.list_all(domain)
+            return stable_mcp_response(
+                {
+                    "count": len(protocols),
+                    "protocols": protocols,
+                    "available_domains": store.domains,
+                }
+            )
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
 
 @mcp.tool()
@@ -393,13 +390,18 @@ def route_protocol(computation_type: str) -> dict[str, object]:
                          calculation of vacuum polarization at one loop").
     """
     with grd_span("mcp.protocols.route"):
-        store = _get_store()
-        matches = store.route(computation_type)
-        return {
-            "query": computation_type,
-            "match_count": len(matches),
-            "protocols": matches[:10],  # Top 10 matches
-        }
+        try:
+            store = _get_store()
+            matches = store.route(computation_type)
+            return stable_mcp_response(
+                {
+                    "query": computation_type,
+                    "match_count": len(matches),
+                    "protocols": matches[:10],  # Top 10 matches
+                }
+            )
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
 
 @mcp.tool()
@@ -413,17 +415,22 @@ def get_protocol_checkpoints(name: str) -> dict[str, object]:
         name: Protocol name (e.g., "perturbation-theory").
     """
     with grd_span("mcp.protocols.checkpoints", protocol_name=name):
-        store = _get_store()
-        protocol = store.get(name)
-        if protocol is None:
-            available = [str(p["name"]) for p in store.list_all()]
-            return {"error": f"Protocol '{name}' not found", "available": available}
-        return {
-            "name": protocol["name"],
-            "title": protocol["title"],
-            "checkpoints": protocol["checkpoints"],
-            "checkpoint_count": len(protocol["checkpoints"]),
-        }
+        try:
+            store = _get_store()
+            protocol = store.get(name)
+            if protocol is None:
+                available = [str(p["name"]) for p in store.list_all()]
+                return stable_mcp_response({"available": available}, error=f"Protocol '{name}' not found")
+            return stable_mcp_response(
+                {
+                    "name": protocol["name"],
+                    "title": protocol["title"],
+                    "checkpoints": protocol["checkpoints"],
+                    "checkpoint_count": len(protocol["checkpoints"]),
+                }
+            )
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
 
 # ---------------------------------------------------------------------------

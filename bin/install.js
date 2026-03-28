@@ -28,12 +28,15 @@ const RUNTIME_CATALOG = require("../src/grd/adapters/runtime_catalog.json");
 
 const pythonPackageVersion = typeof rawPythonPackageVersion === "string" ? rawPythonPackageVersion.trim() : "";
 const GRD_HOME_ENV = "GRD_HOME";
-const GRD_HOME_DIRNAME = ".grd";
+const GRD_HOME_DIRNAME = "GRD";
 const GITHUB_MAIN_BRANCH = "main";
 const BOOTSTRAP_TEST_PROBES_ENV = "GRD_BOOTSTRAP_TEST_PROBES";
 const BOOTSTRAP_DISABLE_NETWORK_PROBES_ENV = "GRD_BOOTSTRAP_DISABLE_NETWORK_PROBES";
 const INSTALL_CANDIDATE_PROBE_TIMEOUT_MS = 5000;
 const INSTALL_CANDIDATE_PROBE_REDIRECT_LIMIT = 5;
+const MIN_SUPPORTED_PYTHON_MAJOR = 3;
+const MIN_SUPPORTED_PYTHON_MINOR = 11;
+const PREFERRED_VERSIONED_PYTHON_MINORS = [13, 12, 11];
 
 const red = "\x1b[31m";
 const green = "\x1b[32m";
@@ -129,13 +132,28 @@ function pythonVersionInfo(python) {
   };
 }
 
+function isSupportedPython(info) {
+  if (!info) {
+    return false;
+  }
+  return info.major > MIN_SUPPORTED_PYTHON_MAJOR
+    || (info.major === MIN_SUPPORTED_PYTHON_MAJOR && info.minor >= MIN_SUPPORTED_PYTHON_MINOR);
+}
+
+function preferredPythonCommands() {
+  return [
+    ...PREFERRED_VERSIONED_PYTHON_MINORS.map((minor) => `python3.${minor}`),
+    "python3",
+    "python",
+  ];
+}
+
 function checkPython() {
-  for (const cmd of ["python3", "python"]) {
+  // Prefer explicit, known-good minor versions before generic aliases so a
+  // too-new `python3` does not mask an installed compatible interpreter.
+  for (const cmd of preferredPythonCommands()) {
     const info = pythonVersionInfo(cmd);
-    if (!info) {
-      continue;
-    }
-    if (info.major > 3 || (info.major === 3 && info.minor >= 11)) {
+    if (isSupportedPython(info)) {
       return info;
     }
   }
@@ -551,9 +569,16 @@ function ensureManagedEnvironment(basePython) {
   let shouldCreate = !existingManaged;
   if (
     existingManaged
-    && (existingManaged.major < 3 || (existingManaged.major === 3 && existingManaged.minor < 11))
+    && (
+      !isSupportedPython(existingManaged)
+      || existingManaged.major > basePython.major
+      || (existingManaged.major === basePython.major && existingManaged.minor > basePython.minor)
+    )
   ) {
-    log(`Recreating managed environment at ${venvDir} (found ${existingManaged.text}).`);
+    log(
+      `Recreating managed environment at ${venvDir} `
+      + `(found ${existingManaged.text}; switching to ${basePython.text}).`
+    );
     fs.rmSync(venvDir, { recursive: true, force: true });
     shouldCreate = true;
   }
@@ -704,6 +729,12 @@ function runtimeGlobalConfigDir(runtime) {
   throw new Error(`Unsupported config policy for runtime ${runtime}`);
 }
 
+function targetDirMatchesGlobal(runtime, targetDir) {
+  const resolvedTargetDir = path.resolve(expandTilde(targetDir));
+  const resolvedGlobalDir = path.resolve(expandTilde(runtimeGlobalConfigDir(runtime)));
+  return resolvedTargetDir === resolvedGlobalDir;
+}
+
 function formatDisplayPath(filePath) {
   const home = os.homedir().replace(/\\/g, "/");
   const normalized = String(filePath).replace(/\\/g, "/");
@@ -797,7 +828,7 @@ function printHelp() {
     console.log(` ${cyan}${flags}${reset}${padding}Select ${runtimeDisplayName(runtime)} only`);
   }
   console.log(` ${cyan}--all${reset}                  Select all supported runtimes`);
-  console.log(` ${cyan}--target-dir <path>${reset}    Override the runtime config directory (implies local scope)`);
+  console.log(` ${cyan}--target-dir <path>${reset}    Override the runtime config directory (defaults to local scope unless it resolves to the runtime's canonical global config dir)`);
   console.log(` ${cyan}--force-statusline${reset}     Replace an existing runtime statusline`);
   console.log(` ${cyan}-h, --help${reset}              Show this help message`);
   console.log("");
@@ -954,13 +985,11 @@ async function selectRuntimes(args, action = "install") {
   }
 
   if (!process.stdin.isTTY) {
-    if (action === "uninstall") {
-      error(`Specify a runtime with ${documentedRuntimeFlags().join("/")} or use --all when running --uninstall non-interactively.`);
-      process.exit(1);
-    }
-    const defaultRuntime = ALL_RUNTIMES[0];
-    warn(`Non-interactive terminal detected, defaulting to ${runtimeDisplayName(defaultRuntime)}.`);
-    return [defaultRuntime];
+    const mode = action === "uninstall" ? "--uninstall " : "";
+    error(
+      `Specify a runtime with ${documentedRuntimeFlags().join("/")} or use --all when running ${mode}non-interactively.`
+    );
+    process.exit(1);
   }
 
   const optionLabelWidth = Math.max(
@@ -999,7 +1028,13 @@ async function selectRuntimes(args, action = "install") {
 
 async function selectInstallScope(args, runtimes, targetDir, action = "install") {
   if (targetDir) {
-    return "local";
+    if (args.includes("--global") || args.includes("-g")) {
+      return "global";
+    }
+    if (args.includes("--local") || args.includes("-l")) {
+      return "local";
+    }
+    return targetDirMatchesGlobal(runtimes[0], targetDir) ? "global" : "local";
   }
   if (args.includes("--global") || args.includes("-g")) {
     return "global";
@@ -1009,12 +1044,9 @@ async function selectInstallScope(args, runtimes, targetDir, action = "install")
   }
 
   if (!process.stdin.isTTY) {
-    if (action === "uninstall") {
-      error("Specify --global or --local when running --uninstall non-interactively.");
-      process.exit(1);
-    }
-    warn("Non-interactive terminal detected, defaulting to global install.");
-    return "global";
+    const mode = action === "uninstall" ? "--uninstall " : "";
+    error(`Specify --global or --local when running ${mode}non-interactively.`);
+    process.exit(1);
   }
 
   const globalExample = formatLocationExample(runtimes, "global");
@@ -1066,6 +1098,7 @@ async function main() {
   const reinstallManagedPackage = args.includes("--reinstall");
   const upgradeManagedPackage = args.includes("--upgrade");
   const targetDir = parseTargetDirArg(args);
+  const parsedRuntimes = parseSelectedRuntimes(args);
 
   printBanner();
 
@@ -1099,8 +1132,8 @@ async function main() {
     error("Cannot combine --uninstall with --force-statusline.");
     process.exit(1);
   }
-  if (targetDir && (args.includes("--global") || args.includes("-g"))) {
-    error("Cannot combine --target-dir with --global. Use --local semantics for explicit target directories.");
+  if (targetDir && parsedRuntimes.length === 0 && !process.stdin.isTTY) {
+    error(`Specify exactly one runtime with ${documentedRuntimeFlags().join("/")} when using --target-dir non-interactively.`);
     process.exit(1);
   }
 

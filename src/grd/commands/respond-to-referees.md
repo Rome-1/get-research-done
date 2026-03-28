@@ -1,7 +1,7 @@
 ---
 name: grd:respond-to-referees
 description: Structure a point-by-point response to referee reports and update the manuscript
-argument-hint: "[path to referee report or paste inline]"
+argument-hint: "[path to referee report or 'paste']"
 context_mode: project-required
 requires:
   files: ["paper/*.tex", "manuscript/*.tex", "draft/*.tex"]
@@ -9,22 +9,25 @@ review-contract:
   review_mode: publication
   schema_version: 1
   required_outputs:
-    - ".grd/paper/REFEREE_RESPONSE.md"
-    - ".grd/AUTHOR-RESPONSE.md"
+    - ".grd/paper/REFEREE_RESPONSE{round_suffix}.md"
+    - ".grd/AUTHOR-RESPONSE{round_suffix}.md"
   required_evidence:
     - existing manuscript
     - structured referee issues
+    - referee report source when provided as a path
     - peer-review review ledger when available
     - peer-review decision artifacts when available
     - revision verification evidence
   blocking_conditions:
     - missing project state
     - missing manuscript
+    - missing referee report source when provided as a path
     - missing conventions
     - degraded review integrity
   preflight_checks:
     - project_state
     - manuscript
+    - referee_report_source
     - conventions
 allowed-tools:
   - file_read
@@ -60,10 +63,10 @@ Responding to referees is collaborative improvement: every comment, even an inco
 Referee report source: $ARGUMENTS (file path or "paste" for inline input)
 
 @.grd/STATE.md
-@.grd/AUTHOR-RESPONSE.md
-@.grd/paper/REFEREE_RESPONSE.md
-@.grd/review/REVIEW-LEDGER.json
-@.grd/review/REFEREE-DECISION.json
+@.grd/AUTHOR-RESPONSE{round_suffix}.md
+@.grd/paper/REFEREE_RESPONSE{round_suffix}.md
+@.grd/review/REVIEW-LEDGER{round_suffix}.json
+@.grd/review/REFEREE-DECISION{round_suffix}.json
 
 Check for existing paper and prior response files:
 
@@ -78,14 +81,14 @@ ls .grd/review/REVIEW-LEDGER*.json .grd/review/REFEREE-DECISION*.json 2>/dev/nul
 
 <process>
 Execute the respond-to-referees workflow from @{GRD_INSTALL_DIR}/workflows/respond-to-referees.md end-to-end.
-If staged peer-review artifacts exist under `.grd/review/`, absorb them as structured decision context while keeping `REFEREE-REPORT*.md` as the canonical issue-ID source.
+If staged peer-review artifacts exist under `.grd/review/`, absorb them as structured decision context while keeping `.grd/REFEREE-REPORT{round_suffix}.md` as the canonical issue-ID source.
 Preserve all validation gates (report parsing, triage confirmation, compilation check, consistency verification, bounded revision loop).
 </process>
 
 <success_criteria>
 - [ ] Referee reports parsed and all comments categorized and prioritized
 - [ ] `.grd/review/REVIEW-LEDGER*.json` and `.grd/review/REFEREE-DECISION*.json` consumed when available
-- [ ] `.grd/AUTHOR-RESPONSE.md` and `.grd/paper/REFEREE_RESPONSE.md` created with complete point-by-point structure
+- [ ] `.grd/AUTHOR-RESPONSE{round_suffix}.md` and `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` created with complete point-by-point structure
 - [ ] Comments triaged into response-only, revision, and new calculation groups
 - [ ] All responses drafted and revisions applied via paper-writer agents
 - [ ] Revised manuscript compiles without errors

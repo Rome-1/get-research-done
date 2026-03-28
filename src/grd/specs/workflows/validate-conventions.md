@@ -1,5 +1,5 @@
 <purpose>
-Check convention consistency across all completed phases. Detects sign errors, notation drift, metric signature mismatches, and convention lock violations. Critical for catching errors that propagate silently across phases — a wrong sign convention in Phase 2 invalidates everything built on it.
+Check convention consistency across all completed phases with a scan-only audit. Detects sign errors, notation drift, metric signature mismatches, and convention lock violations. Critical for catching errors that propagate silently across phases — a wrong sign convention in Phase 2 invalidates everything built on it.
 </purpose>
 
 <required_reading>
@@ -106,8 +106,8 @@ ROADMAP=$(grd roadmap analyze)
 For each phase with `disk_status: "complete"` or `disk_status: "partial"`:
 
 ```bash
-# Extract conventions from SUMMARY.md frontmatter
-for SUMMARY in .grd/phases/${PHASE_DIR}/*-SUMMARY.md; do
+# Extract conventions from summary-artifact frontmatter
+for SUMMARY in .grd/phases/${PHASE_DIR}/*SUMMARY.md; do
   grd summary-extract "$SUMMARY" --field conventions --field affects
 done
 ```
@@ -193,7 +193,7 @@ task(
 
     Validate convention consistency across the entire project.
     Read conventions from state.json via: grd convention list
-    Read all SUMMARY.md files from all completed phases.
+    Read all summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`) from all completed phases.
     file_read: .grd/STATE.md, .grd/state.json, .grd/CONVENTIONS.md
 
     Focus on:
@@ -289,7 +289,7 @@ Resolve convention conflicts detected by validation.
 
 <project_context>
 file_read: .grd/CONVENTIONS.md, .grd/STATE.md, .grd/state.json
-file_read affected phase SUMMARY.md files.
+file_read affected phase summary artifacts.
 </project_context>
 
 <instructions>
@@ -315,7 +315,7 @@ file_read affected phase SUMMARY.md files.
 
 ```
 Recommended actions:
-1. /grd:regression-check {affected_phases} -- re-verify affected phases
+1. /grd:regression-check {affected_phases} -- re-scan affected phases
 2. /grd:debug -- investigate specific discrepancies
 3. Re-execute affected plans with corrected conventions
 ```
@@ -341,7 +341,7 @@ All conventions consistent across {count} phases. No issues found.
 <failure_handling>
 
 - **No convention lock:** Report that no conventions are locked. Suggest running `/grd:execute-phase` which locks conventions before parallel execution.
-- **No SUMMARY.md files:** Cannot validate — no phase data to check. Report and exit.
+- **No summary artifacts:** Cannot validate — no phase data to check. Report and exit.
 - **Consistency checker agent fails:** Fall back to the static analysis from steps 2-4 (convention lock drift + phase scan + cross-reference). Report that deep consistency check was skipped.
 - **CONVENTIONS.md missing:** Skip the drift check (step 2). Rely on convention lock in state.json as sole authority.
 
@@ -351,7 +351,7 @@ All conventions consistent across {count} phases. No issues found.
 
 - [ ] Convention lock loaded from state.json
 - [ ] CONVENTIONS.md compared against lock (if exists)
-- [ ] All completed phase SUMMARY.md files scanned for convention fields
+- [ ] All completed phase summary artifacts scanned for convention fields
 - [ ] Cross-reference performed: each phase convention vs project lock
 - [ ] Unlocked but used conventions identified
 - [ ] grd-consistency-checker spawned for deep validation

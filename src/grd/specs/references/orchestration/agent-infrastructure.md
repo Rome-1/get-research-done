@@ -254,7 +254,7 @@ grd state update "Current Plan" "<value>"
 grd result add --description "<result description>"
 
 # Advance / transition phase status
-grd state advance-plan
+grd state advance
 grd phase complete <phase-number>
 ```
 
@@ -293,7 +293,7 @@ Used by verifiers and orchestrators to validate research artifacts:
 # Verify plan structure (wave assignments, dependencies, frontmatter)
 grd verify plan <plan-file-path>
 
-# Verify phase completeness (all plans have SUMMARY.md)
+# Verify phase completeness (all plans have `*-SUMMARY.md`)
 grd verify phase <phase-number>
 
 # Verify cross-file references in a document
@@ -305,11 +305,11 @@ grd verify commits <hash1> [hash2] ...
 # Verify artifacts declared in a plan's contract-backed deliverables
 grd verify artifacts <plan-file-path>
 
-# Verify SUMMARY.md format and required fields
+# Verify `*-SUMMARY.md` format and required fields
 grd verify summary <summary-path>
 
 # Check for convention conflicts and verification regressions across phases
-grd regression-check [--quick]
+grd regression-check [phase] [--quick]
 
 # Validate wave assignments within a phase
 grd phase validate-waves <phase-number>

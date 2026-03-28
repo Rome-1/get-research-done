@@ -83,7 +83,7 @@ Error: Could not extract research context from the provided file.
 The file should contain at minimum:
 - A research question or objective
 
-It should ideally also name at least one decisive output, anchor, prior output, or explicit "anchor unknown / need grounding" note so any repair prompt can stay narrow.
+It should ideally also name at least one decisive output, anchor, prior output, or explicit "anchor unknown / need grounding / target not yet chosen" note so any repair prompt can stay narrow. Missing-anchor notes preserve uncertainty, but they do not satisfy approval on their own.
 
 Example structure:
   # Research Question
@@ -120,7 +120,8 @@ Build a canonical scoping contract from the extracted input.
 
 - Core question
 - At least one decisive output, claim, or deliverable
-- At least one anchor, reference/prior-output constraint, or an explicit "anchor unknown / must establish later" note
+- At least one concrete anchor, reference, prior-output constraint, or baseline
+- If the decisive anchor is still unknown, keep that blocker explicit in `scope.unresolved_questions`, `context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors` rather than inventing one
 
 **Fields to capture even if still uncertain:**
 
@@ -135,9 +136,10 @@ Build a canonical scoping contract from the extracted input.
 - Unresolved questions / context gaps
 
 **Preservation rule:** If the user names a specific observable, figure, dataset, derivation, paper, benchmark, notebook, prior run, or stop condition, keep that wording recognizable in the contract. Do not generalize it away into a vague proxy.
-If the user does not know the anchor yet, preserve that explicitly in `scope.unresolved_questions` or `context_intake.context_gaps` rather than inventing a paper, benchmark, or baseline.
-Prefer explicit missing-anchor wording such as `Which reference should serve as the decisive benchmark anchor?`, `Benchmark reference not yet selected`, `still to identify the decisive anchor`, or `baseline comparison is TBD`.
+If the user does not know the anchor yet, preserve that explicitly in `scope.unresolved_questions`, `context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors` rather than inventing a paper, benchmark, or baseline.
+Prefer explicit missing-anchor wording such as `Which reference should serve as the decisive benchmark anchor?`, `Benchmark reference not yet selected`, `need grounding before the decisive anchor is chosen`, `decisive target not yet chosen`, or `baseline comparison is TBD`.
 Do not force a phase list just to make the scoping contract look complete. If decomposition is still unclear, record that uncertainty and let `ROADMAP.md` start with a single coarse phase or first grounded investigation chunk.
+If the init JSON already contains `project_contract`, `project_contract_load_info`, or `project_contract_validation`, preserve that state in the approval gate and continuation decision. Do not collapse a visible-but-blocked contract into a blank slate when deciding whether this is a fresh project or a continuation.
 
 If a blocking field is missing, ask exactly one repair prompt that targets only the missing field. Do not silently continue with placeholders.
 
@@ -461,10 +463,14 @@ None yet.
 
 ## Session Continuity
 
-**Last session:** [today's date]
+**Last session:** [current ISO timestamp]
 **Stopped at:** Project initialized (minimal)
 **Resume file:** —
+**Hostname:** [current hostname]
+**Platform:** [current platform]
 ```
+
+Initialize matching continuity fields in `.grd/state.json.session` (`last_session`, `stopped_at`, `resume_file`, `hostname`, `platform`) so `/grd:resume-work` sees the same state when JSON is healthy.
 
 **config.json** — Create with sensible defaults (no config questions asked):
 
@@ -476,7 +482,9 @@ None yet.
     "review_cadence": "adaptive"
   },
   "parallelization": true,
-  "commit_docs": true,
+  "planning": {
+    "commit_docs": true
+  },
   "model_profile": "review",
   "workflow": {
     "research": true,
@@ -491,7 +499,7 @@ None yet.
 Create the directory structure and commit everything in a single commit:
 
 ```bash
-mkdir -p .grd
+mkdir -p GRD
 
 PRE_CHECK=$(grd pre-commit-check --files .grd/PROJECT.md .grd/REQUIREMENTS.md .grd/ROADMAP.md .grd/STATE.md .grd/state.json .grd/config.json 2>&1) || true
 echo "$PRE_CHECK"
@@ -531,17 +539,17 @@ were skipped. Use /grd:settings to adjust workflow preferences.
 Use ask_user:
 
 - header: "Next Step"
-- question: "Plan phase 1 now?"
+- question: "Discuss phase 1 now?"
 - options:
-  - "Plan phase 1" — Run /grd:plan-phase 1
+  - "Discuss phase 1" — Run /grd:discuss-phase 1
   - "Review artifacts first" — I want to check the generated files
   - "Done for now" — I'll continue later
 
-**If "Plan phase 1":** Tell the user to run `/grd:plan-phase 1` (and suggest `/clear` first for a fresh context window).
+**If "Discuss phase 1":** Tell the user to run `/grd:discuss-phase 1` (and suggest `/clear` first for a fresh context window).
 
 **If "Review artifacts first":** List the files and let the user inspect them. Suggest edits if needed, then re-offer planning.
 
-**If "Done for now":** Exit. Remind them to use `/grd:resume-work` or `/grd:plan-phase 1` when ready.
+**If "Done for now":** Exit. Remind them to use `/grd:resume-work` or `/grd:discuss-phase 1` when ready.
 
 ---
 
@@ -563,7 +571,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `project_exists`, `has_research_map`, `planning_exists`, `has_research_files`, `has_project_manifest`, `has_existing_project`, `needs_research_map`, `has_git`.
+Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `project_exists`, `has_research_map`, `planning_exists`, `has_research_files`, `has_project_manifest`, `has_existing_project`, `needs_research_map`, `has_git`, `project_contract`, `project_contract_load_info`, `project_contract_validation`.
 
 **Mode-aware behavior:**
 - `autonomy=supervised`: Pause for user confirmation after each major step (questioning, scoping contract, research, roadmap). Show summaries and wait for approval before proceeding.
@@ -654,6 +662,8 @@ Run `/grd:map-research` first, then return to `/grd:new-project`
 ```
 
 Exit command.
+
+If `project_contract` is present in the init JSON, keep `project_contract`, `project_contract_load_info`, and `project_contract_validation` visible while deciding whether this is fresh work or a continuation. Preserve blockers, warnings, and approval state rather than flattening them into a blank-slate prompt.
 
 **If "Skip mapping" OR `needs_research_map` is false:** Continue to Step 3.
 
@@ -751,7 +761,7 @@ When you could write a clear scoping contract, use ask_user:
 
 If "Keep exploring" — ask what they want to add, or identify gaps and probe naturally.
 
-Avoid rigid turn-counting. After several substantive exchanges, if you can state the core question, one decisive output or deliverable, and at least one anchor (or an explicit "anchor unknown" note), offer to proceed. If those blocking fields are still missing after roughly 6 follow-ups, summarize what is missing and ask whether to keep exploring or proceed with explicit open questions. A full phase breakdown is not required at this stage; if only the first grounded investigation chunk is clear, say so and carry later decomposition as an open question. Do not force closure just because a counter was hit, and do not imply certainty where there is still ambiguity.
+Avoid rigid turn-counting. After several substantive exchanges, if you can state the core question, one decisive output or deliverable, and at least one concrete anchor/reference/prior-output/baseline while keeping any still-missing decisive anchor explicit as an open question, offer to proceed. If those blocking fields are still missing after roughly 6 follow-ups, summarize what is missing and ask whether to keep exploring or proceed with explicit open questions. A full phase breakdown is not required at this stage; if only the first grounded investigation chunk is clear, say so and carry later decomposition as an open question. Do not force closure just because a counter was hit, and do not imply certainty where there is still ambiguity.
 If you only have limiting cases, sanity checks, or generic benchmark language with no decisive smoking-gun observable, curve, or benchmark reproduction, keep exploring unless the user explicitly says that is the decisive standard.
 
 ## 4. Synthesize The Approved Project Contract And Write PROJECT.md
@@ -780,6 +790,7 @@ Before writing `PROJECT.md`, synthesize a canonical project contract with at lea
 
 If no must-read references are confirmed yet, record that explicitly in the contract rather than inventing one.
 If the user does not know the anchor yet, record that explicitly as an unresolved question or context gap rather than fabricating a paper, dataset, benchmark, or baseline.
+Accepted shorthand like `need grounding` or `target not yet chosen` is fine when it clearly refers to the missing decisive anchor.
 If the user supplied explicit observables, deliverables, prior outputs, or stop conditions, preserve them in the contract using wording the user would still recognize. Do not paraphrase them into generic "benchmark" or "artifact" language unless the user asked you to broaden them.
 If the user named a prior output, review checkpoint, or "come back to me before continuing" condition, carry it into `context_intake.must_include_prior_outputs` or `context_intake.crucial_inputs` rather than leaving it only in prose.
 Do not approve a scoping contract that strips decisive outputs, anchors, prior outputs, or review/stop triggers down to generic placeholders. The approved contract must preserve the user guidance that downstream planning needs.
@@ -822,7 +833,7 @@ printf '%s\n' "$PROJECT_CONTRACT_JSON" | grd state set-project-contract -
 
 Do not write `/tmp` intermediates for the approved contract. Prefer piping the exact approved JSON directly to `grd ... -`. Only write a file if the user explicitly wants a durable saved copy, and if so place it under the project, not an OS temp directory.
 
-If `.grd/config.json` does not exist yet, run Step 5 now before generating or committing `PROJECT.md`. This keeps the opening focused on the physics question while still letting `commit_docs` and other durable workflow settings apply before the first project-artifact commit. After Step 5 completes, return here and continue.
+If `.grd/config.json` does not exist yet, run Step 5 now before generating or committing `PROJECT.md`. This keeps the opening focused on the physics question while still letting `planning.commit_docs` and other durable workflow settings apply before the first project-artifact commit. After Step 5 completes, return here and continue.
 
 Then synthesize all context into `.grd/PROJECT.md` using the template from `templates/project.md`.
 
@@ -985,7 +996,7 @@ Do not compress. Capture everything gathered.
 **Commit PROJECT.md:**
 
 ```bash
-mkdir -p .grd
+mkdir -p GRD
 
 PRE_CHECK=$(grd pre-commit-check --files .grd/PROJECT.md .grd/state.json 2>&1) || true
 echo "$PRE_CHECK"
@@ -1010,10 +1021,10 @@ Run this step after scope approval and before the first project-artifact commit 
 Use ask_user:
 
 - header: "Workflow Setup"
-- question: "How would you like to write `.grd/config.json`? Recommended defaults set `autonomy=balanced`, `research_mode=balanced`, `parallelization=true`, `commit_docs=true`, `model_profile=review`, and enable `workflow.research`, `workflow.plan_checker`, and `workflow.verifier`."
+- question: "How would you like to write `.grd/config.json`? Recommended defaults set `autonomy=balanced`, `research_mode=balanced`, `parallelization=true`, `planning.commit_docs=true`, `execution.review_cadence=adaptive`, `model_profile=review`, and enable `workflow.research`, `workflow.plan_checker`, and `workflow.verifier`. After writing config, also sync runtime permissions so yolo behaves correctly in the active runtime."
 - options:
   - "Use recommended defaults (Recommended)" — write those exact values now. Saves 3-5 minutes.
-  - "Customize settings" — choose `autonomy`, `research_mode`, `parallelization`, `commit_docs`, workflow agents, and `model_profile` individually
+  - "Customize settings" — choose `autonomy`, `research_mode`, `parallelization`, `planning.commit_docs`, `execution.review_cadence`, workflow agents, and `model_profile` individually
 
 **If "Use recommended defaults":** Skip all 8 config questions below. Create config.json directly with:
 
@@ -1022,7 +1033,12 @@ Use ask_user:
   "autonomy": "balanced",
   "research_mode": "balanced",
   "parallelization": true,
-  "commit_docs": true,
+  "planning": {
+    "commit_docs": true
+  },
+  "execution": {
+    "review_cadence": "adaptive"
+  },
   "model_profile": "review",
   "workflow": {
     "research": true,
@@ -1055,7 +1071,7 @@ questions: [
     multiSelect: false,
     options: [
       { label: "Balanced (Recommended)", description: "Routine work is automatic; pause on important physics decisions, ambiguities, blockers, or scope changes" },
-      { label: "YOLO", description: "Fastest mode. Auto-approve checkpoints and keep going unless a hard stop fires" },
+      { label: "YOLO", description: "Fastest mode. Auto-approve checkpoints, sync the active runtime to its most autonomous permission mode when supported, and keep going unless a hard stop fires" },
       { label: "Supervised", description: "Confirm each major step before proceeding" }
     ]
   },
@@ -1084,8 +1100,8 @@ questions: [
     question: "Commit planning docs to git?",
     multiSelect: false,
     options: [
-      { label: "Yes (Recommended)", description: "Planning docs tracked in version control" },
-      { label: "No", description: "Keep .grd/ local-only (add to .gitignore)" }
+      { label: "Yes (Recommended)", description: "Set planning.commit_docs=true so planning docs are tracked in version control" },
+      { label: "No", description: "Set planning.commit_docs=false and keep .grd/ local-only (add to .gitignore)" }
     ]
   }
 ]
@@ -1154,7 +1170,9 @@ Create `.grd/config.json` with all settings:
   "autonomy": "supervised|balanced|yolo",
   "research_mode": "explore|balanced|exploit|adaptive",
   "parallelization": true|false,
-  "commit_docs": true|false,
+  "planning": {
+    "commit_docs": true|false
+  },
   "model_profile": "deep-theory|numerical|exploratory|review|paper-writing",
   "workflow": {
     "research": true|false,
@@ -1164,14 +1182,29 @@ Create `.grd/config.json` with all settings:
 }
 ```
 
-**If commit_docs = No:**
+**If planning.commit_docs = No:**
 
-- Set `commit_docs: false` in config.json
+- Set `planning.commit_docs: false` in config.json
 - Add `.grd/` to `.gitignore` (create if needed)
 
-**If commit_docs = Yes:**
+**If planning.commit_docs = Yes:**
 
 - No additional gitignore entries needed
+
+**Sync runtime permissions after writing config.json:**
+
+Run this regardless of whether the user chose recommended defaults or custom settings. For `autonomy=yolo`, this should persist or prepare the runtime's most autonomous permission mode. For non-yolo autonomy, it should restore any earlier GRD-managed yolo override.
+
+```bash
+PERMISSIONS_SYNC=$(grd --raw permissions sync --autonomy "$SELECTED_AUTONOMY" 2>/dev/null || true)
+echo "$PERMISSIONS_SYNC"
+```
+
+Interpret the sync payload before continuing:
+
+- If `message` is present, summarize it in plain language.
+- If `requires_relaunch` is `true`, show `next_step` verbatim before moving on so the user knows whether the runtime must be restarted or relaunched through a generated command or wrapper.
+- If sync fails because no runtime install could be resolved, explain that the project config was still created successfully and the user can run `grd permissions sync --runtime <name>` later.
 
 **Commit config.json:**
 
@@ -1186,11 +1219,11 @@ grd commit "chore: add project config" --files .grd/config.json
 
 ```bash
 cat > .grd/init-progress.json << CHECKPOINT
-{"step": 5, "completed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "description": "config.json created and committed"}
+{"step": 5, "completed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "description": "config.json created, runtime permissions synced, and config committed"}
 CHECKPOINT
 ```
 
-**Note:** Run `/grd:settings` anytime to update these preferences.
+**Note:** Run `/grd:settings` anytime to update these preferences and re-sync runtime permissions.
 
 ## 5.5. Resolve Model Profile
 
@@ -1823,6 +1856,8 @@ Display stage banner:
 NOTATION_MODEL=$(grd resolve-model grd-notation-coordinator)
 ```
 
+If `NOTATION_MODEL` is empty or null, omit `model=` entirely in the spawn call. If it has a concrete value, include `model="$NOTATION_MODEL"`.
+
 Spawn grd-notation-coordinator:
 
 ```
@@ -1851,7 +1886,7 @@ Interactive mode: Present suggested conventions, wait for user confirmation/over
 2. Lock conventions via: grd convention set
 3. Return CONVENTIONS ESTABLISHED with summary
 </output>
-", subagent_type="grd-notation-coordinator", model="{notation_model}", readonly=false, description="Establish project conventions")
+", subagent_type="grd-notation-coordinator", readonly=false, description="Establish project conventions")
 ```
 
 **Handle notation-coordinator return:**

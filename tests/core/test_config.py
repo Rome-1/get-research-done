@@ -1,10 +1,12 @@
 """Tests for grd.core.config."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
 
+from grd.adapters.runtime_catalog import iter_runtime_descriptors
 from grd.core.config import (
     AGENT_DEFAULT_TIERS,
     MODEL_PROFILES,
@@ -22,6 +24,8 @@ from grd.core.config import (
     resolve_tier,
 )
 from grd.core.errors import ConfigError
+
+_RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
 
 # ─── Enum values ────────────────────────────────────────────────────────────────
 
@@ -116,14 +120,14 @@ class TestLoadConfig:
         assert cfg == GRDProjectConfig()
 
     def test_empty_object(self, tmp_path: Path):
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text("{}")
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text("{}")
         cfg = load_config(tmp_path)
         assert cfg.model_profile == ModelProfile.REVIEW
 
     def test_custom_values(self, tmp_path: Path):
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(
             json.dumps(
                 {
                     "model_profile": "deep-theory",
@@ -150,15 +154,15 @@ class TestLoadConfig:
         tmp_path: Path,
         invalid_value: str,
     ) -> None:
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(json.dumps({"autonomy": invalid_value}))
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(json.dumps({"autonomy": invalid_value}))
 
         with pytest.raises(ConfigError, match="Invalid config.json values"):
             load_config(tmp_path)
 
     def test_nested_section_fallback(self, tmp_path: Path):
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(
             json.dumps(
                 {
                     "planning": {"commit_docs": False},
@@ -186,8 +190,8 @@ class TestLoadConfig:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(json.dumps({"commit_docs": True}))
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(json.dumps({"commit_docs": True}))
         monkeypatch.setattr("grd.core.config._planning_dir_is_gitignored", lambda _: True)
 
         cfg = load_config(tmp_path)
@@ -195,14 +199,14 @@ class TestLoadConfig:
         assert cfg.commit_docs is False
 
     def test_malformed_json_raises(self, tmp_path: Path):
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text("{bad json")
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text("{bad json")
         with pytest.raises(ConfigError, match="Malformed config.json"):
             load_config(tmp_path)
 
     def test_physics_section_is_rejected_by_current_config_schema(self, tmp_path: Path) -> None:
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(
             json.dumps({"physics": {"unit_system": "natural"}}),
             encoding="utf-8",
         )
@@ -211,35 +215,33 @@ class TestLoadConfig:
             load_config(tmp_path)
 
     def test_model_overrides(self, tmp_path: Path):
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(
-            json.dumps(
-                {
-                    "model_overrides": {
-                        "codex": {"tier-1": "o3", "tier-2": "gpt-4.1"},
-                        "claude-code": {"tier-1": "opus"},
-                    },
-                }
-            )
+        (tmp_path / "GRD").mkdir()
+        overrides = {
+            descriptor.runtime_name: {"tier-1": f"{descriptor.runtime_name}-tier-1"}
+            for descriptor in _RUNTIME_DESCRIPTORS
+        }
+        (tmp_path / "GRD" / "config.json").write_text(
+            json.dumps({"model_overrides": overrides})
         )
         cfg = load_config(tmp_path)
-        assert cfg.model_overrides == {
-            "codex": {"tier-1": "o3", "tier-2": "gpt-4.1"},
-            "claude-code": {"tier-1": "opus"},
-        }
+        assert cfg.model_overrides == overrides
 
     def test_invalid_model_overrides_runtime_raises(self, tmp_path: Path):
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(
             json.dumps({"model_overrides": {"unknown-runtime": {"tier-1": "foo"}}})
         )
         with pytest.raises(ConfigError, match="model_overrides contains unknown runtime"):
             load_config(tmp_path)
 
     def test_invalid_model_overrides_tier_raises(self, tmp_path: Path):
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(json.dumps({"model_overrides": {"codex": {"tier-x": "foo"}}}))
-        with pytest.raises(ConfigError, match="model_overrides\\['codex'\\] contains unknown tier"):
+        runtime_name = _RUNTIME_DESCRIPTORS[0].runtime_name
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(
+            json.dumps({"model_overrides": {runtime_name: {"tier-x": "foo"}}})
+        )
+        expected_match = re.escape(f"model_overrides['{runtime_name}'] contains unknown tier")
+        with pytest.raises(ConfigError, match=expected_match):
             load_config(tmp_path)
 
     def test_model_overrides_runtime_lookup_failure_raises_config_error(
@@ -247,8 +249,11 @@ class TestLoadConfig:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(json.dumps({"model_overrides": {"codex": {"tier-1": "gpt-5"}}}))
+        runtime_name = _RUNTIME_DESCRIPTORS[0].runtime_name
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(
+            json.dumps({"model_overrides": {runtime_name: {"tier-1": "gpt-5.4"}}})
+        )
 
         _valid_runtime_names.cache_clear()
 
@@ -261,7 +266,6 @@ class TestLoadConfig:
             load_config(tmp_path)
 
         _valid_runtime_names.cache_clear()
-
 
 # ─── resolve_agent_tier ─────────────────────────────────────────────────────────
 
@@ -301,39 +305,48 @@ class TestResolveModel:
         model = resolve_model(tmp_path, "grd-planner")
         assert model is None
 
-    def test_with_runtime_specific_override(self, tmp_path: Path):
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(
+    @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+    def test_with_runtime_specific_override(self, tmp_path: Path, descriptor) -> None:
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(
             json.dumps(
                 {
                     "model_overrides": {
-                        "claude-code": {"tier-1": "opus"},
-                        "codex": {"tier-1": "gpt-5"},
+                        runtime_descriptor.runtime_name: {
+                            "tier-1": f"{runtime_descriptor.runtime_name}-tier-1"
+                        }
+                        for runtime_descriptor in _RUNTIME_DESCRIPTORS
                     },
                 }
             )
         )
-        model = resolve_model(tmp_path, "grd-planner", runtime="claude-code")
-        assert model == "opus"
+        model = resolve_model(tmp_path, "grd-planner", runtime=descriptor.runtime_name)
+        assert model == f"{descriptor.runtime_name}-tier-1"
 
-    def test_without_override_for_active_runtime_returns_none(self, tmp_path: Path):
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(
+    @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+    def test_without_override_for_active_runtime_returns_none(self, tmp_path: Path, descriptor) -> None:
+        foreign_descriptor = next(
+            candidate for candidate in _RUNTIME_DESCRIPTORS if candidate.runtime_name != descriptor.runtime_name
+        )
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(
             json.dumps(
                 {
                     "model_overrides": {
-                        "claude-code": {"tier-1": "opus"},
+                        foreign_descriptor.runtime_name: {"tier-1": f"{foreign_descriptor.runtime_name}-tier-1"}
                     }
                 }
             )
         )
-        model = resolve_model(tmp_path, "grd-planner", runtime="codex")
+        model = resolve_model(tmp_path, "grd-planner", runtime=descriptor.runtime_name)
         assert model is None
 
 
 class TestResolveTier:
     def test_project_resolve_tier_uses_profile(self, tmp_path: Path):
-        (tmp_path / ".grd").mkdir()
-        (tmp_path / ".grd" / "config.json").write_text(json.dumps({"model_profile": "paper-writing"}))
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(
+            json.dumps({"model_profile": "paper-writing"})
+        )
         tier = resolve_tier(tmp_path, "grd-project-researcher")
         assert tier == ModelTier.TIER_3

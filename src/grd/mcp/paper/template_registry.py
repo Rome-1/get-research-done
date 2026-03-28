@@ -14,7 +14,7 @@ from importlib.resources import files
 from jinja2 import BaseLoader, Environment, TemplateNotFound
 
 from grd.mcp.paper.models import Author, FigureRef, PaperConfig, Section
-from grd.utils.latex import clean_latex_fences, sanitize_latex
+from grd.utils.latex import clean_latex_fences, fix_bibliography_conflict, sanitize_latex
 
 logger = logging.getLogger(__name__)
 
@@ -110,5 +110,10 @@ def render_paper(config: PaperConfig) -> str:
 
     # Apply LaTeX sanitization as a safety net
     rendered = sanitize_latex(rendered)
+
+    # Fix conflicting bibliography styles: if the paper-writer agent injected
+    # inline \begin{thebibliography} entries, strip the template's
+    # \bibliographystyle and \bibliography commands which are incompatible.
+    rendered = fix_bibliography_conflict(rendered)
 
     return rendered

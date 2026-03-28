@@ -8,7 +8,6 @@ build/
 .venv/
 .env
 *.log
-.grd/
 .ruff_cache/
 .pytest_cache/
 .coverage

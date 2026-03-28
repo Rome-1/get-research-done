@@ -42,7 +42,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `planner_model`, `executor_model`, `commit_docs`, `autonomy`, `next_num`, `slug`, `date`, `timestamp`, `quick_dir`, `task_dir`, `roadmap_exists`, `planning_exists`, `project_contract`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`.
+Parse JSON for: `planner_model`, `executor_model`, `commit_docs`, `autonomy`, `next_num`, `slug`, `date`, `timestamp`, `quick_dir`, `task_dir`, `roadmap_exists`, `planning_exists`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`.
 
 **Mode-aware behavior:**
 - `autonomy=supervised`: Pause after the plan for user approval before execution.
@@ -52,7 +52,8 @@ Parse JSON for: `planner_model`, `executor_model`, `commit_docs`, `autonomy`, `n
 **If `planning_exists` is false:** Error -- Quick mode requires an initialized project with `.grd/`. Run `/grd:new-project` first.
 
 Quick tasks can run mid-phase and do NOT require ROADMAP.md. They only need `.grd/` to exist for directory structure.
-Quick mode still inherits the approved `project_contract` and active reference ledger. Do not bypass required anchors, baselines, or forbidden-proxy constraints just because the task is small.
+Quick mode still inherits the approved `project_contract` only when `project_contract_load_info` is clean and `project_contract_validation` passes, and it still inherits the active reference ledger. Do not bypass required anchors, baselines, or forbidden-proxy constraints just because the task is small.
+Before planning, also load `{GRD_INSTALL_DIR}/templates/planner-subagent-prompt.md`, `{GRD_INSTALL_DIR}/templates/phase-prompt.md`, and `{GRD_INSTALL_DIR}/templates/plan-contract-schema.md` so the canonical PLAN structure and contract rules are visible to the planner before it writes anything.
 
 ---
 
@@ -84,6 +85,8 @@ Spawn grd-planner with quick mode context:
 task(
   prompt="First, read {GRD_AGENTS_DIR}/grd-planner.md for your role and instructions.
 
+Then read {GRD_INSTALL_DIR}/templates/planner-subagent-prompt.md, {GRD_INSTALL_DIR}/templates/phase-prompt.md, and {GRD_INSTALL_DIR}/templates/plan-contract-schema.md before drafting the plan. Those files are the canonical sources for PLAN frontmatter and contract completeness.
+
 <planning_context>
 
 **Mode:** quick
@@ -94,6 +97,8 @@ task(
 Read the file at .grd/STATE.md
 
 **Project Contract:** {project_contract}
+**Project Contract Load Info:** {project_contract_load_info}
+**Project Contract Validation:** {project_contract_validation}
 **Effective Reference Intake:** {effective_reference_intake}
 **Active References:** {active_reference_context}
 **Reference Artifacts:** {reference_artifacts_content}
@@ -104,6 +109,7 @@ Read the file at .grd/STATE.md
 - Create a SINGLE plan with 1-3 focused tasks
 - Quick tasks should be atomic and self-contained
 - No literature review phase, no checker phase
+- If `project_contract_load_info.status` starts with `blocked` or `project_contract_validation.valid` is false, return `## CHECKPOINT REACHED` instead of drafting a plan from guessed scope.
 - Target ~30% context usage (simple, focused)
 </constraints>
 
@@ -145,6 +151,8 @@ Execute quick task ${next_num}.
 Plan: Read the file at ${QUICK_DIR}/${next_num}-PLAN.md
 Project state: Read the file at .grd/STATE.md
 Project contract: {project_contract}
+Project contract load info: {project_contract_load_info}
+Project contract validation: {project_contract_validation}
 Effective reference intake: {effective_reference_intake}
 Active references: {active_reference_context}
 Reference artifacts: {reference_artifacts_content}

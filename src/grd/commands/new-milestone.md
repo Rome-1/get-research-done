@@ -17,7 +17,7 @@ allowed-tools:
 <objective>
 Start a new research milestone: questioning → literature research (optional) → requirements → roadmap.
 
-Continuation equivalent of new-project. Research project exists, PROJECT.md has history. Gathers "what's next", updates PROJECT.md, then runs requirements → roadmap cycle.
+Continuation equivalent of new-project. Research project exists, PROJECT.md has history. Gathers "what's next", updates PROJECT.md, then runs requirements → roadmap cycle while honoring `planning.commit_docs` for milestone artifact commits.
 
 **Creates/Updates:**
 
@@ -88,7 +88,7 @@ All gates (validation, questioning, research, requirements, roadmap approval, co
 - [ ] Roadmap files written immediately (not draft)
 - [ ] User feedback incorporated (if any)
 - [ ] ROADMAP.md phases continue from previous milestone
-- [ ] All commits made (if planning docs committed)
+- [ ] All commits made when `planning.commit_docs` is true
 - [ ] User knows next step: `/grd:discuss-phase [N]`
 
 **Atomic commits:** Each phase commits its artifacts immediately.

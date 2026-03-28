@@ -7,7 +7,7 @@ The final section of this README keeps the full checked-in repository interdepen
 ## Repository Interdependency Graph
 
 <!-- repo-graph-generated-on:start -->
-Generated on `2026-03-25` from the current worktree.
+Generated on `2026-03-26` from the current worktree.
 <!-- repo-graph-generated-on:end -->
 
 ## Status
@@ -26,18 +26,17 @@ This graph therefore includes:
 
 <!-- repo-graph-scope:start -->
 
-- Live repo files analyzed in the current tree: `690`
-- Python files under `src/` and `tests/`: `219`
+- Live repo files analyzed in the current tree: `681`
+- Python files under `src/` and `tests/`: `241`
 - `src/grd/commands/*.md`: `61`
 - `src/grd/agents/*.md`: `23`
 - `src/grd/specs/workflows/*.md`: `62`
 - `src/grd/specs/templates/**/*.md`: `71`
-- `src/grd/specs/references/**/*.md`: `44`
-- `src/grd/domains/**/*.md`: `132`
+- `src/grd/specs/references/**/*.md`: `160`
 - `src/grd/adapters/*.py`: `9`
-- `src/grd/hooks/*.py`: `6`
+- `src/grd/hooks/*.py`: `7`
 - `src/grd/mcp/servers/*.py`: `8`
-- `tests/**` files: `138`
+- `tests/**` files: `170`
 - `infra/grd-*.json`: `8`
 
 Excluded as noise from node counting, but still modeled where contractually relevant:
@@ -113,6 +112,7 @@ flowchart TD
     cli --> adapters[src/grd/adapters/*.py]
     cli --> hooks[src/grd/hooks/*.py]
     cli --> paper[src/grd/mcp/paper/*.py]
+    cli --> checkpoints[src/grd/core/checkpoints.py]
     registry[src/grd/registry.py] --> commands[src/grd/commands/*.md]
     registry --> agents[src/grd/agents/*.md]
     commands --> workflows[src/grd/specs/workflows/*.md]
@@ -125,6 +125,7 @@ flowchart TD
     hooks --> workspace_state[external .grd/**]
     builtin[src/grd/mcp/builtin_servers.py] --> infra[infra/grd-*.json]
     paper --> paper_outputs[generated paper/build outputs]
+    checkpoints --> checkpoint_outputs[generated checkpoint outputs]
     tests[tests/**] --> cli
     tests --> core
     tests --> adapters
@@ -154,10 +155,10 @@ flowchart TD
 - `bin/install.js -> external Python package {get-research-done}`
   `external-package`
 
-- `bin/install.js -> GitHub tagged release source family {https://github.com/psi-oss/get-research-done/archive/refs/tags/v<version>.tar.gz, git+https://github.com/psi-oss/get-research-done.git@v<version>}`
+- `bin/install.js -> GitHub tagged release source family {https://github.com/Rome-1/get-research-done/archive/refs/tags/v<version>.tar.gz, git+https://github.com/Rome-1/get-research-done.git@v<version>}`
   `external-service`
 
-- `bin/install.js -> GitHub main-branch source family {https://github.com/psi-oss/get-research-done/archive/refs/heads/main.tar.gz, git+https://github.com/psi-oss/get-research-done.git@main}`
+- `bin/install.js -> GitHub main-branch source family {https://github.com/Rome-1/get-research-done/archive/refs/heads/main.tar.gz, git+https://github.com/Rome-1/get-research-done.git@main}`
   `external-service`
 
 - `bin/install.js -> tagged release install candidate chain {tag archive, https tag checkout}`
@@ -215,13 +216,13 @@ flowchart TD
   `authority`
   Locked dependency resolution surface for CI.
 
-- `.github/workflows/test.yml -> actions/checkout@v4`
+- `.github/workflows/test.yml -> actions/checkout@v5`
   `external-service`
 
-- `.github/workflows/test.yml -> actions/setup-python@v5`
+- `.github/workflows/test.yml -> actions/setup-python@v6`
   `external-service`
 
-- `.github/workflows/test.yml -> astral-sh/setup-uv@v4`
+- `.github/workflows/test.yml -> astral-sh/setup-uv@v7`
   `external-service`
 
 - `.github/pull_request_template.md -> src/**`
@@ -280,10 +281,10 @@ flowchart TD
 - `src/grd/cli.py -> candidate manuscript roots {paper/main.tex, manuscript/main.tex, draft/main.tex}`
   `ordering-contract`
 
-- `src/grd/cli.py -> peer-review manuscript candidate family {target/main.tex, target/main.md, lexicographically first direct *.tex/*.md fallback}`
+- `src/grd/cli.py -> peer-review manuscript candidate family {target/main.tex, target/main.md}`
   `candidate-set`
 
-- `src/grd/cli.py -> peer-review manuscript candidate family {target/main.tex, target/main.md, lexicographically first direct *.tex/*.md fallback}`
+- `src/grd/cli.py -> peer-review manuscript candidate family {target/main.tex, target/main.md}`
   `ordering-contract`
 
 - `src/grd/cli.py -> bibliography candidate family {config_path.parent, output_dir, <cwd>/references}/{<bib_stem>.bib}`
@@ -292,22 +293,22 @@ flowchart TD
 - `src/grd/cli.py -> bibliography candidate family {config_path.parent, output_dir, <cwd>/references}/{<bib_stem>.bib}`
   `ordering-contract`
 
-- `src/grd/cli.py -> strict review artifact manifest candidates {manuscript.parent/ARTIFACT-MANIFEST.json, <cwd>/.grd/paper/ARTIFACT-MANIFEST.json}`
+- `src/grd/cli.py -> strict review artifact manifest candidates {manuscript.parent/ARTIFACT-MANIFEST.json}`
   `candidate-set`
 
-- `src/grd/cli.py -> strict review artifact manifest candidates {manuscript.parent/ARTIFACT-MANIFEST.json, <cwd>/.grd/paper/ARTIFACT-MANIFEST.json}`
+- `src/grd/cli.py -> strict review artifact manifest candidates {manuscript.parent/ARTIFACT-MANIFEST.json}`
   `ordering-contract`
 
-- `src/grd/cli.py -> strict review bibliography audit candidates {manuscript.parent/BIBLIOGRAPHY-AUDIT.json, <cwd>/.grd/paper/BIBLIOGRAPHY-AUDIT.json}`
+- `src/grd/cli.py -> strict review bibliography audit candidates {manuscript.parent/BIBLIOGRAPHY-AUDIT.json}`
   `candidate-set`
 
-- `src/grd/cli.py -> strict review bibliography audit candidates {manuscript.parent/BIBLIOGRAPHY-AUDIT.json, <cwd>/.grd/paper/BIBLIOGRAPHY-AUDIT.json}`
+- `src/grd/cli.py -> strict review bibliography audit candidates {manuscript.parent/BIBLIOGRAPHY-AUDIT.json}`
   `ordering-contract`
 
-- `src/grd/cli.py -> strict review reproducibility manifest candidates {manuscript.parent/reproducibility-manifest.json, manuscript.parent/REPRODUCIBILITY-MANIFEST.json, <cwd>/.grd/paper/reproducibility-manifest.json}`
+- `src/grd/cli.py -> strict review reproducibility manifest candidates {manuscript.parent/reproducibility-manifest.json, manuscript.parent/REPRODUCIBILITY-MANIFEST.json}`
   `candidate-set`
 
-- `src/grd/cli.py -> strict review reproducibility manifest candidates {manuscript.parent/reproducibility-manifest.json, manuscript.parent/REPRODUCIBILITY-MANIFEST.json, <cwd>/.grd/paper/reproducibility-manifest.json}`
+- `src/grd/cli.py -> strict review reproducibility manifest candidates {manuscript.parent/reproducibility-manifest.json, manuscript.parent/REPRODUCIBILITY-MANIFEST.json}`
   `ordering-contract`
 
 - `src/grd/cli.py -> src/grd/core/patterns.py -> {GRD_PATTERNS_ROOT, GRD_DATA_DIR, ~/.grd/learned-patterns}`
@@ -336,6 +337,17 @@ flowchart TD
 - `src/grd/cli.py -> src/grd/mcp/paper/compiler.py`
   `hard-import`
 
+- `src/grd/cli.py::sync_phase_checkpoints -> src/grd/core/checkpoints.py::sync_phase_checkpoints`
+  `spawn`
+
+- `src/grd/core/phases.py -> src/grd/core/checkpoints.py::sync_phase_checkpoints`
+  `spawn`
+  `phases.py` also regenerates checkpoint artifacts after phase completion and cleanup.
+
+- `src/grd/core/checkpoints.py -> generated outputs {.grd/CHECKPOINTS.md, .grd/phase-checkpoints/*.md}`
+  `generated-output`
+  `sync-phase-checkpoints` materializes the internal checkpoint index plus one checkpoint note per phase directory.
+
 - `src/grd/core/state.py -> src/grd/contracts.py`
   `schema-contains`
   `ResearchState` contains `ConventionLock` and related typed state structures.
@@ -353,9 +365,15 @@ flowchart TD
 - `src/grd/core/state.py -> state.json.bak`
   `generated-output`
 
-- `src/grd/core/state.py -> <cwd>/.grd/state.intent`
+- `src/grd/core/state.py -> <cwd>/.grd/.state-write-intent`
   `generated-output`
   Dual-write recovery marker for interrupted `state.json` and `STATE.md` writes.
+
+- `src/grd/core/checkpoints.py -> <cwd>/.grd/CHECKPOINTS.md`
+  `generated-output`
+
+- `src/grd/core/checkpoints.py -> <cwd>/.grd/phase-checkpoints/*.md`
+  `generated-output`
 
 - `src/grd/core/results.py -> src/grd/contracts.py`
   `schema-contains`
@@ -461,6 +479,18 @@ flowchart TD
   `include`
   Explicit same-stem command-to-workflow includes are node-level edges, not just an aggregate count.
 
+- `src/grd/commands/help.md -> runtime slash-command surface contract {in-runtime `/grd:*` reference, local CLI distinction, `grd --help`, `grd validate command-context grd:<name>`}`
+  `behavior-contract`
+  Help must say these entries describe the in-runtime slash-command surface, not promise that every item is a direct local `grd` CLI subcommand.
+
+- `src/grd/commands/help.md -> src/grd/core/commands.py::cmd_regression_check`
+  `behavior-contract`
+  `/grd:regression-check` help must describe the implemented SUMMARY/VERIFICATION scan instead of claiming a full re-run of dimensional, limit, or numerical verification.
+
+- `src/grd/specs/workflows/help.md -> slash-command/local-CLI distinction and regression-check wording from src/grd/commands/help.md`
+  `parity`
+  Command and workflow help surfaces should stay synchronized on invocation-surface semantics and on the actual `regression-check` behavior.
+
 - `src/grd/commands/explain.md -> src/grd/agents/{grd-explainer,grd-bibliographer}.md`
   `spawn`
 
@@ -555,7 +585,7 @@ flowchart TD
 - `src/grd/commands/research-phase.md -> src/grd/specs/references/orchestration/model-profile-resolution.md`
   `include`
 
-- `src/grd/commands/verify-work.md -> src/grd/domains/physics/verification/core/verification-core.md`
+- `src/grd/commands/verify-work.md -> src/grd/specs/references/verification/core/verification-core.md`
   `include`
 
 - `src/grd/specs/workflows/plan-phase.md -> src/grd/agents/grd-phase-researcher.md`
@@ -598,25 +628,25 @@ flowchart TD
 - `src/grd/agents/{grd-review-reader,grd-review-literature,grd-review-significance}.md -> src/grd/specs/references/orchestration/agent-infrastructure.md`
   `include`
 
-- `src/grd/agents/{grd-bibliographer,grd-consistency-checker,grd-debugger,grd-executor,grd-explainer,grd-phase-researcher,grd-plan-checker,grd-planner,grd-referee,grd-research-mapper,grd-verifier}.md -> src/grd/domains/physics/physics-subfields.md`
+- `src/grd/agents/{grd-bibliographer,grd-consistency-checker,grd-debugger,grd-executor,grd-explainer,grd-phase-researcher,grd-plan-checker,grd-planner,grd-referee,grd-research-mapper,grd-verifier}.md -> src/grd/specs/references/physics-subfields.md`
   `include`
 
-- `src/grd/agents/{grd-review-math,grd-review-physics}.md -> src/grd/domains/physics/physics-subfields.md`
+- `src/grd/agents/{grd-review-math,grd-review-physics}.md -> src/grd/specs/references/physics-subfields.md`
   `include`
 
-- `src/grd/agents/{grd-consistency-checker,grd-debugger,grd-plan-checker,grd-planner,grd-referee,grd-verifier}.md -> src/grd/domains/physics/verification/core/verification-core.md`
+- `src/grd/agents/{grd-consistency-checker,grd-debugger,grd-plan-checker,grd-planner,grd-referee,grd-verifier}.md -> src/grd/specs/references/verification/core/verification-core.md`
   `include`
 
-- `src/grd/agents/{grd-review-math,grd-review-physics}.md -> src/grd/domains/physics/verification/core/verification-core.md`
+- `src/grd/agents/{grd-review-math,grd-review-physics}.md -> src/grd/specs/references/verification/core/verification-core.md`
   `include`
 
-- `src/grd/agents/{grd-bibliographer,grd-paper-writer,grd-referee}.md -> src/grd/domains/physics/publication/publication-pipeline-modes.md`
+- `src/grd/agents/{grd-bibliographer,grd-paper-writer,grd-referee}.md -> src/grd/specs/references/publication/publication-pipeline-modes.md`
   `include`
 
-- `src/grd/agents/{grd-review-literature,grd-review-significance}.md -> src/grd/domains/physics/publication/publication-pipeline-modes.md`
+- `src/grd/agents/{grd-review-literature,grd-review-significance}.md -> src/grd/specs/references/publication/publication-pipeline-modes.md`
   `include`
 
-- `src/grd/agents/{grd-review-reader,grd-review-literature,grd-review-math,grd-review-physics,grd-review-significance,grd-referee}.md -> src/grd/domains/physics/publication/peer-review-panel.md`
+- `src/grd/agents/{grd-review-reader,grd-review-literature,grd-review-math,grd-review-physics,grd-review-significance,grd-referee}.md -> src/grd/specs/references/publication/peer-review-panel.md`
   `include`
 
 - `src/grd/agents/{grd-phase-researcher,grd-project-researcher,grd-verifier}.md -> src/grd/specs/references/research/research-modes.md`
@@ -665,7 +695,7 @@ flowchart TD
 - `src/grd/agents/grd-verifier.md -> src/grd/specs/{references/verification/meta/verification-hierarchy-mapping.md,references/verification/core/computational-verification-templates.md,references/verification/domains/verification-domain-{qft,condmat,statmech,gr-cosmology,amo,nuclear-particle,astrophysics,fluid-plasma,mathematical-physics,algebraic-qft,string-field-theory,quantum-info,soft-matter}.md}`
   `conditional-include`
 
-- `.grd/config.json::{autonomy,research_mode,workflow.research,workflow.plan_checker,workflow.verifier,workflow.verify_between_waves,model_profile} -> src/grd/specs/workflows/{plan-phase,execute-phase,verify-work,new-project,write-paper}.md`
+- `.grd/config.json::{autonomy,research_mode,execution.review_cadence,workflow.research,workflow.plan_checker,workflow.verifier,model_profile} -> src/grd/specs/workflows/{plan-phase,execute-phase,verify-work,new-project,write-paper}.md`
   `selector-input`
 
 - `STATE.md/state.json::convention_lock -> src/grd/specs/workflows/{execute-phase,validate-conventions,new-project}.md`
@@ -702,13 +732,13 @@ flowchart TD
 - `src/grd/specs/workflows/execute-phase.md -> selector tree {phase classification, force-sequential, YOLO restrictions, inter-wave verification gates}`
   `selector-input`
 
-- `src/grd/specs/workflows/execute-phase.md -> src/grd/specs/{references/orchestration/meta-orchestration.md,references/orchestration/checkpoints.md,references/verification/core/verification-core.md,templates/summary.md,templates/continuation-prompt.md,templates/paper/figure-tracker.md,templates/paper/experimental-comparison.md,templates/recovery-plan.md}`
+- `src/grd/specs/workflows/execute-plan.md -> src/grd/specs/references/protocols/error-propagation-protocol.md`
   `include`
 
-- `src/grd/specs/workflows/execute-plan.md -> src/grd/domains/physics/protocols/error-propagation-protocol.md`
+- `src/grd/specs/workflows/execute-phase.md -> src/grd/specs/{references/orchestration/meta-orchestration.md,references/orchestration/artifact-surfacing.md,references/orchestration/checkpoints.md,references/verification/core/verification-core.md,templates/summary.md,templates/continuation-prompt.md,templates/paper/figure-tracker.md,templates/paper/experimental-comparison.md,templates/recovery-plan.md}`
   `include`
 
-- `src/grd/specs/workflows/execute-plan.md -> src/grd/specs/{references/execution/git-integration.md,references/execution/execute-plan-recovery.md,references/execution/execute-plan-validation.md,references/execution/execute-plan-checkpoints.md,references/protocols/reproducibility.md,references/execution/executor-index.md,references/orchestration/context-budget.md,references/orchestration/checkpoints.md,templates/summary.md}`
+- `src/grd/specs/workflows/execute-plan.md -> src/grd/specs/{references/execution/git-integration.md,references/execution/github-lifecycle.md,references/execution/execute-plan-recovery.md,references/execution/execute-plan-validation.md,references/execution/execute-plan-checkpoints.md,references/protocols/reproducibility.md,references/execution/executor-index.md,references/orchestration/context-budget.md,references/orchestration/checkpoints.md,templates/summary.md}`
   `include`
 
 - `src/grd/specs/workflows/execute-plan.md -> src/grd/specs/templates/calculation-log.md`
@@ -717,7 +747,7 @@ flowchart TD
 - `src/grd/specs/workflows/execute-plan.md -> src/grd/specs/templates/recovery-plan.md`
   `include`
 
-- `src/grd/specs/workflows/verify-phase.md -> src/grd/domains/physics/protocols/error-propagation-protocol.md`
+- `src/grd/specs/workflows/verify-phase.md -> src/grd/specs/references/protocols/error-propagation-protocol.md`
   `include`
 
 - `src/grd/specs/workflows/verify-phase.md -> src/grd/specs/{references/verification/core/verification-core.md,references/verification/core/verification-numerical.md,references/verification/meta/verification-independence.md,templates/verification-report.md,workflows/numerical-convergence.md}`
@@ -726,7 +756,7 @@ flowchart TD
 - `src/grd/specs/workflows/verify-work.md -> src/grd/specs/templates/research-verification.md`
   `include`
 
-- `src/grd/specs/workflows/verify-work.md -> src/grd/domains/physics/protocols/error-propagation-protocol.md`
+- `src/grd/specs/workflows/verify-work.md -> src/grd/specs/references/protocols/error-propagation-protocol.md`
   `include`
 
 - `src/grd/specs/workflows/verify-work.md -> src/grd/specs/{references/verification/meta/verification-independence.md,workflows/debug.md}`
@@ -739,7 +769,7 @@ flowchart TD
 - `src/grd/specs/workflows/verify-work.md -> src/grd/agents/grd-plan-checker.md`
   `conditional-spawn`
 
-- `src/grd/specs/workflows/error-propagation.md -> src/grd/domains/physics/protocols/error-propagation-protocol.md`
+- `src/grd/specs/workflows/error-propagation.md -> src/grd/specs/references/protocols/error-propagation-protocol.md`
   `include`
 
 - `src/grd/specs/workflows/error-propagation.md -> src/grd/specs/templates/uncertainty-budget.md`
@@ -880,6 +910,9 @@ flowchart TD
 - `src/grd/specs/workflows/{arxiv-submission,compact-state,compare-experiment,discover,insert-phase,resume-work,sensitivity-analysis,sync-state}.md -> src/grd/specs/{references/publication/paper-quality-scoring.md,templates/state-archive.md,templates/paper/experimental-comparison.md,templates/research.md,references/orchestration/agent-infrastructure.md,references/orchestration/continuation-format.md,templates/parameter-table.md,templates/state-json-schema.md}`
   `include`
 
+- `src/grd/specs/workflows/resume-work.md -> src/grd/specs/references/orchestration/state-portability.md`
+  `include`
+
 - `src/grd/specs/templates/continuation-prompt.md -> src/grd/specs/{workflows/execute-plan.md,templates/summary.md,references/orchestration/checkpoints.md,references/verification/core/verification-core.md}`
   `include`
 
@@ -971,7 +1004,7 @@ flowchart TD
   `config-mutation`
   Claude MCP wiring stays scoped to the selected install target root; local installs mutate the paired project `.mcp.json`, global installs mutate the paired `.claude.json`.
 
-- `src/grd/adapters/claude_code.py -> target_dir.parent/{.mcp.json,.claude.json}["mcpServers"][GRD_MCP_SERVER_KEYS]`
+- `src/grd/adapters/claude_code.py -> target_dir.parent/{.mcp.json,.claude.json}["mcpServers"][GPD_MCP_SERVER_KEYS]`
   `partial-ownership`
 
 - `src/grd/adapters/gemini.py -> settings.json["experimental.enableAgents"]`
@@ -980,7 +1013,7 @@ flowchart TD
 - `src/grd/adapters/gemini.py -> settings.json["mcpServers"]`
   `config-mutation`
 
-- `src/grd/adapters/gemini.py -> settings.json["mcpServers"][GRD_MCP_SERVER_KEYS]`
+- `src/grd/adapters/gemini.py -> settings.json["mcpServers"][GPD_MCP_SERVER_KEYS]`
   `partial-ownership`
 
 - `src/grd/adapters/gemini.py -> settings.json["statusLine"]`
@@ -1009,6 +1042,10 @@ flowchart TD
   `manifest-contract`
   Used later by uninstall to locate shared skills.
 
+- `src/grd/adapters/codex.py -> grd-file-manifest.json::codex_generated_skill_dirs`
+  `manifest-contract`
+  Codex uninstall and completeness checks use these manifest-owned skill directory names as the authoritative skill inventory.
+
 - `src/grd/adapters/install_utils.py::write_manifest -> grd-file-manifest.json["files"]["skills/grd-*/SKILL.md"]`
   `manifest-contract`
 
@@ -1018,7 +1055,7 @@ flowchart TD
 - `src/grd/adapters/opencode.py -> opencode.json["mcp"]`
   `config-mutation`
 
-- `src/grd/adapters/opencode.py -> opencode.json["mcp"] keys from GRD_MCP_SERVER_KEYS`
+- `src/grd/adapters/opencode.py -> opencode.json["mcp"] keys from GPD_MCP_SERVER_KEYS`
   `partial-ownership`
 
 - `src/grd/adapters/opencode.py -> permission.read["<configDir>/get-research-done/*"]`
@@ -1101,13 +1138,17 @@ They explicitly preserve:
 - `src/grd/hooks/statusline.py -> <workspace>/.grd/state.json`
   `candidate-set`
 
+- `src/grd/hooks/statusline.py -> src/grd/hooks/install_context.py`
+  `hard-import`
+  Shared self-owned install detection and todo/update-cache layout selection.
+
 - `src/grd/hooks/statusline.py -> src/grd/hooks/runtime_detect.py`
   `hard-import`
 
-- `src/grd/hooks/statusline.py -> freshest valid update-cache candidate from runtime_detect.get_update_cache_files()`
+- `src/grd/hooks/statusline.py -> shared self-owned install context + freshest valid update-cache candidate from runtime_detect.get_update_cache_files()`
   `candidate-set`
 
-- `src/grd/hooks/statusline.py -> candidate todo family {local,global runtime dirs}/todos/<session>-agent-*.json`
+- `src/grd/hooks/statusline.py -> shared self-owned todo directory + candidate todo family {local,global runtime dirs}/todos/<session>-agent-*.json`
   `candidate-set`
 
 - `src/grd/hooks/statusline.py -> stdin payload schema {model, workspace, session_id, context_window}`
@@ -1142,6 +1183,10 @@ They explicitly preserve:
 - `src/grd/hooks/notify.py -> src/grd/hooks/check_update.py`
   `spawn`
 
+- `src/grd/hooks/notify.py -> src/grd/hooks/install_context.py`
+  `hard-import`
+  Shared self-owned install detection and update-cache layout selection.
+
 - `src/grd/hooks/notify.py -> freshest valid update-cache candidate set`
   `candidate-set`
 
@@ -1151,6 +1196,10 @@ They explicitly preserve:
 - `src/grd/hooks/notify.py -> src/grd/hooks/runtime_detect.py`
   `hard-import`
   Reads cache candidates and runtime-scoped update commands through runtime-detection helpers.
+
+- `src/grd/hooks/notify.py -> src/grd/core/constants.py::ProjectLayout.last_observability_notification`
+  `layout-authority`
+  Duplicate notification suppression follows the shared observability layout helper instead of a hard-coded GRD path.
 
 - `src/grd/core/context.py -> src/grd/adapters/__init__.py`
   `authority`
@@ -1259,7 +1308,7 @@ They explicitly preserve:
 - `src/grd/mcp/paper/review_artifacts.py -> external Python package {pydantic}`
   `external-package`
 
-- `src/grd/mcp/paper/review_artifacts.py -> src/grd/mcp/paper/models.py::{ClaimIndex, StageReviewReport, ReviewLedger, ReviewPanelBundle}`
+- `src/grd/mcp/paper/review_artifacts.py -> src/grd/mcp/paper/models.py::{ClaimIndex, StageReviewReport, ReviewLedger}`
   `hard-import`
 
 - `src/grd/mcp/paper/bibliography.py -> generated outputs {*.bib, BIBLIOGRAPHY-AUDIT.json}`
@@ -1268,7 +1317,7 @@ They explicitly preserve:
 - `src/grd/mcp/paper/artifact_manifest.py -> ARTIFACT-MANIFEST.json`
   `generated-output`
 
-- `src/grd/mcp/paper/review_artifacts.py -> generated outputs {CLAIMS.json, STAGE-*.json, REVIEW-LEDGER.json, PANEL-BUNDLE.json}`
+- `src/grd/mcp/paper/review_artifacts.py -> generated outputs {CLAIMS.json, STAGE-*.json, REVIEW-LEDGER.json, REFEREE-DECISION.json}`
   `generated-output`
 
 - `src/grd/mcp/paper/compiler.py -> generated outputs {figures/**, main.tex, <bib>.bib, BIBLIOGRAPHY-AUDIT.json, ARTIFACT-MANIFEST.json, main.pdf}`
@@ -1314,7 +1363,7 @@ They explicitly preserve:
 - `tests/core/test_review_artifacts.py -> src/grd/mcp/paper/review_artifacts.py`
   `hard-import`
 
-- `tests/core/test_review_artifacts.py -> generated outputs {CLAIMS.json, STAGE-*.json, REVIEW-LEDGER.json, PANEL-BUNDLE.json}`
+- `tests/core/test_review_artifacts.py -> generated outputs {CLAIMS.json, STAGE-*.json, REVIEW-LEDGER.json, REFEREE-DECISION.json}`
   `typed-roundtrip`
 
 - `tests/test_paper_compiler_regressions.py -> external binaries {latexmk, pdflatex}`
@@ -1323,7 +1372,7 @@ They explicitly preserve:
 - `tests/test_paper_compiler_regressions.py -> paper.pdf`
   `generated-output`
 
-- `tests/test_bootstrap_installer.py -> GitHub source/archive/git candidate family {https://github.com/psi-oss/get-research-done/archive/refs/tags/v<PYTHON_PACKAGE_VERSION>.tar.gz, https://github.com/psi-oss/get-research-done/archive/refs/heads/main.tar.gz, git+https://github.com/psi-oss/get-research-done.git@v<PYTHON_PACKAGE_VERSION>, git+https://github.com/psi-oss/get-research-done.git@main}`
+- `tests/test_bootstrap_installer.py -> GitHub source/archive/git candidate family {https://github.com/Rome-1/get-research-done/archive/refs/tags/v<PYTHON_PACKAGE_VERSION>.tar.gz, https://github.com/Rome-1/get-research-done/archive/refs/heads/main.tar.gz, git+https://github.com/Rome-1/get-research-done.git@v<PYTHON_PACKAGE_VERSION>, git+https://github.com/Rome-1/get-research-done.git@main}`
   `external-service`
 
 - `tests/test_bootstrap_installer.py -> ${GRD_HOME:-~/.grd}/venv/**`
@@ -1596,6 +1645,8 @@ Operationally important node families that are not canonical repo files:
 - `<workspace>/.mcp.json`
 - update caches `*/cache/grd-update-check.json`
 - runtime install `*/get-research-done/VERSION`
+- `<cwd>/.grd/CHECKPOINTS.md`
+- `<cwd>/.grd/phase-checkpoints/*.md`
 - `dist/*.whl`
 - `dist/*.tar.gz`
 - paper outputs `main.tex`, `references.bib`, `main.pdf`, `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`

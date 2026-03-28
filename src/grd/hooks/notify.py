@@ -7,12 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from grd.core.constants import ENV_GRD_DEBUG
-from grd.hooks.install_metadata import (
-    config_dir_has_complete_install,
-    install_scope_from_manifest,
-    installed_update_command,
-)
+import grd.hooks.install_context as hook_layout
+from grd.core.constants import ENV_GRD_DEBUG, ProjectLayout
+from grd.core.observability import resolve_project_root
+from grd.core.utils import atomic_write, file_lock
 
 
 def _debug(msg: str) -> None:
@@ -35,11 +33,22 @@ def _first_string(value: object, *keys: str) -> str:
     return ""
 
 
+def _normalize_workspace_text(value: str | None) -> str:
+    if not value:
+        return str(Path.cwd().resolve(strict=False))
+    path = Path(value).expanduser()
+    try:
+        return str(path.resolve(strict=False))
+    except OSError:
+        return str(path)
+
+
 def _trigger_update_check(cwd: str) -> None:
     """Opportunistically refresh the update cache (throttled by check_update)."""
     try:
+        check_update_script = Path(__file__).resolve(strict=False).with_name("check_update.py")
         subprocess.Popen(
-            [sys.executable, "-m", "grd.hooks.check_update"],
+            [sys.executable, str(check_update_script)],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -55,44 +64,35 @@ def _hook_payload_policy(cwd: str | None = None):
     from grd.adapters.runtime_catalog import get_hook_payload_policy
     from grd.hooks.runtime_detect import RUNTIME_UNKNOWN, detect_active_runtime_with_grd_install
 
-    workspace_path = Path(cwd) if cwd else None
+    workspace_path = resolve_project_root(cwd) if cwd else None
     runtime = detect_active_runtime_with_grd_install(cwd=workspace_path)
     return get_hook_payload_policy(None if runtime == RUNTIME_UNKNOWN else runtime)
 
 
-def _self_config_dir() -> Path | None:
-    """Return the installed runtime config dir when this hook runs from one."""
-    candidate = Path(__file__).resolve().parent.parent
-    if config_dir_has_complete_install(candidate):
-        return candidate
-    return None
-
-
-def _self_install_scope(config_dir: Path) -> str | None:
-    """Return the persisted install scope for the hook's own config dir."""
-    return install_scope_from_manifest(config_dir)
-
-
-def _self_update_command(config_dir: Path) -> str | None:
-    """Return the public update command for the installed runtime."""
-    return installed_update_command(config_dir)
-
-
 def _latest_update_cache(cwd: str | None = None) -> tuple[dict[str, object] | None, object | None]:
     """Return the highest-priority valid update cache and its candidate metadata."""
-    from types import SimpleNamespace
-
     from grd.hooks.runtime_detect import (
+        RUNTIME_UNKNOWN,
         detect_active_runtime_with_grd_install,
+        detect_runtime_install_target,
         get_update_cache_candidates,
         should_consider_update_cache_candidate,
     )
 
-    workspace_path = Path(cwd) if cwd else None
+    workspace_path = resolve_project_root(cwd) if cwd else None
     active_installed_runtime = detect_active_runtime_with_grd_install(cwd=workspace_path)
-    self_config_dir = _self_config_dir()
-    if self_config_dir is not None:
-        cache_file = self_config_dir / "cache" / "grd-update-check.json"
+    self_install = hook_layout.detect_self_owned_install(__file__)
+    active_install_target = (
+        detect_runtime_install_target(active_installed_runtime, cwd=workspace_path)
+        if active_installed_runtime not in (None, "", RUNTIME_UNKNOWN)
+        else None
+    )
+    if hook_layout.should_prefer_self_owned_install(
+        self_install,
+        active_install_target=active_install_target,
+        workspace_path=workspace_path,
+    ):
+        cache_file = self_install.cache_file
         if cache_file.exists():
             try:
                 cache = json.loads(cache_file.read_text(encoding="utf-8"))
@@ -100,15 +100,12 @@ def _latest_update_cache(cwd: str | None = None) -> tuple[dict[str, object] | No
                 _debug(f"Failed to parse cache {cache_file}: {exc}")
             else:
                 if isinstance(cache, dict):
-                    candidate = SimpleNamespace(
-                        path=cache_file,
-                        runtime=None,
-                        scope=_self_install_scope(self_config_dir),
-                        config_dir=self_config_dir,
-                    )
+                    candidate = hook_layout.self_owned_update_cache_candidate(self_install)
                     return cache, candidate
 
-    for candidate in get_update_cache_candidates(cwd=workspace_path, preferred_runtime=active_installed_runtime):
+    preferred_runtime = active_installed_runtime if workspace_path is not None else None
+    fallback_hit: tuple[dict[str, object], object] | None = None
+    for candidate in get_update_cache_candidates(cwd=workspace_path, preferred_runtime=preferred_runtime):
         if not should_consider_update_cache_candidate(
             candidate,
             active_installed_runtime=active_installed_runtime,
@@ -126,9 +123,12 @@ def _latest_update_cache(cwd: str | None = None) -> tuple[dict[str, object] | No
 
         if not isinstance(cache, dict):
             continue
-        return cache, candidate
+        if getattr(candidate, "runtime", None):
+            return cache, candidate
+        if fallback_hit is None:
+            fallback_hit = (cache, candidate)
 
-    return None, None
+    return fallback_hit if fallback_hit is not None else (None, None)
 
 
 def _check_and_notify_update(cwd: str | None = None) -> None:
@@ -140,15 +140,17 @@ def _check_and_notify_update(cwd: str | None = None) -> None:
         update_command_for_runtime,
     )
 
-    workspace_path = Path(cwd) if cwd else None
+    workspace_path = resolve_project_root(cwd) if cwd else None
     latest_cache, latest_candidate = _latest_update_cache(cwd)
+    self_install = hook_layout.detect_self_owned_install(__file__)
 
     if latest_cache and latest_cache.get("update_available"):
         installed = latest_cache.get("installed", "?")
         latest = latest_cache.get("latest", "?")
-        config_dir = getattr(latest_candidate, "config_dir", None)
-        if isinstance(config_dir, Path):
-            cmd = _self_update_command(config_dir) or "npx -y get-research-done"
+        if self_install is not None and latest_candidate is not None and latest_candidate.path == self_install.cache_file:
+            cmd = self_install.update_command
+            if cmd is None:
+                return
             sys.stderr.write(f"[GRD] Update available: v{installed} \u2192 v{latest}. Run: {cmd}\n")
             return
         runtime = latest_candidate.runtime if latest_candidate is not None else RUNTIME_UNKNOWN
@@ -176,18 +178,27 @@ def _workspace_from_payload(data: dict[str, object], *, cwd: str | None = None) 
     # the payload's actual workspace instead of the process cwd.
     policy = _hook_payload_policy(cwd) if cwd else get_hook_payload_policy()
     workspace_value = data.get("workspace")
-    if isinstance(workspace_value, str) and workspace_value:
-        return workspace_value
-    return (
+    raw_workspace = (
+        workspace_value
+        if isinstance(workspace_value, str) and workspace_value
+        else (
         _first_string(workspace_value, *policy.workspace_keys)
         or _first_string(data, *policy.workspace_keys)
         or cwd
         or os.getcwd()
+        )
     )
+    project_dir = _first_string(workspace_value, *policy.project_dir_keys) or _first_string(
+        data,
+        *policy.project_dir_keys,
+    )
+    resolved_root = resolve_project_root(raw_workspace, project_dir=project_dir)
+    return str(resolved_root) if resolved_root is not None else _normalize_workspace_text(raw_workspace)
 
 
 def _notification_state_path(cwd: str) -> Path:
-    return Path(cwd) / ".grd" / "observability" / "last-notify.json"
+    workspace_root = resolve_project_root(cwd) or Path(cwd).expanduser().resolve(strict=False)
+    return ProjectLayout(workspace_root).last_observability_notification
 
 
 def _load_last_notification(cwd: str) -> dict[str, object]:
@@ -199,10 +210,15 @@ def _load_last_notification(cwd: str) -> dict[str, object]:
     return raw if isinstance(raw, dict) else {}
 
 
-def _save_last_notification(cwd: str, payload: dict[str, object]) -> None:
+def _claim_last_notification(cwd: str, fingerprint: str) -> bool:
+    """Atomically claim a notification fingerprint for one workspace."""
     path = _notification_state_path(cwd)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    with file_lock(path):
+        previous = _load_last_notification(cwd)
+        if previous.get("fingerprint") == fingerprint:
+            return False
+        atomic_write(path, json.dumps({"fingerprint": fingerprint}, indent=2))
+        return True
 
 
 def _execution_notification_message(cwd: str) -> tuple[str | None, str | None]:
@@ -262,12 +278,10 @@ def _emit_execution_notification(cwd: str) -> None:
     if not message or not fingerprint:
         return
 
-    previous = _load_last_notification(cwd)
-    if previous.get("fingerprint") == fingerprint:
+    if not _claim_last_notification(cwd, fingerprint):
         return
 
     sys.stderr.write(message)
-    _save_last_notification(cwd, {"fingerprint": fingerprint})
 
 
 def main() -> None:
@@ -281,13 +295,12 @@ def main() -> None:
     if not isinstance(data, dict):
         return
 
-    cwd = _workspace_from_payload(data)
-    hook_payload = _hook_payload_policy(cwd)
-    allowed_event_types = hook_payload.notify_event_types
-    if allowed_event_types and data.get("type") not in (*allowed_event_types, None):
-        return
-
     try:
+        cwd = _workspace_from_payload(data)
+        hook_payload = _hook_payload_policy(cwd)
+        allowed_event_types = hook_payload.notify_event_types
+        if allowed_event_types and data.get("type") not in (*allowed_event_types, None):
+            return
         _trigger_update_check(cwd)
         _check_and_notify_update(cwd)
         _emit_execution_notification(cwd)

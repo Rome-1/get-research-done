@@ -1,6 +1,6 @@
 ---
 name: grd:settings
-description: Configure GRD workflow toggles, tier models, review cadence, and git preferences
+description: Configure GRD workflow toggles, runtime-specific tier model overrides, review cadence, and git preferences
 context_mode: projectless
 allowed-tools:
   - file_read
@@ -13,7 +13,7 @@ allowed-tools:
 <!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
-Interactive configuration of GRD workflow agents, runtime-specific tier model overrides, review cadence, and workflow/git preferences via multi-question prompt.
+Interactive configuration of GRD workflow agents, runtime-specific tier model overrides, `execution.review_cadence`, and workflow/git preferences via multi-question prompt.
 
 Routes to the settings workflow which handles:
 
@@ -41,7 +41,7 @@ The workflow handles all logic including:
    - **Plan researcher**: on / off
    - **Plan checker**: on / off
    - **Execution verifier**: on / off
-   - **Review cadence**: dense / adaptive / sparse
+   - **Review cadence** (`execution.review_cadence`): dense / adaptive / sparse
    - **Parallel execution**: on / off
    - **Git branching**: none / per-phase / per-milestone
 4. Runtime-aware model guidance when explicit tier models are requested:

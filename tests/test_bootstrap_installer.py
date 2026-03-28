@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from grd.adapters import get_adapter, iter_runtime_descriptors
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_JSON = json.loads((REPO_ROOT / "package.json").read_text(encoding="utf-8"))
 PYPROJECT = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
@@ -27,37 +29,32 @@ TAG_ARCHIVE_SPEC = f"{REPO_BASE_URL}/archive/refs/tags/v{PYTHON_PACKAGE_VERSION}
 MAIN_ARCHIVE_SPEC = f"{REPO_BASE_URL}/archive/refs/heads/main.tar.gz"
 TAG_HTTPS_GIT_SPEC = f"git+{REPO_GIT_URL}@v{PYTHON_PACKAGE_VERSION}"
 MAIN_HTTPS_GIT_SPEC = f"git+{REPO_GIT_URL}@main"
-RUNTIME_DISPLAY_NAMES = {
-    "claude-code": "Claude Code",
-    "codex": "Codex",
-    "gemini": "Gemini CLI",
-    "opencode": "OpenCode",
-}
-RUNTIME_HELP_COMMANDS = {
-    "claude-code": "/grd:help",
-    "codex": "$grd-help",
-    "gemini": "/grd:help",
-    "opencode": "/grd-help",
-}
-RUNTIME_LAUNCH_COMMANDS = {
-    "claude-code": "claude",
-    "codex": "codex",
-    "gemini": "gemini",
-    "opencode": "opencode",
-}
-RUNTIME_NEW_PROJECT_COMMANDS = {
-    "claude-code": "/grd:new-project",
-    "codex": "$grd-new-project",
-    "gemini": "/grd:new-project",
-    "opencode": "/grd-new-project",
-}
-RUNTIME_MAP_RESEARCH_COMMANDS = {
-    "claude-code": "/grd:map-research",
-    "codex": "$grd-map-research",
-    "gemini": "/grd:map-research",
-    "opencode": "/grd-map-research",
-}
-ALL_RUNTIME_NAMES = list(RUNTIME_DISPLAY_NAMES)
+_RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
+_RUNTIME_ADAPTERS = {descriptor.runtime_name: get_adapter(descriptor.runtime_name) for descriptor in _RUNTIME_DESCRIPTORS}
+_RUNTIME_NAMES = tuple(descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS)
+_RUNTIME_INSTALL_FLAGS = tuple(descriptor.install_flag for descriptor in _RUNTIME_DESCRIPTORS)
+_RUNTIME_DISPLAY_NAMES = {name: adapter.display_name for name, adapter in _RUNTIME_ADAPTERS.items()}
+_RUNTIME_LAUNCH_COMMANDS = {name: adapter.launch_command for name, adapter in _RUNTIME_ADAPTERS.items()}
+_RUNTIME_HELP_COMMANDS = {name: adapter.help_command for name, adapter in _RUNTIME_ADAPTERS.items()}
+_RUNTIME_NEW_PROJECT_COMMANDS = {name: adapter.new_project_command for name, adapter in _RUNTIME_ADAPTERS.items()}
+_RUNTIME_MAP_RESEARCH_COMMANDS = {name: adapter.map_research_command for name, adapter in _RUNTIME_ADAPTERS.items()}
+_CODEX_RUNTIME_NAME = next(descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS if "skills/" in descriptor.manifest_file_prefixes)
+_CLAUDE_RUNTIME_NAME = next(descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS if descriptor.launch_command == "claude")
+_OPENCODE_RUNTIME_NAME = next(descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS if descriptor.launch_command == "opencode")
+_CODEX_INSTALL_FLAG = _RUNTIME_ADAPTERS[_CODEX_RUNTIME_NAME].install_flag
+_CLAUDE_INSTALL_FLAG = _RUNTIME_ADAPTERS[_CLAUDE_RUNTIME_NAME].install_flag
+_CLAUDE_RUNTIME_ALIAS = _RUNTIME_ADAPTERS[_CLAUDE_RUNTIME_NAME].display_name.lower()
+_OPENCODE_RUNTIME_ALIAS = next(
+    alias for alias in _RUNTIME_ADAPTERS[_OPENCODE_RUNTIME_NAME].selection_aliases if " " in alias
+)
+
+
+def _next_step_line(runtime: str) -> str:
+    return (
+        f"- {_RUNTIME_DISPLAY_NAMES[runtime]} ({_RUNTIME_LAUNCH_COMMANDS[runtime]}), then "
+        f"{_RUNTIME_HELP_COMMANDS[runtime]}, then "
+        f"{_RUNTIME_NEW_PROJECT_COMMANDS[runtime]} or {_RUNTIME_MAP_RESEARCH_COMMANDS[runtime]}"
+    )
 
 
 def test_version_consistency():
@@ -65,7 +62,7 @@ def test_version_consistency():
     assert PACKAGE_VERSION == PYTHON_PACKAGE_VERSION == str(PYPROJECT["project"]["version"])
 
 
-def _write_fake_python(script_path: Path, log_path: Path) -> None:
+def _write_fake_python(script_path: Path, log_path: Path, version_text: str = "Python 3.13.2") -> None:
     script = f"""#!{sys.executable}
 import json
 import os
@@ -85,12 +82,12 @@ TAG_ARCHIVE_SPEC = {TAG_ARCHIVE_SPEC!r}
 MAIN_ARCHIVE_SPEC = {MAIN_ARCHIVE_SPEC!r}
 TAG_HTTPS_GIT_SPEC = {TAG_HTTPS_GIT_SPEC!r}
 MAIN_HTTPS_GIT_SPEC = {MAIN_HTTPS_GIT_SPEC!r}
-RUNTIME_LABELS = {RUNTIME_DISPLAY_NAMES!r}
-LAUNCH_COMMANDS = {RUNTIME_LAUNCH_COMMANDS!r}
-HELP_COMMANDS = {RUNTIME_HELP_COMMANDS!r}
-NEW_PROJECT_COMMANDS = {RUNTIME_NEW_PROJECT_COMMANDS!r}
-MAP_RESEARCH_COMMANDS = {RUNTIME_MAP_RESEARCH_COMMANDS!r}
-ALL_RUNTIMES = {ALL_RUNTIME_NAMES!r}
+RUNTIME_LABELS = {_RUNTIME_DISPLAY_NAMES!r}
+LAUNCH_COMMANDS = {_RUNTIME_LAUNCH_COMMANDS!r}
+HELP_COMMANDS = {_RUNTIME_HELP_COMMANDS!r}
+NEW_PROJECT_COMMANDS = {_RUNTIME_NEW_PROJECT_COMMANDS!r}
+MAP_RESEARCH_COMMANDS = {_RUNTIME_MAP_RESEARCH_COMMANDS!r}
+ALL_RUNTIMES = {_RUNTIME_NAMES!r}
 
 
 def format_runtime_list(runtimes: list[str]) -> str:
@@ -134,7 +131,7 @@ def write_managed_python(target: pathlib.Path) -> None:
 args = sys.argv[1:]
 
 if args == ["--version"]:
-    print("Python 3.13.2")
+    print({version_text!r})
     record()
     raise SystemExit(0)
 
@@ -229,6 +226,7 @@ if args[:3] == ["-m", "grd.cli", "uninstall"]:
 record()
 raise SystemExit(0)
 """
+    script_path.parent.mkdir(parents=True, exist_ok=True)
     script_path.write_text(script, encoding="utf-8")
     script_path.chmod(script_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
@@ -238,6 +236,8 @@ def _run_bootstrap_with_fake_python(
     *,
     installer_args: list[str] | None = None,
     extra_env: dict[str, str] | None = None,
+    python_versions: dict[str, str] | None = None,
+    precreate_managed_version: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
     home = tmp_path / "home"
     fake_bin = tmp_path / "fake-bin"
@@ -245,19 +245,34 @@ def _run_bootstrap_with_fake_python(
     local_bin = home / ".local" / "bin"
     log_path = tmp_path / "python-log.jsonl"
 
-    for name in ("python3", "python"):
-        _write_fake_python(fake_bin / name, log_path)
+    versions = {
+        "python3.13": "Python 3.13.2",
+        "python3.12": "Python 3.12.9",
+        "python3.11": "Python 3.11.9",
+        "python3": "Python 3.13.2",
+        "python": "Python 3.13.2",
+    }
+    if python_versions:
+        versions.update(python_versions)
+
+    for name, version_text in versions.items():
+        _write_fake_python(fake_bin / name, log_path, version_text)
+
+    if precreate_managed_version is not None:
+        managed_bin = home / "GRD" / "venv" / "bin"
+        for name in ("python", "python3"):
+            _write_fake_python(managed_bin / name, log_path, precreate_managed_version)
 
     env = os.environ.copy()
     env["HOME"] = str(home)
-    env["GRD_HOME"] = str(home / ".grd")
+    env["GRD_HOME"] = str(home / "GRD")
     env["GRD_BOOTSTRAP_DISABLE_NETWORK_PROBES"] = "1"
     env["PATH"] = os.pathsep.join([str(local_bin), str(fake_bin), env.get("PATH", "")])
     if extra_env:
         env.update(extra_env)
 
     result = subprocess.run(
-        ["node", "bin/install.js", *(installer_args or ["--codex", "--local"])],
+        ["node", "bin/install.js", *(installer_args or [_CODEX_INSTALL_FLAG, "--local"])],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -294,23 +309,25 @@ def test_bootstrap_uses_managed_virtualenv_and_skips_host_pip(tmp_path: Path) ->
     assert managed_pip_installs[0]["argv"][-1] == PYPI_SPEC
 
     managed_runtime_installs = [
-        entry
-        for entry in entries
-        if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", "codex", "--local"]
+        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", _CODEX_RUNTIME_NAME, "--local"]
     ]
     assert len(managed_runtime_installs) == 1
 
-    assert (home / ".grd" / "venv" / "bin" / "python").exists()
+    assert (home / "GRD" / "venv" / "bin" / "python").exists()
     assert f"GRD v{PACKAGE_VERSION} - Get Research Done" in result.stdout
-    assert "© 2026 Physical Superintelligence PBC (PSI)" in result.stdout
-    assert "Installing GRD (local) for: Codex" in result.stdout
+    assert "© 2026 Research Institute (PSI)" in result.stdout
+    assert f"Installing GRD (local) for: {_RUNTIME_DISPLAY_NAMES[_CODEX_RUNTIME_NAME]}" in result.stdout
     assert "Install Summary" in result.stdout
     assert "Next steps" in result.stdout
-    assert "1. Open Codex from your system terminal (codex)." in result.stdout
-    assert "2. Run $grd-help for the command list." in result.stdout
-    assert "3. Start with $grd-new-project for a new project or $grd-map-research for existing work." in result.stdout
-    assert "Installing GRD for Codex (local)..." not in result.stdout
-    assert "Installed GRD for Codex (local)." not in result.stdout
+    assert f"1. Open {_RUNTIME_DISPLAY_NAMES[_CODEX_RUNTIME_NAME]} from your system terminal ({_CODEX_RUNTIME_NAME})." in result.stdout
+    assert f"2. Run {_RUNTIME_HELP_COMMANDS[_CODEX_RUNTIME_NAME]} for the command list." in result.stdout
+    assert (
+        f"3. Start with {_RUNTIME_NEW_PROJECT_COMMANDS[_CODEX_RUNTIME_NAME]} for a new project or "
+        f"{_RUNTIME_MAP_RESEARCH_COMMANDS[_CODEX_RUNTIME_NAME]} for existing work."
+        in result.stdout
+    )
+    assert f"Installing GRD for {_RUNTIME_DISPLAY_NAMES[_CODEX_RUNTIME_NAME]} (local)..." not in result.stdout
+    assert f"Installed GRD for {_RUNTIME_DISPLAY_NAMES[_CODEX_RUNTIME_NAME]} (local)." not in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -318,7 +335,7 @@ def test_bootstrap_uses_managed_virtualenv_and_skips_host_pip(tmp_path: Path) ->
 def test_bootstrap_uninstall_routes_to_runtime_uninstall(tmp_path: Path) -> None:
     result, home, log_path = _run_bootstrap_with_fake_python(
         tmp_path,
-        installer_args=["--uninstall", "--codex", "--local"],
+        installer_args=["--uninstall", _CODEX_INSTALL_FLAG, "--local"],
     )
 
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
@@ -338,18 +355,13 @@ def test_bootstrap_uninstall_routes_to_runtime_uninstall(tmp_path: Path) -> None
     assert managed_pip_installs[0]["argv"][-1] == PYPI_SPEC
 
     managed_runtime_uninstalls = [
-        entry
-        for entry in entries
-        if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "codex", "--local"]
+        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", _CODEX_RUNTIME_NAME, "--local"]
     ]
     assert len(managed_runtime_uninstalls) == 1
 
-    assert (home / ".grd" / "venv" / "bin" / "python").exists()
-    assert (
-        f"Preparing managed GRD CLI from PyPI (get-research-done=={PYTHON_PACKAGE_VERSION}) into the managed environment..."
-        in result.stdout
-    )
-    assert "Uninstalling GRD from Codex (local)..." in result.stdout
+    assert (home / "GRD" / "venv" / "bin" / "python").exists()
+    assert f"Preparing managed GRD CLI from PyPI (get-research-done=={PYTHON_PACKAGE_VERSION}) into the managed environment..." in result.stdout
+    assert f"Uninstalling GRD from {_RUNTIME_DISPLAY_NAMES[_CODEX_RUNTIME_NAME]} (local)..." in result.stdout
     assert "runtime uninstall ok" in result.stdout
 
 
@@ -365,16 +377,12 @@ def test_bootstrap_uninstall_subcommand_alias_routes_to_runtime_uninstall(tmp_pa
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_runtime_uninstalls = [
-        entry
-        for entry in entries
-        if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "--all", "--local"]
+        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "--all", "--local"]
     ]
 
     assert len(managed_runtime_uninstalls) == 1
-    assert "Claude Code" in result.stdout
-    assert "Gemini CLI" in result.stdout
-    assert "Codex" in result.stdout
-    assert "OpenCode" in result.stdout
+    for runtime in _RUNTIME_NAMES:
+        assert _RUNTIME_DISPLAY_NAMES[runtime] in result.stdout
     assert "runtime uninstall ok" in result.stdout
 
 
@@ -383,22 +391,40 @@ def test_bootstrap_uninstall_subcommand_alias_routes_to_runtime_uninstall(tmp_pa
 def test_bootstrap_install_subcommand_accepts_positional_runtime_alias(tmp_path: Path) -> None:
     result, _, log_path = _run_bootstrap_with_fake_python(
         tmp_path,
-        installer_args=["install", "codex", "--local"],
+        installer_args=["install", _CLAUDE_RUNTIME_ALIAS, "--local"],
     )
 
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_runtime_installs = [
-        entry
-        for entry in entries
-        if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", "codex", "--local"]
+        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", _CLAUDE_RUNTIME_NAME, "--local"]
     ]
 
     assert len(managed_runtime_installs) == 1
-    assert "Installing GRD (local) for: Codex" in result.stdout
+    assert f"Installing GRD (local) for: {_RUNTIME_DISPLAY_NAMES[_CLAUDE_RUNTIME_NAME]}" in result.stdout
     assert "Install Summary" in result.stdout
-    assert "Installed GRD for Codex (local)." not in result.stdout
+    assert f"Installed GRD for {_RUNTIME_DISPLAY_NAMES[_CLAUDE_RUNTIME_NAME]} (local)." not in result.stdout
+
+
+@pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is required for bootstrap installer tests")
+def test_bootstrap_uninstall_subcommand_accepts_runtime_alias(tmp_path: Path) -> None:
+    result, _, log_path = _run_bootstrap_with_fake_python(
+        tmp_path,
+        installer_args=["uninstall", _OPENCODE_RUNTIME_ALIAS, "--local"],
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+
+    entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+    managed_runtime_uninstalls = [
+        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", _OPENCODE_RUNTIME_NAME, "--local"]
+    ]
+
+    assert len(managed_runtime_uninstalls) == 1
+    assert f"Uninstalling GRD from {_RUNTIME_DISPLAY_NAMES[_OPENCODE_RUNTIME_NAME]} (local)..." in result.stdout
+    assert "runtime uninstall ok" in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -413,16 +439,41 @@ def test_bootstrap_supports_all_runtime_uninstall_in_one_pass(tmp_path: Path) ->
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_runtime_uninstalls = [
-        entry
-        for entry in entries
-        if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "--all", "--global"]
+        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "uninstall", "--all", "--global"]
     ]
 
     assert len(managed_runtime_uninstalls) == 1
-    assert "Claude Code" in result.stdout
-    assert "Gemini CLI" in result.stdout
-    assert "Codex" in result.stdout
-    assert "OpenCode" in result.stdout
+    for runtime in _RUNTIME_NAMES:
+        assert _RUNTIME_DISPLAY_NAMES[runtime] in result.stdout
+
+
+@pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is required for bootstrap installer tests")
+def test_bootstrap_install_requires_explicit_runtime_non_interactively(tmp_path: Path) -> None:
+    result, _, log_path = _run_bootstrap_with_fake_python(
+        tmp_path,
+        installer_args=["--local"],
+    )
+
+    assert result.returncode == 1
+    assert "Specify a runtime with" in result.stderr
+    assert "when running non-interactively." in result.stderr
+    for flag in _RUNTIME_INSTALL_FLAGS:
+        assert flag in result.stderr
+    assert not log_path.exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is required for bootstrap installer tests")
+def test_bootstrap_install_requires_explicit_scope_non_interactively(tmp_path: Path) -> None:
+    result, _, log_path = _run_bootstrap_with_fake_python(
+        tmp_path,
+        installer_args=[_CODEX_INSTALL_FLAG],
+    )
+
+    assert result.returncode == 1
+    assert "Specify --global or --local when running non-interactively." in result.stderr
+    assert not log_path.exists()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -436,7 +487,7 @@ def test_bootstrap_uninstall_requires_explicit_runtime_non_interactively(tmp_pat
     assert result.returncode == 1
     assert "Specify a runtime with" in result.stderr
     assert "or use --all when running --uninstall non-interactively." in result.stderr
-    for flag in ("--claude", "--gemini", "--codex", "--opencode"):
+    for flag in _RUNTIME_INSTALL_FLAGS:
         assert flag in result.stderr
 
 
@@ -445,7 +496,7 @@ def test_bootstrap_uninstall_requires_explicit_runtime_non_interactively(tmp_pat
 def test_bootstrap_uninstall_requires_explicit_scope_non_interactively(tmp_path: Path) -> None:
     result, _, _ = _run_bootstrap_with_fake_python(
         tmp_path,
-        installer_args=["--uninstall", "--codex"],
+        installer_args=["--uninstall", _CODEX_INSTALL_FLAG],
     )
 
     assert result.returncode == 1
@@ -457,7 +508,7 @@ def test_bootstrap_uninstall_requires_explicit_scope_non_interactively(tmp_path:
 def test_bootstrap_uninstall_rejects_reinstall_flag(tmp_path: Path) -> None:
     result, _, _ = _run_bootstrap_with_fake_python(
         tmp_path,
-        installer_args=["--uninstall", "--codex", "--local", "--reinstall"],
+        installer_args=["--uninstall", _CODEX_INSTALL_FLAG, "--local", "--reinstall"],
     )
 
     assert result.returncode == 1
@@ -469,7 +520,7 @@ def test_bootstrap_uninstall_rejects_reinstall_flag(tmp_path: Path) -> None:
 def test_bootstrap_rejects_reinstall_and_upgrade_together(tmp_path: Path) -> None:
     result, _, _ = _run_bootstrap_with_fake_python(
         tmp_path,
-        installer_args=["--codex", "--local", "--reinstall", "--upgrade"],
+        installer_args=[_CODEX_INSTALL_FLAG, "--local", "--reinstall", "--upgrade"],
     )
 
     assert result.returncode == 1
@@ -487,16 +538,16 @@ def test_bootstrap_hides_successful_pip_chatter(tmp_path: Path) -> None:
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
     assert "Requirement already satisfied: noisy-package==1.0.0" not in result.stdout
     assert "Install Summary" in result.stdout
-    assert "Installed GRD for Codex (local)." not in result.stdout
+    assert f"Installed GRD for {_RUNTIME_DISPLAY_NAMES[_CODEX_RUNTIME_NAME]} (local)." not in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is required for bootstrap installer tests")
 def test_bootstrap_forwards_target_dir_to_runtime_install(tmp_path: Path) -> None:
-    target_dir = tmp_path / "custom target" / ".codex"
+    target_dir = tmp_path / "custom target" / _RUNTIME_ADAPTERS[_CODEX_RUNTIME_NAME].config_dir_name
     result, _, log_path = _run_bootstrap_with_fake_python(
         tmp_path,
-        installer_args=["--codex", "--local", "--target-dir", str(target_dir)],
+        installer_args=[_CODEX_INSTALL_FLAG, "--target-dir", str(target_dir)],
     )
 
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
@@ -506,9 +557,50 @@ def test_bootstrap_forwards_target_dir_to_runtime_install(tmp_path: Path) -> Non
         entry
         for entry in entries
         if entry["managed"]
-        and entry["argv"] == ["-m", "grd.cli", "install", "codex", "--local", "--target-dir", str(target_dir)]
+        and entry["argv"] == ["-m", "grd.cli", "install", _CODEX_RUNTIME_NAME, "--local", "--target-dir", str(target_dir)]
     ]
     assert len(managed_runtime_installs) == 1
+
+
+@pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is required for bootstrap installer tests")
+def test_bootstrap_preserves_global_scope_for_canonical_global_target_dir(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    target_dir = home / _RUNTIME_ADAPTERS[_CODEX_RUNTIME_NAME].config_dir_name
+    result, _home, log_path = _run_bootstrap_with_fake_python(
+        tmp_path,
+        installer_args=[_CODEX_INSTALL_FLAG, "--target-dir", str(target_dir)],
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+
+    entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+    managed_runtime_installs = [
+        entry
+        for entry in entries
+        if entry["managed"]
+        and entry["argv"] == ["-m", "grd.cli", "install", _CODEX_RUNTIME_NAME, "--global", "--target-dir", str(target_dir)]
+    ]
+
+    assert len(managed_runtime_installs) == 1
+    assert f"Installing GRD (global) for: {_RUNTIME_DISPLAY_NAMES[_CODEX_RUNTIME_NAME]}" in result.stdout
+
+
+@pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is required for bootstrap installer tests")
+def test_bootstrap_requires_explicit_runtime_with_target_dir_non_interactively(tmp_path: Path) -> None:
+    target_dir = tmp_path / "custom target"
+    result, _, log_path = _run_bootstrap_with_fake_python(
+        tmp_path,
+        installer_args=["--target-dir", str(target_dir)],
+    )
+
+    assert result.returncode == 1
+    assert "Specify exactly one runtime with" in result.stderr
+    assert "when using --target-dir non-interactively." in result.stderr
+    for flag in _RUNTIME_INSTALL_FLAGS:
+        assert flag in result.stderr
+    assert not log_path.exists()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -531,7 +623,7 @@ def test_bootstrap_rejects_target_dir_with_all_runtimes(tmp_path: Path) -> None:
 def test_bootstrap_reinstall_force_reinstalls_matching_release(tmp_path: Path) -> None:
     result, _, log_path = _run_bootstrap_with_fake_python(
         tmp_path,
-        installer_args=["--codex", "--local", "--reinstall"],
+        installer_args=[_CODEX_INSTALL_FLAG, "--local", "--reinstall"],
     )
 
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
@@ -544,10 +636,7 @@ def test_bootstrap_reinstall_force_reinstalls_matching_release(tmp_path: Path) -
     assert len(managed_pip_installs) == 1
     assert "--force-reinstall" in managed_pip_installs[0]["argv"]
     assert managed_pip_installs[0]["argv"][-1] == PYPI_SPEC
-    assert (
-        f"Reinstalling GRD from PyPI (get-research-done=={PYTHON_PACKAGE_VERSION}) into the managed environment..."
-        in result.stdout
-    )
+    assert f"Reinstalling GRD from PyPI (get-research-done=={PYTHON_PACKAGE_VERSION}) into the managed environment..." in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -555,7 +644,7 @@ def test_bootstrap_reinstall_force_reinstalls_matching_release(tmp_path: Path) -
 def test_bootstrap_upgrade_prefers_latest_main_source(tmp_path: Path) -> None:
     result, _, log_path = _run_bootstrap_with_fake_python(
         tmp_path,
-        installer_args=["--claude", "--local", "--upgrade"],
+        installer_args=[_CLAUDE_INSTALL_FLAG, "--local", "--upgrade"],
     )
 
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
@@ -577,7 +666,7 @@ def test_bootstrap_upgrade_prefers_latest_main_source(tmp_path: Path) -> None:
 def test_bootstrap_upgrade_falls_back_to_main_git_checkout(tmp_path: Path) -> None:
     result, _, log_path = _run_bootstrap_with_fake_python(
         tmp_path,
-        installer_args=["--claude", "--local", "--upgrade"],
+        installer_args=[_CLAUDE_INSTALL_FLAG, "--local", "--upgrade"],
         extra_env={"FAKE_PIP_FAIL_BRANCH_ARCHIVE": "1"},
     )
 
@@ -585,9 +674,7 @@ def test_bootstrap_upgrade_falls_back_to_main_git_checkout(tmp_path: Path) -> No
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_pip_targets = [
-        entry["argv"][-1]
-        for entry in entries
-        if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
+        entry["argv"][-1] for entry in entries if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
     ]
 
     assert managed_pip_targets == [
@@ -602,9 +689,9 @@ def test_bootstrap_upgrade_falls_back_to_main_git_checkout(tmp_path: Path) -> No
 def test_bootstrap_upgrade_prefers_preflighted_git_checkout_when_archive_is_inaccessible(tmp_path: Path) -> None:
     result, _, log_path = _run_bootstrap_with_fake_python(
         tmp_path,
-        installer_args=["--claude", "--local", "--upgrade"],
+        installer_args=[_CLAUDE_INSTALL_FLAG, "--local", "--upgrade"],
         extra_env={
-            "GRD_BOOTSTRAP_TEST_PROBES": json.dumps(
+            "GPD_BOOTSTRAP_TEST_PROBES": json.dumps(
                 {
                     MAIN_ARCHIVE_SPEC: {
                         "availability": "unavailable",
@@ -623,18 +710,14 @@ def test_bootstrap_upgrade_prefers_preflighted_git_checkout_when_archive_is_inac
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_pip_targets = [
-        entry["argv"][-1]
-        for entry in entries
-        if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
+        entry["argv"][-1] for entry in entries if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
     ]
 
     assert managed_pip_targets == [MAIN_HTTPS_GIT_SPEC]
     assert "Detected that current main branch source archive is unavailable: HTTP 404." in result.stdout
     assert "Using HTTPS git checkout of main for the main-branch upgrade." in result.stdout
     assert "HTTP error 404 while getting branch archive" not in result.stderr
-    assert (
-        "current main branch source archive failed. Falling back to HTTPS git checkout of main..." not in result.stdout
-    )
+    assert "current main branch source archive failed. Falling back to HTTPS git checkout of main..." not in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -642,7 +725,7 @@ def test_bootstrap_upgrade_prefers_preflighted_git_checkout_when_archive_is_inac
 def test_bootstrap_upgrade_fails_closed_without_falling_back_to_release_sources(tmp_path: Path) -> None:
     result, _, log_path = _run_bootstrap_with_fake_python(
         tmp_path,
-        installer_args=["--claude", "--local", "--upgrade"],
+        installer_args=[_CLAUDE_INSTALL_FLAG, "--local", "--upgrade"],
         extra_env={
             "FAKE_PIP_FAIL_BRANCH_ARCHIVE": "1",
             "FAKE_PIP_FAIL_MAIN_GIT": "1",
@@ -653,9 +736,7 @@ def test_bootstrap_upgrade_fails_closed_without_falling_back_to_release_sources(
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_pip_targets = [
-        entry["argv"][-1]
-        for entry in entries
-        if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
+        entry["argv"][-1] for entry in entries if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
     ]
     managed_runtime_installs = [
         entry for entry in entries if entry["managed"] and entry["argv"][:3] == ["-m", "grd.cli", "install"]
@@ -682,19 +763,16 @@ def test_bootstrap_supports_all_runtime_install_in_one_pass(tmp_path: Path) -> N
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_runtime_installs = [
-        entry
-        for entry in entries
-        if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", "--all", "--global"]
+        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "grd.cli", "install", "--all", "--global"]
     ]
 
     assert len(managed_runtime_installs) == 1
-    assert "Claude Code" in result.stdout
-    assert "Gemini CLI" in result.stdout
-    assert "Codex" in result.stdout
-    assert "OpenCode" in result.stdout
+    for runtime in _RUNTIME_NAMES:
+        assert _RUNTIME_DISPLAY_NAMES[runtime] in result.stdout
     assert "Install Summary" in result.stdout
     assert "Next steps" in result.stdout
-    assert "- Claude Code (claude), then /grd:help, then /grd:new-project or /grd:map-research" in result.stdout
+    for runtime in _RUNTIME_NAMES:
+        assert _next_step_line(runtime) in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -709,9 +787,7 @@ def test_bootstrap_falls_back_to_tag_git_when_tag_archive_install_fails(tmp_path
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_pip_targets = [
-        entry["argv"][-1]
-        for entry in entries
-        if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
+        entry["argv"][-1] for entry in entries if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
     ]
 
     assert managed_pip_targets == [
@@ -733,7 +809,7 @@ def test_bootstrap_prefers_preflighted_tag_git_candidate_when_tag_archive_is_ina
         tmp_path,
         extra_env={
             "FAKE_PIP_FAIL_PYPI": "1",
-            "GRD_BOOTSTRAP_TEST_PROBES": json.dumps(
+            "GPD_BOOTSTRAP_TEST_PROBES": json.dumps(
                 {
                     TAG_ARCHIVE_SPEC: {
                         "availability": "unavailable",
@@ -752,20 +828,13 @@ def test_bootstrap_prefers_preflighted_tag_git_candidate_when_tag_archive_is_ina
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_pip_targets = [
-        entry["argv"][-1]
-        for entry in entries
-        if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
+        entry["argv"][-1] for entry in entries if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
     ]
 
     assert managed_pip_targets == [PYPI_SPEC, TAG_HTTPS_GIT_SPEC]
     assert "PyPI install failed. Falling back to GitHub source..." in result.stdout
-    assert (
-        f"Detected that GitHub source archive for v{PYTHON_PACKAGE_VERSION} is unavailable: HTTP 404." in result.stdout
-    )
-    assert (
-        f"Installing GRD from HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} into the managed environment..."
-        in result.stdout
-    )
+    assert f"Detected that GitHub source archive for v{PYTHON_PACKAGE_VERSION} is unavailable: HTTP 404." in result.stdout
+    assert f"Installing GRD from HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} into the managed environment..." in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
@@ -775,7 +844,7 @@ def test_bootstrap_release_install_fails_closed_without_falling_back_to_main_sou
         tmp_path,
         extra_env={
             "FAKE_PIP_FAIL_PYPI": "1",
-            "GRD_BOOTSTRAP_TEST_PROBES": json.dumps(
+            "GPD_BOOTSTRAP_TEST_PROBES": json.dumps(
                 {
                     TAG_ARCHIVE_SPEC: {
                         "availability": "unavailable",
@@ -802,13 +871,8 @@ def test_bootstrap_release_install_fails_closed_without_falling_back_to_main_sou
     ]
 
     assert len(managed_pip_installs) == 1  # PyPI attempted but failed
-    assert (
-        f"Detected that GitHub source archive for v{PYTHON_PACKAGE_VERSION} is unavailable: HTTP 404." in result.stdout
-    )
-    assert (
-        f"Detected that HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} is unavailable: tag v{PYTHON_PACKAGE_VERSION} is not published."
-        in result.stdout
-    )
+    assert f"Detected that GitHub source archive for v{PYTHON_PACKAGE_VERSION} is unavailable: HTTP 404." in result.stdout
+    assert f"Detected that HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} is unavailable: tag v{PYTHON_PACKAGE_VERSION} is not published." in result.stdout
     assert "No accessible tagged GitHub release source candidate was detected." in result.stdout
     assert "main branch" not in result.stdout
     assert f"Failed to install GRD v{PYTHON_PACKAGE_VERSION} from GitHub sources." in result.stderr
@@ -821,7 +885,7 @@ def test_bootstrap_fails_closed_when_probes_mark_all_public_sources_unavailable(
         tmp_path,
         extra_env={
             "FAKE_PIP_FAIL_PYPI": "1",
-            "GRD_BOOTSTRAP_TEST_PROBES": json.dumps(
+            "GPD_BOOTSTRAP_TEST_PROBES": json.dumps(
                 {
                     TAG_ARCHIVE_SPEC: {
                         "availability": "unavailable",
@@ -848,12 +912,8 @@ def test_bootstrap_fails_closed_when_probes_mark_all_public_sources_unavailable(
     ]
 
     assert len(managed_pip_installs) == 1  # PyPI attempted but failed
-    assert (
-        f"Detected that GitHub source archive for v{PYTHON_PACKAGE_VERSION} is unavailable: HTTP 404." in result.stdout
-    )
-    assert (
-        f"Detected that HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} is unavailable: git exit 2." in result.stdout
-    )
+    assert f"Detected that GitHub source archive for v{PYTHON_PACKAGE_VERSION} is unavailable: HTTP 404." in result.stdout
+    assert f"Detected that HTTPS git checkout for v{PYTHON_PACKAGE_VERSION} is unavailable: git exit 2." in result.stdout
     assert "No accessible tagged GitHub release source candidate was detected." in result.stdout
     assert "main branch" not in result.stdout
     assert f"Failed to install GRD v{PYTHON_PACKAGE_VERSION}" in result.stderr
@@ -875,9 +935,7 @@ def test_bootstrap_fails_closed_when_all_release_sources_fail(tmp_path: Path) ->
 
     entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     managed_pip_targets = [
-        entry["argv"][-1]
-        for entry in entries
-        if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
+        entry["argv"][-1] for entry in entries if entry["managed"] and entry["argv"][:4] == ["-m", "pip", "install", "--upgrade"]
     ]
 
     assert managed_pip_targets == [
@@ -888,3 +946,54 @@ def test_bootstrap_fails_closed_when_all_release_sources_fail(tmp_path: Path) ->
     assert "current main branch source archive" not in result.stdout
     assert f"Failed to install GRD v{PYTHON_PACKAGE_VERSION} from GitHub sources." in result.stderr
     assert "Could not find a version that satisfies the requirement" not in result.stderr
+
+
+@pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is required for bootstrap installer tests")
+def test_bootstrap_prefers_versioned_python_when_generic_alias_is_newer(tmp_path: Path) -> None:
+    result, _, log_path = _run_bootstrap_with_fake_python(
+        tmp_path,
+        python_versions={
+            "python3": "Python 3.14.3",
+            "python": "Python 3.14.3",
+            "python3.13": "Python 3.13.2",
+        },
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+
+    entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+    venv_creations = [
+        entry for entry in entries if entry["argv"][:2] == ["-m", "venv"] and entry["argv"] != ["-m", "venv", "--help"]
+    ]
+
+    assert len(venv_creations) == 1
+    assert venv_creations[0]["exe"].endswith("python3.13")
+    assert "Found Python 3.13.2" in result.stdout
+    assert "Found Python 3.14.3" not in result.stdout
+
+
+@pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is required for bootstrap installer tests")
+def test_bootstrap_recreates_managed_env_when_selected_minor_changes(tmp_path: Path) -> None:
+    result, home, log_path = _run_bootstrap_with_fake_python(
+        tmp_path,
+        python_versions={
+            "python3": "Python 3.14.3",
+            "python": "Python 3.14.3",
+            "python3.13": "Python 3.13.2",
+        },
+        precreate_managed_version="Python 3.14.3",
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+
+    entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+    venv_creations = [
+        entry for entry in entries if entry["argv"][:2] == ["-m", "venv"] and entry["argv"] != ["-m", "venv", "--help"]
+    ]
+
+    assert len(venv_creations) == 1
+    assert venv_creations[0]["exe"].endswith("python3.13")
+    assert "switching to Python 3.13.2" in result.stdout
+    assert (home / "GRD" / "venv" / "bin" / "python").exists()

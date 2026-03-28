@@ -8,7 +8,13 @@ from grd.mcp.paper.bibliography import (
     build_bibliography_with_audit,
     write_bibliography_audit,
 )
-from grd.mcp.paper.compiler import build_paper, compile_paper
+from grd.mcp.paper.compiler import (
+    build_paper,
+    compile_paper,
+    detect_latex_toolchain,
+    find_latex_compiler,
+    get_latex_install_guidance,
+)
 from grd.mcp.paper.journal_map import get_journal_for_domain, get_journal_spec, list_journals
 from grd.mcp.paper.models import (
     ArtifactManifest,
@@ -28,7 +34,6 @@ from grd.mcp.paper.models import (
     ReviewIssueSeverity,
     ReviewIssueStatus,
     ReviewLedger,
-    ReviewPanelBundle,
     ReviewRecommendation,
     ReviewStageKind,
     ReviewSupportStatus,
@@ -38,11 +43,9 @@ from grd.mcp.paper.models import (
 from grd.mcp.paper.review_artifacts import (
     read_claim_index,
     read_review_ledger,
-    read_review_panel_bundle,
     read_stage_review_report,
     write_claim_index,
     write_review_ledger,
-    write_review_panel_bundle,
     write_stage_review_report,
 )
 
@@ -67,7 +70,6 @@ __all__ = [
     "ReviewIssueSeverity",
     "ReviewIssueStatus",
     "ReviewLedger",
-    "ReviewPanelBundle",
     "ReviewRecommendation",
     "ReviewStageKind",
     "ReviewSupportStatus",
@@ -77,16 +79,17 @@ __all__ = [
     "build_bibliography_with_audit",
     "build_paper",
     "compile_paper",
+    "detect_latex_toolchain",
+    "find_latex_compiler",
+    "get_latex_install_guidance",
     "get_journal_for_domain",
     "get_journal_spec",
     "list_journals",
     "read_claim_index",
     "read_review_ledger",
-    "read_review_panel_bundle",
     "read_stage_review_report",
     "write_bibliography_audit",
     "write_claim_index",
     "write_review_ledger",
-    "write_review_panel_bundle",
     "write_stage_review_report",
 ]

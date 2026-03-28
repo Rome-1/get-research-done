@@ -49,6 +49,10 @@ def test_normalize_value_metric():
     assert normalize_value("metric_signature", "++++") == "euclidean"
 
 
+def test_normalize_value_metric_euclidean_alias():
+    assert normalize_value("metric_signature", "Euclidean (+,+,+,+)") == "euclidean"
+
+
 def test_normalize_value_passthrough():
     assert normalize_value("metric_signature", "custom-value") == "custom-value"
     assert normalize_value("unknown_field", "anything") == "anything"
@@ -99,7 +103,7 @@ def test_convention_set_canonical():
     assert result.updated is True
     assert result.key == "metric_signature"
     assert result.value == "mostly-plus"
-    assert lock.conventions["metric_signature"] == "mostly-plus"
+    assert lock.metric_signature == "mostly-plus"
 
 
 def test_convention_set_alias():
@@ -107,7 +111,15 @@ def test_convention_set_alias():
     result = convention_set(lock, "metric", "mostly-minus")
     assert result.updated is True
     assert result.key == "metric_signature"
-    assert lock.conventions["metric_signature"] == "mostly-minus"
+    assert lock.metric_signature == "mostly-minus"
+
+
+def test_convention_set_metric_euclidean_alias_normalizes():
+    lock = ConventionLock()
+    result = convention_set(lock, "metric_signature", "Euclidean (+,+,+,+)")
+    assert result.updated is True
+    assert result.value == "euclidean"
+    assert lock.metric_signature == "euclidean"
 
 
 def test_convention_set_immutability_gate():
@@ -116,7 +128,7 @@ def test_convention_set_immutability_gate():
     result = convention_set(lock, "metric_signature", "mostly-minus")
     assert result.updated is False
     assert result.reason == "convention_already_set"
-    assert lock.conventions["metric_signature"] == "mostly-plus"
+    assert lock.metric_signature == "mostly-plus"
 
 
 def test_convention_set_force_overwrite():
@@ -124,7 +136,7 @@ def test_convention_set_force_overwrite():
     convention_set(lock, "metric_signature", "mostly-plus")
     result = convention_set(lock, "metric_signature", "mostly-minus", force=True)
     assert result.updated is True
-    assert lock.conventions["metric_signature"] == "mostly-minus"
+    assert lock.metric_signature == "mostly-minus"
 
 
 def test_convention_set_custom():
@@ -132,7 +144,7 @@ def test_convention_set_custom():
     result = convention_set(lock, "my_custom_convention", "some-value")
     assert result.updated is True
     assert result.custom is True
-    assert lock.conventions["my_custom_convention"] == "some-value"
+    assert lock.custom_conventions["my_custom_convention"] == "some-value"
 
 
 # ─── convention_list ─────────────────────────────────────────────────────────
@@ -210,7 +222,7 @@ def test_convention_check_incomplete():
 
 def test_convention_check_with_custom():
     lock = ConventionLock()
-    lock.conventions["my_custom"] = "value"
+    lock.custom_conventions["my_custom"] = "value"
     result = convention_check(lock)
     assert result.custom_count == 1
 
@@ -302,7 +314,7 @@ def test_convention_set_unicode_key_as_custom():
     result = convention_set(lock, "\u00e9lectrique", "oui")
     assert result.updated is True
     assert result.custom is True
-    assert lock.conventions["\u00e9lectrique"] == "oui"
+    assert lock.custom_conventions["\u00e9lectrique"] == "oui"
 
 
 def test_convention_set_very_long_value():
@@ -311,7 +323,7 @@ def test_convention_set_very_long_value():
     long_val = "x" * 10_000
     result = convention_set(lock, "metric_signature", long_val)
     assert result.updated is True
-    assert lock.conventions["metric_signature"] == long_val
+    assert lock.metric_signature == long_val
 
 
 def test_is_bogus_value_case_insensitive():
@@ -340,7 +352,7 @@ def test_sanitize_value_rejects_none_variants():
 
 
 def test_convention_check_all_18_set():
-    """When all 18 canonical physics fields are set, check reports complete."""
+    """When all 18 canonical fields are set, check reports complete."""
     lock = ConventionLock(
         metric_signature="mostly-plus",
         fourier_convention="physics",
@@ -375,37 +387,6 @@ def test_convention_check_partial():
     assert result.complete is False
     assert result.set_count == 2
     assert result.missing_count == 16
-
-
-# ─── Legacy format migration ────────────────────────────────────────────────
-
-
-def test_legacy_flat_format_migration():
-    """ConventionLock auto-migrates flat physics fields into conventions dict."""
-    lock = ConventionLock(
-        **{
-            "metric_signature": "mostly-plus",
-            "fourier_convention": "physics",
-            "custom_conventions": {"my_field": "my_value"},
-        }
-    )
-    assert lock.conventions["metric_signature"] == "mostly-plus"
-    assert lock.conventions["fourier_convention"] == "physics"
-    assert lock.conventions["my_field"] == "my_value"
-
-
-def test_new_format_passthrough():
-    """New format with conventions dict passes through unchanged."""
-    lock = ConventionLock(
-        **{
-            "conventions": {
-                "metric_signature": "mostly-plus",
-                "my_field": "my_value",
-            }
-        }
-    )
-    assert lock.conventions["metric_signature"] == "mostly-plus"
-    assert lock.conventions["my_field"] == "my_value"
 
 
 # ─── Edge cases: parse_assert_conventions with indentation ───────────────
@@ -468,7 +449,7 @@ def test_convention_set_custom_force_overwrite():
     convention_set(lock, "my_custom", "value1")
     result = convention_set(lock, "my_custom", "value2", force=True)
     assert result.updated is True
-    assert lock.conventions["my_custom"] == "value2"
+    assert lock.custom_conventions["my_custom"] == "value2"
 
 
 # ─── convention_diff_phases ──────────────────────────────────────────────────
@@ -480,8 +461,7 @@ class TestConventionDiffPhases:
     def test_missing_phase_ids_returns_empty(self, tmp_path):
         """convention_diff_phases with missing phase IDs returns empty result."""
         from grd.core.conventions import convention_diff_phases
-
-        grd_dir = tmp_path / ".grd"
+        grd_dir = tmp_path / "GRD"
         grd_dir.mkdir()
 
         result = convention_diff_phases(tmp_path, phase1=None, phase2="1")
@@ -492,132 +472,10 @@ class TestConventionDiffPhases:
     def test_nonexistent_phases_returns_empty(self, tmp_path):
         """convention_diff_phases with nonexistent phases returns empty result."""
         from grd.core.conventions import convention_diff_phases
-
-        grd_dir = tmp_path / ".grd" / "phases"
+        grd_dir = tmp_path / "GRD" / "phases"
         grd_dir.mkdir(parents=True)
 
         result = convention_diff_phases(tmp_path, phase1="99", phase2="98")
         assert result.changed == []
         assert result.added == []
         assert result.removed == []
-
-
-# ─── Lazy-loading proxy backward compatibility ─────────────────────────────
-
-
-class TestLazyProxyBackwardCompat:
-    """Tests for _KnownConventions and _LazyDict lazy-loading behavior."""
-
-    def test_known_conventions_bool_is_truthy(self):
-        """KNOWN_CONVENTIONS must be truthy (triggers lazy load)."""
-        assert bool(KNOWN_CONVENTIONS) is True
-
-    def test_known_conventions_add(self):
-        """KNOWN_CONVENTIONS + list must include all known conventions."""
-        result = KNOWN_CONVENTIONS + ["extra"]
-        assert "extra" in result
-        assert len(result) == len(KNOWN_CONVENTIONS) + 1
-
-    def test_lazy_dict_bool_is_truthy(self):
-        """KEY_ALIASES must be truthy (triggers lazy load)."""
-        from grd.core.conventions import KEY_ALIASES
-
-        assert bool(KEY_ALIASES) is True
-
-    def test_lazy_dict_copy(self):
-        """_LazyDict.copy() returns a plain dict with all loaded entries."""
-        from grd.core.conventions import KEY_ALIASES
-
-        copied = KEY_ALIASES.copy()
-        assert isinstance(copied, dict)
-        assert len(copied) == len(KEY_ALIASES)
-        assert copied == dict(KEY_ALIASES)
-
-    def test_convention_labels_bool_is_truthy(self):
-        """CONVENTION_LABELS must be truthy (triggers lazy load)."""
-        from grd.core.conventions import CONVENTION_LABELS
-
-        assert bool(CONVENTION_LABELS) is True
-
-    def test_value_aliases_bool_is_truthy(self):
-        """VALUE_ALIASES must be truthy (triggers lazy load)."""
-        from grd.core.conventions import VALUE_ALIASES
-
-        assert bool(VALUE_ALIASES) is True
-
-
-class TestLazyPhysicsProxyDegradation:
-    """Tests for _LazyPhysicsProxy graceful degradation."""
-
-    def test_proxy_returns_empty_on_load_failure(self, monkeypatch):
-        """When physics domain fails to load, proxy returns empty collections."""
-        from grd.core import conventions as conv_mod
-
-        proxy = conv_mod._LazyPhysicsProxy()
-        monkeypatch.setattr(conv_mod, "_load_physics_defaults", lambda: None)
-        assert proxy.known_conventions == []
-        assert proxy.labels == {}
-        assert proxy.key_aliases == {}
-        assert proxy.value_aliases == {}
-
-    def test_proxy_only_loads_once(self, monkeypatch):
-        """The proxy calls _load_physics_defaults exactly once."""
-        from grd.core import conventions as conv_mod
-
-        call_count = 0
-        original = conv_mod._load_physics_defaults
-
-        def counting_loader():
-            nonlocal call_count
-            call_count += 1
-            return original()
-
-        proxy = conv_mod._LazyPhysicsProxy()
-        monkeypatch.setattr(conv_mod, "_load_physics_defaults", counting_loader)
-        _ = proxy.known_conventions
-        _ = proxy.labels
-        _ = proxy.key_aliases
-        _ = proxy.value_aliases
-        assert call_count == 1
-
-
-# ─── Legacy migration edge cases ──────────────────────────────────────────
-
-
-class TestLegacyMigrationEdgeCases:
-    """Edge cases for ConventionLock._migrate_legacy_format."""
-
-    def test_conventions_dict_takes_precedence_over_flat_field(self):
-        """Explicit conventions dict value wins over flat physics field."""
-        lock = ConventionLock(
-            **{
-                "conventions": {"metric_signature": "mostly-minus"},
-                "metric_signature": "mostly-plus",
-            }
-        )
-        assert lock.conventions["metric_signature"] == "mostly-minus"
-
-    def test_custom_conventions_none_values_filtered(self):
-        """None values in custom_conventions are not migrated."""
-        lock = ConventionLock(
-            **{
-                "custom_conventions": {"keep": "value", "drop": None},
-            }
-        )
-        assert lock.conventions["keep"] == "value"
-        assert "drop" not in lock.conventions
-
-    def test_empty_conventions_with_flat_fields(self):
-        """Empty conventions dict still receives migrated flat fields."""
-        lock = ConventionLock(
-            **{
-                "conventions": {},
-                "gauge_choice": "Lorenz",
-            }
-        )
-        assert lock.conventions["gauge_choice"] == "Lorenz"
-
-    def test_non_dict_data_passes_through(self):
-        """Non-dict data is returned unchanged by the validator."""
-        lock = ConventionLock()
-        assert lock.conventions == {}

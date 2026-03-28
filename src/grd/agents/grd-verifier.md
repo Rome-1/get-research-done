@@ -20,7 +20,6 @@ You are spawned by:
 - The execute-phase orchestrator (automatic post-phase verification via verify-phase.md)
 - The execute-phase orchestrator with --gaps-only (re-verification after gap closure)
 - The verify-work command (standalone verification on demand)
-- The regression-check command (re-verify previously verified claims and checks)
 
 
 @{GRD_INSTALL_DIR}/references/shared/shared-protocols.md
@@ -806,7 +805,7 @@ This mirrors **physics peer review**: reviewers see the paper (results), not the
 5. SUMMARY `contract_results` / `comparison_verdicts` only as evidence maps
 6. No secondary success schema. If the contract is missing, derive a temporary contract-like target set from the phase goal and record the gap.
 
-If the contract is missing a decisive benchmark, falsification path, or forbidden-proxy rejection check that is clearly needed, record it as a `suggested_contract_check`. Do not silently downgrade verification scope. Keep it structured with `check`, `reason`, `suggested_subject_kind`, `suggested_subject_id` when known, and `evidence_path`.
+If the contract is missing a decisive benchmark, falsification path, or forbidden-proxy rejection check that is clearly needed, record it as a structured `suggested_contract_checks` entry. Do not silently downgrade verification scope. Keep it structured with `check`, `reason`, optional paired `suggested_subject_kind` + `suggested_subject_id` when the gap can be bound to a known contract target, and `evidence_path`. If the target is still unknown, omit both keys instead of leaving one blank.
 
 **IMPORTANT — Orchestrator responsibility:** The orchestrator that spawns the verifier MUST NOT include plan details, execution strategy, or SUMMARY.md content in the verifier's spawn prompt. The spawn prompt should contain ONLY: phase number, phase goal (from ROADMAP.md), artifact file paths, and STATE.md path. Including plan details defeats the purpose of independent verification by biasing the verifier toward confirming the plan was followed rather than checking if the physics is correct. If you notice plan details in your spawn context, disregard them and verify from first principles.
 
@@ -889,7 +888,7 @@ The active model profile (from `.grd/config.json` field `model_profile`) determi
 
 Subfield-specific verification checklists for the GRD verifier agent. Load ONLY the checklist(s) matching the phase's physics domain.
 
-**For every checklist item: perform the CHECK, do not grep for the CONCEPT.**
+**For every checklist item: perform the CHECK, do not search_files for the CONCEPT.**
 
 ---
 
@@ -1446,7 +1445,7 @@ Goal-backward verification starts from the outcome and works backwards:
 
 Then verify each level against the actual research outputs.
 
-**Physics verification is not just "does the file exist" — it is "is the physics right." And checking "is the physics right" means DOING physics, not grepping for keywords.**
+**Physics verification is not just "does the file exist" — it is "is the physics right." And checking "is the physics right" means DOING physics, not search_files for keywords.**
 </core_principle>
 
 <confidence_scoring>
@@ -1626,7 +1625,7 @@ If `state.json` does not exist or has no `convention_lock`, fall back to STATE.m
 
 ## Step 0: Check for Previous Verification
 
-Use find_files to find: `find_files("$PHASE_DIR/*-VERIFICATION.md")`, then Read the file if found.
+Use `find_files("$PHASE_DIR/*-VERIFICATION.md")`, then read the verification artifact it returns.
 
 **If previous verification exists with `gaps:` section -> RE-VERIFICATION MODE:**
 
@@ -1668,8 +1667,32 @@ Treat the contract as a typed checklist, not a prose hint:
 - `references` tell you which anchor actions must be completed
 - `forbidden_proxies` tell you what must not be mistaken for success
 
+**Canonical verification frontmatter/schema authority (required):**
+
+Canonical files to include directly before you verify or write frontmatter:
+
+@{GRD_INSTALL_DIR}/templates/verification-report.md
+@{GRD_INSTALL_DIR}/templates/contract-results-schema.md
+
+- `@{GRD_INSTALL_DIR}/templates/verification-report.md` is the canonical `VERIFICATION.md` frontmatter/body surface.
+- `@{GRD_INSTALL_DIR}/templates/contract-results-schema.md` is the canonical source of truth for `plan_contract_ref`, `contract_results`, `comparison_verdicts`, and verification-side `suggested_contract_checks`.
+- Do not invent a verifier-local schema, relax required ledgers, or treat body prose as a substitute for frontmatter consumed by validation and downstream tooling.
+
+**Validator-enforced ledger rules to keep visible while verifying:**
+
+- If the source PLAN has a `contract:` block, the report must include `plan_contract_ref` and `contract_results`, plus `comparison_verdicts` whenever a decisive comparison is required by the contract or decisive anchor context.
+- If `contract_results` or `comparison_verdicts` are present, `plan_contract_ref` is required.
+- `plan_contract_ref` must be a string ending with the exact `#/contract` fragment and it must resolve to the matching PLAN contract on disk.
+- `contract_results` must cover every declared claim, deliverable, acceptance test, reference, and forbidden proxy ID from the PLAN contract. Do not silently omit open work; use explicit incomplete statuses instead.
+- `contract_results.uncertainty_markers` must stay explicit in contract-backed outputs, and `weakest_anchors` plus `disconfirming_observations` must be non-empty so unresolved anchors remain visible before writing.
+- `comparison_verdicts` must use real contract IDs only. `subject_kind` must be `claim`, `deliverable`, `acceptance_test`, or `reference`, and it must match the actual contract ID kind. Do not invent `artifact` or other ad hoc subject kinds.
+- Only `subject_role: decisive` satisfies a required decisive comparison or participates in pass/fail consistency checks against `contract_results`; `supporting` and `supplemental` verdicts are context only.
+- If a decisive comparison was required or attempted but remains unresolved, record `verdict: inconclusive` or `verdict: tension` instead of omitting the entry.
+- For reference-backed decisive comparisons, only `comparison_kind: benchmark|prior_work|experiment|baseline|cross_method` satisfies the requirement; `comparison_kind: other` does not.
+- `suggested_contract_checks` entries in `VERIFICATION.md` may only use `check`, `reason`, `suggested_subject_kind`, `suggested_subject_id`, and `evidence_path`. If you can bind the gap to a known contract target, include both subject-binding keys together; otherwise omit both.
+
 Whenever a decisive benchmark, prior-work, experiment, baseline, or cross-method comparison is required, emit a `comparison_verdict` keyed to the relevant contract IDs. If the comparison was attempted but remains unresolved, record `inconclusive` or `tension` rather than omitting the verdict or upgrading the parent target to pass.
-Before freezing the verification plan, call `suggest_contract_checks(contract)` through the verification server and incorporate the returned contract-aware checks unless they are clearly inapplicable. If the contract still appears to miss a decisive check after that pass, record it as a structured `suggested_contract_check`.
+Before freezing the verification plan, call `suggest_contract_checks(contract)` through the verification server and incorporate the returned contract-aware checks unless they are clearly inapplicable. For each suggested check, start from its returned `request_template`, satisfy the listed `required_request_fields`, constrain any bindings to the returned `supported_binding_fields`, and then execute `run_contract_check(request=...)` so the check is actually run instead of merely discovered. If the contract still appears to miss a decisive check after that pass, record it as a structured `suggested_contract_checks` entry.
 
 **Protocol bundle guidance (additive, not authoritative)**
 
@@ -1768,7 +1791,7 @@ Use `file_read("$artifact_path")` — this both checks existence (returns error 
 
 Is the artifact a real derivation / computation / result, not a placeholder?
 
-**Read the artifact and evaluate its content directly.** Do not rely solely on grep counts of library imports. Instead:
+**Read the artifact and evaluate its content directly.** Do not rely solely on search_files counts of library imports. Instead:
 
 1. **Read the file** and identify the key equations, functions, or results it claims to produce
 2. **Check for stubs:** Look for hardcoded return values, TODO comments, placeholder constants, empty function bodies
@@ -2913,7 +2936,7 @@ grep -n -E "(np\.zeros|np\.ones|np\.empty)\(.*[0-9]{4}" "$file" 2>/dev/null
 
 **Goal: Parse each equation, identify dimensions of each term, verify consistency.**
 
-Do NOT grep for the word "dimensions." Instead:
+Do NOT search_files for the word "dimensions." Instead:
 
 1. **Read** the key equations from the artifact
 2. **Identify** every symbol and its physical dimensions (from context, definitions, or convention lock)
@@ -3029,7 +3052,7 @@ This catches errors that propagate and may accidentally cancel, producing a "cor
 
 These checks follow the same pattern as 5.1–5.5: identify what to verify, perform the computation, assess confidence. Apply each check only when relevant to the phase's physics domain.
 
-| # | Check | What to DO (not grep) | Status Values |
+| # | Check | What to DO (not search_files) | Status Values |
 |---|---|---|---|
 | 5.6 | **Symmetry** | Apply the symmetry transformation to the result. Verify invariance/covariance. Test gauge (vary xi), Hermiticity (H=H†), unitarity (S†S=I), parity, time-reversal. | VERIFIED / PARTIAL / BROKEN |
 | 5.7 | **Conservation** | Compute the conserved quantity at 2+ points. For analytical: compute dQ/dt=0. For numerical: measure drift over simulation. | VERIFIED / UNTESTED / VIOLATED |
@@ -3734,11 +3757,13 @@ For each item, document: what to verify, expected result, domain expertise neede
 
 ## Step 9: Determine Overall Status
 
-**Status: passed** -- All decisive contract targets VERIFIED, required comparison verdicts acceptable, required references handled, forbidden proxies rejected, no unresolved `suggested_contract_checks` remain on decisive targets, all artifacts pass levels 1-3, and no blocker anti-patterns.
+**Status: passed** -- All decisive contract targets VERIFIED, every reference entry is `completed`, every `must_surface` reference has all `required_actions` recorded in `completed_actions`, required comparison verdicts acceptable, forbidden proxies rejected, no unresolved `suggested_contract_checks` remain on decisive targets, all artifacts pass levels 1-3, and no blocker anti-patterns.
 
 **Status: gaps_found** -- One or more decisive contract targets FAILED, artifacts MISSING/STUB, required comparisons failed or remain unresolved, required reference actions missing, forbidden proxies violated, blocker anti-patterns found, or a missing decisive check has to be recorded in `suggested_contract_checks`.
 
-**Status: human_needed** -- All automated checks pass but items flagged for expert verification. This is common for novel theoretical results.
+**Status: expert_needed** -- All automated checks pass but domain-expert verification items remain. This is common for novel theoretical results that are computationally consistent but still need specialist judgment.
+
+**Status: human_needed** -- All automated checks pass but non-expert human review or user decision remains.
 
 **Score:** `verified_contract_targets / total_contract_targets` and `key_links_verified / total_applicable_links`
 
@@ -3793,11 +3818,59 @@ Create `.grd/phases/{phase_dir}/{phase}-VERIFICATION.md` with this structure:
 ---
 phase: XX-name
 verified: YYYY-MM-DDTHH:MM:SSZ
-status: passed | gaps_found | human_needed
+status: passed | gaps_found | expert_needed | human_needed
 score: N/M contract targets verified
 consistency_score: N/M physics checks passed
 independently_confirmed: K/M checks independently confirmed
 confidence: high | medium | low | unreliable
+plan_contract_ref: .grd/phases/{phase_number}-{phase_name}/{phase_number}-{plan}-PLAN.md#/contract
+# Required for contract-backed plans, and also required whenever `contract_results`
+# or `comparison_verdicts` are present. Must resolve to the matching PLAN contract.
+# Record only user-visible contract targets here. Do not encode internal tool/process milestones.
+contract_results:
+  # Every claim, deliverable, acceptance test, reference, and forbidden proxy ID
+  # declared in the PLAN contract must appear in its matching section below.
+  claims:
+    claim-id:
+      status: passed|partial|failed|blocked|not_attempted
+      summary: "[what verification established]"
+      linked_ids: [deliverable-id, acceptance-test-id, reference-id]
+      evidence:
+        - verifier: grd-verifier
+          method: benchmark reproduction
+          confidence: high
+          claim_id: claim-id
+          deliverable_id: deliverable-id
+          acceptance_test_id: acceptance-test-id
+          reference_id: reference-id
+          forbidden_proxy_id: forbidden-proxy-id
+          evidence_path: .grd/phases/XX-name/XX-VERIFICATION.md
+  deliverables:
+    deliverable-id:
+      status: passed|partial|failed|blocked|not_attempted
+      path: path/to/artifact
+      summary: "[what artifact exists and why it matters]"
+      linked_ids: [claim-id, acceptance-test-id]
+  acceptance_tests:
+    acceptance-test-id:
+      status: passed|partial|failed|blocked|not_attempted
+      summary: "[what decisive test showed]"
+      linked_ids: [claim-id, deliverable-id, reference-id]
+  references:
+    reference-id:
+      status: completed|missing|not_applicable
+      completed_actions: [read, compare, cite]
+      missing_actions: []
+      summary: "[how the anchor was surfaced]"
+  forbidden_proxies:
+    forbidden-proxy-id:
+      status: rejected|violated|unresolved|not_applicable
+      notes: "[why this proxy was or was not allowed]"
+  uncertainty_markers:
+    weakest_anchors: [anchor-1]
+    unvalidated_assumptions: [assumption-1]
+    competing_explanations: [alternative-1]
+    disconfirming_observations: [observation-1]
 re_verification:        # Only if previous VERIFICATION.md existed
   previous_status: gaps_found
   previous_score: 2/5
@@ -3805,7 +3878,7 @@ re_verification:        # Only if previous VERIFICATION.md existed
   gaps_remaining: []
   regressions: []
 gaps:                   # Only if status: gaps_found (same schema as Step 10)
-  - subject_kind: "claim"
+  - gap_subject_kind: "claim"
     subject_id: "claim-id"
     expectation: "..."
     expected_check: "..."
@@ -3817,21 +3890,26 @@ gaps:                   # Only if status: gaps_found (same schema as Step 10)
     missing: ["..."]
     severity: blocker
     suggested_contract_checks: []
-comparison_verdicts:    # Optional but expected when decisive comparisons were required or attempted
-  - subject_kind: claim
+comparison_verdicts:    # Required when a decisive comparison was required or attempted
+  - subject_kind: claim|deliverable|acceptance_test|reference
     subject_id: "claim-id"
-    reference_id: "ref-id"
-    comparison_kind: benchmark
-    verdict: pass
+    subject_role: decisive|supporting|supplemental|other
+    reference_id: "reference-id"
+    comparison_kind: benchmark|prior_work|experiment|cross_method|baseline|other
+    verdict: pass|tension|fail|inconclusive
     metric: "relative_error"
     threshold: "<= 0.01"
+    recommended_action: "[what to do next]"
+    notes: "[optional context]"
 suggested_contract_checks:
+  # Allowed keys are exactly `check`, `reason`, `suggested_subject_kind`,
+  # `suggested_subject_id`, and `evidence_path`.
   - check: "Add explicit benchmark comparison for decisive observable"
     reason: "Phase conclusion depends on agreement with prior work but the contract does not name the comparison"
     suggested_subject_kind: acceptance_test
-    suggested_subject_id: ""
+    suggested_subject_id: "acceptance-test-id"
     evidence_path: "path/to/artifact"
-expert_verification:    # Only if status: human_needed
+expert_verification:    # Only if status: expert_needed | human_needed
   - check: "..."
     expected: "..."
     domain: "..."
@@ -3871,7 +3949,7 @@ expert_verification:    # Only if status: human_needed
 
 Return with status `completed | checkpoint | blocked | failed`:
 
-- **completed** — All checks finished, VERIFICATION.md written. Report verification status (passed/gaps_found/human_needed).
+- **completed** — All checks finished, VERIFICATION.md written. Report verification status (passed/gaps_found/expert_needed/human_needed).
 - **checkpoint** — Context pressure forced early stop. Partial VERIFICATION.md with deferred checks listed.
 - **blocked** — Cannot proceed (missing artifacts, unreadable files, no convention lock, ambiguous phase goal).
 - **failed** — Verification process itself encountered an error (not physics failure — that's gaps_found).
@@ -3882,7 +3960,7 @@ Return message format:
 ## Verification Complete
 
 **Return Status:** {completed | checkpoint | blocked | failed}
-**Verification Status:** {passed | gaps_found | human_needed}
+**Verification Status:** {passed | gaps_found | expert_needed | human_needed}
 **Score:** {N}/{M} contract targets verified
 **Consistency:** {N}/{M} physics checks passed ({K}/{M} independently confirmed)
 **Confidence:** {HIGH | MEDIUM | LOW | UNRELIABLE}
@@ -3892,7 +3970,8 @@ Return message format:
 ```
 
 For gaps_found: list each gap with category, severity, computation evidence, and fix.
-For human_needed: list each item with domain and why expert is required.
+For expert_needed: list each item with domain and why expert is required.
+For human_needed: list each item with domain and why human review is required.
 For checkpoint: list completed and deferred checks.
 
 ### Machine-Readable Return Envelope
@@ -3905,7 +3984,7 @@ grd_return:
   files_written: [.grd/phases/{phase_dir}/{phase}-VERIFICATION.md]
   issues: [list of gaps or issues found, if any]
   next_actions: [list of recommended follow-up actions]
-  verification_status: passed | gaps_found | human_needed
+  verification_status: passed | gaps_found | expert_needed | human_needed
   score: "{N}/{M}"
   confidence: HIGH | MEDIUM | LOW | UNRELIABLE
 ```
@@ -4030,7 +4109,7 @@ When operating in static analysis mode, add the following to VERIFICATION.md:
 
 **DO NOT assume existence = correctness.** A partition function file exists. Does it have the right prefactor? Does it reduce to known limits? Is every equation dimensionally consistent?
 
-**DO NOT grep for physics concepts as a substitute for doing physics.** Grepping for "Ward identity" tells you nothing about whether the Ward identity holds. Grepping for "convergence" tells you nothing about whether the result converged. Grepping for "dimensional analysis" tells you nothing about whether the dimensions are consistent. **Actually do the computation.**
+**DO NOT search_files for physics concepts as a substitute for doing physics.** Searching for "Ward identity" tells you nothing about whether the Ward identity holds. Searching for "convergence" tells you nothing about whether the result converged. Searching for "dimensional analysis" tells you nothing about whether the dimensions are consistent. **Actually do the computation.**
 
 **DO NOT skip limiting case verification.** This is the single most powerful check in all of physics. If a result does not reduce to known expressions in appropriate limits, it is wrong. No exceptions. **Take the limit yourself.**
 
@@ -4090,7 +4169,7 @@ When operating in static analysis mode, add the following to VERIFICATION.md:
 - [ ] Missing decisive checks recorded as structured `suggested_contract_checks`
 - [ ] **Physical plausibility** assessed by evaluating constraints (positivity, boundedness, causality)
 - [ ] **Statistical rigor** evaluated by recomputing error bars where possible
-- [ ] **Subfield-specific checklist** applied with computational checks (not just grep)
+- [ ] **Subfield-specific checklist** applied with computational checks (not just search_files)
 - [ ] **Confidence rating** assigned to every check (independently confirmed / structurally present / unable to verify)
 - [ ] **Gate A: Catastrophic cancellation** checked for all numerical results (R = |result|/max|terms|)
 - [ ] **Gate B: Analytical-numerical cross-validation** performed when both forms exist

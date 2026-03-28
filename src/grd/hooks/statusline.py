@@ -11,13 +11,9 @@ import os
 import sys
 from pathlib import Path
 
+import grd.hooks.install_context as hook_layout
 from grd.core.constants import ENV_GRD_DEBUG, PLANNING_DIR_NAME, STATE_JSON_FILENAME
-from grd.hooks.install_metadata import (
-    config_dir_has_complete_install,
-    install_scope_from_manifest,
-    installed_runtime,
-    installed_update_command,
-)
+from grd.core.observability import resolve_project_root
 
 # Context bar thresholds (percentage of scaled usage)
 _CONTEXT_REAL_LIMIT_PCT = 80
@@ -74,12 +70,22 @@ def _first_value(value: object, *keys: str) -> object | None:
     return None
 
 
+def _normalize_workspace_text(value: str | None) -> str:
+    if not value:
+        return str(Path.cwd().resolve(strict=False))
+    path = Path(value).expanduser()
+    try:
+        return str(path.resolve(strict=False))
+    except OSError:
+        return str(path)
+
+
 def _hook_payload_policy(workspace_dir: str | None = None):
     """Return hook payload metadata for the active runtime or a merged fallback."""
     from grd.adapters.runtime_catalog import get_hook_payload_policy
     from grd.hooks.runtime_detect import RUNTIME_UNKNOWN, detect_active_runtime_with_grd_install
 
-    workspace_path = Path(workspace_dir) if workspace_dir else None
+    workspace_path = resolve_project_root(workspace_dir) if workspace_dir else None
     runtime = detect_active_runtime_with_grd_install(cwd=workspace_path)
     return get_hook_payload_policy(None if runtime == RUNTIME_UNKNOWN else runtime)
 
@@ -131,9 +137,7 @@ def _read_workspace_label(data: dict[str, object], workspace_dir: str, hook_payl
     policy = hook_payload or _hook_payload_policy(workspace_dir)
     workspace_path = Path(workspace_dir).expanduser()
     workspace_value = data.get("workspace")
-    project_dir = _first_string(workspace_value, *policy.project_dir_keys) or _first_string(
-        data, *policy.project_dir_keys
-    )
+    project_dir = _first_string(workspace_value, *policy.project_dir_keys) or _first_string(data, *policy.project_dir_keys)
 
     try:
         resolved_workspace = workspace_path.resolve()
@@ -158,7 +162,8 @@ def _read_workspace_label(data: dict[str, object], workspace_dir: str, hook_payl
 
 def _read_position(workspace_dir: str) -> str:
     """Read research position from .grd/state.json."""
-    state_file = Path(workspace_dir) / PLANNING_DIR_NAME / STATE_JSON_FILENAME
+    workspace_root = resolve_project_root(workspace_dir) or Path(workspace_dir).expanduser().resolve(strict=False)
+    state_file = workspace_root / PLANNING_DIR_NAME / STATE_JSON_FILENAME
     if not state_file.exists():
         return ""
     try:
@@ -179,24 +184,6 @@ def _read_position(workspace_dir: str) -> str:
     except Exception as exc:
         _debug(f"Failed to read state.json: {exc}")
         return ""
-
-
-def _self_config_dir() -> Path | None:
-    """Return the installed runtime config dir when this hook runs from one."""
-    candidate = Path(__file__).resolve().parent.parent
-    if config_dir_has_complete_install(candidate):
-        return candidate
-    return None
-
-
-def _self_install_scope(config_dir: Path) -> str | None:
-    """Return the persisted install scope for the hook's own config dir."""
-    return install_scope_from_manifest(config_dir)
-
-
-def _self_update_command(config_dir: Path) -> str | None:
-    """Return the public update command for the installed runtime."""
-    return installed_update_command(config_dir)
 
 
 def _matching_todo_files(todos_dir: Path, session_id: str) -> list[tuple[float, Path]]:
@@ -240,24 +227,30 @@ def _read_current_task(session_id: str, workspace_dir: str | None = None) -> str
         return ""
 
     from grd.hooks.runtime_detect import (
-        TodoCandidate,
+        RUNTIME_UNKNOWN,
         detect_active_runtime_with_grd_install,
         detect_runtime_for_grd_use,
+        detect_runtime_install_target,
         get_todo_candidates,
         should_consider_todo_candidate,
     )
 
-    workspace_path = Path(workspace_dir) if workspace_dir else None
+    workspace_path = resolve_project_root(workspace_dir) if workspace_dir else None
     active_installed_runtime = detect_active_runtime_with_grd_install(cwd=workspace_path)
     preferred_runtime = detect_runtime_for_grd_use(cwd=workspace_path)
     todo_candidates = get_todo_candidates(cwd=workspace_path, preferred_runtime=preferred_runtime)
-    self_config_dir = _self_config_dir()
-    if self_config_dir is not None:
-        self_candidate = TodoCandidate(
-            self_config_dir / "todos",
-            runtime=installed_runtime(self_config_dir),
-            scope=_self_install_scope(self_config_dir),
-        )
+    self_install = hook_layout.detect_self_owned_install(__file__)
+    active_install_target = (
+        detect_runtime_install_target(active_installed_runtime, cwd=workspace_path)
+        if active_installed_runtime not in (None, "", RUNTIME_UNKNOWN)
+        else None
+    )
+    if hook_layout.should_prefer_self_owned_install(
+        self_install,
+        active_install_target=active_install_target,
+        workspace_path=workspace_path,
+    ):
+        self_candidate = hook_layout.self_owned_todo_candidate(self_install)
         if all(candidate.path != self_candidate.path for candidate in todo_candidates):
             todo_candidates = [self_candidate, *todo_candidates]
 
@@ -286,22 +279,37 @@ def _read_current_task(session_id: str, workspace_dir: str | None = None) -> str
     return ""
 
 
-def _workspace_from_payload(data: dict[str, object]) -> str:
+def _workspace_from_payload(data: dict[str, object], *, cwd: str | None = None) -> str:
     """Extract the workspace directory from a runtime hook payload."""
     from grd.adapters.runtime_catalog import get_hook_payload_policy
 
-    hook_payload = get_hook_payload_policy()
+    hook_payload = _hook_payload_policy(cwd) if cwd else get_hook_payload_policy()
     workspace_value = data.get("workspace")
-    if isinstance(workspace_value, str) and workspace_value:
-        return workspace_value
-    return (
-        _first_string(workspace_value, *hook_payload.workspace_keys)
-        or _first_string(
-            data,
-            *hook_payload.workspace_keys,
-        )
+    raw_workspace = (
+        workspace_value
+        if isinstance(workspace_value, str) and workspace_value
+        else _first_string(workspace_value, *hook_payload.workspace_keys)
+        or _first_string(data, *hook_payload.workspace_keys)
         or os.getcwd()
     )
+    return _normalize_workspace_text(raw_workspace)
+
+
+def _workspace_root_from_payload(
+    data: dict[str, object],
+    workspace_dir: str,
+    *,
+    cwd: str | None = None,
+) -> str:
+    """Resolve the project root for one hook payload workspace."""
+    hook_payload = _hook_payload_policy(cwd or workspace_dir)
+    workspace_value = data.get("workspace")
+    project_dir = _first_string(workspace_value, *hook_payload.project_dir_keys) or _first_string(
+        data,
+        *hook_payload.project_dir_keys,
+    )
+    resolved_root = resolve_project_root(workspace_dir, project_dir=project_dir)
+    return str(resolved_root) if resolved_root is not None else workspace_dir
 
 
 def _read_context_remaining(data: dict[str, object], hook_payload) -> float | int | None:
@@ -417,19 +425,28 @@ def _execution_artifact_label(snapshot: dict[str, object]) -> str:
 
 def _latest_update_cache(workspace_dir: str | None = None) -> tuple[dict[str, object] | None, object | None]:
     """Return the highest-priority valid update cache and its candidate metadata."""
-    from types import SimpleNamespace
-
     from grd.hooks.runtime_detect import (
+        RUNTIME_UNKNOWN,
         detect_active_runtime_with_grd_install,
+        detect_runtime_install_target,
         get_update_cache_candidates,
         should_consider_update_cache_candidate,
     )
 
-    workspace_path = Path(workspace_dir) if workspace_dir else None
+    workspace_path = resolve_project_root(workspace_dir) if workspace_dir else None
     active_installed_runtime = detect_active_runtime_with_grd_install(cwd=workspace_path)
-    self_config_dir = _self_config_dir()
-    if self_config_dir is not None:
-        cache_file = self_config_dir / "cache" / "grd-update-check.json"
+    self_install = hook_layout.detect_self_owned_install(__file__)
+    active_install_target = (
+        detect_runtime_install_target(active_installed_runtime, cwd=workspace_path)
+        if active_installed_runtime not in (None, "", RUNTIME_UNKNOWN)
+        else None
+    )
+    if hook_layout.should_prefer_self_owned_install(
+        self_install,
+        active_install_target=active_install_target,
+        workspace_path=workspace_path,
+    ):
+        cache_file = self_install.cache_file
         if cache_file.exists():
             try:
                 cache = json.loads(cache_file.read_text(encoding="utf-8"))
@@ -437,12 +454,7 @@ def _latest_update_cache(workspace_dir: str | None = None) -> tuple[dict[str, ob
                 _debug(f"Failed to parse update cache {cache_file}: {exc}")
             else:
                 if isinstance(cache, dict):
-                    candidate = SimpleNamespace(
-                        path=cache_file,
-                        runtime=None,
-                        scope=_self_install_scope(self_config_dir),
-                        config_dir=self_config_dir,
-                    )
+                    candidate = hook_layout.self_owned_update_cache_candidate(self_install)
                     return cache, candidate
 
     preferred_runtime = active_installed_runtime if workspace_path is not None else None
@@ -479,12 +491,13 @@ def _check_update(workspace_dir: str | None = None) -> str:
     """Check GRD update cache files for available updates."""
     cache, cache_candidate = _latest_update_cache(workspace_dir)
     if cache and cache.get("update_available"):
-        config_dir = getattr(cache_candidate, "config_dir", None)
-        if isinstance(config_dir, Path):
-            command = _self_update_command(config_dir) or "npx -y get-research-done"
+        self_install = hook_layout.detect_self_owned_install(__file__)
+        if self_install is not None and cache_candidate is not None and cache_candidate.path == self_install.cache_file:
+            command = self_install.update_command
+            if command is None:
+                return ""
             return f"\x1b[33m\u2b06 {command}\x1b[0m \u2502 "
 
-        from grd.adapters import get_adapter
         from grd.hooks.runtime_detect import (
             RUNTIME_UNKNOWN,
             _runtime_dir_has_grd_install,
@@ -493,7 +506,7 @@ def _check_update(workspace_dir: str | None = None) -> str:
             update_command_for_runtime,
         )
 
-        workspace_path = Path(workspace_dir) if workspace_dir else None
+        workspace_path = resolve_project_root(workspace_dir) if workspace_dir else None
         runtime = getattr(cache_candidate, "runtime", None) or RUNTIME_UNKNOWN
         scope = getattr(cache_candidate, "scope", None)
         if runtime != RUNTIME_UNKNOWN and not _runtime_dir_has_grd_install(runtime, cwd=workspace_path):
@@ -501,12 +514,9 @@ def _check_update(workspace_dir: str | None = None) -> str:
             scope = None
         if runtime == RUNTIME_UNKNOWN:
             runtime = detect_active_runtime_with_grd_install(cwd=workspace_path)
-        try:
-            command = get_adapter(runtime).format_command("update")
-        except KeyError:
-            if scope is None and runtime != RUNTIME_UNKNOWN:
-                scope = detect_install_scope(runtime, cwd=workspace_path)
-            command = update_command_for_runtime(runtime, scope=scope)
+        if scope is None and runtime != RUNTIME_UNKNOWN:
+            scope = detect_install_scope(runtime, cwd=workspace_path)
+        command = update_command_for_runtime(runtime, scope=scope)
         return f"\x1b[33m\u2b06 {command}\x1b[0m \u2502 "
     return ""
 
@@ -524,24 +534,25 @@ def main() -> None:
 
     try:
         workspace_dir = _workspace_from_payload(data)
-        hook_payload = _hook_payload_policy(workspace_dir)
+        workspace_root = _workspace_root_from_payload(data, workspace_dir)
+        hook_payload = _hook_payload_policy(workspace_root)
 
         session_value = data.get("session_id")
         session_id = session_value if isinstance(session_value, str) else ""
         remaining = _read_context_remaining(data, hook_payload)
-        execution = _read_execution_state(workspace_dir)
+        execution = _read_execution_state(workspace_root)
 
         ctx = _context_bar(remaining) if isinstance(remaining, (int, float)) and math.isfinite(remaining) else ""
-        position = _read_position(workspace_dir)
+        position = _read_position(workspace_root)
         execution_badge = _execution_badge(execution)
         execution_task = _first_string(execution, "current_task")
-        task = execution_task or _read_current_task(session_id, workspace_dir)
+        task = execution_task or _read_current_task(session_id, workspace_root)
         if execution_task:
             task = execution_task
         elif execution_badge:
             task = ""
         artifact_label = _execution_artifact_label(execution)
-        grd_update = _check_update(workspace_dir)
+        gpd_update = _check_update(workspace_root)
         model_label = _read_model_label(data, hook_payload)
         workspace_label = _read_workspace_label(data, workspace_dir, hook_payload)
 
@@ -560,15 +571,15 @@ def main() -> None:
             segments.append(f"\x1b[36m{position}\x1b[0m")
 
         statusline = " \u2502 ".join(segments)
-        if grd_update:
-            statusline = f"{grd_update}{statusline}"
+        if gpd_update:
+            statusline = f"{gpd_update}{statusline}"
 
         sys.stdout.write(statusline)
         if ctx:
             sys.stdout.write(ctx)
     except Exception as exc:
         _debug(f"Statusline render failed: {exc}")
-        sys.stdout.write("\x1b[2mGRD\x1b[0m")
+        sys.stdout.write("\x1b[2mGPD\x1b[0m")
 
 
 if __name__ == "__main__":

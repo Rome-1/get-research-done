@@ -144,6 +144,8 @@ None yet.
 **Last session:** —
 **Stopped at:** —
 **Resume file:** —
+**Hostname:** —
+**Platform:** —
 ```
 
 <purpose>
@@ -157,7 +159,7 @@ STATE.md is the research project's short-term memory spanning all phases and ses
 - Read first in every workflow
 - Updated after every significant action
 - Contains digest of accumulated research context
-- Enables instant session restoration with full awareness of current research state
+- Enables instant session restoration with full awareness of current research state and machine portability
 
 </purpose>
 
@@ -271,11 +273,15 @@ Updated after each plan completion.
 
 ### Session Continuity
 
-Enables instant resumption:
+Enables instant resumption and machine portability:
 
-- When was last session
-- What was last completed
-- Is there a .continue-here file to resume from
+- Last session timestamp
+- Stopped-at handoff point
+- Resume file pointer
+- Hostname of the previous machine
+- Platform of the previous machine
+
+The `resume_file` field is the handoff signal for resuming work, and the `Hostname` and `Platform` fields record portability context without making resumption dependent on a specific file pattern.
 
 </sections>
 

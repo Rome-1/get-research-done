@@ -195,7 +195,7 @@ Save to:
 - Internal sweep docs: `.grd/phases/{phase-dir}/sweep-{PADDED_INDEX}-PLAN.md`, `.grd/phases/{phase-dir}/sweep-{PADDED_INDEX}-SUMMARY.md`, and `.grd/phases/{phase-dir}/SWEEP-SUMMARY.md`
 - Durable sweep artifacts: `artifacts/phases/{phase-dir}/sweeps/{sweep-slug}/`
 
-Do not put machine-readable sweep datasets under `.grd/phases/**` or `.grd/analysis/**`. Keep the `.grd` documents as internal execution records and write the durable JSON/CSV outputs to `artifacts/`.
+Do not put machine-readable sweep datasets under `.grd/phases/**` or `.grd/analysis/**`. Keep the `GRD` documents as internal execution records and write the durable JSON/CSV outputs to `artifacts/`.
 
 ## 6. Common Pitfalls
 

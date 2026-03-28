@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from grd.core.constants import ProjectLayout
+from grd.core.contract_validation import validate_project_contract
 from grd.core.health import (
     CheckStatus,
     HealthCheck,
@@ -28,7 +31,10 @@ from grd.core.health import (
     run_doctor,
     run_health,
 )
+from grd.core.state import default_state_dict, generate_state_markdown, save_state_json
 from grd.core.storage_paths import ProjectStorageLayout
+
+FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
 
 # ─── Model Tests ─────────────────────────────────────────────────────────────
 
@@ -86,7 +92,7 @@ class TestCheckProjectStructure:
     def test_ok_with_full_structure(self, tmp_path: Path):
         from grd.core.constants import REQUIRED_PLANNING_DIRS, REQUIRED_PLANNING_FILES
 
-        planning = tmp_path / ".grd"
+        planning = tmp_path / "GRD"
         planning.mkdir()
         for f in REQUIRED_PLANNING_FILES:
             (planning / f).write_text("stub")
@@ -119,10 +125,10 @@ class TestCheckStoragePaths:
 
     def test_hidden_results_and_scratch_outputs_warn(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        hidden_results = cwd / ".grd" / "phases" / "01-setup" / "results"
+        hidden_results = cwd / "GRD" / "phases" / "01-setup" / "results"
         hidden_results.mkdir(parents=True)
         (hidden_results / "out.json").write_text("{}", encoding="utf-8")
-        scratch_file = cwd / ".grd" / "tmp" / "final.csv"
+        scratch_file = cwd / "GRD" / "tmp" / "final.csv"
         scratch_file.parent.mkdir(parents=True)
         scratch_file.write_text("x,y\n", encoding="utf-8")
 
@@ -132,6 +138,49 @@ class TestCheckStoragePaths:
         assert any(".grd/phases/01-setup/results/out.json" in warning for warning in result.warnings)
         assert any(".grd/tmp/final.csv" in warning for warning in result.warnings)
 
+    def test_repo_gitignore_does_not_hide_checkpoint_outputs_under_gpd(self, tmp_path: Path) -> None:
+        repo = _init_git_repo(tmp_path)
+
+        result = subprocess.run(
+            [
+                "git",
+                "check-ignore",
+                "-v",
+                "--",
+                ".grd/CHECKPOINTS.md",
+                ".grd/phase-checkpoints/01-test-phase.md",
+            ],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 1
+        assert result.stdout == ""
+        assert result.stderr == ""
+
+    def test_git_status_reports_dirty_tracked_checkpoint_artifacts(self, tmp_path: Path) -> None:
+        repo = _init_git_repo(tmp_path)
+        checkpoint_dir = repo / "GRD" / "phase-checkpoints"
+        checkpoint_dir.mkdir(parents=True)
+        root_index = repo / "GRD" / "CHECKPOINTS.md"
+        phase_checkpoint = checkpoint_dir / "01-test-phase.md"
+        root_index.write_text("initial index\n", encoding="utf-8")
+        phase_checkpoint.write_text("initial phase checkpoint\n", encoding="utf-8")
+
+        subprocess.run(["git", "add", "-f", ".grd/CHECKPOINTS.md", ".grd/phase-checkpoints/01-test-phase.md"], cwd=repo, check=True, capture_output=True, text=True)
+
+        root_index.write_text("dirty index\n", encoding="utf-8")
+        phase_checkpoint.write_text("dirty phase checkpoint\n", encoding="utf-8")
+
+        result = check_git_status(repo)
+
+        assert result.label == "Git Status"
+        assert result.status == CheckStatus.OK
+        assert result.details["repo_detected"] is True
+        assert result.details["uncommitted_files"] == 2
+
 
 class TestCheckCompaction:
     def test_no_state_file(self, tmp_path: Path):
@@ -140,7 +189,7 @@ class TestCheckCompaction:
         assert result.details.get("reason") == "no_state_file"
 
     def test_small_state_ok(self, tmp_path: Path):
-        planning = tmp_path / ".grd"
+        planning = tmp_path / "GRD"
         planning.mkdir()
         (planning / "STATE.md").write_text("# State\nShort content\n")
         result = check_compaction_needed(tmp_path)
@@ -153,7 +202,7 @@ class TestCheckOrphans:
         assert result.status == CheckStatus.OK
 
     def test_empty_phase_dir_warns(self, tmp_path: Path):
-        phases = tmp_path / ".grd" / "phases"
+        phases = tmp_path / "GRD" / "phases"
         (phases / "01-intro").mkdir(parents=True)
         result = check_orphans(tmp_path)
         assert result.status == CheckStatus.WARN
@@ -167,7 +216,7 @@ class TestCheckConventionLock:
         assert any("state.json" in w for w in result.warnings)
 
     def test_no_convention_lock_key(self, tmp_path: Path):
-        planning = tmp_path / ".grd"
+        planning = tmp_path / "GRD"
         planning.mkdir()
         (planning / "state.json").write_text(json.dumps({"position": {}}))
         result = check_convention_lock(tmp_path)
@@ -176,7 +225,7 @@ class TestCheckConventionLock:
     def test_convention_lock_non_dict_warns(self, tmp_path: Path):
         """A truthy non-dict convention_lock must not raise AttributeError."""
         fake_state = {"convention_lock": "not-a-dict"}
-        with patch("grd.core.health.load_state_json", return_value=fake_state):
+        with patch("grd.core.health._peek_normalized_state_for_health", return_value=(fake_state, "state.json")):
             result = check_convention_lock(tmp_path)
         assert result.status == CheckStatus.WARN
         assert any("not a dict" in w for w in result.warnings)
@@ -184,7 +233,7 @@ class TestCheckConventionLock:
     def test_empty_dict_falls_through_to_counting_loop(self, tmp_path: Path):
         """An empty dict {} is a valid convention_lock; should report counts, not 'No convention_lock'."""
         fake_state = {"convention_lock": {}}
-        with patch("grd.core.health.load_state_json", return_value=fake_state):
+        with patch("grd.core.health._peek_normalized_state_for_health", return_value=(fake_state, "state.json")):
             result = check_convention_lock(tmp_path)
         assert "No convention_lock in state.json" not in result.warnings
         assert "set" in result.details
@@ -255,7 +304,7 @@ class TestCheckRoadmapConsistency:
         assert any("not found" in i for i in result.issues)
 
     def test_roadmap_with_matching_phases(self, tmp_path: Path):
-        planning = tmp_path / ".grd"
+        planning = tmp_path / "GRD"
         planning.mkdir()
         (planning / "ROADMAP.md").write_text("## Phase 1: Intro\n## Phase 2: Method\n")
         phases = planning / "phases"
@@ -273,11 +322,11 @@ class TestCheckPlanFrontmatter:
 
     def test_detects_plan_numbering_gap(self, tmp_path: Path):
         """Standard plan filenames like 01-PLAN.md must be parsed by the regex."""
-        phases = tmp_path / ".grd" / "phases"
+        phases = tmp_path / "GRD" / "phases"
         phase_dir = phases / "01-intro"
         phase_dir.mkdir(parents=True)
         # Create plans with a gap: 01, 03 (missing 02)
-        plan_content = "---\nwave: 1\n---\n# Plan\n"
+        plan_content = _canonical_plan_frontmatter()
         (phase_dir / "01-PLAN.md").write_text(plan_content)
         (phase_dir / "03-PLAN.md").write_text(plan_content)
         result = check_plan_frontmatter(tmp_path)
@@ -287,16 +336,106 @@ class TestCheckPlanFrontmatter:
 
     def test_no_gap_with_consecutive_plans(self, tmp_path: Path):
         """Consecutive plan numbers should not produce warnings."""
-        phases = tmp_path / ".grd" / "phases"
+        phases = tmp_path / "GRD" / "phases"
         phase_dir = phases / "01-intro"
         phase_dir.mkdir(parents=True)
-        plan_content = "---\nwave: 1\n---\n# Plan\n"
+        plan_content = _canonical_plan_frontmatter()
         (phase_dir / "01-PLAN.md").write_text(plan_content)
         (phase_dir / "02-PLAN.md").write_text(plan_content)
         (phase_dir / "03-PLAN.md").write_text(plan_content)
         result = check_plan_frontmatter(tmp_path)
         assert result.details["numbering_gaps"] == 0
         assert not any("Plan numbering gap" in w for w in result.warnings)
+
+    def test_missing_contract_block_fails(self, tmp_path: Path):
+        phases = tmp_path / "GRD" / "phases"
+        phase_dir = phases / "01-intro"
+        phase_dir.mkdir(parents=True)
+        plan_content = (
+            "---\n"
+            "phase: 01-intro\n"
+            "plan: 01\n"
+            "type: execute\n"
+            "wave: 1\n"
+            "depends_on: []\n"
+            "files_modified: []\n"
+            "interactive: false\n"
+            "conventions:\n"
+            "  units: natural\n"
+            "  metric: (+,-,-,-)\n"
+            "  coordinates: Cartesian\n"
+            "---\n\n"
+            "# Plan\n"
+        )
+        (phase_dir / "01-PLAN.md").write_text(plan_content)
+
+        result = check_plan_frontmatter(tmp_path)
+
+        assert result.status == CheckStatus.FAIL
+        assert any("missing required frontmatter fields: contract" in issue for issue in result.issues)
+
+    def test_invalid_contract_schema_fails(self, tmp_path: Path):
+        phases = tmp_path / "GRD" / "phases"
+        phase_dir = phases / "01-intro"
+        phase_dir.mkdir(parents=True)
+        plan_content = (
+            "---\n"
+            "phase: 01-intro\n"
+            "plan: 01\n"
+            "type: execute\n"
+            "wave: 1\n"
+            "depends_on: []\n"
+            "files_modified: []\n"
+            "interactive: false\n"
+            "conventions:\n"
+            "  units: natural\n"
+            "  metric: (+,-,-,-)\n"
+            "  coordinates: Cartesian\n"
+            "contract: []\n"
+            "---\n\n"
+            "# Plan\n"
+        )
+        (phase_dir / "01-PLAN.md").write_text(plan_content)
+
+        result = check_plan_frontmatter(tmp_path)
+
+        assert result.status == CheckStatus.FAIL
+        assert any("contract: expected an object" in issue for issue in result.issues)
+
+
+class TestCheckStateValidityProjectContract:
+    def test_promotes_approval_blockers_to_issues(self, tmp_path: Path):
+        cwd = _bootstrap_health_project(tmp_path)
+        contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+        contract["context_intake"] = {
+            "must_read_refs": [],
+            "must_include_prior_outputs": [],
+            "user_asserted_anchors": [],
+            "known_good_baselines": [],
+            "context_gaps": [],
+            "crucial_inputs": [],
+        }
+        contract["references"][0]["role"] = "background"
+        contract["references"][0]["must_surface"] = False
+        contract["references"][0]["applies_to"] = []
+        contract["references"][0]["required_actions"] = []
+
+        state = {"project_contract": contract}
+        (cwd / "GRD" / "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+        approval_validation = validate_project_contract(contract, mode="approved")
+        fake_state_validation = SimpleNamespace(
+            issues=[],
+            warnings=[f"project_contract: {error}" for error in approval_validation.errors],
+        )
+
+        with patch("grd.core.health.state_validate", return_value=fake_state_validation):
+            result = check_state_validity(cwd)
+
+        assert result.status == CheckStatus.FAIL
+        assert approval_validation.errors
+        assert any(issue.startswith("project_contract: ") for issue in result.issues)
+        assert not any(warning in result.warnings for warning in fake_state_validation.warnings)
 
 
 class TestCheckStateValidity:
@@ -305,6 +444,22 @@ class TestCheckStateValidity:
         assert result.label == "State Validity"
         assert result.status == CheckStatus.FAIL
         assert result.issues
+
+    def test_does_not_repair_state_json_while_inspecting(self, tmp_path: Path) -> None:
+        state = default_state_dict()
+        state["position"]["status"] = "Executing"
+        save_state_json(tmp_path, state)
+        layout = ProjectLayout(tmp_path)
+
+        corrupt_state = "{bad json\n"
+        backup_before = layout.state_json_backup.read_text(encoding="utf-8")
+        layout.state_json.write_text(corrupt_state, encoding="utf-8")
+
+        result = check_state_validity(tmp_path)
+
+        assert result.status == CheckStatus.WARN
+        assert layout.state_json.read_text(encoding="utf-8") == corrupt_state
+        assert layout.state_json_backup.read_text(encoding="utf-8") == backup_before
 
 
 # ─── run_health Integration ──────────────────────────────────────────────────
@@ -321,12 +476,134 @@ class TestRunHealth:
         report = run_health(tmp_path, fix=True)
         assert isinstance(report.fixes_applied, list)
 
+    def test_fixless_mode_does_not_rewrite_corrupt_state(self, tmp_path: Path) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        layout = ProjectLayout(cwd)
+
+        save_state_json(cwd, default_state_dict())
+        primary_state = json.loads(layout.state_json.read_text(encoding="utf-8"))
+        primary_state["position"] = []
+        layout.state_json.write_text(json.dumps(primary_state, indent=2) + "\n", encoding="utf-8")
+
+        backup_state = default_state_dict()
+        backup_state["position"]["current_phase"] = "12"
+        backup_state["position"]["status"] = "Executing"
+        layout.state_json_backup.write_text(json.dumps(backup_state, indent=2) + "\n", encoding="utf-8")
+
+        before = layout.state_json.read_text(encoding="utf-8")
+        report = run_health(cwd, fix=False)
+        after = layout.state_json.read_text(encoding="utf-8")
+        state_check = next(check for check in report.checks if check.label == "State Validity")
+
+        assert before == after
+        assert report.fixes_applied == []
+        assert state_check.details["state_source"] == "state.json"
+
+    def test_read_only_health_recovers_intent_marker_and_reports_current_state(
+        self, tmp_path: Path
+    ) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        layout = ProjectLayout(cwd)
+
+        stale_state = default_state_dict()
+        stale_state["position"]["current_phase"] = "01"
+        recovered_state = default_state_dict()
+        recovered_state["position"]["current_phase"] = "05"
+        recovered_state["position"]["status"] = "Executing"
+        _write_intent_recovery_state(cwd, stale_state=stale_state, recovered_state=recovered_state)
+
+        before_state = layout.state_json.read_text(encoding="utf-8")
+        before_md = layout.state_md.read_text(encoding="utf-8")
+
+        report = run_health(cwd, fix=False)
+        state_check = next(check for check in report.checks if check.label == "State Validity")
+
+        assert layout.state_json.read_text(encoding="utf-8") != before_state
+        assert layout.state_md.read_text(encoding="utf-8") != before_md
+        assert not layout.state_intent.exists()
+        assert json.loads(layout.state_json.read_text(encoding="utf-8"))["position"]["current_phase"] == "05"
+        assert state_check.details["state_source"] == "state.json"
+
+    def test_fix_mode_restores_backup_state_and_refreshes_report_details(self, tmp_path: Path) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        layout = ProjectLayout(cwd)
+
+        backup_state = default_state_dict()
+        backup_state["position"]["status"] = "Executing"
+        backup_state["position"]["current_phase"] = "12"
+        backup_state["open_questions"] = ["Recovered from backup"]
+        save_state_json(cwd, backup_state)
+        backup_payload = json.loads(layout.state_json_backup.read_text(encoding="utf-8"))
+
+        layout.state_json.unlink()
+        layout.state_md.write_text("# State\nStale markdown that should not win.\n", encoding="utf-8")
+
+        report = run_health(cwd, fix=True)
+
+        restored_state = json.loads(layout.state_json.read_text(encoding="utf-8"))
+        state_check = next(check for check in report.checks if check.label == "State Validity")
+
+        assert restored_state == backup_payload
+        assert layout.state_json.exists()
+        assert state_check.details["has_json"] is True
+        assert state_check.details["has_md"] is True
+        assert state_check.details["state_source"] == "state.json"
+        assert not any("state.json not found" in issue for issue in state_check.issues)
+        assert report.fixes_applied
+        assert report.fixes_applied == ["Restored state.json from state.json.bak"]
+
+    def test_fix_mode_regenerates_state_from_state_md_and_refreshes_report_details(self, tmp_path: Path) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        layout = ProjectLayout(cwd)
+
+        state = default_state_dict()
+        state["position"]["status"] = "Executing"
+        state["position"]["current_phase"] = "12"
+        markdown = generate_state_markdown(state)
+        layout.state_md.write_text(markdown, encoding="utf-8")
+
+        layout.state_json.write_text("", encoding="utf-8")
+        if layout.state_json_backup.exists():
+            layout.state_json_backup.unlink()
+
+        report = run_health(cwd, fix=True)
+        state_check = next(check for check in report.checks if check.label == "State Validity")
+
+        assert layout.state_json.exists()
+        assert state_check.details["state_source"] == "state.json"
+        assert report.fixes_applied == ["Regenerated state.json from STATE.md"]
+
+    def test_fix_mode_restores_state_pair_coherently(self, tmp_path: Path) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        layout = ProjectLayout(cwd)
+
+        backup_state = default_state_dict()
+        backup_state["position"]["status"] = "Executing"
+        backup_state["position"]["current_phase"] = "12"
+        backup_state["open_questions"] = ["Recovered from backup"]
+        save_state_json(cwd, backup_state)
+        backup_payload = json.loads(layout.state_json_backup.read_text(encoding="utf-8"))
+
+        layout.state_json.unlink()
+        layout.state_md.write_text("# State\nThis markdown is stale.\n", encoding="utf-8")
+
+        report = run_health(cwd, fix=True)
+
+        restored_state = json.loads(layout.state_json.read_text(encoding="utf-8"))
+        restored_md = layout.state_md.read_text(encoding="utf-8")
+
+        assert restored_state == backup_payload
+        assert "Recovered from backup" in restored_md
+        assert "Restored state.json from state.json.bak" in report.fixes_applied
+
     def test_fix_mode_removes_stale_checkpoint_tags(self, tmp_path: Path):
         def _run(args: list[str], **_: object) -> subprocess.CompletedProcess[str]:
             if args == ["git", "--version"]:
                 return subprocess.CompletedProcess(args=args, returncode=0, stdout="git version 2.45.0\n", stderr="")
             if args[:3] == ["git", "status", "--porcelain"]:
                 return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+            if args[:3] == ["git", "check-ignore", "--quiet"]:
+                return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="")
             if args[:3] == ["git", "tag", "-l"]:
                 return subprocess.CompletedProcess(args=args, returncode=0, stdout="grd-checkpoint/old\n", stderr="")
             if args[:4] == ["git", "log", "-1", "--format=%ct"]:
@@ -480,6 +757,50 @@ assets:
         assert checks["Protocol Bundles"].status == CheckStatus.WARN
         assert any("templates/missing-template.md" in w for w in checks["Protocol Bundles"].warnings)
 
+    def test_protocol_bundles_check_fails_when_asset_path_escapes_specs_dir(self, tmp_path: Path):
+        specs_dir = self._make_specs_dir(tmp_path)
+        bundles_dir = specs_dir / "bundles"
+        bundles_dir.mkdir()
+        (bundles_dir / "path-escape-bundle.md").write_text(
+            """---
+bundle_id: path-escape-bundle
+bundle_version: 1
+title: Path Escape Bundle
+summary: Bundle with an invalid asset path.
+trigger:
+  any_terms:
+    - path escape bundle
+  min_term_matches: 1
+  min_score: 3
+assets:
+  project_types:
+    - path: ../outside.md
+      required: true
+---
+
+# Path Escape Bundle
+""",
+            encoding="utf-8",
+        )
+
+        report = run_doctor(specs_dir=specs_dir, version="0.1.0")
+        checks = {check.label: check for check in report.checks}
+
+        assert checks["Protocol Bundles"].status == CheckStatus.FAIL
+        assert any("path must stay within specs dir" in issue for issue in checks["Protocol Bundles"].issues)
+
+    def test_protocol_bundles_check_fails_when_bundle_file_is_not_utf8(self, tmp_path: Path):
+        specs_dir = self._make_specs_dir(tmp_path)
+        bundles_dir = specs_dir / "bundles"
+        bundles_dir.mkdir()
+        (bundles_dir / "invalid-encoding.md").write_bytes(b"\xff\xfe\x80")
+
+        report = run_doctor(specs_dir=specs_dir, version="0.1.0")
+        checks = {check.label: check for check in report.checks}
+
+        assert checks["Protocol Bundles"].status == CheckStatus.FAIL
+        assert any("unreadable bundle" in issue for issue in checks["Protocol Bundles"].issues)
+
     def test_protocol_bundles_check_fails_when_verifier_extension_check_id_is_unknown(self, tmp_path: Path):
         specs_dir = self._make_specs_dir(tmp_path)
         bundles_dir = specs_dir / "bundles"
@@ -547,7 +868,7 @@ trigger:
 
 
 def _bootstrap_health_project(tmp_path: Path) -> Path:
-    planning = tmp_path / ".grd"
+    planning = tmp_path / "GRD"
     planning.mkdir()
     (planning / "phases").mkdir()
     (planning / "state.json").write_text("{}", encoding="utf-8")
@@ -556,6 +877,32 @@ def _bootstrap_health_project(tmp_path: Path) -> Path:
     (planning / "STATE.md").write_text("# State\n", encoding="utf-8")
     (planning / "PROJECT.md").write_text("# Project\n", encoding="utf-8")
     return tmp_path
+
+
+def _write_intent_recovery_state(
+    cwd: Path,
+    *,
+    stale_state: dict[str, object],
+    recovered_state: dict[str, object],
+) -> None:
+    save_state_json(cwd, stale_state)
+    layout = ProjectLayout(cwd)
+    json_tmp = layout.grd / ".state-json-tmp"
+    md_tmp = layout.grd / ".state-md-tmp"
+    json_tmp.write_text(json.dumps(recovered_state, indent=2) + "\n", encoding="utf-8")
+    md_tmp.write_text(generate_state_markdown(recovered_state), encoding="utf-8")
+    layout.state_intent.write_text(f"{json_tmp}\n{md_tmp}\n", encoding="utf-8")
+
+
+def _init_git_repo(tmp_path: Path) -> Path:
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True, text=True)
+    repo_root = Path(__file__).resolve().parents[2]
+    (tmp_path / ".gitignore").write_text((repo_root / ".gitignore").read_text(encoding="utf-8"), encoding="utf-8")
+    return tmp_path
+
+
+def _canonical_plan_frontmatter() -> str:
+    return (FIXTURES_DIR / "plan_with_contract.md").read_text(encoding="utf-8")
 
 
 class TestCheckLatestReturn:
@@ -567,7 +914,7 @@ class TestCheckLatestReturn:
 
     def test_summary_with_valid_return_is_ok(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        phase_dir = cwd / ".grd" / "phases" / "01-setup"
+        phase_dir = cwd / "GRD" / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
         summary_content = (
             "# Summary\n\n"
@@ -588,7 +935,7 @@ class TestCheckLatestReturn:
 
     def test_summary_without_return_block_warns(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        phase_dir = cwd / ".grd" / "phases" / "01-setup"
+        phase_dir = cwd / "GRD" / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
         (phase_dir / "01-setup-01-SUMMARY.md").write_text(
             "# Summary\nJust text, no return block.\n",

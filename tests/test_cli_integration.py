@@ -1,7 +1,7 @@
 """Integration tests for CLI commands with zero prior test coverage.
 
 Each test exercises the real CLI -> core path (no mocks) using a minimal
-GRD project directory created by the ``grd_project`` fixture.  The goal is
+GRD project directory created by the ``gpd_project`` fixture.  The goal is
 to verify that the CLI wiring, argument parsing, and core logic all cooperate
 without crashing.
 """
@@ -9,16 +9,126 @@ without crashing.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
 
+from grd.adapters import get_adapter
+from grd.adapters.runtime_catalog import iter_runtime_descriptors
 from grd.cli import app
 from grd.core.state import default_state_dict, generate_state_markdown
+from tests.runtime_install_helpers import seed_complete_runtime_install
 
 runner = CliRunner()
+_RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
+_DOLLAR_COMMAND_DESCRIPTOR = next(descriptor for descriptor in _RUNTIME_DESCRIPTORS if descriptor.command_prefix.startswith("$"))
+_SLASH_COMMAND_DESCRIPTOR = next(
+    descriptor
+    for descriptor in _RUNTIME_DESCRIPTORS
+    if descriptor.command_prefix.startswith("/") and descriptor.runtime_name != _DOLLAR_COMMAND_DESCRIPTOR.runtime_name
+)
+_ENV_OVERRIDE_DESCRIPTOR = next(
+    descriptor
+    for descriptor in _RUNTIME_DESCRIPTORS
+    if (
+        descriptor.global_config.env_var
+        or descriptor.global_config.env_dir_var
+        or descriptor.global_config.env_file_var
+    )
+)
+_SECONDARY_PERMISSIONS_DESCRIPTOR = next(
+    descriptor
+    for descriptor in _RUNTIME_DESCRIPTORS
+    if descriptor.runtime_name != _ENV_OVERRIDE_DESCRIPTOR.runtime_name
+)
+
+
+@pytest.fixture()
+def codex_command_prefix(monkeypatch: pytest.MonkeyPatch) -> str:
+    """Force the integration preflight surface to resolve the Codex runtime."""
+    monkeypatch.setattr("grd.cli.detect_runtime_for_grd_use", lambda cwd=None: _DOLLAR_COMMAND_DESCRIPTOR.runtime_name)
+    return get_adapter(_DOLLAR_COMMAND_DESCRIPTOR.runtime_name).command_prefix
+
+
+@pytest.fixture()
+def claude_code_command_prefix(monkeypatch: pytest.MonkeyPatch) -> str:
+    """Force the integration preflight surface to resolve the Claude Code runtime."""
+    monkeypatch.setattr("grd.cli.detect_runtime_for_grd_use", lambda cwd=None: _SLASH_COMMAND_DESCRIPTOR.runtime_name)
+    return get_adapter(_SLASH_COMMAND_DESCRIPTOR.runtime_name).command_prefix
+
+def _runtime_env_prefixes() -> tuple[str, ...]:
+    prefixes: set[str] = set()
+    for descriptor in _RUNTIME_DESCRIPTORS:
+        for env_var in descriptor.activation_env_vars:
+            prefixes.add(env_var)
+            prefixes.add(env_var.rsplit("_", 1)[0] if "_" in env_var else env_var)
+    return tuple(sorted(prefixes, key=len, reverse=True))
+
+
+_RUNTIME_ENV_PREFIXES = _runtime_env_prefixes()
+
+
+def _runtime_env_vars_to_clear() -> set[str]:
+    env_vars = {"GRD_ACTIVE_RUNTIME", "XDG_CONFIG_HOME"}
+    for descriptor in _RUNTIME_DESCRIPTORS:
+        global_config = descriptor.global_config
+        for env_var in (global_config.env_var, global_config.env_dir_var, global_config.env_file_var):
+            if env_var:
+                env_vars.add(env_var)
+    return env_vars
+
+
+_RUNTIME_ENV_VARS_TO_CLEAR = _runtime_env_vars_to_clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep CLI integration tests isolated from prior runtime env overrides."""
+    for key in list(os.environ):
+        if key.startswith(_RUNTIME_ENV_PREFIXES) or key in _RUNTIME_ENV_VARS_TO_CLEAR:
+            monkeypatch.delenv(key, raising=False)
+
+def _install_runtime(
+    project_root: Path,
+    descriptor,
+    *,
+    target: Path | None = None,
+    is_global: bool = False,
+    explicit_target: bool = False,
+):
+    adapter = get_adapter(descriptor.runtime_name)
+    install_target = target or (project_root / descriptor.config_dir_name)
+    install_target.mkdir(parents=True, exist_ok=True)
+    gpd_root = Path(__file__).resolve().parents[1] / "src" / "grd"
+    adapter.install(gpd_root, install_target, is_global=is_global, explicit_target=explicit_target)
+    return adapter, install_target
+
+
+def _set_runtime_config_override(monkeypatch: pytest.MonkeyPatch, descriptor, target: Path) -> None:
+    env_var = (
+        descriptor.global_config.env_var
+        or descriptor.global_config.env_dir_var
+        or descriptor.global_config.env_file_var
+    )
+    assert env_var is not None
+    env_value = str(target / "config.json") if env_var == descriptor.global_config.env_file_var else str(target)
+    monkeypatch.setenv(env_var, env_value)
+
+
+def _target_file_snapshot(target: Path) -> dict[str, bytes]:
+    snapshot: dict[str, bytes] = {}
+    for path in sorted(target.rglob("*")):
+        if path.is_file():
+            snapshot[str(path.relative_to(target))] = path.read_bytes()
+    return snapshot
+
+
+def _activate_runtime(monkeypatch: pytest.MonkeyPatch, descriptor, value: str = "active") -> None:
+    assert descriptor.activation_env_vars
+    monkeypatch.setenv(descriptor.activation_env_vars[0], value)
 
 
 # ---------------------------------------------------------------------------
@@ -27,9 +137,9 @@ runner = CliRunner()
 
 
 @pytest.fixture()
-def grd_project(tmp_path: Path) -> Path:
+def gpd_project(tmp_path: Path) -> Path:
     """Create a minimal GRD project with all files commands might touch."""
-    planning = tmp_path / ".grd"
+    planning = tmp_path / "GRD"
     planning.mkdir()
 
     state = default_state_dict()
@@ -50,13 +160,19 @@ def grd_project(tmp_path: Path) -> Path:
     )
     (planning / "state.json").write_text(json.dumps(state, indent=2))
     (planning / "STATE.md").write_text(generate_state_markdown(state))
-    (planning / "PROJECT.md").write_text("# Test Project\n\n## Core Research Question\nWhat is physics?\n")
-    (planning / "REQUIREMENTS.md").write_text("# Requirements\n\n- [ ] **REQ-01**: Do the thing\n")
+    (planning / "PROJECT.md").write_text(
+        "# Test Project\n\n## Core Research Question\nWhat is physics?\n"
+    )
+    (planning / "REQUIREMENTS.md").write_text(
+        "# Requirements\n\n- [ ] **REQ-01**: Do the thing\n"
+    )
     (planning / "ROADMAP.md").write_text(
         "# Roadmap\n\n## Phase 1: Test Phase\nGoal: Test\nRequirements: REQ-01\n"
         "\n## Phase 2: Phase Two\nGoal: More tests\nRequirements: REQ-01\n"
     )
-    (planning / "CONVENTIONS.md").write_text("# Conventions\n\n- Metric: (-,+,+,+)\n- Coordinates: Cartesian\n")
+    (planning / "CONVENTIONS.md").write_text(
+        "# Conventions\n\n- Metric: (-,+,+,+)\n- Coordinates: Cartesian\n"
+    )
     (planning / "config.json").write_text(
         json.dumps(
             {
@@ -78,9 +194,11 @@ def grd_project(tmp_path: Path) -> Path:
     p1 = planning / "phases" / "01-test-phase"
     p1.mkdir(parents=True)
     (p1 / "README.md").write_text("# Phase 1: Test Phase\n")
-    (p1 / "01-PLAN.md").write_text("---\nphase: '01'\nplan: '01'\nwave: 1\n---\n\n# Plan A\n\n## Tasks\n\n- Task 1\n")
+    (p1 / "01-PLAN.md").write_text(
+        "---\nphase: '01'\nplan: '01'\nwave: 1\n---\n\n# Plan A\n\n## Tasks\n\n- Task 1\n"
+    )
     (p1 / "01-SUMMARY.md").write_text(
-        '---\nphase: "01"\nplan: "01"\none-liner: "Set up project"\n'
+        '---\nphase: "01"\nplan: "01"\ndepth: "full"\nprovides: ["main-module"]\ncompleted: "2026-03-22"\none-liner: "Set up project"\n'
         "key-files:\n  - src/main.py\n"
         "dependency-graph:\n  provides:\n    - main-module\n  affects:\n    - phase-2\n"
         "patterns-established:\n  - modular-design\n"
@@ -99,26 +217,19 @@ def grd_project(tmp_path: Path) -> Path:
 
 
 @pytest.fixture(autouse=True)
-def _chdir(grd_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _chdir(gpd_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """All tests run from the project directory."""
-    monkeypatch.chdir(grd_project)
+    monkeypatch.chdir(gpd_project)
 
 
 def _invoke(*args: str, expect_ok: bool = True) -> object:
     """Invoke a grd CLI command and return the CliRunner result."""
     result = runner.invoke(app, list(args), catch_exceptions=False)
     if expect_ok:
-        assert result.exit_code == 0, f"grd {' '.join(args)} failed (exit {result.exit_code}):\n{result.output}"
+        assert result.exit_code == 0, (
+            f"grd {' '.join(args)} failed (exit {result.exit_code}):\n{result.output}"
+        )
     return result
-
-
-def _mark_complete_runtime_install(config_dir: Path, *, runtime: str, install_scope: str = "local") -> None:
-    """Create the concrete install markers real runtime installs write."""
-    (config_dir / "get-research-done").mkdir(parents=True, exist_ok=True)
-    (config_dir / "grd-file-manifest.json").write_text(
-        json.dumps({"runtime": runtime, "install_scope": install_scope}),
-        encoding="utf-8",
-    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -181,12 +292,12 @@ class TestSlug:
 
 
 class TestVerifyPath:
-    def test_verify_existing_file(self, grd_project: Path) -> None:
+    def test_verify_existing_file(self, gpd_project: Path) -> None:
         result = _invoke("verify-path", ".grd/state.json")
         assert "file" in result.output.lower() or "True" in result.output or "true" in result.output
 
     def test_verify_existing_directory(self) -> None:
-        result = _invoke("verify-path", ".grd")
+        result = _invoke("verify-path", "GRD")
         assert "directory" in result.output.lower() or "True" in result.output or "true" in result.output
 
     def test_verify_nonexistent_path(self) -> None:
@@ -194,7 +305,7 @@ class TestVerifyPath:
         assert result.exit_code == 1
         assert "False" in result.output or "false" in result.output
 
-    def test_verify_path_raw(self, grd_project: Path) -> None:
+    def test_verify_path_raw(self, gpd_project: Path) -> None:
         result = _invoke("--raw", "verify-path", ".grd/state.json")
         parsed = json.loads(result.output)
         assert parsed["exists"] is True
@@ -316,16 +427,14 @@ class TestObserve:
         parsed = json.loads(result.output)
         assert parsed["category"] == "workflow"
         assert parsed["name"] == "wave-start"
-        observed = json.loads(
-            _invoke("--raw", "observe", "show", "--category", "workflow", "--name", "wave-start").output
-        )
+        observed = json.loads(_invoke("--raw", "observe", "show", "--category", "workflow", "--name", "wave-start").output)
         assert observed["count"] >= 1
         assert any(event.get("data", {}).get("wave") == 1 for event in observed["events"])
 
 
 class TestFrontmatterValidate:
-    def test_frontmatter_validate_invalid_schema_returns_exit_code_one(self, grd_project: Path) -> None:
-        summary = grd_project / "invalid-summary.md"
+    def test_frontmatter_validate_invalid_schema_returns_exit_code_one(self, gpd_project: Path) -> None:
+        summary = gpd_project / "invalid-summary.md"
         summary.write_text(
             "---\nphase: '01'\nplan: '01'\n---\n\n# Summary\n",
             encoding="utf-8",
@@ -335,7 +444,7 @@ class TestFrontmatterValidate:
             "--raw",
             "frontmatter",
             "validate",
-            str(summary.relative_to(grd_project)),
+            str(summary.relative_to(gpd_project)),
             "--schema",
             "summary",
             expect_ok=False,
@@ -348,7 +457,71 @@ class TestFrontmatterValidate:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 5. regression-check
+# 5. init include parsing + command-context surface
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestInitIncludeParsing:
+    def test_init_progress_include_trims_whitespace_and_drops_empty_entries(self) -> None:
+        result = _invoke("--raw", "init", "progress", "--include", " state, roadmap, , ")
+        payload = json.loads(result.output)
+
+        assert payload["state_content"] is not None
+        assert payload["roadmap_content"] is not None
+
+    def test_init_progress_include_rejects_unknown_values(self) -> None:
+        result = _invoke("--raw", "init", "progress", "--include", "state, bogus", expect_ok=False)
+
+        assert result.exit_code == 1
+        payload = json.loads(result.output)
+        assert payload["error"] == (
+            "Unknown --include value(s) for grd init progress: bogus. "
+            "Allowed values: config, project, roadmap, state."
+        )
+
+
+class TestCommandContextSurface:
+    def test_validate_command_context_reports_runtime_command_surface(self, codex_command_prefix: str) -> None:
+        result = _invoke("--raw", "validate", "command-context", "grd:settings")
+        payload = json.loads(result.output)
+
+        assert payload["command"] == "grd:settings"
+        assert payload["validated_surface"] == "public_runtime_dollar_command"
+        assert payload["local_cli_equivalence_guaranteed"] is False
+        assert f"public `{codex_command_prefix}*` runtime command surface" in payload["dispatch_note"]
+        assert "same-name local `grd` subcommand" in payload["dispatch_note"]
+
+    def test_validate_command_context_reports_slash_runtime_surface(
+        self, claude_code_command_prefix: str
+    ) -> None:
+        result = _invoke("--raw", "validate", "command-context", "grd:settings")
+        payload = json.loads(result.output)
+
+        assert payload["command"] == "grd:settings"
+        assert payload["validated_surface"] == "public_runtime_slash_command"
+        assert payload["local_cli_equivalence_guaranteed"] is False
+        assert f"public `{claude_code_command_prefix}*` runtime command surface" in payload["dispatch_note"]
+        assert "same-name local `grd` subcommand" in payload["dispatch_note"]
+
+    def test_validate_command_context_falls_back_when_runtime_resolution_fails(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def _raise_runtime_error(cwd=None) -> str:
+            raise RuntimeError("runtime resolution failed")
+
+        monkeypatch.setattr("grd.cli.detect_runtime_for_grd_use", _raise_runtime_error)
+
+        result = _invoke("--raw", "validate", "command-context", "grd:settings")
+        payload = json.loads(result.output)
+
+        assert payload["command"] == "grd:settings"
+        assert payload["validated_surface"] == "public_runtime_command_surface"
+        assert payload["local_cli_equivalence_guaranteed"] is False
+        assert "the active runtime command surface" in payload["dispatch_note"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 6. regression-check
 # ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -369,14 +542,31 @@ class TestRegressionCheck:
         result = _invoke("regression-check", "--quick")
         assert result.exit_code == 0
 
-    def test_regression_check_detects_conflict(self, grd_project: Path) -> None:
+    def test_regression_check_phase_scope(self, gpd_project: Path) -> None:
+        p2 = gpd_project / "GRD" / "phases" / "02-phase-two"
+        (p2 / "01-PLAN.md").write_text("---\nphase: '02'\n---\n# Plan\n")
+        (p2 / "01-SUMMARY.md").write_text(
+            '---\nphase: "02"\nplan: "01"\n'
+            "conventions:\n  metric: (+,-,-,-)\n"
+            "---\n\n# Summary\n"
+        )
+
+        result = _invoke("--raw", "regression-check", "1")
+        parsed = json.loads(result.output)
+        assert result.exit_code == 0
+        assert parsed["passed"] is True
+        assert parsed["phases_checked"] == 1
+
+    def test_regression_check_detects_conflict(self, gpd_project: Path) -> None:
         """Inject a convention conflict across two completed phases."""
-        p2 = grd_project / ".grd" / "phases" / "02-phase-two"
+        p2 = gpd_project / "GRD" / "phases" / "02-phase-two"
 
         # Make phase 2 look completed with a conflicting convention
         (p2 / "01-PLAN.md").write_text("---\nphase: '02'\n---\n# Plan\n")
         (p2 / "01-SUMMARY.md").write_text(
-            '---\nphase: "02"\nplan: "01"\nconventions:\n  metric: (+,-,-,-)\n---\n\n# Summary\n'
+            '---\nphase: "02"\nplan: "01"\n'
+            "conventions:\n  metric: (+,-,-,-)\n"
+            "---\n\n# Summary\n"
         )
 
         result = runner.invoke(app, ["--raw", "regression-check"], catch_exceptions=False)
@@ -394,11 +584,11 @@ class TestRegressionCheck:
 
 
 class TestValidateReturn:
-    def test_validate_return_valid(self, grd_project: Path) -> None:
-        """A file with a valid grd_return block should pass."""
-        return_file = grd_project / "valid_return.md"
+    def test_validate_return_valid(self, gpd_project: Path) -> None:
+        """A file with a valid gpd_return block should pass."""
+        return_file = gpd_project / "valid_return.md"
         return_file.write_text(
-            "# Summary\n\n```yaml\ngrd_return:\n"
+            "# Summary\n\n```yaml\ngpd_return:\n"
             '  status: completed\n  files_written: ["src/main.py"]\n'
             "  issues: []\n"
             '  next_actions: ["/grd:verify-work 01"]\n'
@@ -409,10 +599,13 @@ class TestValidateReturn:
         assert parsed["passed"] is True
         assert len(parsed["errors"]) == 0
 
-    def test_validate_return_missing_fields(self, grd_project: Path) -> None:
+    def test_validate_return_missing_fields(self, gpd_project: Path) -> None:
         """A file with missing required fields should fail."""
-        return_file = grd_project / "incomplete_return.md"
-        return_file.write_text("# Summary\n\n```yaml\ngrd_return:\n  status: completed\n```\n")
+        return_file = gpd_project / "incomplete_return.md"
+        return_file.write_text(
+            "# Summary\n\n```yaml\ngpd_return:\n"
+            '  status: completed\n```\n'
+        )
         result = runner.invoke(
             app,
             ["--raw", "validate-return", str(return_file)],
@@ -423,9 +616,9 @@ class TestValidateReturn:
         assert parsed["passed"] is False
         assert len(parsed["errors"]) > 0
 
-    def test_validate_return_no_block(self, grd_project: Path) -> None:
-        """A file without a grd_return block should fail."""
-        return_file = grd_project / "no_block.md"
+    def test_validate_return_no_block(self, gpd_project: Path) -> None:
+        """A file without a gpd_return block should fail."""
+        return_file = gpd_project / "no_block.md"
         return_file.write_text("# Just a regular file\n\nNo return block here.\n")
         result = runner.invoke(
             app,
@@ -435,13 +628,13 @@ class TestValidateReturn:
         assert result.exit_code == 1
         parsed = json.loads(result.output)
         assert parsed["passed"] is False
-        assert any("No grd_return" in e for e in parsed["errors"])
+        assert any("No gpd_return" in e for e in parsed["errors"])
 
-    def test_validate_return_invalid_status(self, grd_project: Path) -> None:
+    def test_validate_return_invalid_status(self, gpd_project: Path) -> None:
         """A file with an invalid status should report errors."""
-        return_file = grd_project / "bad_status.md"
+        return_file = gpd_project / "bad_status.md"
         return_file.write_text(
-            "# Summary\n\n```yaml\ngrd_return:\n"
+            "# Summary\n\n```yaml\ngpd_return:\n"
             '  status: banana\n  files_written: ["src/main.py"]\n'
             "  issues: []\n"
             '  next_actions: ["/grd:verify-work 01"]\n```\n'
@@ -456,11 +649,11 @@ class TestValidateReturn:
         assert parsed["passed"] is False
         assert any("Invalid status" in e for e in parsed["errors"])
 
-    def test_validate_return_warnings(self, grd_project: Path) -> None:
+    def test_validate_return_warnings(self, gpd_project: Path) -> None:
         """Missing recommended fields should produce warnings, not errors."""
-        return_file = grd_project / "warns.md"
+        return_file = gpd_project / "warns.md"
         return_file.write_text(
-            "# Summary\n\n```yaml\ngrd_return:\n"
+            "# Summary\n\n```yaml\ngpd_return:\n"
             '  status: completed\n  files_written: ["src/main.py"]\n'
             "  issues: []\n"
             '  next_actions: ["/grd:verify-work 01"]\n```\n'
@@ -488,9 +681,9 @@ class TestConfigCommands:
         parsed = json.loads(result.output)
         assert parsed["found"] is False
 
-    def test_config_get_alias_key_reads_effective_value(self, grd_project: Path) -> None:
+    def test_config_get_alias_key_reads_effective_value(self, gpd_project: Path) -> None:
         """Alias keys should resolve through the canonical config surface."""
-        config_path = grd_project / ".grd" / "config.json"
+        config_path = gpd_project / "GRD" / "config.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
         config["commit_docs"] = False
         config_path.write_text(json.dumps(config), encoding="utf-8")
@@ -500,8 +693,8 @@ class TestConfigCommands:
         assert parsed["found"] is True
         assert parsed["value"] is False
 
-    def test_config_get_returns_defaults_when_config_is_missing(self, grd_project: Path) -> None:
-        (grd_project / ".grd" / "config.json").unlink()
+    def test_config_get_returns_defaults_when_config_is_missing(self, gpd_project: Path) -> None:
+        (gpd_project / "GRD" / "config.json").unlink()
 
         result = _invoke("--raw", "config", "get", "autonomy")
         parsed = json.loads(result.output)
@@ -509,17 +702,17 @@ class TestConfigCommands:
         assert parsed["found"] is True
         assert parsed["value"] == "balanced"
 
-    def test_config_set_rejects_unsupported_key(self, grd_project: Path) -> None:
+    def test_config_set_rejects_unsupported_key(self, gpd_project: Path) -> None:
         result = _invoke("--raw", "config", "set", "new_key", "new_value", expect_ok=False)
         parsed = json.loads(result.output)
         assert "Unsupported config key" in parsed["error"]
 
-        config = json.loads((grd_project / ".grd" / "config.json").read_text(encoding="utf-8"))
+        config = json.loads((gpd_project / "GRD" / "config.json").read_text(encoding="utf-8"))
         assert "new_key" not in config
 
-    def test_config_set_nested_alias_updates_canonical_value(self, grd_project: Path) -> None:
+    def test_config_set_nested_alias_updates_canonical_value(self, gpd_project: Path) -> None:
         _invoke("--raw", "config", "set", "planning.commit_docs", "false")
-        config = json.loads((grd_project / ".grd" / "config.json").read_text(encoding="utf-8"))
+        config = json.loads((gpd_project / "GRD" / "config.json").read_text(encoding="utf-8"))
         assert config["commit_docs"] is False
         assert "planning" not in config
 
@@ -528,19 +721,19 @@ class TestConfigCommands:
         assert parsed["found"] is True
         assert parsed["value"] is False
 
-    def test_config_set_json_value(self, grd_project: Path) -> None:
+    def test_config_set_json_value(self, gpd_project: Path) -> None:
         """Setting a JSON value (e.g. integer, boolean) should parse it."""
         _invoke("config", "set", "parallelization", "false")
-        config = json.loads((grd_project / ".grd" / "config.json").read_text(encoding="utf-8"))
+        config = json.loads((gpd_project / "GRD" / "config.json").read_text(encoding="utf-8"))
         assert config["parallelization"] is False
 
-    def test_config_set_rejects_legacy_autonomy_value(self, grd_project: Path) -> None:
+    def test_config_set_rejects_legacy_autonomy_value(self, gpd_project: Path) -> None:
         result = _invoke("--raw", "config", "set", "autonomy", "guided", expect_ok=False)
 
         parsed = json.loads(result.output)
         assert "Invalid config.json values" in parsed["error"]
 
-        config = json.loads((grd_project / ".grd" / "config.json").read_text(encoding="utf-8"))
+        config = json.loads((gpd_project / "GRD" / "config.json").read_text(encoding="utf-8"))
         assert config["autonomy"] == "yolo"
 
     def test_config_ensure_section_exists(self) -> None:
@@ -549,13 +742,13 @@ class TestConfigCommands:
         parsed = json.loads(result.output)
         assert parsed["created"] is False
 
-    def test_config_ensure_section_creates(self, grd_project: Path) -> None:
+    def test_config_ensure_section_creates(self, gpd_project: Path) -> None:
         """ensure-section without config.json should create defaults."""
-        (grd_project / ".grd" / "config.json").unlink()
+        (gpd_project / "GRD" / "config.json").unlink()
         result = _invoke("--raw", "config", "ensure-section")
         parsed = json.loads(result.output)
         assert parsed["created"] is True
-        config_path = grd_project / ".grd" / "config.json"
+        config_path = gpd_project / "GRD" / "config.json"
         assert config_path.exists()
         config = json.loads(config_path.read_text())
         assert config["autonomy"] == "balanced"
@@ -566,6 +759,215 @@ class TestConfigCommands:
         assert config["git"]["branching_strategy"] == "none"
         assert "brave_search" not in config
         assert "search_gitignored" not in config
+
+    def test_permissions_sync_updates_installed_runtime(self, gpd_project: Path) -> None:
+        adapter, target = _install_runtime(gpd_project, _ENV_OVERRIDE_DESCRIPTOR)
+
+        result = _invoke("--raw", "permissions", "sync", "--runtime", _ENV_OVERRIDE_DESCRIPTOR.runtime_name, "--autonomy", "yolo")
+        parsed = json.loads(result.output)
+        status = adapter.runtime_permissions_status(target, autonomy="yolo")
+
+        assert parsed["runtime"] == _ENV_OVERRIDE_DESCRIPTOR.runtime_name
+        assert parsed["sync_applied"] is True
+        assert status["config_aligned"] is True
+
+    def test_permissions_sync_accepts_display_name_runtime(self, gpd_project: Path) -> None:
+        adapter, target = _install_runtime(gpd_project, _ENV_OVERRIDE_DESCRIPTOR)
+
+        result = _invoke("--raw", "permissions", "sync", "--runtime", _ENV_OVERRIDE_DESCRIPTOR.display_name, "--autonomy", "yolo")
+        parsed = json.loads(result.output)
+        status = adapter.runtime_permissions_status(target, autonomy="yolo")
+
+        assert parsed["runtime"] == _ENV_OVERRIDE_DESCRIPTOR.runtime_name
+        assert parsed["sync_applied"] is True
+        assert status["config_aligned"] is True
+
+    def test_permissions_sync_accepts_alias_runtime(self, gpd_project: Path) -> None:
+        adapter, target = _install_runtime(gpd_project, _ENV_OVERRIDE_DESCRIPTOR)
+        alias = _ENV_OVERRIDE_DESCRIPTOR.selection_aliases[0]
+
+        result = _invoke("--raw", "permissions", "sync", "--runtime", alias, "--autonomy", "yolo")
+        parsed = json.loads(result.output)
+        status = adapter.runtime_permissions_status(target, autonomy="yolo")
+
+        assert parsed["runtime"] == _ENV_OVERRIDE_DESCRIPTOR.runtime_name
+        assert parsed["sync_applied"] is True
+        assert status["config_aligned"] is True
+
+    def test_permissions_status_and_sync_use_explicit_local_install_target(
+        self,
+        gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        target = gpd_project / "external" / f"{_ENV_OVERRIDE_DESCRIPTOR.config_dir_name.lstrip('.')}-config"
+        adapter, target = _install_runtime(gpd_project, _ENV_OVERRIDE_DESCRIPTOR, target=target, explicit_target=True)
+        _set_runtime_config_override(monkeypatch, _ENV_OVERRIDE_DESCRIPTOR, target)
+
+        status_result = _invoke("--raw", "permissions", "status", "--runtime", _ENV_OVERRIDE_DESCRIPTOR.runtime_name)
+        parsed_status = json.loads(status_result.output)
+        expected_status = adapter.runtime_permissions_status(target, autonomy="yolo")
+
+        assert parsed_status["runtime"] == _ENV_OVERRIDE_DESCRIPTOR.runtime_name
+        assert parsed_status["target"] == str(target)
+        assert parsed_status["settings_path"] == expected_status["settings_path"]
+
+        sync_result = _invoke("--raw", "permissions", "sync", "--runtime", _ENV_OVERRIDE_DESCRIPTOR.runtime_name, "--autonomy", "yolo")
+        parsed_sync = json.loads(sync_result.output)
+        synced_status = adapter.runtime_permissions_status(target, autonomy="yolo")
+
+        assert parsed_sync["runtime"] == _ENV_OVERRIDE_DESCRIPTOR.runtime_name
+        assert parsed_sync["target"] == str(target)
+        assert parsed_sync["sync_applied"] is True
+        assert synced_status["config_aligned"] is True
+
+    def test_permissions_status_uses_public_adapter_target_validation_contract(
+        self,
+        gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import grd.adapters as adapters_module
+
+        descriptor = _DOLLAR_COMMAND_DESCRIPTOR
+        target = gpd_project / "external" / f"{descriptor.runtime_name}-config"
+        target.mkdir(parents=True)
+        validation_calls: list[tuple[Path, str]] = []
+
+        class _FakeAdapter:
+            runtime_name = descriptor.runtime_name
+            display_name = descriptor.display_name
+
+            def validate_target_runtime(self, target_dir: Path, *, action: str) -> None:
+                validation_calls.append((target_dir, action))
+
+            def has_complete_install(self, target_dir: Path) -> bool:
+                return True
+
+            def runtime_permissions_status(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
+                return {
+                    "runtime": descriptor.runtime_name,
+                    "desired_mode": "default",
+                    "configured_mode": "default",
+                    "config_aligned": True,
+                    "requires_relaunch": False,
+                    "managed_by_grd": False,
+                    "message": f"validated {target_dir.name} for {autonomy}",
+                }
+
+        monkeypatch.setattr(adapters_module, "get_adapter", lambda runtime_name: _FakeAdapter())
+
+        result = _invoke(
+            "--raw",
+            "permissions",
+            "status",
+            "--runtime",
+            descriptor.runtime_name,
+            "--target-dir",
+            str(target),
+            "--autonomy",
+            "balanced",
+        )
+        parsed = json.loads(result.output)
+
+        assert validation_calls == [(target.resolve(strict=False), "inspect runtime permissions on")]
+        assert parsed["runtime"] == descriptor.runtime_name
+        assert parsed["target"] == str(target.resolve(strict=False))
+        assert parsed["message"] == f"validated {target.name} for balanced"
+
+    @pytest.mark.parametrize("command", ["status", "sync"])
+    def test_permissions_reject_foreign_manifest_target(
+        self,
+        gpd_project: Path,
+        command: str,
+    ) -> None:
+        _, target = _install_runtime(gpd_project, _ENV_OVERRIDE_DESCRIPTOR)
+        snapshot_before = _target_file_snapshot(target)
+        action = "sync" if command == "sync" else "inspect"
+
+        result = _invoke(
+            "--raw",
+            "permissions",
+            command,
+            "--runtime",
+            _SECONDARY_PERMISSIONS_DESCRIPTOR.runtime_name,
+            "--target-dir",
+            str(target),
+            "--autonomy",
+            "yolo",
+            expect_ok=False,
+        )
+        parsed = json.loads(result.output)
+
+        assert result.exit_code == 1
+        assert parsed["error"].startswith(f"Refusing to {action} runtime permissions on")
+        assert f"`{_ENV_OVERRIDE_DESCRIPTOR.runtime_name}`" in parsed["error"]
+        assert f"`{_SECONDARY_PERMISSIONS_DESCRIPTOR.runtime_name}`" in parsed["error"]
+        assert _target_file_snapshot(target) == snapshot_before
+
+    def test_config_set_autonomy_attempts_runtime_permission_sync(
+        self,
+        gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        adapter, target = _install_runtime(gpd_project, _ENV_OVERRIDE_DESCRIPTOR)
+        adapter.sync_runtime_permissions(target, autonomy="yolo")
+        monkeypatch.setenv("GRD_ACTIVE_RUNTIME", _ENV_OVERRIDE_DESCRIPTOR.runtime_name)
+
+        result = _invoke("--raw", "config", "set", "autonomy", "balanced")
+        parsed = json.loads(result.output)
+        status = adapter.runtime_permissions_status(target, autonomy="balanced")
+
+        assert parsed["value"] == "balanced"
+        assert parsed["runtime_permissions"]["runtime"] == _ENV_OVERRIDE_DESCRIPTOR.runtime_name
+        assert parsed["runtime_permissions"]["sync_applied"] is True
+        assert status["config_aligned"] is True
+
+    def test_permissions_sync_prefers_active_runtime_over_other_installed_runtime(
+        self,
+        gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _, target = _install_runtime(gpd_project, _SECONDARY_PERMISSIONS_DESCRIPTOR)
+        fake_home = gpd_project / "_fake_home_permissions"
+        fake_home.mkdir()
+        _activate_runtime(monkeypatch, _ENV_OVERRIDE_DESCRIPTOR)
+        snapshot_before = _target_file_snapshot(target)
+
+        with patch("pathlib.Path.home", return_value=fake_home):
+            result = _invoke("--raw", "permissions", "sync", "--autonomy", "yolo", expect_ok=False)
+
+        parsed = json.loads(result.output)
+
+        assert parsed["error"] == (
+            f"No GRD install found for runtime '{_ENV_OVERRIDE_DESCRIPTOR.runtime_name}'. "
+            f"Run `grd install {_ENV_OVERRIDE_DESCRIPTOR.runtime_name}` first."
+        )
+        assert _target_file_snapshot(target) == snapshot_before
+
+    def test_config_set_autonomy_does_not_sync_other_installed_runtime(
+        self,
+        gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _, target = _install_runtime(gpd_project, _SECONDARY_PERMISSIONS_DESCRIPTOR)
+        fake_home = gpd_project / "_fake_home_config_set"
+        fake_home.mkdir()
+        _activate_runtime(monkeypatch, _ENV_OVERRIDE_DESCRIPTOR)
+        snapshot_before = _target_file_snapshot(target)
+
+        with patch("pathlib.Path.home", return_value=fake_home):
+            result = _invoke("--raw", "config", "set", "autonomy", "yolo")
+
+        parsed = json.loads(result.output)
+
+        assert parsed["value"] == "yolo"
+        assert parsed["runtime_permissions"]["runtime"] == _ENV_OVERRIDE_DESCRIPTOR.runtime_name
+        assert parsed["runtime_permissions"]["sync_applied"] is False
+        assert parsed["runtime_permissions"]["changed"] is False
+        assert parsed["runtime_permissions"]["message"] == (
+            f"No GRD install found for runtime '{_ENV_OVERRIDE_DESCRIPTOR.runtime_name}'. "
+            f"Run `grd install {_ENV_OVERRIDE_DESCRIPTOR.runtime_name}` first."
+        )
+        assert _target_file_snapshot(target) == snapshot_before
 
     def test_config_help(self) -> None:
         result = _invoke("config", "--help")
@@ -582,13 +984,17 @@ class TestJsonCommands:
     def test_json_get(self) -> None:
         """json get should extract a value from stdin JSON."""
         input_json = json.dumps({"name": "physics", "version": 2})
-        result = runner.invoke(app, ["json", "get", ".name"], input=input_json, catch_exceptions=False)
+        result = runner.invoke(
+            app, ["json", "get", ".name"], input=input_json, catch_exceptions=False
+        )
         assert result.exit_code == 0
         assert "physics" in result.output
 
     def test_json_get_nested(self) -> None:
         input_json = json.dumps({"a": {"b": {"c": "deep"}}})
-        result = runner.invoke(app, ["json", "get", ".a.b.c"], input=input_json, catch_exceptions=False)
+        result = runner.invoke(
+            app, ["json", "get", ".a.b.c"], input=input_json, catch_exceptions=False
+        )
         assert result.exit_code == 0
         assert "deep" in result.output
 
@@ -605,7 +1011,9 @@ class TestJsonCommands:
 
     def test_json_keys(self) -> None:
         input_json = json.dumps({"waves": {"w1": 1, "w2": 2, "w3": 3}})
-        result = runner.invoke(app, ["json", "keys", ".waves"], input=input_json, catch_exceptions=False)
+        result = runner.invoke(
+            app, ["json", "keys", ".waves"], input=input_json, catch_exceptions=False
+        )
         assert result.exit_code == 0
         assert "w1" in result.output
         assert "w2" in result.output
@@ -613,14 +1021,18 @@ class TestJsonCommands:
 
     def test_json_list(self) -> None:
         input_json = json.dumps({"items": ["alpha", "beta", "gamma"]})
-        result = runner.invoke(app, ["json", "list", ".items"], input=input_json, catch_exceptions=False)
+        result = runner.invoke(
+            app, ["json", "list", ".items"], input=input_json, catch_exceptions=False
+        )
         assert result.exit_code == 0
         assert "alpha" in result.output
         assert "beta" in result.output
         assert "gamma" in result.output
 
     def test_json_pluck(self) -> None:
-        input_json = json.dumps({"phases": [{"name": "setup"}, {"name": "compute"}, {"name": "verify"}]})
+        input_json = json.dumps(
+            {"phases": [{"name": "setup"}, {"name": "compute"}, {"name": "verify"}]}
+        )
         result = runner.invoke(
             app,
             ["json", "pluck", ".phases", "name"],
@@ -632,23 +1044,23 @@ class TestJsonCommands:
         assert "compute" in result.output
         assert "verify" in result.output
 
-    def test_json_set(self, grd_project: Path) -> None:
-        target = str(grd_project / "test_output.json")
+    def test_json_set(self, gpd_project: Path) -> None:
+        target = str(gpd_project / "test_output.json")
         result = _invoke("json", "set", "--file", target, "--path", ".key", "--value", '"hello"')
         assert result.exit_code == 0
         data = json.loads(Path(target).read_text())
         assert data["key"] == "hello"
 
-    def test_json_set_nested(self, grd_project: Path) -> None:
-        target = str(grd_project / "test_nested.json")
+    def test_json_set_nested(self, gpd_project: Path) -> None:
+        target = str(gpd_project / "test_nested.json")
         _invoke("json", "set", "--file", target, "--path", ".a.b", "--value", "42")
         data = json.loads(Path(target).read_text())
         assert data["a"]["b"] == 42
 
-    def test_json_merge_files(self, grd_project: Path) -> None:
-        f1 = grd_project / "merge1.json"
-        f2 = grd_project / "merge2.json"
-        out = grd_project / "merged.json"
+    def test_json_merge_files(self, gpd_project: Path) -> None:
+        f1 = gpd_project / "merge1.json"
+        f2 = gpd_project / "merge2.json"
+        out = gpd_project / "merged.json"
         f1.write_text(json.dumps({"a": 1, "b": 2}))
         f2.write_text(json.dumps({"c": 3, "d": 4}))
         result = _invoke(
@@ -666,7 +1078,9 @@ class TestJsonCommands:
         assert merged_data == {"a": 1, "b": 2, "c": 3, "d": 4}
 
     def test_json_sum_lengths(self) -> None:
-        input_json = json.dumps({"items": [1, 2, 3], "tags": ["a", "b"]})
+        input_json = json.dumps(
+            {"items": [1, 2, 3], "tags": ["a", "b"]}
+        )
         result = runner.invoke(
             app,
             ["json", "sum-lengths", ".items", ".tags"],
@@ -688,7 +1102,6 @@ class TestJsonCommands:
 # ═══════════════════════════════════════════════════════════════════════════
 # Extra coverage: summary-extract, resolve-model
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 class TestSummaryExtractCommand:
     def test_summary_extract(self) -> None:
@@ -714,6 +1127,19 @@ class TestSummaryExtractCommand:
         assert parsed["one_liner"] == "Set up project"
 
 
+class TestSyncPhaseCheckpointsCommand:
+    def test_sync_phase_checkpoints(self, gpd_project: Path) -> None:
+        phase_dir = gpd_project / "GRD" / "phases" / "01-test-phase"
+        (phase_dir / "01-VERIFICATION.md").write_text("# Verification\n\nPassed.\n", encoding="utf-8")
+
+        result = _invoke("--raw", "sync-phase-checkpoints")
+
+        parsed = json.loads(result.output)
+        assert parsed["phase_count"] == 1
+        assert (gpd_project / "GRD" / "phase-checkpoints" / "01-test-phase.md").exists()
+        assert (gpd_project / "GRD" / "CHECKPOINTS.md").exists()
+
+
 class TestResolveModelCommand:
     def test_resolve_tier(self) -> None:
         result = _invoke("resolve-tier", "grd-executor")
@@ -724,41 +1150,61 @@ class TestResolveModelCommand:
         parsed = json.loads(result.output)
         assert parsed["error"] == "Unknown agent 'not-an-agent'"
 
-    def test_resolve_model_prefers_installed_runtime_override(self, grd_project: Path) -> None:
-        config_path = grd_project / ".grd" / "config.json"
+    @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+    def test_resolve_model_prefers_installed_runtime_override(self, gpd_project: Path, descriptor) -> None:
+        config_path = gpd_project / "GRD" / "config.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
-        config["model_overrides"] = {"codex": {"tier-1": "gpt-5"}}
+        config["model_overrides"] = {
+            descriptor.runtime_name: {
+                "tier-1": f"{descriptor.runtime_name}-planner-model",
+                "tier-2": f"{descriptor.runtime_name}-executor-model",
+            }
+        }
         config_path.write_text(json.dumps(config), encoding="utf-8")
-        (grd_project / ".claude").mkdir()
-        _mark_complete_runtime_install(grd_project / ".codex", runtime="codex")
-
-        fake_home = grd_project / "_fake_home"
+        seed_complete_runtime_install(gpd_project / descriptor.config_dir_name, runtime=descriptor.runtime_name)
+        fake_home = gpd_project / "_fake_home"
         fake_home.mkdir()
         with patch("pathlib.Path.home", return_value=fake_home):
             result = _invoke("resolve-model", "grd-executor")
-            assert result.output.strip() == ""
+            assert result.output.strip() == f"{descriptor.runtime_name}-executor-model"
 
             planner_result = _invoke("resolve-model", "grd-planner")
-            assert planner_result.output.strip() == "gpt-5"
+            assert planner_result.output.strip() == f"{descriptor.runtime_name}-planner-model"
 
-    def test_init_execute_phase_prefers_installed_runtime_for_model_fields(self, grd_project: Path) -> None:
-        config_path = grd_project / ".grd" / "config.json"
+    @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+    def test_init_execute_phase_prefers_installed_runtime_for_model_fields(
+        self,
+        gpd_project: Path,
+        descriptor,
+    ) -> None:
+        config_path = gpd_project / "GRD" / "config.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
-        config["model_overrides"] = {"codex": {"tier-1": "gpt-5", "tier-2": "gpt-5-mini"}}
+        config["model_overrides"] = {
+            descriptor.runtime_name: {
+                "tier-1": f"{descriptor.runtime_name}-planner-model",
+                "tier-2": f"{descriptor.runtime_name}-executor-model",
+            }
+        }
         config_path.write_text(json.dumps(config), encoding="utf-8")
-        (grd_project / ".claude").mkdir()
-        _mark_complete_runtime_install(grd_project / ".codex", runtime="codex")
+        seed_complete_runtime_install(gpd_project / descriptor.config_dir_name, runtime=descriptor.runtime_name)
 
-        fake_home = grd_project / "_fake_home"
+        fake_home = gpd_project / "_fake_home"
         fake_home.mkdir()
         with patch("pathlib.Path.home", return_value=fake_home):
             result = _invoke("--raw", "init", "execute-phase", "1")
             payload = json.loads(result.output)
 
-            assert payload["executor_model"] == "gpt-5-mini"
-            assert payload["verifier_model"] == "gpt-5"
+            assert payload["executor_model"] == f"{descriptor.runtime_name}-executor-model"
+            assert payload["verifier_model"] == f"{descriptor.runtime_name}-planner-model"
 
     def test_resolve_model_rejects_unknown_agent(self) -> None:
-        result = _invoke("--raw", "resolve-model", "not-an-agent", "--runtime", "codex", expect_ok=False)
+        result = _invoke(
+            "--raw",
+            "resolve-model",
+            "not-an-agent",
+            "--runtime",
+            _RUNTIME_DESCRIPTORS[0].runtime_name,
+            expect_ok=False,
+        )
         parsed = json.loads(result.output)
         assert parsed["error"] == "Unknown agent 'not-an-agent'"

@@ -1,5 +1,5 @@
 <purpose>
-Execute a research plan (PLAN.md) -- carry out derivations, calculations, simulations, or analysis -- and create the outcome summary (SUMMARY.md).
+Execute a research plan (`PLAN.md` or `*-PLAN.md`) -- carry out derivations, calculations, simulations, or analysis -- and create the matching outcome summary (`SUMMARY.md` or `*-SUMMARY.md`).
 </purpose>
 
 <required_reading>
@@ -8,6 +8,7 @@ Read config.json for planning behavior settings.
 
 Read these reference files using the file_read tool:
 - {GRD_INSTALL_DIR}/references/execution/git-integration.md
+- {GRD_INSTALL_DIR}/references/execution/github-lifecycle.md
 - {GRD_INSTALL_DIR}/references/execution/execute-plan-recovery.md
 - {GRD_INSTALL_DIR}/references/execution/execute-plan-validation.md
 - {GRD_INSTALL_DIR}/references/execution/execute-plan-checkpoints.md
@@ -16,6 +17,8 @@ Read these reference files using the file_read tool:
 - {GRD_INSTALL_DIR}/references/execution/executor-index.md -- Maps execution scenarios (QFT, condensed matter, numerical, paper writing, debugging) to the correct domain-specific reference files
 - {GRD_INSTALL_DIR}/templates/calculation-log.md -- Template for CALCULATION_LOG.md (detailed derivation records within a phase)
 - {GRD_INSTALL_DIR}/templates/recovery-plan.md -- Template for RECOVERY.md (structured recovery after plan execution failure)
+
+When following GitHub lifecycle examples, substitute the repository's actual default branch and remote names for `<default-branch>` and `<remote-name>`; those placeholders are not literal branch or remote names.
 </required_reading>
 
 <process>
@@ -31,7 +34,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Extract from init JSON: `executor_model`, `commit_docs`, `phase_dir`, `phase_number`, `plans`, `summaries`, `incomplete_plans`, `autonomy`, `review_cadence`, `max_unattended_minutes_per_plan`, `max_unattended_minutes_per_wave`, `checkpoint_after_n_tasks`, `checkpoint_after_first_load_bearing_result`, `checkpoint_before_downstream_dependent_tasks`, `project_contract`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`, `selected_protocol_bundle_ids`, `protocol_bundle_context`.
+Extract from init JSON: `executor_model`, `commit_docs`, `phase_dir`, `phase_number`, `plans`, `summaries`, `incomplete_plans`, `autonomy`, `review_cadence`, `max_unattended_minutes_per_plan`, `max_unattended_minutes_per_wave`, `checkpoint_after_n_tasks`, `checkpoint_after_first_load_bearing_result`, `checkpoint_before_downstream_dependent_tasks`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`, `selected_protocol_bundle_ids`, `protocol_bundle_context`.
 
 **File contents (from --include):** `state_content`, `config_content`. Access with:
 
@@ -44,7 +47,11 @@ If `.grd/` missing: error.
 </step>
 
 <step name="load_contract_anchor_context">
-Treat `project_contract` as authoritative machine-readable scope when present. Do not execute from PLAN markdown alone if the contract or active-anchor ledger says a decisive reference, prior output, or forbidden proxy still constrains the work.
+If `project_contract_load_info.status` starts with `blocked`, STOP and repair the stored contract before executing. Use the surfaced `project_contract_load_info.errors` / `warnings`; do not guess around them from prose-only context.
+
+If `project_contract_validation.valid` is false, STOP and repair the contract before executing. A visible-but-blocked contract is still not an approved execution contract.
+
+Treat `project_contract` as authoritative machine-readable scope only when present and `project_contract_validation.valid` is true. Do not execute from PLAN markdown alone if the contract or active-anchor ledger says a decisive reference, prior output, or forbidden proxy still constrains the work.
 
 Treat `effective_reference_intake` as the structured carry-forward ledger for must-read refs, baselines, prior outputs, user anchors, and context gaps. Use `active_reference_context` and `reference_artifacts_content` to interpret that ledger quickly, not to replace it with prose-only reconstruction.
 </step>
@@ -82,11 +89,11 @@ Single source of truth is `state.json` convention_lock. Before using any equatio
 <step name="identify_plan">
 ```bash
 # Use plans/summaries from INIT JSON, or list files
-ls "${phase_dir}"/*-PLAN.md 2>/dev/null | sort
-ls "${phase_dir}"/*-SUMMARY.md 2>/dev/null | sort
+ls "${phase_dir}"/PLAN.md "${phase_dir}"/*-PLAN.md 2>/dev/null | sort
+ls "${phase_dir}"/SUMMARY.md "${phase_dir}"/*-SUMMARY.md 2>/dev/null | sort
 ```
 
-Find first PLAN without matching SUMMARY. Decimal phases supported (`01.1-hotfix/`):
+Find the first plan artifact without a matching summary artifact. Canonical standalone pairing is `PLAN.md` <-> `SUMMARY.md`; numbered plans still pair by shared stem. Decimal phases are still supported for numbered files (`01.1-hotfix/`):
 
 ```bash
 phase=$(echo "$PLAN_PATH" | grep -oE '[0-9]+(\.[0-9]+)?-[0-9]+')
@@ -270,7 +277,7 @@ This IS the execution instructions. Follow exactly. If plan references CONTEXT.m
 
 <step name="previous_phase_check">
 ```bash
-ls .grd/phases/*/*-SUMMARY.md 2>/dev/null | sort -r | head -2 | tail -1
+ls .grd/phases/*/*SUMMARY.md 2>/dev/null | sort -r | head -2 | tail -1
 ```
 > **Platform note:** If `ask_user` is not available, present these options in plain text and wait for the user's freeform response.
 
@@ -522,12 +529,16 @@ Create `${phase}-${plan}-SUMMARY.md` at `${phase_dir}/`. Use `{GRD_INSTALL_DIR}/
 
 Note: DERIVATION-STATE.md is updated by /grd:pause-work for session handoff. On natural completion (no pause), key equations and results are captured in SUMMARY.md instead. If you want cumulative derivation state across sessions, run /grd:pause-work before ending.
 
+If the selected plan artifact is the standalone `PLAN.md`, write the canonical standalone summary as `SUMMARY.md`. Where this workflow shows numbered examples like `${phase}-${plan}-SUMMARY.md`, substitute the standalone `SUMMARY.md` filename instead.
+
 **Frontmatter:** phase, plan, depth (minimal/standard/full/complex), subsystem, tags | requires/provides/affects | methods.added/approximations | key-files.created/modified | key-decisions | duration ($DURATION), completed ($PLAN_END_TIME date).
 
 **Contract-backed plans:** if the PLAN frontmatter includes `contract`, SUMMARY frontmatter must also include:
 - `plan_contract_ref`
 - `contract_results` keyed by claim IDs, deliverable IDs, acceptance test IDs, reference IDs, and forbidden proxy IDs
-- `comparison_verdicts` for decisive internal/external comparisons when they exist
+- `comparison_verdicts` for decisive internal/external comparisons that were required or attempted; if the comparison is still open, emit `verdict: inconclusive` or `verdict: tension` instead of omitting the entry
+
+Immediately before writing frontmatter, re-open `@{GRD_INSTALL_DIR}/templates/contract-results-schema.md` and apply it literally. Do not rely on memory or on paraphrased summary rules.
 
 `contract_results` is authoritative. Do not reintroduce ad hoc summary-side success criteria that are absent from the PLAN contract.
 Before treating the summary as complete, run `grd validate summary-contract ${phase_dir}/${phase}-${plan}-SUMMARY.md` and fix any contract-linkage or verdict-ledger errors.
@@ -569,7 +580,7 @@ grd_return:
   contract_updates:
     plan_contract_ref: ".grd/phases/${phase_dir_name}/${phase}-${plan}-PLAN.md#/contract"
     contract_results: { ... keyed by claim/deliverable/test/reference/proxy ids ... }
-    comparison_verdicts: []
+    comparison_verdicts: [ ... ]  # Include inconclusive/tension entries when a decisive comparison is still open
     contract_completion_status: complete | partial | blocked
 ```
 
@@ -615,7 +626,7 @@ Include session update in the `grd_return` envelope:
 grd_return:
   session_update:
     stopped_at: "Completed ${phase}-${plan}-PLAN.md"
-    resume_file: "None"
+    resume_file: "—"
 ```
 
 **Exception:** If executing in Pattern C (main context, no subagent), apply directly:
@@ -623,8 +634,8 @@ grd_return:
 ```bash
 grd state record-session \
   --stopped-at "Completed ${phase}-${plan}-PLAN.md" \
-  --resume-file "None"
-grd observe event session continuity-updated --phase "${phase}" --plan "${plan}" --data "{\"stopped_at\":\"Completed ${phase}-${plan}-PLAN.md\",\"resume_file\":\"None\"}" 2>/dev/null || true
+  --resume-file "—"
+grd observe event session continuity-updated --phase "${phase}" --plan "${plan}" --data "{\"stopped_at\":\"Completed ${phase}-${plan}-PLAN.md\",\"resume_file\":\"—\"}" 2>/dev/null || true
 ```
 
 Keep STATE.md under 150 lines.
@@ -684,8 +695,8 @@ git tag -d "${CHECKPOINT_TAG}" 2>/dev/null
 <step name="offer_next">
 
 ```bash
-ls -1 "${phase_dir}"/*-PLAN.md 2>/dev/null | wc -l
-ls -1 "${phase_dir}"/*-SUMMARY.md 2>/dev/null | wc -l
+ls -1 "${phase_dir}"/PLAN.md "${phase_dir}"/*-PLAN.md 2>/dev/null | wc -l
+ls -1 "${phase_dir}"/SUMMARY.md "${phase_dir}"/*-SUMMARY.md 2>/dev/null | wc -l
 ```
 
 | Condition                                  | Route                 | Action                                                                                                                                                  |

@@ -34,7 +34,7 @@ Configuration options for `.grd/` directory behavior in physics research project
 
 | Option                          | Default                      | Description                                                                                    |
 | ------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| `commit_docs`                   | `true`                       | Whether to commit planning artifacts to git                                                    |
+| `planning.commit_docs`          | `true`                       | Whether to commit planning artifacts to git                                                    |
 | `autonomy`                      | `"balanced"`                 | Human-in-the-loop level: `"supervised"`, `"balanced"`, `"yolo"`                                    |
 | `execution.review_cadence`      | `"adaptive"`                 | How aggressively long-running execution injects bounded review points                            |
 | `execution.max_unattended_minutes_per_plan` | `45`             | Wall-clock budget before a bounded continuation segment must be created, even if the run feels smooth |
@@ -56,34 +56,36 @@ Configuration options for `.grd/` directory behavior in physics research project
 
 <commit_docs_behavior>
 
-**When `commit_docs: true` (default):**
+**When `planning.commit_docs: true` (default):**
 
 - Planning files committed normally
 - SUMMARY.md, STATE.md, ROADMAP.md tracked in git
 - Full history of research decisions preserved
+- Milestone workflows surface this setting directly and honor it when deciding whether to commit generated artifacts
 
-**When `commit_docs: false`:**
+**When `planning.commit_docs: false`:**
 
 - Skip all `git add`/`git commit` for `.grd/` files
 - User must add `.grd/` to `.gitignore`
 - Useful for: private research notes, draft calculations, preliminary explorations
+- The settings workflow exposes this as the explicit `planning.commit_docs` toggle
 
 **Using grd CLI (preferred):**
 
 ```bash
-# Commit with automatic commit_docs + gitignore checks:
+# Commit with automatic planning.commit_docs + gitignore checks:
 grd commit "docs: update state" --files .grd/STATE.md
 
 # Load config via init progress (returns JSON):
 INIT=$(grd init progress --include state,config)
-# commit_docs is available in the JSON output
+# planning.commit_docs is available in the JSON output
 
-# Or use init commands which include commit_docs:
+# Or use init commands which include planning.commit_docs:
 INIT=$(grd init execute-phase "1")
-# commit_docs is included in all init command outputs
+# planning.commit_docs is included in all init command outputs
 ```
 
-**Auto-detection:** If `.grd/` is gitignored, `commit_docs` is automatically `false` regardless of config.json. This prevents git errors when users have `.grd/` in `.gitignore`.
+**Auto-detection:** If `.grd/` is gitignored, `planning.commit_docs` is automatically `false` regardless of config.json. This prevents git errors when users have `.grd/` in `.gitignore`.
 
 **Commit via CLI (handles checks automatically):**
 
@@ -91,7 +93,7 @@ INIT=$(grd init execute-phase "1")
 grd commit "docs: update state" --files .grd/STATE.md
 ```
 
-The CLI checks `commit_docs` config and gitignore status internally -- no manual conditionals needed.
+The CLI checks `planning.commit_docs` config and gitignore status internally -- no manual conditionals needed.
 
 </commit_docs_behavior>
 
@@ -104,6 +106,8 @@ The CLI checks `commit_docs` config and gitignore status internally -- no manual
 | `"dense"`    | Frequent bounded review points and short unattended segments |
 | `"adaptive"` | Default. Insert first-result and risky-fanout gates automatically when results become load-bearing or decisive evidence remains unresolved |
 | `"sparse"`   | Fewest review stops, but required correctness gates still run when a result becomes load-bearing, decisive evidence is still missing, or a wall-clock/task budget trips |
+
+This knob is surfaced directly in `/grd:settings` as `execution.review_cadence`.
 
 `autonomy` and `execution.review_cadence` are separate axes:
 
@@ -178,8 +182,8 @@ To use uncommitted mode:
 | Strategy    | When branch created                   | Branch scope     | Merge point             |
 | ----------- | ------------------------------------- | ---------------- | ----------------------- |
 | `none`      | Never                                 | N/A              | N/A                     |
-| `phase`     | At `execute-phase` start              | Single phase     | User merges after phase |
-| `milestone` | At first `execute-phase` of milestone | Entire milestone | At `complete-milestone` |
+| `per-phase`     | At `execute-phase` start              | Single phase     | User merges after phase |
+| `per-milestone` | At first `execute-phase` of milestone | Entire milestone | At `complete-milestone` |
 
 **When `git.branching_strategy: "none"` (default):**
 
@@ -259,8 +263,8 @@ Squash merge is recommended -- keeps main branch history clean while preserving 
 | Strategy    | Best for                                                                          |
 | ----------- | --------------------------------------------------------------------------------- |
 | `none`      | Solo research, exploratory work, single-problem investigations                    |
-| `phase`     | Multi-approach comparison, granular rollback, collaboration on shared calculation |
-| `milestone` | Publication-oriented work, versioned results, reproducibility checkpoints         |
+| `per-phase`     | Multi-approach comparison, granular rollback, collaboration on shared calculation |
+| `per-milestone` | Publication-oriented work, versioned results, reproducibility checkpoints         |
 
 </branching_strategy_behavior>
 

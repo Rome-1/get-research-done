@@ -25,7 +25,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_enabled`, `plan_checker_enabled`, `commit_docs`, `autonomy`, `research_mode`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_plans`, `plan_count`, `planning_exists`, `roadmap_exists`, `project_contract`, `contract_intake`, `effective_reference_intake`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `protocol_bundle_verifier_extensions`, `active_reference_context`, `reference_artifacts_content`.
+Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_enabled`, `plan_checker_enabled`, `commit_docs`, `autonomy`, `research_mode`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_plans`, `plan_count`, `planning_exists`, `roadmap_exists`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `protocol_bundle_verifier_extensions`, `active_reference_context`, `reference_artifacts_content`.
 
 **File contents (from --include):** `state_content`, `roadmap_content`, `requirements_content`, `context_content`, `research_content`, `verification_content`, `validation_content`, plus reference-artifact fields from init JSON. These are null if files don't exist.
 
@@ -50,7 +50,11 @@ RESEARCH_MODE=$(echo "$INIT" | grd json get .research_mode --default balanced)
 
 **If `planning_exists` is false:** Error -- run `/grd:new-project` first.
 
+**If `project_contract_load_info.status` starts with `blocked`:** STOP and checkpoint with the user. Show the specific `project_contract_load_info.errors` / `warnings`; do not silently continue from `ROADMAP.md`, `REQUIREMENTS.md`, or `active_reference_context` alone when the stored contract could not even be loaded cleanly.
+
 **If `project_contract` is empty or null:** STOP and checkpoint with the user. Planning requires an approved scoping contract in `.grd/state.json`; do not infer phase scope from `ROADMAP.md` or `REQUIREMENTS.md` alone.
+
+**If `project_contract_validation.valid` is false:** STOP and checkpoint with the user. Quote the `project_contract_validation.errors` explicitly and repair the contract before planning; a visible-but-blocked contract is not an approved planning contract.
 
 Treat `effective_reference_intake` as the machine-readable carry-forward anchor ledger for this phase. Do not rely only on the rendered `active_reference_context` prose when deciding what must stay visible.
 
@@ -207,7 +211,7 @@ elif [ "$RESEARCH_MODE" = "exploit" ]; then
   fi
 elif [ "$RESEARCH_MODE" = "adaptive" ]; then
   # Adaptive: narrow only after prior decisive evidence or an explicit approach lock
-  VALIDATED=$(ls .grd/phases/*/*-SUMMARY.md 2>/dev/null | xargs grep -El "approach_validated: true|comparison_verdicts:|contract_results:" 2>/dev/null | head -1)
+  VALIDATED=$(ls .grd/phases/*/*SUMMARY.md 2>/dev/null | xargs grep -El "approach_validated: true|comparison_verdicts:|contract_results:" 2>/dev/null | head -1)
   if [ -n "$VALIDATED" ]; then
     echo "Research mode: adaptive — prior decisive evidence found, using existing research as the starting point"
     # Skip to step 6
@@ -507,11 +511,17 @@ Planning requires an approved project contract. If `{project_contract}` is empty
 
 **Project State:** {state_content}
 **Project Contract:** {project_contract}
+**Contract Intake:** {contract_intake}
+**Effective Reference Intake:** {effective_reference_intake}
 **Roadmap:** {roadmap_content}
 **Requirements:** {requirements_content}
 **Protocol Bundles:** {protocol_bundle_context}
 **Active References:** {active_reference_context}
 **Reference Artifacts:** {reference_artifacts_content}
+
+## Canonical PLAN Contract Schema
+
+Use `templates/plan-contract-schema.md` as the canonical contract schema reference.
 
 **Phase Context:**
 IMPORTANT: If context exists below, it contains USER DECISIONS from /grd:discuss-phase.
@@ -761,9 +771,15 @@ Revision prompt:
 **Existing plans:** {plans_content}
 **Checker issues:** {structured_issues_from_checker}
 **Protocol Bundles:** {protocol_bundle_context}
+**Contract Intake:** {contract_intake}
+**Effective Reference Intake:** {effective_reference_intake}
 **Active References:** {active_reference_context}
 **Project Contract:** {project_contract}
 **Reference Artifacts:** {reference_artifacts_content}
+
+## Canonical PLAN Contract Schema
+
+Use `templates/plan-contract-schema.md` as the canonical contract schema reference.
 
 **Phase Context:**
 Revisions MUST still honor user decisions.

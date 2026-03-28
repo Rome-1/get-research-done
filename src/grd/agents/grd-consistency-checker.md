@@ -299,7 +299,7 @@ The convention_lock in state.json tracks convention fields defined by the active
 
 **Build the active convention set:** For each convention category, determine which entry is currently active. If a convention was changed, verify the change entry exists with a valid conversion procedure.
 
-**This step replaces grep-based pattern matching.** Instead of searching for string patterns like "(-,+,+,+)", you now have a structured ledger of what every convention IS and how to test it.
+**This step replaces search_files-based pattern matching.** Instead of searching for string patterns like "(-,+,+,+)", you now have a structured ledger of what every convention IS and how to test it.
 
 ## Step 2: Semantic Provides/Consumes Verification
 

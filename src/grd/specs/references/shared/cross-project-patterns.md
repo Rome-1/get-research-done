@@ -33,7 +33,7 @@ The library lives outside any single project at the resolved global pattern-libr
   index.json
 ```
 
-**Why the global `.grd` directory:** This directory persists across all projects and sessions. Project-local `.grd/INSIGHTS.md` captures project-specific lessons; the global library captures cross-project patterns.
+**Why the global `GRD` directory:** This directory persists across all projects and sessions. Project-local `.grd/INSIGHTS.md` captures project-specific lessons; the global library captures cross-project patterns.
 
 **Each pattern file** follows the `learned-pattern.md` template (see `../../templates/learned-pattern.md`). Filenames use the format `{category}-{short-slug}.md` (e.g., `sign-error-metric-signature.md`, `factor-error-fourier-convention.md`).
 
@@ -115,7 +115,7 @@ When the verifier (grd-verifier) finds that a particular class of error recurs a
 When a cross-phase convention violation is detected (e.g., one phase uses East Coast metric while another uses West Coast):
 
 1. Write a pattern file focused on the convention pitfall
-2. Include specific detection criteria (what to grep for, what to check in STATE.md)
+2. Include specific detection criteria (what to search_files for, what to check in STATE.md)
 3. Include prevention guidance (what the planner should specify in PLAN.md)
 
 </when_patterns_are_written>

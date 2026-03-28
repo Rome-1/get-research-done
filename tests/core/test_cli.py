@@ -16,8 +16,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from typer.testing import CliRunner
 
 import grd.cli as cli_module
+import grd.runtime_cli as runtime_cli
 from grd.adapters import list_runtimes
 from grd.cli import app
+from grd.core import cli_args as cli_args_module
 
 runner = CliRunner()
 
@@ -322,6 +324,21 @@ def test_resolve_cli_cwd_from_argv_supports_trailing_cwd(tmp_path: Path) -> None
     assert resolved == tmp_path.resolve()
 
 
+def test_shared_root_global_cli_helpers_match_cli_and_bridge_wrappers(tmp_path: Path, monkeypatch) -> None:
+    launcher = tmp_path / "launcher"
+    launcher.mkdir()
+    nested = tmp_path / "workspace" / "nested"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(launcher)
+
+    argv = ["state", "load", "--cwd", str(nested), "--raw"]
+
+    assert cli_args_module.split_root_global_cli_options(argv) == cli_module._split_global_cli_options(argv)
+    assert cli_args_module.normalize_root_global_cli_options(argv) == cli_module._normalize_global_cli_options(argv)
+    assert cli_args_module.resolve_root_global_cli_cwd_from_argv(argv) == cli_module._resolve_cli_cwd_from_argv(argv)
+    assert cli_args_module.resolve_root_global_cli_cwd_from_argv(argv) == runtime_cli._resolve_cli_cwd_from_argv(argv)
+
+
 def test_entrypoint_normalizes_trailing_global_options(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
@@ -515,7 +532,7 @@ def test_trace_stop(mock_stop):
 
 
 def test_observe_sessions_reads_local_metadata(tmp_path: Path) -> None:
-    planning = tmp_path / ".grd" / "observability" / "sessions"
+    planning = tmp_path / "GRD" / "observability" / "sessions"
     planning.mkdir(parents=True)
     (planning / "cli-session-1.jsonl").write_text(
         "\n".join(
@@ -562,7 +579,7 @@ def test_observe_sessions_reads_local_metadata(tmp_path: Path) -> None:
 
 
 def test_observe_show_filters_events(tmp_path: Path) -> None:
-    sessions_dir = tmp_path / ".grd" / "observability" / "sessions"
+    sessions_dir = tmp_path / "GRD" / "observability" / "sessions"
     sessions_dir.mkdir(parents=True)
     (sessions_dir / "cli-a.jsonl").write_text(
         "\n".join(
@@ -611,7 +628,7 @@ def test_observe_show_filters_events(tmp_path: Path) -> None:
 
 def test_observe_show_falls_back_to_session_logs(tmp_path: Path) -> None:
     """show_events reads per-session logs when filtering observability data."""
-    sessions_dir = tmp_path / ".grd" / "observability" / "sessions"
+    sessions_dir = tmp_path / "GRD" / "observability" / "sessions"
     sessions_dir.mkdir(parents=True)
     (sessions_dir / "cli-a.jsonl").write_text(
         json.dumps(
@@ -640,7 +657,7 @@ def test_observe_show_falls_back_to_session_logs(tmp_path: Path) -> None:
 
 
 def test_observe_event_appends_event(tmp_path: Path) -> None:
-    (tmp_path / ".grd").mkdir()
+    (tmp_path / "GRD").mkdir()
 
     result = runner.invoke(
         app,
@@ -672,21 +689,21 @@ def test_observe_event_appends_event(tmp_path: Path) -> None:
     assert payload["category"] == "workflow"
     assert payload["name"] == "wave-start"
     assert payload["data"]["wave"] == 2
-    sessions_dir = tmp_path / ".grd" / "observability" / "sessions"
+    sessions_dir = tmp_path / "GRD" / "observability" / "sessions"
     session_logs = sorted(sessions_dir.glob("*.jsonl"))
     assert len(session_logs) == 1
     events = [json.loads(line) for line in session_logs[0].read_text(encoding="utf-8").splitlines() if line.strip()]
     assert any(event["category"] == "workflow" and event["name"] == "wave-start" for event in events)
-    assert not (tmp_path / ".grd" / "observability" / "events.jsonl").exists()
+    assert not (tmp_path / "GRD" / "observability" / "events.jsonl").exists()
 
 
 def test_cli_invocation_does_not_write_observability_files_without_explicit_events(tmp_path: Path) -> None:
-    (tmp_path / ".grd").mkdir()
+    (tmp_path / "GRD").mkdir()
 
     result = runner.invoke(app, ["--cwd", str(tmp_path), "timestamp"])
 
     assert result.exit_code == 0
-    obs_dir = tmp_path / ".grd" / "observability"
+    obs_dir = tmp_path / "GRD" / "observability"
     assert not obs_dir.exists()
 
 
@@ -910,7 +927,7 @@ def test_paper_build_prefers_manuscript_before_draft(tmp_path: Path) -> None:
 
 
 def test_paper_build_does_not_discover_legacy_planning_configs(tmp_path: Path, capsys) -> None:
-    planning_paper_dir = tmp_path / ".grd" / "paper"
+    planning_paper_dir = tmp_path / "GRD" / "paper"
     planning_paper_dir.mkdir(parents=True)
     (planning_paper_dir / "PAPER-CONFIG.json").write_text(
         json.dumps(
@@ -937,7 +954,7 @@ def test_paper_build_does_not_discover_legacy_planning_configs(tmp_path: Path, c
 
 
 def test_paper_build_rejects_explicit_legacy_planning_config_path(tmp_path: Path, capsys) -> None:
-    planning_paper_dir = tmp_path / ".grd" / "paper"
+    planning_paper_dir = tmp_path / "GRD" / "paper"
     planning_paper_dir.mkdir(parents=True)
     (planning_paper_dir / "PAPER-CONFIG.json").write_text(
         json.dumps(
@@ -959,6 +976,34 @@ def test_paper_build_rejects_explicit_legacy_planning_config_path(tmp_path: Path
 
     captured = capsys.readouterr()
     payload = json.loads(captured.err)
+    assert "no longer supported" in payload["error"]
+
+
+def test_paper_build_rejects_explicit_legacy_hidden_planning_config_path(tmp_path: Path, capsys) -> None:
+    planning_paper_dir = tmp_path / ".grd" / "paper"
+    planning_paper_dir.mkdir(parents=True)
+    (tmp_path / ".grd" / "state.json").write_text("{}\n", encoding="utf-8")
+    (planning_paper_dir / "PAPER-CONFIG.json").write_text(
+        json.dumps(
+            {
+                "title": "planning-lowercase",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"title": "Intro", "content": "Hello."}],
+                "figures": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        cli_module.app(args=["--raw", "--cwd", str(tmp_path), "paper-build", ".grd/paper/PAPER-CONFIG.json"])
+    except SystemExit as exc:
+        assert exc.code == 1
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.err)
+    assert ".grd/paper" in payload["error"]
     assert "no longer supported" in payload["error"]
 
 
@@ -1098,6 +1143,24 @@ def test_history_digest_subcommand(mock_digest):
     result = runner.invoke(app, ["history-digest"])
     assert result.exit_code == 0
     mock_digest.assert_called_once()
+
+
+@patch("grd.core.checkpoints.sync_phase_checkpoints")
+def test_sync_phase_checkpoints_subcommand(mock_sync):
+    mock_result = MagicMock()
+    mock_result.model_dump.return_value = {
+        "generated": True,
+        "phase_count": 1,
+        "preserved_phase_count": 0,
+        "checkpoint_dir": ".grd/phase-checkpoints",
+        "root_index": ".grd/CHECKPOINTS.md",
+        "updated_files": [".grd/phase-checkpoints/01-test-phase.md", ".grd/CHECKPOINTS.md"],
+        "removed_files": [],
+    }
+    mock_sync.return_value = mock_result
+    result = runner.invoke(app, ["sync-phase-checkpoints"])
+    assert result.exit_code == 0
+    mock_sync.assert_called_once()
 
 
 @patch("grd.core.commands.cmd_regression_check")

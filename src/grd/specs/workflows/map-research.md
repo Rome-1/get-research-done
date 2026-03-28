@@ -47,7 +47,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Extract from init JSON: `mapper_model`, `commit_docs`, `research_map_dir`, `existing_maps`, `has_maps`, `research_map_dir_exists`, `project_contract`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`.
+Extract from init JSON: `mapper_model`, `commit_docs`, `research_map_dir`, `existing_maps`, `has_maps`, `research_map_dir_exists`, `project_contract`, `project_contract_load_info`, `project_contract_validation`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`.
 
 **Read mode settings:**
 
@@ -64,6 +64,7 @@ RESEARCH_MODE=$(grd --raw config get research_mode 2>/dev/null | grd json get .v
 - Use `reference_artifacts_content` when the existing literature/research-map artifacts already contain stable citations, prior-output paths, or benchmark wording that should be preserved verbatim.
 - Preserve stable anchor identity when you rewrite or merge references: every durable anchor in `REFERENCES.md` should carry a reusable `Anchor ID` and a concrete `Source / Locator`.
 - Keep workflow carry-forward scope separate from canonical contract subject linkage. `Carry Forward To` names workflow stages; if exact claim/deliverable IDs are known, record them in a dedicated `Contract Subject IDs` field instead of overloading the stage field.
+- Treat `project_contract` as authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes. If either gate is blocked, keep the contract visible as context but do not treat it as approved mapping truth.
 </step>
 
 <step name="check_existing">
@@ -153,8 +154,16 @@ Keep this active reference context visible while mapping:
 Existing reference artifact excerpts:
 {reference_artifacts_content}
 
-If `project_contract` is present, use its existing IDs as the preferred canonical names for anchors and contract subject references:
+Project contract load info:
+{project_contract_load_info}
+
+Project contract validation:
+{project_contract_validation}
+
+If `project_contract` is present and `project_contract_load_info` is clean and `project_contract_validation` passes, use its existing IDs as the preferred canonical names for anchors and contract subject references:
 {project_contract}
+
+If the contract is blocked or not approved, keep it visible as context only and do not treat its IDs as authoritative mapping truth.
 
 Write these documents to .grd/research-map/:
 - FORMALISM.md - Lagrangians/Hamiltonians, symmetries, gauge groups, field content, key equations, approximation schemes, effective theories, governing PDEs/ODEs, boundary conditions, conservation laws
@@ -182,6 +191,20 @@ First, read {GRD_AGENTS_DIR}/grd-research-mapper.md for your role and instructio
 Focus: computation
 
 Analyze this research project for computational methods, solvers, and project structure.
+Treat the machine-readable intake below as binding carry-forward context:
+{effective_reference_intake}
+
+Keep this active reference context visible while mapping:
+{active_reference_context}
+
+Existing reference artifact excerpts:
+{reference_artifacts_content}
+
+Project contract load info:
+{project_contract_load_info}
+
+Project contract validation:
+{project_contract_validation}
 
 Write these documents to .grd/research-map/:
 - ARCHITECTURE.md - Computational pipeline, solver choices (ODE/PDE/linear algebra), algorithm design, parallelization strategy, key libraries used (NumPy, SciPy, PETSc, etc.), MCP simulation servers, data flow from input to output, performance bottlenecks
@@ -209,6 +232,20 @@ First, read {GRD_AGENTS_DIR}/grd-research-mapper.md for your role and instructio
 Focus: methodology
 
 Analyze this research project for notation conventions, unit systems, and validation practices.
+Treat the machine-readable intake below as binding carry-forward context:
+{effective_reference_intake}
+
+Keep this active reference context visible while mapping:
+{active_reference_context}
+
+Existing reference artifact excerpts:
+{reference_artifacts_content}
+
+Project contract load info:
+{project_contract_load_info}
+
+Project contract validation:
+{project_contract_validation}
 
 Write these documents to .grd/research-map/:
 - CONVENTIONS.md - Notation system, sign conventions (metric signature, Fourier transforms), unit system (natural/SI/CGS), index placement conventions (Einstein summation), coordinate labeling, variable naming in code vs equations, coupling constant definitions, Wick rotation conventions
@@ -236,6 +273,20 @@ First, read {GRD_AGENTS_DIR}/grd-research-mapper.md for your role and instructio
 Focus: status
 
 Analyze this research project for open questions, known issues, and areas of concern.
+Treat the machine-readable intake below as binding carry-forward context:
+{effective_reference_intake}
+
+Keep this active reference context visible while mapping:
+{active_reference_context}
+
+Existing reference artifact excerpts:
+{reference_artifacts_content}
+
+Project contract load info:
+{project_contract_load_info}
+
+Project contract validation:
+{project_contract_validation}
 
 Write this document to .grd/research-map/:
 - CONCERNS.md - Known issues (unresolved divergences, numerical instabilities, sign ambiguities), theoretical gaps (missing diagrams, uncontrolled approximations, gauge artifacts), TODO items found in code and notes, fragile areas (code that breaks easily, calculations sensitive to parameter choices), missing validation (untested regimes, unchecked limits), computational bottlenecks, stale or abandoned branches of investigation

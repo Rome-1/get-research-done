@@ -29,7 +29,7 @@ from grd.core.phases import (
 
 def _setup_project(tmp_path: Path) -> Path:
     """Create a minimal GRD project structure and return project root."""
-    planning = tmp_path / ".grd"
+    planning = tmp_path / "GRD"
     planning.mkdir()
     (planning / "phases").mkdir()
     return tmp_path
@@ -37,14 +37,14 @@ def _setup_project(tmp_path: Path) -> Path:
 
 def _create_phase_dir(tmp_path: Path, name: str) -> Path:
     """Create a phase directory and return its path."""
-    phase_dir = tmp_path / ".grd" / "phases" / name
+    phase_dir = tmp_path / "GRD" / "phases" / name
     phase_dir.mkdir(parents=True, exist_ok=True)
     return phase_dir
 
 
 def _create_roadmap(tmp_path: Path, content: str) -> Path:
     """Write ROADMAP.md and return its path."""
-    roadmap = tmp_path / ".grd" / "ROADMAP.md"
+    roadmap = tmp_path / "GRD" / "ROADMAP.md"
     roadmap.parent.mkdir(parents=True, exist_ok=True)
     roadmap.write_text(textwrap.dedent(content))
     return roadmap
@@ -52,7 +52,7 @@ def _create_roadmap(tmp_path: Path, content: str) -> Path:
 
 def _create_state(tmp_path: Path, content: str) -> Path:
     """Write STATE.md and return its path."""
-    state = tmp_path / ".grd" / "STATE.md"
+    state = tmp_path / "GRD" / "STATE.md"
     state.parent.mkdir(parents=True, exist_ok=True)
     state.write_text(textwrap.dedent(content))
     return state

@@ -39,7 +39,7 @@ Categories:
 
 **Pre-flight check:**
 ```bash
-if [ ! -d ".grd" ]; then
+if [ ! -d "GRD" ]; then
   echo "Error: No GRD project found. Run /grd:new-project first."
   exit 1
 fi

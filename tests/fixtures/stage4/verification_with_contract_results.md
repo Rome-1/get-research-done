@@ -27,6 +27,9 @@ contract_results:
   forbidden_proxies:
     fp-benchmark:
       status: rejected
+  uncertainty_markers:
+    weakest_anchors: [Verification spot-check coverage]
+    disconfirming_observations: [Independent rerun misses the benchmark tolerance]
 comparison_verdicts:
   - subject_id: claim-benchmark
     subject_kind: claim

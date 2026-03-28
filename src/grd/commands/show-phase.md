@@ -57,11 +57,11 @@ Read ROADMAP.md to extract this phase's description, goal, dependencies, and cur
 
 ## Step 4: Plan Completion
 
-For each PLAN.md, check if a matching SUMMARY.md exists. Present as completion table.
+For standalone `PLAN.md` and numbered `*-PLAN.md`, check whether the matching `SUMMARY.md` / `*-SUMMARY.md` artifact exists. Present the results as a completion table.
 
 ## Step 5: Key Results
 
-Extract key results from SUMMARY.md files using `summary-extract`:
+Extract key results from standalone `SUMMARY.md` and numbered `*-SUMMARY.md` files using `summary-extract`:
 
 ```bash
 grd summary-extract <path> --field one_liner --field key_results --field equations
@@ -69,11 +69,11 @@ grd summary-extract <path> --field one_liner --field key_results --field equatio
 
 ## Step 6: Verification Status
 
-Check for VERIFICATION.md and VALIDATION.md files. Report their status (passed, issues found, pending).
+Check for `*-VERIFICATION.md` and `*-VALIDATION.md` files. Report their status (passed, issues found, pending).
 
 ## Step 7: Convention Changes
 
-Check SUMMARY.md frontmatter for `affects` fields that indicate convention changes introduced in this phase.
+Check `SUMMARY.md` / `*-SUMMARY.md` frontmatter for `affects` fields that indicate convention changes introduced in this phase.
 
 ## Step 8: File Listing
 

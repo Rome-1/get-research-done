@@ -19,6 +19,14 @@ GRD_CONFIG_DIR="{GRD_CONFIG_DIR}"
 GRD_GLOBAL_CONFIG_DIR="{GRD_GLOBAL_CONFIG_DIR}"
 GRD_RUNTIME_FLAG="{GRD_RUNTIME_FLAG}"
 INSTALL_SCOPE="{GRD_INSTALL_SCOPE_FLAG}"
+PYTHON_BIN="${GRD_PYTHON:-}"
+
+if [ -z "$PYTHON_BIN" ]; then
+  PYTHON_BIN=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)
+fi
+if [ -z "$PYTHON_BIN" ]; then
+  PYTHON_BIN="python3"
+fi
 
 if [ -f "$GRD_INSTALL_DIR/VERSION" ]; then
   INSTALLED_VERSION=$(tr -d '\n' < "$GRD_INSTALL_DIR/VERSION")
@@ -27,20 +35,48 @@ else
 fi
 
 TARGET_DIR_ARG=""
-if [ "$INSTALL_SCOPE" = "--local" ]; then
-  case "$GRD_CONFIG_DIR" in
-    ./*) ;;
-    *)
-      TARGET_DIR_ARG=$(python3 - "$GRD_CONFIG_DIR" <<'PY'
+case "$INSTALL_SCOPE" in
+  --local)
+    case "$GRD_CONFIG_DIR" in
+      ./*) ;;
+      *)
+        TARGET_DIR_ARG=$("$PYTHON_BIN" - "$INSTALL_SCOPE" "$GRD_CONFIG_DIR" "$GRD_GLOBAL_CONFIG_DIR" <<'PY'
 import shlex
 import sys
 
-print(f" --target-dir {shlex.quote(sys.argv[1])}")
+install_scope, config_dir, global_config_dir = sys.argv[1:4]
+if install_scope == "--local" and config_dir.startswith("./"):
+    print("")
+elif install_scope == "--global" and config_dir == global_config_dir:
+    print("")
+else:
+    print(f" --target-dir {shlex.quote(config_dir)}")
 PY
 )
-      ;;
-  esac
-fi
+        ;;
+    esac
+    ;;
+  --global)
+    case "$GRD_CONFIG_DIR" in
+      "$GRD_GLOBAL_CONFIG_DIR") ;;
+      *)
+        TARGET_DIR_ARG=$("$PYTHON_BIN" - "$INSTALL_SCOPE" "$GRD_CONFIG_DIR" "$GRD_GLOBAL_CONFIG_DIR" <<'PY'
+import shlex
+import sys
+
+install_scope, config_dir, global_config_dir = sys.argv[1:4]
+if install_scope == "--local" and config_dir.startswith("./"):
+    print("")
+elif install_scope == "--global" and config_dir == global_config_dir:
+    print("")
+else:
+    print(f" --target-dir {shlex.quote(config_dir)}")
+PY
+)
+        ;;
+    esac
+    ;;
+esac
 
 UPDATE_COMMAND="npx -y get-research-done $GRD_RUNTIME_FLAG $INSTALL_SCOPE$TARGET_DIR_ARG"
 PATCH_META="$GRD_CONFIG_DIR/grd-local-patches/backup-meta.json"
@@ -68,7 +104,7 @@ If the version file is missing, treat the install as version `0.0.0` and continu
 Check the npm registry for the latest released `get-research-done` version:
 
 ```bash
-python3 - <<'PY'
+"$PYTHON_BIN" - <<'PY'
 import json
 import urllib.request
 

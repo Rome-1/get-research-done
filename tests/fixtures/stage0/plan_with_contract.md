@@ -6,6 +6,10 @@ wave: 1
 depends_on: []
 files_modified: []
 interactive: false
+conventions:
+  units: natural
+  metric: "(+,-,-,-)"
+  coordinates: Cartesian
 contract:
   schema_version: 1
   scope:

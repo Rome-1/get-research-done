@@ -9,17 +9,16 @@ review-contract:
   review_mode: publication
   schema_version: 1
   required_outputs:
-    - ".grd/review/CLAIMS.json"
-    - ".grd/review/STAGE-reader.json"
-    - ".grd/review/STAGE-literature.json"
-    - ".grd/review/STAGE-math.json"
-    - ".grd/review/STAGE-physics.json"
-    - ".grd/review/STAGE-interestingness.json"
-    - ".grd/review/REVIEW-LEDGER.json"
-    - ".grd/review/REFEREE-DECISION.json"
-    - ".grd/REFEREE-REPORT.md"
-    - ".grd/REFEREE-REPORT.tex"
-    - ".grd/CONSISTENCY-REPORT.md"
+    - ".grd/review/CLAIMS{round_suffix}.json"
+    - ".grd/review/STAGE-reader{round_suffix}.json"
+    - ".grd/review/STAGE-literature{round_suffix}.json"
+    - ".grd/review/STAGE-math{round_suffix}.json"
+    - ".grd/review/STAGE-physics{round_suffix}.json"
+    - ".grd/review/STAGE-interestingness{round_suffix}.json"
+    - ".grd/review/REVIEW-LEDGER{round_suffix}.json"
+    - ".grd/review/REFEREE-DECISION{round_suffix}.json"
+    - ".grd/REFEREE-REPORT{round_suffix}.md"
+    - ".grd/REFEREE-REPORT{round_suffix}.tex"
   required_evidence:
     - "existing manuscript"
     - "phase summaries or milestone digest"
@@ -51,15 +50,15 @@ review-contract:
     - "interestingness"
     - "meta"
   stage_artifacts:
-    - ".grd/review/CLAIMS.json"
-    - ".grd/review/STAGE-reader.json"
-    - ".grd/review/STAGE-literature.json"
-    - ".grd/review/STAGE-math.json"
-    - ".grd/review/STAGE-physics.json"
-    - ".grd/review/STAGE-interestingness.json"
-    - ".grd/review/REVIEW-LEDGER.json"
-    - ".grd/review/REFEREE-DECISION.json"
-  final_decision_output: ".grd/review/REFEREE-DECISION.json"
+    - ".grd/review/CLAIMS{round_suffix}.json"
+    - ".grd/review/STAGE-reader{round_suffix}.json"
+    - ".grd/review/STAGE-literature{round_suffix}.json"
+    - ".grd/review/STAGE-math{round_suffix}.json"
+    - ".grd/review/STAGE-physics{round_suffix}.json"
+    - ".grd/review/STAGE-interestingness{round_suffix}.json"
+    - ".grd/review/REVIEW-LEDGER{round_suffix}.json"
+    - ".grd/review/REFEREE-DECISION{round_suffix}.json"
+  final_decision_output: ".grd/review/REFEREE-DECISION{round_suffix}.json"
   requires_fresh_context_per_stage: true
   max_review_rounds: 3
 allowed-tools:
@@ -96,12 +95,13 @@ Review target: $ARGUMENTS (optional paper directory or manuscript path)
 @.grd/STATE.md
 @.grd/ROADMAP.md
 
-Check for candidate manuscripts:
+Check canonical candidate manuscript roots in order:
 
 ```bash
 ls paper/main.tex manuscript/main.tex draft/main.tex 2>/dev/null
-find . -maxdepth 3 \( -name "main.tex" -o -name "*.tex" \) 2>/dev/null | head -20
 ```
+
+If none of those roots exist, pass an explicit manuscript path or paper directory and let centralized preflight reject anything outside the supported target family.
 
 </context>
 
@@ -118,14 +118,20 @@ fi
 
 **Follow the peer-review workflow** from `@{GRD_INSTALL_DIR}/workflows/peer-review.md`.
 
+The workflow forwards the resolved `$ARGUMENTS` manuscript target into review preflight and keeps manuscript-root-relative support artifacts anchored to that same explicit root instead of falling back to `paper/...`.
+
+When announcing the panel to the user, say what each stage does in one concise sentence, for example:
+
+`Launching the six-stage review panel: Stage 1 maps the paper's claims; Stages 2-3 check prior work and mathematical soundness in parallel; Stage 4 checks whether the physical interpretation is supported; Stage 5 judges significance and venue fit; Stage 6 synthesizes everything into the final recommendation.`
+
 The workflow handles all logic including:
 
 1. **Init** — Load project context, detect manuscript target, and resolve scope
 2. **Preflight** — Run review preflight validation for the peer-review command
 3. **Artifact discovery** — Load manuscript files, bibliography, verification reports, and review-grade paper artifacts
-4. **Stage 1** — Spawn `grd-review-reader` to read the whole manuscript and write `.grd/review/CLAIMS.json` plus the Stage 1 handoff artifact
+4. **Stage 1** — Spawn `grd-review-reader` to read the whole manuscript and write `.grd/review/CLAIMS{round_suffix}.json` plus the Stage 1 handoff artifact
 5. **Stages 2-5** — Run four fresh-context specialist reviewers with compact stage artifacts: `grd-review-literature`, `grd-review-math`, `grd-review-physics`, and `grd-review-significance`
-6. **Final adjudication** — Spawn `grd-referee` as the meta-reviewer to synthesize stage artifacts, populate `.grd/review/REVIEW-LEDGER.json`, validate the decision floor, and issue the canonical final recommendation
+6. **Final adjudication** — Spawn `grd-referee` as the meta-reviewer to synthesize stage artifacts, populate `.grd/review/REVIEW-LEDGER{round_suffix}.json` and `.grd/review/REFEREE-DECISION{round_suffix}.json`, validate the decision floor, and issue the canonical final recommendation
 7. **Report handling** — Read the generated referee report and classify the recommendation
 8. **Next-step routing** — Route to respond-to-referees, manuscript edits, or arxiv-submission depending on the outcome
 </process>
@@ -134,9 +140,9 @@ The workflow handles all logic including:
 - [ ] Manuscript target located or explicitly resolved from arguments
 - [ ] Review preflight passed or blocking issues were surfaced clearly
 - [ ] Claim index and specialist stage artifacts written under `.grd/review/`
-- [ ] `.grd/review/REVIEW-LEDGER.json` and `.grd/review/REFEREE-DECISION.json` created
+- [ ] `.grd/review/REVIEW-LEDGER{round_suffix}.json` and `.grd/review/REFEREE-DECISION{round_suffix}.json` created
 - [ ] Final adjudicating grd-referee spawned with the stage artifacts and manuscript
-- [ ] `.grd/REFEREE-REPORT.md` or `.grd/REFEREE-REPORT-R{N}.md` created with matching `.tex` companion
+- [ ] `.grd/REFEREE-REPORT{round_suffix}.md` created with matching `.tex` companion
 - [ ] `.grd/CONSISTENCY-REPORT.md` created when supported by the referee workflow
 - [ ] Recommendation, issue counts, and actionable next steps presented
 - [ ] Revision rounds respected if prior author responses already exist

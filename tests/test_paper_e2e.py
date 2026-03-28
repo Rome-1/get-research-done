@@ -12,6 +12,12 @@ from grd.mcp.paper.bibliography import CitationSource
 from grd.mcp.paper.compiler import CompilationResult, _get_tlmgr_package, check_class_file
 from grd.mcp.paper.models import Author, FigureRef, PaperConfig, Section
 
+
+def _allow_journal_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep happy-path build tests focused on build orchestration, not TeX setup."""
+    monkeypatch.setattr("grd.mcp.paper.compiler.check_journal_dependencies", lambda spec: (True, []))
+
+
 # ---- Compiler wrapper tests ----
 
 
@@ -63,6 +69,7 @@ class TestBuildPaper:
         async def mock_compile(tex_path, output_dir, compiler="pdflatex"):
             return mock_result
 
+        _allow_journal_dependencies(monkeypatch)
         monkeypatch.setattr("grd.mcp.paper.compiler.compile_paper", mock_compile)
 
         output = await build_paper(config, tmp_path, bib_data=bib)
@@ -113,6 +120,7 @@ class TestBuildPaper:
         async def mock_compile(tex_path, output_dir, compiler="pdflatex"):
             return mock_result
 
+        _allow_journal_dependencies(monkeypatch)
         monkeypatch.setattr("grd.mcp.paper.compiler.compile_paper", mock_compile)
 
         output = await build_paper(
@@ -134,6 +142,8 @@ class TestBuildPaper:
         bib_content = (tmp_path / "references.bib").read_text(encoding="utf-8")
         assert "einstein1905" in bib_content
         assert "bohr1913" in bib_content
+        assert output.success is True
+        assert output.pdf_path == pdf_path
         assert output.bibliography_audit is not None
         assert output.bibliography_audit.entries[0].key == "bohr1913"
         assert output.manifest is not None
@@ -164,7 +174,7 @@ class TestBuildPaper:
         async def mock_compile(tex_path, output_dir, compiler="pdflatex"):
             return mock_result
 
-        monkeypatch.setattr("grd.mcp.paper.compiler.check_class_file", lambda dc, install_hint=None: (True, "ok"))
+        _allow_journal_dependencies(monkeypatch)
         monkeypatch.setattr("grd.mcp.paper.compiler.compile_paper", mock_compile)
 
         output = await build_paper(config, tmp_path)
@@ -199,6 +209,7 @@ class TestBuildPaper:
         async def mock_compile(tex_path, output_dir, compiler="pdflatex"):
             return mock_result
 
+        _allow_journal_dependencies(monkeypatch)
         monkeypatch.setattr("grd.mcp.paper.compiler.compile_paper", mock_compile)
 
         output = await build_paper(
@@ -331,7 +342,6 @@ class TestPublicAPI:
             ReviewIssueSeverity,
             ReviewIssueStatus,
             ReviewLedger,
-            ReviewPanelBundle,
             ReviewRecommendation,
             ReviewStageKind,
             ReviewSupportStatus,
@@ -346,12 +356,10 @@ class TestPublicAPI:
             list_journals,
             read_claim_index,
             read_review_ledger,
-            read_review_panel_bundle,
             read_stage_review_report,
             write_bibliography_audit,
             write_claim_index,
             write_review_ledger,
-            write_review_panel_bundle,
             write_stage_review_report,
         )
 
@@ -379,7 +387,6 @@ class TestPublicAPI:
         assert ReviewIssueSeverity is not None
         assert ReviewIssueStatus is not None
         assert ReviewLedger is not None
-        assert ReviewPanelBundle is not None
         assert ReviewRecommendation is not None
         assert ReviewStageKind is not None
         assert ReviewSupportStatus is not None
@@ -388,11 +395,9 @@ class TestPublicAPI:
         assert CitationSource is not None
         assert callable(read_claim_index)
         assert callable(read_review_ledger)
-        assert callable(read_review_panel_bundle)
         assert callable(read_stage_review_report)
         assert callable(write_claim_index)
         assert callable(write_review_ledger)
-        assert callable(write_review_panel_bundle)
         assert callable(write_stage_review_report)
 
     def test_public_api_review_artifact_helpers_round_trip(self, tmp_path):
@@ -405,18 +410,15 @@ class TestPublicAPI:
             ReviewIssue,
             ReviewIssueSeverity,
             ReviewLedger,
-            ReviewPanelBundle,
             ReviewRecommendation,
             ReviewStageKind,
             ReviewSupportStatus,
             StageReviewReport,
             read_claim_index,
             read_review_ledger,
-            read_review_panel_bundle,
             read_stage_review_report,
             write_claim_index,
             write_review_ledger,
-            write_review_panel_bundle,
             write_stage_review_report,
         )
 
@@ -466,32 +468,18 @@ class TestPublicAPI:
                 )
             ],
         )
-        bundle = ReviewPanelBundle(
-            manuscript_path="paper/main.tex",
-            claim_index_path=".grd/review/CLAIMS.json",
-            stage_reports=[".grd/review/STAGE-physics.json"],
-            review_ledger_path=".grd/review/REVIEW-LEDGER.json",
-            decision_path=".grd/review/REFEREE-DECISION.json",
-            final_recommendation=ReviewRecommendation.minor_revision,
-            final_confidence=ReviewConfidence.medium,
-            final_report_path=".grd/REFEREE-REPORT.md",
-            final_report_tex_path=".grd/REFEREE-REPORT.tex",
-        )
 
         claims_path = tmp_path / "CLAIMS.json"
         stage_path = tmp_path / "STAGE-physics.json"
         ledger_path = tmp_path / "REVIEW-LEDGER.json"
-        bundle_path = tmp_path / "PANEL-BUNDLE.json"
 
         write_claim_index(claim_index, claims_path)
         write_stage_review_report(stage_report, stage_path)
         write_review_ledger(ledger, ledger_path)
-        write_review_panel_bundle(bundle, bundle_path)
 
         assert read_claim_index(claims_path) == claim_index
         assert read_stage_review_report(stage_path) == stage_report
         assert read_review_ledger(ledger_path) == ledger
-        assert read_review_panel_bundle(bundle_path) == bundle
 
 
 # ---- Class file check fallback ----

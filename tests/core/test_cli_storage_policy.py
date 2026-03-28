@@ -44,7 +44,7 @@ def _build_result(output_dir: Path) -> MagicMock:
 
 
 def _bootstrap_health_project(project_root: Path) -> None:
-    planning = project_root / ".grd"
+    planning = project_root / "GRD"
     planning.mkdir()
     (planning / "phases").mkdir()
     state = default_state_dict()
@@ -136,7 +136,7 @@ def test_paper_build_manuscript_family_output_has_no_storage_warnings(
 @pytest.mark.parametrize(
     ("relative_output_dir", "expected_fragment"),
     [
-        (".grd/paper", "internal storage"),
+        (".grd/paper", ".grd/"),
         ("tmp/release-paper", "scratch directories"),
     ],
 )
@@ -175,7 +175,7 @@ def test_paper_build_warns_when_project_root_is_temporary(tmp_path: Path, monkey
 def test_health_cli_raw_reports_storage_path_warnings(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(ProjectStorageLayout, "project_root_is_temporary", lambda self: False)
     _bootstrap_health_project(tmp_path)
-    hidden_results = tmp_path / ".grd" / "phases" / "01-setup" / "results"
+    hidden_results = tmp_path / "GRD" / "phases" / "01-setup" / "results"
     hidden_results.mkdir(parents=True)
     (hidden_results / "out.json").write_text("{}", encoding="utf-8")
 

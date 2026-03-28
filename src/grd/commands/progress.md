@@ -4,7 +4,7 @@ description: Check research progress, show context, and route to next action (ex
 argument-hint: "[--brief] [--full] [--reconcile]"
 context_mode: project-required
 requires:
-  files: [".grd/ROADMAP.md"]
+  files: [".grd/PROJECT.md"]
 allowed-tools:
   - file_read
   - shell
@@ -26,16 +26,6 @@ Provides situational awareness before continuing research work.
 </execution_context>
 
 <process>
-## Step 0: Validate Context
-
-```bash
-CONTEXT=$(grd --raw validate command-context progress "$ARGUMENTS")
-if [ $? -ne 0 ]; then
-  echo "$CONTEXT"
-  exit 1
-fi
-```
-
 ## Mode Detection
 
 Check `$ARGUMENTS` for flags:
@@ -82,6 +72,16 @@ This means a milestone was completed and archived. Go to **Route F** (between mi
 If missing both ROADMAP.md and PROJECT.md: suggest `/grd:new-project`.
 
 ## Step 2: Load Context
+
+**Run centralized context preflight before continuing:**
+
+```bash
+CONTEXT=$(grd --raw validate command-context progress "$ARGUMENTS")
+if [ $? -ne 0 ]; then
+  echo "$CONTEXT"
+  exit 1
+fi
+```
 
 **Use project context from INIT:**
 
@@ -194,8 +194,8 @@ CONTEXT: [done if has_context | - if not]
 List files in the current phase directory:
 
 ```bash
-ls -1 .grd/phases/[current-phase-dir]/*-PLAN.md 2>/dev/null | wc -l
-ls -1 .grd/phases/[current-phase-dir]/*-SUMMARY.md 2>/dev/null | wc -l
+ls -1 .grd/phases/[current-phase-dir]/PLAN.md .grd/phases/[current-phase-dir]/*-PLAN.md 2>/dev/null | wc -l
+ls -1 .grd/phases/[current-phase-dir]/SUMMARY.md .grd/phases/[current-phase-dir]/*-SUMMARY.md 2>/dev/null | wc -l
 ls -1 .grd/phases/[current-phase-dir]/*-VERIFICATION.md 2>/dev/null | wc -l
 ```
 
@@ -203,16 +203,16 @@ State: "This phase has {X} plans, {Y} summaries."
 
 **Step 7.1.5: Check for unaddressed validation gaps**
 
-Check for VERIFICATION.md files with gaps or review requirements. This includes `gaps_found` (verification found issues), `diagnosed` (root causes identified), `human_needed` (human review required), and `expert_needed` (domain expert review required).
+Check for `*-VERIFICATION.md` files with gaps or review requirements. This includes canonical verification `status: gaps_found|human_needed|expert_needed`, plus researcher-session files where `session_status: diagnosed` records rooted gap analysis without changing the final verification vocabulary.
 
 ```bash
 # Check for validation with gaps or review requirements
-grep -l -E "status: (gaps_found|diagnosed|human_needed|expert_needed)" .grd/phases/[current-phase-dir]/*-VERIFICATION.md 2>/dev/null
+grep -l -E "^(status: (gaps_found|human_needed|expert_needed)|session_status: diagnosed)$" .grd/phases/[current-phase-dir]/*-VERIFICATION.md 2>/dev/null
 ```
 
 Track:
 
-- `validation_with_gaps`: VERIFICATION.md files with status "gaps_found", "diagnosed", "human_needed", or "expert_needed"
+- `validation_with_gaps`: `*-VERIFICATION.md` files with `status: gaps_found|human_needed|expert_needed` or `session_status: diagnosed`
 
 **Step 7.1.75: Check for existing gap-closure plans**
 
@@ -221,9 +221,14 @@ If `validation_with_gaps > 0`, check whether gap-closure plans already exist but
 ```bash
 # Check for gap_closure plans without matching SUMMARYs
 GAP_PLANS_UNEXECUTED=0
-for plan in .grd/phases/[current-phase-dir]/*-PLAN.md; do
+for plan in .grd/phases/[current-phase-dir]/PLAN.md .grd/phases/[current-phase-dir]/*-PLAN.md; do
+  [ -f "$plan" ] || continue
   if grep -q "gap_closure: true" "$plan" 2>/dev/null; then
-    SUMMARY="${plan%-PLAN.md}-SUMMARY.md"
+    if [ "$(basename "$plan")" = "PLAN.md" ]; then
+      SUMMARY="$(dirname "$plan")/SUMMARY.md"
+    else
+      SUMMARY="${plan%-PLAN.md}-SUMMARY.md"
+    fi
     if [ ! -f "$SUMMARY" ]; then
       GAP_PLANS_UNEXECUTED=$((GAP_PLANS_UNEXECUTED + 1))
     fi

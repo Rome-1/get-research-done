@@ -28,8 +28,8 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `project_exists`, `state_exists`, `commit_docs`, `project_contract`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `active_reference_context`.
-Treat `project_contract` and `active_reference_context` as authoritative contract-backed evidence context for later review stages. Stage 1 stays manuscript-first, but later adjudication must not ignore the approved contract or active anchor ledger.
+Parse JSON for: `project_exists`, `state_exists`, `commit_docs`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `reference_artifacts_content`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `active_reference_context`.
+Treat `project_contract_load_info` and `project_contract_validation` as the authoritative contract gate state. Treat `project_contract` and `contract_intake` as approved contract scope only when that gate is clean and passing. Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence context even when the structured contract is blocked. Stage 1 stays manuscript-first, but later adjudication must not ignore either the approved contract or the active anchor ledger.
 
 Run centralized context preflight before continuing:
 
@@ -49,6 +49,16 @@ fi
    - `paper/main.tex`
    - `manuscript/main.tex`
    - `draft/main.tex`
+
+After resolution, keep all manuscript-local support artifacts rooted at the same explicit manuscript directory:
+
+- `RESOLVED_MANUSCRIPT` = resolved `.tex` or `.md` entry point
+- `MANUSCRIPT_ROOT` = parent directory of `RESOLVED_MANUSCRIPT`
+- `ARTIFACT_MANIFEST_PATH` = `${MANUSCRIPT_ROOT}/ARTIFACT-MANIFEST.json`
+- `BIBLIOGRAPHY_AUDIT_PATH` = `${MANUSCRIPT_ROOT}/BIBLIOGRAPHY-AUDIT.json`
+- `REPRODUCIBILITY_MANIFEST_PATH` = first existing of `${MANUSCRIPT_ROOT}/reproducibility-manifest.json` or `${MANUSCRIPT_ROOT}/REPRODUCIBILITY-MANIFEST.json`
+- `PAPER_CONFIG_PATH` = `${MANUSCRIPT_ROOT}/PAPER-CONFIG.json`
+- `LOCAL_BIB_FILES` = all `*.bib` files under `${MANUSCRIPT_ROOT}`
 
 **If no manuscript found:**
 
@@ -76,8 +86,9 @@ fi
 Use `protocol_bundle_context` from init JSON as additive review guidance.
 
 - If `selected_protocol_bundle_ids` is non-empty, treat the bundle summary as a quick map of which decisive artifacts, benchmark anchors, estimator caveats, or specialized comparisons the manuscript should make visible.
-- Use bundle guidance to sharpen skepticism about missing evidence; do **not** use it to invent claims, waive missing comparisons, or overrule the manuscript, `project_contract`, `.grd/comparisons/*-COMPARISON.md`, `.grd/paper/FIGURE_TRACKER.md`, or phase summary / verification evidence (`.grd/phases/*/SUMMARY.md`, `.grd/phases/*/*-SUMMARY.md`, `.grd/phases/*/*VERIFICATION.md`).
+- Use bundle guidance to sharpen skepticism about missing evidence; do **not** use it to invent claims, waive missing comparisons, or overrule the manuscript, `project_contract`, `.grd/comparisons/*-COMPARISON.md`, `.grd/paper/FIGURE_TRACKER.md`, or phase summary / verification evidence (`.grd/phases/*/*SUMMARY.md`, `.grd/phases/*/*-VERIFICATION.md`).
 - Judge the paper by reader-visible claims and surfaced evidence first. Review-support artifacts are scaffolding, not substitutes for contract-backed evidence.
+- Read `@{GRD_INSTALL_DIR}/references/publication/peer-review-reliability.md` for the canonical failure-recovery and round-suffix conventions that keep this workflow fail-closed without falling back to legacy recovery paths.
 - If no bundle is selected, run the same review pipeline against the manuscript and contract-backed artifacts without any specialized overlay.
 </step>
 
@@ -85,12 +96,13 @@ Use `protocol_bundle_context` from init JSON as additive review guidance.
 **Run the executable review preflight checks before spawning the review panel:**
 
 ```bash
-grd validate review-preflight peer-review --strict
+grd validate review-preflight peer-review "$ARGUMENTS" --strict
 ```
 
 If preflight exits nonzero because of missing project state, missing manuscript, degraded review integrity, or missing review-grade paper artifacts, STOP and show the blocking issues.
+If preflight reports blocked contract/state integrity, surface `project_contract_load_info` and `project_contract_validation` details in the stop message and repair the blocked contract before retrying.
 
-In strict peer-review mode, `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and a reproducibility manifest are required inputs. Peer review is expected to fail closed when those review-support artifacts are absent or not review-ready.
+In strict peer-review mode, `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and a reproducibility manifest are required inputs. If the manuscript bibliography changed after the last audit, refresh `BIBLIOGRAPHY_AUDIT_PATH` before proceeding. Peer review is expected to fail closed when those review-support artifacts are absent, stale, or not review-ready.
 Passing preflight still does not establish scientific support. Complete manifests and audits cannot rescue missing decisive comparisons, overclaimed conclusions, or absent contract-backed evidence.
 </step>
 
@@ -102,17 +114,17 @@ Load the following files:
 - The resolved manuscript main file and all nearby `*.tex` section files
 - `.grd/STATE.md`
 - `.grd/ROADMAP.md`
-- All summary artifacts matching `.grd/phases/*/SUMMARY.md` or `.grd/phases/*/*-SUMMARY.md`
-- All `.grd/phases/*/*VERIFICATION.md` files
+- All summary artifacts matching `.grd/phases/*/*SUMMARY.md`
+- All `.grd/phases/*/*-VERIFICATION.md` files
 - `.grd/comparisons/*-COMPARISON.md` if present
 - `.grd/paper/FIGURE_TRACKER.md` if present
-- `paper/ARTIFACT-MANIFEST.json` if present
-- `paper/BIBLIOGRAPHY-AUDIT.json` if present
-- `paper/reproducibility-manifest.json` if present
-- `paper/PAPER-CONFIG.json` if present
-- `paper/references.bib` or `references/references.bib` if present
+- `${ARTIFACT_MANIFEST_PATH}` if present
+- `${BIBLIOGRAPHY_AUDIT_PATH}` if present
+- `${REPRODUCIBILITY_MANIFEST_PATH}` if present
+- `${PAPER_CONFIG_PATH}` if present
+- All `*.bib` files under `${MANUSCRIPT_ROOT}`, plus `references/references.bib` if present
 
-Infer the target journal from `PAPER-CONFIG.json` when available; otherwise use `unspecified`.
+Infer the target journal from `${PAPER_CONFIG_PATH}` when available; otherwise use `unspecified`.
 
 If bundle context is present, compare its decisive-artifact and reference expectations against the actual comparison artifacts and figure tracker. Missing bundle-suggested coverage is a warning unless the manuscript has narrowed the claim honestly; missing contract-backed decisive evidence remains a blocker.
 
@@ -155,6 +167,14 @@ Use the same `-R2` / `-R3` suffix convention for downstream response artifacts:
 - `.grd/AUTHOR-RESPONSE{ROUND_SUFFIX}.md`
 - `.grd/paper/REFEREE_RESPONSE{ROUND_SUFFIX}.md`
 
+</step>
+
+<step name="announce_panel">
+**Before spawning any reviewer, give the user a concise stage map:**
+
+Use one short sentence that names each stage's job, for example:
+
+`Launching the six-stage review panel: Stage 1 maps the paper's claims; Stages 2-3 check prior work and mathematical soundness in parallel; Stage 4 checks whether the physical interpretation is supported; Stage 5 judges significance and venue fit; Stage 6 synthesizes everything into the final recommendation.`
 </step>
 
 <step name="stage_1_read">
@@ -201,6 +221,26 @@ Return STAGE 1 COMPLETE with assessment, blocker count, and major concern count.
 If Stage 1 fails, STOP. Later stages depend on its claim map.
 </step>
 
+<step name="stage_recovery_1">
+**Stage 1 recovery -- Validate the reader output before proceeding.**
+
+Check that both `.grd/review/CLAIMS{round_suffix}.json` and `.grd/review/STAGE-reader{round_suffix}.json` exist.
+
+Run the built-in validators:
+
+```bash
+grd validate review-claim-index .grd/review/CLAIMS{round_suffix}.json
+grd validate review-stage-report .grd/review/STAGE-reader{round_suffix}.json
+```
+
+If validation fails:
+
+1. **Retry once.** Re-run the Stage 1 subagent with the same inputs and an explicit reminder to match the `StageReviewReport` and `ClaimIndex` JSON schemas from `peer-review-panel.md`, then rerun `grd validate review-claim-index` and `grd validate review-stage-report`.
+2. **If the retry also fails,** STOP the pipeline and report the failure: stage name, missing or malformed fields, and any partial output. Do not proceed to Stages 2-6.
+
+Max retries per stage: **1**.
+</step>
+
 <step name="stage_2_and_3">
 **Stages 2 and 3 — Run literature and mathematics in parallel when possible.**
 
@@ -228,6 +268,20 @@ Round: {round}
 Selected protocol bundles: {selected_protocol_bundle_ids}
 Additive specialized guidance:
 {protocol_bundle_context}
+Project Contract:
+{project_contract}
+Project Contract Load Info:
+{project_contract_load_info}
+Project Contract Validation:
+{project_contract_validation}
+Active References:
+{active_reference_context}
+Contract Intake:
+{contract_intake}
+Effective Reference Intake:
+{effective_reference_intake}
+Reference Artifacts Content:
+{reference_artifacts_content}
 Output path: `.grd/review/STAGE-literature{round_suffix}.json`
 
 Files to read:
@@ -236,10 +290,11 @@ Files to read:
 - `.grd/review/STAGE-reader{round_suffix}.json`
 - `.grd/comparisons/*-COMPARISON.md` if present
 - `.grd/paper/FIGURE_TRACKER.md` if present
-- `paper/BIBLIOGRAPHY-AUDIT.json` if present
-- `paper/references.bib` or `references/references.bib` if present
+- `${BIBLIOGRAPHY_AUDIT_PATH}` if present
+- All `*.bib` files under `${MANUSCRIPT_ROOT}`, plus `references/references.bib` if present
 
 Use targeted web search when novelty, significance, or prior-work positioning is uncertain. Treat novelty-heavy claims as requiring external comparison, not trust. Use bundle reference prompts only as additive hints about which prior-work or benchmark framing should be visible; do not infer novelty or correctness from bundle presence alone.
+Treat `project_contract_load_info` and `project_contract_validation` as the authoritative contract gate state. Treat `project_contract` and `contract_intake` as approved evidence only when that gate is clean and passing. Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence even when the contract gate is blocked. If that gate is blocked, keep `project_contract` and `contract_intake` visible as context but do not rely on them as approved scope.
 Return STAGE 2 COMPLETE with assessment, blocker count, and major concern count.",
   description="Peer review stage 2: literature context"
 )
@@ -259,18 +314,33 @@ Operate in mathematical-soundness stage mode with a fresh context.
 
 Target journal: {target_journal}
 Round: {round}
+Project Contract:
+{project_contract}
+Project Contract Load Info:
+{project_contract_load_info}
+Project Contract Validation:
+{project_contract_validation}
+Active References:
+{active_reference_context}
+Contract Intake:
+{contract_intake}
+Effective Reference Intake:
+{effective_reference_intake}
+Reference Artifacts Content:
+{reference_artifacts_content}
 Output path: `.grd/review/STAGE-math{round_suffix}.json`
 
 Files to read:
 - Resolved manuscript main file and all nearby section .tex files
 - `.grd/review/CLAIMS{round_suffix}.json`
 - `.grd/review/STAGE-reader{round_suffix}.json`
-- Summary artifacts matching `.grd/phases/*/SUMMARY.md` or `.grd/phases/*/*-SUMMARY.md`
-- `.grd/phases/*/*VERIFICATION.md`
-- `paper/ARTIFACT-MANIFEST.json` if present
-- `paper/reproducibility-manifest.json` if present
+- Summary artifacts matching `.grd/phases/*/*SUMMARY.md`
+- `.grd/phases/*/*-VERIFICATION.md`
+- `${ARTIFACT_MANIFEST_PATH}` if present
+- `${REPRODUCIBILITY_MANIFEST_PATH}` if present
 
 Focus on key equations, limits, internal consistency, and approximation validity.
+Treat `project_contract_load_info` and `project_contract_validation` as the authoritative contract gate state. Treat `project_contract` and `contract_intake` as approved evidence only when that gate is clean and passing. Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence even when the contract gate is blocked. If that gate is blocked, keep `project_contract` and `contract_intake` visible as context but do not rely on them as approved scope.
 Return STAGE 3 COMPLETE with assessment, blocker count, and major concern count.",
   description="Peer review stage 3: mathematical soundness"
 )
@@ -279,6 +349,24 @@ Return STAGE 3 COMPLETE with assessment, blocker count, and major concern count.
 If the runtime supports parallel subagent execution, run Stage 2 and Stage 3 in parallel. Otherwise run Stage 2 first, then Stage 3.
 
 If either stage fails, STOP and report the failure.
+</step>
+
+<step name="stage_recovery_2_3">
+**Stages 2-3 recovery -- Validate literature and math outputs before proceeding.**
+
+For each of `.grd/review/STAGE-literature{round_suffix}.json` and `.grd/review/STAGE-math{round_suffix}.json`, check that the file exists and run:
+
+```bash
+grd validate review-stage-report .grd/review/STAGE-literature{round_suffix}.json
+grd validate review-stage-report .grd/review/STAGE-math{round_suffix}.json
+```
+
+If validation fails for either stage:
+
+1. **Retry once.** Re-run only the failed stage subagent with the same inputs and an explicit reminder to match the `StageReviewReport` JSON schema from `peer-review-panel.md`, then rerun `grd validate review-stage-report`.
+2. **If the retry also fails,** STOP the pipeline and report the failure: stage name, missing or malformed fields, and any partial output. Do not proceed to Stage 4.
+
+Max retries per stage: **1**.
 </step>
 
 <step name="stage_4_physics">
@@ -305,6 +393,20 @@ Round: {round}
 Selected protocol bundles: {selected_protocol_bundle_ids}
 Additive specialized guidance:
 {protocol_bundle_context}
+Project Contract:
+{project_contract}
+Project Contract Load Info:
+{project_contract_load_info}
+Project Contract Validation:
+{project_contract_validation}
+Active References:
+{active_reference_context}
+Contract Intake:
+{contract_intake}
+Effective Reference Intake:
+{effective_reference_intake}
+Reference Artifacts Content:
+{reference_artifacts_content}
 Output path: `.grd/review/STAGE-physics{round_suffix}.json`
 
 Files to read:
@@ -313,8 +415,8 @@ Files to read:
 - `.grd/review/STAGE-reader{round_suffix}.json`
 - `.grd/review/STAGE-math{round_suffix}.json`
 - `.grd/review/STAGE-literature{round_suffix}.json`
-- Summary artifacts matching `.grd/phases/*/SUMMARY.md` or `.grd/phases/*/*-SUMMARY.md`
-- `.grd/phases/*/*VERIFICATION.md`
+- Summary artifacts matching `.grd/phases/*/*SUMMARY.md`
+- `.grd/phases/*/*-VERIFICATION.md`
 - `.grd/comparisons/*-COMPARISON.md` if present
 - `.grd/paper/FIGURE_TRACKER.md` if present
 
@@ -325,6 +427,7 @@ Focus on:
 4. Whether decisive comparison artifacts, benchmark anchors, and estimator caveats expected by the specialized workflow are actually visible in the manuscript or honestly scoped down
 
 Treat bundle guidance as additive skepticism only. It may highlight missing decisive comparisons or estimator caveats, but it must not replace contract-backed evidence or create new manuscript obligations out of thin air.
+Treat `project_contract_load_info` and `project_contract_validation` as the authoritative contract gate state. Treat `project_contract` and `contract_intake` as approved evidence only when that gate is clean and passing. Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence even when the contract gate is blocked. If that gate is blocked, keep `project_contract` and `contract_intake` visible as context but do not rely on them as approved scope.
 
 Return STAGE 4 COMPLETE with assessment, blocker count, and major concern count.",
   description="Peer review stage 4: physical soundness"
@@ -332,6 +435,23 @@ Return STAGE 4 COMPLETE with assessment, blocker count, and major concern count.
 ```
 
 If Stage 4 fails, STOP and report the failure.
+</step>
+
+<step name="stage_recovery_4">
+**Stage 4 recovery -- Validate the physics output before proceeding.**
+
+Check that `.grd/review/STAGE-physics{round_suffix}.json` exists and run:
+
+```bash
+grd validate review-stage-report .grd/review/STAGE-physics{round_suffix}.json
+```
+
+If validation fails:
+
+1. **Retry once.** Re-run the Stage 4 subagent with the same inputs and an explicit reminder to match the `StageReviewReport` JSON schema from `peer-review-panel.md`, then rerun `grd validate review-stage-report`.
+2. **If the retry also fails,** STOP the pipeline and report the failure: stage name, missing or malformed fields, and any partial output. Do not proceed to Stage 5.
+
+Max retries per stage: **1**.
 </step>
 
 <step name="stage_5_significance">
@@ -355,6 +475,20 @@ Operate in interestingness-and-venue-fit stage mode with a fresh context.
 
 Target journal: {target_journal}
 Round: {round}
+Project Contract:
+{project_contract}
+Project Contract Load Info:
+{project_contract_load_info}
+Project Contract Validation:
+{project_contract_validation}
+Active References:
+{active_reference_context}
+Contract Intake:
+{contract_intake}
+Effective Reference Intake:
+{effective_reference_intake}
+Reference Artifacts Content:
+{reference_artifacts_content}
 Output path: `.grd/review/STAGE-interestingness{round_suffix}.json`
 
 Files to read:
@@ -363,12 +497,14 @@ Files to read:
 - `.grd/review/STAGE-reader{round_suffix}.json`
 - `.grd/review/STAGE-literature{round_suffix}.json`
 - `.grd/review/STAGE-physics{round_suffix}.json`
-- `paper/PAPER-CONFIG.json` if present
+- `${PAPER_CONFIG_PATH}` if present
 
 You must explicitly decide whether the paper is:
 1. Scientifically interesting enough for the venue
 2. Merely technically competent
 3. Overclaimed relative to its actual contribution
+
+Treat `project_contract_load_info` and `project_contract_validation` as the authoritative contract gate state. Treat `project_contract` and `contract_intake` as approved evidence only when that gate is clean and passing. Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence even when the contract gate is blocked. If that gate is blocked, keep `project_contract` and `contract_intake` visible as context but do not rely on them as approved scope.
 
 Return STAGE 5 COMPLETE with assessment, blocker count, and major concern count.",
   description="Peer review stage 5: significance and venue fit"
@@ -376,6 +512,23 @@ Return STAGE 5 COMPLETE with assessment, blocker count, and major concern count.
 ```
 
 If Stage 5 fails, STOP and report the failure.
+</step>
+
+<step name="stage_recovery_5">
+**Stage 5 recovery -- Validate the significance output before proceeding.**
+
+Check that `.grd/review/STAGE-interestingness{round_suffix}.json` exists and run:
+
+```bash
+grd validate review-stage-report .grd/review/STAGE-interestingness{round_suffix}.json
+```
+
+If validation fails:
+
+1. **Retry once.** Re-run the Stage 5 subagent with the same inputs and an explicit reminder to match the `StageReviewReport` JSON schema from `peer-review-panel.md`, then rerun `grd validate review-stage-report`.
+2. **If the retry also fails,** STOP the pipeline and report the failure: stage name, missing or malformed fields, and any partial output. Do not proceed to Stage 6 adjudication.
+
+Max retries per stage: **1**.
 </step>
 
 <step name="final_adjudication">
@@ -404,8 +557,18 @@ Additive specialized guidance:
 {protocol_bundle_context}
 Project Contract:
 {project_contract}
+Project Contract Load Info:
+{project_contract_load_info}
+Project Contract Validation:
+{project_contract_validation}
 Active References:
 {active_reference_context}
+Contract Intake:
+{contract_intake}
+Effective Reference Intake:
+{effective_reference_intake}
+Reference Artifacts Content:
+{reference_artifacts_content}
 
 Files to read:
 - Resolved manuscript main file and all nearby section .tex files
@@ -417,15 +580,17 @@ Files to read:
 - `.grd/review/STAGE-interestingness{round_suffix}.json`
 - `.grd/comparisons/*-COMPARISON.md` if present
 - `.grd/paper/FIGURE_TRACKER.md` if present
-- `paper/ARTIFACT-MANIFEST.json` if present
-- `paper/BIBLIOGRAPHY-AUDIT.json` if present
-- `paper/reproducibility-manifest.json` if present
+- `${ARTIFACT_MANIFEST_PATH}` if present
+- `${BIBLIOGRAPHY_AUDIT_PATH}` if present
+- `${REPRODUCIBILITY_MANIFEST_PATH}` if present
 - `.grd/STATE.md`
 - `.grd/ROADMAP.md`
-- Summary artifacts matching `.grd/phases/*/SUMMARY.md` or `.grd/phases/*/*-SUMMARY.md`
-- `.grd/phases/*/*VERIFICATION.md`
+- Summary artifacts matching `.grd/phases/*/*SUMMARY.md`
+- `.grd/phases/*/*-VERIFICATION.md`
 
 If this is a revision round, also read the latest `REFEREE-REPORT*.md` and matching `AUTHOR-RESPONSE*.md`.
+
+If any required staged-review artifact is missing, malformed, or uses the wrong round suffix, STOP and report that failure instead of falling back to standalone review.
 
 Recommendation guardrails:
 1. Do not issue minor revision if novelty, physical support, or significance remain materially doubtful.
@@ -433,8 +598,12 @@ Recommendation guardrails:
 3. Evaluate venue fit explicitly using the panel artifacts and spot-check the manuscript where the artifacts are under-evidenced.
 4. Treat protocol bundle guidance as additive context only. It can increase concern when decisive comparisons or benchmark anchors are missing, but it cannot rescue missing evidence or override the manuscript's actual artifact trail.
 5. Write `.grd/review/REVIEW-LEDGER{round_suffix}.json` and `.grd/review/REFEREE-DECISION{round_suffix}.json`.
-6. Run `grd validate review-ledger .grd/review/REVIEW-LEDGER{round_suffix}.json`.
-7. Run `grd validate referee-decision .grd/review/REFEREE-DECISION{round_suffix}.json --strict --ledger .grd/review/REVIEW-LEDGER{round_suffix}.json` before trusting a recommendation better than `major_revision`.
+6. Keep `manuscript_path` non-empty and identical across `.grd/review/REVIEW-LEDGER{round_suffix}.json`, `.grd/review/REFEREE-DECISION{round_suffix}.json`, and the staged-review artifacts for this round.
+7. Run `grd validate review-ledger .grd/review/REVIEW-LEDGER{round_suffix}.json`.
+8. Run `grd validate referee-decision .grd/review/REFEREE-DECISION{round_suffix}.json --strict --ledger .grd/review/REVIEW-LEDGER{round_suffix}.json` before trusting any final recommendation.
+9. If either validator fails, STOP and fix the JSON artifacts before presenting or relying on the final recommendation.
+
+Treat `project_contract_load_info` and `project_contract_validation` as the authoritative contract gate state. Treat `project_contract` and `contract_intake` as approved evidence only when that gate is clean and passing. Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence even when the contract gate is blocked. If that gate is blocked, keep `project_contract` and `contract_intake` visible as context but do not rely on them as approved scope.
 
 Write `.grd/REFEREE-REPORT{round_suffix}.md` and the matching `.grd/REFEREE-REPORT{round_suffix}.tex`.
 Also write `.grd/CONSISTENCY-REPORT.md` when applicable.
@@ -447,6 +616,28 @@ Return REVIEW COMPLETE with recommendation, confidence, issue counts, and whethe
 If the referee agent fails to spawn or returns an error, STOP and report the failure. Do not silently skip final adjudication.
 </step>
 
+<step name="stage_recovery_6">
+**Stage 6 recovery -- Validate the adjudication outputs before proceeding.**
+
+Check that both `.grd/review/REVIEW-LEDGER{round_suffix}.json` and `.grd/review/REFEREE-DECISION{round_suffix}.json` exist and parse as valid JSON.
+
+Then run the built-in validators. These are the authoritative fail-closed schema and consistency checks for every final recommendation:
+
+```bash
+grd validate review-ledger .grd/review/REVIEW-LEDGER{round_suffix}.json
+grd validate referee-decision .grd/review/REFEREE-DECISION{round_suffix}.json --strict --ledger .grd/review/REVIEW-LEDGER{round_suffix}.json
+```
+
+If validation fails:
+
+1. **Retry once.** Re-run the Stage 6 referee subagent with the same inputs and an explicit reminder to satisfy `review-ledger-schema.md` and `referee-decision-schema.md` by passing the built-in validators above.
+2. **If the retry also fails,** STOP the pipeline and report the failure: stage name, validation errors, and any partial output. Do not proceed to report summarization.
+
+Treat blank `manuscript_path` values in either `.grd/review/REVIEW-LEDGER{round_suffix}.json` or `.grd/review/REFEREE-DECISION{round_suffix}.json` as validation failures, not as optional bookkeeping.
+
+Max retries per stage: **1**.
+</step>
+
 <step name="optional_pdf_compile">
 **Optional PDF compile of the LaTeX referee report:**
 
@@ -456,7 +647,7 @@ If TeX is missing, do not block the review:
 
 ```
 Referee review artifacts were written, but a TeX toolchain is not available.
-Continue now with `.grd/REFEREE-REPORT.md` + `.grd/REFEREE-REPORT.tex` only.
+Continue now with `.grd/REFEREE-REPORT{round_suffix}.md` + `.grd/REFEREE-REPORT{round_suffix}.tex` only.
 If you want the polished PDF artifact as well, Authorize the agent to install TeX now or compile the `.tex` later in an environment that already has TeX.
 ```
 </step>
@@ -511,11 +702,16 @@ If this was a revision round, state the round number and whether the referee con
 - [ ] Supporting artifacts loaded when present
 - [ ] Claim index written
 - [ ] Stage 1 reader artifact written
+- [ ] Stage 1 output validated (JSON schema check passed or retry succeeded)
 - [ ] Stage 2 literature-context artifact written
 - [ ] Stage 3 mathematical-soundness artifact written
+- [ ] Stages 2-3 outputs validated (JSON schema check passed or retry succeeded)
 - [ ] Stage 4 physical-soundness artifact written
+- [ ] Stage 4 output validated (JSON schema check passed or retry succeeded)
 - [ ] Stage 5 interestingness artifact written
+- [ ] Stage 5 output validated (JSON schema check passed or retry succeeded)
 - [ ] Review ledger and referee decision JSON written
+- [ ] Stage 6 outputs validated (ledger and decision schema checks passed or retry succeeded)
 - [ ] Final adjudicating grd-referee executed successfully
 - [ ] Latest referee report located and summarized
 - [ ] Outcome routed to the correct next action

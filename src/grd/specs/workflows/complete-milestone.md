@@ -37,17 +37,18 @@ When a research milestone completes:
 
 <step name="verify_readiness">
 
-**Use `roadmap analyze` for comprehensive readiness check:**
+**Use `roadmap analyze` plus the on-disk phase inventory for the same readiness semantics as `grd milestone complete`:**
 
 ```bash
 ROADMAP=$(grd roadmap analyze)
 ```
 
-This returns all phases with plan/summary counts and disk status. Use this to verify:
+`roadmap analyze` returns the roadmap-backed phase view. Compare that with the on-disk phase directories so the milestone gate sees the same roadmap-plus-disk union that `grd milestone complete` uses. Use this to verify:
 
-- Which phases belong to this milestone?
-- All phases complete (all plans have summaries)? Check `disk_status == 'complete'` for each.
-- `progress_percent` should be 100%.
+- Which phases belong to this milestone, including any disk-only phase directories?
+- All phases complete? Check that every roadmap phase and every on-disk phase directory reaches `complete`.
+- Standalone `PLAN.md` / `SUMMARY.md` artifacts count the same as numbered `*-PLAN.md` / `*-SUMMARY.md` artifacts.
+- `progress_percent` should be 100% once the roadmap-plus-disk union is fully complete.
 
 Present:
 
@@ -128,11 +129,11 @@ Milestone Stats:
 
 <step name="extract_accomplishments">
 
-Extract one-liners from SUMMARY.md files using summary-extract:
+Extract one-liners from summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`) using summary-extract:
 
 ```bash
 # For each phase in milestone, extract one-liner
-for summary in .grd/phases/*-*/*-SUMMARY.md; do
+for summary in .grd/phases/*/*SUMMARY.md; do
   grd summary-extract "$summary" --field one_liner | grd json get .one_liner --default ""
 done
 ```
@@ -152,7 +153,7 @@ Key accomplishments for this milestone:
 
 <step name="create_milestone_entry">
 
-**Note:** MILESTONES.md entry is now created automatically by `grd milestone complete` in the archive_milestone step. The entry includes version, date, phase/plan/task counts, and accomplishments extracted from SUMMARY.md files.
+**Note:** MILESTONES.md entry is now created automatically by `grd milestone complete` in the archive_milestone step. The entry includes version, date, phase/plan/task counts, and accomplishments extracted from summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`).
 
 If additional details are needed (e.g., researcher-provided "Key Findings" summary, git range, LOC stats), add them manually after the CLI creates the base entry.
 
@@ -162,10 +163,10 @@ If additional details are needed (e.g., researcher-provided "Key Findings" summa
 
 Full PROJECT.md evolution review at milestone completion.
 
-Read all phase summaries:
+Read all phase summary artifacts:
 
 ```bash
-cat .grd/phases/*-*/*-SUMMARY.md
+cat .grd/phases/*/*SUMMARY.md
 ```
 
 **Full review checklist:**
@@ -329,8 +330,8 @@ This returns per-phase summaries with one-liners, provides/requires, and depende
 **Step 2 -- Read source materials:**
 
 ```bash
-# All SUMMARY.md files from this milestone's phases
-cat .grd/phases/*-*/*-SUMMARY.md
+# All summary artifacts from this milestone's phases
+cat .grd/phases/*/*SUMMARY.md
 
 # Research state
 cat .grd/state.json

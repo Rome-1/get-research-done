@@ -10,7 +10,7 @@ review-contract:
   review_mode: review
   schema_version: 1
   required_outputs:
-    - ".grd/phases/XX-name/{phase}-VERIFICATION.md"
+    - ".grd/phases/XX-name/XX-VERIFICATION.md"
   required_evidence:
     - roadmap
     - phase summaries
@@ -33,6 +33,9 @@ allowed-tools:
   - file_edit
   - file_write
   - task
+  - mcp__grd_verification__get_bundle_checklist
+  - mcp__grd_verification__suggest_contract_checks
+  - mcp__grd_verification__run_contract_check
 ---
 
 <!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
@@ -43,7 +46,7 @@ Verify research results through systematic physics checks with persistent state.
 
 Purpose: Confirm that derivations are correct, numerical results are trustworthy, and physical conclusions are sound. One check at a time, plain text responses, no interrogation. When issues are found, automatically diagnose, classify severity, and prepare for resolution.
 
-Output: `.grd/phases/XX-name/{phase}-VERIFICATION.md` tracking all check results. This workflow is only valid once the phase has reached the `phase_executed` state. If issues are found, return diagnosed gaps with severity classification and verified fix plans ready for `/grd:execute-phase`.
+Output: `.grd/phases/XX-name/XX-VERIFICATION.md` tracking all check results. This workflow is only valid once the phase has reached the `phase_executed` state. If issues are found, return diagnosed gaps with severity classification and verified fix plans ready for `/grd:execute-phase`.
 
 Physics verification is fundamentally different from software testing. A software test has a binary pass/fail; a physics check has degrees of agreement, expected approximation errors, and regime-dependent validity. The verification framework accounts for this.
 </objective>

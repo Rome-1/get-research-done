@@ -15,26 +15,30 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from grd.contracts import ComparisonVerdict, ContractResults
+from grd.contracts import ComparisonVerdict, ContractResults, normalize_contract_results_input
 from grd.core.constants import (
     PHASES_DIR_NAME,
     PLAN_SUFFIX,
     PLANNING_DIR_NAME,
     REQUIRED_RETURN_FIELDS,
     STANDALONE_PLAN,
-    STANDALONE_SUMMARY,
-    STANDALONE_VERIFICATION,
-    SUMMARY_SUFFIX,
     VALID_RETURN_STATUSES,
     VERIFICATION_SUFFIX,
+    ProjectLayout,
 )
 from grd.core.errors import ValidationError
-from grd.core.frontmatter import UNSUPPORTED_FRONTMATTER_FIELDS, FrontmatterParseError, extract_frontmatter
+from grd.core.frontmatter import (
+    VERIFICATION_REPORT_STATUSES,
+    FrontmatterParseError,
+    extract_frontmatter,
+    validate_frontmatter,
+)
 from grd.core.observability import instrument_grd_function
 from grd.core.utils import (
     compare_phase_numbers,
     generate_slug,
     is_phase_complete,
+    matching_phase_artifact_count,
     safe_read_file,
 )
 
@@ -307,7 +311,7 @@ def _parse_contract_results(value: object, summary_path: str) -> ContractResults
     if not isinstance(value, dict):
         raise ValidationError(f"Invalid contract_results in {summary_path}: expected an object")
     try:
-        return ContractResults.model_validate(value)
+        return ContractResults.model_validate(normalize_contract_results_input(value, strict=True))
     except Exception as exc:  # pragma: no cover - pydantic version specifics
         raise ValidationError(f"Invalid contract_results in {summary_path}: {exc}") from exc
 
@@ -354,14 +358,11 @@ def cmd_summary_extract(
     except FrontmatterParseError as exc:
         raise ValidationError(f"YAML parse error in {summary_path}: {exc}") from exc
 
-    unsupported_summary_fields = [
-        f"{field}: {message}"
-        for field, message in UNSUPPORTED_FRONTMATTER_FIELDS.get("summary", {}).items()
-        if field in fm
-    ]
-    if unsupported_summary_fields:
+    validation = validate_frontmatter(content, "summary", source_path=full_path)
+    if not validation.valid:
+        problems = [*validation.missing, *validation.errors]
         raise ValidationError(
-            f"Unsupported summary frontmatter in {summary_path}: {'; '.join(unsupported_summary_fields)}"
+            f"Invalid summary frontmatter in {summary_path}: {'; '.join(problems)}"
         )
 
     # Extract one-liner: frontmatter first, fall back to body bold text
@@ -421,7 +422,7 @@ def _merge_list_or_string(target_set: set[str], value: object) -> None:
 def cmd_history_digest(cwd: Path) -> HistoryDigestResult:
     """Build a digest of project history from phase SUMMARY files.
 
-    Scans .grd/phases/*/SUMMARY.md for frontmatter fields:
+    Scans .grd/phases/*/*SUMMARY.md for frontmatter fields:
     dependency-graph.provides, dependency-graph.affects, patterns-established,
     key-decisions, and methods.added.
     """
@@ -432,6 +433,7 @@ def cmd_history_digest(cwd: Path) -> HistoryDigestResult:
 
     if not phases_dir.is_dir():
         return digest
+    layout = ProjectLayout(cwd)
 
     phase_dirs = sorted(
         [d for d in phases_dir.iterdir() if d.is_dir()],
@@ -440,11 +442,7 @@ def cmd_history_digest(cwd: Path) -> HistoryDigestResult:
 
     for dir_path in phase_dirs:
         dir_name = dir_path.name
-        summaries = [
-            f
-            for f in dir_path.iterdir()
-            if f.is_file() and (f.name.endswith(SUMMARY_SUFFIX) or f.name == STANDALONE_SUMMARY)
-        ]
+        summaries = [f for f in dir_path.iterdir() if f.is_file() and layout.is_summary_file(f.name)]
 
         for summary_file in summaries:
             content = safe_read_file(summary_file)
@@ -510,13 +508,27 @@ def cmd_history_digest(cwd: Path) -> HistoryDigestResult:
 _CONVENTION_KV_RE = re.compile(r"^([^=:]+?)\s*[=:]\s*(.+)$")
 
 
+def _matches_phase_scope(dir_name: str, phase: str | None) -> bool:
+    """Return whether a completed phase directory matches an optional phase scope."""
+
+    if phase is None:
+        return True
+
+    requested = phase.strip()
+    if not requested:
+        return True
+
+    dir_phase = dir_name.split("-", 1)[0]
+    return compare_phase_numbers(dir_phase, requested) == 0
+
+
 @instrument_grd_function("commands.regression_check")
-def cmd_regression_check(cwd: Path, *, quick: bool = False) -> RegressionCheckResult:
+def cmd_regression_check(cwd: Path, *, phase: str | None = None, quick: bool = False) -> RegressionCheckResult:
     """Check for regressions across completed phases.
 
     Scans completed phase directories for:
     1. Convention redefinitions — same symbol defined with different values across SUMMARYs.
-    2. Unresolved verification issues — VERIFICATION.md files with non-passing status.
+    2. Unresolved verification issues — *-VERIFICATION.md files with non-passing status.
 
     In quick mode, only checks the most recent 2 completed phases.
 
@@ -534,14 +546,18 @@ def cmd_regression_check(cwd: Path, *, quick: bool = False) -> RegressionCheckRe
     except FileNotFoundError:
         return RegressionCheckResult(passed=True, issues=[], phases_checked=0)
 
+    layout = ProjectLayout(cwd)
     completed_dirs: list[Path] = []
     for d in all_dirs:
         files = [f.name for f in d.iterdir() if f.is_file()]
         plans = [f for f in files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN]
-        summaries = [f for f in files if f.endswith(SUMMARY_SUFFIX) or f == STANDALONE_SUMMARY]
-        if is_phase_complete(len(plans), len(summaries)):
+        summaries = [f for f in files if layout.is_summary_file(f)]
+        if is_phase_complete(len(plans), matching_phase_artifact_count(plans, summaries)):
             completed_dirs.append(d)
 
+    if not completed_dirs:
+        return RegressionCheckResult(passed=True, issues=[], phases_checked=0)
+    completed_dirs = [d for d in completed_dirs if _matches_phase_scope(d.name, phase)]
     if not completed_dirs:
         return RegressionCheckResult(passed=True, issues=[], phases_checked=0)
 
@@ -551,9 +567,7 @@ def cmd_regression_check(cwd: Path, *, quick: bool = False) -> RegressionCheckRe
     # 1. Convention redefinitions across SUMMARYs
     conventions_by_symbol: dict[str, list[dict[str, str]]] = {}
     for d in completed_dirs:
-        summaries = [
-            f for f in d.iterdir() if f.is_file() and (f.name.endswith(SUMMARY_SUFFIX) or f.name == STANDALONE_SUMMARY)
-        ]
+        summaries = [f for f in d.iterdir() if f.is_file() and layout.is_summary_file(f.name)]
         for summary_file in summaries:
             content = safe_read_file(summary_file)
             if content is None:
@@ -591,13 +605,9 @@ def cmd_regression_check(cwd: Path, *, quick: bool = False) -> RegressionCheckRe
                 )
             )
 
-    # 2. Unresolved VERIFICATION.md issues
+    # 2. Unresolved *-VERIFICATION.md issues
     for d in completed_dirs:
-        verifications = [
-            f
-            for f in d.iterdir()
-            if f.is_file() and (f.name.endswith(VERIFICATION_SUFFIX) or f.name == STANDALONE_VERIFICATION)
-        ]
+        verifications = [f for f in d.iterdir() if f.is_file() and f.name.endswith(VERIFICATION_SUFFIX)]
         for v_file in verifications:
             content = safe_read_file(v_file)
             if content is None:
@@ -616,7 +626,32 @@ def cmd_regression_check(cwd: Path, *, quick: bool = False) -> RegressionCheckRe
                 continue
 
             status = fm.get("status")
-            if status in ("gaps_found", "expert_needed", "human_needed"):
+            status_text = str(status).strip() if status is not None else ""
+            if not status_text:
+                issues.append(
+                    RegressionIssue(
+                        type="invalid_verification_status",
+                        phase=d.name,
+                        file=v_file.name,
+                        status=status_text or None,
+                        error="verification status must be one of passed, gaps_found, expert_needed, human_needed",
+                    )
+                )
+                continue
+
+            if status_text not in VERIFICATION_REPORT_STATUSES:
+                issues.append(
+                    RegressionIssue(
+                        type="invalid_verification_status",
+                        phase=d.name,
+                        file=v_file.name,
+                        status=status_text,
+                        error="verification status must be one of passed, gaps_found, expert_needed, human_needed",
+                    )
+                )
+                continue
+
+            if status_text in ("gaps_found", "expert_needed", "human_needed"):
                 score_str = str(fm.get("score", ""))
                 score_match = re.match(r"(\d+)/(\d+)", score_str)
                 verified = int(score_match.group(1)) if score_match else 0
@@ -638,7 +673,7 @@ def cmd_regression_check(cwd: Path, *, quick: bool = False) -> RegressionCheckRe
     return RegressionCheckResult(passed=passed, issues=issues, phases_checked=len(completed_dirs))
 
 
-_GRD_RETURN_BLOCK_RE = re.compile(r"```ya?ml\s*\n(grd_return:\s*\n[\s\S]*?)```")
+_GRD_RETURN_BLOCK_RE = re.compile(r"```ya?ml\s*\n(gpd_return:\s*\n[\s\S]*?)```")
 _GRD_RETURN_FIELD_RE = re.compile(r"^\s{2,4}(\w+):\s*(.+)")
 _GRD_RETURN_LIST_START_RE = re.compile(r"^\s{2,4}(\w+):\s*$")
 _GRD_RETURN_LIST_ITEM_RE = re.compile(r"^\s{4,}-\s*(.+)")
@@ -671,7 +706,7 @@ def _parse_grd_return_fields(yaml_block: str) -> dict[str, object]:
     active_list_key: str | None = None
 
     for line in yaml_block.split("\n"):
-        if not line.strip() or line.strip() == "grd_return:":
+        if not line.strip() or line.strip() == "gpd_return:":
             if not line.strip():
                 active_list_key = None
             continue
@@ -718,7 +753,7 @@ def _field_present(value: object) -> bool:
 
 @instrument_grd_function("commands.validate_return")
 def cmd_validate_return(file_path: Path) -> ValidateReturnResult:
-    """Validate a grd_return YAML block in a file.
+    """Validate a gpd_return YAML block in a file.
 
     Checks for required fields, valid status values, and numeric task counts.
 
@@ -736,7 +771,7 @@ def cmd_validate_return(file_path: Path) -> ValidateReturnResult:
     if not return_match:
         return ValidateReturnResult(
             passed=False,
-            errors=["No grd_return YAML block found"],
+            errors=["No gpd_return YAML block found"],
             warnings=warnings,
         )
 
@@ -754,7 +789,9 @@ def cmd_validate_return(file_path: Path) -> ValidateReturnResult:
 
     # Validate status value
     if raw_status and status_lower not in VALID_RETURN_STATUSES:
-        errors.append(f"Invalid status '{raw_status}'. Must be one of: {', '.join(sorted(VALID_RETURN_STATUSES))}")
+        errors.append(
+            f"Invalid status '{raw_status}'. Must be one of: {', '.join(sorted(VALID_RETURN_STATUSES))}"
+        )
 
     # Validate task counts are numbers
     for count_field in ("tasks_completed", "tasks_total"):

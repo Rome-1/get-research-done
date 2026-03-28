@@ -50,7 +50,6 @@ class IntermediateResult(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     verified: bool = False
     verification_records: list[VerificationEvidence] = Field(default_factory=list)
-    metadata: dict[str, str] = Field(default_factory=dict)
 
 
 class ResultDeps(BaseModel):
@@ -76,17 +75,7 @@ class MissingDep(BaseModel):
 # --- Helpers ---
 
 RESULT_FIELDS = frozenset(
-    {
-        "equation",
-        "description",
-        "units",
-        "validity",
-        "phase",
-        "depends_on",
-        "verified",
-        "verification_records",
-        "metadata",
-    }
+    {"equation", "description", "units", "validity", "phase", "depends_on", "verified", "verification_records"}
 )
 
 
@@ -111,6 +100,30 @@ def _normalize_verification_records(
                 type(record).__name__,
                 record,
             )
+    return normalized
+
+
+def _strict_verification_records(
+    records: object,
+) -> list[VerificationEvidence]:
+    """Validate an update-time verification-record payload without dropping data."""
+    if records is None:
+        return []
+    if not isinstance(records, list):
+        raise ResultError("verification_records must be a list of verification records")
+
+    normalized: list[VerificationEvidence] = []
+    for index, record in enumerate(records):
+        if isinstance(record, VerificationEvidence):
+            normalized.append(record)
+            continue
+        if isinstance(record, dict):
+            try:
+                normalized.append(VerificationEvidence(**record))
+            except (TypeError, _PydanticValidationError) as exc:
+                raise ResultError(f"Invalid verification_records[{index}]: {exc}") from exc
+            continue
+        raise ResultError(f"verification_records[{index}] must be a verification record object")
     return normalized
 
 
@@ -192,7 +205,6 @@ def result_add(
     verified: bool = False,
     verification_records: list[VerificationEvidence | dict[str, object]] | None = None,
     result_id: str | None = None,
-    metadata: dict[str, str] | None = None,
 ) -> IntermediateResult:
     """Add an intermediate result to state.
 
@@ -231,7 +243,7 @@ def result_add(
     else:
         deps = list(depends_on)
 
-    normalized_records = _normalize_verification_records(verification_records)
+    normalized_records = _strict_verification_records(verification_records)
 
     result_dict = {
         "id": rid,
@@ -243,7 +255,6 @@ def result_add(
         "depends_on": deps,
         "verified": verified or bool(normalized_records),
         "verification_records": [record.model_dump() for record in normalized_records],
-        "metadata": dict(metadata) if metadata else {},
     }
 
     state["intermediate_results"].append(result_dict)
@@ -369,6 +380,10 @@ def result_verify(
     commit_sha: str | None = None,
     notes: str | None = None,
     claim_id: str | None = None,
+    deliverable_id: str | None = None,
+    acceptance_test_id: str | None = None,
+    reference_id: str | None = None,
+    forbidden_proxy_id: str | None = None,
     verified_at: str | None = None,
 ) -> IntermediateResult:
     """Mark a result as verified.
@@ -394,10 +409,17 @@ def result_verify(
         commit_sha=commit_sha,
         notes=notes,
         claim_id=claim_id,
+        deliverable_id=deliverable_id,
+        acceptance_test_id=acceptance_test_id,
+        reference_id=reference_id,
+        forbidden_proxy_id=forbidden_proxy_id,
     )
 
     raw_result = state["intermediate_results"][idx]
-    records = _normalize_verification_records(raw_result.get("verification_records"))
+    try:
+        records = _strict_verification_records(raw_result.get("verification_records"))
+    except ResultError as exc:
+        raise ResultError(f"Existing verification_records for {result_id} are invalid: {exc}") from exc
     records.append(record)
     raw_result["verification_records"] = [entry.model_dump() for entry in records]
     raw_result["verified"] = True
@@ -432,26 +454,14 @@ def result_update(
         elif not isinstance(updates["depends_on"], list):
             updates["depends_on"] = [updates["depends_on"]]
 
-    # Coerce verified to bool
     if "verified" in updates:
         raw = updates["verified"]
-        if isinstance(raw, bool):
-            updates["verified"] = raw
-        elif isinstance(raw, str):
-            updates["verified"] = raw.strip().lower() in ("true", "1", "yes")
-        else:
-            updates["verified"] = bool(raw)
+        if not isinstance(raw, bool):
+            raise ResultError("verified must be a boolean")
 
     if "verification_records" in updates:
-        records_raw = updates["verification_records"]
-        if records_raw is None:
-            updates["verification_records"] = []
-        elif isinstance(records_raw, list):
-            updates["verification_records"] = [
-                record.model_dump() for record in _normalize_verification_records(records_raw)
-            ]
-        else:
-            raise ResultError("verification_records must be a list of verification records")
+        records = _strict_verification_records(updates["verification_records"])
+        updates["verification_records"] = [record.model_dump() for record in records]
         has_records = bool(updates["verification_records"])
         if "verified" not in updates:
             updates["verified"] = has_records

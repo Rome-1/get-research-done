@@ -102,7 +102,7 @@ def test_json_keys_bad_json():
 
 def test_json_list_array():
     data = json.dumps({"waves": {"1": ["plan-a", "plan-b"]}})
-    result = json_list(data, ".waves.1")
+    result = json_list(data, '.waves.1')
     assert result == "plan-a\nplan-b"
 
 
@@ -172,34 +172,48 @@ def test_json_set_json_value(tmp_path):
     assert data["count"] == 42  # parsed as int
 
 
+def test_json_set_malformed_existing_json_does_not_overwrite_file(tmp_path):
+    fp = tmp_path / "broken.json"
+    original = "{not-json"
+    fp.write_text(original, encoding="utf-8")
+
+    result = json_set(str(fp), "task_1", "abc123")
+
+    assert result["updated"] is False
+    assert result["error"] == "existing file contains invalid JSON"
+    assert fp.read_text(encoding="utf-8") == original
+
+
+
+
 def test_json_set_out_of_range_index_no_write(tmp_path):
     """json_set must not write when a list index is out of range (updated=False)."""
-    fp = tmp_path / "data.json"
-    fp.write_text(json.dumps({"items": ["a", "b"]}))
+    fp = tmp_path / 'data.json'
+    fp.write_text(json.dumps({'items': ['a', 'b']}))
     original = fp.read_text()
-    result = json_set(str(fp), "items[99]", '"new"')
-    assert result["updated"] is False
+    result = json_set(str(fp), 'items[99]', '"new"')
+    assert result['updated'] is False
     # File content must be unchanged
     assert fp.read_text() == original
 
 
 def test_json_set_out_of_range_deep_nested_no_write(tmp_path):
     """Deeply nested list with OOB index must not rewrite the file."""
-    fp = tmp_path / "data.json"
+    fp = tmp_path / 'data.json'
     fp.write_text(json.dumps({"root": {"nested": {"arr": ["only_one"]}}}))
     original = fp.read_text()
-    result = json_set(str(fp), "root.nested.arr[99]", '"val"')
-    assert result["updated"] is False
+    result = json_set(str(fp), 'root.nested.arr[99]', '"val"')
+    assert result['updated'] is False
     assert fp.read_text() == original
 
 
 def test_json_set_out_of_range_negative_index_no_write(tmp_path):
     """Negative out-of-range list index must not rewrite the file."""
-    fp = tmp_path / "data.json"
-    fp.write_text(json.dumps({"arr": ["only"]}))
+    fp = tmp_path / 'data.json'
+    fp.write_text(json.dumps({'arr': ['only']}))
     original = fp.read_text()
-    result = json_set(str(fp), "arr[-99]", '"val"')
-    assert result["updated"] is False
+    result = json_set(str(fp), 'arr[-99]', '"val"')
+    assert result['updated'] is False
     assert fp.read_text() == original
 
 
@@ -242,13 +256,11 @@ def test_json_merge_files_skips_missing(tmp_path):
 
 
 def test_json_sum_lengths_basic():
-    data = json.dumps(
-        {
-            "truths": ["t1", "t2"],
-            "artifacts": ["a1"],
-            "key_links": ["k1", "k2", "k3"],
-        }
-    )
+    data = json.dumps({
+        "truths": ["t1", "t2"],
+        "artifacts": ["a1"],
+        "key_links": ["k1", "k2", "k3"],
+    })
     result = json_sum_lengths(data, [".truths", ".artifacts", ".key_links"])
     assert result == "6"
 

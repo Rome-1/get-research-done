@@ -128,7 +128,7 @@ None yet.
 
 
 @pytest.fixture()
-def grd_project(tmp_path: Path) -> Path:
+def gpd_project(tmp_path: Path) -> Path:
     """Create a realistic GRD project directory tree.
 
     Layout::
@@ -143,7 +143,7 @@ def grd_project(tmp_path: Path) -> Path:
                 plan-03.md
                 summary-01.md
     """
-    planning = tmp_path / ".grd"
+    planning = tmp_path / "GRD"
     planning.mkdir()
 
     # Write state files
@@ -168,10 +168,10 @@ def grd_project(tmp_path: Path) -> Path:
 class TestConventionsServerIntegration:
     """Integration tests for conventions_server tools with real state files."""
 
-    def test_convention_set_stores_value(self, grd_project: Path):
+    def test_convention_set_stores_value(self, gpd_project: Path):
         from grd.mcp.servers.conventions_server import convention_set
 
-        result = convention_set(str(grd_project), "regularization_scheme", "dim-reg")
+        result = convention_set(str(gpd_project), "regularization_scheme", "dim-reg")
 
         assert result["status"] == "set"
         assert result["key"] == "regularization_scheme"
@@ -179,20 +179,20 @@ class TestConventionsServerIntegration:
         assert result["type"] == "standard"
 
         # Verify the value persisted in state.json
-        state = json.loads((grd_project / ".grd" / "state.json").read_text())
-        assert state["convention_lock"]["conventions"]["regularization_scheme"] == "dim-reg"
+        state = json.loads((gpd_project / "GRD" / "state.json").read_text())
+        assert state["convention_lock"]["regularization_scheme"] == "dim-reg"
 
-    def test_convention_set_already_set_rejects_overwrite(self, grd_project: Path):
+    def test_convention_set_already_set_rejects_overwrite(self, gpd_project: Path):
         from grd.mcp.servers.conventions_server import convention_set
 
         # metric_signature is already "(+,-,-,-)" in the fixture
-        result = convention_set(str(grd_project), "metric_signature", "(-,+,+,+)")
+        result = convention_set(str(gpd_project), "metric_signature", "(-,+,+,+)")
 
         assert result["status"] == "already_set"
         assert result["current_value"] == "(+,-,-,-)"
         assert result["requested_value"] == "mostly-plus"
 
-    def test_convention_check_real_lock(self, grd_project: Path):
+    def test_convention_check_real_lock(self, gpd_project: Path):
         from grd.mcp.servers.conventions_server import convention_check
 
         lock = _STATE_JSON["convention_lock"]
@@ -214,20 +214,20 @@ class TestConventionsServerIntegration:
 class TestStateServerIntegration:
     """Integration tests for state_server tools with real STATE.md / state.json."""
 
-    def test_get_state_returns_structured_data(self, grd_project: Path):
+    def test_get_state_returns_structured_data(self, gpd_project: Path):
         from grd.mcp.servers.state_server import get_state
 
-        result = get_state(str(grd_project))
+        result = get_state(str(gpd_project))
 
         assert isinstance(result, dict)
         # Should return structured state, not raw markdown
         assert "position" in result
         assert "decisions" in result or "blockers" in result
 
-    def test_advance_plan_increments(self, grd_project: Path):
+    def test_advance_plan_increments(self, gpd_project: Path):
         from grd.mcp.servers.state_server import advance_plan
 
-        result = advance_plan(str(grd_project))
+        result = advance_plan(str(gpd_project))
 
         assert isinstance(result, dict)
         # Plan 1 -> 2, should succeed
@@ -235,13 +235,13 @@ class TestStateServerIntegration:
         assert result.get("new_plan") == 2 or result.get("current_plan") == 2
 
         # Verify STATE.md was updated
-        md = (grd_project / ".grd" / "STATE.md").read_text()
+        md = (gpd_project / "GRD" / "STATE.md").read_text()
         assert "**Current Plan:** 2" in md
 
-    def test_validate_state_on_realistic_project(self, grd_project: Path):
+    def test_validate_state_on_realistic_project(self, gpd_project: Path):
         from grd.mcp.servers.state_server import validate_state
 
-        result = validate_state(str(grd_project))
+        result = validate_state(str(gpd_project))
 
         assert isinstance(result, dict)
         assert "valid" in result
@@ -305,6 +305,22 @@ class TestVerificationServerIntegration:
         assert "L" in mismatches
         assert "T" in mismatches
 
+    def test_dimensional_check_invalid_element_returns_error_envelope(self):
+        from grd.mcp.servers.verification_server import dimensional_check
+
+        result = dimensional_check(["[M] = [M]", 4])
+
+        assert result["schema_version"] == 1
+        assert result["error"] == "expressions[1] must be a string"
+
+    def test_limiting_case_check_invalid_limit_key_returns_error_envelope(self):
+        from grd.mcp.servers.verification_server import limiting_case_check
+
+        result = limiting_case_check("E = m * c^2", {0: "classical"})
+
+        assert result["schema_version"] == 1
+        assert result["error"] == "limits keys must be strings"
+
     def test_symmetry_check_with_real_symmetries(self):
         from grd.mcp.servers.verification_server import symmetry_check
 
@@ -317,6 +333,22 @@ class TestVerificationServerIntegration:
         for entry in result["results"]:
             assert entry["matched_type"] is not None
             assert entry["strategy"] is not None
+
+    def test_symmetry_check_invalid_element_returns_error_envelope(self):
+        from grd.mcp.servers.verification_server import symmetry_check
+
+        result = symmetry_check("M(s,t)", ["Lorentz invariance", None])
+
+        assert result["schema_version"] == 1
+        assert result["error"] == "symmetries[1] must be a string"
+
+    def test_verification_coverage_invalid_element_returns_error_envelope(self):
+        from grd.mcp.servers.verification_server import get_verification_coverage
+
+        result = get_verification_coverage([15, {"id": 37}], ["5.1"])
+
+        assert result["schema_version"] == 1
+        assert result["error"] == "error_class_ids[1] must be an integer"
 
     def test_run_contract_check_fit_family_with_partial_metadata(self):
         from grd.mcp.servers.verification_server import run_contract_check
@@ -625,17 +657,31 @@ class TestSkillsServerIntegration:
         assert "error" not in result
         assert result["name"] == "grd-help"
         assert "grd command reference" in result["content"].lower()
+        assert "`/grd:*`" in result["content"]
+        assert "grd validate command-context grd:<name>" in result["content"]
+        assert "grd-new-project" in result["content"]
         assert result["file_count"] == 1
+        assert result["allowed_tools_surface"] == "command.allowed-tools"
 
     def test_get_skill_resolves_package_spec_paths(self):
         from grd.mcp.servers.skills_server import get_skill
-        from grd.registry import SPECS_DIR
 
         result = get_skill("grd-plan-phase")
 
         assert "error" not in result
-        assert "{GRD_INSTALL_DIR}" not in result["content"]
-        assert f"@{SPECS_DIR.resolve().as_posix()}/workflows/plan-phase.md" in result["content"]
+        assert "@{GRD_INSTALL_DIR}/workflows/plan-phase.md" in result["content"]
+        assert all(not entry["path"].startswith("/") for entry in result["referenced_files"])
+        assert all(not entry["path"].startswith("/") for entry in result["schema_documents"])
+        assert all(not entry["path"].startswith("/") for entry in result["contract_documents"])
+
+    def test_get_skill_surfaces_project_context_references(self):
+        from grd.mcp.servers.skills_server import get_skill
+
+        result = get_skill("grd-discover")
+        references = {entry["path"]: entry["kind"] for entry in result["referenced_files"]}
+
+        assert references["@.grd/STATE.md"] == "project"
+        assert references["@.grd/ROADMAP.md"] == "project"
 
     def test_get_skill_peer_review_surfaces_transitive_schema_refs_and_typed_contract(self):
         from grd.mcp.servers.skills_server import get_skill
@@ -648,6 +694,74 @@ class TestSkillsServerIntegration:
         assert result["review_contract"] is not None
         assert result["review_contract"]["review_mode"] == "publication"
         assert result["context_mode"] == "project-required"
+
+    @pytest.mark.parametrize(
+        ("skill_name", "expected_schema_docs", "expected_contract_docs", "expected_review_mode"),
+        [
+            (
+                "grd-write-paper",
+                {"paper-config-schema.md": "Paper Config Schema"},
+                {"reproducibility-manifest.md": "Reproducibility Manifest Template"},
+                "publication",
+            ),
+            (
+                "grd-verify-work",
+                {
+                    "verification-report.md": "Verification Report Template",
+                    "contract-results-schema.md": "Contract Results Schema",
+                },
+                {"contract-results-schema.md": "Contract Results Schema"},
+                "review",
+            ),
+            (
+                "grd-peer-review",
+                {
+                    "review-ledger-schema.md": "Review Ledger Schema",
+                    "referee-decision-schema.md": "Referee Decision Schema",
+                },
+                {"peer-review-panel.md": "Peer Review Panel Protocol"},
+                "publication",
+            ),
+            (
+                "grd-sync-state",
+                {"state-json-schema.md": "state.json Schema"},
+                {"state-json-schema.md": "state.json Schema"},
+                None,
+            ),
+        ],
+    )
+    def test_get_skill_surfaces_embedded_schema_and_contract_documents(
+        self,
+        skill_name: str,
+        expected_schema_docs: dict[str, str],
+        expected_contract_docs: dict[str, str],
+        expected_review_mode: str | None,
+    ) -> None:
+        from grd.mcp.servers.skills_server import get_skill
+
+        result = get_skill(skill_name)
+        schema_documents = {Path(entry["path"]).name: entry for entry in result["schema_documents"]}
+        contract_documents = {Path(entry["path"]).name: entry for entry in result["contract_documents"]}
+
+        assert "error" not in result
+        assert result["schema_documents"]
+        assert result["contract_documents"]
+        assert all(not entry["path"].startswith("/") for entry in result["schema_documents"])
+        assert all(not entry["path"].startswith("/") for entry in result["contract_documents"])
+        for name, marker in expected_schema_docs.items():
+            assert name in schema_documents
+            assert marker in schema_documents[name]["body"]
+            assert schema_documents[name]["content"]
+        for name, marker in expected_contract_docs.items():
+            assert name in contract_documents
+            assert marker in contract_documents[name]["body"]
+            assert contract_documents[name]["content"]
+
+        if expected_review_mode is None:
+            assert result["review_contract"] is None
+        else:
+            assert result["review_contract"] is not None
+            assert result["review_contract"]["review_mode"] == expected_review_mode
 
     def test_get_skill_not_found(self):
         from grd.mcp.servers.skills_server import get_skill
@@ -684,8 +798,8 @@ class TestSkillsServerIntegration:
         assert isinstance(result, dict)
         assert result["total_skills"] > 10
         assert "index_text" in result
-        assert "/grd:" in result["index_text"]
-        assert "/grd:peer-review" in result["index_text"]
+        assert "grd-execute-phase" in result["index_text"]
+        assert "grd-peer-review" in result["index_text"]
         assert "grd-debugger" in result["index_text"]
         assert "/grd:debugger" not in result["index_text"]
         assert len(result["categories"]) > 3

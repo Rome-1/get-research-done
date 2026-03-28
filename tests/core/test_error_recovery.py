@@ -46,6 +46,7 @@ from grd.core.state import (
     generate_state_markdown,
     load_state_json,
     save_state_json,
+    state_add_decision,
     state_validate,
     sync_state_json,
 )
@@ -58,7 +59,7 @@ from grd.core.utils import safe_read_file
 
 def _make_planning(tmp_path: Path) -> Path:
     """Create minimal .grd/ structure and return project root."""
-    planning = tmp_path / ".grd"
+    planning = tmp_path / "GRD"
     planning.mkdir(parents=True, exist_ok=True)
     return tmp_path
 
@@ -204,6 +205,21 @@ class TestLoadStateJsonFallback:
         assert result is not None
         assert result["position"]["current_phase"] == "01"
         assert result["position"]["status"] == "Executing"
+
+    def test_tier3_falls_back_to_state_md_without_overwriting_unreadable_state_json(
+        self, tmp_path: Path
+    ) -> None:
+        """Unreadable state.json should remain untouched when STATE.md is used as fallback."""
+        cwd = _make_planning(tmp_path)
+        layout = ProjectLayout(cwd)
+        layout.state_json.write_text("CORRUPT", encoding="utf-8")
+        _write_state_md(cwd, MINIMAL_STATE_MD)
+
+        result = load_state_json(cwd)
+
+        assert result is not None
+        assert result["position"]["current_phase"] == "01"
+        assert layout.state_json.read_text(encoding="utf-8") == "CORRUPT"
 
     def test_returns_none_when_no_state_exists(self, tmp_path: Path) -> None:
         """When no state files exist at all, return None (not raise)."""
@@ -547,9 +563,15 @@ class TestValidateFrontmatter:
             "depends_on: []\n"
             "files_modified: []\n"
             "interactive: false\n"
+            "conventions:\n"
+            "  units: natural\n"
+            "  metric: (+,-,-,-)\n"
+            "  coordinates: Cartesian\n"
             "contract:\n"
             "  scope:\n"
             "    question: What benchmark must this plan recover?\n"
+            "  context_intake:\n"
+            "    must_read_refs: [ref-main]\n"
             "  claims:\n"
             "    - id: claim-main\n"
             "      statement: Recover the benchmark value within tolerance\n"
@@ -842,3 +864,32 @@ class TestSaveLoadRoundTrip:
         loaded = load_state_json(cwd)
         assert loaded is not None
         assert loaded["position"]["current_phase"] == "02"
+
+    def test_mutator_recovers_pending_intent_before_missing_state_check(self, tmp_path: Path) -> None:
+        """Mutators should recover pending intent before they reject missing STATE.md."""
+        cwd = _make_planning(tmp_path)
+        layout = ProjectLayout(cwd)
+
+        stale_state = default_state_dict()
+        stale_state["position"]["current_phase"] = "01"
+        stale_state["position"]["status"] = "Planning"
+        save_state_json(cwd, stale_state)
+
+        recovered_state = default_state_dict()
+        recovered_state["position"]["current_phase"] = "05"
+        recovered_state["position"]["status"] = "Executing"
+        recovered_state["decisions"] = []
+        json_tmp = layout.grd / ".state-json-tmp"
+        md_tmp = layout.grd / ".state-md-tmp"
+        json_tmp.write_text(json.dumps(recovered_state, indent=2) + "\n", encoding="utf-8")
+        md_tmp.write_text(generate_state_markdown(recovered_state), encoding="utf-8")
+        layout.state_intent.write_text(f"{json_tmp}\n{md_tmp}\n", encoding="utf-8")
+
+        layout.state_md.unlink()
+
+        result = state_add_decision(cwd, summary="Recovered decision", phase="05")
+
+        assert result.added is True
+        assert "Recovered decision" in layout.state_md.read_text(encoding="utf-8")
+        assert json.loads(layout.state_json.read_text(encoding="utf-8"))["position"]["current_phase"] == "05"
+        assert not layout.state_intent.exists()

@@ -219,7 +219,7 @@ def test_validate_final_output_rejects_internal_project_scratch_temp_and_externa
     external_root.mkdir()
     monkeypatch.setattr(ProjectStorageLayout, "temp_roots", lambda self: (temp_root,))
 
-    with pytest.raises(StoragePathError, match="internal storage"):
+    with pytest.raises(StoragePathError, match=".grd/"):
         layout.validate_final_output(".grd/paper/main.tex")
 
     with pytest.raises(StoragePathError, match="scratch directories"):
@@ -245,7 +245,7 @@ def test_validate_commit_target_allows_internal_docs_but_rejects_internal_artifa
     hidden_results = layout.internal_root / "phases" / "01-setup" / "results" / "out.json"
     hidden_results.parent.mkdir(parents=True)
     hidden_results.write_text("{}", encoding="utf-8")
-    with pytest.raises(StoragePathError, match="Suspicious durable-artifact path under internal storage"):
+    with pytest.raises(StoragePathError, match=r"Suspicious durable-artifact path under .*GRD"):
         layout.validate_commit_target(hidden_results)
 
     artifact_like = layout.internal_root / "paper" / "main.tex"

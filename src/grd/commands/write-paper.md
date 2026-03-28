@@ -8,10 +8,10 @@ review-contract:
   schema_version: 1
   required_outputs:
     - paper/main.tex
-    - ".grd/REFEREE-REPORT.md"
-    - ".grd/REFEREE-REPORT.tex"
+    - ".grd/REFEREE-REPORT{round_suffix}.md"
+    - ".grd/REFEREE-REPORT{round_suffix}.tex"
   required_evidence:
-    - existing manuscript
+    - manuscript scaffold target (existing draft or bootstrap target)
     - phase summaries or milestone digest
     - verification reports
     - bibliography audit
@@ -21,7 +21,6 @@ review-contract:
     - missing project state
     - missing roadmap
     - missing conventions
-    - missing manuscript
     - no research artifacts
     - degraded review integrity
   preflight_checks:
@@ -61,7 +60,7 @@ Routes to the write-paper workflow which handles all logic including:
 3. Scope establishment, artifact cataloging, and outline creation
 4. Figure generation before section drafting
 5. Wave-parallelized section drafting (Wave 1: Results+Methods, Wave 2: Introduction, Wave 3: Discussion, Wave 4: Conclusions, Wave 5: Abstract, Wave 6: Appendices)
-6. LaTeX compilation checks after each wave (if pdflatex available)
+6. LaTeX compilation checks after each wave (if pdflatex available; cross-platform detection including Windows MiKTeX/TeX Live)
 7. Consistency check, notation audit, and RESULT PENDING placeholder resolution
 8. Bibliography verification via grd-bibliographer
 9. Pre-submission staged peer review via specialist panel plus final grd-referee adjudication
@@ -71,6 +70,8 @@ Routes to the write-paper workflow which handles all logic including:
 <execution_context>
 @{GRD_INSTALL_DIR}/workflows/write-paper.md
 @{GRD_INSTALL_DIR}/templates/paper/paper-config-schema.md
+@{GRD_INSTALL_DIR}/templates/paper/figure-tracker.md
+@{GRD_INSTALL_DIR}/templates/paper/reproducibility-manifest.md
 </execution_context>
 
 <context>
@@ -88,7 +89,7 @@ Load research context:
 
 ```bash
 cat .grd/ROADMAP.md 2>/dev/null
-ls .grd/phases/*/SUMMARY.md .grd/phases/*/*-SUMMARY.md 2>/dev/null
+ls .grd/phases/*/*SUMMARY.md 2>/dev/null
 cat .grd/research-map/FORMALISM.md 2>/dev/null
 ```
 
@@ -97,16 +98,18 @@ cat .grd/research-map/FORMALISM.md 2>/dev/null
 <process>
 **Follow the write-paper workflow** from `@{GRD_INSTALL_DIR}/workflows/write-paper.md`.
 
+When the workflow asks for constrained artifacts such as `${PAPER_DIR}/PAPER-CONFIG.json`, `.grd/paper/FIGURE_TRACKER.md`, or `${PAPER_DIR}/reproducibility-manifest.json`, use the canonical schema/template surfaces it loads there rather than inventing keys from memory.
+
 The workflow handles all logic including:
 
-1. **Init** — Load project context via `grd init phase-op`, check pdflatex availability, verify conventions
+1. **Init** — Load project context via `grd init phase-op`, check pdflatex availability (cross-platform, including Windows MiKTeX/TeX Live), verify conventions
 2. **Load research digest** — Check for RESEARCH-DIGEST.md from milestone completion; map digest sections to paper structure; fall back to raw phase data if no digest found. Supports `--from-phases` flag to select specific phases.
 3. **Establish scope** — Target journal, paper type, key result (ONE sentence), audience, available artifacts
 4. **Catalog artifacts** — Gather derivations, numerical results, figures, literature, verification results from phases
 5. **Paper-readiness audit** — 5 checks (SUMMARY completeness, convention consistency, numerical stability, figure readiness, citation readiness) with gate decision (0 critical gaps to proceed, or user approval)
 6. **Create outline** — Detailed per-section outline (purpose, key content, equations, figures, citations, dependencies) adapted to journal format. Present for approval.
-7. **Generate files** — Create `paper/PAPER-CONFIG.json` using `@{GRD_INSTALL_DIR}/templates/paper/paper-config-schema.md`, then materialize the canonical manuscript scaffold with `grd paper-build` (emits `paper/main.tex`, bibliography artifacts, and `paper/ARTIFACT-MANIFEST.json`)
-8. **Generate figures** — Generate matplotlib scripts from phase data, execute to paper/figures/, update FIGURE_TRACKER.md
+7. **Generate files** — Create `${PAPER_DIR}/PAPER-CONFIG.json` using `@{GRD_INSTALL_DIR}/templates/paper/paper-config-schema.md`, then materialize the canonical manuscript scaffold with `grd paper-build` (emits `${PAPER_DIR}/main.tex`, bibliography artifacts, and `${PAPER_DIR}/ARTIFACT-MANIFEST.json`)
+8. **Generate figures** — Generate matplotlib scripts from phase data, execute to `${PAPER_DIR}/figures/`, update FIGURE_TRACKER.md
 9. **Draft sections** — Wave-parallelized spawning of grd-paper-writer agents:
    - Wave 1: Results + Methods (no dependency)
    - Wave 2: Introduction (depends on Results)
@@ -114,7 +117,7 @@ The workflow handles all logic including:
    - Wave 4: Conclusions
    - Wave 5: Abstract (write LAST)
    - Wave 6: Appendices
-   - LaTeX compilation check after each wave (if pdflatex available)
+   - LaTeX compilation check after each wave (if pdflatex available; Windows users: install MiKTeX or TeX Live)
    - Per-wave checkpointing: skip waves whose .tex outputs already exist
 10. **Consistency check** — Notation audit, cross-reference audit, placeholder resolution (RESULT PENDING markers), physics consistency, narrative flow
 11. **Notation audit** — Cross-reference all symbols against NOTATION_GLOSSARY.md (if exists)

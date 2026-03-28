@@ -22,7 +22,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `research_enabled`, `current_milestone`, `current_milestone_name`, `project_exists`, `roadmap_exists`, `state_exists`, `project_contract`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifact_files`, `reference_artifacts_content`.
+Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `research_enabled`, `current_milestone`, `current_milestone_name`, `project_exists`, `roadmap_exists`, `state_exists`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifact_files`, `reference_artifacts_content`.
 
 **Mode-aware behavior:**
 - `autonomy=supervised`: Pause for user confirmation after requirements gathering and before roadmap generation.
@@ -42,7 +42,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Treat `project_contract` as the authoritative machine-readable project contract when present. Treat `active_reference_context` and `effective_reference_intake` as binding carry-forward context even when `project_contract` is empty.
+Treat `project_contract` as the authoritative machine-readable project contract only when `project_contract_load_info` is clean and `project_contract_validation.valid` is true. Treat `active_reference_context` and `effective_reference_intake` as binding carry-forward context even when `project_contract` is empty or blocked.
 
 Before defining scope, inspect these carry-forward inputs and keep them visible through milestone planning:
 - `effective_reference_intake.must_read_refs`
@@ -61,7 +61,10 @@ Load project files:
 - Read STATE.md (if `state_exists` — pending items, blockers)
 - Check for MILESTONE-CONTEXT.md (from milestone discussion)
 - If `reference_artifact_files` is non-empty, read the listed reference artifacts or use `reference_artifacts_content` as a compact fallback
+- Keep `project_contract_load_info` and `project_contract_validation` visible while gathering goals, determining milestone version, and reviewing roadmap coverage; do not assume `project_contract` is authoritative unless those gates are clean.
 - Keep `active_reference_context` available while gathering goals, defining objectives, and reviewing roadmap coverage
+- If `project_contract_load_info.status` starts with `blocked`, checkpoint with the user and repair the stored contract before using it for milestone scope.
+- If `project_contract_validation.valid` is false, checkpoint with the user and repair the stored contract before using it for milestone scope.
 
 ## 2. Gather Milestone Goals
 
@@ -128,6 +131,7 @@ Keep Accumulated Context section from previous milestone.
 ## 6. Cleanup and Commit
 
 Delete MILESTONE-CONTEXT.md if exists (consumed).
+Honor `planning.commit_docs` from init internally when deciding whether milestone artifacts are committed.
 
 ```bash
 PRE_CHECK=$(grd pre-commit-check --files .grd/PROJECT.md .grd/STATE.md 2>&1) || true

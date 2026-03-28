@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
+import sys
 from datetime import date
+from functools import lru_cache
 from pathlib import Path
-
-from grd.adapters.runtime_catalog import iter_runtime_descriptors
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GRAPH_PATH = REPO_ROOT / "tests" / "README.md"
@@ -21,6 +22,43 @@ SCOPE_END = "<!-- repo-graph-scope:end -->"
 SAME_STEM_COMMAND_WORKFLOW_START = "<!-- repo-graph-same-stem-command-workflow:start -->"
 SAME_STEM_COMMAND_WORKFLOW_END = "<!-- repo-graph-same-stem-command-workflow:end -->"
 
+GRAPH_SCOPE_LABELS = (
+    "Live repo files analyzed in the current tree",
+    "Python files under `src/` and `tests/`",
+    "`src/grd/commands/*.md`",
+    "`src/grd/agents/*.md`",
+    "`src/grd/specs/workflows/*.md`",
+    "`src/grd/specs/templates/**/*.md`",
+    "`src/grd/specs/references/**/*.md`",
+    "`src/grd/adapters/*.py`",
+    "`src/grd/hooks/*.py`",
+    "`src/grd/mcp/servers/*.py`",
+    "`tests/**` files",
+    "`infra/grd-*.json`",
+)
+
+_NORMALIZED_SCOPE_LABELS = {
+    label[1:-1] if label.startswith("`") and label.endswith("`") else label: label
+    for label in GRAPH_SCOPE_LABELS
+}
+
+
+@lru_cache(maxsize=1)
+def _runtime_catalog_module():
+    module_path = REPO_ROOT / "src" / "grd" / "adapters" / "runtime_catalog.py"
+    spec = importlib.util.spec_from_file_location("_grd_runtime_catalog_bootstrap", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load runtime catalog from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
+def iter_runtime_descriptors():
+    return _runtime_catalog_module().iter_runtime_descriptors()
+
+
 _LOCAL_RUNTIME_MIRROR_EXCLUDES = tuple(descriptor.config_dir_name for descriptor in iter_runtime_descriptors())
 
 EXCLUDED_GRAPH_DIRS = (
@@ -32,30 +70,10 @@ EXCLUDED_GRAPH_DIRS = (
     ".pytest_cache",
     ".mypy_cache",
     ".ruff_cache",
-    ".grd",
+    "GRD",
     *_LOCAL_RUNTIME_MIRROR_EXCLUDES,
     "dist",
 )
-
-GRAPH_SCOPE_LABELS = (
-    "Live repo files analyzed in the current tree",
-    "Python files under `src/` and `tests/`",
-    "`src/grd/commands/*.md`",
-    "`src/grd/agents/*.md`",
-    "`src/grd/specs/workflows/*.md`",
-    "`src/grd/specs/templates/**/*.md`",
-    "`src/grd/specs/references/**/*.md`",
-    "`src/grd/domains/**/*.md`",
-    "`src/grd/adapters/*.py`",
-    "`src/grd/hooks/*.py`",
-    "`src/grd/mcp/servers/*.py`",
-    "`tests/**` files",
-    "`infra/grd-*.json`",
-)
-
-_NORMALIZED_SCOPE_LABELS = {
-    label[1:-1] if label.startswith("`") and label.endswith("`") else label: label for label in GRAPH_SCOPE_LABELS
-}
 
 
 def read_graph_text() -> str:
@@ -87,7 +105,11 @@ def _tracked_repo_files(repo_root: Path) -> list[Path] | None:
 def _repo_files_in_scope(repo_root: Path) -> list[Path]:
     tracked_files = _tracked_repo_files(repo_root)
     if tracked_files is not None:
-        return [path for path in tracked_files if not _is_excluded_path(path) and (repo_root / path).is_file()]
+        return [
+            path
+            for path in tracked_files
+            if not _is_excluded_path(path) and (repo_root / path).is_file()
+        ]
 
     return [
         path.relative_to(repo_root)
@@ -161,16 +183,19 @@ def expected_scope_counts(repo_root: Path = REPO_ROOT) -> dict[str, int]:
             1 for path in repo_files if _has_parent(path, "src", "grd", "agents") and path.suffix == ".md"
         ),
         "`src/grd/specs/workflows/*.md`": sum(
-            1 for path in repo_files if _has_parent(path, "src", "grd", "specs", "workflows") and path.suffix == ".md"
+            1
+            for path in repo_files
+            if _has_parent(path, "src", "grd", "specs", "workflows") and path.suffix == ".md"
         ),
         "`src/grd/specs/templates/**/*.md`": sum(
-            1 for path in repo_files if _is_under(path, "src", "grd", "specs", "templates") and path.suffix == ".md"
+            1
+            for path in repo_files
+            if _is_under(path, "src", "grd", "specs", "templates") and path.suffix == ".md"
         ),
         "`src/grd/specs/references/**/*.md`": sum(
-            1 for path in repo_files if _is_under(path, "src", "grd", "specs", "references") and path.suffix == ".md"
-        ),
-        "`src/grd/domains/**/*.md`": sum(
-            1 for path in repo_files if _is_under(path, "src", "grd", "domains") and path.suffix == ".md"
+            1
+            for path in repo_files
+            if _is_under(path, "src", "grd", "specs", "references") and path.suffix == ".md"
         ),
         "`src/grd/adapters/*.py`": sum(
             1 for path in repo_files if _has_parent(path, "src", "grd", "adapters") and path.suffix == ".py"
@@ -179,9 +204,13 @@ def expected_scope_counts(repo_root: Path = REPO_ROOT) -> dict[str, int]:
             1 for path in repo_files if _has_parent(path, "src", "grd", "hooks") and path.suffix == ".py"
         ),
         "`src/grd/mcp/servers/*.py`": sum(
-            1 for path in repo_files if _has_parent(path, "src", "grd", "mcp", "servers") and path.suffix == ".py"
+            1
+            for path in repo_files
+            if _has_parent(path, "src", "grd", "mcp", "servers") and path.suffix == ".py"
         ),
-        "`tests/**` files": sum(1 for path in repo_files if _is_under(path, "tests")),
+        "`tests/**` files": sum(
+            1 for path in repo_files if _is_under(path, "tests")
+        ),
         "`infra/grd-*.json`": sum(
             1
             for path in repo_files
@@ -294,3 +323,4 @@ def sync_readme_text(readme_text: str, contract: dict[str, object]) -> str:
         SAME_STEM_COMMAND_WORKFLOW_END,
         render_same_stem_command_workflow_block(),
     )
+

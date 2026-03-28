@@ -17,8 +17,8 @@ class TestStateAddDecision:
         assert result.added is True
         assert result.decision == "- [Phase 1]: Use SI units"
 
-        markdown = (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8")
-        stored = json.loads((cwd / ".grd" / "state.json").read_text(encoding="utf-8"))
+        markdown = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
+        stored = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
 
         assert "Use SI units" in markdown
         assert stored["decisions"] == [{"phase": "1", "summary": "Use SI units", "rationale": None}]
@@ -35,8 +35,8 @@ class TestStateAddDecision:
 
         assert result.added is True
 
-        markdown = (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8")
-        stored = json.loads((cwd / ".grd" / "state.json").read_text(encoding="utf-8"))
+        markdown = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
+        stored = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
 
         assert "Choose RK4 integrator" in markdown
         assert "Better stability" in markdown
@@ -71,19 +71,19 @@ class TestStateAddDecision:
         state_add_decision(cwd, summary="Decision A", phase="1")
         state_add_decision(cwd, summary="Decision B", phase="2")
 
-        stored = json.loads((cwd / ".grd" / "state.json").read_text(encoding="utf-8"))
+        stored = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
         summaries = [entry["summary"] for entry in stored["decisions"]]
 
         assert summaries == ["Decision A", "Decision B"]
 
     def test_add_decision_removes_decision_placeholder(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
-        before = (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8")
+        before = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
         assert "None yet." in before
 
         state_add_decision(cwd, summary="First decision", phase="1")
 
-        after = (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8")
+        after = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
         decisions_start = after.find("### Decisions")
         decisions_end = after.find("\n###", decisions_start + 1)
         if decisions_end == -1:
@@ -112,8 +112,8 @@ class TestStateRecordMetric:
         assert result.plan == "01"
         assert result.duration == "45min"
 
-        markdown = (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8")
-        stored = json.loads((cwd / ".grd" / "state.json").read_text(encoding="utf-8"))
+        markdown = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
+        stored = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
 
         assert "Phase 03 P01" in markdown
         assert "45min" in markdown
@@ -158,7 +158,7 @@ class TestStateRecordMetric:
         state_record_metric(cwd, phase="03", plan="01", duration="20min")
         state_record_metric(cwd, phase="03", plan="02", duration="30min")
 
-        stored = json.loads((cwd / ".grd" / "state.json").read_text(encoding="utf-8"))
+        stored = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
         labels = [row["label"] for row in stored["performance_metrics"]["rows"]]
 
         assert labels == ["Phase 03 P01", "Phase 03 P02"]
@@ -171,8 +171,8 @@ class TestStateRecordMetric:
         result = state_record_metric(cwd, phase="03", plan="01", duration="15min", tasks=None, files=None)
 
         assert result.recorded is True
-        markdown = (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8")
-        stored = json.loads((cwd / ".grd" / "state.json").read_text(encoding="utf-8"))
+        markdown = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
+        stored = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
 
         assert "| Phase 03 P01 | 15min | - tasks | - files |" in markdown
         assert stored["performance_metrics"]["rows"][0]["tasks"] == "-"
@@ -188,8 +188,8 @@ class TestStateRecordSession:
         assert result.recorded is True
         assert set(result.updated) >= {"Last session", "Stopped at", "Resume file"}
 
-        markdown = (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8")
-        stored = json.loads((cwd / ".grd" / "state.json").read_text(encoding="utf-8"))
+        markdown = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
+        stored = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
 
         assert "Phase 03 Plan 2" in markdown
         assert "next-step.md" in markdown
@@ -197,7 +197,7 @@ class TestStateRecordSession:
         assert stored["session"]["resume_file"] == "next-step.md"
         assert stored["session"]["last_date"] is not None
 
-    def test_record_session_clears_resume_file_when_omitted(
+    def test_record_session_preserves_resume_file_when_omitted(
         self, tmp_path: Path, session_state_project_factory
     ) -> None:
         cwd = session_state_project_factory(tmp_path)
@@ -206,12 +206,30 @@ class TestStateRecordSession:
 
         assert result.recorded is True
 
-        markdown = (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8")
-        stored = json.loads((cwd / ".grd" / "state.json").read_text(encoding="utf-8"))
+        markdown = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
+        stored = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
 
         assert "Done" in markdown
-        assert "**Resume file:**" in markdown
+        assert "**Resume file:** resume.md" in markdown
+        assert stored["session"]["resume_file"] == "resume.md"
+
+    @pytest.mark.parametrize("clear_value", ["", "  ", "—", "None", "null"])
+    def test_record_session_clears_resume_file_when_placeholder_is_passed(
+        self,
+        tmp_path: Path,
+        session_state_project_factory,
+        clear_value: str,
+    ) -> None:
+        cwd = session_state_project_factory(tmp_path)
+
+        result = state_record_session(cwd, stopped_at="Done", resume_file=clear_value)
+
+        assert result.recorded is True
+        stored = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
+        markdown = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
+
         assert stored["session"]["resume_file"] is None
+        assert "**Resume file:** —" in markdown
 
     def test_record_session_missing_state_file(self, tmp_path: Path) -> None:
         result = state_record_session(tmp_path, stopped_at="Task 1")

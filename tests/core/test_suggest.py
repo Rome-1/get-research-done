@@ -3,29 +3,57 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from grd.adapters import get_adapter, list_runtimes
+from grd.adapters.runtime_catalog import get_runtime_descriptor
+from grd.core.constants import ENV_GRD_ACTIVE_RUNTIME
 from grd.core.suggest import (
     Recommendation,
     SuggestContext,
     SuggestResult,
     suggest_next,
 )
+from tests.runtime_install_helpers import seed_complete_runtime_install
 
-_RUNTIME_ENV_PREFIXES = ("CLAUDE", "CODEX", "GEMINI", "OPENCODE")
-_RUNTIME_ENV_VARS_TO_CLEAR = {"GRD_ACTIVE_RUNTIME", "XDG_CONFIG_HOME"}
+_RUNTIME_NAMES = tuple(list_runtimes())
+_SUPPORTED_RUNTIME_DESCRIPTORS = tuple(get_runtime_descriptor(runtime) for runtime in _RUNTIME_NAMES)
+_RUNTIME_ENV_VARS_TO_CLEAR = {
+    ENV_GRD_ACTIVE_RUNTIME,
+    *(
+        env_var
+        for descriptor in _SUPPORTED_RUNTIME_DESCRIPTORS
+        for env_var in (
+            *descriptor.activation_env_vars,
+            descriptor.global_config.env_var,
+            descriptor.global_config.env_dir_var,
+            descriptor.global_config.env_file_var,
+            "XDG_CONFIG_HOME" if descriptor.global_config.strategy == "xdg_app" else None,
+        )
+        if env_var
+    ),
+}
+
+
+def _runtime_pair_with_distinct_commands(action: str) -> tuple[str, str]:
+    for runtime in _RUNTIME_NAMES:
+        runtime_command = get_adapter(runtime).format_command(action)
+        for other_runtime in _RUNTIME_NAMES:
+            if other_runtime == runtime:
+                continue
+            if get_adapter(other_runtime).format_command(action) != runtime_command:
+                return runtime, other_runtime
+    raise AssertionError(f"Expected two supported runtimes with distinct command formatting for {action!r}")
 
 
 @pytest.fixture(autouse=True)
 def _isolate_runtime_detection(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Keep suggest tests independent from the host machine's runtime installs."""
-    for key in list(os.environ):
-        if key.startswith(_RUNTIME_ENV_PREFIXES) or key in _RUNTIME_ENV_VARS_TO_CLEAR:
-            monkeypatch.delenv(key, raising=False)
+    for key in _RUNTIME_ENV_VARS_TO_CLEAR:
+        monkeypatch.delenv(key, raising=False)
     monkeypatch.setattr("grd.hooks.runtime_detect.Path.home", lambda: tmp_path / "home")
 
 
@@ -34,7 +62,7 @@ def _isolate_runtime_detection(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
 
 def _setup_project(tmp_path: Path) -> Path:
     """Create a minimal GRD project structure and return project root."""
-    planning = tmp_path / ".grd"
+    planning = tmp_path / "GRD"
     planning.mkdir()
     (planning / "phases").mkdir()
     (planning / "PROJECT.md").write_text("# My Project\n")
@@ -43,12 +71,12 @@ def _setup_project(tmp_path: Path) -> Path:
 
 def _create_roadmap(tmp_path: Path, content: str = "# Roadmap\n## Phase 1\n") -> None:
     """Write ROADMAP.md."""
-    (tmp_path / ".grd" / "ROADMAP.md").write_text(content)
+    (tmp_path / "GRD" / "ROADMAP.md").write_text(content)
 
 
 def _create_state(tmp_path: Path, state: dict[str, object]) -> None:
     """Write state.json."""
-    (tmp_path / ".grd" / "state.json").write_text(json.dumps(state))
+    (tmp_path / "GRD" / "state.json").write_text(json.dumps(state))
 
 
 def _create_phase(
@@ -61,7 +89,7 @@ def _create_phase(
     verification: bool = False,
 ) -> Path:
     """Create a phase directory with specified artifacts."""
-    phase_dir = tmp_path / ".grd" / "phases" / name
+    phase_dir = tmp_path / "GRD" / "phases" / name
     phase_dir.mkdir(parents=True, exist_ok=True)
     for i in range(1, plans + 1):
         (phase_dir / f"{i:02d}-PLAN.md").write_text(f"Plan {i}\n")
@@ -70,25 +98,29 @@ def _create_phase(
     if research:
         (phase_dir / "RESEARCH.md").write_text("Research\n")
     if verification:
-        (phase_dir / "VERIFICATION.md").write_text("Verification\n")
+        (phase_dir / "01-VERIFICATION.md").write_text("Verification\n")
     return phase_dir
+
+
+def _create_roadmap_with_phases(tmp_path: Path, phases: list[tuple[str, str]]) -> None:
+    lines = ["# Roadmap", ""]
+    for number, name in phases:
+        lines.extend(
+            [
+                f"### Phase {number}: {name}",
+                "**Goal:** planned",
+                "",
+            ]
+        )
+    _create_roadmap(tmp_path, "\n".join(lines).strip() + "\n")
 
 
 def _create_todos(tmp_path: Path, count: int) -> None:
     """Create pending todo files."""
-    pending = tmp_path / ".grd" / "todos" / "pending"
+    pending = tmp_path / "GRD" / "todos" / "pending"
     pending.mkdir(parents=True, exist_ok=True)
     for i in range(count):
         (pending / f"todo-{i}.md").write_text(f"Todo {i}\n")
-
-
-def _mark_complete_runtime_install(config_dir: Path, *, runtime: str, install_scope: str = "local") -> None:
-    """Create the concrete install markers real runtime installs write."""
-    (config_dir / "get-research-done").mkdir(parents=True, exist_ok=True)
-    (config_dir / "grd-file-manifest.json").write_text(
-        json.dumps({"runtime": runtime, "install_scope": install_scope}),
-        encoding="utf-8",
-    )
 
 
 # ─── No Project ────────────────────────────────────────────────────────────────
@@ -105,13 +137,17 @@ def test_no_project_suggests_new_project(tmp_path: Path) -> None:
 
 def test_no_project_uses_workspace_runtime_install_for_command_formatting(tmp_path: Path) -> None:
     """Installed runtime command formatting should follow the analyzed workspace, not the process cwd."""
+    workspace_runtime, elsewhere_runtime = _runtime_pair_with_distinct_commands("new-project")
+    workspace_adapter = get_adapter(workspace_runtime)
+    elsewhere_adapter = get_adapter(elsewhere_runtime)
+
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    _mark_complete_runtime_install(workspace / ".codex", runtime="codex")
+    seed_complete_runtime_install(workspace / workspace_adapter.local_config_dir_name, runtime=workspace_runtime)
 
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    _mark_complete_runtime_install(elsewhere / ".claude", runtime="claude-code")
+    seed_complete_runtime_install(elsewhere / elsewhere_adapter.local_config_dir_name, runtime=elsewhere_runtime)
 
     with (
         patch("grd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
@@ -120,18 +156,23 @@ def test_no_project_uses_workspace_runtime_install_for_command_formatting(tmp_pa
         result = suggest_next(workspace)
 
     assert result.top_action is not None
-    assert result.top_action.command == "$grd-new-project"
+    assert result.top_action.command == workspace_adapter.format_command("new-project")
 
 
-def test_no_project_with_runtime_dir_but_no_install_uses_plain_gpd_command(tmp_path: Path) -> None:
-    """Runtime-native commands should not be advertised without a concrete runtime install."""
+def test_no_project_with_runtime_dir_but_no_install_uses_plain_grd_command(tmp_path: Path) -> None:
+    """Workflow bootstrap suggestions should fall back to the local init CLI when no runtime is installed."""
+    workspace_runtime, elsewhere_runtime = _runtime_pair_with_distinct_commands("new-project")
+
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    (workspace / ".codex").mkdir()
+    (workspace / get_adapter(workspace_runtime).local_config_dir_name).mkdir()
 
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    (elsewhere / ".claude" / "get-research-done").mkdir(parents=True)
+    seed_complete_runtime_install(
+        elsewhere / get_adapter(elsewhere_runtime).local_config_dir_name,
+        runtime=elsewhere_runtime,
+    )
 
     with (
         patch("grd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
@@ -140,7 +181,7 @@ def test_no_project_with_runtime_dir_but_no_install_uses_plain_gpd_command(tmp_p
         result = suggest_next(workspace)
 
     assert result.top_action is not None
-    assert result.top_action.command == "grd context new-project"
+    assert result.top_action.command == "grd init new-project"
 
 
 # ─── Empty Project ─────────────────────────────────────────────────────────────
@@ -174,6 +215,7 @@ def test_paused_work_highest_priority(tmp_path: Path) -> None:
     result = suggest_next(root)
     assert result.top_action is not None
     assert result.top_action.action == "resume"
+    assert result.top_action.command == "grd init resume"
     assert result.top_action.priority == 1
     assert "2026-01-15" in result.top_action.reason
 
@@ -226,8 +268,38 @@ def test_in_progress_phase_suggests_execute(tmp_path: Path) -> None:
     actions = [s.action for s in result.suggestions]
     assert "execute-phase" in actions
     exec_rec = next(s for s in result.suggestions if s.action == "execute-phase")
+    assert exec_rec.command == "grd init execute-phase 01"
     assert "2 incomplete plan(s)" in exec_rec.reason
     assert exec_rec.phase == "01"
+
+
+def test_numbered_plans_are_not_completed_by_bare_summary(tmp_path: Path) -> None:
+    """A bare SUMMARY.md must not complete numbered plan files."""
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    phase_dir = _create_phase(root, "01-setup", plans=1, summaries=0)
+    (phase_dir / "SUMMARY.md").write_text("Summary\n", encoding="utf-8")
+
+    result = suggest_next(root)
+
+    assert result.context.phase_count == 1
+    assert result.context.completed_phases == 0
+    assert any(s.action == "execute-phase" for s in result.suggestions)
+
+
+def test_standalone_plan_and_summary_count_as_phase_completion(tmp_path: Path) -> None:
+    """Standalone PLAN.md and SUMMARY.md should remain a valid completion pair."""
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    phase_dir = _create_phase(root, "01-setup", plans=0, summaries=0)
+    (phase_dir / "PLAN.md").write_text("Plan\n", encoding="utf-8")
+    (phase_dir / "SUMMARY.md").write_text("Summary\n", encoding="utf-8")
+
+    result = suggest_next(root)
+
+    assert result.context.phase_count == 1
+    assert result.context.completed_phases == 1
+    assert all(s.action != "execute-phase" for s in result.suggestions)
 
 
 def test_complete_unverified_suggests_verify(tmp_path: Path) -> None:
@@ -250,6 +322,7 @@ def test_researched_phase_suggests_plan(tmp_path: Path) -> None:
     actions = [s.action for s in result.suggestions]
     assert "plan-phase" in actions
     plan_rec = next(s for s in result.suggestions if s.action == "plan-phase")
+    assert plan_rec.command == "grd init plan-phase 02"
     assert plan_rec.phase == "02"
 
 
@@ -276,6 +349,20 @@ def test_all_complete_suggests_audit(tmp_path: Path) -> None:
     assert "write-paper" in actions  # all verified too
 
 
+def test_roadmap_only_phase_blocks_milestone_audit(tmp_path: Path) -> None:
+    """Roadmap phases without matching disk work must keep the milestone open."""
+    root = _setup_project(tmp_path)
+    _create_roadmap_with_phases(root, [("1", "Setup"), ("2", "Build")])
+    _create_phase(root, "01-setup", plans=1, summaries=1, verification=True)
+
+    result = suggest_next(root)
+
+    assert result.context.phase_count == 2
+    assert result.context.completed_phases == 1
+    assert all(s.action != "audit-milestone" for s in result.suggestions)
+    assert all(s.action != "write-paper" for s in result.suggestions)
+
+
 # ─── Unverified Results ────────────────────────────────────────────────────────
 
 
@@ -296,7 +383,7 @@ def test_unverified_results_suggest_verification(tmp_path: Path) -> None:
     result = suggest_next(root)
     verify_results = next((s for s in result.suggestions if s.action == "verify-results"), None)
     assert verify_results is not None
-    assert verify_results.command == "grd context verify-work 01"
+    assert verify_results.command == "grd init verify-work 01"
     assert verify_results.phase == "01"
     assert result.context.unverified_results == 1
 
@@ -392,6 +479,7 @@ def test_missing_conventions_suggest_set(tmp_path: Path) -> None:
     actions = [s.action for s in result.suggestions]
     assert "set-conventions" in actions
     assert "natural_units" in result.context.missing_conventions
+    assert "coordinate_system" in result.context.missing_conventions
 
 
 # ─── Paper Pipeline ────────────────────────────────────────────────────────────
@@ -414,17 +502,76 @@ def test_paper_exists_suggests_peer_review_before_submission(tmp_path: Path) -> 
 
 
 def test_referee_report_in_planning_root_suggests_response(tmp_path: Path) -> None:
-    """Referee report in .grd suggests responding to referees."""
+    """Referee report in GRD suggests responding to referees."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
     (root / "paper").mkdir()
     (root / "paper" / "main.tex").write_text("\\documentclass{article}\n")
-    (root / ".grd" / "REFEREE-REPORT.md").write_text("Major revision needed.\n")
+    (root / "GRD" / "REFEREE-REPORT.md").write_text("Major revision needed.\n")
     result = suggest_next(root)
     actions = [s.action for s in result.suggestions]
     assert "respond-to-referees" in actions
     assert "peer-review" not in actions
     assert "arxiv-submission" not in actions  # referee response takes precedence
+
+
+def test_referee_report_in_canonical_grd_root_suggests_response(tmp_path: Path) -> None:
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    (root / "paper").mkdir()
+    (root / "paper" / "main.tex").write_text("\\documentclass{article}\n")
+    (root / "GRD" / "REFEREE-REPORT.md").write_text("Major revision needed.\n")
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "respond-to-referees" in actions
+    assert "peer-review" not in actions
+
+
+def test_milestone_referee_report_namespace_does_not_trigger_response(tmp_path: Path) -> None:
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    (root / "paper").mkdir()
+    (root / "paper" / "main.tex").write_text("\\documentclass{article}\n")
+    (root / "GRD" / "v1-MILESTONE-REFEREE-REPORT.md").write_text("Milestone review only.\n")
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "respond-to-referees" not in actions
+    assert "peer-review" in actions
+
+
+def test_legacy_lowercase_referee_report_locations_no_longer_trigger_response(tmp_path: Path) -> None:
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    paper_dir = root / "GRD" / "paper"
+    paper_dir.mkdir(parents=True)
+    (root / "paper").mkdir(parents=True)
+    (root / "paper" / "main.tex").write_text("\\documentclass{article}\n")
+    (paper_dir / "referee-report-1.md").write_text("Major revision needed.\n")
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "respond-to-referees" not in actions
+    assert "peer-review" in actions
+
+
+def test_non_markdown_referee_report_does_not_trigger_response(tmp_path: Path) -> None:
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    reports_dir = root / "paper" / "referee-reports"
+    reports_dir.mkdir(parents=True)
+    (root / "paper" / "main.tex").write_text("\\documentclass{article}\n")
+    (reports_dir / "REFEREE-REPORT-1.txt").write_text("Major revision needed.\n")
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "respond-to-referees" not in actions
+    assert "peer-review" in actions
 
 
 def test_literature_review_suggested_when_all_complete(tmp_path: Path) -> None:
@@ -475,7 +622,7 @@ def test_explore_mode_boosts_discussion(tmp_path: Path) -> None:
     """Explore mode should lower priority (boost) discuss-phase."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
-    (root / ".grd" / "config.json").write_text(json.dumps({"research_mode": "explore"}))
+    (root / "GRD" / "config.json").write_text(json.dumps({"research_mode": "explore"}))
     _create_phase(root, "01-setup", plans=2, summaries=0)
     _create_phase(root, "02-core")  # pending
     result = suggest_next(root)
@@ -488,7 +635,7 @@ def test_exploit_mode_boosts_execution(tmp_path: Path) -> None:
     """Exploit mode should lower priority (boost) execute-phase."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
-    (root / ".grd" / "config.json").write_text(json.dumps({"research_mode": "exploit"}))
+    (root / "GRD" / "config.json").write_text(json.dumps({"research_mode": "exploit"}))
     _create_phase(root, "01-setup", plans=2, summaries=0)
     result = suggest_next(root)
     execute = next((s for s in result.suggestions if s.action == "execute-phase"), None)
@@ -500,7 +647,7 @@ def test_supervised_mode_penalizes_execution(tmp_path: Path) -> None:
     """Supervised autonomy mode should increase execution priority (penalize)."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
-    (root / ".grd" / "config.json").write_text(json.dumps({"autonomy": "supervised"}))
+    (root / "GRD" / "config.json").write_text(json.dumps({"autonomy": "supervised"}))
     _create_phase(root, "01-setup", plans=2, summaries=0)
     result = suggest_next(root)
     execute = next((s for s in result.suggestions if s.action == "execute-phase"), None)
@@ -512,7 +659,7 @@ def test_yolo_mode_boosts_execution(tmp_path: Path) -> None:
     """YOLO mode should lower execution priority (boost)."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
-    (root / ".grd" / "config.json").write_text(json.dumps({"autonomy": "yolo"}))
+    (root / "GRD" / "config.json").write_text(json.dumps({"autonomy": "yolo"}))
     _create_phase(root, "01-setup", plans=2, summaries=0)
     result = suggest_next(root)
     execute = next((s for s in result.suggestions if s.action == "execute-phase"), None)
@@ -574,7 +721,7 @@ def test_adaptive_mode_without_lock_signal_boosts_discussion(tmp_path: Path) -> 
     """Adaptive mode should stay discussion-heavy until the method is locked by evidence."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
-    (root / ".grd" / "config.json").write_text(json.dumps({"research_mode": "adaptive"}))
+    (root / "GRD" / "config.json").write_text(json.dumps({"research_mode": "adaptive"}))
     _create_phase(root, "01-setup", plans=2, summaries=0)
     _create_phase(root, "02-core")
     result = suggest_next(root)
@@ -588,7 +735,7 @@ def test_adaptive_mode_with_decisive_evidence_boosts_execution_and_verification(
     """Adaptive mode should narrow only once decisive evidence or an explicit lock exists."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
-    (root / ".grd" / "config.json").write_text(json.dumps({"research_mode": "adaptive"}))
+    (root / "GRD" / "config.json").write_text(json.dumps({"research_mode": "adaptive"}))
     locked_phase = _create_phase(root, "00-scan", summaries=1)
     (locked_phase / "01-SUMMARY.md").write_text(
         """---

@@ -20,7 +20,7 @@ allowed-tools:
 <objective>
 Verify a research milestone achieved its definition of done. Check whether the original research question has been answered, whether all claims are supported by derivations or data, whether results are internally consistent, and whether cross-phase integration is sound.
 
-**This command IS the orchestrator.** Reads existing VERIFICATION.md files (phases already verified during execute-phase), aggregates open questions and deferred gaps, then spawns an integration checker for cross-phase consistency (e.g., do numerical results match analytical predictions? do approximations used in phase 3 remain valid given the parameter regime explored in phase 5?).
+**This command IS the orchestrator.** Reads existing `*-VERIFICATION.md` files (phases already verified during execute-phase), aggregates open questions and deferred gaps, then spawns an integration checker for cross-phase consistency (e.g., do numerical results match analytical predictions? do approximations used in phase 3 remain valid given the parameter regime explored in phase 5?).
 </objective>
 
 <execution_context>
@@ -39,7 +39,7 @@ Version: $ARGUMENTS (optional — defaults to current milestone)
 @.grd/config.json (if exists)
 
 **Completed Work:**
-find_files: .grd/phases/*/*-SUMMARY.md
+find_files: .grd/phases/*/*SUMMARY.md
 find_files: .grd/phases/*/*-VERIFICATION.md
 </context>
 
@@ -47,7 +47,7 @@ find_files: .grd/phases/*/*-VERIFICATION.md
 
 ## What Constitutes a Complete Milestone
 
-- **All phases verified:** Every phase has a VERIFICATION.md with pass/conditional-pass status. No phase should be left unverified.
+- **All phases verified:** Every phase has a `*-VERIFICATION.md` with pass/conditional-pass status. No phase should be left unverified.
 - **Cross-phase consistency checked:** Results from different phases must agree where they overlap. Analytical predictions from phase N match numerical results from phase M. Parameters used consistently across all phases.
 - **Notation stable:** The same symbol means the same thing in every phase. No silent redefinitions of variables, conventions, or normalizations between phases.
 - **Requirements 100% covered:** Every REQ-ID from REQUIREMENTS.md is mapped to a completed phase with supporting evidence (derivation, numerical result, or explicit deferral with justification).

@@ -153,9 +153,49 @@ Every stage report should be compact and machine-readable, matching the staged-r
 
 Additionally:
 
-- Stage 1 must also emit `CLAIMS.json` as a compact `ClaimIndex`.
+- Stage 1 must also emit `CLAIMS{round_suffix}.json` as a compact `ClaimIndex`.
+- Strict-stage specialist artifacts must use canonical names `STAGE-reader`, `STAGE-literature`, `STAGE-math`, `STAGE-physics`, `STAGE-interestingness`.
+- In strict mode, specialist stage filenames must match `STAGE-(reader|literature|math|physics|interestingness)(-R<round>)?.json`, and all five must share the same optional `-R<round>` suffix.
+- In strict mode, any additional noncanonical `stage_artifacts` entry fails validation rather than being ignored.
 - The final adjudicator must emit `REVIEW-LEDGER{round_suffix}.json` and `REFEREE-DECISION{round_suffix}.json` (empty suffix on the first round).
 - The artifact should stay compact. It is a decision handoff, not a second manuscript.
+- `StageReviewReport` and nested `ReviewFinding` entries use a closed schema; do not invent extra keys beyond those shown here.
+- `manuscript_path` must be non-empty and must name the exact manuscript snapshot under review.
+- `claims_reviewed` and every nested `claim_ids` list must use Stage 1 `CLM-...` claim IDs, not free-form labels.
+- `manuscript_sha256` must be the lowercase 64-hex digest for the exact manuscript snapshot under review.
+- The filename `STAGE-<stage_id>{round_suffix}.json` and the JSON `round` field must agree: unsuffixed first-round artifacts use `round: 1`, and `-R<round>` filenames must use that same integer in `round`.
+- For Stages 2-5, `manuscript_path` and `manuscript_sha256` must exactly match the sibling `CLAIMS{round_suffix}.json` claim index for the same round.
+
+The runtime artifact path is `CLAIMS{round_suffix}.json`; use the same compact schema on later rounds, preserving the shared optional `-R<round>` suffix across all staged-review artifacts.
+
+Stage 1 `CLAIMS{round_suffix}.json` must follow this compact `ClaimIndex` shape:
+
+```json
+{
+  "version": 1,
+  "manuscript_path": "paper/main.tex",
+  "manuscript_sha256": "<sha256>",
+  "claims": [
+    {
+      "claim_id": "CLM-001",
+      "claim_type": "main_result | novelty | significance | physical_interpretation | generality | method",
+      "text": "Exact manuscript claim text or faithful paraphrase",
+      "artifact_path": "paper/main.tex",
+      "section": "Conclusion",
+      "equation_refs": ["paper/main.tex#eq:main"],
+      "figure_refs": ["paper/main.tex#fig:main"],
+      "supporting_artifacts": ["paper/figures/main-result.pdf"]
+    }
+  ]
+}
+```
+
+- `manuscript_path` and `manuscript_sha256` are required `ClaimIndex` metadata, not optional bookkeeping.
+- `manuscript_path` must be non-empty and must name the exact manuscript snapshot under review.
+- `manuscript_sha256` must be the lowercase 64-hex digest for the exact manuscript snapshot under review.
+- `ClaimIndex` and every nested `ClaimRecord` use a closed schema; do not invent extra keys beyond those shown here.
+- Keep `section` as an empty string and `equation_refs`, `figure_refs`, `supporting_artifacts` as empty lists when unavailable.
+- Do not invent locations, equations, figures, or supporting artifacts just to populate the schema.
 
 The final adjudicator JSON artifacts must follow these canonical schemas:
 

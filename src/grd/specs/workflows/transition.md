@@ -5,8 +5,8 @@
 1. `.grd/STATE.md`
 2. `.grd/PROJECT.md`
 3. `.grd/ROADMAP.md`
-4. Current phase's plan files (`*-PLAN.md`)
-5. Current phase's summary files (`*-SUMMARY.md`)
+4. Current phase's plan files (`PLAN.md` and `*-PLAN.md`)
+5. Current phase's summary files (`SUMMARY.md` and `*-SUMMARY.md`)
 
 </required_reading>
 
@@ -36,7 +36,7 @@ Note accumulated context that may need updating after transition.
 **Extract current phase variables from STATE.md:**
 
 ```bash
-CURRENT_PHASE=$(grep "^Phase:" .grd/STATE.md | head -1 | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
+CURRENT_PHASE=$(grep '^\*\*Current Phase:\*\*' .grd/STATE.md | head -1 | grep -oE '[0-9]+(\.[0-9]+)?' | head -1)
 PHASE_DIR=$(ls -d .grd/phases/${CURRENT_PHASE}-* 2>/dev/null | head -1)
 ```
 
@@ -57,14 +57,14 @@ Exit without further action. This prevents duplicate entries in DECISIONS.md and
 Check current phase has all plan summaries:
 
 ```bash
-ls ${PHASE_DIR}/*-PLAN.md 2>/dev/null | sort
-ls ${PHASE_DIR}/*-SUMMARY.md 2>/dev/null | sort
+ls "${PHASE_DIR}"/PLAN.md "${PHASE_DIR}"/*-PLAN.md 2>/dev/null | sort
+ls "${PHASE_DIR}"/SUMMARY.md "${PHASE_DIR}"/*-SUMMARY.md 2>/dev/null | sort
 ```
 
 **Verification logic:**
 
-- Count PLAN files
-- Count SUMMARY files
+- Count standalone and numbered PLAN files
+- Count standalone and numbered SUMMARY files
 - If counts match: all plans complete
 - If counts don't match: incomplete
 
@@ -155,6 +155,7 @@ The tool handles:
 - Updating the Progress table (Status -> Complete, adding date)
 - Advancing STATE.md to next phase (Current Phase, Status -> Ready to plan, Current Plan -> Not started)
 - Detecting if this is the last phase in the milestone
+- Counting standalone `PLAN.md` / `SUMMARY.md` alongside numbered `*-PLAN.md` / `*-SUMMARY.md` artifacts
 
 Extract from result: `completed_phase`, `plans_executed`, `next_phase`, `next_phase_name`, `is_last_phase`.
 
@@ -173,7 +174,7 @@ Evolve PROJECT.md to reflect learnings from completed phase.
 **Read phase summaries:**
 
 ```bash
-cat ${PHASE_DIR}/*-SUMMARY.md
+cat ${PHASE_DIR}/SUMMARY.md ${PHASE_DIR}/*-SUMMARY.md 2>/dev/null
 ```
 
 **Assess research question changes:**
@@ -275,13 +276,13 @@ This step captures decisions in the cumulative decision log (separate from the P
 **1. Extract decisions from phase summaries:**
 
 ```bash
-cat ${PHASE_DIR}/*-SUMMARY.md
+cat ${PHASE_DIR}/SUMMARY.md ${PHASE_DIR}/*-SUMMARY.md 2>/dev/null
 ```
 
 Look for the `key-decisions` field in SUMMARY.md frontmatter. Also check CONTEXT.md for decisions made during planning:
 
 ```bash
-cat ${PHASE_DIR}/*-CONTEXT.md 2>/dev/null
+cat ${PHASE_DIR}/CONTEXT.md ${PHASE_DIR}/*-CONTEXT.md 2>/dev/null
 ```
 
 Collect all decisions: convention choices, method selections, approximation schemes, algorithm choices, parameter values with rationale.
@@ -373,7 +374,7 @@ Update Project Reference section in STATE.md.
 
 See: .grd/PROJECT.md (updated [today])
 
-**Core question:** [Current core research question from PROJECT.md]
+**Core research question:** [Current core research question from PROJECT.md]
 **Current focus:** [Next phase name]
 ```
 
@@ -434,24 +435,17 @@ After (if regularization was checked in Phase 3):
 **Sync state.json after all STATE.md updates are complete:**
 
 ```bash
-# Backup state.json before regeneration (never delete without backup)
-if [ -f .grd/state.json ]; then
-  mv .grd/state.json .grd/state.json.bak
-fi
+uv run python - <<'PY'
+from pathlib import Path
+from grd.core.state import save_state_markdown
 
-grd --raw state snapshot > /dev/null
-if [ $? -ne 0 ]; then
-  echo "WARNING: grd state snapshot failed — restoring backup"
-  if [ -f .grd/state.json.bak ]; then
-    mv .grd/state.json.bak .grd/state.json
-  fi
-else
-  # Regeneration succeeded — remove backup
-  rm -f .grd/state.json.bak
-fi
+cwd = Path(".")
+state_md = cwd / "GRD" / "STATE.md"
+save_state_markdown(cwd, state_md.read_text(encoding="utf-8"))
+PY
 ```
 
-This is the single markdown-to-json sync point for this workflow. The backup + `grd --raw state snapshot` sequence intentionally uses the loader's `STATE.md` fallback to merge the schema-backed markdown edits from this workflow into authoritative `state.json` while preserving JSON-only fields from the backup. Earlier steps deliberately skip syncing to avoid multiple writes.
+This is the single markdown-to-json sync point for this workflow. `save_state_markdown()` is the authoritative write path for merging the schema-backed markdown edits from this workflow into `state.json` while preserving JSON-only fields and keeping the dual-write pair in sync. Earlier steps deliberately skip syncing to avoid multiple writes.
 
 </step>
 
@@ -465,14 +459,14 @@ If DECISIONS.md doesn't exist (no decisions logged), it will be silently skipped
 
 ```bash
 # Run pre-commit validation on planning files
-PRE_CHECK=$(grd pre-commit-check --files .grd/ROADMAP.md .grd/STATE.md .grd/PROJECT.md 2>&1) || true
+PRE_CHECK=$(grd pre-commit-check --files .grd/ROADMAP.md .grd/STATE.md .grd/state.json .grd/PROJECT.md 2>&1) || true
 echo "$PRE_CHECK"
 ```
 
 If the explicit `PRE_CHECK` command reports issues, treat it as early visibility only. `grd commit` re-runs the same validation on the requested files and remains the blocking gate, even for metadata-only transitions.
 
 ```bash
-grd commit "docs(phase-${CURRENT_PHASE}): transition to next phase" --files .grd/ROADMAP.md .grd/STATE.md .grd/PROJECT.md .grd/DECISIONS.md
+grd commit "docs(phase-${CURRENT_PHASE}): transition to next phase" --files .grd/ROADMAP.md .grd/STATE.md .grd/state.json .grd/PROJECT.md .grd/DECISIONS.md
 ```
 
 If commit fails with "nothing to commit", the changes were already committed — proceed.
@@ -513,9 +507,9 @@ fi
 
 <step name="quick_regression_check">
 
-**Run a quick regression check on previously verified phases.**
+**Run a quick regression scan on recently completed phases.**
 
-After committing the transition, verify that the completed phase hasn't introduced regressions in previously verified results. This catches convention redefinitions, symbol conflicts, and result inconsistencies early.
+After committing the transition, scan the most recent completed phases for artifact-level regressions in recorded verification state. This catches convention redefinitions, symbol conflicts, and invalid verification statuses early without pretending the underlying physics was re-verified.
 
 ```bash
 grd regression-check --quick
@@ -523,10 +517,10 @@ grd regression-check --quick
 
 The `--quick` flag limits the check to the most recent 2 completed phases. It:
 
-- Reads all completed phase VERIFICATION.md files
-- Checks for convention redefinitions across SUMMARYs (e.g., same symbol defined with different values)
-- Reports any symbols redefined with different values
-- Flags results that contradict earlier verified claims
+- Reads completed `SUMMARY.md` and `VERIFICATION.md` frontmatter
+- Checks for convention redefinitions across summaries (e.g., same symbol defined with different values)
+- Flags missing, invalid, or non-canonical verification statuses
+- Reports the affected phases and files for follow-up verification or repair
 
 **If issues found:**
 
@@ -540,12 +534,13 @@ The following regressions were detected after completing Phase {X}:
 | Issue | Phase | Details |
 |-------|-------|---------|
 | Convention redefinition | Phase {A} vs Phase {B} | Symbol `g` redefined: 0.3 → 0.5 |
-| Result conflict | Phase {A} vs Phase {B} | Critical temperature differs by >5% |
+| Invalid verification status | Phase {B} | `status: completed` is not a canonical verification status |
+| Unresolved verification issues | Phase {C} | `status: gaps_found`, `score: 3/5` |
 
 Options:
 1. Acknowledge and proceed (issues may be intentional updates)
-2. Investigate before continuing
-3. Run full regression check: `/grd:regression-check`
+2. Investigate and repair the artifact or frontmatter before continuing
+3. Run `/grd:verify-work <phase>` for any phase that now needs real re-verification
 ```
 
 Wait for user response before proceeding.
@@ -565,7 +560,7 @@ This ensures derivation state is captured even without explicit `/grd:pause-work
 **1. Read phase summaries:**
 
 ```bash
-cat ${PHASE_DIR}/*-SUMMARY.md
+cat ${PHASE_DIR}/SUMMARY.md ${PHASE_DIR}/*-SUMMARY.md 2>/dev/null
 ```
 
 **2. Extract from SUMMARYs:**
@@ -648,13 +643,16 @@ If no DERIVATION-STATE.md was created or updated (step 5 skipped), the commit wi
 <step name="update_session_continuity_after_transition">
 
 Update Session Continuity section in STATE.md to reflect transition completion.
+Update the same values under `.grd/state.json.session`; resume reads JSON first when it is healthy.
 
 **Format:**
 
 ```markdown
-Last session: [today]
-Stopped at: Phase [X] complete, ready to plan Phase [X+1]
-Resume file: —
+**Last session:** [current ISO timestamp]
+**Stopped at:** Phase [X] complete, ready to plan Phase [X+1]
+**Resume file:** —
+**Hostname:** [current hostname]
+**Platform:** [current platform]
 ```
 
 **Step complete when:**
@@ -662,14 +660,16 @@ Resume file: —
 - [ ] Last session timestamp updated to current date and time
 - [ ] Stopped at describes phase completion and next phase
 - [ ] Resume file confirmed as `—` (transitions don't use resume files)
+- [ ] Hostname and Platform record the current machine identity
+- [ ] `.grd/state.json.session` matches the rendered Session Continuity block
 
 **Commit the session continuity update** (commit_transition already ran, so this is a follow-up commit):
 
 ```bash
-PRE_CHECK=$(grd pre-commit-check --files .grd/STATE.md 2>&1) || true
+PRE_CHECK=$(grd pre-commit-check --files .grd/STATE.md .grd/state.json 2>&1) || true
 echo "$PRE_CHECK"
 
-grd commit "chore: update session continuity after phase-${CURRENT_PHASE} transition" --files .grd/STATE.md
+grd commit "chore: update session continuity after phase-${CURRENT_PHASE} transition" --files .grd/STATE.md .grd/state.json
 ```
 
 </step>

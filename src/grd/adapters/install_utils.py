@@ -14,10 +14,11 @@ import re
 import shlex
 import sys
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from grd.adapters.runtime_catalog import get_runtime_descriptor, resolve_global_config_dir
 from grd.adapters.tool_names import CONTEXTUAL_TOOL_REFERENCE_NAMES
+from grd.core.constants import HOME_DATA_DIR_NAME
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -92,6 +93,69 @@ def _default_install_target(config_dir: Path, runtime: str, scope_flag: str | No
     if scope_flag == "--global":
         return resolve_global_config_dir(descriptor)
     return None
+
+
+def bundled_hooks_dir() -> Path:
+    """Return the directory containing the bundled GRD hook scripts."""
+    return Path(__file__).resolve().parents[1] / HOOKS_DIR_NAME
+
+
+def bundled_hook_relpaths() -> tuple[str, ...]:
+    """Return managed bundled hook file paths relative to a runtime config dir."""
+    hooks_dir = bundled_hooks_dir()
+    if not hooks_dir.is_dir():
+        return ()
+
+    relpaths: list[str] = []
+    for hook_file in sorted(hooks_dir.iterdir()):
+        if hook_file.is_file() and not hook_file.name.startswith("__"):
+            relpaths.append(f"{HOOKS_DIR_NAME}/{hook_file.name}")
+    return tuple(relpaths)
+
+
+def prune_empty_ancestors(path: Path, *, stop_at: Path | None = None) -> None:
+    """Remove *path* and empty ancestor directories until *stop_at* is reached."""
+    current = path
+    while True:
+        if stop_at is not None and _paths_equal(current, stop_at):
+            return
+        if not current.exists() or not current.is_dir():
+            return
+        try:
+            next(current.iterdir())
+        except StopIteration:
+            current.rmdir()
+            current = current.parent
+            continue
+        return
+
+
+def remove_empty_json_object_file(path: Path) -> bool:
+    """Delete *path* when it contains only an empty JSON object."""
+    if not path.is_file():
+        return False
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if payload != {}:
+        return False
+    path.unlink()
+    return True
+
+
+def remove_empty_text_file(path: Path) -> bool:
+    """Delete *path* when its text content is empty after stripping whitespace."""
+    if not path.is_file():
+        return False
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    if content.strip():
+        return False
+    path.unlink()
+    return True
 
 
 def config_dir_reference(
@@ -220,8 +284,76 @@ def replace_placeholders(
     """
     content = content.replace("{GRD_INSTALL_DIR}", path_prefix + "get-research-done")
     content = content.replace("{GRD_AGENTS_DIR}", path_prefix + "agents")
-    content = content.replace("{GRD_DOMAIN}", os.environ.get("GRD_DOMAIN", "physics"))
     return _replace_runtime_placeholders(content, path_prefix, runtime, install_scope)
+
+
+def _materialize_workflow_paths(
+    content: str,
+    *,
+    target_dir: Path,
+    runtime: str,
+    install_scope: str | None,
+) -> str:
+    """Rewrite workflow bootstrap variables to authoritative absolute paths."""
+    resolved_target = target_dir.expanduser().resolve(strict=False)
+    config_dir = resolved_target.as_posix()
+    install_dir = (resolved_target / GRD_INSTALL_DIR_NAME).as_posix()
+    # Keep the canonical runtime-global directory distinct from an explicit
+    # global install target so update/reapply workflows can still detect when
+    # ``--target-dir`` is required.
+    descriptor = get_runtime_descriptor(runtime)
+    global_config_dir = resolve_global_config_dir(descriptor, home=Path.home()).as_posix()
+    relative_config_prefix = f"./{descriptor.config_dir_name}/"
+
+    replacements = {
+        "GRD_INSTALL_DIR": install_dir,
+        "GRD_CONFIG_DIR": config_dir,
+        "GRD_GLOBAL_CONFIG_DIR": global_config_dir,
+        "PATCHES_DIR": f"{config_dir}/grd-local-patches",
+        "GLOBAL_PATCHES_DIR": f"{global_config_dir}/grd-local-patches",
+    }
+    for var, value in replacements.items():
+        content = re.sub(
+            rf"(?m)^(?P<indent>\s*){re.escape(var)}=\"[^\"]*\"$",
+            lambda match, replacement=value, name=var: f'{match.group("indent")}{name}="{replacement}"',
+            content,
+            count=1,
+        )
+    content = content.replace(f"@{relative_config_prefix}get-research-done/", f"@{config_dir}/get-research-done/")
+    content = content.replace(f"@{relative_config_prefix}agents/", f"@{config_dir}/agents/")
+    return content
+
+
+def materialize_first_round_review_schema_headings(content: str) -> str:
+    """Render staged-review schema headings with first-round filenames.
+
+    Source prompts stay round-aware via ``{round_suffix}``, but installed agent
+    prompts should show the concrete first-round artifact names in the schema
+    headings models read before producing those files.
+    """
+    replacements = {
+        "Required schema for `CLAIMS{round_suffix}.json` (`ClaimIndex`):": (
+            "Required schema for `CLAIMS.json` (`ClaimIndex`):"
+        ),
+        "Required schema for `STAGE-reader{round_suffix}.json` (`StageReviewReport`, mirroring the staged-review contract):": (
+            "Required schema for `STAGE-reader.json` (`StageReviewReport`, mirroring the staged-review contract):"
+        ),
+        "Required schema for `STAGE-literature{round_suffix}.json` (`StageReviewReport`, mirroring the staged-review contract):": (
+            "Required schema for `STAGE-literature.json` (`StageReviewReport`, mirroring the staged-review contract):"
+        ),
+        "Required schema for `STAGE-math{round_suffix}.json` (`StageReviewReport`, mirroring the staged-review contract):": (
+            "Required schema for `STAGE-math.json` (`StageReviewReport`, mirroring the staged-review contract):"
+        ),
+        "Required schema for `STAGE-physics{round_suffix}.json` (`StageReviewReport`, mirroring the staged-review contract):": (
+            "Required schema for `STAGE-physics.json` (`StageReviewReport`, mirroring the staged-review contract):"
+        ),
+        "Required schema for `STAGE-interestingness{round_suffix}.json` (`StageReviewReport`, mirroring the staged-review contract):": (
+            "Required schema for `STAGE-interestingness.json` (`StageReviewReport`, mirroring the staged-review contract):"
+        ),
+    }
+    for source, rendered in replacements.items():
+        content = content.replace(source, rendered)
+    return content
 
 
 _BRACED_PROMPT_VAR_RE = re.compile(r"(?<!\\)\$\{([A-Za-z_][A-Za-z0-9_]*)(?:[^{}]*)\}")
@@ -230,7 +362,7 @@ _INLINE_MATH_RE = re.compile(r"(?<!\\)\$(?=\S)([^$\n]*?\S)(?<!\\)\$(?![A-Za-z0-9
 _MARKDOWN_FRONTMATTER_RE = re.compile(
     r"^(?P<preamble>\ufeff?(?:[ \t]*\r?\n)*)---[ \t]*\r?\n(?P<frontmatter>[\s\S]*?)(?P<separator>\r?\n)---[ \t]*(?P<body_separator>\r?\n|$)"
 )
-_LIST_ITEM_INCLUDE_RE = re.compile(r"^(?:[-*+]\s+|\d+\.\s+)(@.*)$")
+_AT_INCLUDE_LINE_RE = re.compile(r"^(?:[-*+]\s+|\d+\.\s+)?`?(@[^\s`]+)`?(?:\s+.*)?$")
 _COMMON_INLINE_MATH_NAMES = frozenset(
     {
         "sin",
@@ -253,6 +385,13 @@ _COMMON_INLINE_MATH_NAMES = frozenset(
         "inf",
     }
 )
+_UNRESOLVED_INCLUDE_MARKERS = (
+    "@ include not resolved:",
+    "@ include cycle detected:",
+    "@ include read error:",
+    "@ include depth limit reached:",
+)
+_TEXT_INSTALL_ARTIFACT_SUFFIXES = frozenset({".md", ".toml"})
 
 
 def protect_runtime_agent_prompt(content: str, runtime: str) -> str:
@@ -653,6 +792,7 @@ def compile_markdown_for_runtime(
     path_prefix: str,
     install_scope: str | None = None,
     src_root: str | Path | None = None,
+    workflow_target_dir: Path | None = None,
     protect_agent_prompt_body: bool = False,
 ) -> str:
     """Compile canonical markdown into a runtime-specific installed form.
@@ -680,6 +820,14 @@ def compile_markdown_for_runtime(
 
     if protect_agent_prompt_body:
         content = protect_runtime_agent_prompt(content, runtime)
+
+    if workflow_target_dir is not None:
+        content = _materialize_workflow_paths(
+            content,
+            target_dir=workflow_target_dir,
+            runtime=runtime,
+            install_scope=install_scope,
+        )
 
     return content
 
@@ -736,18 +884,15 @@ def expand_at_includes(
             result.append(line)
             continue
 
-        include_candidate = trimmed
-        bullet_match = _LIST_ITEM_INCLUDE_RE.match(trimmed)
-        if bullet_match:
-            include_candidate = bullet_match.group(1)
+        include_match = _AT_INCLUDE_LINE_RE.match(trimmed)
+        if not include_match:
+            result.append(line)
+            continue
+
+        include_candidate = include_match.group(1)
 
         # Must start with @ followed by a path (not a BibTeX entry like @article{)
-        if (
-            not include_candidate.startswith("@")
-            or len(include_candidate) < 3
-            or include_candidate[1] == " "
-            or re.match(r"^@\w+\{", include_candidate)
-        ):
+        if len(include_candidate) < 3 or include_candidate[1] == " " or re.match(r"^@\w+\{", include_candidate):
             result.append(line)
             continue
 
@@ -757,9 +902,6 @@ def expand_at_includes(
         include_path = include_path.split(" -> ")[0]  # strip "-> Section Name" suffixes
         include_path = re.sub(r"\s+\([^)]*\)\s*$", "", include_path)  # strip trailing labels like "(main workflow)"
         include_path = include_path.strip()
-        # Resolve {GRD_DOMAIN} placeholder to active domain
-        if "{GRD_DOMAIN}" in include_path:
-            include_path = include_path.replace("{GRD_DOMAIN}", os.environ.get("GRD_DOMAIN", "physics"))
 
         # Only treat paths that contain "/" (avoid false positives like decorators)
         if "/" not in include_path:
@@ -777,24 +919,7 @@ def expand_at_includes(
             continue
 
         # Resolve against source directory
-        src_path: Path | None = None
-        if include_path.startswith("{GRD_INSTALL_DIR}/"):
-            relative_path = include_path[len("{GRD_INSTALL_DIR}/") :]
-            if relative_path.startswith("domains/"):
-                src_path = src_root.parent / relative_path
-            else:
-                src_path = src_root / relative_path
-        elif include_path.startswith("{GRD_AGENTS_DIR}/"):
-            relative_path = include_path[len("{GRD_AGENTS_DIR}/") :]
-            src_path = src_root.parent / "agents" / relative_path
-        elif "get-research-done/" in include_path:
-            grd_idx = include_path.index("get-research-done/")
-            relative_path = include_path[grd_idx:]
-            src_path = src_root.parent / relative_path
-        elif "/agents/" in include_path:
-            agents_idx = include_path.index("/agents/")
-            relative_path = include_path[agents_idx + 1 :]
-            src_path = src_root.parent / relative_path
+        src_path = _resolve_include_source_path(src_root, include_path)
 
         # Try to read and inline the file
         if src_path and src_path.exists():
@@ -820,8 +945,8 @@ def expand_at_includes(
             if frontmatter:
                 body = split_body.strip()
 
-            # Normalize path references in included content before recursion
-            body = replace_placeholders(body, path_prefix, runtime, install_scope)
+            # Expand nested includes against canonical source paths before
+            # translating placeholders into installed runtime paths.
             body = expand_at_includes(
                 body,
                 str(src_root),
@@ -831,6 +956,7 @@ def expand_at_includes(
                 depth=depth + 1,
                 include_stack=include_stack,
             )
+            body = replace_placeholders(body, path_prefix, runtime, install_scope)
 
             result.append("")
             result.append(f"<!-- [included: {src_path.name}] -->")
@@ -842,6 +968,49 @@ def expand_at_includes(
             result.append(f"<!-- @ include not resolved: {include_path} -->")
 
     return "\n".join(result)
+
+
+def _resolve_include_source_path(src_root: Path, include_path: str) -> Path | None:
+    """Map a canonical or installed include path back to its source file."""
+
+    specs_root = _specs_source_root(src_root)
+    agents_root = _agents_source_root(src_root)
+
+    if include_path.startswith("{GRD_INSTALL_DIR}/"):
+        relative_path = include_path[len("{GRD_INSTALL_DIR}/") :]
+        return specs_root / relative_path
+    if include_path.startswith("{GRD_AGENTS_DIR}/"):
+        relative_path = include_path[len("{GRD_AGENTS_DIR}/") :]
+        return agents_root / relative_path
+    if "get-research-done/" in include_path:
+        relative_path = include_path.split("get-research-done/", 1)[1]
+        return specs_root / relative_path
+    if "/agents/" in include_path:
+        relative_path = include_path.split("/agents/", 1)[1]
+        return agents_root / relative_path
+    return None
+
+
+def _specs_source_root(src_root: Path) -> Path:
+    """Return the canonical source root for installed get-research-done content."""
+
+    specs_root = src_root / "specs"
+    if specs_root.is_dir():
+        return specs_root
+    return src_root
+
+
+def _agents_source_root(src_root: Path) -> Path:
+    """Return the canonical source root for agent markdown files."""
+
+    specs_root = _specs_source_root(src_root)
+    sibling_agents = specs_root.parent / "agents"
+    if sibling_agents.is_dir():
+        return sibling_agents
+    direct_agents = src_root / "agents"
+    if direct_agents.is_dir():
+        return direct_agents
+    return sibling_agents
 
 
 # ---------------------------------------------------------------------------
@@ -856,6 +1025,9 @@ def copy_with_path_replacement(
     runtime: str,
     install_scope: str | None = None,
     markdown_transform: Callable[[str, str, str | None], str] | None = None,
+    *,
+    workflow_paths: bool = False,
+    workflow_target_dir: Path | None = None,
 ) -> None:
     """Safely copy *src_dir* to *dest_dir* with path replacement in ``.md`` files.
 
@@ -894,6 +1066,8 @@ def copy_with_path_replacement(
             runtime,
             install_scope,
             markdown_transform=markdown_transform,
+            workflow_paths=workflow_paths,
+            workflow_target_dir=workflow_target_dir,
         )
 
         # Swap into place
@@ -927,6 +1101,9 @@ def _copy_dir_contents(
     runtime: str,
     install_scope: str | None = None,
     markdown_transform: Callable[[str, str, str | None], str] | None = None,
+    *,
+    workflow_paths: bool = False,
+    workflow_target_dir: Path | None = None,
 ) -> None:
     """Recursively copy directory contents with runtime translation in .md files.
 
@@ -947,11 +1124,20 @@ def _copy_dir_contents(
                 runtime,
                 install_scope,
                 markdown_transform=markdown_transform,
+                workflow_paths=workflow_paths,
+                workflow_target_dir=workflow_target_dir,
             )
         elif entry.suffix == ".md":
             content = entry.read_text(encoding="utf-8")
             active_transform = markdown_transform or _default_markdown_transform(runtime)
             content = active_transform(content, path_prefix, install_scope=install_scope)
+            if workflow_paths:
+                content = _materialize_workflow_paths(
+                    content,
+                    target_dir=workflow_target_dir or target_dir,
+                    runtime=runtime,
+                    install_scope=install_scope,
+                )
             dest.write_text(content, encoding="utf-8")
         else:
             # Binary copy
@@ -1016,6 +1202,7 @@ def write_manifest(
     skills_dir: str | Path | None = None,
     metadata: dict[str, object] | None = None,
     install_scope: str | None = None,
+    explicit_target: bool | None = None,
 ) -> dict[str, object]:
     """Write a file manifest after installation for future modification detection.
 
@@ -1040,7 +1227,9 @@ def write_manifest(
     elif normalized_scope == "--global":
         manifest["install_scope"] = "global"
     manifest["install_target_dir"] = str(config_dir)
-    if isinstance(runtime, str) and runtime.strip() and normalized_scope in {"--local", "--global"}:
+    if explicit_target is not None:
+        manifest["explicit_target"] = bool(explicit_target)
+    elif isinstance(runtime, str) and runtime.strip() and normalized_scope in {"--local", "--global"}:
         default_target = _default_install_target(config_dir, runtime.strip(), normalized_scope)
         if default_target is not None:
             manifest["explicit_target"] = not _paths_equal(config_dir, default_target)
@@ -1063,14 +1252,14 @@ def write_manifest(
 
     # hooks/
     if hooks_dir.exists():
-        bundled_hooks_dir = Path(__file__).resolve().parents[1] / HOOKS_DIR_NAME
-        for hook_name in HOOK_SCRIPTS.values():
+        for rel_path in bundled_hook_relpaths():
+            hook_name = PurePosixPath(rel_path).name
             installed_hook = hooks_dir / hook_name
-            bundled_hook = bundled_hooks_dir / hook_name
+            bundled_hook = bundled_hooks_dir() / hook_name
             if not installed_hook.exists() or not bundled_hook.exists():
                 continue
             if file_hash(installed_hook) == file_hash(bundled_hook):
-                files[f"hooks/{hook_name}"] = file_hash(installed_hook)
+                files[rel_path] = file_hash(installed_hook)
 
     # External/shared skills
     if skills_dir:
@@ -1096,6 +1285,11 @@ def _tracked_hook_paths_for_cleanup(
     skills_dir: str | Path | None = None,
 ) -> set[str]:
     """Return managed hook paths that pre-install cleanup may safely remove."""
+    return managed_hook_paths(config_dir)
+
+
+def tracked_hook_paths_from_manifest(config_dir: Path) -> set[str]:
+    """Return hook paths explicitly tracked in the install manifest."""
     manifest_path = config_dir / MANIFEST_NAME
     if not manifest_path.exists():
         return set()
@@ -1103,18 +1297,40 @@ def _tracked_hook_paths_for_cleanup(
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        manifest = None
+        return set()
 
-    if isinstance(manifest, dict):
-        raw_files = manifest.get("files")
-        if isinstance(raw_files, dict):
-            return {str(path) for path in raw_files if str(path).startswith("hooks/")}
+    if not isinstance(manifest, dict):
+        return set()
 
-    return {
-        rel_path
-        for rel_path in _managed_install_paths(config_dir, skills_dir=skills_dir)
-        if rel_path.startswith("hooks/")
-    }
+    raw_files = manifest.get("files")
+    if not isinstance(raw_files, dict):
+        return set()
+
+    return {str(path) for path in raw_files if str(path).startswith("hooks/")}
+
+
+def managed_hook_paths(config_dir: Path) -> set[str]:
+    """Return bundled hook paths that are manifest-tracked or hash-matched."""
+    tracked = tracked_hook_paths_from_manifest(config_dir)
+    managed: set[str] = set()
+
+    for rel_path in bundled_hook_relpaths():
+        installed_hook = config_dir / rel_path
+        if rel_path in tracked:
+            managed.add(rel_path)
+            continue
+        if not installed_hook.is_file():
+            continue
+        bundled_hook = bundled_hooks_dir() / PurePosixPath(rel_path).name
+        if not bundled_hook.is_file():
+            continue
+        try:
+            if file_hash(installed_hook) == file_hash(bundled_hook):
+                managed.add(rel_path)
+        except (FileNotFoundError, OSError):
+            continue
+
+    return managed
 
 
 def _managed_install_paths(
@@ -1288,6 +1504,16 @@ def verify_installed(dir_path: str | Path, description: str) -> bool:
             return False
     except OSError:
         return False
+    for artifact in p.rglob("*"):
+        if not artifact.is_file() or artifact.suffix not in _TEXT_INSTALL_ARTIFACT_SUFFIXES:
+            continue
+        try:
+            content = artifact.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        lowered = content.casefold()
+        if any(marker in lowered for marker in _UNRESOLVED_INCLUDE_MARKERS):
+            return False
     return True
 
 
@@ -1303,13 +1529,13 @@ def verify_file_installed(file_path: str | Path, description: str) -> bool:
 _install_logger = logging.getLogger(__name__)
 
 
-def validate_package_integrity(grd_root: Path) -> None:
+def validate_package_integrity(gpd_root: Path) -> None:
     """Validate that the GRD package data directory contains required subdirs.
 
     Raises ``FileNotFoundError`` if commands/, agents/, hooks/, or specs/ are missing.
     """
     for required in ("commands", "agents", "hooks", "specs"):
-        if not (grd_root / required).is_dir():
+        if not (gpd_root / required).is_dir():
             raise FileNotFoundError(
                 f"Package integrity check failed: missing {required}/. Try reinstalling: npx -y get-research-done"
             )
@@ -1355,58 +1581,52 @@ def install_grd_content(
     install_scope: str | None = None,
     markdown_transform: Callable[[str, str, str | None], str] | None = None,
 ) -> list[str]:
-    """Install get-research-done/ content from specs/ and domains/ subdirectories.
+    """Install get-research-done/ content from specs/ subdirectories.
 
-    Copies references/, templates/, workflows/ from specs/ and domain pack
-    content from domains/ with path replacement.
+    Copies references/, templates/, workflows/ with path replacement.
     Returns list of failure descriptions (empty on success).
     """
-    grd_dest = target_dir / "get-research-done"
-    grd_dest.mkdir(parents=True, exist_ok=True)
+    gpd_dest = target_dir / "get-research-done"
+    gpd_dest.mkdir(parents=True, exist_ok=True)
 
     for subdir_name in GRD_CONTENT_DIRS:
         src_subdir = specs_dir / subdir_name
         if src_subdir.is_dir():
             copy_with_path_replacement(
                 src_subdir,
-                grd_dest / subdir_name,
+                gpd_dest / subdir_name,
                 path_prefix,
                 runtime,
                 install_scope,
                 markdown_transform=markdown_transform,
+                workflow_paths=subdir_name == "workflows",
+                workflow_target_dir=target_dir,
             )
 
-    # Install domain pack content (domains/ is a sibling of specs/)
-    domains_dir = specs_dir.parent / "domains"
-    if domains_dir.is_dir():
-        copy_with_path_replacement(
-            domains_dir,
-            grd_dest / "domains",
-            path_prefix,
-            runtime,
-            install_scope,
-            markdown_transform=markdown_transform,
-        )
-
-    if verify_installed(grd_dest, "get-research-done"):
+    if verify_installed(gpd_dest, "get-research-done"):
         subdir_info = []
-        for subdir in (*GRD_CONTENT_DIRS, "domains"):
-            subdir_path = grd_dest / subdir
+        for subdir in GRD_CONTENT_DIRS:
+            subdir_path = gpd_dest / subdir
             if subdir_path.is_dir():
                 count = sum(1 for f in subdir_path.rglob("*") if f.is_file())
                 subdir_info.append(f"{subdir}: {count}")
+        protocols_path = gpd_dest / "references" / "protocols"
+        if protocols_path.is_dir():
+            protocol_count = sum(1 for f in protocols_path.rglob("*") if f.is_file())
+            if protocol_count:
+                subdir_info.append(f"protocols: {protocol_count}")
         _install_logger.info("Installed get-research-done (%s)", ", ".join(subdir_info))
         return []
 
     return ["get-research-done"]
 
 
-def write_version_file(grd_dest: Path, version: str) -> list[str]:
+def write_version_file(gpd_dest: Path, version: str) -> list[str]:
     """Write VERSION file into get-research-done/.
 
     Returns list of failure descriptions (empty on success).
     """
-    version_dest = grd_dest / "VERSION"
+    version_dest = gpd_dest / "VERSION"
     version_dest.parent.mkdir(parents=True, exist_ok=True)
     version_dest.write_text(version, encoding="utf-8")
 
@@ -1417,14 +1637,14 @@ def write_version_file(grd_dest: Path, version: str) -> list[str]:
     return ["VERSION"]
 
 
-def copy_hook_scripts(grd_root: Path, target_dir: Path) -> list[str]:
-    """Copy hook scripts from grd_root/hooks/ to target_dir/hooks/.
+def copy_hook_scripts(gpd_root: Path, target_dir: Path) -> list[str]:
+    """Copy hook scripts from gpd_root/hooks/ to target_dir/hooks/.
 
     Returns list of failure descriptions (empty on success).
     """
     import shutil as _shutil
 
-    hooks_src = grd_root / "hooks"
+    hooks_src = gpd_root / "hooks"
     if not hooks_src.is_dir():
         return []
 
@@ -1502,14 +1722,36 @@ def _is_hook_command_for_script(
     if config_dir_name:
         managed_paths.append(f"{config_dir_name}/hooks/{hook_filename}")
 
-    if managed_paths:
-        if any(managed_path in normalized_command for managed_path in managed_paths):
-            return True
-        # Some installs use bare filenames like `python3 check_update.py`.
-        # Match only filename tokens, not third-party paths ending in the same basename.
-        return re.search(rf"(^|[\s'\"`]){re.escape(hook_filename)}(['\"`]|$)", normalized_command) is not None
+    try:
+        command_tokens = shlex.split(normalized_command)
+    except ValueError:
+        command_tokens = normalized_command.split()
 
-    return hook_filename in normalized_command
+    if managed_paths:
+        managed_path_set = {path.replace("\\", "/") for path in managed_paths}
+        if any(token.replace("\\", "/") in managed_path_set for token in command_tokens):
+            return True
+
+        return False
+
+    for token in command_tokens:
+        normalized_token = token.replace("\\", "/")
+        if normalized_token == hook_filename:
+            return True
+        path = PurePosixPath(normalized_token)
+        if path.name == hook_filename and path.parent.name == "hooks":
+            return True
+
+    return False
+
+
+def _is_managed_statusline_command(command: object, *, target_dir: Path) -> bool:
+    """Return True when *command* points at the GRD-managed statusline hook."""
+    return _is_hook_command_for_script(
+        command,
+        HOOK_SCRIPTS["statusline"],
+        target_dir=target_dir,
+    )
 
 
 def ensure_update_hook(
@@ -1612,8 +1854,13 @@ def finish_install(
     if should_install_statusline:
         status_line = settings.get("statusLine")
         existing_cmd = status_line.get("command") if isinstance(status_line, dict) else None
+        config_dir = Path(settings_path).expanduser().resolve(strict=False).parent
 
-        if isinstance(existing_cmd, str) and "statusline.py" not in existing_cmd and not force_statusline:
+        if (
+            isinstance(existing_cmd, str)
+            and not _is_managed_statusline_command(existing_cmd, target_dir=config_dir)
+            and not force_statusline
+        ):
             _install_logger.warning("Skipping statusline (already configured by another tool)")
         else:
             settings["statusLine"] = {"type": "command", "command": statusline_command}
@@ -1654,20 +1901,20 @@ def _rmtree(p: Path) -> None:
     shutil.rmtree(str(p), ignore_errors=True)
 
 
-def _gpd_home_dir() -> Path:
+def _grd_home_dir() -> Path:
     """Return the managed GRD home directory."""
     raw_home = os.environ.get("GRD_HOME", "").strip()
     if raw_home:
         expanded = expand_tilde(raw_home)
         if expanded:
             return Path(expanded).expanduser()
-    return Path.home() / ".grd"
+    return Path.home() / HOME_DATA_DIR_NAME
 
 
-def _managed_gpd_python() -> str | None:
+def _managed_grd_python() -> str | None:
     """Return the managed GRD virtualenv interpreter when it exists."""
     python_relpath = Path("Scripts/python.exe") if os.name == "nt" else Path("bin/python")
-    candidate = _gpd_home_dir() / "venv" / python_relpath
+    candidate = _grd_home_dir() / "venv" / python_relpath
     if candidate.is_file():
         return str(candidate)
     return None
@@ -1699,7 +1946,7 @@ def hook_python_interpreter() -> str:
     if _running_from_checkout():
         return sys.executable or "python3"
 
-    managed_python = _managed_gpd_python()
+    managed_python = _managed_grd_python()
     if managed_python:
         return managed_python
 
@@ -1711,193 +1958,3 @@ def _iso_now() -> str:
     from datetime import UTC, datetime
 
     return datetime.now(UTC).isoformat()
-
-
-# ---------------------------------------------------------------------------
-# Shell-fence-aware GRD CLI rewriting
-# ---------------------------------------------------------------------------
-
-_SHELL_FENCE_LANGUAGES = frozenset({"bash", "sh", "shell", "zsh"})
-
-
-def rewrite_grd_cli_in_shell_fences(content: str, bridge_command: str) -> str:
-    """Rewrite shell-command ``grd`` invocations to the shared CLI bridge.
-
-    Restrict rewrites to fenced shell code blocks and only when ``grd`` appears
-    in a command position. This keeps user-facing prose and quoted shell
-    strings like ``echo "ERROR: grd initialization failed"`` intact.
-    """
-    rewritten: list[str] = []
-    in_shell_fence = False
-
-    for line in content.splitlines(keepends=True):
-        stripped = line.lstrip()
-        if stripped.startswith("```"):
-            if in_shell_fence:
-                in_shell_fence = False
-            else:
-                fence_language = stripped[3:].strip().lower()
-                in_shell_fence = fence_language in _SHELL_FENCE_LANGUAGES
-            rewritten.append(line)
-            continue
-
-        if in_shell_fence:
-            rewritten.append(_rewrite_grd_shell_line(line, bridge_command))
-            continue
-
-        rewritten.append(line)
-
-    return "".join(rewritten)
-
-
-def _rewrite_grd_shell_line(line: str, command: str) -> str:
-    """Rewrite only command-position ``grd`` tokens on a shell line."""
-    pieces: list[str] = []
-    index = 0
-    in_single = False
-    in_double = False
-
-    while index < len(line):
-        char = line[index]
-        previous = line[index - 1] if index > 0 else ""
-
-        if char == "'" and not in_double:
-            in_single = not in_single
-            pieces.append(char)
-            index += 1
-            continue
-
-        if char == '"' and not in_single and previous != "\\":
-            in_double = not in_double
-            pieces.append(char)
-            index += 1
-            continue
-
-        if (
-            not in_single
-            and not in_double
-            and line.startswith("grd", index)
-            and _is_grd_command_start(line, index)
-            and _is_grd_token_end(line, index + 3)
-        ):
-            pieces.append(command)
-            index += 3
-            continue
-
-        pieces.append(char)
-        index += 1
-
-    return "".join(pieces)
-
-
-def _is_grd_command_start(line: str, index: int) -> bool:
-    """Return whether ``grd`` starts a shell command token at *index*."""
-    probe = index - 1
-    while probe >= 0 and line[probe] in " \t":
-        probe -= 1
-
-    if probe < 0:
-        return True
-
-    if line[probe] in "|;(":
-        return True
-
-    if probe >= 1 and line[probe - 1 : probe + 1] in {"&&", "||", "$("}:
-        return True
-
-    return False
-
-
-def _is_grd_token_end(line: str, end_index: int) -> bool:
-    """Return whether the token ending at *end_index* is a standalone ``grd``."""
-    if end_index >= len(line):
-        return True
-    return line[end_index].isspace() or line[end_index] in {'"', "'", "`"}
-
-
-# ---------------------------------------------------------------------------
-# Hook entry detection
-# ---------------------------------------------------------------------------
-
-
-def cleanup_settings_hooks(
-    settings: dict[str, object],
-    *,
-    target_dir: Path | None,
-    config_dir_name: str | None,
-) -> bool:
-    """Remove GRD-managed statusLine and SessionStart hooks from settings.
-
-    Returns True if any modifications were made.
-    """
-    modified = False
-
-    status_line = settings.get("statusLine")
-    if isinstance(status_line, dict):
-        cmd = status_line.get("command", "")
-        if _is_hook_command_for_script(
-            cmd,
-            HOOK_SCRIPTS["statusline"],
-            target_dir=target_dir,
-            config_dir_name=config_dir_name,
-        ):
-            del settings["statusLine"]
-            modified = True
-
-    hooks = settings.get("hooks")
-    if isinstance(hooks, dict):
-        session_start = hooks.get("SessionStart")
-        if isinstance(session_start, list):
-            before = len(session_start)
-            session_start[:] = [
-                entry
-                for entry in session_start
-                if not entry_has_grd_hook(
-                    entry,
-                    target_dir=target_dir,
-                    config_dir_name=config_dir_name,
-                )
-            ]
-            if len(session_start) < before:
-                modified = True
-            if not session_start:
-                del hooks["SessionStart"]
-            if not hooks:
-                del settings["hooks"]
-
-    return modified
-
-
-def entry_has_grd_hook(
-    entry: object,
-    *,
-    target_dir: Path | None,
-    config_dir_name: str | None,
-    hook_scripts: tuple[str, ...] | None = None,
-) -> bool:
-    """Check if a settings.json hook entry points at GRD-managed hooks.
-
-    By default checks both ``check_update`` and ``statusline`` hook scripts.
-    Pass *hook_scripts* to narrow the check to specific scripts.
-    """
-    if not isinstance(entry, dict):
-        return False
-    entry_hooks = entry.get("hooks")
-    if not isinstance(entry_hooks, list):
-        return False
-    if hook_scripts is None:
-        hook_scripts = (HOOK_SCRIPTS["check_update"], HOOK_SCRIPTS["statusline"])
-    return any(
-        isinstance(hook, dict)
-        and isinstance(hook.get("command"), str)
-        and any(
-            _is_hook_command_for_script(
-                hook["command"],
-                script,
-                target_dir=target_dir,
-                config_dir_name=config_dir_name,
-            )
-            for script in hook_scripts
-        )
-        for hook in entry_hooks
-    )

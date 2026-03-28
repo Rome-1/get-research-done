@@ -267,7 +267,7 @@ For each gap in the Gaps section, add artifacts and missing fields:
   debug_session: .grd/debug/energy-not-conserved.md
 ```
 
-Update status in frontmatter to "diagnosed".
+Keep canonical verification `status` unchanged and set `session_status: diagnosed` in frontmatter.
 
 Commit the updated VERIFICATION.md:
 

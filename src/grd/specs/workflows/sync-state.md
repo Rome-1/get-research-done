@@ -7,6 +7,9 @@ Read all files referenced by the invoking prompt's execution_context before star
 
 **Schema reference:** `{GRD_INSTALL_DIR}/templates/state-json-schema.md` — Canonical schema for state.json fields, types, defaults, and authoritative-vs-derived status. Consult when resolving conflicts between STATE.md and state.json.
 Before deciding any merge or repair, read `{GRD_INSTALL_DIR}/templates/state-json-schema.md` itself and use its authoritative-vs-derived rules as the reconciliation contract rather than guessing from the current file contents.
+
+Canonical reconciliation contract:
+@{GRD_INSTALL_DIR}/templates/state-json-schema.md
 </required_reading>
 
 <process>
@@ -32,25 +35,20 @@ Exit.
 
 **If only STATE.md exists (state.json missing):**
 
-Use the loader's controlled fallback path to recover `state.json` from the current markdown while preserving any backup if one exists:
+Use the authoritative markdown write path to recover `state.json` from the current markdown while preserving JSON-only fields and rebuilding the dual-write pair atomically:
 
 ```bash
-if [ -f .grd/state.json ]; then
-  mv .grd/state.json .grd/state.json.bak
-fi
+uv run python - <<'PY'
+from pathlib import Path
+from grd.core.state import save_state_markdown
 
-grd --raw state snapshot > /dev/null
-if [ $? -ne 0 ]; then
-  echo "WARNING: grd state snapshot failed — restoring backup"
-  if [ -f .grd/state.json.bak ]; then
-    mv .grd/state.json.bak .grd/state.json
-  fi
-else
-  rm -f .grd/state.json.bak
-fi
+cwd = Path(".")
+md_path = cwd / "GRD" / "STATE.md"
+save_state_markdown(cwd, md_path.read_text(encoding="utf-8"))
+PY
 ```
 
-Report: "state.json recovered from STATE.md via fallback sync." Exit (no divergence to reconcile).
+Report: "state.json recovered from STATE.md via authoritative markdown sync." Exit (no divergence to reconcile).
 
 **If only state.json exists (STATE.md missing):**
 
@@ -63,7 +61,7 @@ from pathlib import Path
 from grd.core.state import save_state_json
 
 cwd = Path(".")
-state = json.loads((cwd / ".grd" / "state.json").read_text(encoding="utf-8"))
+state = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
 save_state_json(cwd, state)
 PY
 ```
@@ -200,22 +198,17 @@ Wait for user confirmation.
 
 **For STATE.md-preferred fields:**
 
-Regenerate state.json from STATE.md by backing it up and triggering a state read (which merges parsed markdown fields INTO existing JSON backup, preserving `convention_lock`, `intermediate_results`, `approximations`, and `propagated_uncertainties`):
+Regenerate `state.json` from `STATE.md` through the authoritative markdown write path (which preserves `convention_lock`, `intermediate_results`, `approximations`, and `propagated_uncertainties` while rewriting the synchronized pair atomically):
 
 ```bash
-if [ -f .grd/state.json ]; then
-  mv .grd/state.json .grd/state.json.bak
-fi
+uv run python - <<'PY'
+from pathlib import Path
+from grd.core.state import save_state_markdown
 
-grd --raw state snapshot > /dev/null
-if [ $? -ne 0 ]; then
-  echo "WARNING: grd state snapshot failed — restoring backup"
-  if [ -f .grd/state.json.bak ]; then
-    mv .grd/state.json.bak .grd/state.json
-  fi
-else
-  rm -f .grd/state.json.bak
-fi
+cwd = Path(".")
+md_path = cwd / "GRD" / "STATE.md"
+save_state_markdown(cwd, md_path.read_text(encoding="utf-8"))
+PY
 ```
 
 **For state.json-preferred fields (including the common case where JSON is newer):**
@@ -229,7 +222,7 @@ from pathlib import Path
 from grd.core.state import save_state_json
 
 cwd = Path(".")
-state = json.loads((cwd / ".grd" / "state.json").read_text(encoding="utf-8"))
+state = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
 save_state_json(cwd, state)
 PY
 ```
@@ -284,7 +277,7 @@ Both files are now consistent.
 
 <failure_handling>
 
-- **STATE.md corrupt (unparseable):** If STATE.md cannot be parsed, check if state.json is valid and regenerate STATE.md from it. If both are corrupt, suggest restoring from git: `git checkout HEAD~1 -- .grd/STATE.md .grd/state.json`
+- **STATE.md corrupt (unparseable):** If STATE.md cannot be parsed, check if `state.json` is valid and regenerate STATE.md from it. If both are damaged, follow the built-in recovery chain in order: `state.json.bak`, then any surviving valid `STATE.md`, then a controlled regeneration from defaults plus surviving structured artifacts. Do not recommend discarding newer state first.
 - **state.json corrupt (invalid JSON):** Move it aside to `.grd/state.json.bak`, then use the fallback recovery path from `STATE.md`. Do not delete it without keeping a backup first.
 - **Regeneration still fails:** Fall back to manual reconciliation — read STATE.md, write state.json directly using `grd state` subcommands.
 - **Both files very old (neither recently committed):** Warn user that both files may be stale. Suggest checking git log for the most recent good state.

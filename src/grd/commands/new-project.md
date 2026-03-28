@@ -36,7 +36,7 @@ If no project config exists yet, the workflow opens with the physics-questioning
 - `.grd/STATE.md` — project memory
 - `.grd/state.json` `project_contract` — authoritative machine-readable scoping contract
 
-**After this command:** Run `/grd:plan-phase 1` to start execution.
+**After this command:** Run `/grd:discuss-phase 1` to clarify the first phase before planning.
 </objective>
 
 <execution_context>
@@ -122,6 +122,6 @@ Check `$ARGUMENTS` for flags:
 - [ ] config.json created with defaults → **committed**
 - [ ] All files committed in single commit: "docs: initialize research project (minimal)"
 - [ ] Same directory structure and file set as full path
-- [ ] User offered "Plan phase 1 now?"
+- [ ] User offered "Discuss phase 1 now?"
 
 </success_criteria>

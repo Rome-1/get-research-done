@@ -397,6 +397,38 @@ def sanitize_latex(latex: str) -> str:
     return _EMOJI_RE.sub("", "".join(result))
 
 
+def fix_bibliography_conflict(latex: str) -> str:
+    r"""Remove ``\bibliographystyle`` and ``\bibliography`` when inline bibliography is present.
+
+    If the document contains a ``\begin{thebibliography}`` block (inline
+    ``\bibitem`` entries), the BibTeX-based ``\bibliographystyle{...}`` and
+    ``\bibliography{...}`` commands are incompatible and must be removed.
+    Leaving both causes ``natbib`` to throw a fatal error::
+
+        ! Package natbib Error: Bibliography not compatible with author-year citations.
+    """
+    if r"\begin{thebibliography}" not in latex:
+        return latex
+
+    # Strip \bibliographystyle{...} lines
+    cleaned = re.sub(r"\\bibliographystyle\{[^}]*\}\s*\n?", "", latex)
+    # Strip \bibliography{...} lines (but NOT \begin{thebibliography})
+    cleaned = re.sub(r"(?<!\\begin\{thebibliography\})(?<=\n)\\bibliography\{[^}]*\}\s*\n?", "", cleaned)
+    # Simpler fallback: catch \bibliography{...} that isn't part of \begin{thebibliography}
+    cleaned = re.sub(r"^\\bibliography\{[^}]*\}\s*$", "", cleaned, flags=re.MULTILINE)
+
+    if cleaned != latex:
+        logger.info("Removed \\bibliographystyle/\\bibliography (inline \\thebibliography detected)")
+
+    return cleaned
+
+
+# Append the bibliography-conflict rule now that fix_bibliography_conflict is defined.
+_AUTO_FIX_RULES.append(
+    (r"Bibliography not compatible with author-year citations", fix_bibliography_conflict, r"Removed \bibliographystyle conflicting with inline thebibliography"),
+)
+
+
 def clean_latex_fences(raw: str) -> str:
     """Strip markdown code fences from LLM output."""
     latex = raw.strip()

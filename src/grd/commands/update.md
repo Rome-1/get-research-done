@@ -16,6 +16,7 @@ Check for GRD updates, install if available, and display what changed.
 Routes to the update workflow which handles:
 
 - Version detection (local vs global installation)
+- Explicit-target installs that require `--target-dir <path>`
 - Package version checking
 - Changelog fetching and display
 - User confirmation with clean install warning
@@ -33,11 +34,12 @@ Routes to the update workflow which handles:
 The workflow handles all logic including:
 
 1. Installed version detection (local/global)
-2. Latest version checking via package registry
-3. Version comparison
-4. Changelog fetching and extraction
-5. Clean install warning display
-6. User confirmation
-7. Update execution
-8. Cache clearing
+2. Explicit-target detection and `--target-dir` handling
+3. Latest version checking via package registry
+4. Version comparison
+5. Changelog fetching and extraction
+6. Clean install warning display
+7. User confirmation
+8. Update execution
+9. Cache clearing
    </process>

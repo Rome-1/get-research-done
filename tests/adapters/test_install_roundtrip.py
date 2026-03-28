@@ -19,16 +19,28 @@ from grd.adapters.claude_code import ClaudeCodeAdapter
 from grd.adapters.codex import CodexAdapter
 from grd.adapters.gemini import GeminiAdapter
 from grd.adapters.install_utils import (
+    build_runtime_cli_bridge_command,
     convert_tool_references_in_body,
     expand_at_includes,
     translate_frontmatter_tool_names,
 )
 from grd.adapters.opencode import OpenCodeAdapter
+from grd.adapters.runtime_catalog import resolve_global_config_dir
 from grd.adapters.tool_names import build_canonical_alias_map
 from grd.registry import load_agents_from_dir
 
 REPO_GRD_ROOT = Path(__file__).resolve().parents[2] / "src" / "grd"
 RUNTIME_ALIAS_MAP = build_canonical_alias_map(adapter.tool_name_map for adapter in iter_adapters())
+
+
+def expected_opencode_bridge(target: Path, *, is_global: bool = False, explicit_target: bool = False) -> str:
+    return build_runtime_cli_bridge_command(
+        "opencode",
+        target_dir=target,
+        config_dir_name=".opencode",
+        is_global=is_global,
+        explicit_target=explicit_target,
+    )
 
 
 def _install_real_repo_for_runtime(tmp_path: Path, runtime: str) -> Path:
@@ -49,9 +61,7 @@ def _install_real_repo_for_runtime(tmp_path: Path, runtime: str) -> Path:
     if runtime == "gemini":
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter = GeminiAdapter()
-        result = adapter.install(REPO_GRD_ROOT, target)
-        adapter.finalize_install(result)
+        _install_gemini_for_tests(REPO_GRD_ROOT, target)
         return target
 
     if runtime == "opencode":
@@ -61,6 +71,14 @@ def _install_real_repo_for_runtime(tmp_path: Path, runtime: str) -> Path:
         return target
 
     raise AssertionError(f"Unsupported runtime {runtime}")
+
+
+def _install_gemini_for_tests(gpd_root: Path, target: Path) -> GeminiAdapter:
+    """Install Gemini artifacts and persist the deferred Gemini settings."""
+    adapter = GeminiAdapter()
+    result = adapter.install(gpd_root, target)
+    adapter.finalize_install(result)
+    return adapter
 
 
 def _canonicalize_runtime_markdown(content: str, *, runtime: str) -> str:
@@ -115,6 +133,68 @@ def _read_compare_experiment_command(tmp_path: Path, target: Path, runtime: str)
     raise AssertionError(f"Unsupported runtime {runtime}")
 
 
+def _read_runtime_command_prompt(tmp_path: Path, target: Path, runtime: str, command_name: str) -> str:
+    if runtime == "claude-code":
+        return (target / "commands" / "grd" / f"{command_name}.md").read_text(encoding="utf-8")
+
+    if runtime == "codex":
+        return (tmp_path / "skills" / f"grd-{command_name}" / "SKILL.md").read_text(encoding="utf-8")
+
+    if runtime == "gemini":
+        parsed = tomllib.loads((target / "commands" / "grd" / f"{command_name}.toml").read_text(encoding="utf-8"))
+        prompt = parsed.get("prompt")
+        assert isinstance(prompt, str)
+        return prompt
+
+    if runtime == "opencode":
+        return (target / "command" / f"grd-{command_name}.md").read_text(encoding="utf-8")
+
+    raise AssertionError(f"Unsupported runtime {runtime}")
+
+
+def _read_runtime_update_surface(tmp_path: Path, target: Path, runtime: str) -> str:
+    if runtime == "claude-code":
+        return (target / "commands" / "grd" / "update.md").read_text(encoding="utf-8")
+
+    if runtime == "codex":
+        return (tmp_path / "skills" / "grd-update" / "SKILL.md").read_text(encoding="utf-8")
+
+    if runtime == "gemini":
+        parsed = tomllib.loads((target / "commands" / "grd" / "update.toml").read_text(encoding="utf-8"))
+        prompt = parsed.get("prompt")
+        assert isinstance(prompt, str)
+        return prompt
+
+    if runtime == "opencode":
+        return (target / "command" / "grd-update.md").read_text(encoding="utf-8")
+
+    raise AssertionError(f"Unsupported runtime {runtime}")
+
+
+def _read_runtime_agent_prompt(target: Path, runtime: str, agent_name: str) -> str:
+    if runtime in {"claude-code", "codex", "gemini", "opencode"}:
+        return (target / "agents" / f"{agent_name}.md").read_text(encoding="utf-8")
+    raise AssertionError(f"Unsupported runtime {runtime}")
+
+
+@pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
+def test_update_surface_materializes_workflow_paths_in_compiled_artifacts(
+    tmp_path: Path,
+    runtime: str,
+) -> None:
+    target = _install_real_repo_for_runtime(tmp_path, runtime)
+    adapter = next(adapter for adapter in iter_adapters() if adapter.runtime_name == runtime)
+    canonical_global_dir = resolve_global_config_dir(adapter.runtime_descriptor)
+    content = _read_runtime_update_surface(tmp_path, target, runtime)
+
+    if runtime == "claude-code":
+        assert f"@{target.as_posix()}/get-research-done/workflows/update.md" in content
+        assert "{GRD_CONFIG_DIR}" not in content
+    else:
+        assert f'GRD_CONFIG_DIR="{target.as_posix()}"' in content
+        assert f'GRD_GLOBAL_CONFIG_DIR="{canonical_global_dir.as_posix()}"' in content
+        assert "TARGET_DIR_ARG=$(" in content
+
 # ---------------------------------------------------------------------------
 # Claude Code: install → read back → compare
 # ---------------------------------------------------------------------------
@@ -124,15 +204,15 @@ class TestClaudeCodeRoundtrip:
     """Install into .claude/, then verify installed files match source semantics."""
 
     @pytest.fixture()
-    def installed(self, grd_root: Path, tmp_path: Path) -> Path:
+    def installed(self, gpd_root: Path, tmp_path: Path) -> Path:
         target = tmp_path / ".claude"
         target.mkdir()
-        ClaudeCodeAdapter().install(grd_root, target)
+        ClaudeCodeAdapter().install(gpd_root, target)
         return target
 
-    def test_commands_roundtrip(self, installed: Path, grd_root: Path) -> None:
+    def test_commands_roundtrip(self, installed: Path, gpd_root: Path) -> None:
         """Installed commands/grd/ files correspond 1:1 with source commands/."""
-        src_mds = sorted(f.name for f in (grd_root / "commands").rglob("*.md"))
+        src_mds = sorted(f.name for f in (gpd_root / "commands").rglob("*.md"))
         dest_mds = sorted(f.name for f in (installed / "commands" / "grd").rglob("*.md"))
         assert dest_mds == src_mds
 
@@ -142,9 +222,9 @@ class TestClaudeCodeRoundtrip:
             content = md.read_text(encoding="utf-8")
             assert "{GRD_INSTALL_DIR}" not in content
 
-    def test_agents_roundtrip(self, installed: Path, grd_root: Path) -> None:
+    def test_agents_roundtrip(self, installed: Path, gpd_root: Path) -> None:
         """Installed agents match source agent filenames."""
-        src_agents = sorted(f.name for f in (grd_root / "agents").glob("*.md"))
+        src_agents = sorted(f.name for f in (gpd_root / "agents").glob("*.md"))
         dest_agents = sorted(f.name for f in (installed / "agents").glob("grd-*.md"))
         assert dest_agents == src_agents
 
@@ -185,9 +265,9 @@ class TestClaudeCodeRoundtrip:
         assert "WebSearch" in reference
         assert "web_search" not in reference
 
-    def test_hooks_copied(self, installed: Path, grd_root: Path) -> None:
+    def test_hooks_copied(self, installed: Path, gpd_root: Path) -> None:
         """Hook scripts are copied faithfully."""
-        for hook in (grd_root / "hooks").iterdir():
+        for hook in (gpd_root / "hooks").iterdir():
             if hook.is_file() and not hook.name.startswith("__"):
                 dest = installed / "hooks" / hook.name
                 assert dest.exists(), f"Missing hook: {hook.name}"
@@ -218,12 +298,10 @@ class TestGeminiRoundtrip:
     """Install into .gemini/, verify TOML commands and converted agents."""
 
     @pytest.fixture()
-    def installed(self, grd_root: Path, tmp_path: Path) -> Path:
+    def installed(self, gpd_root: Path, tmp_path: Path) -> Path:
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter = GeminiAdapter()
-        result = adapter.install(grd_root, target)
-        adapter.finalize_install(result)
+        _install_gemini_for_tests(gpd_root, target)
         return target
 
     def test_commands_are_toml(self, installed: Path) -> None:
@@ -239,12 +317,12 @@ class TestGeminiRoundtrip:
             content = toml_file.read_text(encoding="utf-8")
             assert "prompt" in content, f"{toml_file.name} missing prompt field"
 
-    def test_toml_preserves_non_runtime_metadata_as_comments(self, grd_root: Path, tmp_path: Path) -> None:
+    def test_toml_preserves_non_runtime_metadata_as_comments(self, gpd_root: Path, tmp_path: Path) -> None:
         """Gemini TOML commands keep canonical non-runtime metadata as comments."""
-        (grd_root / "commands" / "progress.md").write_text(
+        (gpd_root / "commands" / "progress.md").write_text(
             "---\n"
             "name: grd:progress\n"
-            "description: Check research progress\n"
+            'description: Check research progress\n'
             'argument-hint: "[--brief] [--full] [--reconcile]"\n'
             "context_mode: project-required\n"
             "requires:\n"
@@ -258,24 +336,22 @@ class TestGeminiRoundtrip:
         )
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter = GeminiAdapter()
-        result = adapter.install(grd_root, target)
-        adapter.finalize_install(result)
+        _install_gemini_for_tests(gpd_root, target)
 
         content = (target / "commands" / "grd" / "progress.toml").read_text(encoding="utf-8")
         parsed = tomllib.loads(content)
 
         assert "# Source frontmatter preserved for parity:" in content
-        assert "# name: grd:progress" in content
+        assert '# name: grd:progress' in content
         assert '# argument-hint: "[--brief] [--full] [--reconcile]"' in content
         assert "# requires:" in content
         assert '#   files: [".grd/ROADMAP.md"]' in content
         assert "# allowed-tools:" not in content
         assert parsed["context_mode"] == "project-required"
 
-    def test_toml_command_count_matches_source(self, installed: Path, grd_root: Path) -> None:
+    def test_toml_command_count_matches_source(self, installed: Path, gpd_root: Path) -> None:
         """Number of TOML commands matches source .md count."""
-        src_count = sum(1 for _ in (grd_root / "commands").rglob("*.md"))
+        src_count = sum(1 for _ in (gpd_root / "commands").rglob("*.md"))
         dest_count = sum(1 for _ in (installed / "commands" / "grd").rglob("*.toml"))
         assert dest_count == src_count
 
@@ -326,6 +402,29 @@ class TestGeminiRoundtrip:
         assert "google_web_search" in reference
         assert "WebSearch" not in reference
 
+    def test_runtime_cli_bridge_is_pinned_in_shell_heavy_surfaces(self, tmp_path: Path) -> None:
+        """Gemini install rewrites the shell-heavy surfaces to the runtime bridge."""
+        installed = _install_real_repo_for_runtime(tmp_path, "gemini")
+        bridge_marker = "-m grd.runtime_cli --runtime gemini"
+        command = _read_runtime_command_prompt(tmp_path, installed, "gemini", "set-profile")
+        workflow = (installed / "get-research-done" / "workflows" / "set-profile.md").read_text(encoding="utf-8")
+        execute_phase = (installed / "get-research-done" / "workflows" / "execute-phase.md").read_text(encoding="utf-8")
+        agent = (installed / "agents" / "grd-planner.md").read_text(encoding="utf-8")
+
+        assert bridge_marker in command
+        assert bridge_marker in workflow
+        assert bridge_marker in execute_phase
+        assert bridge_marker in agent
+        assert "config ensure-section" in command
+        assert "config ensure-section" in workflow
+        assert "init progress --include state,config" in command
+        assert 'if !' in execute_phase and "verify plan \"$plan\"" in execute_phase
+        assert 'INIT=$(' in agent and "init plan-phase \"<PHASE>\"" in agent
+        assert "grd config ensure-section" not in command
+        assert 'INIT=$(grd init progress --include state,config)' not in command
+        assert 'if ! grd verify plan "$plan"; then' not in execute_phase
+        assert 'INIT=$(grd init plan-phase "<PHASE>")' not in agent
+
     def test_settings_json_has_experimental(self, installed: Path) -> None:
         """settings.json enables experimental.enableAgents."""
         settings_path = installed / "settings.json"
@@ -352,12 +451,12 @@ class TestCodexRoundtrip:
     """Install into .codex/ + skills/, verify command skills plus agent roles."""
 
     @pytest.fixture()
-    def installed(self, grd_root: Path, tmp_path: Path) -> tuple[Path, Path]:
+    def installed(self, gpd_root: Path, tmp_path: Path) -> tuple[Path, Path]:
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        CodexAdapter().install(grd_root, target, skills_dir=skills)
+        CodexAdapter().install(gpd_root, target, skills_dir=skills)
         return target, skills
 
     def test_commands_become_skill_dirs(self, installed: tuple[Path, Path]) -> None:
@@ -392,34 +491,34 @@ class TestCodexRoundtrip:
             if skill_dir.is_dir() and skill_dir.name.startswith("grd-"):
                 assert re.match(r"^[a-z0-9-]+$", skill_dir.name), f"Skill name not hyphen-case: {skill_dir.name}"
 
-    def test_command_count_matches_source(self, installed: tuple[Path, Path], grd_root: Path) -> None:
+    def test_command_count_matches_source(self, installed: tuple[Path, Path], gpd_root: Path) -> None:
         """Number of skills matches source command count."""
         _, skills = installed
-        src_count = sum(1 for _ in (grd_root / "commands").rglob("*.md"))
+        src_count = sum(1 for _ in (gpd_root / "commands").rglob("*.md"))
         skill_count = sum(1 for d in skills.iterdir() if d.is_dir() and d.name.startswith("grd-"))
         assert skill_count == src_count
 
-    def test_agents_not_installed_as_skills(self, installed: tuple[Path, Path], grd_root: Path) -> None:
+    def test_agents_not_installed_as_skills(self, installed: tuple[Path, Path], gpd_root: Path) -> None:
         """Codex agents are registered as roles, not duplicated as discoverable skills."""
         _, skills = installed
-        agents = load_agents_from_dir(grd_root / "agents")
+        agents = load_agents_from_dir(gpd_root / "agents")
         for agent_name in sorted(agents):
             assert not (skills / agent_name).exists(), f"Agent should not be a Codex skill: {agent_name}"
 
-    def test_agents_installed_as_md_files(self, installed: tuple[Path, Path], grd_root: Path) -> None:
+    def test_agents_installed_as_md_files(self, installed: tuple[Path, Path], gpd_root: Path) -> None:
         """Agents are also installed as .md files under .codex/agents/."""
         target, _ = installed
         agents_dir = target / "agents"
         assert agents_dir.is_dir()
-        src_agents = sorted(f.name for f in (grd_root / "agents").glob("*.md"))
+        src_agents = sorted(f.name for f in (gpd_root / "agents").glob("*.md"))
         dest_agents = sorted(f.name for f in agents_dir.glob("*.md"))
         assert dest_agents == src_agents
 
-    def test_agent_role_configs_installed(self, installed: tuple[Path, Path], grd_root: Path) -> None:
+    def test_agent_role_configs_installed(self, installed: tuple[Path, Path], gpd_root: Path) -> None:
         """Each installed Codex agent also gets a role config TOML."""
         target, _ = installed
         agents_dir = target / "agents"
-        src_agent_names = sorted(f.stem for f in (grd_root / "agents").glob("*.md"))
+        src_agent_names = sorted(f.stem for f in (gpd_root / "agents").glob("*.md"))
         dest_role_names = sorted(f.stem for f in agents_dir.glob("grd-*.toml"))
         assert dest_role_names == src_agent_names
 
@@ -444,6 +543,27 @@ class TestCodexRoundtrip:
         assert "Task(" not in workflow
         assert "web_search" in reference
         assert "WebSearch" not in reference
+
+    def test_runtime_cli_bridge_is_pinned_in_shell_heavy_surfaces(self, tmp_path: Path) -> None:
+        """Codex install rewrites the shell-heavy surfaces to the runtime bridge."""
+        target = _install_real_repo_for_runtime(tmp_path, "codex")
+        bridge_marker = "-m grd.runtime_cli --runtime codex"
+        command = _read_runtime_command_prompt(tmp_path, target, "codex", "set-profile")
+        workflow = (target / "get-research-done" / "workflows" / "set-profile.md").read_text(encoding="utf-8")
+        execute_phase = (target / "get-research-done" / "workflows" / "execute-phase.md").read_text(encoding="utf-8")
+        agent = (target / "agents" / "grd-planner.md").read_text(encoding="utf-8")
+
+        assert bridge_marker in command
+        assert bridge_marker in workflow
+        assert bridge_marker in execute_phase
+        assert bridge_marker in agent
+        assert "config ensure-section" in command
+        assert "config ensure-section" in workflow
+        assert "verify plan \"$plan\"" in execute_phase
+        assert 'INIT=$(' in agent and "init plan-phase \"${PHASE}\"" in agent
+        assert "```bash\ngpd config ensure-section\n" not in workflow
+        assert 'if ! grd verify plan "$plan"; then' not in execute_phase
+        assert 'INIT=$(grd init plan-phase "${PHASE}")' not in agent
 
     def test_slash_commands_converted(self, installed: tuple[Path, Path]) -> None:
         """Content replaces /grd: with $grd- for Codex invocation syntax."""
@@ -481,20 +601,20 @@ class TestOpenCodeRoundtrip:
     """Install into .opencode/, verify flattened commands and permissions."""
 
     @pytest.fixture()
-    def installed(self, grd_root: Path, tmp_path: Path) -> Path:
+    def installed(self, gpd_root: Path, tmp_path: Path) -> Path:
         target = tmp_path / ".opencode"
         target.mkdir()
-        OpenCodeAdapter().install(grd_root, target)
+        OpenCodeAdapter().install(gpd_root, target)
         return target
 
     def test_commands_are_flattened(self, installed: Path) -> None:
         """OpenCode commands are flat: command/grd-help.md (not commands/grd/help.md)."""
         command_dir = installed / "command"
         assert command_dir.is_dir()
-        grd_cmds = [f for f in command_dir.iterdir() if f.name.startswith("grd-") and f.suffix == ".md"]
-        assert len(grd_cmds) > 0
+        gpd_cmds = [f for f in command_dir.iterdir() if f.name.startswith("grd-") and f.suffix == ".md"]
+        assert len(gpd_cmds) > 0
 
-    def test_flattened_command_names(self, installed: Path, grd_root: Path) -> None:
+    def test_flattened_command_names(self, installed: Path, gpd_root: Path) -> None:
         """Flattened command names follow grd-<name>.md convention."""
         command_dir = installed / "command"
         # help.md -> grd-help.md, sub/deep.md -> grd-sub-deep.md
@@ -519,11 +639,11 @@ class TestOpenCodeRoundtrip:
             # AskUserQuestion should be converted to question
             assert "AskUserQuestion" not in content, f"{md.name} still has AskUserQuestion"
 
-    def test_agents_installed(self, installed: Path, grd_root: Path) -> None:
+    def test_agents_installed(self, installed: Path, gpd_root: Path) -> None:
         """Agents are installed with OpenCode frontmatter conversion."""
         agents_dir = installed / "agents"
         assert agents_dir.is_dir()
-        src_agents = sorted(f.name for f in (grd_root / "agents").glob("*.md"))
+        src_agents = sorted(f.name for f in (gpd_root / "agents").glob("*.md"))
         dest_agents = sorted(f.name for f in agents_dir.glob("*.md"))
         assert dest_agents == src_agents
 
@@ -577,6 +697,23 @@ class TestOpenCodeRoundtrip:
         assert any(k.startswith("command/grd-") for k in files)
 
 
+def test_real_installed_opencode_artifacts_rewrite_grd_cli_calls_to_runtime_bridge(tmp_path: Path) -> None:
+    target = _install_real_repo_for_runtime(tmp_path, "opencode")
+    expected_bridge = expected_opencode_bridge(target, is_global=False)
+    command = (target / "command" / "grd-settings.md").read_text(encoding="utf-8")
+    workflow = (target / "get-research-done" / "workflows" / "settings.md").read_text(encoding="utf-8")
+    agent = (target / "agents" / "grd-planner.md").read_text(encoding="utf-8")
+
+    assert expected_bridge + " config ensure-section" in command
+    assert f'INIT=$({expected_bridge} init progress --include state,config)' in command
+    assert expected_bridge + " config ensure-section" in workflow
+    assert f'INIT=$({expected_bridge} init progress --include state,config)' in workflow
+    assert 'echo "ERROR: grd initialization failed: $INIT"' in workflow
+    assert f'INIT=$({expected_bridge} init plan-phase "<PHASE>")' in agent
+    assert 'INIT=$(grd init progress --include state,config)' not in workflow
+    assert 'INIT=$(grd init plan-phase "<PHASE>")' not in agent
+
+
 # ---------------------------------------------------------------------------
 # Cross-runtime: install/uninstall cycle for each runtime
 # ---------------------------------------------------------------------------
@@ -585,12 +722,12 @@ class TestOpenCodeRoundtrip:
 class TestInstallUninstallCycle:
     """Install then uninstall for each runtime — verify clean removal."""
 
-    def test_claude_code_cycle(self, grd_root: Path, tmp_path: Path) -> None:
+    def test_claude_code_cycle(self, gpd_root: Path, tmp_path: Path) -> None:
         adapter = ClaudeCodeAdapter()
         target = tmp_path / ".claude"
         target.mkdir()
 
-        adapter.install(grd_root, target)
+        adapter.install(gpd_root, target)
         assert (target / "commands" / "grd").is_dir()
         assert (target / "get-research-done").is_dir()
 
@@ -598,51 +735,50 @@ class TestInstallUninstallCycle:
         assert not (target / "commands" / "grd").exists()
         assert not (target / "get-research-done").exists()
 
-    def test_gemini_cycle(self, grd_root: Path, tmp_path: Path) -> None:
-        adapter = GeminiAdapter()
+    def test_gemini_cycle(self, gpd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
 
-        adapter.install(grd_root, target)
+        _install_gemini_for_tests(gpd_root, target)
         assert (target / "commands" / "grd").is_dir()
         assert (target / "get-research-done").is_dir()
 
-        adapter.uninstall(target)
+        GeminiAdapter().uninstall(target)
         assert not (target / "commands" / "grd").exists()
         assert not (target / "get-research-done").exists()
 
-    def test_codex_cycle(self, grd_root: Path, tmp_path: Path) -> None:
+    def test_codex_cycle(self, gpd_root: Path, tmp_path: Path) -> None:
         adapter = CodexAdapter()
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
 
-        adapter.install(grd_root, target, skills_dir=skills)
+        adapter.install(gpd_root, target, skills_dir=skills)
         assert any(d.name.startswith("grd-") for d in skills.iterdir() if d.is_dir())
         assert (target / "get-research-done").is_dir()
 
         adapter.uninstall(target, skills_dir=skills)
-        assert not any(d.name.startswith("grd-") for d in skills.iterdir() if d.is_dir())
+        assert not skills.exists() or not any(d.name.startswith("grd-") for d in skills.iterdir() if d.is_dir())
         assert not (target / "get-research-done").exists()
 
-    def test_opencode_cycle(self, grd_root: Path, tmp_path: Path) -> None:
+    def test_opencode_cycle(self, gpd_root: Path, tmp_path: Path) -> None:
         adapter = OpenCodeAdapter()
         target = tmp_path / ".opencode"
         target.mkdir()
 
-        adapter.install(grd_root, target)
+        adapter.install(gpd_root, target)
         assert (target / "command").is_dir()
         assert (target / "get-research-done").is_dir()
 
         adapter.uninstall(target)
         assert not (target / "get-research-done").exists()
-        grd_cmds = (
+        gpd_cmds = (
             [f for f in (target / "command").iterdir() if f.name.startswith("grd-")]
             if (target / "command").exists()
             else []
         )
-        assert len(grd_cmds) == 0
+        assert len(gpd_cmds) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -653,60 +789,60 @@ class TestInstallUninstallCycle:
 class TestSerializationRoundtrip:
     """Verify that content survives serialization through each adapter."""
 
-    def test_claude_code_body_preserved(self, grd_root: Path, tmp_path: Path) -> None:
+    def test_claude_code_body_preserved(self, gpd_root: Path, tmp_path: Path) -> None:
         """The body text of a command survives Claude Code install."""
         target = tmp_path / ".claude"
         target.mkdir()
-        ClaudeCodeAdapter().install(grd_root, target)
+        ClaudeCodeAdapter().install(gpd_root, target)
 
         installed = (target / "commands" / "grd" / "help.md").read_text(encoding="utf-8")
         # Body should contain the non-placeholder text
         assert "Help body" in installed
 
-    def test_gemini_toml_preserves_body(self, grd_root: Path, tmp_path: Path) -> None:
+    def test_gemini_toml_preserves_body(self, gpd_root: Path, tmp_path: Path) -> None:
         """Command body text survives TOML conversion for Gemini."""
         target = tmp_path / ".gemini"
         target.mkdir()
-        GeminiAdapter().install(grd_root, target)
+        _install_gemini_for_tests(gpd_root, target)
 
         toml_file = target / "commands" / "grd" / "help.toml"
         content = toml_file.read_text(encoding="utf-8")
         assert "Help body" in content
 
-    def test_codex_skill_preserves_body(self, grd_root: Path, tmp_path: Path) -> None:
+    def test_codex_skill_preserves_body(self, gpd_root: Path, tmp_path: Path) -> None:
         """Command body text survives Codex SKILL.md conversion."""
         target = tmp_path / ".codex"
         target.mkdir()
         skills = tmp_path / "skills"
         skills.mkdir()
-        CodexAdapter().install(grd_root, target, skills_dir=skills)
+        CodexAdapter().install(gpd_root, target, skills_dir=skills)
 
         skill_md = skills / "grd-help" / "SKILL.md"
         content = skill_md.read_text(encoding="utf-8")
         assert "Help body" in content
 
-    def test_opencode_flat_preserves_body(self, grd_root: Path, tmp_path: Path) -> None:
+    def test_opencode_flat_preserves_body(self, gpd_root: Path, tmp_path: Path) -> None:
         """Command body text survives OpenCode flattening."""
         target = tmp_path / ".opencode"
         target.mkdir()
-        OpenCodeAdapter().install(grd_root, target)
+        OpenCodeAdapter().install(gpd_root, target)
 
         cmd = target / "command" / "grd-help.md"
         content = cmd.read_text(encoding="utf-8")
         assert "Help body" in content
 
-    def test_nested_command_survives_all_runtimes(self, grd_root: Path, tmp_path: Path) -> None:
+    def test_nested_command_survives_all_runtimes(self, gpd_root: Path, tmp_path: Path) -> None:
         """The nested sub/deep.md command is reachable in every runtime."""
         # Claude Code: commands/grd/sub/deep.md
         cc_target = tmp_path / "cc" / ".claude"
         cc_target.mkdir(parents=True)
-        ClaudeCodeAdapter().install(grd_root, cc_target)
+        ClaudeCodeAdapter().install(gpd_root, cc_target)
         assert (cc_target / "commands" / "grd" / "sub" / "deep.md").exists()
 
         # Gemini: commands/grd/sub/deep.toml
         gem_target = tmp_path / "gem" / ".gemini"
         gem_target.mkdir(parents=True)
-        GeminiAdapter().install(grd_root, gem_target)
+        _install_gemini_for_tests(gpd_root, gem_target)
         assert (gem_target / "commands" / "grd" / "sub" / "deep.toml").exists()
 
         # Codex: skills/grd-sub-deep/SKILL.md
@@ -714,13 +850,13 @@ class TestSerializationRoundtrip:
         codex_target.mkdir(parents=True)
         codex_skills = tmp_path / "codex" / "skills"
         codex_skills.mkdir(parents=True)
-        CodexAdapter().install(grd_root, codex_target, skills_dir=codex_skills)
+        CodexAdapter().install(gpd_root, codex_target, skills_dir=codex_skills)
         assert (codex_skills / "grd-sub-deep" / "SKILL.md").exists()
 
         # OpenCode: command/grd-sub-deep.md
         oc_target = tmp_path / "oc" / ".opencode"
         oc_target.mkdir(parents=True)
-        OpenCodeAdapter().install(grd_root, oc_target)
+        OpenCodeAdapter().install(gpd_root, oc_target)
         assert (oc_target / "command" / "grd-sub-deep.md").exists()
 
 
@@ -760,3 +896,86 @@ def test_real_installed_shared_prompt_semantics_are_equivalent_across_runtimes(t
     assert "review_cadence" in execute_plan
     assert "Required first-result sanity gate" in execute_plan
     assert "Contract-backed plans" in execute_plan
+
+
+@pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
+def test_real_installed_contract_and_review_surfaces_keep_required_schema_bodies(
+    tmp_path: Path, runtime: str
+) -> None:
+    target = _install_real_repo_for_runtime(tmp_path, runtime)
+
+    verify_work = _canonicalize_runtime_markdown(
+        _read_runtime_command_prompt(tmp_path, target, runtime, "verify-work"),
+        runtime=runtime,
+    )
+    sync_state = _canonicalize_runtime_markdown(
+        _read_runtime_command_prompt(tmp_path, target, runtime, "sync-state"),
+        runtime=runtime,
+    )
+    write_paper = _canonicalize_runtime_markdown(
+        _read_runtime_command_prompt(tmp_path, target, runtime, "write-paper"),
+        runtime=runtime,
+    )
+    review_literature = _canonicalize_runtime_markdown(
+        _read_runtime_agent_prompt(target, runtime, "grd-review-literature"),
+        runtime=runtime,
+    )
+    review_reader = _canonicalize_runtime_markdown(
+        _read_runtime_agent_prompt(target, runtime, "grd-review-reader"),
+        runtime=runtime,
+    )
+    review_math = _canonicalize_runtime_markdown(
+        _read_runtime_agent_prompt(target, runtime, "grd-review-math"),
+        runtime=runtime,
+    )
+    review_physics = _canonicalize_runtime_markdown(
+        _read_runtime_agent_prompt(target, runtime, "grd-review-physics"),
+        runtime=runtime,
+    )
+    review_significance = _canonicalize_runtime_markdown(
+        _read_runtime_agent_prompt(target, runtime, "grd-review-significance"),
+        runtime=runtime,
+    )
+    referee = _canonicalize_runtime_markdown(
+        _read_runtime_agent_prompt(target, runtime, "grd-referee"),
+        runtime=runtime,
+    )
+
+    for content in (
+        verify_work,
+        sync_state,
+        write_paper,
+        review_literature,
+        review_reader,
+        review_math,
+        review_physics,
+        review_significance,
+        referee,
+    ):
+        lowered = content.lower()
+        assert "@ include not resolved:" not in lowered
+        assert "@ include cycle detected:" not in lowered
+        assert "@ include read error:" not in lowered
+        assert "@ include depth limit reached:" not in lowered
+
+    assert "Canonical source of truth for `plan_contract_ref`, `contract_results`, and `comparison_verdicts`" in verify_work
+    assert "check_subject_kind: [claim | deliverable | acceptance_test | reference]" in verify_work
+    assert 'gap_subject_kind: "{check_subject_kind}"' in verify_work
+    assert "\nsubject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in verify_work
+    assert "check_subject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in verify_work
+    assert "# state.json Schema" in sync_state
+    assert "Reproducibility Manifest Template" in write_paper
+    assert "Peer Review Panel Protocol" in review_literature
+    assert '"stage_id": "reader | literature | math | physics | interestingness"' in review_literature
+    assert '"stage_kind": "reader | literature | math | physics | interestingness"' in review_literature
+    assert "Peer Review Panel Protocol" in review_reader
+    for review_stage, stage_path, stage_kind in (
+        (review_math, "STAGE-math.json", "math"),
+        (review_physics, "STAGE-physics.json", "physics"),
+        (review_significance, "STAGE-interestingness.json", "interestingness"),
+    ):
+        assert f"Required schema for `{stage_path}` (`StageReviewReport`, mirroring the staged-review contract):" in review_stage
+        assert f"`stage_id` and `stage_kind` must both be `{stage_kind}`" in review_stage
+        assert "do not collapse them to prose or scalars" in review_stage
+    assert "Review Ledger Schema" in referee
+    assert "Referee Decision Schema" in referee

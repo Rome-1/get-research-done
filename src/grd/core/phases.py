@@ -14,11 +14,13 @@ import re
 import shutil
 from collections import deque
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from grd.core.checkpoints import sync_phase_checkpoints
 from grd.core.constants import (
     CONTEXT_SUFFIX,
     MILESTONES_DIR_NAME,
@@ -33,7 +35,6 @@ from grd.core.constants import (
     STANDALONE_RESEARCH,
     STANDALONE_SUMMARY,
     STANDALONE_VALIDATION,
-    STANDALONE_VERIFICATION,
     SUMMARY_SUFFIX,
     VALIDATION_SUFFIX,
     VERIFICATION_SUFFIX,
@@ -48,6 +49,9 @@ from grd.core.utils import (
     file_lock,
     generate_slug,
     is_phase_complete,
+    matching_phase_artifact_count,
+    phase_artifact_display_name,
+    phase_artifact_id,
     phase_normalize,
     phase_unpad,
     safe_parse_int,
@@ -199,6 +203,22 @@ def _extract_state_field(state_content: str, field_name: str) -> str | None:
         return None
     value = match.group(1).strip()
     return None if value == "\u2014" else value
+
+
+_CHECKPOINT_TASK_RE = re.compile(r'<task\s+[^>]*?type=["\']?checkpoint', re.IGNORECASE)
+
+
+def _upsert_milestone_entry(existing: str, version: str, milestone_entry: str) -> str:
+    """Replace or append a milestone entry keyed by version."""
+    pattern = re.compile(
+        rf"^##\s+{re.escape(version)}(?:\s|$)[\s\S]*?(?:\n---\n\n|\Z)",
+        re.MULTILINE,
+    )
+    if pattern.search(existing):
+        return pattern.sub(milestone_entry, existing, count=1)
+
+    separator = "" if existing.endswith("\n\n") else ("\n" if existing.endswith("\n") else "\n\n")
+    return existing + separator + milestone_entry
 
 
 # ─── Pydantic Models ──────────────────────────────────────────────────────────
@@ -463,9 +483,61 @@ def _strip_suffix(name: str, suffix: str) -> str:
     return name
 
 
+
 def _sorted_phases(dirs: list[str]) -> list[str]:
     """Sort phase directory names by numeric segments."""
     return sorted(dirs, key=_phase_sort_key)
+
+
+@dataclass(frozen=True, slots=True)
+class _MilestoneCompletionSnapshot:
+    """Internal milestone-level completion summary shared across workflows."""
+
+    phase_numbers: tuple[str, ...]
+    phase_count: int
+    completed_phases: int
+    total_plans: int
+    all_phases_complete: bool
+
+
+def _milestone_completion_snapshot(cwd: Path) -> _MilestoneCompletionSnapshot:
+    """Return roadmap-plus-disk milestone completion state."""
+
+    roadmap = roadmap_analyze(cwd)
+    roadmap_phase_map = {phase_normalize(phase.number): phase for phase in roadmap.phases}
+    disk_phase_numbers = {
+        phase_normalize(match.group(1))
+        for phase_dir in _list_phase_dirs(cwd)
+        if (match := re.match(r"^(\d+(?:\.\d+)*)", phase_dir))
+    }
+
+    phase_numbers = tuple(sorted(set(roadmap_phase_map) | disk_phase_numbers, key=_phase_sort_key))
+    completed_phases = 0
+    total_plans = 0
+
+    for phase_number in phase_numbers:
+        roadmap_phase = roadmap_phase_map.get(phase_number)
+        phase_info = find_phase(cwd, phase_number)
+
+        if roadmap_phase is not None:
+            total_plans += roadmap_phase.plan_count
+        elif phase_info is not None:
+            total_plans += len(phase_info.plans)
+
+        if phase_info is None:
+            continue
+
+        if is_phase_complete(len(phase_info.plans), matching_phase_artifact_count(phase_info.plans, phase_info.summaries)):
+            completed_phases += 1
+
+    phase_count = len(phase_numbers)
+    return _MilestoneCompletionSnapshot(
+        phase_numbers=phase_numbers,
+        phase_count=phase_count,
+        completed_phases=completed_phases,
+        total_plans=total_plans,
+        all_phases_complete=phase_count > 0 and completed_phases == phase_count,
+    )
 
 
 def _planning_path(cwd: Path) -> Path:
@@ -533,7 +605,8 @@ def find_phase(cwd: Path, phase: str) -> PhaseInfo | None:
     if not phase:
         return None
 
-    phases_dir = _phases_dir(cwd)
+    layout = ProjectLayout(cwd)
+    phases_dir = layout.phases_dir
     normalized = phase_normalize(phase)
 
     if not phases_dir.is_dir():
@@ -571,17 +644,15 @@ def find_phase(cwd: Path, phase: str) -> PhaseInfo | None:
         phase_files = sorted(f.name for f in phase_dir.iterdir() if f.is_file())
 
         plans = sorted(f for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN)
-        summaries = sorted(f for f in phase_files if f.endswith(SUMMARY_SUFFIX) or f == STANDALONE_SUMMARY)
+        summaries = sorted(f for f in phase_files if layout.is_summary_file(f))
         has_research = any(f.endswith(RESEARCH_SUFFIX) or f == STANDALONE_RESEARCH for f in phase_files)
         has_context = any(f.endswith(CONTEXT_SUFFIX) or f == STANDALONE_CONTEXT for f in phase_files)
-        has_verification = any(f.endswith(VERIFICATION_SUFFIX) or f == STANDALONE_VERIFICATION for f in phase_files)
+        has_verification = any(f.endswith(VERIFICATION_SUFFIX) for f in phase_files)
         has_validation = any(f.endswith(VALIDATION_SUFFIX) or f == STANDALONE_VALIDATION for f in phase_files)
 
         # Determine incomplete plans (plans without matching summaries)
-        completed_plan_ids = {_strip_suffix(_strip_suffix(s, SUMMARY_SUFFIX), STANDALONE_SUMMARY) for s in summaries}
-        incomplete_plans = [
-            p for p in plans if _strip_suffix(_strip_suffix(p, PLAN_SUFFIX), STANDALONE_PLAN) not in completed_plan_ids
-        ]
+        completed_plan_ids = {phase_artifact_id(s, SUMMARY_SUFFIX, STANDALONE_SUMMARY) for s in summaries}
+        incomplete_plans = [p for p in plans if phase_artifact_id(p, PLAN_SUFFIX, STANDALONE_PLAN) not in completed_plan_ids]
 
         # Build slug
         phase_slug = None
@@ -638,7 +709,8 @@ def list_phase_files(cwd: Path, file_type: str, phase: str | None = None) -> Pha
         phase: Optional phase filter.
     """
     with grd_span("phases.list_files", file_type=file_type):
-        phases_dir = _phases_dir(cwd)
+        layout = ProjectLayout(cwd)
+        phases_dir = layout.phases_dir
         if not phases_dir.is_dir():
             return PhaseFilesResult()
 
@@ -660,7 +732,7 @@ def list_phase_files(cwd: Path, file_type: str, phase: str | None = None) -> Pha
             if file_type == "plans":
                 filtered = [f for f in dir_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN]
             elif file_type == "summaries":
-                filtered = [f for f in dir_files if f.endswith(SUMMARY_SUFFIX) or f == STANDALONE_SUMMARY]
+                filtered = [f for f in dir_files if layout.is_summary_file(f)]
             else:
                 filtered = dir_files
 
@@ -893,7 +965,8 @@ def validate_phase_waves(cwd: Path, phase: str) -> PhaseWaveValidationResult:
         plans: list[PlanEntry] = []
         errors: list[str] = []
         for plan_file in phase_info.plans:
-            plan_id = _strip_suffix(_strip_suffix(plan_file, PLAN_SUFFIX), STANDALONE_PLAN)
+            plan_key = phase_artifact_id(plan_file, PLAN_SUFFIX, STANDALONE_PLAN)
+            plan_id = phase_artifact_display_name(plan_key, STANDALONE_PLAN)
             try:
                 content = (phase_dir / plan_file).read_text(encoding="utf-8")
                 fm = _extract_frontmatter(content)
@@ -927,9 +1000,7 @@ def phase_plan_index(cwd: Path, phase: str) -> PhasePlanIndex:
     with grd_span("phases.plan_index", phase=normalized):
         phase_dir = cwd / phase_info.directory
 
-        completed_plan_ids = {
-            _strip_suffix(_strip_suffix(s, SUMMARY_SUFFIX), STANDALONE_SUMMARY) for s in phase_info.summaries
-        }
+        completed_plan_ids = {phase_artifact_id(s, SUMMARY_SUFFIX, STANDALONE_SUMMARY) for s in phase_info.summaries}
 
         plans: list[PlanEntry] = []
         waves: dict[str, list[str]] = {}
@@ -938,7 +1009,8 @@ def phase_plan_index(cwd: Path, phase: str) -> PhasePlanIndex:
         validation_errors: list[str] = []
 
         for plan_file in phase_info.plans:
-            plan_id = _strip_suffix(_strip_suffix(plan_file, PLAN_SUFFIX), STANDALONE_PLAN)
+            plan_key = phase_artifact_id(plan_file, PLAN_SUFFIX, STANDALONE_PLAN)
+            plan_id = phase_artifact_display_name(plan_key, STANDALONE_PLAN)
             try:
                 content = (phase_dir / plan_file).read_text(encoding="utf-8")
                 fm = _extract_frontmatter(content)
@@ -957,10 +1029,10 @@ def phase_plan_index(cwd: Path, phase: str) -> PhasePlanIndex:
             if "interactive" in fm:
                 interactive = fm["interactive"] in (True, "true")
 
-            if interactive:
+            if interactive or _CHECKPOINT_TASK_RE.search(content):
                 has_checkpoints = True
 
-            has_summary = plan_id in completed_plan_ids
+            has_summary = plan_key in completed_plan_ids
             if not has_summary:
                 incomplete.append(plan_id)
 
@@ -1006,7 +1078,8 @@ def roadmap_analyze(cwd: Path) -> RoadmapAnalysis:
         return RoadmapAnalysis()
 
     with grd_span("roadmap.analyze"):
-        phases_dir = _phases_dir(cwd)
+        layout = ProjectLayout(cwd)
+        phases_dir = layout.phases_dir
 
         # Read phase directories once
         phase_dir_names: list[str] = []
@@ -1046,7 +1119,9 @@ def roadmap_analyze(cwd: Path) -> RoadmapAnalysis:
             contract_advances = _coverage_items(section, "Advances")
             contract_anchor_coverage = _coverage_items(section, "Anchor coverage")
             contract_forbidden_proxies = _coverage_items(section, "Forbidden proxies")
-            has_contract_coverage = bool(contract_advances or contract_anchor_coverage or contract_forbidden_proxies)
+            has_contract_coverage = bool(
+                contract_advances or contract_anchor_coverage or contract_forbidden_proxies
+            )
 
             # Check disk status
             normalized = phase_normalize(phase_num)
@@ -1063,8 +1138,10 @@ def roadmap_analyze(cwd: Path) -> RoadmapAnalysis:
 
             if dir_match_name:
                 phase_files = [f.name for f in (phases_dir / dir_match_name).iterdir() if f.is_file()]
-                plan_count = sum(1 for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN)
-                summary_count = sum(1 for f in phase_files if f.endswith(SUMMARY_SUFFIX) or f == STANDALONE_SUMMARY)
+                plans = [f for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN]
+                summaries = [f for f in phase_files if layout.is_summary_file(f)]
+                plan_count = len(plans)
+                summary_count = matching_phase_artifact_count(plans, summaries)
                 has_context = any(f.endswith(CONTEXT_SUFFIX) or f == STANDALONE_CONTEXT for f in phase_files)
                 has_research = any(f.endswith(RESEARCH_SUFFIX) or f == STANDALONE_RESEARCH for f in phase_files)
 
@@ -1449,7 +1526,8 @@ def phase_remove(cwd: Path, target_phase: str, *, force: bool = False) -> PhaseR
     _validate_phase_number(target_phase)
 
     roadmap_path = _roadmap_path(cwd)
-    phases_dir = _phases_dir(cwd)
+    layout = ProjectLayout(cwd)
+    phases_dir = layout.phases_dir
 
     if not roadmap_path.exists():
         raise RoadmapNotFoundError("ROADMAP.md not found")
@@ -1474,11 +1552,7 @@ def phase_remove(cwd: Path, target_phase: str, *, force: bool = False) -> PhaseR
             # Check for executed work (inside lock to avoid TOCTOU race)
             if target_dir and not force:
                 target_path = phases_dir / target_dir
-                summaries = [
-                    f.name
-                    for f in target_path.iterdir()
-                    if f.name.endswith(SUMMARY_SUFFIX) or f.name == STANDALONE_SUMMARY
-                ]
+                summaries = [f.name for f in target_path.iterdir() if layout.is_summary_file(f.name)]
                 if summaries:
                     raise PhaseValidationError(
                         f"Phase {target_phase} has {len(summaries)} executed plan(s). Use force=True to remove anyway."
@@ -1611,7 +1685,7 @@ def phase_remove(cwd: Path, target_phase: str, *, force: bool = False) -> PhaseR
 
                     _save_state_markdown(cwd, state_content)
 
-        return PhaseRemoveResult(
+        result = PhaseRemoveResult(
             removed=target_phase,
             directory_deleted=target_dir,
             renamed_directories=renamed_dirs,
@@ -1619,6 +1693,9 @@ def phase_remove(cwd: Path, target_phase: str, *, force: bool = False) -> PhaseR
             roadmap_updated=True,
             state_updated=state_path.exists(),
         )
+
+    sync_phase_checkpoints(cwd)
+    return result
 
 
 def _renumber_decimal_phases(phases_dir: Path, normalized: str) -> tuple[list[RenameEntry], list[RenameEntry]]:
@@ -1828,7 +1905,7 @@ def phase_complete(cwd: Path, phase_num: str) -> PhaseCompleteResult:
                 raise PhaseValidationError(f"Phase {phase_num} has no plans. Run plan-phase {phase_num} first.")
 
             plan_count = len(phase_info.plans)
-            summary_count = len(phase_info.summaries)
+            summary_count = matching_phase_artifact_count(phase_info.plans, phase_info.summaries)
 
             if not is_phase_complete(plan_count, summary_count):
                 raise PhaseIncompleteError(phase_num, summary_count, plan_count)
@@ -1878,9 +1955,7 @@ def phase_complete(cwd: Path, phase_num: str) -> PhaseCompleteResult:
 
                     state_content = _replace_state_field(state_content, "Current Phase", next_phase_num or phase_num)
 
-                    phase_name_display = (
-                        next_phase_name.replace("-", " ") if next_phase_name else (next_phase_num or "\u2014")
-                    )
+                    phase_name_display = next_phase_name.replace('-', ' ') if next_phase_name else (next_phase_num or "\u2014")
                     state_content = _replace_state_field(state_content, "Current Phase Name", phase_name_display)
                     state_content = _replace_state_field(
                         state_content,
@@ -1906,6 +1981,11 @@ def phase_complete(cwd: Path, phase_num: str) -> PhaseCompleteResult:
                     state_content = _replace_state_field(state_content, "Last Activity Description", transition_msg)
 
                     _save_state_markdown(cwd, state_content)
+
+            # sync_phase_checkpoints() already degrades gracefully for malformed
+            # or unreadable summaries. Let unexpected render/write failures
+            # surface here instead of silently completing the lifecycle step.
+            sync_phase_checkpoints(cwd)
 
         return PhaseCompleteResult(
             completed_phase=phase_num,
@@ -1952,36 +2032,15 @@ def milestone_complete(cwd: Path, version: str, *, name: str | None = None) -> M
         # Gather stats from the union of roadmap phases and on-disk phase dirs so
         # milestone completion cannot ignore either unscaffolded roadmap entries
         # or real phase work that exists only on disk.
-        phase_count = 0
-        completed_phase_count = 0
-        total_plans = 0
         total_tasks = 0
         accomplishments: list[str] = []
 
-        roadmap = roadmap_analyze(cwd)
-        roadmap_phase_map = {phase_normalize(phase.number): phase for phase in roadmap.phases}
-        disk_phase_numbers = {
-            phase_normalize(match.group(1))
-            for phase_dir in _list_phase_dirs(cwd)
-            if (match := re.match(r"^(\d+(?:\.\d+)*)", phase_dir))
-        }
-        all_phase_numbers = sorted(set(roadmap_phase_map) | disk_phase_numbers, key=_phase_sort_key)
-        phase_count = len(all_phase_numbers)
+        completion_snapshot = _milestone_completion_snapshot(cwd)
 
-        for phase_number in all_phase_numbers:
-            roadmap_phase = roadmap_phase_map.get(phase_number)
+        for phase_number in completion_snapshot.phase_numbers:
             phase_info = find_phase(cwd, phase_number)
-
-            if roadmap_phase is not None:
-                total_plans += roadmap_phase.plan_count
-            elif phase_info is not None:
-                total_plans += len(phase_info.plans)
-
             if phase_info is None:
                 continue
-
-            if is_phase_complete(len(phase_info.plans), len(phase_info.summaries)):
-                completed_phase_count += 1
 
             phase_dir = phases_dir / Path(phase_info.directory).name
             for summary_name in phase_info.summaries:
@@ -2009,8 +2068,11 @@ def milestone_complete(cwd: Path, version: str, *, name: str | None = None) -> M
                 total_tasks += len(task_matches)
 
         # Guard: all phases must be complete
-        if phase_count > 0 and completed_phase_count < phase_count:
-            raise MilestoneIncompleteError(phase_count - completed_phase_count, phase_count)
+        if completion_snapshot.phase_count > 0 and not completion_snapshot.all_phases_complete:
+            raise MilestoneIncompleteError(
+                completion_snapshot.phase_count - completion_snapshot.completed_phases,
+                completion_snapshot.phase_count,
+            )
 
         with file_lock(roadmap_path):
             if roadmap_path.exists():
@@ -2034,13 +2096,13 @@ def milestone_complete(cwd: Path, version: str, *, name: str | None = None) -> M
             acc_list = "\n".join(f"- {a}" for a in accomplishments) if accomplishments else "- (none recorded)"
             milestone_entry = (
                 f"## {version} {milestone_name} (Shipped: {today})\n\n"
-                f"**Phases completed:** {phase_count} phases, {total_plans} plans, {total_tasks} tasks\n\n"
+                f"**Phases completed:** {completion_snapshot.phase_count} phases, {completion_snapshot.total_plans} plans, {total_tasks} tasks\n\n"
                 f"**Key accomplishments:**\n{acc_list}\n\n---\n\n"
             )
 
             if milestones_path.exists():
                 existing = milestones_path.read_text(encoding="utf-8")
-                atomic_write(milestones_path, existing + "\n" + milestone_entry)
+                atomic_write(milestones_path, _upsert_milestone_entry(existing, version, milestone_entry))
             else:
                 atomic_write(milestones_path, f"# Milestones\n\n{milestone_entry}")
 
@@ -2056,12 +2118,16 @@ def milestone_complete(cwd: Path, version: str, *, name: str | None = None) -> M
                     )
                     _save_state_markdown(cwd, state_content)
 
+            # sync_phase_checkpoints() already handles malformed or unreadable
+            # summaries non-fatally. Let unexpected sync failures propagate.
+            sync_phase_checkpoints(cwd)
+
         return MilestoneCompleteResult(
             version=version,
             name=milestone_name,
             date=today,
-            phases=phase_count,
-            plans=total_plans,
+            phases=completion_snapshot.phase_count,
+            plans=completion_snapshot.total_plans,
             tasks=total_tasks,
             accomplishments=accomplishments,
             archived=ArchiveStatus(
@@ -2086,7 +2152,8 @@ def progress_render(cwd: Path, fmt: str = "json") -> ProgressJsonResult | Progre
              or ``"table"`` (markdown table).
     """
     with grd_span("progress.render", format=fmt):
-        phases_dir = _phases_dir(cwd)
+        layout = ProjectLayout(cwd)
+        phases_dir = layout.phases_dir
         milestone = get_milestone_info(cwd)
 
         phases: list[PhaseProgress] = []
@@ -2101,8 +2168,10 @@ def progress_render(cwd: Path, fmt: str = "json") -> ProgressJsonResult | Progre
                 phase_name = dm.group(2).replace("-", " ") if dm and dm.group(2) else ""
 
                 phase_files = [f.name for f in (phases_dir / d).iterdir() if f.is_file()]
-                plan_count = sum(1 for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN)
-                summary_count = sum(1 for f in phase_files if f.endswith(SUMMARY_SUFFIX) or f == STANDALONE_SUMMARY)
+                plans = [f for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN]
+                summaries = [f for f in phase_files if layout.is_summary_file(f)]
+                plan_count = len(plans)
+                summary_count = matching_phase_artifact_count(plans, summaries)
 
                 total_plans += plan_count
                 total_summaries += summary_count

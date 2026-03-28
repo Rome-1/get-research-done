@@ -93,7 +93,7 @@ def test_convention_handlers_return_error_for_invalid_lock_data() -> None:
 def test_convention_set_returns_error_on_timeout(tmp_path: Path) -> None:
     from grd.mcp.servers.conventions_server import convention_set
 
-    planning = tmp_path / ".grd"
+    planning = tmp_path / "GRD"
     planning.mkdir()
     (planning / "state.json").write_text("{}", encoding="utf-8")
 

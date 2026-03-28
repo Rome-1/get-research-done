@@ -25,5 +25,8 @@
       "max_results": 1
     },
     "expect": "contains paper"
-  }
+  },
+  "optional": true,
+  "availability": "conditional",
+  "availability_condition": "Available only when the optional Python module 'arxiv_mcp_server' is installed."
 }

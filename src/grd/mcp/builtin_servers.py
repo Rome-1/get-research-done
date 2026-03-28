@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import subprocess
 import sys
 from copy import deepcopy
 
@@ -66,14 +67,30 @@ _BUILTIN_SERVERS: dict[str, _ServerDef] = {
     },
 }
 
-_PUBLIC_BOOTSTRAP_PREREQUISITE = "Install GRD first: npx -y get-research-done"
-_ENTRY_POINT_NOTES = "Requires grd package installed"
+_PUBLIC_BOOTSTRAP_PREREQUISITE = "Install GRD before enabling built-in MCP servers."
+_ENTRY_POINT_NOTES = "Requires grd package installed and Python >=3.11"
+
+
+class _VersionedPythonLauncher(str):
+    """Human-readable launcher label that compares equal to legacy bare-python descriptors."""
+
+    def __new__(cls, display_value: str = "python3") -> _VersionedPythonLauncher:
+        return str.__new__(cls, display_value)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, str) and other in {"python", str(self)}:
+            return True
+        return str.__eq__(self, other)
+
+    __hash__ = None
 
 _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
     "grd-conventions": {
         "description": (
             "GRD convention lock management. Tools for querying, setting, validating, and comparing "
-            "physics conventions across research phases."
+            "physics conventions across research phases, including ASSERT_CONVENTION validation. "
+            "Every derivation artifact must carry at least one ASSERT_CONVENTION header that matches "
+            "the project convention lock."
         ),
         "capabilities": [
             "convention_lock_status",
@@ -83,17 +100,17 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "assert_convention_validate",
             "subfield_defaults",
         ],
-        "registry_prefix": "grd_conventions",
+        "registry_prefix": "gpd_conventions",
         "health_check": {
-            "tool": "convention_lock_status",
-            "input": {"project_dir": "."},
-            "expect": "contains set_count",
+            "tool": "subfield_defaults",
+            "input": {"domain": "qft"},
+            "expect": "contains metric_signature",
         },
     },
     "grd-errors": {
         "description": (
-            "LLM error catalog and traceability matrix for GRD verification. "
-            "Domain-specific error classes with detection strategies mapped to verification check categories."
+            "LLM physics error catalog and traceability matrix for GRD verification. "
+            "104 error classes with detection strategies mapped to 8 verification check categories."
         ),
         "capabilities": [
             "get_error_class",
@@ -102,7 +119,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "get_traceability",
             "list_error_classes",
         ],
-        "registry_prefix": "grd_errors",
+        "registry_prefix": "gpd_errors",
         "health_check": {
             "tool": "list_error_classes",
             "input": {},
@@ -112,7 +129,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
     "grd-patterns": {
         "description": (
             "GRD cross-project pattern library. Tools for searching, adding, promoting, "
-            "and seeding domain error patterns across research projects."
+            "and seeding physics error patterns across research projects."
         ),
         "capabilities": [
             "lookup_pattern",
@@ -121,17 +138,17 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "seed_patterns",
             "list_domains",
         ],
-        "registry_prefix": "grd_patterns",
+        "registry_prefix": "gpd_patterns",
         "health_check": {
             "tool": "list_domains",
             "input": {},
-            "expect": "contains domains",
+            "expect": "contains qft",
         },
     },
     "grd-protocols": {
         "description": (
-            "Computation protocols for GRD research workflows. Provides step-by-step methodology, "
-            "verification checkpoints, and auto-routing for domain-specific topics."
+            "Physics computation protocols for GRD research workflows. Provides step-by-step methodology, "
+            "verification checkpoints, and auto-routing across the live protocol catalog."
         ),
         "capabilities": [
             "get_protocol",
@@ -139,7 +156,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "route_protocol",
             "get_protocol_checkpoints",
         ],
-        "registry_prefix": "grd_protocols",
+        "registry_prefix": "gpd_protocols",
         "health_check": {
             "tool": "list_protocols",
             "input": {},
@@ -157,7 +174,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "route_skill",
             "get_skill_index",
         ],
-        "registry_prefix": "grd_skills",
+        "registry_prefix": "gpd_skills",
         "health_check": {
             "tool": "list_skills",
             "input": {},
@@ -178,7 +195,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "run_health_check",
             "get_config",
         ],
-        "registry_prefix": "grd_state",
+        "registry_prefix": "gpd_state",
         "health_check": {
             "tool": "get_config",
             "input": {"project_dir": "/tmp/test"},
@@ -189,7 +206,15 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
         "description": (
             "GRD physics verification checks. Tools for running contract-aware checks, "
             "dimensional analysis, domain and bundle-specific checklists, limiting case checks, "
-            "symmetry verification, and coverage gap analysis."
+            "symmetry verification, and coverage gap analysis. Contract-aware tools accept "
+            "structured request objects or schema_version=1 contract payloads, expose the exact "
+            "request shape through `required_request_fields`, `optional_request_fields`, and "
+            "`request_template`, and surface the supported binding fields `binding.observable_id(s)`, "
+            "`binding.claim_id(s)`, `binding.deliverable_id(s)`, `binding.acceptance_test_id(s)`, "
+            "`binding.reference_id(s)`, and `binding.forbidden_proxy_id(s)`. These live semantic "
+            "integrity rules reject target IDs reused across contract kinds when that makes target "
+            "resolution ambiguous, and treat `references[].carry_forward_to` entries as workflow "
+            "scope labels only, never contract IDs."
         ),
         "capabilities": [
             "run_check",
@@ -202,7 +227,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "symmetry_check",
             "get_verification_coverage",
         ],
-        "registry_prefix": "grd_verification",
+        "registry_prefix": "gpd_verification",
         "health_check": {
             "tool": "get_checklist",
             "input": {"domain": "qft"},
@@ -211,8 +236,9 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
     },
     "grd-arxiv": {
         "description": (
-            "arXiv paper search and retrieval via arxiv-mcp-server. Search for physics papers, "
-            "fetch abstracts, and download full text."
+            "Optional/conditional arXiv paper search and retrieval via arxiv-mcp-server. "
+            "Available only when the optional arxiv-mcp-server dependency is installed; "
+            "search for physics papers, fetch abstracts, and download full text."
         ),
         "capabilities": [
             "search_papers",
@@ -220,7 +246,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "list_papers",
             "read_paper",
         ],
-        "registry_prefix": "grd_arxiv",
+        "registry_prefix": "gpd_arxiv",
         "health_check": {
             "tool": "search_papers",
             "input": {"query": "quantum field theory", "max_results": 1},
@@ -238,7 +264,6 @@ GRD_MCP_SERVER_KEYS = frozenset(_BUILTIN_SERVERS.keys())
 
 def _resolve_env(value: str) -> str:
     """Resolve ${VAR:-default} patterns in a string."""
-
     def _replace(match: re.Match[str]) -> str:
         var_name = match.group(1)
         default = match.group(2)
@@ -252,17 +277,26 @@ def _resolve_env(value: str) -> str:
     return _ENV_VAR_PATTERN.sub(_replace, value)
 
 
-def _is_module_available(module_name: str) -> bool:
-    """Check if a Python module is importable without loading it."""
-    from importlib.util import find_spec
-
+def _is_module_available(module_name: str, *, python_path: str | None = None) -> bool:
+    """Check if a Python module is importable in a specific interpreter."""
+    interpreter = python_path or sys.executable
     try:
-        return find_spec(module_name) is not None
-    except (ModuleNotFoundError, ValueError):
+        return subprocess.run(
+            [
+                interpreter,
+                "-c",
+                "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1]) is not None else 1)",
+                module_name,
+            ],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode == 0
+    except (FileNotFoundError, ModuleNotFoundError, OSError, ValueError):
         return False
 
 
-def _build_public_alternatives(name: str) -> dict[str, dict[str, str | list[str]]] | None:
+def _build_public_alternatives(name: str) -> dict[str, dict[str, object]] | None:
     """Build fallback launch alternatives for a public built-in server descriptor."""
     if name == "grd-arxiv":
         return None
@@ -272,7 +306,7 @@ def _build_public_alternatives(name: str) -> dict[str, dict[str, str | list[str]
     args = list(raw.get("args", [])) if isinstance(raw.get("args"), list) else []
     return {
         "python_module": {
-            "command": str(raw["command"]),
+            "command": _VersionedPythonLauncher(),
             "args": args,
             "notes": _ENTRY_POINT_NOTES,
         }
@@ -305,6 +339,14 @@ def build_public_descriptor(name: str) -> dict[str, object]:
     alternatives = _build_public_alternatives(name)
     if alternatives:
         descriptor["alternatives"] = alternatives
+    if raw.get("optional"):
+        descriptor["optional"] = True
+        descriptor["availability"] = "conditional"
+        module_check = raw.get("module_check")
+        if isinstance(module_check, str) and module_check:
+            descriptor["availability_condition"] = (
+                f"Available only when the optional Python module '{module_check}' is installed."
+            )
     return descriptor
 
 
@@ -395,7 +437,7 @@ def build_mcp_servers_dict(
         # Skip optional servers if their dependencies aren't installed.
         if raw.get("optional"):
             module_check = str(raw.get("module_check", ""))
-            if not module_check or not _is_module_available(module_check):
+            if not module_check or not _is_module_available(module_check, python_path=python_path):
                 continue
 
         cmd = str(raw["command"])

@@ -54,7 +54,7 @@ Use the init payload to extract:
 Search the local workspace for relevant mentions of the requested concept:
 
 ```bash
-rg -n -i --fixed-strings -- "{concept}" .grd paper manuscript docs src 2>/dev/null | head -60
+rg -n -i --fixed-strings -- "{concept}" GRD paper manuscript docs src 2>/dev/null | head -60
 ```
 
 Also check for nearby high-value context when present:

@@ -305,7 +305,7 @@ Use the cross-convention interaction table from `<convention_validation>` to ide
 After locking a new convention mid-execution:
 1. Update CONVENTIONS.md with the new entry
 2. Add an ASSERT_CONVENTION line to the current derivation file
-3. Verify compatibility with all prior derivation files in the current phase (grep for ASSERT_CONVENTION headers)
+3. Verify compatibility with all prior derivation files in the current phase (search_files for ASSERT_CONVENTION headers)
 4. If any prior file in this phase assumed a different choice for this convention → flag as DEVIATION Rule 5
 
 ### Worked Example

@@ -84,7 +84,7 @@ Removing Phase {target}: {Name}
 This will:
 - Delete: .grd/phases/{target}-{slug}/
 - Renumber all subsequent phases
-- Update: ROADMAP.md, STATE.md
+- Update: ROADMAP.md, STATE.md, checkpoint shelf artifacts
 
 Proceed? (y/n)
 ```
@@ -115,6 +115,7 @@ The CLI handles:
 - Renaming all files inside renumbered directories (PLAN.md, SUMMARY.md, etc.)
 - Updating ROADMAP.md (removing section, renumbering all phase references, updating dependencies)
 - Updating STATE.md (decrementing phase count)
+- Regenerating `.grd/CHECKPOINTS.md` and `.grd/phase-checkpoints/*.md`
 
 Extract from result: `removed`, `directory_deleted`, `renamed_directories`, `renamed_files`, `roadmap_updated`, `state_updated`.
 </step>
@@ -123,11 +124,11 @@ Extract from result: `removed`, `directory_deleted`, `renamed_directories`, `ren
 Stage and commit the removal:
 
 ```bash
-PRE_CHECK=$(grd pre-commit-check --files .grd/ROADMAP.md .grd/STATE.md .grd/state.json 2>&1) || true
+PRE_CHECK=$(grd pre-commit-check --files .grd/ROADMAP.md .grd/STATE.md .grd/state.json .grd/CHECKPOINTS.md .grd/phase-checkpoints 2>&1) || true
 echo "$PRE_CHECK"
 
 grd commit "chore: remove phase {target} ({original-phase-name})" \
-  --files .grd/phases/ .grd/ROADMAP.md .grd/STATE.md .grd/state.json
+  --files .grd/phases/ .grd/ROADMAP.md .grd/STATE.md .grd/state.json .grd/CHECKPOINTS.md .grd/phase-checkpoints
 ```
 
 The commit message preserves the historical record of what was removed.
@@ -142,7 +143,7 @@ Phase {target} ({original-name}) removed.
 Changes:
 - Deleted: .grd/phases/{target}-{slug}/
 - Renumbered: {N} directories and {M} files
-- Updated: ROADMAP.md, STATE.md
+- Updated: ROADMAP.md, STATE.md, checkpoint shelf artifacts
 - Committed: chore: remove phase {target} ({original-name})
 
 ---
@@ -176,6 +177,7 @@ Phase removal is complete when:
 
 - [ ] Target phase validated as future/unstarted
 - [ ] `grd phase remove` executed successfully
+- [ ] `.grd/CHECKPOINTS.md` and `.grd/phase-checkpoints/*.md` resynced
 - [ ] Changes committed with descriptive message
 - [ ] User informed of changes
 

@@ -43,25 +43,25 @@ from grd.core.phases import (
 
 
 def _setup_project(tmp_path: Path) -> Path:
-    (tmp_path / ".grd" / "phases").mkdir(parents=True)
+    (tmp_path / "GRD" / "phases").mkdir(parents=True)
     return tmp_path
 
 
 def _create_phase(tmp_path: Path, name: str) -> Path:
-    d = tmp_path / ".grd" / "phases" / name
+    d = tmp_path / "GRD" / "phases" / name
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def _write_roadmap(tmp_path: Path, content: str) -> Path:
-    p = tmp_path / ".grd" / "ROADMAP.md"
+    p = tmp_path / "GRD" / "ROADMAP.md"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(textwrap.dedent(content))
     return p
 
 
 def _write_state(tmp_path: Path, content: str) -> Path:
-    p = tmp_path / ".grd" / "STATE.md"
+    p = tmp_path / "GRD" / "STATE.md"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(textwrap.dedent(content))
     return p
@@ -78,7 +78,7 @@ class TestEdgeMissingPhasesDir:
 
     def test_progress_handles_missing_phases_dir(self, tmp_path: Path) -> None:
         """progress json returns 0% and empty phases when no phases dir exists."""
-        (tmp_path / ".grd").mkdir(parents=True)
+        (tmp_path / "GRD").mkdir(parents=True)
         _write_roadmap(tmp_path, "## v1.0\n")
         # No .grd/phases/ directory at all
 
@@ -95,13 +95,13 @@ class TestEdgeMissingPhasesDir:
 
     def test_find_phase_with_no_phases_dir(self, tmp_path: Path) -> None:
         """find_phase returns None when .grd/phases/ doesn't exist."""
-        (tmp_path / ".grd").mkdir(parents=True)
+        (tmp_path / "GRD").mkdir(parents=True)
         result = find_phase(tmp_path, "5")
         assert result is None
 
     def test_roadmap_analyze_no_phases_dir(self, tmp_path: Path) -> None:
         """roadmap_analyze works when phases dir is missing — reports no_directory."""
-        (tmp_path / ".grd").mkdir(parents=True)
+        (tmp_path / "GRD").mkdir(parents=True)
         _write_roadmap(
             tmp_path,
             """\
@@ -498,14 +498,23 @@ class TestEdgePhaseNumberValidation:
 class TestEdgeFileDetection:
     """find_phase correctly detects VERIFICATION.md, CONTEXT.md, etc."""
 
-    def test_verification_file_detected(self, tmp_path: Path) -> None:
+    def test_canonical_verification_file_detected(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        d = _create_phase(tmp_path, "01-setup")
+        (d / "01-VERIFICATION.md").write_text("verified")
+
+        info = find_phase(tmp_path, "1")
+        assert info is not None
+        assert info.has_verification is True
+
+    def test_legacy_verification_file_is_ignored(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         d = _create_phase(tmp_path, "01-setup")
         (d / "VERIFICATION.md").write_text("verified")
 
         info = find_phase(tmp_path, "1")
         assert info is not None
-        assert info.has_verification is True
+        assert info.has_verification is False
 
     def test_validation_file_detected(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -566,7 +575,7 @@ class TestEdgeStandalonePlan:
         assert "PLAN.md" in info.plans
         assert len(info.plans) == 1
 
-    def test_standalone_summary_completes_standalone_plan(self, tmp_path: Path) -> None:
+    def test_standalone_plan_and_summary_complete_phase(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         d = _create_phase(tmp_path, "01-setup")
         (d / "PLAN.md").write_text("plan")

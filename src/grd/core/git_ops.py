@@ -346,7 +346,7 @@ def cmd_pre_commit_check(cwd: Path, files: list[str]) -> PreCommitCheckResult:
     Behavior:
     - If *files* is empty, validates the currently staged files.
     - Directory inputs are expanded recursively to regular files.
-    - Blocks scratch/internal artifact paths while allowing normal `.grd` docs.
+    - Blocks scratch/internal artifact paths while allowing normal `GRD` docs.
     """
     resolved_files = _expand_check_inputs(cwd, files)
     if not resolved_files:
@@ -465,6 +465,14 @@ def cmd_commit(
             files=files_to_stage,
             error="nothing to commit (no staged changes)",
             reason="nothing_to_commit",
+        )
+    if rc != 1:
+        return CommitResult(
+            committed=False,
+            message=message,
+            files=files_to_stage,
+            error=f"git diff --cached --quiet failed: {stderr or stdout}",
+            reason="git_diff_failed",
         )
 
     # Commit

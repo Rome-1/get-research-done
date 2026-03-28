@@ -28,7 +28,7 @@
   },
   "alternatives": {
     "python_module": {
-      "command": "python",
+      "command": "python3",
       "args": [
         "-m",
         "grd.mcp.servers.conventions_server"

@@ -18,7 +18,7 @@ test -f .grd/INSIGHTS.md && echo "EXISTS" || echo "MISSING"
 **If MISSING:** Create from template:
 
 ```bash
-mkdir -p .grd
+mkdir -p GRD
 ```
 
 Write `.grd/INSIGHTS.md`:

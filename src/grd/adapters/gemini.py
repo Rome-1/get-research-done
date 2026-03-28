@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shlex
 import shutil
 from pathlib import Path
 
@@ -20,16 +21,18 @@ from grd.adapters.base import RuntimeAdapter
 from grd.adapters.install_utils import (
     HOOK_SCRIPTS,
     MANIFEST_NAME,
+    _is_hook_command_for_script,
     build_hook_command,
-    cleanup_settings_hooks,
     compile_markdown_for_runtime,
     convert_tool_references_in_body,
     ensure_update_hook,
-    entry_has_grd_hook,
     hook_python_interpreter,
+    materialize_first_round_review_schema_headings,
     process_attribution,
     protect_runtime_agent_prompt,
+    prune_empty_ancestors,
     read_settings,
+    remove_empty_json_object_file,
     remove_stale_agents,
     render_markdown_frontmatter,
     split_markdown_frontmatter,
@@ -37,6 +40,9 @@ from grd.adapters.install_utils import (
     verify_installed,
     write_manifest,
     write_settings,
+)
+from grd.adapters.install_utils import (
+    finish_install as _finish_install,
 )
 from grd.adapters.tool_names import build_runtime_alias_map, reference_translation_map, translate_for_runtime
 
@@ -89,19 +95,23 @@ _TOOL_REFERENCE_MAP = reference_translation_map(
 
 _GEMINI_POLICY_DIR_NAME = "policies"
 _GEMINI_POLICY_FILE_NAME = "grd-auto-edit.toml"
+_GEMINI_RUNTIME_BIN_DIR_NAME = "bin"
+_GEMINI_YOLO_WRAPPER_NAME = "gemini-grd-yolo"
 _GEMINI_APPROVED_CONTRACT_PATH = ".grd/.approved-project-contract.json"
 _GEMINI_STATIC_POLICY_COMMAND_PREFIXES: tuple[str, ...] = (
     "git init",
-    "mkdir -p .grd",
+    "mkdir -p GRD",
     "mkdir -p .grd/research",
     "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\"",
 )
-_GRD_CLI_INVOCATION_RE = re.compile(r'(?<![A-Za-z0-9_./:-])grd(?=(?:\s|["\'`]|$))')
+_SHELL_FENCE_LANGUAGES = frozenset({"bash", "sh", "shell", "zsh"})
+_INLINE_GRD_COMMAND_RE = re.compile(r"`(?P<command>grd(?=\s)[^`]*?)`")
 _GEMINI_COMMAND_RUNTIME_NOTE = (
     "<gemini_runtime_notes>\n"
     "Gemini shell compatibility:\n"
     "- When shell steps call the GRD CLI, use {launcher} instead of the ambient `grd` on PATH.\n"
     "- Gemini policy checks are syntactic in headless auto-edit mode. Prefer direct commands and reason over stdout instead of wrapping approved commands in shell variables, `$(...)`, heredocs, or extra chained blocks.\n"
+    "- Any remaining `VAR=$(...)` examples in rendered workflow guidance are non-runnable shorthand; do not copy them into Gemini auto-edit mode.\n"
     "- Keep contract JSON in-memory or under `.grd/`. Do not write approved contracts to `/tmp`.\n"
     "</gemini_runtime_notes>\n\n"
 )
@@ -141,7 +151,7 @@ grd init progress --include state,config
 
 If the init command fails, stop, surface the error, and do not proceed."""
 _GEMINI_MINIMAL_COMMIT_BLOCK = """```bash
-mkdir -p .grd
+mkdir -p GRD
 
 PRE_CHECK=$(grd pre-commit-check --files .grd/PROJECT.md .grd/REQUIREMENTS.md .grd/ROADMAP.md .grd/STATE.md .grd/state.json .grd/config.json 2>&1) || true
 echo "$PRE_CHECK"
@@ -151,7 +161,7 @@ grd commit "docs: initialize research project (minimal)" --files .grd/PROJECT.md
 _GEMINI_MINIMAL_COMMIT_REPLACEMENT = """Create the directory structure, run the pre-check, then commit everything. In Gemini auto-edit mode, execute each shell command separately rather than pasting the whole block as one command.
 
 ```bash
-mkdir -p .grd
+mkdir -p GRD
 ```
 
 Then run:
@@ -198,9 +208,104 @@ def _gemini_policy_command_prefixes(bridge_command: str) -> tuple[str, ...]:
     )
 
 
-def _rewrite_gpd_cli_invocations(content: str, bridge_command: str) -> str:
-    """Rewrite bare ``grd`` CLI calls to the shared runtime CLI bridge."""
-    return _GRD_CLI_INVOCATION_RE.sub(bridge_command, content)
+def _rewrite_grd_cli_invocations(content: str, bridge_command: str) -> str:
+    """Rewrite shell-command ``grd`` calls to the shared runtime CLI bridge.
+
+    Restrict rewrites to fenced shell code blocks and inline code spans that
+    actually contain runnable commands. This keeps prose and quoted strings
+    intact while still rewriting command positions.
+    """
+    rewritten: list[str] = []
+    in_shell_fence = False
+
+    for line in content.splitlines(keepends=True):
+        stripped = line.lstrip()
+        if stripped.startswith("```"):
+            if in_shell_fence:
+                in_shell_fence = False
+            else:
+                fence_language = stripped[3:].strip().lower()
+                in_shell_fence = fence_language in _SHELL_FENCE_LANGUAGES
+            rewritten.append(line)
+            continue
+
+        if in_shell_fence:
+            rewritten.append(_rewrite_gemini_shell_line(line, bridge_command))
+            continue
+
+        rewritten.append(_rewrite_inline_grd_command_spans(line, bridge_command))
+
+    return "".join(rewritten)
+
+
+def _rewrite_inline_grd_command_spans(content: str, bridge_command: str) -> str:
+    """Rewrite inline markdown code spans that execute ``grd`` commands."""
+    return _INLINE_GRD_COMMAND_RE.sub(lambda match: f"`{bridge_command}{match.group('command')[3:]}`", content)
+
+
+def _rewrite_gemini_shell_line(line: str, bridge_command: str) -> str:
+    """Rewrite only command-position ``grd`` tokens on a shell line."""
+    pieces: list[str] = []
+    index = 0
+    in_single = False
+    in_double = False
+
+    while index < len(line):
+        char = line[index]
+        previous = line[index - 1] if index > 0 else ""
+
+        if char == "'" and not in_double:
+            in_single = not in_single
+            pieces.append(char)
+            index += 1
+            continue
+
+        if char == '"' and not in_single and previous != "\\":
+            in_double = not in_double
+            pieces.append(char)
+            index += 1
+            continue
+
+        if (
+            not in_single
+            and not in_double
+            and line.startswith("grd", index)
+            and _is_grd_command_start(line, index)
+            and _is_grd_token_end(line, index + 3)
+        ):
+            pieces.append(bridge_command)
+            index += 3
+            continue
+
+        pieces.append(char)
+        index += 1
+
+    return "".join(pieces)
+
+
+def _is_grd_command_start(line: str, index: int) -> bool:
+    """Return whether ``grd`` starts a shell command token at *index*."""
+    probe = index - 1
+    while probe >= 0 and line[probe] in " \t":
+        probe -= 1
+
+    if probe < 0:
+        return True
+
+    if line[probe] in "|;(!":
+        return True
+
+    if probe >= 1 and line[probe - 1 : probe + 1] in {"&&", "||", "$("}:
+        return True
+
+    return False
+
+
+def _is_grd_token_end(line: str, end_index: int) -> bool:
+    """Return whether the token ending at *end_index* is a standalone ``grd``."""
+    if end_index >= len(line):
+        return True
+    return line[end_index].isspace() or line[end_index] in {'"', "'", "`", ";", "|", "&", ")", "<", ">"}
 
 
 def _inject_gemini_command_runtime_note(content: str, bridge_command: str) -> str:
@@ -235,11 +340,11 @@ def _rewrite_gemini_shell_workflow_guidance(content: str) -> str:
         content,
     )
     content = content.replace(
-        "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd --raw validate project-contract -",
+        'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd --raw validate project-contract -',
         f"grd --raw validate project-contract {_GEMINI_APPROVED_CONTRACT_PATH}",
     )
     content = content.replace(
-        "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd state set-project-contract -",
+        'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd state set-project-contract -',
         f"grd state set-project-contract {_GEMINI_APPROVED_CONTRACT_PATH}",
     )
     content = content.replace(
@@ -254,7 +359,208 @@ def _rewrite_gemini_shell_workflow_guidance(content: str) -> str:
         "Do not write `/tmp` intermediates for the approved contract. Prefer piping the exact approved JSON directly to `grd ... -`. Only write a file if the user explicitly wants a durable saved copy, and if so place it under the project, not an OS temp directory.",
         _GEMINI_CONTRACT_FILE_NOTE,
     )
+    content = _rewrite_gemini_capture_and_check_blocks(content)
     return content
+
+
+def _rewrite_gemini_capture_and_check_blocks(content: str) -> str:
+    """Rewrite Gemini-hostile shell capture examples into direct command guidance."""
+    content = content.replace(
+        """```bash
+CONV_CHECK=$(grd --raw convention check 2>/dev/null)
+if [ $? -ne 0 ]; then
+  echo "WARNING: Convention verification failed — unit mismatches between theory and experiment are the #1 source of false discrepancies"
+  echo "$CONV_CHECK"
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run convention verification directly instead of capturing it in CONV_CHECK.
+grd --raw convention check 2>/dev/null
+```""",
+    )
+    content = content.replace(
+        """```bash
+CONV_CHECK=$(grd --raw convention check 2>/dev/null)
+if [ $? -ne 0 ]; then
+  echo "WARNING: Convention verification failed — unit mismatches between theory and experiment are the #1 source of false discrepancies"
+  echo "$CONV_CHECK"
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run convention verification directly instead of capturing it in CONV_CHECK.
+grd --raw convention check 2>/dev/null
+```""",
+    )
+    content = content.replace(
+        """```bash
+CONV_CHECK=$(grd --raw convention check 2>/dev/null)
+if [ $? -ne 0 ]; then
+  echo "WARNING: Convention verification failed — review before writing paper"
+  echo "$CONV_CHECK"
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run convention verification directly instead of capturing it in CONV_CHECK.
+grd --raw convention check 2>/dev/null
+```""",
+    )
+    content = content.replace(
+        """```bash
+CONTEXT=$(grd --raw validate command-context validate-conventions "$ARGUMENTS")
+if [ $? -ne 0 ]; then
+  echo "$CONTEXT"
+  exit 1
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run the command-context validation directly instead of capturing it in CONTEXT.
+grd --raw validate command-context validate-conventions "$ARGUMENTS"
+```""",
+    )
+    content = content.replace(
+        """```bash
+CONTEXT=$(grd --raw validate command-context write-paper "$ARGUMENTS")
+if [ $? -ne 0 ]; then
+  echo "$CONTEXT"
+  exit 1
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run the command-context validation directly instead of capturing it in CONTEXT.
+grd --raw validate command-context write-paper "$ARGUMENTS"
+```""",
+    )
+    content = content.replace(
+        """```bash
+QUALITY=$(grd --raw validate paper-quality --from-project . 2>/dev/null)
+```""",
+        """```bash
+# Gemini auto-edit: run paper-quality validation directly instead of capturing it in QUALITY.
+grd --raw validate paper-quality --from-project . 2>/dev/null
+```""",
+    )
+    content = content.replace(
+        """```bash
+PRE_CHECK=$(grd pre-commit-check --files "${COMPARISON_OUTPUT_PATH}" 2>&1) || true
+echo "$PRE_CHECK"
+
+grd commit \
+  "docs: theory-experiment comparison for {slug}" \
+  --files "${COMPARISON_OUTPUT_PATH}"
+```""",
+        """```bash
+# Gemini auto-edit: run the pre-check directly; if it fails, inspect the output before committing.
+grd pre-commit-check --files "${COMPARISON_OUTPUT_PATH}" 2>&1 || true
+
+grd commit \
+  "docs: theory-experiment comparison for {slug}" \
+  --files "${COMPARISON_OUTPUT_PATH}"
+```""",
+    )
+    content = content.replace(
+        """```bash
+PRE_CHECK=$(grd pre-commit-check --files .grd/DEPENDENCY-GRAPH.md 2>&1) || true
+echo "$PRE_CHECK"
+
+grd commit "docs: generate dependency graph" --files .grd/DEPENDENCY-GRAPH.md
+```""",
+        """```bash
+# Gemini auto-edit: run the pre-check directly; if it fails, inspect the output before committing.
+grd pre-commit-check --files .grd/DEPENDENCY-GRAPH.md 2>&1 || true
+
+grd commit "docs: generate dependency graph" --files .grd/DEPENDENCY-GRAPH.md
+```""",
+    )
+    content = content.replace(
+        """```bash
+INIT=$(grd init phase-op)
+if [ $? -ne 0 ]; then
+  echo "ERROR: grd initialization failed: $INIT"
+  # STOP — display the error to the user and do not proceed.
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run initialization directly instead of capturing it in INIT.
+grd init phase-op
+```""",
+    )
+    content = content.replace(
+        """```bash
+INIT=$(grd init progress --include state,roadmap,config)
+if [ $? -ne 0 ]; then
+  echo "ERROR: grd initialization failed: $INIT"
+  # STOP — display the error to the user and do not proceed.
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run initialization directly instead of capturing it in INIT.
+grd init progress --include state,roadmap,config
+```""",
+    )
+    content = content.replace(
+        """```bash
+INIT=$(grd init progress --include state)
+if [ $? -ne 0 ]; then
+  echo "ERROR: grd initialization failed: $INIT"
+  # STOP — display the error to the user and do not proceed.
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run initialization directly instead of capturing it in INIT.
+grd init progress --include state
+```""",
+    )
+    content = content.replace(
+        """```bash
+INIT=$(grd init phase-op --include state,config "${PHASE_ARG:-}")
+if [ $? -ne 0 ]; then
+  echo "ERROR: grd initialization failed: $INIT"
+  # STOP — display the error to the user and do not proceed.
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run initialization directly instead of capturing it in INIT.
+grd init phase-op --include state,config "${PHASE_ARG:-}"
+```""",
+    )
+    content = content.replace(
+        """```bash
+INIT=$(grd init progress --include state,config)
+if [ $? -ne 0 ]; then
+  echo "ERROR: grd initialization failed: $INIT"
+  # STOP — display the error to the user and do not proceed.
+fi
+```""",
+        """```bash
+# Gemini auto-edit: run initialization directly instead of capturing it in INIT.
+grd init progress --include state,config
+```""",
+    )
+    return _rewrite_gemini_capture_assignments(content)
+
+
+_GEMINI_CAPTURE_ASSIGNMENT_RE = re.compile(
+    r"^(?P<indent>[ \t]*)(?P<var>[A-Z][A-Z0-9_]*)=\$\((?P<command>grd[^\n]*)\)(?P<suffix>[ \t]*(?:\|\|\s*true)?)$",
+    re.MULTILINE,
+)
+
+
+def _rewrite_gemini_capture_assignments(content: str) -> str:
+    """Rewrite single-line Gemini shell capture examples into direct commands."""
+
+    def _replace(match: re.Match[str]) -> str:
+        indent = match.group("indent")
+        var = match.group("var")
+        command = match.group("command").strip()
+        suffix = match.group("suffix") or ""
+        suffix = suffix.strip()
+        comment = f"{indent}# Gemini auto-edit: run the command directly instead of capturing it in {var}."
+        rewritten = f"{indent}{command}"
+        if suffix:
+            rewritten = f"{rewritten} {suffix}"
+        return f"{comment}\n{rewritten}"
+
+    return _GEMINI_CAPTURE_ASSIGNMENT_RE.sub(_replace, content)
 
 
 # ---------------------------------------------------------------------------
@@ -390,11 +696,21 @@ def _managed_gemini_policy_path(target_dir: Path) -> Path:
     return target_dir / _GEMINI_POLICY_DIR_NAME / _GEMINI_POLICY_FILE_NAME
 
 
+def _managed_gemini_yolo_wrapper_path(target_dir: Path) -> Path:
+    """Return the GRD-managed Gemini launch wrapper for yolo sessions."""
+    return target_dir / "get-research-done" / _GEMINI_RUNTIME_BIN_DIR_NAME / _GEMINI_YOLO_WRAPPER_NAME
+
+
+def _render_gemini_yolo_wrapper() -> str:
+    """Render a small launcher that starts Gemini in yolo approval mode."""
+    return "#!/bin/sh\nexec gemini --approval-mode=yolo \"$@\"\n"
+
+
 def _render_gemini_policy_toml(bridge_command: str) -> str:
     """Render the Gemini policy file GRD installs for headless auto-edit flows."""
     rendered_prefixes: list[str] = []
     for prefix in _gemini_policy_command_prefixes(bridge_command):
-        rendered_prefixes.append("'" + prefix.replace("'", "''") + "'")
+        rendered_prefixes.append(json.dumps(prefix))
     prefixes = ",\n  ".join(rendered_prefixes)
     return (
         "# Managed by Get Research Done (GRD).\n"
@@ -524,7 +840,7 @@ def _copy_agents_gemini(
     agents_src: Path,
     agents_dest: Path,
     path_prefix: str,
-    grd_src_root: Path | None = None,
+    gpd_src_root: Path | None = None,
     attribution: str | None = "",
     install_scope: str | None = None,
     *,
@@ -543,7 +859,7 @@ def _copy_agents_gemini(
         return
 
     agents_dest.mkdir(parents=True, exist_ok=True)
-    source_root = grd_src_root or agents_src.parent / "specs"
+    source_root = gpd_src_root or agents_src.parent / "specs"
 
     new_agent_names: set[str] = set()
     for agent_md in sorted(agents_src.glob("*.md")):
@@ -554,11 +870,12 @@ def _copy_agents_gemini(
             install_scope=install_scope,
             src_root=source_root,
         )
+        content = materialize_first_round_review_schema_headings(content)
         content = process_attribution(content, attribution)
         content = protect_runtime_agent_prompt(content, "gemini")
         content = _convert_frontmatter_to_gemini(content)
         content = convert_tool_references_in_body(content, _TOOL_REFERENCE_MAP)
-        content = _rewrite_gpd_cli_invocations(content, bridge_command)
+        content = _rewrite_grd_cli_invocations(content, bridge_command)
 
         (agents_dest / agent_md.name).write_text(content, encoding="utf-8")
         new_agent_names.add(agent_md.name)
@@ -575,7 +892,8 @@ def _install_commands_as_toml(
     commands_src: Path,
     commands_dest: Path,
     path_prefix: str,
-    grd_src_root: Path,
+    workflow_target_dir: Path,
+    gpd_src_root: Path,
     attribution: str | None = "",
     install_scope: str | None = None,
     *,
@@ -597,8 +915,9 @@ def _install_commands_as_toml(
         commands_src,
         commands_dest,
         path_prefix,
+        workflow_target_dir,
         attribution,
-        grd_src_root,
+        gpd_src_root,
         install_scope,
         bridge_command=bridge_command,
     )
@@ -608,8 +927,9 @@ def _copy_commands_recursive(
     src_dir: Path,
     dest_dir: Path,
     path_prefix: str,
+    workflow_target_dir: Path,
     attribution: str | None,
-    grd_src_root: Path,
+    gpd_src_root: Path,
     install_scope: str | None = None,
     *,
     bridge_command: str,
@@ -623,8 +943,9 @@ def _copy_commands_recursive(
                 entry,
                 sub_dest,
                 path_prefix,
+                workflow_target_dir,
                 attribution,
-                grd_src_root,
+                gpd_src_root,
                 install_scope,
                 bridge_command=bridge_command,
             )
@@ -634,13 +955,14 @@ def _copy_commands_recursive(
                 runtime="gemini",
                 path_prefix=path_prefix,
                 install_scope=install_scope,
-                src_root=grd_src_root,
+                src_root=gpd_src_root,
+                workflow_target_dir=workflow_target_dir,
             )
             content = process_attribution(content, attribution)
             content = strip_sub_tags(content)
             content = convert_tool_references_in_body(content, _TOOL_REFERENCE_MAP)
             content = _rewrite_gemini_shell_workflow_guidance(content)
-            content = _rewrite_gpd_cli_invocations(content, bridge_command)
+            content = _rewrite_grd_cli_invocations(content, bridge_command)
             content = _inject_gemini_command_runtime_note(content, bridge_command)
             toml_content = _convert_to_gemini_toml(content)
             toml_path = dest_dir / entry.with_suffix(".toml").name
@@ -666,24 +988,30 @@ class GeminiAdapter(RuntimeAdapter):
     def runtime_name(self) -> str:
         return "gemini"
 
+    def _runtime_bridge_only_relpaths(self) -> tuple[str, ...]:
+        """Return Gemini artifacts that appear only after finalize_install()."""
+        return ("settings.json",)
+
     def install(
         self,
-        grd_root: Path,
+        gpd_root: Path,
         target_dir: Path,
         *,
         is_global: bool = False,
         explicit_target: bool = False,
     ) -> dict[str, object]:
-        """Install GRD and persist Gemini settings as part of the install.
+        """Install Gemini surfaces and defer settings persistence to finalization.
 
         Unlike Claude Code, Gemini requires ``settings.json`` to enable
         ``experimental.enableAgents`` for the installed agents to function.
-        A bare content copy is therefore an incomplete Gemini install.
+        ``install()`` prepares those settings in-memory; ``finalize_install()``
+        writes them to disk once the caller is ready to complete the runtime
+        configuration step.
         """
         previous_finalize_pending = getattr(self, "_gemini_finalize_pending", False)
         self._gemini_finalize_pending = True
         try:
-            result = super().install(grd_root, target_dir, is_global=is_global, explicit_target=explicit_target)
+            result = super().install(gpd_root, target_dir, is_global=is_global, explicit_target=explicit_target)
         finally:
             self._gemini_finalize_pending = previous_finalize_pending
 
@@ -691,8 +1019,8 @@ class GeminiAdapter(RuntimeAdapter):
 
     # --- Template method hooks ---
 
-    def _install_commands(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
-        commands_src = grd_root / "commands"
+    def _install_commands(self, gpd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
+        commands_src = gpd_root / "commands"
         commands_dest = target_dir / "commands" / "grd"
         (target_dir / "commands").mkdir(parents=True, exist_ok=True)
         bridge_command = self.runtime_cli_bridge_command(target_dir)
@@ -700,7 +1028,8 @@ class GeminiAdapter(RuntimeAdapter):
             commands_src,
             commands_dest,
             path_prefix,
-            grd_root / "specs",
+            target_dir,
+            gpd_root / "specs",
             attribution=self.get_commit_attribution(),
             install_scope=self._current_install_scope_flag(),
             bridge_command=bridge_command,
@@ -711,15 +1040,15 @@ class GeminiAdapter(RuntimeAdapter):
             failures.append("commands/grd")
         return sum(1 for f in commands_dest.rglob("*.toml") if f.is_file()) if commands_dest.exists() else 0
 
-    def _install_agents(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
-        agents_src = grd_root / "agents"
+    def _install_agents(self, gpd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
+        agents_src = gpd_root / "agents"
         agents_dest = target_dir / "agents"
         bridge_command = self.runtime_cli_bridge_command(target_dir)
         _copy_agents_gemini(
             agents_src,
             agents_dest,
             path_prefix,
-            grd_root / "specs",
+            gpd_root / "specs",
             attribution=self.get_commit_attribution(),
             install_scope=self._current_install_scope_flag(),
             bridge_command=bridge_command,
@@ -730,7 +1059,7 @@ class GeminiAdapter(RuntimeAdapter):
             failures.append("agents")
         return sum(1 for f in agents_dest.iterdir() if f.is_file() and f.suffix == ".md") if agents_dest.exists() else 0
 
-    def _install_content(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> None:
+    def _install_content(self, gpd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> None:
         """Install shared specs content with Gemini-specific bridge rewrites."""
         bridge_command = self.runtime_cli_bridge_command(target_dir)
 
@@ -741,13 +1070,13 @@ class GeminiAdapter(RuntimeAdapter):
                 install_scope=install_scope,
             )
             translated = _rewrite_gemini_shell_workflow_guidance(translated)
-            return _rewrite_gpd_cli_invocations(translated, bridge_command)
+            return _rewrite_grd_cli_invocations(translated, bridge_command)
 
         from grd.adapters.install_utils import install_grd_content
 
         failures.extend(
             install_grd_content(
-                grd_root / "specs",
+                gpd_root / "specs",
                 target_dir,
                 path_prefix,
                 self.runtime_name,
@@ -807,9 +1136,7 @@ class GeminiAdapter(RuntimeAdapter):
         ]
 
         policy_dir_setting = str(policy_path.parent.resolve())
-        merged_policy_paths, added_policy_paths = _merge_unique_strings(
-            settings.get("policyPaths"), [policy_dir_setting]
-        )
+        merged_policy_paths, added_policy_paths = _merge_unique_strings(settings.get("policyPaths"), [policy_dir_setting])
         if merged_policy_paths:
             settings["policyPaths"] = merged_policy_paths
         self._managed_policy_paths = added_policy_paths
@@ -834,6 +1161,64 @@ class GeminiAdapter(RuntimeAdapter):
             "mcpServers": len(mcp_servers),
         }
 
+    def runtime_permissions_status(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
+        """Report whether a Gemini yolo launcher is ready for the next session."""
+        wrapper_path = _managed_gemini_yolo_wrapper_path(target_dir)
+        wrapper_exists = wrapper_path.is_file()
+        desired_mode = "yolo" if autonomy == "yolo" else "default"
+        message = "Gemini is using its normal approval-mode defaults."
+        if desired_mode == "yolo":
+            if wrapper_exists:
+                message = (
+                    "Gemini only supports yolo at launch time. The GRD launcher is ready for the next session."
+                )
+            else:
+                message = (
+                    "Gemini only supports yolo at launch time. Generate and use the GRD launcher before "
+                    "expecting uninterrupted yolo execution."
+                )
+        return {
+            "runtime": self.runtime_name,
+            "desired_mode": desired_mode,
+            "configured_mode": "launch-wrapper" if wrapper_exists else "default",
+            "config_aligned": wrapper_exists if desired_mode == "yolo" else True,
+            "managed_by_grd": wrapper_exists,
+            "launch_command": shlex.quote(str(wrapper_path)) if wrapper_exists else None,
+            "message": message,
+        }
+
+    def sync_runtime_permissions(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
+        """Create or remove the Gemini yolo launcher for the requested autonomy."""
+        wrapper_path = _managed_gemini_yolo_wrapper_path(target_dir)
+        changed = False
+        if autonomy == "yolo":
+            wrapper_path.parent.mkdir(parents=True, exist_ok=True)
+            content = _render_gemini_yolo_wrapper()
+            current = wrapper_path.read_text(encoding="utf-8") if wrapper_path.exists() else None
+            if current != content:
+                wrapper_path.write_text(content, encoding="utf-8")
+                wrapper_path.chmod(0o755)
+                changed = True
+        elif wrapper_path.exists():
+            wrapper_path.unlink()
+            changed = True
+
+        status = self.runtime_permissions_status(target_dir, autonomy=autonomy)
+        result = {
+            **status,
+            "changed": changed,
+            "sync_applied": bool(status.get("config_aligned")),
+            "requires_relaunch": autonomy == "yolo",
+        }
+        if autonomy == "yolo" and status.get("launch_command"):
+            result["next_step"] = (
+                "Exit the current Gemini session and relaunch with "
+                f"{status['launch_command']} so the runtime itself starts in yolo mode."
+            )
+        elif changed:
+            result["next_step"] = "Future Gemini sessions will use the normal approval mode unless you re-enable yolo."
+        return result
+
     def _write_manifest(self, target_dir: Path, version: str) -> None:
         """Record manifest metadata for shared config keys GRD actually introduced."""
         managed_config: dict[str, object] = {}
@@ -852,6 +1237,40 @@ class GeminiAdapter(RuntimeAdapter):
             runtime=self.runtime_name,
             metadata=metadata or None,
             install_scope=self._current_install_scope_flag(),
+            explicit_target=getattr(self, "_install_explicit_target", False),
+        )
+
+    def install_completeness_relpaths(self) -> tuple[str, ...]:
+        """Return Gemini-specific artifacts required for a usable install."""
+        return (
+            *super().install_completeness_relpaths(),
+            f"{_GEMINI_POLICY_DIR_NAME}/{_GEMINI_POLICY_FILE_NAME}",
+            *self._runtime_bridge_only_relpaths(),
+        )
+
+    def install_verification_relpaths(self) -> tuple[str, ...]:
+        """Return Gemini artifacts that must exist before ``install()`` returns."""
+        return (
+            *super().install_completeness_relpaths(),
+            f"{_GEMINI_POLICY_DIR_NAME}/{_GEMINI_POLICY_FILE_NAME}",
+        )
+
+    def finish_install(
+        self,
+        settings_path: str | Path,
+        settings: dict[str, object],
+        statusline_command: str,
+        should_install_statusline: bool,
+        *,
+        force_statusline: bool = False,
+    ) -> None:
+        """Apply statusline config and write settings atomically."""
+        _finish_install(
+            settings_path,
+            settings,
+            statusline_command,
+            should_install_statusline,
+            force_statusline=force_statusline,
         )
 
     def finalize_install(
@@ -864,8 +1283,18 @@ class GeminiAdapter(RuntimeAdapter):
         if install_result.get("settingsWritten"):
             return
 
-        super().finalize_install(install_result, force_statusline=force_statusline)
-        install_result["settingsWritten"] = True
+        settings_path = install_result.get("settingsPath")
+        settings = install_result.get("settings")
+        statusline_command = install_result.get("statuslineCommand")
+        if isinstance(settings_path, (str, Path)) and isinstance(settings, dict) and isinstance(statusline_command, str):
+            self.finish_install(
+                settings_path,
+                settings,
+                statusline_command,
+                True,
+                force_statusline=force_statusline,
+            )
+            install_result["settingsWritten"] = True
 
     def uninstall(self, target_dir: Path) -> dict[str, object]:
         """Remove GRD from a Gemini CLI .gemini/ directory.
@@ -887,11 +1316,38 @@ class GeminiAdapter(RuntimeAdapter):
         settings_path = target_dir / "settings.json"
         if settings_path.exists():
             settings = read_settings(settings_path)
-            modified = cleanup_settings_hooks(
-                settings,
-                target_dir=target_dir,
-                config_dir_name=self.config_dir_name,
-            )
+            modified = False
+
+            # Remove GRD statusline
+            status_line = settings.get("statusLine")
+            if isinstance(status_line, dict):
+                cmd = status_line.get("command", "")
+                if _is_hook_command_for_script(
+                    cmd,
+                    HOOK_SCRIPTS["statusline"],
+                    target_dir=target_dir,
+                    config_dir_name=self.config_dir_name,
+                ):
+                    del settings["statusLine"]
+                    modified = True
+
+            # Remove GRD hooks from SessionStart
+            hooks = settings.get("hooks")
+            if isinstance(hooks, dict):
+                session_start = hooks.get("SessionStart")
+                if isinstance(session_start, list):
+                    before = len(session_start)
+                    session_start[:] = [
+                        entry
+                        for entry in session_start
+                        if not _entry_has_grd_hook(entry, target_dir=target_dir, config_dir_name=self.config_dir_name)
+                    ]
+                    if len(session_start) < before:
+                        modified = True
+                    if not session_start:
+                        del hooks["SessionStart"]
+                    if not hooks:
+                        del settings["hooks"]
 
             # Remove experimental.enableAgents only when GRD introduced it.
             experimental = settings.get("experimental")
@@ -953,6 +1409,8 @@ class GeminiAdapter(RuntimeAdapter):
             if modified:
                 write_settings(settings_path, settings)
                 logger.info("Cleaned up Gemini settings.json (statusline, hooks, experimental, MCP)")
+            if remove_empty_json_object_file(settings_path):
+                result.setdefault("removed", []).append(settings_path.name)
 
         policy_files = _normalize_string_list(managed_runtime_files)
         if not policy_files:
@@ -965,6 +1423,16 @@ class GeminiAdapter(RuntimeAdapter):
         policy_dir = _managed_gemini_policy_path(target_dir).parent
         if policy_dir.is_dir() and not any(policy_dir.iterdir()):
             policy_dir.rmdir()
+
+        for path in (
+            target_dir / "commands",
+            target_dir / "agents",
+            target_dir / "hooks",
+            target_dir / "cache",
+            policy_dir,
+            target_dir,
+        ):
+            prune_empty_ancestors(path, stop_at=target_dir.parent)
 
         return result
 
@@ -987,7 +1455,7 @@ class GeminiAdapter(RuntimeAdapter):
         hooks = settings.get("hooks")
         session_start = hooks.get("SessionStart") if isinstance(hooks, dict) else None
         if not isinstance(session_start, list) or not any(
-            _entry_has_gpd_hook(entry, target_dir=target_dir, config_dir_name=self.config_dir_name)
+            _entry_has_grd_hook(entry, target_dir=target_dir, config_dir_name=self.config_dir_name)
             for entry in session_start
         ):
             raise RuntimeError("Gemini install incomplete: update hook not configured")
@@ -1002,18 +1470,28 @@ class GeminiAdapter(RuntimeAdapter):
 # ---------------------------------------------------------------------------
 
 
-def _entry_has_gpd_hook(
+def _entry_has_grd_hook(
     entry: object,
     *,
     target_dir: Path | None,
     config_dir_name: str | None,
 ) -> bool:
     """Check if a hook entry contains the GRD-managed Gemini update hook."""
-    return entry_has_grd_hook(
-        entry,
-        target_dir=target_dir,
-        config_dir_name=config_dir_name,
-        hook_scripts=(HOOK_SCRIPTS["check_update"],),
+    if not isinstance(entry, dict):
+        return False
+    entry_hooks = entry.get("hooks")
+    if not isinstance(entry_hooks, list):
+        return False
+    return any(
+        isinstance(h, dict)
+        and isinstance(h.get("command"), str)
+        and _is_hook_command_for_script(
+            h["command"],
+            HOOK_SCRIPTS["check_update"],
+            target_dir=target_dir,
+            config_dir_name=config_dir_name,
+        )
+        for h in entry_hooks
     )
 
 

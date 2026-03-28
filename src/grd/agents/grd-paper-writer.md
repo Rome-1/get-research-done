@@ -1581,7 +1581,9 @@ for f in .grd/phases/*-*/*-SUMMARY.md; do
 done
 ```
 
-If any contributing phase lacks contract-backed outcome evidence or confidence tags, the research is not paper-ready. Return WRITING BLOCKED.
+If any contributing phase lacks required contract-backed outcome evidence (`plan_contract_ref`, `contract_results`, and any decisive `comparison_verdicts` entry with an evidence path when the manuscript claim depends on that comparison), the research is not paper-ready. Return WRITING BLOCKED.
+
+Missing `CONFIDENCE:` tags are a calibration warning, not a writing block. Treat them as missing calibration input: fall back to `VERIFICATION.md` assessments and the contract-backed evidence ledger when available, downgrade claim language when confidence is underspecified, and report the missing tags in `gpd_return.issues` or checkpoint notes so the orchestrator can tighten calibration later.
 
 **2. Convention consistency across phases:**
 

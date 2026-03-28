@@ -5,114 +5,141 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from grd.adapters import get_adapter, iter_adapters
-from grd.adapters.install_utils import build_runtime_install_repair_command
-from grd.adapters.runtime_catalog import iter_runtime_descriptors
-from grd.hooks.runtime_detect import SCOPE_LOCAL
+from grd.adapters import get_adapter
+from grd.adapters.install_utils import MANIFEST_NAME, build_runtime_install_repair_command
+
+
+def _load_manifest_payload(config_dir: Path) -> dict[str, object] | None:
+    """Return the parsed manifest payload when it is a mapping."""
+
+    state, payload = load_install_manifest_state(config_dir)
+    if state != "ok":
+        return None
+    return payload
 
 
 def load_install_manifest(config_dir: Path) -> dict[str, object]:
     """Return the parsed install manifest for *config_dir* when available."""
 
-    manifest_path = config_dir / "grd-file-manifest.json"
+    payload = _load_manifest_payload(config_dir)
+    return payload if payload is not None else {}
+
+
+def load_install_manifest_state(config_dir: Path) -> tuple[str, dict[str, object]]:
+    """Return the manifest parse state and payload for *config_dir*.
+
+    The state is one of ``missing``, ``corrupt``, ``invalid``, or ``ok``.
+    ``ok`` means the manifest parsed as a mapping; the payload is the parsed
+    dict in that case and ``{}`` otherwise.
+    """
+
+    manifest_path = config_dir / MANIFEST_NAME
     try:
-        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+        raw = manifest_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return "missing", {}
+    except (OSError, UnicodeDecodeError):
+        return "corrupt", {}
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return "corrupt", {}
+
+    if not isinstance(payload, dict):
+        return "invalid", {}
+    return "ok", payload
+
+
+def load_install_manifest_runtime_status(config_dir: Path) -> tuple[str, dict[str, object], str | None]:
+    """Return the manifest parse state, payload, and canonical runtime when available."""
+
+    state, payload = load_install_manifest_state(config_dir)
+    if state != "ok":
+        return state, payload, None
+
+    if "runtime" not in payload:
+        return "missing_runtime", payload, None
+
+    runtime = payload.get("runtime")
+    if not isinstance(runtime, str):
+        return "malformed_runtime", payload, None
+
+    normalized_runtime = runtime.strip()
+    if not normalized_runtime:
+        return "malformed_runtime", payload, None
+
+    from grd.hooks.runtime_detect import normalize_runtime_name
+
+    canonical_runtime = normalize_runtime_name(normalized_runtime)
+    if canonical_runtime is None:
+        return "malformed_runtime", payload, None
+    return "ok", payload, canonical_runtime
 
 
 def install_scope_from_manifest(config_dir: Path) -> str | None:
     """Return the persisted install scope for *config_dir*."""
 
-    scope = load_install_manifest(config_dir).get("install_scope")
+    manifest = _load_manifest_payload(config_dir)
+    if manifest is None:
+        return None
+
+    scope = manifest.get("install_scope")
     return scope if scope in {"local", "global"} else None
 
 
-def _manifest_target_dir(config_dir: Path) -> Path:
-    manifest_target = load_install_manifest(config_dir).get("install_target_dir")
-    if isinstance(manifest_target, str) and manifest_target.strip():
-        return Path(manifest_target)
-    return config_dir
-
-
-def _manifest_explicit_target(config_dir: Path) -> bool | None:
-    explicit_target = load_install_manifest(config_dir).get("explicit_target")
-    if isinstance(explicit_target, bool):
-        return explicit_target
-    return None
-
-
-def _paths_equal(left: Path, right: Path) -> bool:
-    try:
-        return left.expanduser().resolve() == right.expanduser().resolve()
-    except OSError:
-        return left.expanduser() == right.expanduser()
-
-
-def _infer_runtime_from_manifest(config_dir: Path) -> str | None:
-    manifest = load_install_manifest(config_dir)
-    runtime = manifest.get("runtime")
-    if isinstance(runtime, str) and runtime.strip():
-        return runtime.strip()
-
-    files = manifest.get("files")
-    if isinstance(files, dict):
-        file_keys = [str(key) for key in files]
-        for descriptor in iter_runtime_descriptors():
-            if any(key.startswith(prefix) for key in file_keys for prefix in descriptor.manifest_file_prefixes):
-                return descriptor.runtime_name
-    return None
-
-
-def _infer_runtime_from_config_dir(config_dir: Path) -> str | None:
-    for adapter in iter_adapters():
-        if config_dir.name == adapter.local_config_dir_name:
-            return adapter.runtime_name
-    return None
+def _manifest_runtime(config_dir: Path) -> str | None:
+    """Return the authoritative runtime declared in *config_dir*'s manifest."""
+    manifest_state, _payload, runtime = load_install_manifest_runtime_status(config_dir)
+    return runtime if manifest_state == "ok" else None
 
 
 def installed_runtime(config_dir: Path) -> str | None:
-    """Return the runtime associated with *config_dir* when it can be inferred."""
-
-    return _infer_runtime_from_manifest(config_dir) or _infer_runtime_from_config_dir(config_dir)
+    """Return the authoritative runtime declared by *config_dir*'s manifest."""
+    return _manifest_runtime(config_dir)
 
 
 def config_dir_has_complete_install(config_dir: Path) -> bool:
-    """Return whether *config_dir* satisfies the shared install contract."""
-    return (config_dir / "grd-file-manifest.json").is_file() and (config_dir / "get-research-done").is_dir()
+    """Return whether *config_dir* is a complete install with authoritative runtime identity."""
+    runtime = _manifest_runtime(config_dir)
+    if runtime is not None:
+        try:
+            return get_adapter(runtime).has_complete_install(config_dir)
+        except KeyError:
+            return False
+    return False
 
 
 def installed_update_command(config_dir: Path) -> str | None:
     """Return the bootstrap update command for the install in *config_dir*."""
 
-    runtime = installed_runtime(config_dir)
-    if runtime is None:
+    manifest_state, manifest, runtime = load_install_manifest_runtime_status(config_dir)
+    if manifest_state != "ok" or runtime is None:
         return None
 
-    scope = install_scope_from_manifest(config_dir)
+    scope = manifest.get("install_scope")
+    if scope not in {"local", "global"}:
+        return None
+
+    explicit_target = manifest.get("explicit_target")
+    if not isinstance(explicit_target, bool):
+        return None
+
+    install_target = config_dir
+    if explicit_target:
+        install_target_value = manifest.get("install_target_dir")
+        if not isinstance(install_target_value, str) or not install_target_value.strip():
+            return None
+        install_target = Path(install_target_value)
+
     try:
-        adapter = get_adapter(runtime)
+        get_adapter(runtime)
     except KeyError:
-        return build_runtime_install_repair_command(
-            runtime,
-            install_scope=scope,
-            target_dir=_manifest_target_dir(config_dir),
-            explicit_target=bool(_manifest_explicit_target(config_dir)),
-        )
-
-    install_target = _manifest_target_dir(config_dir)
-    explicit_target = _manifest_explicit_target(config_dir)
-
-    if explicit_target is None:
-        if scope == SCOPE_LOCAL:
-            explicit_target = not _paths_equal(install_target, Path.cwd() / adapter.local_config_dir_name)
-        else:
-            explicit_target = not _paths_equal(install_target, adapter.global_config_dir)
+        return None
 
     return build_runtime_install_repair_command(
         runtime,
         install_scope=scope,
         target_dir=install_target,
-        explicit_target=bool(explicit_target),
+        explicit_target=explicit_target,
     )

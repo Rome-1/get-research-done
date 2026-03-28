@@ -7,13 +7,13 @@ from grd.core.phases import list_phase_files, validate_phase_waves
 
 
 def _create_phase_dir(cwd: Path, name: str) -> Path:
-    phase_dir = cwd / ".grd" / "phases" / name
+    phase_dir = cwd / "GRD" / "phases" / name
     phase_dir.mkdir(parents=True, exist_ok=True)
     return phase_dir
 
 
 def _write_roadmap(cwd: Path, content: str) -> None:
-    (cwd / ".grd" / "ROADMAP.md").write_text(content, encoding="utf-8")
+    (cwd / "GRD" / "ROADMAP.md").write_text(content, encoding="utf-8")
 
 
 class TestVerifyPhaseCompleteness:
@@ -31,7 +31,23 @@ class TestVerifyPhaseCompleteness:
         assert result.summary_count == 1
         assert result.incomplete_plans == []
 
-    def test_incomplete_phase_reports_missing_summaries(self, tmp_path: Path, state_project_factory) -> None:
+    def test_complete_standalone_phase(self, tmp_path: Path, state_project_factory) -> None:
+        cwd = state_project_factory(tmp_path, current_phase="01", status="Planning")
+        phase_dir = _create_phase_dir(cwd, "01-setup")
+        (phase_dir / "PLAN.md").write_text("# Plan\n", encoding="utf-8")
+        (phase_dir / "SUMMARY.md").write_text("# Summary\nDone.\n", encoding="utf-8")
+        _write_roadmap(cwd, "# Roadmap\n\n### Phase 1: Setup\n**Goal:** Initial setup\n")
+
+        result = verify_phase_completeness(cwd, "1")
+
+        assert result.complete is True
+        assert result.plan_count == 1
+        assert result.summary_count == 1
+        assert result.incomplete_plans == []
+
+    def test_incomplete_phase_reports_missing_summaries(
+        self, tmp_path: Path, state_project_factory
+    ) -> None:
         cwd = state_project_factory(tmp_path, current_phase="02", status="Planning")
         phase_dir = _create_phase_dir(cwd, "02-core")
         (phase_dir / "02-core-01-PLAN.md").write_text("---\nwave: 1\n---\n# Plan 1\n", encoding="utf-8")
@@ -110,7 +126,7 @@ class TestListPhaseFiles:
         assert result.files == ["01-setup-01-SUMMARY.md", "01-setup-02-SUMMARY.md"]
 
     def test_returns_zero_when_phases_directory_is_missing(self, tmp_path: Path) -> None:
-        planning = tmp_path / ".grd"
+        planning = tmp_path / "GRD"
         planning.mkdir()
         (planning / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
         (planning / "state.json").write_text("{}", encoding="utf-8")

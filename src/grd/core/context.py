@@ -8,15 +8,18 @@ resolution so that defaults and model profiles are defined in exactly one place.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from grd.adapters import iter_adapters
+from pydantic import ValidationError as PydanticValidationError
+
 from grd.adapters.install_utils import AGENTS_DIR_NAME, FLAT_COMMANDS_DIR_NAME, GRD_INSTALL_DIR_NAME, HOOKS_DIR_NAME
-from grd.contracts import ResearchContract, contract_from_data
-from grd.core.config import GRDProjectConfig, resolve_agent_tier
+from grd.adapters.runtime_catalog import iter_runtime_descriptors
+from grd.contracts import ResearchContract, collect_contract_integrity_errors
+from grd.core.config import GRDProjectConfig
 from grd.core.config import load_config as _load_config_structured
 from grd.core.config import resolve_model as _resolve_model_canonical
 from grd.core.constants import (
@@ -35,23 +38,30 @@ from grd.core.constants import (
     STANDALONE_CONTEXT,
     STANDALONE_PLAN,
     STANDALONE_RESEARCH,
-    STANDALONE_SUMMARY,
     STANDALONE_VALIDATION,
-    STANDALONE_VERIFICATION,
     STATE_MD_FILENAME,
-    SUMMARY_SUFFIX,
     TODOS_DIR_NAME,
     VALIDATION_SUFFIX,
     VERIFICATION_SUFFIX,
+    ProjectLayout,
+)
+from grd.core.contract_validation import (
+    _collect_list_shape_drift_errors,
+    _split_project_contract_schema_findings,
+    salvage_project_contract,
+    validate_project_contract,
 )
 from grd.core.errors import ValidationError
+from grd.core.phases import _milestone_completion_snapshot
 from grd.core.protocol_bundles import render_protocol_bundle_context, select_protocol_bundles
 from grd.core.reference_ingestion import ingest_reference_artifacts
-from grd.core.state import load_state_json as _load_state_json
+from grd.core.state import EM_DASH, _current_machine_identity, _load_state_json_with_integrity_issues
+from grd.core.state import peek_state_json as _peek_state_json
 from grd.core.utils import (
     generate_slug as _generate_slug_impl,
 )
 from grd.core.utils import is_phase_complete as _is_phase_complete
+from grd.core.utils import matching_phase_artifact_count as _matching_phase_artifact_count
 from grd.core.utils import phase_normalize as _phase_normalize_impl
 from grd.core.utils import phase_sort_key as _phase_sort_key
 from grd.core.utils import safe_read_file as _safe_read_file
@@ -62,7 +72,7 @@ logger = logging.getLogger(__name__)
 
 # Research file extensions for project detection.
 _RESEARCH_EXTENSIONS = frozenset({".tex", ".ipynb", ".py", ".jl", ".f90"})
-_RUNTIME_CONFIG_DIRS = frozenset(adapter.local_config_dir_name for adapter in iter_adapters())
+_RUNTIME_CONFIG_DIRS = frozenset(descriptor.config_dir_name for descriptor in iter_runtime_descriptors())
 _LITERATURE_DIR_NAME = "literature"
 _REFERENCE_MAP_DOCS = ("REFERENCES.md", "VALIDATION.md")
 _LITERATURE_INCLUDE_LIMIT = 2
@@ -76,13 +86,25 @@ _REFERENCE_ROLE_PRIORITY = {
     "other": 5,
 }
 
+_RESUME_FILE_CLEAR_VALUES = frozenset({"[not set]", "none", "null"})
+
 # Directories to skip when scanning for research files.
+_RUNTIME_IGNORED_SCAN_PATHS = frozenset(
+    {
+        (descriptor.config_dir_name,)
+        for descriptor in iter_runtime_descriptors()
+    }
+    | {
+        (".config", descriptor.global_config.xdg_subdir)
+        for descriptor in iter_runtime_descriptors()
+        if descriptor.global_config.xdg_subdir
+    }
+)
 _IGNORE_DIRS = frozenset(
     {
         ".git",
         PLANNING_DIR_NAME,
         *_RUNTIME_CONFIG_DIRS,
-        ".config",
         ".venv",
         ".tox",
         ".pytest_cache",
@@ -126,7 +148,8 @@ def _path_exists(cwd: Path, target: str) -> bool:
 
 def _state_exists(cwd: Path) -> bool:
     """Return whether the project has recoverable state from JSON or STATE.md."""
-    return _load_state_json(cwd) is not None
+    state, _state_issues, _state_source = _peek_state_json(cwd)
+    return isinstance(state, dict)
 
 
 def _generate_slug(text: str | None) -> str | None:
@@ -148,12 +171,13 @@ def _normalize_phase_name(phase: str) -> str:
     return _phase_normalize_impl(phase)
 
 
-def _find_phase_artifact(phase_dir: Path, suffix: str, standalone: str) -> str | None:
+
+def _find_phase_artifact(phase_dir: Path, suffix: str, standalone: str | None = None) -> str | None:
     """Find file content matching a suffix pattern in a phase directory (truncated)."""
     if not phase_dir.is_dir():
         return None
     for f in sorted(phase_dir.iterdir()):
-        if f.is_file() and (f.name.endswith(suffix) or f.name == standalone):
+        if f.is_file() and (f.name.endswith(suffix) or (standalone is not None and f.name == standalone)):
             return _safe_read_file_truncated(f)
     return None
 
@@ -188,18 +212,208 @@ def _extract_frontmatter_field(content: str, field: str) -> str | None:
     return val or None
 
 
-def _load_project_contract(cwd: Path) -> ResearchContract | None:
-    """Load the canonical project contract from state.json when available."""
-    state = _load_state_json(cwd)
-    if not isinstance(state, dict):
+def _load_raw_project_contract_payload(cwd: Path) -> tuple[Path, object] | None:
+    """Return the raw project_contract payload from state storage."""
+    layout = ProjectLayout(cwd)
+
+    def _backup_project_contract(reason: str) -> tuple[Path, object] | None:
+        try:
+            raw_backup = json.loads(layout.state_json_backup.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError, OSError, UnicodeDecodeError):
+            return None
+        if not isinstance(raw_backup, dict):
+            return None
+        logger.warning(
+            "Using project_contract from %s because %s",
+            layout.state_json_backup,
+            reason,
+        )
+        return layout.state_json_backup, raw_backup.get("project_contract")
+
+    def _read_state_payload(path: Path) -> object:
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError, OSError, UnicodeDecodeError):
+            return None
+
+    if layout.state_intent.exists():
+        _load_state_json_with_integrity_issues(cwd, persist_recovery=True)
+
+    raw_state = _read_state_payload(layout.state_json)
+    source_path = layout.state_json
+
+    if raw_state is None:
+        logger.warning(
+            "Using project_contract from %s because the primary state.json was unavailable or unreadable",
+            layout.state_json_backup,
+        )
+        backup_payload = _backup_project_contract("the primary state.json was unavailable or unreadable")
+        if backup_payload is not None:
+            return backup_payload
         return None
-    return contract_from_data(state.get("project_contract"))
+
+    if not isinstance(raw_state, dict):
+        backup_payload = _backup_project_contract("the primary state.json content was not a JSON object")
+        if backup_payload is not None:
+            return backup_payload
+        return None
+
+    raw_contract = raw_state.get("project_contract")
+    if raw_contract is None:
+        return source_path, None
+    if not isinstance(raw_contract, dict):
+        return source_path, raw_contract
+    return source_path, raw_contract
+
+
+def _project_contract_source_path(cwd: Path, source_path: Path) -> str:
+    """Return a stable display path for project-contract diagnostics."""
+
+    try:
+        return source_path.relative_to(cwd).as_posix()
+    except ValueError:
+        return str(source_path)
+
+
+def _project_contract_load_payload(
+    *,
+    status: str,
+    source_path: str,
+    errors: list[str] | None = None,
+    warnings: list[str] | None = None,
+) -> dict[str, object]:
+    """Build structured project-contract load diagnostics for init payloads."""
+
+    return {
+        "status": status,
+        "source_path": source_path,
+        "errors": list(errors or []),
+        "warnings": list(warnings or []),
+    }
+
+
+def _classify_project_contract_payload(
+    *,
+    cwd: Path,
+    source_path: Path,
+    raw_contract: object,
+) -> tuple[ResearchContract | None, dict[str, object]]:
+    """Classify a raw project contract payload into a load result."""
+
+    source_label = _project_contract_source_path(cwd, source_path)
+    if raw_contract is None:
+        return None, _project_contract_load_payload(status="missing", source_path=source_label)
+    if not isinstance(raw_contract, dict):
+        logger.warning("Skipping project_contract from %s because it is not a JSON object", source_path)
+        return None, _project_contract_load_payload(
+            status="blocked_type",
+            source_path=source_label,
+            errors=["project contract must be a JSON object"],
+        )
+
+    list_shape_drift_errors = _collect_list_shape_drift_errors(raw_contract)
+    normalized_contract, schema_findings = salvage_project_contract(raw_contract)
+    schema_warnings, schema_errors = _split_project_contract_schema_findings(
+        schema_findings,
+        allow_singleton_defaults=False,
+    )
+    schema_warnings = list(dict.fromkeys([*schema_warnings, *list_shape_drift_errors]))
+    if schema_errors or normalized_contract is None:
+        logger.warning(
+            "Skipping project_contract from %s because blocking schema normalization would be required: %s",
+            source_path,
+            "; ".join(schema_errors) if schema_errors else "validation failed",
+        )
+        return None, _project_contract_load_payload(
+            status="blocked_schema",
+            source_path=source_label,
+            errors=schema_errors or ["blocking schema normalization would be required"],
+            warnings=schema_warnings,
+        )
+
+    integrity_errors = collect_contract_integrity_errors(normalized_contract)
+    if integrity_errors:
+        logger.warning(
+            "Skipping project_contract from %s because semantic integrity checks failed: %s",
+            source_path,
+            "; ".join(integrity_errors),
+        )
+        return None, _project_contract_load_payload(
+            status="blocked_integrity",
+            source_path=source_label,
+            errors=integrity_errors,
+            warnings=schema_warnings,
+        )
+
+    if schema_warnings:
+        logger.warning(
+            "Loaded project_contract from %s after recoverable schema normalization: %s",
+            source_path,
+            "; ".join(schema_warnings),
+        )
+    contract = normalized_contract
+    load_info = _project_contract_load_payload(
+        status="loaded",
+        source_path=source_label,
+        warnings=schema_warnings,
+    )
+    approval_validation = validate_project_contract(contract, mode="approved")
+    if not approval_validation.valid:
+        logger.warning(
+            "Loaded project_contract from %s with approval blockers: %s",
+            source_path,
+            "; ".join(approval_validation.errors) if approval_validation.errors else "validation failed",
+        )
+        load_info["status"] = "loaded_with_approval_blockers"
+    return contract, load_info
+
+
+def _load_project_contract(cwd: Path) -> tuple[ResearchContract | None, dict[str, object]]:
+    """Load the canonical project contract and return load diagnostics."""
+    layout = ProjectLayout(cwd)
+    raw_payload = _load_raw_project_contract_payload(cwd)
+    if raw_payload is not None:
+        source_path, raw_contract = raw_payload
+        contract, load_info = _classify_project_contract_payload(
+            cwd=cwd,
+            source_path=source_path,
+            raw_contract=raw_contract,
+        )
+    else:
+        state, _state_issues, state_source = _peek_state_json(cwd)
+        default_source = _project_contract_source_path(cwd, layout.state_json)
+        if not isinstance(state, dict):
+            return None, _project_contract_load_payload(status="missing", source_path=default_source)
+
+        source_path = (
+            layout.state_json
+            if state_source in (None, "state.json")
+            else layout.state_json_backup
+            if state_source == "state.json.bak"
+            else layout.state_md
+        )
+        contract, load_info = _classify_project_contract_payload(
+            cwd=cwd,
+            source_path=source_path,
+            raw_contract=state.get("project_contract"),
+        )
+    return contract, load_info
+
+
+def _project_contract_validation_payload(contract: ResearchContract | None) -> dict[str, object] | None:
+    """Return approval-mode validation metadata for a loaded project contract."""
+
+    if contract is None:
+        return None
+    return validate_project_contract(contract, mode="approved").model_dump(mode="json")
 
 
 def _sorted_markdown_files(directory: Path) -> list[Path]:
     """Return markdown files in a directory, sorted by name."""
     try:
-        return sorted(path for path in directory.iterdir() if path.is_file() and path.suffix == ".md")
+        return sorted(
+            path for path in directory.iterdir() if path.is_file() and path.suffix == ".md"
+        )
     except FileNotFoundError:
         return []
 
@@ -239,6 +453,26 @@ def _append_unique_strings(target: list[str], values: list[object] | tuple[objec
             target.append(text)
 
 
+def _should_skip_research_scan_entry(cwd: Path, entry: Path) -> bool:
+    """Return whether *entry* should be skipped during research-file discovery."""
+
+    if entry.name in _IGNORE_DIRS:
+        return True
+
+    try:
+        relative_parts = entry.relative_to(cwd).parts
+    except ValueError:
+        return False
+    for ignored_parts in _RUNTIME_IGNORED_SCAN_PATHS:
+        ignored_length = len(ignored_parts)
+        if ignored_length == 0 or len(relative_parts) < ignored_length:
+            continue
+        for offset in range(len(relative_parts) - ignored_length + 1):
+            if relative_parts[offset : offset + ignored_length] == ignored_parts:
+                return True
+    return False
+
+
 def _reference_identity_tokens(values: list[object]) -> set[str]:
     """Return normalized identity tokens for matching related anchor records."""
     tokens: set[str] = set()
@@ -254,23 +488,46 @@ def _reference_identity_tokens(values: list[object]) -> set[str]:
 
 def _build_active_reference_lookup(
     active_references: list[dict[str, object]],
-) -> tuple[dict[str, dict[str, object]], dict[str, str]]:
-    """Return active-reference lookup tables by ID and canonicalizable token."""
+) -> tuple[dict[str, dict[str, object]], dict[str, str], set[str]]:
+    """Return active-reference lookup tables and ambiguous token markers."""
     by_id: dict[str, dict[str, object]] = {}
-    token_to_id: dict[str, str] = {}
+    token_matches: dict[str, set[str]] = {}
     for ref in active_references:
         ref_id = str(ref.get("id") or "").strip()
         locator = str(ref.get("locator") or "").strip()
         if ref_id:
             by_id[ref_id] = ref
-            token_to_id.setdefault(ref_id.casefold(), ref_id)
+            token_matches.setdefault(ref_id.casefold(), set()).add(ref_id)
         if ref_id and locator:
-            token_to_id.setdefault(locator.casefold(), ref_id)
+            token_matches.setdefault(locator.casefold(), set()).add(ref_id)
         for alias in ref.get("aliases", []):
             alias_text = str(alias).strip()
             if alias_text and ref_id:
-                token_to_id.setdefault(alias_text.casefold(), ref_id)
-    return by_id, token_to_id
+                token_matches.setdefault(alias_text.casefold(), set()).add(ref_id)
+    token_to_id: dict[str, str] = {}
+    ambiguous_tokens: set[str] = set()
+    for token, ref_ids in token_matches.items():
+        if len(ref_ids) == 1:
+            token_to_id[token] = next(iter(ref_ids))
+        elif len(ref_ids) > 1:
+            ambiguous_tokens.add(token)
+    return by_id, token_to_id, ambiguous_tokens
+
+
+def _resolve_reference_token(
+    token: object,
+    *,
+    token_to_id: dict[str, str],
+    ambiguous_tokens: set[str],
+) -> str:
+    """Resolve a reference token without collapsing ambiguous aliases or locators."""
+    token_text = str(token).strip()
+    if not token_text:
+        return token_text
+    token_key = token_text.casefold()
+    if token_key in ambiguous_tokens:
+        return token_text
+    return token_to_id.get(token_key, token_text)
 
 
 def _merge_reference_record(merged: dict[str, dict[str, object]], ref: dict[str, object]) -> None:
@@ -366,7 +623,7 @@ def _merge_reference_intake(
         "context_gaps": [],
         "crucial_inputs": [],
     }
-    _, token_to_id = _build_active_reference_lookup(active_references)
+    _, token_to_id, ambiguous_tokens = _build_active_reference_lookup(active_references)
     if contract is not None:
         intake = contract.context_intake.model_dump(mode="json")
         for key in merged:
@@ -375,7 +632,11 @@ def _merge_reference_intake(
         _append_unique_strings(merged[key], list(derived_intake.get(key) or []))
     canonical_must_read_refs: list[str] = []
     for token in merged["must_read_refs"]:
-        resolved = token_to_id.get(token.casefold(), token)
+        resolved = _resolve_reference_token(
+            token,
+            token_to_id=token_to_id,
+            ambiguous_tokens=ambiguous_tokens,
+        )
         _append_unique_strings(canonical_must_read_refs, [resolved])
     merged["must_read_refs"] = canonical_must_read_refs
     return merged
@@ -439,9 +700,7 @@ def _merge_contract_reference_payload(
     elif existing_why and derived_why and derived_why not in existing_why:
         payload["why_it_matters"] = f"{existing_why}; {derived_why}"
 
-    merged_applies_to: list[str] = [
-        item for item in list(payload.get("applies_to") or []) if item in allowed_subject_ids
-    ]
+    merged_applies_to: list[str] = [item for item in list(payload.get("applies_to") or []) if item in allowed_subject_ids]
     _append_unique_strings(
         merged_applies_to,
         [item for item in list(derived.get("applies_to") or []) if item in allowed_subject_ids],
@@ -468,22 +727,17 @@ def _canonical_contract_intake(
 ) -> dict[str, list[str]]:
     """Return additive canonical intake with canonicalized reference IDs."""
 
-    intake = {
-        "must_read_refs": [],
-        "must_include_prior_outputs": [],
-        "user_asserted_anchors": [],
-        "known_good_baselines": [],
-        "context_gaps": [],
-        "crucial_inputs": [],
-    }
-    contract_intake = contract.context_intake.model_dump(mode="json")
-    for key in intake:
-        _append_unique_strings(intake[key], list(contract_intake.get(key) or []))
-        _append_unique_strings(intake[key], list(effective_reference_intake.get(key) or []))
-    _, token_to_id = _build_active_reference_lookup(active_references)
+    del effective_reference_intake  # Artifact-derived intake stays in ``effective_reference_intake`` only.
+
+    intake = contract.context_intake.model_dump(mode="json")
+    _, token_to_id, ambiguous_tokens = _build_active_reference_lookup(active_references)
     canonical_must_read_refs: list[str] = []
     for token in list(intake.get("must_read_refs") or []):
-        resolved = token_to_id.get(str(token).casefold(), str(token))
+        resolved = _resolve_reference_token(
+            token,
+            token_to_id=token_to_id,
+            ambiguous_tokens=ambiguous_tokens,
+        )
         _append_unique_strings(canonical_must_read_refs, [resolved])
     intake["must_read_refs"] = canonical_must_read_refs
     return intake
@@ -494,11 +748,11 @@ def _canonicalize_project_contract(
     *,
     active_references: list[dict[str, object]],
     effective_reference_intake: dict[str, list[str]],
-) -> ResearchContract | None:
+) -> tuple[ResearchContract | None, list[str]]:
     """Return the canonical contract after merging durable anchor context."""
 
     if contract is None:
-        return None
+        return None, []
 
     payload = contract.model_dump(mode="json")
     payload["context_intake"] = _canonical_contract_intake(
@@ -515,15 +769,17 @@ def _canonicalize_project_contract(
         active_references,
         allowed_subject_ids=allowed_subject_ids,
     )
-    refs_by_id = {str(ref.get("id") or "").strip(): ref for ref in canonical_refs if str(ref.get("id") or "").strip()}
+    refs_by_id = {
+        str(ref.get("id") or "").strip(): ref
+        for ref in canonical_refs
+        if str(ref.get("id") or "").strip()
+    }
     refs_by_locator = {
         str(ref.get("locator") or "").strip().casefold(): ref
         for ref in canonical_refs
         if str(ref.get("locator") or "").strip()
     }
     merged_references: list[dict[str, object]] = []
-    seen_ids: set[str] = set()
-    seen_locators: set[str] = set()
     for existing in list(payload.get("references") or []):
         ref_id = str(existing.get("id") or "").strip()
         locator_key = str(existing.get("locator") or "").strip().casefold()
@@ -536,21 +792,23 @@ def _canonicalize_project_contract(
             else existing
         )
         merged_references.append(merged)
-        if ref_id:
-            seen_ids.add(ref_id)
-        if locator_key:
-            seen_locators.add(locator_key)
-    for derived in canonical_refs:
-        ref_id = str(derived.get("id") or "").strip()
-        locator_key = str(derived.get("locator") or "").strip().casefold()
-        if ref_id in seen_ids or (locator_key and locator_key in seen_locators):
-            continue
-        merged_references.append(derived)
     payload["references"] = merged_references
     try:
-        return ResearchContract.model_validate(payload)
-    except Exception:
-        return contract
+        return ResearchContract.model_validate(payload), []
+    except PydanticValidationError as exc:
+        validation_errors = [
+            f"{'.'.join(str(part) for part in error.get('loc', ())) or 'project_contract'}: {str(error.get('msg', 'validation failed')).strip() or 'validation failed'}"
+            for error in exc.errors()
+        ]
+        warning = "canonical project_contract merge failed validation; keeping original contract: " + "; ".join(
+            validation_errors
+        )
+        logger.warning(warning)
+        return contract, [warning]
+    except Exception as exc:
+        warning = f"canonical project_contract merge failed unexpectedly; keeping original contract: {exc}"
+        logger.warning(warning)
+        return contract, [warning]
 
 
 def _render_active_reference_context(
@@ -558,10 +816,12 @@ def _render_active_reference_context(
     effective_intake: dict[str, list[str]],
     literature_review_files: list[str],
     research_map_reference_files: list[str],
+    contract_validation: dict[str, object] | None = None,
+    contract_load_info: dict[str, object] | None = None,
 ) -> str:
     """Render a compact text block of anchors and carry-forward inputs."""
     lines: list[str] = ["## Active Reference Registry"]
-    refs_by_id, _ = _build_active_reference_lookup(active_references)
+    refs_by_id, _, _ = _build_active_reference_lookup(active_references)
 
     if active_references:
         for ref in active_references:
@@ -583,6 +843,32 @@ def _render_active_reference_context(
             lines.append("- No structured anchors parsed yet; raw reference artifacts are available below.")
         else:
             lines.append("- None confirmed in `state.json.project_contract.references` yet.")
+
+    if contract_load_info is not None:
+        load_status = str(contract_load_info.get("status") or "").strip()
+        load_warnings = list(contract_load_info.get("warnings") or [])
+        load_errors = list(contract_load_info.get("errors") or [])
+        if load_status.startswith("blocked") or load_warnings:
+            lines.extend(["", "## Project Contract Intake"])
+            lines.append(f"- Load status: {load_status.replace('_', ' ')}")
+            source_path = str(contract_load_info.get("source_path") or "").strip()
+            if source_path:
+                lines.append(f"- Source: {source_path}")
+            for error in load_errors:
+                lines.append(f"- Blocker: {error}")
+            for warning in load_warnings:
+                lines.append(f"- Warning: {warning}")
+
+    if contract_validation is not None:
+        lines.extend(["", "## Project Contract Validation"])
+        if contract_validation.get("valid") is True:
+            lines.append("- Approval status: ready")
+        else:
+            lines.append("- Approval status: blocked")
+        for error in list(contract_validation.get("errors") or []):
+            lines.append(f"- Blocker: {error}")
+        for warning in list(contract_validation.get("warnings") or []):
+            lines.append(f"- Warning: {warning}")
 
     lines.extend(
         [
@@ -672,7 +958,7 @@ def _reference_artifact_payload(cwd: Path) -> dict[str, object]:
 
 def _build_reference_runtime_context(cwd: Path) -> dict[str, object]:
     """Build shared reference/anchor context for workflow init payloads."""
-    contract = _load_project_contract(cwd)
+    contract, project_contract_load_info = _load_project_contract(cwd)
     artifact_payload = _reference_artifact_payload(cwd)
     artifact_ingestion = ingest_reference_artifacts(
         cwd,
@@ -686,11 +972,17 @@ def _build_reference_runtime_context(cwd: Path) -> dict[str, object]:
         artifact_ingestion.intake.to_dict(),
         active_references,
     )
-    canonical_contract = _canonicalize_project_contract(
+    canonical_contract, canonicalization_warnings = _canonicalize_project_contract(
         contract,
         active_references=active_references,
         effective_reference_intake=effective_reference_intake,
     )
+    if canonicalization_warnings:
+        project_contract_load_info = {
+            **project_contract_load_info,
+            "warnings": [*list(project_contract_load_info.get("warnings") or []), *canonicalization_warnings],
+        }
+    project_contract_validation = _project_contract_validation_payload(canonical_contract)
     project_text = _safe_read_file(cwd / PLANNING_DIR_NAME / PROJECT_FILENAME)
     selected_protocol_bundles = select_protocol_bundles(project_text, canonical_contract)
 
@@ -707,9 +999,9 @@ def _build_reference_runtime_context(cwd: Path) -> dict[str, object]:
 
     return {
         "project_contract": canonical_contract.model_dump(mode="json") if canonical_contract is not None else None,
-        "contract_intake": canonical_contract.context_intake.model_dump(mode="json")
-        if canonical_contract is not None
-        else None,
+        "project_contract_validation": project_contract_validation,
+        "project_contract_load_info": project_contract_load_info,
+        "contract_intake": canonical_contract.context_intake.model_dump(mode="json") if canonical_contract is not None else None,
         "effective_reference_intake": effective_reference_intake,
         "derived_active_references": derived_references,
         "derived_active_reference_count": len(derived_references),
@@ -724,6 +1016,8 @@ def _build_reference_runtime_context(cwd: Path) -> dict[str, object]:
             effective_reference_intake,
             artifact_payload["literature_review_files"],
             artifact_payload["research_map_reference_files"],
+            project_contract_validation,
+            project_contract_load_info,
         ),
         **artifact_payload,
     }
@@ -734,26 +1028,64 @@ def _build_execution_runtime_context(cwd: Path) -> dict[str, object]:
     from grd.core.observability import get_current_execution
 
     snapshot = get_current_execution(cwd)
-    state = _load_state_json(cwd)
+    state, _state_issues, _state_source = _peek_state_json(cwd)
     position = state.get("position") if isinstance(state, dict) else {}
     session = state.get("session") if isinstance(state, dict) else {}
+    machine = _current_machine_identity()
+    current_hostname = machine.get("hostname")
+    current_platform = machine.get("platform")
+    session_hostname = session.get("hostname") if isinstance(session, dict) else None
+    session_platform = session.get("platform") if isinstance(session, dict) else None
+    session_resume_file = _normalize_runtime_resume_file(
+        cwd,
+        session.get("resume_file") if isinstance(session, dict) else None,
+    )
+    current_execution_resume_file = _normalize_runtime_resume_file(
+        cwd,
+        snapshot.resume_file if snapshot is not None else None,
+        require_exists=True,
+    )
+    current_execution_payload = snapshot.model_dump(mode="json") if snapshot is not None else None
+    if isinstance(current_execution_payload, dict):
+        current_execution_payload["resume_file"] = current_execution_resume_file
+    execution_resume_file_source = (
+        "current_execution"
+        if current_execution_resume_file
+        else ("session_resume_file" if session_resume_file else None)
+    )
 
     paused_states = {"paused", "awaiting_user", "ready_to_continue", "waiting_review", "blocked"}
     segment_status = (snapshot.segment_status or "").lower() if snapshot is not None else ""
-    is_resumable = bool(snapshot and segment_status in paused_states)
+    is_resumable = bool(snapshot and segment_status in paused_states and current_execution_resume_file)
     paused_at = (
         snapshot.updated_at
         if snapshot is not None and segment_status in paused_states
         else (position.get("paused_at") if isinstance(position, dict) else None)
     )
     resume_file = (
-        snapshot.resume_file
-        if snapshot is not None and snapshot.resume_file
-        else (session.get("resume_file") if isinstance(session, dict) else None)
+        current_execution_resume_file
+        if current_execution_resume_file
+        else session_resume_file
     )
+    machine_change_detected = bool(
+        session_hostname
+        and session_platform
+        and (
+            session_hostname != current_hostname
+            or session_platform != current_platform
+        )
+    )
+    machine_change_notice = None
+    if machine_change_detected:
+        machine_change_notice = (
+            "Machine change detected: "
+            f"last active on {session_hostname} ({session_platform}); "
+            f"current machine {current_hostname} ({current_platform}). "
+            "The project state is portable and does not require repair."
+        )
 
     return {
-        "current_execution": snapshot.model_dump(mode="json") if snapshot is not None else None,
+        "current_execution": current_execution_payload,
         "has_live_execution": snapshot is not None,
         "execution_review_pending": bool(
             snapshot
@@ -765,13 +1097,62 @@ def _build_execution_runtime_context(cwd: Path) -> dict[str, object]:
             )
         ),
         "execution_pre_fanout_review_pending": bool(snapshot and snapshot.pre_fanout_review_pending),
-        "execution_skeptical_requestioning_required": bool(snapshot and snapshot.skeptical_requestioning_required),
+        "execution_skeptical_requestioning_required": bool(
+            snapshot and snapshot.skeptical_requestioning_required
+        ),
         "execution_downstream_locked": bool(snapshot and snapshot.downstream_locked),
         "execution_blocked": bool(snapshot and snapshot.blocked_reason),
         "execution_resumable": is_resumable,
         "execution_paused_at": paused_at,
+        "current_execution_resume_file": current_execution_resume_file,
+        "session_resume_file": session_resume_file,
         "execution_resume_file": resume_file,
-    }
+        "execution_resume_file_source": execution_resume_file_source,
+        "current_hostname": current_hostname,
+        "current_platform": current_platform,
+        "session_hostname": session_hostname,
+        "session_platform": session_platform,
+        "machine_change_detected": machine_change_detected,
+        "machine_change_notice": machine_change_notice,
+}
+
+
+def _normalize_runtime_resume_file(
+    cwd: Path,
+    resume_file: object,
+    *,
+    require_exists: bool = False,
+) -> str | None:
+    """Return a portable repo-local resume pointer when one can be trusted."""
+    if not isinstance(resume_file, str):
+        return None
+
+    normalized = resume_file.strip()
+    if not normalized or normalized == EM_DASH or normalized.casefold() in _RESUME_FILE_CLEAR_VALUES:
+        return None
+
+    resolved_cwd = cwd.resolve(strict=False)
+    candidate = Path(normalized).expanduser()
+    if candidate.is_absolute():
+        try:
+            normalized = candidate.resolve(strict=False).relative_to(resolved_cwd).as_posix()
+        except (OSError, ValueError):
+            return None
+        candidate = Path(normalized)
+
+    if candidate.is_absolute():
+        return None
+
+    resolved_target = (cwd / candidate).resolve(strict=False)
+    try:
+        resolved_target.relative_to(resolved_cwd)
+    except (OSError, ValueError):
+        return None
+
+    if require_exists and not resolved_target.exists():
+        return None
+
+    return candidate.as_posix()
 
 
 # ─── Config Loader ────────────────────────────────────────────────────────────
@@ -837,30 +1218,19 @@ def _resolve_model(
     active_runtime = runtime
     if active_runtime is None:
         try:
-            from grd.hooks.runtime_detect import detect_runtime_for_grd_use
+            from grd.hooks.runtime_detect import RUNTIME_UNKNOWN, detect_runtime_for_grd_use
 
             active_runtime = detect_runtime_for_grd_use(cwd=cwd)
         except Exception:
             active_runtime = _detect_platform(cwd)
-    if active_runtime == "unknown":
+    else:
+        RUNTIME_UNKNOWN = "unknown"
+    if active_runtime == RUNTIME_UNKNOWN:
+        active_runtime = _detect_platform(cwd)
+    if active_runtime == RUNTIME_UNKNOWN:
         active_runtime = None
 
-    if config is None:
-        return _resolve_model_canonical(cwd, agent_type, runtime=active_runtime)
-
-    if not active_runtime:
-        return None
-
-    profile = config.get("model_profile", str(GRDProjectConfig.model_fields["model_profile"].default.value))
-    tier = resolve_agent_tier(agent_type, profile).value
-    runtime_overrides = config.get("model_overrides")
-    if not isinstance(runtime_overrides, dict):
-        return None
-    runtime_map = runtime_overrides.get(active_runtime)
-    if not isinstance(runtime_map, dict):
-        return None
-    value = runtime_map.get(tier)
-    return value if isinstance(value, str) and value else None
+    return _resolve_model_canonical(cwd, agent_type, runtime=active_runtime)
 
 
 # ─── Phase Info Helper ────────────────────────────────────────────────────────
@@ -889,12 +1259,41 @@ def _try_get_milestone_info(cwd: Path) -> dict:
 
 def _detect_platform(cwd: Path | None = None) -> str:
     """Detect the active AI runtime, if any."""
+    resolved_cwd = cwd or Path.cwd()
+    resolved_home = Path.home()
+    runtime_unknown = "unknown"
     try:
-        from grd.hooks.runtime_detect import detect_runtime_for_grd_use
+        from grd.hooks.runtime_detect import (
+            RUNTIME_UNKNOWN,
+            detect_active_runtime,
+            detect_runtime_for_grd_use,
+            detect_runtime_install_target,
+        )
+        runtime_unknown = RUNTIME_UNKNOWN
 
-        return detect_runtime_for_grd_use(cwd=cwd)
+        active = detect_active_runtime(cwd=resolved_cwd, home=resolved_home)
+        if active != runtime_unknown:
+            return active
+
+        detected = detect_runtime_for_grd_use(cwd=resolved_cwd, home=resolved_home)
+        if detected != runtime_unknown:
+            return detected
+
+        for descriptor in iter_runtime_descriptors():
+            try:
+                install_target = detect_runtime_install_target(
+                    descriptor.runtime_name,
+                    cwd=resolved_cwd,
+                    home=resolved_home,
+                )
+            except Exception:
+                continue
+            if install_target is not None:
+                return descriptor.runtime_name
     except Exception:
-        return "unknown"
+        pass
+
+    return runtime_unknown
 
 
 # ─── Context Assemblers ──────────────────────────────────────────────────────
@@ -910,7 +1309,8 @@ def init_execute_phase(cwd: Path, phase: str | None, includes: set[str] | None =
     """
     if not phase:
         raise ValidationError(
-            "phase is required for init execute-phase. Provide a phase identifier such as '1', '03', or '3.1'."
+            "phase is required for init execute-phase. "
+            "Provide a phase identifier such as '1', '03', or '3.1'."
         )
 
     includes = includes or set()
@@ -994,7 +1394,8 @@ def init_plan_phase(cwd: Path, phase: str | None, includes: set[str] | None = No
     """
     if not phase:
         raise ValidationError(
-            "phase is required for init plan-phase. Provide a phase identifier such as '1', '03', or '3.1'."
+            "phase is required for init plan-phase. "
+            "Provide a phase identifier such as '1', '03', or '3.1'."
         )
 
     includes = includes or set()
@@ -1048,7 +1449,7 @@ def init_plan_phase(cwd: Path, phase: str | None, includes: set[str] | None = No
         result["research_content"] = _find_phase_artifact(phase_dir, RESEARCH_SUFFIX, STANDALONE_RESEARCH)
     if "verification" in includes and phase_info and phase_info.get("directory"):
         phase_dir = cwd / phase_info["directory"]
-        result["verification_content"] = _find_phase_artifact(phase_dir, VERIFICATION_SUFFIX, STANDALONE_VERIFICATION)
+        result["verification_content"] = _find_phase_artifact(phase_dir, VERIFICATION_SUFFIX)
     if "validation" in includes and phase_info and phase_info.get("directory"):
         phase_dir = cwd / phase_info["directory"]
         result["validation_content"] = _find_phase_artifact(phase_dir, VALIDATION_SUFFIX, STANDALONE_VALIDATION)
@@ -1075,7 +1476,7 @@ def init_new_project(cwd: Path) -> dict:
         for entry in entries:
             if found_count >= 5:
                 return
-            if entry.name in _IGNORE_DIRS:
+            if _should_skip_research_scan_entry(cwd, entry):
                 continue
             if entry.is_dir():
                 _walk(entry, depth + 1)
@@ -1113,6 +1514,8 @@ def init_new_project(cwd: Path) -> dict:
         and not _path_exists(cwd, f"{PLANNING_DIR_NAME}/{RESEARCH_MAP_DIR_NAME}"),
         # Git state
         "has_git": _path_exists(cwd, ".git"),
+        # Contract-backed context
+        **_build_reference_runtime_context(cwd),
         # Platform
         "platform": _detect_platform(cwd),
     }
@@ -1215,29 +1618,42 @@ def init_resume(cwd: Path) -> dict:
     segment_candidates: list[dict[str, object]] = []
     current_execution = execution_context.get("current_execution")
     if execution_context.get("execution_resumable") and isinstance(current_execution, dict):
-        segment_candidates.append(
-            {
-                "source": "current_execution",
-                "status": current_execution.get("segment_status"),
-                "phase": current_execution.get("phase"),
-                "plan": current_execution.get("plan"),
-                "segment_id": current_execution.get("segment_id"),
-                "resume_file": current_execution.get("resume_file"),
-                "checkpoint_reason": current_execution.get("checkpoint_reason"),
-                "first_result_gate_pending": current_execution.get("first_result_gate_pending"),
-                "pre_fanout_review_pending": current_execution.get("pre_fanout_review_pending"),
-                "pre_fanout_review_cleared": current_execution.get("pre_fanout_review_cleared"),
-                "skeptical_requestioning_required": current_execution.get("skeptical_requestioning_required"),
-                "skeptical_requestioning_summary": current_execution.get("skeptical_requestioning_summary"),
-                "weakest_unchecked_anchor": current_execution.get("weakest_unchecked_anchor"),
-                "disconfirming_observation": current_execution.get("disconfirming_observation"),
-                "downstream_locked": current_execution.get("downstream_locked"),
-                "waiting_reason": current_execution.get("waiting_reason"),
-                "blocked_reason": current_execution.get("blocked_reason"),
-                "last_result_label": current_execution.get("last_result_label"),
-                "updated_at": current_execution.get("updated_at"),
-            }
-        )
+        current_candidate = {
+            "source": "current_execution",
+            "status": current_execution.get("segment_status"),
+            "phase": current_execution.get("phase"),
+            "plan": current_execution.get("plan"),
+            "segment_id": current_execution.get("segment_id"),
+            "resume_file": current_execution.get("resume_file"),
+            "checkpoint_reason": current_execution.get("checkpoint_reason"),
+            "first_result_gate_pending": current_execution.get("first_result_gate_pending"),
+            "pre_fanout_review_pending": current_execution.get("pre_fanout_review_pending"),
+            "pre_fanout_review_cleared": current_execution.get("pre_fanout_review_cleared"),
+            "skeptical_requestioning_required": current_execution.get("skeptical_requestioning_required"),
+            "skeptical_requestioning_summary": current_execution.get("skeptical_requestioning_summary"),
+            "weakest_unchecked_anchor": current_execution.get("weakest_unchecked_anchor"),
+            "disconfirming_observation": current_execution.get("disconfirming_observation"),
+            "downstream_locked": current_execution.get("downstream_locked"),
+            "waiting_reason": current_execution.get("waiting_reason"),
+            "blocked_reason": current_execution.get("blocked_reason"),
+            "last_result_label": current_execution.get("last_result_label"),
+            "updated_at": current_execution.get("updated_at"),
+        }
+        segment_candidates.append(current_candidate)
+
+    session_resume_file = execution_context.get("session_resume_file")
+    if isinstance(session_resume_file, str) and session_resume_file:
+        session_candidate = {
+            "source": "session_resume_file",
+            "status": "handoff",
+            "resume_file": session_resume_file,
+            "resumable": False,
+        }
+        if not any(
+            candidate.get("resume_file") == session_candidate["resume_file"]
+            for candidate in segment_candidates
+        ):
+            segment_candidates.append(session_candidate)
     if interrupted_agent_id is not None:
         segment_candidates.append(
             {
@@ -1282,7 +1698,8 @@ def init_verify_work(cwd: Path, phase: str | None) -> dict:
     """Assemble context for work verification."""
     if not phase:
         raise ValidationError(
-            "phase is required for init verify-work. Provide a phase identifier such as '1', '03', or '3.1'."
+            "phase is required for init verify-work. "
+            "Provide a phase identifier such as '1', '03', or '3.1'."
         )
 
     config = load_config(cwd)
@@ -1432,29 +1849,17 @@ def init_milestone_op(cwd: Path) -> dict:
     """Assemble context for milestone operations (complete, archive, etc.)."""
     config = load_config(cwd)
     milestone = _try_get_milestone_info(cwd)
+    reference_runtime_context = _build_reference_runtime_context(cwd)
 
-    # Count phases
-    phases_dir = cwd / PLANNING_DIR_NAME / PHASES_DIR_NAME
-    phase_count = 0
-    completed_phases = 0
-    try:
-        for d in sorted(phases_dir.iterdir()):
-            if not d.is_dir():
-                continue
-            phase_count += 1
-            phase_files = [f.name for f in d.iterdir() if f.is_file()]
-            plans = [f for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN]
-            summaries = [f for f in phase_files if f.endswith(SUMMARY_SUFFIX) or f == STANDALONE_SUMMARY]
-            if _is_phase_complete(len(plans), len(summaries)):
-                completed_phases += 1
-    except FileNotFoundError:
-        pass
+    milestone_snapshot = _milestone_completion_snapshot(cwd)
 
     # Check archived milestones
     milestones_dir = cwd / PLANNING_DIR_NAME / MILESTONES_DIR_NAME
     archived_milestones: list[str] = []
     try:
-        archived_milestones = sorted(d.name for d in milestones_dir.iterdir() if d.is_dir())
+        archived_milestones = sorted(
+            entry.name for entry in milestones_dir.iterdir() if entry.is_dir() or entry.is_file()
+        )
     except FileNotFoundError:
         pass
 
@@ -1471,9 +1876,9 @@ def init_milestone_op(cwd: Path) -> dict:
         "milestone_name": milestone["name"],
         "milestone_slug": _generate_slug(milestone["name"]),
         # Phase counts
-        "phase_count": phase_count,
-        "completed_phases": completed_phases,
-        "all_phases_complete": phase_count > 0 and phase_count == completed_phases,
+        "phase_count": milestone_snapshot.phase_count,
+        "completed_phases": milestone_snapshot.completed_phases,
+        "all_phases_complete": milestone_snapshot.all_phases_complete,
         # Archive
         "archived_milestones": archived_milestones,
         "archive_count": len(archived_milestones),
@@ -1485,6 +1890,7 @@ def init_milestone_op(cwd: Path) -> dict:
         "phases_dir_exists": _path_exists(cwd, f"{PLANNING_DIR_NAME}/{PHASES_DIR_NAME}"),
         # Platform
         "platform": _detect_platform(cwd),
+        **reference_runtime_context,
     }
 
 
@@ -1535,7 +1941,8 @@ def init_progress(cwd: Path, includes: set[str] | None = None) -> dict:
     milestone = _try_get_milestone_info(cwd)
 
     # Analyze phases
-    phases_dir = cwd / PLANNING_DIR_NAME / PHASES_DIR_NAME
+    layout = ProjectLayout(cwd)
+    phases_dir = layout.phases_dir
     phases: list[dict[str, object]] = []
     current_phase: dict[str, object] | None = None
     next_phase: dict[str, object] | None = None
@@ -1554,10 +1961,12 @@ def init_progress(cwd: Path, includes: set[str] | None = None) -> dict:
             phase_files = [f.name for f in phase_path.iterdir() if f.is_file()]
 
             plans = [f for f in phase_files if f.endswith(PLAN_SUFFIX) or f == STANDALONE_PLAN]
-            summaries = [f for f in phase_files if f.endswith(SUMMARY_SUFFIX) or f == STANDALONE_SUMMARY]
+            summaries = [f for f in phase_files if layout.is_summary_file(f)]
             has_research = any(f.endswith(RESEARCH_SUFFIX) or f == STANDALONE_RESEARCH for f in phase_files)
 
-            if _is_phase_complete(len(plans), len(summaries)):
+            summary_count = _matching_phase_artifact_count(plans, summaries)
+
+            if _is_phase_complete(len(plans), summary_count):
                 status = "complete"
             elif plans:
                 status = "in_progress"
@@ -1572,7 +1981,7 @@ def init_progress(cwd: Path, includes: set[str] | None = None) -> dict:
                 "directory": f"{PLANNING_DIR_NAME}/{PHASES_DIR_NAME}/{dir_name}",
                 "status": status,
                 "plan_count": len(plans),
-                "summary_count": len(summaries),
+                "summary_count": summary_count,
                 "has_research": has_research,
             }
             phases.append(phase_entry)

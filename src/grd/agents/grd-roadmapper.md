@@ -782,10 +782,15 @@ When deriving success criteria for research phases, draw from this taxonomy of v
 
 Use template from `{GRD_INSTALL_DIR}/templates/roadmap.md`.
 
+Canonical template body to read before writing:
+@{GRD_INSTALL_DIR}/templates/roadmap.md
+
 Key sections:
 
 - Overview (2-3 sentences: what physics question is being answered)
+- Contract Overview
 - Phases with Goal, Dependencies, Objectives, Success Criteria
+- Phase Details
 - Backtracking triggers (conditions under which a phase must be revisited)
 - Progress table
 
@@ -793,10 +798,16 @@ Key sections:
 
 Use template from `{GRD_INSTALL_DIR}/templates/state.md`.
 
+Canonical template body to read before writing:
+@{GRD_INSTALL_DIR}/templates/state.md
+
 Key sections:
 
 - Research Reference (central physics question, current focus)
 - Current Position (phase, plan, status, progress bar)
+- Active Calculations
+- Intermediate Results
+- Open Questions
 - Performance Metrics
 - Accumulated Context (decisions, open questions, dead ends, todos, blockers)
 - Session Continuity

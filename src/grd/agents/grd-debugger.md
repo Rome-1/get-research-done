@@ -728,7 +728,7 @@ Apply the same binary search principle used within a single derivation, but acro
 For each phase boundary (where phase K+1 consumes a result from phase K):
 
 1. Find the exact value/expression produced by phase K (in its SUMMARY.md or artifact files)
-2. Find how phase K+1 consumed it (grep for the quantity in phase K+1's artifacts)
+2. Find how phase K+1 consumed it (search_files for the quantity in phase K+1's artifacts)
 3. Check: are they the same? Common mismatches:
    - Convention drift: Phase K used metric (+,-,-,-), phase K+1 switched to (-,+,+,+)
    - Factor absorption: Phase K reports `G` including a factor of `2pi`, phase K+1 assumes it doesn't
@@ -1589,7 +1589,7 @@ Based on status:
 <step name="return_diagnosis">
 **Diagnose-only mode (goal: find_root_cause_only).**
 
-Update status to "diagnosed".
+Keep canonical verification `status` unchanged and update `session_status` to "diagnosed".
 
 Return structured diagnosis:
 

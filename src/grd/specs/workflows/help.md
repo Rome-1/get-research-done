@@ -38,8 +38,8 @@ Ready to execute:
 **Phase complete:**
 ```
 Phase {N} complete:
-  /grd:verify-work         — Verify results
-  /grd:plan-phase {N+1}    — Plan next phase
+  /grd:discuss-phase {N+1}  — Gather context before planning the next phase
+  /grd:plan-phase {N+1}    — Create execution plan
   /grd:complete-milestone   — If all phases done
 ```
 
@@ -75,14 +75,15 @@ Project ─── the overall research goal
 
 **Typical workflow:**
 1. `/grd:new-project` — Define research question, survey literature, create roadmap
-2. `/grd:plan-phase N` — Create detailed plans for phase N
-3. `/grd:execute-phase N` — Run all plans (derivations, simulations, analysis)
-4. `/grd:verify-work` — Verify physics correctness
-5. Repeat 2-4 for each phase
-6. `/grd:write-paper` — Generate publication from results
-7. `/grd:peer-review` — Run manuscript review before submission inside the current project
-8. `/grd:respond-to-referees` — Address reviewer comments if needed
-9. `/grd:arxiv-submission` — Package the approved manuscript
+2. `/grd:discuss-phase N` — Clarify the phase before planning
+3. `/grd:plan-phase N` — Create detailed plans for phase N
+4. `/grd:execute-phase N` — Run all plans (derivations, simulations, analysis)
+5. `/grd:verify-work` — Verify physics correctness
+6. Repeat 2-5 for each phase
+7. `/grd:write-paper` — Generate publication from results
+8. `/grd:peer-review` — Run manuscript review before submission inside the current project
+9. `/grd:respond-to-referees` — Address reviewer comments if needed
+10. `/grd:arxiv-submission` — Package the approved manuscript
 
 **Example:** Studying the 3D Ising critical exponent:
 - Phase 1: Set up Wolff cluster MC algorithm
@@ -98,16 +99,25 @@ Project ─── the overall research goal
 
 **GRD** (Get Research Done) creates hierarchical research plans optimized for solo agentic physics research with AI research agents.
 
+## Invocation Surfaces
+
+This reference lists canonical in-runtime slash-command names in `/grd:*` form.
+
+- Use these names inside the installed agent/runtime command surface.
+- The local `grd` CLI may expose different `grd ...` subcommands and grouping. Use `grd --help` to inspect the executable CLI surface directly.
+- If you need to validate whether a slash-command can run in the current workspace, use `grd validate command-context grd:<name>`.
+
 ## Quick Start
 
 1. `/grd:new-project` - Initialize research project (includes literature survey, objectives, roadmap)
-2. `/grd:plan-phase 1` - Create detailed plan for first phase
-3. `/grd:execute-phase 1` - Execute the phase
+2. `/grd:discuss-phase 1` - Clarify the first phase before planning
+3. `/grd:plan-phase 1` - Create detailed plan for first phase
+4. `/grd:execute-phase 1` - Execute the phase
 
 ## Core Workflow
 
 ```
-/grd:new-project -> /grd:plan-phase -> /grd:execute-phase -> repeat
+/grd:new-project -> /grd:discuss-phase -> /grd:plan-phase -> /grd:execute-phase -> repeat
 ```
 
 ### Project Initialization
@@ -125,7 +135,7 @@ One command takes you from research idea to ready-for-investigation:
 Creates all `.grd/` artifacts:
 
 - `PROJECT.md` — research question, theoretical framework, key parameters
-- `config.json` — workflow settings (`autonomy`, `research_mode`, agent toggles)
+- `config.json` — workflow settings (`autonomy`, `research_mode`, `execution.review_cadence`, `planning.commit_docs`, agent toggles)
 - `research/` — literature survey (if selected)
 - `REQUIREMENTS.md` — scoped research requirements with REQ-IDs
 - `ROADMAP.md` — phases mapped to requirements
@@ -247,7 +257,7 @@ Perform a rigorous physics derivation with systematic verification at each step.
 - Justifies and bounds all approximations with error estimates
 - Produces a complete, self-contained derivation document with boxed final result
 
-Usage: `/grd:derive-equation`
+Usage: `/grd:derive-equation "derive the one-loop beta function"`
 
 ### Quick Mode
 
@@ -329,6 +339,7 @@ Start a new research milestone through unified flow.
 - Optional literature survey (spawns 4 parallel scout agents)
 - Objectives definition with scoping
 - Roadmap creation with phase breakdown
+- Uses `planning.commit_docs` from init to decide whether milestone artifacts are committed immediately
 
 Mirrors `/grd:new-project` flow for continuation projects (existing PROJECT.md).
 
@@ -441,7 +452,8 @@ Check dimensional consistency of equations and expressions.
 - Checks final results have correct dimensions
 - Flags dimensionless ratios and magic numbers
 
-Usage: `/grd:dimensional-analysis`
+Usage: `/grd:dimensional-analysis 3`
+Usage: `/grd:dimensional-analysis results/01-SUMMARY.md`
 
 **`/grd:limiting-cases`**
 Verify results reduce correctly in known limiting cases.
@@ -450,7 +462,8 @@ Verify results reduce correctly in known limiting cases.
 - Compares against textbook expressions in each limit
 - Flags limits that are not recovered
 
-Usage: `/grd:limiting-cases`
+Usage: `/grd:limiting-cases 3`
+Usage: `/grd:limiting-cases results/01-SUMMARY.md`
 
 **`/grd:numerical-convergence`**
 Run systematic convergence tests on numerical computations.
@@ -459,7 +472,8 @@ Run systematic convergence tests on numerical computations.
 - Estimates convergence order via Richardson extrapolation
 - Constructs error budgets for computed quantities
 
-Usage: `/grd:numerical-convergence`
+Usage: `/grd:numerical-convergence 3`
+Usage: `/grd:numerical-convergence results/mesh-study.csv`
 
 **`/grd:compare-experiment`**
 Compare theoretical/numerical results against experimental data.
@@ -468,7 +482,17 @@ Compare theoretical/numerical results against experimental data.
 - Computes chi-squared or other goodness-of-fit measures
 - Identifies systematic deviations and their possible origins
 
-Usage: `/grd:compare-experiment`
+Usage: `/grd:compare-experiment predictions.csv experiment.csv`
+
+**`/grd:compare-results [phase, artifact, or comparison target]`**
+Compare internal results, baselines, or methods and emit a decisive verdict.
+
+- Compares phase outputs, artifacts, or named comparison targets
+- Surfaces agreement, tension, or failure in a single verdict-oriented view
+- Useful when you need to compare internal baselines without reaching for external data
+
+Usage: `/grd:compare-results 3`
+Usage: `/grd:compare-results results/01-SUMMARY.md`
 
 **`/grd:validate-conventions [phase]`**
 Validate convention consistency across all phases.
@@ -476,21 +500,33 @@ Validate convention consistency across all phases.
 - Checks metric signature, Fourier convention, natural units, gauge choice
 - Detects convention drift where a symbol is redefined in a later phase
 - Cross-checks locked conventions against all phase artifacts
-- Scope to a single phase or run across all phases
+- Scope to a single phase using the optional phase argument, or run across all completed phases
 
 Usage: `/grd:validate-conventions`
 Usage: `/grd:validate-conventions 3`
 
 **`/grd:regression-check [phase]`**
-Re-verify all previously verified claims and checks to catch regressions after changes.
+Scan-only audit for regressions in already-recorded verification state.
 
-- Extracts verified results from VERIFICATION.md files
-- Re-runs dimensional analysis, limiting cases, and numerical checks
-- Reports any results that no longer hold
-- Scope to a single phase or run across all phases
+- Detects convention conflicts where the same symbol is redefined with different values across completed SUMMARY artifacts
+- Scans `SUMMARY.md` and `VERIFICATION.md` frontmatter rather than re-running numerical or physics verification
+- Flags non-passing, invalid, or non-canonical `VERIFICATION.md` statuses in completed phases
+- Uses canonical statuses `passed`, `gaps_found`, `expert_needed`, and `human_needed`
+- Reports the affected phases and files for follow-up verification or repair
+- Scope to a single phase using the optional phase argument, or run across all completed phases
 
 Usage: `/grd:regression-check`
 Usage: `/grd:regression-check 3`
+
+**`/grd:health`**
+Run project health checks and optionally auto-fix issues.
+
+- Checks state, frontmatter, storage-path policy, and other project health surfaces
+- Reports warnings and fixable issues before they become workflow blockers
+- Supports `--fix` for automatic repair of common problems
+
+Usage: `/grd:health`
+Usage: `/grd:health --fix`
 
 ### Quantitative Analysis
 
@@ -514,7 +550,7 @@ Determine which input parameters most strongly affect output quantities.
 - Supports analytical and numerical methods
 
 Usage: `/grd:sensitivity-analysis --target cross_section --params g,m,Lambda`
-Usage: `/grd:sensitivity-analysis --method numerical`
+Usage: `/grd:sensitivity-analysis --target cross_section --params g,m,Lambda --method numerical`
 
 **`/grd:error-propagation`**
 Track how uncertainties propagate through multi-step calculations.
@@ -549,7 +585,7 @@ Run skeptical peer review on an existing manuscript within the current GRD proje
 - Runs strict review preflight checks against project state, manuscript, artifacts, and reproducibility support
 - Loads manuscript files, phase summaries, verification reports, bibliography audit, and artifact manifest
 - Spawns a six-agent review panel: reader, literature, math, physics, significance, and final grd-referee adjudicator
-- Produces stage artifacts under `.grd/review/` plus `.grd/REFEREE-REPORT.md` and `.grd/REFEREE-REPORT.tex` (or revision-round follow-up pairs)
+- Produces stage artifacts under `.grd/review/` plus `.grd/REFEREE-REPORT{round_suffix}.md` and `.grd/REFEREE-REPORT{round_suffix}.tex`
 - Routes the result to `/grd:respond-to-referees` or `/grd:arxiv-submission`
 - Requires an initialized `.grd/PROJECT.md` workspace; manuscript paths do not bypass project preflight
 
@@ -560,7 +596,7 @@ Usage: `/grd:peer-review paper/`
 Structure point-by-point response to referee reports and revise the manuscript.
 
 - Parses referee comments into structured items with severity levels
-- Drafts AUTHOR-RESPONSE.md with REF-xxx issue tracking (fixed/rebutted/acknowledged)
+- Drafts both `.grd/AUTHOR-RESPONSE{round_suffix}.md` and `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` with REF-xxx issue tracking (fixed/rebutted/acknowledged)
 - Consumes `.grd/review/REVIEW-LEDGER*.json` and `.grd/review/REFEREE-DECISION*.json` when present to preserve blocking-issue context
 - Spawns paper-writer agents for targeted section revisions
 - Tracks new calculations required by referees as revision tasks
@@ -591,6 +627,16 @@ Explain a concept, method, notation, result, or paper in project context or from
 - Audits cited papers with `grd-bibliographer` and includes a reading path with openable links
 
 Usage: `/grd:explain "Ward identity"`
+
+**`/grd:suggest-next`**
+Suggest the most impactful next action based on current project state.
+
+- Scans phases, plans, verification status, blockers, and todos
+- Produces a prioritized action list
+- Local CLI fallback: `grd --raw suggest`
+- Fastest way to answer "what should I do next?" without reading through progress reports
+
+Usage: `/grd:suggest-next`
 
 **`/grd:literature-review [topic]`**
 Structured literature review for a physics research topic.
@@ -716,13 +762,15 @@ Usage: `/grd:plan-milestone-gaps`
 ### Configuration
 
 **`/grd:settings`**
-Configure workflow toggles, model profile, and runtime-specific tier model overrides interactively.
+Configure workflow toggles, model profile, `execution.review_cadence`, and runtime-specific tier model overrides interactively.
 
 - Toggle plan researcher, plan checker, and execution verifier agents
-- Configure inter-wave verification gates (auto/always/never)
+- Configure inter-wave verification gates (`execution.review_cadence`: `dense`, `adaptive`, or `sparse`)
 - Toggle parallel execution of wave plans
 - Select model profile (deep-theory/numerical/exploratory/review/paper-writing)
 - Optionally pin concrete runtime model strings for `tier-1`, `tier-2`, and `tier-3`
+- Configure whether planning artifacts are committed (`planning.commit_docs`)
+- Configure git branching strategy (`git.branching_strategy`: `none`, `per-phase`, or `per-milestone`)
 - Updates `.grd/config.json`
 
 Usage: `/grd:settings`
@@ -861,7 +909,7 @@ Configure how planning artifacts are managed in `.grd/config.json`:
 - `true`: Planning artifacts committed to git (standard workflow)
 - `false`: Planning artifacts kept local-only, not committed
 
-When `commit_docs: false`:
+When `planning.commit_docs: false`:
 
 - Add `.grd/` to your `.gitignore`
 - Useful for collaborative projects, shared repos, or keeping planning private
@@ -871,6 +919,9 @@ Example config:
 
 ```json
 {
+  "execution": {
+    "review_cadence": "adaptive"
+  },
   "planning": {
     "commit_docs": false
   }
@@ -882,7 +933,9 @@ Example config:
 **Starting a new research project:**
 
 ```
-/grd:new-project        # Unified flow: questioning -> survey -> objectives -> roadmap
+/grd:new-project        # Unified flow: questioning -> survey -> discuss -> objectives -> roadmap
+/clear
+/grd:discuss-phase 1    # Gather context and clarify approach
 /clear
 /grd:plan-phase 1       # Create plans for first phase
 /clear

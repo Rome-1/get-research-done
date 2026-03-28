@@ -79,7 +79,7 @@ None yet.
 
 
 def _make_state_md(tmp_path: Path) -> Path:
-    grd_dir = tmp_path / ".grd"
+    grd_dir = tmp_path / "GRD"
     grd_dir.mkdir(parents=True)
     state_md = grd_dir / "STATE.md"
     state_md.write_text(

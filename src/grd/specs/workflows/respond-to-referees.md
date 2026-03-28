@@ -29,7 +29,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `commit_docs`, `state_exists`, `project_exists`, `project_contract`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `active_reference_context`.
+Parse JSON for: `commit_docs`, `state_exists`, `project_exists`, `project_contract`, `project_contract_load_info`, `project_contract_validation`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `active_reference_context`.
 
 **Read mode settings:**
 
@@ -66,7 +66,9 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-If review preflight exits nonzero because of missing project state, missing manuscript or referee-report source, degraded review integrity, or missing required conventions, STOP and show the blocking issues before drafting responses.
+Use the literal `paste` sentinel when collecting inline report text. Do not pass the raw pasted referee report body as `$ARGUMENTS` to the strict preflight command.
+
+If review preflight exits nonzero because of missing project state, missing manuscript, missing referee report source when provided as a path, degraded review integrity, or missing required conventions, STOP and show the blocking issues before drafting responses. Treat `project_contract` as authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes; otherwise the contract is visible but blocked, and the response should surface the blocker instead of relying on it.
 
 **Locate paper directory:**
 
@@ -117,7 +119,7 @@ ls .grd/review/REVIEW-LEDGER*.json 2>/dev/null
 ls .grd/review/REFEREE-DECISION*.json 2>/dev/null
 ```
 
-If matching round-specific files exist, load them as structured context. Use `REFEREE-REPORT*.md` as the canonical issue-ID source, and use `REVIEW-LEDGER*.json` / `REFEREE-DECISION*.json` to identify blocking issues, unsupported-claim findings, recommendation floors, and the referee's stated rationale.
+If matching round-specific files exist, load them as structured context. Use `.grd/REFEREE-REPORT{round_suffix}.md` as the canonical issue-ID source, and use `REVIEW-LEDGER*.json` / `REFEREE-DECISION*.json` to identify blocking issues, unsupported-claim findings, recommendation floors, and the referee's stated rationale. Keep `project_contract`, `project_contract_load_info`, `project_contract_validation`, and `active_reference_context` visible together when drafting the response letter.
 
 Set `round_suffix` to match the peer-review artifact convention:
 
@@ -133,7 +135,7 @@ Use `protocol_bundle_context` from init JSON as additive revision guidance.
 
 - If `selected_protocol_bundle_ids` is non-empty, keep the bundle's decisive artifact expectations, benchmark anchors, estimator caveats, and reference prompts visible while triaging referee requests.
 - Use bundle guidance to distinguish "missing decisive evidence we already owed" from "new side quest the referee is asking for."
-- Do **not** let bundle guidance justify broader claims, waive review-ledger blockers, or replace the manuscript's actual evidence trail in `.grd/comparisons/*-COMPARISON.md`, `.grd/paper/FIGURE_TRACKER.md`, phase `SUMMARY.md`, or `VERIFICATION.md`.
+- Do **not** let bundle guidance justify broader claims, waive review-ledger blockers, or replace the manuscript's actual evidence trail in `.grd/comparisons/*-COMPARISON.md`, `.grd/paper/FIGURE_TRACKER.md`, phase summary artifacts, or `VERIFICATION.md`.
 - Keep revisions tied to claims the manuscript still intends to make. Review ledgers and bundle hints help prioritize, but they do not force new side analyses once honest claim narrowing resolves the concern.
 </step>
 
@@ -144,7 +146,7 @@ Ask the user to provide referee reports via one of:
 
 1. **Paste directly** -- user pastes report text into the conversation
 2. **File path** -- user provides a path to the report file(s)
-3. **Existing file** -- check `.grd/paper/referee-report-*.md` or `paper/referee-reports/`
+3. **Existing file** -- use canonical `.grd/REFEREE-REPORT{round_suffix}.md` only
 
 **Parse each referee's comments into structured items:**
 
@@ -165,7 +167,7 @@ For each comment, extract:
 - Blocking issues and unresolved issue IDs from `REVIEW-LEDGER*.json`
 - Any finding that the paper's claim scope outruns the evidence, that physical interpretation is unsupported, or that venue fit/significance is inadequate
 
-Do not invent new `REF-*` identifiers from the JSON artifacts. Instead, use them to prioritize and calibrate the responses to the issues already surfaced in `REFEREE-REPORT*.md`.
+Do not invent new `REF-*` identifiers from the JSON artifacts. Instead, use them to prioritize and calibrate the responses to the issues already surfaced in the canonical `.grd/REFEREE-REPORT{round_suffix}.md`.
 
 Present the parsed structure for user confirmation:
 
@@ -222,12 +224,40 @@ Populate `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` with:
 - Empty response and changes-made fields (to be filled in subsequent steps)
 - Progress tracking table
 
+Before writing `.grd/AUTHOR-RESPONSE{round_suffix}.md`, use this exact scaffold so the file matches the canonical author-response schema expected by later review rounds:
+
+```markdown
+---
+response_to: REFEREE-REPORT{round_suffix}.md
+round: {N}
+date: YYYY-MM-DDTHH:MM:SSZ
+issues_fixed: {count}
+issues_rebutted: {count}
+issues_acknowledged: {count}
+---
+
+# Author Response — Round {N}
+
+## Summary
+
+{1-2 paragraph overview: what changed, what was rebutted, what remains.}
+
+## Point-by-Point Responses
+
+### REF-001: {brief description from referee report}
+
+**Classification:** fixed
+**Response:** {issue-by-issue narrative response}
+**Changes:** {exact manuscript locations changed}
+```
+
 Populate `.grd/AUTHOR-RESPONSE{round_suffix}.md` with:
 
 - One section per `REF-*` issue
 - Classification (`fixed`, `rebutted`, `acknowledged`, `needs-calculation`)
 - Exact manuscript change locations or planned follow-up work
 - Any blocking / recommendation-floor context imported from `REVIEW-LEDGER*.json` or `REFEREE-DECISION*.json`
+- Use `**Evidence:**` blocks for rebuttals and `**Plan:**` blocks for acknowledged or `needs-calculation` responses when those sections are needed
 
 For later rounds, use the round-specific variants (for example `REFEREE_RESPONSE-R2.md` and `AUTHOR-RESPONSE-R2.md`).
 
@@ -301,7 +331,7 @@ If no Group C items: skip to draft_responses.
 
 For each new calculation:
 
-1. Create matching entries in the "New Calculations Summary" sections of `REFEREE_RESPONSE.md` and `AUTHOR-RESPONSE.md`
+1. Create matching entries in the "New Calculations Summary" sections of `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` and `.grd/AUTHOR-RESPONSE{round_suffix}.md`
 2. Suggest a research phase to execute the calculation:
 
 ```
@@ -347,7 +377,7 @@ WRITER_MODEL=$(grd resolve-model grd-paper-writer)
 
 **For Group A (response-only) items:**
 
-Draft each response in `AUTHOR-RESPONSE.md`, then mirror the polished journal-facing wording into `REFEREE_RESPONSE.md`. For each comment:
+Draft each response in `.grd/AUTHOR-RESPONSE{round_suffix}.md`, then mirror the polished journal-facing wording into `.grd/paper/REFEREE_RESPONSE{round_suffix}.md`. For each comment:
 
 - Quote the referee's exact words
 - Write the assessment (is the referee correct, partially correct, or mistaken?)
@@ -373,7 +403,7 @@ task(
 Each revision agent receives:
 
 - The specific referee comments affecting this section (with full quotes)
-- The current section text (read from paper/{section}.tex)
+- The current section text (read from `${PAPER_DIR}/{section}.tex`)
 - The planned response strategy for each comment
 - Relevant `.grd/comparisons/*-COMPARISON.md` files and `FIGURE_TRACKER.md` entries for decisive claims mentioned in the section
 - `protocol_bundle_context` and `selected_protocol_bundle_ids` as additive specialized guidance only; they help preserve benchmark anchors, decisive artifacts, and estimator caveats during revision, but do not create new claims or replace the review ledger
@@ -383,11 +413,11 @@ Each revision agent receives:
 **If a revision agent fails to spawn or returns an error:** Note the failure for that section. Continue with other sections. After all agents complete, report which sections failed and offer: 1) Retry failed sections, 2) Apply revisions manually in the main context, 3) Skip failed sections and proceed. Do not block the entire referee response on a single section failure.
 
 After each agent returns, verify the promised artifacts before trusting the handoff text:
-- Re-read the targeted `paper/{section}.tex` file and confirm the expected revision markers or substantive edits landed.
-- Re-open `AUTHOR-RESPONSE.md` and `REFEREE_RESPONSE.md` and confirm the affected comment block now contains the updated assessment / changes-made text.
+- Re-read the targeted `${PAPER_DIR}/{section}.tex` file and confirm the expected revision markers or substantive edits landed.
+- Re-open `.grd/AUTHOR-RESPONSE{round_suffix}.md` and `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` and confirm the affected comment block now contains the updated assessment / changes-made text.
 - If the agent claimed success but the files did not change, treat that section as failed and route it through the retry/manual options above instead of silently proceeding.
 
-Only after those checks pass, update both `AUTHOR-RESPONSE.md` and `REFEREE_RESPONSE.md`:
+Only after those checks pass, update both `.grd/AUTHOR-RESPONSE{round_suffix}.md` and `.grd/paper/REFEREE_RESPONSE{round_suffix}.md`:
 - Fill in "Changes made" with specific locations (section, page, equation)
 - Set status to "Response drafted"
 
@@ -415,6 +445,7 @@ pdflatex -interaction=nonstopmode main.tex 2>&1 | tail -5
 4. Check cross-references to new or renumbered equations/figures
 5. Resolve any `MISSING:` citation markers left by the paper-writer (see write-paper workflow for the resolution protocol)
 6. Re-check any decisive `comparison_verdicts` or benchmark anchors touched by the revision. If protocol bundles are selected, use them only as an additive reminder of which decisive comparisons or estimator caveats must remain visible after revision.
+7. If the revision touched bibliography files or citation commands, refresh `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` before generating the response letter or proceeding to final review. Stale bibliography audits are not acceptable in a referee-response round.
 
 **If inconsistencies found and iteration < 3:**
 
@@ -438,7 +469,7 @@ Options:
 <step name="generate_response_letter">
 **Generate the response letter to the editor:**
 
-Read the completed `AUTHOR-RESPONSE.md` and `REFEREE_RESPONSE.md` (all comments should have status "Response drafted" or "Final").
+Read the completed `.grd/AUTHOR-RESPONSE{round_suffix}.md` and `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` (all comments should have status "Response drafted" or "Final").
 
 **If any Group C items are still pending:** Warn the user before generating:
 
@@ -447,7 +478,7 @@ Read the completed `AUTHOR-RESPONSE.md` and `REFEREE_RESPONSE.md` (all comments 
 "work in progress." Complete them with /grd:execute-phase before resubmission.
 ```
 
-Write `paper/response-letter.tex` (or `.md` depending on journal requirements):
+Write `${PAPER_DIR}/response-letter.tex` (or `.md` depending on journal requirements):
 
 ```latex
 \documentclass[12pt]{article}
@@ -510,12 +541,12 @@ raised. Below we provide point-by-point responses.
 **Commit all revision artifacts:**
 
 ```bash
-PRE_CHECK=$(grd pre-commit-check --files .grd/paper/REFEREE_RESPONSE.md .grd/AUTHOR-RESPONSE.md paper/response-letter.tex ${PAPER_DIR}/*.tex ${PAPER_DIR}/references.bib 2>&1) || true
+PRE_CHECK=$(grd pre-commit-check --files .grd/paper/REFEREE_RESPONSE{round_suffix}.md .grd/AUTHOR-RESPONSE{round_suffix}.md ${PAPER_DIR}/response-letter.tex ${PAPER_DIR}/*.tex ${PAPER_DIR}/references.bib 2>&1) || true
 echo "$PRE_CHECK"
 
 grd commit \
   "docs: referee response and manuscript revisions" \
-  --files .grd/paper/REFEREE_RESPONSE.md .grd/AUTHOR-RESPONSE.md paper/response-letter.tex ${PAPER_DIR}/*.tex ${PAPER_DIR}/references.bib
+  --files .grd/paper/REFEREE_RESPONSE{round_suffix}.md .grd/AUTHOR-RESPONSE{round_suffix}.md ${PAPER_DIR}/response-letter.tex ${PAPER_DIR}/*.tex ${PAPER_DIR}/references.bib
 ```
 
 **Present completion summary:**
@@ -538,9 +569,9 @@ grd commit \
 
 ### Files
 
-- Structured response tracking: .grd/AUTHOR-RESPONSE.md
-- Journal-facing response letter source: .grd/paper/REFEREE_RESPONSE.md
-- Response letter: paper/response-letter.tex
+- Structured response tracking: .grd/AUTHOR-RESPONSE{round_suffix}.md
+- Journal-facing response letter source: .grd/paper/REFEREE_RESPONSE{round_suffix}.md
+- Response letter: ${PAPER_DIR}/response-letter.tex
 - Revised manuscript: {paper_dir}/*.tex
 
 ---
@@ -548,8 +579,8 @@ grd commit \
 ## Next Steps
 
 {If all complete:}
-1. Review response letter: `cat paper/response-letter.tex`
-2. Build revised manuscript: `cd paper && make`
+1. Review response letter: `cat ${PAPER_DIR}/response-letter.tex`
+2. Build revised manuscript: `cd ${PAPER_DIR} && make`
 3. `/grd:arxiv-submission` — repackage for resubmission
 4. `/grd:peer-review` — optional re-review before final packaging if the revision was substantial
 5. Submit revised manuscript + response letter to journal
@@ -559,7 +590,7 @@ grd commit \
    /grd:plan-phase {N}
    /grd:execute-phase {N}
 2. Return here to incorporate results:
-   /grd:respond-to-referees (will detect existing REFEREE_RESPONSE.md / AUTHOR-RESPONSE.md)
+   /grd:respond-to-referees (will detect existing `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` / `.grd/AUTHOR-RESPONSE{round_suffix}.md`)
 
 Recommend `/grd:peer-review` as the standalone re-review command once the revised manuscript compiles cleanly. This keeps revision rounds aligned with the referee agent's `REFEREE-REPORT-R{N}.md` protocol.
 
@@ -585,7 +616,7 @@ Recommend `/grd:peer-review` as the standalone re-review command once the revise
 
 - [ ] Referee reports parsed and structured
 - [ ] All comments categorized (physics concern, clarity, etc.) and prioritized
-- [ ] REFEREE_RESPONSE.md and AUTHOR-RESPONSE.md created with complete point-by-point structure
+- [ ] `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` and `.grd/AUTHOR-RESPONSE{round_suffix}.md` created with complete point-by-point structure
 - [ ] Comments triaged into Groups A (response-only), B (revision), C (new calculation)
 - [ ] Group C items routed to research phases (if any)
 - [ ] All Group A responses drafted

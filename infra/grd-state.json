@@ -29,7 +29,7 @@
   },
   "alternatives": {
     "python_module": {
-      "command": "python",
+      "command": "python3",
       "args": [
         "-m",
         "grd.mcp.servers.state_server"

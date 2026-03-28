@@ -2,12 +2,15 @@
 
 Wraps the LaTeX compiler with TeX resource pre-checks (kpsewhich),
 latexmk support for multi-pass compilation, and the build_paper orchestrator.
+Supports cross-platform LaTeX detection including Windows (MiKTeX, TeX Live).
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import platform
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -28,6 +31,136 @@ from grd.mcp.paper.models import FigureRef, JournalSpec, PaperConfig, PaperOutpu
 from grd.mcp.paper.template_registry import render_paper
 
 logger = logging.getLogger(__name__)
+
+
+# ---- Cross-platform LaTeX detection ----
+
+# Common Windows install paths for MiKTeX and TeX Live.
+_WINDOWS_LATEX_SEARCH_DIRS: list[str] = [
+    os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "MiKTeX", "miktex", "bin", "x64"),
+    os.path.join(os.environ.get("PROGRAMFILES", ""), "MiKTeX", "miktex", "bin", "x64"),
+    os.path.join(os.environ.get("PROGRAMFILES(X86)", ""), "MiKTeX", "miktex", "bin", "x64"),
+    # TeX Live uses year-based directories; glob the most likely locations.
+    os.path.join(os.environ.get("PROGRAMFILES", ""), "texlive"),
+    os.path.join("C:\\", "texlive"),
+]
+
+
+def _find_in_windows_paths(binary: str) -> str | None:
+    """Search common Windows LaTeX install directories for *binary*."""
+    for base in _WINDOWS_LATEX_SEARCH_DIRS:
+        if not base or not os.path.isdir(base):
+            continue
+        # TeX Live nests binaries under <year>/bin/windows (or win64)
+        candidate = os.path.join(base, f"{binary}.exe")
+        if os.path.isfile(candidate):
+            return candidate
+        # Walk one level for TeX Live year dirs
+        try:
+            for child in os.listdir(base):
+                child_path = os.path.join(base, child)
+                if os.path.isdir(child_path):
+                    for sub in ("bin", os.path.join("bin", "windows"), os.path.join("bin", "win64")):
+                        candidate = os.path.join(child_path, sub, f"{binary}.exe")
+                        if os.path.isfile(candidate):
+                            return candidate
+        except OSError:
+            continue
+    return None
+
+
+def find_latex_compiler(compiler: str = "pdflatex") -> str | None:
+    """Locate a LaTeX compiler on the current system.
+
+    First tries the standard PATH via ``shutil.which``.  On Windows, also
+    searches common MiKTeX and TeX Live install directories that may not be
+    on the PATH.
+
+    Returns the full path to the compiler, or ``None`` if not found.
+    """
+    found = shutil.which(compiler)
+    if found:
+        return found
+    if platform.system() == "Windows":
+        return _find_in_windows_paths(compiler)
+    return None
+
+
+@dataclass(frozen=True)
+class LatexToolchainStatus:
+    """Result of a LaTeX toolchain availability check."""
+
+    available: bool
+    compiler_path: str | None = None
+    distribution: str | None = None
+    message: str = ""
+
+
+def detect_latex_toolchain(compiler: str = "pdflatex") -> LatexToolchainStatus:
+    """Detect whether a usable LaTeX toolchain is present.
+
+    Returns a :class:`LatexToolchainStatus` summarising availability, the
+    resolved compiler path, the likely distribution name, and a
+    human-readable message.
+    """
+    path = find_latex_compiler(compiler)
+    if path is None:
+        return LatexToolchainStatus(
+            available=False,
+            message=get_latex_install_guidance(),
+        )
+
+    # Heuristic distribution name
+    lower = path.lower().replace("\\", "/")
+    if "miktex" in lower:
+        dist = "MiKTeX"
+    elif "texlive" in lower:
+        dist = "TeX Live"
+    elif "mactex" in lower or "/Library/TeX/" in path:
+        dist = "MacTeX"
+    else:
+        dist = "TeX distribution"
+
+    return LatexToolchainStatus(
+        available=True,
+        compiler_path=path,
+        distribution=dist,
+        message=f"{compiler} found ({dist}): {path}",
+    )
+
+
+def get_latex_install_guidance() -> str:
+    """Return platform-specific guidance for installing a LaTeX distribution."""
+    system = platform.system()
+    if system == "Windows":
+        return (
+            "No LaTeX compiler found.\n"
+            "Install one of the following LaTeX distributions:\n"
+            "  - MiKTeX (recommended): https://miktex.org/download\n"
+            "    After install, open the MiKTeX Console and enable automatic\n"
+            "    package installation so missing .sty/.cls files are fetched\n"
+            "    on demand.\n"
+            "  - TeX Live: https://tug.org/texlive/windows.html\n"
+            "After installation, restart your terminal so the new PATH entries\n"
+            "take effect."
+        )
+    if system == "Darwin":
+        return (
+            "No LaTeX compiler found.\n"
+            "Install a LaTeX distribution:\n"
+            "  - MacTeX (recommended): brew install --cask mactex\n"
+            "  - BasicTeX (smaller):    brew install --cask basictex\n"
+            "  - TeX Live:              https://tug.org/texlive/"
+        )
+    # Linux / other
+    return (
+        "No LaTeX compiler found.\n"
+        "Install TeX Live via your package manager:\n"
+        "  - Debian/Ubuntu: sudo apt install texlive-latex-base\n"
+        "  - Fedora:        sudo dnf install texlive-scheme-basic\n"
+        "  - Arch:          sudo pacman -S texlive-basic\n"
+        "  - Or full suite:  https://tug.org/texlive/"
+    )
 
 
 # ---- TeX resource availability check ----
@@ -135,8 +268,20 @@ async def compile_paper(tex_path: Path, output_dir: Path, compiler: str = "pdfla
         tex_path: Path to the .tex file.
         output_dir: Directory for output files.
         compiler: TeX compiler to use (pdflatex or xelatex).
+
+    Uses :func:`find_latex_compiler` for cross-platform compiler detection,
+    including Windows MiKTeX and TeX Live installations that may not be on
+    the system PATH.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Pre-check: is the compiler available at all?
+    if find_latex_compiler(compiler) is None:
+        guidance = get_latex_install_guidance()
+        return CompilationResult(
+            success=False,
+            error=f"Compiler '{compiler}' not found. {guidance}",
+        )
 
     if shutil.which("latexmk"):
         return await _compile_with_latexmk(tex_path, output_dir, compiler)
@@ -190,7 +335,7 @@ async def _compile_with_latexmk(tex_path: Path, output_dir: Path, compiler: str)
 
 async def _compile_manual_multipass(tex_path: Path, output_dir: Path, compiler: str) -> CompilationResult:
     """Manual multi-pass: pdflatex -> bibtex -> pdflatex -> pdflatex."""
-    compiler_path = shutil.which(compiler)
+    compiler_path = find_latex_compiler(compiler)
     if not compiler_path:
         return CompilationResult(success=False, error=f"Compiler '{compiler}' not found")
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -117,3 +118,34 @@ def test_write_mcp_servers_opencode_recovers_from_non_dict_mcp_key(tmp_path: Pat
     assert count == 1
     assert isinstance(written["mcp"], dict)
     assert "grd-errors" in written["mcp"]
+
+
+@pytest.mark.parametrize(
+    ("module_name", "function_name"),
+    [
+        ("grd.adapters.claude_code", "_rewrite_grd_cli_invocations"),
+        ("grd.adapters.codex", "_rewrite_codex_grd_cli_invocations"),
+        ("grd.adapters.gemini", "_rewrite_grd_cli_invocations"),
+        ("grd.adapters.opencode", "_rewrite_grd_cli_invocations"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("shell_line", "expected_fragment"),
+    [
+        ("grd; echo ok\n", "/runtime/grd; echo ok"),
+        ("echo $(grd)\n", "echo $(/runtime/grd)"),
+        ("grd>out.log\n", "/runtime/grd>out.log"),
+    ],
+)
+def test_runtime_shell_rewriters_handle_metacharacter_terminated_grd_commands(
+    module_name: str,
+    function_name: str,
+    shell_line: str,
+    expected_fragment: str,
+) -> None:
+    module = importlib.import_module(module_name)
+    rewrite = getattr(module, function_name)
+
+    result = rewrite(f"```bash\n{shell_line}```\n", "/runtime/grd")
+
+    assert expected_fragment in result

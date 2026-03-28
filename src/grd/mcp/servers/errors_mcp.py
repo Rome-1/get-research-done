@@ -1,9 +1,8 @@
-"""GRD Errors MCP server — exposes domain error catalog and traceability via MCP tools.
+"""GRD Errors MCP server — exposes physics error catalog and traceability via MCP tools.
 
-Loads the error catalog files and traceability matrix from the active domain
-pack's errors directory, parses markdown tables, and serves them via FastMCP tools.
-
-Set GRD_DOMAIN env var to select a domain pack (default: "physics").
+Loads the error catalog files and traceability matrix from
+specs/references/verification/errors/, parses markdown tables, and serves them
+via FastMCP tools.
 
 Entry point: python -m grd.mcp.servers.errors_mcp
 Console script: grd-mcp-errors
@@ -18,21 +17,29 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from grd.core.observability import grd_span
-from grd.mcp.servers import parse_frontmatter_safe, run_mcp_server
+from grd.mcp.servers import (
+    parse_frontmatter_safe,
+    run_mcp_server,
+    stable_mcp_error,
+    stable_mcp_response,
+)
+from grd.specs import SPECS_DIR
 
 # MCP stdio uses stdout for JSON-RPC — redirect logging to stderr
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(name)s %(levelname)s: %(message)s")
 logger = logging.getLogger("grd-errors")
 
+REFERENCES_DIR = SPECS_DIR / "references"
+
 # The 4 error catalog part files (ordered by error ID range)
 ERROR_CATALOG_FILES = [
-    "llm-errors-core.md",  # #1-25
-    "llm-errors-field-theory.md",  # #26-51
-    "llm-errors-extended.md",  # #52-81, #102-104
-    "llm-errors-deep.md",  # #82-101
+    "verification/errors/llm-errors-core.md",  # #1-25
+    "verification/errors/llm-errors-field-theory.md",  # #26-51
+    "verification/errors/llm-errors-extended.md",  # #52-81, #102-104
+    "verification/errors/llm-errors-deep.md",  # #82-101
 ]
 
-TRACEABILITY_FILE = "llm-errors-traceability.md"
+TRACEABILITY_FILE = "verification/errors/llm-errors-traceability.md"
 
 # Traceability matrix column names
 TRACEABILITY_COLUMNS = [
@@ -102,20 +109,20 @@ def _infer_domain_from_id(error_id: int) -> str:
 class ErrorStore:
     """In-memory store of parsed error classes and traceability data."""
 
-    def __init__(self, errors_dir: Path) -> None:
+    def __init__(self, references_dir: Path) -> None:
         self._errors: dict[int, dict[str, object]] = {}
         self._traceability: dict[int, dict[str, str]] = {}
-        self._load_catalogs(errors_dir)
-        self._load_traceability(errors_dir)
+        self._load_catalogs(references_dir)
+        self._load_traceability(references_dir)
 
-    def _load_catalogs(self, errors_dir: Path) -> None:
+    def _load_catalogs(self, references_dir: Path) -> None:
         """Load all 4 error catalog files."""
-        with grd_span("errors.load_catalogs", errors_dir=str(errors_dir)):
-            self._do_load_catalogs(errors_dir)
+        with grd_span("errors.load_catalogs", references_dir=str(references_dir)):
+            self._do_load_catalogs(references_dir)
 
-    def _do_load_catalogs(self, errors_dir: Path) -> None:
+    def _do_load_catalogs(self, references_dir: Path) -> None:
         for filename in ERROR_CATALOG_FILES:
-            path = errors_dir / filename
+            path = references_dir / filename
             if not path.is_file():
                 logger.warning("Error catalog not found: %s", path)
                 continue
@@ -157,13 +164,13 @@ class ErrorStore:
 
         logger.info("Loaded %d error classes from catalogs", len(self._errors))
 
-    def _load_traceability(self, errors_dir: Path) -> None:
+    def _load_traceability(self, references_dir: Path) -> None:
         """Load the traceability matrix mapping errors to verification checks."""
         with grd_span("errors.load_traceability"):
-            self._do_load_traceability(errors_dir)
+            self._do_load_traceability(references_dir)
 
-    def _do_load_traceability(self, errors_dir: Path) -> None:
-        path = errors_dir / TRACEABILITY_FILE
+    def _do_load_traceability(self, references_dir: Path) -> None:
+        path = references_dir / TRACEABILITY_FILE
         if not path.is_file():
             logger.warning("Traceability matrix not found: %s", path)
             return
@@ -286,25 +293,6 @@ _store: ErrorStore | None = None
 _store_lock = threading.Lock()
 
 
-def _resolve_errors_dir() -> Path:
-    """Resolve the errors directory from the active domain pack."""
-    import os
-
-    domain_name = os.environ.get("GRD_DOMAIN", "physics")
-    try:
-        from grd.domains.loader import load_domain
-
-        ctx = load_domain(domain_name)
-        if ctx is not None:
-            edir = ctx.errors_dir
-            if edir.is_dir() and any(edir.glob("*.md")):
-                return edir
-    except Exception:  # noqa: BLE001
-        pass
-    logger.warning("No errors directory found for domain '%s'; falling back to physics", domain_name)
-    return Path(__file__).resolve().parent.parent.parent / "domains" / "physics" / "verification" / "errors"
-
-
 def _get_store() -> ErrorStore:
     """Return the lazily-initialised error store (thread-safe)."""
     global _store  # noqa: PLW0603
@@ -312,7 +300,7 @@ def _get_store() -> ErrorStore:
         return _store
     with _store_lock:
         if _store is None:
-            _store = ErrorStore(_resolve_errors_dir())
+            _store = ErrorStore(REFERENCES_DIR)
         return _store
 
 
@@ -321,7 +309,7 @@ mcp = FastMCP("grd-errors")
 
 @mcp.tool()
 def get_error_class(error_id: int) -> dict[str, object]:
-    """Get full details of an error class by ID.
+    """Get full details of a physics error class by ID.
 
     Returns the error name, description, detection strategy, and example.
 
@@ -333,21 +321,25 @@ def get_error_class(error_id: int) -> dict[str, object]:
             store = _get_store()
             error = store.get(error_id)
             if error is None:
-                return {
-                    "error": f"Error class #{error_id} not found",
-                    "valid_range": "1-104",
-                    "total_classes": store.count,
-                }
-            return dict(error)
-        except (OSError, ValueError, KeyError) as e:
-            return {"error": str(e)}
+                return stable_mcp_response(
+                    {
+                        "valid_range": "1-104",
+                        "total_classes": store.count,
+                    },
+                    error=f"Error class #{error_id} not found",
+                )
+            return stable_mcp_response(dict(error))
+        except (OSError, ValueError, KeyError) as exc:
+            return stable_mcp_error(exc)
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
 
 @mcp.tool()
 def check_error_classes(computation_desc: str) -> dict[str, object]:
     """Identify error classes relevant to a computation description.
 
-    Given a description of the computation being performed, finds the
+    Given a description of the physics computation being performed, finds the
     most relevant error classes by matching against error names and descriptions.
 
     Args:
@@ -358,20 +350,24 @@ def check_error_classes(computation_desc: str) -> dict[str, object]:
         try:
             store = _get_store()
             matches = store.check_relevant(computation_desc)
-            return {
-                "query": computation_desc,
-                "match_count": len(matches),
-                "error_classes": matches[:15],  # Top 15 matches
-            }
-        except (OSError, ValueError, KeyError) as e:
-            return {"error": str(e)}
+            return stable_mcp_response(
+                {
+                    "query": computation_desc,
+                    "match_count": len(matches),
+                    "error_classes": matches[:15],  # Top 15 matches
+                }
+            )
+        except (OSError, ValueError, KeyError) as exc:
+            return stable_mcp_error(exc)
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
 
 @mcp.tool()
 def get_detection_strategy(error_id: int) -> dict[str, object]:
     """Get the detection strategy for a specific error class.
 
-    Returns the specific tests and checks to detect this type of error.
+    Returns the specific tests and checks to detect this type of physics error.
 
     Args:
         error_id: Numeric error class ID (1-104).
@@ -381,18 +377,19 @@ def get_detection_strategy(error_id: int) -> dict[str, object]:
             store = _get_store()
             error = store.get(error_id)
             if error is None:
-                return {
-                    "error": f"Error class #{error_id} not found",
-                    "valid_range": "1-104",
+                return stable_mcp_response({"valid_range": "1-104"}, error=f"Error class #{error_id} not found")
+            return stable_mcp_response(
+                {
+                    "id": error["id"],
+                    "name": error["name"],
+                    "detection_strategy": error["detection_strategy"],
+                    "example": error["example"],
                 }
-            return {
-                "id": error["id"],
-                "name": error["name"],
-                "detection_strategy": error["detection_strategy"],
-                "example": error["example"],
-            }
-        except (OSError, ValueError, KeyError) as e:
-            return {"error": str(e)}
+            )
+        except (OSError, ValueError, KeyError) as exc:
+            return stable_mcp_error(exc)
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
 
 @mcp.tool()
@@ -411,36 +408,39 @@ def get_traceability(error_id: int) -> dict[str, object]:
             store = _get_store()
             error = store.get(error_id)
             if error is None:
-                return {
-                    "error": f"Error class #{error_id} not found",
-                    "valid_range": "1-104",
-                }
+                return stable_mcp_response({"valid_range": "1-104"}, error=f"Error class #{error_id} not found")
 
             traceability = store.get_traceability(error_id)
             if traceability is None:
-                return {
+                return stable_mcp_response(
+                    {
+                        "id": error_id,
+                        "name": error["name"],
+                        "verification_checks": {},
+                        "covered_by": [],
+                        "coverage_count": 0,
+                        "note": "No traceability data available for this error class",
+                    }
+                )
+
+            return stable_mcp_response(
+                {
                     "id": error_id,
                     "name": error["name"],
-                    "verification_checks": {},
-                    "covered_by": [],
-                    "coverage_count": 0,
-                    "note": "No traceability data available for this error class",
+                    "verification_checks": traceability,
+                    "covered_by": [col for col, val in traceability.items() if val],
+                    "coverage_count": len([v for v in traceability.values() if v]),
                 }
-
-            return {
-                "id": error_id,
-                "name": error["name"],
-                "verification_checks": traceability,
-                "covered_by": [col for col, val in traceability.items() if val],
-                "coverage_count": len([v for v in traceability.values() if v]),
-            }
-        except (OSError, ValueError, KeyError) as e:
-            return {"error": str(e)}
+            )
+        except (OSError, ValueError, KeyError) as exc:
+            return stable_mcp_error(exc)
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
 
 @mcp.tool()
 def list_error_classes(domain: str | None = None) -> dict[str, object]:
-    """List all error classes, optionally filtered by domain.
+    """List all physics error classes, optionally filtered by domain.
 
     Args:
         domain: Optional domain filter. Available domains:
@@ -452,14 +452,18 @@ def list_error_classes(domain: str | None = None) -> dict[str, object]:
         try:
             store = _get_store()
             errors = store.list_all(domain)
-            return {
-                "count": len(errors),
-                "error_classes": errors,
-                "available_domains": store.domains,
-                "total_classes": store.count,
-            }
-        except (OSError, ValueError, KeyError) as e:
-            return {"error": str(e)}
+            return stable_mcp_response(
+                {
+                    "count": len(errors),
+                    "error_classes": errors,
+                    "available_domains": store.domains,
+                    "total_classes": store.count,
+                }
+            )
+        except (OSError, ValueError, KeyError) as exc:
+            return stable_mcp_error(exc)
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
 
 # ---------------------------------------------------------------------------

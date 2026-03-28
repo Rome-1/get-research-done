@@ -11,17 +11,20 @@ Usage:
 
 import json
 import logging
-import os
+import re
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import TypeVar
+from typing import Annotated, TypeVar
 
 from mcp.server.fastmcp import FastMCP
+from pydantic import WithJsonSchema
 
 from grd.contracts import ConventionLock
 from grd.core.constants import ProjectLayout
 from grd.core.conventions import (
+    KEY_ALIASES,
+    KNOWN_CONVENTIONS,
     ConventionSetResult,
     convention_list,
     normalize_key,
@@ -39,6 +42,7 @@ from grd.core.conventions import (
 )
 from grd.core.errors import ConventionError
 from grd.core.observability import grd_span
+from grd.mcp.servers import stable_mcp_error, stable_mcp_response
 
 T = TypeVar("T")
 
@@ -48,55 +52,145 @@ logger = logging.getLogger("grd-conventions")
 
 mcp = FastMCP("grd-conventions")
 
+# ─── Convention Field Metadata (for MCP tool responses) ──────────────────────
 
-# ─── Domain-Aware Helpers ────────────────────────────────────────────────────
+# Valid options per field — enriches responses beyond what conventions.py tracks.
+CONVENTION_OPTIONS: dict[str, list[str]] = {
+    "metric_signature": ["(+,-,-,-)", "(-,+,+,+)", "Euclidean (+,+,+,+)", "mostly-minus", "mostly-plus", "euclidean"],
+    "fourier_convention": ["physics", "math", "symmetric", "QFT"],
+    "natural_units": ["natural", "SI", "CGS", "lattice"],
+    "gauge_choice": ["Coulomb", "Lorenz", "axial", "Feynman", "light-cone"],
+    "regularization_scheme": ["dim-reg", "cutoff", "lattice", "zeta", "PV"],
+    "renormalization_scheme": ["MS-bar", "on-shell", "MOM", "lattice"],
+    "coordinate_system": ["Cartesian", "spherical", "cylindrical", "light-cone"],
+    "spin_basis": ["Dirac", "Weyl", "Majorana"],
+    "state_normalization": ["relativistic", "non-relativistic", "box"],
+    "coupling_convention": ["g", "g^2", "g^2/(4pi)", "alpha=g^2/(4pi)"],
+    "index_positioning": ["Einstein", "explicit"],
+    "time_ordering": ["time-ordered", "anti-time-ordered", "path-ordered"],
+    "commutation_convention": ["canonical", "anti-canonical"],
+    "levi_civita_sign": ["+1", "-1"],
+    "generator_normalization": ["delta/2", "delta"],
+    "covariant_derivative_sign": ["D=d-igA", "D=d+igA"],
+    "gamma_matrix_convention": ["Dirac", "Weyl", "Majorana"],
+    "creation_annihilation_order": ["normal", "anti-normal", "Weyl"],
+}
 
+_CUSTOM_CONVENTION_KEY_BODY = r"[A-Za-z0-9][A-Za-z0-9_-]*"
+_CUSTOM_CONVENTION_KEY_PATTERN = rf"^{_CUSTOM_CONVENTION_KEY_BODY}$"
+_CONVENTION_VALUE_PATTERN = r"^(?!\s*(?:null|none|undefined)\s*$)\S(?:.*\S)?$"
 
-def _get_domain_ctx():
-    """Load the active domain context from GRD_DOMAIN env var."""
-    from grd.domains.loader import load_domain
+ConventionKeyInput = Annotated[
+    str,
+    WithJsonSchema(
+        {
+            "description": "Use one canonical convention field name, one of the short aliases, or a custom key with the custom:<slug> prefix.",
+            "anyOf": [
+                {"type": "string", "enum": KNOWN_CONVENTIONS},
+                {"type": "string", "enum": list(KEY_ALIASES)},
+                {
+                    "type": "string",
+                    "pattern": rf"^custom:{_CUSTOM_CONVENTION_KEY_BODY}$",
+                    "description": "Custom keys must be non-empty slugs such as custom:<slug>.",
+                },
+            ],
+        }
+    ),
+]
+ConventionValueInput = Annotated[
+    str,
+    WithJsonSchema(
+        {
+            "type": "string",
+            "minLength": 1,
+            "pattern": _CONVENTION_VALUE_PATTERN,
+            "description": "Convention values must be non-empty and must not be blank or placeholder strings like null, none, or undefined.",
+        }
+    ),
+]
 
-    domain_name = os.environ.get("GRD_DOMAIN", "physics")
-    ctx = load_domain(domain_name)
-    if ctx is None:
-        logger.warning("Domain pack '%s' not found; convention helpers will use empty defaults", domain_name)
-    return ctx
+# ─── Subfield Default Conventions ─────────────────────────────────────────────
 
-
-def _get_convention_options(ctx=None) -> dict[str, list[str]]:
-    """Return convention options from domain context."""
-    if ctx is None:
-        ctx = _get_domain_ctx()
-    if ctx is not None:
-        return ctx.convention_options
-    return {}
-
-
-def _get_subfield_defaults(ctx=None) -> dict[str, dict[str, str]]:
-    """Return subfield defaults from domain context."""
-    if ctx is None:
-        ctx = _get_domain_ctx()
-    if ctx is not None:
-        return ctx.subfield_defaults
-    return {}
-
-
-def _get_known_conventions(ctx=None) -> list[str]:
-    """Return known convention names from domain context."""
-    if ctx is None:
-        ctx = _get_domain_ctx()
-    if ctx is not None:
-        return ctx.known_convention_names
-    return []
-
-
-def _get_critical_fields(ctx=None) -> set[str]:
-    """Return critical field names from domain context."""
-    if ctx is None:
-        ctx = _get_domain_ctx()
-    if ctx is not None:
-        return set(ctx.critical_fields)
-    return set()
+SUBFIELD_DEFAULTS: dict[str, dict[str, str]] = {
+    "qft": {
+        "natural_units": "natural",
+        "metric_signature": "mostly-minus",
+        "fourier_convention": "physics",
+        "index_positioning": "Einstein",
+        "state_normalization": "relativistic",
+        "levi_civita_sign": "+1",
+        "generator_normalization": "delta/2",
+        "creation_annihilation_order": "normal",
+    },
+    "condensed_matter": {
+        "natural_units": "natural",
+        "metric_signature": "euclidean",
+        "fourier_convention": "physics",
+        "state_normalization": "non-relativistic",
+        "creation_annihilation_order": "normal",
+    },
+    "stat_mech": {
+        "natural_units": "natural",
+        "fourier_convention": "physics",
+        "state_normalization": "non-relativistic",
+    },
+    "gr_cosmology": {
+        "natural_units": "natural",
+        "metric_signature": "mostly-plus",
+        "fourier_convention": "physics",
+        "index_positioning": "Einstein",
+        "coordinate_system": "spherical",
+    },
+    "amo": {
+        "natural_units": "SI",
+        "state_normalization": "non-relativistic",
+        "coordinate_system": "spherical",
+    },
+    "nuclear_particle": {
+        "natural_units": "natural",
+        "metric_signature": "mostly-minus",
+        "fourier_convention": "physics",
+        "state_normalization": "relativistic",
+        "levi_civita_sign": "+1",
+    },
+    "astrophysics": {
+        "natural_units": "CGS",
+        "coordinate_system": "spherical",
+    },
+    "mathematical_physics": {
+        "natural_units": "natural",
+        "index_positioning": "Einstein",
+    },
+    "algebraic_qft": {
+        "natural_units": "natural",
+        "metric_signature": "mostly-minus",
+        "fourier_convention": "physics",
+        "index_positioning": "Einstein",
+        "state_normalization": "relativistic",
+    },
+    "string_field_theory": {
+        "natural_units": "natural",
+        "fourier_convention": "physics",
+        "index_positioning": "Einstein",
+        "creation_annihilation_order": "normal",
+    },
+    "quantum_info": {
+        "natural_units": "natural",
+        "state_normalization": "non-relativistic",
+    },
+    "soft_matter": {
+        "natural_units": "SI",
+        "coordinate_system": "Cartesian",
+    },
+    "fluid_plasma": {
+        "natural_units": "CGS",
+        "coordinate_system": "Cartesian",
+    },
+    "classical_mechanics": {
+        "natural_units": "SI",
+        "coordinate_system": "Cartesian",
+    },
+}
 
 
 # ─── Project I/O ──────────────────────────────────────────────────────────────
@@ -112,6 +206,7 @@ def _load_lock_from_project(project_dir: str) -> ConventionLock:
     except json.JSONDecodeError as e:
         raise ConventionError(f"Malformed state.json: {e}") from e
 
+
     if not isinstance(raw, dict):
         return ConventionLock()
     lock_data = raw.get("convention_lock", {})
@@ -124,7 +219,14 @@ def _update_lock_in_project(
     project_dir: str,
     mutate_fn: Callable[[ConventionLock], T],
 ) -> tuple[ConventionLock, T]:
-    """Atomically load, mutate, and save a convention lock."""
+    """Atomically load, mutate, and save a convention lock.
+
+    Holds the file lock for the entire read-modify-write cycle so that
+    concurrent ``convention_set`` calls cannot lose each other's writes
+    (TOCTOU race).
+
+    Returns (updated_lock, result_of_mutate_fn).
+    """
     from grd.core.state import save_state_json_locked
     from grd.core.utils import file_lock
 
@@ -138,6 +240,7 @@ def _update_lock_in_project(
             raw = {}
         except json.JSONDecodeError as e:
             raise ConventionError(f"Malformed state.json: {e}") from e
+
 
         if not isinstance(raw, dict):
             raw = {}
@@ -165,37 +268,40 @@ def _update_lock_in_project(
 def convention_lock_status(project_dir: str) -> dict:
     """Get the current convention lock state for a GRD project.
 
-    Returns all set conventions and lists which standard fields are still unset.
+    Returns all set conventions and lists which of the 18 standard
+    fields are still unset.
     """
     with grd_span("mcp.conventions.lock_status"):
         try:
-            ctx = _get_domain_ctx()
-            known = _get_known_conventions(ctx)
             lock = _load_lock_from_project(project_dir)
-            result = convention_list(lock, domain_ctx=ctx)
+            result = convention_list(lock)
 
             set_fields = [k for k, e in result.conventions.items() if e.is_set and e.canonical]
-            unset_fields = [k for k in known if k not in set_fields]
+            unset_fields = [k for k in KNOWN_CONVENTIONS if k not in set_fields]
             custom = {k: e.value for k, e in result.conventions.items() if not e.canonical and e.is_set}
 
-            return {
-                "lock": lock.model_dump(exclude_none=True),
-                "set_count": result.set_count,
-                "total_standard_fields": result.canonical_total,
-                "set_fields": set_fields,
-                "unset_fields": unset_fields,
-                "custom_conventions": custom,
-                "completeness_percent": round(len(set_fields) / max(result.canonical_total, 1) * 100, 1),
-            }
-        except (ConventionError, OSError, ValueError, TimeoutError) as e:
-            return {"error": str(e)}
+            return stable_mcp_response(
+                {
+                    "lock": lock.model_dump(exclude_none=True),
+                    "set_count": result.set_count,
+                    "total_standard_fields": result.canonical_total,
+                    "set_fields": set_fields,
+                    "unset_fields": unset_fields,
+                    "custom_conventions": custom,
+                    "completeness_percent": round(len(set_fields) / max(result.canonical_total, 1) * 100, 1),
+                }
+            )
+        except (ConventionError, OSError, ValueError, TimeoutError) as exc:
+            return stable_mcp_error(exc)
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
 
 @mcp.tool()
 def convention_set(
     project_dir: str,
-    key: str,
-    value: str,
+    key: ConventionKeyInput,
+    value: ConventionValueInput,
     force: bool = False,
 ) -> dict:
     """Set a convention in the project's convention lock.
@@ -204,36 +310,46 @@ def convention_set(
     Use force=True to override an already-set convention (dangerous
     mid-project -- can invalidate prior derivations).
 
-    Custom conventions use the 'custom:' prefix: key="custom:my_convention".
+    Key must be one of the canonical convention fields, one of the short
+    aliases, or a custom key in the form ``custom:<slug>`` (for example
+    ``custom:my_convention``).
+    Value must be non-empty and must not be a blank or placeholder string.
     """
     with grd_span("mcp.conventions.set", convention_key=key):
         try:
-            ctx = _get_domain_ctx()
-
             # Validate custom key eagerly (before acquiring the file lock).
             if key.startswith("custom:"):
                 custom_key = key[len("custom:") :]
                 if not custom_key:
                     raise ConventionError("Custom convention key cannot be empty")
+                if not re.fullmatch(_CUSTOM_CONVENTION_KEY_PATTERN, custom_key):
+                    raise ConventionError(
+                        "Custom convention keys must be non-empty slugs using letters, numbers, underscores, or hyphens"
+                    )
 
             def _mutate(lock: ConventionLock) -> ConventionSetResult:
                 if key.startswith("custom:"):
-                    return _convention_set(lock, key[len("custom:") :], value, force=force, domain_ctx=ctx)
-                return _convention_set(lock, key, value, force=force, domain_ctx=ctx)
+                    return _convention_set(lock, key[len("custom:") :], value, force=force)
+                return _convention_set(lock, key, value, force=force)
 
             # Atomic read-modify-write under file lock to prevent TOCTOU races.
             _lock, result = _update_lock_in_project(project_dir, _mutate)
-        except (ConventionError, OSError, ValueError, TimeoutError) as e:
-            return {"error": str(e)}
+        except (ConventionError, OSError, ValueError, TimeoutError) as exc:
+            return stable_mcp_error(exc)
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
         if not result.updated:
-            return {
-                "status": "already_set",
-                "key": result.key,
-                "current_value": result.previous,
-                "requested_value": result.value,
-                "message": result.hint or f"Convention '{result.key}' already set. Use force=True to override.",
-            }
+            return stable_mcp_response(
+                {
+                    "status": "already_set",
+                    "key": result.key,
+                    "current_value": result.previous,
+                    "requested_value": result.value,
+                    "message": result.hint
+                    or f"Convention '{result.key}' already set. Use force=True to override.",
+                }
+            )
 
         response: dict[str, object] = {
             "status": "set",
@@ -246,14 +362,14 @@ def convention_set(
             response["forced"] = True
 
         # Warn about non-standard values for known fields
-        canonical = normalize_key(key, domain_ctx=ctx)
-        options = _get_convention_options(ctx).get(canonical, [])
+        canonical = normalize_key(key)
+        options = CONVENTION_OPTIONS.get(canonical, [])
         if options:
-            normalized_options = [normalize_value(canonical, o, domain_ctx=ctx) for o in options]
+            normalized_options = [normalize_value(canonical, o) for o in options]
             if result.value not in options and result.value not in normalized_options:
                 response["warning"] = f"Non-standard value '{result.value}' for '{canonical}'. Known options: {options}"
 
-        return response
+        return stable_mcp_response(response)
 
 
 @mcp.tool()
@@ -265,24 +381,50 @@ def convention_check(lock: dict) -> dict:
     """
     with grd_span("mcp.conventions.check"):
         try:
-            ctx = _get_domain_ctx()
             parsed = ConventionLock(**lock)
-            result = _convention_check(parsed, domain_ctx=ctx)
+            result = _convention_check(parsed)
 
-            # Critical fields from domain pack
-            critical = _get_critical_fields(ctx)
+            # Critical fields that should almost always be set
+            critical = {"metric_signature", "fourier_convention", "natural_units"}
             missing_critical = [m.key for m in result.missing if m.key in critical]
 
-            return {
-                "valid": len(missing_critical) == 0,
-                "completeness_percent": round(result.set_count / max(result.total, 1) * 100, 1),
-                "set_fields": [s.key for s in result.set_conventions],
-                "unset_fields": [m.key for m in result.missing],
-                "missing_critical": missing_critical,
-                "total_standard_fields": result.total,
-            }
-        except (ConventionError, OSError, ValueError, TimeoutError) as e:
-            return {"error": str(e)}
+            # Consistency checks beyond what conventions.py provides
+            issues: list[str] = []
+            metric = parsed.metric_signature
+            fourier = parsed.fourier_convention
+            units = parsed.natural_units
+
+            if metric and fourier:
+                if "euclidean" in (metric or "").lower() and fourier == "QFT":
+                    issues.append(
+                        "Euclidean metric with QFT Fourier convention may cause sign issues. Check Wick rotation conventions."
+                    )
+
+            if units == "SI" and metric and ("(-,+,+,+)" in (metric or "") or "mostly-plus" in (metric or "").lower()):
+                issues.append(
+                    "SI units with mostly-plus signature: ensure c factors are explicit in all relativistic expressions."
+                )
+
+            if parsed.renormalization_scheme and not parsed.regularization_scheme:
+                issues.append(
+                    "Renormalization scheme set without regularization scheme. These are typically specified together."
+                )
+
+            return stable_mcp_response(
+                {
+                    "valid": len(missing_critical) == 0,
+                    "completeness_percent": round(result.set_count / max(result.total, 1) * 100, 1),
+                    "set_fields": [s.key for s in result.set_conventions],
+                    "unset_fields": [m.key for m in result.missing],
+                    "missing_critical": missing_critical,
+                    "issues": issues,
+                    "total_standard_fields": result.total,
+                }
+            )
+        except (ConventionError, OSError, ValueError, TimeoutError) as exc:
+            return stable_mcp_error(exc)
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
 
 @mcp.tool()
@@ -294,14 +436,15 @@ def convention_diff(lock_a: dict, lock_b: dict) -> dict:
     """
     with grd_span("mcp.conventions.diff"):
         try:
-            ctx = _get_domain_ctx()
             parsed_a = ConventionLock(**lock_a)
             parsed_b = ConventionLock(**lock_b)
             result = _convention_diff(parsed_a, parsed_b)
-        except (ConventionError, OSError, ValueError, TimeoutError) as e:
-            return {"error": str(e)}
+        except (ConventionError, OSError, ValueError, TimeoutError) as exc:
+            return stable_mcp_error(exc)
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
-    critical_fields = _get_critical_fields(ctx)
+    critical_fields = {"metric_signature", "fourier_convention", "natural_units"}
     diffs: list[dict[str, object]] = []
 
     for d in result.changed:
@@ -332,17 +475,31 @@ def convention_diff(lock_a: dict, lock_b: dict) -> dict:
             }
         )
 
-    return {
-        "identical": len(diffs) == 0,
-        "diff_count": len(diffs),
-        "diffs": diffs,
-        "critical_diffs": [d for d in diffs if d["severity"] == "critical"],
-    }
+    return stable_mcp_response(
+        {
+            "identical": len(diffs) == 0,
+            "diff_count": len(diffs),
+            "diffs": diffs,
+            "critical_diffs": [d for d in diffs if d["severity"] == "critical"],
+        }
+    )
 
 
 @mcp.tool()
 def assert_convention_validate(file_content: str, lock: dict) -> dict:
-    """Verify ASSERT_CONVENTION lines in a file against the project lock."""
+    """Verify ASSERT_CONVENTION lines in a file against the project lock.
+
+    Scans for convention assertion comments in the format:
+        % ASSERT_CONVENTION: key=value, key=value, ...
+        # ASSERT_CONVENTION: key=value, key=value, ...
+        <!-- ASSERT_CONVENTION: key=value, key=value, ... -->
+
+    Every derivation artifact must include at least one ASSERT_CONVENTION line.
+    Missing assertions are treated as invalid, not advisory, because downstream
+    verification depends on those headers matching the convention lock.
+
+    Returns mismatches and missing assertions.
+    """
     from grd.core.conventions import parse_assert_conventions
 
     with grd_span("mcp.conventions.assert_validate"):
@@ -350,63 +507,80 @@ def assert_convention_validate(file_content: str, lock: dict) -> dict:
             parsed_lock = ConventionLock(**lock)
             assertions = parse_assert_conventions(file_content)
             mismatches = validate_assertions(file_content, parsed_lock, filename="<mcp_input>")
-        except (ConventionError, OSError, ValueError, TimeoutError) as e:
-            return {"error": str(e)}
+        except (ConventionError, OSError, ValueError, TimeoutError) as exc:
+            return stable_mcp_error(exc)
+        except Exception as exc:  # pragma: no cover - defensive envelope
+            return stable_mcp_error(exc)
 
     if not assertions:
-        return {
-            "valid": False,
-            "assertions_found": 0,
-            "message": "No ASSERT_CONVENTION lines found. Every derivation file must include at least one.",
-            "mismatches": [],
-            "assertions": [],
-        }
-
-    return {
-        "valid": len(mismatches) == 0,
-        "assertions_found": len(assertions),
-        "assertions": [{"key": k, "value": v} for k, v in assertions],
-        "mismatches": [
+        return stable_mcp_response(
             {
-                "key": m.key,
-                "file_value": m.file_value,
-                "lock_value": m.lock_value,
-                "message": f"Convention mismatch: file declares {m.key}={m.file_value} but lock has {m.key}={m.lock_value}",
+                "valid": False,
+                "assertions_found": 0,
+                "message": "No ASSERT_CONVENTION lines found. Every derivation file must include at least one.",
+                "mismatches": [],
+                "assertions": [],
             }
-            for m in mismatches
-        ],
-    }
+        )
+
+    return stable_mcp_response(
+        {
+            "valid": len(mismatches) == 0,
+            "assertions_found": len(assertions),
+            "assertions": [{"key": k, "value": v} for k, v in assertions],
+            "mismatches": [
+                {
+                    "key": m.key,
+                    "file_value": m.file_value,
+                    "lock_value": m.lock_value,
+                    "message": (
+                        f"Convention mismatch: file declares {m.key}={m.file_value} "
+                        f"but lock has {m.key}={m.lock_value}"
+                    ),
+                }
+                for m in mismatches
+            ],
+        }
+    )
 
 
 @mcp.tool()
 def subfield_defaults(domain: str) -> dict:
-    """Return recommended default conventions for a research subfield.
+    """Return recommended default conventions for a physics domain.
 
-    Provides sensible starting conventions for common subfields within
-    the active domain. These are recommendations, not requirements.
+    Provides sensible starting conventions for common subfields.
+    These are recommendations, not requirements.
+
+    Valid domains: qft, condensed_matter, stat_mech, gr_cosmology,
+    amo, nuclear_particle, astrophysics, mathematical_physics,
+    algebraic_qft, string_field_theory, quantum_info, soft_matter, fluid_plasma,
+    classical_mechanics.
     """
     with grd_span("mcp.conventions.subfield_defaults", domain=domain):
-        ctx = _get_domain_ctx()
-        all_defaults = _get_subfield_defaults(ctx)
-        known = _get_known_conventions(ctx)
-        defaults = all_defaults.get(domain)
-
+        defaults = SUBFIELD_DEFAULTS.get(domain)
     if defaults is None:
-        return {
-            "found": False,
-            "domain": domain,
-            "available_domains": sorted(all_defaults.keys()),
-            "message": f"No defaults for subfield '{domain}'.",
-        }
+        return stable_mcp_response(
+            {
+                "found": False,
+                "domain": domain,
+                "available_domains": sorted(SUBFIELD_DEFAULTS.keys()),
+                "message": f"No defaults for domain '{domain}'.",
+            }
+        )
 
-    return {
-        "found": True,
-        "domain": domain,
-        "defaults": defaults,
-        "field_count": len(defaults),
-        "unset_fields": [f for f in known if f not in defaults],
-        "message": (f"Recommended conventions for {domain}. Sets {len(defaults)} of {len(known)} standard fields."),
-    }
+    return stable_mcp_response(
+        {
+            "found": True,
+            "domain": domain,
+            "defaults": defaults,
+            "field_count": len(defaults),
+            "unset_fields": [f for f in KNOWN_CONVENTIONS if f not in defaults],
+            "message": (
+                f"Recommended conventions for {domain}. "
+                f"Sets {len(defaults)} of {len(KNOWN_CONVENTIONS)} standard fields."
+            ),
+        }
+    )
 
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────

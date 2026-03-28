@@ -271,13 +271,29 @@ def test_peer_review_stages_use_fresh_context_and_stage_artifacts() -> None:
     assert "fresh context" in math.text
     assert "fresh context" in physics.text
     assert "fresh context" in significance.text
+    assert ".grd/review/CLAIMS{round_suffix}.json" in referee.text
+    assert ".grd/review/STAGE-reader{round_suffix}.json" in referee.text
     assert ".grd/review/STAGE-literature{round_suffix}.json" in literature.text
     assert ".grd/review/STAGE-math{round_suffix}.json" in math.text
     assert ".grd/review/STAGE-physics{round_suffix}.json" in physics.text
     assert ".grd/review/STAGE-interestingness{round_suffix}.json" in significance.text
+    assert ".grd/review/STAGE-literature{round_suffix}.json" in referee.text
+    assert ".grd/review/STAGE-math{round_suffix}.json" in referee.text
+    assert ".grd/review/STAGE-physics{round_suffix}.json" in referee.text
+    assert ".grd/review/STAGE-interestingness{round_suffix}.json" in referee.text
     assert ".grd/review/REVIEW-LEDGER{round_suffix}.json" in referee.text
     assert ".grd/review/REFEREE-DECISION{round_suffix}.json" in referee.text
     assert ".grd/REFEREE-REPORT{round_suffix}.md" in referee.text
+    assert ".grd/REFEREE-REPORT{round_suffix}.tex" in referee.text
+
+
+def test_referee_response_template_uses_round_suffixed_decision_artifacts() -> None:
+    content = _read(TEMPLATES_DIR / "paper" / "referee-response.md")
+
+    assert "REFEREE-DECISION{round_suffix}.json" in content
+    assert "REVIEW-LEDGER{round_suffix}.json" in content
+    assert "REFEREE-REPORT{round_suffix}.md" in content
+    assert "REFEREE-REPORT.md" not in content
 
 
 def test_all_workflow_task_blocks_include_readonly_false() -> None:

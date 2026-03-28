@@ -7,6 +7,7 @@ template_version: 1
 # Figure Tracker Template
 
 Template for `.grd/paper/FIGURE_TRACKER.md` — registry of all figures for the manuscript with source data, dependencies, and status.
+Use this template as the canonical schema source of truth before creating or updating the tracker. The `figure_registry` frontmatter is machine-readable and consumed by paper-quality scoring, so keep the keys and shapes shown below intact instead of paraphrasing them into prose.
 
 ---
 

@@ -52,7 +52,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `commit_docs`, `state_exists`, `project_exists`, `project_contract`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifact_files`, `reference_artifacts_content`.
+Parse JSON for: `commit_docs`, `state_exists`, `project_exists`, `project_contract`, `project_contract_load_info`, `project_contract_validation`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifact_files`, `reference_artifacts_content`.
 
 **Read mode settings:**
 
@@ -73,6 +73,7 @@ RESEARCH_MODE=$(grd --raw config get research_mode 2>/dev/null | grd json get .v
 - **If `state_exists` is false** (standalone usage): Proceed — the user will specify the topic directly.
 - Treat `effective_reference_intake` as the machine-readable carry-forward ledger for anchors, prior outputs, baselines, user-mandated context, and unresolved gaps. Re-surface those items in the review even if the broader search expands beyond them.
 - Use `reference_artifacts_content` as supporting evidence when existing literature/research-map artifacts already pin down benchmark values, prior outputs, or anchor wording that should remain stable.
+- Treat `project_contract` as authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes. If either gate is blocked, keep the contract visible as context but do not promote it to approved review truth.
 
 Project context helps focus the review on conventions and methods relevant to the current research.
 </step>
@@ -356,11 +357,12 @@ status: completed | checkpoint
 
 ## Active Anchor Registry
 
-| Anchor ID | Anchor | Type | Source / Locator | Why It Matters | Contract Subject IDs | Required Action | Carry Forward To |
-| --------- | ------ | ---- | ---------------- | -------------- | -------------------- | --------------- | ---------------- |
-| {stable-anchor-id} | {reference or artifact} | {benchmark/method/background/prior artifact} | {citation, dataset id, or path} | {claim, observable, deliverable, or convention constrained} | {claim-id, deliverable-id, or blank} | {read/use/compare/cite} | {planning/execution/verification/writing} |
+| Anchor ID | Anchor | Type | Source / Locator | Why It Matters | Contract Subject IDs | Must Surface | Required Action | Carry Forward To |
+| --------- | ------ | ---- | ---------------- | -------------- | -------------------- | ------------ | --------------- | ---------------- |
+| {stable-anchor-id} | {reference or artifact} | {benchmark/method/background/prior artifact} | {citation, dataset id, or path} | {claim, observable, deliverable, or convention constrained} | {claim-id, deliverable-id, or blank} | {yes/no} | {read/use/compare/cite} | {planning/execution/verification/writing} |
 
 `Carry Forward To` is workflow stage scope only. If exact contract subject IDs are known, store them in `Contract Subject IDs` instead of collapsing them into stage labels.
+Set `Must Surface` to `yes` when later planners or verifiers must explicitly re-surface the anchor. If you leave it blank, ingestion promotes anchors with roles like `benchmark`, `definition`, `method`, or `must_consider`, and anchors whose required actions include `use`, `compare`, or `avoid`.
 
 ## Convention Catalog
 

@@ -9,6 +9,7 @@ Orchestrator coordinates, not executes. Each subagent loads the full execute-pla
 <required_reading>
 Read STATE.md before any operation to load project context.
 For agent selection strategy and verification failure routing, see `@{GRD_INSTALL_DIR}/references/orchestration/meta-orchestration.md`.
+For artifact class definitions and review priority rules, see `@{GRD_INSTALL_DIR}/references/orchestration/artifact-surfacing.md`.
 </required_reading>
 
 <process>
@@ -24,13 +25,17 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `executor_model`, `verifier_model`, `commit_docs`, `autonomy`, `review_cadence`, `research_mode`, `parallelization`, `max_unattended_minutes_per_plan`, `max_unattended_minutes_per_wave`, `checkpoint_after_n_tasks`, `checkpoint_after_first_load_bearing_result`, `checkpoint_before_downstream_dependent_tasks`, `verifier_enabled`, `branching_strategy`, `branch_name`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `plans`, `incomplete_plans`, `plan_count`, `incomplete_count`, `state_exists`, `roadmap_exists`, `project_contract`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`, `selected_protocol_bundle_ids`, `protocol_bundle_context`.
+Parse JSON for: `executor_model`, `verifier_model`, `commit_docs`, `autonomy`, `review_cadence`, `research_mode`, `parallelization`, `max_unattended_minutes_per_plan`, `max_unattended_minutes_per_wave`, `checkpoint_after_n_tasks`, `checkpoint_after_first_load_bearing_result`, `checkpoint_before_downstream_dependent_tasks`, `verifier_enabled`, `branching_strategy`, `branch_name`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `plans`, `incomplete_plans`, `plan_count`, `incomplete_count`, `state_exists`, `roadmap_exists`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`, `selected_protocol_bundle_ids`, `protocol_bundle_context`.
 
 **If `phase_found` is false:** Error -- phase directory not found.
 **If `plan_count` is 0:** Error -- no plans found in phase.
 **If `state_exists` is false but `.grd/` exists:** Offer reconstruct or continue.
 
-Treat `project_contract` as the authoritative machine-readable execution contract when present.
+If `project_contract_load_info.status` starts with `blocked`, STOP and show the concrete `project_contract_load_info.errors` / `warnings` before execution. A contract that could not be loaded cleanly is not safe to execute from.
+
+If `project_contract_validation.valid` is false, STOP and show the explicit `project_contract_validation.errors` before execution. Do not treat a visible-but-blocked contract as an approved execution contract.
+
+Treat `project_contract` as the authoritative machine-readable execution contract only when it is present and `project_contract_validation.valid` is true.
 Treat `effective_reference_intake` as the carry-forward anchor ledger for refs, baselines, prior outputs, and unresolved context gaps.
 Use `active_reference_context` and `reference_artifacts_content` to interpret that ledger, not to replace it with markdown-only guesses.
 
@@ -545,6 +550,7 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
    1. `grd state advance` immediately
    2. `grd state record-metric` for the completed plan
    3. This ensures crash recovery loses at most ONE plan's state, not an entire wave
+   4. By the time the wave-complete report is emitted, `.grd/STATE.md` already reflects every successful plan from that wave
 
    If pass:
 
@@ -564,9 +570,32 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
    - Bad: "Wave 2 complete. Proceeding to Wave 3."
    - Good: "Spin-chain spectrum computed -- Bethe ansatz solution yields N-magnon energies with correct Heisenberg limit. Finite-size scaling exponents match CFT prediction (nu = 1.00 +/- 0.02). Transport coefficient calculation (Wave 3) can now use these eigenstates."
 
-7. **Handle failures** -- see `wave_failure_handling` below.
+7. **Artifact summary** -- surface key artifacts produced in the completed wave.
 
-8. **Execute checkpoint plans between waves** -- see `<checkpoint_handling>`.
+   After verifying wave completion, collect the artifacts from each plan's SUMMARY.md (`key-files.created`, `key-files.modified`) and emit a compact summary with review priorities. See `references/orchestration/artifact-surfacing.md` for artifact class definitions and review priority rules.
+
+   ```
+   ## Artifacts: Wave {N}
+
+   | Path | Class | Review |
+   |------|-------|--------|
+   | {relative_path} | {artifact_class} | {required | optional | final-deliverable} |
+   ...
+
+   Required review: {count} artifact(s) -- inspect before Wave {N+1}
+   ```
+
+   **Classification rules:**
+   - Assign artifact class from file extension and path (see artifact-surfacing.md section 1)
+   - Mark as `required` if the artifact is a load-bearing derivation, a numerical result consumed by later waves, or a contract deliverable that is the `subject` of an acceptance test
+   - Mark as `final-deliverable` for completed manuscript outputs, compiled PDFs, and peer review reports
+   - Mark as `optional` for supporting plots, intermediate notebooks, and literature notes
+
+   **If any artifacts are marked `required`:** Include their paths in the wave completion report so the researcher can prioritize review. Do not block execution for optional artifacts.
+
+8. **Handle failures** -- see `wave_failure_handling` below.
+
+9. **Execute checkpoint plans between waves** -- see `<checkpoint_handling>`.
 
    Before unlocking downstream dependent waves, confirm that risky-wave plans passed the first meaningful review point:
 
@@ -593,7 +622,7 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
 
    For `pre_fanout`, the matching gate-clear and `fanout unlock` are separate transitions: the clear records the review outcome, the unlock releases downstream work. Keep the segment live on status, notify, and resume surfaces until both have been observed. Do not silently continue on "looks fine" prose alone.
 
-9. **Inter-wave verification gate (if more waves remain):**
+10. **Inter-wave verification gate (if more waves remain):**
 
    Before spawning the next wave, run lightweight verification on the just-completed wave's outputs. This catches errors cheaply before they propagate to downstream waves.
 
@@ -724,11 +753,11 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
 
    Present options and wait for user response (or auto-continue in YOLO mode if both are warnings, not errors — unless `YOLO_RESTRICTIONS` includes `no_skip_inter_wave`, in which case always present).
 
-   **If disabled:** Skip verification gate, proceed directly to step 10. Exception: if `YOLO_RESTRICTIONS` includes `no_skip_inter_wave`, the gate runs even when disabled by config.
+   **If disabled:** Skip verification gate, proceed directly to step 11. Exception: if `YOLO_RESTRICTIONS` includes `no_skip_inter_wave`, the gate runs even when disabled by config.
 
    **Cost:** ~2-5k tokens per inter-wave gate. For a 4-wave phase with deep-theory profile, this is ~10-15k tokens overhead — negligible compared to the cost of a sign error propagating through 3 subsequent waves.
 
-10. **Inter-wave transition display:**
+11. **Inter-wave transition display:**
 
    Before spawning the next wave, display a physics-meaningful progress update that connects what was just computed to what comes next:
 
@@ -744,7 +773,7 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
 
    Extract the "Completed" summary from the wave N completion report (step 6 above). Extract "Enables" and "Starting" from the wave N+1 plan objectives. Keep each line to one sentence.
 
-11. **Proceed to next wave.**
+12. **Proceed to next wave.**
    </step>
 
 <step name="wave_failure_handling">
@@ -1189,18 +1218,17 @@ Follow the verification workflow. Read `{GRD_INSTALL_DIR}/workflows/verify-phase
 Read status after verification completes:
 
 ```bash
-grep "^status:" "$phase_dir"/*-VERIFICATION.md | head -1 | cut -d: -f2 | tr -d ' '
+grep "^status:" "$phase_dir"/*-VERIFICATION.md 2>/dev/null | head -1 | cut -d: -f2 | tr -d ' '
 ```
 
 | Status         | Action                                                      |
 | -------------- | ----------------------------------------------------------- |
 | `passed`       | -> update_roadmap                                           |
-| `completed`    | -> update_roadmap (interactive verify-work equivalent)      |
 | `human_needed`  | Present items for human review, get approval or feedback    |
 | `expert_needed` | Domain expert review required; present items, escalate      |
 | `gaps_found`    | Present gap summary, offer `/grd:plan-phase {phase} --gaps` |
-| `diagnosed`    | Gaps were debugged; review fixes, then -> update_roadmap    |
-| `validating`   | Verification in progress; wait or re-run verify-phase       |
+
+If the same report also carries `session_status: validating|completed|diagnosed`, treat that as conversational progress only. It does not replace the canonical verification `status` read above. A diagnosed verification session will normally still report `status: gaps_found` until the fixes are re-verified.
 
 **If human_needed:**
 
@@ -1246,9 +1274,10 @@ Gap closure cycle: `/grd:plan-phase {X} --gaps` reads VERIFICATION.md -> creates
 Before triggering gap closure, classify the failure to select the minimum-cost recovery strategy. See `agent-infrastructure.md` Meta-Orchestration Intelligence > Feedback Loop Intelligence for the full classification table.
 
 ```bash
-# Count failed contract targets and classify
-FAILED_COUNT=$(grep -c "status: failed" "${phase_dir}"/*-VERIFICATION.md 2>/dev/null || echo 0)
-TOTAL_COUNT=$(grep -c "status:" "${phase_dir}"/*-VERIFICATION.md 2>/dev/null || echo 0)
+# Count only top-level verification outcomes. Nested contract-results and gap
+# ledgers also have `status:` fields, so unanchored grep would overcount them.
+FAILED_COUNT=$(rg -c '^status: (gaps_found|expert_needed|human_needed)$' "${phase_dir}"/*-VERIFICATION.md 2>/dev/null | awk -F: '{sum += $2} END {print sum+0}')
+TOTAL_COUNT=$(rg -c '^status: (passed|gaps_found|expert_needed|human_needed)$' "${phase_dir}"/*-VERIFICATION.md 2>/dev/null | awk -F: '{sum += $2} END {print sum+0}')
 ```
 
 | Failure Pattern | Recovery | Cost |
@@ -1364,7 +1393,7 @@ Read these files using the file_read tool:
 - Roadmap: .grd/ROADMAP.md
 </files_to_read>
 
-Focus on the gaps that were marked as 'failed' or 'diagnosed' in the previous verification.
+Focus on the gaps that were previously marked failed, partial, blocked, or otherwise unresolved in the previous verification. If the prior report carries `session_status: diagnosed`, use the recorded root causes and missing actions as the starting point for re-verification.
 Check whether the gap closure plans have resolved each issue.
 Update VERIFICATION.md with new status for each gap.
 Return verification status: passed | gaps_found.",

@@ -24,15 +24,16 @@ from grd.core.constants import (
     STANDALONE_PLAN,
     STANDALONE_RESEARCH,
     STANDALONE_SUMMARY,
-    STANDALONE_VERIFICATION,
     STATE_JSON_FILENAME,
     SUMMARY_SUFFIX,
     TODOS_DIR_NAME,
     VERIFICATION_SUFFIX,
 )
+from grd.core.phases import _milestone_completion_snapshot
 from grd.core.utils import (
     is_phase_complete as _is_phase_complete,
 )
+from grd.core.utils import matching_phase_artifact_count as _matching_phase_artifact_count
 from grd.core.utils import (
     phase_sort_key as _phase_sort_key,
 )
@@ -51,24 +52,7 @@ __all__ = [
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-
-def _core_conventions() -> tuple[str, ...]:
-    """Return critical convention fields from the active domain."""
-    try:
-        import os
-
-        from grd.domains.loader import load_domain
-
-        domain_name = os.environ.get("GRD_DOMAIN", "physics")
-        ctx = load_domain(domain_name)
-        if ctx is not None and ctx.critical_fields:
-            return tuple(ctx.critical_fields)
-    except Exception:
-        pass
-    return ()
-
-
-CORE_CONVENTIONS = _core_conventions()
+CORE_CONVENTIONS = ("metric_signature", "natural_units", "coordinate_system")
 
 # Paper search paths relative to cwd
 PAPER_PATHS = ("paper/main.tex", "manuscript/main.tex", "draft/main.tex")
@@ -181,7 +165,11 @@ def _is_research_file(name: str) -> bool:
 
 
 def _is_verification_file(name: str) -> bool:
-    return name.endswith(VERIFICATION_SUFFIX) or name == STANDALONE_VERIFICATION
+    return name.endswith(VERIFICATION_SUFFIX)
+
+
+
+
 
 
 def _load_config(cwd: Path) -> dict[str, object]:
@@ -200,23 +188,28 @@ def _load_config(cwd: Path) -> dict[str, object]:
     }
 
 
-_CONTEXT_ACTIONS = frozenset(
-    {
-        "new-project",
-        "new-milestone",
-        "plan-phase",
-        "execute-phase",
-        "quick",
-        "resume",
-        "verify-work",
-        "progress",
-        "map-research",
-        "todos",
-        "phase-op",
-        "milestone-op",
-        "resume-work",
-    }
-)
+_LOCAL_CLI_INIT_COMMANDS: dict[str, str] = {
+    "check-todos": "todos",
+    "execute-phase": "execute-phase",
+    "map-research": "map-research",
+    "milestone-op": "milestone-op",
+    "new-milestone": "new-milestone",
+    "new-project": "new-project",
+    "phase-op": "phase-op",
+    "plan-phase": "plan-phase",
+    "quick": "quick",
+    "resume": "resume",
+    "resume-work": "resume",
+    "verify-work": "verify-work",
+}
+
+
+def _format_local_cli_command(action: str) -> str:
+    """Format the best available local CLI equivalent for a workflow action."""
+    init_action = _LOCAL_CLI_INIT_COMMANDS.get(action)
+    if init_action is not None:
+        return f"grd init {init_action}"
+    return f"grd {action}"
 
 
 def _format_command(action: str, *, cwd: Path | None = None) -> str:
@@ -230,15 +223,10 @@ def _format_command(action: str, *, cwd: Path | None = None) -> str:
 
         runtime = detect_active_runtime_with_grd_install(cwd=cwd)
         if runtime == RUNTIME_UNKNOWN:
-            # Context-assembly actions live under 'grd context <action>'
-            if action in _CONTEXT_ACTIONS:
-                return f"grd context {action}"
-            return f"grd {action}"
+            return _format_local_cli_command(action)
         return get_adapter(runtime).format_command(action)
     except Exception:
-        if action in _CONTEXT_ACTIONS:
-            return f"grd context {action}"
-        return f"grd {action}"
+        return _format_local_cli_command(action)
 
 
 def _scan_phases(cwd: Path) -> list[_PhaseAnalysis]:
@@ -273,7 +261,7 @@ def _scan_phases(cwd: Path) -> list[_PhaseAnalysis]:
         has_verification = any(_is_verification_file(f) for f in files)
 
         plan_count = len(plans)
-        summary_count = len(summaries)
+        summary_count = _matching_phase_artifact_count(plans, summaries)
         complete = _is_phase_complete(plan_count, summary_count)
 
         if complete:
@@ -299,6 +287,7 @@ def _scan_phases(cwd: Path) -> list[_PhaseAnalysis]:
         )
 
     return results
+
 
 
 def _phase_label(phase: _PhaseAnalysis) -> str:
@@ -373,12 +362,12 @@ def _has_literature_review(cwd: Path) -> bool:
 
 
 def _has_referee_report(cwd: Path) -> bool:
-    """Check if any referee report files exist."""
-    candidate_dirs = (_planning_dir(cwd), _planning_dir(cwd) / "paper")
-    for directory in candidate_dirs:
-        if directory.is_dir() and any(f.name.startswith("REFEREE-REPORT") for f in directory.iterdir() if f.is_file()):
-            return True
-    return False
+    """Check for canonical referee report files in `.grd/` only."""
+
+    reports_dir = _planning_dir(cwd)
+    if not reports_dir.is_dir():
+        return False
+    return any(f.is_file() for f in reports_dir.glob("REFEREE-REPORT*.md"))
 
 
 def _has_paper(cwd: Path) -> bool:
@@ -399,9 +388,7 @@ def _has_adaptive_lock_signal(cwd: Path) -> bool:
         "approach_validated: true",
     )
     decisive_pass_re = re.compile(r"subject_role:\s*decisive[\s\S]{0,400}?verdict:\s*pass\b", re.IGNORECASE)
-    decisive_failure_re = re.compile(
-        r"subject_role:\s*decisive[\s\S]{0,400}?verdict:\s*(?:tension|fail)\b", re.IGNORECASE
-    )
+    decisive_failure_re = re.compile(r"subject_role:\s*decisive[\s\S]{0,400}?verdict:\s*(?:tension|fail)\b", re.IGNORECASE)
     passed_status_re = re.compile(r"^status:\s*passed\b", re.IGNORECASE | re.MULTILINE)
     for path in sorted(phases_dir.rglob("*.md")):
         if not path.is_file():
@@ -481,7 +468,6 @@ def suggest_next(cwd: Path, *, limit: int = 5) -> SuggestResult:
     """
     suggestions: list[_MutableRecommendation] = []
     ctx_kwargs: dict[str, object] = {}
-
     def format_command(action):
         return _format_command(action, cwd=cwd)
 
@@ -555,11 +541,8 @@ def suggest_next(cwd: Path, *, limit: int = 5) -> SuggestResult:
     current_phase: _PhaseAnalysis | None = None
     next_unplanned: _PhaseAnalysis | None = None
     next_pending: _PhaseAnalysis | None = None
-    all_complete = True
 
     for pa in phase_analysis:
-        if pa.status != "complete":
-            all_complete = False
         if not current_phase and pa.status == "in_progress":
             current_phase = pa
         if not next_unplanned and pa.status == "researched":
@@ -567,11 +550,10 @@ def suggest_next(cwd: Path, *, limit: int = 5) -> SuggestResult:
         if not next_pending and pa.status == "pending":
             next_pending = pa
 
-    if not phase_analysis:
-        all_complete = False
-
-    ctx_kwargs["phase_count"] = len(phase_analysis)
-    ctx_kwargs["completed_phases"] = sum(1 for p in phase_analysis if p.status == "complete")
+    milestone_snapshot = _milestone_completion_snapshot(cwd)
+    all_complete = milestone_snapshot.all_phases_complete
+    ctx_kwargs["phase_count"] = milestone_snapshot.phase_count
+    ctx_kwargs["completed_phases"] = milestone_snapshot.completed_phases
 
     # ── 5. Phase-based suggestions ──────────────────────────────────────
 
@@ -702,9 +684,7 @@ def suggest_next(cwd: Path, *, limit: int = 5) -> SuggestResult:
         if isinstance(convention_lock, dict):
             from grd.core.conventions import is_bogus_value
 
-            missing = [
-                k for k in CORE_CONVENTIONS if not convention_lock.get(k) or is_bogus_value(convention_lock.get(k))
-            ]
+            missing = [k for k in CORE_CONVENTIONS if not convention_lock.get(k) or is_bogus_value(convention_lock.get(k))]
             if missing:
                 ctx_kwargs["missing_conventions"] = tuple(missing)
                 suggestions.append(

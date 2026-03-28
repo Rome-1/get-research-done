@@ -102,7 +102,7 @@ Read each phase's SUMMARY.md `provides` and `requires` sections to map the phase
 
 ```bash
 for phase_dir in .grd/phases/*/; do
-  grep -A 10 "provides\|requires" "$phase_dir/SUMMARY.md" 2>/dev/null
+  grep -A 10 "provides\|requires" "$phase_dir"/*-SUMMARY.md 2>/dev/null
 done
 ```
 
@@ -146,7 +146,7 @@ For each node in the dependency tree, catalog all uncertainty sources.
 grd --raw state validate
 ```
 
-If validation reports divergence or a parse error, stop here and run `/grd:sync-state` (or the controlled backup + `grd --raw state snapshot` recovery path) before trusting uncertainty values. If recovery is blocked, fall back to `STATE.md`'s `## Intermediate Results` and `## Propagated Uncertainties` sections, and clearly label the result as markdown-recovered rather than JSON-backed.
+If validation reports divergence or a parse error, stop here and run `/grd:sync-state` (or the authoritative `save_state_markdown()` recovery path used there) before trusting uncertainty values. If recovery is blocked, fall back to `STATE.md`'s `## Intermediate Results` and `## Propagated Uncertainties` sections, and clearly label the result as markdown-recovered rather than JSON-backed.
 
 Read `propagated_uncertainties` in state.json for existing uncertainty values on input parameters. For each leaf input:
 

@@ -30,7 +30,7 @@ Useful checks:
 ```bash
 uv build
 npm_config_cache="$(mktemp -d)" npm pack --dry-run --json
-uv run python -m scripts.sync_repo_graph_contract
+python scripts/sync_repo_graph_contract.py
 uv run pytest tests/test_metadata_consistency.py -v
 uv run pytest tests/test_release_consistency.py -v
 uv run pytest tests/adapters/test_registry.py tests/adapters/test_install_roundtrip.py -v
@@ -62,6 +62,8 @@ Cross-runtime release checks:
 ## Pull Request Checklist
 
 - `main` is protected: direct pushes are blocked, and pull requests must pass the required `tests` workflow before merge.
+- Feature and fix PRs must not bump package versions or publish releases.
+- Add public release notes under `## vNEXT` in `CHANGELOG.md` so the release workflows can prepare the next tagged release from reviewed notes.
 - Add or update tests when behavior changes.
 - Update public docs when install flow, commands, or release messaging changes.
 - Keep commit messages concise and descriptive.

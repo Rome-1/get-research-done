@@ -10,7 +10,10 @@ import pytest
 
 from grd import registry
 from grd.adapters.install_utils import expand_at_includes
+from grd.adapters.runtime_catalog import iter_runtime_descriptors
 from grd.contracts import ResearchContract, VerificationEvidence
+from grd.core.frontmatter import validate_frontmatter
+from grd.registry import _parse_frontmatter, _parse_tools
 from scripts.repo_graph_contract import parse_scope_count
 
 
@@ -18,7 +21,6 @@ from scripts.repo_graph_contract import parse_scope_count
 def _clean_registry_cache():
     """Ensure fresh registry cache for each test."""
     from grd import registry
-
     registry.invalidate_cache()
     yield
     registry.invalidate_cache()
@@ -30,7 +32,8 @@ WORKFLOWS_DIR = REPO_ROOT / "src/grd/specs/workflows"
 COMMANDS_DIR = REPO_ROOT / "src/grd/commands"
 AGENTS_DIR = REPO_ROOT / "src/grd/agents"
 REFERENCES_DIR = REPO_ROOT / "src/grd/specs/references"
-PHYSICS_DIR = REPO_ROOT / "src/grd/domains/physics"
+FIXTURES_STAGE0 = REPO_ROOT / "tests" / "fixtures" / "stage0"
+FIXTURES_STAGE4 = REPO_ROOT / "tests" / "fixtures" / "stage4"
 GRAPH_PATH = REPO_ROOT / "tests" / "README.md"
 WORKFLOW_EXEMPT_COMMANDS = frozenset({"health", "suggest-next"})
 
@@ -96,33 +99,33 @@ AGENT_REFERENCE_TOKENS = {
     "grd-bibliographer.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/physics-subfields.md",
-        "domains/{GRD_DOMAIN}/publication/publication-pipeline-modes.md",
+        "references/physics-subfields.md",
+        "references/publication/publication-pipeline-modes.md",
         "templates/notation-glossary.md",
-        "domains/{GRD_DOMAIN}/publication/bibtex-standards.md",
+        "references/publication/bibtex-standards.md",
     ],
     "grd-explainer.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/physics-subfields.md",
+        "references/physics-subfields.md",
         "templates/notation-glossary.md",
     ],
     "grd-consistency-checker.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/physics-subfields.md",
-        "domains/{GRD_DOMAIN}/verification/core/verification-core.md",
+        "references/physics-subfields.md",
+        "references/verification/core/verification-core.md",
         "references/shared/cross-project-patterns.md",
         "references/examples/contradiction-resolution-example.md",
-        "domains/{GRD_DOMAIN}/verification/meta/verification-hierarchy-mapping.md",
+        "references/verification/meta/verification-hierarchy-mapping.md",
         "templates/uncertainty-budget.md",
         "templates/conventions.md",
     ],
     "grd-debugger.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/physics-subfields.md",
-        "domains/{GRD_DOMAIN}/verification/core/verification-core.md",
+        "references/physics-subfields.md",
+        "references/verification/core/verification-core.md",
         "references/shared/cross-project-patterns.md",
         "workflows/record-insight.md",
     ],
@@ -138,13 +141,14 @@ AGENT_REFERENCE_TOKENS = {
         "references/execution/executor-task-checkpoints.md",
         "references/execution/executor-completion.md",
         "references/execution/executor-worked-example.md",
-        "domains/{GRD_DOMAIN}/protocols/order-of-limits.md",
+        "references/protocols/order-of-limits.md",
         "references/methods/approximation-selection.md",
-        "domains/{GRD_DOMAIN}/verification/errors/llm-physics-errors.md",
-        "domains/{GRD_DOMAIN}/verification/core/code-testing-physics.md",
+        "references/verification/errors/llm-physics-errors.md",
+        "references/verification/core/code-testing-physics.md",
         "references/orchestration/checkpoints.md",
         "templates/state-machine.md",
         "templates/summary.md",
+        "templates/contract-results-schema.md",
         "templates/calculation-log.md",
     ],
     "grd-experiment-designer.md": [
@@ -155,78 +159,78 @@ AGENT_REFERENCE_TOKENS = {
     "grd-notation-coordinator.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/conventions/subfield-convention-defaults.md",
+        "references/conventions/subfield-convention-defaults.md",
         "templates/conventions.md",
     ],
     "grd-paper-writer.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/publication/publication-pipeline-modes.md",
+        "references/publication/publication-pipeline-modes.md",
         "templates/notation-glossary.md",
         "templates/latex-preamble.md",
-        "domains/{GRD_DOMAIN}/publication/figure-generation-templates.md",
+        "references/publication/figure-generation-templates.md",
     ],
     "grd-review-reader.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/publication/peer-review-panel.md",
+        "references/publication/peer-review-panel.md",
     ],
     "grd-review-literature.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/publication/publication-pipeline-modes.md",
-        "domains/{GRD_DOMAIN}/publication/peer-review-panel.md",
+        "references/publication/publication-pipeline-modes.md",
+        "references/publication/peer-review-panel.md",
     ],
     "grd-review-math.md": [
         "references/shared/shared-protocols.md",
-        "domains/{GRD_DOMAIN}/physics-subfields.md",
-        "domains/{GRD_DOMAIN}/verification/core/verification-core.md",
-        "domains/{GRD_DOMAIN}/publication/peer-review-panel.md",
+        "references/physics-subfields.md",
+        "references/verification/core/verification-core.md",
+        "references/publication/peer-review-panel.md",
     ],
     "grd-review-physics.md": [
         "references/shared/shared-protocols.md",
-        "domains/{GRD_DOMAIN}/physics-subfields.md",
-        "domains/{GRD_DOMAIN}/verification/core/verification-core.md",
-        "domains/{GRD_DOMAIN}/publication/peer-review-panel.md",
+        "references/physics-subfields.md",
+        "references/verification/core/verification-core.md",
+        "references/publication/peer-review-panel.md",
     ],
     "grd-review-significance.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/publication/publication-pipeline-modes.md",
-        "domains/{GRD_DOMAIN}/publication/peer-review-panel.md",
+        "references/publication/publication-pipeline-modes.md",
+        "references/publication/peer-review-panel.md",
     ],
     "grd-phase-researcher.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/physics-subfields.md",
+        "references/physics-subfields.md",
         "references/research/research-modes.md",
     ],
     "grd-plan-checker.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/physics-subfields.md",
-        "domains/{GRD_DOMAIN}/verification/core/verification-core.md",
+        "references/physics-subfields.md",
+        "references/verification/core/verification-core.md",
     ],
     "grd-planner.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/physics-subfields.md",
-        "domains/{GRD_DOMAIN}/verification/core/verification-core.md",
+        "references/physics-subfields.md",
+        "references/verification/core/verification-core.md",
         "templates/planner-subagent-prompt.md",
         "templates/phase-prompt.md",
         "templates/parameter-table.md",
         "templates/summary.md",
         "workflows/execute-plan.md",
-        "domains/{GRD_DOMAIN}/protocols/order-of-limits.md",
+        "references/protocols/order-of-limits.md",
         "references/methods/approximation-selection.md",
-        "domains/{GRD_DOMAIN}/verification/core/code-testing-physics.md",
+        "references/verification/core/code-testing-physics.md",
         "references/orchestration/checkpoints.md",
         "references/planning/planner-conventions.md",
         "references/planning/planner-approximations.md",
         "references/planning/planner-scope-examples.md",
         "references/planning/planner-tdd.md",
         "references/planning/planner-iterative.md",
-        "domains/{GRD_DOMAIN}/protocols/hypothesis-driven-research.md",
+        "references/protocols/hypothesis-driven-research.md",
     ],
     "grd-project-researcher.md": [
         "references/shared/shared-protocols.md",
@@ -236,10 +240,10 @@ AGENT_REFERENCE_TOKENS = {
     "grd-referee.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/physics-subfields.md",
-        "domains/{GRD_DOMAIN}/verification/core/verification-core.md",
-        "domains/{GRD_DOMAIN}/publication/publication-pipeline-modes.md",
-        "domains/{GRD_DOMAIN}/publication/peer-review-panel.md",
+        "references/physics-subfields.md",
+        "references/verification/core/verification-core.md",
+        "references/publication/publication-pipeline-modes.md",
+        "references/publication/peer-review-panel.md",
         "templates/paper/referee-report.tex",
     ],
     "grd-research-synthesizer.md": [
@@ -256,7 +260,7 @@ AGENT_REFERENCE_TOKENS = {
     "grd-research-mapper.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "domains/{GRD_DOMAIN}/physics-subfields.md",
+        "references/physics-subfields.md",
         "references/templates/research-mapper/FORMALISM.md",
         "references/templates/research-mapper/REFERENCES.md",
         "references/templates/research-mapper/ARCHITECTURE.md",
@@ -267,11 +271,11 @@ AGENT_REFERENCE_TOKENS = {
     ],
     "grd-verifier.md": [
         "references/shared/shared-protocols.md",
-        "domains/{GRD_DOMAIN}/physics-subfields.md",
-        "domains/{GRD_DOMAIN}/verification/core/verification-core.md",
+        "references/physics-subfields.md",
+        "references/verification/core/verification-core.md",
         "references/research/research-modes.md",
-        "domains/{GRD_DOMAIN}/verification/meta/verification-hierarchy-mapping.md",
-        "domains/{GRD_DOMAIN}/verification/core/computational-verification-templates.md",
+        "references/verification/meta/verification-hierarchy-mapping.md",
+        "references/verification/core/computational-verification-templates.md",
     ],
 }
 
@@ -280,6 +284,14 @@ def _assert_contains_tokens(path: Path, tokens: list[str]) -> None:
     content = path.read_text(encoding="utf-8")
     missing = [token for token in tokens if token not in content]
     assert missing == [], f"{path.relative_to(REPO_ROOT)} missing {missing}"
+
+
+def _expand_prompt_surface(path: Path) -> str:
+    return expand_at_includes(
+        path.read_text(encoding="utf-8"),
+        REPO_ROOT / "src/grd/specs",
+        "/runtime/",
+    )
 
 
 def test_planner_templates_exist():
@@ -333,6 +345,9 @@ def test_executor_completion_examples_use_command_based_next_actions() -> None:
 
     assert '"/grd:execute-phase {phase}"' in completion
     assert '"/grd:show-phase {phase}"' in completion
+    assert "grd state validate" in completion
+    assert "/grd:sync-state" in completion
+    assert "file_edit tool" not in completion
 
 
 def test_referee_workflow_mentions_optional_pdf_compile_and_missing_tex_prompt() -> None:
@@ -341,7 +356,7 @@ def test_referee_workflow_mentions_optional_pdf_compile_and_missing_tex_prompt()
 
     assert "compile the latest referee-report `.tex` file to a matching `.pdf`" in referee
     assert "Do NOT install TeX yourself" in referee
-    assert "Continue now with `.grd/REFEREE-REPORT.md` + `.grd/REFEREE-REPORT.tex` only" in peer_review
+    assert "Continue now with `.grd/REFEREE-REPORT{round_suffix}.md` + `.grd/REFEREE-REPORT{round_suffix}.tex` only" in peer_review
     assert "Authorize the agent to install TeX now" in peer_review
 
 
@@ -349,16 +364,13 @@ def test_executor_prompt_defaults_to_return_only_shared_state_updates() -> None:
     executor = (AGENTS_DIR / "grd-executor.md").read_text(encoding="utf-8")
 
     assert "return shared-state updates to the orchestrator instead of writing `STATE.md` directly" in executor
-    assert (
-        "Your job: Execute the research plan completely, checkpoint each step, create SUMMARY.md, update STATE.md."
-        not in executor
-    )
+    assert "Your job: Execute the research plan completely, checkpoint each step, create SUMMARY.md, update STATE.md." not in executor
 
 
 def test_referee_prompt_no_longer_claims_read_only_artifact_policy() -> None:
     referee = (AGENTS_DIR / "grd-referee.md").read_text(encoding="utf-8")
 
-    assert "Only scoped review artifacts written, and changed paths reported in `grd_return.files_written`" in referee
+    assert "Only scoped review artifacts written, and changed paths reported in `gpd_return.files_written`" in referee
     assert "No files modified (read-only agent)" not in referee
 
 
@@ -420,6 +432,7 @@ def test_commands_are_workflow_backed_or_explicitly_exempt() -> None:
             assert "@{GRD_INSTALL_DIR}/workflows/health.md" not in command_text
         elif command_stem == "suggest-next":
             assert "grd --raw suggest" in command_text
+            assert "Local CLI fallback: `grd --raw suggest`" in command_text
             assert "@{GRD_INSTALL_DIR}/workflows/suggest-next.md" not in command_text
 
 
@@ -446,19 +459,20 @@ def test_review_commands_expose_typed_contracts() -> None:
 
     assert write_paper.review_contract is not None
     assert write_paper.review_contract.review_mode == "publication"
-    assert "existing manuscript" in write_paper.review_contract.required_evidence
+    assert "manuscript scaffold target (existing draft or bootstrap target)" in write_paper.review_contract.required_evidence
     assert "artifact manifest" in write_paper.review_contract.required_evidence
     assert "reproducibility manifest" in write_paper.review_contract.required_evidence
-    assert ".grd/REFEREE-REPORT.tex" in write_paper.review_contract.required_outputs
+    assert ".grd/REFEREE-REPORT{round_suffix}.md" in write_paper.review_contract.required_outputs
+    assert ".grd/REFEREE-REPORT{round_suffix}.tex" in write_paper.review_contract.required_outputs
     assert "manuscript" in write_paper.review_contract.preflight_checks
 
     assert peer_review.review_contract is not None
     assert peer_review.review_contract.review_mode == "publication"
-    assert ".grd/REFEREE-REPORT.md" in peer_review.review_contract.required_outputs
-    assert ".grd/REFEREE-REPORT.tex" in peer_review.review_contract.required_outputs
-    assert ".grd/review/CLAIMS.json" in peer_review.review_contract.required_outputs
-    assert ".grd/review/STAGE-interestingness.json" in peer_review.review_contract.required_outputs
-    assert ".grd/review/REFEREE-DECISION.json" in peer_review.review_contract.required_outputs
+    assert ".grd/REFEREE-REPORT{round_suffix}.md" in peer_review.review_contract.required_outputs
+    assert ".grd/REFEREE-REPORT{round_suffix}.tex" in peer_review.review_contract.required_outputs
+    assert ".grd/review/CLAIMS{round_suffix}.json" in peer_review.review_contract.required_outputs
+    assert ".grd/review/STAGE-interestingness{round_suffix}.json" in peer_review.review_contract.required_outputs
+    assert ".grd/review/REFEREE-DECISION{round_suffix}.json" in peer_review.review_contract.required_outputs
     assert "manuscript" in peer_review.review_contract.preflight_checks
     assert peer_review.review_contract.stage_ids == [
         "reader",
@@ -470,24 +484,24 @@ def test_review_commands_expose_typed_contracts() -> None:
     ]
     assert peer_review.review_contract.requires_fresh_context_per_stage is True
     assert peer_review.review_contract.stage_artifacts == [
-        ".grd/review/CLAIMS.json",
-        ".grd/review/STAGE-reader.json",
-        ".grd/review/STAGE-literature.json",
-        ".grd/review/STAGE-math.json",
-        ".grd/review/STAGE-physics.json",
-        ".grd/review/STAGE-interestingness.json",
-        ".grd/review/REVIEW-LEDGER.json",
-        ".grd/review/REFEREE-DECISION.json",
+        ".grd/review/CLAIMS{round_suffix}.json",
+        ".grd/review/STAGE-reader{round_suffix}.json",
+        ".grd/review/STAGE-literature{round_suffix}.json",
+        ".grd/review/STAGE-math{round_suffix}.json",
+        ".grd/review/STAGE-physics{round_suffix}.json",
+        ".grd/review/STAGE-interestingness{round_suffix}.json",
+        ".grd/review/REVIEW-LEDGER{round_suffix}.json",
+        ".grd/review/REFEREE-DECISION{round_suffix}.json",
     ]
-    assert peer_review.review_contract.final_decision_output == ".grd/review/REFEREE-DECISION.json"
+    assert peer_review.review_contract.final_decision_output == ".grd/review/REFEREE-DECISION{round_suffix}.json"
 
     assert verify_work.review_contract is not None
     assert verify_work.review_contract.required_state == "phase_executed"
     assert "phase_artifacts" in verify_work.review_contract.preflight_checks
 
     assert respond_to_referees.review_contract is not None
-    assert ".grd/paper/REFEREE_RESPONSE.md" in respond_to_referees.review_contract.required_outputs
-    assert ".grd/AUTHOR-RESPONSE.md" in respond_to_referees.review_contract.required_outputs
+    assert ".grd/paper/REFEREE_RESPONSE{round_suffix}.md" in respond_to_referees.review_contract.required_outputs
+    assert ".grd/AUTHOR-RESPONSE{round_suffix}.md" in respond_to_referees.review_contract.required_outputs
     assert "structured referee issues" in respond_to_referees.review_contract.required_evidence
     assert "peer-review review ledger when available" in respond_to_referees.review_contract.required_evidence
     assert "peer-review decision artifacts when available" in respond_to_referees.review_contract.required_evidence
@@ -556,12 +570,44 @@ def test_respond_to_referees_references_staged_review_artifacts() -> None:
     workflow_text = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
     writer_text = (AGENTS_DIR / "grd-paper-writer.md").read_text(encoding="utf-8")
 
-    assert ".grd/review/REVIEW-LEDGER.json" in command_text
-    assert ".grd/review/REFEREE-DECISION.json" in command_text
+    assert "argument-hint: \"[path to referee report or 'paste']\"" in command_text
+    assert ".grd/review/REVIEW-LEDGER{round_suffix}.json" in command_text
+    assert ".grd/review/REFEREE-DECISION{round_suffix}.json" in command_text
+    assert "Use the literal `paste` sentinel" in workflow_text
     assert "REVIEW-LEDGER*.json" in workflow_text
     assert "REFEREE-DECISION*.json" in workflow_text
     assert "REVIEW-LEDGER{-RN}.json" in writer_text
     assert "REFEREE-DECISION{-RN}.json" in writer_text
+
+
+def test_review_workflows_keep_round_suffix_artifacts_visible_and_anchor_response_outputs() -> None:
+    peer_review = (COMMANDS_DIR / "peer-review.md").read_text(encoding="utf-8")
+    respond = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
+    write_paper = (WORKFLOWS_DIR / "write-paper.md").read_text(encoding="utf-8")
+    panel = (REFERENCES_DIR / "publication" / "peer-review-panel.md").read_text(encoding="utf-8")
+
+    assert ".grd/review/CLAIMS{round_suffix}.json" in peer_review
+    assert ".grd/review/REVIEW-LEDGER{round_suffix}.json" in peer_review
+    assert ".grd/review/REFEREE-DECISION{round_suffix}.json" in peer_review
+    assert ".grd/REFEREE-REPORT{round_suffix}.md" in peer_review
+    assert ".grd/REFEREE-REPORT{round_suffix}.tex" in panel
+    assert "Stage 1 `CLAIMS{round_suffix}.json` must follow this compact `ClaimIndex` shape:" in panel
+    assert "ClaimIndex` and every nested `ClaimRecord` use a closed schema; do not invent extra keys" in panel
+    assert "`manuscript_path` must be non-empty" in panel
+    assert "JSON `round` field must agree" in panel
+    assert "must exactly match the sibling `CLAIMS{round_suffix}.json`" in panel
+    assert "Stage 1 `CLAIMS.json` must follow this compact `ClaimIndex` shape:" not in panel
+
+    assert "${PAPER_DIR}/{section}.tex" in respond
+    assert "${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json" in respond
+    assert "${PAPER_DIR}/response-letter.tex" in respond
+    assert ".grd/paper/REFEREE_RESPONSE{round_suffix}.md" in respond
+    assert ".grd/AUTHOR-RESPONSE{round_suffix}.md" in respond
+
+    assert "CLAIMS{round_suffix}.json" in write_paper
+    assert "REVIEW-LEDGER{round_suffix}.json" in write_paper
+    assert "REFEREE-DECISION{round_suffix}.json" in write_paper
+    assert ".grd/REFEREE-REPORT{round_suffix}.md" in write_paper
 
 
 def test_publication_commands_accept_documented_manuscript_layouts() -> None:
@@ -572,45 +618,62 @@ def test_publication_commands_accept_documented_manuscript_layouts() -> None:
     for content in (peer_review, respond, arxiv):
         assert 'files: ["paper/*.tex", "manuscript/*.tex", "draft/*.tex"]' in content
 
+    assert "peer-review review ledger when available" in arxiv
+    assert "peer-review referee decision when available" in arxiv
+    assert "latest `REVIEW-LEDGER{round_suffix}.json` / `REFEREE-DECISION{round_suffix}.json` outcome" in arxiv
+    assert "resolve only from `paper/`, `manuscript/`, or `draft/`" in arxiv
+    assert 'find . -name "main.tex"' not in arxiv
+
+
+def test_remove_phase_workflow_stages_checkpoint_shelf_updates() -> None:
+    workflow = (WORKFLOWS_DIR / "remove-phase.md").read_text(encoding="utf-8")
+
+    assert "checkpoint shelf artifacts" in workflow
+    assert ".grd/CHECKPOINTS.md" in workflow
+    assert ".grd/phase-checkpoints" in workflow
+
 
 def test_new_project_recommended_autonomy_matches_balanced_default() -> None:
     workflow_text = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
 
     assert workflow_text.count('"autonomy": "balanced"') >= 2
     assert "How would you like to write `.grd/config.json`?" in workflow_text
-    assert "`autonomy=balanced`, `research_mode=balanced`, `parallelization=true`, `commit_docs=true`" in workflow_text
+    assert (
+        "`autonomy=balanced`, `research_mode=balanced`, `parallelization=true`, "
+        "`planning.commit_docs=true`, `execution.review_cadence=adaptive`"
+    ) in workflow_text
     assert (
         "Config: Balanced autonomy | Adaptive review cadence | Balanced research mode | Parallel | All agents | Review profile"
         in workflow_text
     )
     assert "Recommended defaults use YOLO autonomy" not in workflow_text
-    assert (
-        "Config: YOLO autonomy | Balanced research mode | Parallel | All agents | Review profile" not in workflow_text
-    )
+    assert "Config: YOLO autonomy | Balanced research mode | Parallel | All agents | Review profile" not in workflow_text
+
+
+def test_settings_and_new_project_surface_runtime_permission_sync_for_yolo() -> None:
+    new_project = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
+    settings = (WORKFLOWS_DIR / "settings.md").read_text(encoding="utf-8")
+
+    assert 'grd --raw permissions sync --autonomy "$SELECTED_AUTONOMY"' in new_project
+    assert 'grd --raw permissions sync --autonomy "$SELECTED_AUTONOMY"' in settings
+    assert "sync the active runtime to its most autonomous permission mode when supported" in new_project
+    assert "syncs the runtime to its most autonomous permission mode when supported" in settings
+    assert "| Runtime Permissions  | {aligned / changed / manual follow-up required} |" in settings
+    assert "If `requires_relaunch` is `true`, show `next_step` verbatim" in new_project
 
 
 def test_new_project_requires_scoping_contract_across_setup_modes() -> None:
     workflow_text = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     command_text = (COMMANDS_DIR / "new-project.md").read_text(encoding="utf-8")
 
-    assert (
-        "Auto mode compresses intake; it does not override autonomy review gates after the scoping contract is approved"
-        in workflow_text
-    )
+    assert "Auto mode compresses intake; it does not override autonomy review gates after the scoping contract is approved" in workflow_text
     assert "Require one explicit scoping approval gate before requirements and roadmap generation" in workflow_text
-    assert (
-        "Roadmap approval: Auto-approve only for `balanced` / `yolo`; if `autonomy=supervised`, present the draft roadmap before commit"
-        in workflow_text
-    )
+    assert "Roadmap approval: Auto-approve only for `balanced` / `yolo`; if `autonomy=supervised`, present the draft roadmap before commit" in workflow_text
     assert "Minimal mode is still allowed to be lean, but it is not allowed to be contract-free." in workflow_text
-    assert (
-        'At least one anchor, reference/prior-output constraint, or an explicit "anchor unknown / must establish later" note'
-        in workflow_text
-    )
-    assert (
-        "Do not approve a scoping contract that strips decisive outputs, anchors, prior outputs, or review/stop triggers down to generic placeholders."
-        in workflow_text
-    )
+    assert "At least one concrete anchor, reference, prior-output constraint, or baseline" in workflow_text
+    assert "If the decisive anchor is still unknown, keep that blocker explicit" in workflow_text
+    assert "scope.unresolved_questions`, `context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors`" in workflow_text
+    assert "Do not approve a scoping contract that strips decisive outputs, anchors, prior outputs, or review/stop triggers down to generic placeholders." in workflow_text
     assert "Do NOT skip the initial scoping-contract approval gate." in workflow_text
     assert "scoping contract with decisive outputs, anchors, and explicit approval" in command_text
 
@@ -624,6 +687,9 @@ def test_new_project_wiring_mentions_contract_persistence_and_contract_first_dow
     assert "grd state set-project-contract -" in workflow_text
     assert "/tmp/grd-project-contract.json" not in workflow_text
     assert "temporary JSON file if needed" not in workflow_text
+    assert "Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `project_exists`, `has_research_map`, `planning_exists`, `has_research_files`, `has_project_manifest`, `has_existing_project`, `needs_research_map`, `has_git`, `project_contract`, `project_contract_load_info`, `project_contract_validation`." in workflow_text
+    assert "If `project_contract` is present in the init JSON, keep `project_contract`, `project_contract_load_info`, and `project_contract_validation` visible while deciding whether this is fresh work or a continuation." in workflow_text
+    assert "If the init JSON already contains `project_contract`, `project_contract_load_info`, or `project_contract_validation`, preserve that state in the approval gate and continuation decision." in workflow_text
     assert "Read PROJECT.md and `.grd/state.json` and extract" in workflow_text
     assert "Derive phases from requirements AND the approved project contract" in workflow_text
     assert "If auto mode and `autonomy` is not `supervised`" in workflow_text
@@ -634,26 +700,14 @@ def test_new_project_defers_workflow_setup_until_after_scope_approval() -> None:
     workflow_text = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     command_text = (COMMANDS_DIR / "new-project.md").read_text(encoding="utf-8")
 
-    assert (
-        "Before `.grd/config.json` exists, the `autonomy` and `research_mode` values from `grd init new-project` are temporary defaults"
-        in workflow_text
-    )
+    assert "Before `.grd/config.json` exists, the `autonomy` and `research_mode` values from `grd init new-project` are temporary defaults" in workflow_text
     assert "## 2.5 Early Workflow Setup" not in workflow_text
     assert "What physics problem do you want to investigate?" in workflow_text
-    assert (
-        "If `.grd/config.json` does not exist yet, run Step 5 now before generating or committing `PROJECT.md`."
-        in workflow_text
-    )
-    assert (
-        "Run this step after scope approval and before the first project-artifact commit whenever `.grd/config.json` does not exist yet."
-        in workflow_text
-    )
+    assert "If `.grd/config.json` does not exist yet, run Step 5 now before generating or committing `PROJECT.md`." in workflow_text
+    assert "Run this step after scope approval and before the first project-artifact commit whenever `.grd/config.json` does not exist yet." in workflow_text
     assert "If Step 2.5 already captured provisional setup preferences" not in workflow_text
     assert "workflow opens with the physics-questioning pass" in command_text
-    assert (
-        "asks for workflow preferences only after scope approval and before the first project-artifact commit"
-        in command_text
-    )
+    assert "asks for workflow preferences only after scope approval and before the first project-artifact commit" in command_text
 
 
 def test_questioning_guide_requires_anchors_and_disconfirming_questions() -> None:
@@ -675,34 +729,18 @@ def test_new_project_questioning_requires_smoking_gun_and_rejects_proxy_only_rea
     workflow_text = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     guide_text = (REFERENCES_DIR / "research" / "questioning.md").read_text(encoding="utf-8")
 
-    assert (
-        "What first smoking-gun observable, curve, benchmark reproduction, or scaling law they would trust before softer sanity checks"
-        in workflow_text
-    )
-    assert (
-        "Whether passing limiting cases, generic expectations, or qualitative agreement without that smoking gun should still count as failure"
-        in workflow_text
-    )
-    assert (
-        'Demand the smoking gun ("What exact check would make you trust this over softer sanity checks?")'
-        in workflow_text
-    )
-    assert (
-        "If you only have limiting cases, sanity checks, or generic benchmark language with no decisive smoking-gun observable"
-        in workflow_text
-    )
-    assert (
-        "especially the first smoking-gun check they would trust over softer proxies or limiting cases" in workflow_text
-    )
-    assert (
-        "If the only checks captured so far are limiting cases, sanity checks, or qualitative expectations, treat the contract as still underspecified"
-        in workflow_text
-    )
+    assert "What first smoking-gun observable, curve, benchmark reproduction, or scaling law they would trust before softer sanity checks" in workflow_text
+    assert "Whether passing limiting cases, generic expectations, or qualitative agreement without that smoking gun should still count as failure" in workflow_text
+    assert 'Demand the smoking gun ("What exact check would make you trust this over softer sanity checks?")' in workflow_text
+    assert "If you only have limiting cases, sanity checks, or generic benchmark language with no decisive smoking-gun observable" in workflow_text
+    assert "especially the first smoking-gun check they would trust over softer proxies or limiting cases" in workflow_text
+    assert "If the only checks captured so far are limiting cases, sanity checks, or qualitative expectations, treat the contract as still underspecified" in workflow_text
     assert "Push until you know the first hard correctness check or smoking-gun signal they would trust" in guide_text
     assert "What is the first smoking-gun observable, scaling law, curve, or benchmark" in guide_text
     assert "If the result passed a few limiting cases or sanity checks but missed the smoking-gun check" in guide_text
     assert (
-        "Do not offer the gate if you only have proxy checks, sanity checks, or limiting cases with no decisive smoking-gun observable"
+        "Do not offer the gate if you only have proxy checks, sanity checks, or limiting cases and still lack "
+        "concrete reference/prior-output/baseline grounding, even when the missing anchor is noted explicitly."
         in guide_text
     )
 
@@ -754,10 +792,7 @@ def test_discuss_and_plan_workflows_resolve_roadmap_only_phases() -> None:
     assert 'PHASE=$(echo "$INIT" | grd json get .phase_number --default "${REQUESTED_PHASE}")' in plan_text
     assert 'PHASE_INFO=$(grd roadmap get-phase "${PHASE}")' in plan_text
     assert 'PHASE_SLUG=$(grd slug "$PHASE_NAME")' in plan_text
-    assert (
-        "Use these resolved values for all later references to `PHASE_DIR`, `PHASE_SLUG`, and `PADDED_PHASE`."
-        in plan_text
-    )
+    assert "Use these resolved values for all later references to `PHASE_DIR`, `PHASE_SLUG`, and `PADDED_PHASE`." in plan_text
 
 
 def test_planning_and_phase_templates_surface_active_reference_context() -> None:
@@ -770,9 +805,31 @@ def test_planning_and_phase_templates_surface_active_reference_context() -> None
     assert "**Active References:** {active_reference_context}" in planner_prompt
     assert "@path/to/reference-or-benchmark-anchor.md" in phase_prompt
     assert "Planning requires an approved scoping contract in `.grd/state.json`" in workflow_text
+    assert "project_contract_validation" in workflow_text
+    assert "project_contract_load_info" in workflow_text
+    assert "visible-but-blocked contract is not an approved planning contract" in workflow_text
     assert "**Project Contract:** {project_contract}" in workflow_text
     assert "**Active References:** {active_reference_context}" in workflow_text
     assert "**Anchor coverage:** Required references, baselines, and prior outputs are surfaced" in workflow_text
+
+
+def test_progress_workflow_surfaces_contract_load_and_validation_state() -> None:
+    workflow_text = (WORKFLOWS_DIR / "progress.md").read_text(encoding="utf-8")
+    command_text = (COMMANDS_DIR / "progress.md").read_text(encoding="utf-8")
+
+    assert "project_contract_validation" in workflow_text
+    assert "project_contract_load_info" in workflow_text
+    assert "authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes" in workflow_text
+    assert "structured load status, warnings, and blockers for the contract" in workflow_text
+    status_scan = 'grep -l -E "^(status: (gaps_found|human_needed|expert_needed)|session_status: diagnosed)$"'
+    assert status_scan in workflow_text
+    assert status_scan in command_text
+    assert 'status: (gaps_found|diagnosed|human_needed|expert_needed)' not in workflow_text
+    assert 'status: (gaps_found|diagnosed|human_needed|expert_needed)' not in command_text
+    assert "`session_status: diagnosed`" in workflow_text
+    assert "`session_status: diagnosed`" in command_text
+    assert ".grd/phases/[current-phase-dir]/*-VERIFICATION.md" in workflow_text
+    assert ".grd/phases/[current-phase-dir]/*-VERIFICATION.md" in command_text
 
 
 def test_planning_prompts_keep_contract_gate_in_light_mode_and_all_modes() -> None:
@@ -782,15 +839,9 @@ def test_planning_prompts_keep_contract_gate_in_light_mode_and_all_modes() -> No
     workflow_text = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
 
     assert "Light mode changes verbosity, not contract completeness." in planner_prompt
-    assert (
-        "Autonomy mode and model profile may change cadence or detail, but they do NOT relax contract completeness."
-        in planner_prompt
-    )
+    assert "Autonomy mode and model profile may change cadence or detail, but they do NOT relax contract completeness." in planner_prompt
     assert "Profiles may compress detail, but they do NOT relax contract completeness." in planner_agent
-    assert (
-        "All modes still require contract completeness, decisive outputs, required anchors, forbidden-proxy handling, and disconfirming paths before execution starts."
-        in workflow_text
-    )
+    assert "All modes still require contract completeness, decisive outputs, required anchors, forbidden-proxy handling, and disconfirming paths before execution starts." in workflow_text
     assert "Human review does not replace those requirements." in checker_agent
 
 
@@ -804,22 +855,25 @@ def test_plan_checker_requires_contract_gate_and_reference_artifacts() -> None:
     assert "proxy_only_success_path" in checker_agent
     assert "**Reference Artifacts:** {reference_artifacts_content}" in workflow_text
     assert "**Decisive outputs:** The plan set covers decisive claims and deliverables" in workflow_text
-    assert (
-        "**Acceptance tests:** Every decisive claim or deliverable has at least one executable or reviewable test"
-        in workflow_text
-    )
+    assert "**Acceptance tests:** Every decisive claim or deliverable has at least one executable or reviewable test" in workflow_text
     assert "**Forbidden proxies:** Proxy-only success conditions are rejected explicitly" in workflow_text
 
 
 def test_roadmap_template_and_workflows_surface_phase_contract_coverage() -> None:
     roadmap_template = (TEMPLATES_DIR / "roadmap.md").read_text(encoding="utf-8")
+    state_template = (TEMPLATES_DIR / "state.md").read_text(encoding="utf-8")
     roadmapper_agent = (AGENTS_DIR / "grd-roadmapper.md").read_text(encoding="utf-8")
     new_project = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     new_milestone = (WORKFLOWS_DIR / "new-milestone.md").read_text(encoding="utf-8")
 
     assert "## Contract Overview" in roadmap_template
     assert "**Contract Coverage:**" in roadmap_template
+    assert "@{GRD_INSTALL_DIR}/templates/roadmap.md" in roadmapper_agent
+    assert "@{GRD_INSTALL_DIR}/templates/state.md" in roadmapper_agent
     assert "Contract coverage" in roadmapper_agent
+    assert "Phase Details" in roadmapper_agent
+    assert "Active Calculations" in roadmapper_agent
+    assert "Intermediate Results" in state_template
     assert "forbidden proxies a phase must carry" in roadmapper_agent
     assert "Phase counts are heuristics, not quotas" in roadmapper_agent
     assert "Do not pad the roadmap with speculative phases just to make it look complete." in roadmapper_agent
@@ -842,37 +896,43 @@ def test_new_project_minimal_mode_and_planning_wiring_allow_coarse_scoped_decomp
     assert "whether the anchor is still unknown" in workflow_text
     assert "Do not force a phase list just to make the scoping contract look complete." in workflow_text
     assert (
-        "If the user does not know the anchor yet, preserve that explicitly in `scope.unresolved_questions` or `context_intake.context_gaps` rather than inventing a paper, benchmark, or baseline."
+        "If the user does not know the anchor yet, preserve that explicitly in `scope.unresolved_questions`, "
+        "`context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors` rather than inventing a paper, "
+        "benchmark, or baseline."
         in workflow_text
     )
-    assert (
-        'If the user named a prior output, review checkpoint, or "come back to me before continuing" condition, carry it into `context_intake.must_include_prior_outputs` or `context_intake.crucial_inputs` rather than leaving it only in prose.'
-        in workflow_text
-    )
+    assert 'If the user named a prior output, review checkpoint, or "come back to me before continuing" condition, carry it into `context_intake.must_include_prior_outputs` or `context_intake.crucial_inputs` rather than leaving it only in prose.' in workflow_text
     assert "A full phase breakdown is not required at this stage;" in workflow_text
     assert "Use the coarsest decomposition the approved contract actually supports." in workflow_text
-    assert (
-        "Do NOT invent literature, numerics, or paper phases unless the requirements or contract demand them."
-        in workflow_text
-    )
-    assert (
-        "If `project_contract` is empty, stale, or too underspecified to identify the phase contract slice, return `## CHECKPOINT REACHED`"
-        in planner_prompt
-    )
+    assert "Do NOT invent literature, numerics, or paper phases unless the requirements or contract demand them." in workflow_text
+    assert "If `project_contract` is empty, stale, or too underspecified to identify the phase contract slice, return `## CHECKPOINT REACHED`" in planner_prompt
 
 
 def test_reference_workflows_require_anchor_registry_propagation() -> None:
     literature_workflow = (WORKFLOWS_DIR / "literature-review.md").read_text(encoding="utf-8")
     literature_command = (COMMANDS_DIR / "literature-review.md").read_text(encoding="utf-8")
     literature_agent = (AGENTS_DIR / "grd-literature-reviewer.md").read_text(encoding="utf-8")
+    compare_workflow = (WORKFLOWS_DIR / "compare-results.md").read_text(encoding="utf-8")
     map_workflow = (WORKFLOWS_DIR / "map-research.md").read_text(encoding="utf-8")
     map_command = (COMMANDS_DIR / "map-research.md").read_text(encoding="utf-8")
     mapper_agent = (AGENTS_DIR / "grd-research-mapper.md").read_text(encoding="utf-8")
 
     assert "contract-critical anchors" in literature_workflow
+    assert "project_contract_load_info" in literature_workflow
+    assert "project_contract_validation" in literature_workflow
+    assert "authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes" in literature_workflow
     assert "Active Anchor Registry" in literature_command
     assert "active_anchors" in literature_agent
+    assert "project_contract_load_info" in compare_workflow
+    assert "project_contract_validation" in compare_workflow
+    assert "active_reference_context" in compare_workflow
+    assert "Treat `project_contract` as authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes." in compare_workflow
     assert "active_reference_context" in map_workflow
+    assert "effective_reference_intake" in map_workflow
+    assert "project_contract_load_info" in map_workflow
+    assert "project_contract_validation" in map_workflow
+    assert "reference_artifacts_content" in map_workflow
+    assert "authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes" in map_workflow
     assert "Contract-critical anchors, decisive benchmarks, prior artifacts" in map_command
     assert "REFERENCES.md is an anchor registry" in mapper_agent
 
@@ -887,7 +947,7 @@ def test_file_producing_command_surfaces_use_canonical_spawn_contract() -> None:
         (debug, "grd-debugger", ".grd/debug/{slug}.md"),
         (research, "grd-phase-researcher", ".grd/phases/${PHASE}-{slug}/${PHASE}-RESEARCH.md"),
     ):
-        assert f"read {{GRD_AGENTS_DIR}}/{agent_name}.md for your role and instructions" in content
+        assert f'read {{GRD_AGENTS_DIR}}/{agent_name}.md for your role and instructions' in content
         assert "readonly=false" in content
         assert f"{file_token}\nRead that file before continuing" in content
         assert f"@{file_token}" not in content
@@ -897,13 +957,32 @@ def test_revision_and_audit_workflows_verify_artifacts_before_trusting_success_t
     respond = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
     audit = (WORKFLOWS_DIR / "audit-milestone.md").read_text(encoding="utf-8")
 
+    assert "response_to: REFEREE-REPORT{round_suffix}.md" in respond
+    assert "## Point-by-Point Responses" in respond
+    assert "**Classification:** fixed" in respond
+    assert "Use `**Evidence:**` blocks for rebuttals" in respond
     assert "verify the promised artifacts before trusting the handoff text" in respond
     assert "If the agent claimed success but the files did not change, treat that section as failed" in respond
-    assert "Re-open `AUTHOR-RESPONSE.md` and `REFEREE_RESPONSE.md`" in respond
+    assert "Re-open `.grd/AUTHOR-RESPONSE{round_suffix}.md` and `.grd/paper/REFEREE_RESPONSE{round_suffix}.md`" in respond
 
     assert "Verify the promised referee artifacts before trusting the handoff text" in audit
-    assert "Confirm `.grd/REFEREE-REPORT.md` exists" in audit
+    assert "Confirm `.grd/v{milestone_version}-MILESTONE-REFEREE-REPORT.md` exists" in audit
     assert "If the agent reported success but either artifact is missing, treat peer review as failed" in audit
+
+
+def test_audit_milestone_surfaces_contract_gate_and_milestone_review_namespace() -> None:
+    audit = (WORKFLOWS_DIR / "audit-milestone.md").read_text(encoding="utf-8")
+
+    assert "project_contract_load_info" in audit
+    assert "project_contract_validation" in audit
+    assert "active_reference_context" in audit
+    assert "Treat `project_contract` as authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes." in audit
+    assert "skip mock peer review and note that the contract gate must be repaired before milestone publishability review" in audit
+    assert ".grd/v{milestone_version}-MILESTONE-REFEREE-REPORT.md" in audit
+    assert ".grd/v{milestone_version}-MILESTONE-REFEREE-REPORT.tex" in audit
+    assert "Project contract load info: {project_contract_load_info}" in audit
+    assert "Project contract validation: {project_contract_validation}" in audit
+    assert "Active references: {active_reference_context}" in audit
 
 
 def test_phase_research_and_verification_surfaces_keep_anchor_checks_mandatory() -> None:
@@ -918,10 +997,14 @@ def test_phase_research_and_verification_surfaces_keep_anchor_checks_mandatory()
     assert "| validation, testing, benchmarks    | VALIDATION.md, REFERENCES.md    |" in planner_agent
     assert "Do NOT skip contract-critical anchors" in verify_workflow
     assert "active_reference_context" in verify_workflow
+    assert "project_contract_validation" in verify_workflow
+    assert "project_contract_load_info" in verify_workflow
+    assert "visible-but-blocked contract must be repaired before it is used as authoritative verification scope" in verify_workflow
     assert "suggest_contract_checks(contract)" in verify_workflow
 
 
 def test_stage4_templates_and_workflows_surface_contract_results_and_verdict_ledgers() -> None:
+    contract_results_schema = (TEMPLATES_DIR / "contract-results-schema.md").read_text(encoding="utf-8")
     summary_template = (TEMPLATES_DIR / "summary.md").read_text(encoding="utf-8")
     verification_template = (TEMPLATES_DIR / "verification-report.md").read_text(encoding="utf-8")
     research_verification = (TEMPLATES_DIR / "research-verification.md").read_text(encoding="utf-8")
@@ -929,7 +1012,9 @@ def test_stage4_templates_and_workflows_surface_contract_results_and_verdict_led
     verify_workflow = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
     verify_phase = (WORKFLOWS_DIR / "verify-phase.md").read_text(encoding="utf-8")
     compare_workflow = (WORKFLOWS_DIR / "compare-experiment.md").read_text(encoding="utf-8")
-    comparison_template = (TEMPLATES_DIR / "paper" / "experimental-comparison.md").read_text(encoding="utf-8")
+    comparison_template = (
+        TEMPLATES_DIR / "paper" / "experimental-comparison.md"
+    ).read_text(encoding="utf-8")
     executor_agent = (AGENTS_DIR / "grd-executor.md").read_text(encoding="utf-8")
     verifier_agent = (AGENTS_DIR / "grd-verifier.md").read_text(encoding="utf-8")
 
@@ -937,51 +1022,366 @@ def test_stage4_templates_and_workflows_surface_contract_results_and_verdict_led
     assert "comparison_verdicts" in summary_template
     assert "plan_contract_ref" in summary_template
     assert "Keep this ledger user-visible" in summary_template
+    assert "Reload `@{GRD_INSTALL_DIR}/templates/contract-results-schema.md` immediately before writing the YAML" in summary_template
+    assert "canonical project-root-relative `.grd/phases/XX-name/{phase}-{plan}-PLAN.md#/contract` path" in summary_template
+    assert "Choose the depth explicitly" in summary_template
+    assert "default: full" not in summary_template
+    assert "Keep `uncertainty_markers` explicit and user-visible" in summary_template
+    assert "uncertainty_markers:" in summary_template
+    assert "weakest_anchors: [anchor-1]" in summary_template
+    assert "disconfirming_observations: [observation-1]" in summary_template
     assert "omitting the corresponding `comparison_verdicts` entry makes the summary incomplete" in summary_template
     assert "verification_inputs" not in summary_template
     assert "contract_results" in verification_template
     assert "comparison_verdicts" in verification_template
+    assert "Subject Role" in verification_template
+    assert "subject_role: decisive" in verification_template
     assert "Record only user-visible contract targets here" in verification_template
+    assert "status: passed` is strict" in verification_template
     assert "absence of a verdict is itself a gap" in verification_template
-    assert (
-        "Use `@{GRD_INSTALL_DIR}/templates/verification-report.md` for the canonical verification frontmatter contract."
-        in research_verification
-    )
+    assert "Reload `@{GRD_INSTALL_DIR}/templates/contract-results-schema.md` immediately before writing the YAML" in verification_template
+    assert "verification-side `suggested_contract_checks`" in verification_template
+    assert "uncertainty_markers:" in verification_template
+    assert "weakest_anchors: [anchor-1]" in verification_template
+    assert "disconfirming_observations: [observation-1]" in verification_template
+    assert "every reference entry is `completed`" in verification_template
+    assert "every `must_surface` reference has all `required_actions` recorded in `completed_actions`" in verification_template
+    assert "Benchmark acceptance tests require `comparison_kind: benchmark`" in verification_template
+    assert "cross-method acceptance tests require `comparison_kind: cross_method`" in verification_template
+    assert "Section-specific status vocabularies are mandatory" in contract_results_schema
+    assert "`references` use `completed`, `missing`, or `not_applicable`" in contract_results_schema
+    assert "`forbidden_proxies` use `rejected`, `violated`, `unresolved`, or `not_applicable`" in contract_results_schema
+    assert "The same requirement applies when a benchmark-style reference anchors the subject" in contract_results_schema
+    assert "The same structured suggestion is required when a benchmark-style reference anchors the subject" in verification_template
+    assert "Include a `suggested_contract_checks` entry whenever a decisive benchmark / cross-method comparison is still partial or unresolved" in verification_template
+    assert "Use `@{GRD_INSTALL_DIR}/templates/verification-report.md` for the canonical verification frontmatter contract." in research_verification
     assert "status: passed | gaps_found | expert_needed | human_needed" in research_verification
-    assert "comparison_verdicts: []" in research_verification
+    assert "deliverables: {}" not in research_verification
+    assert "acceptance_tests: {}" not in research_verification
+    assert "references: {}" not in research_verification
+    assert "forbidden_proxies: {}" not in research_verification
+    assert "deliverable-main" in research_verification
+    assert "acceptance-test-main" in research_verification
+    assert "reference-main" in research_verification
+    assert "forbidden-proxy-main" in research_verification
+    assert "comparison_verdicts:" in research_verification
+    assert "subject_role: decisive" in research_verification
+    assert "comparison_kind: benchmark" in research_verification
+    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]" in research_verification
+    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other | \"\"]" not in research_verification
+    assert "omit both `comparison_kind` and `comparison_reference_id` instead of leaving blank placeholders" in research_verification
+    assert "comparison_kind: benchmark | prior_work | experiment | cross_method | baseline | other" in research_verification
+    assert 'comparison_kind: "benchmark | prior_work | experiment | cross_method | baseline | other"' in research_verification
+    assert "verification-side `suggested_contract_checks` entries are part of the same canonical schema surface" in research_verification
+    assert "suggested_contract_checks:" in research_verification
+    assert "uncertainty_markers:" in research_verification
+    assert "weakest_anchors: [anchor-1]" in research_verification
+    assert "disconfirming_observations: [observation-1]" in research_verification
     assert "session_status: validating | completed | diagnosed" in research_verification
+    assert "verified: 2026-03-15T14:45:00Z" in research_verification
+    assert "score: 3/4 contract targets verified" in research_verification
+    assert "session_status: diagnosed" in research_verification
+    assert "\nstatus: diagnosed\n" not in research_verification
+    assert 'status -> "completed"' not in research_verification
+    assert '`session_status` -> "diagnosed"' in research_verification
+    assert 'status -> "diagnosed"' not in research_verification
     assert "The frontmatter `comparison_verdicts` ledger is authoritative" in research_verification
-    assert (
-        "decisive benchmark / cross-method check remains partial, not attempted, or still lacks a decisive verdict"
-        in research_verification
-    )
+    assert "subject_role: decisive | supporting | supplemental | other" in research_verification
+    assert "Only `subject_role: decisive` closes a required decisive comparison" in research_verification
+    assert "decisive benchmark / cross-method check remains partial, not attempted, or still lacks a decisive verdict" in research_verification
+    assert "even a single item must stay a YAML list" in contract_results_schema
+    assert "scalar strings are invalid" in contract_results_schema
+    assert "Even singleton values must stay YAML lists in strict contract-backed ledgers" in summary_template
+    assert "Even singleton values must stay YAML lists in strict contract-backed ledgers" in verification_template
+    assert "Benchmark acceptance tests require `comparison_kind: benchmark`" in contract_results_schema
+    assert "cross-method acceptance tests require `comparison_kind: cross_method`" in contract_results_schema
     assert "claim_id" in research_verification
     assert "acceptance_test_id" in research_verification
-    assert (
-        "frontmatter contract compatible with `@{GRD_INSTALL_DIR}/templates/verification-report.md`" in verify_workflow
-    )
-    assert "status: human_needed" in verify_workflow
+    assert "frontmatter contract compatible with `@{GRD_INSTALL_DIR}/templates/verification-report.md`" in verify_workflow
+    assert "status: passed | gaps_found | expert_needed | human_needed" in verify_workflow
     assert "session_status: validating" in verify_workflow
+    assert "uncertainty_markers:" in verify_workflow
+    assert "weakest_anchors: [anchor-1]" in verify_workflow
+    assert "disconfirming_observations: [observation-1]" in verify_workflow
+    assert "weakest_anchors: []" not in verify_workflow
+    assert "disconfirming_observations: []" not in verify_workflow
     assert "Mirror decisive verdicts into frontmatter `comparison_verdicts`." in verify_workflow
     assert "structured `suggested_contract_checks` entry before final validation" in verify_workflow
+    assert "request_template" in verify_workflow
+    assert "required_request_fields" in verify_workflow
+    assert "supported_binding_fields" in verify_workflow
+    assert "run_contract_check(request=...)" in verify_workflow
+    assert "Benchmark acceptance tests require `comparison_kind: benchmark`" in verify_workflow
+    assert "cross-method acceptance tests require `comparison_kind: cross_method`" in verify_workflow
+    assert "deliverables: {}" not in verify_workflow
+    assert "acceptance_tests: {}" not in verify_workflow
+    assert "references: {}" not in verify_workflow
+    assert "forbidden_proxies: {}" not in verify_workflow
+    assert "deliverable-id" in verify_workflow
+    assert "acceptance-test-id" in verify_workflow
+    assert "reference-id" in verify_workflow
+    assert "forbidden-proxy-id" in verify_workflow
+    assert "comparison_verdicts:" in verify_workflow
+    assert "subject_role: decisive" in verify_workflow
+    assert "comparison_kind: benchmark" in verify_workflow
+    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]" in verify_workflow
+    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | \"\"]" not in verify_workflow
+    assert "omit both `comparison_kind` and `comparison_reference_id` instead of leaving blank placeholders" in verify_workflow
+    assert "suggested_contract_checks:" in verify_workflow
+    assert "`suggested_contract_check`" not in verify_workflow
+    assert "Return status (`passed` | `gaps_found` | `expert_needed` | `human_needed`)" in verify_phase
+    assert "contract_results including `uncertainty_markers`" in verify_phase
+    assert "`suggested_contract_check`" not in verify_phase
+    assert "gap_subject_kind" in verifier_agent
+    assert "Each gap has: `gap_subject_kind`" in verifier_agent
+    assert "Each gap has: `subject_kind`" not in verifier_agent
+    assert "Verification Status:** {passed | gaps_found | expert_needed | human_needed}" in verifier_agent
+    assert "uncertainty_markers:" in verifier_agent
+    assert "weakest_anchors: [anchor-1]" in verifier_agent
+    assert "disconfirming_observations: [observation-1]" in verifier_agent
+    assert "weakest_anchors: []" not in verifier_agent
+    assert "disconfirming_observations: []" not in verifier_agent
+    assert "`suggested_contract_check`" not in verifier_agent
     assert "`contract_results` is authoritative." in execute_plan
-    assert (
-        "Autonomy mode (`supervised` / `balanced` / `yolo`) and profile may change cadence or verbosity, but they do NOT relax contract-result emission."
-        in execute_plan
-    )
+    assert "project_contract_validation" in execute_plan
+    assert "project_contract_load_info" in execute_plan
+    assert "visible-but-blocked contract is still not an approved execution contract" in execute_plan
+    assert "Autonomy mode (`supervised` / `balanced` / `yolo`) and profile may change cadence or verbosity, but they do NOT relax contract-result emission." in execute_plan
+    assert "comparison_verdicts` for decisive internal/external comparisons that were required or attempted" in execute_plan
+    assert "emit `verdict: inconclusive` or `verdict: tension` instead of omitting the entry" in execute_plan
+    assert "Immediately before writing frontmatter, re-open `@{GRD_INSTALL_DIR}/templates/contract-results-schema.md` and apply it literally." in execute_plan
     assert "contract_results" in verify_phase
     assert "Verification targets must stay user-visible" in verify_phase
     assert "must_haves" not in verify_phase
+    assert "request_template" in verify_phase
+    assert "required_request_fields" in verify_phase
+    assert "supported_binding_fields" in verify_phase
+    assert "run_contract_check(request=...)" in verify_phase
     assert "comparison_verdicts" in compare_workflow
+    assert "project_contract_load_info" in compare_workflow
+    assert "project_contract_validation" in compare_workflow
+    assert "authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes" in compare_workflow
+    assert "selected_protocol_bundle_ids" in compare_workflow
+    assert "protocol_bundle_context" in compare_workflow
+    assert "active_reference_context" in compare_workflow
+    assert "protocol_bundle_ids (optional):" in compare_workflow
+    assert "bundle_expectations (optional):" in compare_workflow
+    assert "comparison_kind: benchmark|prior_work|experiment|cross_method|baseline|other" in compare_workflow
+    assert "comparison_kind: benchmark|prior_work|experiment|cross_method|baseline|other" in comparison_template
+    assert "`comparison_verdicts` is a closed schema" in comparison_template
+    internal_comparison_template = (TEMPLATES_DIR / "paper" / "internal-comparison.md").read_text(encoding="utf-8")
+    assert "`comparison_verdicts` is a closed schema" in internal_comparison_template
     assert "subject_role" in comparison_template
+    assert "Profiles and autonomy modes may compress prose or cadence, but they do NOT relax contract-result emission" in executor_agent
+    assert "Use claim IDs, deliverable IDs, acceptance test IDs, reference IDs, and forbidden proxy IDs directly from the `contract` block." in verifier_agent
+
+
+def test_execute_phase_workflow_surfaces_project_contract_validation_gate() -> None:
+    execute_workflow = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
+
+    assert "project_contract_validation" in execute_workflow
+    assert "project_contract_load_info" in execute_workflow
+    assert "visible-but-blocked contract as an approved execution contract" in execute_workflow
+
+
+def test_execute_phase_and_execute_plan_surface_required_reference_and_state_ownership_guidance() -> None:
+    execute_command = (COMMANDS_DIR / "execute-phase.md").read_text(encoding="utf-8")
+    execute_workflow = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
+    execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
+
+    assert "@{GRD_INSTALL_DIR}/references/orchestration/artifact-surfacing.md" in execute_workflow
+    assert "{GRD_INSTALL_DIR}/references/execution/github-lifecycle.md" in execute_plan
     assert (
-        "Profiles and autonomy modes may compress prose or cadence, but they do NOT relax contract-result emission"
-        in executor_agent
+        "substitute the repository's actual default branch and remote names for "
+        "`<default-branch>` and `<remote-name>`"
+    ) in execute_plan
+    assert "applies returned shared-state updates after each successfully completed plan" in execute_command
+    assert "STATE.md is updated after each wave completes" not in execute_command
+    assert "By the time the wave-complete report is emitted" in execute_workflow
+
+
+def test_verification_prompts_keep_suggested_contract_check_bindings_schema_tight() -> None:
+    verification_template = (TEMPLATES_DIR / "verification-report.md").read_text(encoding="utf-8")
+    research_verification = (TEMPLATES_DIR / "research-verification.md").read_text(encoding="utf-8")
+    verify_workflow = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
+    verifier_agent = (AGENTS_DIR / "grd-verifier.md").read_text(encoding="utf-8")
+
+    assert 'suggested_subject_id: ""' not in verification_template
+    assert 'suggested_subject_id: [contract id or ""]' not in research_verification
+    assert 'suggested_subject_id: [contract id or ""]' not in verify_workflow
+    assert 'suggested_subject_id: "matching contract id"' in research_verification
+    assert 'suggested_subject_id: "matching contract id"' in verify_workflow
+    assert "acceptance-test-id" in verification_template
+    assert "acceptance-test-main" in research_verification
+    assert "acceptance-test-id" in verifier_agent
+    assert "omit both keys instead of leaving one blank" in verification_template
+    assert "omit both keys instead of leaving one blank" in research_verification
+    assert "verification-side `suggested_contract_checks`" in verification_template
+    assert "verification-side `suggested_contract_checks` entries are part of the same canonical schema surface" in research_verification
+    assert "omit both keys instead of leaving one blank" in verify_workflow
+    assert "omit both keys instead of leaving one blank" in verifier_agent
+    assert "gap_subject_kind" in verifier_agent
+    assert "Each gap has: `gap_subject_kind`" in verifier_agent
+    assert "Each gap has: `subject_kind`" not in verifier_agent
+    assert "Verification Status:** {passed | gaps_found | expert_needed | human_needed}" in verifier_agent
+
+
+def test_lane5_prompt_examples_keep_schema_valid_contract_fields_visible() -> None:
+    planner = (AGENTS_DIR / "grd-planner.md").read_text(encoding="utf-8")
+    plan_checker = (AGENTS_DIR / "grd-plan-checker.md").read_text(encoding="utf-8")
+    parameter_sweep = (WORKFLOWS_DIR / "parameter-sweep.md").read_text(encoding="utf-8")
+    research_verification = (TEMPLATES_DIR / "research-verification.md").read_text(encoding="utf-8")
+    verify_work = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
+    verifier = (AGENTS_DIR / "grd-verifier.md").read_text(encoding="utf-8")
+    executor_example = (REFERENCES_DIR / "execution" / "executor-worked-example.md").read_text(encoding="utf-8")
+
+    assert "context_intake:" in planner
+    assert 'must_read_refs: ["ref-textbook"]' in planner
+    assert "references: [ref-uehling]" in planner
+    assert "context_intake:" in plan_checker
+    assert "why_it_matters:" in plan_checker
+    assert "required_actions: [read, compare, cite]" in plan_checker
+    assert "procedure: \"Compare the computed value against the benchmark anchor within tolerance.\"" in plan_checker
+    assert "context_intake:" in parameter_sweep
+    assert "must_read_refs: [ref-sweep-anchor]" in parameter_sweep
+    assert "reference-main" in research_verification
+    assert "acceptance-test-main" in research_verification
+    assert "linked_ids: [deliverable-main, acceptance-test-main, reference-main]" in research_verification
+    assert "evidence:\n        - verifier: grd-verifier" in research_verification
+    assert 'evidence_path: "[artifact path or expected evidence path]"' in research_verification
+    assert 'started: "ISO timestamp"' in research_verification
+    assert 'updated: "ISO timestamp"' in research_verification
+    assert "test-benchmark" not in research_verification
+    assert "reference-id" in verify_work
+    assert "acceptance-test-id" in verify_work
+    assert "test-benchmark" not in verify_work
+    assert "reference-id" in verifier
+    assert "acceptance-test-id" in verifier
+    assert "test-benchmark" not in verifier
+    assert "deliverables:" in executor_example
+    assert "references:" in executor_example
+    assert 'reference_id: "reference-qed-benchmark"' in executor_example
+    assert "deliverable-self-energy-derivation" in executor_example
+
+
+def test_verification_prompt_wiring_rejects_invalid_reference_and_proxy_scaffolds(tmp_path: Path) -> None:
+    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir.mkdir(parents=True)
+    (phase_dir / "01-01-PLAN.md").write_text(
+        (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
+        encoding="utf-8",
     )
-    assert (
-        "Use claim IDs, deliverable IDs, acceptance test IDs, reference IDs, and forbidden proxy IDs directly from the `contract` block."
-        in verifier_agent
+    verification_path = phase_dir / "01-VERIFICATION.md"
+    verification_path.write_text(
+        (FIXTURES_STAGE4 / "verification_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
+            "  references:\n"
+            "    ref-benchmark:\n"
+            "      status: completed\n"
+            "      completed_actions: [read, compare, cite]\n"
+            "      missing_actions: []\n"
+            "      summary: Benchmark anchor was surfaced.\n",
+            "  references:\n"
+            "    ref-benchmark:\n"
+            "      completed_actions: [read, cite]\n"
+            "      missing_actions: [compare]\n"
+            "      summary: Benchmark anchor was surfaced.\n",
+            1,
+        )
+        .replace(
+            "  forbidden_proxies:\n"
+            "    fp-benchmark:\n"
+            "      status: rejected\n",
+            "  forbidden_proxies:\n"
+            "    fp-benchmark:\n"
+            "      notes: Proxy scaffold left status unspecified.\n",
+            1,
+        ),
+        encoding="utf-8",
     )
+
+    result = validate_frontmatter(
+        verification_path.read_text(encoding="utf-8"),
+        "verification",
+        source_path=verification_path,
+    )
+
+    assert result.valid is False
+    assert any(
+        "references.ref-benchmark.status must be explicit in contract-backed contract_results" in error
+        for error in result.errors
+    )
+    assert any(
+        "forbidden_proxies.fp-benchmark.status must be explicit in contract-backed contract_results" in error
+        for error in result.errors
+    )
+
+
+def test_verification_prompt_wiring_requires_suggested_checks_for_compare_required_references(
+    tmp_path: Path,
+) -> None:
+    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir.mkdir(parents=True)
+    (phase_dir / "01-01-PLAN.md").write_text(
+        (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    verification_path = phase_dir / "01-VERIFICATION.md"
+    verification_path.write_text(
+        (FIXTURES_STAGE4 / "verification_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
+            "status: passed\nscore: 3/3 contract targets verified\n",
+            "status: gaps_found\nscore: 2/3 contract targets verified\n",
+            1,
+        )
+        .replace(
+            "  references:\n"
+            "    ref-benchmark:\n"
+            "      status: completed\n"
+            "      completed_actions: [read, compare, cite]\n"
+            "      missing_actions: []\n"
+            "      summary: Benchmark anchor was surfaced.\n",
+            "  references:\n"
+            "    ref-benchmark:\n"
+            "      status: completed\n"
+            "      completed_actions: [read, cite]\n"
+            "      missing_actions: []\n"
+            "      summary: Benchmark anchor was surfaced.\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_frontmatter(
+        verification_path.read_text(encoding="utf-8"),
+        "verification",
+        source_path=verification_path,
+    )
+
+    assert result.valid is False
+    assert any(
+        "suggested_contract_checks: required when decisive benchmark/cross-method checks remain missing, partial, or incomplete"
+        in error
+        for error in result.errors
+    )
+
+
+def test_verifier_entry_points_expose_contract_check_tools() -> None:
+    verify_work_meta, _ = _parse_frontmatter((COMMANDS_DIR / "verify-work.md").read_text(encoding="utf-8"))
+    verifier_meta, _ = _parse_frontmatter((AGENTS_DIR / "grd-verifier.md").read_text(encoding="utf-8"))
+
+    verify_work_tools = verify_work_meta.get("allowed-tools", [])
+    verifier_tools = _parse_tools(verifier_meta.get("tools"))
+
+    for tool_name in (
+        "mcp__grd_verification__get_bundle_checklist",
+        "mcp__grd_verification__suggest_contract_checks",
+        "mcp__grd_verification__run_contract_check",
+    ):
+        assert tool_name in verify_work_tools
+        assert tool_name in verifier_tools
 
 
 def test_contract_schema_references_stay_wired_into_templates_and_review_docs() -> None:
@@ -989,14 +1389,15 @@ def test_contract_schema_references_stay_wired_into_templates_and_review_docs() 
     summary_template = (TEMPLATES_DIR / "summary.md").read_text(encoding="utf-8")
     verification_template = (TEMPLATES_DIR / "verification-report.md").read_text(encoding="utf-8")
     contract_results_schema = (TEMPLATES_DIR / "contract-results-schema.md").read_text(encoding="utf-8")
+    executor_completion = (REFERENCES_DIR / "execution" / "executor-completion.md").read_text(encoding="utf-8")
     referee = (AGENTS_DIR / "grd-referee.md").read_text(encoding="utf-8")
     peer_review = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
-    panel = (PHYSICS_DIR / "publication" / "peer-review-panel.md").read_text(encoding="utf-8")
-    scoring = (PHYSICS_DIR / "publication" / "paper-quality-scoring.md").read_text(encoding="utf-8")
+    panel = (REFERENCES_DIR / "publication" / "peer-review-panel.md").read_text(encoding="utf-8")
+    scoring = (REFERENCES_DIR / "publication" / "paper-quality-scoring.md").read_text(encoding="utf-8")
     referee_decision_schema = (TEMPLATES_DIR / "paper" / "referee-decision-schema.md").read_text(encoding="utf-8")
     paper_config_schema = (TEMPLATES_DIR / "paper" / "paper-config-schema.md").read_text(encoding="utf-8")
     reproducibility_template = (TEMPLATES_DIR / "paper" / "reproducibility-manifest.md").read_text(encoding="utf-8")
-    reproducibility_protocol = (PHYSICS_DIR / "protocols" / "reproducibility.md").read_text(encoding="utf-8")
+    reproducibility_protocol = (REFERENCES_DIR / "protocols" / "reproducibility.md").read_text(encoding="utf-8")
     execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
     verify_work = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
     plan_phase = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
@@ -1007,8 +1408,14 @@ def test_contract_schema_references_stay_wired_into_templates_and_review_docs() 
     assert "templates/contract-results-schema.md" in verification_template
     assert "templates/paper/review-ledger-schema.md" in referee
     assert "templates/paper/referee-decision-schema.md" in referee
+    assert "fall back to direct standalone review" not in referee
+    assert "Do not fall back to standalone review" in referee
+    assert "grd validate review-claim-index" in peer_review
+    assert "grd validate review-stage-report" in peer_review
     assert "grd validate review-ledger" in peer_review
     assert "--ledger .grd/review/REVIEW-LEDGER{round_suffix}.json" in peer_review
+    assert "before trusting any final recommendation" in peer_review
+    assert "Keep `manuscript_path` non-empty and identical across `.grd/review/REVIEW-LEDGER{round_suffix}.json`" in peer_review
     assert "templates/paper/review-ledger-schema.md" in panel
     assert "templates/paper/referee-decision-schema.md" in panel
     assert "--ledger .grd/review/REVIEW-LEDGER{round_suffix}.json" in panel
@@ -1018,11 +1425,35 @@ def test_contract_schema_references_stay_wired_into_templates_and_review_docs() 
     assert '"sections"' in paper_config_schema
     assert "XX-YY-SUMMARY.md" in contract_results_schema
     assert "XX-VERIFICATION.md" in contract_results_schema
+    assert "Must be the canonical project-root-relative `.grd/phases/XX-name/XX-YY-PLAN.md#/contract` path" in contract_results_schema
+    assert "`uncertainty_markers` must remain explicit in contract-backed outputs" in contract_results_schema
+    assert "weakest_anchors: [anchor-1]" in contract_results_schema
+    assert "disconfirming_observations: [observation-1]" in contract_results_schema
+    assert "forbidden_proxy_id: fp-main" in contract_results_schema
+    assert "closed action vocabulary: `read`, `use`, `compare`, `cite`, `avoid`" in contract_results_schema
+    assert "forbidden_proxy_id: forbidden-proxy-id" in summary_template
+    assert "templates/contract-results-schema.md" in executor_completion
+    assert "claim_id: claim-main" in executor_completion
+    assert "completed_actions: [read, compare, cite]" in executor_completion
+    assert "`completed` requires non-empty `completed_actions`" in executor_completion
+    assert "`subject_role` explicitly" in executor_completion
+    assert "forbidden_proxies:" in executor_completion
+    assert "uncertainty_markers:" in executor_completion
     assert "REFEREE-DECISION{round_suffix}.json --strict --ledger" in referee_decision_schema
+    assert "STAGE-(reader|literature|math|physics|interestingness)(-R<round>)?.json" in referee_decision_schema
+    assert "same optional `-R<round>` suffix" in referee_decision_schema
+    assert "manuscript_path` must be non-empty" in referee_decision_schema
+    assert "must align with the matching `CLAIMS{round_suffix}.json` claim index" in referee_decision_schema
+    assert ".grd/review/STAGE-reader{round_suffix}.json" in panel
+    assert ".grd/review/CLAIMS{round_suffix}.json" in panel
     assert "random_seeds[].computation" in reproducibility_template
     assert "resource_requirements[].step" in reproducibility_template
+    assert "Strict validation fails on warnings, not only on hard errors." in reproducibility_template
+    assert "Draft-only approximate output checksums still emit warnings and therefore block strict review." in reproducibility_template
+    assert "Every stochastic `execution_steps[].name` must have a matching `random_seeds[].computation`" in reproducibility_template
     assert "templates/paper/reproducibility-manifest.md" in reproducibility_protocol
     assert "templates/paper/paper-config-schema.md" in write_paper
+    assert "templates/paper/figure-tracker.md" in write_paper
     assert "templates/paper/reproducibility-manifest.md" in write_paper
     assert "grd paper-build paper/PAPER-CONFIG.json" in paper_config_schema
     assert "paper/reproducibility-manifest.json" in write_paper
@@ -1030,32 +1461,192 @@ def test_contract_schema_references_stay_wired_into_templates_and_review_docs() 
     assert "grd validate summary-contract" in execute_plan
     assert "grd validate verification-contract" in verify_work
     assert "grd validate plan-contract" in plan_phase
+    assert "Contract Intake:" in plan_phase
+    assert "Effective Reference Intake:" in plan_phase
+    assert "Contract Intake:" in verify_work
+    assert "Effective Reference Intake:" in verify_work
 
 
 def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_contract_context() -> None:
     peer_review = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
     verify_command = (COMMANDS_DIR / "verify-work.md").read_text(encoding="utf-8")
     write_paper = (WORKFLOWS_DIR / "write-paper.md").read_text(encoding="utf-8")
+    respond_to_referees = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
     sync_state = (WORKFLOWS_DIR / "sync-state.md").read_text(encoding="utf-8")
     review_reader = (AGENTS_DIR / "grd-review-reader.md").read_text(encoding="utf-8")
     review_literature = (AGENTS_DIR / "grd-review-literature.md").read_text(encoding="utf-8")
+    review_math = (AGENTS_DIR / "grd-review-math.md").read_text(encoding="utf-8")
+    review_physics = (AGENTS_DIR / "grd-review-physics.md").read_text(encoding="utf-8")
+    review_significance = (AGENTS_DIR / "grd-review-significance.md").read_text(encoding="utf-8")
     referee = (AGENTS_DIR / "grd-referee.md").read_text(encoding="utf-8")
 
     assert "Project Contract:\n{project_contract}" in peer_review
+    assert "Project Contract Load Info:\n{project_contract_load_info}" in peer_review
+    assert "Project Contract Validation:\n{project_contract_validation}" in peer_review
     assert "Active References:\n{active_reference_context}" in peer_review
+    assert "Contract Intake:\n{contract_intake}" in peer_review
+    assert "Effective Reference Intake:\n{effective_reference_intake}" in peer_review
+    assert "Reference Artifacts Content:\n{reference_artifacts_content}" in peer_review
+    assert "project_contract_validation" in peer_review
+    assert "project_contract_load_info" in peer_review
+    assert (
+        "Treat `project_contract_load_info` and `project_contract_validation` as the authoritative contract gate state."
+        in peer_review
+    )
+    assert (
+        "Treat `project_contract` and `contract_intake` as approved evidence only when that gate is clean and passing."
+        in peer_review
+    )
+    assert (
+        "Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence even when the contract gate is blocked."
+        in peer_review
+    )
+    assert "project_contract_load_info" in write_paper
+    assert "project_contract_validation" in write_paper
+    assert "authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes" in write_paper
+    assert "project_contract_load_info" in respond_to_referees
+    assert "project_contract_validation" in respond_to_referees
+    assert "authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes" in respond_to_referees
     assert "templates/paper/review-ledger-schema.md" in peer_review
     assert "templates/paper/referee-decision-schema.md" in peer_review
-    assert "domains/{GRD_DOMAIN}/publication/peer-review-panel.md" in peer_review
+    assert "references/publication/peer-review-panel.md" in peer_review
     assert "templates/verification-report.md" in verify_command
     assert "templates/contract-results-schema.md" in verify_command
+    assert "Canonical schema for `paper/reproducibility-manifest.json`:" in write_paper
+    assert "Canonical reconciliation contract:" in sync_state
     assert "state-json-schema.md` itself" in sync_state
+    assert "save_state_markdown" in sync_state
+    assert "grd --raw state snapshot" not in sync_state
     assert (
-        "Keep the current `project_contract` and `active_reference_context` visible throughout that staged review"
+        "Keep the current `project_contract`, `project_contract_load_info`, `project_contract_validation`, "
+        "and `active_reference_context` visible throughout the staged review"
         in write_paper
     )
+    assert peer_review.count("Project Contract:\n{project_contract}") >= 5
+    assert peer_review.count("Project Contract Load Info:\n{project_contract_load_info}") >= 5
+    assert peer_review.count("Project Contract Validation:\n{project_contract_validation}") >= 5
+    assert peer_review.count("Active References:\n{active_reference_context}") >= 5
+    assert peer_review.count("Contract Intake:\n{contract_intake}") >= 5
+    assert peer_review.count("Effective Reference Intake:\n{effective_reference_intake}") >= 5
+    assert peer_review.count("Reference Artifacts Content:\n{reference_artifacts_content}") >= 5
+    assert peer_review.count("Treat `project_contract` and `contract_intake` as approved evidence only when that gate is clean and passing.") >= 5
+    assert (
+        peer_review.count(
+            "Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence even when the contract gate is blocked."
+        )
+        >= 5
+    )
+    assert "repair the blocked contract before retrying" in peer_review
     assert "peer-review-panel.md` directly" in review_reader
     assert "peer-review-panel.md` directly" in review_literature
-    assert "re-open `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/peer-review-panel.md`" in referee
+    assert ".grd/review/CLAIMS{round_suffix}.json" in review_reader
+    assert ".grd/review/STAGE-reader{round_suffix}.json" in review_reader
+    assert "closed schema; do not invent extra keys" in review_reader
+    assert "CLAIMS.json" not in review_reader
+    assert "STAGE-reader.json" not in review_reader
+    assert "round-specific variant when instructed" not in review_reader
+    assert ".grd/review/STAGE-literature{round_suffix}.json" in review_literature
+    assert ".grd/review/STAGE-math{round_suffix}.json" in review_math
+    assert ".grd/review/STAGE-physics{round_suffix}.json" in review_physics
+    assert ".grd/review/STAGE-interestingness{round_suffix}.json" in review_significance
+    assert "Required schema for `STAGE-math{round_suffix}.json` (`StageReviewReport`, mirroring the staged-review contract):" in review_math
+    assert "Required schema for `STAGE-physics{round_suffix}.json` (`StageReviewReport`, mirroring the staged-review contract):" in review_physics
+    assert (
+        "Required schema for `STAGE-interestingness{round_suffix}.json` (`StageReviewReport`, mirroring the staged-review contract):"
+        in review_significance
+    )
+    assert "STAGE-literature.json" not in review_literature
+    assert "STAGE-math.json" not in review_math
+    assert "STAGE-physics.json" not in review_physics
+    assert "STAGE-interestingness.json" not in review_significance
+    assert "round-specific variant" not in review_literature
+    assert "round-specific variant" not in review_math
+    assert "round-specific variant" not in review_physics
+    assert "round-specific variant" not in review_significance
+    assert "re-open `@{GRD_INSTALL_DIR}/references/publication/peer-review-panel.md`" in referee
+
+
+def test_peer_review_prompt_includes_concise_stage_map_for_users() -> None:
+    peer_review_command = (COMMANDS_DIR / "peer-review.md").read_text(encoding="utf-8")
+    peer_review_workflow = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
+
+    assert "When announcing the panel to the user, say what each stage does in one concise sentence" in peer_review_command
+    assert "Before spawning any reviewer, give the user a concise stage map" in peer_review_workflow
+    for token in (
+        "Stage 1 maps the paper's claims",
+        "Stages 2-3 check prior work and mathematical soundness in parallel",
+        "Stage 4 checks whether the physical interpretation is supported",
+        "Stage 5 judges significance and venue fit",
+        "Stage 6 synthesizes everything into the final recommendation",
+    ):
+        assert token in peer_review_command
+        assert token in peer_review_workflow
+
+
+def test_peer_review_command_limits_default_manuscript_targets_to_canonical_roots() -> None:
+    peer_review_command = (COMMANDS_DIR / "peer-review.md").read_text(encoding="utf-8")
+
+    assert "ls paper/main.tex manuscript/main.tex draft/main.tex 2>/dev/null" in peer_review_command
+    assert "find . -maxdepth 3" not in peer_review_command
+    assert "pass an explicit manuscript path or paper directory" in peer_review_command
+
+
+def test_peer_review_referee_surface_fail_closed_stage6_contract() -> None:
+    referee = (AGENTS_DIR / "grd-referee.md").read_text(encoding="utf-8")
+    peer_review = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
+    reliability = (REFERENCES_DIR / "publication" / "peer-review-reliability.md").read_text(encoding="utf-8")
+
+    assert "If any required staged-review artifact is missing, malformed, or uses the wrong round suffix, STOP" in peer_review
+    assert "before trusting any final recommendation" in peer_review
+    assert "Treat blank `manuscript_path` values in either `.grd/review/REVIEW-LEDGER{round_suffix}.json`" in peer_review
+    assert "Do not fall back to standalone review" in referee
+    assert "fall back to direct standalone review" not in referee
+    assert "passes `grd validate referee-decision ... --strict --ledger ...`" in reliability
+    assert "passes `grd validate review-ledger ...`, including a non-empty `manuscript_path`" in reliability
+    assert "A blank `manuscript_path` in the review ledger or referee decision is a contract failure" in reliability
+
+
+def test_research_verification_body_scaffold_keeps_body_only_subject_labels_distinct() -> None:
+    research_verification = (TEMPLATES_DIR / "research-verification.md").read_text(encoding="utf-8")
+
+    assert "check_subject_kind: [claim | deliverable | acceptance_test | reference]" in research_verification
+    assert 'gap_subject_kind: "claim | deliverable | acceptance_test | reference"' in research_verification
+    assert "Use `check_subject_kind` for body-only verification checkpoints" in research_verification
+    assert "Use `gap_subject_kind` for the body scaffold" in research_verification
+    assert "Keep `check_subject_kind` and `gap_subject_kind` aligned with the canonical frontmatter-safe subject vocabulary" in research_verification
+    assert "use `forbidden_proxy_id` for explicit proxy-rejection gaps" in research_verification
+    assert "\nsubject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in research_verification
+    assert "check_subject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in research_verification
+    assert 'gap_subject_kind: "claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check"' not in research_verification
+
+
+def test_verify_work_workflow_uses_body_only_subject_kind_fields() -> None:
+    verify_work = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
+
+    assert "check_subject_kind: `claim | deliverable | acceptance_test | reference`" in verify_work
+    assert "check_subject_kind: [claim | deliverable | acceptance_test | reference]" in verify_work
+    assert 'gap_subject_kind: "{check_subject_kind}"' in verify_work
+    assert "Use `forbidden_proxy_id` for explicit proxy-rejection checks" in verify_work
+    assert "instead of inventing extra body subject kinds" in verify_work
+    assert "{phase}" not in verify_work
+    assert ".grd/phases/{phase_dir}" not in verify_work
+    assert 'Write to `${phase_dir}/${phase_number}-VERIFICATION.md`' in verify_work
+    assert 'grd validate verification-contract "${phase_dir}/${phase_number}-VERIFICATION.md"' in verify_work
+    assert 'grd commit "verify(${phase_number}): complete research validation - {passed} passed, {issues} issues" --files "${phase_dir}/${phase_number}-VERIFICATION.md"' in verify_work
+    assert "Read all PLAN.md files in ${phase_dir}/ using the file_read tool." in verify_work
+    assert "\nsubject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in verify_work
+    assert "check_subject_kind: `claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check`" not in verify_work
+    assert "check_subject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in verify_work
+
+
+def test_verify_work_active_sessions_use_canonical_verification_path_and_keep_status_separate() -> None:
+    verify_work = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
+
+    assert "rg -l '^session_status: (validating|diagnosed)$' .grd/phases/*/*-VERIFICATION.md 2>/dev/null | sort | head -5" in verify_work
+    assert "Only treat files with `session_status: validating` or `session_status: diagnosed` as active researcher sessions." in verify_work
+    assert "extract canonical verification `status`, `session_status`, `phase`, and the Current Check section" in verify_work
+    assert "`session_status` replace or overwrite the canonical verification `status`" in verify_work
+    assert '`session_status` if present, otherwise `status`' not in verify_work
 
 
 def test_skill_surface_exposes_contract_references_for_paper_and_review_workflows() -> None:
@@ -1063,6 +1654,8 @@ def test_skill_surface_exposes_contract_references_for_paper_and_review_workflow
 
     write_paper = get_skill("grd-write-paper")
     peer_review = get_skill("grd-peer-review")
+    write_paper_schema_documents = {Path(entry["path"]).name: entry for entry in write_paper["schema_documents"]}
+    peer_review_contract_documents = {Path(entry["path"]).name: entry for entry in peer_review["contract_documents"]}
 
     assert "error" not in write_paper
     assert "error" not in peer_review
@@ -1070,7 +1663,9 @@ def test_skill_surface_exposes_contract_references_for_paper_and_review_workflow
     assert any(path.endswith("reproducibility-manifest.md") for path in write_paper["contract_references"])
     assert any(path.endswith("peer-review-panel.md") for path in write_paper["contract_references"])
     assert any(path.endswith("peer-review-panel.md") for path in peer_review["contract_references"])
-    assert "Load schema_references, contract_references" in write_paper["loading_hint"]
+    assert "Paper Config Schema" in write_paper_schema_documents["paper-config-schema.md"]["body"]
+    assert "Peer Review Panel Protocol" in peer_review_contract_documents["peer-review-panel.md"]["body"]
+    assert "schema_documents and contract_documents already include" in write_paper["loading_hint"]
 
 
 def test_review_and_execution_prompts_expand_required_schema_sources() -> None:
@@ -1102,10 +1697,98 @@ def test_review_and_execution_prompts_expand_required_schema_sources() -> None:
     assert "Review Ledger Schema" in referee
     assert "Referee Decision Schema" in referee
     assert "Summary Template" in executor
+    assert "Contract Results Schema" in executor
+
+
+def test_verification_and_agent_reference_prompts_expand_required_reference_bodies() -> None:
+    verify_work = _expand_prompt_surface(WORKFLOWS_DIR / "verify-work.md")
+    verify_phase = _expand_prompt_surface(WORKFLOWS_DIR / "verify-phase.md")
+    phase_researcher = _expand_prompt_surface(AGENTS_DIR / "grd-phase-researcher.md")
+    planner = _expand_prompt_surface(AGENTS_DIR / "grd-planner.md")
+
+    assert "Verification Independence" in verify_work
+    assert "# Contract Results Schema" in verify_work
+    assert "Verification Independence" in verify_phase
+    assert "# Contract Results Schema" in verify_phase
+    assert "Shared Research Philosophy and Protocols" in phase_researcher
+    assert "Agent Infrastructure Protocols" in phase_researcher
+    assert "Shared Protocols" in planner
+    assert "Agent Infrastructure Protocols" in planner
+    assert "@ include not resolved:" not in verify_work.lower()
+    assert "@ include not resolved:" not in verify_phase.lower()
+    assert "@ include not resolved:" not in phase_researcher.lower()
+    assert "@ include not resolved:" not in planner.lower()
+    assert "The standalone `/grd:verify-work` workflow reuses the same verification criteria through `verify-work.md`; this file itself is executed by the execute-phase orchestrator." in verify_phase
+    assert "VERIFICATION_FILE=\"${phase_dir}/${phase_number}-VERIFICATION.md\"" in verify_phase
+    assert "Return status (`passed` | `gaps_found` | `expert_needed` | `human_needed`)" in verify_phase
+
+
+def test_planner_and_summary_prompt_surfaces_expand_contract_schema_bodies() -> None:
+    phase_prompt = _expand_prompt_surface(TEMPLATES_DIR / "phase-prompt.md")
+    planner_prompt = _expand_prompt_surface(TEMPLATES_DIR / "planner-subagent-prompt.md")
+    summary_template = _expand_prompt_surface(TEMPLATES_DIR / "summary.md")
+
+    assert "# PLAN Contract Schema" in phase_prompt
+    assert "schema_version: 1" in phase_prompt
+    assert "in_scope:" in phase_prompt
+    assert "context_intake:" in phase_prompt
+    assert "non-empty `context_intake`" in phase_prompt
+    assert "must_include_prior_outputs: [\"Phase 00 benchmark table\"]" in phase_prompt
+    assert "user_asserted_anchors: [\"Use the lattice normalization from the user notes\"]" in phase_prompt
+    assert "claims:" in phase_prompt
+    assert "observables: [obs-main]" in phase_prompt
+    assert "### `forbidden_proxies[]`" in phase_prompt
+    assert "### `links[]`" in phase_prompt
+    assert "# PLAN Contract Schema" in planner_prompt
+    assert "non-empty `context_intake` object" in planner_prompt
+    assert "Omit `kind`, `role`, or `relation` only when the schema default `other` is genuinely intended" in planner_prompt
+    assert "scope.unresolved_questions" in planner_prompt
+    assert "Every claim must declare a stable `id`." in planner_prompt
+    assert (
+        "Do not reuse the same ID across `claims[]`, `deliverables[]`, `acceptance_tests[]`, or `references[]`; "
+        "target resolution becomes ambiguous."
+        in planner_prompt
+    )
+    assert "If `must_surface: true`, `required_actions` must not be empty." in planner_prompt
+    assert "# Contract Results Schema" in summary_template
+    assert "Missing contract-backed `contract_results` is invalid." in summary_template
+    assert "Do not invent `artifact` or `other` subject kinds" in summary_template
+
+
+def test_sync_state_and_write_paper_command_prompts_expand_required_schema_bodies() -> None:
+    sync_state = _expand_prompt_surface(COMMANDS_DIR / "sync-state.md")
+    write_paper = _expand_prompt_surface(COMMANDS_DIR / "write-paper.md")
+
+    assert "# state.json Schema" in sync_state
+    assert "Authoritative vs Derived" in sync_state
+    assert "`project_contract`" in sync_state
+    assert (
+        "Do not reuse the same ID across `claims[]`, `deliverables[]`, `acceptance_tests[]`, or `references[]`; "
+        "target resolution becomes ambiguous."
+        in sync_state
+    )
+    assert "`convention_lock`" in sync_state
+    assert "Reproducibility Manifest Template" in write_paper
+    assert '"execution_steps"' in write_paper
+    assert "random_seeds[].computation" in write_paper
+    assert "resource_requirements[].step" in write_paper
 
 
 def test_non_adapter_sources_do_not_hardcode_runtime_names() -> None:
-    runtime_name_re = re.compile(r"\b(?:claude(?:-code)?|codex|gemini|opencode)\b", re.IGNORECASE)
+    runtime_terms = {
+        descriptor.runtime_name
+        for descriptor in iter_runtime_descriptors()
+    }
+    runtime_terms.update(
+        alias
+        for descriptor in iter_runtime_descriptors()
+        for alias in descriptor.selection_aliases
+        if alias.strip()
+    )
+    runtime_name_re = re.compile(
+        rf"\b(?:{'|'.join(re.escape(term) for term in sorted(runtime_terms, key=len, reverse=True))})\b",
+        re.IGNORECASE,
+    )
     offenders: list[str] = []
 
     for path in sorted((REPO_ROOT / "src" / "grd").rglob("*")):
@@ -1124,9 +1807,40 @@ def test_plan_contract_schema_surfaces_downstream_contract_fields_and_normalizat
     plan_schema = (TEMPLATES_DIR / "plan-contract-schema.md").read_text(encoding="utf-8")
 
     assert "schema_version: 1" in plan_schema
-    assert 'aliases: ["optional stable label or citation shorthand"]' in plan_schema
+    assert "scope:" in plan_schema
+    assert "in_scope: [\"[Optional boundary or objective]\"]" in plan_schema
+    assert "unresolved_questions: [\"[Optional open question that still blocks planning]\"]" in plan_schema
+    assert "context_intake:" in plan_schema
+    assert "`context_intake` is required and must be a non-empty object, not a string or list." in plan_schema
+    assert "must_read_refs: [ref-main]" in plan_schema
+    assert "must_include_prior_outputs: [\"Phase 00 benchmark table\"]" in plan_schema
+    assert "user_asserted_anchors: [\"Use the lattice normalization from the user notes\"]" in plan_schema
+    assert "known_good_baselines: [\"Published large-N curve from Smith et al.\"]" in plan_schema
+    assert "context_gaps: [\"Comparison source still undecided before planning\"]" in plan_schema
+    assert "crucial_inputs: [\"Check the user's finite-volume cutoff choice before proceeding\"]" in plan_schema
+    assert "approach_policy:" in plan_schema
+    assert "allowed_fit_families: [power_law]" in plan_schema
+    assert "`observables[]` may only reference declared `observables[].id`." in plan_schema
+    assert "observables: [obs-main]" in plan_schema
+    assert "aliases: [\"optional stable label or citation shorthand\"]" in plan_schema
     assert "carry_forward_to: [planning, verification]" in plan_schema
     assert "automation: automated | hybrid | human" in plan_schema
+    assert "`kind` is optional and defaults to `other`; set it when the plan knows a more specific semantic category." in plan_schema
+    assert "`kind` and `role` are optional and default to `other`; set them when the anchor semantics are already known." in plan_schema
+    assert "`relation` is optional and defaults to `other`; set it when the dependency type is already known." in plan_schema
+    assert "required_actions: [read, compare, cite, avoid]" in plan_schema
+    assert "`required_actions[]` values must use the closed action vocabulary: `read`, `use`, `compare`, `cite`, `avoid`." in plan_schema
+    assert "For non-scoping plans, `claims[]`, `deliverables[]`, `acceptance_tests[]`, and `forbidden_proxies[]` are all required." in plan_schema
+    assert "### `forbidden_proxies[]`" in plan_schema
+    assert "### `links[]`" in plan_schema
+    assert "unvalidated_assumptions" in plan_schema
+    assert "competing_explanations" in plan_schema
+    assert "All ID cross-links must resolve to declared IDs." in plan_schema
+    assert (
+        "Do not reuse the same ID across `claims[]`, `deliverables[]`, `acceptance_tests[]`, or `references[]`; "
+        "target resolution becomes ambiguous."
+        in plan_schema
+    )
     assert "`deliverables[]` must not be empty." in plan_schema
     assert "`acceptance_tests[]` must not be empty." in plan_schema
     assert "If `must_surface: true`, `applies_to[]` must not be empty." in plan_schema
@@ -1137,21 +1851,47 @@ def test_plan_contract_schema_surfaces_downstream_contract_fields_and_normalizat
 def test_state_json_schema_surfaces_stdin_contract_persistence_and_model_normalization_rules() -> None:
     state_schema = (TEMPLATES_DIR / "state-json-schema.md").read_text(encoding="utf-8")
 
-    assert "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd --raw validate project-contract -" in state_schema
-    assert "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd state set-project-contract -" in state_schema
+    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd --raw validate project-contract -' in state_schema
+    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd state set-project-contract -' in state_schema
     assert "temporary file" in state_schema
     assert "`schema_version` must be `1`." in state_schema
     assert "Approved project contracts must include at least one observable, claim, or deliverable." in state_schema
+    assert "`uncertainty_markers.weakest_anchors` and `uncertainty_markers.disconfirming_observations` must both be non-empty." in state_schema
+    assert "`scope.in_scope` must name at least one project boundary or objective." in state_schema
     assert (
-        "`uncertainty_markers.weakest_anchors` and `uncertainty_markers.disconfirming_observations` must both be non-empty."
+        "If a project contract has any `references[]` and does not already carry concrete prior-output, "
+        "user-anchor, or baseline grounding, at least one reference must set `must_surface: true`."
         in state_schema
     )
+    assert "a missing `must_surface: true` reference is still a warning" in state_schema
+    assert "If a project-contract reference sets `must_surface: true`, `applies_to[]` must not be empty." in state_schema
+    assert "If a project-contract reference sets `must_surface: true`, `required_actions[]` must not be empty." in state_schema
+    assert '"required_actions": ["read", "compare", "cite", "avoid"]' in state_schema
+    assert "`required_actions[]` uses the same closed action vocabulary enforced downstream in contract ledgers: `read`, `use`, `compare`, `cite`, `avoid`." in state_schema
     assert (
-        "If a project-contract reference sets `must_surface: true`, `required_actions[]` must not be empty."
+        "Do not reuse the same ID across `claims[]`, `deliverables[]`, `acceptance_tests[]`, or `references[]`; "
+        "target resolution becomes ambiguous."
         in state_schema
     )
+    assert "`scope.unresolved_questions`, `context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors`" in state_schema
     assert "Which reference should serve as the decisive benchmark anchor?" in state_schema
     assert "Blank-after-trim values are invalid" in state_schema
+
+
+def test_phase_prompt_surfaces_validation_critical_plan_contract_rules() -> None:
+    phase_prompt = (TEMPLATES_DIR / "phase-prompt.md").read_text(encoding="utf-8")
+
+    assert "the contract must carry non-empty claims, deliverables, acceptance tests, forbidden proxies" in phase_prompt
+    assert "If references are present, at least one must set `must_surface: true`." in phase_prompt
+    assert "Semantic enum fields with schema defaults may be omitted when `other` is actually intended." in phase_prompt
+    assert "If the plan is intentionally scoping-only" in phase_prompt
+
+
+def test_review_ledger_schema_surfaces_enforced_id_formats() -> None:
+    review_ledger_schema = (TEMPLATES_DIR / "paper" / "review-ledger-schema.md").read_text(encoding="utf-8")
+
+    assert "`issue_id` must match `REF-[A-Za-z0-9][A-Za-z0-9_-]*`" in review_ledger_schema
+    assert "Every `claim_ids[]` entry must match `CLM-[A-Za-z0-9][A-Za-z0-9_-]*`." in review_ledger_schema
 
 
 def test_contract_models_match_prompted_schema_contracts() -> None:
@@ -1180,14 +1920,8 @@ def test_stage5_execution_surfaces_use_bounded_review_cadence_and_first_result_g
     assert "bounded_execution" in execute_phase
     assert "autonomy` changes who is asked and when. It does NOT disable first-result sanity checks" in execute_plan
     assert "Required first-result sanity gate" in execute_plan
-    assert (
-        'phase ordering, prior momentum, or "we are already deep into execution" never waive a required bounded stop'
-        in execute_plan
-    )
-    assert (
-        "uninterrupted wall-clock time since the current segment started reaches `MAX_UNATTENDED_MINUTES_PER_PLAN`"
-        in execute_plan
-    )
+    assert "phase ordering, prior momentum, or \"we are already deep into execution\" never waive a required bounded stop" in execute_plan
+    assert "uninterrupted wall-clock time since the current segment started reaches `MAX_UNATTENDED_MINUTES_PER_PLAN`" in execute_plan
     assert "Do NOT narrow just because a wave advanced or one proxy passed." in execute_phase
     assert "What decisive evidence is still owed before downstream work is trustworthy?" in resume_work
     assert "Pattern D: Auto-bounded" in executor_agent
@@ -1195,6 +1929,67 @@ def test_stage5_execution_surfaces_use_bounded_review_cadence_and_first_result_g
     assert "execution_segment" in continuation
     assert "Required Checkpoint Payload" in checkpoints
     assert "rollback primitive" in checkpoint_flow
+    assert "| `completed`    | -> update_roadmap (interactive verify-work equivalent)" not in execute_phase
+    assert "| `diagnosed`    | Gaps were debugged; review fixes, then -> update_roadmap" not in execute_phase
+    assert "| `validating`   | Verification in progress; wait or re-run verify-phase" not in execute_phase
+    assert "If the same report also carries `session_status: validating|completed|diagnosed`, treat that as conversational progress only." in execute_phase
+    assert "If the prior report carries `session_status: diagnosed`" in execute_phase
+
+
+def test_show_phase_workflow_distinguishes_verification_status_from_session_status() -> None:
+    show_phase = (WORKFLOWS_DIR / "show-phase.md").read_text(encoding="utf-8")
+
+    assert "`*-VERIFICATION.md`" in show_phase
+    assert "read frontmatter to extract canonical verification `status`, plus `session_status` when present" in show_phase
+    assert "Automated verification uses `passed`/`gaps_found`/`expert_needed`/`human_needed`" in show_phase
+    assert "researcher-session progress uses `session_status: validating|completed|diagnosed`" in show_phase
+    assert "Automated verification uses `passed`/`gaps_found`/`human_needed`" not in show_phase
+    assert "interactive validation uses `validating`/`completed`/`diagnosed`" not in show_phase
+
+
+def test_execute_phase_and_related_agents_surface_only_plan_scoped_verification_artifacts() -> None:
+    execute_phase = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
+    planner = (AGENTS_DIR / "grd-planner.md").read_text(encoding="utf-8")
+    verifier = (AGENTS_DIR / "grd-verifier.md").read_text(encoding="utf-8")
+    audit_milestone = (WORKFLOWS_DIR / "audit-milestone.md").read_text(encoding="utf-8")
+
+    assert '"$phase_dir"/*-VERIFICATION.md' in execute_phase
+    assert '"$phase_dir"/VERIFICATION.md "$phase_dir"/*-VERIFICATION.md' not in execute_phase
+    assert 'ls "$phase_dir"/*-VERIFICATION.md 2>/dev/null' in planner
+    assert 'find_files("$PHASE_DIR/*-VERIFICATION.md")' in verifier
+    assert 'cat .grd/phases/01-*/*-VERIFICATION.md' in audit_milestone
+    assert '.grd/phases/01-*/VERIFICATION.md' not in audit_milestone
+
+
+def test_debug_prompts_use_session_status_for_diagnosis_progress() -> None:
+    debug_workflow = (WORKFLOWS_DIR / "debug.md").read_text(encoding="utf-8")
+    debugger = (AGENTS_DIR / "grd-debugger.md").read_text(encoding="utf-8")
+
+    assert 'set `session_status: diagnosed`' in debug_workflow
+    assert 'Update status in frontmatter to "diagnosed"' not in debug_workflow
+    assert 'update `session_status` to "diagnosed"' in debugger
+    assert 'Update status to "diagnosed"' not in debugger
+
+
+def test_resume_workflow_surfaces_contract_load_and_validation_state() -> None:
+    resume_work = (WORKFLOWS_DIR / "resume-work.md").read_text(encoding="utf-8")
+
+    assert "@{GRD_INSTALL_DIR}/templates/state-json-schema.md" in resume_work
+    assert "project_contract_validation" in resume_work
+    assert "project_contract_load_info" in resume_work
+    assert "execution_resume_file_source" in resume_work
+    assert "session_resume_file" in resume_work
+    assert "machine_change_detected" in resume_work
+    assert "machine_change_notice" in resume_work
+    assert "current_hostname" in resume_work
+    assert "current_platform" in resume_work
+    assert "session_hostname" in resume_work
+    assert "session_platform" in resume_work
+    assert "only when `project_contract_load_info` is clean and `project_contract_validation` passes" in resume_work
+    assert "records whether that contract loaded cleanly and what blocked it if not." in resume_work
+    assert "approval gate for treating the structured contract as authoritative" in resume_work
+    assert "Contract repair required:" in resume_work
+    assert "Repair the blocked contract or state-integrity issue before planning or execution" in resume_work
 
 
 def test_stage6_surfaces_protocol_bundle_context_across_planning_execution_and_verification() -> None:
@@ -1233,14 +2028,13 @@ def test_stage6_executor_bundle_fallback_stays_generic_when_no_bundle_fits() -> 
     assert "stay with the generic execution flow plus contract-backed anchors and checks" in executor_agent
     assert "instead of forcing the work into a topic bucket" in executor_agent
     assert "Do not stay trapped in the original bundle or fallback subfield" in executor_agent
-    assert (
-        "If no row cleanly fits, stay with generic execution guidance plus core verification expectations instead of guessing."
-        in executor_guide
-    )
+    assert "If no row cleanly fits, stay with generic execution guidance plus core verification expectations instead of guessing." in executor_guide
 
 
 def test_stage7_runtime_parity_docs_use_canonical_model_resolution_and_generic_handoff_rules() -> None:
-    model_resolution = (REFERENCES_DIR / "orchestration" / "model-profile-resolution.md").read_text(encoding="utf-8")
+    model_resolution = (
+        REFERENCES_DIR / "orchestration" / "model-profile-resolution.md"
+    ).read_text(encoding="utf-8")
     agent_delegation = (REFERENCES_DIR / "orchestration" / "agent-delegation.md").read_text(encoding="utf-8")
     execute_phase = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
     execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
@@ -1256,6 +2050,17 @@ def test_stage7_runtime_parity_docs_use_canonical_model_resolution_and_generic_h
     assert "Handoff verification" in execute_phase
     assert "False failure report despite delivered work" in execute_phase
     assert "Handoff verification" in quick
+    assert "templates/planner-subagent-prompt.md" in quick
+    assert "templates/phase-prompt.md" in quick
+    assert "templates/plan-contract-schema.md" in quick
+    assert "project_contract_load_info.status" in quick
+    assert "project_contract_validation.valid" in quick
+    assert "project_contract_validation" in quick
+    assert "project_contract_load_info" in quick
+    assert "Quick mode still inherits the approved `project_contract` only when `project_contract_load_info` is clean and `project_contract_validation` passes" in quick
+    assert "**Project Contract Load Info:** {project_contract_load_info}" in quick
+    assert "**Project Contract Validation:** {project_contract_validation}" in quick
+    assert "## CHECKPOINT REACHED" in quick
     assert "classifyHandoffIfNeeded" not in execute_phase
     assert "classifyHandoffIfNeeded" not in execute_plan
     assert "classifyHandoffIfNeeded" not in quick
@@ -1271,31 +2076,31 @@ def test_stage8_surfaces_decisive_comparisons_paper_quality_artifacts_and_profil
     write_paper = (WORKFLOWS_DIR / "write-paper.md").read_text(encoding="utf-8")
     new_project = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     execute_phase = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
-    scoring = (PHYSICS_DIR / "publication" / "paper-quality-scoring.md").read_text(encoding="utf-8")
+    scoring = (REFERENCES_DIR / "publication" / "paper-quality-scoring.md").read_text(encoding="utf-8")
     settings = (WORKFLOWS_DIR / "settings.md").read_text(encoding="utf-8")
     profiles = (REFERENCES_DIR / "orchestration" / "model-profiles.md").read_text(encoding="utf-8")
-    quick_reference = (PHYSICS_DIR / "verification" / "core" / "verification-quick-reference.md").read_text(
+    quick_reference = (REFERENCES_DIR / "verification" / "core" / "verification-quick-reference.md").read_text(
         encoding="utf-8"
     )
-    verifier_profiles = (PHYSICS_DIR / "verification" / "meta" / "verifier-profile-checks.md").read_text(
-        encoding="utf-8"
-    )
+    verifier_profiles = (
+        REFERENCES_DIR / "verification" / "meta" / "verifier-profile-checks.md"
+    ).read_text(encoding="utf-8")
     planner = (AGENTS_DIR / "grd-planner.md").read_text(encoding="utf-8")
     executor = (AGENTS_DIR / "grd-executor.md").read_text(encoding="utf-8")
     verifier_agent = (AGENTS_DIR / "grd-verifier.md").read_text(encoding="utf-8")
 
     assert "emit decisive verdicts" in compare_command
     assert ".grd/comparisons/[slug]-COMPARISON.md" in compare_workflow
+    assert ".grd/analysis/comparison-{slug}.md" not in compare_workflow
     assert "comparison_verdicts" in internal_template
     assert "figure_registry" in figure_tracker
     assert "role: smoking_gun|benchmark|comparison|sanity_check|publication_polish|other" in figure_tracker
+    assert "canonical schema source of truth" in figure_tracker
     assert "validate paper-quality --from-project ." in write_paper
+    assert "Before reading or updating `.grd/paper/FIGURE_TRACKER.md`, load" in write_paper
     assert '"review_cadence": "adaptive"' in new_project
     assert "Adaptive review cadence" in new_project
-    assert (
-        "prior decisive `contract_results`, decisive `comparison_verdicts`, or an explicit approach lock"
-        in execute_phase
-    )
+    assert "prior decisive `contract_results`, decisive `comparison_verdicts`, or an explicit approach lock" in execute_phase
     assert "figure_registry" in scoring
     assert "Review (Recommended)" in settings
     assert "all required contract-aware checks" in profiles
@@ -1305,6 +2110,19 @@ def test_stage8_surfaces_decisive_comparisons_paper_quality_artifacts_and_profil
     assert "Do NOT change conventions mid-project without an explicit checkpoint" in planner
     assert "Required first-result, anchor, and pre-fanout gates still apply even in yolo mode" in executor
     assert "live machine source of truth is the verifier registry" in verifier_agent
+
+
+def test_publication_workflows_refresh_bibliography_audit_after_bibliography_changes() -> None:
+    write_paper = (WORKFLOWS_DIR / "write-paper.md").read_text(encoding="utf-8")
+    respond = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
+    peer_review = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
+
+    assert "If the bibliography changed after the last audit, refresh `paper/BIBLIOGRAPHY-AUDIT.json` before strict review." in write_paper
+    assert "Refresh `paper/BIBLIOGRAPHY-AUDIT.json` after the bibliography changes before entering strict review or `pre_submission_review`." in write_paper
+    assert "If the manuscript bibliography or citation set changed after the last audit, refresh `paper/BIBLIOGRAPHY-AUDIT.json` before building the reproducibility manifest." in write_paper
+    assert "refresh `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` before generating the response letter or proceeding to final review" in respond
+    assert "If the manuscript bibliography changed after the last audit, refresh `BIBLIOGRAPHY_AUDIT_PATH` before proceeding." in peer_review
+    assert "absent, stale, or not review-ready" in peer_review
 
 
 def test_stage9_adaptive_mode_and_review_cadence_docs_stay_aligned() -> None:
@@ -1327,6 +2145,12 @@ def test_stage9_adaptive_mode_and_review_cadence_docs_stay_aligned() -> None:
     assert expected_anchor in meta_orchestration
     assert "anchors or decisive evidence make one method family clearly preferable" in new_project
     assert "prior milestones already provide decisive evidence or an explicit approach lock" in new_milestone
+    assert "project_contract_validation" in new_milestone
+    assert "project_contract_load_info" in new_milestone
+    assert "project_contract_load_info.status" in new_milestone
+    assert "project_contract_validation.valid" in new_milestone
+    assert "only when `project_contract_load_info` is clean and `project_contract_validation.valid` is true" in new_milestone
+    assert "checkpoint with the user and repair the stored contract before using it for milestone scope" in new_milestone
     assert "same contract-critical floor at all times" in verify_work
     assert "phase 1-2" not in plan_phase
     assert "phase 3+" not in plan_phase
@@ -1335,13 +2159,51 @@ def test_stage9_adaptive_mode_and_review_cadence_docs_stay_aligned() -> None:
     assert "verify_between_waves" not in set_profile
     assert "independent of `model_profile` and `research_mode`" in settings
     assert "wall-clock and task budgets still create bounded segments in every autonomy mode" in planning_config
-    assert (
-        "phase number, wave number, and `model_profile` do not create or retire these gates by themselves"
-        in planning_config
-    )
+    assert "phase number, wave number, and `model_profile` do not create or retire these gates by themselves" in planning_config
     assert "There is no separate `adaptive_transition` block" in research_modes
     assert "The decision is evidence-driven, not phase-count-driven." in meta_orchestration
     assert "Proxy-only or sanity-only passes do NOT satisfy this." in meta_orchestration
+
+
+def test_help_surfaces_distinguish_runtime_slash_commands_from_local_cli_subcommands() -> None:
+    help_command = (COMMANDS_DIR / "help.md").read_text(encoding="utf-8")
+    help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
+
+    for content in (help_command, help_workflow):
+        assert "`/grd:*`" in content
+        assert "in-runtime" in content
+        assert "slash-command" in content
+        assert "local `grd` CLI" in content
+        assert "grd --help" in content
+        assert "grd validate command-context grd:<name>" in content
+
+
+def test_help_surfaces_describe_regression_check_as_metadata_scan_not_full_reverification() -> None:
+    help_command = (COMMANDS_DIR / "help.md").read_text(encoding="utf-8")
+    help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
+
+    for content in (help_command, help_workflow):
+        assert "SUMMARY" in content
+        assert "frontmatter" in content
+        assert "convention conflicts" in content
+        assert "VERIFICATION" in content
+        assert "canonical statuses" in content
+        assert "re-runs dimensional analysis" not in content
+        assert "re-runs limiting cases" not in content
+        assert "re-runs numerical checks" not in content
+
+
+def test_help_surfaces_use_projectless_examples_that_satisfy_command_context_predicates() -> None:
+    help_command = (COMMANDS_DIR / "help.md").read_text(encoding="utf-8")
+    help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
+
+    for content in (help_command, help_workflow):
+        assert 'Usage: `/grd:derive-equation "derive the one-loop beta function"`' in content
+        assert "Usage: `/grd:dimensional-analysis 3`" in content
+        assert "Usage: `/grd:limiting-cases 3`" in content
+        assert "Usage: `/grd:numerical-convergence 3`" in content
+        assert "Usage: `/grd:compare-experiment predictions.csv experiment.csv`" in content
+        assert "Usage: `/grd:sensitivity-analysis --target cross_section --params g,m,Lambda --method numerical`" in content
 
 
 def test_verification_and_publication_prompts_keep_decisive_contract_targets_reader_visible() -> None:
@@ -1351,21 +2213,12 @@ def test_verification_and_publication_prompts_keep_decisive_contract_targets_rea
     respond = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
 
     assert "researcher can recognize in the phase promise" in verify_work
-    assert (
-        "Do not mark the parent claim or acceptance test as passed until that decisive comparison is resolved."
-        in verify_work
-    )
+    assert "Do not mark the parent claim or acceptance test as passed until that decisive comparison is resolved." in verify_work
     assert "Missing generic `verification_status` / `confidence` tags alone are not blockers." in write_paper
     assert "Only require the manuscript to surface decisive comparisons for claims it actually makes." in write_paper
-    assert (
-        "Do not enter `pre_submission_review` with a missing or non-review-ready reproducibility manifest"
-        in write_paper
-    )
+    assert "Do not enter `pre_submission_review` with a missing or non-review-ready reproducibility manifest" in write_paper
     assert "Review-support artifacts are scaffolding, not substitutes for contract-backed evidence." in peer_review
-    assert (
-        "Treat referee requests beyond the manuscript's honest scope as optional unless they expose a real support gap"
-        in respond
-    )
+    assert "Treat referee requests beyond the manuscript's honest scope as optional unless they expose a real support gap" in respond
 
 
 def test_repo_graph_prompt_scope_counts_match_repo_inventory() -> None:
@@ -1374,7 +2227,6 @@ def test_repo_graph_prompt_scope_counts_match_repo_inventory() -> None:
     assert parse_scope_count("src/grd/specs/workflows/*.md") == len(list(WORKFLOWS_DIR.glob("*.md")))
     assert parse_scope_count("src/grd/specs/templates/**/*.md") == len(list(TEMPLATES_DIR.rglob("*.md")))
     assert parse_scope_count("src/grd/specs/references/**/*.md") == len(list(REFERENCES_DIR.rglob("*.md")))
-    assert parse_scope_count("src/grd/domains/**/*.md") == len(list(PHYSICS_DIR.parent.rglob("*.md")))
 
 
 def test_repo_graph_same_stem_command_inventory_matches_repo() -> None:
@@ -1414,5 +2266,5 @@ def test_repo_graph_tracks_staged_review_panel_wiring() -> None:
     assert (
         "src/grd/agents/{grd-review-reader,grd-review-literature,grd-review-math,"
         "grd-review-physics,grd-review-significance,grd-referee}.md"
-        " -> src/grd/domains/physics/publication/peer-review-panel.md"
+        " -> src/grd/specs/references/publication/peer-review-panel.md"
     ) in graph_text

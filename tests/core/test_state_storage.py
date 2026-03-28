@@ -16,7 +16,7 @@ from grd.core.utils import file_lock
 
 class TestSyncStateJson:
     def test_sync_creates_state_json_from_markdown(self, tmp_path: Path) -> None:
-        planning = tmp_path / ".grd"
+        planning = tmp_path / "GRD"
         planning.mkdir()
 
         state = default_state_dict()
@@ -34,28 +34,28 @@ class TestSyncStateJson:
 
     def test_sync_preserves_json_only_fields(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
-        json_path = cwd / ".grd" / "state.json"
+        json_path = cwd / "GRD" / "state.json"
 
         existing = json.loads(json_path.read_text(encoding="utf-8"))
         existing["custom_field"] = "preserved"
         json_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
 
-        markdown = (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8")
+        markdown = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
         result = sync_state_json(cwd, markdown)
 
         assert result["custom_field"] == "preserved"
 
     def test_sync_core_creates_backup(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
-        markdown = (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8")
+        markdown = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
 
         sync_state_json_core(cwd, markdown)
 
-        assert (cwd / ".grd" / "state.json.bak").exists()
+        assert (cwd / "GRD" / "state.json.bak").exists()
 
     def test_sync_core_recovers_from_corrupt_json(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
-        planning = cwd / ".grd"
+        planning = cwd / "GRD"
         (planning / "state.json").write_text("NOT VALID JSON {{{", encoding="utf-8")
 
         backup_path = planning / "state.json.bak"
@@ -70,7 +70,7 @@ class TestSyncStateJson:
 
     def test_sync_core_uses_backup_when_primary_json_is_corrupt(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
-        planning = cwd / ".grd"
+        planning = cwd / "GRD"
 
         backup = json.loads((planning / "state.json").read_text(encoding="utf-8"))
         backup["from_backup"] = True
@@ -84,14 +84,14 @@ class TestSyncStateJson:
     def test_sync_updates_position_from_markdown(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path, status="Planning")
 
-        result = sync_state_json(cwd, (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8"))
+        result = sync_state_json(cwd, (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8"))
 
         assert result["position"]["status"] == "Planning"
 
 
 class TestSaveStateJsonLocked:
     def test_save_writes_json_markdown_and_backup(self, tmp_path: Path) -> None:
-        planning = tmp_path / ".grd"
+        planning = tmp_path / "GRD"
         planning.mkdir()
         (planning / "phases").mkdir()
 
@@ -112,7 +112,7 @@ class TestSaveStateJsonLocked:
 
     def test_save_overwrites_existing_content(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
-        json_path = cwd / ".grd" / "state.json"
+        json_path = cwd / "GRD" / "state.json"
 
         state = default_state_dict()
         state["position"]["current_phase"] = "99"
@@ -126,7 +126,7 @@ class TestSaveStateJsonLocked:
         assert stored["position"]["status"] == "Complete"
 
     def test_save_removes_intent_marker_after_success(self, tmp_path: Path) -> None:
-        planning = tmp_path / ".grd"
+        planning = tmp_path / "GRD"
         planning.mkdir()
 
         json_path = planning / "state.json"
@@ -158,8 +158,8 @@ class TestStateCompact:
 
         result = state_compact(cwd)
 
-        archive = (cwd / ".grd" / "STATE-ARCHIVE.md").read_text(encoding="utf-8")
-        markdown = (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8")
+        archive = (cwd / "GRD" / "STATE-ARCHIVE.md").read_text(encoding="utf-8")
+        markdown = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
 
         assert result.compacted is True
         assert "Old decision" in archive
@@ -175,8 +175,8 @@ class TestStateCompact:
 
         result = state_compact(cwd)
 
-        archive = (cwd / ".grd" / "STATE-ARCHIVE.md").read_text(encoding="utf-8")
-        markdown = (cwd / ".grd" / "STATE.md").read_text(encoding="utf-8")
+        archive = (cwd / "GRD" / "STATE-ARCHIVE.md").read_text(encoding="utf-8")
+        markdown = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
 
         assert result.compacted is True
         assert "Resolved" in archive or "Old decision" in archive
@@ -184,7 +184,7 @@ class TestStateCompact:
 
     def test_compact_appends_to_existing_archive(self, tmp_path: Path, large_state_project_factory) -> None:
         cwd = large_state_project_factory(tmp_path, n_old_decisions=50, extra_lines=80)
-        archive_path = cwd / ".grd" / "STATE-ARCHIVE.md"
+        archive_path = cwd / "GRD" / "STATE-ARCHIVE.md"
         archive_path.write_text("# STATE Archive\n\nPrevious entries.\n\n", encoding="utf-8")
 
         result = state_compact(cwd)
@@ -197,7 +197,7 @@ class TestStateCompact:
 
         state_compact(cwd)
 
-        stored = json.loads((cwd / ".grd" / "state.json").read_text(encoding="utf-8"))
+        stored = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
         assert "position" in stored or "project_reference" in stored
 
     def test_compact_reports_line_counts(self, tmp_path: Path, large_state_project_factory) -> None:

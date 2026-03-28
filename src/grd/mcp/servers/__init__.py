@@ -3,8 +3,37 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping
 
 from grd.core.frontmatter import FrontmatterParseError, extract_frontmatter
+
+MCP_SCHEMA_VERSION = 1
+
+
+class StableMCPEnvelope(dict[str, object]):
+    """Schema-versioned MCP envelope for all server responses."""
+
+
+def stable_mcp_response(
+    payload: Mapping[str, object] | None = None,
+    *,
+    error: object | None = None,
+) -> StableMCPEnvelope:
+    """Return a stable MCP response envelope without nesting the payload."""
+
+    response = StableMCPEnvelope()
+    if payload is not None:
+        response.update(payload)
+    if error is not None:
+        response["error"] = str(error)
+    response["schema_version"] = MCP_SCHEMA_VERSION
+    return response
+
+
+def stable_mcp_error(error: object) -> StableMCPEnvelope:
+    """Return a stable MCP error envelope."""
+
+    return stable_mcp_response(error=error)
 
 
 def parse_frontmatter_safe(text: str) -> tuple[dict[str, object], str]:
@@ -36,9 +65,16 @@ def run_mcp_server(mcp: object, description: str) -> None:
     args = parser.parse_args()
     if args.host:
         mcp.settings.host = args.host  # type: ignore[union-attr]
-    if args.port:
+    if args.port is not None:
         mcp.settings.port = args.port  # type: ignore[union-attr]
     mcp.run(transport=args.transport)  # type: ignore[union-attr]
 
 
-__all__ = ["parse_frontmatter_safe", "run_mcp_server"]
+__all__ = [
+    "MCP_SCHEMA_VERSION",
+    "StableMCPEnvelope",
+    "parse_frontmatter_safe",
+    "run_mcp_server",
+    "stable_mcp_error",
+    "stable_mcp_response",
+]

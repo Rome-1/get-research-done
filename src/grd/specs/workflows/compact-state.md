@@ -112,7 +112,7 @@ from pathlib import Path
 from grd.core.state import save_state_json
 
 cwd = Path(".")
-state = json.loads((cwd / ".grd" / "state.json").read_text(encoding="utf-8"))
+state = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
 save_state_json(cwd, state)
 PY
   RECOVERY_METHOD="regenerated from authoritative state.json"

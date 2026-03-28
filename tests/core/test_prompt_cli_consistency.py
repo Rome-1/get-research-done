@@ -8,23 +8,24 @@ from pathlib import Path
 from grd.registry import VALID_CONTEXT_MODES, _parse_frontmatter
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CLI_DIR = REPO_ROOT / "src/grd/cli"
+CLI_PATH = REPO_ROOT / "src/grd/cli.py"
+COMMANDS_DIR = REPO_ROOT / "src/grd/commands"
+WORKFLOWS_DIR = REPO_ROOT / "src/grd/specs/workflows"
 PROMPT_ROOTS = (
-    REPO_ROOT / "src/grd/commands",
+    COMMANDS_DIR,
     REPO_ROOT / "src/grd/agents",
-    REPO_ROOT / "src/grd/specs/workflows",
+    WORKFLOWS_DIR,
     REPO_ROOT / "src/grd/specs/references",
     REPO_ROOT / "src/grd/specs/templates",
 )
 GRAPH_PATH = REPO_ROOT / "tests" / "README.md"
 
-INIT_COMMAND_RE = re.compile(r"@init_app\.command\(\s*\"([a-z0-9-]+)\"(?:,|\))", re.MULTILINE)
-INIT_USAGE_RE = re.compile(r"\bgrd init ([a-z0-9-]+)\b")
-VALIDATE_COMMAND_RE = re.compile(r"@validate_app\.command\(\s*\"([a-z0-9-]+)\"(?:,|\))", re.MULTILINE)
-VALIDATE_USAGE_RE = re.compile(r"\bgrd(?:\s+--raw)?\s+validate\s+([a-z0-9-]+)\b")
+ROOT_COMMAND_RE = re.compile(r"@app\.command\(\s*\"([a-z0-9-]+)\"(?:,|\))", re.MULTILINE)
+TYPER_GROUP_RE = re.compile(r"app\.add_typer\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*name=\"([a-z0-9-]+)\"", re.MULTILINE)
+GROUP_COMMAND_RE = re.compile(r"@{group}\.command\(\s*\"([a-z0-9-]+)\"(?:,|\))", re.MULTILINE)
 NON_CANONICAL_GRD_COMMAND_RE = re.compile(r"(?<![A-Za-z0-9_./}])(?:\$grd-[A-Za-z0-9{}-]+|/grd-[A-Za-z0-9{}-]+)(?!\.md)")
-RAW_AFTER_SUBCOMMAND_RE = re.compile(r"\bgrd\s+(?!--raw\b)[^`\n]*\s+--raw\b")
-SUMMARY_EXTRACT_FIELDS_RE = re.compile(r"\bgrd\s+summary-extract\b[^\n`]*\s--fields\b")
+RAW_AFTER_SUBCOMMAND_RE = re.compile(r"\bgpd\s+(?!--raw\b)[^`\n]*\s+--raw\b")
+SUMMARY_EXTRACT_FIELDS_RE = re.compile(r"\bgpd\s+summary-extract\b[^\n`]*\s--fields\b")
 
 
 def _iter_prompt_sources() -> list[Path]:
@@ -34,52 +35,84 @@ def _iter_prompt_sources() -> list[Path]:
     return files
 
 
-def _read_all_cli_sources() -> str:
-    """Read all CLI source files (supports both monolithic cli.py and split cli/ package)."""
-    parts: list[str] = []
-    if CLI_DIR.is_dir():
-        for py in sorted(CLI_DIR.rglob("*.py")):
-            parts.append(py.read_text(encoding="utf-8"))
-    else:
-        # Fallback for monolithic cli.py
-        parts.append(CLI_DIR.with_suffix(".py").read_text(encoding="utf-8"))
-    return "\n".join(parts)
+def _declared_command_surfaces() -> set[str]:
+    content = CLI_PATH.read_text(encoding="utf-8")
+    surfaces = set(ROOT_COMMAND_RE.findall(content))
+    surfaces.update(_declared_group_surfaces(content))
+    return surfaces
 
 
-def _declared_init_subcommands() -> set[str]:
-    content = _read_all_cli_sources()
-    return set(INIT_COMMAND_RE.findall(content))
+def _declared_group_surfaces(content: str) -> set[str]:
+    groups = dict(TYPER_GROUP_RE.findall(content))
+    surfaces: set[str] = set(groups.values())
+    for group_var, group_name in groups.items():
+        command_re = re.compile(GROUP_COMMAND_RE.pattern.format(group=re.escape(group_var)), re.MULTILINE)
+        for subcommand in command_re.findall(content):
+            surfaces.add(f"{group_name} {subcommand}")
+    return surfaces
 
 
-def _declared_validate_subcommands() -> set[str]:
-    content = _read_all_cli_sources()
-    return set(VALIDATE_COMMAND_RE.findall(content))
+def _declared_root_commands(content: str) -> set[str]:
+    return set(ROOT_COMMAND_RE.findall(content))
 
 
-def test_prompt_sources_use_only_real_grd_init_subcommands() -> None:
-    allowed = _declared_init_subcommands()
+def _declared_groups(content: str) -> dict[str, set[str]]:
+    groups = dict(TYPER_GROUP_RE.findall(content))
+    result: dict[str, set[str]] = {}
+    for group_var, group_name in groups.items():
+        command_re = re.compile(GROUP_COMMAND_RE.pattern.format(group=re.escape(group_var)), re.MULTILINE)
+        result[group_name] = set(command_re.findall(content))
+    return result
+
+
+def _iter_markdown_code_samples(content: str) -> list[str]:
+    samples: list[str] = []
+    fenced_pattern = re.compile(r"```(?:[^\n`]*)\n(.*?)```", re.DOTALL)
+    for match in fenced_pattern.finditer(content):
+        samples.append(match.group(1))
+    inline_source = fenced_pattern.sub("\n", content)
+    samples.extend(re.findall(r"`([^`]+)`", inline_source))
+    return samples
+
+
+def _extract_grd_command_surfaces(
+    content: str,
+    *,
+    root_commands: set[str],
+    group_commands: dict[str, set[str]],
+) -> list[str]:
+    command_roots = root_commands | set(group_commands)
+    if not command_roots:
+        return []
+
+    root_pattern = "|".join(sorted((re.escape(root) for root in command_roots), key=len, reverse=True))
+    prefix_pattern = r"(?:\s+(?:--raw|--cwd(?:=[^\s`]+)?|--cwd\s+[^\s`]+))*"
+    pattern = re.compile(rf"\bgpd{prefix_pattern}\s+({root_pattern})(?:\s+([a-z0-9-]+))?")
+    surfaces: list[str] = []
+    for sample in _iter_markdown_code_samples(content):
+        for match in pattern.finditer(sample):
+            command = match.group(1)
+            subcommand = match.group(2)
+            if command in root_commands and command not in group_commands:
+                surfaces.append(command)
+                continue
+            if command in group_commands:
+                surfaces.append(command if subcommand is None else f"{command} {subcommand}")
+    return surfaces
+
+
+def test_prompt_sources_use_only_real_grd_command_surfaces() -> None:
+    allowed = _declared_command_surfaces()
+    content = CLI_PATH.read_text(encoding="utf-8")
+    root_commands = _declared_root_commands(content)
+    group_commands = _declared_groups(content)
     invalid: list[str] = []
 
     for path in _iter_prompt_sources():
         content = path.read_text(encoding="utf-8")
-        for match in INIT_USAGE_RE.finditer(content):
-            subcommand = match.group(1)
-            if subcommand not in allowed:
-                invalid.append(f"{path.relative_to(REPO_ROOT)} -> {subcommand}")
-
-    assert invalid == []
-
-
-def test_prompt_sources_use_only_real_grd_validate_subcommands() -> None:
-    allowed = _declared_validate_subcommands()
-    invalid: list[str] = []
-
-    for path in _iter_prompt_sources():
-        content = path.read_text(encoding="utf-8")
-        for match in VALIDATE_USAGE_RE.finditer(content):
-            subcommand = match.group(1)
-            if subcommand not in allowed:
-                invalid.append(f"{path.relative_to(REPO_ROOT)} -> {subcommand}")
+        for surface in _extract_grd_command_surfaces(content, root_commands=root_commands, group_commands=group_commands):
+            if surface not in allowed:
+                invalid.append(f"{path.relative_to(REPO_ROOT)} -> {surface}")
 
     assert invalid == []
 
@@ -96,7 +129,7 @@ def test_prompt_sources_use_canonical_grd_command_syntax() -> None:
 
 
 def test_help_prompt_command_count_matches_live_inventory() -> None:
-    command_count = len(list((REPO_ROOT / "src/grd/commands").glob("*.md")))
+    command_count = len(list(COMMANDS_DIR.glob("*.md")))
     help_prompt = (REPO_ROOT / "src/grd/commands/help.md").read_text(encoding="utf-8")
 
     assert f"Run `/grd:help --all` for all {command_count} commands." in help_prompt
@@ -106,7 +139,36 @@ def test_suggest_next_prompt_uses_real_cli_subcommand() -> None:
     suggest_prompt = (REPO_ROOT / "src/grd/commands/suggest-next.md").read_text(encoding="utf-8")
 
     assert "Uses `grd --raw suggest`" in suggest_prompt
+    assert "Local CLI fallback: `grd --raw suggest`" in suggest_prompt
     assert "grd suggest-next to scan" not in suggest_prompt
+
+
+def test_progress_prompt_runs_preflight_after_init_context() -> None:
+    command = (REPO_ROOT / "src/grd/commands/progress.md").read_text(encoding="utf-8")
+    workflow = (REPO_ROOT / "src/grd/specs/workflows/progress.md").read_text(encoding="utf-8")
+
+    for content in (command, workflow):
+        assert "INIT=$(grd init progress --include state,roadmap,project,config)" in content
+        assert "CONTEXT=$(grd --raw validate command-context progress \"$ARGUMENTS\")" in content
+        assert content.index("INIT=$(grd init progress --include state,roadmap,project,config)") < content.index(
+            "CONTEXT=$(grd --raw validate command-context progress \"$ARGUMENTS\")"
+        )
+
+
+def test_progress_prompt_requires_project_not_roadmap() -> None:
+    command = (REPO_ROOT / "src/grd/commands/progress.md").read_text(encoding="utf-8")
+
+    assert 'files: [".grd/PROJECT.md"]' in command
+    assert 'files: [".grd/ROADMAP.md"]' not in command
+
+
+def test_new_milestone_prompt_mentions_planning_commit_docs() -> None:
+    command = (REPO_ROOT / "src/grd/commands/new-milestone.md").read_text(encoding="utf-8")
+    workflow = (REPO_ROOT / "src/grd/specs/workflows/new-milestone.md").read_text(encoding="utf-8")
+
+    for content in (command, workflow):
+        assert "planning.commit_docs" in content
+        assert "/grd:discuss-phase [N]" in content or "/grd:discuss-phase 1" in content
 
 
 def test_doc_sources_place_global_raw_before_subcommands() -> None:
@@ -153,8 +215,8 @@ def test_prompt_sources_use_summary_extract_field_flag_not_fields() -> None:
 def test_new_project_prompt_uses_stdin_for_contract_validation_and_persistence() -> None:
     workflow = (REPO_ROOT / "src/grd/specs/workflows/new-project.md").read_text(encoding="utf-8")
 
-    assert "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd --raw validate project-contract -" in workflow
-    assert "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd state set-project-contract -" in workflow
+    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd --raw validate project-contract -' in workflow
+    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd state set-project-contract -' in workflow
     assert "/tmp/grd-project-contract.json" not in workflow
     assert "temporary JSON file if needed" not in workflow
 
@@ -162,8 +224,10 @@ def test_new_project_prompt_uses_stdin_for_contract_validation_and_persistence()
 def test_state_json_schema_stays_aligned_with_stdin_contract_persistence_flow() -> None:
     schema = (REPO_ROOT / "src/grd/specs/templates/state-json-schema.md").read_text(encoding="utf-8")
 
-    assert "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd --raw validate project-contract -" in schema
-    assert "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\" | grd state set-project-contract -" in schema
+    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd --raw validate project-contract -' in schema
+    assert 'printf \'%s\\n\' "$PROJECT_CONTRACT_JSON" | grd state set-project-contract -' in schema
+    assert "grd state advance" in schema
+    assert "grd state advance-plan" not in schema
     assert "Preferred write path: `grd state set-project-contract <path-to-contract.json>`." not in schema
 
 
@@ -174,3 +238,65 @@ def test_compare_branches_prompt_keeps_branch_summary_extraction_in_memory() -> 
     assert "do not write it to `.grd/tmp/` just to run a path-based extractor." in workflow
     assert "Keep branch-summary extraction in memory/stdout only" in workflow
     assert "do not use `.grd/tmp/`, `/tmp`, or another temp root for this step." in workflow
+
+
+def test_regression_check_prompt_examples_include_optional_phase_before_quick_flag() -> None:
+    verifier = (REPO_ROOT / "src/grd/agents/grd-verifier.md").read_text(encoding="utf-8")
+    infra = (REPO_ROOT / "src/grd/specs/references/orchestration/agent-infrastructure.md").read_text(encoding="utf-8")
+
+    for content in (verifier, infra):
+        assert "grd regression-check [phase] [--quick]" in content
+        assert "grd regression-check [--quick]" not in content
+
+
+def test_verifier_prompt_does_not_claim_regression_check_spawns_verifier() -> None:
+    verifier = (REPO_ROOT / "src/grd/agents/grd-verifier.md").read_text(encoding="utf-8")
+
+    assert "The regression-check command" not in verifier
+
+
+def test_help_prompt_workflow_modes_match_current_settings_vocabulary() -> None:
+    help_command = (COMMANDS_DIR / "help.md").read_text(encoding="utf-8")
+    help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
+
+    for content in (help_command, help_workflow):
+        assert "Interactive Mode" not in content
+        assert "YOLO Mode" not in content
+        assert "Change anytime by editing `.grd/config.json`" not in content
+        assert "Supervised" in content
+        assert "Balanced (Recommended)" in content
+        assert "YOLO" in content
+        assert "/grd:settings" in content
+        assert "/grd:discuss-phase" in content
+        assert "execution.review_cadence" in content
+        assert "planning.commit_docs" in content
+        assert "git.branching_strategy" in content
+
+
+def test_new_project_prompt_surfaces_discuss_phase_before_planning() -> None:
+    command = (REPO_ROOT / "src/grd/commands/new-project.md").read_text(encoding="utf-8")
+    workflow = (REPO_ROOT / "src/grd/specs/workflows/new-project.md").read_text(encoding="utf-8")
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+    for content in (command, workflow, readme):
+        assert "/grd:discuss-phase 1" in content
+
+    assert "Discuss phase 1 now?" in command
+    assert "Discuss phase 1 now?" in workflow
+    assert "Plan phase 1 now?" not in command
+    assert "Plan phase 1 now?" not in workflow
+
+
+def test_execute_phase_failure_recovery_counts_only_top_level_verification_statuses() -> None:
+    workflow = (REPO_ROOT / "src/grd/specs/workflows/execute-phase.md").read_text(encoding="utf-8")
+
+    assert (
+        "FAILED_COUNT=$(rg -c '^status: (gaps_found|expert_needed|human_needed)$'"
+        in workflow
+    )
+    assert (
+        "TOTAL_COUNT=$(rg -c '^status: (passed|gaps_found|expert_needed|human_needed)$'"
+        in workflow
+    )
+    assert 'grep -c "status: failed"' not in workflow
+    assert 'grep -c "status:"' not in workflow

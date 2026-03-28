@@ -120,6 +120,86 @@ _SOURCE_TYPE_TO_BIBTEX = {
 }
 
 
+# ---- Author field sanitization ----
+
+# Patterns that match "et al." variants (with optional leading comma/and)
+_ET_AL_RE = re.compile(
+    r",?\s*\band\s+(?:et\s*al\.?)\b"  # "and et al."
+    r"|,?\s*\bet\s*\.?\s*al\.?\b"      # "et al." / "etal." / "et. al."
+    r"|,?\s*\bet\s+alia\b",            # "et alia"
+    re.IGNORECASE,
+)
+
+# Characters safe in BibTeX author fields: Basic Latin, Latin Extended-A/B,
+# common punctuation.  Anything outside this set is stripped.
+_SAFE_BIB_CHAR_RE = re.compile(r"[^\x20-\x7E\u00C0-\u024F]")
+
+
+def sanitize_bib_author_field(author_string: str) -> str:
+    """Sanitize a BibTeX author field to prevent LaTeX compilation errors.
+
+    - Replaces ``et al.`` variants with ``and others`` (proper BibTeX).
+    - Strips characters outside the Basic Latin + Latin Extended range that
+      would cause ``Unicode character ... not set up for use with LaTeX``.
+    - Collapses resulting whitespace.
+    """
+    # Replace "et al." with "and others"
+    cleaned = _ET_AL_RE.sub("", author_string)
+    # If "et al." was at the end, append "and others"
+    if _ET_AL_RE.search(author_string):
+        cleaned = cleaned.rstrip().rstrip(",.").rstrip()
+        if not cleaned.endswith("and others"):
+            cleaned = cleaned + " and others"
+
+    # Strip non-Latin characters that would break pdflatex
+    sanitized = _SAFE_BIB_CHAR_RE.sub("", cleaned)
+    if sanitized != cleaned:
+        logger.warning(
+            "Stripped non-Latin characters from BibTeX author field: %r -> %r",
+            cleaned,
+            sanitized,
+        )
+
+    # Collapse whitespace
+    return re.sub(r"\s{2,}", " ", sanitized).strip()
+
+
+def sanitize_bib_authors(authors: list[str]) -> list[str]:
+    """Sanitize a list of author names for BibTeX.
+
+    Handles per-author ``et al.`` replacement and non-Latin character
+    stripping, then returns the cleaned list with ``others`` appended
+    if any author contained an ``et al.`` marker.
+    """
+    cleaned: list[str] = []
+    has_et_al = False
+
+    for author in authors:
+        if _ET_AL_RE.search(author):
+            has_et_al = True
+            # Strip the "et al." portion from this author name
+            name = _ET_AL_RE.sub("", author).strip().rstrip(",.").strip()
+            if name:
+                name = _SAFE_BIB_CHAR_RE.sub("", name)
+                if name.strip():
+                    cleaned.append(name.strip())
+        else:
+            sanitized = _SAFE_BIB_CHAR_RE.sub("", author)
+            if sanitized != author:
+                logger.warning(
+                    "Stripped non-Latin characters from author name: %r -> %r",
+                    author,
+                    sanitized,
+                )
+            if sanitized.strip():
+                cleaned.append(sanitized.strip())
+
+    if has_et_al and not any(a.lower() == "others" for a in cleaned):
+        cleaned.append("others")
+
+    return cleaned
+
+
 def _source_to_entry(source: CitationSource, existing_keys: set[str]) -> tuple[str, Entry]:
     """Convert a CitationSource to a pybtex Entry."""
     key = _create_bib_key(source, existing_keys)
@@ -127,7 +207,8 @@ def _source_to_entry(source: CitationSource, existing_keys: set[str]) -> tuple[s
 
     fields: list[tuple[str, str]] = []
     if source.authors:
-        fields.append(("author", " and ".join(source.authors)))
+        safe_authors = sanitize_bib_authors(source.authors)
+        fields.append(("author", " and ".join(safe_authors)))
     fields.append(("title", source.title))
     if source.journal:
         fields.append(("journal", source.journal))

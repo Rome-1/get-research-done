@@ -843,14 +843,45 @@ approximations: # Active approximations
 contract:
   scope:
     question: "[The decisive question this plan advances]"
-  claims: []
-  deliverables: []
-  references: []
-  acceptance_tests: []
-  forbidden_proxies: []
+  context_intake:
+    must_read_refs: ["ref-textbook"]
+    must_include_prior_outputs: ["Phase 01 benchmark table"]
+    user_asserted_anchors: ["Gauge choice and tensor convention are fixed by the user"]
+  claims:
+    - id: "claim-polarization"
+      statement: "Vacuum polarization tensor is transverse in the chosen gauge and scheme"
+      deliverables: ["deliv-vac-pol"]
+      acceptance_tests: ["test-transversality"]
+      references: ["ref-textbook"]
+  deliverables:
+    - id: "deliv-vac-pol"
+      kind: "derivation"
+      path: "derivations/vacuum-polarization.tex"
+      description: "One-loop vacuum polarization derivation with explicit tensor contraction"
+  references:
+    - id: "ref-textbook"
+      kind: "paper"
+      locator: "Peskin & Schroeder, Ch. 7"
+      role: "benchmark"
+      why_it_matters: "Standard convention and benchmark derivation"
+      applies_to: ["claim-polarization"]
+      must_surface: true
+      required_actions: ["read", "compare", "cite"]
+  acceptance_tests:
+    - id: "test-transversality"
+      subject: "claim-polarization"
+      kind: "consistency"
+      procedure: "Contract Pi^{mu nu} with q_mu and verify the longitudinal part vanishes."
+      pass_condition: "q_mu Pi^{mu nu} = 0"
+      evidence_required: ["deliv-vac-pol", "ref-textbook"]
+  forbidden_proxies:
+    - id: "fp-clean-algebra"
+      subject: "claim-polarization"
+      proxy: "Clean-looking algebra without an explicit transversality check"
+      reason: "Would not establish the decisive gauge-consistency result"
   uncertainty_markers:
-    weakest_anchors: []
-    disconfirming_observations: []
+    weakest_anchors: ["Choice of gauge-fixing convention"]
+    disconfirming_observations: ["Longitudinal term survives after simplification"]
 
 ---
 
@@ -1420,6 +1451,12 @@ For one-loop QED:
 
 ```yaml
 contract:
+  scope:
+    question: "Does the one-loop vacuum polarization remain transverse after renormalization?"
+  context_intake:
+    must_read_refs: [ref-uehling]
+    must_include_prior_outputs: ["Phase 01 Feynman rules"]
+    user_asserted_anchors: ["Use the metric and Fourier convention from the approved conventions file"]
   claims:
     - id: claim-transverse
       statement: "Vacuum polarization is transverse"
@@ -1442,6 +1479,15 @@ contract:
       path: "code/running_coupling.py"
       description: "Numerical evaluation of alpha(q^2)"
       must_contain: ["running_alpha", "beta_function"]
+  references:
+    - id: ref-uehling
+      kind: paper
+      locator: "Uehling, Phys. Rev. 48 (1935)"
+      role: benchmark
+      why_it_matters: "Provides the benchmark transversality and renormalization conventions for the example."
+      applies_to: [claim-transverse]
+      must_surface: true
+      required_actions: [read, compare, cite]
   acceptance_tests:
     - id: test-transversality
       subject: claim-transverse
@@ -1449,6 +1495,14 @@ contract:
       procedure: "Contract q_mu with Pi^{mu nu} and verify the tensor remains transverse."
       pass_condition: "The contracted expression vanishes in the declared convention."
       evidence_required: [deliv-vacuum-polarization]
+  forbidden_proxies:
+    - id: fp-ward-identity
+      subject: claim-transverse
+      proxy: "Reporting algebraic simplification without an explicit transversality check"
+      reason: "Would not establish the decisive gauge-consistency result"
+  uncertainty_markers:
+    weakest_anchors: ["Choice of gauge-fixing convention"]
+    disconfirming_observations: ["Longitudinal term survives after simplification"]
   links:
     - id: link-ward
       source: deliv-vacuum-polarization
@@ -1618,7 +1672,7 @@ Triggered by `--gaps` flag. Creates plans to address verification or physics con
 Use init context (from load_project_state) which provides `phase_dir`:
 
 ```bash
-# Check for VERIFICATION.md (physics consistency gaps)
+# Check for *-VERIFICATION.md (physics consistency gaps)
 ls "$phase_dir"/*-VERIFICATION.md 2>/dev/null
 
 # Check for REVIEW.md with diagnosed status (expert review gaps)
