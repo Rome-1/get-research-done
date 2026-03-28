@@ -1497,7 +1497,7 @@ class TestMain:
 
         output = captured.getvalue().lower()
         assert "stuck" not in output
-        assert "wait" in output or "review" in output
+        assert "wait:budget" in output or "review" in output
 
     def test_main_uses_visibility_stall_badge_without_raw_snapshot_heuristics(self) -> None:
         captured = io.StringIO()

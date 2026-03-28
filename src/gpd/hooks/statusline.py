@@ -373,6 +373,10 @@ def _execution_reason_label(reason: str | None, *, default: str) -> str:
     text = (reason or "").strip().lower()
     if not text:
         return default
+    if "result" in text or "skeptical" in text or "fanout" in text:
+        return "review"
+    if "budget" in text or "time" in text:
+        return "budget"
     if "user" in text or "review" in text or "approve" in text:
         return "user"
     if "depend" in text or "upstream" in text or "fanout" in text:

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import gpd.hooks.install_context as hook_layout
 from gpd.core.constants import ENV_GPD_DEBUG, ProjectLayout
-from gpd.core.observability import resolve_project_root
+from gpd.core.observability import humanize_execution_reason, resolve_project_root
 from gpd.core.utils import atomic_write, file_lock
 
 _PAUSED_SEGMENT_STATES = {"paused", "awaiting_user", "ready_to_continue"}
@@ -282,8 +282,9 @@ def _execution_notification_message(cwd: str) -> tuple[str | None, str | None]:
     segment_status = (snapshot.segment_status or "").strip().lower()
 
     if snapshot.blocked_reason:
+        blocked_reason = humanize_execution_reason(snapshot.blocked_reason) or snapshot.blocked_reason
         return (
-            f"[GPD] Blocked in {phase_plan}: {snapshot.blocked_reason}\n",
+            f"[GPD] Blocked in {phase_plan}: {blocked_reason}\n",
             f"blocked:{snapshot.transition_id or snapshot.segment_id or snapshot.blocked_reason}",
         )
     if snapshot.first_result_gate_pending:
@@ -310,8 +311,9 @@ def _execution_notification_message(cwd: str) -> tuple[str | None, str | None]:
             f"review:{snapshot.transition_id or snapshot.segment_id or checkpoint}",
         )
     if snapshot.waiting_reason:
+        waiting_reason = humanize_execution_reason(snapshot.waiting_reason) or snapshot.waiting_reason
         return (
-            f"[GPD] Waiting in {phase_plan}: {snapshot.waiting_reason}\n",
+            f"[GPD] Waiting in {phase_plan}: {waiting_reason}\n",
             f"wait:{snapshot.transition_id or snapshot.segment_id or snapshot.waiting_reason}",
         )
     if segment_status in _COMPLETED_SEGMENT_STATES:

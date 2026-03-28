@@ -466,6 +466,10 @@ class TestObserveExecution:
         assert parsed["assessment"] == "possibly stalled"
         assert parsed["last_update_age_minutes"] >= 30
         assert parsed["current_task"] == "Inspect a long-running segment"
+        assert parsed["next_check_command"] == "gpd observe show --session sess-1 --last 20"
+        assert "has stalled" in parsed["next_check_reason"]
+        assert parsed["suggested_next_steps"]
+        assert any("gpd observe show --session sess-1 --last 20" in step for step in parsed["suggested_next_steps"])
         assert parsed["suggested_next_commands"]
         assert _target_file_snapshot(gpd_project / "GPD") == snapshot_before
 

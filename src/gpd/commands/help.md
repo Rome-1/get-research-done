@@ -60,7 +60,7 @@ Choose the path that matches your starting point:
 3. `/gpd:resume-work` — Continue in-runtime from the current project state
 4. `/gpd:progress` — Secondary status check; use `--brief` when you only need a short snapshot
 5. `/gpd:suggest-next` — Fastest post-resume next command
-6. `gpd observe execution` — Read-only long-run visibility from your normal terminal; shows progress / waiting state and may say `possibly stalled`
+6. `gpd observe execution` — Read-only long-run visibility from your normal terminal; shows progress / waiting state, may say `possibly stalled`, and points you to the next read-only checks
 7. `gpd cost` — Read-only machine-local usage / cost summary from recorded local telemetry; advisory only, not live budget enforcement or provider billing truth
 
 Before stepping away mid-phase, run `/gpd:pause-work` so `/gpd:resume-work` has an explicit handoff to restore. If you need to find the workspace first, use `gpd resume --recent`, then continue inside that workspace with `/gpd:resume-work`. For a current-workspace read-only recovery snapshot, use `gpd resume` from your normal terminal.
@@ -154,7 +154,7 @@ Local Mathematica installs are separate from the shared optional Wolfram integra
 3. `/gpd:resume-work` - Continue in-runtime from current state
 4. `/gpd:progress` - Secondary manual status check; use `--brief` when you only need a short snapshot
 5. `/gpd:suggest-next` - Fastest post-resume next command
-6. `gpd observe execution` - Read-only long-run visibility from your normal terminal; use this for progress / waiting state and conservative `possibly stalled` wording
+6. `gpd observe execution` - Read-only long-run visibility from your normal terminal; use this for progress / waiting state, conservative `possibly stalled` wording, and the next read-only checks
 7. `gpd cost` - Read-only machine-local usage / cost summary from recorded local telemetry; advisory only, not live budget enforcement or provider billing truth
 
 Before stepping away mid-phase, run `/gpd:pause-work` so `/gpd:resume-work` has an explicit handoff to restore. Use `gpd resume` from your normal system terminal when you want a current-workspace read-only recovery snapshot. Use `gpd resume --recent` first if you need to find the workspace before resuming it, then continue inside that workspace with `/gpd:resume-work`.

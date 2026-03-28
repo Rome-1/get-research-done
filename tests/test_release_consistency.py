@@ -922,10 +922,14 @@ def test_public_readme_observability_surface_keeps_execution_guidance_in_command
     assert "| `gpd observe sessions [--status ...] [--command ...] [--last N]` | List recorded observability sessions |" in readme
     assert "| `gpd observe show [--session ...] [--category ...] [--name ...] [--action ...] [--status ...] [--command ...] [--phase ...] [--plan ...] [--last N]` | Show logged observability events with filters |" in readme
     assert "| `gpd observe event <category> <name> [--action ...] [--status ...] [--command ...] [--phase ...] [--plan ...] [--session ...] [--data <json>]` | Append an explicit observability event with optional structured metadata |" in readme
-    assert "| `gpd observe execution` | Show read-only live execution status for the current workspace, including progress / waiting state and conservative `possibly stalled` wording |" in readme
+    assert (
+        "| `gpd observe execution` | Show read-only live execution status for the current workspace, including progress / waiting state, "
+        "conservative `possibly stalled` wording, and the next read-only checks to run |"
+    ) in readme
     assert "| `gpd cost` | Show the read-only machine-local usage / cost summary from recorded local telemetry; advisory only, not live budget enforcement or provider billing truth |" in readme
     assert "gpd observe execution" in readme
     assert "For read-only long-run visibility from your normal system terminal, use `gpd observe execution`." in readme
+    assert "Start with `gpd observe show --last 20` when you need the recent event trail" in readme
     assert "gpd cost" in readme
     assert "For a read-only machine-local usage / cost summary from your normal system terminal, use `gpd cost`." in readme
 

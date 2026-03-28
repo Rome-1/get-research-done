@@ -377,6 +377,63 @@ If we continue, the next highest-value step is long-run visibility and stuck-sta
 
 That step should answer one user question directly: “Is this run still healthy, waiting normally, or actually stuck?”
 
+### Step 8 Completed: Long-Run Visibility And Stuck-State UX
+
+Status: completed on March 28, 2026.
+
+What shipped:
+
+- Core observability now owns the shared human-facing execution guidance for this slice:
+  - humanized wait/block reason labels
+  - prioritized next-check commands
+  - conservative `possibly stalled` follow-up guidance for stale active runs
+- `gpd observe execution` now reuses that shared guidance instead of rebuilding its own generic follow-up ladder:
+  - one explicit `Check next` command
+  - conservative state note for `waiting`, `paused-or-resumable`, `blocked`, and `possibly stalled`
+  - secondary read-only checks sourced from the same core ordering
+- Statusline and notify remain conservative:
+  - no new stall detector
+  - no stronger-than-`possibly stalled` language
+  - raw wait/block reason codes such as `time_budget_exceeded` are now humanized where surfaced
+- README/help text now consistently teaches that `gpd observe execution` is not just a passive label:
+  - inspect `gpd observe show --last 20` first when you need the recent event trail
+  - inspect `gpd resume` when the run is waiting, paused, blocked, or flagged `possibly stalled`
+- The step intentionally stayed narrow:
+  - no new dashboard
+  - no new heartbeat daemon or polling loop
+  - no runtime control surface changes
+  - no notify-side inactivity alert branch
+
+Verification:
+
+- Focused Step 8 suites passed:
+  - `uv run pytest -q tests/core/test_cli.py tests/test_cli_integration.py tests/core/test_observability.py tests/hooks/test_statusline.py tests/hooks/test_notify.py tests/core/test_prompt_wiring.py tests/test_release_consistency.py`
+  - `uv run ruff check README.md src/gpd/cli.py src/gpd/core/observability.py src/gpd/hooks/notify.py src/gpd/hooks/statusline.py src/gpd/commands/help.md src/gpd/specs/workflows/help.md tests/core/test_cli.py tests/test_cli_integration.py tests/core/test_observability.py tests/hooks/test_statusline.py tests/hooks/test_notify.py tests/core/test_prompt_wiring.py tests/test_release_consistency.py`
+- Result:
+  - `557 passed`
+  - `ruff clean`
+
+Execution/review wave feedback:
+
+- Core observability, CLI, hooks, docs/help, and focused verification lanes all converged on the same narrow shipping scope.
+- The one execution/review lane that hung did not block the step; the other five lanes and the local verification pass agreed that the current Step 8 worktree is shippable.
+
+Remaining friction after Step 8:
+
+- `observe execution --raw` and `ExecutionVisibilityState` gained additive fields (`suggested_next_commands`, `next_check_command`, reason labels). Internal targeted coverage passed, but external consumers that assume a smaller schema may still need a compatibility check.
+- Coverage is strongest for stale active runs. There is still a minor optional test gap around raw `next_check_command` ordering for `waiting` and `paused-or-resumable`.
+- Notify still does not emit a separate inactivity-based `possibly stalled` alert. That is intentional for this step to avoid a second timer/state machine, but it remains the main semantic difference between passive status surfaces and notifications.
+
+### Next Step After Step 8
+
+If we continue, the next highest-value step is tangent / branch-state surfacing during execution:
+
+- make tangent proposals more visible in long-run execution UX
+- keep “stay / quick / defer / branch” decisions explicit instead of implicit scope drift
+- expose branch/tangent state without widening the current observability model into a new dashboard
+
+That step should answer one user question directly: “Is this a tangent I should stay on, defer, or branch cleanly?”
+
 ## Feedback Map
 
 | Transcript theme | Current repo state | What should happen |

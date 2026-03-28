@@ -65,7 +65,7 @@ The table below uses the Claude Code / Gemini CLI form for in-runtime commands. 
 
 Leave / return path: run your runtime-specific `pause-work` command before stepping away mid-phase, then use the runtime `resume-work` command when you return inside that runtime. If you only need a current-workspace, read-only recovery snapshot from your normal system terminal, use `gpd resume`. If you need to find the workspace first, use `gpd resume --recent`, then continue inside that workspace with the runtime `resume-work` command. After resuming, the runtime `suggest-next` command is the fastest post-resume command.
 
-For read-only long-run visibility from your normal system terminal, use `gpd observe execution`. It is the passive status surface for progress and waiting state; if it cannot prove the run is healthy, it will conservatively say `possibly stalled` instead of relying on runtime hotkeys.
+For read-only long-run visibility from your normal system terminal, use `gpd observe execution`. It is the passive status surface for progress and waiting state; if it cannot prove the run is healthy, it will conservatively say `possibly stalled` instead of relying on runtime hotkeys. Start with `gpd observe show --last 20` when you need the recent event trail, then inspect `gpd resume` if the run is waiting, paused, or flagged `possibly stalled`.
 
 For a read-only machine-local usage / cost summary from your normal system terminal, use `gpd cost`. It reports recorded local usage/cost telemetry only; it does not invent provider pricing, promise invoice-level accuracy, or enforce budgets by itself.
 
@@ -619,7 +619,7 @@ GPD stores project-local observability under `GPD/observability/` and detailed p
 |---------|--------------|
 | `gpd observe sessions [--status ...] [--command ...] [--last N]` | List recorded observability sessions |
 | `gpd observe show [--session ...] [--category ...] [--name ...] [--action ...] [--status ...] [--command ...] [--phase ...] [--plan ...] [--last N]` | Show logged observability events with filters |
-| `gpd observe execution` | Show read-only live execution status for the current workspace, including progress / waiting state and conservative `possibly stalled` wording |
+| `gpd observe execution` | Show read-only live execution status for the current workspace, including progress / waiting state, conservative `possibly stalled` wording, and the next read-only checks to run |
 | `gpd cost` | Show the read-only machine-local usage / cost summary from recorded local telemetry; advisory only, not live budget enforcement or provider billing truth |
 | `gpd resume` | Show a current-workspace read-only recovery snapshot |
 | `gpd resume --recent` | Show recently used GPD projects from the machine-local index so you can find the workspace before resuming |

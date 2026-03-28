@@ -288,7 +288,10 @@ def test_derive_execution_visibility_marks_only_active_segments_possibly_stalled
     assert visibility.possibly_stalled is True
     assert visibility.last_updated_age_minutes is not None
     assert visibility.last_updated_age_minutes >= 30.0
-    assert any("30+ minutes" in step for step in visibility.suggested_next_steps)
+    assert visibility.suggested_next_commands[0].command == "gpd observe show --session sess-active --last 20"
+    assert "has stalled" in visibility.suggested_next_commands[0].reason
+    assert any("before assuming the run has stalled" in step for step in visibility.suggested_next_steps)
+    assert any("gpd observe show --session sess-active --last 20" in step for step in visibility.suggested_next_steps)
 
 
 def test_derive_execution_visibility_keeps_recent_active_segments_active(tmp_path: Path, monkeypatch) -> None:

@@ -2344,14 +2344,38 @@ class ObserveExecutionResult:
     stale_after_minutes: int
     current_task: str | None
     waiting_reason: str | None
+    waiting_reason_label: str | None
     blocked_reason: str | None
+    blocked_reason_label: str | None
     review_reason: str | None
     last_update_at: str | None
     last_update_age: str | None
     last_update_age_minutes: float | None
     resume_file: str | None
+    next_check_command: str | None
+    next_check_reason: str | None
+    suggested_next_steps: list[str]
     suggested_next_commands: list[ObserveExecutionSuggestion]
     current_execution: dict[str, object] | None = None
+
+
+def _observe_execution_status_note(result: ObserveExecutionResult) -> str | None:
+    """Return a short human note that clarifies the live execution state."""
+    if not result.found:
+        return None
+    if result.possibly_stalled:
+        return (
+            f"[yellow]This execution is possibly stalled.[/] It is still marked active and has not updated for at least "
+            f"{result.stale_after_minutes} minutes."
+        )
+    if result.status_classification == "waiting":
+        return "[cyan]This execution is waiting on review or another gate.[/] It is not currently treated as stalled."
+    if result.status_classification == "paused-or-resumable":
+        return "[cyan]This execution is paused or resumable.[/] Use `gpd resume` to inspect the best recovery target."
+    if result.status_classification == "blocked":
+        return "[yellow]This execution is blocked.[/] Use `gpd resume` and the recent event trail to inspect the blocker context."
+    return None
+
 
 def _observe_execution_payload() -> ObserveExecutionResult:
     """Build the read-only execution snapshot for the local CLI surface."""
@@ -2366,45 +2390,13 @@ def _observe_execution_payload() -> ObserveExecutionResult:
     status_classification = str(visibility.status_classification or "idle")
     current_state = status_classification.replace("-", " ")
     assessment = str(visibility.assessment or status_classification).replace("-", " ")
-
-    suggested_next_commands: list[ObserveExecutionSuggestion] = []
-    if not visibility.has_live_execution:
-        suggested_next_commands.extend(
-            [
-                ObserveExecutionSuggestion(
-                    command="gpd observe sessions --last 5",
-                    reason="Inspect recent local observability sessions",
-                ),
-                ObserveExecutionSuggestion(
-                    command="gpd progress --brief",
-                    reason="Check workspace-level progress separately from live execution telemetry",
-                ),
-            ]
-        )
-    else:
-        if status_classification in {"blocked", "waiting", "paused-or-resumable"} or visibility.possibly_stalled:
-            suggested_next_commands.append(
-                ObserveExecutionSuggestion(
-                    command="gpd resume",
-                    reason="Review the current local recovery snapshot and the best resumable target",
-                )
-            )
-        suggested_next_commands.extend(
-            [
-                ObserveExecutionSuggestion(
-                    command="gpd observe show --last 20",
-                    reason="Inspect the recent observability event trail for this workspace",
-                ),
-                ObserveExecutionSuggestion(
-                    command="gpd observe sessions --last 5",
-                    reason="Compare recent observability sessions and their command history",
-                ),
-                ObserveExecutionSuggestion(
-                    command="gpd progress --brief",
-                    reason="Check phase-level progress separately from live execution state",
-                ),
-            ]
-        )
+    suggested_next_steps = [str(step).strip() for step in visibility.suggested_next_steps if str(step).strip()]
+    suggested_next_commands = [
+        ObserveExecutionSuggestion(command=item.command, reason=item.reason)
+        for item in visibility.suggested_next_commands
+        if item.command.strip() and item.reason.strip()
+    ]
+    next_check = suggested_next_commands[0] if suggested_next_commands else None
 
     return ObserveExecutionResult(
         found=visibility.has_live_execution,
@@ -2418,12 +2410,17 @@ def _observe_execution_payload() -> ObserveExecutionResult:
         stale_after_minutes=visibility.stale_after_minutes,
         current_task=visibility.current_task,
         waiting_reason=visibility.waiting_reason,
+        waiting_reason_label=visibility.waiting_reason_label,
         blocked_reason=visibility.blocked_reason,
+        blocked_reason_label=visibility.blocked_reason_label,
         review_reason=visibility.review_reason,
         last_update_at=visibility.last_updated_at,
         last_update_age=visibility.last_updated_age_label,
         last_update_age_minutes=visibility.last_updated_age_minutes,
         resume_file=visibility.resume_file,
+        next_check_command=next_check.command if next_check is not None else None,
+        next_check_reason=next_check.reason if next_check is not None else None,
+        suggested_next_steps=suggested_next_steps,
         suggested_next_commands=suggested_next_commands,
         current_execution=visibility.current_execution,
     )
@@ -2445,27 +2442,33 @@ def _render_observe_execution(result: ObserveExecutionResult) -> None:
     summary.add_row("Current state", result.current_state or "unknown")
     summary.add_row("Assessment", result.assessment)
     summary.add_row("Current task", result.current_task or "—")
-    summary.add_row("Waiting reason", result.waiting_reason or "—")
-    summary.add_row("Blocked reason", result.blocked_reason or "—")
+    summary.add_row("Waiting reason", result.waiting_reason_label or result.waiting_reason or "—")
+    summary.add_row("Blocked reason", result.blocked_reason_label or result.blocked_reason or "—")
     summary.add_row("Review reason", result.review_reason or "—")
     summary.add_row("Last update age", result.last_update_age or "unknown")
     if result.resume_file:
         summary.add_row("Resume file", _format_display_path(result.resume_file))
     console.print(summary)
 
-    console.print()
-    console.print("[bold]Suggested next commands[/]")
-    for suggestion in result.suggested_next_commands:
-        console.print(f"- {suggestion.command} — {suggestion.reason}")
+    status_note = _observe_execution_status_note(result)
+    if status_note:
+        console.print()
+        console.print(status_note)
+
+    if result.next_check_command:
+        console.print()
+        console.print("[bold]Check next[/]")
+        console.print(f"- {result.next_check_command} — {result.next_check_reason}")
+
+    if len(result.suggested_next_commands) > 1:
+        console.print()
+        console.print("[bold]Other read-only checks[/]")
+        for suggestion in result.suggested_next_commands[1:]:
+            console.print(f"- {suggestion.command} — {suggestion.reason}")
 
     if not result.found:
         console.print()
         console.print("[dim]No live execution snapshot is currently recorded for this workspace.[/]")
-    elif result.possibly_stalled:
-        console.print()
-        console.print(
-            f"[yellow]This execution is possibly stalled.[/] It is still marked active and has not updated for at least {result.stale_after_minutes} minutes."
-        )
 
 
 observe_app = typer.Typer(help="Inspect local observability sessions, live execution status, and events")

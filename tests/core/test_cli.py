@@ -2014,6 +2014,10 @@ def test_observe_execution_raw_reads_local_visibility_snapshot(tmp_path: Path) -
     assert payload["possibly_stalled"] is True
     assert payload["stale_after_minutes"] == 30
     assert payload["current_task"] == "Benchmark reproduction"
+    assert payload["next_check_command"] == "gpd observe show --session cli-session-1 --last 20"
+    assert "execution event trail" in payload["next_check_reason"]
+    assert payload["suggested_next_steps"]
+    assert any("gpd observe show --session cli-session-1 --last 20" in step for step in payload["suggested_next_steps"])
 
 
 def test_observe_execution_human_output_keeps_waiting_state_distinct_from_possibly_stalled(tmp_path: Path) -> None:
@@ -2039,8 +2043,33 @@ def test_observe_execution_human_output_keeps_waiting_state_distinct_from_possib
 
     assert result.exit_code == 0
     assert "Execution Status" in result.output
+    assert "Check next" in result.output
+    assert "gpd resume" in result.output
     assert "waiting" in result.output.lower()
     assert "possibly stalled" not in result.output.lower()
+
+
+def test_observe_execution_human_output_humanizes_budget_wait_reason(tmp_path: Path) -> None:
+    observability = tmp_path / "GPD" / "observability"
+    observability.mkdir(parents=True)
+    (observability / "current-execution.json").write_text(
+        json.dumps(
+            {
+                "session_id": "cli-session-2",
+                "phase": "03",
+                "plan": "03",
+                "segment_status": "waiting_review",
+                "waiting_reason": "time_budget_exceeded",
+                "updated_at": "2000-01-01T00:00:00+00:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["--cwd", str(tmp_path), "observe", "execution"])
+
+    assert result.exit_code == 0
+    assert "time budget exceeded" in result.output.lower()
 
 
 def test_observe_show_filters_events(tmp_path: Path) -> None:

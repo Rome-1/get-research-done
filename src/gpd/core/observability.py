@@ -31,6 +31,7 @@ from gpd.core.utils import atomic_write, file_lock, phase_normalize, safe_read_f
 
 __all__ = [
     "CurrentExecutionState",
+    "ExecutionVisibilitySuggestion",
     "ExecutionVisibilityState",
     "LocalSpan",
     "ObservabilityEvent",
@@ -45,6 +46,7 @@ __all__ = [
     "get_current_session",
     "get_current_session_id",
     "gpd_span",
+    "humanize_execution_reason",
     "instrument_gpd_function",
     "list_sessions",
     "log_event",
@@ -182,13 +184,25 @@ class ExecutionVisibilityState(BaseModel):
     segment_reason: str | None = None
     checkpoint_reason: str | None = None
     waiting_reason: str | None = None
+    waiting_reason_label: str | None = None
     blocked_reason: str | None = None
+    blocked_reason_label: str | None = None
     review_reason: str | None = None
     last_result_label: str | None = None
     last_artifact_path: str | None = None
     resume_file: str | None = None
     current_execution: dict[str, object] | None = None
+    suggested_next_commands: list[ExecutionVisibilitySuggestion] = Field(default_factory=list)
     suggested_next_steps: list[str] = Field(default_factory=list)
+
+
+class ExecutionVisibilitySuggestion(BaseModel):
+    """One prioritized follow-up command for the current execution snapshot."""
+
+    model_config = ConfigDict(frozen=True)
+
+    command: str
+    reason: str
 
 
 class ObserveEventResult(BaseModel):
@@ -468,43 +482,143 @@ def _execution_visibility_classification(snapshot: CurrentExecutionState | None)
     return "active"
 
 
-def _execution_visibility_next_steps(
+_EXECUTION_REASON_LABELS = {
+    "first_result": "first-result",
+    "pre_fanout": "pre-fanout",
+    "first_result_review_required": "first-result review required",
+    "skeptical_requestioning": "skeptical re-questioning",
+    "skeptical_requestioning_required": "skeptical re-questioning required",
+    "task_budget_reached": "task budget reached",
+    "time_budget_exceeded": "time budget exceeded",
+    "segment_boundary": "segment boundary reached",
+    "awaiting_user": "awaiting user input",
+    "ready_to_continue": "ready to continue",
+}
+
+
+def humanize_execution_reason(reason: str | None) -> str | None:
+    """Return one human-readable label for an execution checkpoint or wait reason."""
+    normalized = _normalized_checkpoint_reason(reason)
+    if normalized is None:
+        return None
+    return _EXECUTION_REASON_LABELS.get(normalized, normalized.replace("_", " "))
+
+
+def _execution_visibility_next_commands(
     *,
     classification: str,
     snapshot: CurrentExecutionState | None,
     possibly_stalled: bool,
-) -> list[str]:
-    steps: list[str] = []
+) -> list[ExecutionVisibilitySuggestion]:
+    suggestions: list[ExecutionVisibilitySuggestion] = []
     if snapshot is None:
         return [
-            "Run `gpd observe sessions --last 5` to inspect recent local observability sessions.",
-            "Run `gpd progress --brief` to inspect the workspace state separately from live execution telemetry.",
+            ExecutionVisibilitySuggestion(
+                command="gpd observe sessions --last 5",
+                reason="inspect recent local observability sessions",
+            ),
+            ExecutionVisibilitySuggestion(
+                command="gpd progress --brief",
+                reason="inspect the workspace state separately from live execution telemetry",
+            ),
         ]
 
     phase_plan = "-".join(part for part in (snapshot.phase, snapshot.plan) if part) or "current execution"
     session_scope = f" --session {snapshot.session_id}" if snapshot.session_id else ""
+    observe_command = f"gpd observe show{session_scope} --last 20"
 
     if classification == "blocked":
-        steps.append("Run `gpd resume` to inspect the current recovery snapshot and blocker context.")
-        steps.append(f"Run `gpd observe show{session_scope} --last 20` to inspect the recent execution event trail for {phase_plan}.")
+        suggestions.append(
+            ExecutionVisibilitySuggestion(
+                command="gpd resume",
+                reason="inspect the current recovery snapshot and blocker context",
+            )
+        )
+        suggestions.append(
+            ExecutionVisibilitySuggestion(
+                command=observe_command,
+                reason=f"inspect the recent execution event trail for {phase_plan}",
+            )
+        )
     elif classification == "waiting":
-        steps.append("Run `gpd resume` to inspect the resumable checkpoint and review context.")
-        steps.append(f"Run `gpd observe show{session_scope} --last 20` to inspect the recent execution event trail for {phase_plan}.")
+        suggestions.append(
+            ExecutionVisibilitySuggestion(
+                command="gpd resume",
+                reason="inspect the resumable checkpoint and review context",
+            )
+        )
+        suggestions.append(
+            ExecutionVisibilitySuggestion(
+                command=observe_command,
+                reason=f"inspect the recent execution event trail for {phase_plan}",
+            )
+        )
     elif classification == "paused-or-resumable":
-        steps.append("Run `gpd resume` to inspect the ranked recovery candidates before continuing inside the runtime.")
-        steps.append(f"Run `gpd observe show{session_scope} --last 20` to inspect the recent execution event trail for {phase_plan}.")
+        suggestions.append(
+            ExecutionVisibilitySuggestion(
+                command="gpd resume",
+                reason="inspect the ranked recovery candidates before continuing inside the runtime",
+            )
+        )
+        suggestions.append(
+            ExecutionVisibilitySuggestion(
+                command=observe_command,
+                reason=f"inspect the recent execution event trail for {phase_plan}",
+            )
+        )
     elif classification == "active":
         if possibly_stalled:
-            steps.append(f"No update for 30+ minutes in {phase_plan}; this execution is possibly stalled.")
-            steps.append(f"Run `gpd observe show{session_scope} --last 20` to inspect the recent execution event trail for {phase_plan}.")
-            steps.append("Run `gpd resume` to inspect the latest recovery snapshot if the run should already have paused.")
+            suggestions.append(
+                ExecutionVisibilitySuggestion(
+                    command=observe_command,
+                    reason=f"inspect the recent execution event trail for {phase_plan} before assuming the run has stalled",
+                )
+            )
+            suggestions.append(
+                ExecutionVisibilitySuggestion(
+                    command="gpd resume",
+                    reason="inspect the latest recovery snapshot if the run should already have paused",
+                )
+            )
+            suggestions.append(
+                ExecutionVisibilitySuggestion(
+                    command="gpd progress --brief",
+                    reason="cross-check broader workspace progress separately from the live execution state",
+                )
+            )
         else:
-            steps.append("Run `gpd observe show --last 20` when you want the recent observability event trail.")
-            steps.append("Recheck with `gpd progress --brief` when you want a compact workspace-level summary.")
+            suggestions.append(
+                ExecutionVisibilitySuggestion(
+                    command=observe_command,
+                    reason=f"inspect the recent observability event trail for {phase_plan} when you want more detail",
+                )
+            )
+            suggestions.append(
+                ExecutionVisibilitySuggestion(
+                    command="gpd progress --brief",
+                    reason="check a compact workspace-level summary separately from the live execution state",
+                )
+            )
     else:
-        steps.append("Run `gpd observe sessions --last 5` to inspect the recent local observability sessions.")
-        steps.append("Run `gpd progress --brief` to inspect the current workspace state.")
-    return steps
+        suggestions.append(
+            ExecutionVisibilitySuggestion(
+                command="gpd observe sessions --last 5",
+                reason="inspect recent local observability sessions",
+            )
+        )
+        suggestions.append(
+            ExecutionVisibilitySuggestion(
+                command="gpd progress --brief",
+                reason="inspect the current workspace state",
+            )
+        )
+    return suggestions
+
+
+def _execution_visibility_next_steps(
+    suggestions: list[ExecutionVisibilitySuggestion],
+) -> list[str]:
+    return [f"Run `{suggestion.command}` to {suggestion.reason}." for suggestion in suggestions]
 
 
 def derive_execution_visibility(cwd: Path | None = None) -> ExecutionVisibilityState | None:
@@ -515,15 +629,18 @@ def derive_execution_visibility(cwd: Path | None = None) -> ExecutionVisibilityS
 
     snapshot = get_current_execution(layout.root)
     if snapshot is None:
+        suggestions = _execution_visibility_next_commands(
+            classification="idle",
+            snapshot=None,
+            possibly_stalled=False,
+        )
         return ExecutionVisibilityState(
             workspace_root=str(layout.root),
             has_live_execution=False,
             status_classification="idle",
             assessment="idle",
-        suggested_next_steps=[
-                "Run `gpd observe sessions --last 5` to inspect recent local observability sessions.",
-                "Run `gpd progress --brief` to inspect the workspace state separately from live execution telemetry.",
-            ],
+            suggested_next_commands=suggestions,
+            suggested_next_steps=_execution_visibility_next_steps(suggestions),
         )
 
     classification = _execution_visibility_classification(snapshot)
@@ -534,6 +651,12 @@ def derive_execution_visibility(cwd: Path | None = None) -> ExecutionVisibilityS
     current_task_progress: str | None = None
     if snapshot.current_task_index is not None and snapshot.current_task_total is not None:
         current_task_progress = f"{snapshot.current_task_index}/{snapshot.current_task_total}"
+
+    suggestions = _execution_visibility_next_commands(
+        classification=classification,
+        snapshot=snapshot,
+        possibly_stalled=possibly_stalled,
+    )
 
     return ExecutionVisibilityState(
         workspace_root=str(layout.root),
@@ -556,17 +679,16 @@ def derive_execution_visibility(cwd: Path | None = None) -> ExecutionVisibilityS
         segment_reason=snapshot.segment_reason,
         checkpoint_reason=snapshot.checkpoint_reason,
         waiting_reason=snapshot.waiting_reason,
+        waiting_reason_label=humanize_execution_reason(snapshot.waiting_reason),
         blocked_reason=snapshot.blocked_reason,
+        blocked_reason_label=humanize_execution_reason(snapshot.blocked_reason),
         review_reason=_execution_visibility_review_reason(snapshot),
         last_result_label=snapshot.last_result_label,
         last_artifact_path=snapshot.last_artifact_path,
         resume_file=snapshot.resume_file,
         current_execution=snapshot.model_dump(mode="json"),
-        suggested_next_steps=_execution_visibility_next_steps(
-            classification=classification,
-            snapshot=snapshot,
-            possibly_stalled=possibly_stalled,
-        ),
+        suggested_next_commands=suggestions,
+        suggested_next_steps=_execution_visibility_next_steps(suggestions),
     )
 
 

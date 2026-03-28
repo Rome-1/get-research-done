@@ -1133,6 +1133,7 @@ def test_emit_execution_notification_does_not_claim_stuck(tmp_path: Path) -> Non
     output = stderr.getvalue().lower()
     assert "stuck" not in output
     assert "blocked in 06-01" in output or "waiting in 06-01" in output
+    assert "time budget exceeded" in output or "anchor mismatch" in output
 
 
 def test_emit_execution_notification_dedupes_repeated_resume_state(tmp_path: Path) -> None:
