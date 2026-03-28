@@ -28,7 +28,12 @@ depends_on: []
 files_modified: []
 interactive: false
 researcher_setup: [] # Optional. Omit if empty.
-tool_requirements: [] # Optional machine-checkable specialized tools. Omit if empty.
+# tool_requirements: # Optional machine-checkable specialized tools. Omit entirely if none.
+#   - id: "wolfram-cas"
+#     tool: "wolfram"
+#     purpose: "[Why this specialized tool is needed]"
+#     required: false
+#     fallback: "[Standard-tool fallback when feasible]"
 
 conventions:
   units: "natural"

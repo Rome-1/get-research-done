@@ -67,7 +67,7 @@ When executing a real `PLAN.md`, inspect its frontmatter for optional `tool_requ
 
 - Run `gpd validate plan-preflight <PLAN.md path>` from the local CLI.
 - If preflight exits nonzero because a required specialized tool is unavailable, STOP and surface the blocking check instead of attempting the task blindly.
-- If preflight fails but the plan declares a viable fallback, use the fallback path only when it preserves the plan's scientific intent and record the switch in `SUMMARY.md`.
+- A declared fallback does not override a blocking `required: true` requirement. Only use a fallback automatically when preflight passes with warnings for a preferred (`required: false`) tool, the fallback preserves the plan's scientific intent, and the switch is recorded in `SUMMARY.md`.
 - Warnings alone do not force a fallback; they are caveats to keep visible during execution.
 - Keep `researcher_setup` separate: it is for human credentials or manual environment actions, not the machine-checkable tool-capability contract.
 - Treat canonical tool keys as runtime-agnostic capability labels. For Mathematica / Wolfram Language capability, use `wolfram`; do not hardcode runtime-specific MCP assumptions here.

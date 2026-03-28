@@ -1086,12 +1086,14 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
     verify_phase = (WORKFLOWS_DIR / "verify-phase.md").read_text(encoding="utf-8")
     verifier_agent = (AGENTS_DIR / "gpd-verifier.md").read_text(encoding="utf-8")
 
-    assert "tool_requirements: [] # Optional machine-checkable specialized tools. Omit if empty." in phase_prompt
-    assert "tool_requirements: [] # Machine-checkable specialized tools (omit if empty)" in planner_agent
+    assert "# tool_requirements: # Optional machine-checkable specialized tools. Omit entirely if none." in phase_prompt
+    assert "# tool_requirements: # Machine-checkable specialized tools (omit entirely if none)" in planner_agent
     assert "| `tool_requirements` | No       | Machine-checkable specialized tool requirements |" in planner_agent
     assert "declare them in `tool_requirements`" in plan_checker
     assert "Run `gpd validate plan-preflight <PLAN.md path>` from the local CLI." in executor_agent
+    assert "A declared fallback does not override a blocking `required: true` requirement." in executor_agent
     assert 'PLAN_PREFLIGHT=$(gpd --raw validate plan-preflight "${PLAN_PATH}")' in execute_plan
+    assert "Use declared fallbacks automatically only for non-blocking preferred tools (`required: false`)" in execute_plan
     assert "gpd validate plan-preflight <PLAN.md>" not in execute_plan
     assert "require that the selected `PLAN.md` passes `gpd validate plan-preflight <PLAN.md>`" in execute_phase
     assert "gpd validate plan-preflight <PLAN.md>" in plan_phase

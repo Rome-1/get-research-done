@@ -146,6 +146,9 @@ What shipped:
   - `tool_requirements` for machine-checkable capability gates
 - Execution prompts now require plan preflight before substantive work starts when a plan declares specialized tool requirements.
 - Help/README/tooling docs now surface `gpd validate plan-preflight <PLAN.md>` as the local CLI gate for explicit specialized-tool requirements.
+- Post-review consistency follow-up removed two prompt contradictions:
+  - plan examples no longer show invalid empty `tool_requirements: []` entries
+  - fallback wording now matches the blocking semantics of `required: true` specialized tools
 
 Verification:
 

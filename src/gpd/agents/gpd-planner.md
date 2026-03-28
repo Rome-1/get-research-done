@@ -846,7 +846,12 @@ depends_on: [] # Plan IDs this plan requires
 files_modified: [] # Files this plan touches
 interactive: false # true if plan has checkpoints
 researcher_setup: [] # Human-required setup (omit if empty)
-tool_requirements: [] # Machine-checkable specialized tools (omit if empty)
+# tool_requirements: # Machine-checkable specialized tools (omit entirely if none)
+#   - id: "wolfram-cas"
+#     tool: "wolfram"
+#     purpose: "Symbolic tensor reduction"
+#     required: false
+#     fallback: "Use SymPy if unavailable"
 
 conventions: # Physics conventions for this plan
   units: "natural"

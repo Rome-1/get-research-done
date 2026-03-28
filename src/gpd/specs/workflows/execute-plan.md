@@ -121,7 +121,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-If the preflight reports warnings only, keep them visible during execution. If a required specialized tool is unavailable but the plan declares a fallback, use the fallback only when it preserves the plan's scientific intent and document the switch in `SUMMARY.md`.
+If the preflight reports warnings only, keep them visible during execution. Use declared fallbacks automatically only for non-blocking preferred tools (`required: false`) when the fallback preserves the plan's scientific intent, and document the switch in `SUMMARY.md`. If a required specialized tool is unavailable, stop and revise the plan or environment before execution.
 </step>
 
 <step name="record_start_time">
