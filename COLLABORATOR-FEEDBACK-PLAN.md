@@ -149,6 +149,9 @@ What shipped:
 - Post-review consistency follow-up removed two prompt contradictions:
   - plan examples no longer show invalid empty `tool_requirements: []` entries
   - fallback wording now matches the blocking semantics of `required: true` specialized tools
+- Post-review hardening also fixed two helper edge cases:
+  - missing `PLAN.md` paths now fail specialized-tool preflight instead of reporting a false pass
+  - warning-only optional-tool states no longer claim a fallback path when no fallback is declared
 
 Verification:
 

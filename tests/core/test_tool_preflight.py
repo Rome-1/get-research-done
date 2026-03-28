@@ -107,6 +107,15 @@ def test_build_plan_tool_preflight_without_requirements_passes(tmp_path: Path) -
     assert result.guidance == "No machine-checkable specialized tool requirements declared."
 
 
+def test_build_plan_tool_preflight_missing_plan_fails(tmp_path: Path) -> None:
+    result = build_plan_tool_preflight(tmp_path / "missing-PLAN.md")
+
+    assert result.passed is False
+    assert result.valid is False
+    assert result.validation_passed is False
+    assert result.errors == [f"Plan not found: {(tmp_path / 'missing-PLAN.md').resolve(strict=False)}"]
+
+
 def test_build_plan_tool_preflight_reports_missing_wolfram(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr("gpd.core.tool_preflight.shutil.which", lambda _name: None)
     plan_path = tmp_path / "01-01-PLAN.md"
@@ -181,3 +190,83 @@ def test_build_plan_tool_preflight_reports_missing_wolfram(monkeypatch: pytest.M
     assert result.checks[0].blocking is True
     assert "wolframscript not found on PATH" in result.blocking_conditions[0]
     assert "license state are not proven" in result.warnings[0]
+
+
+def test_build_plan_tool_preflight_optional_missing_tool_without_fallback_stays_non_blocking(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr("gpd.core.tool_preflight.shutil.which", lambda _name: None)
+    plan_path = tmp_path / "01-02-PLAN.md"
+    plan_path.write_text(
+        "---\n"
+        "phase: 01-test\n"
+        "plan: 02\n"
+        "type: execute\n"
+        "wave: 1\n"
+        "depends_on: []\n"
+        "files_modified: []\n"
+        "interactive: false\n"
+        "tool_requirements:\n"
+        "  - id: wolfram-optional\n"
+        "    tool: wolfram\n"
+        "    purpose: Optional symbolic simplification\n"
+        "    required: false\n"
+        "conventions:\n"
+        "  units: natural\n"
+        "  metric: (+,-,-,-)\n"
+        "  coordinates: Cartesian\n"
+        "contract:\n"
+        "  scope:\n"
+        "    question: What benchmark must this plan recover?\n"
+        "  context_intake:\n"
+        "    must_read_refs: [ref-main]\n"
+        "    must_include_prior_outputs: [GPD/phases/00-baseline/00-01-SUMMARY.md]\n"
+        "  claims:\n"
+        "    - id: claim-main\n"
+        "      statement: Recover the benchmark value within tolerance\n"
+        "      deliverables: [deliv-main]\n"
+        "      acceptance_tests: [test-main]\n"
+        "      references: [ref-main]\n"
+        "  deliverables:\n"
+        "    - id: deliv-main\n"
+        "      kind: figure\n"
+        "      path: figures/main.png\n"
+        "      description: Main benchmark figure\n"
+        "  references:\n"
+        "    - id: ref-main\n"
+        "      kind: paper\n"
+        "      locator: Author et al., Journal, 2024\n"
+        "      role: benchmark\n"
+        "      why_it_matters: Published comparison target\n"
+        "      applies_to: [claim-main]\n"
+        "      must_surface: true\n"
+        "      required_actions: [read, compare, cite]\n"
+        "  acceptance_tests:\n"
+        "    - id: test-main\n"
+        "      subject: claim-main\n"
+        "      kind: benchmark\n"
+        "      procedure: Compare against the benchmark reference\n"
+        "      pass_condition: Matches reference within tolerance\n"
+        "      evidence_required: [deliv-main, ref-main]\n"
+        "  forbidden_proxies:\n"
+        "    - id: fp-main\n"
+        "      subject: claim-main\n"
+        "      proxy: Qualitative trend match without numerical comparison\n"
+        "      reason: Would allow false progress without the decisive benchmark\n"
+        "  uncertainty_markers:\n"
+        "    weakest_anchors: [Reference tolerance interpretation]\n"
+        "    disconfirming_observations: [Benchmark agreement disappears after normalization fix]\n"
+        "---\n\n"
+        "Body.\n",
+        encoding="utf-8",
+    )
+
+    result = build_plan_tool_preflight(plan_path)
+
+    assert result.passed is True
+    assert result.checks[0].blocking is False
+    assert result.guidance == (
+        "Optional specialized tools are unavailable; continue only if the plan can genuinely proceed without them."
+    )
+    assert any("no fallback is declared" in warning for warning in result.warnings)

@@ -178,7 +178,16 @@ def build_plan_tool_preflight(
 
     resolved_path = plan_path.expanduser().resolve(strict=False)
     active_requirements = requirements
-    if active_requirements is None and resolved_path.exists():
+    if active_requirements is None:
+        if not resolved_path.exists():
+            return PlanToolPreflightResult(
+                plan_path=str(resolved_path),
+                validation_passed=False,
+                valid=False,
+                passed=False,
+                errors=[f"Plan not found: {resolved_path}"],
+                guidance=f"Plan not found: {resolved_path}",
+            )
         try:
             content = resolved_path.read_text(encoding="utf-8")
         except OSError as exc:
@@ -277,14 +286,30 @@ def build_plan_tool_preflight(
             warnings.append(
                 f"Preferred tool {requirement.tool} is unavailable; use the declared fallback."
             )
+        else:
+            warnings.append(
+                f"Preferred tool {requirement.tool} is unavailable and no fallback is declared."
+            )
 
+    missing_preferred_with_fallback = any(
+        (not check.available) and (not check.blocking) and bool(check.fallback)
+        for check in checks
+    )
+    missing_preferred_without_fallback = any(
+        (not check.available) and (not check.blocking) and not check.fallback
+        for check in checks
+    )
     guidance = (
         "Install or enable the missing required specialized tools, or revise the plan before execution."
         if blocking_missing
         else (
             "Proceed using declared fallback paths for unavailable preferred tools."
-            if warnings
-            else "All declared specialized tools are available on this machine."
+            if missing_preferred_with_fallback
+            else (
+                "Optional specialized tools are unavailable; continue only if the plan can genuinely proceed without them."
+                if missing_preferred_without_fallback
+                else "All declared specialized tools are available on this machine."
+            )
         )
     )
     return PlanToolPreflightResult(
