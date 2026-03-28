@@ -97,7 +97,7 @@ The resolved manuscript must already have been materialized by `gpd paper-build`
 <step name="paper_quality_gate">
 **Run the paper-quality submission gate before packaging:**
 
-Use the resolved manuscript root as the scoring source of truth. The same resolved manuscript root is also the strict preflight source of truth for `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and the compiled PDF, but only after the paper-build gate above has succeeded. If `PAPER_DIR` is not already the project's `paper/` directory, create a temporary scratch project root that mirrors `GPD/` and exposes the resolved manuscript directory as `paper/` for scoring, then run:
+Use the resolved manuscript root as the scoring source of truth. The same resolved manuscript root is also the strict preflight source of truth for `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and the compiled PDF. Only rely on that strict-preflight source of truth after the paper-build gate above has succeeded. If `PAPER_DIR` is not already the project's `paper/` directory, create a temporary scratch project root that mirrors `GPD/` and exposes the resolved manuscript directory as `paper/` for scoring, then run:
 
 ```bash
 QUALITY_ROOT="."
