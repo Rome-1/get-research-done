@@ -15,9 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from gpd.core.context import init_resume
 from gpd.core.costs import build_cost_summary, resolve_cost_advisory
-from gpd.core.observability import derive_execution_visibility, resolve_project_root
+from gpd.core.observability import derive_execution_visibility
 from gpd.core.recent_projects import list_recent_projects
 from gpd.core.recovery_advice import RecoveryAdvice, build_recovery_advice
+from gpd.core.root_resolution import normalize_workspace_hint, resolve_project_roots
 from gpd.core.surface_phrases import (
     command_follow_up_action,
     cost_inspect_action,
@@ -228,10 +229,11 @@ def build_runtime_hint_payload(
 ) -> RuntimeHintPayload:
     """Build one shallow runtime hint payload from the canonical core summaries."""
 
-    workspace_hint = cwd.expanduser().resolve(strict=False) if cwd is not None else Path.cwd().resolve(strict=False)
-    project_root = resolve_project_root(cwd) if cwd is not None else None
-    if project_root is None:
-        project_root = workspace_hint
+    workspace_hint = normalize_workspace_hint(cwd) if cwd is not None else None
+    if workspace_hint is None:
+        workspace_hint = Path.cwd().resolve(strict=False)
+    resolution = resolve_project_roots(workspace_hint)
+    project_root = resolution.project_root if resolution is not None else workspace_hint
 
     execution_visibility = derive_execution_visibility(project_root)
     execution = _model_dump(execution_visibility)

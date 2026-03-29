@@ -38,7 +38,8 @@ from gpd.core.contract_validation import (
     _format_schema_error,
 )
 from gpd.core.errors import GPDError
-from gpd.core.observability import instrument_gpd_function, resolve_project_root
+from gpd.core.observability import instrument_gpd_function
+from gpd.core.root_resolution import resolve_project_root
 from gpd.core.tool_preflight import PlanToolPreflightError, parse_plan_tool_requirements
 from gpd.core.utils import matching_phase_artifact_count, phase_artifact_display_name, phase_artifact_id, safe_read_file
 

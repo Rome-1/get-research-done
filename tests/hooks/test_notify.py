@@ -9,8 +9,6 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 import gpd.hooks.notify as notify_module
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.core.constants import ProjectLayout
@@ -625,6 +623,45 @@ def test_main_accepts_workspace_mapping_with_cwd_field() -> None:
 
     mock_trigger.assert_called_once_with(expected)
     mock_notify.assert_called_once_with(expected)
+
+
+def test_main_resolves_alias_only_workspace_payload_before_ambient_runtime_policy(tmp_path: Path) -> None:
+    process_cwd = tmp_path / "process-cwd"
+    process_cwd.mkdir()
+    _mark_complete_install(process_cwd / ".codex", runtime="codex")
+
+    project = tmp_path / "project"
+    nested = project / "src" / "notes"
+    nested.mkdir(parents=True)
+    home = tmp_path / "home"
+    home.mkdir()
+    payload = {
+        "type": "agent-turn-complete",
+        "workspace": {"current_dir": str(nested), "project_dir": str(project)},
+    }
+    resolved_nested = str(nested.resolve(strict=False))
+    resolved_project = str(project.resolve(strict=False))
+
+    with (
+        patch("gpd.hooks.runtime_detect.Path.cwd", return_value=process_cwd),
+        patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+        patch("gpd.hooks.payload_roots.os.getcwd", return_value=str(process_cwd)),
+        patch("sys.stdin", io.StringIO(json.dumps(payload))),
+        patch("gpd.hooks.notify._record_usage_telemetry") as mock_usage,
+        patch("gpd.hooks.notify._trigger_update_check") as mock_trigger,
+        patch("gpd.hooks.notify._check_and_notify_update") as mock_notify,
+        patch("gpd.hooks.notify._emit_execution_notification") as mock_execution,
+    ):
+        main()
+
+    mock_usage.assert_called_once_with(
+        payload,
+        workspace_dir=resolved_nested,
+        project_root=resolved_project,
+    )
+    mock_trigger.assert_called_once_with(resolved_project)
+    mock_notify.assert_called_once_with(resolved_project)
+    mock_execution.assert_called_once_with(resolved_project)
 
 
 def test_main_prefers_project_dir_root_over_nested_workspace_cwd(tmp_path: Path) -> None:

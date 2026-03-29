@@ -622,6 +622,49 @@ class TestInitCommands:
             "Allowed values: config, project, roadmap, state."
         )
 
+    def test_init_resume_resolves_ancestor_project_root_from_nested_workspace(
+        self,
+        gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        nested = gpd_project / "workspace" / "notes"
+        nested.mkdir(parents=True)
+        monkeypatch.chdir(nested)
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(nested), "init", "resume"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["planning_exists"] is True
+        assert payload["project_exists"] is True
+        assert payload["roadmap_exists"] is True
+        assert payload["state_exists"] is True
+
+    def test_init_progress_resolves_ancestor_project_root_from_nested_workspace(
+        self,
+        gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        nested = gpd_project / "workspace" / "notes"
+        nested.mkdir(parents=True)
+        monkeypatch.chdir(nested)
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(nested), "init", "progress"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["project_exists"] is True
+        assert payload["roadmap_exists"] is True
+        assert payload["state_exists"] is True
+
     def test_plan_phase_surfaces_artifact_derived_reference_context(self, gpd_project: Path) -> None:
         literature_dir = gpd_project / "GPD" / "literature"
         literature_dir.mkdir(parents=True)
@@ -805,6 +848,30 @@ class TestRoadmapCommands:
 class TestProgressCommand:
     def test_progress(self) -> None:
         _invoke("progress")
+
+
+class TestRecoveryStatusCommands:
+    def test_resume_resolves_ancestor_project_root_from_nested_workspace(
+        self,
+        gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        nested = gpd_project / "workspace" / "notes"
+        nested.mkdir(parents=True)
+        monkeypatch.chdir(nested)
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(nested), "resume"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["planning_exists"] is True
+        assert payload["project_exists"] is True
+        assert payload["roadmap_exists"] is True
+        assert payload["state_exists"] is True
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1065,13 +1132,13 @@ class TestReviewValidationCommands:
     def test_command_context_project_required_fails_without_project(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, codex_command_prefix: str
     ) -> None:
-        empty_dir = tmp_path / "empty-context"
-        empty_dir.mkdir()
-        monkeypatch.chdir(empty_dir)
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside"
+        outside_dir.mkdir()
+        monkeypatch.chdir(outside_dir)
 
         result = runner.invoke(
             app,
-            ["--raw", "--cwd", str(empty_dir), "validate", "command-context", "progress"],
+            ["--raw", "--cwd", str(outside_dir), "validate", "command-context", "progress"],
             catch_exceptions=False,
         )
 
@@ -1081,9 +1148,88 @@ class TestReviewValidationCommands:
         assert payload["context_mode"] == "project-required"
         assert payload["passed"] is False
         assert payload["guidance"] == (
-            "This command requires an initialized GPD project. "
-            f"Use `{codex_command_prefix}new-project` in the runtime surface or `gpd init new-project` in the local CLI."
+            "This command requires a recoverable GPD workspace. "
+            "Open the right project, use `gpd resume --recent` to rediscover it, or initialize a new project with "
+            f"`{codex_command_prefix}new-project` in the runtime surface or `gpd init new-project` in the local CLI."
         )
+
+    def test_command_context_progress_resolves_ancestor_project_root_for_nested_workspace(
+        self,
+        gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        nested = gpd_project / "workspace" / "notes"
+        nested.mkdir(parents=True)
+        monkeypatch.chdir(nested)
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(nested), "validate", "command-context", "progress"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:progress"
+        assert payload["context_mode"] == "project-required"
+        assert payload["passed"] is True
+        assert payload["project_exists"] is True
+        assert checks["project_exists"]["passed"] is True
+        assert "GPD/PROJECT.md" in checks["project_exists"]["detail"]
+
+    def test_command_context_resume_work_resolves_ancestor_project_root_for_nested_workspace(
+        self,
+        gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        nested = gpd_project / "workspace" / "notes"
+        nested.mkdir(parents=True)
+        monkeypatch.chdir(nested)
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(nested), "validate", "command-context", "resume-work"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:resume-work"
+        assert payload["context_mode"] == "project-required"
+        assert payload["passed"] is True
+        assert checks["project_exists"]["passed"] is True
+
+    def test_command_context_recovery_surfaces_accept_partial_recoverable_workspace(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        project = tmp_path / "recoverable-project"
+        nested = project / "workspace" / "notes"
+        gpd_dir = project / "GPD"
+        nested.mkdir(parents=True)
+        gpd_dir.mkdir()
+        (gpd_dir / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+        (gpd_dir / "STATE.md").write_text("# Research State\n", encoding="utf-8")
+        monkeypatch.chdir(nested)
+
+        for command_name in ("progress", "resume-work"):
+            result = runner.invoke(
+                app,
+                ["--raw", "--cwd", str(nested), "validate", "command-context", command_name],
+                catch_exceptions=False,
+            )
+
+            assert result.exit_code == 0, result.output
+            payload = json.loads(result.output)
+            checks = {check["name"]: check for check in payload["checks"]}
+            assert payload["passed"] is True
+            assert payload["project_exists"] is False
+            assert checks["state_exists"]["passed"] is True
+            assert checks["roadmap_exists"]["passed"] is True
+            assert checks["project_exists"]["passed"] is False
 
     def test_command_context_projectless_passes_without_project(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, codex_command_prefix: str

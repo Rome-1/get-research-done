@@ -52,6 +52,32 @@ def test_ensure_session_writes_single_session_log_and_current_pointer(tmp_path: 
     assert events[0]["data"]["source"] == "cli"
 
 
+def test_ensure_session_resolves_nested_workspace_to_project_root(tmp_path: Path, monkeypatch) -> None:
+    project = _bootstrap_project(tmp_path)
+    nested = project / "workspace" / "nested"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+
+    from gpd.core.observability import ensure_session
+
+    session = ensure_session(nested, source="cli", command="execute-phase")
+    assert session is not None
+    assert (project / "GPD" / "observability" / "current-session.json").exists()
+    assert not (nested / "GPD" / "observability").exists()
+
+
+def test_resolve_project_root_uses_shared_root_resolution_for_nested_workspace(tmp_path: Path) -> None:
+    project = _bootstrap_project(tmp_path)
+    nested = project / "workspace" / "nested"
+    nested.mkdir(parents=True)
+
+    from gpd.core.observability import resolve_project_root
+
+    resolved = resolve_project_root(nested)
+
+    assert resolved == project
+
+
 def test_observe_event_appends_session_event_and_finish_marker(tmp_path: Path, monkeypatch) -> None:
     project = _bootstrap_project(tmp_path)
     monkeypatch.chdir(project)

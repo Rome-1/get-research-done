@@ -7,7 +7,7 @@ from typing import Literal
 
 import gpd.hooks.install_context as hook_layout
 from gpd.adapters.runtime_catalog import get_hook_payload_policy, get_runtime_capabilities
-from gpd.core.observability import resolve_project_root
+from gpd.core.root_resolution import resolve_project_root
 from gpd.hooks.runtime_detect import RUNTIME_UNKNOWN, detect_active_runtime_with_gpd_install
 
 HookSurface = Literal["notify", "statusline"]

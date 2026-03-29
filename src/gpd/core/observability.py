@@ -27,6 +27,8 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from gpd.core.constants import ProjectLayout
+from gpd.core.root_resolution import normalize_workspace_hint as _normalize_workspace_path
+from gpd.core.root_resolution import resolve_project_root as _shared_resolve_project_root
 from gpd.core.utils import atomic_write, file_lock, phase_normalize, safe_read_file
 
 __all__ = [
@@ -293,40 +295,13 @@ def _extract_cwd(value: object | None) -> Path | None:
     return None
 
 
-def _normalize_workspace_path(value: object | None) -> Path | None:
-    path = _extract_cwd(value)
-    if path is None:
-        return None
-    expanded = path.expanduser()
-    try:
-        return expanded.resolve(strict=False)
-    except OSError:
-        return expanded
-
-
-def _walk_project_root(candidate: Path | None) -> Path | None:
-    if candidate is None:
-        return None
-    for path in (candidate, *candidate.parents):
-        if ProjectLayout(path).gpd.exists():
-            return path
-    return None
-
-
 def resolve_project_root(
     cwd: Path | str | None = None,
     *,
     project_dir: Path | str | None = None,
 ) -> Path | None:
-    """Return the best project-root candidate for one workspace hint."""
-    explicit_project = _normalize_workspace_path(project_dir)
-    if explicit_project is not None:
-        return _walk_project_root(explicit_project) or explicit_project
-
-    candidate = _normalize_workspace_path(cwd)
-    if candidate is None:
-        return None
-    return _walk_project_root(candidate) or candidate
+    """Compatibility wrapper around the canonical shared root resolver."""
+    return _shared_resolve_project_root(cwd, project_dir=project_dir)
 
 
 def _project_root(cwd: Path | None = None) -> Path | None:

@@ -13,8 +13,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import pytest
-
 from gpd.hooks.runtime_detect import TodoCandidate, update_command_for_runtime
 from gpd.hooks.statusline import (
     _check_update,
@@ -954,6 +952,42 @@ class TestMain:
             main()
 
         assert "[workspace]" in captured.getvalue()
+
+    def test_main_resolves_alias_only_workspace_payload_before_ambient_runtime_policy(self, tmp_path: Path) -> None:
+        process_cwd = tmp_path / "process-cwd"
+        process_cwd.mkdir()
+        _mark_complete_install(process_cwd / ".codex", runtime="codex")
+
+        project = tmp_path / "project"
+        nested = project / "src" / "notes"
+        nested.mkdir(parents=True)
+        home = tmp_path / "home"
+        home.mkdir()
+
+        captured = io.StringIO()
+        with (
+            patch(
+                "sys.stdin",
+                io.StringIO(json.dumps({"workspace": {"current_dir": str(nested), "project_dir": str(project)}})),
+            ),
+            patch("sys.stdout", captured),
+            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=process_cwd),
+            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
+            patch("gpd.hooks.payload_roots.os.getcwd", return_value=str(process_cwd)),
+            patch("gpd.hooks.statusline._read_runtime_hints", return_value=_runtime_hints_payload(_visibility_state())) as mock_hints,
+            patch("gpd.hooks.statusline._read_position", return_value="") as mock_position,
+            patch("gpd.hooks.statusline._read_current_task", return_value="") as mock_task,
+            patch("gpd.hooks.statusline._read_execution_state", return_value={}) as mock_execution,
+            patch("gpd.hooks.statusline._check_update", return_value="") as mock_update,
+        ):
+            main()
+
+        mock_hints.assert_called_once_with(str(project))
+        mock_position.assert_called_once_with(str(project))
+        mock_task.assert_called_once_with("", str(project))
+        mock_execution.assert_called_once_with(str(project))
+        mock_update.assert_called_once_with(str(project))
+        assert "[project/src/notes]" in captured.getvalue()
 
     def test_main_uses_project_root_for_project_state_helpers_when_workspace_is_nested_mapping(self, tmp_path: Path) -> None:
         project = tmp_path / "project"

@@ -25,7 +25,8 @@ from gpd.core.constants import (
     HOME_DATA_DIR_NAME,
     ProjectLayout,
 )
-from gpd.core.observability import get_current_session_id, resolve_project_root
+from gpd.core.observability import get_current_session_id
+from gpd.core.root_resolution import normalize_workspace_hint, resolve_project_roots
 from gpd.core.utils import atomic_write, file_lock, safe_read_file
 
 __all__ = [
@@ -753,14 +754,12 @@ def record_usage_from_runtime_payload(
 
     # Keep the runtime's raw workspace path separate from the resolved GPD
     # project root used for session and observability lookups.
-    resolved_workspace_root = workspace_root.expanduser().resolve(strict=False) if workspace_root is not None else None
-    if resolved_workspace_root is None and cwd is not None:
-        resolved_workspace_root = cwd.expanduser().resolve(strict=False)
+    resolved_workspace_root = normalize_workspace_hint(workspace_root)
+    if resolved_workspace_root is None:
+        resolved_workspace_root = normalize_workspace_hint(cwd)
 
-    resolved_project_root = project_root.expanduser().resolve(strict=False) if project_root is not None else None
-    if resolved_project_root is None:
-        root_hint = resolved_workspace_root or cwd
-        resolved_project_root = resolve_project_root(root_hint) if root_hint is not None else None
+    resolution = resolve_project_roots(resolved_workspace_root, project_dir=project_root)
+    resolved_project_root = resolution.project_root if resolution is not None else normalize_workspace_hint(project_root)
     if resolved_project_root is None:
         resolved_project_root = resolved_workspace_root
 
@@ -1087,11 +1086,11 @@ def build_cost_summary(
     last_sessions: int = _RECENT_SESSION_DEFAULT,
 ) -> CostSummary:
     """Build a read-only usage/cost summary for the current project and recent sessions."""
-    resolved_project_root = resolve_project_root(cwd) if cwd is not None else None
-    if resolved_project_root is None:
-        resolved_project_root = (
-            cwd.expanduser().resolve(strict=False) if cwd is not None else Path.cwd().resolve(strict=False)
-        )
+    workspace_hint = normalize_workspace_hint(cwd) if cwd is not None else None
+    if workspace_hint is None:
+        workspace_hint = Path.cwd().resolve(strict=False)
+    resolution = resolve_project_roots(workspace_hint)
+    resolved_project_root = resolution.project_root if resolution is not None else workspace_hint
 
     records = list_usage_records(data_root)
     project_records = [record for record in records if record.project_root == resolved_project_root.as_posix()]

@@ -12,8 +12,9 @@ import sys
 from pathlib import Path
 
 import gpd.hooks.install_context as hook_layout
+from gpd.adapters.runtime_catalog import get_hook_payload_policy
 from gpd.core.constants import ENV_GPD_DEBUG, PLANNING_DIR_NAME, STATE_JSON_FILENAME
-from gpd.core.observability import resolve_project_root
+from gpd.core.root_resolution import resolve_project_root
 from gpd.hooks.payload_policy import resolve_hook_payload_policy
 from gpd.hooks.payload_roots import project_root_from_payload as _shared_project_root_from_payload
 from gpd.hooks.payload_roots import resolve_payload_roots as _resolve_payload_roots
@@ -108,6 +109,13 @@ def _hook_payload_policy(workspace_dir: str | None = None):
     return resolve_hook_payload_policy(hook_file=__file__, cwd=workspace_dir, surface="statusline")
 
 
+def _root_resolution_policy(cwd: str | None = None):
+    """Use merged aliases until a payload workspace is known, then narrow by runtime."""
+    if cwd is None:
+        return get_hook_payload_policy()
+    return _hook_payload_policy(cwd)
+
+
 def _format_context_window_size(value: object) -> str:
     """Return a compact context-window label like ``1M context``."""
     if not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
@@ -189,7 +197,7 @@ def _read_workspace_label(
 
 def _read_position(workspace_dir: str) -> str:
     """Read research position from GPD/state.json."""
-    workspace_root = resolve_project_root(workspace_dir) or Path(workspace_dir).expanduser().resolve(strict=False)
+    workspace_root = resolve_project_root(workspace_dir, require_layout=True) or Path(workspace_dir).expanduser().resolve(strict=False)
     state_file = workspace_root / PLANNING_DIR_NAME / STATE_JSON_FILENAME
     if not state_file.exists():
         return ""
@@ -280,7 +288,7 @@ def _workspace_dir_from_payload(data: dict[str, object], *, cwd: str | None = No
     """Extract the raw workspace directory from a runtime hook payload."""
     return _shared_workspace_dir_from_payload(
         data,
-        policy_getter=_hook_payload_policy,
+        policy_getter=_root_resolution_policy,
         cwd=cwd,
     )
 
@@ -295,7 +303,7 @@ def _project_root_from_payload(
     return _shared_project_root_from_payload(
         data,
         workspace_dir,
-        policy_getter=_hook_payload_policy,
+        policy_getter=_root_resolution_policy,
         cwd=cwd,
     )
 
@@ -304,7 +312,7 @@ def _resolved_project_root_from_payload(data: dict[str, object], *, cwd: str | N
     """Return the resolved project root for one statusline payload workspace."""
     return _resolve_payload_roots(
         data,
-        policy_getter=_hook_payload_policy,
+        policy_getter=_root_resolution_policy,
         cwd=cwd,
     ).project_root
 
@@ -512,7 +520,7 @@ def main() -> None:
         return
 
     try:
-        roots = _resolve_payload_roots(data, policy_getter=_hook_payload_policy)
+        roots = _resolve_payload_roots(data, policy_getter=_root_resolution_policy)
         workspace_dir = roots.workspace_dir
         project_root = roots.project_root
         hook_payload = _hook_payload_policy(project_root)

@@ -13,8 +13,17 @@ from gpd.hooks.payload_roots import (
 )
 
 
-def _policy(*, workspace_keys: tuple[str, ...] = ("cwd",), project_dir_keys: tuple[str, ...] = ("project_dir",)):
-    return SimpleNamespace(workspace_keys=workspace_keys, project_dir_keys=project_dir_keys)
+def _policy(
+    *,
+    workspace_keys: tuple[str, ...] = ("cwd",),
+    project_dir_keys: tuple[str, ...] = ("project_dir",),
+    root_resolution_service=None,
+):
+    return SimpleNamespace(
+        workspace_keys=workspace_keys,
+        project_dir_keys=project_dir_keys,
+        root_resolution_service=root_resolution_service,
+    )
 
 
 def test_normalize_workspace_text_resolves_explicit_path(tmp_path) -> None:
@@ -152,6 +161,78 @@ def test_resolve_payload_roots_preserves_raw_workspace_and_resolved_project_root
     roots = resolve_payload_roots(
         {"workspace": {"cwd": str(workspace), "project_dir": str(project)}},
         policy_getter=lambda _cwd: _policy(workspace_keys=("cwd",), project_dir_keys=("project_dir",)),
+    )
+
+    assert roots.workspace_dir == str(workspace.resolve(strict=False))
+    assert roots.project_root == str(project.resolve(strict=False))
+    assert roots.workspace_dir != roots.project_root
+
+
+def test_project_root_from_payload_prefers_policy_root_resolution_service(tmp_path) -> None:
+    project = tmp_path / "project"
+    workspace = project / "src" / "notes"
+    project.mkdir(parents=True)
+    workspace.mkdir(parents=True, exist_ok=True)
+    service = Mock(
+        return_value={
+            "workspace_dir": str(workspace),
+            "project_root": str(project),
+        }
+    )
+
+    result = project_root_from_payload(
+        {"workspace": {"cwd": str(workspace), "project_dir": str(project)}},
+        str(workspace),
+        policy_getter=lambda _cwd: _policy(
+            workspace_keys=("cwd",),
+            project_dir_keys=("project_dir",),
+            root_resolution_service=service,
+        ),
+    )
+
+    service.assert_called_once()
+    assert result == str(project.resolve(strict=False))
+
+
+def test_resolve_payload_roots_accepts_compatibility_aliases_from_shared_service(tmp_path) -> None:
+    project = tmp_path / "project"
+    workspace = project / "src" / "notes"
+    workspace.mkdir(parents=True)
+    service = Mock(
+        return_value=SimpleNamespace(
+            raw_workspace_dir=str(workspace),
+            resolved_project_root=str(project),
+        )
+    )
+
+    roots = resolve_payload_roots(
+        {"workspace": {"cwd": str(workspace), "project_dir": str(project)}},
+        policy_getter=lambda _cwd: _policy(
+            workspace_keys=("cwd",),
+            project_dir_keys=("project_dir",),
+            root_resolution_service=service,
+        ),
+    )
+
+    assert roots.workspace_dir == str(workspace.resolve(strict=False))
+    assert roots.project_root == str(project.resolve(strict=False))
+    assert roots.raw_workspace_dir == roots.workspace_dir
+    assert roots.resolved_project_root == roots.project_root
+
+
+def test_resolve_payload_roots_keeps_raw_workspace_when_service_only_returns_project_root(tmp_path) -> None:
+    project = tmp_path / "project"
+    workspace = project / "src" / "notes"
+    workspace.mkdir(parents=True)
+    service = Mock(return_value=str(project))
+
+    roots = resolve_payload_roots(
+        {"workspace": {"cwd": str(workspace), "project_dir": str(project)}},
+        policy_getter=lambda _cwd: _policy(
+            workspace_keys=("cwd",),
+            project_dir_keys=("project_dir",),
+            root_resolution_service=service,
+        ),
     )
 
     assert roots.workspace_dir == str(workspace.resolve(strict=False))

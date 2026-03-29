@@ -7,9 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-import gpd.hooks.install_context as hook_layout
+from gpd.adapters.runtime_catalog import get_hook_payload_policy
 from gpd.core.constants import ENV_GPD_DEBUG, ProjectLayout
-from gpd.core.observability import humanize_execution_reason, resolve_project_root
+from gpd.core.observability import humanize_execution_reason
+from gpd.core.root_resolution import resolve_project_root
 from gpd.core.utils import atomic_write, file_lock
 from gpd.hooks.payload_policy import resolve_hook_payload_policy, resolve_hook_surface_runtime
 from gpd.hooks.payload_roots import project_root_from_payload as _shared_project_root_from_payload
@@ -61,6 +62,13 @@ def _trigger_update_check(cwd: str) -> None:
 def _hook_payload_policy(cwd: str | None = None):
     """Return hook payload metadata for the active runtime or a merged fallback."""
     return resolve_hook_payload_policy(hook_file=__file__, cwd=cwd, surface="notify")
+
+
+def _root_resolution_policy(cwd: str | None = None):
+    """Use merged aliases until a payload workspace is known, then narrow by runtime."""
+    if cwd is None:
+        return get_hook_payload_policy()
+    return _hook_payload_policy(cwd)
 
 
 def _payload_runtime(cwd: str | None = None) -> str | None:
@@ -123,7 +131,7 @@ def _check_and_notify_update(cwd: str | None = None) -> None:
 def _workspace_dir_from_payload(data: dict[str, object], *, cwd: str | None = None) -> str:
     return _shared_workspace_dir_from_payload(
         data,
-        policy_getter=_hook_payload_policy,
+        policy_getter=_root_resolution_policy,
         cwd=cwd,
     )
 
@@ -138,7 +146,7 @@ def _project_root_from_payload(
     return _shared_project_root_from_payload(
         data,
         workspace_dir,
-        policy_getter=_hook_payload_policy,
+        policy_getter=_root_resolution_policy,
         cwd=cwd,
     )
 
@@ -147,13 +155,13 @@ def _resolved_project_root_from_payload(data: dict[str, object], *, cwd: str | N
     """Return the resolved project root for one notify payload workspace."""
     return _resolve_payload_roots(
         data,
-        policy_getter=_hook_payload_policy,
+        policy_getter=_root_resolution_policy,
         cwd=cwd,
     ).project_root
 
 
 def _notification_state_path(cwd: str) -> Path:
-    workspace_root = resolve_project_root(cwd) or Path(cwd).expanduser().resolve(strict=False)
+    workspace_root = resolve_project_root(cwd, require_layout=True) or Path(cwd).expanduser().resolve(strict=False)
     return ProjectLayout(workspace_root).last_observability_notification
 
 
@@ -267,7 +275,7 @@ def main() -> None:
         return
 
     try:
-        roots = _resolve_payload_roots(data, policy_getter=_hook_payload_policy)
+        roots = _resolve_payload_roots(data, policy_getter=_root_resolution_policy)
         workspace_dir = roots.workspace_dir
         project_root = roots.project_root
         hook_payload = _hook_payload_policy(project_root)

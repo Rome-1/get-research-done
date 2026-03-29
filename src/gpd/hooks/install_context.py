@@ -7,7 +7,7 @@ from pathlib import Path
 
 from gpd.adapters.install_utils import CACHE_DIR_NAME, UPDATE_CACHE_FILENAME
 from gpd.core.constants import TODOS_DIR_NAME
-from gpd.core.observability import resolve_project_root
+from gpd.core.root_resolution import resolve_project_root
 from gpd.hooks.install_metadata import (
     config_dir_has_complete_install,
     install_scope_from_manifest,

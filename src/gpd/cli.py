@@ -85,6 +85,10 @@ err_console = Console(stderr=True)
 # Global state threaded through typer context
 _raw: bool = False
 _cwd: Path = Path(".")
+
+_PROJECT_ROOT_AWARE_STATUS_COMMANDS = frozenset({"gpd:progress", "gpd:resume-work"})
+
+
 def _output(data: object) -> None:
     """Print result — JSON when --raw, rich text otherwise."""
     if _raw:
@@ -144,6 +148,37 @@ def _error(msg: str) -> NoReturn:
 
 def _get_cwd() -> Path:
     return _cwd.resolve()
+
+
+def _resolve_project_root_or_cwd(cwd: Path | None = None) -> Path:
+    """Resolve the ancestor project root when present, otherwise keep the workspace cwd."""
+    from gpd.core.observability import resolve_project_root
+
+    workspace_cwd = (cwd or _get_cwd()).expanduser().resolve(strict=False)
+    project_root = resolve_project_root(workspace_cwd)
+    if project_root is None:
+        return workspace_cwd
+    return project_root.expanduser().resolve(strict=False)
+
+
+def _status_command_cwd(cwd: Path | None = None) -> Path:
+    """Resolve the effective cwd for read-only status/recovery commands."""
+    return _resolve_project_root_or_cwd(cwd)
+
+
+def _recoverable_project_context(layout) -> tuple[bool, bool, bool]:
+    """Return whether a workspace has enough durable state for recovery surfaces."""
+    state_exists = any(
+        path.exists()
+        for path in (
+            layout.state_json,
+            layout.state_json_backup,
+            layout.state_md,
+        )
+    )
+    roadmap_exists = layout.roadmap.exists()
+    project_exists = layout.project_md.exists()
+    return state_exists, roadmap_exists, project_exists
 
 
 def _split_global_cli_options(argv: list[str]) -> tuple[list[str], list[str]]:
@@ -1567,7 +1602,7 @@ def resume(
 
     from gpd.core.context import init_resume
 
-    payload = init_resume(_get_cwd())
+    payload = init_resume(_status_command_cwd())
     if _raw:
         _output(payload)
         return
@@ -1586,7 +1621,7 @@ def progress(
     """Render progress in the specified format."""
     from gpd.core.phases import progress_render
 
-    _output(progress_render(_get_cwd(), fmt))
+    _output(progress_render(_status_command_cwd(), fmt))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3011,7 +3046,7 @@ def init_resume() -> None:
     """Assemble context for resuming previous work."""
     from gpd.core.context import init_resume
 
-    _output(init_resume(_get_cwd()))
+    _output(init_resume(_status_command_cwd()))
 
 
 @init_app.command("verify-work")
@@ -3036,7 +3071,7 @@ def init_progress(
         command_name="gpd init progress",
         allowed=_INIT_PROGRESS_INCLUDES,
     )
-    _output(init_progress(_get_cwd(), includes=includes))
+    _output(init_progress(_status_command_cwd(), includes=includes))
 
 
 @init_app.command("map-research")
@@ -4697,8 +4732,9 @@ def _build_command_context_preflight(
     from gpd.core.constants import ProjectLayout
 
     cwd = _get_cwd()
-    layout = ProjectLayout(cwd)
     command, public_command_name = _resolve_registry_command(command_name)
+    context_cwd = _status_command_cwd(cwd) if command.name in _PROJECT_ROOT_AWARE_STATUS_COMMANDS else cwd
+    layout = ProjectLayout(context_cwd)
     project_exists = layout.project_md.exists()
     dispatch_note = _runtime_surface_dispatch_note(cwd=cwd)
     init_command = _active_runtime_new_project_command(cwd=cwd)
@@ -4748,6 +4784,59 @@ def _build_command_context_preflight(
         )
 
     if command.context_mode == "project-required":
+        if command.name in _PROJECT_ROOT_AWARE_STATUS_COMMANDS:
+            state_exists, roadmap_exists, project_exists = _recoverable_project_context(layout)
+            add_check(
+                "state_exists",
+                state_exists,
+                (
+                    "recoverable state present"
+                    if state_exists
+                    else f"missing {_format_display_path(layout.state_json)} and {_format_display_path(layout.state_md)}"
+                ),
+                blocking=False,
+            )
+            add_check(
+                "roadmap_exists",
+                roadmap_exists,
+                (
+                    f"{_format_display_path(layout.roadmap)} present"
+                    if roadmap_exists
+                    else f"missing {_format_display_path(layout.roadmap)}"
+                ),
+                blocking=False,
+            )
+            add_check(
+                "project_exists",
+                project_exists,
+                (
+                    f"{_format_display_path(layout.project_md)} present"
+                    if project_exists
+                    else f"missing {_format_display_path(layout.project_md)}"
+                ),
+                blocking=False,
+            )
+            recoverable = state_exists or roadmap_exists or project_exists
+            guidance = (
+                ""
+                if recoverable
+                else (
+                    "This command requires a recoverable GPD workspace. "
+                    "Open the right project, use `gpd resume --recent` to rediscover it, or "
+                    f"initialize a new project with `{init_command}` in the runtime surface or `gpd init new-project` in the local CLI."
+                )
+            )
+            return CommandContextPreflightResult(
+                command=public_command_name,
+                context_mode=command.context_mode,
+                passed=recoverable,
+                project_exists=project_exists,
+                explicit_inputs=[],
+                guidance=guidance,
+                checks=checks,
+                validated_surface=_validated_runtime_surface(cwd=cwd),
+                dispatch_note=dispatch_note,
+            )
         add_check(
             "project_exists",
             project_exists,
