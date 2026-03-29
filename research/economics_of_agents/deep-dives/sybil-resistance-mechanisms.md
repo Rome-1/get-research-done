@@ -15,45 +15,39 @@ But the taxonomy, as the Round 1 review correctly noted, discusses this problem 
 
 This deep dive surveys the major sybil resistance approaches, evaluates each against AI agents specifically (not just human sybils), maps each to a concrete shape for c(k), and assesses which approaches are likely to remain viable as AI capabilities improve.
 
+**Adversary model note:** Following the [principal-agent analysis](principal-agent-ai.md), we evaluate sybil resistance against *strategic principals operating through AI agents*, not against AI agents as autonomous adversaries. The agent is the tool; the principal is the strategic actor. This distinction matters because the principal can combine human creativity (identifying mechanism vulnerabilities) with AI execution (creating and operating sybil identities at scale). Defense mechanisms must therefore resist not just automated identity creation but strategically directed identity creation — a harder problem.
+
 ---
 
 ## 1. Taxonomy of Sybil Resistance Approaches
 
 ### 1.1 Proof-of-Personhood
 
-Proof-of-personhood systems attempt to establish a one-to-one mapping between identities and unique human beings. The approaches vary widely in their mechanism and their tradeoffs.
+Proof-of-personhood systems attempt to establish a one-to-one mapping between identities and unique human beings.
 
-**Biometric verification (Worldcoin).** Worldcoin uses iris scanning via a custom hardware device (the Orb) to generate a unique biometric hash. The claim is that iris patterns are unique and difficult to forge, creating a hard upper bound of one identity per human. The system stores only hashes, not raw biometric data, and uses zero-knowledge proofs for verification. As of early 2026, Worldcoin has registered over 10 million iris scans, primarily in the Global South.
+**Biometric verification (Worldcoin).** Iris scanning via custom hardware (the Orb) generates a unique biometric hash. Zero-knowledge proofs allow verification without revealing raw biometric data. Over 10 million registrations as of early 2026, concentrated in the Global South.
 
-**Social graph verification (BrightID).** BrightID constructs a social graph of verified connections and uses graph analysis to detect sybil clusters. Users attend "connection parties" (in-person or video) to establish edges. The theory is that real humans have densely connected local graphs that are expensive to fabricate at scale, while sybil clusters are identifiable by their sparse connections to the legitimate graph.
+**Social graph verification (BrightID).** Users build a verified social graph through "connection parties" (in-person or video). Graph analysis detects sybil clusters by their sparse connections to the legitimate graph.
 
-**Synchronous CAPTCHA ceremonies (Idena).** Idena requires all participants to simultaneously solve AI-hard tests (FLIP puzzles -- identifying meaningful image sequences) during short, globally synchronized windows. The synchrony constraint means a single operator cannot solve puzzles for multiple identities sequentially. Each ceremony lasts roughly 2 minutes, and identities that miss ceremonies lose status.
+**Synchronous CAPTCHA ceremonies (Idena).** Globally synchronized puzzle-solving sessions where all participants must solve AI-hard tests (FLIP puzzles) simultaneously. The synchrony constraint prevents one operator from solving for multiple identities sequentially.
 
-**Document verification (Civic, Persona).** These services verify government-issued identity documents (passports, national IDs) and link them to on-chain addresses. This is functionally KYC (Know Your Customer) with a Web3 wrapper. It is the most reliable current method for establishing one-person-one-identity but inherits all the centralization and privacy costs of traditional KYC.
+**Document verification (Civic, Persona).** Government-issued ID verification linked to on-chain addresses -- functionally KYC with a Web3 wrapper. Most reliable for one-person-one-identity but inherits all centralization and privacy costs of traditional KYC.
 
 ### 1.2 Stake-Based Identity
 
-Stake-based systems require participants to lock economic value as a condition of participation. The deposit creates a financial cost to identity multiplication: maintaining k identities requires k times the minimum stake. Slashing conditions -- where misbehavior (including detected sybil activity) causes loss of the deposit -- add a penalty term.
-
-Examples include Ethereum's proof-of-stake validator set (32 ETH minimum), various DAO governance systems with token-gating, and prediction markets like Polymarket that require capital commitment. The mechanism is simple and credibly neutral: anyone can participate if they lock the required capital, and no central authority decides who qualifies.
+Stake-based systems require participants to lock economic value as a condition of participation: k identities require k times the minimum stake. Slashing conditions add a penalty term for detected sybil activity. Examples include Ethereum's validator set (32 ETH minimum), token-gated DAOs, and prediction markets like Polymarket. The mechanism is credibly neutral -- anyone can participate if they post capital -- but inherently plutocratic.
 
 ### 1.3 Social Graph and Web of Trust
 
-Web-of-trust systems propagate identity verification through chains of vouching. If Alice trusts Bob and Bob trusts Carol, Alice extends some (decayed) trust to Carol. The approach dates to PGP key signing in the 1990s and has been revived in blockchain contexts.
-
-Modern implementations include EthereumAttestationService (EAS), where attestations from trusted issuers propagate through a graph, and Circles UBI, which uses trust edges to determine eligibility for a universal basic income token. The key parameter is the trust decay function: how quickly does confidence degrade across hops?
+Web-of-trust systems propagate identity verification through chains of vouching, with trust decaying across hops. Dating to PGP key signing, the approach has been revived in EthereumAttestationService (EAS) and Circles UBI. The key parameter is the trust decay function: how quickly does confidence degrade with distance?
 
 ### 1.4 Computational Puzzles
 
-Proof-of-work identity requires solving a computational puzzle to register. The cost of k identities scales linearly with k (each requires its own puzzle solution). This approach was used in some early anti-spam systems (Hashcash) and implicitly in Bitcoin mining (where identity weight is proportional to hash power).
-
-This category is largely deprecated for identity purposes because the cost scales identically for legitimate users and attackers. A GPU farm that solves puzzles 1,000 times faster than a laptop creates 1,000 identities at the same marginal cost. The approach provides no differentiation between humans and machines.
+Proof-of-work identity requires solving a computational puzzle to register (Hashcash, early Bitcoin). The cost of k identities scales linearly with k. This category is largely deprecated because it provides no differentiation between humans and machines: a GPU farm creates identities at lower marginal cost than a laptop.
 
 ### 1.5 Reputation Accumulation
 
-Reputation-based systems assign identity weight based on historical behavior. New identities start with low or zero reputation and accumulate it through sustained positive participation. Time-weighted reputation adds a temporal dimension: reputation earned long ago counts for more (or less, depending on design) than reputation earned recently.
-
-Conviction voting (used in Commons Stack and 1Hive) is a notable variant: proposals pass not by reaching a vote threshold at a single moment but by accumulating sufficient stake-weighted support over time. The time dimension makes sybil attacks more expensive because each identity must independently build reputation over weeks or months.
+Reputation-based systems assign identity weight based on sustained historical behavior. Conviction voting (Commons Stack, 1Hive) is a notable variant: influence accumulates through continuous stake-weighted support over time rather than one-shot votes. The time dimension makes sybil attacks more expensive because each identity must independently build reputation over weeks or months.
 
 ### 1.6 Hybrid Approaches
 
@@ -67,7 +61,7 @@ The critical question is not whether these mechanisms resist human sybils -- mos
 
 ### 2.1 Proof-of-Personhood
 
-**Resistance to AI identities.** Biometric systems (Worldcoin) are currently the strongest defense because they require a physical human body at a physical device. An AI agent cannot fabricate an iris. However, the attack surface shifts to the supply side: paying humans to scan their irises and surrender the resulting credentials. Reports from Kenya, Indonesia, and other early-adoption markets suggest this is already happening at non-trivial scale, with iris scans reportedly purchased for $30-50. Social graph systems (BrightID) are moderately resistant: AI agents can create fake social connections, but graph analysis can detect synthetic clusters if the legitimate graph is sufficiently well-characterized. Synchronous CAPTCHAs (Idena) are under direct threat because AI systems are increasingly capable of solving the visual puzzles; Idena has had to escalate puzzle difficulty multiple times.
+**Resistance to AI identities.** Biometric systems (Worldcoin) are currently the strongest defense -- an AI agent cannot fabricate an iris. However, the attack surface shifts to buying human credentials: reports from Kenya and Indonesia suggest iris scans are purchased for $30-50. Social graph systems (BrightID) are moderately resistant but vulnerable to synthetic clusters. Synchronous CAPTCHAs (Idena) are under direct threat as AI puzzle-solving improves; Idena has escalated puzzle difficulty multiple times.
 
 **Marginal cost curve.** Ideally c(k) approaches infinity at k=1 -- binary uniqueness. In practice, biometric approaches achieve c(k) = c_bribe * k where c_bribe is the cost of acquiring one real human's credentials. Social graph approaches have sublinear c(k) for small k (creating a few connected fake identities is easy) but superlinear for large k (clusters become detectable).
 
@@ -77,23 +71,23 @@ The critical question is not whether these mechanisms resist human sybils -- mos
 
 ### 2.2 Stake-Based Identity
 
-**Resistance to AI identities.** None, by design. Stake-based systems are identity-agnostic: they do not care whether the staker is human or artificial. An AI principal with sufficient capital can stake k times. This makes stake-based identity a plutocratic mechanism -- it resists sybils from capital-constrained attackers but not from well-funded ones.
+**Resistance to AI identities.** None, by design. Stake-based systems are identity-agnostic: an AI principal with sufficient capital stakes k times. This resists capital-constrained attackers but not well-funded ones.
 
-**Marginal cost curve.** c(k) = c_0 * k, strictly linear. The slope c_0 (minimum stake) is a tunable parameter. Setting c_0 high enough to deter attacks also excludes legitimate participants with limited capital. This is the fundamental tradeoff: accessibility versus sybil resistance.
+**Marginal cost curve.** c(k) = c_0 * k, strictly linear. Setting c_0 high enough to deter attacks also excludes legitimate participants -- the fundamental accessibility-versus-resistance tradeoff.
 
-**Failure modes.** Stake centralization (wealthy actors dominate), flash loan attacks (borrow stake, act, return in one transaction), and the circularity problem (in systems where staking earns yield, the stake cost may be partially offset by returns, reducing effective c(k)).
+**Failure modes.** Stake centralization, flash loan attacks (borrow stake, act, return in one transaction), and yield-bearing stakes that reduce effective c(k).
 
-**Privacy.** Good. Stake-based systems require only a deposit, not identity disclosure. Pseudonymous participation is natural.
+**Privacy.** Good. Only a deposit is required, not identity disclosure.
 
 ### 2.3 Social Graph / Web of Trust
 
-**Resistance to AI identities.** Moderate and degrading. AI agents can create convincing personas and build social connections autonomously. Current LLM-based agents can maintain persistent identities across platforms, participate in conversations, and accumulate genuine-seeming social graph edges. The defense relies on graph-theoretic detection of anomalous cluster structure, which is an arms race: as AI agents become better at mimicking organic social behavior, the statistical signatures that distinguish real from fake graphs weaken.
+**Resistance to AI identities.** Moderate and degrading. LLM-based agents can maintain persistent personas, participate in conversations, and accumulate genuine-seeming social graph edges. The defense is graph-theoretic detection of anomalous clusters -- an arms race that AI agents are gradually winning.
 
-**Marginal cost curve.** Sublinear for small k (creating a few connected nodes is cheap and undetectable), transitioning to superlinear as k increases past a detection threshold k*. Formally, c(k) behaves roughly as c_edge * k^alpha where alpha < 1 for k < k* and alpha > 1 for k > k*. The value of k* depends on graph analysis sophistication and is itself an arms race variable. Against AI agents capable of long-term persona maintenance, k* shifts upward over time.
+**Marginal cost curve.** Sublinear for small k (a few connected fake nodes are cheap), transitioning to superlinear past a detection threshold k*. Against AI agents with long-term persona capability, k* shifts upward over time.
 
-**Failure modes.** Long-running infiltration attacks where AI agents build genuine-seeming reputation over months before activating as sybils. Graph poisoning where fake edges are introduced to the legitimate graph. Collusion between real humans and AI operators.
+**Failure modes.** Long-running infiltration (AI agents build reputation for months before activating), graph poisoning, and collusion between real humans and AI operators.
 
-**Privacy.** Moderate. Social graphs inherently reveal relationship structure. Privacy-preserving social graph verification (proving you have sufficient connections without revealing who they are) is an active research area but not yet practical.
+**Privacy.** Moderate. Social graphs inherently reveal relationship structure. Privacy-preserving verification remains an active research area.
 
 ### 2.4 Computational Puzzles
 
@@ -103,21 +97,21 @@ The critical question is not whether these mechanisms resist human sybils -- mos
 
 ### 2.5 Reputation Accumulation
 
-**Resistance to AI identities.** The time dimension is the key defense. An AI agent can create a new identity instantly but cannot accelerate clock time. Building reputation over months or years imposes a genuine cost: the opportunity cost of the identity's "dormancy period" and the risk that the system's detection mechanisms improve before the identity is activated. Conviction-style systems, where influence accumulates slowly and cannot be transferred or concentrated, are relatively robust.
+**Resistance to AI identities.** The time dimension is the key defense. AI agents can create identities instantly but cannot accelerate clock time. Building reputation over months imposes genuine cost: opportunity cost of dormancy plus the risk that detection improves before activation. Conviction-style systems where influence accumulates slowly are relatively robust.
 
-**Marginal cost curve.** c(k) = c_0 + t * k, where t is the time cost per identity. If t is measured in months and the mechanism requires meaningful reputation for meaningful influence, this can be substantial. The weakness is that AI agents can run many reputation-building processes in parallel, so the real constraint is t (clock time, which is irreducible) times k, but the per-identity maintenance cost may be low.
+**Marginal cost curve.** c(k) = c_0 + t * k, where t is the irreducible time cost per identity. AI agents can farm many identities in parallel, but each still requires real elapsed time.
 
-**Failure modes.** Aged account markets (buying old, reputable accounts). Gradual reputation farming by AI agents running autonomously for months. Reputation systems that weight recent activity heavily (reducing the time defense).
+**Failure modes.** Aged account markets, autonomous reputation farming over months, and systems that over-weight recent activity (reducing the time defense).
 
-**Privacy.** Reputation systems inherently require tracking behavior over time, creating privacy concerns. Pseudonymous reputation (consistent pseudonym with tracked history) offers a middle path.
+**Privacy.** Requires tracking behavior over time. Pseudonymous reputation offers a middle path.
 
 ### 2.6 Hybrid (Gitcoin Passport Model)
 
-**Resistance to AI identities.** Strongest current practical defense. Faking any single signal is feasible; simultaneously faking 10+ uncorrelated signals (government ID, social media history, on-chain activity, biometric attestation, proof-of-attendance, ENS domain) is expensive and operationally complex. The cost is superlinear in the number of required stamps and approximately linear in the number of sybil identities.
+**Resistance to AI identities.** Strongest current practical defense. Simultaneously faking 10+ uncorrelated signals (government ID, social media history, on-chain activity, biometric attestation, ENS domain) is expensive and operationally complex.
 
-**Marginal cost curve.** c(k) = (sum of stamp costs) * k, where the sum of stamp costs is itself superlinear in the number of required stamps. Gitcoin has empirically tuned threshold scores across multiple rounds, observing that a minimum score of ~20 (out of ~100 possible) eliminates the large majority of detectable sybils while remaining accessible to legitimate participants. Higher thresholds eliminate more sybils but also more legitimate users.
+**Marginal cost curve.** c(k) = (sum of stamp costs) * k, where stamp costs are superlinear in the number required. Gitcoin has empirically tuned thresholds across multiple rounds: a minimum score of ~20/100 eliminates most detectable sybils while remaining accessible.
 
-**Failure modes.** Signal correlation (if several stamps rely on the same underlying data source, they are not truly independent). Stamp market emergence (services that provide verified stamps for a fee). Threshold gaming (accumulating exactly enough stamps to qualify, minimizing cost). Score inflation over time as AI agents become better at satisfying individual stamp requirements.
+**Failure modes.** Signal correlation (stamps sharing underlying data sources), stamp markets (buying verified credentials), threshold gaming, and gradual score inflation as AI agents improve at satisfying individual stamps.
 
 ---
 
@@ -125,9 +119,9 @@ The critical question is not whether these mechanisms resist human sybils -- mos
 
 Strong sybil resistance and permissionless access are in direct tension. The most effective sybil defense -- biometric verification linked to government identity -- is also the most centralizing. It requires trusted hardware operators, creates single points of failure, enables censorship (deny verification to disfavored populations), and is fundamentally incompatible with the privacy and permissionlessness values that motivate decentralized system design.
 
-Weak sybil resistance preserves openness but enables the attacks the taxonomy describes: VCG surplus extraction, quadratic voting capture, labor market manipulation, and mechanism design breakdown. This is not merely a technical problem awaiting a clever cryptographic solution. It is a values tradeoff between two desirable properties -- openness and integrity -- that become increasingly incompatible as identity creation costs approach zero.
+Weak sybil resistance preserves openness but enables the attacks the taxonomy describes: VCG surplus extraction, quadratic voting capture, and mechanism design breakdown. This is a values tradeoff, not merely a technical problem, between openness and integrity -- increasingly incompatible as identity costs approach zero.
 
-The DeFi governance community has lived with this tension for years. The practical resolution has been graduated defense: low-stakes decisions (forum governance, temperature checks) use weak sybil resistance (token holding), medium-stakes decisions (grants, quadratic funding) use hybrid approaches (Gitcoin Passport), and high-stakes decisions (protocol upgrades, treasury management) use stake-weighted voting that explicitly accepts plutocratic properties in exchange for sybil resistance. This pragmatic layering reflects an implicit recognition that no single mechanism resolves the tension at all stakes.
+The DeFi governance community has lived with this tension for years. The practical resolution is graduated defense: low-stakes decisions use weak resistance (token holding), medium-stakes decisions use hybrid approaches (Gitcoin Passport), and high-stakes decisions use stake-weighted voting that explicitly accepts plutocratic properties. This layering reflects an implicit recognition that no single mechanism resolves the tension at all stakes.
 
 ---
 
@@ -135,15 +129,15 @@ The DeFi governance community has lived with this tension for years. The practic
 
 The taxonomy's identity cost function c(k) = c_0 + c_marginal * (k - 1) + c_coordination(k) provides a framework for comparing mechanisms. Each sybil resistance approach implies a specific shape for c(k):
 
-**Proof-of-personhood (biometric).** In the ideal case, c(k) is infinite for k > 1: you have one body, one iris, one identity. In practice, c(k) = c_bribe * k, where c_bribe is the market price of a human willing to lend their biometrics. Current data suggests c_bribe is $30-100 in lower-income markets. This makes the effective cost curve linear with a slope set by the global labor market for biometric lending -- a depressing but empirically observable quantity.
+**Proof-of-personhood (biometric).** Ideally c(k) is infinite for k > 1. In practice, c(k) = c_bribe * k, where c_bribe ($30-100 in lower-income markets) is the price of a human lending their biometrics. Linear, with slope set by the global labor market for credential lending.
 
-**Stake-based.** c(k) = s * k, where s is the minimum stake. This is exactly linear, perfectly predictable, and tunable by the mechanism designer. The coordination cost c_coordination(k) is approximately zero (no need to disguise stake-based identities as independent). The simplicity is both its strength (transparent, analyzable) and its weakness (no superlinearity, no detection-based deterrence).
+**Stake-based.** c(k) = s * k, exactly linear and tunable via minimum stake s. Coordination cost is approximately zero. Transparent and analyzable but offers no superlinearity or detection-based deterrence.
 
-**Social graph.** c(k) is sublinear for small k (creating a few connected nodes is cheap and undetectable), then transitions to superlinear as k increases past a detection threshold k*. Formally, c(k) behaves roughly as c_edge * k^alpha where alpha < 1 for k < k* and alpha > 1 for k > k*. The value of k* depends on graph analysis sophistication and is itself an arms race variable. Against AI agents capable of long-term persona maintenance, k* shifts upward over time.
+**Social graph.** c(k) ~ c_edge * k^alpha, where alpha < 1 for k below a detection threshold k* and alpha > 1 above it. Against AI agents with long-term persona capability, k* shifts upward -- more fake identities survive before detection triggers.
 
-**Reputation.** c(k) = c_maintenance * k * T, where T is the minimum reputation-building time. The irreducible time component T is the key defense: no amount of compute can compress clock time. However, c_maintenance (the cost of maintaining an active, reputation-building identity per unit time) may be very low for AI agents, making the effective cost c(k) approximately proportional to k * T with a small constant.
+**Reputation.** c(k) = c_maintenance * k * T, where T is irreducible clock time. No compute can compress T, but c_maintenance may be very low for autonomous AI agents, making the effective cost proportional to k * T with a small constant.
 
-**Hybrid (Gitcoin Passport).** c(k) = (sum_i c_stamp_i) * k, where the sum runs over all required stamps. If n stamps are required and each costs c_stamp on average, the total is n * c_stamp * k. The superlinearity comes from n: requiring more stamps increases the per-identity cost faster than linearly because stamps are drawn from different domains (social, financial, biometric, temporal) with independent cost structures. The mechanism designer's lever is the minimum score threshold, which implicitly sets n.
+**Hybrid (Gitcoin Passport).** c(k) = (sum_i c_stamp_i) * k. Superlinearity comes from requiring stamps across independent domains (social, financial, biometric, temporal). The mechanism designer's lever is the minimum score threshold, which implicitly sets how many domains must be satisfied.
 
 ---
 
@@ -155,9 +149,9 @@ Computational puzzles are already obsolete -- AI agents solve them cheaper than 
 
 The viable path forward is the layered approach exemplified by Gitcoin Passport, generalized and hardened. The design principle is defense in depth: require multiple uncorrelated signals, score them continuously rather than as a one-time gate, and adjust thresholds dynamically based on observed attack patterns. The key economic insight is that **sybil resistance does not need to be perfect -- it needs to make c(k) exceed the exploitable surplus of the target mechanism.**
 
-This reframes the problem. Instead of asking "can we achieve perfect one-person-one-identity?" (almost certainly not, in a world of credential markets and AI-generated personas), we ask: "for a mechanism with exploitable surplus S, can we make the identity cost c(k*) > S, where k* is the number of sybil identities needed to extract S?" If yes, the mechanism is economically secure even with imperfect sybil resistance. The mechanism designer's job is to (a) minimize the exploitable surplus per identity (mechanism design), (b) maximize the per-identity cost through layered verification (sybil resistance), and (c) ensure (b) exceeds (a) with margin.
+This reframes the problem. Instead of asking "can we achieve perfect one-person-one-identity?" we ask: "for a mechanism with exploitable surplus S, can we ensure c(k*) > S, where k* is the sybil count needed to extract S?" If yes, the mechanism is economically secure despite imperfect identity verification. The designer's job is to minimize exploitable surplus (mechanism design) while maximizing per-identity cost (sybil resistance) until the latter exceeds the former.
 
-Concretely, this suggests several design principles for mechanisms operating in AI-agent-populated environments:
+This suggests design principles for mechanisms in AI-agent-populated environments:
 
 1. **Cap per-identity surplus.** Mechanisms like quadratic funding can limit the maximum matching amount per participant, bounding the reward for sybil creation.
 

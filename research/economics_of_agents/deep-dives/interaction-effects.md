@@ -274,7 +274,7 @@ An overall **Danger Rating** synthesizes the three dimensions.
 | **Speed x Elastic Labor** | Medium | High | Medium | **HIGH** | Professional services, labor regulation |
 | **Collusion x Sybil** | High | Medium | High | **CRITICAL** | Antitrust law (entire framework) |
 | **Speed x Monetary Velocity** | Medium | Medium | High | **HIGH** | Central banking, monetary policy |
-| **Sybil x Speed x Elastic Labor** | Extreme | Medium | Extreme | **EXISTENTIAL** | Market economy as a governance system |
+| **Sybil x Speed x Elastic Labor** | Extreme | Medium (near-term feasibility growing) | Extreme | **SYSTEMIC** | Market economy as a governance system |
 
 ### Reading the matrix
 
@@ -282,7 +282,9 @@ Three compounds rate CRITICAL: Sybil x Speed, Sybil x Elastic Labor, and Collusi
 
 Two compounds rate HIGH: Speed x Elastic Labor and Speed x Monetary Velocity. These are severe but do not break the fundamental observability of the system. Regulators can see that AI labor is fast and plentiful; central bankers can observe velocity increasing. The challenge is *responding* to visible changes, not *detecting* hidden manipulation. This makes them more tractable — difficult policy problems rather than epistemically impossible ones.
 
-The triple compound (Sybil x Speed x Elastic Labor) rates EXISTENTIAL because it combines the undetectability of sybil-amplified violations with the scale of elastic labor and the speed that prevents real-time response. It is the scenario in which the market economy's core function — decentralized coordination through prices among independent agents — is no longer a description of what is happening. What is happening is centralized optimization presented through a facade of decentralized participation. Whether the economy continues to produce efficient outcomes under this regime is an empirical question that our current theory cannot answer, because the theory assumes the decentralized coordination is real.
+The triple compound (Sybil x Speed x Elastic Labor) rates SYSTEMIC — meaning it threatens the functioning of market coordination as a governance system, though not necessarily civilizational collapse — because it combines the undetectability of sybil-amplified violations with the scale of elastic labor and the speed that prevents real-time response. It is the scenario in which the market economy's core function — decentralized coordination through prices among independent agents — is no longer a description of what is happening. What is happening is centralized optimization presented through a facade of decentralized participation. Whether the economy continues to produce efficient outcomes under this regime is an empirical question that our current theory cannot answer, because the theory assumes the decentralized coordination is real.
+
+**Temporal note:** This triple compound is not yet realized at scale. Current identity costs, while falling rapidly, still impose meaningful friction on sybil creation in regulated markets (see the taxonomy's identity cost analysis). The SYSTEMIC rating reflects the scenario's severity conditional on feasibility, not an assessment of the current state. The taxonomy rates individual violations (e.g., Arrow-Debreu at "High") against *current conditions*; this interaction analysis rates compounds against *the conditions they require*, which are approaching but have not fully arrived. The two assessments are consistent when their different temporal frames are recognized.
 
 ### What is relatively benign?
 
