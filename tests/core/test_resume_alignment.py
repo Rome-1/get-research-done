@@ -41,19 +41,23 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "execution_resume_file" in resume_doc
     assert "execution_resume_file" in portability_doc
     assert "machine_change_detected" in resume_doc
+    assert "missing_session_resume_file" in resume_doc
     assert "session_resume_file" in resume_doc
+    assert "Recorded session handoff is missing" in resume_doc
     assert "stopped-at handoff" in resume_doc
     assert "previous hostname/platform" in resume_doc
     assert "machine-change notice" in resume_doc
+    assert "rerunning the installer so runtime-local config stays current" in resume_doc
     assert "stopped-at handoff" in portability_doc
     assert "resume pointer or interrupted segment" in portability_doc
     assert "hostname/platform differ" in portability_doc
     assert "machine-change advisory" in portability_doc
+    assert "rerunning the installer" in portability_doc
     assert "current-execution.json" in portability_doc
     assert "bounded-segment resume state" in portability_doc
-    assert "portable bounded-segment resume hint" in portability_doc
-    assert "Non-project or missing resume pointers are treated as advisory telemetry" in portability_doc
-    assert 'do not make `resume_mode="bounded_segment"`' in portability_doc
+    assert "advisory continuity context only" in portability_doc
+    assert "does not create a resumable `current_execution` candidate" in portability_doc
+    assert 'set `resume_mode="bounded_segment"`' in portability_doc
     assert "project-relative paths" in portability_doc
     assert "normalizes project-local absolute `resume_file` paths back to relative form" in portability_doc
     assert "usable state from `GPD/state.json`, `GPD/state.json.bak`, or `GPD/STATE.md`" in resume_doc
@@ -62,6 +66,7 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "silently promoting `state.json.bak` as the current authoritative contract" in portability_doc
     assert "does not choose a newer backup by timestamp alone" in portability_doc
     assert "state.json  >  state.json.bak  >  STATE.md" in portability_doc
+    assert "reconstructs the full project context from recoverable state in `GPD/state.json`, `GPD/state.json.bak`, or `GPD/STATE.md`" in portability_doc
     assert "state.json > state.json.bak > STATE.md" in schema_doc
     assert "state saves fail closed if the backup cannot be refreshed" in schema_doc
     assert "/gpd:sync-state" in portability_doc
@@ -113,6 +118,7 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "Hostname" in state_doc
     assert "Platform" in state_doc
     assert "normalizes project-local absolute paths back to that form" in schema_doc
+    assert "recommends rerunning the installer when runtime-local config may be stale" in schema_doc
 
 
 def test_recovery_docs_keep_runtime_resume_work_distinct_from_local_resume_surfaces() -> None:
@@ -178,3 +184,4 @@ def test_init_resume_surfaces_machine_change_and_session_resume_candidate(
     assert ctx["machine_change_detected"] is True
     assert "old-host" in ctx["machine_change_notice"]
     assert "new-host" in ctx["machine_change_notice"]
+    assert "Rerun the installer" in ctx["machine_change_notice"]

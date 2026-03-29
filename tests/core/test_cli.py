@@ -1146,7 +1146,8 @@ def test_resume_plain_output_surfaces_machine_change_as_advisory_status(tmp_path
             "active_execution_segment": None,
             "machine_change_notice": (
                 "Machine change detected: last active on old-host (Linux 5.15 x86_64); "
-                "current machine new-host (Linux 6.1 x86_64). The project state is portable and does not require repair."
+                "current machine new-host (Linux 6.1 x86_64). The project state is portable and does not require repair. "
+                "Rerun the installer if runtime-local config may be stale on this machine."
             ),
         },
     )
@@ -1157,7 +1158,52 @@ def test_resume_plain_output_surfaces_machine_change_as_advisory_status(tmp_path
     normalized = " ".join(result.output.split())
     assert "A machine change was detected" in normalized
     assert "the project state is portable and does not require repair." in normalized
+    assert "Rerun the installer" in normalized
     assert "No recent local recovery target is currently recorded." not in result.output
+
+
+def test_resume_plain_output_keeps_machine_change_notice_when_session_handoff_is_primary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "gpd.core.context.init_resume",
+        lambda _cwd: {
+            "planning_exists": True,
+            "state_exists": True,
+            "roadmap_exists": True,
+            "project_exists": True,
+            "segment_candidates": [
+                {
+                    "source": "session_resume_file",
+                    "status": "handoff",
+                    "resume_file": "GPD/phases/04/.continue-here.md",
+                    "resumable": False,
+                }
+            ],
+            "session_resume_file": "GPD/phases/04/.continue-here.md",
+            "execution_resume_file": "GPD/phases/04/.continue-here.md",
+            "execution_resume_file_source": "session_resume_file",
+            "has_live_execution": False,
+            "resume_mode": None,
+            "execution_paused_at": None,
+            "autonomy": None,
+            "research_mode": None,
+            "active_execution_segment": None,
+            "machine_change_notice": (
+                "Machine change detected: last active on old-host (Linux 5.15 x86_64); "
+                "current machine new-host (Linux 6.1 x86_64). The project state is portable and does not require repair. "
+                "Rerun the installer if runtime-local config may be stale on this machine."
+            ),
+        },
+    )
+
+    result = runner.invoke(app, ["resume"])
+
+    assert result.exit_code == 0
+    normalized = " ".join(result.output.split())
+    assert "A recorded session handoff is available" in normalized
+    assert "Rerun the installer" in normalized
 
 
 def test_resume_plain_output_surfaces_advisory_live_execution_status(tmp_path: Path, monkeypatch) -> None:

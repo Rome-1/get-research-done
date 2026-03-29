@@ -1104,7 +1104,8 @@ def _build_execution_runtime_context(cwd: Path) -> dict[str, object]:
             "Machine change detected: "
             f"last active on {session_hostname} ({session_platform}); "
             f"current machine {current_hostname} ({current_platform}). "
-            "The project state is portable and does not require repair."
+            "The project state is portable and does not require repair. "
+            "Rerun the installer if runtime-local config may be stale on this machine."
         )
 
     return {

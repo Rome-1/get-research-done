@@ -193,3 +193,29 @@ def test_build_recovery_advice_prefers_missing_handoff_over_advisory_live_execut
     assert advice.current_workspace_has_resume_file is False
     assert advice.has_local_recovery_target is False
     assert advice.primary_reason == "Current workspace has recorded recovery state, but the last handoff file is missing."
+
+
+def test_build_recovery_advice_keeps_machine_change_notice_in_current_workspace_priority(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+
+    advice = build_recovery_advice(
+        project,
+        recent_rows=[{"project_root": "/tmp/other", "available": True, "resumable": True}],
+        resume_payload={
+            "machine_change_notice": (
+                "Machine change detected: last active on old-host (Linux 5.15 x86_64); "
+                "current machine new-host (Linux 6.1 x86_64). "
+                "The project state is portable and does not require repair. "
+                "Rerun the installer if runtime-local config may be stale on this machine."
+            ),
+            "has_live_execution": False,
+        },
+    )
+
+    assert advice.mode == "current-workspace"
+    assert advice.status == "workspace-recovery"
+    assert advice.primary_command == "gpd resume"
+    assert advice.recent_projects_count == 1
+    assert advice.machine_change_notice is not None
+    assert advice.primary_reason == "Current workspace has recorded recovery state and a machine-change notice to inspect."
+    assert "Rerun the installer" in advice.machine_change_notice

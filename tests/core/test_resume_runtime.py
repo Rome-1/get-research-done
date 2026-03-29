@@ -128,6 +128,7 @@ def test_init_resume_surfaces_machine_change_and_session_resume_candidate(
 
     assert ctx["machine_change_detected"] is True
     assert "old-host" in ctx["machine_change_notice"]
+    assert "Rerun the installer" in ctx["machine_change_notice"]
     assert ctx["session_hostname"] == "old-host"
     assert ctx["session_platform"] == "Linux 5.15 x86_64"
     assert ctx["current_hostname"] == "new-host"

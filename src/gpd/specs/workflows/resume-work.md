@@ -29,7 +29,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `state_exists`, `roadmap_exists`, `project_exists`, `planning_exists`, `has_interrupted_agent`, `interrupted_agent_id`, `commit_docs`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`, `active_execution_segment`, `segment_candidates`, `resume_mode`, `execution_resumable`, `execution_resume_file`, `execution_resume_file_source`, `current_execution_resume_file`, `session_resume_file`, `execution_paused_at`, `execution_review_pending`, `execution_pre_fanout_review_pending`, `execution_skeptical_requestioning_required`, `execution_downstream_locked`, `machine_change_detected`, `machine_change_notice`, `current_hostname`, `current_platform`, `session_hostname`, `session_platform`.
+Parse JSON for: `state_exists`, `roadmap_exists`, `project_exists`, `planning_exists`, `has_interrupted_agent`, `interrupted_agent_id`, `commit_docs`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`, `active_execution_segment`, `segment_candidates`, `resume_mode`, `execution_resumable`, `execution_resume_file`, `execution_resume_file_source`, `current_execution_resume_file`, `session_resume_file`, `missing_session_resume_file`, `execution_paused_at`, `execution_review_pending`, `execution_pre_fanout_review_pending`, `execution_skeptical_requestioning_required`, `execution_downstream_locked`, `machine_change_detected`, `machine_change_notice`, `current_hostname`, `current_platform`, `session_hostname`, `session_platform`.
 
 `state_exists` means INIT could recover usable state from `GPD/state.json`, `GPD/state.json.bak`, or `GPD/STATE.md`. A stray unreadable file path by itself does not count as recoverable state.
 
@@ -37,9 +37,11 @@ Parse JSON for: `state_exists`, `roadmap_exists`, `project_exists`, `planning_ex
 **If `state_exists` is false but `roadmap_exists` or `project_exists` is true:** Offer to reconstruct STATE.md
 **If `planning_exists` is false:** This is a new project - route to /gpd:new-project
 
-If `resume_mode="bounded_segment"` and `active_execution_segment` exists, treat that as the primary resume target. Do not infer a second resume system from ad hoc handoff files or stale notes outside the canonical handoff path.
+If `resume_mode="bounded_segment"` and `active_execution_segment` exists, treat that as the primary bounded resume target. Do not infer a second resume system from ad hoc handoff files or stale notes outside the canonical handoff path.
 
-If `active_execution_segment` exists but `current_execution_resume_file` is empty, non-project, or missing on disk, treat that live snapshot as advisory context only. It can explain the last gate or paused work, but it is not a ranked bounded-segment resume candidate and does not justify `resume_mode="bounded_segment"`.
+`resume_mode` is narrower than the overall recovery status. A recorded `session_resume_file`, a `missing_session_resume_file`, or advisory live execution can still exist when `resume_mode` is `None`.
+
+If `active_execution_segment` exists but `execution_resumable` is false, treat that live snapshot as advisory context only. If `current_execution_resume_file` is empty, non-project, or missing on disk, call that out explicitly; in all such cases it is not a ranked bounded-segment resume candidate and does not justify `resume_mode="bounded_segment"`.
 
 If `active_execution_segment.pre_fanout_review_pending` is true, the gate is still live even when a resume file exists. If `active_execution_segment.pre_fanout_review_cleared` is true, the review outcome was recorded but the separate fanout unlock is still missing.
 
@@ -50,7 +52,7 @@ If `active_execution_segment.first_result_gate_pending` is true, do not treat la
 
 **machine_change_detection:** Compare the current hostname/platform with `session.hostname` and `session.platform` from `state.json`. If they differ, display the non-blocking machine-change notice from INIT and recommend rerunning the installer so runtime-local config stays current. The project state itself remains portable and does not require repair.
 
-**canonical handoff path:** `/gpd:pause-work` records a canonical phase handoff by writing `GPD/phases/.../.continue-here.md` and persisting that pointer into session continuity. `execution_resume_file` is surfaced from the live execution snapshot or `session.resume_file` for display and logging. The runtime also ranks `session.resume_file` as a `session_resume_file` handoff candidate in `segment_candidates` when it is distinct from the live execution resume file. Treat it as informational continuity metadata, not as proof that a resumable bounded segment still exists. The same machine-readable intake powers the local `gpd resume` summary. If you need to rediscover the project first, use `gpd resume --recent` before dropping into the per-project resume flow.
+**canonical handoff path:** `/gpd:pause-work` records a canonical phase handoff by writing `GPD/phases/.../.continue-here.md` and persisting that pointer into session continuity. `execution_resume_file` is surfaced from the live execution snapshot or `session.resume_file` for display and logging. The runtime also ranks `session.resume_file` as a `session_resume_file` handoff candidate in `segment_candidates` when it is distinct from the live execution resume file. Treat it as a ranked non-bounded handoff candidate and continuity pointer, not as proof that a resumable bounded segment still exists. The same machine-readable intake powers the local `gpd resume` summary. If you need to rediscover the project first, use `gpd resume --recent` before dropping into the per-project resume flow.
 
 Read and parse STATE.md, then PROJECT.md:
 
@@ -211,7 +213,7 @@ if [ "$has_interrupted_agent" = "true" ]; then
 fi
 ```
 
-**Bounded execution segment detection:** If `active_execution_segment` is present, `execution_resumable` is true, and `current_execution_resume_file` is present, treat that live snapshot as the primary resume target. The runtime currently ranks only a resumable live execution snapshot with a portable repo-local resume pointer, a non-resumable `session_resume_file` handoff candidate, and an interrupted-agent marker as resume candidates. If the live snapshot lacks a portable usable resume file, keep it visible only as advisory context. Do NOT invent additional candidates from plan files without summaries, auto-checkpoints, or other ad hoc checkpoints.
+**Bounded execution segment detection:** If `active_execution_segment` is present, `execution_resumable` is true, and `current_execution_resume_file` is present, treat that live snapshot as the primary resume target. The runtime currently ranks three source families into `segment_candidates`: a resumable live execution snapshot (`current_execution`), a non-resumable or advisory `session_resume_file` handoff source, and an interrupted-agent marker. If the live snapshot lacks a portable usable resume file, keep it visible only as advisory context. Do NOT invent additional candidates from plan files without summaries, auto-checkpoints, or other ad hoc checkpoints.
 
 Reason-scoped clears still matter on resume: a `first_result` clear does not retire `pre_fanout` or skeptical fields, and a `fanout unlock` does not clear the review gate by itself.
 
@@ -255,7 +257,7 @@ Present complete research project status to user:
     - Intermediate results: [Z] recorded
     - Approximations: [W] catalogued
 
-[If active_execution_segment has a resume file:]
+[If `execution_resumable` is true and `active_execution_segment` has a resume file:]
 >> Research checkpoint detected:
     - Resume artifact: [resume_file]
     - Derivation state: [brief summary from the active execution snapshot]
@@ -263,14 +265,22 @@ Present complete research project status to user:
     - Last result obtained: [most recent intermediate result]
     - Next planned step: [what was planned before pausing]
 
-[If execution_resume_file exists but there is no active execution segment:]
->> Session resume file recorded:
-    - Resume artifact: [execution_resume_file]
-    - Status: informational only; no resumable live execution snapshot is currently active
+[If `session_resume_file` exists and `execution_resumable` is false:]
+>> Session handoff recorded:
+    - Resume artifact: [session_resume_file]
+    - Status: recoverable session handoff; no resumable live execution snapshot is currently active
+    - Note: this can coexist with an advisory live execution snapshot
 
-[If active_execution_segment exists but `current_execution_resume_file` is empty:]
+[If `missing_session_resume_file` exists:]
+>> Recorded session handoff is missing:
+    - Resume artifact: [missing_session_resume_file]
+    - Status: continuity metadata exists, but the recorded handoff file is missing from this workspace
+    - Action: repair or recreate the handoff target before treating it as a resumable local target
+
+[If `active_execution_segment` exists and `execution_resumable` is false:]
 >> Live execution snapshot detected:
-    - Status: advisory only; the stored resume pointer is not portable or no longer resolves
+    - Status: advisory only; no bounded resume segment is currently active
+    - [If `current_execution_resume_file` is empty, non-project, or missing on disk:] the stored resume pointer is not portable or no longer resolves
     - Use: recover context about the last gate or paused task, but do not treat it as a resumable bounded segment
 
 [If machine_change_detected is true:]
@@ -332,7 +342,7 @@ Based on project state, determine the most logical next action:
 -> Do not resume downstream fanout until the gate has an explicit clear/override outcome and, for `pre_fanout`, the matching fanout-unlock transition
 -> Option: Review another ranked resume candidate from `segment_candidates`
 
-**If `active_execution_segment` exists but `current_execution_resume_file` is empty:**
+**If `active_execution_segment` exists and `execution_resumable` is false:**
 -> Primary: Treat the live snapshot as advisory continuity context only and prefer a valid `session_resume_file` handoff or repair action
 -> Option: Inspect the live gate state without claiming the bounded segment is directly resumable
 
@@ -343,6 +353,14 @@ Based on project state, determine the most logical next action:
 **If interrupted agent exists:**
 -> Primary: Resume interrupted agent (Task tool with resume parameter)
 -> Option: Start fresh (abandon agent work)
+
+**If `session_resume_file` exists and `execution_resumable` is false and no interrupted agent exists:**
+-> Primary: Continue from the recorded session handoff in the current workspace
+-> Option: Inspect any advisory live execution context without claiming a bounded segment is active
+
+**If `missing_session_resume_file` exists and no interrupted agent exists:**
+-> Primary: Repair or recreate the recorded handoff file before treating it as a resumable local target
+-> Option: Inspect advisory live execution context or other recorded recovery state without claiming a bounded segment is active
 
 **If incomplete plan (PLAN without SUMMARY):**
 -> Primary: Complete the incomplete plan
