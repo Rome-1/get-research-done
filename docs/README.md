@@ -4,6 +4,7 @@ Use this page as the single first-stop for new users.
 
 Use it to pick one OS guide and one runtime guide. The exact install,
 startup, and return-to-work commands live in those guides.
+Use the next section for the beginner preflight and caveats before you choose.
 
 ## Before you open the guides
 
@@ -18,7 +19,8 @@ Make sure these are already true:
 <summary>What this hub does not do</summary>
 
 - GPD is not a standalone app. It installs commands into Claude Code, Codex, Gemini CLI, or OpenCode.
-- GPD does not install your runtime for you and does not include model access, billing, or API credits.
+- GPD does not install your runtime for you.
+- GPD does not include model access, billing, or API credits.
 - This hub is the beginner path, not the full reference. Use the OS guide, runtime guide, and later `help` / `gpd --help` for the exact commands and deeper diagnostics.
 
 </details>

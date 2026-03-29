@@ -34,6 +34,9 @@ from tests.doc_surface_contracts import (
     PLAN_PREFLIGHT_SURFACE,
     UNATTENDED_READINESS_SURFACE,
     WOLFRAM_STATUS_SURFACE,
+    assert_beginner_caveat_follow_up_contract,
+    assert_beginner_hub_preflight_contract,
+    assert_beginner_preflight_notice_contract,
     _assert_cost_advisory_contract,
     _assert_cost_surface_discoverability,
     _assert_shared_preset_surface_contract,
@@ -683,6 +686,7 @@ def test_public_beginner_hub_keeps_top_level_and_help_surfaces_aligned() -> None
     install_js = (repo_root / "bin" / "install.js").read_text(encoding="utf-8")
 
     assert beginner_startup_ladder_text() in hub
+    assert_beginner_hub_preflight_contract(hub)
 
     start_here = _markdown_section(readme, "## Start Here")
     quick_start = _markdown_section(readme, "## Quick Start")
@@ -712,10 +716,8 @@ def test_public_readme_and_bootstrap_surface_optional_workflow_add_on_guidance()
     repo_root = _repo_root()
     installer = (repo_root / "bin/install.js").read_text(encoding="utf-8")
 
-    assert "Workflow presets: if you plan paper/manuscript workflows, rerun " in installer
     assert_runtime_readiness_handoff_contract(installer)
-    assert_optional_paper_workflow_guidance_contract(installer)
-    assert_publication_toolchain_boundary_contract(installer)
+    assert_beginner_caveat_follow_up_contract(installer)
 
 
 def test_public_paper_toolchain_capability_model_stays_consistent_across_help_and_installer_surfaces() -> None:
@@ -730,12 +732,10 @@ def test_public_paper_toolchain_capability_model_stays_consistent_across_help_an
     assert_optional_paper_workflow_guidance_contract(help_workflow)
     assert_publication_toolchain_boundary_contract(help_workflow)
     assert_runtime_readiness_handoff_contract(installer)
-    assert_optional_paper_workflow_guidance_contract(installer)
-    assert_publication_toolchain_boundary_contract(installer)
+    assert_beginner_caveat_follow_up_contract(installer)
     assert "Local Mathematica installs are separate from the shared optional Wolfram integration config." in help_workflow
     assert DOCTOR_RUNTIME_SCOPE_RE.search(help_workflow) is not None
     assert WOLFRAM_STATUS_SURFACE in help_workflow
-    assert "Workflow presets: if you plan paper/manuscript workflows, rerun " in installer
 
 
 def test_public_readme_quick_start_stays_router_not_full_readiness_checklist_owner() -> None:
@@ -878,7 +878,8 @@ def test_public_bootstrap_help_examples_cover_install_and_readiness_handoff() ->
     assert "# Equivalent uninstall subcommand form" in content
     assert "settingsCommandTail()" in content
     assert "SHARED_PUBLIC_SURFACE_TEXT.settingsRecommendationSentence" in content
-    assert "Recommended unattended default: Balanced autonomy (`balanced`)." in content
+    assert_beginner_preflight_notice_contract(content)
+    assert_beginner_caveat_follow_up_contract(content)
 
 
 def test_public_readme_observability_surface_keeps_execution_guidance_in_command_space() -> None:

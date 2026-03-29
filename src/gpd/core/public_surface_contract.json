@@ -2,6 +2,17 @@
   "schema_version": 1,
   "beginner_onboarding": {
     "hub_url": "https://github.com/psi-oss/get-physics-done/blob/main/docs/README.md",
+    "preflight_requirements": [
+      "One supported runtime is already installed and can open from your normal terminal.",
+      "Node.js 20+ is available in that same terminal.",
+      "Python 3.11+ with the standard `venv` module is available there too."
+    ],
+    "caveats": [
+      "GPD is not a standalone app.",
+      "GPD does not install your runtime for you.",
+      "GPD does not include model access, billing, or API credits.",
+      "This hub is the beginner path, not the full reference."
+    ],
     "startup_ladder": [
       "help",
       "start",

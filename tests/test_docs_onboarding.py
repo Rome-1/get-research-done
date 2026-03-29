@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from gpd.core.onboarding_surfaces import beginner_runtime_surfaces, beginner_startup_ladder_text
+from gpd.core.onboarding_surfaces import beginner_runtime_surfaces
+from tests.doc_surface_contracts import assert_beginner_hub_preflight_contract, assert_beginner_startup_routing_contract
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -94,32 +95,17 @@ def test_os_quickstarts_link_runtime_guides_and_post_install_help(doc_name: str)
 
 def test_docs_onboarding_hub_links_os_and_runtime_guides() -> None:
     content = _read("docs/README.md")
+    assert_beginner_hub_preflight_contract(content)
 
     _assert_fragments(
         content,
         (
             "# GPD Onboarding Hub",
-            "## Before you open the guides",
-            "Make sure these are already true:",
-            "One supported runtime is already installed",
-            "Node.js 20+",
-            "Python 3.11+ with the standard `venv` module",
-            "Use `--local` while learning",
-            "What this hub does not do",
-            "GPD is not a standalone app.",
-            "does not install your runtime for you",
-            "does not include model access, billing, or API credits",
-            "This hub is the beginner path, not the full reference.",
-            beginner_startup_ladder_text(),
             "Show the full beginner path on one page",
-            "If you already have a GPD project, `resume-work` is the in-runtime return path",
+            "## First: terminal vs runtime",
             "Your **normal terminal**",
             "Your **runtime**",
             "Common beginner terms",
-            "**API credits**",
-            "**`--local`**",
-            "**`gpd resume`**",
-            "**`resume-work`**",
             "./macos.md",
             "./windows.md",
             "./linux.md",
@@ -134,6 +120,7 @@ def test_docs_onboarding_hub_links_os_and_runtime_guides() -> None:
             "## After the guides",
         ),
     )
+    assert_beginner_startup_routing_contract(content)
     _assert_in_order(
         content,
         (
@@ -156,7 +143,6 @@ def test_root_readme_start_here_links_to_docs_onboarding_hub() -> None:
             "[Beginner Onboarding Hub](./docs/README.md)",
             "If you are new to terminals, start with the [Beginner Onboarding Hub](./docs/README.md).",
             "Use the hub as the single beginner path",
-            "advanced surfaces",
             "There are two places you type commands:",
             "In your normal system terminal:",
             "Inside your AI runtime:",

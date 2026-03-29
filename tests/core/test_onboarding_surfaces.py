@@ -7,11 +7,23 @@ from gpd.core.onboarding_surfaces import (
     beginner_runtime_surfaces,
     beginner_startup_ladder_text,
 )
+from gpd.core.public_surface_contract import beginner_onboarding_caveats, beginner_preflight_requirements
 
 
 def test_beginner_onboarding_surface_contract_exposes_hub_and_ladder() -> None:
     assert beginner_onboarding_hub_url().endswith("/docs/README.md")
     assert beginner_startup_ladder_text() == "`help -> start -> tour -> new-project / map-research -> resume-work`"
+    assert beginner_preflight_requirements() == (
+        "One supported runtime is already installed and can open from your normal terminal.",
+        "Node.js 20+ is available in that same terminal.",
+        "Python 3.11+ with the standard `venv` module is available there too.",
+    )
+    assert beginner_onboarding_caveats() == (
+        "GPD is not a standalone app.",
+        "GPD does not install your runtime for you.",
+        "GPD does not include model access, billing, or API credits.",
+        "This hub is the beginner path, not the full reference.",
+    )
 
 
 def test_beginner_startup_ladder_stays_separate_from_deeper_recovery_follow_ups() -> None:

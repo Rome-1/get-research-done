@@ -31,11 +31,7 @@ Use the hub as the single beginner path. It keeps the OS guides, runtime guides,
 and post-install checklist in one place, while this README keeps the reference
 tables and advanced surfaces.
 
-You need three things before GPD can work:
-
-- One supported runtime already installed and able to open from your normal system terminal
-- Node.js 20+
-- Python 3.11+ with the standard `venv` module
+The hub owns the beginner preflight and caveats: prerequisites, runtime/account expectations, and the reminder that GPD does not install your runtime or provide model access, billing, or API credits.
 
 Here, "runtime" means the AI terminal app you talk to, such as Claude Code, Codex, Gemini CLI, or OpenCode.
 
@@ -43,16 +39,6 @@ There are two places you type commands:
 
 - In your normal system terminal: `npx ...`, `gpd ...`, `claude`, `codex`, `gemini`, `opencode`
 - Inside your AI runtime: `/gpd:...`, `$gpd-...`, or `/gpd-...`
-
-<details>
-<summary><strong>What GPD Does Not Include</strong></summary>
-
-- GPD does not install Claude Code, Codex, Gemini CLI, or OpenCode for you.
-- GPD does not include model access, billing, or API credits. You still need an account, subscription, or API access for the runtime you choose.
-- "API credits" means paid model usage from the provider behind your runtime.
-- GPD does not require you to understand Git to start using it. It manages the research workflow for you unless you deliberately choose advanced branching workflows later.
-
-</details>
 
 ## Who This Is For
 

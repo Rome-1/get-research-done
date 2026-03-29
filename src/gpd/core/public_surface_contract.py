@@ -14,7 +14,9 @@ __all__ = [
     "PublicSurfaceContract",
     "RecoveryLadderContract",
     "beginner_onboarding_contract",
+    "beginner_onboarding_caveats",
     "beginner_onboarding_hub_url",
+    "beginner_preflight_requirements",
     "beginner_startup_ladder",
     "beginner_startup_ladder_text",
     "load_public_surface_contract",
@@ -32,6 +34,8 @@ __all__ = [
 @dataclass(frozen=True, slots=True)
 class BeginnerOnboardingContract:
     hub_url: str
+    preflight_requirements: tuple[str, ...]
+    caveats: tuple[str, ...]
     startup_ladder: tuple[str, ...]
 
     def render_startup_ladder(self) -> str:
@@ -149,6 +153,12 @@ def load_public_surface_contract() -> PublicSurfaceContract:
     return PublicSurfaceContract(
         beginner_onboarding=BeginnerOnboardingContract(
             hub_url=_require_string(beginner_payload, "hub_url", label="beginner_onboarding"),
+            preflight_requirements=_require_string_list(
+                beginner_payload,
+                "preflight_requirements",
+                label="beginner_onboarding",
+            ),
+            caveats=_require_string_list(beginner_payload, "caveats", label="beginner_onboarding"),
             startup_ladder=_require_string_list(beginner_payload, "startup_ladder", label="beginner_onboarding"),
         ),
         local_cli_bridge=LocalCliBridgeContract(
@@ -215,6 +225,14 @@ def beginner_onboarding_contract() -> BeginnerOnboardingContract:
 
 def beginner_onboarding_hub_url() -> str:
     return beginner_onboarding_contract().hub_url
+
+
+def beginner_preflight_requirements() -> tuple[str, ...]:
+    return beginner_onboarding_contract().preflight_requirements
+
+
+def beginner_onboarding_caveats() -> tuple[str, ...]:
+    return beginner_onboarding_contract().caveats
 
 
 def beginner_startup_ladder() -> tuple[str, ...]:

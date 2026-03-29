@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 import re
 
+from gpd.core.public_surface_contract import beginner_onboarding_caveats, beginner_preflight_requirements
 from gpd.core.onboarding_surfaces import beginner_startup_ladder_text
 from gpd.core.surface_phrases import post_start_settings_note, post_start_settings_recommendation
 
@@ -20,6 +21,9 @@ __all__ = [
     "PLAN_PREFLIGHT_SURFACE",
     "UNATTENDED_READINESS_SURFACE",
     "WOLFRAM_STATUS_SURFACE",
+    "assert_beginner_caveat_follow_up_contract",
+    "assert_beginner_hub_preflight_contract",
+    "assert_beginner_preflight_notice_contract",
     "assert_beginner_router_bridge_contract",
     "assert_optional_paper_workflow_guidance_contract",
     "assert_publication_toolchain_boundary_contract",
@@ -299,6 +303,56 @@ def assert_beginner_router_bridge_contract(content: str) -> None:
         ),
         label="post-startup settings bridge",
     )
+
+
+def assert_beginner_preflight_notice_contract(content: str) -> None:
+    _assert_contains_any(
+        content,
+        (
+            "Bootstrap preflight checks runtime launcher/target blockers only",
+            "runtime launcher/target blockers only",
+        ),
+        label="bootstrap preflight scope",
+    )
+    _assert_contains_any(
+        content,
+        (
+            "do the first successful startup before changing unattended behavior",
+            "first successful startup before changing unattended behavior",
+        ),
+        label="bootstrap preflight startup caveat",
+    )
+
+
+def assert_beginner_caveat_follow_up_contract(content: str) -> None:
+    _assert_contains_any(
+        content,
+        (
+            "Recommended unattended default: Balanced autonomy (`balanced`).",
+            "Balanced autonomy (`balanced`)",
+        ),
+        label="balanced unattended default",
+    )
+    assert_optional_paper_workflow_guidance_contract(content)
+    assert_publication_toolchain_boundary_contract(content)
+
+
+def assert_beginner_hub_preflight_contract(content: str) -> None:
+    assert "## Before you open the guides" in content
+    for requirement in beginner_preflight_requirements():
+        assert requirement in content
+    _assert_contains_any(
+        content,
+        (
+            "Use `--local` while learning",
+            "`--local` while learning",
+        ),
+        label="local install learning guidance",
+    )
+    assert "What this hub does not do" in content
+    for caveat in beginner_onboarding_caveats():
+        assert caveat in content
+    assert content.index("## Before you open the guides") < content.index("## First: terminal vs runtime")
 
 
 def assert_recovery_ladder_contract(

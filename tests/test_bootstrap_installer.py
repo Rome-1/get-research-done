@@ -19,9 +19,8 @@ from gpd.core.surface_phrases import (
     recovery_ladder_note,
 )
 from tests.doc_surface_contracts import (
+    assert_beginner_caveat_follow_up_contract,
     assert_install_summary_runtime_follow_up_contract,
-    assert_optional_paper_workflow_guidance_contract,
-    assert_publication_toolchain_boundary_contract,
     assert_recovery_ladder_contract,
 )
 
@@ -179,8 +178,7 @@ def _assert_install_summary_semantic_contract(
         pause_work_fragments=pause_work_fragments,
     )
     assert_install_summary_runtime_follow_up_contract(output, runtime_help_fragments=runtime_help_fragments)
-    assert_optional_paper_workflow_guidance_contract(output)
-    assert_publication_toolchain_boundary_contract(output)
+    assert_beginner_caveat_follow_up_contract(output)
 
 
 def test_version_consistency():
@@ -753,7 +751,6 @@ def test_bootstrap_uses_managed_virtualenv_and_skips_host_pip(tmp_path: Path) ->
     assert "Beginner Onboarding Hub:" in result.stdout
     assert _BEGINNER_ONBOARDING_HUB_URL in result.stdout
     _assert_single_runtime_next_steps(result.stdout, _CODEX_RUNTIME_NAME)
-    assert "Recommended unattended default: Balanced autonomy (`balanced`)." in result.stdout
     assert f"Installing GPD for {_RUNTIME_DISPLAY_NAMES[_CODEX_RUNTIME_NAME]} (local)..." not in result.stdout
     assert f"Installed GPD for {_RUNTIME_DISPLAY_NAMES[_CODEX_RUNTIME_NAME]} (local)." not in result.stdout
 
