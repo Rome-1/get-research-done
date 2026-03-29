@@ -8,8 +8,6 @@ from pathlib import Path
 from gpd.registry import VALID_CONTEXT_MODES, _parse_frontmatter
 from tests.doc_surface_contracts import (
     DOCTOR_RUNTIME_SCOPE_RE,
-    PERMISSIONS_SYNC_SURFACE,
-    UNATTENDED_READINESS_SURFACE,
     _assert_cost_advisory_guardrail,
     _assert_cost_surface_discoverability,
     _assert_shared_preset_surface_contract,
@@ -173,7 +171,14 @@ def test_help_prompt_default_quick_start_extracts_workflow_owned_sections() -> N
         suggest_next_fragments=("/gpd:suggest-next",),
         pause_work_fragments=("/gpd:pause-work",),
     )
+    quick_start_reference = _extract_between(help_workflow, "## Quick Start", "## Core Workflow")
     assert "Choose the path that matches your starting point:" in help_workflow
+    assert "/gpd:start" in quick_start_reference
+    assert "/gpd:tour" in quick_start_reference
+    assert "/gpd:new-project" in quick_start_reference
+    assert "/gpd:map-research" in quick_start_reference
+    assert "/gpd:resume-work" in quick_start_reference
+    assert "Usage: `/gpd:start`" not in quick_start_reference
     assert "## Core Workflow" in help_workflow
     assert "/gpd:new-project -> /gpd:discuss-phase -> /gpd:plan-phase -> /gpd:execute-phase -> /gpd:verify-work -> repeat" in help_workflow
     assert "gpd init new-project" not in help_workflow
@@ -212,6 +217,7 @@ def test_start_prompt_delegates_routing_to_workflow_only() -> None:
     start_workflow = (WORKFLOWS_DIR / "start.md").read_text(encoding="utf-8")
 
     assert "@{GPD_INSTALL_DIR}/workflows/start.md" in start_command
+    assert "/gpd:tour" in start_command
     assert "Provide a beginner-friendly first-run entry point for GPD." in start_workflow
     assert "/gpd:new-project --minimal" in start_workflow
     assert "/gpd:new-project" in start_workflow
@@ -220,7 +226,15 @@ def test_start_prompt_delegates_routing_to_workflow_only() -> None:
     assert "/gpd:progress" in start_workflow
     assert "/gpd:quick" in start_workflow
     assert "/gpd:explain" in start_workflow
-    assert "/gpd:help" in start_workflow
+    assert "/gpd:tour" in start_workflow
+    assert "/gpd:help --all" in start_workflow
+    assert "Show full command reference" in start_workflow
+    assert "Follow the installed `/gpd:new-project --minimal` command contract directly" in start_workflow
+    assert "Follow the installed `/gpd:new-project` command contract directly" in start_workflow
+    assert "Follow the installed `/gpd:help --all` command contract directly" in start_workflow
+    assert "Read `{GPD_INSTALL_DIR}/workflows/new-project.md` with the file-read tool." not in start_workflow
+    assert "Read `{GPD_INSTALL_DIR}/workflows/help.md` with the file-read tool." not in start_workflow
+    assert "Read `{GPD_INSTALL_DIR}/workflows/tour.md` with the file-read tool." not in start_workflow
     assert "workflow-exempt command" in start_workflow
     assert "{GPD_INSTALL_DIR}/commands/suggest-next.md" not in start_workflow
     assert "not a parallel onboarding state machine" in start_workflow
@@ -232,6 +246,7 @@ def test_tour_prompt_delegates_routing_to_workflow_only() -> None:
 
     assert "@{GPD_INSTALL_DIR}/workflows/tour.md" in tour_command
     assert "beginner-friendly guided tour" in tour_workflow
+    assert "does not change your files" in tour_workflow
     assert "/gpd:start" in tour_workflow
     assert "/gpd:new-project --minimal" in tour_workflow
     assert "/gpd:map-research" in tour_workflow
@@ -242,15 +257,20 @@ def test_tour_prompt_delegates_routing_to_workflow_only() -> None:
     assert "/gpd:quick" in tour_workflow
     assert "/gpd:help" in tour_workflow
     assert "does not create project artifacts" in tour_workflow
+    assert "tour` does not execute those" in tour_workflow
+    assert "$ARGUMENTS" in tour_workflow
+    assert "Do not narrow the command list or route based on it." in tour_workflow
 
 
 def test_help_workflow_surfaces_start_as_first_run_router() -> None:
     help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
+    quick_start_reference = _extract_between(help_workflow, "## Quick Start", "## Core Workflow")
 
     assert "/gpd:start" in help_workflow
     assert "Guided first-run router" in help_workflow
     assert "/gpd:tour" in help_workflow
     assert "guided tour" in help_workflow.lower()
+    assert quick_start_reference.index("/gpd:start") < quick_start_reference.index("/gpd:tour")
 
 
 def test_prompt_docs_keep_wolfram_as_shared_capability_not_runtime_config_surface() -> None:

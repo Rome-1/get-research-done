@@ -15,8 +15,9 @@ allowed-tools:
 Provide a safe beginner walkthrough of the core GPD command paths.
 
 Explain what the main commands are for, when to use each one, and how they fit
-together. Do not create project files, do not silently route into another
-workflow, and do not assume the user already knows GPD terminology.
+together. Do not create project artifacts, do not create files, do not silently
+route into another workflow, and do not assume the user already knows GPD
+terminology.
 </objective>
 
 <execution_context>

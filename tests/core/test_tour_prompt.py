@@ -4,7 +4,6 @@ from pathlib import Path
 
 from gpd.registry import get_command, list_commands
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMANDS_DIR = REPO_ROOT / "src" / "gpd" / "commands"
 WORKFLOWS_DIR = REPO_ROOT / "src" / "gpd" / "specs" / "workflows"
@@ -27,6 +26,7 @@ def test_tour_workflow_introduces_a_safe_beginner_walkthrough() -> None:
 
     for fragment in (
         "beginner-friendly guided tour",
+        "does not change your files",
         "/gpd:start",
         "/gpd:new-project --minimal",
         "/gpd:map-research",
@@ -37,5 +37,8 @@ def test_tour_workflow_introduces_a_safe_beginner_walkthrough() -> None:
         "/gpd:quick",
         "/gpd:help",
         "does not create project artifacts",
+        "tour` does not execute those",
+        "inspect the folder for you",
+        "Do not ask the user to pick a branch and do not continue into another workflow",
     ):
         assert fragment in workflow

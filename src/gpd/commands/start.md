@@ -28,6 +28,7 @@ run.
 <inline_guidance>
 
 - `/gpd:start` is the first-stop chooser
+- `/gpd:tour` is the read-only walkthrough when the user wants orientation before choosing a path
 - `/gpd:new-project` and `/gpd:new-project --minimal` remain the real project-creation workflows
 - `/gpd:map-research` remains the existing-work importer
 - `/gpd:resume-work` remains the in-runtime return path for an existing GPD project

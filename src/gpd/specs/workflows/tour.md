@@ -17,6 +17,10 @@ Open with one short sentence:
 
 `This is a guided tour of the main GPD commands. It does not change your files.`
 
+If `$ARGUMENTS` is non-empty, show it back as one short context line such as
+`You asked about: <goal>. I will use that as context for the tour.`
+Do not narrow the command list or route based on it.
+
 Then explain that GPD has two broad entry modes:
 
 - `start` for choosing the right first action in a folder
@@ -41,17 +45,18 @@ For each entry, include one plain-English sentence about when it is the right
 choice and one sentence about when it is not the right choice.
 </step>
 
-<step name="show_simple_decision_rules">
-Summarize the decision tree in plain language:
+<step name="show_simple_distinctions">
+Summarize the most common command distinctions in plain language:
 
-- If the folder is empty or new, start with `/gpd:start` or `/gpd:new-project --minimal`
-- If the folder already contains research material, use `/gpd:map-research`
-- If the folder already has GPD state, use `/gpd:resume-work`
-- If the user only wants a concept explained, use `/gpd:explain <topic>`
-- If the user only wants the next step, use `/gpd:suggest-next`
+- If you want GPD to inspect the current folder and tell you the right path, use `/gpd:start`
+- If you already know the work is brand-new, use `/gpd:new-project --minimal` or `/gpd:new-project`
+- If you already know the folder contains existing research material, use `/gpd:map-research`
+- If you already know the folder already has GPD state, use `/gpd:resume-work`
+- If you only want a concept explained, use `/gpd:explain <topic>`
+- If you only want the next step after resuming, use `/gpd:suggest-next`
 
 Keep this section short and explicitly note that `tour` does not execute those
-commands.
+commands, inspect the folder for you, or continue into another workflow.
 </step>
 
 <step name="highlight_common_mistakes">
@@ -70,7 +75,7 @@ End with a short wrap-up that says:
 
 - `If you are still unsure, run /gpd:start.`
 - `If you want the reference list again later, run /gpd:help.`
-- `If you want to practice on your current folder, choose one of the commands above based on the state of the folder.`
+- `If you want to practice on your current folder, choose one of the commands above only after you know which path fits; otherwise use /gpd:start to decide safely.`
 
 Do not ask the user to pick a branch and do not continue into another workflow.
 </step>

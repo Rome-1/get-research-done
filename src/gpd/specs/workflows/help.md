@@ -196,7 +196,7 @@ Guide a first-time user to the right GPD entry point for the current folder.
 
 - Detects whether the current folder is an existing GPD project, existing non-GPD research, or a new folder
 - Recommends the right entry point instead of forcing the user to guess
-- Routes into `/gpd:resume-work`, `/gpd:suggest-next`, `/gpd:progress`, `/gpd:map-research`, `/gpd:new-project`, `/gpd:new-project --minimal`, or `/gpd:explain`
+- Routes into `/gpd:resume-work`, `/gpd:suggest-next`, `/gpd:progress`, `/gpd:tour`, `/gpd:map-research`, `/gpd:new-project`, `/gpd:new-project --minimal`, `/gpd:help --all`, or `/gpd:explain`
 - Does not create project artifacts itself; it is an onboarding router
 
 Usage: `/gpd:start`

@@ -92,28 +92,31 @@ Offer only the options that make sense for the detected state.
 - `Review project status first` — inspect broader state through `/gpd:progress`
 - `Do a small bounded task` — use `/gpd:quick`
 - `Explain a concept` — use `/gpd:explain`
-- `Show all commands` — use `/gpd:help`
+- `Show full command reference` — use `/gpd:help --all`
 
 **If this folder has a research map but not a full project yet:**
 
 - `Turn this mapped folder into a GPD project` — use `/gpd:new-project`
 - `Refresh the research map` — use `/gpd:map-research`
-- `Show all commands` — use `/gpd:help`
+- `Take a guided tour first` — use `/gpd:tour`
+- `Show full command reference` — use `/gpd:help --all`
 
 **If this looks like an existing research folder without GPD state:**
 
 - `Map this folder first (recommended)` — use `/gpd:map-research`
 - `Start a brand-new GPD project anyway` — use `/gpd:new-project --minimal`
+- `Take a guided tour first` — use `/gpd:tour`
 - `Explain a concept` — use `/gpd:explain`
-- `Show all commands` — use `/gpd:help`
+- `Show full command reference` — use `/gpd:help --all`
 - `Reopen a different GPD project` — use `gpd resume --recent` in your normal terminal
 
 **If this is a fresh folder:**
 
 - `Fast start` — use `/gpd:new-project --minimal`
 - `Full guided setup` — use `/gpd:new-project`
+- `Take a guided tour first` — use `/gpd:tour`
 - `Explain a concept` — use `/gpd:explain`
-- `Show all commands` — use `/gpd:help`
+- `Show full command reference` — use `/gpd:help --all`
 - `Reopen a different GPD project` — use `gpd resume --recent` in your normal terminal
 
 Ask the researcher to choose exactly one path.
@@ -144,13 +147,15 @@ Route immediately into the real existing workflow for the chosen path.
 
 **If the researcher chooses `Fast start`:**
 
-- Read `{GPD_INSTALL_DIR}/workflows/new-project.md` with the file-read tool.
-- Follow that workflow as if the researcher had run `/gpd:new-project --minimal`.
+- Follow the installed `/gpd:new-project --minimal` command contract directly, as if the researcher had run it.
 
 **If the researcher chooses `Full guided setup` or `Turn this mapped folder into a GPD project`:**
 
-- Read `{GPD_INSTALL_DIR}/workflows/new-project.md` with the file-read tool.
-- Follow that workflow as if the researcher had run `/gpd:new-project`.
+- Follow the installed `/gpd:new-project` command contract directly, as if the researcher had run it.
+
+**If the researcher chooses `Take a guided tour first`:**
+
+- Follow the installed `/gpd:tour` command contract directly, as if the researcher had run it.
 
 **If the researcher chooses `Do a small bounded task`:**
 
@@ -164,10 +169,9 @@ Route immediately into the real existing workflow for the chosen path.
 - Read `{GPD_INSTALL_DIR}/workflows/explain.md` with the file-read tool.
 - Follow that workflow as if the researcher had run `/gpd:explain <topic>`.
 
-**If the researcher chooses `Show all commands`:**
+**If the researcher chooses `Show full command reference`:**
 
-- Read `{GPD_INSTALL_DIR}/workflows/help.md` with the file-read tool.
-- Follow the default quick-start extract behavior from the help surface, as if the researcher had run `/gpd:help`.
+- Follow the installed `/gpd:help --all` command contract directly, as if the researcher had run it.
 
 **If the researcher chooses `Reopen a different GPD project`:**
 
