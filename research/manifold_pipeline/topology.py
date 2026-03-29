@@ -104,7 +104,10 @@ def _compute_fallback(
     labels = fcluster(Z, t=median_dist, criterion="distance")
     beta_0 = len(np.unique(labels))
 
-    diagrams = [np.zeros((beta_0, 2))]  # placeholder
+    # H0 persistence diagram: each feature born at 0, dies at merge distance
+    # Z has shape (n-1, 4) where column 2 is the merge distance
+    h0_diagram = np.column_stack([np.zeros(len(Z)), Z[:, 2]])
+    diagrams = [h0_diagram]
     betti = [beta_0] + [0] * max_dim
     max_pers = [float(median_dist)] + [0.0] * max_dim
 
