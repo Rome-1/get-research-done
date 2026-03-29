@@ -8,17 +8,18 @@ from pathlib import Path
 from gpd.registry import VALID_CONTEXT_MODES, _parse_frontmatter
 from tests.doc_surface_contracts import (
     DOCTOR_RUNTIME_SCOPE_RE,
-    _assert_cost_advisory_guardrail,
-    _assert_cost_surface_discoverability,
+    assert_cost_advisory_contract,
+    assert_cost_surface_discoverability,
     assert_help_command_quick_start_extract_contract,
-    _assert_help_workflow_runtime_reference_contract,
-    _assert_shared_preset_surface_contract,
-    _assert_unattended_readiness_boundary,
-    _assert_wolfram_plan_boundary,
-    assert_help_start_tour_ordering_contract,
+    assert_help_workflow_quick_start_taxonomy_contract,
+    assert_help_workflow_runtime_reference_contract,
+    assert_start_workflow_router_contract,
+    assert_tour_command_surface_contract,
+    assert_unattended_readiness_contract,
+    assert_wolfram_plan_boundary_contract,
+    assert_workflow_preset_surface_contract,
     assert_beginner_startup_routing_contract,
     assert_recovery_ladder_contract,
-    assert_tour_read_only_teaching_contract,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -165,11 +166,10 @@ def test_help_prompt_default_quick_start_extracts_workflow_owned_sections() -> N
     )
 
     assert_help_command_quick_start_extract_contract(quick_start)
-    _assert_help_workflow_runtime_reference_contract(help_workflow)
+    assert_help_workflow_runtime_reference_contract(help_workflow)
     quick_start_reference = _extract_between(help_workflow, "## Quick Start", "## Core Workflow")
+    assert_help_workflow_quick_start_taxonomy_contract(quick_start_reference)
     assert_beginner_startup_routing_contract(quick_start_reference)
-    for section in ("**New work**", "**Existing work**", "**Returning work**", "**Post-startup settings**"):
-        assert section in quick_start_reference
     assert "Usage: `/gpd:start`" not in quick_start_reference
     assert "## Core Workflow" in help_workflow
     assert "/gpd:new-project -> /gpd:discuss-phase -> /gpd:plan-phase -> /gpd:execute-phase -> /gpd:verify-work -> repeat" in help_workflow
@@ -191,13 +191,13 @@ def test_help_prompt_keeps_workflow_preset_readiness_on_local_cli_surface() -> N
     assert "Include the workflow-owned `## Invocation Surfaces` section." in quick_start
     assert "Include the workflow-owned `## Quick Start` section." in quick_start
     assert "Append this one wrapper-owned line" in quick_start
-    _assert_help_workflow_runtime_reference_contract(help_workflow)
+    assert_help_workflow_runtime_reference_contract(help_workflow)
     assert "executable probes" in help_workflow
     assert "pdflatex" in help_workflow
     assert "wolframscript" in help_workflow
     assert DOCTOR_RUNTIME_SCOPE_RE.search(help_workflow) is not None
-    _assert_wolfram_plan_boundary(help_workflow)
-    _assert_shared_preset_surface_contract(help_workflow)
+    assert_wolfram_plan_boundary_contract(help_workflow)
+    assert_workflow_preset_surface_contract(help_workflow)
     assert "Workflow preset tooling is layered on top of the base install; it does not change runtime permission alignment." in help_workflow
 
 
@@ -210,32 +210,11 @@ def test_start_prompt_delegates_routing_to_workflow_only() -> None:
     assert "read-only walkthrough when the user wants orientation before choosing a path" in start_command
     assert "explain them the first time they appear" in start_command
     assert "/gpd:tour" in start_command
-    assert "Give a first-run chooser for people who may not know GPD yet." in start_workflow
-    assert "Explain the folder state in plain English" in start_workflow
-    assert "Recommended next steps:" in start_workflow
-    assert "Other useful options" in start_workflow
-    assert "Resume this project (recommended)" in start_workflow
-    assert "Suggest the next best step" in start_workflow
-    assert "/gpd:new-project --minimal" in start_workflow
-    assert "/gpd:new-project" in start_workflow
-    assert "/gpd:map-research" in start_workflow
-    assert "/gpd:resume-work" in start_workflow
-    assert "/gpd:progress" in start_workflow
-    assert "/gpd:quick" in start_workflow
-    assert "/gpd:explain" in start_workflow
-    assert "/gpd:tour" in start_workflow
-    assert "/gpd:help --all" in start_workflow
-    assert "Ask for exactly one choice." in start_workflow
-    assert "Follow the installed `/gpd:new-project --minimal` command contract directly" in start_workflow
-    assert "Follow the installed `/gpd:new-project` command contract directly" in start_workflow
-    assert "Follow the installed `/gpd:help --all` command contract directly" in start_workflow
+    assert_start_workflow_router_contract(start_workflow)
     assert "Read `{GPD_INSTALL_DIR}/workflows/new-project.md` with the file-read tool." not in start_workflow
     assert "Read `{GPD_INSTALL_DIR}/workflows/help.md` with the file-read tool." not in start_workflow
     assert "Read `{GPD_INSTALL_DIR}/workflows/tour.md` with the file-read tool." not in start_workflow
-    assert "workflow-exempt command" in start_workflow
     assert "{GPD_INSTALL_DIR}/commands/suggest-next.md" not in start_workflow
-    assert "not a parallel onboarding state machine" in start_workflow
-    assert "broader capability overview" in start_workflow
 
 
 def test_tour_prompt_delegates_routing_to_workflow_only() -> None:
@@ -246,28 +225,11 @@ def test_tour_prompt_delegates_routing_to_workflow_only() -> None:
     assert "teaching surface, not a chooser" in tour_command
     assert "safe beginner walkthrough of the core GPD command paths" in tour_command
     assert "/gpd:settings" in tour_command
-    assert_tour_read_only_teaching_contract(tour_workflow)
-    assert "/gpd:start" in tour_workflow
-    assert "/gpd:new-project --minimal" in tour_workflow
-    assert "/gpd:map-research" in tour_workflow
-    assert "/gpd:resume-work" in tour_workflow
-    assert "/gpd:suggest-next" in tour_workflow
-    assert "/gpd:progress" in tour_workflow
-    assert "/gpd:explain" in tour_workflow
-    assert "/gpd:quick" in tour_workflow
-    assert "/gpd:settings" in tour_workflow
-    assert "/gpd:help" in tour_workflow
-    assert "What comes later after startup" in tour_workflow
-    assert "/gpd:discuss-phase" in tour_workflow
-    assert "/gpd:write-paper" in tour_workflow
-    assert "/gpd:tangent" in tour_workflow
+    assert_tour_command_surface_contract(tour_workflow)
     assert "$ARGUMENTS" in tour_workflow
     assert "Do not narrow the command list, select a path, or route based on it." in tour_workflow
     assert "the runtime, where you use the GPD command prefix provided for that runtime" in tour_workflow
     assert "Normal terminal vs runtime" in tour_workflow
-    assert "gpd resume" in tour_workflow
-    assert "Use `settings` when you want to change autonomy, permissions, or runtime" in tour_workflow
-    assert "after your first successful start or later" in tour_workflow
 
 
 def test_help_workflow_surfaces_start_as_first_run_router() -> None:
@@ -278,7 +240,6 @@ def test_help_workflow_surfaces_start_as_first_run_router() -> None:
     assert "Guided first-run router" in help_workflow
     assert "/gpd:tour" in help_workflow
     assert "guided tour" in help_workflow.lower()
-    assert_help_start_tour_ordering_contract(quick_start_reference)
     assert_beginner_startup_routing_contract(quick_start_reference)
 
 
@@ -300,11 +261,11 @@ def test_prompt_docs_keep_wolfram_as_shared_capability_not_runtime_config_surfac
             assert token not in content
 
     assert "@{GPD_INSTALL_DIR}/workflows/help.md" in help_command
-    _assert_unattended_readiness_boundary(help_workflow)
-    _assert_wolfram_plan_boundary(help_workflow)
+    assert_unattended_readiness_contract(help_workflow)
+    assert_wolfram_plan_boundary_contract(help_workflow)
     assert "gpd integrations enable wolfram" in help_workflow
     assert "gpd integrations disable wolfram" in help_workflow
-    _assert_shared_preset_surface_contract(help_workflow)
+    assert_workflow_preset_surface_contract(help_workflow)
 
     assert "Mathematica / Wolfram Language" in tooling_ref
     assert "declare it as `tool: wolfram` in `tool_requirements`" in tooling_ref
@@ -513,7 +474,7 @@ def test_help_prompt_workflow_modes_match_current_settings_vocabulary() -> None:
     assert "planning.commit_docs" in help_workflow
     assert "git.branching_strategy" in help_workflow
     assert "gpd observe execution" in help_workflow
-    _assert_cost_surface_discoverability(help_workflow)
+    assert_cost_surface_discoverability(help_workflow)
 
 
 def test_help_prompt_surfaces_workflow_presets_on_the_local_cli_surface() -> None:
@@ -523,7 +484,7 @@ def test_help_prompt_surfaces_workflow_presets_on_the_local_cli_surface() -> Non
     assert "Paper/manuscript workflows" in help_workflow
     assert DOCTOR_RUNTIME_SCOPE_RE.search(help_workflow) is not None
     assert "executable probes" in help_workflow
-    _assert_shared_preset_surface_contract(help_workflow)
+    assert_workflow_preset_surface_contract(help_workflow)
     assert "paper-toolchain readiness" in help_workflow
     assert "degrade `write-paper`" in help_workflow
     assert "`paper-build` remains the build contract" in help_workflow
@@ -537,7 +498,7 @@ def test_help_prompt_keeps_cost_surface_on_local_cli_not_runtime_slash_command()
 
     assert "gpd cost" in help_workflow
     assert "/gpd:cost" not in help_workflow
-    _assert_cost_advisory_guardrail(help_workflow)
+    assert_cost_advisory_contract(help_workflow)
 
 
 def test_help_prompt_session_management_keeps_pause_before_leave_and_resume_on_return() -> None:

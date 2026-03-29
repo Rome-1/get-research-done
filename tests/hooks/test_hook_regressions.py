@@ -76,6 +76,16 @@ def test_check_update_uses_shared_update_resolution_candidates() -> None:
     assert "should_consider_update_cache_candidate(" not in source
 
 
+def test_statusline_current_task_uses_shared_todo_resolution_candidates() -> None:
+    source = (Path(__file__).resolve().parents[2] / "src" / "gpd" / "hooks" / "statusline.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "ordered_todo_lookup_candidates" in source
+    assert "get_todo_candidates(" not in source
+    assert "should_consider_todo_candidate(" not in source
+
+
 def test_check_update_ignores_rejected_preferred_runtime_cache_when_no_runtime_is_active(
     tmp_path: Path,
 ) -> None:

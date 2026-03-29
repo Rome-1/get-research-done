@@ -352,6 +352,34 @@ class TestInstall:
         assert 'if ! gpd verify plan "$plan"; then' not in execute_phase
         assert 'INIT=$(gpd init plan-phase "${PHASE}")' not in agent
 
+    def test_install_keeps_canonical_local_cli_language_in_skill_prose(
+        self,
+        adapter: CodexAdapter,
+        tmp_path: Path,
+    ) -> None:
+        gpd_root = Path(__file__).resolve().parents[2] / "src" / "gpd"
+        target = tmp_path / ".codex"
+        target.mkdir()
+        adapter.install(gpd_root, target, is_global=False)
+        local_skills = tmp_path / ".agents" / "skills"
+
+        help_skill = (local_skills / "gpd-help" / "SKILL.md").read_text(encoding="utf-8")
+        tour_skill = (local_skills / "gpd-tour" / "SKILL.md").read_text(encoding="utf-8")
+        settings_skill = (local_skills / "gpd-settings" / "SKILL.md").read_text(encoding="utf-8")
+
+        assert "Use `gpd --help` to inspect the executable local install/readiness/permissions/diagnostics surface directly." in help_skill
+        assert "For a normal-terminal, current-workspace read-only recovery snapshot without launching the runtime, use `gpd resume`." in help_skill
+        assert "For a normal-terminal, read-only machine-local usage / cost summary, use `gpd cost`." in help_skill
+        assert "The normal terminal is where you install GPD, run `gpd --help`, and run" in tour_skill
+        assert "`gpd resume` is the normal-terminal recovery step for reopening the right" in tour_skill
+        assert "use `gpd --help` when you need the broader local CLI entrypoint" in settings_skill
+        assert "use `gpd cost` after runs for advisory local usage / cost, optional USD budget guardrails, and the current profile tier mix" in settings_skill
+        assert re.search(r"`[^`\n]*gpd\.runtime_cli[^`\n]*--help`", help_skill) is None
+        assert re.search(r"`[^`\n]*gpd\.runtime_cli[^`\n]*resume(?:\s|`)", help_skill) is None
+        assert re.search(r"`[^`\n]*gpd\.runtime_cli[^`\n]*cost`", help_skill) is None
+        assert re.search(r"`[^`\n]*gpd\.runtime_cli[^`\n]*--help`", settings_skill) is None
+        assert re.search(r"`[^`\n]*gpd\.runtime_cli[^`\n]*cost`", settings_skill) is None
+
     def test_install_does_not_expose_agents_as_skills(
         self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path
     ) -> None:

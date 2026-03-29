@@ -30,6 +30,8 @@ from gpd.hooks.statusline import (
 from tests.hooks.helpers import mark_complete_install as _mark_complete_install
 from tests.hooks.helpers import repair_command as _repair_command
 
+_TEST_MODEL = "model-under-test"
+
 
 def _todo_candidates(*paths: Path) -> list[TodoCandidate]:
     return [TodoCandidate(path) for path in paths]
@@ -173,39 +175,6 @@ class TestStatusMetadata:
 
         label = _read_workspace_label({}, str(current))
         assert label == "[workspace]"
-
-
-def test_read_current_task_uses_shared_todo_directory_constant_for_self_owned_install(
-    tmp_path: Path,
-) -> None:
-    from gpd.hooks.install_context import SelfOwnedInstallContext
-
-    self_config_dir = tmp_path / "runtime"
-    todo_dir = self_config_dir / "todos"
-    todo_dir.mkdir(parents=True)
-    todo_file = todo_dir / "session-agent-1.json"
-    todo_file.write_text(
-        json.dumps(
-            [
-                {
-                    "status": "in_progress",
-                    "activeForm": "working from shared todos",
-                }
-            ]
-        ),
-        encoding="utf-8",
-    )
-    self_install = SelfOwnedInstallContext(config_dir=self_config_dir, runtime="codex", install_scope="local")
-
-    with (
-        patch("gpd.hooks.install_context.detect_self_owned_install", return_value=self_install),
-        patch("gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install", return_value="unknown"),
-        patch("gpd.hooks.runtime_detect.detect_runtime_for_gpd_use", return_value="unknown"),
-        patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=[]),
-        patch("gpd.hooks.runtime_detect.should_consider_todo_candidate", return_value=True),
-    ):
-        assert _read_current_task("session") == "working from shared todos"
-
 
 class TestExecutionBadge:
     def test_first_result_gate_badge_wins(self) -> None:
@@ -403,7 +372,7 @@ class TestReadCurrentTask:
     def test_no_matching_todo_files(self, tmp_path: Path) -> None:
         todo_dir = tmp_path / "todos"
         todo_dir.mkdir()
-        with patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
+        with patch("gpd.hooks.install_context.ordered_todo_lookup_candidates", return_value=_todo_candidates(todo_dir)):
             assert _read_current_task("session-123") == ""
 
     def test_matching_file_with_in_progress_task(self, tmp_path: Path) -> None:
@@ -411,7 +380,7 @@ class TestReadCurrentTask:
         todo_dir.mkdir()
         todos = [{"status": "in_progress", "activeForm": "Running tests"}]
         (todo_dir / "session-123-agent-abc.json").write_text(json.dumps(todos))
-        with patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
+        with patch("gpd.hooks.install_context.ordered_todo_lookup_candidates", return_value=_todo_candidates(todo_dir)):
             assert _read_current_task("session-123") == "Running tests"
 
     def test_matching_file_no_in_progress_task(self, tmp_path: Path) -> None:
@@ -419,119 +388,8 @@ class TestReadCurrentTask:
         todo_dir.mkdir()
         todos = [{"status": "completed", "activeForm": "Done"}]
         (todo_dir / "session-123-agent-abc.json").write_text(json.dumps(todos))
-        with patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
+        with patch("gpd.hooks.install_context.ordered_todo_lookup_candidates", return_value=_todo_candidates(todo_dir)):
             assert _read_current_task("session-123") == ""
-
-    def test_local_runtime_todo_file_is_discovered(self, tmp_path: Path) -> None:
-        home = tmp_path / "home"
-        _mark_complete_install(tmp_path / ".codex", runtime="codex")
-        local_todo_dir = tmp_path / ".codex" / "todos"
-        local_todo_dir.mkdir(parents=True)
-        todos = [{"status": "in_progress", "activeForm": "Inspect local runtime"}]
-        (local_todo_dir / "session-123-agent-local.json").write_text(json.dumps(todos))
-
-        with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
-        ):
-            assert _read_current_task("session-123") == "Inspect local runtime"
-
-    def test_workspace_dir_overrides_process_cwd_for_local_todos(self, tmp_path: Path) -> None:
-        workspace = tmp_path / "workspace"
-        home = tmp_path / "home"
-        _mark_complete_install(workspace / ".codex", runtime="codex")
-        local_todo_dir = workspace / ".codex" / "todos"
-        local_todo_dir.mkdir(parents=True)
-        todos = [{"status": "in_progress", "activeForm": "Workspace-scoped task"}]
-        (local_todo_dir / "session-123-agent-local.json").write_text(json.dumps(todos))
-
-        elsewhere = tmp_path / "elsewhere"
-        elsewhere.mkdir()
-
-        with (
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=elsewhere),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
-        ):
-            assert _read_current_task("session-123", str(workspace)) == "Workspace-scoped task"
-
-    def test_runtime_less_explicit_target_hook_todo_dir_is_ignored_for_task_lookup(self, tmp_path: Path) -> None:
-        explicit_target = tmp_path / "custom-runtime-dir"
-        hook_path = explicit_target / "hooks" / "statusline.py"
-        hook_path.parent.mkdir(parents=True)
-        hook_path.write_text("# hook\n", encoding="utf-8")
-        _mark_complete_install(explicit_target)
-        explicit_todo_dir = explicit_target / "todos"
-        explicit_todo_dir.mkdir(parents=True)
-        (explicit_todo_dir / "session-123-agent-explicit.json").write_text(
-            json.dumps([{"status": "in_progress", "activeForm": "Explicit target task"}]),
-            encoding="utf-8",
-        )
-
-        with (
-            patch("gpd.hooks.statusline.__file__", str(hook_path)),
-            patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=[]),
-        ):
-            assert _read_current_task("session-123") == ""
-
-    def test_unrelated_self_config_todo_dir_does_not_override_workspace_install(self, tmp_path: Path) -> None:
-        workspace = tmp_path / "workspace"
-        workspace.mkdir()
-        home = tmp_path / "home"
-
-        workspace_runtime_dir = workspace / ".codex"
-        workspace_todo_dir = workspace_runtime_dir / "todos"
-        workspace_todo_dir.mkdir(parents=True)
-        _mark_complete_install(workspace_runtime_dir, runtime="codex")
-        (workspace_todo_dir / "session-123-agent-workspace.json").write_text(
-            json.dumps([{"status": "in_progress", "activeForm": "Workspace task"}]),
-            encoding="utf-8",
-        )
-
-        unrelated_runtime_dir = tmp_path / "custom-runtime-dir"
-        hook_path = unrelated_runtime_dir / "hooks" / "statusline.py"
-        unrelated_todo_dir = unrelated_runtime_dir / "todos"
-        hook_path.parent.mkdir(parents=True)
-        unrelated_todo_dir.mkdir(parents=True)
-        hook_path.write_text("# hook\n", encoding="utf-8")
-        _mark_complete_install(unrelated_runtime_dir, runtime="codex")
-        (unrelated_todo_dir / "session-123-agent-self.json").write_text(
-            json.dumps([{"status": "in_progress", "activeForm": "Self task"}]),
-            encoding="utf-8",
-        )
-
-        with (
-            patch("gpd.hooks.statusline.__file__", str(hook_path)),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
-        ):
-            assert _read_current_task("session-123", str(workspace)) == "Workspace task"
-
-    def test_active_runtime_todo_dir_beats_other_runtime_with_same_session_id(self, tmp_path: Path) -> None:
-        home = tmp_path / "home"
-        claude_todo_dir = tmp_path / ".claude" / "todos"
-        codex_todo_dir = tmp_path / ".codex" / "todos"
-        claude_todo_dir.mkdir(parents=True)
-        codex_todo_dir.mkdir(parents=True)
-        _mark_complete_install(tmp_path / ".codex", runtime="codex")
-
-        claude_file = claude_todo_dir / "session-123-agent-claude.json"
-        codex_file = codex_todo_dir / "session-123-agent-codex.json"
-        claude_file.write_text(
-            json.dumps([{"status": "in_progress", "activeForm": "Claude task"}]),
-            encoding="utf-8",
-        )
-        codex_file.write_text(
-            json.dumps([{"status": "in_progress", "activeForm": "Codex task"}]),
-            encoding="utf-8",
-        )
-        claude_file.touch()
-
-        env = {key: value for key, value in os.environ.items() if key != "CODEX_SESSION"}
-        env["CODEX_SESSION"] = "1"
-        with (
-            patch.dict(os.environ, env, clear=True),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
-        ):
-            assert _read_current_task("session-123", str(tmp_path)) == "Codex task"
 
     def test_newest_allowed_todo_file_wins_across_candidate_dirs(self, tmp_path: Path) -> None:
         local_todo_dir = tmp_path / ".codex" / "todos"
@@ -552,7 +410,7 @@ class TestReadCurrentTask:
         global_file.touch()
 
         with patch(
-            "gpd.hooks.runtime_detect.get_todo_candidates",
+            "gpd.hooks.install_context.ordered_todo_lookup_candidates",
             return_value=_todo_candidates(local_todo_dir, global_todo_dir),
         ):
             assert _read_current_task("session-123") == "Do not prefer global"
@@ -561,12 +419,12 @@ class TestReadCurrentTask:
         todo_dir = tmp_path / "todos"
         todo_dir.mkdir()
         (todo_dir / "session-123-agent-abc.json").write_text("not json!")
-        with patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
+        with patch("gpd.hooks.install_context.ordered_todo_lookup_candidates", return_value=_todo_candidates(todo_dir)):
             assert _read_current_task("session-123") == ""
 
     def test_nonexistent_todo_dirs(self) -> None:
         with patch(
-            "gpd.hooks.runtime_detect.get_todo_candidates",
+            "gpd.hooks.install_context.ordered_todo_lookup_candidates",
             return_value=_todo_candidates(Path("/nonexistent/todos")),
         ):
             assert _read_current_task("session-123") == ""
@@ -583,7 +441,7 @@ class TestReadCurrentTask:
             encoding="utf-8",
         )
 
-        with patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
+        with patch("gpd.hooks.install_context.ordered_todo_lookup_candidates", return_value=_todo_candidates(todo_dir)):
             assert _read_current_task("session-1") == "Correct task"
 
 
@@ -992,19 +850,6 @@ class TestCheckUpdateHook:
         assert update_command_for_runtime("unknown") in result
         assert "gpd-update" not in result
 
-    def test_read_current_task_uses_runtime_unknown_constant_not_literal(self, tmp_path: Path) -> None:
-        runtime_unknown = "runtime-unknown"
-
-        with (
-            patch("gpd.hooks.install_context.detect_self_owned_install", return_value=None),
-            patch("gpd.hooks.runtime_detect.RUNTIME_UNKNOWN", runtime_unknown),
-            patch("gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install", return_value=runtime_unknown),
-            patch("gpd.hooks.runtime_detect.detect_runtime_for_gpd_use", return_value=runtime_unknown),
-            patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=[]),
-            patch("gpd.hooks.runtime_detect.detect_runtime_install_target", side_effect=AssertionError("unexpected lookup")),
-        ):
-            assert _read_current_task("session-1", str(tmp_path)) == ""
-
     def test_known_runtime_resolves_scope_for_bootstrap_update_command(self, tmp_path: Path) -> None:
         """Known runtimes should still resolve scope before rendering the bootstrap command."""
         gpd_cache = tmp_path / "GPD" / "cache"
@@ -1235,13 +1080,13 @@ class TestMain:
     def test_string_model_workspace_and_context_payloads_do_not_crash(self) -> None:
         output = self._run_main(
             {
-                "model": "gpt-5",
+                "model": _TEST_MODEL,
                 "workspace": "/tmp/research-project",
                 "context_window": "not-a-mapping",
             }
         )
         assert "GPD" in output
-        assert "gpt-5" in output
+        assert _TEST_MODEL in output
         assert "[research-project]" in output
 
     def test_string_workspace_is_forwarded_to_helpers(self) -> None:

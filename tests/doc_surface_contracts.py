@@ -21,37 +21,29 @@ __all__ = [
     "PLAN_PREFLIGHT_SURFACE",
     "UNATTENDED_READINESS_SURFACE",
     "WOLFRAM_STATUS_SURFACE",
-    "assert_help_start_tour_ordering_contract",
+    "assert_cost_advisory_contract",
+    "assert_cost_surface_discoverability",
+    "assert_execution_observability_surface_contract",
     "assert_help_command_quick_start_extract_contract",
+    "assert_help_start_tour_ordering_contract",
     "assert_help_workflow_quick_start_taxonomy_contract",
+    "assert_help_workflow_runtime_reference_contract",
+    "assert_install_summary_runtime_follow_up_contract",
+    "assert_optional_paper_workflow_guidance_contract",
+    "assert_publication_toolchain_boundary_contract",
     "assert_beginner_caveat_follow_up_contract",
     "assert_beginner_help_bridge_contract",
     "assert_beginner_hub_preflight_contract",
     "assert_beginner_preflight_notice_contract",
     "assert_beginner_router_bridge_contract",
-    "assert_optional_paper_workflow_guidance_contract",
-    "assert_publication_toolchain_boundary_contract",
+    "assert_beginner_startup_routing_contract",
     "assert_recovery_ladder_contract",
     "assert_runtime_readiness_handoff_contract",
     "assert_settings_local_terminal_follow_up_contract",
-    "_assert_cost_surface_discoverability",
-    "_assert_cost_advisory_contract",
-    "_assert_cost_advisory_guardrail",
-    "assert_cost_surface_discoverability",
-    "_assert_shared_preset_surface_contract",
-    "_assert_unattended_readiness_boundary",
-    "_assert_unattended_readiness_surface",
-    "_assert_wolfram_plan_boundary",
-    "assert_cost_advisory_contract",
-    "assert_beginner_startup_routing_contract",
-    "assert_execution_observability_surface_contract",
-    "assert_help_workflow_runtime_reference_contract",
-    "assert_install_summary_runtime_follow_up_contract",
-    "assert_shared_preset_surface_contract",
+    "assert_start_workflow_router_contract",
+    "assert_tour_command_surface_contract",
     "assert_tour_read_only_teaching_contract",
-    "assert_unattended_readiness_boundary",
     "assert_unattended_readiness_contract",
-    "assert_wolfram_plan_boundary",
     "assert_wolfram_plan_boundary_contract",
     "assert_workflow_preset_surface_contract",
 ]
@@ -309,6 +301,58 @@ def assert_tour_read_only_teaching_contract(content: str) -> None:
     )
 
 
+def assert_tour_command_surface_contract(content: str) -> None:
+    assert_tour_read_only_teaching_contract(content)
+    for token in (
+        "/gpd:start",
+        "/gpd:new-project --minimal",
+        "/gpd:new-project",
+        "/gpd:map-research",
+        "gpd resume",
+        "/gpd:resume-work",
+        "/gpd:suggest-next",
+        "/gpd:progress",
+        "/gpd:explain",
+        "/gpd:quick",
+        "/gpd:settings",
+        "/gpd:help",
+    ):
+        assert token in content
+
+    assert "What comes later after startup" in content
+    for token in ("/gpd:discuss-phase", "/gpd:write-paper", "/gpd:tangent"):
+        assert token in content
+
+    _assert_contains_any(
+        content,
+        (
+            "Normal terminal vs runtime",
+            "the normal terminal, where you install GPD",
+            "the runtime, where you use the GPD command prefix",
+        ),
+        label="tour terminal/runtime distinction",
+    )
+    _assert_contains_any(
+        content,
+        (
+            "Use `gpd resume` first",
+            "gpd resume` is the normal-terminal recovery step",
+            "resume-work` is the in-runtime continue command",
+        ),
+        label="tour resume boundary",
+    )
+    _assert_contains_any(
+        content,
+        (
+            "after your first successful start or later",
+            "change autonomy, permissions, or runtime preferences",
+            "change permissions, autonomy, or runtime preferences",
+        ),
+        label="tour settings follow-up boundary",
+    )
+    assert "Do not ask the user to pick a branch and do not continue into another workflow." in content
+
+
 def assert_beginner_startup_routing_contract(content: str) -> None:
     ladder = beginner_startup_ladder_text()
     startup_markers = (
@@ -355,6 +399,81 @@ def assert_beginner_startup_routing_contract(content: str) -> None:
     assert tour_index < new_project_index
     assert tour_index < map_research_index
     assert tour_index < resume_work_index
+
+
+def assert_start_workflow_router_contract(content: str) -> None:
+    _assert_contains_any(
+        content,
+        (
+            "Give a first-run chooser for people who may not know GPD yet.",
+            "first-run chooser",
+        ),
+        label="start chooser purpose",
+    )
+    _assert_contains_any(
+        content,
+        (
+            "Explain the folder state in plain English",
+            "plain English summaries",
+            "plain English",
+        ),
+        label="start plain-English routing",
+    )
+    _assert_contains_any(
+        content,
+        (
+            "Reply with the number or the option name.",
+            "Ask for exactly one choice.",
+        ),
+        label="start single-choice prompt",
+    )
+
+    for token in (
+        "Recommended next steps:",
+        "Other useful options",
+        "/gpd:resume-work",
+        "/gpd:progress",
+        "/gpd:suggest-next",
+        "/gpd:quick",
+        "/gpd:tour",
+        "/gpd:map-research",
+        "/gpd:new-project --minimal",
+        "/gpd:new-project",
+        "/gpd:explain",
+        "/gpd:help --all",
+        "Follow the installed `/gpd:new-project --minimal` command contract directly",
+        "Follow the installed `/gpd:new-project` command contract directly",
+        "Follow the installed `/gpd:help --all` command contract directly",
+    ):
+        assert token in content
+
+    assert "gpd resume --recent" in content
+    _assert_contains_any(
+        content,
+        (
+            "normal-terminal recovery command",
+            "normal terminal to find the project first",
+            "This is a normal-terminal recovery command",
+        ),
+        label="start normal-terminal recovery boundary",
+    )
+    _assert_contains_any(
+        content,
+        (
+            "broader capability overview",
+            "planning phases, verifying work, writing papers, and handling tangents",
+        ),
+        label="start tour handoff boundary",
+    )
+    _assert_contains_any(
+        content,
+        (
+            "workflow-exempt command",
+            "not a parallel onboarding state machine",
+            "chooser, not a second implementation",
+        ),
+        label="start routing/chooser boundary",
+    )
 
 
 def assert_beginner_router_bridge_contract(content: str) -> None:
@@ -857,20 +976,3 @@ def assert_wolfram_plan_boundary_contract(content: str) -> None:
         ),
         label="plan-readiness boundary",
     )
-
-
-assert_shared_preset_surface_contract = assert_workflow_preset_surface_contract
-assert_unattended_readiness_boundary = assert_unattended_readiness_contract
-assert_wolfram_plan_boundary = assert_wolfram_plan_boundary_contract
-_assert_cost_surface_discoverability = assert_cost_surface_discoverability
-_assert_cost_advisory_contract = assert_cost_advisory_contract
-_assert_cost_advisory_guardrail = assert_cost_advisory_contract
-_assert_help_command_quick_start_extract_contract = assert_help_command_quick_start_extract_contract
-_assert_help_workflow_runtime_reference_contract = assert_help_workflow_runtime_reference_contract
-_assert_help_workflow_quick_start_taxonomy_contract = assert_help_workflow_quick_start_taxonomy_contract
-_assert_shared_preset_surface_contract = assert_workflow_preset_surface_contract
-_assert_settings_local_terminal_follow_up_contract = assert_settings_local_terminal_follow_up_contract
-_assert_tour_read_only_teaching_contract = assert_tour_read_only_teaching_contract
-_assert_unattended_readiness_boundary = assert_unattended_readiness_contract
-_assert_unattended_readiness_surface = assert_unattended_readiness_contract
-_assert_wolfram_plan_boundary = assert_wolfram_plan_boundary_contract

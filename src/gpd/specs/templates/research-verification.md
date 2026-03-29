@@ -97,16 +97,16 @@ session_status: validating | completed | diagnosed
 ## Current Check
 
 <!-- OVERWRITE each check - shows where we are -->
+<!-- Include only the ID keys that actually bind this check.
+Omit unused `subject_id`, `claim_id`, `deliverable_id`, `acceptance_test_id`,
+and `forbidden_proxy_id` fields instead of leaving blank placeholder strings. -->
 
 number: 1
 name: "[check name]"
 check_subject_kind: [claim | deliverable | acceptance_test | reference]
-subject_id: "contract id or \"\""
-claim_id: "claim-id or \"\""
-deliverable_id: "deliverable-id or \"\""
-acceptance_test_id: "acceptance-test-id or \"\""
+subject_id: "claim-main"
+claim_id: "claim-main"
 reference_ids: ["reference-id", "..."]
-forbidden_proxy_id: "forbidden-proxy-id or \"\""
 comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]
 comparison_reference_id: "reference-id"
 # If this check is not comparison-backed yet, omit both `comparison_kind` and `comparison_reference_id` instead of leaving blank placeholders.
@@ -130,13 +130,14 @@ awaiting: researcher response
 
 ### 1. [Check Name]
 
+<!-- Include only the ID keys that actually bind this check.
+Omit unused `subject_id`, `claim_id`, `deliverable_id`, `acceptance_test_id`,
+and `forbidden_proxy_id` fields instead of leaving blank placeholder strings. -->
+
 check_subject_kind: [claim | deliverable | acceptance_test | reference]
-subject_id: "contract id or \"\""
-claim_id: "claim-id or \"\""
-deliverable_id: "deliverable-id or \"\""
-acceptance_test_id: "acceptance-test-id or \"\""
+subject_id: "claim-main"
+claim_id: "claim-main"
 reference_ids: ["reference-id", "..."]
-forbidden_proxy_id: "forbidden-proxy-id or \"\""
 comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]
 comparison_reference_id: "reference-id"
 # If this check is not comparison-backed yet, omit both `comparison_kind` and `comparison_reference_id` instead of leaving blank placeholders.
@@ -212,15 +213,16 @@ Only `subject_role: decisive` closes a required decisive comparison; the other r
 
 <!-- YAML format for plan-phase --gaps consumption -->
 
+<!-- Include only the ID keys that actually bind the gap.
+Omit unused `subject_id`, `claim_id`, `deliverable_id`, `acceptance_test_id`,
+and `forbidden_proxy_id` fields instead of leaving blank placeholder strings. -->
+
 - gap_subject_kind: "claim | deliverable | acceptance_test | reference"
-  subject_id: "contract-id"
+  subject_id: "claim-main"
   expectation: "[expected physics property from check]"
   expected_check: "[expected physics property from check]"
-  claim_id: "claim-id"
-  deliverable_id: "deliverable-id"
-  acceptance_test_id: "acceptance-test-id"
+  claim_id: "claim-main"
   reference_ids: ["reference-id"]
-  forbidden_proxy_id: "forbidden-proxy-id"
   comparison_kind: "benchmark | prior_work | experiment | cross_method | baseline | other"
   comparison_reference_id: "reference-id"
   status: failed

@@ -176,6 +176,17 @@ def _shared_runtime_facing_test_paths() -> tuple[Path, ...]:
 
 _SHARED_TEST_RUNTIME_SURFACE_PATHS = _shared_runtime_facing_test_paths()
 _TEXT_SURFACE_SUFFIXES = {".json", ".md", ".py"}
+_SHARED_GENERIC_PROVIDER_MODEL_TEST_PATHS = (
+    REPO_ROOT / "tests/core/test_health.py",
+    REPO_ROOT / "tests/core/test_runtime_hints.py",
+    REPO_ROOT / "tests/core/test_costs.py",
+    REPO_ROOT / "tests/core/test_cli.py",
+    REPO_ROOT / "tests/hooks/test_notify.py",
+    REPO_ROOT / "tests/hooks/test_statusline.py",
+)
+_SHARED_GENERIC_PROVIDER_MODEL_LITERAL_PATTERN = re.compile(
+    r"""["'](?:openai|anthropic|google|gpt-[^"']+|claude-(?!code)[^"']+|gemini-(?!cli)[^"']+)["']"""
+)
 
 
 def _git_grep(pattern: str) -> list[tuple[Path, int, str]]:
@@ -292,6 +303,18 @@ def _runtime_fixture_literal_findings(content: str) -> list[str]:
         if len(matched_values) >= 2:
             findings.append(block.replace("\n", " "))
     return findings
+
+
+def _readme_optional_terminal_reference() -> str:
+    content = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    match = re.search(
+        r"<summary><strong>Optional Terminal-Side Readiness And Troubleshooting Reference</strong></summary>\n\n(?P<body>.*?)\n</details>",
+        content,
+        re.DOTALL,
+    )
+    if match is None:
+        raise AssertionError("README optional terminal-side reference block not found")
+    return match.group("body")
 
 
 def test_runtime_specific_terms_are_confined_to_explicit_boundary_files() -> None:
@@ -425,3 +448,25 @@ def test_shared_runtime_facing_tests_do_not_duplicate_runtime_catalog_literals()
         "Shared runtime-facing tests should derive supported runtime sets from the runtime catalog:\n"
         f"{_format_failures(leaks)}"
     )
+
+
+def test_shared_generic_tests_do_not_hardcode_provider_or_model_literals() -> None:
+    leaks = _scan_paths_for_pattern(
+        _SHARED_GENERIC_PROVIDER_MODEL_TEST_PATHS,
+        _SHARED_GENERIC_PROVIDER_MODEL_LITERAL_PATTERN,
+    )
+
+    assert leaks == [], (
+        "Shared generic tests should use catalog-driven or placeholder runtime/provider/model fixtures:\n"
+        f"{_format_failures(leaks)}"
+    )
+
+
+def test_readme_optional_terminal_reference_uses_runtime_placeholders() -> None:
+    block = _readme_optional_terminal_reference()
+
+    assert "--codex" not in block
+    assert "--runtime codex" not in block
+    assert "relaunch Codex" not in block
+    assert "--<runtime-flag>" in block
+    assert "--runtime <runtime>" in block

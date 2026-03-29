@@ -33,6 +33,8 @@ __all__ = [
     "ContractLink",
     "ContractUncertaintyMarkers",
     "ResearchContract",
+    "ProjectContractParseResult",
+    "parse_project_contract_data_strict",
     "collect_contract_integrity_errors",
     "contract_from_data",
 ]
@@ -899,6 +901,65 @@ def collect_contract_integrity_errors(contract: ResearchContract) -> list[str]:
     return errors
 
 
+class ProjectContractParseResult(BaseModel):
+    """Structured result for project-contract payload parsing boundaries."""
+
+    model_config = ConfigDict(frozen=True)
+
+    contract: ResearchContract | None = None
+    errors: list[str] = Field(default_factory=list)
+
+
+def parse_project_contract_data_strict(data: object) -> ProjectContractParseResult:
+    """Strictly parse an authored project-contract payload.
+
+    This entrypoint is for model-facing or authoring boundaries where recoverable
+    salvage is undesirable. Inputs that would require schema normalization
+    (singleton list drift, extra keys, defaulted singleton sections, coercive
+    scalars) are rejected explicitly instead of being silently canonicalized.
+    Read/repair flows should continue to use ``contract_from_data()`` or the
+    lower-level salvage helpers.
+    """
+
+    if not isinstance(data, dict):
+        return ProjectContractParseResult(errors=["project contract must be a JSON object"])
+
+    from gpd.core.contract_validation import (
+        _collect_list_shape_drift_errors,
+        _split_project_contract_schema_findings,
+        salvage_project_contract,
+    )
+
+    list_shape_drift_errors = _collect_list_shape_drift_errors(data)
+    contract, schema_findings = salvage_project_contract(data)
+    schema_warnings, schema_errors = _split_project_contract_schema_findings(
+        schema_findings,
+        allow_singleton_defaults=False,
+    )
+
+    errors: list[str] = []
+    for error in (*schema_errors, *schema_warnings, *list_shape_drift_errors):
+        if error not in errors:
+            errors.append(error)
+
+    if contract is None:
+        if not errors and schema_findings:
+            for error in schema_findings:
+                if error not in errors:
+                    errors.append(error)
+        if not errors:
+            errors.append("project contract could not be normalized")
+        return ProjectContractParseResult(errors=errors)
+
+    integrity_errors = collect_contract_integrity_errors(contract)
+    for error in integrity_errors:
+        if error not in errors:
+            errors.append(error)
+    if errors:
+        return ProjectContractParseResult(errors=errors)
+    return ProjectContractParseResult(contract=contract)
+
+
 def contract_from_data(
     data: object,
     *,
@@ -909,8 +970,11 @@ def contract_from_data(
     """Return a validated :class:`ResearchContract` when *data* is a mapping.
 
     Malformed mappings degrade to ``None`` so callers can treat this helper as a
-    safe probe instead of an exception boundary. Callers that preserve contracts
-    back into state can additionally require draft-level scoping validity.
+    safe salvage-aware probe instead of an exception boundary. Callers that need
+    strict authored-input rejection should use
+    :func:`parse_project_contract_data_strict` instead. Callers that preserve
+    contracts back into state can additionally require draft-level scoping
+    validity.
     """
 
     if not isinstance(data, dict):

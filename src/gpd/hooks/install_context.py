@@ -83,3 +83,67 @@ def self_owned_todo_candidate(self_install: SelfOwnedInstallContext):
         runtime=self_install.runtime,
         scope=self_install.install_scope,
     )
+
+
+def ordered_todo_lookup_candidates(
+    *,
+    hook_file: str | Path,
+    cwd: str | Path | None,
+    home: str | Path | None = None,
+    active_installed_runtime: str | None = None,
+    preferred_runtime: str | None = None,
+) -> list[object]:
+    """Return todo candidates in the shared precedence order for current-task lookup."""
+    from gpd.core.observability import resolve_project_root
+    from gpd.hooks.runtime_detect import (
+        RUNTIME_UNKNOWN,
+        detect_active_runtime_with_gpd_install,
+        detect_runtime_for_gpd_use,
+        detect_runtime_install_target,
+        get_todo_candidates,
+        should_consider_todo_candidate,
+    )
+
+    workspace_path = resolve_project_root(cwd) if cwd else None
+    resolved_home = Path.home() if home is None else Path(home)
+    active_runtime = (
+        active_installed_runtime
+        if active_installed_runtime is not None
+        else detect_active_runtime_with_gpd_install(cwd=workspace_path, home=resolved_home)
+    )
+    prioritized_runtime = (
+        preferred_runtime
+        if preferred_runtime is not None
+        else detect_runtime_for_gpd_use(cwd=workspace_path, home=resolved_home)
+    )
+    todo_candidates = get_todo_candidates(
+        cwd=workspace_path,
+        home=resolved_home,
+        preferred_runtime=prioritized_runtime,
+    )
+    self_install = detect_self_owned_install(hook_file)
+    active_install_target = (
+        detect_runtime_install_target(active_runtime, cwd=workspace_path, home=resolved_home)
+        if active_runtime not in (None, "", RUNTIME_UNKNOWN)
+        else None
+    )
+    if should_prefer_self_owned_install(
+        self_install,
+        active_install_target=active_install_target,
+        workspace_path=workspace_path,
+    ):
+        if self_install is not None:
+            self_candidate = self_owned_todo_candidate(self_install)
+            if all(candidate.path != self_candidate.path for candidate in todo_candidates):
+                todo_candidates = [self_candidate, *todo_candidates]
+
+    return [
+        candidate
+        for candidate in todo_candidates
+        if should_consider_todo_candidate(
+            candidate,
+            active_installed_runtime=active_runtime,
+            cwd=workspace_path,
+            home=resolved_home,
+        )
+    ]

@@ -253,42 +253,12 @@ def _read_current_task(session_id: str, workspace_dir: str | None = None) -> str
     if not session_id:
         return ""
 
-    from gpd.hooks.runtime_detect import (
-        RUNTIME_UNKNOWN,
-        detect_active_runtime_with_gpd_install,
-        detect_runtime_for_gpd_use,
-        detect_runtime_install_target,
-        get_todo_candidates,
-        should_consider_todo_candidate,
+    todo_candidates = hook_layout.ordered_todo_lookup_candidates(
+        hook_file=__file__,
+        cwd=workspace_dir,
     )
-
-    workspace_path = resolve_project_root(workspace_dir) if workspace_dir else None
-    active_installed_runtime = detect_active_runtime_with_gpd_install(cwd=workspace_path)
-    preferred_runtime = detect_runtime_for_gpd_use(cwd=workspace_path)
-    todo_candidates = get_todo_candidates(cwd=workspace_path, preferred_runtime=preferred_runtime)
-    self_install = hook_layout.detect_self_owned_install(__file__)
-    active_install_target = (
-        detect_runtime_install_target(active_installed_runtime, cwd=workspace_path)
-        if active_installed_runtime not in (None, "", RUNTIME_UNKNOWN)
-        else None
-    )
-    if hook_layout.should_prefer_self_owned_install(
-        self_install,
-        active_install_target=active_install_target,
-        workspace_path=workspace_path,
-    ):
-        self_candidate = hook_layout.self_owned_todo_candidate(self_install)
-        if all(candidate.path != self_candidate.path for candidate in todo_candidates):
-            todo_candidates = [self_candidate, *todo_candidates]
-
     todo_files: list[tuple[float, Path]] = []
     for candidate in todo_candidates:
-        if not should_consider_todo_candidate(
-            candidate,
-            active_installed_runtime=active_installed_runtime,
-            cwd=workspace_path,
-        ):
-            continue
         todos_dir = candidate.path
         if not todos_dir.is_dir():
             continue

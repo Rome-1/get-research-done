@@ -36,20 +36,20 @@ from tests.doc_surface_contracts import (
     assert_beginner_help_bridge_contract,
     assert_beginner_hub_preflight_contract,
     assert_beginner_preflight_notice_contract,
-    _assert_cost_advisory_contract,
-    _assert_cost_surface_discoverability,
+    assert_cost_advisory_contract,
     assert_help_command_quick_start_extract_contract,
-    _assert_unattended_readiness_surface,
-    _assert_wolfram_plan_boundary,
     assert_beginner_router_bridge_contract,
     assert_beginner_startup_routing_contract,
     assert_execution_observability_surface_contract,
+    assert_help_workflow_quick_start_taxonomy_contract,
     assert_help_workflow_runtime_reference_contract,
     assert_optional_paper_workflow_guidance_contract,
     assert_publication_toolchain_boundary_contract,
     assert_recovery_ladder_contract,
     assert_runtime_readiness_handoff_contract,
     assert_settings_local_terminal_follow_up_contract,
+    assert_unattended_readiness_contract,
+    assert_wolfram_plan_boundary_contract,
 )
 
 
@@ -631,15 +631,7 @@ def test_public_help_default_quick_start_keeps_runtime_surface_readiness_path() 
 
     assert_help_command_quick_start_extract_contract(quick_start)
     assert_help_workflow_runtime_reference_contract(help_workflow)
-    for section in (
-        "**New work**",
-        "**Existing work**",
-        "**Returning work**",
-        "**Tangents**",
-        "**Workflow presets**",
-        "**Wolfram integration**",
-    ):
-        assert section in quick_start_reference
+    assert_help_workflow_quick_start_taxonomy_contract(quick_start_reference)
 
 
 def test_public_help_surfaces_keep_publication_workflows_visible_for_optional_add_ons() -> None:
@@ -725,8 +717,8 @@ def test_public_paper_toolchain_capability_model_stays_consistent_across_help_an
     installer = (repo_root / "bin/install.js").read_text(encoding="utf-8")
 
     assert "@{GPD_INSTALL_DIR}/workflows/help.md" in help_command
-    _assert_unattended_readiness_surface(help_workflow)
-    _assert_wolfram_plan_boundary(help_workflow)
+    assert_unattended_readiness_contract(help_workflow)
+    assert_wolfram_plan_boundary_contract(help_workflow)
     assert_optional_paper_workflow_guidance_contract(help_workflow)
     assert_publication_toolchain_boundary_contract(help_workflow)
     assert_runtime_readiness_handoff_contract(installer)
@@ -846,7 +838,7 @@ def test_public_settings_workflow_keeps_balanced_recommendation_and_relaunch_gui
     assert_settings_local_terminal_follow_up_contract(settings_workflow)
     assert "What model-cost posture should GPD optimize for?" in settings_workflow
     assert "Use runtime defaults" in settings_workflow
-    _assert_cost_advisory_contract(settings_workflow)
+    assert_cost_advisory_contract(settings_workflow)
 
 
 def test_public_bootstrap_help_examples_cover_install_and_readiness_handoff() -> None:
@@ -882,7 +874,7 @@ def test_public_readme_observability_surface_keeps_execution_guidance_in_command
     assert "For read-only long-run visibility from your normal system terminal, use `gpd observe execution`." in readme
     assert "Start with `gpd observe show --last 20` when you need the recent event trail" in readme
     assert "route it through the runtime `tangent` command first" in readme
-    _assert_cost_advisory_contract(readme)
+    assert_cost_advisory_contract(readme)
 
 
 def test_public_local_cli_help_and_install_summary_keep_readiness_diagnostics_emphasis() -> None:

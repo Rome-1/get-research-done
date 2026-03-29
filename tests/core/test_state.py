@@ -653,22 +653,21 @@ def test_state_set_project_contract_rejects_contract_missing_skeptical_fields(tm
     assert saved["project_contract"] is None
 
 
-def test_state_set_project_contract_accepts_singleton_list_drift(tmp_path: Path):
+def test_state_set_project_contract_rejects_singleton_list_drift(tmp_path: Path):
     contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
     contract["context_intake"]["must_read_refs"] = "ref-benchmark"
     save_state_json(tmp_path, default_state_dict())
 
     result = state_set_project_contract(tmp_path, contract)
 
-    assert result.updated is True
-    assert result.reason is None or "already matches requested value" not in result.reason
+    assert result.updated is False
+    assert result.reason == "Invalid project contract schema: context_intake.must_read_refs must be a list, not str"
     saved = load_state_json(tmp_path)
     assert saved is not None
-    assert saved["project_contract"] is not None
-    assert saved["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
+    assert saved["project_contract"] is None
 
 
-def test_state_set_project_contract_accepts_research_contract_instance_singleton_list_drift(
+def test_state_set_project_contract_rejects_research_contract_instance_singleton_list_drift(
     tmp_path: Path,
 ):
     contract = ResearchContract.model_validate(
@@ -683,14 +682,14 @@ def test_state_set_project_contract_accepts_research_contract_instance_singleton
 
     result = state_set_project_contract(tmp_path, contract)
 
-    assert result.updated is True
-    assert result.reason is None or "already matches requested value" not in result.reason
+    assert result.updated is False
+    assert (
+        result.reason
+        == "Invalid project contract schema: context_intake.must_include_prior_outputs must be a list, not str"
+    )
     saved = load_state_json(tmp_path)
     assert saved is not None
-    assert saved["project_contract"] is not None
-    assert saved["project_contract"]["context_intake"]["must_include_prior_outputs"] == [
-        "GPD/phases/00-baseline/00-01-SUMMARY.md"
-    ]
+    assert saved["project_contract"] is None
 
 
 def test_state_set_project_contract_suppresses_serializer_warning_for_invalid_research_contract_instance(
@@ -713,20 +712,18 @@ def test_state_set_project_contract_suppresses_serializer_warning_for_invalid_re
     assert saved["project_contract"] is None
 
 
-def test_state_set_project_contract_accepts_recoverable_schema_normalization(tmp_path: Path):
+def test_state_set_project_contract_rejects_recoverable_schema_normalization(tmp_path: Path):
     contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
     contract["claims"][0]["notes"] = "harmless"
     save_state_json(tmp_path, default_state_dict())
 
     result = state_set_project_contract(tmp_path, contract)
 
-    assert result.updated is True
-    assert result.warnings == ["claims.0.notes: Extra inputs are not permitted"]
+    assert result.updated is False
+    assert result.reason == "Invalid project contract schema: claims.0.notes: Extra inputs are not permitted"
     saved = load_state_json(tmp_path)
     assert saved is not None
-    assert saved["project_contract"] is not None
-    assert saved["project_contract"]["claims"][0]["id"] == "claim-benchmark"
-    assert "notes" not in saved["project_contract"]["claims"][0]
+    assert saved["project_contract"] is None
 
 
 def test_state_set_project_contract_surfaces_approved_mode_warnings_on_success(tmp_path: Path):

@@ -17,6 +17,8 @@ from gpd.registry import _parse_frontmatter, _parse_tools
 from tests.doc_surface_contracts import (
     assert_cost_surface_discoverability,
     assert_execution_observability_surface_contract,
+    assert_help_command_quick_start_extract_contract,
+    assert_help_workflow_quick_start_taxonomy_contract,
     assert_help_workflow_runtime_reference_contract,
     assert_recovery_ladder_contract,
     assert_runtime_readiness_handoff_contract,
@@ -2240,25 +2242,14 @@ def test_help_surfaces_distinguish_runtime_slash_commands_from_local_cli_subcomm
 def test_help_command_keeps_static_quick_start_while_workflow_owns_full_reference() -> None:
     help_command = (COMMANDS_DIR / "help.md").read_text(encoding="utf-8")
     help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
+    quick_start_reference = _extract_between(help_workflow, "## Quick Start", "## Core Workflow")
 
     assert "@{GPD_INSTALL_DIR}/workflows/help.md" in help_command
-    assert "Start at `# GPD Command Reference`." in help_command
-    assert "Include the workflow-owned `## Invocation Surfaces` section." in help_command
-    assert "Include the workflow-owned `## Quick Start` section." in help_command
-    assert "Stop before `## Core Workflow`." in help_command
+    assert_help_command_quick_start_extract_contract(help_command)
     assert "Append this one wrapper-owned line:" in help_command
-    assert "/gpd:help --all" in help_command
     assert_help_workflow_runtime_reference_contract(help_workflow)
     assert "## Core Workflow" in help_workflow
-    for section in (
-        "**New work**",
-        "**Existing work**",
-        "**Returning work**",
-        "**Post-startup settings**",
-        "**Tangents**",
-        "**Workflow presets**",
-    ):
-        assert section in help_workflow
+    assert_help_workflow_quick_start_taxonomy_contract(quick_start_reference)
 
 
 def test_help_workflow_state_aware_variant_surfaces_paused_resume_branch() -> None:

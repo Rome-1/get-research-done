@@ -48,6 +48,9 @@ from gpd.core.storage_paths import ProjectStorageLayout
 from gpd.hooks.install_metadata import InstallTargetAssessment
 
 _PRIMARY_RUNTIME = iter_runtime_descriptors()[0].runtime_name
+_PRIMARY_CONFIG_DIR = iter_runtime_descriptors()[0].config_dir_name
+_PRIMARY_TARGET_DIR = Path("/tmp/project") / _PRIMARY_CONFIG_DIR
+_PRIMARY_RELAUNCH_STEP = f"Exit and relaunch {_PRIMARY_RUNTIME} before treating unattended use as ready."
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
 
@@ -150,14 +153,14 @@ class TestHealthModels:
         )
 
         result = build_unattended_readiness_result(
-            runtime="codex",
+            runtime=_PRIMARY_RUNTIME,
             autonomy=None,
             install_scope="local",
-            target_dir=Path("/tmp/project/.codex"),
+            target_dir=_PRIMARY_TARGET_DIR,
             doctor_report=report,
             permissions_payload={
                 "autonomy": "balanced",
-                "target": "/tmp/project/.codex",
+                "target": str(_PRIMARY_TARGET_DIR),
                 "readiness": "ready",
                 "ready": True,
                 "readiness_message": "Runtime permissions are ready for unattended use.",
@@ -169,10 +172,10 @@ class TestHealthModels:
             validated_surface="public_runtime_command_surface",
         )
 
-        assert result.runtime == "codex"
+        assert result.runtime == _PRIMARY_RUNTIME
         assert result.autonomy == "balanced"
         assert result.install_scope == "local"
-        assert result.target == "/tmp/project/.codex"
+        assert result.target == str(_PRIMARY_TARGET_DIR)
         assert result.readiness == "ready"
         assert result.ready is True
         assert result.passed is True
@@ -210,18 +213,18 @@ class TestHealthModels:
         )
 
         result = build_unattended_readiness_result(
-            runtime="codex",
+            runtime=_PRIMARY_RUNTIME,
             autonomy="balanced",
             install_scope="local",
-            target_dir=Path("/tmp/project/.codex"),
+            target_dir=_PRIMARY_TARGET_DIR,
             doctor_report=report,
             permissions_payload={
                 "autonomy": "balanced",
-                "target": "/tmp/project/.codex",
+                "target": str(_PRIMARY_TARGET_DIR),
                 "readiness": "relaunch-required",
                 "ready": False,
                 "readiness_message": "Runtime permissions are aligned, but the runtime must be relaunched before unattended use.",
-                "next_step": "Exit and relaunch codex before treating unattended use as ready.",
+                "next_step": _PRIMARY_RELAUNCH_STEP,
                 "status_scope": "next-launch",
                 "current_session_verified": False,
             },
@@ -232,7 +235,7 @@ class TestHealthModels:
         assert result.readiness == "relaunch-required"
         assert result.ready is False
         assert result.passed is False
-        assert result.next_step == "Exit and relaunch codex before treating unattended use as ready."
+        assert result.next_step == _PRIMARY_RELAUNCH_STEP
         assert result.status_scope == "next-launch"
         assert result.current_session_verified is False
         assert result.validated_surface == "public_runtime_command_surface"
@@ -271,14 +274,14 @@ class TestHealthModels:
         )
 
         result = build_unattended_readiness_result(
-            runtime="codex",
+            runtime=_PRIMARY_RUNTIME,
             autonomy="balanced",
             install_scope="local",
-            target_dir=Path("/tmp/project/.codex"),
+            target_dir=_PRIMARY_TARGET_DIR,
             doctor_report=report,
             permissions_payload={
                 "autonomy": "balanced",
-                "target": "/tmp/project/.codex",
+                "target": str(_PRIMARY_TARGET_DIR),
                 "readiness": "ready",
                 "ready": True,
                 "readiness_message": "Runtime permissions are ready for unattended use.",
@@ -296,7 +299,7 @@ class TestHealthModels:
         assert result.current_session_verified is False
         assert result.validated_surface == "public_runtime_command_surface"
         assert result.next_step == (
-            f"Run `{runtime_doctor_hint('codex', install_scope='local', target_dir=Path('/tmp/project/.codex'))}` "
+            f"Run `{runtime_doctor_hint(_PRIMARY_RUNTIME, install_scope='local', target_dir=_PRIMARY_TARGET_DIR)}` "
             "to inspect and clear the blocking runtime-readiness issues."
         )
         assert result.blocking_conditions == ["Runtime config target not writable"]

@@ -7,13 +7,22 @@ from pathlib import Path
 import pytest
 
 import gpd.core.costs as costs
+from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.core.costs import (
     build_cost_summary,
     list_usage_records,
     pricing_snapshot_path,
     record_usage_from_runtime_payload,
+    resolve_cost_advisory,
     usage_ledger_path,
 )
+
+_TELEMETRY_RUNTIME = next(
+    descriptor.runtime_name
+    for descriptor in iter_runtime_descriptors()
+    if descriptor.capabilities.telemetry_completeness != "none"
+)
+_GENERIC_MODEL = "model-under-test"
 
 
 def _bootstrap_project(tmp_path: Path, name: str = "project") -> Path:
@@ -30,7 +39,7 @@ def _write_current_execution(project: Path, payload: dict[str, object]) -> None:
 
 def _payload(
     *,
-    model: str = "gpt-5.4",
+    model: str = _GENERIC_MODEL,
     input_tokens: int | None = None,
     output_tokens: int | None = None,
     total_tokens: int | None = None,
@@ -73,8 +82,8 @@ def _write_pricing_snapshot(data_root: Path) -> None:
                 "currency": "USD",
                 "entries": [
                     {
-                        "runtime": "codex",
-                        "model": "gpt-5.4",
+                        "runtime": _TELEMETRY_RUNTIME,
+                        "model": _GENERIC_MODEL,
                         "input_per_million_usd": 3.0,
                         "output_per_million_usd": 15.0,
                         "cached_input_per_million_usd": 0.3,
@@ -111,21 +120,21 @@ def test_record_usage_writes_measured_records_and_builds_project_summary(
 
     record_usage_from_runtime_payload(
         _payload(input_tokens=100, output_tokens=25, cost_usd=0.01),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
     current_session["value"] = "sess-b"
     record_usage_from_runtime_payload(
         _payload(input_tokens=200, output_tokens=50, cost_usd=0.02),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
     current_session["value"] = "sess-c"
     record_usage_from_runtime_payload(
         _payload(input_tokens=300, output_tokens=75, cost_usd=0.03),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=other_project,
         data_root=data_root,
     )
@@ -163,19 +172,19 @@ def test_record_usage_uses_contract_declared_payload_attribution_keys(
     project = _bootstrap_project(tmp_path)
     monkeypatch.setattr(costs, "get_current_session_id", lambda _root: "sess-agent")
     monkeypatch.setattr(costs, "_now_iso", lambda: "2026-03-27T12:10:00+00:00")
-    codex_policy = costs.get_hook_payload_policy("codex")
+    runtime_policy = costs.get_hook_payload_policy(_TELEMETRY_RUNTIME)
     monkeypatch.setattr(
         costs,
         "get_hook_payload_policy",
         lambda runtime=None: (
             replace(
-                codex_policy,
+                runtime_policy,
                 agent_id_keys=("agent_id",),
                 agent_name_keys=("agent_name",),
                 agent_scope_keys=("agent_scope",),
             )
-            if runtime == "codex"
-            else codex_policy
+            if runtime == _TELEMETRY_RUNTIME
+            else runtime_policy
         ),
     )
 
@@ -190,7 +199,7 @@ def test_record_usage_uses_contract_declared_payload_attribution_keys(
                 "agent_scope": "subagent",
             },
         ),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
@@ -230,7 +239,7 @@ def test_record_usage_falls_back_to_workspace_state_when_payload_keys_are_undecl
             cost_usd=0.02,
             extra={"subagent_id": "agent-explicit", "subagent_type": "gpd-executor"},
         ),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
@@ -262,7 +271,7 @@ def test_record_usage_falls_back_to_current_agent_file_when_active_session_match
 
     record = record_usage_from_runtime_payload(
         _payload(input_tokens=120, output_tokens=30, cost_usd=0.02),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
@@ -297,7 +306,7 @@ def test_record_usage_does_not_claim_workspace_agent_id_without_matching_active_
 
     record = record_usage_from_runtime_payload(
         _payload(input_tokens=120, output_tokens=30, cost_usd=0.02),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
@@ -320,17 +329,17 @@ def test_record_usage_records_runtime_session_id_only_when_declared_by_policy(
     project = _bootstrap_project(tmp_path)
     monkeypatch.setattr(costs, "get_current_session_id", lambda _root: "sess-runtime")
     monkeypatch.setattr(costs, "_now_iso", lambda: "2026-03-27T12:14:00+00:00")
-    codex_policy = costs.get_hook_payload_policy("codex")
+    runtime_policy = costs.get_hook_payload_policy(_TELEMETRY_RUNTIME)
     monkeypatch.setattr(
         costs,
         "get_hook_payload_policy",
         lambda runtime=None: (
             replace(
-                codex_policy,
+                runtime_policy,
                 runtime_session_id_keys=("runtime_session_id",),
             )
-            if runtime == "codex"
-            else codex_policy
+            if runtime == _TELEMETRY_RUNTIME
+            else runtime_policy
         ),
     )
 
@@ -341,7 +350,7 @@ def test_record_usage_records_runtime_session_id_only_when_declared_by_policy(
             cost_usd=0.02,
             extra={"runtime_session_id": "rt-123"},
         ),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
@@ -358,8 +367,8 @@ def test_record_usage_skips_when_runtime_payload_has_no_usage_signal(
     monkeypatch.setattr(costs, "get_current_session_id", lambda _root: "sess-empty")
 
     record = record_usage_from_runtime_payload(
-        {"type": "response.completed", "model": "gpt-5.4", "usage": {}},
-        runtime="codex",
+        {"type": "response.completed", "model": _GENERIC_MODEL, "usage": {}},
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
@@ -402,7 +411,7 @@ def test_record_usage_estimates_cost_from_pricing_snapshot(tmp_path: Path, monke
             cached_input_tokens=100,
             cache_write_input_tokens=50,
         ),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
@@ -436,13 +445,13 @@ def test_record_usage_dedupes_identical_payloads_within_window(tmp_path: Path, m
     payload = _payload(input_tokens=400, output_tokens=100, cost_usd=0.04)
     first = record_usage_from_runtime_payload(
         payload,
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
     second = record_usage_from_runtime_payload(
         payload,
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
@@ -474,7 +483,7 @@ def test_record_usage_marks_workspace_fallback_as_subagent_scope(
 
     record = record_usage_from_runtime_payload(
         _payload(input_tokens=120, output_tokens=30, cost_usd=0.02),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
@@ -496,7 +505,7 @@ def test_record_usage_preserves_explicit_workspace_and_project_roots(
 
     record = record_usage_from_runtime_payload(
         _payload(input_tokens=120, output_tokens=30, cost_usd=0.02),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=nested,
         workspace_root=nested,
         project_root=project,
@@ -545,7 +554,7 @@ def test_record_usage_uses_project_root_for_workspace_state_attribution_and_summ
 
     record = record_usage_from_runtime_payload(
         _payload(input_tokens=120, output_tokens=30, cost_usd=0.02),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=nested,
         workspace_root=nested,
         project_root=project,
@@ -553,7 +562,7 @@ def test_record_usage_uses_project_root_for_workspace_state_attribution_and_summ
     )
     record_usage_from_runtime_payload(
         _payload(input_tokens=220, output_tokens=55, cost_usd=0.03),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=sibling,
         workspace_root=sibling,
         project_root=sibling,
@@ -618,7 +627,7 @@ def test_record_usage_dedup_keeps_distinct_nested_workspace_roots(tmp_path: Path
 
     first = record_usage_from_runtime_payload(
         _payload(input_tokens=120, output_tokens=30, cost_usd=0.02),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=nested_a,
         workspace_root=nested_a,
         project_root=project,
@@ -626,7 +635,7 @@ def test_record_usage_dedup_keeps_distinct_nested_workspace_roots(tmp_path: Path
     )
     second = record_usage_from_runtime_payload(
         _payload(input_tokens=120, output_tokens=30, cost_usd=0.02),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=nested_b,
         workspace_root=nested_b,
         project_root=project,
@@ -664,13 +673,13 @@ def test_build_cost_summary_marks_mixed_measured_and_estimated_usd_as_advisory(
 
     record_usage_from_runtime_payload(
         _payload(input_tokens=400, output_tokens=100, cost_usd=0.04),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
     record_usage_from_runtime_payload(
         _payload(input_tokens=1_000, output_tokens=500),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
@@ -686,6 +695,65 @@ def test_build_cost_summary_marks_mixed_measured_and_estimated_usd_as_advisory(
     assert summary.current_session.session_id == "sess-estimated"
     assert summary.current_session.cost_status == "estimated"
     assert {row.cost_status for row in summary.recent_sessions} == {"estimated", "measured"}
+
+    advisory = resolve_cost_advisory(summary)
+    assert advisory is not None
+    assert advisory.state == "mixed"
+    assert advisory.scope is None
+    assert advisory.config_key is None
+    assert "pricing-snapshot estimates" in advisory.message
+
+
+def test_build_cost_summary_surfaces_structured_unavailable_usd_advisory_when_tokens_are_measured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data_root = tmp_path / "data"
+    project = _bootstrap_project(tmp_path)
+    monkeypatch.setattr(costs, "get_current_session_id", lambda _root: "sess-unavailable")
+    monkeypatch.setattr(costs, "_now_iso", lambda: "2026-03-27T15:10:00+00:00")
+
+    record_usage_from_runtime_payload(
+        _payload(input_tokens=400, output_tokens=100),
+        runtime=_TELEMETRY_RUNTIME,
+        cwd=project,
+        data_root=data_root,
+    )
+
+    summary = build_cost_summary(project, data_root=data_root, last_sessions=5)
+
+    advisory = resolve_cost_advisory(summary)
+    assert advisory is not None
+    assert advisory.state == "unavailable"
+    assert advisory.scope is None
+    assert advisory.config_key is None
+    assert "Measured tokens are available" in advisory.message
+    assert "USD cost is unavailable" in advisory.message
+
+
+def test_build_cost_summary_surfaces_structured_estimated_usd_advisory_without_budget_threshold(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data_root = tmp_path / "data"
+    project = _bootstrap_project(tmp_path)
+    _write_pricing_snapshot(data_root)
+    monkeypatch.setattr(costs, "get_current_session_id", lambda _root: "sess-estimated")
+    monkeypatch.setattr(costs, "_now_iso", lambda: "2026-03-27T15:20:00+00:00")
+
+    record_usage_from_runtime_payload(
+        _payload(input_tokens=1_000, output_tokens=500),
+        runtime=_TELEMETRY_RUNTIME,
+        cwd=project,
+        data_root=data_root,
+    )
+
+    summary = build_cost_summary(project, data_root=data_root, last_sessions=5)
+
+    advisory = resolve_cost_advisory(summary)
+    assert advisory is not None
+    assert advisory.state == "estimated"
+    assert advisory.scope is None
+    assert advisory.config_key is None
+    assert "pricing snapshot" in advisory.message
 
 
 def test_build_cost_summary_surfaces_advisory_budget_thresholds(
@@ -710,7 +778,7 @@ def test_build_cost_summary_surfaces_advisory_budget_thresholds(
 
     record_usage_from_runtime_payload(
         _payload(input_tokens=600, output_tokens=400, cost_usd=0.25),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
@@ -740,6 +808,13 @@ def test_build_cost_summary_surfaces_advisory_budget_thresholds(
     assert session_threshold.cost_status == "measured"
     assert session_threshold.comparison_exact is True
     assert session_threshold.state == "near_budget"
+
+    advisory = resolve_cost_advisory(summary)
+    assert advisory is not None
+    assert advisory.state == "near_budget"
+    assert advisory.scope == "session"
+    assert advisory.config_key == "session_usd_budget"
+    assert "nearing budget" in advisory.message
 
 
 def test_build_cost_summary_marks_configured_budgets_unavailable_without_spend(
@@ -791,7 +866,7 @@ def test_build_cost_summary_marks_budget_overrun_when_spend_reaches_threshold(
 
     record_usage_from_runtime_payload(
         _payload(input_tokens=600, output_tokens=400, cost_usd=0.25),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
@@ -824,7 +899,7 @@ def test_build_cost_summary_marks_cost_only_records_as_token_incomplete(
 
     record_usage_from_runtime_payload(
         _payload(cost_usd=0.25),
-        runtime="codex",
+        runtime=_TELEMETRY_RUNTIME,
         cwd=project,
         data_root=data_root,
     )
@@ -879,14 +954,14 @@ def test_build_cost_summary_surfaces_best_effort_runtime_capabilities_without_re
 
     class _Config:
         model_profile = "review"
-        model_overrides = {"codex": {"fast": "tier-1"}}
+        model_overrides = {_TELEMETRY_RUNTIME: {"fast": "tier-1"}}
 
     monkeypatch.setattr("gpd.core.config.load_config", lambda _cwd: _Config())
-    monkeypatch.setattr("gpd.hooks.runtime_detect.detect_runtime_for_gpd_use", lambda cwd=None: "codex")
+    monkeypatch.setattr("gpd.hooks.runtime_detect.detect_runtime_for_gpd_use", lambda cwd=None: _TELEMETRY_RUNTIME)
 
     summary = build_cost_summary(project, data_root=tmp_path / "data", last_sessions=5)
 
-    assert summary.active_runtime == "codex"
+    assert summary.active_runtime == _TELEMETRY_RUNTIME
     assert summary.active_runtime_capabilities["telemetry_source"] == "notify-hook"
     assert summary.active_runtime_capabilities["telemetry_completeness"] == "best-effort"
     assert summary.model_profile == "review"

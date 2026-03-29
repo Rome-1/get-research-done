@@ -14,7 +14,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from gpd.core.context import init_resume
-from gpd.core.costs import build_cost_summary
+from gpd.core.costs import build_cost_summary, resolve_cost_advisory
 from gpd.core.observability import derive_execution_visibility, resolve_project_root
 from gpd.core.recent_projects import list_recent_projects
 from gpd.core.recovery_advice import RecoveryAdvice, build_recovery_advice
@@ -173,26 +173,10 @@ def _execution_next_actions(execution_visibility: object | None) -> list[str]:
     return actions
 
 
-def _workflow_next_actions(
-    _details: dict[str, object], *, base_ready: bool, latex_capability: dict[str, object]
-) -> list[str]:
-    actions: list[str] = []
+def _workflow_next_actions(*, base_ready: bool) -> list[str]:
     if not base_ready:
-        actions.append("Fix base runtime-readiness issues before relying on workflow presets.")
-    else:
-        compiler_available = bool(latex_capability.get("compiler_available"))
-        bibtex_available = bool(latex_capability.get("bibtex_available"))
-        latexmk_available = latex_capability.get("latexmk_available")
-        kpsewhich_available = latex_capability.get("kpsewhich_available")
-        if not compiler_available:
-            actions.append("Install or enable a LaTeX compiler to unblock publication and manuscript presets.")
-        elif not bibtex_available:
-            actions.append("Install or enable BibTeX support to fully unblock publication and manuscript presets.")
-        if compiler_available and bibtex_available and latexmk_available is False:
-            actions.append("Install latexmk to speed up paper builds; manual multipass compilation is still available.")
-        if compiler_available and bibtex_available and kpsewhich_available is False:
-            actions.append("Install kpsewhich/TeX resource lookup support to improve journal and class checks.")
-    return actions
+        return ["Fix base runtime-readiness issues before relying on workflow presets."]
+    return []
 
 
 def _cost_next_action(advisory: dict[str, object]) -> str | None:
@@ -203,43 +187,10 @@ def _cost_next_action(advisory: dict[str, object]) -> str | None:
 
 
 def _cost_advisory(cost_summary: object) -> dict[str, object] | None:
-    budget_thresholds = list(getattr(cost_summary, "budget_thresholds", []) or [])
-    prioritized_budget_states = ("at_or_over_budget", "near_budget", "unavailable")
-    for state in prioritized_budget_states:
-        for threshold in budget_thresholds:
-            threshold_state = str(getattr(threshold, "state", "unavailable") or "unavailable")
-            if threshold_state != state:
-                continue
-            advisory: dict[str, object] = {
-                "state": threshold_state,
-                "scope": getattr(threshold, "scope", "unknown"),
-                "config_key": getattr(threshold, "config_key", "unknown"),
-                "message": str(getattr(threshold, "message", "") or "").strip(),
-            }
-            next_action = _cost_next_action(advisory)
-            if next_action is not None:
-                advisory["next_action"] = next_action
-            return advisory
-
-    project_rollup = getattr(cost_summary, "project", None)
-    guidance = list(getattr(cost_summary, "guidance", []) or [])
-    if not guidance:
+    structured_advisory = resolve_cost_advisory(cost_summary)
+    advisory = _model_dump(structured_advisory)
+    if advisory is None:
         return None
-
-    record_count = int(getattr(project_rollup, "record_count", 0) or 0)
-    usage_status = str(getattr(project_rollup, "usage_status", "unavailable") or "unavailable")
-    cost_status = str(getattr(project_rollup, "cost_status", "unavailable") or "unavailable")
-    if record_count <= 0 and cost_status == "unavailable":
-        return None
-    if cost_status not in {"mixed", "unavailable"} and not (
-        cost_status == "estimated" and record_count > 0 and usage_status == "measured"
-    ):
-        return None
-
-    advisory: dict[str, object] = {
-        "state": cost_status,
-        "message": guidance[0],
-    }
     next_action = _cost_next_action(advisory)
     if next_action is not None:
         advisory["next_action"] = next_action
@@ -308,32 +259,6 @@ def build_runtime_hint_payload(
         {
             "current_project": current_project,
             "recent_projects": [_model_dump(row) or row for row in recent_rows],
-            "recent_projects_count": recovery_advice.recent_projects_count if recovery_advice is not None else len(recent_rows),
-            "resumable_projects": recovery_advice.resumable_projects_count if recovery_advice is not None else sum(
-                1
-                for row in recent_rows
-                if bool(row.get("resumable") if isinstance(row, dict) else _row_value(row, "resumable", False))
-            ),
-            "available_projects": recovery_advice.available_projects_count if recovery_advice is not None else sum(
-                1
-                for row in recent_rows
-                if bool(row.get("available") if isinstance(row, dict) else _row_value(row, "available", False))
-            ),
-            "current_workspace": (
-                {
-                    "has_recovery": recovery_advice.current_workspace_has_recovery,
-                    "resumable": recovery_advice.current_workspace_resumable,
-                    "has_resume_file": recovery_advice.current_workspace_has_resume_file,
-                    "candidate_count": recovery_advice.current_workspace_candidate_count,
-                    "has_live_execution": recovery_advice.has_live_execution,
-                    "has_session_resume_file": recovery_advice.has_session_resume_file,
-                    "missing_session_resume_file": recovery_advice.missing_session_resume_file,
-                    "has_interrupted_agent": recovery_advice.has_interrupted_agent,
-                    "machine_change_notice": recovery_advice.machine_change_notice,
-                }
-                if recovery_advice is not None
-                else {}
-            ),
         }
         if include_recovery
         else {}
@@ -383,7 +308,7 @@ def build_runtime_hint_payload(
             if isinstance(next_action, str) and next_action.strip():
                 next_action_parts.append(next_action.strip())
     if include_workflow_presets:
-        next_action_parts.extend(_workflow_next_actions(workflow_presets, base_ready=base_ready, latex_capability=normalized_latex_capability))
+        next_action_parts.extend(_workflow_next_actions(base_ready=base_ready))
     next_actions = _dedupe_text(next_action_parts)
 
     return RuntimeHintPayload(

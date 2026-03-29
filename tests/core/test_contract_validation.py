@@ -11,9 +11,11 @@ from pydantic import ValidationError
 
 from gpd.contracts import (
     ContractResults,
+    ProjectContractParseResult,
     ResearchContract,
     contract_from_data,
     normalize_contract_results_input,
+    parse_project_contract_data_strict,
 )
 from gpd.core.contract_validation import validate_project_contract
 
@@ -90,6 +92,26 @@ def test_contract_from_data_rejects_blank_scalar_to_list_drift() -> None:
     contract["claims"][0]["references"] = "   "
 
     assert contract_from_data(contract) is None
+
+
+def test_parse_project_contract_data_strict_rejects_singleton_list_drift() -> None:
+    contract = _load_contract_fixture()
+    contract["context_intake"]["must_read_refs"] = "ref-benchmark"
+
+    result: ProjectContractParseResult = parse_project_contract_data_strict(contract)
+
+    assert result.contract is None
+    assert result.errors == ["context_intake.must_read_refs must be a list, not str"]
+
+
+def test_parse_project_contract_data_strict_rejects_recoverable_nested_extra_keys() -> None:
+    contract = _load_contract_fixture()
+    contract["scope"]["legacy_notes"] = "nested extra field"
+
+    result: ProjectContractParseResult = parse_project_contract_data_strict(contract)
+
+    assert result.contract is None
+    assert result.errors == ["scope.legacy_notes: Extra inputs are not permitted"]
 
 
 def test_validate_project_contract_rejects_missing_decisive_targets_and_skepticism() -> None:

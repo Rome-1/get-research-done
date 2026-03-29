@@ -26,9 +26,11 @@ from pydantic import ValidationError as PydanticValidationError
 
 from gpd.contracts import (
     ConventionLock,
+    ProjectContractParseResult,
     ResearchContract,
     VerificationEvidence,
     contract_from_data,
+    parse_project_contract_data_strict,
 )
 from gpd.core.constants import (
     ENV_GPD_DEBUG,
@@ -2483,9 +2485,10 @@ def state_set_project_contract(cwd: Path, contract_data: dict[str, object] | Res
 
     This is a JSON-only state field, so it bypasses ``STATE.md`` field patching and
     writes through the authoritative structured state path instead. Unlike
-    ``ensure_state_schema()``, this write path still rejects authoritative schema
-    drift, but it accepts a small class of recoverable normalization fixes
-    (for example harmless extra keys) and persists the canonicalized contract.
+    ``ensure_state_schema()``, this write path rejects authored schema
+    normalization drift instead of silently salvaging it. Read/repair flows can
+    still canonicalize historical state through ``ensure_state_schema()`` and
+    the backup recovery path.
     """
     warning_messages: list[str] = []
     try:
@@ -2500,28 +2503,18 @@ def state_set_project_contract(cwd: Path, contract_data: dict[str, object] | Res
                 updated=False,
                 reason="Invalid project contract schema: project contract must be a JSON object",
             )
-        list_shape_drift_errors = _collect_list_shape_drift_errors(contract_payload)
-        normalized_contract, schema_findings = salvage_project_contract(contract_payload)
-        schema_warnings, schema_errors = _split_project_contract_schema_findings(
-            schema_findings,
-            allow_singleton_defaults=False,
-        )
-        schema_errors = list(dict.fromkeys(schema_errors))
-        if schema_errors:
+        strict_result: ProjectContractParseResult = parse_project_contract_data_strict(contract_payload)
+        if strict_result.errors:
             return StateUpdateResult(
                 updated=False,
-                reason="Invalid project contract schema: " + "; ".join(schema_errors),
+                reason="Invalid project contract schema: " + "; ".join(strict_result.errors),
             )
-        warning_messages.extend(schema_warnings)
-        warning_messages.extend(
-            _integrity_issue_from_contract_error(error) for error in list_shape_drift_errors
-        )
-        if normalized_contract is None:
+        parsed = strict_result.contract
+        if parsed is None:
             return StateUpdateResult(
                 updated=False,
                 reason="Invalid project contract schema: project contract could not be normalized",
             )
-        parsed = normalized_contract
     except PydanticValidationError as exc:
         first_error = exc.errors()[0] if exc.errors() else {}
         location = ".".join(str(part) for part in first_error.get("loc", ())) or "project_contract"

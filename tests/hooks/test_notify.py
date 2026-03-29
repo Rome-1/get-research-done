@@ -12,12 +12,21 @@ from unittest.mock import patch
 import pytest
 
 import gpd.hooks.notify as notify_module
+from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.core.constants import ProjectLayout
 from gpd.core.costs import usage_ledger_path
 from gpd.hooks.notify import _check_and_notify_update, _emit_execution_notification, _hook_payload_policy, main
 from gpd.hooks.runtime_detect import update_command_for_runtime
 from tests.hooks.helpers import mark_complete_install as _mark_complete_install
 from tests.hooks.helpers import repair_command as _repair_command
+
+_TELEMETRY_RUNTIME = next(
+    descriptor.runtime_name
+    for descriptor in iter_runtime_descriptors()
+    if descriptor.capabilities.telemetry_completeness != "none"
+)
+_TEST_PROVIDER = "provider-under-test"
+_TEST_MODEL = "model-under-test"
 
 
 def _write_current_execution(workspace: Path, payload: dict[str, object]) -> None:
@@ -664,7 +673,7 @@ def test_main_passes_workspace_and_project_roots_to_usage_recorder_when_supporte
     payload = {
         "type": "agent-turn-complete",
         "workspace": {"cwd": str(nested), "project_dir": str(project)},
-        "model": {"id": "gpt-5", "provider": "openai"},
+        "model": {"id": _TEST_MODEL, "provider": _TEST_PROVIDER},
         "tokens": {"promptTokens": 120, "completionTokens": 30},
     }
     captured: dict[str, object] = {}
@@ -685,7 +694,7 @@ def test_main_passes_workspace_and_project_roots_to_usage_recorder_when_supporte
 
     with (
         patch("sys.stdin", io.StringIO(json.dumps(payload))),
-        patch("gpd.hooks.notify._payload_runtime", return_value="codex"),
+        patch("gpd.hooks.notify._payload_runtime", return_value=_TELEMETRY_RUNTIME),
         patch("gpd.hooks.notify._runtime_supports_usage_telemetry", return_value=True),
         patch("gpd.core.costs.record_usage_from_runtime_payload", side_effect=_record) as mock_record,
         patch("gpd.hooks.notify._trigger_update_check") as mock_trigger,
@@ -702,7 +711,7 @@ def test_main_passes_workspace_and_project_roots_to_usage_recorder_when_supporte
     mock_notify.assert_called_once_with(str(project))
     mock_execution.assert_called_once_with(str(project))
     assert captured["payload"] == payload
-    assert captured["runtime"] == "codex"
+    assert captured["runtime"] == _TELEMETRY_RUNTIME
     assert captured["cwd"] == resolved_nested
     assert captured["workspace_root"] == resolved_nested
     assert captured["project_root"] == resolved_project
@@ -720,7 +729,7 @@ def test_main_passes_workspace_and_project_roots_to_usage_recorder_for_runtime_s
     payload = {
         "type": "agent-turn-complete",
         "workspace": {"current_dir": str(nested), "project_root": str(project)},
-        "model": {"id": "gpt-5", "provider": "openai"},
+        "model": {"id": _TEST_MODEL, "provider": _TEST_PROVIDER},
         "tokens": {"promptTokens": 120, "completionTokens": 30},
     }
     captured: dict[str, object] = {}
@@ -751,7 +760,7 @@ def test_main_passes_workspace_and_project_roots_to_usage_recorder_for_runtime_s
     with (
         patch("sys.stdin", io.StringIO(json.dumps(payload))),
         patch("gpd.hooks.notify._hook_payload_policy", return_value=hook_payload),
-        patch("gpd.hooks.notify._payload_runtime", return_value="codex"),
+        patch("gpd.hooks.notify._payload_runtime", return_value=_TELEMETRY_RUNTIME),
         patch("gpd.hooks.notify._runtime_supports_usage_telemetry", return_value=True),
         patch("gpd.core.costs.record_usage_from_runtime_payload", side_effect=_record) as mock_record,
         patch("gpd.hooks.notify._trigger_update_check") as mock_trigger,
@@ -768,32 +777,10 @@ def test_main_passes_workspace_and_project_roots_to_usage_recorder_for_runtime_s
     mock_notify.assert_called_once_with(str(project))
     mock_execution.assert_called_once_with(str(project))
     assert captured["payload"] == payload
-    assert captured["runtime"] == "codex"
+    assert captured["runtime"] == _TELEMETRY_RUNTIME
     assert captured["cwd"] == resolved_nested
     assert captured["workspace_root"] == resolved_nested
     assert captured["project_root"] == resolved_project
-
-
-def test_usage_recorder_kwargs_keep_legacy_cwd_contract_for_old_recorders(tmp_path: Path) -> None:
-    project = tmp_path / "project"
-    nested = project / "src"
-    nested.mkdir(parents=True)
-
-    def _legacy_recorder(payload_arg: dict[str, object], *, runtime: str | None, cwd: Path) -> None:
-        del payload_arg, runtime, cwd
-
-    kwargs = notify_module._usage_recorder_kwargs(
-        _legacy_recorder,
-        runtime="codex",
-        workspace_dir=str(nested),
-        project_root=str(project),
-    )
-
-    assert kwargs == {
-        "runtime": "codex",
-        "cwd": nested.resolve(strict=False),
-    }
-
 
 def test_main_expands_tilde_workspace_and_project_dir(tmp_path: Path) -> None:
     home = tmp_path / "home"
@@ -847,7 +834,7 @@ def test_main_records_usage_telemetry_from_alias_fields(tmp_path: Path) -> None:
     payload = {
         "type": "agent-turn-complete",
         "workspace": str(workspace),
-        "model": {"id": "gpt-5", "provider": "openai"},
+        "model": {"id": _TEST_MODEL, "provider": _TEST_PROVIDER},
         "tokens": {
             "promptTokens": 120,
             "completionTokens": 30,
@@ -860,7 +847,8 @@ def test_main_records_usage_telemetry_from_alias_fields(tmp_path: Path) -> None:
     with (
         patch.dict("os.environ", {"GPD_DATA_DIR": str(data_root)}),
         patch("sys.stdin", io.StringIO(json.dumps(payload))),
-        patch("gpd.hooks.notify._payload_runtime", return_value="codex"),
+        patch("gpd.hooks.notify._payload_runtime", return_value=_TELEMETRY_RUNTIME),
+        patch("gpd.hooks.notify._runtime_supports_usage_telemetry", return_value=True),
         patch("gpd.hooks.notify._trigger_update_check"),
         patch("gpd.hooks.notify._check_and_notify_update"),
         patch("gpd.hooks.notify._emit_execution_notification"),
@@ -872,9 +860,9 @@ def test_main_records_usage_telemetry_from_alias_fields(tmp_path: Path) -> None:
 
     assert len(rows) == 1
     row = rows[0]
-    assert row["runtime"] == "codex"
-    assert row["provider"] == "openai"
-    assert row["model"] == "gpt-5"
+    assert row["runtime"] == _TELEMETRY_RUNTIME
+    assert row["provider"] == _TEST_PROVIDER
+    assert row["model"] == _TEST_MODEL
     assert row["input_tokens"] == 120
     assert row["output_tokens"] == 30
     assert row["total_tokens"] == 150
@@ -904,7 +892,7 @@ def test_main_records_workspace_state_subagent_attribution(tmp_path: Path) -> No
     payload = {
         "type": "agent-turn-complete",
         "workspace": {"cwd": str(nested), "project_dir": str(project)},
-        "model": {"id": "gpt-5", "provider": "openai"},
+        "model": {"id": _TEST_MODEL, "provider": _TEST_PROVIDER},
         "tokens": {
             "promptTokens": 120,
             "completionTokens": 30,
@@ -915,7 +903,8 @@ def test_main_records_workspace_state_subagent_attribution(tmp_path: Path) -> No
     with (
         patch.dict("os.environ", {"GPD_DATA_DIR": str(data_root)}),
         patch("sys.stdin", io.StringIO(json.dumps(payload))),
-        patch("gpd.hooks.notify._payload_runtime", return_value="codex"),
+        patch("gpd.hooks.notify._payload_runtime", return_value=_TELEMETRY_RUNTIME),
+        patch("gpd.hooks.notify._runtime_supports_usage_telemetry", return_value=True),
         patch("gpd.core.costs.get_current_session_id", return_value="sess-subagent"),
         patch("gpd.hooks.notify._trigger_update_check"),
         patch("gpd.hooks.notify._check_and_notify_update"),
@@ -956,7 +945,7 @@ def test_main_records_workspace_state_subagent_attribution_from_top_level_aliase
         "type": "agent-turn-complete",
         "cwd": str(nested),
         "project_dir": str(project),
-        "model": {"id": "gpt-5", "provider": "openai"},
+        "model": {"id": _TEST_MODEL, "provider": _TEST_PROVIDER},
         "tokens": {
             "promptTokens": 120,
             "completionTokens": 30,
@@ -967,7 +956,8 @@ def test_main_records_workspace_state_subagent_attribution_from_top_level_aliase
     with (
         patch.dict("os.environ", {"GPD_DATA_DIR": str(data_root)}),
         patch("sys.stdin", io.StringIO(json.dumps(payload))),
-        patch("gpd.hooks.notify._payload_runtime", return_value="codex"),
+        patch("gpd.hooks.notify._payload_runtime", return_value=_TELEMETRY_RUNTIME),
+        patch("gpd.hooks.notify._runtime_supports_usage_telemetry", return_value=True),
         patch("gpd.core.costs.get_current_session_id", return_value="sess-top-level"),
         patch("gpd.hooks.notify._trigger_update_check"),
         patch("gpd.hooks.notify._check_and_notify_update"),
@@ -994,7 +984,7 @@ def test_main_does_not_record_usage_when_runtime_capability_is_unknown(tmp_path:
     payload = {
         "type": "agent-turn-complete",
         "workspace": str(workspace),
-        "model": {"id": "gpt-5", "provider": "openai"},
+        "model": {"id": _TEST_MODEL, "provider": _TEST_PROVIDER},
         "tokens": {
             "promptTokens": 120,
             "completionTokens": 30,
@@ -1024,7 +1014,7 @@ def test_main_does_not_record_usage_when_runtime_capability_excludes_notify_tele
     payload = {
         "type": "agent-turn-complete",
         "workspace": str(workspace),
-        "model": {"id": "gpt-5", "provider": "openai"},
+        "model": {"id": _TEST_MODEL, "provider": _TEST_PROVIDER},
         "tokens": {
             "promptTokens": 120,
             "completionTokens": 30,
@@ -1074,14 +1064,15 @@ def test_main_does_not_record_usage_when_usage_container_has_no_token_or_cost_si
     payload = {
         "type": "agent-turn-complete",
         "workspace": str(workspace),
-        "model": {"id": "gpt-5", "provider": "openai"},
+        "model": {"id": _TEST_MODEL, "provider": _TEST_PROVIDER},
         "token_usage": {"requestCount": 1},
     }
 
     with (
         patch.dict("os.environ", {"GPD_DATA_DIR": str(data_root)}),
         patch("sys.stdin", io.StringIO(json.dumps(payload))),
-        patch("gpd.hooks.notify._payload_runtime", return_value="codex"),
+        patch("gpd.hooks.notify._payload_runtime", return_value=_TELEMETRY_RUNTIME),
+        patch("gpd.hooks.notify._runtime_supports_usage_telemetry", return_value=True),
         patch("gpd.hooks.notify._trigger_update_check"),
         patch("gpd.hooks.notify._check_and_notify_update"),
         patch("gpd.hooks.notify._emit_execution_notification"),
@@ -1115,7 +1106,8 @@ def test_main_treats_usage_telemetry_failures_as_advisory(tmp_path: Path) -> Non
     stderr = io.StringIO()
     with (
         patch("sys.stdin", io.StringIO(payload)),
-        patch("gpd.hooks.notify._payload_runtime", return_value="codex"),
+        patch("gpd.hooks.notify._payload_runtime", return_value=_TELEMETRY_RUNTIME),
+        patch("gpd.hooks.notify._runtime_supports_usage_telemetry", return_value=True),
         patch("gpd.core.costs.record_usage_from_runtime_payload", side_effect=RuntimeError("telemetry boom")),
         patch("gpd.hooks.notify._trigger_update_check"),
         patch("gpd.hooks.notify._check_and_notify_update"),

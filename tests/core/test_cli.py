@@ -33,6 +33,9 @@ from gpd.core.health import (
 
 runner = CliRunner()
 
+_COST_TEST_RUNTIME = "runtime-under-test"
+_COST_TEST_MODEL = "model-under-test"
+
 
 def _make_checkout(tmp_path: Path, version: str = "9.9.9") -> Path:
     """Create a minimal GPD source checkout for CLI version tests."""
@@ -404,8 +407,8 @@ def _sample_cost_summary(workspace: Path) -> CostSummary:
         total_tokens=1500,
         cost_usd=None,
         last_recorded_at="2026-03-27T00:00:00+00:00",
-        runtimes=["codex"],
-        models=["gpt-5.4"],
+        runtimes=[_COST_TEST_RUNTIME],
+        models=[_COST_TEST_MODEL],
     )
     current_session = CostSessionSummary(
         session_id="session-123",
@@ -419,12 +422,12 @@ def _sample_cost_summary(workspace: Path) -> CostSummary:
         total_tokens=1000,
         cost_usd=None,
         last_recorded_at="2026-03-27T00:00:00+00:00",
-        runtimes=["codex"],
-        models=["gpt-5.4"],
+        runtimes=[_COST_TEST_RUNTIME],
+        models=[_COST_TEST_MODEL],
     )
     return CostSummary(
         workspace_root=workspace_text,
-        active_runtime="codex",
+        active_runtime=_COST_TEST_RUNTIME,
         active_runtime_capabilities={
             "permissions_surface": "config-file",
             "statusline_surface": "none",
@@ -458,13 +461,13 @@ def _sample_cost_summary(workspace: Path) -> CostSummary:
         ],
         guidance=[
             "Measured tokens are available, but no pricing snapshot is configured at the machine-local cost root, so USD cost is unavailable.",
-            "Current model posture: profile `review` with codex runtime defaults. Use the runtime `settings` command only if you want explicit tier-model overrides.",
+            f"Current model posture: profile `review` with {_COST_TEST_RUNTIME} runtime defaults. Use the runtime `settings` command only if you want explicit tier-model overrides.",
         ],
     )
 
 
 def _assert_cost_posture_semantics(output: str) -> None:
-    assert "codex" in output
+    assert _COST_TEST_RUNTIME in output
     assert "review" in output
     assert "runtime defaults" in output
     assert "tier-1=12, tier-2=10, tier-3=1" in output
@@ -493,7 +496,7 @@ def test_cost_raw_outputs_summary_payload(tmp_path: Path) -> None:
     payload = json.loads(result.output)
     assert payload["project_root"] == str(tmp_path)
     assert "workspace_root" not in payload
-    assert payload["active_runtime"] == "codex"
+    assert payload["active_runtime"] == _COST_TEST_RUNTIME
     assert payload["active_runtime_capabilities"]["telemetry_completeness"] == "best-effort"
     assert payload["active_runtime_capabilities"]["telemetry_source"] == "notify-hook"
     assert payload["model_profile"] == "review"

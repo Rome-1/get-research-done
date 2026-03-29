@@ -123,11 +123,11 @@ _SHELL_FENCE_LANGUAGES = frozenset({"bash", "sh", "shell", "zsh"})
 _CODEX_COMMAND_RUNTIME_NOTE = (
     "<codex_runtime_notes>\n"
     "Codex shell compatibility:\n"
+    "- Keep user-facing command names canonical in prose: `gpd ...` for your normal terminal and `$gpd-...` for Codex commands.\n"
     "- When shell steps call the GPD CLI, use {launcher} instead of the ambient `gpd` on PATH.\n"
     "- The bridge already pins Codex and validates the install contract, so keep using it for normal CLI execution.\n"
     "</codex_runtime_notes>\n\n"
 )
-_INLINE_GPD_COMMAND_RE = re.compile(r"`(?P<command>gpd(?=\s)[^`]*?)`")
 _CODEX_QUESTION_MARKERS = (
     "Use ask_user",
     "ask_user(",
@@ -423,7 +423,7 @@ def _inject_codex_command_runtime_note(content: str, launcher: str) -> str:
 
 
 def _rewrite_codex_gpd_cli_invocations(content: str, launcher: str) -> str:
-    """Rewrite direct shell ``gpd`` calls to the shared runtime CLI bridge."""
+    """Rewrite shell-executable ``gpd`` calls to the shared runtime CLI bridge."""
     rewritten: list[str] = []
     in_shell_fence = False
 
@@ -442,14 +442,9 @@ def _rewrite_codex_gpd_cli_invocations(content: str, launcher: str) -> str:
             rewritten.append(_rewrite_codex_shell_line(line, launcher))
             continue
 
-        rewritten.append(_rewrite_codex_inline_gpd_commands(line, launcher))
+        rewritten.append(line)
 
     return "".join(rewritten)
-
-
-def _rewrite_codex_inline_gpd_commands(content: str, launcher: str) -> str:
-    """Rewrite inline markdown code spans that execute ``gpd`` commands."""
-    return _INLINE_GPD_COMMAND_RE.sub(lambda match: f"`{launcher}{match.group('command')[3:]}`", content)
 
 
 def _normalize_codex_questioning(content: str) -> str:

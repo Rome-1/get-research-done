@@ -592,7 +592,11 @@ class TestCodexLifecycle:
         assert "context_mode: projectless" in content
         assert "<!-- [included: slides.md] -->" in content
 
-    def test_inline_gpd_commands_are_rewritten_to_the_bridge(self, tmp_path: Path, gpd_root: Path) -> None:
+    def test_shell_gpd_calls_use_the_bridge_but_inline_local_cli_language_stays_canonical(
+        self,
+        tmp_path: Path,
+        gpd_root: Path,
+    ) -> None:
         adapter = get_adapter("codex")
         target = tmp_path / ".codex"
         target.mkdir()
@@ -604,8 +608,10 @@ class TestCodexLifecycle:
         bridge_command = _expected_bridge_for_install(adapter, target, is_global=True)
         content = (skills_dir / "gpd-suggest-next" / "SKILL.md").read_text(encoding="utf-8")
         assert bridge_command in content
-        assert "Uses `gpd --raw suggest`" not in content
-        assert "`gpd --raw suggest`" not in content
+        assert f"SUGGESTIONS=$({bridge_command} --raw suggest)" in content
+        assert "Uses `gpd --raw suggest`" in content
+        assert "Local CLI fallback: `gpd --raw suggest`" in content
+        assert f"`{bridge_command} --raw suggest`" not in content
 
 
 # ---------------------------------------------------------------------------

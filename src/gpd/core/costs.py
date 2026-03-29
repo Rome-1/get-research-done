@@ -29,6 +29,7 @@ from gpd.core.observability import get_current_session_id, resolve_project_root
 from gpd.core.utils import atomic_write, file_lock, safe_read_file
 
 __all__ = [
+    "CostAdvisorySummary",
     "CostBudgetThresholdSummary",
     "CostProjectSummary",
     "CostSessionSummary",
@@ -41,6 +42,7 @@ __all__ = [
     "load_pricing_snapshot",
     "pricing_snapshot_path",
     "record_usage_from_runtime_payload",
+    "resolve_cost_advisory",
     "usage_ledger_path",
 ]
 
@@ -209,6 +211,17 @@ class CostBudgetThresholdSummary(BaseModel):
     comparison_exact: bool = False
     state: str = "unavailable"
     message: str
+
+
+class CostAdvisorySummary(BaseModel):
+    """Structured cost advisory for downstream hint/rendering layers."""
+
+    model_config = ConfigDict(frozen=True)
+
+    state: str
+    message: str
+    scope: str | None = None
+    config_key: str | None = None
 
 
 def _now_iso() -> str:
@@ -680,9 +693,8 @@ def record_usage_from_runtime_payload(
 ) -> UsageRecord | None:
     """Record one measured usage payload when the runtime exposes token/cost telemetry.
 
-    ``cwd`` is a legacy compatibility hint from the caller. ``workspace_root``
-    preserves the raw runtime workspace path for this event, while
-    ``project_root`` identifies the resolved GPD project scope used for
+    ``workspace_root`` preserves the raw runtime workspace path for this event,
+    while ``project_root`` identifies the resolved GPD project scope used for
     session lookup, project filtering, and project-state attribution. When the
     explicit roots are omitted, ``cwd`` seeds that resolution.
     """
@@ -1007,6 +1019,71 @@ def _budget_threshold_summary(
             "it stays advisory only and never stops work automatically."
         ),
     )
+
+
+def resolve_cost_advisory(cost_summary: object | None) -> CostAdvisorySummary | None:
+    """Return the highest-priority structured cost advisory for a summary."""
+
+    if cost_summary is None:
+        return None
+
+    budget_thresholds = list(getattr(cost_summary, "budget_thresholds", []) or [])
+    for state in ("at_or_over_budget", "near_budget", "unavailable"):
+        for threshold in budget_thresholds:
+            threshold_state = str(getattr(threshold, "state", "unavailable") or "unavailable")
+            if threshold_state != state:
+                continue
+            return CostAdvisorySummary(
+                state=threshold_state,
+                scope=str(getattr(threshold, "scope", "") or "").strip() or None,
+                config_key=str(getattr(threshold, "config_key", "") or "").strip() or None,
+                message=str(getattr(threshold, "message", "") or "").strip(),
+            )
+
+    project_rollup = getattr(cost_summary, "project", None)
+    if project_rollup is None:
+        return None
+
+    record_count = int(getattr(project_rollup, "record_count", 0) or 0)
+    usage_status = str(getattr(project_rollup, "usage_status", "unavailable") or "unavailable")
+    cost_status = str(getattr(project_rollup, "cost_status", "unavailable") or "unavailable")
+    pricing_snapshot_configured = bool(getattr(cost_summary, "pricing_snapshot_configured", False))
+
+    if record_count <= 0 and cost_status == "unavailable":
+        return None
+    if cost_status == "mixed":
+        return CostAdvisorySummary(
+            state="mixed",
+            message=(
+                "USD cost mixes measured runtime telemetry with pricing-snapshot estimates. "
+                "Treat the total as advisory rather than invoice-level billing truth."
+            ),
+        )
+    if cost_status == "estimated" and record_count > 0 and usage_status == "measured":
+        return CostAdvisorySummary(
+            state="estimated",
+            message=(
+                "USD cost is estimated from the machine-local pricing snapshot rather than "
+                "measured runtime billing telemetry."
+            ),
+        )
+    if cost_status == "unavailable" and usage_status == "measured":
+        if pricing_snapshot_configured:
+            return CostAdvisorySummary(
+                state="unavailable",
+                message=(
+                    "Measured tokens are available, but no pricing snapshot entry matched the "
+                    "recorded runtime/provider/model combination, so USD cost is unavailable."
+                ),
+            )
+        return CostAdvisorySummary(
+            state="unavailable",
+            message=(
+                "Measured tokens are available, but no pricing snapshot is configured at the "
+                "machine-local cost root, so USD cost is unavailable."
+            ),
+        )
+    return None
 
 
 def build_cost_summary(

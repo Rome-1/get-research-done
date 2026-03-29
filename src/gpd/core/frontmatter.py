@@ -20,10 +20,12 @@ from pydantic import ValidationError as PydanticValidationError
 from gpd.contracts import (
     ComparisonVerdict,
     ContractResults,
+    ProjectContractParseResult,
     ResearchContract,
     SuggestedContractCheck,
     collect_contract_integrity_errors,
     normalize_contract_results_input,
+    parse_project_contract_data_strict,
 )
 from gpd.core.constants import (
     PLAN_SUFFIX,
@@ -33,9 +35,6 @@ from gpd.core.constants import (
 )
 from gpd.core.contract_validation import (
     _format_schema_error,
-    _sanitize_contract_scalars,
-    _split_project_contract_schema_findings,
-    salvage_project_contract,
 )
 from gpd.core.errors import GPDError
 from gpd.core.observability import instrument_gpd_function, resolve_project_root
@@ -241,39 +240,28 @@ def _validate_contract_mapping(
     *,
     enforce_plan_semantics: bool,
 ) -> _PlanContractResolution:
-    """Return validated contract data plus explicit scalar/schema/semantic errors."""
+    """Return validated contract data plus explicit strict/semantic errors."""
 
     if not isinstance(contract_data, dict):
         return _PlanContractResolution(errors=["expected an object"])
 
-    scalar_errors: list[str] = []
-    sanitized_contract_data = _sanitize_contract_scalars(contract_data, errors=scalar_errors)
-    if not isinstance(sanitized_contract_data, dict):
-        return _PlanContractResolution(errors=["expected an object"])
-    if scalar_errors:
-        return _PlanContractResolution(errors=list(dict.fromkeys(scalar_errors)))
+    strict_result: ProjectContractParseResult = parse_project_contract_data_strict(contract_data)
+    if strict_result.errors:
+        return _PlanContractResolution(errors=list(dict.fromkeys(strict_result.errors)))
 
-    normalized_contract, schema_findings = salvage_project_contract(sanitized_contract_data)
-    schema_warnings, schema_errors = _split_project_contract_schema_findings(
-        schema_findings,
-        allow_singleton_defaults=False,
-    )
-    if schema_errors:
-        return _PlanContractResolution(errors=list(dict.fromkeys(schema_errors)))
-    try:
-        contract = normalized_contract or ResearchContract.model_validate(sanitized_contract_data)
-    except PydanticValidationError as exc:
-        return _PlanContractResolution(errors=_format_pydantic_validation_errors(exc))
+    contract = strict_result.contract
+    if contract is None:
+        return _PlanContractResolution(errors=["contract could not be normalized"])
 
     if not enforce_plan_semantics:
         return _PlanContractResolution(contract=contract)
 
     semantic_errors: list[str] = []
-    if "context_intake" not in sanitized_contract_data:
+    if "context_intake" not in contract_data:
         semantic_errors.append("missing context_intake")
     elif not _has_explicit_context_intake(contract):
         semantic_errors.append("context_intake must not be empty")
-    for error in _collect_plan_contract_explicit_field_errors(sanitized_contract_data):
+    for error in _collect_plan_contract_explicit_field_errors(contract_data):
         if error not in semantic_errors:
             semantic_errors.append(error)
     for error in (*collect_contract_integrity_errors(contract), *_validate_plan_contract(contract)):

@@ -9,6 +9,9 @@ from gpd.core.recent_projects import record_recent_project
 from gpd.core.runtime_hints import build_runtime_hint_payload, workflow_preset_surface_note
 from gpd.core.surface_phrases import cost_inspect_action
 
+_TEST_RUNTIME = "runtime-under-test"
+_TEST_MODEL = "model-under-test"
+
 
 def _bootstrap_project(tmp_path: Path) -> Path:
     project = tmp_path / "project"
@@ -65,8 +68,8 @@ def _write_usage_record(*, data_root: Path, project_root: Path, session_id: str)
     record = UsageRecord(
         record_id="usage-001",
         recorded_at="2026-03-27T12:00:00+00:00",
-        runtime="codex",
-        model="gpt-5.4",
+        runtime=_TEST_RUNTIME,
+        model=_TEST_MODEL,
         session_id=session_id,
         workspace_root=project_root.resolve(strict=False).as_posix(),
         project_root=project_root.resolve(strict=False).as_posix(),
@@ -94,7 +97,7 @@ def _latex_capability(**overrides: object) -> dict[str, object]:
 def _fake_cost_summary(workspace: Path, **overrides: object) -> SimpleNamespace:
     payload: dict[str, object] = {
         "current_session_id": "sess-cost",
-        "active_runtime": "codex",
+        "active_runtime": _TEST_RUNTIME,
         "model_profile": "review",
         "runtime_model_selection": "runtime defaults",
         "profile_tier_mix": {},
@@ -160,9 +163,10 @@ def test_build_runtime_hint_payload_merges_source_sections_and_actions(tmp_path:
     assert payload.execution["status_classification"] == "waiting"
     assert payload.execution["review_reason"] == "first-result review pending"
 
-    assert payload.recovery["recent_projects_count"] == 1
+    assert len(payload.recovery["recent_projects"]) == 1
     assert payload.recovery["current_project"]["resumable"] is True
     assert payload.recovery["current_project"]["resume_file_available"] is True
+    assert "current_workspace" not in payload.recovery
     assert payload.orientation["mode"] == "current-workspace"
     assert payload.orientation["primary_command"] == "gpd resume"
     assert "bounded resumable execution segment" in str(payload.orientation["primary_reason"])
@@ -215,7 +219,12 @@ def test_build_runtime_hint_payload_reports_degraded_publication_presets_when_bi
     assert payload.workflow_presets["degraded"] == 2
     assert payload.workflow_presets["blocked"] == 0
     assert payload.workflow_presets["latex_capability"]["paper_build_ready"] is False
-    assert any("BibTeX support" in action for action in payload.next_actions)
+    assert any(
+        "BibTeX support" in warning
+        for preset in payload.workflow_presets["presets"]
+        for warning in preset["warnings"]
+    )
+    assert not any("BibTeX support" in action for action in payload.next_actions)
     assert not any("latexmk" in action for action in payload.next_actions)
     assert not any("kpsewhich" in action for action in payload.next_actions)
 
@@ -245,7 +254,7 @@ def test_build_runtime_hint_payload_handles_absent_execution_snapshot(tmp_path: 
     assert payload.execution is not None
     assert payload.execution["has_live_execution"] is False
     assert payload.execution["status_classification"] == "idle"
-    assert payload.recovery["recent_projects_count"] == 1
+    assert len(payload.recovery["recent_projects"]) == 1
     assert payload.recovery["current_project"] is None
     assert payload.orientation["mode"] == "recent-projects"
     assert payload.orientation["primary_command"] == "gpd resume --recent"
@@ -277,7 +286,7 @@ def test_build_runtime_hint_payload_keeps_cost_guidance_quiet_when_best_effort_t
             "telemetry_completeness": "best-effort",
         },
         guidance=[
-            "codex only exposes best-effort usage telemetry through notify-hook, so missing turns remain unavailable instead of being guessed."
+            f"{_TEST_RUNTIME} only exposes best-effort usage telemetry through notify-hook, so missing turns remain unavailable instead of being guessed."
         ],
     )
     monkeypatch.setattr("gpd.core.runtime_hints.build_cost_summary", lambda *args, **kwargs: fake_summary)
@@ -424,7 +433,7 @@ def test_build_runtime_hint_payload_skips_cost_advisory_when_runtime_exposes_no_
             "telemetry_completeness": "none",
         },
         guidance=[
-            "codex does not currently expose a GPD-managed usage telemetry collection path, so `gpd cost` may remain empty even when work runs."
+            f"{_TEST_RUNTIME} does not currently expose a GPD-managed usage telemetry collection path, so `gpd cost` may remain empty even when work runs."
         ],
     )
     monkeypatch.setattr("gpd.core.runtime_hints.build_cost_summary", lambda *args, **kwargs: fake_summary)
@@ -516,7 +525,7 @@ def test_build_runtime_hint_payload_uses_shared_resume_contract_without_recent_p
         include_workflow_presets=False,
     )
 
-    assert payload.recovery["recent_projects_count"] == 0
+    assert payload.recovery["recent_projects"] == []
     assert payload.orientation["mode"] == "current-workspace"
     assert payload.orientation["primary_command"] == "gpd resume"
     assert payload.orientation["resume_mode"] == "bounded_segment"
