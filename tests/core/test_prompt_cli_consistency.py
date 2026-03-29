@@ -10,6 +10,7 @@ from tests.doc_surface_contracts import (
     DOCTOR_RUNTIME_SCOPE_RE,
     _assert_cost_advisory_guardrail,
     _assert_cost_surface_discoverability,
+    assert_help_command_quick_start_extract_contract,
     _assert_help_workflow_runtime_reference_contract,
     _assert_shared_preset_surface_contract,
     _assert_unattended_readiness_boundary,
@@ -163,21 +164,12 @@ def test_help_prompt_default_quick_start_extracts_workflow_owned_sections() -> N
         "## Step 3: Full Command Reference (--all)",
     )
 
-    assert "workflow-owned reference" in quick_start
-    assert "Start at `# GPD Command Reference`." in quick_start
-    assert "Include the workflow-owned `## Invocation Surfaces` section." in quick_start
-    assert "Include the workflow-owned `## Quick Start` section." in quick_start
-    assert "Stop before `## Core Workflow`." in quick_start
-    assert "Run \\`/gpd:help --all\\` for the full command reference." in quick_start
+    assert_help_command_quick_start_extract_contract(quick_start)
     _assert_help_workflow_runtime_reference_contract(help_workflow)
     quick_start_reference = _extract_between(help_workflow, "## Quick Start", "## Core Workflow")
+    assert_beginner_startup_routing_contract(quick_start_reference)
     for section in ("**New work**", "**Existing work**", "**Returning work**", "**Post-startup settings**"):
         assert section in quick_start_reference
-    assert "/gpd:start" in quick_start_reference
-    assert "/gpd:tour" in quick_start_reference
-    assert "/gpd:new-project" in quick_start_reference
-    assert "/gpd:map-research" in quick_start_reference
-    assert "/gpd:resume-work" in quick_start_reference
     assert "Usage: `/gpd:start`" not in quick_start_reference
     assert "## Core Workflow" in help_workflow
     assert "/gpd:new-project -> /gpd:discuss-phase -> /gpd:plan-phase -> /gpd:execute-phase -> /gpd:verify-work -> repeat" in help_workflow

@@ -22,6 +22,8 @@ __all__ = [
     "UNATTENDED_READINESS_SURFACE",
     "WOLFRAM_STATUS_SURFACE",
     "assert_help_start_tour_ordering_contract",
+    "assert_help_command_quick_start_extract_contract",
+    "assert_help_workflow_quick_start_taxonomy_contract",
     "assert_beginner_caveat_follow_up_contract",
     "assert_beginner_help_bridge_contract",
     "assert_beginner_hub_preflight_contract",
@@ -177,6 +179,91 @@ def assert_help_start_tour_ordering_contract(content: str) -> None:
 
     assert help_index < start_index
     assert start_index < tour_index
+
+
+def assert_help_command_quick_start_extract_contract(content: str) -> None:
+    _assert_contains_any(
+        content,
+        (
+            "workflow-owned reference",
+            "workflow-owned `## Quick Start` section",
+        ),
+        label="help command quick-start wrapper framing",
+    )
+    _assert_contains_any(
+        content,
+        (
+            "Start at `# GPD Command Reference`.",
+            "Start at `# GPD Command Reference`",
+        ),
+        label="help command quick-start reference anchor",
+    )
+    _assert_contains_any(
+        content,
+        (
+            "Include the workflow-owned `## Invocation Surfaces` section.",
+            "`## Invocation Surfaces` section",
+        ),
+        label="help command invocation-surfaces extract boundary",
+    )
+    _assert_contains_any(
+        content,
+        (
+            "Include the workflow-owned `## Quick Start` section.",
+            "`## Quick Start` section",
+        ),
+        label="help command quick-start extract boundary",
+    )
+    _assert_contains_any(
+        content,
+        (
+            "Stop before `## Core Workflow`.",
+            "before `## Core Workflow`",
+        ),
+        label="help command core-workflow cutoff boundary",
+    )
+    _assert_contains_any(
+        content,
+        (
+            "Run \\`/gpd:help --all\\` for the full command reference.",
+            "`/gpd:help --all` for the full command reference",
+            "`/gpd:help --all`",
+        ),
+        label="help command full-reference follow-up",
+    )
+
+
+def assert_help_workflow_quick_start_taxonomy_contract(content: str) -> None:
+    for label, options in (
+        ("quick-start new-work group", ("**New work**", "New work")),
+        ("quick-start existing-work group", ("**Existing work**", "Existing work")),
+        ("quick-start returning-work group", ("**Returning work**", "Returning work")),
+        ("quick-start post-startup settings group", ("**Post-startup settings**", "Post-startup settings")),
+        ("quick-start tangents group", ("**Tangents**", "Tangents")),
+        ("quick-start workflow presets group", ("**Workflow presets**", "Workflow presets")),
+        ("quick-start Wolfram integration group", ("**Wolfram integration**", "Wolfram integration")),
+    ):
+        _assert_contains_any(content, options, label=label)
+
+    for label, options in (
+        ("quick-start start command", ("/gpd:start", "`/gpd:start`")),
+        ("quick-start tour command", ("/gpd:tour", "`/gpd:tour`")),
+        ("quick-start new-project command", ("/gpd:new-project", "`/gpd:new-project`")),
+        ("quick-start map-research command", ("/gpd:map-research", "`/gpd:map-research`")),
+        ("quick-start resume-work command", ("/gpd:resume-work", "`/gpd:resume-work`")),
+        ("quick-start settings command", ("/gpd:settings", "`/gpd:settings`")),
+    ):
+        _assert_contains_any(content, options, label=label)
+
+    _assert_contains_any(
+        content,
+        (
+            "Primary guided unattended/autonomy setup after project creation",
+            "guided unattended/autonomy setup",
+            "after your first successful start or later",
+        ),
+        label="quick-start post-startup settings guidance",
+    )
 
 
 def assert_tour_read_only_teaching_contract(content: str) -> None:
@@ -778,7 +865,9 @@ assert_wolfram_plan_boundary = assert_wolfram_plan_boundary_contract
 _assert_cost_surface_discoverability = assert_cost_surface_discoverability
 _assert_cost_advisory_contract = assert_cost_advisory_contract
 _assert_cost_advisory_guardrail = assert_cost_advisory_contract
+_assert_help_command_quick_start_extract_contract = assert_help_command_quick_start_extract_contract
 _assert_help_workflow_runtime_reference_contract = assert_help_workflow_runtime_reference_contract
+_assert_help_workflow_quick_start_taxonomy_contract = assert_help_workflow_quick_start_taxonomy_contract
 _assert_shared_preset_surface_contract = assert_workflow_preset_surface_contract
 _assert_settings_local_terminal_follow_up_contract = assert_settings_local_terminal_follow_up_contract
 _assert_tour_read_only_teaching_contract = assert_tour_read_only_teaching_contract

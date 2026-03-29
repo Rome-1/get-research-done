@@ -30,9 +30,7 @@ from scripts.release_workflow import (
 )
 from tests.doc_surface_contracts import (
     DOCTOR_RUNTIME_SCOPE_RE,
-    PERMISSIONS_SYNC_SURFACE,
     PLAN_PREFLIGHT_SURFACE,
-    UNATTENDED_READINESS_SURFACE,
     WOLFRAM_STATUS_SURFACE,
     assert_beginner_caveat_follow_up_contract,
     assert_beginner_help_bridge_contract,
@@ -40,6 +38,7 @@ from tests.doc_surface_contracts import (
     assert_beginner_preflight_notice_contract,
     _assert_cost_advisory_contract,
     _assert_cost_surface_discoverability,
+    assert_help_command_quick_start_extract_contract,
     _assert_unattended_readiness_surface,
     _assert_wolfram_plan_boundary,
     assert_beginner_router_bridge_contract,
@@ -628,20 +627,19 @@ def test_public_help_default_quick_start_keeps_runtime_surface_readiness_path() 
         "## Step 2: Quick Start Extract (Default Output)",
         "## Step 3: Full Command Reference (--all)",
     )
+    quick_start_reference = _extract_between(help_workflow, "## Quick Start", "## Core Workflow")
 
-    assert "workflow-owned reference" in quick_start
-    assert "Start at `# GPD Command Reference`." in quick_start
-    assert "Include the workflow-owned `## Invocation Surfaces` section." in quick_start
-    assert "Include the workflow-owned `## Quick Start` section." in quick_start
-    assert "Stop before `## Core Workflow`." in quick_start
-    assert "Run \\`/gpd:help --all\\` for the full command reference." in quick_start
+    assert_help_command_quick_start_extract_contract(quick_start)
     assert_help_workflow_runtime_reference_contract(help_workflow)
-    assert "**New work**" in help_workflow
-    assert "**Existing work**" in help_workflow
-    assert "**Returning work**" in help_workflow
-    assert "**Tangents**" in help_workflow
-    assert "**Workflow presets**" in help_workflow
-    assert "**Wolfram integration**" in help_workflow
+    for section in (
+        "**New work**",
+        "**Existing work**",
+        "**Returning work**",
+        "**Tangents**",
+        "**Workflow presets**",
+        "**Wolfram integration**",
+    ):
+        assert section in quick_start_reference
 
 
 def test_public_help_surfaces_keep_publication_workflows_visible_for_optional_add_ons() -> None:
@@ -971,20 +969,8 @@ def test_help_reference_surfaces_clarify_runtime_slash_commands_vs_local_cli() -
 
     assert "workflow-owned help surface" in help_command
     assert "@{GPD_INSTALL_DIR}/workflows/help.md" in help_command
-
-    required_snippets = (
-        "`/gpd:*`",
-        "in-runtime",
-        "slash-command",
-        "local `gpd` CLI",
-        "gpd --help",
-        UNATTENDED_READINESS_SURFACE,
-        PERMISSIONS_SYNC_SURFACE,
-        "gpd validate command-context gpd:<name>",
-    )
-
-    for snippet in required_snippets:
-        assert snippet in help_workflow
+    assert_help_workflow_runtime_reference_contract(help_workflow)
+    assert "gpd validate command-context gpd:<name>" in help_workflow
 
 
 def test_help_reference_surfaces_keep_regression_check_wording_aligned_with_implementation() -> None:
