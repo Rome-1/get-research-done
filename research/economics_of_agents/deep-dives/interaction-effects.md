@@ -274,7 +274,7 @@ An overall **Danger Rating** synthesizes the three dimensions.
 | **Speed x Elastic Labor** | Medium | High | Medium | **HIGH** | Professional services, labor regulation |
 | **Collusion x Sybil** | High | Medium | High | **CRITICAL** | Antitrust law (entire framework) |
 | **Speed x Monetary Velocity** | Medium | Medium | High | **HIGH** | Central banking, monetary policy |
-| **Sybil x Speed x Elastic Labor** | Extreme | Medium (near-term feasibility growing) | Extreme | **SYSTEMIC** | Market economy as a governance system |
+| **Sybil x Speed x Elastic Labor** | Extreme | Medium (near-term feasibility growing) | Extreme | **SYSTEMIC (PROSPECTIVE)** | Market economy as a governance system |
 
 ### Reading the matrix
 
