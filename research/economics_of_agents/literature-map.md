@@ -36,6 +36,8 @@
   - KEY PAPER for our framework
 - **Levine, B. et al. (2006)** — "A Survey of Solutions to the Sybil Attack."
   - Taxonomy of defenses: centralized certification, resource testing, social networks
+- **Conitzer, V. & Sandholm, T. (2006)** — "Failures of the VCG Mechanism." AAMAS.
+  - VCG fails even with unique agents when they are computationally sophisticated; extends to sybil case
 - **Conitzer, V. (2010)** — "Mechanism Design for the Computational Era."
   - Computational complexity as a barrier to strategic manipulation; AI removes this barrier
 - **Wagman, L. & Conitzer, V. (2008)** — "Optimal False-name-proof Voting Rules."
@@ -95,8 +97,34 @@
   - Network topology determines whether shocks are amplified or absorbed
   - AI agents on networks may create brittle topologies
 
-## To Survey (identified, not yet read)
-- Parkes, D. & Wellman, M. — "Economic Reasoning and Artificial Intelligence" (Science, 2015)
+## Principal-Agent Theory (AI as Literal Agent)
+- **Holmstrom, B. (1979)** — "Moral Hazard and Observability." Bell Journal of Economics.
+  - Foundational P-A model; moral hazard shifts from "shirking" to "misalignment" for AI
+- **Grossman, S. & Hart, O. (1983)** — "An Analysis of the Principal-Agent Problem." Econometrica.
+  - Incomplete contracts framework; AI agents are inspectable but instructions are unverifiable by third parties
+- **Tirole, J. (1986)** — "Hierarchies and Bureaucracies." Journal of Law, Economics, and Organization.
+  - Hierarchical P-A problems; maps to Society → Regulator → Platform → Principal → AI Agent chain
+- See [deep-dives/principal-agent-ai.md](deep-dives/principal-agent-ai.md) for full analysis.
+
+## Closest Prior Work
+- **Parkes, D. & Wellman, M. (2015)** — "Economic Reasoning and Artificial Intelligence." Science.
+  - The most important antecedent — surveys AI×economics intersection. But treats AI as a tool for economics, not as an entity that violates economic substrate assumptions. Our contribution is orthogonal: what breaks when participants aren't human? See taxonomy §Relation to Prior Work.
+- **Conitzer, V. & Sandholm, T. (2006)** — "Failures of the VCG Mechanism in Combinatorial Auctions and Exchanges." AAMAS.
+  - Shows VCG failures from computational sophistication; our sybil analysis extends to identity multiplication.
+
+## Prediction Markets & Information Aggregation
+- **Chen, Y. & Pennock, D.** — Prediction market design and scoring rules.
+  - AI agents with correlated information break the independence assumption underlying Condorcet Jury Theorem.
+  - See [deep-dives/prediction-markets-attention.md](deep-dives/prediction-markets-attention.md).
+
+## Sybil Resistance (Practical)
+- **Worldcoin / Tools for Humanity** — Proof-of-personhood via iris biometrics.
+- **Gitcoin Passport** — Multi-signal identity scoring (social graph + on-chain + attestations).
+- **BrightID** — Social graph-based unique identity verification.
+- **Idena** — Synchronous AI-hard CAPTCHA ceremonies.
+- See [deep-dives/sybil-resistance-mechanisms.md](deep-dives/sybil-resistance-mechanisms.md) for analysis.
+
+## To Survey
 - Nisan, N. et al. — "Algorithmic Game Theory" textbook
-- Chen, Y. & Pennock, D. — prediction markets with AI agents
 - Milgrom, P. — "Discovering Prices" (on auction design)
+- Recent 2024-2025 work on LLM-based agents in market/auction settings (more relevant than Q-learning results)
