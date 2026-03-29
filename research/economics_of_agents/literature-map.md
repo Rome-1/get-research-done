@@ -124,6 +124,29 @@
 - **Idena** — Synchronous AI-hard CAPTCHA ceremonies.
 - See [deep-dives/sybil-resistance-mechanisms.md](deep-dives/sybil-resistance-mechanisms.md) for analysis.
 
+## DeFi & Flash Loans (Monetary Velocity Evidence)
+- **Qin, K. et al. (2021)** — "Attacking the DeFi Ecosystem with Flash Loans for Fun and Profit." Financial Cryptography.
+  - Systematic analysis of flash loan attack vectors; formalizes the oracle manipulation pattern
+- **Daian, P. et al. (2020)** — "Flash Boys 2.0: Frontrunning in Decentralized Exchanges, Miner Extractable Value, and Consensus Instability."
+  - MEV as systematic velocity exploitation; agents competing for transaction ordering
+- **Boado, E. (2020)** — Aave flash loan documentation and launch.
+  - First major flash loan protocol; billions in volume by 2023
+- See [deep-dives/flash-loans-monetary-velocity.md](deep-dives/flash-loans-monetary-velocity.md) for analysis.
+
+## Common Agency & Multi-Principal Problems
+- **Bernheim, B.D. & Whinston, M.D. (1986)** — "Common Agency." Econometrica.
+  - Multiple principals, single agent; equilibria with significant inefficiency
+  - Directly applicable to model provider + deployer as co-principals of AI agent
+- **Bai, Y. et al. (2022)** — "Constitutional AI: Harmlessness from AI Feedback." Anthropic.
+  - Constitutional AI as a hidden behavioral constraint set by model provider
+- See [deep-dives/model-provider-co-principal.md](deep-dives/model-provider-co-principal.md) for analysis.
+
+## Algorithmic Collusion (Additional)
+- **den Boer, A.V., Meylahn, J.M., & Schinkel, M.P. (2022)** — "Artificial Collusion: Examining Supracompetitive Pricing by Q-learning Algorithms." Working paper.
+  - Critical perspective on generalizability of Calvano et al. results
+- **Banchio, M. & Skrzypacz, A. (2022)** — "Artificial Intelligence and Auction Design." Working paper, Stanford GSB.
+  - AI agents in auction contexts; different from pricing game results
+
 ## Future Literature Targets (tracked, not yet integrated)
 - Nisan, N. et al. — *Algorithmic Game Theory* textbook (comprehensive reference for computational mechanism design foundations)
 - Milgrom, P. — *Discovering Prices* (modern auction design, especially combinatorial auctions)
