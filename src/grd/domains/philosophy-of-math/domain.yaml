@@ -1,0 +1,36 @@
+name: philosophy-of-math
+display_name: Philosophy of Mathematics
+description: >
+  Philosophy of mathematics research spanning foundations (logicism, formalism,
+  intuitionism, structuralism, predicativism), epistemology (mathematical knowledge,
+  the role of proof, intuition, the unreasonable effectiveness of mathematics),
+  ontology (platonism vs nominalism, mathematical objects, indispensability arguments),
+  philosophy of specific mathematical domains (set theory, category theory, arithmetic,
+  geometry, probability), and methodology (the role of axioms, mathematical explanation,
+  beauty and elegance in proofs, computational and experimental mathematics).
+version: 1
+
+conventions_file: conventions/convention-fields.yaml
+
+content:
+  subfields: subfields
+  protocols: protocols
+  errors: verification/errors
+
+result_metadata_fields:
+  - key: philosophical_position
+    label: "Philosophical position"
+    help: "Primary philosophical position defended or analyzed (e.g., platonism, nominalism, structuralism)"
+  - key: argument_type
+    label: "Argument type"
+    help: "Type of philosophical argument employed (e.g., indispensability, conceivability, transcendental)"
+  - key: formal_system_discussed
+    label: "Formal system discussed"
+    help: "Formal system under philosophical investigation (e.g., ZFC, PA, HoTT, category theory)"
+  - key: historical_period
+    label: "Historical period"
+    help: "Historical period of the philosophical work analyzed (e.g., ancient, foundational-crisis, contemporary)"
+
+branding:
+  tagline: "Rigorous inquiry into the nature of mathematical truth"
+  color: purple

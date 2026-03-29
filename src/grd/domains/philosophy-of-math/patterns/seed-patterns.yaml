@@ -1,0 +1,292 @@
+# Philosophy of Mathematics domain bootstrap patterns for cross-project pattern library seeding.
+# Each entry defines a known error pattern that recurs across philosophy of mathematics projects.
+
+patterns:
+  - domain: mathematical-ontology
+    category: assumption-error
+    severity: critical
+    title: "Treating platonism-nominalism as an exhaustive dichotomy"
+    slug: platonism-nominalism-false-dichotomy
+    domains_extra: [mathematical-structuralism, foundations-of-mathematics]
+    description: >
+      The ontological landscape in philosophy of mathematics is not a binary choice
+      between full-blooded platonism and eliminative nominalism. Intermediate and
+      orthogonal positions — structuralism (Shapiro, Resnik), fictionalism (Field),
+      thin realism (Maddy), plenitudinous platonism (Balaguer), arealism (Maddy's
+      later work) — occupy distinct logical space. Framing a debate as "platonism
+      or nominalism" artificially constrains the available positions and often leads
+      to false dilemmas in argumentation.
+    detection: >
+      Check if the argument assumes exactly two ontological options. Look for
+      phrases like "either mathematical objects exist or they don't" without
+      acknowledging that "exist" is itself contested. Verify whether the argument
+      survives when a structuralist or fictionalist position is introduced.
+    prevention: >
+      Map the full space of ontological positions before constructing arguments.
+      Distinguish between existence claims (are there mathematical objects?) and
+      nature claims (what kind of things are they?). Test arguments against at
+      least three distinct ontological positions.
+    tags: [ontology, platonism, nominalism, structuralism, fictionalism, false-dichotomy]
+
+  - domain: foundations-of-mathematics
+    category: conflation-error
+    severity: critical
+    title: "Confusing mathematical foundations with philosophical foundations"
+    slug: foundational-framework-conflation
+    domains_extra: [philosophy-of-set-theory, philosophy-of-category-theory]
+    description: >
+      ZFC, type theory, and category theory serve as mathematical foundations —
+      frameworks within which other mathematics can be developed. But adopting
+      ZFC as a foundation does not commit one to any particular philosophical
+      position about set theory's ontological status. Conversely, a philosophical
+      foundationalist program (logicism, formalism, intuitionism) is not the same
+      as choosing a formal system. Frege's logicism failed as philosophy even
+      though the formal systems it inspired (ramified type theory, ZFC) succeeded
+      as mathematics.
+    detection: >
+      Check if the argument slides between "X is foundational for mathematics"
+      (technical sense) and "X provides the philosophical foundation of mathematics"
+      (epistemic/ontological sense). Look for unargued moves from "mathematics
+      can be formalized in X" to "mathematics is really about the objects of X."
+    prevention: >
+      Distinguish explicitly between foundation-as-framework (organizational,
+      technical) and foundation-as-justification (philosophical, epistemic).
+      Note that multiple frameworks can be mathematically equivalent while
+      philosophically distinct.
+    tags: [foundations, set-theory, category-theory, conflation, formalization]
+
+  - domain: mathematical-logic
+    category: misapplication
+    severity: critical
+    title: "Misapplying Goedel's incompleteness theorems beyond their scope"
+    slug: goedel-misapplication
+    domains_extra: [foundations-of-mathematics, mathematical-epistemology]
+    description: >
+      Goedel's incompleteness theorems have precise technical content: any
+      consistent, recursively axiomatizable extension of Robinson arithmetic
+      is incomplete (first theorem), and cannot prove its own consistency
+      (second theorem). Common misapplications include: claiming the theorems
+      show mathematics is "uncertain" or "unreliable," that they refute
+      mechanism/computationalism about the mind (Lucas-Penrose), that they
+      apply to any formal system whatsoever, that they show truth outruns
+      provability in some mystical sense, or that they undermine Hilbert's
+      program completely (they only refute the finitary consistency proof
+      component).
+    detection: >
+      Check that the formal prerequisites are met: the system must be
+      consistent, recursively axiomatizable, and strong enough to represent
+      all computable functions. Verify the argument doesn't confuse
+      incompleteness (some truths unprovable) with inconsistency (contradictions
+      derivable) or undecidability (no algorithm decides membership).
+    prevention: >
+      State exactly which incompleteness theorem is being invoked and verify
+      its hypotheses hold. Distinguish between the mathematical results and
+      their philosophical interpretations. Be explicit about what "Goedel
+      showed" vs. what is a further philosophical claim.
+    tags: [Goedel, incompleteness, misapplication, Lucas-Penrose, formalism]
+
+  - domain: philosophy-of-proof
+    category: conflation-error
+    severity: high
+    title: "Equating informal mathematical proof with formal derivation"
+    slug: proof-formalization-gap
+    domains_extra: [foundations-of-mathematics, mathematical-epistemology]
+    description: >
+      Working mathematicians produce informal proofs — arguments that convince
+      the mathematical community of a statement's truth. These are not the same
+      as formal derivations in a logical calculus. The gap between them is
+      philosophically significant: informal proofs may rely on diagram-based
+      reasoning, pattern recognition, or "obvious" steps that resist
+      formalization. Assuming that every accepted proof can be straightforwardly
+      formalized (the "formalizability thesis") is a substantive philosophical
+      claim, not a truism. Conversely, insisting that only formal derivations
+      count as proofs would invalidate most of mathematical practice.
+    detection: >
+      Check whether the argument treats "proof" univocally when it should
+      distinguish between social/epistemic proof and formal/logical proof.
+      Look for unstated assumptions about formalizability. Verify whether
+      conclusions about formal systems are being applied to informal practice
+      or vice versa.
+    prevention: >
+      Specify which notion of proof is in play. When the formalizability
+      thesis is needed, state it as an explicit premise. Acknowledge the
+      gap between proof-as-practiced and proof-as-formalized, and discuss
+      whether that gap matters for the argument at hand.
+    tags: [proof, formalization, informal-proof, derivation, mathematical-practice]
+
+  - domain: intuitionism-constructivism
+    category: logic-error
+    severity: high
+    title: "Using classical reasoning when the argument requires constructive validity"
+    slug: constructive-classical-equivocation
+    domains_extra: [philosophy-of-logic, foundations-of-mathematics]
+    description: >
+      Arguments about intuitionistic or constructive mathematics must be valid
+      in the relevant logic. Using the law of excluded middle, double negation
+      elimination, or classical reductio ad absurdum when arguing within or
+      about a constructive framework invalidates the reasoning. This is
+      particularly insidious when the argument concerns whether a classical
+      result has constructive content — the very question at issue is whether
+      classical reasoning applies, so using it begs the question.
+    detection: >
+      Identify which logical framework the argument operates in. Check for
+      uses of excluded middle, proof by contradiction (vs. proof of negation),
+      and double negation elimination. Verify that existence claims are
+      witnessed by constructions, not merely shown consistent.
+    prevention: >
+      Lock the logic_system convention before proceeding. When working in a
+      constructive context, flag every use of classical principles. Distinguish
+      between proof of negation (constructively valid) and proof by
+      contradiction (not constructively valid). Use constructive alternatives
+      where available.
+    tags: [constructivism, intuitionism, classical-logic, excluded-middle, begging-the-question]
+
+  - domain: philosophy-of-applied-mathematics
+    category: assumption-error
+    severity: high
+    title: "Mystifying the applicability of mathematics instead of analyzing it"
+    slug: unreasonable-effectiveness-mystification
+    domains_extra: [mathematical-epistemology, mathematical-ontology]
+    description: >
+      Wigner's "unreasonable effectiveness of mathematics in the natural
+      sciences" is often treated as a deep metaphysical puzzle rather than a
+      phenomenon admitting piecemeal explanations. Much of the "effectiveness"
+      dissolves on analysis: mathematics developed for physical applications is
+      not surprising when it applies (selection bias); structural similarities
+      between mathematical and physical domains have specific explanations;
+      and the failures of mathematical models (most mathematics has no physical
+      application) are systematically underweighted. Treating the effectiveness
+      as fundamentally mysterious can smuggle in platonist assumptions.
+    detection: >
+      Check if the argument treats applicability as a brute mystery requiring
+      a single unified explanation. Look for selective attention to successful
+      applications while ignoring the vast body of pure mathematics with no
+      physical application. Verify whether the "puzzle" survives once
+      selection effects and historical context are accounted for.
+    prevention: >
+      Distinguish between different types of applicability (direct vs.
+      indirect, inevitable vs. surprising). Account for the development
+      history of the mathematics in question. Address the non-applicability
+      of most mathematics as a relevant datum. Evaluate proposed explanations
+      (structuralism, pragmatism, inference to best explanation) on their
+      individual merits.
+    tags: [applicability, Wigner, effectiveness, selection-bias, platonism]
+
+  - domain: history-of-philosophy-of-mathematics
+    category: interpretive-error
+    severity: high
+    title: "Projecting modern concepts onto historical philosophers of mathematics"
+    slug: historical-anachronism
+    domains_extra: [foundations-of-mathematics, mathematical-ontology]
+    description: >
+      Reading contemporary distinctions back into historical texts distorts
+      the philosophical landscape. Plato was not a "mathematical platonist" in
+      the modern sense — he did not face the Benacerraf problem. Kant's views
+      on arithmetic cannot be evaluated against post-Fregean logic without
+      acknowledging the conceptual gap. Hilbert's "formalism" was not the
+      game-formalism caricature. Brouwer's intuitionism was embedded in a
+      broader philosophical program (mysticism, solipsism) that modern
+      constructivists typically reject. Presenting historical figures as early
+      advocates of modern positions obscures what was genuinely distinctive
+      about their views.
+    detection: >
+      Check whether the argument attributes modern technical concepts to
+      historical figures without textual evidence. Look for anachronistic
+      vocabulary (e.g., "Plato's mathematical platonism," "Euclid's
+      formalism"). Verify that the historical figure's actual concerns and
+      conceptual framework are represented.
+    prevention: >
+      Situate historical claims in their proper intellectual context.
+      Distinguish between "X anticipated Y" (weak, acceptable) and "X held Y"
+      (strong, requires evidence). Use primary sources, not textbook summaries.
+      Lock historical_context to prevent drift between eras.
+    tags: [anachronism, history, Plato, Kant, Hilbert, Brouwer, hermeneutics]
+
+  - domain: meta-mathematics
+    category: level-confusion
+    severity: critical
+    title: "Confusing object-level mathematics with meta-level philosophy"
+    slug: category-error-levels
+    domains_extra: [philosophy-of-proof, philosophy-of-set-theory]
+    description: >
+      Philosophy of mathematics operates at a meta-level: it is discourse about
+      mathematics, not mathematics itself. Confusing these levels produces
+      characteristic errors. A proof within ZFC that a set exists does not
+      settle the philosophical question of whether sets exist. A model-theoretic
+      result about the independence of CH does not by itself resolve the
+      philosophical question of CH's truth value. Conversely, a philosophical
+      argument about the nature of numbers does not constitute a mathematical
+      proof about numbers. The object/meta distinction also applies to formal
+      systems: Goedel sentences are about a formal system (meta-level) but
+      formulated within it (object-level), and confusing these levels is the
+      source of many misinterpretations.
+    detection: >
+      Check whether mathematical results are being used as philosophical
+      conclusions without additional philosophical argument. Look for moves
+      from "provable in system S" to "true" or from "independent of S" to
+      "indeterminate." Verify that formal results about a system are
+      distinguished from claims made within the system.
+    prevention: >
+      Label claims as object-level (mathematical) or meta-level (philosophical)
+      and track level transitions. When invoking a mathematical result in a
+      philosophical argument, make the bridging principle explicit. Distinguish
+      between a system's internal provability and external truth.
+    tags: [meta-level, object-level, use-mention, Goedel, set-theory, truth]
+
+  - domain: mathematical-ontology
+    category: assumption-error
+    severity: high
+    title: "Assuming indispensability arguments settle ontological questions"
+    slug: indispensability-overreach
+    domains_extra: [mathematical-platonism, philosophy-of-applied-mathematics]
+    description: >
+      The Quine-Putnam indispensability argument — that we should believe in
+      mathematical objects because they are indispensable to our best scientific
+      theories — is often presented as decisive for platonism. But the argument
+      has multiple contested premises (confirmational holism, naturalism, that
+      indispensability entails ontological commitment) and faces strong
+      objections (Field's nominalization program, Maddy's naturalist objections,
+      Melia's weaseling, the problem of idealizations). Treating the argument
+      as conclusive rather than as one consideration among many oversimplifies
+      the ontological debate.
+    detection: >
+      Check if the argument presents indispensability as sufficient for
+      ontological commitment without defending the required premises. Look for
+      dismissal of nominalist reconstruction programs without engagement.
+      Verify whether idealizations (frictionless planes, infinite populations)
+      are treated as ontologically committing.
+    prevention: >
+      State which version of the indispensability argument is in play (Quine's,
+      Putnam's, Colyvan's enhanced version). Address the most serious objections.
+      Distinguish between indispensability for prediction and indispensability
+      for explanation. Acknowledge that ontological conclusions require
+      additional philosophical argument beyond indispensability.
+    tags: [indispensability, Quine-Putnam, ontology, platonism, holism, nominalism]
+
+  - domain: philosophy-of-logic
+    category: conflation-error
+    severity: high
+    title: "Treating logic choice as philosophically neutral"
+    slug: logic-choice-neutrality
+    domains_extra: [intuitionism-constructivism, foundations-of-mathematics]
+    description: >
+      The choice of logic (classical, intuitionistic, paraconsistent, plural)
+      is not philosophically innocent — it carries ontological, epistemic, and
+      methodological commitments. Classical logic presupposes bivalence and
+      excluded middle, which are substantive metaphysical claims in the context
+      of mathematics. Intuitionistic logic embodies a constructive epistemology.
+      Paraconsistent logic allows for true contradictions. Arguments that
+      assume a particular logic without acknowledging these commitments
+      implicitly beg questions that may be at the core of the dispute.
+    detection: >
+      Check whether the argument's conclusions depend on the choice of logic
+      and whether that choice is made explicit. Look for implicit uses of
+      excluded middle in arguments about constructive mathematics, or
+      bivalence in arguments about vagueness or indeterminacy. Verify whether
+      the logic is argued for or simply assumed.
+    prevention: >
+      Lock logic_system at the start of analysis. State the logical framework
+      explicitly and justify its appropriateness to the philosophical question.
+      Test whether the argument survives under alternative logics. When the
+      choice of logic is itself at issue, reason from shared principles only.
+    tags: [logic, classical, intuitionistic, bivalence, excluded-middle, neutrality]

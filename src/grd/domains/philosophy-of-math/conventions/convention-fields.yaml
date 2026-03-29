@@ -1,0 +1,257 @@
+# Philosophy of Mathematics convention fields — canonical convention lock fields
+# These define the domain-specific conventions that can be locked per-project.
+
+fields:
+  - name: ontological_commitment
+    label: "Ontological commitment"
+    description: "Stance on the existence and nature of mathematical objects"
+    critical: true
+    aliases: ["ontology", "mathematical_ontology"]
+    options:
+      - "full-platonism"
+      - "moderate-realism"
+      - "structuralism"
+      - "nominalism"
+      - "fictionalism"
+      - "formalism"
+      - "constructivism"
+      - "neo-logicism"
+      - "plenitudinous-platonism"
+      - "thin-realism"
+      - "arealism"
+    value_aliases:
+      "platonism": "full-platonism"
+      "realism": "moderate-realism"
+      "anti-realism": "nominalism"
+      "Balaguer": "plenitudinous-platonism"
+      "Field": "fictionalism"
+
+  - name: foundational_framework
+    label: "Foundational framework"
+    description: "Formal system or foundational program under discussion or assumed"
+    critical: true
+    aliases: ["foundation", "formal_foundation"]
+    options:
+      - "ZFC"
+      - "ZF"
+      - "type-theory"
+      - "HoTT"
+      - "category-theory"
+      - "second-order-arithmetic"
+      - "constructive-type-theory"
+      - "predicative"
+      - "classical-set-theory"
+      - "none-informal"
+    value_aliases:
+      "set-theory": "ZFC"
+      "Martin-Lof": "constructive-type-theory"
+      "MLTT": "constructive-type-theory"
+      "homotopy": "HoTT"
+
+  - name: epistemic_stance
+    label: "Epistemic stance"
+    description: "View on how mathematical knowledge is acquired or justified"
+    critical: false
+    aliases: ["epistemology", "mathematical_epistemology"]
+    options:
+      - "rationalism"
+      - "empiricism"
+      - "quasi-empiricism"
+      - "social-constructivism"
+      - "reliabilism"
+      - "intuitionism-BHK"
+      - "a-priori-synthetic"
+      - "pragmatism"
+      - "structuralist-epistemology"
+      - "deflationary"
+    value_aliases:
+      "Lakatos": "quasi-empiricism"
+      "Kitcher": "empiricism"
+      "Kantian": "a-priori-synthetic"
+      "BHK": "intuitionism-BHK"
+
+  - name: logic_system
+    label: "Logic system"
+    description: "Logical framework assumed or under investigation"
+    critical: true
+    aliases: ["logic", "logical_framework"]
+    options:
+      - "classical-FOL"
+      - "classical-HOL"
+      - "intuitionistic"
+      - "modal"
+      - "paraconsistent"
+      - "free-logic"
+      - "plural-logic"
+      - "infinitary"
+      - "linear"
+      - "relevant"
+    value_aliases:
+      "classical": "classical-FOL"
+      "FOL": "classical-FOL"
+      "HOL": "classical-HOL"
+      "constructive": "intuitionistic"
+
+  - name: proof_conception
+    label: "Proof conception"
+    description: "View on what constitutes a mathematical proof"
+    critical: false
+    aliases: ["proof_model", "proof_type"]
+    options:
+      - "formal-derivation"
+      - "informal-rigorous"
+      - "diagrammatic"
+      - "computational-verified"
+      - "probabilistic"
+      - "social-process"
+      - "surveyable-proof"
+      - "axiomatic-deductive"
+    value_aliases:
+      "formal": "formal-derivation"
+      "informal": "informal-rigorous"
+      "computer": "computational-verified"
+
+  - name: mathematical_domain
+    label: "Mathematical domain"
+    description: "Branch of mathematics under philosophical investigation"
+    critical: false
+    aliases: ["math_domain", "subject_area"]
+    options:
+      - "arithmetic"
+      - "analysis"
+      - "geometry"
+      - "algebra"
+      - "topology"
+      - "set-theory"
+      - "category-theory"
+      - "probability"
+      - "combinatorics"
+      - "logic"
+      - "number-theory"
+      - "general-mathematics"
+    value_aliases:
+      "numbers": "arithmetic"
+      "calculus": "analysis"
+
+  - name: philosophical_tradition
+    label: "Philosophical tradition"
+    description: "Broader philosophical tradition the work operates within"
+    critical: false
+    aliases: ["tradition", "school"]
+    options:
+      - "analytic"
+      - "continental"
+      - "pragmatist"
+      - "phenomenological"
+      - "Wittgensteinian"
+      - "neo-Kantian"
+      - "naturalist"
+      - "structuralist"
+    value_aliases:
+      "Vienna-Circle": "analytic"
+      "logical-positivism": "analytic"
+
+  - name: argument_style
+    label: "Argument style"
+    description: "Primary mode of philosophical argumentation employed"
+    critical: false
+    aliases: ["argument_mode", "reasoning_style"]
+    options:
+      - "a-priori"
+      - "transcendental"
+      - "abductive"
+      - "reductio"
+      - "thought-experiment"
+      - "formal-analysis"
+      - "historical-exegesis"
+      - "conceptual-analysis"
+      - "indispensability"
+    value_aliases:
+      "IBE": "abductive"
+      "inference-to-best-explanation": "abductive"
+
+  - name: formalization_level
+    label: "Formalization level"
+    description: "Degree of formal rigor in the philosophical analysis"
+    critical: false
+    aliases: ["formality", "rigor_level"]
+    options:
+      - "fully-formal"
+      - "semi-formal"
+      - "informal-discursive"
+      - "mixed-formal-informal"
+    value_aliases:
+      "formal": "fully-formal"
+      "informal": "informal-discursive"
+      "discursive": "informal-discursive"
+
+  - name: historical_context
+    label: "Historical context"
+    description: "Historical period of the philosophical discourse being analyzed or situated"
+    critical: false
+    aliases: ["period", "era"]
+    options:
+      - "ancient"
+      - "early-modern"
+      - "Kantian"
+      - "foundational-crisis"
+      - "post-Goedel"
+      - "structuralist-turn"
+      - "contemporary"
+    value_aliases:
+      "Plato": "ancient"
+      "Aristotle": "ancient"
+      "Kant": "Kantian"
+      "Frege": "foundational-crisis"
+      "Russell": "foundational-crisis"
+      "Hilbert": "foundational-crisis"
+      "modern": "post-Goedel"
+
+  - name: modality_stance
+    label: "Modality stance"
+    description: "Position on the modal status of mathematical truths"
+    critical: false
+    aliases: ["modality", "necessity"]
+    options:
+      - "necessary-a-priori"
+      - "necessary-a-posteriori"
+      - "contingent"
+      - "conventional"
+      - "modal-structuralism"
+      - "agnostic"
+    value_aliases:
+      "Hellman": "modal-structuralism"
+
+  - name: truth_theory
+    label: "Truth theory"
+    description: "Account of mathematical truth assumed or defended"
+    critical: false
+    aliases: ["truth", "truth_conception"]
+    options:
+      - "correspondence"
+      - "coherence"
+      - "deflationary"
+      - "pragmatic"
+      - "proof-theoretic"
+      - "model-theoretic"
+      - "pluralist"
+    value_aliases:
+      "Tarski": "model-theoretic"
+      "Tarskian": "model-theoretic"
+
+  - name: applicability_stance
+    label: "Applicability stance"
+    description: "View on why and how mathematics applies to the physical world"
+    critical: false
+    aliases: ["applicability", "application"]
+    options:
+      - "pre-established-harmony"
+      - "structural-mapping"
+      - "indispensability-based"
+      - "instrumental"
+      - "coincidental"
+      - "anthropocentric"
+      - "explanatory"
+    value_aliases:
+      "Wigner": "pre-established-harmony"
+      "Quine-Putnam": "indispensability-based"

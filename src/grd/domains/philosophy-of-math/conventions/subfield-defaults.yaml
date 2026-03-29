@@ -1,0 +1,78 @@
+# Philosophy of Mathematics subfield convention defaults
+# Maps subfield names to convention presets.
+
+subfields:
+  foundations_of_mathematics:
+    ontological_commitment: "formalism"
+    foundational_framework: "ZFC"
+    logic_system: "classical-FOL"
+    proof_conception: "formal-derivation"
+    formalization_level: "semi-formal"
+    historical_context: "foundational-crisis"
+
+  mathematical_platonism:
+    ontological_commitment: "full-platonism"
+    epistemic_stance: "rationalism"
+    logic_system: "classical-FOL"
+    argument_style: "indispensability"
+    truth_theory: "correspondence"
+    modality_stance: "necessary-a-priori"
+
+  mathematical_structuralism:
+    ontological_commitment: "structuralism"
+    epistemic_stance: "structuralist-epistemology"
+    argument_style: "conceptual-analysis"
+    truth_theory: "model-theoretic"
+    modality_stance: "modal-structuralism"
+    philosophical_tradition: "analytic"
+
+  philosophy_of_set_theory:
+    foundational_framework: "ZFC"
+    mathematical_domain: "set-theory"
+    logic_system: "classical-FOL"
+    formalization_level: "semi-formal"
+    proof_conception: "axiomatic-deductive"
+    ontological_commitment: "moderate-realism"
+
+  philosophy_of_proof:
+    proof_conception: "informal-rigorous"
+    epistemic_stance: "reliabilism"
+    formalization_level: "mixed-formal-informal"
+    argument_style: "conceptual-analysis"
+    philosophical_tradition: "analytic"
+
+  intuitionism_constructivism:
+    ontological_commitment: "constructivism"
+    logic_system: "intuitionistic"
+    foundational_framework: "constructive-type-theory"
+    epistemic_stance: "intuitionism-BHK"
+    proof_conception: "formal-derivation"
+    truth_theory: "proof-theoretic"
+
+  philosophy_of_applied_mathematics:
+    applicability_stance: "structural-mapping"
+    argument_style: "abductive"
+    mathematical_domain: "general-mathematics"
+    epistemic_stance: "pragmatism"
+    ontological_commitment: "moderate-realism"
+
+  mathematical_epistemology:
+    epistemic_stance: "rationalism"
+    argument_style: "conceptual-analysis"
+    ontological_commitment: "moderate-realism"
+    philosophical_tradition: "analytic"
+    truth_theory: "correspondence"
+
+  philosophy_of_logic:
+    mathematical_domain: "logic"
+    logic_system: "classical-FOL"
+    formalization_level: "semi-formal"
+    argument_style: "formal-analysis"
+    philosophical_tradition: "analytic"
+
+  philosophy_of_category_theory:
+    foundational_framework: "category-theory"
+    mathematical_domain: "category-theory"
+    ontological_commitment: "structuralism"
+    formalization_level: "semi-formal"
+    argument_style: "conceptual-analysis"
