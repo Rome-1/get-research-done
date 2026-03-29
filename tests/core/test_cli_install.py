@@ -24,7 +24,7 @@ from gpd.adapters import get_adapter
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.cli import _format_install_header_lines, _render_install_option_line, app
 from gpd.core.health import CheckStatus, DoctorReport, HealthCheck, HealthSummary
-from gpd.core.surface_phrases import recovery_ladder_note
+from gpd.core.surface_phrases import post_start_settings_note, post_start_settings_recommendation, recovery_ladder_note
 from tests.doc_surface_contracts import (
     assert_install_summary_runtime_follow_up_contract,
     assert_recovery_ladder_contract,
@@ -150,21 +150,53 @@ def _assert_single_runtime_next_steps(
     resume_work_command = adapter.format_command("resume-work")
     suggest_next_command = adapter.format_command("suggest-next")
     pause_work_command = adapter.format_command("pause-work")
-    pattern = re.compile(
-        rf"Next steps.*?"
-        rf"Open .*?{re.escape(descriptor.display_name)}.*?{re.escape(adapter.launch_command)}.*?"
-        rf"Run {re.escape(adapter.help_command)} for the command list\..*?"
-        rf"Start with {re.escape(adapter.new_project_command)} for a new project or "
-        rf"{re.escape(adapter.map_research_command)} for existing work\. "
-        rf"{re.escape(recovery_ladder_note(resume_work_phrase=f'`{resume_work_command}`', suggest_next_phrase=f'`{suggest_next_command}`', pause_work_phrase=f'`{pause_work_command}`'))}.*?"
-        rf"Fast bootstrap: use {re.escape(adapter.new_project_command)} --minimal",
-        re.S,
+    ordered_patterns = (
+        re.escape("Startup checklist"),
+        re.escape("Beginner Onboarding Hub: https://github.com/psi-oss/get-physics-done/blob/main/docs/README.md"),
+        re.escape("First-run order: `help -> start -> tour -> new-project / map-research -> resume-work`"),
+        re.escape(
+            f"1. Open {descriptor.display_name} from your system terminal ({adapter.launch_command})."
+        ),
+        re.escape(f"2. Run {adapter.help_command} for the command list."),
+        re.escape(
+            "3. Run "
+            f"{adapter.format_command('start')} if you're not sure what fits this folder yet. "
+            "Run "
+            f"{adapter.format_command('tour')} if you want a read-only overview of the broader command surface first."
+        ),
+        re.escape(
+            f"4. Then use {adapter.new_project_command} for a new project or "
+            f"{adapter.map_research_command} for existing work."
+        ),
+        re.escape(
+            f"Fast bootstrap: use {adapter.new_project_command} --minimal for the shortest onboarding path."
+        ),
+        re.escape(
+            f"6. When you return later, use {resume_work_command} after reopening the right workspace. "
+        ),
+        re.escape(
+            recovery_ladder_note(
+                resume_work_phrase=f"`{resume_work_command}`",
+                suggest_next_phrase=f"`{suggest_next_command}`",
+                pause_work_phrase=f"`{pause_work_command}`",
+            )
+        ),
+        re.escape("Secondary follow-up"),
+        re.escape("7. Use gpd --help for local install, readiness, validation, permissions, observability, and diagnostics."),
+        re.escape("8. Run gpd doctor --runtime"),
+        re.escape(f"9. {post_start_settings_note()} {post_start_settings_recommendation()}"),
+        re.escape("10. If you plan to use paper/manuscript workflows, rerun"),
+        re.escape("gpd presets list"),
     )
-    assert pattern.search(output), output
+    cursor = 0
+    for pattern in ordered_patterns:
+        match = re.search(pattern, output[cursor:], re.S)
+        assert match, output
+        cursor += match.end()
     assert_install_summary_runtime_follow_up_contract(
         output,
         runtime_help_fragments=(
-            f"Use {adapter.help_command} inside {descriptor.display_name} for workflow help.",
+            f"Run {adapter.help_command} for the command list.",
         ),
     )
 
@@ -175,9 +207,13 @@ def _assert_multi_runtime_next_step_line(output: str, descriptor) -> None:
         rf"- {re.escape(descriptor.display_name)}.*?"
         rf"{re.escape(adapter.launch_command)}.*?"
         rf"{re.escape(adapter.help_command)}.*?"
+        rf"{re.escape(adapter.format_command('start'))}.*?"
+        rf"{re.escape(adapter.format_command('tour'))}.*?"
         rf"{re.escape(adapter.new_project_command)}.*?"
         rf"{re.escape(adapter.map_research_command)}.*?"
-        rf"{re.escape(adapter.new_project_command)} --minimal",
+        rf"{re.escape(adapter.format_command('resume-work'))}.*?"
+        rf"Fast bootstrap: use .*? --minimal",
+        re.S,
     )
     assert pattern.search(output), output
 
@@ -454,7 +490,7 @@ def test_install_summary_lists_runtime_specific_help_for_multi_runtime_install(t
         result = runner.invoke(app, ["install", *(descriptor.runtime_name for descriptor in descriptors), "--local"])
 
     assert result.exit_code == 0
-    assert "Next steps" in result.output
+    assert "Startup checklist" in result.output
     for descriptor in descriptors:
         _assert_multi_runtime_next_step_line(result.output, descriptor)
     assert "1. From your system terminal" not in result.output

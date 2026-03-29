@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
+
+from gpd.core.onboarding_surfaces import beginner_runtime_surfaces, beginner_startup_ladder_text
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -33,59 +36,22 @@ def _markdown_section(content: str, heading: str) -> str:
     return content[start:next_heading]
 
 
-@pytest.mark.parametrize(
-    ("doc_name", "fragments"),
-    [
-        (
-            "claude-code.md",
-            (
-                "/gpd:help",
-                "/gpd:start",
-                "/gpd:tour",
-                "/gpd:new-project --minimal",
-                "/gpd:map-research",
-                "/gpd:resume-work",
-            ),
-        ),
-        (
-            "codex.md",
-            (
-                "$gpd-help",
-                "$gpd-start",
-                "$gpd-tour",
-                "$gpd-new-project --minimal",
-                "$gpd-map-research",
-                "$gpd-resume-work",
-            ),
-        ),
-        (
-            "gemini-cli.md",
-            (
-                "/gpd:help",
-                "/gpd:start",
-                "/gpd:tour",
-                "/gpd:new-project --minimal",
-                "/gpd:map-research",
-                "/gpd:resume-work",
-            ),
-        ),
-        (
-            "opencode.md",
-            (
-                "/gpd-help",
-                "/gpd-start",
-                "/gpd-tour",
-                "/gpd-new-project --minimal",
-                "/gpd-resume-work",
-                "/gpd-map-research",
-            ),
-        ),
-    ],
-)
-def test_runtime_quickstarts_surface_the_beginner_next_steps(
-    doc_name: str, fragments: tuple[str, ...]
-) -> None:
-    content = _read(f"docs/{doc_name}")
+def _runtime_doc_filename(display_name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", display_name.lower()).strip("-")
+    return f"{slug}.md"
+
+
+@pytest.mark.parametrize("surface", beginner_runtime_surfaces(), ids=lambda surface: surface.runtime_name)
+def test_runtime_quickstarts_surface_the_beginner_next_steps(surface) -> None:
+    content = _read(f"docs/{_runtime_doc_filename(surface.display_name)}")
+    fragments = (
+        surface.help_command,
+        surface.start_command,
+        surface.tour_command,
+        surface.new_project_minimal_command,
+        surface.map_research_command,
+        surface.resume_work_command,
+    )
     _assert_fragments(content, fragments)
     _assert_in_order(content, fragments[:3])
     assert "Back to the onboarding hub: [GPD Onboarding Hub](./README.md)." in content
@@ -133,11 +99,16 @@ def test_docs_onboarding_hub_links_os_and_runtime_guides() -> None:
         content,
         (
             "# GPD Onboarding Hub",
-            "This is the shortest path for a non-coder to get started with GPD.",
-            "Use the runtime you can already open from your normal terminal. That is the",
-            "Pick one runtime only. Do not install all four just to start.",
-            "Quick runtime chooser",
-            "`help -> start -> tour -> new-project / map-research -> resume-work`",
+            "Use this page as the single first-stop for new users.",
+            beginner_startup_ladder_text(),
+            "Follow one linear path:",
+            "Open the OS guide for your machine.",
+            "Open the runtime guide you actually plan to use.",
+            "Open that runtime from your normal terminal and run `help`.",
+            "Run `start` if you are not sure what fits this folder.",
+            "Run `tour` if you want a read-only overview of what GPD can do before choosing.",
+            "Then choose `new-project`, `map-research`, or `resume-work`.",
+            "If you already have a GPD project, `resume-work` is the in-runtime return path",
             "Your **normal terminal**",
             "Your **runtime**",
             "Common beginner terms",
@@ -156,29 +127,19 @@ def test_docs_onboarding_hub_links_os_and_runtime_guides() -> None:
             "npx -y get-physics-done --codex --local",
             "npx -y get-physics-done --gemini --local",
             "npx -y get-physics-done --opencode --local",
-            "/gpd:...",
-            "$gpd-...",
-            "/gpd-...",
+            "## After the guides",
         ),
     )
     _assert_in_order(
         content,
         (
-            "## If you do not know which runtime to pick",
-            "## I installed GPD, now what?",
-            "`help -> start -> tour -> new-project / map-research -> resume-work`",
+            "Use this page as the single first-stop for new users.",
+            beginner_startup_ladder_text(),
+            "Follow one linear path:",
             "## First: terminal vs runtime",
             "## Choose your OS",
             "## Choose your runtime",
-            "## How to use the guides",
-        ),
-    )
-    _assert_in_order(
-        content,
-        (
-            "`help -> start -> tour -> new-project / map-research -> resume-work`",
-            "## Choose your OS",
-            "## Choose your runtime",
+            "## After the guides",
         ),
     )
 
@@ -191,6 +152,7 @@ def test_root_readme_start_here_links_to_docs_onboarding_hub() -> None:
         start_here,
         (
             "[Beginner Onboarding Hub](./docs/README.md)",
+            "Use the hub as the single beginner path",
             "There are two places you type commands:",
             "In your normal system terminal:",
             "Inside your AI runtime:",

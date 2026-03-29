@@ -101,10 +101,33 @@ function runtimeSurfaceCommand(runtime, commandName) {
   return `${runtimeCommandPrefix(runtime)}${commandName}`;
 }
 
+function runtimeLaunchCommand(runtime) {
+  return runtimeRecord(runtime).launch_command;
+}
+
 function loadSharedPublicSurfaceText() {
-  const payload = PUBLIC_SURFACE_CONTRACT && typeof PUBLIC_SURFACE_CONTRACT === "object"
-    ? PUBLIC_SURFACE_CONTRACT.post_start_settings
+  const contract = PUBLIC_SURFACE_CONTRACT && typeof PUBLIC_SURFACE_CONTRACT === "object"
+    ? PUBLIC_SURFACE_CONTRACT
     : null;
+  if (!contract) {
+    throw new Error("public surface contract payload is missing");
+  }
+  const beginnerPayload = contract.beginner_onboarding;
+  if (!beginnerPayload || typeof beginnerPayload !== "object") {
+    throw new Error("public surface contract is missing beginner_onboarding");
+  }
+  const beginnerHubUrl = typeof beginnerPayload.hub_url === "string" ? beginnerPayload.hub_url.trim() : "";
+  const beginnerStartupLadder = Array.isArray(beginnerPayload.startup_ladder)
+    ? beginnerPayload
+      .startup_ladder
+      .filter((item) => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean)
+    : [];
+  if (!beginnerHubUrl || beginnerStartupLadder.length === 0) {
+    throw new Error("public surface contract beginner_onboarding is incomplete");
+  }
+  const payload = contract.post_start_settings;
   if (!payload || typeof payload !== "object") {
     throw new Error("public surface contract is missing post_start_settings");
   }
@@ -114,6 +137,8 @@ function loadSharedPublicSurfaceText() {
     throw new Error("public surface contract post_start_settings is incomplete");
   }
   return {
+    beginnerHubUrl,
+    beginnerStartupLadder,
     settingsCommandSentence,
     settingsRecommendationSentence,
   };
@@ -121,6 +146,10 @@ function loadSharedPublicSurfaceText() {
 
 const SHARED_PUBLIC_SURFACE_TEXT = loadSharedPublicSurfaceText();
 const SETTINGS_COMMAND_PREFIX = "After your first successful start or later, use the runtime `settings` command ";
+
+function beginnerStartupLadderText() {
+  return `\`${SHARED_PUBLIC_SURFACE_TEXT.beginnerStartupLadder.join(" -> ")}\``;
+}
 
 function settingsCommandTail() {
   const { settingsCommandSentence } = SHARED_PUBLIC_SURFACE_TEXT;
@@ -1051,7 +1080,66 @@ function runInstallReadinessPreflight(managedPython, runtimes, scope, targetDir 
 
 function printUnattendedConfigurationReminder(runtimes, targetDir = null) {
   console.log("");
-  console.log(` ${bold}${brandTitle}Unattended configuration${reset}`);
+  console.log(` ${bold}${brandTitle}Startup checklist${reset}`);
+  console.log("");
+  log(`Beginner Onboarding Hub: ${SHARED_PUBLIC_SURFACE_TEXT.beginnerHubUrl}`);
+  log(`First-run order: ${beginnerStartupLadderText()}`);
+  if (runtimes.length === 1) {
+    const runtime = runtimes[0];
+    log(
+      `1. Open ${runtimeDisplayName(runtime)} from your system terminal `
+      + `(${runtimeLaunchCommand(runtime)}).`
+    );
+    log(`2. Run \`${runtimeSurfaceCommand(runtime, "help")}\` for the command list.`);
+    log(
+      `3. Run \`${runtimeSurfaceCommand(runtime, "start")}\` if you're not sure what fits this folder yet. `
+      + `Run \`${runtimeSurfaceCommand(runtime, "tour")}\` if you want a read-only overview of the broader command surface first.`
+    );
+    log(
+      `4. Then use \`${runtimeSurfaceCommand(runtime, "new-project")}\` for a new project or `
+      + `\`${runtimeSurfaceCommand(runtime, "map-research")}\` for existing work.`
+    );
+    log(
+      `5. Fast bootstrap: use \`${runtimeSurfaceCommand(runtime, "new-project")} --minimal\` `
+      + "for the shortest onboarding path."
+    );
+    const resumeWorkCommand = runtimeSurfaceCommand(runtime, "resume-work");
+    const suggestNextCommand = runtimeSurfaceCommand(runtime, "suggest-next");
+    const pauseWorkCommand = runtimeSurfaceCommand(runtime, "pause-work");
+    log(
+      `6. When you return later, use \`${resumeWorkCommand}\` after reopening the right workspace. `
+      + `Recovery ladder: use \`gpd resume\` for the current-workspace read-only recovery snapshot. `
+      + `If that is the wrong workspace, use \`gpd resume --recent\` to find the workspace first, then continue inside that workspace with \`${resumeWorkCommand}\`. `
+      + `After resuming, \`${suggestNextCommand}\` is the fastest next command. `
+      + `Before stepping away mid-phase, run \`${pauseWorkCommand}\` so that ladder has an explicit handoff to restore.`
+    );
+    log("7. Use `gpd --help` for local install, readiness, validation, permissions, observability, and diagnostics.");
+  } else {
+    log("For multiple runtimes, follow the same order in each one.");
+    for (const runtime of runtimes) {
+      log(
+        `- ${runtimeDisplayName(runtime)} (${runtimeLaunchCommand(runtime)}): `
+        + `\`${runtimeSurfaceCommand(runtime, "help")}\`, then `
+        + `\`${runtimeSurfaceCommand(runtime, "start")}\`, then `
+        + `\`${runtimeSurfaceCommand(runtime, "tour")}\`, then `
+        + `\`${runtimeSurfaceCommand(runtime, "new-project")}\` for new work or `
+        + `\`${runtimeSurfaceCommand(runtime, "map-research")}\` for existing work, then `
+        + `\`${runtimeSurfaceCommand(runtime, "resume-work")}\` when you return later.`
+      );
+    }
+    log(
+      `Fast bootstrap: use \`${runtimeSurfaceCommand(runtimes[0], "new-project")} --minimal\` for the shortest onboarding path.`
+    );
+    log(
+      `Recovery ladder: use \`gpd resume\` for the current-workspace read-only recovery snapshot. `
+      + `If that is the wrong workspace, use \`gpd resume --recent\` to find the workspace first, then continue inside that workspace with your runtime-specific \`resume-work\` command. `
+      + `After resuming, your runtime-specific \`suggest-next\` command is the fastest next command. `
+      + `Before stepping away mid-phase, run your runtime-specific \`pause-work\` command so that ladder has an explicit handoff to restore.`
+    );
+    log("Use `gpd --help` for local install, readiness, validation, permissions, observability, and diagnostics.");
+  }
+  console.log("");
+  console.log(` ${bold}${brandTitle}Secondary follow-up${reset}`);
   console.log("");
   log("Recommended unattended default: Balanced autonomy (`balanced`).");
   if (runtimes.length === 1) {
@@ -1118,8 +1206,6 @@ function printHelp() {
   const primaryFlag = runtimeInstallFlag(primaryRuntime);
   const dollarCommandFlag = runtimeInstallFlag(dollarCommandRuntime);
   const targetDirExample = `/path/to/${runtimeConfigDirName(dollarCommandRuntime)}`;
-  const repoBaseUrl = repositoryBaseUrl(repository) || "https://github.com/psi-oss/get-physics-done";
-  const beginnerOnboardingHubUrl = `${repoBaseUrl}/blob/main/docs/README.md`;
   console.log(` ${yellow}Usage:${reset} ${installCommand} [install|uninstall] [options]`);
   console.log("");
   console.log(` ${dim}${productPositioning}${reset}`);
@@ -1175,19 +1261,21 @@ function printHelp() {
   console.log(` ${installCommand} uninstall ${primaryRuntime} --local`);
   console.log("");
   console.log(` ${yellow}After install:${reset}`);
-  console.log(` ${dim}# Recommended unattended configuration${reset}`);
-  console.log(" Bootstrap preflight checks runtime launcher/target blockers only; configure unattended behavior after startup.");
-  console.log(` Beginner Onboarding Hub: ${beginnerOnboardingHubUrl}`);
-  console.log(" If you are new to terminals or are not sure which runtime path fits you yet, open that hub first.");
-  console.log(" Open your runtime, run its help command first, then use `start` if you are not sure what fits this folder. Use `tour` for a read-only walkthrough first. Then use your runtime's `new-project` command for new work or `map-research` for existing work.");
+  console.log(` ${dim}# Beginner startup checklist${reset}`);
+  console.log(" Bootstrap preflight checks runtime launcher/target blockers only; do the first successful startup before changing unattended behavior.");
+  console.log(` Beginner Onboarding Hub: ${SHARED_PUBLIC_SURFACE_TEXT.beginnerHubUrl}`);
+  console.log(` First-run order: ${beginnerStartupLadderText()}`);
+  console.log(" Open your runtime, run its help command first, use `start` if you are not sure what fits this folder, and use `tour` if you want a read-only overview of the broader command surface before choosing.");
+  console.log(" Then use your runtime's `new-project` command for new work or `map-research` for existing work. When you come back later, use `gpd resume` or `gpd resume --recent` first and continue in the runtime with `resume-work`.");
+  console.log(` Later, use the runtime-specific \`settings\` command after your first successful start or later ${settingsCommandTail()}`);
   console.log(` Recommended unattended default: Balanced autonomy (\`balanced\`). ${SHARED_PUBLIC_SURFACE_TEXT.settingsRecommendationSentence}`);
-  console.log(` Use the runtime-specific \`settings\` command after your first successful start or later ${settingsCommandTail()}`);
   console.log(
     " For returning work, use `gpd resume` for the current-workspace read-only recovery snapshot. "
     + "If that is the wrong workspace, use `gpd resume --recent` to find the workspace first, then continue inside that workspace with your runtime-specific `resume-work` command. "
     + "After resuming, your runtime-specific `suggest-next` command is the fastest next command. "
     + "Before stepping away mid-phase, run your runtime-specific `pause-work` command so that ladder has an explicit handoff to restore."
   );
+  console.log(" Use `gpd --help` for local install, readiness, validation, permissions, observability, and diagnostics.");
   console.log(
     " Workflow presets: if you plan paper/manuscript workflows, rerun `gpd doctor --runtime <runtime> --local|--global` "
     + "and check whether `Workflow Presets` is `ready` or `degraded`. Without LaTeX, the paper/manuscript and full research presets remain usable for `write-paper` and `peer-review`, "

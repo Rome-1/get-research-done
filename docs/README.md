@@ -1,53 +1,25 @@
 # GPD Onboarding Hub
 
-This is the shortest path for a non-coder to get started with GPD.
-
-Use this page to choose:
-- your operating system guide
-- your runtime guide
-- your safest first in-runtime command
-
-## If you do not know which runtime to pick
-
-Use the runtime you can already open from your normal terminal. That is the
-simplest default.
-
-If none are installed yet:
-
-1. Pick one runtime only. Do not install all four just to start.
-2. Use `--local` while learning, so GPD only affects the current folder.
-3. Follow that runtime guide through `help`, `start`, and `tour` before trying
-   another runtime.
-
-<details>
-<summary>Quick runtime chooser</summary>
-
-- **Claude Code**: use this if you already open `claude` and want `/gpd:...`
-  commands.
-- **Codex**: use this if you already open `codex` and want `$gpd-...`
-  commands.
-- **Gemini CLI**: use this if you already open `gemini` and want `/gpd:...`
-  commands.
-- **OpenCode**: use this if you already open `opencode` and want `/gpd-...`
-  commands.
-
-</details>
-
-## I installed GPD, now what?
+Use this page as the single first-stop for new users.
 
 Use this one-line path:
 
 `help -> start -> tour -> new-project / map-research -> resume-work`
 
-1. Open your runtime from your normal terminal.
-2. Run `help` inside the runtime.
-3. If you are not sure what fits this folder yet, run `start`.
-4. If you want a read-only walkthrough first, run `tour`.
-5. Then choose `new-project`, `map-research`, or `resume-work`.
+Follow one linear path:
 
-If you later need to reopen the project from your normal terminal first, use
-`gpd resume` or `gpd resume --recent`, then come back into the runtime and use
-`resume-work`.
+1. Open the OS guide for your machine.
+2. Open the runtime guide you actually plan to use.
+3. Install GPD with the runtime command shown there.
+4. Open that runtime from your normal terminal and run `help`.
+5. Run `start` if you are not sure what fits this folder.
+6. Run `tour` if you want a read-only overview of what GPD can do before choosing.
+7. Then choose `new-project`, `map-research`, or `resume-work`.
+
+If you already have a GPD project, `resume-work` is the in-runtime return path
+after you open the right folder. If you need to reopen from your normal
+terminal first, use `gpd resume` or `gpd resume --recent`, then come back into
+the runtime.
 
 ## First: terminal vs runtime
 
@@ -68,6 +40,8 @@ You will use two different places:
 </details>
 
 ## Choose your OS
+
+Open only the guide that matches your computer.
 
 <details>
 <summary>macOS</summary>
@@ -97,6 +71,9 @@ Use this if you are on Linux.
 </details>
 
 ## Choose your runtime
+
+Open only the runtime guide you actually plan to use.
+Use `--local` while learning so GPD only affects the current folder.
 
 <details>
 <summary>Claude Code</summary>
@@ -138,12 +115,9 @@ Use this if you want GPD inside OpenCode. Inside the runtime, GPD commands use `
 
 </details>
 
-## How to use the guides
+## After the guides
 
-1. Open your OS guide and follow the basic terminal setup there.
-2. Open your runtime guide and confirm the runtime starts from the normal terminal.
-3. Install GPD with the runtime-specific command in that guide.
-4. Inside the runtime, start with `help`, then `start`, then `tour`.
-5. After that, choose `new-project`, `map-research`, or `resume-work` depending on your situation.
-
-If you want the most guided path, follow the runtime guide first, then come back here only when you need the next step.
+1. Finish the OS and runtime guide you opened.
+2. Inside the runtime, use `help`, then `start`, then `tour`.
+3. Then choose `new-project`, `map-research`, or `resume-work`.
+4. Come back to this hub only when you need the ladder or a different guide.

@@ -31,6 +31,10 @@ When you first use an official GPD term such as `runtime`, `read-only`, or
 
 Close the opening with one sentence that says this tour explains the common
 commands without executing them.
+
+Also add one short sentence near the opening:
+
+`Most first-time users follow this order: help -> start -> tour -> new-project / map-research -> resume-work.`
 </step>
 
 <step name="explain_the_core_paths">
@@ -57,6 +61,8 @@ Include these entries:
 - `/gpd:help`
 
 Keep the examples short and concrete, such as `I just opened a folder and do not know what belongs here yet.`
+
+Put the starter commands first. Keep the broader capability groups for the later section.
 </step>
 
 <step name="show_broader_capabilities">
@@ -70,7 +76,8 @@ the main capability groups GPD supports once a project is underway:
 - side investigations and preferences: `/gpd:tangent`, `/gpd:branch-hypothesis`, `/gpd:set-profile`, `/gpd:settings`
 
 Keep this section high-level. Do not turn it into a second full command
-reference.
+reference. Keep `settings` visibly in the post-startup group, not in the
+initial first-run path.
 </step>
 
 <step name="distinguish_terminal_and_runtime">

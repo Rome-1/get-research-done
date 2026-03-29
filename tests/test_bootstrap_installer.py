@@ -82,30 +82,47 @@ _RUNTIME_RECOVERY_LADDER_TEMPLATE = (
 
 
 def _assert_single_runtime_next_steps(output: str, runtime: str) -> None:
+    resume_work_command = _RUNTIME_RESUME_WORK_COMMANDS[runtime]
+    suggest_next_command = _RUNTIME_SUGGEST_NEXT_COMMANDS[runtime]
+    pause_work_command = _RUNTIME_PAUSE_WORK_COMMANDS[runtime]
     ordered_patterns = (
-        re.escape("Next steps"),
+        re.escape("Startup checklist"),
+        re.escape(f"Beginner Onboarding Hub: {_BEGINNER_ONBOARDING_HUB_URL}"),
+        re.escape("First-run order: `help -> start -> tour -> new-project / map-research -> resume-work`"),
         re.escape(
             f"1. Open {_RUNTIME_DISPLAY_NAMES[runtime]} from your system terminal ({_RUNTIME_LAUNCH_COMMANDS[runtime]})."
         ),
         re.escape(f"2. Run {_RUNTIME_HELP_COMMANDS[runtime]} for the command list."),
         re.escape(
-            "3. If you're not sure what fits this folder yet, run "
-            f"{_RUNTIME_START_COMMANDS[runtime]}. If you want a guided walkthrough first, run "
-            f"{_RUNTIME_TOUR_COMMANDS[runtime]}."
+            "3. Run "
+            f"{_RUNTIME_START_COMMANDS[runtime]} if you're not sure what fits this folder yet. "
+            "Run "
+            f"{_RUNTIME_TOUR_COMMANDS[runtime]} if you want a read-only overview of the broader command surface first."
         ),
         re.escape(
-            "4. Start with "
+            "4. Then use "
             f"{_RUNTIME_NEW_PROJECT_COMMANDS[runtime]} for a new project or "
             f"{_RUNTIME_MAP_RESEARCH_COMMANDS[runtime]} for existing work."
         ),
         re.escape(
-            f"Fast bootstrap: use {_RUNTIME_NEW_PROJECT_COMMANDS[runtime]} --minimal for the shortest onboarding path."
+            f"5. Fast bootstrap: use {_RUNTIME_NEW_PROJECT_COMMANDS[runtime]} --minimal for the shortest onboarding path."
         ),
-        re.escape("5. "),
-        rf"6\. Verify or troubleshoot this machine with gpd doctor --runtime {re.escape(runtime)} --(?:local|global)\.",
-        re.escape("7. "),
-        re.escape("8. "),
-        re.escape("9. Use `gpd presets list` to inspect the workflow preset surface:"),
+        re.escape(
+            f"6. When you return later, use {resume_work_command} after reopening the right workspace. "
+        ),
+        re.escape(
+            recovery_ladder_note(
+                resume_work_phrase=f"`{resume_work_command}`",
+                suggest_next_phrase=f"`{suggest_next_command}`",
+                pause_work_phrase=f"`{pause_work_command}`",
+            )
+        ),
+        re.escape("Secondary follow-up"),
+        re.escape("7. Use gpd --help for local install, readiness, validation, permissions, observability, and diagnostics."),
+        re.escape("8. Run gpd doctor --runtime"),
+        re.escape(f"9. {_POST_START_SETTINGS_NOTE} {_POST_START_SETTINGS_RECOMMENDATION}"),
+        re.escape("10. If you plan to use paper/manuscript workflows, rerun"),
+        re.escape("Use `gpd presets list` to inspect the workflow preset"),
     )
     cursor = 0
     for pattern in ordered_patterns:
@@ -117,7 +134,6 @@ def _assert_single_runtime_next_steps(output: str, runtime: str) -> None:
         output,
         runtime_help_fragments=(
             f"Run {_RUNTIME_HELP_COMMANDS[runtime]} for the command list.",
-            f"Use {_RUNTIME_HELP_COMMANDS[runtime]} inside {_RUNTIME_DISPLAY_NAMES[runtime]} for workflow help.",
         ),
         resume_work_fragments=(f"`{_RUNTIME_RESUME_WORK_COMMANDS[runtime]}`",),
         suggest_next_fragments=(f"`{_RUNTIME_SUGGEST_NEXT_COMMANDS[runtime]}`",),
@@ -134,8 +150,10 @@ def _assert_multi_runtime_next_steps_line(output: str, runtime: str) -> None:
         rf"{re.escape(_RUNTIME_TOUR_COMMANDS[runtime])}.*?"
         rf"{re.escape(_RUNTIME_NEW_PROJECT_COMMANDS[runtime])}.*?"
         rf"{re.escape(_RUNTIME_MAP_RESEARCH_COMMANDS[runtime])}.*?"
-        rf"{re.escape(_RUNTIME_NEW_PROJECT_COMMANDS[runtime])} --minimal",
-        )
+        rf"{re.escape(_RUNTIME_RESUME_WORK_COMMANDS[runtime])}.*?"
+        rf"Fast bootstrap: use .*? --minimal",
+        re.S,
+    )
     assert pattern.search(output), output
 
 
@@ -497,8 +515,9 @@ if args[:3] == ["-m", "gpd.cli", "install"]:
     for runtime in runtimes:
         print(f"✓ {{RUNTIME_LABELS[runtime]}}")
     print("Install Summary")
-    print("Next steps")
+    print("Startup checklist")
     print(f"Beginner Onboarding Hub: {_BEGINNER_ONBOARDING_HUB_URL}")
+    print("First-run order: `help -> start -> tour -> new-project / map-research -> resume-work`")
     if len(runtimes) == 1:
         runtime = runtimes[0]
         print(
@@ -507,48 +526,52 @@ if args[:3] == ["-m", "gpd.cli", "install"]:
         )
         print(f"2. Run {{HELP_COMMANDS[runtime]}} for the command list.")
         print(
-            "3. If you're not sure what fits this folder yet, run "
-            f"{{START_COMMANDS[runtime]}}. If you want a guided walkthrough first, run "
-            f"{{TOUR_COMMANDS[runtime]}}."
+            "3. Run "
+            f"{{START_COMMANDS[runtime]}} if you're not sure what fits this folder yet. "
+            "Run "
+            f"{{TOUR_COMMANDS[runtime]}} if you want a read-only overview of the broader command surface first."
         )
         print(
-            "4. Start with "
+            "4. Then use "
             f"{{NEW_PROJECT_COMMANDS[runtime]}} for a new project or "
-            f"{{MAP_RESEARCH_COMMANDS[runtime]}} for existing work. "
-            f"{{recovery_ladder_for_runtime(runtime)}}"
+            f"{{MAP_RESEARCH_COMMANDS[runtime]}} for existing work."
         )
-        print("")
         print(
-            "   Fast bootstrap: use "
+            "5. Fast bootstrap: use "
             f"{{NEW_PROJECT_COMMANDS[runtime]}} --minimal for the shortest onboarding path."
         )
         print(
-            f"5. Use gpd --help for local install, readiness, validation, permissions, observability, and diagnostics. "
-            f"Use {{HELP_COMMANDS[runtime]}} inside {{RUNTIME_LABELS[runtime]}} for workflow help."
+            f"6. When you return later, use {{RESUME_WORK_COMMANDS[runtime]}} after reopening the right workspace. "
+            f"{{recovery_ladder_for_runtime(runtime)}}"
         )
-        print(f"6. Verify or troubleshoot this machine with gpd doctor --runtime {{runtime}} --{{scope}}.")
+        print("")
+        print("Secondary follow-up")
+        print("7. Use gpd --help for local install, readiness, validation, permissions, observability, and diagnostics.")
+        print(f"8. Run gpd doctor --runtime {{runtime}} --{{scope}} for a focused readiness check.")
+        print(f"9. {_POST_START_SETTINGS_NOTE} {_POST_START_SETTINGS_RECOMMENDATION}")
         print(
-            f"7. {_POST_START_SETTINGS_NOTE} {_POST_START_SETTINGS_RECOMMENDATION}"
-        )
-        print(
-            "8. If you plan to use paper/manuscript workflows, rerun "
+            "10. If you plan to use paper/manuscript workflows, rerun "
             f"gpd doctor --runtime {{runtime}} --{{scope}} "
             "and check the `Workflow Presets` and `LaTeX Toolchain` rows before publication work."
         )
         print(
-            "9. Use `gpd presets list` to inspect the workflow preset surface: "
+            "Use `gpd presets list` to inspect the workflow preset surface: "
             "Core research, Theory, Numerics, Publication / manuscript, Full research."
         )
     else:
         for runtime in runtimes:
             print(
-                f"- {{RUNTIME_LABELS[runtime]}} ({{LAUNCH_COMMANDS[runtime]}}), then "
+                f"- {{RUNTIME_LABELS[runtime]}} ({{LAUNCH_COMMANDS[runtime]}}): "
                 f"{{HELP_COMMANDS[runtime]}}, then "
-                f"{{START_COMMANDS[runtime]}} if you're unsure or "
-                f"{{TOUR_COMMANDS[runtime]}} for orientation, then "
-                f"{{NEW_PROJECT_COMMANDS[runtime]}} or {{MAP_RESEARCH_COMMANDS[runtime]}}. "
-                f"Quick bootstrap: {{NEW_PROJECT_COMMANDS[runtime]}} --minimal"
+                f"{{START_COMMANDS[runtime]}}, then "
+                f"{{TOUR_COMMANDS[runtime]}}, then "
+                f"{{NEW_PROJECT_COMMANDS[runtime]}} for new work or "
+                f"{{MAP_RESEARCH_COMMANDS[runtime]}} for existing work, then "
+                f"{{RESUME_WORK_COMMANDS[runtime]}} when you return later."
             )
+        print(
+            f"Fast bootstrap: use {{NEW_PROJECT_COMMANDS[runtimes[0]]}} --minimal for the shortest onboarding path."
+        )
         print({_GENERIC_RECOVERY_LADDER_NOTE!r})
         print("Use gpd --help for local install, readiness, validation, permissions, observability, and diagnostics.")
         print("Run gpd doctor --runtime <runtime> --local|--global for a focused readiness check.")
@@ -702,6 +725,7 @@ def test_bootstrap_uses_managed_virtualenv_and_skips_host_pip(tmp_path: Path) ->
     assert "GPD does not verify provider credentials automatically" in result.stdout
     assert f"`gpd doctor --runtime {_CODEX_RUNTIME_NAME} --local`" in result.stdout
     assert "Install Summary" in result.stdout
+    assert "Startup checklist" in result.stdout
     assert "Beginner Onboarding Hub:" in result.stdout
     assert _BEGINNER_ONBOARDING_HUB_URL in result.stdout
     _assert_single_runtime_next_steps(result.stdout, _CODEX_RUNTIME_NAME)
@@ -1275,14 +1299,14 @@ def test_bootstrap_supports_all_runtime_install_in_one_pass(tmp_path: Path) -> N
     for runtime in _RUNTIME_NAMES:
         assert _RUNTIME_DISPLAY_NAMES[runtime] in result.stdout
     assert "Install Summary" in result.stdout
-    assert "Next steps" in result.stdout
+    assert "Startup checklist" in result.stdout
     assert "Beginner Onboarding Hub:" in result.stdout
     assert _BEGINNER_ONBOARDING_HUB_URL in result.stdout
     for runtime in _RUNTIME_NAMES:
         _assert_multi_runtime_next_steps_line(result.stdout, runtime)
     _assert_install_summary_semantic_contract(
         result.stdout,
-        runtime_help_fragments=tuple(f"{_RUNTIME_HELP_COMMANDS[runtime]}, then" for runtime in _RUNTIME_NAMES),
+        runtime_help_fragments=tuple(_RUNTIME_HELP_COMMANDS[runtime] for runtime in _RUNTIME_NAMES),
         resume_work_fragments=("your runtime-specific `resume-work` command",),
         suggest_next_fragments=("your runtime-specific `suggest-next` command",),
         pause_work_fragments=("your runtime-specific `pause-work` command",),

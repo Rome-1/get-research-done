@@ -16,6 +16,11 @@ import pytest
 
 from gpd.adapters import get_adapter
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
+from gpd.core.onboarding_surfaces import (
+    beginner_onboarding_hub_url,
+    beginner_runtime_surfaces,
+    beginner_startup_ladder_text,
+)
 from gpd.core.surface_phrases import local_cli_bridge_note
 from scripts.release_workflow import (
     ReleaseError,
@@ -169,7 +174,7 @@ def _expected_wheel_dependency_names() -> set[str]:
 
 
 HELP_COMMAND_HEADING_RE = re.compile(r"^\*\*`/gpd:([a-z0-9-]+)(?:[^`]*)`\*\*$", re.MULTILINE)
-BEGINNER_ONBOARDING_HUB_URL = "https://github.com/psi-oss/get-physics-done/blob/main/docs/README.md"
+BEGINNER_ONBOARDING_HUB_URL = beginner_onboarding_hub_url()
 
 
 def _normalized_requirement_name(requirement: str) -> str:
@@ -584,21 +589,33 @@ def test_public_docs_keep_runtime_surface_first() -> None:
     assert "does not fabricate opaque provider internals" in readme
 
 
+def test_public_supported_runtime_rows_follow_runtime_catalog_commands() -> None:
+    readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
+    supported_runtimes = _markdown_section(readme, "## Supported Runtimes")
+
+    for surface in beginner_runtime_surfaces():
+        expected_row = (
+            f"| {surface.display_name} | `{surface.install_flag}` | "
+            f"`{surface.help_command}` | `{surface.start_command}` | "
+            f"`{surface.tour_command}` | `{surface.new_project_minimal_command}` | "
+            f"`{surface.map_research_command}` | `{surface.resume_work_command}` |"
+        )
+        assert expected_row in supported_runtimes
+
+    assert "Common first commands by runtime:" not in supported_runtimes
+    assert "For post-startup configuration, use your runtime's `settings` command" in supported_runtimes
+
+
 def test_public_readme_quick_start_keeps_runtime_first_next_steps() -> None:
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
     quick_start = _markdown_section(readme, "## Quick Start")
 
     assert "npx -y get-physics-done" in quick_start
     assert "The bootstrap installer requires Node.js 20+, Python 3.11+ with `venv`" in quick_start
-    assert "**Next steps after install**" in quick_start
-    assert "The installer adds GPD to your runtime config" in quick_start
-    assert "it does not launch the runtime for you" in quick_start
-    assert "Open your chosen runtime from your normal system terminal" in quick_start
+    assert beginner_startup_ladder_text() in quick_start
+    assert "Launch your runtime with `claude`, `codex`, `gemini`, or `opencode`." in quick_start
     assert "Run its help command first: Claude Code / Gemini CLI use `/gpd:help`" in quick_start
     assert "Codex uses `$gpd-help`, and OpenCode uses `/gpd-help`." in quick_start
-    assert "For best performance, run both this install step and your chosen runtime" in quick_start
-    assert "`claude` for Claude Code" in quick_start
-    assert "`gemini` for Gemini CLI" in quick_start
     assert "/gpd:help" in quick_start
     assert "$gpd-help" in quick_start
     assert "/gpd-help" in quick_start
@@ -619,7 +636,7 @@ def test_public_help_default_quick_start_keeps_runtime_surface_readiness_path() 
     assert "Include the workflow-owned `## Quick Start` section." in quick_start
     assert "Stop before `## Core Workflow`." in quick_start
     assert "Run \\`/gpd:help --all\\` for the full command reference." in quick_start
-    assert "Choose the path that matches your starting point:" in help_workflow
+    assert "After that, choose the path that matches your current situation:" in help_workflow
     assert "**New work**" in help_workflow
     assert "**Existing work**" in help_workflow
     assert "**Returning work**" in help_workflow
@@ -646,7 +663,6 @@ def test_public_readme_quick_start_surfaces_step_one_entry_points() -> None:
     quick_start = _markdown_section(readme, "## Quick Start")
 
     assert "Then choose the path that matches your starting point:" in quick_start
-    assert "Use the runtime syntax above for the command names below." in quick_start
     assert "| Not sure which path fits this folder | `start` |" in quick_start
     assert "| Want a guided command walkthrough | `tour` |" in quick_start
     assert "| New research project | `new-project --minimal` |" in quick_start
@@ -655,10 +671,6 @@ def test_public_readme_quick_start_surfaces_step_one_entry_points() -> None:
     assert "| Existing research folder or codebase | `map-research` |" in quick_start
     assert "gpd resume --recent" in quick_start
     assert "gpd --help" in quick_start
-    assert "Typical next move after install:" in quick_start
-    assert "- Brand-new project: run your runtime's `new-project --minimal` command." in quick_start
-    assert "- Existing folder with papers, notes, or code: run your runtime's `map-research` command." in quick_start
-    assert "- Returning to a paused GPD project: use `gpd resume` in your normal terminal or your runtime's `resume-work` command." in quick_start
     assert quick_start.index("| Not sure which path fits this folder | `start` |") < quick_start.index("| Want a guided command walkthrough | `tour` |")
     assert quick_start.index("| Want a guided command walkthrough | `tour` |") < quick_start.index("| New research project | `new-project --minimal` |")
 
@@ -668,8 +680,7 @@ def test_public_readme_start_here_surfaces_beginner_hub_links_and_order() -> Non
     start_here = _markdown_section(readme, "## Start Here")
 
     assert "[Beginner Onboarding Hub](./docs/README.md)" in start_here
-    assert "It lets you open only the OS and runtime guides you need" in start_here
-    assert "`--local` as the default beginner path" in start_here
+    assert "Use the hub as the single beginner path." in start_here
     assert "There are two places you type commands:" in start_here
     assert "In your normal system terminal:" in start_here
     assert "Inside your AI runtime:" in start_here
@@ -684,18 +695,22 @@ def test_public_beginner_hub_keeps_top_level_and_help_surfaces_aligned() -> None
     cli_content = (repo_root / "src" / "gpd" / "cli.py").read_text(encoding="utf-8")
     install_js = (repo_root / "bin" / "install.js").read_text(encoding="utf-8")
 
-    assert "This is the shortest path for a non-coder to get started with GPD." in hub
-    assert "Use this page to choose:" in hub
-    assert "Use the runtime you can already open from your normal terminal. That is the" in hub
-    assert "Pick one runtime only. Do not install all four just to start." in hub
-    assert "Quick runtime chooser" in hub
-    assert "help -> start -> tour -> new-project / map-research -> resume-work" in hub
+    assert "Use this page as the single first-stop for new users." in hub
+    assert beginner_startup_ladder_text() in hub
+    assert "Follow one linear path:" in hub
+    assert "Open the OS guide for your machine." in hub
+    assert "Open the runtime guide you actually plan to use." in hub
+    assert "Install GPD with the runtime command shown there." in hub
+    assert "Open that runtime from your normal terminal and run `help`." in hub
+    assert "Run `start` if you are not sure what fits this folder." in hub
+    assert "Run `tour` if you want a read-only overview" in hub
+    assert "Then choose `new-project`, `map-research`, or `resume-work`." in hub
     assert "Your **normal terminal**" in hub
     assert "Your **runtime**" in hub
     assert "## First: terminal vs runtime" in hub
     assert "## Choose your OS" in hub
     assert "## Choose your runtime" in hub
-    assert "## How to use the guides" in hub
+    assert "Common beginner terms" in hub
     assert "[macOS guide](./macos.md)" in hub
     assert "[Claude Code quickstart](./claude-code.md)" in hub
     assert "[Codex quickstart](./codex.md)" in hub
@@ -706,19 +721,16 @@ def test_public_beginner_hub_keeps_top_level_and_help_surfaces_aligned() -> None
     quick_start = _markdown_section(readme, "## Quick Start")
 
     assert "[Beginner Onboarding Hub](./docs/README.md)" in start_here
-    assert "The intended first-pass order is `help`, then `start`, then `tour`, then `new-project` or `map-research`." in quick_start
-    assert "| Claude Code | `/gpd:help` | `/gpd:start` | `/gpd:tour` | `/gpd:new-project --minimal` |" in quick_start
-    assert "| Codex | `$gpd-help` | `$gpd-start` | `$gpd-tour` | `$gpd-new-project --minimal` |" in quick_start
-    assert "| OpenCode | `/gpd-help` | `/gpd-start` | `/gpd-tour` | `/gpd-new-project --minimal` |" in quick_start
+    assert beginner_startup_ladder_text() in quick_start
 
     assert "@{GPD_INSTALL_DIR}/workflows/help.md" in help_command
-    assert BEGINNER_ONBOARDING_HUB_URL in help_workflow
-    assert BEGINNER_ONBOARDING_HUB_URL in cli_content
+    assert "beginner_onboarding_hub_url()" in cli_content
     assert "Beginner Onboarding Hub:" in install_js
-    assert "/blob/main/docs/README.md" in install_js
-    assert "repositoryBaseUrl(repository)" in install_js
-    assert "If you are new to terminals or are not sure which runtime path fits you yet" in install_js
-    assert "If you are new to terminals or are not sure which runtime path fits you yet" in cli_content
+    assert "beginnerHubUrl" in install_js
+    assert "beginnerHubUrl" in install_js
+    assert "First-run order:" in install_js
+    assert install_js.index("Beginner Onboarding Hub:") < install_js.index("First-run order:")
+    assert cli_content.index("Beginner Onboarding Hub:") < cli_content.index("First-run order:")
     assert "Getting started:" in help_workflow
     start_snippet = "/gpd:start               — Guided router when you are not sure whether to create, map, resume, or just explain something"
     tour_snippet = "/gpd:tour               — Optional guided tour of the main commands and when to use them"
@@ -799,20 +811,16 @@ def test_public_readme_keeps_bootstrap_prerequisites_and_runtime_doctor_scopes_d
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
     quick_start = _markdown_section(readme, "## Quick Start")
 
-    assert "The intended first-pass order is `help`, then `start`, then `tour`, then `new-project` or `map-research`." in quick_start
+    assert beginner_startup_ladder_text() in quick_start
     assert "The bootstrap installer requires Node.js 20+, Python 3.11+ with `venv`" in quick_start
     assert "**Bootstrap hard blockers**" in quick_start
     assert "These are bootstrap prerequisites for `npx -y get-physics-done`, not a claim that every local `gpd ...` command rechecks them." in quick_start
     assert "Here, `gpd doctor --runtime ...` is a runtime-readiness check for the selected runtime target." in quick_start
-    assert "If you are not sure what fits this folder yet, run your runtime's `start` command first." in quick_start
-    assert "If you want a guided walkthrough of the main commands and when to use them, run your runtime's `tour` command." in quick_start
-    assert "Otherwise start with `new-project --minimal` for new work, `map-research` for existing work, or `resume-work` for an existing GPD project using your runtime's command syntax." in quick_start
-    assert "| Claude Code | `/gpd:help` | `/gpd:start` | `/gpd:tour` | `/gpd:new-project --minimal` |" in quick_start
-    assert "| Codex | `$gpd-help` | `$gpd-start` | `$gpd-tour` | `$gpd-new-project --minimal` |" in quick_start
-    assert "| Gemini CLI | `/gpd:help` | `/gpd:start` | `/gpd:tour` | `/gpd:new-project --minimal` |" in quick_start
-    assert "| OpenCode | `/gpd-help` | `/gpd-start` | `/gpd-tour` | `/gpd-new-project --minimal` |" in quick_start
-    assert quick_start.index("If you are not sure what fits this folder yet, run your runtime's `start` command first.") < quick_start.index("If you want a guided walkthrough of the main commands and when to use them, run your runtime's `tour` command.")
-    assert quick_start.index("If you want a guided walkthrough of the main commands and when to use them, run your runtime's `tour` command.") < quick_start.index("Otherwise start with `new-project --minimal` for new work, `map-research` for existing work, or `resume-work` for an existing GPD project using your runtime's command syntax.")
+    assert "Run your runtime's `start` command if you are not sure what fits this folder yet." in quick_start
+    assert "Run your runtime's `tour` command if you want a read-only overview before choosing." in quick_start
+    assert "Then use `new-project --minimal` for new work, `map-research` for existing work, or `resume-work` when you return later." in quick_start
+    assert quick_start.index("Run your runtime's `start` command if you are not sure what fits this folder yet.") < quick_start.index("Run your runtime's `tour` command if you want a read-only overview before choosing.")
+    assert quick_start.index("Run your runtime's `tour` command if you want a read-only overview before choosing.") < quick_start.index("Then use `new-project --minimal` for new work, `map-research` for existing work, or `resume-work` when you return later.")
     _assert_unattended_readiness_surface(quick_start)
     _assert_wolfram_plan_boundary(quick_start)
     assert DOCTOR_RUNTIME_SCOPE_RE.search(quick_start) is not None
@@ -857,22 +865,20 @@ def test_public_help_surface_keeps_start_tour_new_project_and_map_research_order
 def test_js_bootstrap_after_install_surface_keeps_beginner_order() -> None:
     install_js = (_repo_root() / "bin/install.js").read_text(encoding="utf-8")
 
-    hub_line = "Beginner Onboarding Hub: ${beginnerOnboardingHubUrl}"
-    hub_followup = "If you are new to terminals or are not sure which runtime path fits you yet, open that hub first."
+    hub_line = "Beginner Onboarding Hub: ${SHARED_PUBLIC_SURFACE_TEXT.beginnerHubUrl}"
+    order_line = "First-run order: ${beginnerStartupLadderText()}"
     onboarding_line = (
-        "Open your runtime, run its help command first, then use `start` if you are not sure what fits this folder. "
-        "Use `tour` for a read-only walkthrough first. Then use your runtime's `new-project` command for new work "
-        "or `map-research` for existing work."
+        "Open your runtime, run its help command first, use `start` if you are not sure what fits this folder, "
+        "and use `tour` if you want a read-only overview of the broader command surface before choosing."
     )
 
     assert hub_line in install_js
-    assert hub_followup in install_js
+    assert order_line in install_js
     assert onboarding_line in install_js
-    assert install_js.index(hub_line) < install_js.index(hub_followup)
-    assert install_js.index(hub_followup) < install_js.index(onboarding_line)
+    assert install_js.index(hub_line) < install_js.index(order_line)
+    assert install_js.index(order_line) < install_js.index(onboarding_line)
     assert install_js.index("help command first") < install_js.index("use `start`")
-    assert install_js.index("use `start`") < install_js.index("Use `tour`")
-    assert install_js.index("Use `tour`") < install_js.index("use your runtime's `new-project` command")
+    assert install_js.index("use `start`") < install_js.index("use `tour`")
 
 
 def test_public_readme_recovery_surfaces_keep_runtime_pause_and_resume_roles_distinct() -> None:
@@ -881,7 +887,7 @@ def test_public_readme_recovery_surfaces_keep_runtime_pause_and_resume_roles_dis
     key_commands = _readme_key_commands_section(readme)
 
     assert "| Current-workspace recovery snapshot | `gpd resume` |" in quick_start
-    assert "| Continue in an existing GPD project | `/gpd:resume-work` |" in quick_start
+    assert "| Continue in an existing GPD project | `resume-work` |" in quick_start
     assert "| Returning to an existing GPD project | `pause-work` |" not in quick_start
     assert "use `gpd resume`" in quick_start
     assert_recovery_ladder_contract(
@@ -925,7 +931,10 @@ def test_public_help_surfaces_keep_settings_as_guided_post_startup_path() -> Non
     help_workflow = (repo_root / "src/gpd/specs/workflows/help.md").read_text(encoding="utf-8")
 
     assert "@{GPD_INSTALL_DIR}/workflows/help.md" in help_command
-    assert "Safest beginner order: `/gpd:start` -> `/gpd:tour` -> `/gpd:new-project` or `/gpd:map-research` -> `/gpd:resume-work` when you return later." in help_workflow
+    assert "If you just installed GPD, use this order first:" in help_workflow
+    assert "1. Open your runtime and run `/gpd:help`." in help_workflow
+    assert "2. Run `/gpd:start` if you are not sure what fits this folder yet." in help_workflow
+    assert "3. Run `/gpd:tour` if you want a read-only overview of the broader command surface before choosing." in help_workflow
     assert "**Post-startup settings**" in help_workflow
     assert (
         "1. `/gpd:settings` - Primary guided unattended/autonomy setup after project creation; use this after your first successful start or later"
@@ -1016,14 +1025,14 @@ def test_public_runtime_docs_explain_runtime_specific_command_syntax() -> None:
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
 
     assert "## Supported Runtimes" in readme
-    for descriptor in _RUNTIME_DESCRIPTORS:
-        adapter = get_adapter(descriptor.runtime_name)
+    for surface in beginner_runtime_surfaces():
         assert (
-            f"| {descriptor.display_name} | `{descriptor.install_flag}` | "
-            f"`{adapter.help_command}` | `{adapter.new_project_command}` |"
+            f"| {surface.display_name} | `{surface.install_flag}` | "
+            f"`{surface.help_command}` | `{surface.start_command}` | `{surface.tour_command}` | "
+            f"`{surface.new_project_minimal_command}` | `{surface.map_research_command}` | `{surface.resume_work_command}` |"
         ) in readme
     assert "Each runtime uses its own command prefix" in readme
-    assert "Common first commands by runtime:" in readme
+    assert "Common first commands by runtime:" not in readme
 
 
 def test_codex_runtime_docs_distinguish_public_skills_from_full_agent_install() -> None:

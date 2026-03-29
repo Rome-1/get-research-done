@@ -34,6 +34,10 @@ from rich.table import Table
 from rich.text import Text
 
 from gpd.command_labels import canonical_command_label
+from gpd.core.onboarding_surfaces import (
+    beginner_onboarding_hub_url,
+    beginner_startup_ladder_text,
+)
 from gpd.core.cli_args import (
     normalize_root_global_cli_options as _normalize_root_global_cli_options,
 )
@@ -6465,7 +6469,7 @@ def _print_install_summary(results: list[tuple[str, dict[str, object]]]) -> None
 
     # Post-install next steps
     if results:
-        next_step_entries: list[tuple[str, str, str, str, str]] = []
+        next_step_entries: list[tuple[str, str, str, str, str, str, str, str]] = []
         seen_runtime_names: set[str] = set()
         for runtime_name, _result in results:
             if runtime_name in seen_runtime_names:
@@ -6474,6 +6478,7 @@ def _print_install_summary(results: list[tuple[str, dict[str, object]]]) -> None
             adapter = _get_adapter_or_error(runtime_name, action="install summary")
             next_step_entries.append(
                 (
+                    runtime_name,
                     adapter.display_name,
                     adapter.launch_command,
                     adapter.help_command,
@@ -6485,18 +6490,19 @@ def _print_install_summary(results: list[tuple[str, dict[str, object]]]) -> None
             )
 
         console.print()
-        console.print("[bold]Next steps[/]")
+        console.print("[bold]Startup checklist[/]")
         console.print(
-            "Beginner Onboarding Hub: https://github.com/psi-oss/get-physics-done/blob/main/docs/README.md",
+            f"Beginner Onboarding Hub: {beginner_onboarding_hub_url()}",
             soft_wrap=True,
         )
         console.print(
-            "If you are new to terminals or are not sure which runtime path fits you yet, start there first.",
+            f"First-run order: {beginner_startup_ladder_text()}",
             soft_wrap=True,
         )
         if len(next_step_entries) == 1:
             single_runtime_name, single_result = results[0]
             (
+                _runtime_name,
                 display_name,
                 launch_command,
                 help_command,
@@ -6524,61 +6530,76 @@ def _print_install_summary(results: list[tuple[str, dict[str, object]]]) -> None
                 soft_wrap=True,
             )
             console.print(
-                "3. If you're not sure what fits this folder yet, run "
-                f"[{_INSTALL_ACCENT_COLOR} bold]{start_command}[/]. "
-                "If you want a guided walkthrough first, run "
-                f"[{_INSTALL_ACCENT_COLOR} bold]{tour_command}[/].",
+                "3. Run "
+                f"[{_INSTALL_ACCENT_COLOR} bold]{start_command}[/] if you're not sure what fits this folder yet. "
+                "Run "
+                f"[{_INSTALL_ACCENT_COLOR} bold]{tour_command}[/] if you want a read-only overview of the broader command surface first.",
                 soft_wrap=True,
             )
             console.print(
-                "4. Start with "
+                "4. Then use "
                 f"[{_INSTALL_ACCENT_COLOR} bold]{new_project_command}[/] for a new project "
                 "or "
-                f"[{_INSTALL_ACCENT_COLOR} bold]{map_research_command}[/] for existing work. "
-                f"{recovery_ladder_note(resume_work_phrase=f'`{resume_work_command}`', suggest_next_phrase=f'`{suggest_next_command}`', pause_work_phrase=f'`{pause_work_command}`')}",
+                f"[{_INSTALL_ACCENT_COLOR} bold]{map_research_command}[/] for existing work.",
                 soft_wrap=True,
             )
-            console.print()
             console.print(
-                "   Fast bootstrap: use "
+                "5. Fast bootstrap: use "
                 f"[{_INSTALL_ACCENT_COLOR} bold]{new_project_command} --minimal[/] "
                 "for the shortest onboarding path.",
                 soft_wrap=True,
             )
             console.print(
-                "5. Use [bold]gpd --help[/] for local install, readiness, validation, permissions, observability, and diagnostics. "
-                f"Use [{_INSTALL_ACCENT_COLOR} bold]{help_command}[/] inside {display_name} for workflow help.",
+                "6. When you return later, use "
+                f"[{_INSTALL_ACCENT_COLOR} bold]{resume_work_command}[/] after reopening the right workspace. "
+                f"{recovery_ladder_note(resume_work_phrase=f'`{resume_work_command}`', suggest_next_phrase=f'`{suggest_next_command}`', pause_work_phrase=f'`{pause_work_command}`')}",
+                soft_wrap=True,
+            )
+            console.print()
+            console.print("[bold]Secondary follow-up[/]")
+            console.print(
+                "7. Use [bold]gpd --help[/] for local install, readiness, validation, permissions, observability, and diagnostics.",
                 soft_wrap=True,
             )
             console.print(
-                "6. Verify or troubleshoot this machine with "
-                f"[bold]gpd doctor --runtime {single_runtime_name} --{doctor_scope}[/].",
+                "8. Run [bold]gpd doctor --runtime {runtime} --local|--global[/] for a focused readiness check.".format(
+                    runtime=single_runtime_name
+                ),
                 soft_wrap=True,
             )
             console.print(
-                f"7. {post_start_settings_note()} {post_start_settings_recommendation()}",
+                f"9. {post_start_settings_note()} {post_start_settings_recommendation()}",
                 soft_wrap=True,
             )
             console.print(
-                "8. If you plan to use paper/manuscript workflows, rerun "
+                "10. If you plan to use paper/manuscript workflows, rerun "
                 f"[bold]gpd doctor --runtime {single_runtime_name} --{doctor_scope}[/] "
                 "and check the `Workflow Presets` and `LaTeX Toolchain` rows before publication work.",
                 soft_wrap=True,
             )
-            console.print(f"9. {_workflow_preset_surface_note()}", soft_wrap=True)
+            console.print(_workflow_preset_surface_note(), soft_wrap=True)
         else:
-            for display_name, launch_command, help_command, start_command, tour_command, new_project_command, map_research_command in next_step_entries:
-                console.print(
+            runtime_lines: list[str] = []
+            for runtime_name, display_name, launch_command, help_command, start_command, tour_command, new_project_command, map_research_command in next_step_entries:
+                resume_work_command = _get_adapter_or_error(runtime_name, action="install summary").format_command("resume-work")
+                runtime_lines.append(
                     f"- {display_name} "
-                    f"([{_INSTALL_ACCENT_COLOR} bold]{launch_command}[/]), then "
+                    f"([{_INSTALL_ACCENT_COLOR} bold]{launch_command}[/]): "
                     f"[{_INSTALL_ACCENT_COLOR} bold]{help_command}[/], then "
-                    f"[{_INSTALL_ACCENT_COLOR} bold]{start_command}[/] if you're unsure or "
-                    f"[{_INSTALL_ACCENT_COLOR} bold]{tour_command}[/] for orientation, then "
-                    f"[{_INSTALL_ACCENT_COLOR} bold]{new_project_command}[/] "
-                    f"or [{_INSTALL_ACCENT_COLOR} bold]{map_research_command}[/]. "
-                    f"Quick bootstrap: [{_INSTALL_ACCENT_COLOR} bold]{new_project_command} --minimal[/]",
-                    soft_wrap=True,
+                    f"[{_INSTALL_ACCENT_COLOR} bold]{start_command}[/], then "
+                    f"[{_INSTALL_ACCENT_COLOR} bold]{tour_command}[/], then "
+                    f"[{_INSTALL_ACCENT_COLOR} bold]{new_project_command}[/] for new work or "
+                    f"[{_INSTALL_ACCENT_COLOR} bold]{map_research_command}[/] for existing work, then "
+                    f"[{_INSTALL_ACCENT_COLOR} bold]{resume_work_command}[/] when you return later."
                 )
+            for line in runtime_lines:
+                console.print(line, soft_wrap=True)
+            console.print(
+                "Fast bootstrap: use [bold]{command} --minimal[/] for the shortest onboarding path.".format(
+                    command=next_step_entries[0][6]
+                ),
+                soft_wrap=True,
+            )
             console.print(
                 recovery_ladder_note(
                     resume_work_phrase="your runtime-specific `resume-work` command",
@@ -6587,8 +6608,10 @@ def _print_install_summary(results: list[tuple[str, dict[str, object]]]) -> None
                 ),
                 soft_wrap=True,
             )
+            console.print()
+            console.print("[bold]Secondary follow-up[/]")
             console.print(
-                "\nUse [bold]gpd --help[/] for local install, readiness, validation, permissions, observability, and diagnostics.",
+                "Use [bold]gpd --help[/] for local install, readiness, validation, permissions, observability, and diagnostics.",
                 soft_wrap=True,
             )
             console.print(

@@ -27,6 +27,7 @@ def test_tour_workflow_introduces_a_safe_beginner_walkthrough() -> None:
     for fragment in (
         "Provide a beginner-friendly, read-only tour of the core GPD command surface.",
         "This is a read-only tour of the main GPD commands. It will not change your files.",
+        "Most first-time users follow this order: help -> start -> tour -> new-project / map-research -> resume-work.",
         "the normal terminal, where you install GPD and run setup / status commands",
         "the runtime, where you use the GPD command prefix provided for that runtime",
         "Use a compact table with four columns:",

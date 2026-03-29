@@ -2270,7 +2270,7 @@ def test_help_command_keeps_static_quick_start_while_workflow_owns_full_referenc
     assert "/gpd:help --all" in help_command
     assert "## Invocation Surfaces" in help_workflow
     assert "## Core Workflow" in help_workflow
-    assert "Choose the path that matches your starting point:" in help_workflow
+    assert "After that, choose the path that matches your current situation:" in help_workflow
     for token in (
         "/gpd:new-project",
         "/gpd:new-project --minimal",

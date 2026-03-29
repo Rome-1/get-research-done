@@ -165,6 +165,9 @@ def test_help_prompt_default_quick_start_extracts_workflow_owned_sections() -> N
     assert "Include the workflow-owned `## Quick Start` section." in quick_start
     assert "Stop before `## Core Workflow`." in quick_start
     assert "Run \\`/gpd:help --all\\` for the full command reference." in quick_start
+    assert "## Startup Checklist" in help_workflow
+    assert "If you only remember one order, use this:" in help_workflow
+    assert "help -> start -> tour -> new-project / map-research -> resume-work" in help_workflow
     assert_recovery_ladder_contract(
         help_workflow,
         resume_work_fragments=("/gpd:resume-work",),
@@ -172,7 +175,7 @@ def test_help_prompt_default_quick_start_extracts_workflow_owned_sections() -> N
         pause_work_fragments=("/gpd:pause-work",),
     )
     quick_start_reference = _extract_between(help_workflow, "## Quick Start", "## Core Workflow")
-    assert "Choose the path that matches your starting point:" in help_workflow
+    assert "After that, choose the path that matches your current situation:" in help_workflow
     assert "/gpd:start" in quick_start_reference
     assert "/gpd:tour" in quick_start_reference
     assert "/gpd:new-project" in quick_start_reference
@@ -182,6 +185,10 @@ def test_help_prompt_default_quick_start_extracts_workflow_owned_sections() -> N
     assert "## Core Workflow" in help_workflow
     assert "/gpd:new-project -> /gpd:discuss-phase -> /gpd:plan-phase -> /gpd:execute-phase -> /gpd:verify-work -> repeat" in help_workflow
     assert "gpd init new-project" not in help_workflow
+    assert "## What comes later after startup" in help_workflow
+    assert "Project work:" in help_workflow
+    assert "Writing and review:" in help_workflow
+    assert "Side investigations and preferences:" in help_workflow
 
 
 def test_help_prompt_keeps_workflow_preset_readiness_on_local_cli_surface() -> None:
@@ -226,7 +233,7 @@ def test_start_prompt_delegates_routing_to_workflow_only() -> None:
     assert "Reply with the number or the option name." in start_workflow
     assert "I will show the safest next steps first and the broader options second." in start_workflow
     assert "Recommended next steps:" in start_workflow
-    assert "Other useful options:" in start_workflow
+    assert "Other useful options, only if one of these is what you need:" in start_workflow
     assert "official GPD terms visible in plain-English form" in start_workflow
     assert "Resume this project (recommended)" in start_workflow
     assert "Suggest the next best step" in start_workflow
@@ -280,6 +287,7 @@ def test_tour_prompt_delegates_routing_to_workflow_only() -> None:
     assert "/gpd:tangent" in tour_workflow
     assert "This is a read-only tour of the main GPD commands." in tour_workflow
     assert "It will not change your files." in tour_workflow
+    assert "Most first-time users follow this order: help -> start -> tour -> new-project / map-research -> resume-work." in tour_workflow
     assert "$ARGUMENTS" in tour_workflow
     assert "Do not narrow the command list, select a path, or route based on it." in tour_workflow
     assert "the runtime, where you use the GPD command prefix provided for that runtime" in tour_workflow

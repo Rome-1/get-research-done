@@ -8,9 +8,14 @@ from functools import lru_cache
 from importlib.resources import files
 
 __all__ = [
+    "BeginnerOnboardingContract",
     "LocalCliBridgeContract",
     "PostStartSettingsContract",
     "PublicSurfaceContract",
+    "beginner_onboarding_contract",
+    "beginner_onboarding_hub_url",
+    "beginner_startup_ladder",
+    "beginner_startup_ladder_text",
     "load_public_surface_contract",
     "local_cli_bridge_commands",
     "local_cli_bridge_contract",
@@ -19,6 +24,15 @@ __all__ = [
     "post_start_settings_note",
     "post_start_settings_recommendation",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class BeginnerOnboardingContract:
+    hub_url: str
+    startup_ladder: tuple[str, ...]
+
+    def render_startup_ladder(self) -> str:
+        return "`" + " -> ".join(self.startup_ladder) + "`"
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +59,7 @@ class PostStartSettingsContract:
 
 @dataclass(frozen=True, slots=True)
 class PublicSurfaceContract:
+    beginner_onboarding: BeginnerOnboardingContract
     local_cli_bridge: LocalCliBridgeContract
     post_start_settings: PostStartSettingsContract
 
@@ -95,10 +110,15 @@ def load_public_surface_contract() -> PublicSurfaceContract:
     if schema_version != 1:
         raise ValueError(f"Unsupported public surface contract schema_version: {schema_version!r}")
 
+    beginner_payload = _require_object(payload.get("beginner_onboarding"), label="beginner_onboarding")
     bridge_payload = _require_object(payload.get("local_cli_bridge"), label="local_cli_bridge")
     settings_payload = _require_object(payload.get("post_start_settings"), label="post_start_settings")
 
     return PublicSurfaceContract(
+        beginner_onboarding=BeginnerOnboardingContract(
+            hub_url=_require_string(beginner_payload, "hub_url", label="beginner_onboarding"),
+            startup_ladder=_require_string_list(beginner_payload, "startup_ladder", label="beginner_onboarding"),
+        ),
         local_cli_bridge=LocalCliBridgeContract(
             commands=_require_string_list(bridge_payload, "commands", label="local_cli_bridge"),
             terminal_phrase=_require_string(bridge_payload, "terminal_phrase", label="local_cli_bridge"),
@@ -117,6 +137,22 @@ def load_public_surface_contract() -> PublicSurfaceContract:
             ),
         ),
     )
+
+
+def beginner_onboarding_contract() -> BeginnerOnboardingContract:
+    return load_public_surface_contract().beginner_onboarding
+
+
+def beginner_onboarding_hub_url() -> str:
+    return beginner_onboarding_contract().hub_url
+
+
+def beginner_startup_ladder() -> tuple[str, ...]:
+    return beginner_onboarding_contract().startup_ladder
+
+
+def beginner_startup_ladder_text() -> str:
+    return beginner_onboarding_contract().render_startup_ladder()
 
 
 def local_cli_bridge_contract() -> LocalCliBridgeContract:

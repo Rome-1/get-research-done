@@ -1,5 +1,15 @@
 {
   "schema_version": 1,
+  "beginner_onboarding": {
+    "hub_url": "https://github.com/psi-oss/get-physics-done/blob/main/docs/README.md",
+    "startup_ladder": [
+      "help",
+      "start",
+      "tour",
+      "new-project / map-research",
+      "resume-work"
+    ]
+  },
   "local_cli_bridge": {
     "commands": [
       "gpd --help",

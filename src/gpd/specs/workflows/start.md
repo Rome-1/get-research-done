@@ -85,33 +85,35 @@ Before listing choices, add one short line in plain English such as:
 
 - `I will show the safest next steps first and the broader options second.`
 - `The official GPD command names are included so you can learn them as you go.`
+- `Keep the numbered list short. Put extra capabilities in a separate \`Other useful options\` block instead of making the user compare too many first choices.`
 
 **This folder already has saved GPD work (`GPD project`)**
 
 Recommended next steps:
 
 1. Resume this project (recommended) - use `/gpd:resume-work`. This is the in-runtime continue command for an existing GPD project. Example: `I already worked on this GPD project and want to keep going.`
-2. Suggest the next best step - use `/gpd:suggest-next`. Example: `I resumed the project and only want the next action.`
-3. Review the project status first - use `/gpd:progress`. Example: `I want a broader snapshot before I continue.`
+2. Review the project status first - use `/gpd:progress`. Example: `I want a broader snapshot before I continue.`
+3. Take a guided tour first - use `/gpd:tour`. Example: `I want a read-only overview before I continue.`
 
-Other useful options:
+Other useful options, only if one of these is what you need:
 
-4. Do one small bounded task - use `/gpd:quick`. Example: `I only want one contained job, not a full session.`
-5. Explain one concept - use `/gpd:explain`. Example: `Explain a method or equation before I continue.`
-6. Show all commands - use `/gpd:help --all`.
+- Suggest the next best step - use `/gpd:suggest-next`. Example: `I resumed the project and only want the next action.`
+- Do one small bounded task - use `/gpd:quick`. Example: `I only want one contained job, not a full session.`
+- Explain one concept - use `/gpd:explain`. Example: `Explain a method or equation before I continue.`
+- Show all commands - use `/gpd:help --all`.
 
 **This folder already has GPD's folder summary (`research map`)**
 
 Recommended next steps:
 
-1. Turn this into a full GPD project - use `/gpd:new-project`. A research map is GPD's summary of an existing folder before full setup. Example: `The folder was already mapped and now I want the full project.`
+1. Turn this into a full GPD project (recommended) - use `/gpd:new-project`. A research map is GPD's summary of an existing folder before full setup. Example: `The folder was already mapped and now I want the full project.`
 2. Refresh the research map - use `/gpd:map-research`. Example: `The folder changed and I want GPD to inspect it again.`
 3. Take a guided tour first - use `/gpd:tour`. Example: `I want the commands explained before I choose.`
 
-Other useful options:
+Other useful options, only if one of these is what you need:
 
-4. Explain one concept - use `/gpd:explain`.
-5. Show all commands - use `/gpd:help --all`.
+- Explain one concept - use `/gpd:explain`.
+- Show all commands - use `/gpd:help --all`.
 
 **This folder already has research files, but GPD is not set up here yet**
 
@@ -121,11 +123,11 @@ Recommended next steps:
 2. Take a guided tour first - use `/gpd:tour`.
 3. Start a brand-new GPD project anyway - use `/gpd:new-project --minimal`. Example: `I want to ignore the old files and begin fresh.`
 
-Other useful options:
+Other useful options, only if one of these is what you need:
 
-4. Explain one concept - use `/gpd:explain`.
-5. Show all commands - use `/gpd:help --all`.
-6. Reopen a different GPD project - use `gpd resume --recent` in your normal terminal. This is a normal-terminal recovery command, not an in-runtime slash command.
+- Explain one concept - use `/gpd:explain`.
+- Show all commands - use `/gpd:help --all`.
+- Reopen a different GPD project - use `gpd resume --recent` in your normal terminal. This is a normal-terminal recovery command, not an in-runtime slash command.
 
 **This folder looks new or mostly empty**
 
@@ -135,11 +137,11 @@ Recommended next steps:
 2. Full guided setup - use `/gpd:new-project`. Example: `I want the fuller guided questioning path.`
 3. Take a guided tour first - use `/gpd:tour`.
 
-Other useful options:
+Other useful options, only if one of these is what you need:
 
-4. Explain one concept - use `/gpd:explain`.
-5. Show all commands - use `/gpd:help --all`.
-6. Reopen a different GPD project - use `gpd resume --recent` in your normal terminal.
+- Explain one concept - use `/gpd:explain`.
+- Show all commands - use `/gpd:help --all`.
+- Reopen a different GPD project - use `gpd resume --recent` in your normal terminal.
 
 Add one final sentence before asking for the choice:
 

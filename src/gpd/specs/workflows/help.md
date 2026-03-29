@@ -118,12 +118,24 @@ Project ─── the overall research goal
 
 **GPD** (Get Physics Done) creates hierarchical research plans optimized for solo agentic physics research with AI research agents.
 
+## Startup Checklist
+
+If you only remember one order, use this:
+`help -> start -> tour -> new-project / map-research -> resume-work`
+
+1. `/gpd:help` - See the command reference first.
+2. `/gpd:start` - Let GPD choose the safest first step for the current folder.
+3. `/gpd:tour` - Get a read-only walkthrough before you choose.
+4. `/gpd:new-project` or `/gpd:map-research` - Begin the actual work path once you know the folder state.
+5. `/gpd:resume-work` - Continue later after you have an existing GPD project.
+6. `/gpd:settings` - Change autonomy, permissions, or runtime preferences after startup or later.
+
 ## Invocation Surfaces
 
 This reference lists canonical in-runtime slash-command names in `/gpd:*` form.
 
 - If you are new to terminals or runtime setup, use the Beginner Onboarding Hub: https://github.com/psi-oss/get-physics-done/blob/main/docs/README.md
-- If you do not know which runtime to pick, the hub walks you through one runtime at a time and keeps `--local` as the default beginner path.
+- The hub keeps the OS guides, runtime guides, and beginner startup checklist in one place.
 - Use these names inside the installed agent/runtime command surface.
 - The bootstrap installer owns Node.js / Python / `venv` prerequisites. The local `gpd` CLI may expose different `gpd ...` subcommands and grouping. Use `gpd --help` to inspect the executable local install/readiness/permissions/diagnostics surface directly.
 - Use `gpd validate unattended-readiness --runtime <runtime> --autonomy balanced` for the unattended or overnight verdict, and `gpd permissions sync --runtime <runtime> --autonomy balanced` when runtime-owned permissions need realignment.
@@ -137,9 +149,15 @@ This reference lists canonical in-runtime slash-command names in `/gpd:*` form.
 
 ## Quick Start
 
-Safest beginner order: `/gpd:start` -> `/gpd:tour` -> `/gpd:new-project` or `/gpd:map-research` -> `/gpd:resume-work` when you return later.
+If you just installed GPD, use this order first:
 
-Choose the path that matches your starting point:
+1. Open your runtime and run `/gpd:help`.
+2. Run `/gpd:start` if you are not sure what fits this folder yet.
+3. Run `/gpd:tour` if you want a read-only overview of the broader command surface before choosing.
+4. Then use `/gpd:new-project` for new work or `/gpd:map-research` for existing work.
+5. When you return later, use `gpd resume` or `gpd resume --recent` first, then `/gpd:resume-work` inside the runtime.
+
+After that, choose the path that matches your current situation:
 
 **New work**
 1. `/gpd:start` - Guided first-run router when you are not sure whether to create a new project, map existing work, resume, or ask a standalone explanation question
@@ -188,6 +206,14 @@ Local Mathematica installs are separate from the shared optional Wolfram integra
 Workflow preset tooling is layered on top of the base install; it does not change runtime permission alignment.
 
 Recovery ladder: use `gpd resume` for the current-workspace read-only recovery snapshot. If that is the wrong workspace, use `gpd resume --recent` to find the workspace first, then continue inside that workspace with `/gpd:resume-work`. After resuming, `/gpd:suggest-next` is the fastest next command. Before stepping away mid-phase, run `/gpd:pause-work` so that ladder has an explicit handoff to restore.
+
+## What comes later after startup
+
+These are the main capability groups GPD supports once a project is underway:
+
+- Project work: `/gpd:discuss-phase`, `/gpd:plan-phase`, `/gpd:execute-phase`, `/gpd:verify-work`
+- Writing and review: `/gpd:write-paper`, `/gpd:peer-review`, `/gpd:respond-to-referees`, `/gpd:arxiv-submission`
+- Side investigations and preferences: `/gpd:tangent`, `/gpd:branch-hypothesis`, `/gpd:set-profile`, `/gpd:settings`
 
 ## Core Workflow
 

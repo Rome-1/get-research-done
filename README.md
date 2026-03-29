@@ -27,9 +27,9 @@ https://github.com/user-attachments/assets/e79f8153-c0bd-484f-b69e-da8f142649e0
 GPD is not a standalone app. It installs physics-research commands into Claude Code, Codex, Gemini CLI, or OpenCode.
 
 If you are new to terminals, start with the [Beginner Onboarding Hub](./docs/README.md).
-It lets you open only the OS and runtime guides you need, and it uses `--local` as the default beginner path.
-If you do not already have a preferred runtime, use the one you can already launch from your normal terminal.
-Most beginners should install GPD into one runtime at a time and use `--local`.
+Use the hub as the single beginner path. It keeps the OS guides, runtime guides,
+and post-install checklist in one place, while this README keeps the reference
+tables and advanced surfaces.
 
 You need three things before GPD can work:
 
@@ -66,28 +66,18 @@ We welcome contributions and feedback via GitHub issues or pull requests; if GPD
 
 If you already know your runtime and are comfortable in a terminal, use the Quick Start path below. If not, go back to [Start Here](#start-here) and use the hub first.
 
-The intended first-pass order is `help`, then `start`, then `tour`, then `new-project` or `map-research`.
+Use this post-install order:
 
-**Next steps after install**
+`help -> start -> tour -> new-project / map-research -> resume-work`
 
-The installer adds GPD to your runtime config; it does not launch the runtime for you.
-Open your chosen runtime from your normal system terminal.
 Run its help command first: Claude Code / Gemini CLI use `/gpd:help`. Codex uses `$gpd-help`, and OpenCode uses `/gpd-help`.
-For best performance, run both this install step and your chosen runtime from the same normal system terminal session: use `claude` for Claude Code, `codex` for Codex, `gemini` for Gemini CLI, and `opencode` for OpenCode.
 
 1. From inside the folder where your project should live, run the matching install command from [Start Here](#start-here).
 2. Launch your runtime with `claude`, `codex`, `gemini`, or `opencode`.
-3. Run the matching GPD help command shown below.
-4. If you are not sure what fits this folder yet, run your runtime's `start` command first.
-5. If you want a guided walkthrough of the main commands and when to use them, run your runtime's `tour` command.
-6. Otherwise start with `new-project --minimal` for new work, `map-research` for existing work, or `resume-work` for an existing GPD project using your runtime's command syntax.
-
-| Runtime | First help command | Guided first-run command | Guided walkthrough command | Fastest first project |
-|---------|--------------------|--------------------------|-----------------------------|-----------------------|
-| Claude Code | `/gpd:help` | `/gpd:start` | `/gpd:tour` | `/gpd:new-project --minimal` |
-| Codex | `$gpd-help` | `$gpd-start` | `$gpd-tour` | `$gpd-new-project --minimal` |
-| Gemini CLI | `/gpd:help` | `/gpd:start` | `/gpd:tour` | `/gpd:new-project --minimal` |
-| OpenCode | `/gpd-help` | `/gpd-start` | `/gpd-tour` | `/gpd-new-project --minimal` |
+3. Run the matching GPD help command shown in [Supported Runtimes](#supported-runtimes).
+4. Run your runtime's `start` command if you are not sure what fits this folder yet.
+5. Run your runtime's `tour` command if you want a read-only overview before choosing.
+6. Then use `new-project --minimal` for new work, `map-research` for existing work, or `resume-work` when you return later.
 
 The bootstrap installer requires Node.js 20+, Python 3.11+ with `venv`, and one supported runtime (`claude`, `gemini`, `codex`, or `opencode`).
 
@@ -100,31 +90,17 @@ Then choose the path that matches your starting point:
 
 Use the runtime syntax above for the command names below.
 
-| Starting point | Command name | What it's for |
-|----------------|--------------|----------------|
-| Not sure which path fits this folder | `start` | Inspect the current folder and route you to the right first command. |
-| Want a guided command walkthrough | `tour` | Show the main GPD commands and when to use them. |
-| New research project | `new-project --minimal` | Start the fastest guided project bootstrap. |
-| Current-workspace recovery snapshot | `gpd resume` | Current-workspace read-only recovery snapshot from your normal system terminal. |
-| Find a workspace to reopen | `gpd resume --recent` | Find the workspace first when you need to reopen a different one, then continue there with the runtime `resume-work` command. |
-| Continue in an existing GPD project | `resume-work` | Continue in-runtime from the selected project state. |
-| Existing research folder or codebase | `map-research` | Map existing work before planning. |
-
-Common slash-command example for an existing GPD project:
-
-| Starting point | Example command |
-|----------------|-----------------|
-| Continue in an existing GPD project | `/gpd:resume-work` |
+| Starting point | Use this |
+|----------------|----------|
+| Not sure which path fits this folder | `start` |
+| Want a guided command walkthrough | `tour` |
+| New research project | `new-project --minimal` |
+| Existing research folder or codebase | `map-research` |
+| Current-workspace recovery snapshot | `gpd resume` |
+| Find a workspace to reopen first | `gpd resume --recent`, then `resume-work` |
+| Continue in an existing GPD project | `resume-work` |
 
 After resuming, the runtime `suggest-next` command is the fastest post-resume next command when you only need the next action.
-
-If you are new to terminals or not sure which runtime to choose, use [Start Here](#start-here) above.
-
-Typical next move after install:
-
-- Brand-new project: run your runtime's `new-project --minimal` command.
-- Existing folder with papers, notes, or code: run your runtime's `map-research` command.
-- Returning to a paused GPD project: use `gpd resume` in your normal terminal or your runtime's `resume-work` command.
 
 <details>
 <summary><strong>Clean-machine readiness and first-run verification</strong></summary>
@@ -215,29 +191,15 @@ npx -y github:psi-oss/get-physics-done --upgrade
 
 GPD currently installs into four AI runtimes. To preselect one during install, use the matching `npx` flag, or use `--all` to install everything in one pass:
 
-If you do not already have a preferred runtime, the simplest default is the one you can already open from your normal terminal. Most beginners should install GPD into one runtime at a time and use `--local`.
-
-| Runtime | `npx` flag | Help command | New project command | Guided first-run command | Guided walkthrough command |
-|---------|------------|--------------|---------------------|--------------------------|-----------------------------|
-| Claude Code | `--claude` | `/gpd:help` | `/gpd:new-project` | `/gpd:start` | `/gpd:tour` |
-| Codex | `--codex` | `$gpd-help` | `$gpd-new-project` | `$gpd-start` | `$gpd-tour` |
-| Gemini CLI | `--gemini` | `/gpd:help` | `/gpd:new-project` | `/gpd:start` | `/gpd:tour` |
-| OpenCode | `--opencode` | `/gpd-help` | `/gpd-new-project` | `/gpd-start` | `/gpd-tour` |
+| Runtime | `npx` flag | Help | Start | Tour | New work | Existing work | Return later |
+|---------|------------|------|-------|------|----------|---------------|--------------|
+| Claude Code | `--claude` | `/gpd:help` | `/gpd:start` | `/gpd:tour` | `/gpd:new-project --minimal` | `/gpd:map-research` | `/gpd:resume-work` |
+| Codex | `--codex` | `$gpd-help` | `$gpd-start` | `$gpd-tour` | `$gpd-new-project --minimal` | `$gpd-map-research` | `$gpd-resume-work` |
+| Gemini CLI | `--gemini` | `/gpd:help` | `/gpd:start` | `/gpd:tour` | `/gpd:new-project --minimal` | `/gpd:map-research` | `/gpd:resume-work` |
+| OpenCode | `--opencode` | `/gpd-help` | `/gpd-start` | `/gpd-tour` | `/gpd-new-project --minimal` | `/gpd-map-research` | `/gpd-resume-work` |
 
 Each runtime uses its own command prefix, but the workflow is the same across all four. After installing GPD, open your chosen runtime normally from your system terminal and use the commands shown above.
-
-Common first commands by runtime:
-
-| Goal | Claude Code / Gemini CLI | Codex | OpenCode |
-|------|---------------------------|-------|----------|
-| Guided first-run triage | `/gpd:start` | `$gpd-start` | `/gpd-start` |
-| Guided command walkthrough | `/gpd:tour` | `$gpd-tour` | `/gpd-tour` |
-| Help | `/gpd:help` | `$gpd-help` | `/gpd-help` |
-| Full onboarding for a new project | `/gpd:new-project` | `$gpd-new-project` | `/gpd-new-project` |
-| Fast onboarding for a new project | `/gpd:new-project --minimal` | `$gpd-new-project --minimal` | `/gpd-new-project --minimal` |
-| Returning to an existing GPD project | `/gpd:resume-work` | `$gpd-resume-work` | `/gpd-resume-work` |
-| Existing research folder or codebase | `/gpd:map-research` | `$gpd-map-research` | `/gpd-map-research` |
-| Optional configuration after startup | `/gpd:settings` | `$gpd-settings` | `/gpd-settings` |
+For post-startup configuration, use your runtime's `settings` command after your first successful start or later.
 
 Notes:
 - Claude Code-specific note: GPD writes `.claude/settings.json` for hooks and statusline. MCP servers are added to project `.mcp.json` for local installs or `~/.claude.json` for global installs.
