@@ -7,7 +7,7 @@ In these docs, "runtime" means the AI terminal app you talk to.
 ## What you need first
 
 - A Linux machine with internet access
-- Permission to install software
+- Permission to install software, or `sudo` access
 - Node.js 20 or newer
 - Python 3.11 or newer with `venv`
 - One supported runtime that already starts from Terminal:
@@ -48,7 +48,7 @@ Linux package names vary by distro. The simplest safe path is:
 
 - Use your distro's normal software installer or package manager
 - If your distro only offers an older Node.js version, use the official Node.js downloads page linked below
-- If your distro's Python is too old, use your distro's newer package channel or a tool like `pyenv`
+- If your distro's Python is too old, use your distro's newer package channel or the official Python downloads page linked below
 
 Examples:
 
@@ -127,3 +127,4 @@ Use the exact command for your runtime:
 - Node.js: [Download Node.js](https://nodejs.org/en/download)
 - Python: [Python downloads](https://www.python.org/downloads/)
 - Python: [The `venv` module](https://docs.python.org/3/library/venv.html)
+- Ubuntu packages: [python3-venv](https://packages.ubuntu.com/search?keywords=python3-venv)
