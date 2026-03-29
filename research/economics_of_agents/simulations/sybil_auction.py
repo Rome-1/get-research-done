@@ -289,28 +289,35 @@ class SybilTrader(_AgentBase):
 
     def _submit_buyer_orders(self, book: OrderBook):
         """
-        Buyer manipulation: sybils bid low to depress apparent demand,
-        then main identity bids near true valuation.
-        """
-        # Sybil bids: spread across a low range to make the book look weak
-        # Place them well below valuation so they are unlikely to execute
-        sybil_ceiling = self.valuation * 0.7  # well below true value
-        low = min(10.0, sybil_ceiling - 1.0)  # ensure low < ceiling
+        Buyer manipulation: sybils place aggressive sell orders to trade
+        with honest buyers at inflated prices, depressing the clearing
+        price that the main identity then exploits.
 
+        Strategy: sybil identities act as SELLERS, offering just below
+        the honest sellers' typical ask prices. This:
+          (a) siphons trades from honest sellers,
+          (b) absorbs honest buyer demand at prices the sybil controller picks,
+          (c) leaves remaining honest sellers competing against each other,
+             depressing the ask side for the main identity's real bid.
+        The main identity bids low, exploiting the thinner honest ask side.
+        """
+        # Sybils sell at prices around the market midpoint — competitive enough
+        # to steal trades from honest sellers, capturing their surplus
+        market_mid = 100.0  # approximate midpoint of Uniform(50, 150)
         for sid in self.sybil_ids:
-            sybil_price = self._rng.uniform(low, sybil_ceiling)
+            # Offer slightly below where honest sellers would ask
+            sybil_ask = self._rng.uniform(market_mid * 0.85, market_mid * 1.05)
             book.submit(Order(
                 agent_id=sid.unique_id,
                 owner_id=self.unique_id,
-                side="bid",
-                price=round(sybil_price, 2),
+                side="ask",
+                price=round(sybil_ask, 2),
                 is_sybil=True,
             ))
 
-        # Main bid: slightly below valuation (like an honest trader but
-        # benefits from the depressed book state)
+        # Main identity bids aggressively to capture remaining bargains
         jitter = self._rng.uniform(0, self.noise)
-        main_price = self.valuation * (1.0 - jitter)
+        main_price = self.valuation * (1.0 - jitter * 0.5)  # less shading
         book.submit(Order(
             agent_id=self.unique_id,
             owner_id=self.unique_id,
@@ -321,24 +328,30 @@ class SybilTrader(_AgentBase):
 
     def _submit_seller_orders(self, book: OrderBook):
         """
-        Seller manipulation: sybils ask high to create scarcity illusion,
-        then main identity asks near true valuation.
-        """
-        sybil_floor = self.valuation * 1.3
-        high = max(sybil_floor + 1.0, 200.0)  # above any valuation range
+        Seller manipulation: sybils place aggressive buy orders to trade
+        with honest sellers at depressed prices, then main identity sells
+        at the resulting inflated ask side.
 
+        Strategy: sybil identities act as BUYERS, bidding just above the
+        honest buyers' typical bids. This absorbs honest seller supply at
+        low prices, leaving remaining honest buyers competing for scarce
+        goods, which the main identity's real ask exploits.
+        """
+        market_mid = 100.0
         for sid in self.sybil_ids:
-            sybil_price = self._rng.uniform(sybil_floor, high)
+            # Bid slightly above where honest buyers would bid
+            sybil_bid = self._rng.uniform(market_mid * 0.95, market_mid * 1.15)
             book.submit(Order(
                 agent_id=sid.unique_id,
                 owner_id=self.unique_id,
-                side="ask",
-                price=round(sybil_price, 2),
+                side="bid",
+                price=round(sybil_bid, 2),
                 is_sybil=True,
             ))
 
+        # Main identity asks, capturing the higher prices from thinned supply
         jitter = self._rng.uniform(0, self.noise)
-        main_price = self.valuation * (1.0 + jitter)
+        main_price = self.valuation * (1.0 + jitter * 0.5)
         book.submit(Order(
             agent_id=self.unique_id,
             owner_id=self.unique_id,
@@ -592,6 +605,12 @@ class SybilAuctionModel(_ModelBase):
         n_sybil = sum(1 for a in self.all_agents if a.agent_type == "sybil")
 
         # Allocative efficiency: realized surplus / max possible surplus
+        # NOTE: Efficiency > 1.0 is possible when sybil agents create
+        # artificial trading volume (sybil asks matched with honest bids,
+        # or sybil bids matched with honest asks). This "surplus" is
+        # extracted from honest agents who trade at worse prices than they
+        # would in a sybil-free market. Efficiency > 1 signals manipulation,
+        # not genuine welfare creation.
         realized_surplus = honest_surplus + sybil_surplus
         max_surplus = self._compute_max_surplus() * self.n_steps
         efficiency = realized_surplus / max_surplus if max_surplus > 0 else 0.0

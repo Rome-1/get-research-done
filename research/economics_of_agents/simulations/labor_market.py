@@ -70,6 +70,8 @@ class LaborMarket:
                  ai_marginal_cost: float = 5.0,
                  ai_quality_growth: float = 0.02,
                  ai_cost_decay: float = 0.98,
+                 ai_quality_ceiling: float = 0.85,
+                 new_task_rate: float = 0.02,
                  seed: int = 42):
         self.rng = np.random.default_rng(seed)
 
@@ -84,10 +86,14 @@ class LaborMarket:
         ]
 
         self.n_tasks_per_period = n_tasks_per_period
+        self.base_n_tasks = n_tasks_per_period
+        self.ai_quality_init = ai_quality
         self.ai_quality = ai_quality
         self.ai_marginal_cost = ai_marginal_cost
         self.ai_quality_growth = ai_quality_growth
         self.ai_cost_decay = ai_cost_decay
+        self.ai_quality_ceiling = ai_quality_ceiling  # AI doesn't reach 1.0
+        self.new_task_rate = new_task_rate  # fraction of new tasks created per period
 
         self.history: list[LaborMarketState] = []
 
@@ -110,13 +116,22 @@ class LaborMarket:
         return float((2 * np.sum(index * sorted_inc) / (n * np.sum(sorted_inc))) - (n + 1) / n)
 
     def _classify_phase(self, state: LaborMarketState) -> str:
-        """Classify the current market phase."""
-        if state.human_employment_rate > 0.8 and state.mean_human_wage > 4.0:
+        """Classify the current market phase using employment AND AI task share.
+
+        Complementary: AI does < 30% of tasks, employment > 70%
+        Substitution: AI does 30-70% of tasks, employment declining
+        Displacement: AI does > 70% of tasks, employment < 30%
+        """
+        total_tasks = state.ai_tasks_completed + state.human_tasks_completed
+        ai_share = state.ai_tasks_completed / total_tasks if total_tasks > 0 else 0
+        emp = state.human_employment_rate
+
+        if ai_share < 0.3 and emp > 0.7:
             return "complementary"
-        elif state.human_employment_rate > 0.4:
-            return "substitution"
-        else:
+        elif ai_share > 0.7 or emp < 0.3:
             return "displacement"
+        else:
+            return "substitution"
 
     def step(self, period: int) -> LaborMarketState:
         """Run one period of the labor market."""
@@ -210,9 +225,19 @@ class LaborMarket:
         state.phase = self._classify_phase(state)
         self.history.append(state)
 
-        # AI improves over time
-        self.ai_quality = min(1.0, self.ai_quality + self.ai_quality_growth)
+        # AI improves over time — sigmoid growth (fast in middle, slow at ceiling)
+        # q(t+1) = q(t) + growth * q(t) * (1 - q(t)/ceiling)  [logistic]
+        q = self.ai_quality
+        c = self.ai_quality_ceiling
+        self.ai_quality = q + self.ai_quality_growth * q * (1.0 - q / c)
+        self.ai_quality = min(c, max(0.01, self.ai_quality))
         self.ai_marginal_cost = max(0.01, self.ai_marginal_cost * self.ai_cost_decay)
+
+        # New task creation: AI-driven productivity creates new task categories
+        # that require human skills AI doesn't have (creativity, judgment, trust)
+        # These are high-skill tasks that grow the total task pool
+        new_tasks = int(self.base_n_tasks * self.new_task_rate)
+        self.n_tasks_per_period = self.base_n_tasks + new_tasks * period
 
         return state
 

@@ -65,59 +65,66 @@ def one_person_one_vote(preferences: list[VoterPreferences],
 def quadratic_voting(preferences: list[VoterPreferences],
                      attacker: SybilAttacker | None = None,
                      budget_per_voter: float = 100.0) -> float:
-    """Quadratic voting: cost of k votes = k^2 credits.
+    """Quadratic voting (Lalley & Weyl 2018).
 
-    Each voter allocates voice credits to shift outcome up or down.
-    Cost of moving the outcome by v is v^2 voice credits.
-    With sybils, the attacker's budget is split across identities,
-    but each identity gets a fresh budget — this is the vulnerability.
+    Each voter buys votes at quadratic cost: buying v votes costs v^2 credits.
+    Optimal strategy with budget B: buy sqrt(B) votes in your preferred direction.
+    Outcome = mean of reported preferences weighted by votes purchased.
+
+    Sybil vulnerability: with k identities, each gets budget B, so the attacker
+    buys k * sqrt(B) total votes instead of sqrt(k*B) — a factor of sqrt(k)
+    amplification. This is the linearization attack on QV.
     """
-    # Each honest voter uses their budget to vote for their ideal point
-    # Influence = sqrt(budget) in the direction of their preference
-    weighted_sum = 0.0
-    total_weight = 0.0
-
-    # The "status quo" is 50 (center of range)
-    status_quo = 50.0
+    # Each voter optimally buys sqrt(budget * intensity) votes
+    votes = []  # list of (direction, n_votes) pairs
 
     for pref in preferences:
-        direction = pref.ideal_point - status_quo
-        # Voter allocates budget proportional to intensity
-        # Influence = sqrt(allocated_credits) * sign(direction)
-        credits = min(budget_per_voter, budget_per_voter * pref.intensity)
-        influence = np.sqrt(credits) * np.sign(direction)
-        weighted_sum += influence
-        total_weight += np.sqrt(credits)
+        direction = pref.ideal_point  # vote for their ideal point directly
+        allocated = budget_per_voter * pref.intensity
+        n_votes = np.sqrt(allocated)  # optimal: buy sqrt(B) votes
+        votes.append((direction, n_votes))
 
     if attacker is not None:
         # Each sybil identity gets a fresh budget — this is the exploit
-        for _ in range(attacker.n_sybils + 1):  # +1 for the attacker's real identity
-            direction = attacker.ideal_point - status_quo
-            credits = budget_per_voter  # each sybil gets full budget
-            influence = np.sqrt(credits) * np.sign(direction)
-            weighted_sum += influence
-            total_weight += np.sqrt(credits)
+        # A single agent with budget k*B would buy sqrt(k*B) votes
+        # But k sybils each with B buy k*sqrt(B) votes — sqrt(k) amplification
+        n_identities = attacker.n_sybils + 1  # +1 for real identity
+        for _ in range(n_identities):
+            n_votes = np.sqrt(budget_per_voter)  # each gets full budget, max intensity
+            votes.append((attacker.ideal_point, n_votes))
 
-    if total_weight == 0:
-        return status_quo
+    if not votes:
+        return 50.0
 
-    # Outcome shifts from status quo proportional to net influence
-    shift = (weighted_sum / total_weight) * 50  # normalize to [0, 100] range
-    outcome = status_quo + shift
-    return float(np.clip(outcome, 0, 100))
+    # Outcome = weighted mean of vote directions
+    total_votes = sum(v for _, v in votes)
+    if total_votes == 0:
+        return 50.0
+    weighted_outcome = sum(d * v for d, v in votes) / total_votes
+    return float(np.clip(weighted_outcome, 0, 100))
 
 
 def conviction_voting(preferences: list[VoterPreferences],
                       attacker: SybilAttacker | None = None,
                       n_rounds: int = 50,
-                      decay: float = 0.9) -> float:
+                      decay: float = 0.9,
+                      sybil_arrival_round: int = 25) -> float:
     """Conviction voting: votes accumulate over time with decay.
 
     Voters continuously stake tokens on their preferred outcome.
-    Conviction = sum of staked tokens over time with exponential decay.
-    This provides some sybil resistance because conviction takes time to build.
+    Conviction_t = decay * Conviction_{t-1} + stake_t
+    At steady state, conviction = stake / (1 - decay).
+
+    Sybil resistance comes from two sources:
+    1. Time: new identities start at zero conviction and must build it up.
+       Honest voters who've been staking since round 0 have a head start.
+    2. Decay: conviction decays, so late arrivals have permanently lower
+       conviction than early stakers (until they've staked for many rounds).
+
+    We model sybils arriving at `sybil_arrival_round` to capture the late-entry
+    disadvantage. If sybils arrive at round 0, conviction voting offers no
+    advantage over one-person-one-vote for sybil resistance.
     """
-    # Discretize outcome space into bins
     n_bins = 21  # 0, 5, 10, ..., 100
     bins = np.linspace(0, 100, n_bins)
     convictions = np.zeros(n_bins)
@@ -129,16 +136,17 @@ def conviction_voting(preferences: list[VoterPreferences],
         honest_stakes[bin_idx] += pref.intensity
 
     sybil_stakes = np.zeros(n_bins)
+    sybil_bin_idx = None
     if attacker is not None:
-        # Sybils all stake on attacker's ideal
-        bin_idx = np.argmin(np.abs(bins - attacker.ideal_point))
-        # But conviction takes time to build — new identities start at 0
-        # Sybils created at round 0 still accumulate conviction
-        sybil_stakes[bin_idx] += (attacker.n_sybils + 1)
+        sybil_bin_idx = np.argmin(np.abs(bins - attacker.ideal_point))
+        sybil_stakes[sybil_bin_idx] += (attacker.n_sybils + 1)
 
     # Simulate conviction accumulation
-    for _ in range(n_rounds):
-        convictions = decay * convictions + honest_stakes + sybil_stakes
+    for r in range(n_rounds):
+        convictions = decay * convictions + honest_stakes
+        # Sybils only start staking after arrival round
+        if attacker is not None and r >= sybil_arrival_round:
+            convictions += sybil_stakes
 
     # Outcome = bin with highest conviction
     winner_idx = np.argmax(convictions)
