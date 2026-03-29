@@ -124,7 +124,7 @@
 - **Idena** — Synchronous AI-hard CAPTCHA ceremonies.
 - See [deep-dives/sybil-resistance-mechanisms.md](deep-dives/sybil-resistance-mechanisms.md) for analysis.
 
-## To Survey
-- Nisan, N. et al. — "Algorithmic Game Theory" textbook
-- Milgrom, P. — "Discovering Prices" (on auction design)
-- Recent 2024-2025 work on LLM-based agents in market/auction settings (more relevant than Q-learning results)
+## Future Literature Targets (tracked, not yet integrated)
+- Nisan, N. et al. — *Algorithmic Game Theory* textbook (comprehensive reference for computational mechanism design foundations)
+- Milgrom, P. — *Discovering Prices* (modern auction design, especially combinatorial auctions)
+- Recent 2024-2025 work on LLM-based agents in market/auction settings — more relevant than the Q-learning results that dominate the current collusion literature, as these use the same foundation model architectures identified in our taxonomy

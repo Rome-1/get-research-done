@@ -34,6 +34,8 @@
 
 **Setup:** 50 honest voters with preferences drawn over [0, 100], 1 sybil attacker (ideal point = 90.0), sybil counts from 0 to 100, identity costs swept 0.0-10.0, 50 replications per condition.
 
+**Implementation caveat (QV).** The Quadratic Voting results below use an equilibrium-play proxy: each voter buys sqrt(budget × intensity) votes, and the outcome is the vote-weighted mean of ideal points. This captures the sqrt(k) sybil amplification from budget splitting but does not model the strategic vote-buying choice that defines QV. Results should be interpreted as measuring QV's *structural* sybil vulnerability, not its full strategic properties. A proper QV implementation where agents choose vote quantities and face quadratic costs may show different resistance characteristics.
+
 ### Sybil Resistance Comparison (identity cost = 0.0)
 
 | Sybil Count | 1p1v Deviation | Quadratic Deviation | Conviction Deviation |
@@ -141,7 +143,7 @@
 
 ---
 
-## 4b. Collusion Bertrand Results (NEW — addresses Round 2 Gap 4)
+## 5. Collusion Bertrand Results
 
 **Setup:** Repeated Bertrand pricing game with Q-learning agents. N firms (2, 3, 5), homogeneous good, marginal cost = 1.0, monopoly price = 2.0, 15 price levels, 5000 learning periods, measurement over final 1000. Architectural correlation parameter rho ∈ [0, 1] controls Q-table initialization similarity.
 
