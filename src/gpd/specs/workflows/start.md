@@ -127,7 +127,6 @@ Other useful options, only if one of these is what you need:
 
 - Explain one concept - use `/gpd:explain`.
 - Show all commands - use `/gpd:help --all`.
-- Reopen a different GPD project - use `gpd resume --recent` in your normal terminal. This is a normal-terminal recovery command, not an in-runtime slash command.
 
 **This folder looks new or mostly empty**
 
@@ -141,7 +140,8 @@ Other useful options, only if one of these is what you need:
 
 - Explain one concept - use `/gpd:explain`.
 - Show all commands - use `/gpd:help --all`.
-- Reopen a different GPD project - use `gpd resume --recent` in your normal terminal.
+
+If you need to reopen a different GPD project, use `gpd resume --recent` in your normal terminal first. This is a normal-terminal recovery command, not an in-runtime slash command.
 
 Add one final sentence before asking for the choice:
 

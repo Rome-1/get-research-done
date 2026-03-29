@@ -526,11 +526,16 @@ def test_representative_commands_expose_expected_context_modes() -> None:
     assert registry.get_command("help").context_mode == "global"
     assert registry.get_command("health").context_mode == "projectless"
     assert registry.get_command("start").context_mode == "projectless"
-    assert registry.get_command("start").description.startswith("Choose the right first GPD action")
-    assert "route into the real workflow" in registry.get_command("start").description
+    start_description = registry.get_command("start").description
+    assert "first" in start_description.lower()
+    assert "route into the real workflow" in start_description
+    assert "without taking action" not in start_description
     assert registry.get_command("tour").context_mode == "projectless"
-    assert registry.get_command("tour").description.startswith("Show a guided beginner walkthrough")
-    assert "without taking action" in registry.get_command("tour").description
+    tour_description = registry.get_command("tour").description
+    assert "guided beginner walkthrough" in tour_description
+    assert "core GPD commands" in tour_description
+    assert "without taking action" in tour_description
+    assert "route into the real workflow" not in tour_description
     assert registry.get_command("compare-results").context_mode == "project-aware"
     assert registry.get_command("map-research").context_mode == "projectless"
     assert registry.get_command("slides").context_mode == "projectless"

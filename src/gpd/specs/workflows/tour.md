@@ -32,7 +32,8 @@ When you first use an official GPD term such as `runtime`, `read-only`, or
 Close the opening with one sentence that says this tour explains the common
 commands without executing them.
 
-Also add one short sentence near the opening:
+Also add one short sentence near the opening that frames a common first-pass
+path rather than a rigid requirement:
 
 `Most first-time users follow this order: help -> start -> tour -> new-project / map-research -> resume-work.`
 </step>
@@ -104,6 +105,10 @@ Include one example sentence for each:
 - `In your normal terminal, you install GPD and verify it.`
 - `Inside your runtime, you ask GPD what to do next.`
 - `Use \`gpd resume\` first if you need to reopen the project before using \`/gpd:resume-work\`.`
+
+If you want one slightly longer recovery reminder in the same section, use:
+
+- `If you need to reopen the project itself from your normal terminal, use \`gpd resume\` first and then \`/gpd:resume-work\` in the runtime.`
 </step>
 
 <step name="highlight_common_mistakes">
@@ -114,8 +119,6 @@ Call out beginner traps in a gentle, plain-English way:
   inspect it
 - Use `map-research` for an existing folder with papers, notes, or code, not an
   empty folder
-- Use `gpd resume` before `resume-work` when you first need to find or reopen
-  the right project from your normal terminal
 - Use `resume-work` only when the project already has GPD state
 - Use `settings` when you want to change autonomy, permissions, or runtime
   preferences after your first successful start or later, not `help` or
@@ -147,7 +150,6 @@ End with a short wrap-up that says:
 - `If you are still unsure, run /gpd:start.`
 - `If you want the reference list again later, run /gpd:help.`
 - `If you want to change permissions, autonomy, or runtime preferences after your first successful start or later, run \`/gpd:settings\`.`
-- `If you need to reopen the project itself from your normal terminal, use \`gpd resume\` first and then \`/gpd:resume-work\` in the runtime.`
 - `If you already know your path, use the matching command from the table
   above.`
 

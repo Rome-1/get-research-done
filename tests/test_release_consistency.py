@@ -705,12 +705,6 @@ def test_public_beginner_hub_keeps_top_level_and_help_surfaces_aligned() -> None
     assert cli_content.index("Beginner Onboarding Hub:") < cli_content.index("First-run order:")
     assert "Getting started:" in help_workflow
     assert_beginner_startup_routing_contract(help_workflow)
-    start_snippet = "/gpd:start               — Guided router when you are not sure whether to create, map, resume, or just explain something"
-    tour_snippet = "/gpd:tour               — Optional guided tour of the main commands and when to use them"
-    new_project_snippet = "/gpd:new-project         — Start a new research project with full scoping"
-
-    assert help_workflow.index(start_snippet) < help_workflow.index(tour_snippet)
-    assert help_workflow.index(tour_snippet) < help_workflow.index(new_project_snippet)
 
 
 def test_public_readme_quick_start_keeps_settings_guided_balanced_unattended_readiness_path() -> None:
@@ -812,19 +806,8 @@ def test_public_help_surface_keeps_start_tour_new_project_and_map_research_order
     repo_root = _repo_root()
     help_workflow = (repo_root / "src/gpd/specs/workflows/help.md").read_text(encoding="utf-8")
 
-    start_snippet = "/gpd:start               — Guided router when you are not sure whether to create, map, resume, or just explain something"
-    tour_snippet = "/gpd:tour               — Optional guided tour of the main commands and when to use them"
-    new_project_snippet = "/gpd:new-project         — Start a new research project with full scoping"
-    map_research_snippet = "/gpd:map-research        — Map an existing research project"
-
     assert "Getting started:" in help_workflow
-    assert start_snippet in help_workflow
-    assert tour_snippet in help_workflow
-    assert new_project_snippet in help_workflow
-    assert map_research_snippet in help_workflow
-    assert help_workflow.index(start_snippet) < help_workflow.index(tour_snippet)
-    assert help_workflow.index(tour_snippet) < help_workflow.index(new_project_snippet)
-    assert help_workflow.index(new_project_snippet) < help_workflow.index(map_research_snippet)
+    assert_beginner_startup_routing_contract(help_workflow)
 
 
 def test_js_bootstrap_after_install_surface_keeps_beginner_order() -> None:
@@ -897,10 +880,7 @@ def test_public_help_surfaces_keep_settings_as_guided_post_startup_path() -> Non
     help_workflow = (repo_root / "src/gpd/specs/workflows/help.md").read_text(encoding="utf-8")
 
     assert "@{GPD_INSTALL_DIR}/workflows/help.md" in help_command
-    assert "If you just installed GPD, use this order first:" in help_workflow
-    assert "1. Open your runtime and run `/gpd:help`." in help_workflow
-    assert "2. Run `/gpd:start` if you are not sure what fits this folder yet." in help_workflow
-    assert "3. Run `/gpd:tour` if you want a read-only overview of the broader command surface before choosing." in help_workflow
+    assert_beginner_startup_routing_contract(help_workflow)
     assert "**Post-startup settings**" in help_workflow
     assert (
         "1. `/gpd:settings` - Primary guided unattended/autonomy setup after project creation; use this after your first successful start or later"

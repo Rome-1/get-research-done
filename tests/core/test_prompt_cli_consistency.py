@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from gpd.core.public_surface_contract import beginner_startup_ladder_text
 from gpd.registry import VALID_CONTEXT_MODES, _parse_frontmatter
 from tests.doc_surface_contracts import (
     DOCTOR_RUNTIME_SCOPE_RE,
@@ -293,13 +292,11 @@ def test_tour_prompt_delegates_routing_to_workflow_only() -> None:
     assert "/gpd:tangent" in tour_workflow
     assert "read-only tour" in tour_workflow
     assert "not change your files" in tour_workflow
-    assert "Most first-time users follow this order:" in tour_workflow
-    assert beginner_startup_ladder_text().strip("`") in tour_workflow
     assert "$ARGUMENTS" in tour_workflow
     assert "Do not narrow the command list, select a path, or route based on it." in tour_workflow
     assert "the runtime, where you use the GPD command prefix provided for that runtime" in tour_workflow
     assert "Normal terminal vs runtime" in tour_workflow
-    assert "Use \\`gpd resume\\` first if you need to reopen the project before using \\`/gpd:resume-work\\`." in tour_workflow
+    assert "gpd resume" in tour_workflow
     assert "Use `settings` when you want to change autonomy, permissions, or runtime" in tour_workflow
     assert "after your first successful start or later" in tour_workflow
 

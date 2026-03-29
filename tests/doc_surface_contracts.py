@@ -51,6 +51,13 @@ def _assert_contains_any(content: str, fragments: Iterable[str], *, label: str) 
     assert any(fragment in content for fragment in options), f"expected {label}; wanted one of {options!r}"
 
 
+def _first_index_of_any(content: str, fragments: Iterable[str], *, label: str) -> int:
+    options = tuple(fragments)
+    positions = [content.index(fragment) for fragment in options if fragment in content]
+    assert positions, f"expected {label}; wanted one of {options!r}"
+    return min(positions)
+
+
 def assert_unattended_readiness_contract(content: str) -> None:
     assert UNATTENDED_READINESS_SURFACE in content
     assert PERMISSIONS_SYNC_SURFACE in content
@@ -132,70 +139,75 @@ def assert_execution_observability_surface_contract(content: str) -> None:
 
 def assert_beginner_startup_routing_contract(content: str) -> None:
     ladder = beginner_startup_ladder_text()
+    startup_markers = (
+        ladder,
+        ladder.strip("`"),
+        "If you just installed GPD, use this order first:",
+        "If you only remember one order, use this:",
+    )
+    help_fragments = (
+        "`help`",
+        "/gpd:help",
+        "$gpd-help",
+        "/gpd-help",
+        "run `help`",
+        "help command",
+    )
+    start_fragments = (
+        "`start`",
+        "/gpd:start",
+        "$gpd-start",
+        "/gpd-start",
+        "Run `start`",
+    )
+    tour_fragments = (
+        "`tour`",
+        "/gpd:tour",
+        "$gpd-tour",
+        "/gpd-tour",
+        "Run `tour`",
+    )
+    new_project_fragments = (
+        "`new-project --minimal`",
+        "/gpd:new-project --minimal",
+        "$gpd-new-project --minimal",
+        "/gpd-new-project --minimal",
+        "`new-project`",
+        "/gpd:new-project",
+    )
+    map_research_fragments = (
+        "`map-research`",
+        "/gpd:map-research",
+        "$gpd-map-research",
+        "/gpd-map-research",
+    )
+    resume_work_fragments = (
+        "`resume-work`",
+        "/gpd:resume-work",
+        "$gpd-resume-work",
+        "/gpd-resume-work",
+    )
+
     _assert_contains_any(
         content,
-        (
-            ladder,
-            ladder.strip("`"),
-            "If you just installed GPD, use this order first:",
-            "If you only remember one order, use this:",
-        ),
+        startup_markers,
         label="startup order surface",
     )
-    _assert_contains_any(
-        content,
-        (
-            "`start`",
-            "/gpd:start",
-            "$gpd-start",
-            "/gpd-start",
-            "Run `start`",
-        ),
-        label="start entry point",
-    )
-    _assert_contains_any(
-        content,
-        (
-            "`tour`",
-            "/gpd:tour",
-            "$gpd-tour",
-            "/gpd-tour",
-            "Run `tour`",
-        ),
-        label="tour entry point",
-    )
-    _assert_contains_any(
-        content,
-        (
-            "`new-project --minimal`",
-            "/gpd:new-project --minimal",
-            "$gpd-new-project --minimal",
-            "/gpd-new-project --minimal",
-            "`new-project`",
-            "/gpd:new-project",
-        ),
-        label="new-project entry point",
-    )
-    _assert_contains_any(
-        content,
-        (
-            "`map-research`",
-            "/gpd:map-research",
-            "$gpd-map-research",
-            "/gpd-map-research",
-        ),
-        label="map-research entry point",
-    )
-    _assert_contains_any(
-        content,
-        (
-            "`resume-work`",
-            "/gpd:resume-work",
-            "$gpd-resume-work",
-            "/gpd-resume-work",
-        ),
-        label="resume-work entry point",
-    )
+    startup_anchor = min(content.index(marker) for marker in startup_markers if marker in content)
+    startup_content = content[startup_anchor:]
+
+    help_index = _first_index_of_any(startup_content, help_fragments, label="help entry point")
+    start_index = _first_index_of_any(startup_content, start_fragments, label="start entry point")
+    tour_index = _first_index_of_any(startup_content, tour_fragments, label="tour entry point")
+    new_project_index = _first_index_of_any(startup_content, new_project_fragments, label="new-project entry point")
+    map_research_index = _first_index_of_any(startup_content, map_research_fragments, label="map-research entry point")
+    resume_work_index = _first_index_of_any(startup_content, resume_work_fragments, label="resume-work entry point")
+
+    assert help_index < start_index
+    assert start_index < tour_index
+    assert tour_index < new_project_index
+    assert tour_index < map_research_index
+    assert tour_index < resume_work_index
 
 
 def assert_recovery_ladder_contract(
