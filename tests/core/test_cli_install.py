@@ -24,7 +24,11 @@ from gpd.adapters import get_adapter
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.cli import _format_install_header_lines, _render_install_option_line, app
 from gpd.core.health import CheckStatus, DoctorReport, HealthCheck, HealthSummary
-from gpd.core.surface_phrases import post_start_settings_note, post_start_settings_recommendation, recovery_ladder_note
+from gpd.core.surface_phrases import recovery_ladder_note
+from tests.doc_surface_contracts import (
+    assert_install_summary_runtime_follow_up_contract,
+    assert_recovery_ladder_contract,
+)
 
 runner = CliRunner()
 _INSTALL_TEST_DESCRIPTORS = iter_runtime_descriptors()
@@ -40,10 +44,6 @@ _ENV_OVERRIDE_INSTALL_DESCRIPTOR = next(
         or descriptor.global_config.env_file_var
     )
 )
-_POST_START_SETTINGS_NOTE = post_start_settings_note()
-_POST_START_SETTINGS_RECOMMENDATION = post_start_settings_recommendation()
-
-
 def _descriptor_with_selection_alias_fragment(fragment: str):
     matches = [
         descriptor
@@ -157,20 +157,16 @@ def _assert_single_runtime_next_steps(
         rf"Start with {re.escape(adapter.new_project_command)} for a new project or "
         rf"{re.escape(adapter.map_research_command)} for existing work\. "
         rf"{re.escape(recovery_ladder_note(resume_work_phrase=f'`{resume_work_command}`', suggest_next_phrase=f'`{suggest_next_command}`', pause_work_phrase=f'`{pause_work_command}`'))}.*?"
-        rf"Fast bootstrap: use {re.escape(adapter.new_project_command)} --minimal.*?"
-        rf"Use gpd --help for local install, readiness, validation, permissions, observability, and diagnostics\..*?"
-        rf"Use {re.escape(adapter.help_command)} inside {re.escape(descriptor.display_name)} for workflow help\..*?"
-        rf"Verify or troubleshoot this machine with gpd doctor --runtime "
-        rf"{re.escape(descriptor.runtime_name)} --{re.escape(doctor_scope)}\..*?"
-        rf"{re.escape(_POST_START_SETTINGS_NOTE)} "
-        rf"{re.escape(_POST_START_SETTINGS_RECOMMENDATION)}.*?"
-        rf"If you plan to use paper/manuscript workflows, rerun "
-        rf"gpd doctor --runtime {re.escape(descriptor.runtime_name)} --{re.escape(doctor_scope)} "
-        rf"and check the `Workflow Presets` and `LaTeX Toolchain` rows before publication work\..*?"
-        r"Use `gpd presets list` to inspect the workflow preset (?:surface|catalog)",
+        rf"Fast bootstrap: use {re.escape(adapter.new_project_command)} --minimal",
         re.S,
     )
     assert pattern.search(output), output
+    assert_install_summary_runtime_follow_up_contract(
+        output,
+        runtime_help_fragments=(
+            f"Use {adapter.help_command} inside {descriptor.display_name} for workflow help.",
+        ),
+    )
 
 
 def _assert_multi_runtime_next_step_line(output: str, descriptor) -> None:
@@ -184,6 +180,30 @@ def _assert_multi_runtime_next_step_line(output: str, descriptor) -> None:
         rf"{re.escape(adapter.new_project_command)} --minimal",
     )
     assert pattern.search(output), output
+
+
+def _assert_install_summary_recovery_contract(
+    output: str,
+    *,
+    descriptor=_PRIMARY_INSTALL_DESCRIPTOR,
+    runtime_specific: bool = False,
+) -> None:
+    if runtime_specific:
+        resume_work_fragments = ("your runtime-specific `resume-work` command",)
+        suggest_next_fragments = ("your runtime-specific `suggest-next` command",)
+        pause_work_fragments = ("your runtime-specific `pause-work` command",)
+    else:
+        adapter = _install_adapter(descriptor)
+        resume_work_fragments = (f"`{adapter.format_command('resume-work')}`",)
+        suggest_next_fragments = (f"`{adapter.format_command('suggest-next')}`",)
+        pause_work_fragments = (f"`{adapter.format_command('pause-work')}`",)
+
+    assert_recovery_ladder_contract(
+        output,
+        resume_work_fragments=resume_work_fragments,
+        suggest_next_fragments=suggest_next_fragments,
+        pause_work_fragments=pause_work_fragments,
+    )
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -400,21 +420,7 @@ def test_install_summary_surfaces_help_then_new_or_existing_entry_points(tmp_pat
 
     assert result.exit_code == 0
     _assert_single_runtime_next_steps(result.output)
-    assert (
-        recovery_ladder_note(
-            resume_work_phrase=f"`{_install_adapter(_PRIMARY_INSTALL_DESCRIPTOR).format_command('resume-work')}`",
-            suggest_next_phrase=f"`{_install_adapter(_PRIMARY_INSTALL_DESCRIPTOR).format_command('suggest-next')}`",
-            pause_work_phrase=f"`{_install_adapter(_PRIMARY_INSTALL_DESCRIPTOR).format_command('pause-work')}`",
-        )
-    ) in result.output
-    assert (
-        f"{_POST_START_SETTINGS_NOTE} {_POST_START_SETTINGS_RECOMMENDATION}"
-    ) in result.output
-    assert (
-        f"If you plan to use paper/manuscript workflows, rerun "
-        f"gpd doctor --runtime {_PRIMARY_INSTALL_DESCRIPTOR.runtime_name} --local "
-        "and check the `Workflow Presets` and `LaTeX Toolchain` rows before publication work."
-    ) in result.output
+    _assert_install_summary_recovery_contract(result.output, descriptor=_PRIMARY_INSTALL_DESCRIPTOR)
 
 
 def test_install_summary_lists_runtime_specific_help_for_multi_runtime_install(tmp_path: Path):
@@ -452,22 +458,8 @@ def test_install_summary_lists_runtime_specific_help_for_multi_runtime_install(t
     for descriptor in descriptors:
         _assert_multi_runtime_next_step_line(result.output, descriptor)
     assert "1. From your system terminal" not in result.output
-    assert (
-        recovery_ladder_note(
-            resume_work_phrase="your runtime-specific `resume-work` command",
-            suggest_next_phrase="your runtime-specific `suggest-next` command",
-            pause_work_phrase="your runtime-specific `pause-work` command",
-        )
-    ) in result.output
-    assert (
-        f"{_POST_START_SETTINGS_NOTE} {_POST_START_SETTINGS_RECOMMENDATION}"
-    ) in result.output
-    assert (
-        "For paper/manuscript workflows, rerun gpd doctor --runtime <runtime> --local|--global "
-        "and check the `Workflow Presets` and `LaTeX Toolchain` rows before publication work."
-    ) in result.output
-    assert "Use gpd --help for local install, readiness, validation, permissions, observability, and diagnostics." in result.output
-    assert "Run gpd doctor --runtime <runtime> --local|--global for a focused readiness check." in result.output
+    _assert_install_summary_recovery_contract(result.output, runtime_specific=True)
+    assert_install_summary_runtime_follow_up_contract(result.output)
 
 
 def test_install_help_surfaces_interactive_batch_and_targeting_guidance() -> None:

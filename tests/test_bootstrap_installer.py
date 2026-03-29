@@ -18,6 +18,12 @@ from gpd.core.surface_phrases import (
     post_start_settings_recommendation,
     recovery_ladder_note,
 )
+from tests.doc_surface_contracts import (
+    assert_install_summary_runtime_follow_up_contract,
+    assert_optional_paper_workflow_guidance_contract,
+    assert_publication_toolchain_boundary_contract,
+    assert_recovery_ladder_contract,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_JSON = json.loads((REPO_ROOT / "package.json").read_text(encoding="utf-8"))
@@ -76,32 +82,47 @@ _RUNTIME_RECOVERY_LADDER_TEMPLATE = (
 
 
 def _assert_single_runtime_next_steps(output: str, runtime: str) -> None:
-    recovery_note = recovery_ladder_note(
-        resume_work_phrase=f"`{_RUNTIME_RESUME_WORK_COMMANDS[runtime]}`",
-        suggest_next_phrase=f"`{_RUNTIME_SUGGEST_NEXT_COMMANDS[runtime]}`",
-        pause_work_phrase=f"`{_RUNTIME_ADAPTERS[runtime].format_command('pause-work')}`",
+    ordered_patterns = (
+        re.escape("Next steps"),
+        re.escape(
+            f"1. Open {_RUNTIME_DISPLAY_NAMES[runtime]} from your system terminal ({_RUNTIME_LAUNCH_COMMANDS[runtime]})."
+        ),
+        re.escape(f"2. Run {_RUNTIME_HELP_COMMANDS[runtime]} for the command list."),
+        re.escape(
+            "3. If you're not sure what fits this folder yet, run "
+            f"{_RUNTIME_START_COMMANDS[runtime]}. If you want a guided walkthrough first, run "
+            f"{_RUNTIME_TOUR_COMMANDS[runtime]}."
+        ),
+        re.escape(
+            "4. Start with "
+            f"{_RUNTIME_NEW_PROJECT_COMMANDS[runtime]} for a new project or "
+            f"{_RUNTIME_MAP_RESEARCH_COMMANDS[runtime]} for existing work."
+        ),
+        re.escape(
+            f"Fast bootstrap: use {_RUNTIME_NEW_PROJECT_COMMANDS[runtime]} --minimal for the shortest onboarding path."
+        ),
+        re.escape("5. "),
+        rf"6\. Verify or troubleshoot this machine with gpd doctor --runtime {re.escape(runtime)} --(?:local|global)\.",
+        re.escape("7. "),
+        re.escape("8. "),
+        re.escape("9. Use `gpd presets list` to inspect the workflow preset surface:"),
     )
-    pattern = re.compile(
-        rf"Next steps.*?"
-        rf"Open .*?{re.escape(_RUNTIME_DISPLAY_NAMES[runtime])}.*?{re.escape(_RUNTIME_LAUNCH_COMMANDS[runtime])}.*?"
-        rf"Run {re.escape(_RUNTIME_HELP_COMMANDS[runtime])} for the command list\..*?"
-        rf"If you're not sure what fits this folder yet, run {re.escape(_RUNTIME_START_COMMANDS[runtime])}\. "
-        rf"If you want a guided walkthrough first, run {re.escape(_RUNTIME_TOUR_COMMANDS[runtime])}\..*?"
-        rf"Start with {re.escape(_RUNTIME_NEW_PROJECT_COMMANDS[runtime])} for a new project or "
-        rf"{re.escape(_RUNTIME_MAP_RESEARCH_COMMANDS[runtime])} for existing work\. "
-        rf"{re.escape(recovery_note)}.*?"
-        rf"Fast bootstrap: use {re.escape(_RUNTIME_NEW_PROJECT_COMMANDS[runtime])} --minimal.*?"
-        rf"Use gpd --help for local install, readiness, validation, permissions, observability, and diagnostics\..*?"
-        rf"Use {re.escape(_RUNTIME_HELP_COMMANDS[runtime])} inside {re.escape(_RUNTIME_DISPLAY_NAMES[runtime])} for workflow help\..*?"
-        rf"Verify or troubleshoot this machine with gpd doctor --runtime {re.escape(runtime)} --(?:local|global)\..*?"
-        rf"{re.escape(_POST_START_SETTINGS_NOTE)} "
-        rf"{re.escape(_POST_START_SETTINGS_RECOMMENDATION)}.*?"
-        rf"If you plan to use paper/manuscript workflows, rerun gpd doctor --runtime {re.escape(runtime)} --(?:local|global) "
-        rf"and check the `Workflow Presets` and `LaTeX Toolchain` rows before publication work\..*?"
-        rf"Use `gpd presets list` to inspect the workflow preset surface:",
-        re.S,
+    cursor = 0
+    for pattern in ordered_patterns:
+        match = re.search(pattern, output[cursor:], re.S)
+        assert match, output
+        cursor += match.end()
+
+    _assert_install_summary_semantic_contract(
+        output,
+        runtime_help_fragments=(
+            f"Run {_RUNTIME_HELP_COMMANDS[runtime]} for the command list.",
+            f"Use {_RUNTIME_HELP_COMMANDS[runtime]} inside {_RUNTIME_DISPLAY_NAMES[runtime]} for workflow help.",
+        ),
+        resume_work_fragments=(f"`{_RUNTIME_RESUME_WORK_COMMANDS[runtime]}`",),
+        suggest_next_fragments=(f"`{_RUNTIME_SUGGEST_NEXT_COMMANDS[runtime]}`",),
+        pause_work_fragments=(f"`{_RUNTIME_PAUSE_WORK_COMMANDS[runtime]}`",),
     )
-    assert pattern.search(output), output
 
 
 def _assert_multi_runtime_next_steps_line(output: str, runtime: str) -> None:
@@ -116,6 +137,25 @@ def _assert_multi_runtime_next_steps_line(output: str, runtime: str) -> None:
         rf"{re.escape(_RUNTIME_NEW_PROJECT_COMMANDS[runtime])} --minimal",
         )
     assert pattern.search(output), output
+
+
+def _assert_install_summary_semantic_contract(
+    output: str,
+    *,
+    runtime_help_fragments: tuple[str, ...],
+    resume_work_fragments: tuple[str, ...],
+    suggest_next_fragments: tuple[str, ...],
+    pause_work_fragments: tuple[str, ...],
+) -> None:
+    assert_recovery_ladder_contract(
+        output,
+        resume_work_fragments=resume_work_fragments,
+        suggest_next_fragments=suggest_next_fragments,
+        pause_work_fragments=pause_work_fragments,
+    )
+    assert_install_summary_runtime_follow_up_contract(output, runtime_help_fragments=runtime_help_fragments)
+    assert_optional_paper_workflow_guidance_contract(output)
+    assert_publication_toolchain_boundary_contract(output)
 
 
 def test_version_consistency():
@@ -661,18 +701,11 @@ def test_bootstrap_uses_managed_virtualenv_and_skips_host_pip(tmp_path: Path) ->
     assert f"{_RUNTIME_DISPLAY_NAMES[_CODEX_RUNTIME_NAME]}: launcher/target preflight passed" in result.stdout
     assert "GPD does not verify provider credentials automatically" in result.stdout
     assert f"`gpd doctor --runtime {_CODEX_RUNTIME_NAME} --local`" in result.stdout
-    assert (
-        "Workflow presets: if you plan paper/manuscript workflows, rerun "
-        f"`gpd doctor --runtime {_CODEX_RUNTIME_NAME} --local` after install and check whether "
-        "`Workflow Presets` is `ready` or `degraded`. Without LaTeX, the paper/manuscript and full research presets remain usable for "
-        "`write-paper` and `peer-review`, but `paper-build` and `arxiv-submission` require the `LaTeX Toolchain`."
-    ) in result.stdout
     assert "Install Summary" in result.stdout
     assert "Beginner Onboarding Hub:" in result.stdout
     assert _BEGINNER_ONBOARDING_HUB_URL in result.stdout
     _assert_single_runtime_next_steps(result.stdout, _CODEX_RUNTIME_NAME)
     assert "Recommended unattended default: Balanced autonomy (`balanced`)." in result.stdout
-    assert _POST_START_SETTINGS_RECOMMENDATION in result.stdout
     assert f"Installing GPD for {_RUNTIME_DISPLAY_NAMES[_CODEX_RUNTIME_NAME]} (local)..." not in result.stdout
     assert f"Installed GPD for {_RUNTIME_DISPLAY_NAMES[_CODEX_RUNTIME_NAME]} (local)." not in result.stdout
 
@@ -1245,16 +1278,15 @@ def test_bootstrap_supports_all_runtime_install_in_one_pass(tmp_path: Path) -> N
     assert "Next steps" in result.stdout
     assert "Beginner Onboarding Hub:" in result.stdout
     assert _BEGINNER_ONBOARDING_HUB_URL in result.stdout
-    assert (
-        "Workflow presets: if you plan paper/manuscript workflows, rerun "
-        + ", ".join(f"`gpd doctor --runtime {runtime} --global`" for runtime in _RUNTIME_NAMES)
-        + " after install and check whether `Workflow Presets` is `ready` or `degraded`. "
-        + "Without LaTeX, the paper/manuscript and full research presets remain usable for `write-paper` and `peer-review`, but `paper-build` and "
-        + "`arxiv-submission` require the `LaTeX Toolchain`."
-    ) in result.stdout
     for runtime in _RUNTIME_NAMES:
         _assert_multi_runtime_next_steps_line(result.stdout, runtime)
-    assert "Use gpd --help for local install, readiness, validation, permissions, observability, and diagnostics." in result.stdout
+    _assert_install_summary_semantic_contract(
+        result.stdout,
+        runtime_help_fragments=tuple(f"{_RUNTIME_HELP_COMMANDS[runtime]}, then" for runtime in _RUNTIME_NAMES),
+        resume_work_fragments=("your runtime-specific `resume-work` command",),
+        suggest_next_fragments=("your runtime-specific `suggest-next` command",),
+        pause_work_fragments=("your runtime-specific `pause-work` command",),
+    )
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")

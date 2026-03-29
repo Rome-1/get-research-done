@@ -14,6 +14,14 @@ from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.contracts import ResearchContract, VerificationEvidence
 from gpd.core.frontmatter import validate_frontmatter
 from gpd.registry import _parse_frontmatter, _parse_tools
+from tests.doc_surface_contracts import (
+    assert_cost_surface_discoverability,
+    assert_execution_observability_surface_contract,
+    assert_recovery_ladder_contract,
+    assert_runtime_readiness_handoff_contract,
+)
+
+
 @pytest.fixture(autouse=True)
 def _clean_registry_cache():
     """Ensure fresh registry cache for each test."""
@@ -1990,11 +1998,8 @@ def test_execution_observability_and_resume_workflow_surfaces_stay_conservative_
 
     assert "Display GPD help by delegating to the workflow-owned help surface." in help_command
     assert "@{GPD_INSTALL_DIR}/workflows/help.md" in help_command
-    assert "gpd observe execution" in help_workflow
-    assert "progress / waiting state" in help_workflow
-    assert "possibly stalled" in help_workflow
-    assert "read-only checks" in help_workflow
-    assert "gpd cost" in help_workflow
+    assert_execution_observability_surface_contract(help_workflow)
+    assert_cost_surface_discoverability(help_workflow)
     assert "Start at `# GPD Command Reference`." in help_command
     assert "When STATE.md appears out of sync with disk reality" in progress
     assert "advisory context only" in resume_work
@@ -2021,11 +2026,12 @@ def test_pause_resume_and_help_wiring_keep_runtime_handoff_and_local_snapshot_bo
     assert "gpd resume --recent" in pause_work
     assert "This is the canonical pause/resume handoff for the current phase." in pause_work
     assert "context handoff" in pause_work or "session continuity" in pause_work
-    assert "/gpd:resume-work" in help_workflow
-    assert "/gpd:pause-work" in help_workflow
-    assert "/gpd:suggest-next" in help_workflow
-    assert "current-workspace read-only recovery snapshot" in help_workflow
-    assert "gpd resume" in help_workflow
+    assert_recovery_ladder_contract(
+        help_workflow,
+        resume_work_fragments=("/gpd:resume-work",),
+        suggest_next_fragments=("/gpd:suggest-next",),
+        pause_work_fragments=("/gpd:pause-work",),
+    )
     assert "gpd observe execution" in help_workflow
     assert "suggested read-only checks rather than runtime hotkeys" in help_workflow
 
@@ -2245,10 +2251,8 @@ def test_help_surfaces_distinguish_runtime_slash_commands_from_local_cli_subcomm
     assert "slash-command" in help_workflow
     assert "local `gpd` CLI" in help_workflow
     assert "gpd --help" in help_workflow
-    assert "gpd permissions sync --runtime <runtime> --autonomy balanced" in help_workflow
     assert "install/readiness/permissions/diagnostics surface directly" in help_workflow
-    assert "`gpd doctor` checks the selected install target and runtime-local readiness signals." in help_workflow
-    assert "`gpd permissions ...` checks runtime-owned approval/alignment only." in help_workflow
+    assert_runtime_readiness_handoff_contract(help_workflow)
     assert "gpd validate command-context gpd:<name>" in help_workflow
     assert "gpd observe execution" in help_workflow
 

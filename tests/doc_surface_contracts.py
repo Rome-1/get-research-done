@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 import re
 
+from gpd.core.surface_phrases import post_start_settings_note, post_start_settings_recommendation
+
 DOCTOR_RUNTIME_SCOPE_RE = re.compile(r"gpd doctor --runtime <runtime> --local\|--global")
 UNATTENDED_READINESS_SURFACE = "gpd validate unattended-readiness"
 PERMISSIONS_SYNC_SURFACE = "gpd permissions sync --runtime <runtime> --autonomy balanced"
@@ -30,6 +32,8 @@ __all__ = [
     "_assert_unattended_readiness_surface",
     "_assert_wolfram_plan_boundary",
     "assert_cost_advisory_contract",
+    "assert_execution_observability_surface_contract",
+    "assert_install_summary_runtime_follow_up_contract",
     "assert_shared_preset_surface_contract",
     "assert_unattended_readiness_boundary",
     "assert_unattended_readiness_contract",
@@ -99,6 +103,27 @@ def assert_cost_surface_discoverability(content: str) -> None:
             "recorded local usage/cost",
         ),
         label="machine-local usage/cost surface",
+    )
+
+
+def assert_execution_observability_surface_contract(content: str) -> None:
+    assert "gpd observe execution" in content
+    _assert_contains_any(
+        content,
+        (
+            "progress / waiting state",
+            "progress/waiting state",
+        ),
+        label="execution progress/waiting wording",
+    )
+    assert "possibly stalled" in content
+    _assert_contains_any(
+        content,
+        (
+            "read-only checks",
+            "suggested read-only checks",
+        ),
+        label="read-only execution checks wording",
     )
 
 
@@ -188,6 +213,65 @@ def assert_runtime_readiness_handoff_contract(content: str) -> None:
     )
 
 
+def assert_install_summary_runtime_follow_up_contract(
+    content: str,
+    *,
+    runtime_help_fragments: Iterable[str] = (),
+) -> None:
+    assert "gpd --help" in content
+    _assert_contains_any(
+        content,
+        (
+            "local install, readiness, validation, permissions, observability, and diagnostics",
+            "local install/readiness/permissions/diagnostics surface directly",
+            "local CLI for install, readiness checks, permissions, observability, validation, and diagnostics",
+        ),
+        label="local CLI install/readiness follow-up surface",
+    )
+    help_fragments = tuple(fragment for fragment in runtime_help_fragments if fragment)
+    if help_fragments:
+        _assert_contains_any(content, help_fragments, label="runtime help follow-up surface")
+    assert "gpd doctor" in content
+    _assert_contains_any(
+        content,
+        (
+            "Verify or troubleshoot this machine",
+            "focused readiness check",
+            "gpd doctor --runtime",
+        ),
+        label="doctor follow-up surface",
+    )
+    assert post_start_settings_note() in content
+    assert post_start_settings_recommendation() in content
+    _assert_contains_any(
+        content,
+        (
+            "paper/manuscript workflows",
+            "Paper/manuscript workflows",
+        ),
+        label="paper/manuscript workflow follow-up",
+    )
+    assert "Workflow Presets" in content
+    assert "LaTeX Toolchain" in content
+    _assert_contains_any(
+        content,
+        (
+            "before publication work",
+            "check whether `Workflow Presets` is `ready` or `degraded`",
+        ),
+        label="publication workflow follow-up timing",
+    )
+    assert "gpd presets list" in content
+    _assert_contains_any(
+        content,
+        (
+            "workflow preset surface",
+            "workflow preset catalog",
+        ),
+        label="workflow preset follow-up",
+    )
+
+
 def assert_optional_paper_workflow_guidance_contract(content: str) -> None:
     _assert_contains_any(
         content,
@@ -218,7 +302,6 @@ def assert_optional_paper_workflow_guidance_contract(content: str) -> None:
         ),
         label="optional paper workflow degradation guidance",
     )
-
 
 def assert_publication_toolchain_boundary_contract(content: str) -> None:
     _assert_contains_any(
