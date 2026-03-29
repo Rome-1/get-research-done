@@ -30,15 +30,15 @@ image = (
     )
 )
 
-# Volume for outputs
-vol = modal.Volume.from_name("manifold-pipeline-outputs", create_if_missing=True)
+# Shared research volume — our data lives under /root/data/manifold-pipeline/
+vol = modal.Volume.from_name("research")
 
 
 @app.function(
     image=image,
     gpu="T4",  # T4 is cheapest, sufficient for GPT-2 Small
     timeout=3600,
-    volumes={"/outputs": vol},
+    volumes={"/root/data": vol},
 )
 def run_pipeline(synthetic: bool = False, n_tokens: int = 2000):
     """Run the manifold detection pipeline on Modal GPU."""
@@ -49,7 +49,7 @@ def run_pipeline(synthetic: bool = False, n_tokens: int = 2000):
     from research.manifold_pipeline.run_pipeline import run_synthetic, run_gpt2
     from pathlib import Path
 
-    output_dir = Path("/outputs/run")
+    output_dir = Path("/root/data/manifold-pipeline/outputs")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     config = PipelineConfig(
@@ -75,7 +75,7 @@ def run_pipeline(synthetic: bool = False, n_tokens: int = 2000):
     image=image,
     gpu="T4",
     timeout=1800,
-    volumes={"/outputs": vol},
+    volumes={"/root/data": vol},
 )
 def run_synthetic_validation():
     """Quick synthetic validation on GPU."""
@@ -109,5 +109,5 @@ def main(
 
     # Download outputs
     print("\nDownloading outputs from Modal Volume...")
-    # Note: use `modal volume get manifold-pipeline-outputs /run ./outputs` to download
-    print("Run: modal volume get manifold-pipeline-outputs /run research/manifold_pipeline/outputs/")
+    # Note: use `modal volume get research /manifold-pipeline/outputs ./outputs` to download
+    print("Run: modal volume get research /manifold-pipeline/outputs research/manifold_pipeline/outputs/")
