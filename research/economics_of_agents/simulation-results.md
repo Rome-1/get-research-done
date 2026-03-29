@@ -138,3 +138,42 @@
 **Supports the inequality prediction:** The Gini coefficient nearly quadrupling (0.151 to 0.565) with Q4-Q5 wages perfectly insulated while Q1-Q2 go to zero confirms the extreme polarization predicted by the taxonomy. This is not standard technological unemployment -- it is a binary employed/displaced partition determined entirely by skill level relative to AI capability.
 
 **Challenges the taxonomy in one respect:** The taxonomy frames this as a "wage collapse singularity," but the simulation shows a *floor* rather than a singularity. Once displacement equilibrium is reached (at AI cost = 5.0), further cost reductions produce no additional damage. The collapse is severe but bounded -- roughly half the workforce is displaced, not all of it, because tasks requiring skills above the AI quality ceiling remain human-dominated.
+
+---
+
+## 4b. Collusion Bertrand Results (NEW — addresses Round 2 Gap 4)
+
+**Setup:** Repeated Bertrand pricing game with Q-learning agents. N firms (2, 3, 5), homogeneous good, marginal cost = 1.0, monopoly price = 2.0, 15 price levels, 5000 learning periods, measurement over final 1000. Architectural correlation parameter rho ∈ [0, 1] controls Q-table initialization similarity.
+
+### Price Index by Correlation and Firm Count
+
+Price Index = (mean_price - marginal_cost) / (monopoly_price - marginal_cost). 0 = competitive, 1 = monopoly.
+
+| rho | N=2 | N=3 | N=5 |
+|:---:|:---:|:---:|:---:|
+| 0.0 | 0.491 | 0.425 | 0.409 |
+| 0.2 | 0.487 | 0.456 | 0.398 |
+| 0.5 | 0.489 | 0.470 | 0.421 |
+| 0.8 | 0.487 | 0.481 | 0.372 |
+| 0.9 | 0.484 | 0.473 | 0.344 |
+| **1.0** | **0.727** | **0.699** | **0.717** |
+
+### Key Findings
+
+**Phase transition at rho=1.0.** The most striking result is the sharp discontinuity at full architectural identity. For rho < 1.0, price indices cluster around 0.40-0.49 regardless of correlation level — agents with even slight independence settle near midpoint pricing. At rho = 1.0 (identical Q-tables and exploration), prices jump to ~0.72 — a 48% increase toward monopoly pricing. This is not gradual: the transition from rho=0.9 to rho=1.0 accounts for more price increase than the entire 0.0-to-0.9 range.
+
+**Collusion emerges without communication.** At rho=1.0, agents sustain supra-competitive pricing (PI > 0.7) for the entire measurement window despite having no shared state, no communication channel, and no explicit coordination mechanism. This directly confirms the Calvano et al. (2020) result under controlled conditions. The agents collude because their identical learning dynamics find the same basin of attraction in the strategy space.
+
+**N does not prevent collusion at rho=1.0.** Standard Bertrand theory predicts that more firms drive prices toward marginal cost. This holds for rho < 1.0 (PI decreases from ~0.49 to ~0.40 as N increases from 2 to 5). But at rho=1.0, the price index is ~0.72 regardless of N — identical architecture overrides competitive pressure from additional firms.
+
+**Punishment behavior exists but is weak.** After forced deviations, competitors lower prices 10-70% of the time, but the magnitude is small (-0.01 to -0.07). This is weaker punishment than Calvano et al. report, possibly due to our simpler Q-learning setup (tabular, no eligibility traces).
+
+**The policy implication is stark.** Architectural monoculture — not the number of competitors — is the primary determinant of collusive outcomes. Antitrust policy focused on market concentration (number of firms) is insufficient when the firms use identical AI pricing agents. The relevant metric is architectural diversity, not market share.
+
+### Theory Alignment — Taxonomy Claims on Algorithmic Collusion
+
+**Strongly supports the taxonomy's collusion-without-communication claim.** The simulation demonstrates that shared architecture produces supra-competitive pricing without any communication or coordination. The mechanism is exactly as described: correlated learning dynamics find the same equilibrium.
+
+**Partially supports the interaction-effects Collusion x Sybil analysis.** While this simulation does not include sybils, the rho=1.0 result shows that a single principal deploying identical agents would achieve the highest collusive pricing. Combined with the sybil auction results showing rent extraction, the interaction compound is empirically grounded.
+
+**Adds nuance to the Calvano et al. caveat.** The taxonomy (post-revision) notes that Calvano results may not generalize. Our results confirm the core finding (collusion emerges from shared architecture) but show that even slight architectural diversity (rho=0.9) is enough to prevent it. This suggests the concern about "a small number of foundation model families" is more nuanced than a binary: collusion requires near-identity, not just similarity.

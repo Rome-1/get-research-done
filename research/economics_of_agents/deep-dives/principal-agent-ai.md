@@ -117,7 +117,19 @@ Third, regulatory mechanisms face the compounded information asymmetry of the hi
 
 ---
 
-## 7. Conclusion and Research Agenda
+## 7. The Multi-Principal Problem
+
+The analysis above assumes bilateral principal-agent relationships. But AI agents increasingly serve multiple principals simultaneously, introducing common agency problems (Bernheim and Whinston 1986).
+
+**Shared AI services.** When a single AI platform processes requests from competing firms — a cloud API that handles pricing queries from rivals, a market-making agent that serves multiple brokers — the agent faces conflicting objectives from multiple principals. The standard bilateral P-A framework breaks down because the agent's action on behalf of principal A affects principal B's payoff, and vice versa. Bernheim and Whinston (1986) show that common agency generates equilibria with significant inefficiency: each principal offers contracts that account for the other principals' influence, leading to distortions that pure bilateral contracting avoids.
+
+**AI agents as common agents.** The common agency problem is especially acute for AI agents because: (a) the same model weights serve all principals, creating a structural channel through which one principal's fine-tuning or prompt engineering affects another's service quality; (b) the platform that hosts the agent has its own objective (revenue, data collection) that is distinct from any principal's; and (c) the agent may learn patterns from one principal's data that benefit or harm another — an information externality with no clean contractual solution.
+
+**Implications.** The multi-principal dimension means that AI deployment is not just a bilateral alignment problem between each deployer and their agent. It is a market design problem about how shared AI infrastructure mediates between competing interests. This connects to the platform economics literature and suggests that the governance of multi-principal AI services — who controls the agent, whose objectives take priority when they conflict, how information barriers are maintained — is a first-order question for economic analysis.
+
+---
+
+## 8. Conclusion and Research Agenda
 
 The principal-agent framework, far from being made obsolete by AI agents, becomes more relevant than ever — but in a transformed form. The key insight is that AI agents shift the locus of strategic behavior from the agent to the principal. The agent becomes a tool, and the principal-agent problem moves up one level in the hierarchy: the relevant alignment problem is not between the principal and the agent, but between the mechanism (or society) and the principal who wields the agent.
 
@@ -132,6 +144,7 @@ The principal-agent lens does not replace the sybil, collusion, and labor market
 - Acemoglu, D. and Restrepo, P. (2019). Automation and new tasks: How technology displaces and reinstates labor. *Journal of Economic Perspectives*, 33(2), 3-30.
 - Agrawal, A., Gans, J., and Goldfarb, A. (2018). *Prediction Machines: The Simple Economics of Artificial Intelligence*. Harvard Business Review Press.
 - Akerlof, G. (1970). The market for "lemons": Quality uncertainty and the market mechanism. *Quarterly Journal of Economics*, 84(3), 488-500.
+- Bernheim, B.D. and Whinston, M.D. (1986). Common agency. *Econometrica*, 54(4), 923-942.
 - Bergemann, D. and Morris, S. (2005). Robust mechanism design. *Econometrica*, 73(6), 1771-1813.
 - Grossman, S.J. and Hart, O.D. (1983). An analysis of the principal-agent problem. *Econometrica*, 51(1), 7-45.
 - Hart, O. and Moore, J. (1990). Property rights and the nature of the firm. *Journal of Political Economy*, 98(6), 1119-1158.

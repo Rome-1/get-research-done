@@ -104,7 +104,27 @@ The implications for market structure and business models are severe and specifi
 
 **Recommendation systems and curated feeds become irrelevant.** Netflix's recommendation algorithm, Spotify's Discover Weekly, Amazon's "customers also bought" — these systems exist to reduce search costs for humans with limited attention. They are attention allocation mechanisms. An AI agent acting on behalf of a user does not need Netflix to recommend movies; it can evaluate every movie in every catalog against the user's preferences directly. The curation layer that platforms provide as a value-added service becomes redundant, removing a key source of platform differentiation and switching costs.
 
-### 2.4 The Attention Paradox: Scarcity Inverted
+### 2.4 When This Holds and When It Breaks
+
+The analysis above describes a limiting case. The actual trajectory depends on conditions that may or may not materialize, and several important caveats apply.
+
+**When the analysis holds:** The attention economy transformation is robust for commodity purchasing (standardized goods with objectively comparable specifications), price-sensitive services (insurance, utilities, financial products), and information-intensive decisions (medical, legal, financial research). In these domains, AI agents genuinely eliminate the search cost and attention constraints that current business models exploit.
+
+**When it breaks down:**
+
+1. **Subjective preferences resist algorithmic delegation.** Many purchasing decisions involve aesthetic, emotional, or identity-expressive dimensions that humans may not want to delegate. Fashion, art, food, home décor — these are domains where the shopping experience is partly constitutive of the consumption experience. A principal who tells their AI agent "buy me clothes I'll like" faces a preference specification problem that may be harder than the search problem the agent solves. In these domains, human attention remains in the loop and advertising retains its mechanism of action.
+
+2. **Brand-as-quality-signal persists for experience goods.** For goods whose quality cannot be assessed before purchase (restaurants, entertainment, professional services), brand reputation serves as a credible quality signal even for AI agents. An AI agent optimizing on user satisfaction may rationally prefer established brands as a hedge against unverifiable quality claims. This preserves some marketing value, though the mechanism shifts from emotional persuasion to information provision.
+
+3. **The transition period may last decades.** AI-mediated purchasing requires both capable agents and user trust in delegation. Behavioral economics suggests humans are slow to delegate decisions they perceive as identity-relevant. The coexistence of human and AI purchasing may be the dominant regime for a generation, during which advertising retains value for the human segment.
+
+4. **Principals may instruct AI agents to value brands.** If a human tells their AI agent "I prefer Nike," the brand preference persists through the AI intermediary. Advertising may shift from persuading consumers directly to influencing the preference specifications that principals encode in their agents. The attention economy does not disappear — it migrates from runtime persuasion to specification-time influence.
+
+5. **Regulatory friction.** Jurisdictions may require human-in-the-loop for certain purchasing decisions (financial products, healthcare, real estate), limiting the scope of AI-mediated transactions.
+
+**Net assessment:** The attention economy transformation is likely strongest in commodity and information-intensive markets, weakest in experiential and identity-expressive markets, and gradual everywhere. Claims that "the advertising-funded platform model collapses" should be read as describing the endpoint of a trend, not an imminent event. The speed and completeness of the transition are empirical questions that depend on AI agent capability, user adoption, and regulatory response.
+
+### 2.5 The Attention Paradox: Scarcity Inverted
 
 The transformation described above eliminates attention scarcity for economic transactions that can be delegated to AI agents. But it simultaneously intensifies the scarcity of a different resource: irreducibly human attention.
 

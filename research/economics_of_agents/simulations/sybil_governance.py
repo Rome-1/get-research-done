@@ -65,11 +65,19 @@ def one_person_one_vote(preferences: list[VoterPreferences],
 def quadratic_voting(preferences: list[VoterPreferences],
                      attacker: SybilAttacker | None = None,
                      budget_per_voter: float = 100.0) -> float:
-    """Quadratic voting (Lalley & Weyl 2018).
+    """Quadratic voting over a continuous outcome space (Lalley & Weyl 2018).
 
     Each voter buys votes at quadratic cost: buying v votes costs v^2 credits.
-    Optimal strategy with budget B: buy sqrt(B) votes in your preferred direction.
-    Outcome = mean of reported preferences weighted by votes purchased.
+    Optimal strategy with budget B and intensity i: buy sqrt(B*i) votes.
+    Outcome = weighted mean of ideal points, weighted by votes purchased.
+
+    Implementation note: This assumes all voters play the equilibrium strategy
+    (buy sqrt(budget * intensity) votes). The strategic dimension — choosing
+    how many votes to buy — is collapsed to the optimal-play solution. This is
+    appropriate for measuring sybil robustness (the mechanism's structural
+    vulnerability) but does not model strategic vote-buying deviations.
+    A fuller implementation would let agents choose vote quantities and
+    face the quadratic cost explicitly.
 
     Sybil vulnerability: with k identities, each gets budget B, so the attacker
     buys k * sqrt(B) total votes instead of sqrt(k*B) — a factor of sqrt(k)

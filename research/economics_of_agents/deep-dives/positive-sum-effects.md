@@ -107,7 +107,7 @@ AI agents also create entirely new tasks. The history of automation is a history
 
 The labor market gains are positive-sum when: (a) the rate of new task creation exceeds or matches the rate of task displacement; (b) displaced workers can retrain for new tasks within a timeframe shorter than their savings runway; (c) the complementarity between human and AI labor is strong enough to increase the marginal product of remaining human tasks; and (d) the labor market institutions (education, credentialing, safety nets) adapt at roughly the speed of technological change.
 
-Condition (c) is empirically supported in the current period. Noy and Zhang (2023) find that AI assistance disproportionately benefits lower-skill workers by raising their performance to near the level of higher-skill workers. This is a positive-sum effect: the productivity distribution compresses upward rather than shifting downward.
+Condition (c) has preliminary empirical support. Noy and Zhang (2023) find that AI assistance disproportionately benefits lower-skill workers in a writing task experiment, raising their performance to near the level of higher-skill workers. This is suggestive of a positive-sum complementarity effect. However, this is a single study of one task type (writing) with one tool (ChatGPT), and generalizing to labor market dynamics broadly is premature. Whether the complementarity holds across diverse cognitive tasks, manual labor, and different AI architectures remains an open empirical question. The result should be treated as preliminary evidence of a plausible positive mechanism, not as an established labor market regularity.
 
 ### When it breaks down
 
