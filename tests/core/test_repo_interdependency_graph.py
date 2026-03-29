@@ -22,6 +22,7 @@ from scripts.repo_graph_contract import (
     SCOPE_START,
     expected_scope_counts,
     extract_marked_block,
+    graph_has_edge,
     live_repo_file_count,
     load_contract,
     parse_scope_count,
@@ -93,44 +94,68 @@ def test_graph_same_stem_command_workflow_inventory_matches_tree() -> None:
 
 def test_graph_captures_hook_runtime_wiring_edges() -> None:
     graph = read_graph_text()
-    expected_edges = [
-        "`src/gpd/hooks/statusline.py -> src/gpd/hooks/runtime_detect.py`",
-        "`src/gpd/hooks/statusline.py -> src/gpd/adapters/__init__.py`",
-        "`src/gpd/hooks/check_update.py -> src/gpd/hooks/runtime_detect.py`",
-        "`src/gpd/hooks/notify.py -> src/gpd/hooks/check_update.py`",
-        "`src/gpd/hooks/notify.py -> src/gpd/hooks/runtime_detect.py`",
-    ]
-
-    unexpected_edges = [
-        "`src/gpd/hooks/notify.py -> src/gpd/adapters/__init__.py`",
-    ]
-
-    for edge in expected_edges:
-        assert edge in graph
-
-    for edge in unexpected_edges:
-        assert edge not in graph
+    assert graph_has_edge("src/gpd/hooks/statusline.py", "src/gpd/hooks/runtime_detect.py", graph)
+    assert graph_has_edge("src/gpd/hooks/statusline.py", "src/gpd/adapters/__init__.py", graph)
+    assert graph_has_edge("src/gpd/hooks/check_update.py", "src/gpd/hooks/runtime_detect.py", graph)
+    assert graph_has_edge("src/gpd/hooks/notify.py", "src/gpd/hooks/check_update.py", graph)
+    assert graph_has_edge("src/gpd/hooks/notify.py", "src/gpd/hooks/runtime_detect.py", graph)
+    assert not graph_has_edge("src/gpd/hooks/notify.py", "src/gpd/adapters/__init__.py", graph)
 
 
 def test_graph_captures_checkpoint_feature_edges() -> None:
     graph = read_graph_text()
-    expected_edges = [
-        "`src/gpd/cli.py::sync_phase_checkpoints -> src/gpd/core/checkpoints.py::sync_phase_checkpoints`",
-        "`src/gpd/core/phases.py -> src/gpd/core/checkpoints.py::sync_phase_checkpoints`",
-        "`src/gpd/core/state.py -> <cwd>/GPD/.state-write-intent`",
-        "`src/gpd/core/checkpoints.py -> generated outputs {GPD/CHECKPOINTS.md, GPD/phase-checkpoints/*.md}`",
-        "`src/gpd/core/checkpoints.py -> <cwd>/GPD/CHECKPOINTS.md`",
-        "`src/gpd/core/checkpoints.py -> <cwd>/GPD/phase-checkpoints/*.md`",
-    ]
-    unexpected_edges = [
-        "`src/gpd/core/state.py -> src/gpd/core/checkpoints.py::sync_phase_checkpoints`",
-    ]
+    assert graph_has_edge("src/gpd/cli.py::sync_phase_checkpoints", "src/gpd/core/checkpoints.py::sync_phase_checkpoints", graph)
+    assert graph_has_edge("src/gpd/core/phases.py", "src/gpd/core/checkpoints.py::sync_phase_checkpoints", graph)
+    assert graph_has_edge("src/gpd/core/state.py", "<cwd>/GPD/.state-write-intent", graph)
+    assert graph_has_edge("src/gpd/core/checkpoints.py", "generated outputs {GPD/CHECKPOINTS.md, GPD/phase-checkpoints/*.md}", graph)
+    assert graph_has_edge("src/gpd/core/checkpoints.py", "<cwd>/GPD/CHECKPOINTS.md", graph)
+    assert graph_has_edge("src/gpd/core/checkpoints.py", "<cwd>/GPD/phase-checkpoints/*.md", graph)
+    assert not graph_has_edge("src/gpd/core/state.py", "src/gpd/core/checkpoints.py::sync_phase_checkpoints", graph)
 
-    for edge in expected_edges:
-        assert edge in graph
 
-    for edge in unexpected_edges:
-        assert edge not in graph
+def test_graph_captures_execute_phase_artifact_surfacing_edges() -> None:
+    graph = read_graph_text()
+
+    assert graph_has_edge(
+        "src/gpd/specs/workflows/execute-phase.md",
+        "src/gpd/specs/{references/orchestration/meta-orchestration.md,references/orchestration/artifact-surfacing.md,",
+        graph,
+    )
+    assert not graph_has_edge(
+        "src/gpd/specs/workflows/execute-phase.md",
+        "src/gpd/specs/{references/orchestration/meta-orchestration.md,references/orchestration/checkpoints.md,",
+        graph,
+    )
+
+
+def test_graph_captures_execute_plan_github_lifecycle_edge() -> None:
+    graph = read_graph_text()
+
+    assert graph_has_edge(
+        "src/gpd/specs/workflows/execute-plan.md",
+        "src/gpd/specs/{references/execution/git-integration.md,references/execution/github-lifecycle.md,",
+        graph,
+    )
+
+
+def test_graph_captures_staged_review_panel_wiring() -> None:
+    graph = read_graph_text()
+
+    assert graph_has_edge(
+        "src/gpd/commands/peer-review.md",
+        "src/gpd/agents/{gpd-review-reader,gpd-review-literature,gpd-review-math,gpd-review-physics,gpd-review-significance,gpd-referee}.md",
+        graph,
+    )
+    assert graph_has_edge(
+        "src/gpd/specs/workflows/peer-review.md",
+        "src/gpd/agents/{gpd-review-reader,gpd-review-literature,gpd-review-math,gpd-review-physics,gpd-review-significance,gpd-referee}.md",
+        graph,
+    )
+    assert graph_has_edge(
+        "src/gpd/agents/{gpd-review-reader,gpd-review-literature,gpd-review-math,gpd-review-physics,gpd-review-significance,gpd-referee}.md",
+        "src/gpd/specs/references/publication/peer-review-panel.md",
+        graph,
+    )
 
 
 def test_graph_test_file_references_exist() -> None:

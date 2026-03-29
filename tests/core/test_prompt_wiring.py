@@ -31,7 +31,6 @@ AGENTS_DIR = REPO_ROOT / "src/gpd/agents"
 REFERENCES_DIR = REPO_ROOT / "src/gpd/specs/references"
 FIXTURES_STAGE0 = REPO_ROOT / "tests" / "fixtures" / "stage0"
 FIXTURES_STAGE4 = REPO_ROOT / "tests" / "fixtures" / "stage4"
-GRAPH_PATH = REPO_ROOT / "tests" / "README.md"
 WORKFLOW_EXEMPT_COMMANDS = frozenset({"health", "suggest-next"})
 
 COMMAND_SPAWN_TOKENS = {
@@ -2387,31 +2386,3 @@ def test_verification_and_publication_prompts_keep_decisive_contract_targets_rea
     assert "Do not enter `pre_submission_review` with a missing or non-review-ready reproducibility manifest" in write_paper
     assert "Review-support artifacts are scaffolding, not substitutes for contract-backed evidence." in peer_review
     assert "Treat referee requests beyond the manuscript's honest scope as optional unless they expose a real support gap" in respond
-
-
-def test_repo_graph_tracks_staged_review_panel_wiring() -> None:
-    graph_text = GRAPH_PATH.read_text(encoding="utf-8")
-    review_agents = [
-        "gpd-review-reader",
-        "gpd-review-literature",
-        "gpd-review-math",
-        "gpd-review-physics",
-        "gpd-review-significance",
-    ]
-
-    for agent_name in review_agents:
-        assert agent_name in graph_text, f"Tests README graph is missing {agent_name}"
-
-    assert (
-        "src/gpd/commands/peer-review.md -> src/gpd/agents/"
-        "{gpd-review-reader,gpd-review-literature,gpd-review-math,gpd-review-physics,gpd-review-significance,gpd-referee}.md"
-    ) in graph_text
-    assert (
-        "src/gpd/specs/workflows/peer-review.md -> src/gpd/agents/"
-        "{gpd-review-reader,gpd-review-literature,gpd-review-math,gpd-review-physics,gpd-review-significance,gpd-referee}.md"
-    ) in graph_text
-    assert (
-        "src/gpd/agents/{gpd-review-reader,gpd-review-literature,gpd-review-math,"
-        "gpd-review-physics,gpd-review-significance,gpd-referee}.md"
-        " -> src/gpd/specs/references/publication/peer-review-panel.md"
-    ) in graph_text

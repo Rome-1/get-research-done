@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from functools import lru_cache
@@ -78,6 +79,52 @@ def read_graph_text() -> str:
 
 def load_contract() -> dict[str, object]:
     return json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+
+
+_GRAPH_EDGE_RE = re.compile(r"^- `([^`\n]+?) -> ([^`\n]+?)`$", re.MULTILINE)
+
+
+def iter_graph_edges(graph_text: str | None = None) -> tuple[str, ...]:
+    text = graph_text if graph_text is not None else read_graph_text()
+    return tuple(
+        f"{match.group(1)} -> {match.group(2)}"
+        for match in _GRAPH_EDGE_RE.finditer(text)
+    )
+
+
+def iter_graph_edge_specs(graph_text: str | None = None) -> tuple[tuple[str, str], ...]:
+    text = graph_text if graph_text is not None else read_graph_text()
+    return tuple((match.group(1), match.group(2)) for match in _GRAPH_EDGE_RE.finditer(text))
+
+
+@lru_cache(maxsize=None)
+def _expand_braced_edge_endpoint(endpoint: str) -> tuple[str, ...]:
+    match = re.search(r"\{([^{}]+)\}", endpoint)
+    if match is None:
+        return (endpoint,)
+
+    prefix = endpoint[: match.start()]
+    suffix = endpoint[match.end() :]
+    expansions: list[str] = []
+    for option in (item.strip() for item in match.group(1).split(",")):
+        if not option:
+            continue
+        for expanded_suffix in _expand_braced_edge_endpoint(suffix):
+            expansions.append(f"{prefix}{option}{expanded_suffix}")
+    return tuple(expansions)
+
+
+def _edge_endpoint_matches(expected: str, rendered: str) -> bool:
+    if expected == rendered or expected in rendered:
+        return True
+    return expected in _expand_braced_edge_endpoint(rendered)
+
+
+def graph_has_edge(source: str, target: str, graph_text: str | None = None) -> bool:
+    for rendered_source, rendered_target in iter_graph_edge_specs(graph_text):
+        if _edge_endpoint_matches(source, rendered_source) and _edge_endpoint_matches(target, rendered_target):
+            return True
+    return False
 
 
 def _is_excluded_path(path: Path) -> bool:
