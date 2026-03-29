@@ -12,21 +12,12 @@ from unittest.mock import patch
 import pytest
 
 import gpd.hooks.notify as notify_module
-from gpd.adapters.install_utils import build_runtime_install_repair_command
 from gpd.core.constants import ProjectLayout
 from gpd.core.costs import usage_ledger_path
 from gpd.hooks.notify import _check_and_notify_update, _emit_execution_notification, _hook_payload_policy, main
 from gpd.hooks.runtime_detect import update_command_for_runtime
 from tests.hooks.helpers import mark_complete_install as _mark_complete_install
-
-
-def _repair_command(runtime: str, *, install_scope: str, target_dir: Path, explicit_target: bool) -> str:
-    return build_runtime_install_repair_command(
-        runtime,
-        install_scope=install_scope,
-        target_dir=target_dir,
-        explicit_target=explicit_target,
-    )
+from tests.hooks.helpers import repair_command as _repair_command
 
 
 def _write_current_execution(workspace: Path, payload: dict[str, object]) -> None:

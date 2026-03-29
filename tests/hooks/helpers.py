@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from gpd.adapters import get_adapter
+from gpd.adapters.install_utils import build_runtime_install_repair_command
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
@@ -79,3 +80,13 @@ def mark_complete_install(config_dir: Path, *, runtime: str | None = None, insta
             manifest["codex_skills_dir"] = str(config_dir.parent / ".agents" / "skills")
             manifest["codex_generated_skill_dirs"] = ["gpd-help"]
     (config_dir / "gpd-file-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def repair_command(runtime: str, *, install_scope: str, target_dir: Path, explicit_target: bool) -> str:
+    """Build the expected runtime-specific repair command for hook tests."""
+    return build_runtime_install_repair_command(
+        runtime,
+        install_scope=install_scope,
+        target_dir=target_dir,
+        explicit_target=explicit_target,
+    )

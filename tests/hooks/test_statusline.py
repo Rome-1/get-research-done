@@ -15,7 +15,6 @@ from unittest.mock import patch
 
 import pytest
 
-from gpd.adapters.install_utils import build_runtime_install_repair_command
 from gpd.hooks.runtime_detect import TodoCandidate, update_command_for_runtime
 from gpd.hooks.statusline import (
     _check_update,
@@ -29,15 +28,7 @@ from gpd.hooks.statusline import (
     main,
 )
 from tests.hooks.helpers import mark_complete_install as _mark_complete_install
-
-
-def _repair_command(runtime: str, *, install_scope: str, target_dir: Path, explicit_target: bool) -> str:
-    return build_runtime_install_repair_command(
-        runtime,
-        install_scope=install_scope,
-        target_dir=target_dir,
-        explicit_target=explicit_target,
-    )
+from tests.hooks.helpers import repair_command as _repair_command
 
 
 def _todo_candidates(*paths: Path) -> list[TodoCandidate]:
