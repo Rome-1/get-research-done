@@ -7,19 +7,19 @@ In these docs, "runtime" means the AI terminal app you talk to.
 ## What you need first
 
 - A Linux machine with internet access
-- Permission to install software, or `sudo` access
+- Permission to install software
 - Node.js 20 or newer
 - Python 3.11 or newer with `venv`
-- One supported runtime that already starts from Terminal:
+- One supported runtime that already starts from your terminal:
   Claude Code, Codex, Gemini CLI, or OpenCode
 
 ## Open a terminal
 
-Use whichever method is easiest on your Linux desktop:
+Use whichever option matches your desktop:
 
-- Search your applications for `Terminal`
-- On many Linux desktops, press `Ctrl` + `Alt` + `T`
-- If you work on a remote Linux machine, open the shell you normally use there
+- On Ubuntu and many GNOME-based desktops, press `Ctrl` + `Alt` + `T`
+- Or open your app launcher, type `Terminal`, and press `Enter`
+- If you already see a shell prompt, you are in the right place
 
 ## Check Node and Python
 
@@ -39,33 +39,32 @@ You want:
 - Python `3.11` or newer
 - `python3 -m venv --help` to print help text instead of an error
 
-If Python is present but `python3 -m venv --help` fails, your distro may be missing the `venv` package.
-On Debian or Ubuntu, that is usually fixed with `python3-venv`.
-
 ## Install or update missing tools
 
-Linux package names vary by distro. The simplest safe path is:
+Linux distributions vary more than macOS or Windows, so the safest path is:
 
-- Use your distro's normal software installer or package manager
-- If your distro only offers an older Node.js version, use the official Node.js downloads page linked below
-- If your distro's Python is too old, use your distro's newer package channel or the official Python downloads page linked below
+- Use the official Node.js download or package-manager docs linked below if `node --version` is missing or older than `v20`
+- Use your Linux distribution's package manager for Python if `python3` is missing or older than `3.11`
 
-Examples:
-
-- Debian or Ubuntu:
+If `python3 -m venv --help` fails on Debian or Ubuntu, install the missing `venv` package:
 
 ```bash
 sudo apt update
-sudo apt install nodejs npm python3 python3-venv
+sudo apt install python3-venv
 ```
 
-- Fedora:
+If you are on Fedora and `python3` is missing, a common install command is:
 
 ```bash
-sudo dnf install nodejs npm python3
+sudo dnf install python3
 ```
 
-After installing, close Terminal, open it again, and rerun the version checks.
+After installing anything, open a new terminal and rerun the version checks.
+
+## Linux-specific notes
+
+- Linux package names differ by distribution. If one command here does not match your distro, use the official docs linked below, then come back to the version checks.
+- Claude Code's official docs list Ubuntu 20.04+, Debian 10+, and Alpine Linux 3.19+ as supported. If you use Alpine or another musl-based distro, read Anthropic's Linux install notes before continuing.
 
 ## Make sure your runtime works
 
@@ -86,7 +85,6 @@ Then use the matching runtime guide:
 ## Install GPD
 
 Most beginners should install GPD into one runtime at a time and use `--local`.
-That means you should run the install command from inside the folder where you want this research project to live.
 
 | Runtime | Install command |
 |---------|-----------------|
@@ -123,8 +121,8 @@ Use the exact command for your runtime:
 
 ## Official docs
 
-- Ubuntu: [The Linux command line for beginners](https://documentation.ubuntu.com/desktop/en/latest/tutorial/the-linux-command-line-for-beginners/)
+- Ubuntu: [Package management](https://ubuntu.com/server/docs/package-management/)
 - Node.js: [Download Node.js](https://nodejs.org/en/download)
-- Python: [Python downloads](https://www.python.org/downloads/)
-- Python: [The `venv` module](https://docs.python.org/3/library/venv.html)
-- Ubuntu packages: [python3-venv](https://packages.ubuntu.com/search?keywords=python3-venv)
+- Node.js: [Node.js package-manager guidance](https://nodejs.org/en/download/package-manager)
+- Python: [`venv` documentation](https://docs.python.org/3/library/venv.html)
+- Anthropic: [Claude Code getting started](https://code.claude.com/docs/en/getting-started)
