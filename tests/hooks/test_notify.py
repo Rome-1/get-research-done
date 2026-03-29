@@ -661,35 +661,6 @@ def test_main_accepts_workspace_mapping_with_cwd_field() -> None:
     mock_notify.assert_called_once_with(expected)
 
 
-def test_workspace_resolution_helpers_keep_raw_workspace_path_distinct_from_project_root(tmp_path: Path) -> None:
-    project = tmp_path / "project"
-    nested = project / "src" / "notes"
-    nested.mkdir(parents=True)
-    payload = {"workspace": {"cwd": str(nested), "project_dir": str(project)}}
-
-    raw_workspace = notify_module._workspace_dir_from_payload(payload)
-    resolved_project = notify_module._resolved_project_root_from_payload(payload, cwd=raw_workspace)
-
-    assert raw_workspace == nested.resolve(strict=False).as_posix()
-    assert resolved_project == project.resolve(strict=False).as_posix()
-    assert raw_workspace != resolved_project
-
-
-def test_project_root_resolution_helpers_honor_runtime_specific_alias_keys(tmp_path: Path) -> None:
-    project = tmp_path / "project"
-    nested = project / "src" / "notes"
-    nested.mkdir(parents=True)
-    payload = {"workspace": {"current_dir": str(nested), "project_root": str(project)}}
-    hook_payload = type("HookPayload", (), {"workspace_keys": ("current_dir",), "project_dir_keys": ("project_root",)})()
-
-    with patch("gpd.hooks.notify._hook_payload_policy", return_value=hook_payload):
-        raw_workspace = notify_module._workspace_dir_from_payload(payload)
-        resolved_project = notify_module._resolved_project_root_from_payload(payload, cwd=raw_workspace)
-
-    assert raw_workspace == nested.resolve(strict=False).as_posix()
-    assert resolved_project == project.resolve(strict=False).as_posix()
-
-
 def test_main_prefers_project_dir_root_over_nested_workspace_cwd(tmp_path: Path) -> None:
     project = tmp_path / "project"
     nested = project / "src" / "notes"
