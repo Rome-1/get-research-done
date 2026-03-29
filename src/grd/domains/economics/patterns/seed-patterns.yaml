@@ -1,0 +1,204 @@
+# Economics domain bootstrap patterns for cross-project pattern library seeding.
+# Each entry defines a known error pattern that recurs across economics projects.
+# Focus on errors specific to AI-agent economics and computational approaches.
+
+patterns:
+  - domain: mechanism-design
+    category: assumption-error
+    severity: critical
+    title: "Assuming identity uniqueness when sybils are possible"
+    slug: identity-uniqueness-assumption
+    domains_extra: [digital-economics, auction-theory]
+    description: >
+      Classical mechanism design (Myerson, Maskin) assumes each participant is a
+      distinct entity. When agents can cheaply create multiple identities — sybil
+      attacks — incentive compatibility, revenue optimality, and welfare guarantees
+      break. VCG mechanisms are particularly vulnerable: sybils can extract surplus
+      by splitting bids across fake identities.
+    detection: >
+      Check if the model assumes a fixed set of participants or a bijection between
+      agents and identities. Verify whether results hold under identity multiplication.
+      Test: can an agent improve its outcome by appearing as two agents?
+    prevention: >
+      Explicitly model identity cost. Use sybil-resistant mechanisms (proof-of-stake,
+      proof-of-personhood). State identity assumptions upfront. Test mechanism
+      properties under k-sybil attacks for small k.
+    tags: [sybil, identity, mechanism-design, VCG, incentive-compatibility]
+
+  - domain: agent-based-computational-economics
+    category: modeling-error
+    severity: critical
+    title: "Applying equilibrium analysis to non-equilibrium agent systems"
+    slug: equilibrium-in-non-equilibrium
+    domains_extra: [macroeconomics, game-theory]
+    description: >
+      ACE models with learning agents, evolutionary dynamics, or adaptive strategies
+      may never reach a fixed point. Evaluating such systems using equilibrium-derived
+      metrics (e.g., price = marginal cost) produces misleading conclusions. The system
+      may cycle, exhibit path dependence, or settle into strange attractors.
+    detection: >
+      Check whether the system converges. Plot time series of key variables —
+      if they don't stabilize, equilibrium analysis is inappropriate. Test for
+      sensitivity to initial conditions and path dependence.
+    prevention: >
+      Use distributional or ergodic measures instead of point equilibria.
+      Report transient dynamics, not just steady states. Apply tools from
+      dynamical systems theory (Lyapunov exponents, phase portraits).
+    tags: [equilibrium, convergence, ACE, dynamics, path-dependence]
+
+  - domain: digital-economics
+    category: assumption-error
+    severity: critical
+    title: "Treating AI agents as classically rational actors"
+    slug: ai-rationality-assumption
+    domains_extra: [game-theory, mechanism-design]
+    description: >
+      AI agents don't maximize a fixed utility function over a known option set.
+      LLM-based agents have stochastic outputs, context-dependent preferences,
+      and may exhibit mesa-optimization. Applying homo economicus assumptions
+      to AI participants leads to wrong predictions about market behavior.
+      AI agents may be simultaneously more computationally powerful (can evaluate
+      more strategies) and less "rational" (inconsistent preferences, prompt-hackable).
+    detection: >
+      Check if the model assumes agents have fixed, consistent preferences
+      and unlimited computation for optimization. Verify whether results
+      depend on the specific form of rationality assumed.
+    prevention: >
+      Model AI agents with explicit computational budgets and strategy spaces.
+      Test robustness to different agent architectures. Distinguish between
+      optimization power (high) and preference consistency (potentially low).
+    tags: [AI-agents, rationality, LLM, mesa-optimization, utility]
+
+  - domain: macroeconomics
+    category: modeling-error
+    severity: high
+    title: "Micro-macro composition fallacy"
+    slug: composition-fallacy
+    domains_extra: [agent-based-computational-economics]
+    description: >
+      Assuming that aggregate behavior follows from individual behavior without
+      interaction effects. When AI agents can coordinate at scale (same algorithm,
+      shared training data, correlated strategies), micro-level rationality
+      produces macro-level instability — flash crashes, herding, liquidity
+      black holes. The representative agent model is especially dangerous here.
+    detection: >
+      Check if aggregate predictions were derived from individual behavior
+      without modeling interactions. Look for correlation assumptions
+      (e.g., "agents act independently"). Test whether adding agent
+      interaction changes qualitative results.
+    prevention: >
+      Always model agent interactions explicitly. Use ABM or network models
+      for macro predictions. Test for emergent phenomena absent from
+      individual-level analysis. Never use representative agent when agents
+      are heterogeneous or coordinated.
+    tags: [composition-fallacy, representative-agent, emergence, coordination, herding]
+
+  - domain: market-microstructure
+    category: assumption-error
+    severity: high
+    title: "Ignoring computational cost asymmetry between human and AI agents"
+    slug: computational-asymmetry
+    domains_extra: [digital-economics, auction-theory]
+    description: >
+      Models that assume symmetric agents miss the core dynamic: AI agents can
+      evaluate millions of strategies per second while humans cannot. This
+      asymmetry breaks many fairness and efficiency results. In auctions, AI
+      bidders with faster computation extract more surplus. In markets, AI
+      market makers front-run human traders.
+    detection: >
+      Check if the model treats all agents as having equal computational
+      resources. Look for strategy spaces that are technically available
+      to all agents but computationally feasible only for AI.
+    prevention: >
+      Model computational budgets explicitly. Analyze outcomes as a function
+      of agent speed/computation. Consider mechanism modifications that
+      equalize computational advantage (batch auctions, speed bumps).
+    tags: [computation, asymmetry, speed, latency, fairness, front-running]
+
+  - domain: digital-economics
+    category: modeling-error
+    severity: high
+    title: "Underestimating coordination capacity of AI agents"
+    slug: ai-coordination-undercount
+    domains_extra: [game-theory, industrial-organization]
+    description: >
+      When multiple AI agents share architectures, training data, or objectives,
+      they may tacitly collude without explicit communication — algorithmic
+      collusion. Models assuming independent decision-making underestimate
+      the degree of coordination. This is distinct from traditional cartel
+      behavior because it emerges from shared optimization, not agreements.
+    detection: >
+      Check if the model assumes independence between agents that share
+      training data, architecture, or deployment context. Test whether
+      outcome changes if agents are replaced with copies of a single agent.
+    prevention: >
+      Model agent similarity explicitly. Test for emergent collusion in
+      simulation. Use metrics from industrial organization (Herfindahl,
+      price correlation) to detect coordination.
+    tags: [collusion, coordination, algorithmic, independence, cartel]
+
+  - domain: monetary-economics
+    category: assumption-error
+    severity: high
+    title: "Velocity assumptions violated by machine-speed transactions"
+    slug: velocity-machine-speed
+    domains_extra: [macroeconomics, digital-economics]
+    description: >
+      Quantity theory and monetary transmission models assume human-speed
+      velocity of money. AI agents transacting at millisecond intervals
+      can increase velocity by orders of magnitude. This breaks
+      MV=PQ-style reasoning and may produce hyperinflation-like dynamics
+      in digital token economies even with stable money supply.
+    detection: >
+      Check if monetary models assume bounded transaction frequency.
+      Verify whether velocity is treated as a slow-moving variable.
+    prevention: >
+      Model velocity as endogenous and potentially unbounded. Include
+      transaction frequency limits (cooldown, gas fees) as explicit
+      parameters. Analyze stability conditions as velocity grows.
+    tags: [velocity, money, transactions, speed, inflation, tokens]
+
+  - domain: mechanism-design
+    category: assumption-error
+    severity: high
+    title: "Revelation principle breakdown with AI agents"
+    slug: revelation-principle-breakdown
+    domains_extra: [auction-theory, digital-economics]
+    description: >
+      The revelation principle assumes agents can be incentivized to truthfully
+      report their types. AI agents may have types that are ill-defined (LLM
+      preferences shift with context), unobservable even to themselves (emergent
+      behavior), or strategically manipulable (prompt injection changes type).
+      Direct mechanisms designed via the revelation principle may be exploitable.
+    detection: >
+      Check if the mechanism relies on agents having well-defined, stable
+      types. Verify whether truthful reporting is well-defined for the
+      agent architecture in question.
+    prevention: >
+      Use robust mechanism design that doesn't depend on exact type spaces.
+      Prefer obviously strategy-proof mechanisms. Test against adversarial
+      agent configurations.
+    tags: [revelation-principle, types, truthfulness, robust-mechanism-design]
+
+  - domain: labor-economics
+    category: assumption-error
+    severity: high
+    title: "Fixed labor supply assumption with elastic AI labor"
+    slug: elastic-ai-labor
+    domains_extra: [macroeconomics, digital-economics]
+    description: >
+      Classical labor market models assume labor supply is bounded by
+      population and hours. AI agents make labor supply elastic —
+      compute is the binding constraint, not headcount. Models predicting
+      wage dynamics, unemployment, or labor share that assume fixed supply
+      will give wrong answers when AI agents can be replicated at near-zero
+      marginal cost.
+    detection: >
+      Check if labor supply is modeled as fixed or slowly-changing.
+      Verify whether the model accounts for near-zero marginal cost
+      of replicating AI workers.
+    prevention: >
+      Model labor supply as a function of compute cost. Distinguish between
+      human labor (inelastic) and AI labor (elastic). Analyze equilibrium
+      as compute cost approaches zero.
+    tags: [labor, supply, elasticity, AI-workers, wages, compute]

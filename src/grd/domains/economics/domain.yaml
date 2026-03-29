@@ -1,0 +1,35 @@
+name: economics
+display_name: Economics
+description: >
+  Economics research with emphasis on agent-based computational economics (ACE),
+  mechanism design, market microstructure, and the impact of AI agents on economic
+  systems. Supports both theoretical analysis and simulation-based investigation
+  of how autonomous digital agents violate classical economic assumptions —
+  identity uniqueness, bounded rationality ceilings, transaction cost floors,
+  and equilibrium existence.
+version: 1
+
+conventions_file: conventions/convention-fields.yaml
+
+content:
+  subfields: subfields
+  protocols: protocols
+  errors: verification/errors
+
+result_metadata_fields:
+  - key: market_type
+    label: "Market type"
+    help: "Type of market studied (e.g., double auction, AMM, labor market)"
+  - key: agent_count
+    label: "Agent count"
+    help: "Number of agents in simulation or model"
+  - key: equilibrium_type
+    label: "Equilibrium type"
+    help: "Type of equilibrium analyzed or observed (e.g., Nash, Walrasian, none)"
+  - key: welfare_measure
+    label: "Welfare measure"
+    help: "Welfare or efficiency metric reported (e.g., total surplus, Gini, allocative efficiency)"
+
+branding:
+  tagline: "Economic theory meets autonomous agents"
+  color: blue

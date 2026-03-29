@@ -1,0 +1,97 @@
+# Economics subfield convention defaults
+# Maps subfield names to convention presets.
+
+subfields:
+  microeconomics:
+    agent_rationality: "perfect-rational"
+    equilibrium_concept: "Nash"
+    information_structure: "incomplete-information"
+    simulation_framework: "analytical"
+    welfare_criterion: "Pareto"
+
+  macroeconomics:
+    agent_rationality: "bounded-rational"
+    equilibrium_concept: "general-equilibrium"
+    simulation_framework: "DSGE"
+    time_model: "discrete-period"
+    currency_model: "fiat"
+    agent_population: "heterogeneous-types"
+
+  mechanism_design:
+    agent_rationality: "perfect-rational"
+    equilibrium_concept: "dominant-strategy"
+    information_structure: "private-values"
+    identity_model: "unique-verified"
+    simulation_framework: "analytical"
+    welfare_criterion: "utilitarian"
+
+  game_theory:
+    agent_rationality: "perfect-rational"
+    equilibrium_concept: "Nash"
+    information_structure: "incomplete-information"
+    simulation_framework: "analytical"
+
+  agent_based_computational_economics:
+    agent_rationality: "reinforcement-learning"
+    equilibrium_concept: "none-emergent"
+    simulation_framework: "ACE"
+    time_model: "event-driven"
+    agent_population: "heterogeneous-types"
+    identity_model: "pseudonymous"
+    network_topology: "scale-free"
+
+  market_microstructure:
+    market_structure: "order-book"
+    price_mechanism: "double-auction"
+    time_model: "event-driven"
+    transaction_cost_model: "proportional"
+    simulation_framework: "ACE"
+
+  digital_economics:
+    identity_model: "sybil-capable"
+    transaction_cost_model: "gas-fee"
+    currency_model: "cryptocurrency"
+    market_structure: "AMM-DEX"
+    agent_rationality: "LLM-based"
+    simulation_framework: "ACE"
+
+  labor_economics:
+    market_structure: "monopolistic-competition"
+    information_structure: "asymmetric-information"
+    agent_population: "heterogeneous-continuous"
+    simulation_framework: "empirical"
+
+  monetary_economics:
+    currency_model: "fiat"
+    simulation_framework: "DSGE"
+    time_model: "discrete-period"
+    agent_population: "heterogeneous-types"
+
+  public_economics:
+    welfare_criterion: "utilitarian"
+    simulation_framework: "analytical"
+    information_structure: "asymmetric-information"
+
+  industrial_organization:
+    market_structure: "oligopoly"
+    equilibrium_concept: "Nash"
+    simulation_framework: "game-theoretic"
+    information_structure: "incomplete-information"
+
+  behavioral_economics:
+    agent_rationality: "bounded-rational"
+    risk_model: "prospect-theory"
+    simulation_framework: "experimental"
+
+  auction_theory:
+    price_mechanism: "sealed-bid"
+    equilibrium_concept: "Bayesian-Nash"
+    information_structure: "private-values"
+    identity_model: "unique-verified"
+    simulation_framework: "analytical"
+
+  network_economics:
+    network_topology: "scale-free"
+    agent_population: "heterogeneous-types"
+    simulation_framework: "ACE"
+    equilibrium_concept: "none-emergent"

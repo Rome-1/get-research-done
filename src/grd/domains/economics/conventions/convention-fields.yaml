@@ -1,0 +1,246 @@
+# Economics convention fields — canonical convention lock fields
+# These define the domain-specific conventions that can be locked per-project.
+
+fields:
+  - name: agent_rationality
+    label: "Agent rationality model"
+    description: "Decision-making model assumed for economic agents"
+    critical: true
+    aliases: ["rationality", "agent_model"]
+    options:
+      - "perfect-rational"
+      - "bounded-rational"
+      - "reinforcement-learning"
+      - "LLM-based"
+      - "evolutionary"
+      - "zero-intelligence"
+      - "heuristic"
+      - "mixed-population"
+    value_aliases:
+      "rational": "perfect-rational"
+      "homo-economicus": "perfect-rational"
+      "bounded": "bounded-rational"
+      "RL": "reinforcement-learning"
+      "ZI": "zero-intelligence"
+
+  - name: identity_model
+    label: "Identity model"
+    description: "Whether agents have unique, verifiable identities or can create pseudonyms/sybils"
+    critical: true
+    aliases: ["identity", "sybil_model"]
+    options:
+      - "unique-verified"
+      - "pseudonymous"
+      - "sybil-capable"
+      - "costly-identity"
+      - "reputation-linked"
+    value_aliases:
+      "unique": "unique-verified"
+      "sybil": "sybil-capable"
+      "pseudonym": "pseudonymous"
+
+  - name: equilibrium_concept
+    label: "Equilibrium concept"
+    description: "Solution concept or equilibrium notion used in analysis"
+    critical: true
+    aliases: ["equilibrium", "solution_concept"]
+    options:
+      - "Nash"
+      - "Walrasian"
+      - "correlated"
+      - "Bayesian-Nash"
+      - "dominant-strategy"
+      - "evolutionary-stable"
+      - "none-emergent"
+      - "competitive"
+      - "general-equilibrium"
+    value_aliases:
+      "CE": "competitive"
+      "BNE": "Bayesian-Nash"
+      "DSE": "dominant-strategy"
+      "ESS": "evolutionary-stable"
+      "emergent": "none-emergent"
+
+  - name: market_structure
+    label: "Market structure"
+    description: "Competitive structure of the market being analyzed"
+    critical: true
+    aliases: ["market", "competition"]
+    options:
+      - "perfect-competition"
+      - "monopoly"
+      - "oligopoly"
+      - "monopolistic-competition"
+      - "bilateral-monopoly"
+      - "AMM-DEX"
+      - "order-book"
+      - "platform-market"
+      - "two-sided-market"
+
+  - name: time_model
+    label: "Time model"
+    description: "How time is modeled in the economic system"
+    aliases: ["time", "temporal"]
+    options:
+      - "discrete-period"
+      - "continuous"
+      - "event-driven"
+      - "asynchronous"
+      - "tick-based"
+    value_aliases:
+      "discrete": "discrete-period"
+      "async": "asynchronous"
+
+  - name: information_structure
+    label: "Information structure"
+    description: "What agents know about the economic environment and each other"
+    critical: true
+    aliases: ["information", "info_model"]
+    options:
+      - "perfect-information"
+      - "incomplete-information"
+      - "asymmetric-information"
+      - "costly-information"
+      - "private-values"
+      - "common-values"
+      - "interdependent-values"
+    value_aliases:
+      "perfect": "perfect-information"
+      "incomplete": "incomplete-information"
+      "asymmetric": "asymmetric-information"
+      "IPV": "private-values"
+      "CV": "common-values"
+
+  - name: transaction_cost_model
+    label: "Transaction cost model"
+    description: "How transaction costs are modeled"
+    aliases: ["transaction_costs", "friction"]
+    options:
+      - "zero"
+      - "fixed-fee"
+      - "proportional"
+      - "network-dependent"
+      - "gas-fee"
+      - "Coasian"
+      - "search-cost"
+    value_aliases:
+      "frictionless": "zero"
+      "none": "zero"
+
+  - name: welfare_criterion
+    label: "Welfare criterion"
+    description: "Normative criterion for evaluating economic outcomes"
+    aliases: ["welfare", "social_choice"]
+    options:
+      - "Pareto"
+      - "utilitarian"
+      - "Rawlsian"
+      - "Kaldor-Hicks"
+      - "total-surplus"
+      - "consumer-surplus"
+      - "Gini-coefficient"
+      - "envy-freeness"
+    value_aliases:
+      "maximin": "Rawlsian"
+
+  - name: price_mechanism
+    label: "Price mechanism"
+    description: "How prices are determined in the market"
+    aliases: ["pricing", "price_discovery"]
+    options:
+      - "Walrasian-auctioneer"
+      - "double-auction"
+      - "sealed-bid"
+      - "English-auction"
+      - "Dutch-auction"
+      - "posted-price"
+      - "negotiation"
+      - "AMM-constant-product"
+      - "AMM-constant-sum"
+      - "VCG"
+    value_aliases:
+      "CDA": "double-auction"
+      "FPSB": "sealed-bid"
+
+  - name: simulation_framework
+    label: "Simulation framework"
+    description: "Modeling methodology used"
+    critical: true
+    aliases: ["framework", "methodology"]
+    options:
+      - "ACE"
+      - "DSGE"
+      - "analytical"
+      - "ABM-generic"
+      - "game-theoretic"
+      - "experimental"
+      - "empirical"
+      - "hybrid-analytical-simulation"
+    value_aliases:
+      "agent-based": "ACE"
+      "ABM": "ABM-generic"
+
+  - name: currency_model
+    label: "Currency model"
+    description: "Type of medium of exchange in the economic system"
+    aliases: ["currency", "money"]
+    options:
+      - "fiat"
+      - "cryptocurrency"
+      - "token"
+      - "commodity-money"
+      - "mixed"
+      - "barter"
+      - "none-abstract"
+    value_aliases:
+      "crypto": "cryptocurrency"
+      "abstract": "none-abstract"
+
+  - name: agent_population
+    label: "Agent population model"
+    description: "How the population of economic agents is structured"
+    aliases: ["population", "agents"]
+    options:
+      - "homogeneous"
+      - "heterogeneous-types"
+      - "heterogeneous-continuous"
+      - "evolutionary"
+      - "overlapping-generations"
+      - "entry-exit"
+      - "replicator-dynamics"
+    value_aliases:
+      "OLG": "overlapping-generations"
+      "hetero": "heterogeneous-types"
+
+  - name: risk_model
+    label: "Risk model"
+    description: "How risk and uncertainty are handled"
+    aliases: ["risk", "uncertainty"]
+    options:
+      - "risk-neutral"
+      - "CARA"
+      - "CRRA"
+      - "prospect-theory"
+      - "ambiguity-averse"
+      - "Knightian-uncertainty"
+    value_aliases:
+      "neutral": "risk-neutral"
+      "expected-utility": "CARA"
+
+  - name: network_topology
+    label: "Network topology"
+    description: "Structure of agent interaction network"
+    aliases: ["network", "topology"]
+    options:
+      - "complete-graph"
+      - "random-Erdos-Renyi"
+      - "scale-free"
+      - "small-world"
+      - "lattice"
+      - "bipartite"
+      - "empirical-network"
+      - "none-well-mixed"
+    value_aliases:
+      "well-mixed": "none-well-mixed"
+      "BA": "scale-free"
+      "WS": "small-world"
