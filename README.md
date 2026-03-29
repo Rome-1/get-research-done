@@ -20,11 +20,59 @@ Get Physics Done is an open-source AI copilot for physics research from [Physica
 
 https://github.com/user-attachments/assets/e79f8153-c0bd-484f-b69e-da8f142649e0
 
-[Quick Start](#quick-start) · [Supported Runtimes](#supported-runtimes) · [Workflow](#what-gpd-does) · [Commands](#key-in-runtime-commands) · [Models](#optional-model-profiles-and-tier-overrides) · [Advanced CLI](#advanced-cli-utilities) · [System Requirements](#system-requirements)
+[Start Here](#start-here) · [Quick Start](#quick-start) · [Supported Runtimes](#supported-runtimes) · [Workflow](#what-gpd-does) · [Commands](#key-in-runtime-commands) · [Models](#optional-model-profiles-and-tier-overrides) · [Advanced CLI](#advanced-cli-utilities) · [System Requirements](#system-requirements)
+
+## Start Here
+
+GPD is not a standalone app. It installs physics-research commands into Claude Code, Codex, Gemini CLI, or OpenCode.
+
+You need three things before GPD can work:
+
+- One supported runtime already installed and able to open from your normal system terminal
+- Node.js 20+
+- Python 3.11+ with the standard `venv` module
+
+There are two places you type commands:
+
+- In your normal system terminal: `npx ...`, `gpd ...`, `claude`, `codex`, `gemini`, `opencode`
+- Inside your AI runtime: `/gpd:...`, `$gpd-...`, or `/gpd-...`
+
+If you are new to terminals, start with one OS guide and one runtime guide:
+
+<details>
+<summary><strong>Choose Your Operating System</strong></summary>
+
+- [macOS guide](./docs/macos.md)
+- [Windows guide](./docs/windows.md)
+
+</details>
+
+<details>
+<summary><strong>Choose Your Runtime</strong></summary>
+
+| Runtime | Install command | Guide |
+|---------|-----------------|-------|
+| Claude Code | `npx -y get-physics-done --claude --local` | [Claude Code quickstart](./docs/claude-code.md) |
+| Codex | `npx -y get-physics-done --codex --local` | [Codex quickstart](./docs/codex.md) |
+| Gemini CLI | `npx -y get-physics-done --gemini --local` | [Gemini CLI quickstart](./docs/gemini-cli.md) |
+| OpenCode | `npx -y get-physics-done --opencode --local` | [OpenCode quickstart](./docs/opencode.md) |
+
+Most beginners should install GPD into one runtime at a time and use `--local`.
+
+</details>
+
+<details>
+<summary><strong>What GPD Does Not Include</strong></summary>
+
+- GPD does not install Claude Code, Codex, Gemini CLI, or OpenCode for you.
+- GPD does not include model access, billing, or API credits. You still need an account, subscription, or API access for the runtime you choose.
+- GPD does not require you to understand Git to start using it. It manages the research workflow for you unless you deliberately choose advanced branching workflows later.
+
+</details>
 
 ## Who This Is For
 
-GPD is for hard physics research problems that cannot be handled reliably with manual prompting.
+GPD is for physics research projects that need more structure than a one-off chat.
 
 It is designed for long-horizon projects that require rigorous verification, structured research memory, multi-step analytical work, complex numerical studies, and manuscript writing or review.
 
@@ -32,58 +80,33 @@ We welcome contributions and feedback via GitHub issues or pull requests; if GPD
 
 ## Quick Start
 
-Install GPD:
+If you already know your runtime and are comfortable in a terminal, use one of these exact install commands:
 
-```bash
-npx -y get-physics-done
-```
+| Runtime | Install command | Open runtime | First help command | Fastest first project |
+|---------|-----------------|--------------|--------------------|-----------------------|
+| Claude Code | `npx -y get-physics-done --claude --local` | `claude` | `/gpd:help` | `/gpd:new-project --minimal` |
+| Codex | `npx -y get-physics-done --codex --local` | `codex` | `$gpd-help` | `$gpd-new-project --minimal` |
+| Gemini CLI | `npx -y get-physics-done --gemini --local` | `gemini` | `/gpd:help` | `/gpd:new-project --minimal` |
+| OpenCode | `npx -y get-physics-done --opencode --local` | `opencode` | `/gpd-help` | `/gpd-new-project --minimal` |
 
 The bootstrap installer requires Node.js 20+, Python 3.11+ with `venv`, and one supported runtime (`claude`, `gemini`, `codex`, or `opencode`).
 
-**Next steps after install**
+If the install worked, both of these should be true:
 
-The installer adds GPD to your runtime config, but it does not launch the runtime for you.
-
-1. Open your chosen runtime from your normal system terminal (`claude` for Claude Code, `gemini` for Gemini CLI, `codex` for Codex, `opencode` for OpenCode).
-2. Run its help command first: Claude Code / Gemini CLI use `/gpd:help`, Codex uses `$gpd-help`, and OpenCode uses `/gpd-help`.
-3. Use the exact runtime-specific command syntax below for your first command.
-
-For best performance, run both this install step and your chosen runtime from your normal system terminal, not inside the VS Code, Cursor, or other AI runtime command/chat interface.
+1. `gpd --help` works in your normal terminal.
+2. Your runtime-specific GPD help command works inside the runtime.
 
 Then choose the path that matches your starting point:
 
-The table below uses the Claude Code / Gemini CLI form for in-runtime commands. Codex and OpenCode use the equivalent prefixed forms shown in [Supported Runtimes](#supported-runtimes). `gpd ...` rows are local terminal commands.
-
-| Starting point | First command | What it's for |
-|----------------|---------------|----------------|
-| New research project | `/gpd:new-project` | Start a fresh GPD research workflow with the full onboarding path. |
-| New research project, fast path | `/gpd:new-project --minimal` | Skip deep questioning and the literature-survey setup when you already know the scope and want the fastest project bootstrap. |
+| Starting point | What to run | What it's for |
+|----------------|-------------|----------------|
+| New research project | Your runtime's `new-project --minimal` command | Start the fastest guided project bootstrap. |
 | Current-workspace recovery snapshot | `gpd resume` | Current-workspace read-only recovery snapshot from your normal system terminal. |
 | Find a workspace to reopen | `gpd resume --recent` | Find the workspace first when you need to reopen a different one, then continue there with the runtime `resume-work` command. |
-| Continue in an existing GPD project | `/gpd:resume-work` | Continue in-runtime from the selected project state. |
-| Existing research folder or codebase | `/gpd:map-research` | Map existing work before planning. |
+| Continue in an existing GPD project | Your runtime's `resume-work` command | Continue in-runtime from the selected project state. |
+| Existing research folder or codebase | Your runtime's `map-research` command | Map existing work before planning. |
 
-Recovery ladder: use `gpd resume` for the current-workspace read-only recovery snapshot. If that is the wrong workspace, use `gpd resume --recent` to find the workspace first, then continue inside that workspace with the runtime `resume-work` command. After resuming, the runtime `suggest-next` command is the fastest next command. Before stepping away mid-phase, run your runtime-specific `pause-work` command so that ladder has an explicit handoff to restore.
-
-For read-only long-run visibility from your normal system terminal, use `gpd observe execution`. It is the passive status surface for progress and waiting state; if it cannot prove the run is healthy, it will conservatively say `possibly stalled` instead of relying on runtime hotkeys. Start with `gpd observe show --last 20` when you need the recent event trail, then inspect `gpd resume` if the run is waiting, paused, blocked, or flagged `possibly stalled`. If the same execution surface shows an alternative-path follow-up or `branch later` recommendation, route it through the runtime `tangent` command first and use `branch-hypothesis` only after that explicit choice.
-
-For a read-only machine-local usage / cost summary from your normal system terminal, use `gpd cost`.
-
-Local CLI bridge: Use `gpd --help`, `gpd validate unattended-readiness --runtime <runtime> --autonomy balanced`, `gpd permissions status --runtime <runtime> --autonomy balanced`, `gpd permissions sync --runtime <runtime> --autonomy balanced`, `gpd resume`, `gpd resume --recent`, `gpd observe execution`, `gpd cost`, `gpd presets list`, and `gpd integrations status wolfram` from your normal terminal when you want the broader local diagnostics, readiness, recovery, visibility, cost, preset, and shared Wolfram integration surface. Use `gpd doctor` for the selected install target and runtime-local readiness signals. Add `--live-executable-probes` if you also want cheap local executable probes such as `pdflatex --version` or `wolframscript -version`; that still does not replace `gpd validate plan-preflight <PLAN.md>`. Use `gpd permissions ...` for runtime-owned approval/alignment only.
-
-For side investigations, use your runtime-specific `tangent` command when GPD surfaces an alternative path worth checking. `tangent` is the lightweight chooser for stay / quick / defer / branch. Use the matching `branch-hypothesis` command only when you want the explicit git-backed alternative path with isolated `GPD/` state.
-
-Guided unattended configuration path: use your runtime-specific `settings` command after startup when you want to tune workflow toggles, tier models, research preferences, or autonomy. Start there if you are deciding how much unattended execution to allow or what model-cost posture you want.
-
-For model choice, the safe default is `review` plus runtime defaults. Use your runtime-specific `settings` command to move toward `Max quality`, `Balanced`, or `Budget-aware` only if you want to trade off quality against cost or model access. Treat that posture choice as the starting heuristic, then pin explicit tier models only if you actually need that control. Use `gpd cost` after runs to inspect recorded local usage/cost, optional USD budget guardrails, and the current profile tier mix instead of treating posture labels as billing truth.
-
-Workflow presets are bundles over the existing config keys only; they do not add a separate persisted preset block. Use `gpd presets list` to inspect the catalog, `gpd presets show <preset>` to preview one bundle, and `gpd presets apply <preset> --dry-run` to preview the changed knobs before writing them. If you prefer the guided runtime path, choose the same preset explicitly in your runtime-specific `settings` command. The first supported workflow preset is paper/manuscript workflows such as `write-paper`, `paper-build`, `peer-review`, and `arxiv-submission`; run `gpd doctor --runtime <runtime> --local|--global` first if you plan to use that preset. Missing preset tooling degrades that preset; it does not block the base GPD install.
-
-For unattended execution, the recommended default is Balanced (`balanced`). Use your runtime-specific `settings` command to confirm or change autonomy, then run `gpd validate unattended-readiness --runtime <runtime> --autonomy balanced` from your normal system terminal for the unattended or overnight verdict. If it returns `not-ready`, run `gpd permissions sync --runtime <runtime> --autonomy balanced`. If it returns `relaunch-required`, exit and relaunch the runtime before treating unattended use as ready.
-
-If you specifically want prompt-free runtime approvals, that is a stricter mode than ordinary unattended use. In practice this may require switching autonomy to YOLO (`yolo`) in your runtime-specific `settings` command, then running `gpd permissions sync --runtime <runtime> --autonomy yolo`, and relaunching the runtime when `gpd validate unattended-readiness --runtime <runtime> --autonomy yolo` returns `relaunch-required`. The exact runtime behavior differs by platform.
-
-Use the runtime-specific command syntax shown in [Supported Runtimes](#supported-runtimes), for example `/gpd:new-project --minimal`, `$gpd-resume-work`, or `/gpd:map-research`.
+If you are new to terminals or not sure which runtime to choose, use [Start Here](#start-here) above.
 
 <details>
 <summary><strong>Clean-machine readiness and first-run verification</strong></summary>
