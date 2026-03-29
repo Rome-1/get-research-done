@@ -180,6 +180,7 @@ def _status(
 def _build_actions(
     *,
     mode: str,
+    has_local_recovery_target: bool,
     primary_command: str | None,
     primary_reason: str | None,
     continue_command: str,
@@ -199,6 +200,8 @@ def _build_actions(
         )
 
     if mode == "current-workspace":
+        if not has_local_recovery_target:
+            return actions
         availability = "now"
     elif mode == "recent-projects":
         availability = "after_selection"
@@ -373,6 +376,7 @@ def build_recovery_advice(
         machine_change_notice=machine_change_notice,
         actions=_build_actions(
             mode=mode,
+            has_local_recovery_target=has_local_recovery_target,
             primary_command=primary_command,
             primary_reason=primary_reason,
             continue_command=resolved_continue_command,

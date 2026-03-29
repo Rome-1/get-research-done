@@ -12,6 +12,7 @@ from gpd.core.surface_phrases import (
     recovery_continue_action,
     recovery_fast_next_action,
     recovery_ladder_note,
+    recovery_next_actions,
     recovery_recent_action,
     recovery_resume_action,
     workflow_preset_storage_note,
@@ -59,6 +60,19 @@ def test_recovery_surface_phrases_cover_current_and_cross_project_paths() -> Non
         )
         == "Recovery ladder: use `gpd resume` for the current-workspace read-only recovery snapshot. If that is the wrong workspace, use `gpd resume --recent` to find the workspace first, then continue inside that workspace with `/gpd:resume-work`. After resuming, `/gpd:suggest-next` is the fastest next command. Before stepping away mid-phase, run `/gpd:pause-work` so that ladder has an explicit handoff to restore."
     )
+
+
+def test_recovery_next_actions_respect_local_target_gating_and_resume_dedup() -> None:
+    assert recovery_next_actions(
+        primary_command="gpd resume",
+        mode="current-workspace",
+        continue_command="runtime `resume-work`",
+        fast_next_command="runtime `suggest-next`",
+        existing_actions=[recovery_resume_action()],
+    ) == [
+        recovery_continue_action(mode="current-workspace", continue_command="runtime `resume-work`"),
+        recovery_fast_next_action(fast_next_command="runtime `suggest-next`"),
+    ]
 
 
 def test_observe_surface_phrases_stay_read_only_and_route_follow_ups_explicitly() -> None:

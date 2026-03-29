@@ -125,11 +125,16 @@ def _recovery_next_actions(advice: RecoveryAdvice, *, existing_actions: list[str
     primary_command = advice.primary_command
     if primary_command == "gpd resume" and any("`gpd resume`" in action for action in existing):
         primary_command = None
+    available_action_kinds = {
+        str(action.kind)
+        for action in advice.actions
+        if str(action.availability) == "now"
+    }
     return recovery_next_actions(
         primary_command=primary_command,
         mode=advice.mode,
-        continue_command=advice.continue_command,
-        fast_next_command=advice.fast_next_command,
+        continue_command=advice.continue_command if "continue" in available_action_kinds else None,
+        fast_next_command=advice.fast_next_command if "fast-next" in available_action_kinds else None,
         existing_actions=existing,
     )
 

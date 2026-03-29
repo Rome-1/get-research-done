@@ -988,6 +988,8 @@ def test_resume_recent_human_output_surfaces_command_and_missing_projects(
     assert "Recent Projects" in result.output
     assert "Next here" in result.output
     assert "gpd --cwd" in result.output
+    assert "resume-work" in result.output
+    assert "suggest-next" in result.output
     assert "ready to reopen" in result.output
     assert "project root missing" in result.output or "project unavailable on this machine" in result.output
 
@@ -1159,6 +1161,8 @@ def test_resume_plain_output_surfaces_machine_change_as_advisory_status(tmp_path
     assert "A machine change was detected" in normalized
     assert "the project state is portable and does not require repair." in normalized
     assert "Rerun the installer" in normalized
+    assert "resume-work" not in result.output
+    assert "suggest-next" not in result.output
     assert "No recent local recovery target is currently recorded." not in result.output
 
 
@@ -1204,6 +1208,8 @@ def test_resume_plain_output_keeps_machine_change_notice_when_session_handoff_is
     normalized = " ".join(result.output.split())
     assert "A recorded session handoff is available" in normalized
     assert "Rerun the installer" in normalized
+    assert "resume-work" in result.output
+    assert "suggest-next" in result.output
 
 
 def test_resume_plain_output_surfaces_advisory_live_execution_status(tmp_path: Path, monkeypatch) -> None:
@@ -1236,6 +1242,8 @@ def test_resume_plain_output_surfaces_advisory_live_execution_status(tmp_path: P
     normalized = " ".join(result.output.split())
     assert "A live execution snapshot exists" in normalized
     assert "it is advisory only and does not expose a portable resume target." in normalized
+    assert "resume-work" not in result.output
+    assert "suggest-next" not in result.output
 
 
 def test_resume_plain_output_surfaces_missing_handoff_status(tmp_path: Path, monkeypatch) -> None:
@@ -1273,6 +1281,8 @@ def test_resume_plain_output_surfaces_missing_handoff_status(tmp_path: Path, mon
     normalized = " ".join(result.output.split())
     assert "Session continuity metadata exists" in normalized
     assert "the recorded handoff file is missing." in normalized
+    assert "resume-work" not in result.output
+    assert "suggest-next" not in result.output
 
 
 def test_observe_execution_help_surfaces_read_only_local_status_role() -> None:

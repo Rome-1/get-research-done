@@ -219,3 +219,6 @@ def test_build_recovery_advice_keeps_machine_change_notice_in_current_workspace_
     assert advice.machine_change_notice is not None
     assert advice.primary_reason == "Current workspace has recorded recovery state and a machine-change notice to inspect."
     assert "Rerun the installer" in advice.machine_change_notice
+    assert [(action.kind, action.command, action.availability) for action in advice.actions] == [
+        ("primary", "gpd resume", "now")
+    ]

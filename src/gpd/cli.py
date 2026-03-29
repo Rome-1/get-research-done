@@ -1425,6 +1425,17 @@ def _resume_recent_project_notes(row: dict[str, object]) -> str:
     return "inspect local recovery state"
 
 
+def _resume_follow_up_actions(recovery_advice: RecoveryAdvice) -> list[str]:
+    """Render recovery follow-up lines from the shared structured action contract."""
+    lines: list[str] = []
+    for action in recovery_advice.actions:
+        if action.kind == "continue":
+            lines.append(recovery_continue_action(mode=recovery_advice.mode, continue_command=action.command))
+        elif action.kind == "fast-next":
+            lines.append(recovery_fast_next_action(fast_next_command=action.command))
+    return lines
+
+
 def _render_recent_resume_summary(rows: list[dict[str, object]]) -> None:
     """Render the recent-project picker for cross-project recovery."""
     recovery_advice = _resume_recovery_advice(recent_rows=rows, force_recent=True)
@@ -1456,12 +1467,8 @@ def _render_recent_resume_summary(rows: list[dict[str, object]]) -> None:
     console.print()
     console.print("[bold]Next here[/]")
     console.print("- Run the exact `gpd --cwd ... resume` command from the table to inspect the selected workspace.")
-    console.print(
-        f"- {recovery_continue_action(mode='recent-projects', continue_command=recovery_advice.continue_command or 'runtime `resume-work`')}"
-    )
-    console.print(
-        f"- {recovery_fast_next_action(fast_next_command=recovery_advice.fast_next_command or 'runtime `suggest-next`')}"
-    )
+    for line in _resume_follow_up_actions(recovery_advice):
+        console.print(f"- {line}")
 
 
 def _render_resume_summary(payload: dict[str, object]) -> None:
@@ -1563,12 +1570,8 @@ def _render_resume_summary(payload: dict[str, object]) -> None:
     if hint is not None:
         console.print(f"- {hint}")
 
-    console.print(
-        f"- {recovery_continue_action(mode='current-workspace', continue_command=recovery_advice.continue_command or 'runtime `resume-work`')}"
-    )
-    console.print(
-        f"- {recovery_fast_next_action(fast_next_command=recovery_advice.fast_next_command or 'runtime `suggest-next`')}"
-    )
+    for line in _resume_follow_up_actions(recovery_advice):
+        console.print(f"- {line}")
 
 
 @app.command("resume")

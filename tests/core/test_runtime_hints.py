@@ -536,6 +536,76 @@ def test_build_runtime_hint_payload_formats_generic_runtime_follow_up_when_runti
     assert not any("`runtime `resume-work``" in action for action in payload.next_actions)
 
 
+def test_build_runtime_hint_payload_machine_change_only_keeps_local_resume_without_in_runtime_followups(
+    tmp_path: Path, monkeypatch
+) -> None:
+    project = _bootstrap_project(tmp_path)
+    data_root = tmp_path / "data"
+    monkeypatch.setattr(
+        "gpd.core.runtime_hints._resume_context",
+        lambda _cwd: {
+            "planning_exists": True,
+            "state_exists": True,
+            "roadmap_exists": True,
+            "project_exists": True,
+            "segment_candidates": [],
+            "has_live_execution": False,
+            "machine_change_notice": (
+                "Machine change detected: last active on old-host (Linux 5.15 x86_64); "
+                "current machine new-host (Linux 6.1 x86_64). The project state is portable and does not require repair. "
+                "Rerun the installer if runtime-local config may be stale on this machine."
+            ),
+        },
+    )
+
+    payload = build_runtime_hint_payload(
+        project,
+        data_root=data_root,
+        include_cost=False,
+        include_workflow_presets=False,
+    )
+
+    assert payload.orientation["mode"] == "current-workspace"
+    assert payload.orientation["status"] == "workspace-recovery"
+    assert payload.orientation["has_local_recovery_target"] is False
+    assert any(action.startswith("Run `gpd resume`") for action in payload.next_actions)
+    assert not any("resume-work" in action for action in payload.next_actions)
+    assert not any("suggest-next" in action for action in payload.next_actions)
+
+
+def test_build_runtime_hint_payload_missing_handoff_keeps_local_resume_without_in_runtime_followups(
+    tmp_path: Path, monkeypatch
+) -> None:
+    project = _bootstrap_project(tmp_path)
+    data_root = tmp_path / "data"
+    monkeypatch.setattr(
+        "gpd.core.runtime_hints._resume_context",
+        lambda _cwd: {
+            "planning_exists": True,
+            "state_exists": True,
+            "roadmap_exists": True,
+            "project_exists": True,
+            "segment_candidates": [],
+            "has_live_execution": False,
+            "missing_session_resume_file": "GPD/phases/04/.continue-here.md",
+        },
+    )
+
+    payload = build_runtime_hint_payload(
+        project,
+        data_root=data_root,
+        include_cost=False,
+        include_workflow_presets=False,
+    )
+
+    assert payload.orientation["mode"] == "current-workspace"
+    assert payload.orientation["status"] == "missing-handoff"
+    assert payload.orientation["has_local_recovery_target"] is False
+    assert any(action.startswith("Run `gpd resume`") for action in payload.next_actions)
+    assert not any("resume-work" in action for action in payload.next_actions)
+    assert not any("suggest-next" in action for action in payload.next_actions)
+
+
 def test_build_runtime_hint_payload_suppresses_duplicate_resume_recovery_nudge(tmp_path: Path) -> None:
     project = _bootstrap_project(tmp_path)
     data_root = tmp_path / "data"
