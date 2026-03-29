@@ -1,116 +1,116 @@
 {
   "conditions": [
-    "two_moons",
-    "three_blobs",
-    "circle"
+    "positional",
+    "numeric",
+    "syntactic"
   ],
   "manifold_counts": {
-    "two_moons": 3,
-    "three_blobs": 2,
-    "circle": 3
+    "positional": 2,
+    "numeric": 3,
+    "syntactic": 3
   },
   "total_scores": 7,
-  "significant_scores": 5,
+  "significant_scores": 4,
   "top_scores": [
     {
-      "pair": "two_moons/M0 \u2194 three_blobs/M0",
-      "v_combined": 92.0706,
-      "v_topo": 92.0331,
-      "v_geom": 0.0337,
-      "v_dim": 0.0075,
-      "p_value": 0.139
+      "pair": "numeric/M1 \u2194 syntactic/M0",
+      "v_combined": 319.3844,
+      "v_topo": 304.3462,
+      "v_geom": 0.6752,
+      "v_dim": 28.7259,
+      "p_value": 0.002
     },
     {
-      "pair": "three_blobs/M0 \u2194 circle/M1",
-      "v_combined": 88.0233,
-      "v_topo": 87.8881,
-      "v_geom": 0.0803,
-      "v_dim": 0.1098,
-      "p_value": 0.001
+      "pair": "numeric/M0 \u2194 syntactic/M1",
+      "v_combined": 316.7626,
+      "v_topo": 306.5251,
+      "v_geom": 0.6196,
+      "v_dim": 19.2359,
+      "p_value": 0.002
     },
     {
-      "pair": "three_blobs/M1 \u2194 circle/M2",
-      "v_combined": 58.2892,
-      "v_topo": 57.7251,
-      "v_geom": 0.2378,
-      "v_dim": 0.6526,
-      "p_value": 0.001
+      "pair": "positional/M0 \u2194 syntactic/M0",
+      "v_combined": 297.9217,
+      "v_topo": 287.0548,
+      "v_geom": 0.2547,
+      "v_dim": 21.2243,
+      "p_value": 0.002
     },
     {
-      "pair": "two_moons/M1 \u2194 three_blobs/M1",
-      "v_combined": 50.6342,
-      "v_topo": 50.0799,
-      "v_geom": 0.2406,
-      "v_dim": 0.6273,
-      "p_value": 0.001
+      "pair": "positional/M0 \u2194 numeric/M0",
+      "v_combined": 293.7325,
+      "v_topo": 287.626,
+      "v_geom": 0.2277,
+      "v_dim": 11.7576,
+      "p_value": 0.002
     },
     {
-      "pair": "two_moons/M0 \u2194 circle/M1",
-      "v_combined": 9.6788,
-      "v_topo": 9.5405,
-      "v_geom": 0.0872,
-      "v_dim": 0.1023,
-      "p_value": 0.001
+      "pair": "positional/M1 \u2194 numeric/M2",
+      "v_combined": 0.0,
+      "v_topo": 0.0,
+      "v_geom": 0.0,
+      "v_dim": 0.0,
+      "p_value": 1.0
     }
   ],
   "characterizations": [
     {
-      "condition": "two_moons",
-      "manifold_id": 0,
-      "n_points": 285,
-      "intrinsic_dim": 1.05,
-      "betti": [
-        1,
-        0,
-        0
-      ],
-      "diffusion_eigenvalues": [
-        1.0031,
-        1.0004,
-        1.0004,
-        1.0001,
-        0.6887,
-        0.6457
-      ]
-    },
-    {
-      "condition": "three_blobs",
-      "manifold_id": 0,
-      "n_points": 1038,
-      "intrinsic_dim": 1.05,
-      "betti": [
-        1,
-        0,
-        0
-      ],
-      "diffusion_eigenvalues": [
-        1.0165,
-        1.0162,
-        1.0049,
-        0.9998,
-        0.9981,
-        0.9966
-      ]
-    },
-    {
-      "condition": "circle",
+      "condition": "numeric",
       "manifold_id": 1,
-      "n_points": 332,
-      "intrinsic_dim": 1.16,
+      "n_points": 84,
+      "intrinsic_dim": 1.03,
       "betti": [
-        1,
+        83,
         0,
         0
       ],
       "diffusion_eigenvalues": [
-        1.0012,
-        1.001,
-        0.9201,
-        0.9193,
-        0.6885,
-        0.6762
+        1.0017,
+        0.9857,
+        0.9379,
+        0.8472,
+        0.7373,
+        0.6583
+      ]
+    },
+    {
+      "condition": "syntactic",
+      "manifold_id": 0,
+      "n_points": 880,
+      "intrinsic_dim": 29.75,
+      "betti": [
+        491,
+        231,
+        79
+      ],
+      "diffusion_eigenvalues": [
+        1.0019,
+        0.4056,
+        0.3797,
+        0.37,
+        0.3429,
+        0.296
+      ]
+    },
+    {
+      "condition": "numeric",
+      "manifold_id": 0,
+      "n_points": 906,
+      "intrinsic_dim": 20.28,
+      "betti": [
+        497,
+        271,
+        107
+      ],
+      "diffusion_eigenvalues": [
+        1.002,
+        0.5369,
+        0.4176,
+        0.3409,
+        0.317,
+        0.2953
       ]
     }
   ],
-  "total_time_seconds": 609.3
+  "total_time_seconds": 90.4
 }
