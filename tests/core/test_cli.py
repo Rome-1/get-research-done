@@ -1057,6 +1057,178 @@ def test_resume_plain_output_hints_recent_when_workspace_is_missing(tmp_path: Pa
     assert "gpd resume --recent" in result.output
 
 
+def test_resume_plain_output_surfaces_session_handoff_status(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "gpd.core.context.init_resume",
+        lambda _cwd: {
+            "planning_exists": True,
+            "state_exists": True,
+            "roadmap_exists": True,
+            "project_exists": True,
+            "segment_candidates": [
+                {
+                    "source": "session_resume_file",
+                    "status": "handoff",
+                    "resume_file": "GPD/phases/01/.continue-here.md",
+                    "resumable": False,
+                }
+            ],
+            "has_live_execution": False,
+            "resume_mode": None,
+            "execution_resume_file": "GPD/phases/01/.continue-here.md",
+            "execution_paused_at": None,
+            "autonomy": None,
+            "research_mode": None,
+            "active_execution_segment": None,
+            "session_resume_file": "GPD/phases/01/.continue-here.md",
+        },
+    )
+
+    result = runner.invoke(app, ["resume"])
+
+    assert result.exit_code == 0
+    normalized = " ".join(result.output.split())
+    assert "A recorded session handoff is available" in normalized
+    assert "no resumable live execution snapshot is currently active." in normalized
+    assert "Recovery context is available, but no live bounded segment is currently resumable." not in result.output
+
+
+def test_resume_plain_output_surfaces_interrupted_agent_status_from_candidate(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "gpd.core.context.init_resume",
+        lambda _cwd: {
+            "planning_exists": True,
+            "state_exists": True,
+            "roadmap_exists": True,
+            "project_exists": True,
+            "segment_candidates": [
+                {
+                    "source": "interrupted_agent",
+                    "status": "interrupted",
+                    "agent_id": "agent-123",
+                }
+            ],
+            "has_live_execution": False,
+            "resume_mode": None,
+            "execution_resume_file": None,
+            "execution_paused_at": None,
+            "autonomy": None,
+            "research_mode": None,
+            "active_execution_segment": None,
+        },
+    )
+
+    result = runner.invoke(app, ["resume"])
+
+    assert result.exit_code == 0
+    normalized = " ".join(result.output.split())
+    assert "An interrupted agent marker is present, but no bounded resume segment is active." in normalized
+
+
+def test_resume_plain_output_surfaces_machine_change_as_advisory_status(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "gpd.core.context.init_resume",
+        lambda _cwd: {
+            "planning_exists": True,
+            "state_exists": True,
+            "roadmap_exists": True,
+            "project_exists": True,
+            "segment_candidates": [],
+            "has_live_execution": False,
+            "resume_mode": None,
+            "execution_resume_file": None,
+            "execution_paused_at": None,
+            "autonomy": None,
+            "research_mode": None,
+            "active_execution_segment": None,
+            "machine_change_notice": (
+                "Machine change detected: last active on old-host (Linux 5.15 x86_64); "
+                "current machine new-host (Linux 6.1 x86_64). The project state is portable and does not require repair."
+            ),
+        },
+    )
+
+    result = runner.invoke(app, ["resume"])
+
+    assert result.exit_code == 0
+    normalized = " ".join(result.output.split())
+    assert "A machine change was detected" in normalized
+    assert "the project state is portable and does not require repair." in normalized
+    assert "No recent local recovery target is currently recorded." not in result.output
+
+
+def test_resume_plain_output_surfaces_advisory_live_execution_status(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "gpd.core.context.init_resume",
+        lambda _cwd: {
+            "planning_exists": True,
+            "state_exists": True,
+            "roadmap_exists": True,
+            "project_exists": True,
+            "segment_candidates": [],
+            "has_live_execution": True,
+            "resume_mode": None,
+            "execution_resume_file": None,
+            "execution_paused_at": None,
+            "autonomy": None,
+            "research_mode": None,
+            "active_execution_segment": {
+                "phase": "03",
+                "plan": "01",
+                "segment_status": "active",
+            },
+        },
+    )
+
+    result = runner.invoke(app, ["resume"])
+
+    assert result.exit_code == 0
+    normalized = " ".join(result.output.split())
+    assert "A live execution snapshot exists" in normalized
+    assert "it is advisory only and does not expose a portable resume target." in normalized
+
+
+def test_resume_plain_output_surfaces_missing_handoff_status(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "gpd.core.context.init_resume",
+        lambda _cwd: {
+            "planning_exists": True,
+            "state_exists": True,
+            "roadmap_exists": True,
+            "project_exists": True,
+            "segment_candidates": [
+                {
+                    "source": "session_resume_file",
+                    "status": "missing",
+                    "resume_file": "GPD/phases/04/.continue-here.md",
+                    "resumable": False,
+                    "advisory": True,
+                }
+            ],
+            "has_live_execution": False,
+            "resume_mode": None,
+            "execution_resume_file": None,
+            "execution_paused_at": None,
+            "autonomy": None,
+            "research_mode": None,
+            "active_execution_segment": None,
+            "missing_session_resume_file": "GPD/phases/04/.continue-here.md",
+        },
+    )
+
+    result = runner.invoke(app, ["resume"])
+
+    assert result.exit_code == 0
+    normalized = " ".join(result.output.split())
+    assert "Session continuity metadata exists" in normalized
+    assert "the recorded handoff file is missing." in normalized
+
+
 def test_observe_execution_help_surfaces_read_only_local_status_role() -> None:
     result = runner.invoke(app, ["observe", "execution", "--help"])
     assert result.exit_code == 0

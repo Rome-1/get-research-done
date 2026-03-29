@@ -353,9 +353,12 @@ class TestResume:
         state_path.write_text(json.dumps(state), encoding="utf-8")
 
         result = _invoke("resume")
+        normalized = " ".join(result.output.split())
 
         assert "Resume Summary" in result.output
         assert "Read-only local recovery snapshot for this workspace." in result.output
+        assert "A recorded session handoff is available" in normalized
+        assert "no resumable live execution snapshot is currently active." in normalized
         assert "gpd resume" in result.output
         assert "gpd resume --recent" in result.output
         assert "gpd init resume" in result.output
