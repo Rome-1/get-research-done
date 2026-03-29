@@ -28,6 +28,7 @@ GPD is not a standalone app. It installs physics-research commands into Claude C
 
 If you are new to terminals, start with the [Beginner Onboarding Hub](./docs/README.md).
 It lets you open only the OS and runtime guides you need, and it uses `--local` as the default beginner path.
+If you do not already have a preferred runtime, use the one you can already launch from your normal terminal.
 
 You need three things before GPD can work:
 
@@ -63,6 +64,7 @@ We welcome contributions and feedback via GitHub issues or pull requests; if GPD
 ## Quick Start
 
 If you already know your runtime and are comfortable in a terminal:
+If not, go back to [Start Here](#start-here) and use the hub first.
 
 The intended first-pass order is `help`, then `start`, then `tour`, then `new-project` or `map-research`.
 
@@ -212,6 +214,7 @@ npx -y github:psi-oss/get-physics-done --upgrade
 ## Supported Runtimes
 
 GPD currently installs into four AI runtimes. To preselect one during install, use the matching `npx` flag, or use `--all` to install everything in one pass:
+If you do not already have a preferred runtime, the simplest default is the one you can already open from your normal terminal. Most beginners should install GPD into one runtime at a time and use `--local`.
 
 | Runtime | `npx` flag | Help command | New project command | Guided first-run command | Guided walkthrough command |
 |---------|------------|--------------|---------------------|--------------------------|-----------------------------|
@@ -337,35 +340,20 @@ Typical artifacts include derivation notes, numerical scripts, convergence studi
 
 </details>
 
-## Key In-Runtime Commands
+## Key GPD Paths
 
-These commands run inside your installed AI runtime after GPD has been installed there. The examples below use Claude Code / Gemini CLI syntax.
+Most research actions run inside your installed AI runtime after GPD has been installed there. Recovery and diagnostics commands like `gpd resume`, `gpd resume --recent`, and `gpd --help` still run from your normal system terminal. The examples below use Claude Code / Gemini CLI syntax when a runtime command is shown.
 
-### Common Starting Points
+### Core Runtime Paths
 
-| Command | What it does |
-|---------|--------------|
-| `start` | Guided first-run router when you are not sure whether to create, map, resume, or explain |
-| `tour` | Guided walkthrough of the main GPD commands and when to use them |
-| `map-research` | Map an existing research project before `new-project` |
-| `new-project` | Start a new research project with the full onboarding flow |
-| `new-project --minimal` | Fast path: initialize a new project from a compact description with lighter upfront setup |
-| `gpd resume` | Current-workspace read-only recovery snapshot from your normal system terminal |
-| `gpd resume --recent` | Find the workspace first when you need to reopen a different one |
-| `resume-work` | Continue in-runtime from the selected project state |
-| `pause-work` | Capture a handoff before stepping away mid-phase so `resume-work` can continue cleanly |
-| `plan-phase N` | Plan phase `N` with task breakdown and checkpoints |
-| `execute-phase N` | Execute all tasks in phase `N` |
-| `verify-work` | Run verification checks against current work |
-| `peer-review` | Run manuscript peer review inside the current project before submission |
-| `progress` | Show project state and recommend the next step |
-| `suggest-next` | Fastest post-resume next command when you only need the next action |
-| `discuss-phase N` | Explore a phase before committing to a plan |
-| `quick` | Run a smaller task with a lighter workflow |
-| `settings` | Guided path for workflow defaults, autonomy, and unattended execution settings after startup |
-| `write-paper` | Draft a manuscript from completed research artifacts |
-| `respond-to-referees` | Structure referee responses and revise the manuscript |
-| `arxiv-submission` | Validate and package the manuscript for arXiv |
+| Path | Use these commands |
+|------|--------------------|
+| Start or orient | `start`, `tour` |
+| Create or import work | `new-project`, `new-project --minimal`, `map-research` |
+| Return after a break | `gpd resume`, `gpd resume --recent`, `resume-work`, `pause-work`, `suggest-next` |
+| Run the research loop | `discuss-phase N`, `plan-phase N`, `execute-phase N`, `verify-work`, `progress`, `quick` |
+| Write and review | `write-paper`, `peer-review`, `respond-to-referees`, `arxiv-submission` |
+| Configure or branch | `settings`, `set-profile`, `tangent`, `branch-hypothesis` |
 
 Typical research loop: `/gpd:new-project -> /gpd:discuss-phase 1 -> /gpd:plan-phase 1 -> /gpd:execute-phase 1 -> /gpd:verify-work -> repeat -> /gpd:complete-milestone`
 
@@ -385,136 +373,24 @@ Not every GPD command needs the same amount of project state.
 
 Passing a manuscript path to a project-required command such as `/gpd:peer-review paper/` selects the manuscript target, but does not bypass project initialization.
 
-The full command reference below uses Claude Code / Gemini CLI syntax. Codex uses `$gpd-...` and OpenCode uses `/gpd-...`.
+The full in-runtime reference uses Claude Code / Gemini CLI syntax. Codex uses `$gpd-...` and OpenCode uses `/gpd-...`.
 
 <details>
-<summary><strong>Full Command Reference (64 Commands)</strong></summary>
+<summary><strong>Where To Find The Full Runtime Command Reference</strong></summary>
 
-#### Project Initialization
+This README is the onboarding and orientation surface, not the complete in-runtime command manual.
 
-| Command | What it does |
-|---------|--------------|
-| `/gpd:start` | Guide a first-time user to the right GPD entry point for the current folder |
-| `/gpd:tour` | Give a guided walkthrough of the main GPD commands and when to use them |
-| `/gpd:new-project` | Initialize a new physics research project with deep context gathering and `PROJECT.md` |
-| `/gpd:map-research` | Map existing research project — theoretical framework, computations, conventions, and open questions |
-
-#### Phase Planning
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:discuss-phase <number>` | Gather phase context through adaptive questioning before planning |
-| `/gpd:research-phase <number>` | Research how to tackle a phase (standalone - usually use `/gpd:plan-phase` instead) |
-| `/gpd:list-phase-assumptions <number>` | Surface the AI's assumptions about a phase approach before planning |
-| `/gpd:discover [phase or topic] [--depth {quick,medium,deep}]` | Run discovery phase to investigate methods, literature, and approaches before planning |
-| `/gpd:show-phase <number>` | Inspect a single phase's artifacts, status, and results |
-| `/gpd:plan-phase <number>` | Create detailed execution plan for a phase (`PLAN.md`) with verification loop |
-
-#### Execution
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:execute-phase <phase-number>` | Execute all plans in a phase with wave-based parallelization |
-
-#### Derivation
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:derive-equation` | Perform a rigorous physics derivation with systematic verification at each step |
-
-#### Quick Mode
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:quick` | Execute a quick research task with GPD guarantees (atomic commits, state tracking) but skip optional agents |
-
-#### Roadmap Management
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:add-phase <description>` | Add research phase to end of current milestone in roadmap |
-| `/gpd:insert-phase <after> <description>` | Insert urgent research work as decimal phase (for example, `72.1`) between existing phases |
-| `/gpd:remove-phase <number>` | Remove a future phase from roadmap and renumber subsequent phases |
-| `/gpd:revise-phase <number> "<reason>"` | Supersede a completed phase and create a replacement for iterative revision |
-| `/gpd:merge-phases <source> <target>` | Merge results from one phase into another |
-
-#### Milestone Management
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:new-milestone <name>` | Start a new research milestone cycle — update `PROJECT.md` and route to requirements |
-| `/gpd:complete-milestone <version>` | Archive completed research milestone and prepare for next phase of investigation |
-
-#### Progress Tracking
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:progress` | Check research progress, show context, and route to the next action (execute or plan) |
-| `/gpd:suggest-next` | Suggest the most impactful next action based on current project state |
-
-#### Research Support
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:explain [concept]` | Explain a physics concept rigorously in the context of the active project or standalone question |
+- For the full in-runtime command reference, examples, and per-command usage details, run your runtime's help command such as `/gpd:help --all`, `$gpd-help --all`, or `/gpd-help --all`.
+- For local install, readiness, validation, permissions, observability, recovery, and diagnostics, run `gpd --help` in your normal system terminal.
 
 #### Session Management
 
-| Command | What it does |
-|---------|--------------|
-| `/gpd:resume-work` | Resume research from the previous session with full context restoration |
-| `/gpd:pause-work` | Create a context handoff when pausing research mid-phase |
-
-#### Todo Management
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:add-todo [description]` | Capture an idea or task as a todo from current research conversation context |
-| `/gpd:check-todos [area]` | List pending research todos and select one to work on |
-
-#### Validation
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:verify-work [phase]` | Verify research results through physics consistency checks |
-
-#### Debugging
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:debug [issue description]` | Systematic debugging of physics calculations with persistent state across context resets |
-
-#### Physics Validation
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:dimensional-analysis` | Systematic dimensional analysis audit on all equations in a derivation or phase |
-| `/gpd:limiting-cases` | Systematically identify and verify all relevant limiting cases for a result or phase |
-| `/gpd:numerical-convergence` | Systematic convergence testing for numerical physics computations |
-| `/gpd:compare-experiment` | Systematically compare theoretical predictions with experimental or observational data |
-| `/gpd:validate-conventions [phase]` | Validate convention consistency across all phases |
-| `/gpd:regression-check [phase]` | Scan-only audit for convention conflicts and verification-state regressions in completed phase summaries and verifications |
-
-#### Quantitative Analysis
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:parameter-sweep [phase]` | Systematic parameter sweep with parallel execution and result aggregation |
-| `/gpd:sensitivity-analysis` | Systematic sensitivity analysis — which parameters matter most and how uncertainties propagate |
-| `/gpd:error-propagation` | Track how uncertainties propagate through multi-step calculations across phases |
-| `/gpd:compare-results [phase, artifact, or comparison target]` | Compare internal results, baselines, or methods and emit decisive verdicts |
-
-#### Research Publishing
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:write-paper [title or topic] [--from-phases 1,2,3]` | Structure and write a physics paper from research results |
-| `/gpd:peer-review [paper directory or manuscript path]` | Conduct a staged six-pass peer review of a manuscript and supporting research artifacts in the current GPD project |
-| `/gpd:respond-to-referees` | Structure a point-by-point response to referee reports and update the manuscript |
-| `/gpd:arxiv-submission` | Prepare a paper for arXiv submission with validation and packaging |
-| `/gpd:literature-review [topic]` | Structured literature review for a physics research topic with citation network analysis and open question identification |
+Session management lives primarily in `gpd resume`, `gpd resume --recent`, `/gpd:pause-work`, `/gpd:resume-work`, and `/gpd:suggest-next`.
+Use `/gpd:pause-work` before stepping away when you want an explicit context handoff for the next return.
 
 #### Tangents & Hypothesis Branches
+
+Tangents and alternative paths live primarily in `/gpd:tangent`, `/gpd:branch-hypothesis`, and `/gpd:compare-branches`.
 
 | Command | What it does |
 |---------|--------------|
@@ -522,52 +398,8 @@ The full command reference below uses Claude Code / Gemini CLI syntax. Codex use
 | `/gpd:branch-hypothesis <description>` | Create a hypothesis branch for parallel investigation of an alternative approach |
 | `/gpd:compare-branches` | Compare results across hypothesis branches side-by-side |
 
-Use the matching `branch-hypothesis` command only when you want the explicit git-backed alternative path.
-If `gpd observe execution` surfaces an alternative-path follow-up or `branch later` recommendation, route it through the runtime `tangent` command first.
-
-#### Decision Tracking
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:decisions [phase or keyword]` | Display and search the cumulative decision log |
-
-#### Visualization & Export
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:graph` | Visualize dependency graph across phases and identify gaps |
-| `/gpd:slides [topic]` | Create presentation slides from a GPD project or the current folder |
-| `/gpd:export [--format {html,latex,zip,all}]` | Export research results to HTML, LaTeX, or ZIP package |
-| `/gpd:error-patterns [category]` | View accumulated physics error patterns for this project |
-| `/gpd:record-insight [description]` | Record a project-specific learning or pattern to the insights ledger |
-
-#### Milestone Auditing
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:audit-milestone [version]` | Audit research milestone completion against original research goals |
-| `/gpd:plan-milestone-gaps` | Create phases to close all gaps identified by research milestone audit |
-
-#### Configuration
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:settings` | Configure GPD workflow toggles, tier models, and physics research preferences |
-| `/gpd:set-profile <profile>` | Switch research profile for GPD agents (`deep-theory`, `numerical`, `exploratory`, `review`, `paper-writing`) |
-
-#### Utility Commands
-
-| Command | What it does |
-|---------|--------------|
-| `/gpd:compact-state` | Archive historical entries from `STATE.md` to keep it under the 150-line target |
-| `/gpd:sync-state` | Reconcile diverged `STATE.md` and `state.json` after manual edits or corruption |
-| `/gpd:undo` | Roll back the last GPD operation with a safety checkpoint |
-| `/gpd:update` | Update GPD to the latest version with changelog display |
-| `/gpd:reapply-patches` | Reapply local modifications after a GPD update |
-| `/gpd:health` | Run project health checks and optionally auto-fix issues |
-| `/gpd:help` | Show available GPD commands and usage guide |
-
-For full per-command detail and examples inside your runtime, run `/gpd:help --all` or the equivalent runtime-specific help command.
+- Use the matching `branch-hypothesis` command only when you want the explicit git-backed alternative path.
+- If `gpd observe execution` surfaces an alternative-path follow-up or `branch later` recommendation, route it through the runtime `tangent` command first.
 
 </details>
 

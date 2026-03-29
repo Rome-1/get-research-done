@@ -123,6 +123,7 @@ def assert_recovery_ladder_contract(
         content,
         (
             "find the workspace first",
+            "find the workspace before resuming it",
             "wrong workspace",
             "find the workspace you want to reopen",
             "find the workspace you need to reopen",
@@ -147,6 +148,7 @@ def assert_recovery_ladder_contract(
             "fastest next command",
             "fastest post-resume next command",
             "fastest post-resume command when you only need the next action",
+            "when you only need the next action",
         ),
         label="fast post-resume next-command wording",
     )

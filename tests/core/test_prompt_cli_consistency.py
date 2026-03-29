@@ -564,12 +564,11 @@ def test_help_prompt_session_management_keeps_pause_before_leave_and_resume_on_r
     )
 
 
-def test_new_project_prompt_surfaces_discuss_phase_before_planning() -> None:
+def test_new_project_prompt_surfaces_discuss_phase_before_planning_in_command_and_workflow() -> None:
     command = (REPO_ROOT / "src/gpd/commands/new-project.md").read_text(encoding="utf-8")
     workflow = (REPO_ROOT / "src/gpd/specs/workflows/new-project.md").read_text(encoding="utf-8")
-    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 
-    for content in (command, workflow, readme):
+    for content in (command, workflow):
         assert "/gpd:discuss-phase 1" in content
 
     assert "Discuss phase 1 now?" in command

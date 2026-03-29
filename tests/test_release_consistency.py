@@ -169,7 +169,6 @@ def _expected_wheel_dependency_names() -> set[str]:
 
 
 HELP_COMMAND_HEADING_RE = re.compile(r"^\*\*`/gpd:([a-z0-9-]+)(?:[^`]*)`\*\*$", re.MULTILINE)
-README_COMMAND_ROW_RE = re.compile(r"^\| `/gpd:([a-z0-9-]+)(?:[^`]*)` \| (.*?) \|$", re.MULTILINE)
 BEGINNER_ONBOARDING_HUB_URL = "https://github.com/psi-oss/get-physics-done/blob/main/docs/README.md"
 
 
@@ -203,11 +202,6 @@ def _command_inventory_stems(repo_root: Path) -> set[str]:
 def _help_heading_stems(content: str) -> set[str]:
     return set(HELP_COMMAND_HEADING_RE.findall(content))
 
-
-def _readme_command_rows(content: str) -> dict[str, str]:
-    return {stem: description.strip() for stem, description in README_COMMAND_ROW_RE.findall(content)}
-
-
 def _markdown_section(content: str, heading: str) -> str:
     lines = content.splitlines()
     collected: list[str] = []
@@ -227,6 +221,10 @@ def _extract_between(content: str, start_marker: str, end_marker: str) -> str:
     start = content.index(start_marker)
     end = content.index(end_marker, start)
     return content[start:end]
+
+
+def _readme_key_commands_section(content: str) -> str:
+    return _markdown_section(content, "## Key GPD Paths")
 
 
 def test_required_public_release_artifacts_exist() -> None:
@@ -866,21 +864,22 @@ def test_js_bootstrap_after_install_surface_keeps_beginner_order() -> None:
 def test_public_readme_recovery_surfaces_keep_runtime_pause_and_resume_roles_distinct() -> None:
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
     quick_start = _markdown_section(readme, "## Quick Start")
+    key_commands = _readme_key_commands_section(readme)
 
     assert "| Current-workspace recovery snapshot | `gpd resume` |" in quick_start
     assert "| Continue in an existing GPD project | `/gpd:resume-work` |" in quick_start
     assert "| Returning to an existing GPD project | `pause-work` |" not in quick_start
     assert "use `gpd resume`" in quick_start
     assert_recovery_ladder_contract(
-        readme,
+        key_commands,
         resume_work_fragments=("runtime `resume-work` command", "`/gpd:resume-work`"),
         suggest_next_fragments=("runtime `suggest-next` command", "`suggest-next`"),
         pause_work_fragments=("runtime-specific `pause-work` command", "`/gpd:pause-work`"),
     )
-    assert "#### Session Management" in readme
-    assert "`/gpd:resume-work`" in readme
-    assert "`/gpd:pause-work`" in readme
-    assert "full context restoration" in readme
+    assert "Leave / return path:" in key_commands
+    assert "`/gpd:pause-work`" in key_commands
+    assert "`/gpd:resume-work`" in key_commands
+    assert "`/gpd:suggest-next`" in key_commands
 
 
 def test_public_readme_and_help_surfaces_keep_tangent_discoverable() -> None:
@@ -1031,24 +1030,27 @@ def test_public_runtime_notes_cover_all_runtime_specific_install_surfaces() -> N
 def test_public_cli_docs_cover_project_contract_comparison_and_paper_build() -> None:
     repo_root = _repo_root()
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    help_workflow = (repo_root / "src/gpd/specs/workflows/help.md").read_text(encoding="utf-8")
 
     assert "`gpd validate project-contract <file.json or -> [--mode approved|draft]`" in readme
-    assert "| `/gpd:compare-results [phase, artifact, or comparison target]` |" in readme
     assert "`gpd paper-build [PAPER-CONFIG.json] [--output-dir <dir>]`" in readme
+    assert "**`/gpd:compare-results [phase, artifact, or comparison target]`**" in help_workflow
 
 
-def test_public_readme_command_table_matches_command_inventory_and_regression_check_wording() -> None:
-    repo_root = _repo_root()
-    readme = (repo_root / "README.md").read_text(encoding="utf-8")
-    inventory = _command_inventory_stems(repo_root)
-    readme_rows = _readme_command_rows(readme)
+def test_public_readme_points_to_runtime_and_local_cli_help_for_full_command_surfaces() -> None:
+    readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
+    quick_start = _markdown_section(readme, "## Quick Start")
+    key_commands = _readme_key_commands_section(readme)
 
-    assert readme_rows, "expected README command table entries"
-    assert set(readme_rows) == inventory
+    assert "Run its help command first: Claude Code / Gemini CLI use `/gpd:help`." in quick_start
+    assert "Codex uses `$gpd-help`, and OpenCode uses `/gpd-help`." in quick_start
+    assert "`gpd --help` works in your normal terminal." in quick_start
+    assert f"Local CLI bridge: {local_cli_bridge_note()}" in quick_start
+    assert "This README is the onboarding and orientation surface, not the complete in-runtime command manual." in key_commands
+    assert "run your runtime's help command such as `/gpd:help --all`, `$gpd-help --all`, or `/gpd-help --all`." in key_commands
     assert (
-        readme_rows["regression-check"]
-        == "Scan-only audit for convention conflicts and verification-state regressions in completed phase summaries and verifications"
-    )
+        "run `gpd --help` in your normal system terminal."
+    ) in key_commands
 
 
 def test_public_readme_typical_new_project_loop_includes_discuss_phase_before_planning() -> None:
@@ -1135,25 +1137,14 @@ def test_regression_check_canonical_surfaces_match_scan_only_implementation() ->
     assert "frontmatter" in verify_work
 
 
-def test_public_runtime_command_table_has_unique_entries() -> None:
-    repo_root = _repo_root()
-    lines = (repo_root / "README.md").read_text(encoding="utf-8").splitlines()
+def test_public_runtime_path_table_has_unique_entries() -> None:
+    readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
+    key_commands = _readme_key_commands_section(readme)
 
-    in_table = False
-    commands: list[str] = []
-    for line in lines:
-        if line == "## Key In-Runtime Commands":
-            in_table = True
-            continue
-        if in_table and line.startswith("## "):
-            break
-        if not in_table or not line.startswith("| `"):
-            continue
-        command = line.split("`", 2)[1]
-        commands.append(command)
+    path_labels = re.findall(r"^\| ([A-Za-z /-]+) \| `", key_commands, re.MULTILINE)
 
-    assert commands, "expected README key-command table entries"
-    assert len(commands) == len(set(commands))
+    assert path_labels, "expected README runtime path table entries"
+    assert len(path_labels) == len(set(path_labels))
 
 
 def test_claude_sdk_is_not_shipped_in_public_install() -> None:

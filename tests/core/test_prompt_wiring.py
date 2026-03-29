@@ -1982,10 +1982,9 @@ def test_resume_workflow_surfaces_contract_load_and_validation_state() -> None:
     assert "Repair the blocked contract or state-integrity issue before planning or execution" in resume_work
 
 
-def test_execution_observability_and_resume_surfaces_stay_conservative_about_stalls() -> None:
+def test_execution_observability_and_resume_workflow_surfaces_stay_conservative_about_stalls() -> None:
     help_command = (COMMANDS_DIR / "help.md").read_text(encoding="utf-8")
     help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
-    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     progress = (WORKFLOWS_DIR / "progress.md").read_text(encoding="utf-8")
     resume_work = (WORKFLOWS_DIR / "resume-work.md").read_text(encoding="utf-8")
 
@@ -1996,13 +1995,7 @@ def test_execution_observability_and_resume_surfaces_stay_conservative_about_sta
     assert "possibly stalled" in help_workflow
     assert "read-only checks" in help_workflow
     assert "gpd cost" in help_workflow
-    assert "For read-only long-run visibility from your normal system terminal, use `gpd observe execution`." in readme
-    assert "conservatively say `possibly stalled` instead of relying on runtime hotkeys" in readme
-    assert "Start with `gpd observe show --last 20` when you need the recent event trail" in readme
-    assert "route it through the runtime `tangent` command first" in readme
-    assert "gpd cost" in readme
     assert "Start at `# GPD Command Reference`." in help_command
-    assert "gpd resume --recent" in readme
     assert "When STATE.md appears out of sync with disk reality" in progress
     assert "advisory context only" in resume_work
     assert "it is not a ranked bounded-segment resume candidate and does not justify `resume_mode=\"bounded_segment\"`." in resume_work
