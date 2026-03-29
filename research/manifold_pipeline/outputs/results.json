@@ -5,112 +5,112 @@
     "syntactic"
   ],
   "manifold_counts": {
-    "positional": 2,
+    "positional": 4,
     "numeric": 3,
     "syntactic": 3
   },
-  "total_scores": 7,
-  "significant_scores": 4,
+  "total_scores": 9,
+  "significant_scores": 6,
   "top_scores": [
     {
-      "pair": "numeric/M1 \u2194 syntactic/M0",
-      "v_combined": 319.3844,
-      "v_topo": 304.3462,
-      "v_geom": 0.6752,
-      "v_dim": 28.7259,
-      "p_value": 0.002
+      "pair": "positional/M0 \u2194 syntactic/M2",
+      "v_combined": 1523.9398,
+      "v_topo": 1523.8661,
+      "v_geom": 0.0553,
+      "v_dim": 0.0369,
+      "p_value": 0.007
     },
     {
-      "pair": "numeric/M0 \u2194 syntactic/M1",
-      "v_combined": 316.7626,
-      "v_topo": 306.5251,
-      "v_geom": 0.6196,
-      "v_dim": 19.2359,
-      "p_value": 0.002
+      "pair": "numeric/M0 \u2194 syntactic/M0",
+      "v_combined": 325.0441,
+      "v_topo": 310.1842,
+      "v_geom": 0.6703,
+      "v_dim": 28.3791,
+      "p_value": 0.001
     },
     {
-      "pair": "positional/M0 \u2194 syntactic/M0",
-      "v_combined": 297.9217,
-      "v_topo": 287.0548,
-      "v_geom": 0.2547,
-      "v_dim": 21.2243,
-      "p_value": 0.002
+      "pair": "numeric/M1 \u2194 syntactic/M2",
+      "v_combined": 321.1139,
+      "v_topo": 310.6062,
+      "v_geom": 0.6213,
+      "v_dim": 19.7728,
+      "p_value": 0.001
     },
     {
-      "pair": "positional/M0 \u2194 numeric/M0",
-      "v_combined": 293.7325,
-      "v_topo": 287.626,
-      "v_geom": 0.2277,
-      "v_dim": 11.7576,
-      "p_value": 0.002
+      "pair": "positional/M2 \u2194 syntactic/M0",
+      "v_combined": 319.0946,
+      "v_topo": 305.4997,
+      "v_geom": 0.469,
+      "v_dim": 26.2519,
+      "p_value": 0.001
     },
     {
-      "pair": "positional/M1 \u2194 numeric/M2",
-      "v_combined": 0.0,
-      "v_topo": 0.0,
-      "v_geom": 0.0,
-      "v_dim": 0.0,
-      "p_value": 1.0
+      "pair": "positional/M3 \u2194 numeric/M1",
+      "v_combined": 310.9043,
+      "v_topo": 301.8918,
+      "v_geom": 0.3927,
+      "v_dim": 17.2395,
+      "p_value": 0.001
     }
   ],
   "characterizations": [
     {
-      "condition": "numeric",
-      "manifold_id": 1,
-      "n_points": 84,
-      "intrinsic_dim": 1.03,
+      "condition": "positional",
+      "manifold_id": 0,
+      "n_points": 1269,
+      "intrinsic_dim": 1.01,
       "betti": [
-        83,
-        0,
-        0
+        266,
+        8,
+        1
       ],
       "diffusion_eigenvalues": [
-        1.0017,
-        0.9857,
-        0.9379,
-        0.8472,
-        0.7373,
-        0.6583
+        1.0006,
+        1.0005,
+        1.0003,
+        1.0003,
+        1.0003,
+        1.0
       ]
     },
     {
       "condition": "syntactic",
-      "manifold_id": 0,
-      "n_points": 880,
-      "intrinsic_dim": 29.75,
+      "manifold_id": 2,
+      "n_points": 215,
+      "intrinsic_dim": 1.05,
       "betti": [
-        491,
-        231,
-        79
+        214,
+        17,
+        0
       ],
       "diffusion_eigenvalues": [
         1.0019,
-        0.4056,
-        0.3797,
-        0.37,
-        0.3429,
-        0.296
+        0.9955,
+        0.9698,
+        0.9275,
+        0.8784,
+        0.8047
       ]
     },
     {
       "condition": "numeric",
       "manifold_id": 0,
-      "n_points": 906,
-      "intrinsic_dim": 20.28,
+      "n_points": 182,
+      "intrinsic_dim": 1.03,
       "betti": [
-        497,
-        271,
-        107
+        181,
+        10,
+        0
       ],
       "diffusion_eigenvalues": [
-        1.002,
-        0.5369,
-        0.4176,
-        0.3409,
-        0.317,
-        0.2953
+        1.0012,
+        0.9943,
+        0.9729,
+        0.9359,
+        0.8825,
+        0.8274
       ]
     }
   ],
-  "total_time_seconds": 90.4
+  "total_time_seconds": 149.1
 }
