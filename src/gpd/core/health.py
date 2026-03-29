@@ -7,6 +7,7 @@ report with auto-fix capability.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import os
@@ -1005,6 +1006,38 @@ class DoctorRuntimeReadinessContext(BaseModel):
     launch_command: str
 
 
+@dataclasses.dataclass(frozen=True)
+class UnattendedReadinessCheck:
+    """One composed check contributing to unattended-readiness."""
+
+    name: str
+    passed: bool
+    blocking: bool
+    detail: str
+
+
+@dataclasses.dataclass(frozen=True)
+class UnattendedReadinessResult:
+    """Summary of whether one runtime surface is ready for unattended use."""
+
+    runtime: str
+    autonomy: str
+    install_scope: str
+    target: str | None
+    readiness: str
+    ready: bool
+    passed: bool
+    readiness_message: str
+    live_executable_probes: bool
+    checks: list[UnattendedReadinessCheck]
+    blocking_conditions: list[str]
+    warnings: list[str]
+    next_step: str = ""
+    status_scope: str = "unknown"
+    current_session_verified: bool = False
+    validated_surface: str = "public_runtime_command_surface"
+
+
 def _doctor_active_virtualenv() -> bool:
     """Return whether the active interpreter is running inside a virtualenv."""
     return bool(
@@ -1474,6 +1507,125 @@ def extract_doctor_blockers(report: DoctorReport) -> list[HealthCheck]:
     return [check for check in report.checks if check.status == CheckStatus.FAIL]
 
 
+def extract_doctor_advisories(report: DoctorReport) -> list[str]:
+    """Return unique warning/issue messages from non-blocking doctor checks."""
+    advisories: list[str] = []
+    seen: set[str] = set()
+    for check in report.checks:
+        if check.status == CheckStatus.FAIL:
+            continue
+        for message in [*check.issues, *check.warnings]:
+            if message not in seen:
+                seen.add(message)
+                advisories.append(message)
+    return advisories
+
+
+def runtime_doctor_hint(runtime_name: str, *, install_scope: str, target_dir: Path | None) -> str:
+    """Build the exact doctor command that inspects one install target."""
+    parts = ["gpd", "doctor", "--runtime", runtime_name, f"--{install_scope}"]
+    if target_dir is not None:
+        parts.extend(["--target-dir", str(target_dir)])
+    return " ".join(shlex.quote(part) for part in parts)
+
+
+def build_unattended_readiness_result(
+    *,
+    runtime: str,
+    autonomy: str | None,
+    install_scope: str,
+    target_dir: Path | None,
+    doctor_report: DoctorReport,
+    permissions_payload: dict[str, object],
+    live_executable_probes: bool,
+    validated_surface: str = "public_runtime_command_surface",
+) -> UnattendedReadinessResult:
+    """Compose doctor and permissions status into one unattended-readiness verdict."""
+    blocker_messages: list[str] = []
+    seen_blockers: set[str] = set()
+    for check in extract_doctor_blockers(doctor_report):
+        messages = [*check.issues, *check.warnings]
+        if not messages:
+            messages = [f"{check.label}: readiness check failed."]
+        for message in messages:
+            if message not in seen_blockers:
+                seen_blockers.add(message)
+                blocker_messages.append(message)
+
+    advisory_messages = extract_doctor_advisories(doctor_report)
+    readiness = str(permissions_payload.get("readiness") or "unresolved")
+    permissions_ready = bool(permissions_payload.get("ready", False))
+    readiness_message = str(
+        permissions_payload.get("readiness_message") or "Runtime permissions are not ready for unattended use."
+    )
+
+    doctor_detail = "Runtime readiness checks passed."
+    if blocker_messages:
+        doctor_detail = "; ".join(blocker_messages[:3])
+    elif advisory_messages:
+        doctor_detail = f"Runtime readiness checks passed with {len(advisory_messages)} advisory(s)."
+
+    checks = [
+        UnattendedReadinessCheck(
+            name="permissions",
+            passed=permissions_ready,
+            blocking=not permissions_ready,
+            detail=readiness_message,
+        ),
+        UnattendedReadinessCheck(
+            name="doctor",
+            passed=not blocker_messages,
+            blocking=bool(blocker_messages),
+            detail=doctor_detail,
+        ),
+    ]
+
+    blocking_conditions: list[str] = []
+    if not permissions_ready and readiness_message not in blocking_conditions:
+        blocking_conditions.append(readiness_message)
+    for message in blocker_messages:
+        if message not in blocking_conditions:
+            blocking_conditions.append(message)
+
+    warnings: list[str] = []
+    for message in advisory_messages:
+        if message not in warnings:
+            warnings.append(message)
+
+    next_step = str(permissions_payload.get("next_step") or "").strip()
+    if not next_step and blocker_messages:
+        next_step = (
+            f"Run `{runtime_doctor_hint(runtime, install_scope=install_scope, target_dir=target_dir)}` "
+            "to inspect and clear the blocking runtime-readiness issues."
+        )
+
+    target = permissions_payload.get("target")
+    if not isinstance(target, str) or not target.strip():
+        target = str(target_dir) if target_dir is not None else getattr(doctor_report, "target", None)
+
+    resolved_autonomy = permissions_payload.get("autonomy")
+    autonomy_value = str(resolved_autonomy) if isinstance(resolved_autonomy, str) and resolved_autonomy else (autonomy or "")
+    passed = permissions_ready and not blocker_messages
+    return UnattendedReadinessResult(
+        runtime=runtime,
+        autonomy=autonomy_value,
+        install_scope=install_scope,
+        target=target,
+        readiness=readiness,
+        ready=permissions_ready,
+        passed=passed,
+        readiness_message=readiness_message,
+        live_executable_probes=live_executable_probes,
+        checks=checks,
+        blocking_conditions=blocking_conditions,
+        warnings=warnings,
+        next_step=next_step,
+        status_scope=str(permissions_payload.get("status_scope") or "unknown"),
+        current_session_verified=bool(permissions_payload.get("current_session_verified", False)),
+        validated_surface=validated_surface,
+    )
+
+
 def run_doctor(
     specs_dir: Path | None = None,
     version: str | None = None,
@@ -1634,8 +1786,13 @@ __all__ = [
     "HealthCheck",
     "HealthReport",
     "HealthSummary",
+    "UnattendedReadinessCheck",
+    "UnattendedReadinessResult",
+    "build_unattended_readiness_result",
+    "extract_doctor_advisories",
     "extract_doctor_blockers",
     "resolve_doctor_runtime_readiness",
+    "runtime_doctor_hint",
     "check_compaction_needed",
     "check_config",
     "check_convention_lock",

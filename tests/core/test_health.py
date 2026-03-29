@@ -21,6 +21,9 @@ from gpd.core.health import (
     HealthCheck,
     HealthReport,
     HealthSummary,
+    build_unattended_readiness_result,
+    extract_doctor_advisories,
+    runtime_doctor_hint,
     _doctor_check_latex_toolchain,
     check_checkpoint_tags,
     check_compaction_needed,
@@ -118,6 +121,100 @@ class TestHealthModels:
         blockers = extract_doctor_blockers(report)
 
         assert [check.label for check in blockers] == ["fail-a", "fail-b"]
+
+    def test_extract_doctor_advisories_deduplicates_non_blocking_messages(self):
+        report = DoctorReport(
+            overall=CheckStatus.WARN,
+            version="0.1.0",
+            summary=HealthSummary(ok=1, warn=2, fail=0, total=3),
+            checks=[
+                HealthCheck(status=CheckStatus.OK, label="ok", warnings=["shared warning"]),
+                HealthCheck(status=CheckStatus.WARN, label="warn", warnings=["shared warning", "extra warning"]),
+                HealthCheck(status=CheckStatus.WARN, label="warn-2", issues=["non-blocking issue"]),
+            ],
+        )
+
+        advisories = extract_doctor_advisories(report)
+
+        assert advisories == ["shared warning", "extra warning", "non-blocking issue"]
+
+    def test_build_unattended_readiness_result_prefers_permissions_next_step_when_present(self):
+        report = DoctorReport(
+            overall=CheckStatus.OK,
+            version="0.1.0",
+            summary=HealthSummary(ok=2, warn=0, fail=0, total=2),
+            checks=[
+                HealthCheck(status=CheckStatus.OK, label="Runtime Launcher"),
+                HealthCheck(status=CheckStatus.OK, label="Runtime Config Target"),
+            ],
+        )
+
+        result = build_unattended_readiness_result(
+            runtime="codex",
+            autonomy="balanced",
+            install_scope="local",
+            target_dir=Path("/tmp/project/.codex"),
+            doctor_report=report,
+            permissions_payload={
+                "autonomy": "balanced",
+                "target": "/tmp/project/.codex",
+                "readiness": "relaunch-required",
+                "ready": False,
+                "readiness_message": "Runtime permissions are aligned, but the runtime must be relaunched before unattended use.",
+                "next_step": "Exit and relaunch codex before treating unattended use as ready.",
+                "status_scope": "next-launch",
+                "current_session_verified": False,
+            },
+            live_executable_probes=False,
+            validated_surface="public_runtime_command_surface",
+        )
+
+        assert result.readiness == "relaunch-required"
+        assert result.next_step == "Exit and relaunch codex before treating unattended use as ready."
+        assert result.blocking_conditions == [
+            "Runtime permissions are aligned, but the runtime must be relaunched before unattended use."
+        ]
+
+    def test_build_unattended_readiness_result_falls_back_to_doctor_hint_for_blockers(self):
+        report = DoctorReport(
+            overall=CheckStatus.FAIL,
+            version="0.1.0",
+            summary=HealthSummary(ok=1, warn=0, fail=1, total=2),
+            checks=[
+                HealthCheck(status=CheckStatus.OK, label="Runtime Launcher"),
+                HealthCheck(
+                    status=CheckStatus.FAIL,
+                    label="Runtime Config Target",
+                    issues=["Runtime config target not writable"],
+                ),
+            ],
+        )
+
+        result = build_unattended_readiness_result(
+            runtime="codex",
+            autonomy="balanced",
+            install_scope="local",
+            target_dir=Path("/tmp/project/.codex"),
+            doctor_report=report,
+            permissions_payload={
+                "autonomy": "balanced",
+                "target": "/tmp/project/.codex",
+                "readiness": "ready",
+                "ready": True,
+                "readiness_message": "Runtime permissions are ready for unattended use.",
+                "status_scope": "config-only",
+                "current_session_verified": False,
+            },
+            live_executable_probes=True,
+            validated_surface="public_runtime_command_surface",
+        )
+
+        assert result.passed is False
+        assert result.next_step == (
+            f"Run `{runtime_doctor_hint('codex', install_scope='local', target_dir=Path('/tmp/project/.codex'))}` "
+            "to inspect and clear the blocking runtime-readiness issues."
+        )
+        assert result.blocking_conditions == ["Runtime config target not writable"]
 
 
 # ─── Individual Check Tests ──────────────────────────────────────────────────

@@ -22,6 +22,7 @@ from gpd.adapters import get_adapter, list_runtimes
 from gpd.cli import app
 from gpd.core import cli_args as cli_args_module
 from gpd.core.costs import CostBudgetThresholdSummary, CostProjectSummary, CostSessionSummary, CostSummary
+from gpd.core.health import CheckStatus, DoctorReport, HealthCheck, HealthSummary
 
 runner = CliRunner()
 
@@ -1956,8 +1957,18 @@ def test_validate_unattended_readiness_ready_composes_doctor_and_permissions(
     runtime_name = list_runtimes()[0]
     expected_target = get_adapter(runtime_name).resolve_target_dir(False, tmp_path)
     captured_permissions: dict[str, object] = {}
-    doctor_report = MagicMock()
-    doctor_report.target = str(expected_target)
+    doctor_report = DoctorReport(
+        overall=CheckStatus.WARN,
+        version="0.1.0",
+        runtime=runtime_name,
+        install_scope="local",
+        target=str(expected_target),
+        summary=HealthSummary(ok=1, warn=1, fail=0, total=2),
+        checks=[
+            HealthCheck(status=CheckStatus.OK, label="Runtime Launcher"),
+            HealthCheck(status=CheckStatus.WARN, label="LaTeX Toolchain", warnings=["LaTeX toolchain is partial."]),
+        ],
+    )
 
     def fake_run_doctor(
         *,
@@ -1996,9 +2007,6 @@ def test_validate_unattended_readiness_ready_composes_doctor_and_permissions(
 
     monkeypatch.setattr("gpd.core.health.run_doctor", fake_run_doctor)
     monkeypatch.setattr(cli_module, "_permissions_status_payload", fake_permissions_status_payload)
-    monkeypatch.setattr(cli_module, "_doctor_blocker_messages", lambda report: [])
-    monkeypatch.setattr(cli_module, "_doctor_advisory_messages", lambda report: ["LaTeX toolchain is partial."])
-
     result = runner.invoke(
         app,
         ["--cwd", str(tmp_path), "--raw", "validate", "unattended-readiness", "--runtime", runtime_name, "--local"],
@@ -2045,8 +2053,18 @@ def test_validate_unattended_readiness_preserves_permissions_taxonomy(
 
     runtime_name = list_runtimes()[0]
     expected_target = get_adapter(runtime_name).resolve_target_dir(True, tmp_path)
-    doctor_report = MagicMock()
-    doctor_report.target = str(expected_target)
+    doctor_report = DoctorReport(
+        overall=CheckStatus.OK,
+        version="0.1.0",
+        runtime=runtime_name,
+        install_scope="global",
+        target=str(expected_target),
+        summary=HealthSummary(ok=2, warn=0, fail=0, total=2),
+        checks=[
+            HealthCheck(status=CheckStatus.OK, label="Runtime Launcher"),
+            HealthCheck(status=CheckStatus.OK, label="Runtime Config Target"),
+        ],
+    )
 
     def fake_run_doctor(
         *,
@@ -2082,9 +2100,6 @@ def test_validate_unattended_readiness_preserves_permissions_taxonomy(
             "current_session_verified": False,
         },
     )
-    monkeypatch.setattr(cli_module, "_doctor_blocker_messages", lambda report: [])
-    monkeypatch.setattr(cli_module, "_doctor_advisory_messages", lambda report: [])
-
     result = runner.invoke(
         app,
         [
@@ -2127,8 +2142,19 @@ def test_validate_unattended_readiness_uses_doctor_hint_when_permissions_are_rea
     target_dir = tmp_path / ".gpd-target"
     resolved_target = target_dir.resolve(strict=False)
     captured_permissions: dict[str, object] = {}
-    doctor_report = MagicMock()
-    doctor_report.target = str(resolved_target)
+    doctor_report = DoctorReport(
+        overall=CheckStatus.FAIL,
+        version="0.1.0",
+        runtime=runtime_name,
+        install_scope="global",
+        target=str(resolved_target),
+        live_executable_probes=True,
+        summary=HealthSummary(ok=0, warn=1, fail=1, total=2),
+        checks=[
+            HealthCheck(status=CheckStatus.FAIL, label="Runtime Launcher", issues=["Runtime launcher not found on PATH"]),
+            HealthCheck(status=CheckStatus.WARN, label="LaTeX Toolchain", warnings=["LaTeX toolchain is partial."]),
+        ],
+    )
 
     def fake_run_doctor(
         *,
@@ -2166,9 +2192,6 @@ def test_validate_unattended_readiness_uses_doctor_hint_when_permissions_are_rea
 
     monkeypatch.setattr("gpd.core.health.run_doctor", fake_run_doctor)
     monkeypatch.setattr(cli_module, "_permissions_status_payload", fake_permissions_status_payload)
-    monkeypatch.setattr(cli_module, "_doctor_blocker_messages", lambda report: ["Runtime launcher not found on PATH"])
-    monkeypatch.setattr(cli_module, "_doctor_advisory_messages", lambda report: ["LaTeX toolchain is partial."])
-
     with patch("gpd.cli._target_dir_matches_global", return_value=True) as mock_matches_global:
         result = runner.invoke(
             app,

@@ -278,38 +278,6 @@ class CommandContextPreflightResult:
     dispatch_note: str = ""
 
 
-@dataclasses.dataclass(frozen=True)
-class UnattendedReadinessCheck:
-    """One composed check contributing to unattended-readiness."""
-
-    name: str
-    passed: bool
-    blocking: bool
-    detail: str
-
-
-@dataclasses.dataclass(frozen=True)
-class UnattendedReadinessResult:
-    """Summary of whether one runtime surface is ready for unattended use."""
-
-    runtime: str
-    autonomy: str
-    install_scope: str
-    target: str | None
-    readiness: str
-    ready: bool
-    passed: bool
-    readiness_message: str
-    live_executable_probes: bool
-    checks: list[UnattendedReadinessCheck]
-    blocking_conditions: list[str]
-    warnings: list[str]
-    next_step: str = ""
-    status_scope: str = "unknown"
-    current_session_verified: bool = False
-    validated_surface: str = "public_runtime_command_surface"
-
-
 def _format_runtime_list(runtime_names: list[str]) -> str:
     """Render runtime identifiers as human-friendly names."""
     display_names = [
@@ -6522,6 +6490,10 @@ def _print_install_summary(results: list[tuple[str, dict[str, object]]]) -> None
             "Beginner Onboarding Hub: https://github.com/psi-oss/get-physics-done/blob/main/docs/README.md",
             soft_wrap=True,
         )
+        console.print(
+            "If you are new to terminals or are not sure which runtime path fits you yet, start there first.",
+            soft_wrap=True,
+        )
         if len(next_step_entries) == 1:
             single_runtime_name, single_result = results[0]
             (
@@ -6584,7 +6556,7 @@ def _print_install_summary(results: list[tuple[str, dict[str, object]]]) -> None
                 soft_wrap=True,
             )
             console.print(
-                f"7. {post_start_settings_note()} {post_start_settings_recommendation()}",
+                f"7. After your first successful start or later, {post_start_settings_note().lower()} {post_start_settings_recommendation()}",
                 soft_wrap=True,
             )
             console.print(
@@ -6624,7 +6596,7 @@ def _print_install_summary(results: list[tuple[str, dict[str, object]]]) -> None
                 soft_wrap=True,
             )
             console.print(
-                f"{post_start_settings_note()} {post_start_settings_recommendation()}",
+                f"After your first successful start or later, {post_start_settings_note().lower()} {post_start_settings_recommendation()}",
                 soft_wrap=True,
             )
             console.print(
@@ -6708,67 +6680,6 @@ def _print_workflow_preset_details(preset_name: str) -> None:
 
     _pretty_print(dataclasses.asdict(preset))
 
-
-def _doctor_check_messages(check: object, field_names: tuple[str, ...]) -> list[str]:
-    """Collect normalized issue/warning text from one doctor check payload."""
-    messages: list[str] = []
-    for field_name in field_names:
-        field_value = getattr(check, field_name, None)
-        if not isinstance(field_value, list):
-            continue
-        for item in field_value:
-            if not isinstance(item, str):
-                continue
-            normalized = item.strip()
-            if normalized:
-                messages.append(normalized)
-    return messages
-
-
-def _doctor_blocker_messages(report: object) -> list[str]:
-    """Extract blocking readiness messages from a doctor report."""
-    from gpd.core.health import extract_doctor_blockers
-
-    seen: set[str] = set()
-    blockers: list[str] = []
-    for check in extract_doctor_blockers(report):
-        messages = _doctor_check_messages(check, ("issues", "warnings"))
-        if not messages:
-            label = str(getattr(check, "label", "") or "").strip() or "Readiness Check"
-            messages = [f"{label}: readiness check failed."]
-        for message in messages:
-            if message not in seen:
-                seen.add(message)
-                blockers.append(message)
-    return blockers
-
-
-def _doctor_advisory_messages(report: object) -> list[str]:
-    """Extract advisory readiness messages from a doctor report."""
-    summary = getattr(report, "summary", None)
-    if getattr(summary, "warn", 0) <= 0:
-        return []
-
-    seen: set[str] = set()
-    advisories: list[str] = []
-    for check in getattr(report, "checks", []):
-        if getattr(check, "status", None) != "warn":
-            continue
-        for message in _doctor_check_messages(check, ("issues", "warnings")):
-            if message not in seen:
-                seen.add(message)
-                advisories.append(message)
-    return advisories
-
-
-def _runtime_doctor_hint(runtime_name: str, *, install_scope: str, target_dir: Path | None) -> str:
-    """Build the exact doctor command that inspects one install target."""
-    parts = ["gpd", "doctor", "--runtime", runtime_name, f"--{install_scope}"]
-    if target_dir is not None:
-        parts.extend(["--target-dir", str(target_dir)])
-    return " ".join(shlex.quote(part) for part in parts)
-
-
 def _build_unattended_readiness(
     *,
     runtime: str,
@@ -6779,7 +6690,7 @@ def _build_unattended_readiness(
     live_executable_probes: bool,
 ) -> UnattendedReadinessResult:
     """Compose doctor and permissions status into one unattended-readiness verdict."""
-    from gpd.core.health import run_doctor
+    from gpd.core.health import UnattendedReadinessResult, build_unattended_readiness_result, run_doctor
     from gpd.specs import SPECS_DIR
 
     if global_install and local_install:
@@ -6817,77 +6728,15 @@ def _build_unattended_readiness(
         target_dir=permissions_target,
     )
 
-    blocker_messages = _doctor_blocker_messages(doctor_report)
-    advisory_messages = _doctor_advisory_messages(doctor_report)
-    readiness = str(permissions_payload.get("readiness") or "unresolved")
-    permissions_ready = bool(permissions_payload.get("ready", False))
-    readiness_message = str(
-        permissions_payload.get("readiness_message") or "Runtime permissions are not ready for unattended use."
-    )
-
-    doctor_detail = "Runtime readiness checks passed."
-    if blocker_messages:
-        doctor_detail = "; ".join(blocker_messages[:3])
-    elif advisory_messages:
-        doctor_detail = f"Runtime readiness checks passed with {len(advisory_messages)} advisory(s)."
-
-    checks = [
-        UnattendedReadinessCheck(
-            name="permissions",
-            passed=permissions_ready,
-            blocking=not permissions_ready,
-            detail=readiness_message,
-        ),
-        UnattendedReadinessCheck(
-            name="doctor",
-            passed=not blocker_messages,
-            blocking=bool(blocker_messages),
-            detail=doctor_detail,
-        ),
-    ]
-
-    blocking_conditions: list[str] = []
-    if not permissions_ready and readiness_message not in blocking_conditions:
-        blocking_conditions.append(readiness_message)
-    for message in blocker_messages:
-        if message not in blocking_conditions:
-            blocking_conditions.append(message)
-
-    warnings: list[str] = []
-    for message in advisory_messages:
-        if message not in warnings:
-            warnings.append(message)
-
-    next_step = str(permissions_payload.get("next_step") or "").strip()
-    if not next_step and blocker_messages:
-        next_step = (
-            f"Run `{_runtime_doctor_hint(normalized_runtime, install_scope=install_scope, target_dir=resolved_target)}` "
-            "to inspect and clear the blocking runtime-readiness issues."
-        )
-
-    target = permissions_payload.get("target")
-    if not isinstance(target, str) or not target.strip():
-        target = str(resolved_target) if resolved_target is not None else getattr(doctor_report, "target", None)
-
-    resolved_autonomy = permissions_payload.get("autonomy")
-    autonomy_value = str(resolved_autonomy) if isinstance(resolved_autonomy, str) and resolved_autonomy else (autonomy or "")
-    passed = permissions_ready and not blocker_messages
-    return UnattendedReadinessResult(
+    return build_unattended_readiness_result(
         runtime=normalized_runtime,
-        autonomy=autonomy_value,
+        autonomy=autonomy,
         install_scope=install_scope,
-        target=target,
-        readiness=readiness,
-        ready=permissions_ready,
-        passed=passed,
-        readiness_message=readiness_message,
+        target_dir=resolved_target,
+        doctor_report=doctor_report,
+        permissions_payload=permissions_payload,
         live_executable_probes=live_executable_probes,
-        checks=checks,
-        blocking_conditions=blocking_conditions,
-        warnings=warnings,
-        next_step=next_step,
-        status_scope=str(permissions_payload.get("status_scope") or "unknown"),
-        current_session_verified=bool(permissions_payload.get("current_session_verified", False)),
+        validated_surface=_validated_runtime_surface(cwd=_get_cwd()),
     )
 
 
