@@ -4610,6 +4610,28 @@ def _resolve_review_preflight_publication_artifact(manuscript: Path, *filenames:
     return _first_existing_path(*(manuscript.parent / filename for filename in filenames))
 
 
+@dataclasses.dataclass(frozen=True)
+class ManuscriptPublicationArtifacts:
+    """Publication artifacts resolved beside the active manuscript."""
+
+    artifact_manifest: Path | None = None
+    bibliography_audit: Path | None = None
+    reproducibility_manifest: Path | None = None
+
+
+def _resolve_review_preflight_publication_artifacts(manuscript: Path) -> ManuscriptPublicationArtifacts:
+    """Resolve the standard manuscript-local publication artifacts."""
+    return ManuscriptPublicationArtifacts(
+        artifact_manifest=_resolve_review_preflight_publication_artifact(manuscript, "ARTIFACT-MANIFEST.json"),
+        bibliography_audit=_resolve_review_preflight_publication_artifact(manuscript, "BIBLIOGRAPHY-AUDIT.json"),
+        reproducibility_manifest=_resolve_review_preflight_publication_artifact(
+            manuscript,
+            "reproducibility-manifest.json",
+            "REPRODUCIBILITY-MANIFEST.json",
+        ),
+    )
+
+
 _REVIEW_LEDGER_FILENAME_RE = re.compile(r"^REVIEW-LEDGER(?P<round_suffix>-R(?P<round>\d+))?\.json$")
 _REFEREE_DECISION_FILENAME_RE = re.compile(r"^REFEREE-DECISION(?P<round_suffix>-R(?P<round>\d+))?\.json$")
 
@@ -5702,19 +5724,10 @@ def _build_review_preflight(
             "gpd:write-paper",
             "gpd:arxiv-submission",
         }:
-            artifact_manifest = _resolve_review_preflight_publication_artifact(
-                manuscript,
-                "ARTIFACT-MANIFEST.json",
-            )
-            bibliography_audit = _resolve_review_preflight_publication_artifact(
-                manuscript,
-                "BIBLIOGRAPHY-AUDIT.json",
-            )
-            reproducibility_manifest = _resolve_review_preflight_publication_artifact(
-                manuscript,
-                "reproducibility-manifest.json",
-                "REPRODUCIBILITY-MANIFEST.json",
-            )
+            publication_artifacts = _resolve_review_preflight_publication_artifacts(manuscript)
+            artifact_manifest = publication_artifacts.artifact_manifest
+            bibliography_audit = publication_artifacts.bibliography_audit
+            reproducibility_manifest = publication_artifacts.reproducibility_manifest
             artifact_manifest_detail = "no ARTIFACT-MANIFEST.json found near the manuscript"
             artifact_manifest_passed = artifact_manifest is not None
             if artifact_manifest is not None:

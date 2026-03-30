@@ -3731,6 +3731,22 @@ def test_paper_build_prefers_config_dir_bibliography_before_output_and_reference
     assert "configsource" in mock_build.await_args.kwargs["bib_data"].entries
 
 
+def test_resolve_review_preflight_publication_artifacts_bundle(tmp_path: Path) -> None:
+    manuscript_dir = tmp_path / "paper"
+    manuscript_dir.mkdir()
+    manuscript = manuscript_dir / "main.tex"
+    manuscript.write_text("\\documentclass{article}\\begin{document}Hello\\end{document}", encoding="utf-8")
+    (manuscript_dir / "ARTIFACT-MANIFEST.json").write_text("{}", encoding="utf-8")
+    (manuscript_dir / "BIBLIOGRAPHY-AUDIT.json").write_text("{}", encoding="utf-8")
+    (manuscript_dir / "reproducibility-manifest.json").write_text("{}", encoding="utf-8")
+
+    bundle = cli_module._resolve_review_preflight_publication_artifacts(manuscript)
+
+    assert bundle.artifact_manifest == manuscript_dir / "ARTIFACT-MANIFEST.json"
+    assert bundle.bibliography_audit == manuscript_dir / "BIBLIOGRAPHY-AUDIT.json"
+    assert bundle.reproducibility_manifest == manuscript_dir / "reproducibility-manifest.json"
+
+
 def test_paper_build_without_bibliography_does_not_import_pybtex(tmp_path: Path, monkeypatch) -> None:
     import gpd.mcp.paper.compiler  # noqa: F401
 
