@@ -2503,9 +2503,9 @@ def result_list(
 
 @result_app.command("deps")
 def result_deps(
-    result_id: str = typer.Argument(..., help="Result ID"),
+    result_id: str = typer.Argument(..., help="Canonical result ID"),
 ) -> None:
-    """Show BFS dependency graph for a result."""
+    """Trace the direct and transitive upstream dependency chain for a canonical result."""
     from gpd.core.results import result_deps
 
     _output(result_deps(_load_state_dict(), result_id))

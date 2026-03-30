@@ -390,7 +390,7 @@ For phase dependency graphing, combine `gpd roadmap analyze` with SUMMARY frontm
 # Inspect roadmap structure
 gpd roadmap analyze
 
-# Trace a specific result across phases
+# Trace a specific phase/frontmatter dependency across phases
 gpd query deps <identifier>
 
 # Search SUMMARY frontmatter by provides/requires/affects
@@ -446,8 +446,8 @@ gpd query search --affects "phase boundary"
 # Search canonical equations and derived results
 gpd result search --equation "E = mc^2"
 
-# Trace dependencies for a specific identifier
-gpd query deps <identifier>
+# Trace dependencies for a canonical result identifier
+gpd result deps <identifier>
 
 # Query assumptions across phases
 gpd query assumptions "<search term>"

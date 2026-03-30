@@ -494,6 +494,56 @@ def test_result_persist_derived_bridge_reports_requested_result_id_from_slug(gpd
     assert payload["result"]["id"] == "R-01-effective-mass"
 
 
+def test_result_deps_raw_surfaces_transitive_dependency_tree(gpd_project: Path) -> None:
+    planning = gpd_project / "GPD"
+    state_path = planning / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["intermediate_results"] = [
+        {
+            "id": "R-01",
+            "equation": "A",
+            "description": "Seed result",
+            "phase": "01",
+            "depends_on": [],
+            "verified": False,
+            "verification_records": [],
+        },
+        {
+            "id": "R-02",
+            "equation": "B",
+            "description": "Intermediate result",
+            "phase": "02",
+            "depends_on": ["R-01"],
+            "verified": False,
+            "verification_records": [],
+        },
+        {
+            "id": "R-03",
+            "equation": "C",
+            "description": "Canonical target",
+            "phase": "03",
+            "depends_on": ["R-02"],
+            "verified": True,
+            "verification_records": [],
+        },
+    ]
+    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        ["--raw", "--cwd", str(gpd_project), "result", "deps", "R-03"],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["result"]["id"] == "R-03"
+    assert payload["result"]["equation"] == "C"
+    assert payload["depends_on"] == ["R-02"]
+    assert [entry["id"] for entry in payload["direct_deps"]] == ["R-02"]
+    assert [entry["id"] for entry in payload["transitive_deps"]] == ["R-01"]
+
+
 def test_state_record_session_persists_last_result_id_in_session_and_handoff(gpd_project: Path) -> None:
     handoff = gpd_project / "GPD" / "phases" / "01-test-phase" / ".continue-here.md"
     handoff.parent.mkdir(parents=True, exist_ok=True)
