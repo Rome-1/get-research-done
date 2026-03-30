@@ -131,6 +131,74 @@ def classify_logit_entropy(
     return np.digitize(entropies, percentiles).astype(np.int32)
 
 
+def classify_attention_entropy(
+    model, tokens_tensor, manifold_labels: np.ndarray,
+    layer: int = 6, max_seq_len: int = 128, batch_size: int = 16,
+    n_buckets: int = 5,
+) -> np.ndarray:
+    """Classify tokens by attention pattern entropy at a specific layer.
+
+    Tests whether manifolds group tokens by how focused/distributed their
+    attention is — a proxy for computational mode (lookup vs. integration).
+    """
+    import torch
+
+    all_entropies = []
+    hook_point = f"blocks.{layer}.attn.hook_pattern"
+
+    for i in range(0, len(tokens_tensor), batch_size):
+        batch = tokens_tensor[i:i + batch_size]
+        if batch.shape[1] > max_seq_len:
+            batch = batch[:, :max_seq_len]
+        with torch.no_grad():
+            _, cache = model.run_with_cache(batch, names_filter=[hook_point])
+
+        # attn_pattern shape: (batch, n_heads, seq_len, seq_len)
+        attn = cache[hook_point]
+        # Average over heads, compute entropy of attention distribution per position
+        attn_avg = attn.mean(dim=1)  # (batch, seq_len, seq_len)
+        # Entropy of attention distribution for each query position
+        entropy = -(attn_avg * torch.log(attn_avg + 1e-10)).sum(dim=-1)  # (batch, seq_len)
+        all_entropies.append(entropy.cpu().numpy().reshape(-1))
+
+    entropies = np.concatenate(all_entropies)[:len(manifold_labels)]
+    percentiles = np.percentile(entropies, np.linspace(0, 100, n_buckets + 1)[1:-1])
+    return np.digitize(entropies, percentiles).astype(np.int32)
+
+
+def classify_prediction_correct(
+    model, tokens_tensor, manifold_labels: np.ndarray,
+    max_seq_len: int = 128, batch_size: int = 16,
+) -> np.ndarray:
+    """Binary: 1 if model's top-1 prediction matches next token, 0 otherwise.
+
+    Tests whether manifolds separate tokens the model processes
+    confidently/correctly from those it gets wrong.
+    """
+    import torch
+
+    all_correct = []
+    for i in range(0, len(tokens_tensor), batch_size):
+        batch = tokens_tensor[i:i + batch_size]
+        if batch.shape[1] > max_seq_len:
+            batch = batch[:, :max_seq_len]
+        with torch.no_grad():
+            logits = model(batch)  # (batch, seq_len, vocab)
+
+        # Top-1 prediction for each position
+        preds = logits.argmax(dim=-1)  # (batch, seq_len)
+        # Compare with next token (shift by 1)
+        targets = batch[:, 1:]  # (batch, seq_len-1)
+        preds_shifted = preds[:, :-1]  # (batch, seq_len-1)
+        correct = (preds_shifted == targets).int()
+        # Pad last position with 0 (no next token to predict)
+        pad = torch.zeros(batch.shape[0], 1, dtype=torch.int32, device=correct.device)
+        correct = torch.cat([correct, pad], dim=1)
+        all_correct.append(correct.cpu().numpy().reshape(-1))
+
+    return np.concatenate(all_correct)[:len(manifold_labels)].astype(np.int32)
+
+
 # --- Mutual information ---
 
 def mutual_information(labels_x: np.ndarray, labels_y: np.ndarray) -> float:
@@ -231,6 +299,10 @@ def compute_token_attribution(
     n_permutations: int = 1000,
     p_threshold: float = 0.01,
     seed: int = 42,
+    model=None,
+    tokens_tensor=None,
+    layer: int = 6,
+    include_computational: bool = False,
 ) -> list[AttributionResult]:
     """Compute MI between manifold assignment and multiple token types.
 
@@ -248,6 +320,10 @@ def compute_token_attribution(
         n_permutations: permutation count for significance test
         p_threshold: significance threshold (default 0.01)
         seed: random seed
+        model: TransformerLens model (needed for computational classifiers)
+        tokens_tensor: (batch, seq_len) token tensor (needed for computational classifiers)
+        layer: layer number for attention entropy
+        include_computational: if True, add logit/attention entropy classifiers
 
     Returns:
         List of AttributionResult, one per token type tested.
@@ -267,6 +343,26 @@ def compute_token_attribution(
         TokenType("bos_vs_content", classify_bos_vs_content(token_ids, positions)),
         TokenType("punctuation", classify_punctuation(token_ids, tokenizer)),
     ]
+
+    # Computational classifiers (require model + token tensor)
+    if include_computational and model is not None and tokens_tensor is not None:
+        print("  Computing logit entropy classifier...")
+        logit_ent = classify_logit_entropy(
+            model, tokens_tensor, manifold_labels,
+        )
+        token_types.append(TokenType("logit_entropy", logit_ent))
+
+        print("  Computing attention entropy classifier...")
+        attn_ent = classify_attention_entropy(
+            model, tokens_tensor, manifold_labels, layer=layer,
+        )
+        token_types.append(TokenType("attention_entropy", attn_ent))
+
+        print("  Computing prediction accuracy classifier...")
+        pred_correct = classify_prediction_correct(
+            model, tokens_tensor, manifold_labels,
+        )
+        token_types.append(TokenType("prediction_correct", pred_correct))
 
     results = []
     for tt in token_types:

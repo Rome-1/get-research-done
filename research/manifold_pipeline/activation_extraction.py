@@ -94,10 +94,70 @@ def _syntactic_texts(n: int, seq_len: int) -> list[str]:
     return texts
 
 
+def _arithmetic_texts(n: int, seq_len: int) -> list[str]:
+    """Arithmetic sequences with verifiable answers.
+
+    Each sentence has a simple addition/subtraction with the correct answer.
+    Used by Diagnostic C to test whether manifolds group by prediction
+    accuracy (model gets it right vs wrong).
+    """
+    import random
+    rng = random.Random(44)
+    texts = []
+    for _ in range(n):
+        parts = []
+        while len(" ".join(parts)) < seq_len * 3:
+            a = rng.randint(1, 50)
+            b = rng.randint(1, 50)
+            if rng.random() > 0.5:
+                parts.append(f"{a} plus {b} equals {a + b}.")
+            else:
+                big, small = max(a, b), min(a, b)
+                parts.append(f"{big} minus {small} equals {big - small}.")
+        texts.append(" ".join(parts))
+    return texts
+
+
+def _cloze_texts(n: int, seq_len: int) -> list[str]:
+    """High-predictability cloze sentences.
+
+    Common collocations and idioms where the final word is highly predictable.
+    Used to test whether manifolds correspond to prediction confidence.
+    """
+    import random
+    rng = random.Random(45)
+    templates = [
+        "The sun rises in the east and sets in the west.",
+        "She opened the door and walked into the room.",
+        "He picked up the phone and made a call.",
+        "The cat sat on the mat and fell asleep.",
+        "They went to the store to buy some food.",
+        "The bird flew over the tree and landed on the ground.",
+        "She turned on the light and read a book.",
+        "The rain fell from the sky and hit the ground.",
+        "He drank a glass of water and felt better.",
+        "The dog barked at the mailman and wagged its tail.",
+        "She wrote a letter and put it in the mailbox.",
+        "The students took the test and passed with flying colors.",
+        "He drove the car to the gas station and filled up the tank.",
+        "The flowers bloomed in the spring and wilted in the fall.",
+        "She cooked dinner and set the table for the family.",
+    ]
+    texts = []
+    for _ in range(n):
+        parts = []
+        while len(" ".join(parts)) < seq_len * 3:
+            parts.append(rng.choice(templates))
+        texts.append(" ".join(parts))
+    return texts
+
+
 CONDITION_GENERATORS = {
     "positional": _positional_texts,
     "numeric": _numeric_texts,
     "syntactic": _syntactic_texts,
+    "arithmetic": _arithmetic_texts,
+    "cloze": _cloze_texts,
 }
 
 
