@@ -2076,6 +2076,21 @@ def test_pause_resume_and_help_wiring_keep_runtime_handoff_and_local_snapshot_bo
     assert "suggested read-only checks rather than runtime hotkeys" in help_workflow
 
 
+def test_pause_resume_and_derivation_templates_preserve_result_id_continuity() -> None:
+    pause_work = (WORKFLOWS_DIR / "pause-work.md").read_text(encoding="utf-8")
+    resume_work = (WORKFLOWS_DIR / "resume-work.md").read_text(encoding="utf-8")
+    continue_here = (TEMPLATES_DIR / "continue-here.md").read_text(encoding="utf-8")
+    derivation_state = (TEMPLATES_DIR / "DERIVATION-STATE.md").read_text(encoding="utf-8")
+
+    assert "Every intermediate result added to state.json (with result IDs)" in pause_work
+    assert "The `<persistent_state>` and `<intermediate_results>` sections in `.continue-here.md` are filled (documenting what was appended to DERIVATION-STATE.md)" in pause_work
+    assert "canonical `last_result_id`" in resume_work
+    assert "preferred continuity anchor" in resume_work
+    assert "Reference the result IDs added to state.json this session" in continue_here
+    assert "Each entry links back to the state.json intermediate_results key" in continue_here
+    assert "Result IDs should match those in state.json intermediate_results" in derivation_state
+
+
 def test_stage6_surfaces_protocol_bundle_context_across_planning_execution_and_verification() -> None:
     planner_prompt = (TEMPLATES_DIR / "planner-subagent-prompt.md").read_text(encoding="utf-8")
     execute_phase = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
