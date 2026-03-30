@@ -55,10 +55,13 @@ from gpd.core.protocol_bundles import render_protocol_bundle_context, select_pro
 from gpd.core.reference_ingestion import ingest_reference_artifacts
 from gpd.core.results import result_list
 from gpd.core.resume_surface import (
-    build_resume_compat_surface as _build_resume_compat_surface_shared,
-)
-from gpd.core.resume_surface import (
-    canonicalize_resume_public_payload as _canonicalize_resume_public_payload,
+    build_resume_candidate,
+    build_resume_compat_surface,
+    build_resume_segment_candidate,
+    canonicalize_resume_public_payload,
+    resume_origin_for_bounded_segment,
+    resume_origin_for_handoff,
+    resume_origin_for_interrupted_agent,
 )
 from gpd.core.state import (
     EM_DASH,
@@ -1132,52 +1135,28 @@ def _bounded_segment_resume_origin(resume_projection: object) -> str:
     continuation = getattr(resume_projection, "continuation", None)
     segment = getattr(continuation, "bounded_segment", None)
     recorded_by = getattr(segment, "recorded_by", None)
-    if isinstance(recorded_by, str) and recorded_by.strip() == "legacy_current_execution":
-        return "compat.current_execution"
-    if _resume_projection_source_name(resume_projection) == "legacy":
-        return "compat.current_execution"
-    return "continuation.bounded_segment"
+    return resume_origin_for_bounded_segment(
+        recorded_by=recorded_by if isinstance(recorded_by, str) else None,
+        source=_resume_projection_source_name(resume_projection),
+    )
 
 
 def _handoff_resume_origin(resume_projection: object) -> str:
     continuation = getattr(resume_projection, "continuation", None)
     handoff = getattr(continuation, "handoff", None)
     recorded_by = getattr(handoff, "recorded_by", None)
-    if isinstance(recorded_by, str) and recorded_by.strip() == "legacy_session":
-        return "compat.session_resume_file"
-    if _resume_projection_source_name(resume_projection) == "legacy":
-        return "compat.session_resume_file"
-    return "continuation.handoff"
+    return resume_origin_for_handoff(
+        recorded_by=recorded_by if isinstance(recorded_by, str) else None,
+        source=_resume_projection_source_name(resume_projection),
+    )
 
 
 def _interrupted_agent_resume_origin() -> str:
-    return "interrupted_agent_marker"
+    return resume_origin_for_interrupted_agent()
 
 
 def _resume_candidate_from_segment(segment: dict[str, object]) -> dict[str, object]:
-    return {
-        "source": "current_execution",
-        "status": segment.get("segment_status"),
-        "phase": segment.get("phase"),
-        "plan": segment.get("plan"),
-        "segment_id": segment.get("segment_id"),
-        "resume_file": segment.get("resume_file"),
-        "checkpoint_reason": segment.get("checkpoint_reason"),
-        "first_result_gate_pending": segment.get("first_result_gate_pending"),
-        "pre_fanout_review_pending": segment.get("pre_fanout_review_pending"),
-        "pre_fanout_review_cleared": segment.get("pre_fanout_review_cleared"),
-        "skeptical_requestioning_required": segment.get("skeptical_requestioning_required"),
-        "skeptical_requestioning_summary": segment.get("skeptical_requestioning_summary"),
-        "weakest_unchecked_anchor": segment.get("weakest_unchecked_anchor"),
-        "disconfirming_observation": segment.get("disconfirming_observation"),
-        "transition_id": segment.get("transition_id"),
-        "last_result_id": segment.get("last_result_id"),
-        "downstream_locked": segment.get("downstream_locked"),
-        "waiting_reason": segment.get("waiting_reason"),
-        "blocked_reason": segment.get("blocked_reason"),
-        "last_result_label": segment.get("last_result_label"),
-        "updated_at": segment.get("updated_at"),
-    }
+    return build_resume_segment_candidate(segment)
 
 
 def _canonical_resume_candidate(
@@ -1187,12 +1166,12 @@ def _canonical_resume_candidate(
     origin: str,
     resume_pointer: str | None = None,
 ) -> dict[str, object]:
-    payload = dict(candidate)
-    payload.pop("source", None)
-    payload["kind"] = kind
-    payload["origin"] = origin
-    payload["resume_pointer"] = resume_pointer
-    return payload
+    return build_resume_candidate(
+        candidate,
+        kind=kind,
+        origin=origin,
+        resume_pointer=resume_pointer,
+    )
 
 
 def _has_candidate(
@@ -1229,17 +1208,6 @@ def _has_resume_candidate(
             continue
         return True
     return False
-
-
-def _build_resume_compat_surface(*sources: Mapping[str, object] | None) -> dict[str, object]:
-    """Return the legacy resume envelope grouped under a compatibility block."""
-    surface = _build_resume_compat_surface_shared(*sources)
-    return surface or {}
-
-
-def _strip_resume_public_compat_aliases(payload: dict[str, object]) -> dict[str, object]:
-    """Return the public resume surface with legacy aliases nested only under compat_resume_surface."""
-    return _canonicalize_resume_public_payload(payload)
 
 
 def _build_legacy_resume_state(
@@ -1378,7 +1346,7 @@ def _build_legacy_resume_state(
         "has_interrupted_agent": interrupted_agent_id is not None,
         "interrupted_agent_id": interrupted_agent_id,
     }
-    result["compat_resume_surface"] = _build_resume_compat_surface(result)
+    result["compat_resume_surface"] = build_resume_compat_surface(result) or {}
     return result
 
 
@@ -1529,7 +1497,7 @@ def _build_resume_read_state(
             "has_interrupted_agent": interrupted_agent_id is not None,
             "interrupted_agent_id": interrupted_agent_id,
         }
-        result["compat_resume_surface"] = _build_resume_compat_surface(result)
+        result["compat_resume_surface"] = build_resume_compat_surface(result) or {}
         return result
 
     try:
@@ -1561,7 +1529,7 @@ def _build_resume_read_state(
             "has_interrupted_agent": interrupted_agent_id is not None,
             "interrupted_agent_id": interrupted_agent_id,
         }
-        result["compat_resume_surface"] = _build_resume_compat_surface(result)
+        result["compat_resume_surface"] = build_resume_compat_surface(result) or {}
         return result
 
 
@@ -2130,8 +2098,8 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
         key: value for key, value in execution_context.items() if key != "resume_projection"
     }
     result.update(execution_public)
-    result["compat_resume_surface"] = _build_resume_compat_surface(result, continuation_state, execution_context)
-    return _strip_resume_public_compat_aliases(result)
+    result["compat_resume_surface"] = build_resume_compat_surface(result, continuation_state, execution_context) or {}
+    return canonicalize_resume_public_payload(result)
 
 
 def init_verify_work(cwd: Path, phase: str | None) -> dict:

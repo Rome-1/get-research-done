@@ -34,24 +34,24 @@ Parse JSON once and read it semantically:
 - **Availability and contract authority:** `state_exists`, `roadmap_exists`, `project_exists`, `planning_exists`, `commit_docs`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`
 - **Canonical continuation and recovery authority:** `resume_surface_schema_version`, `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `active_bounded_segment`, `derived_execution_head`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, `has_continuity_handoff`, `resume_candidates`, `execution_resumable`, `execution_paused_at`, `execution_review_pending`, `execution_pre_fanout_review_pending`, `execution_skeptical_requestioning_required`, `execution_downstream_locked`, `has_interrupted_agent`, `interrupted_agent_id`
 - **Compatibility-only raw intake:** `compat_resume_surface`
-  - Nested legacy candidate/source labels may still appear there for migration, debugging, and compatibility intake
-- Do not surface those names as public top-level resume vocabulary; they are not part of the public top-level resume vocabulary.
+  - Legacy raw-intake aliases stay nested under compatibility mirrors only; they are intake names, not public continuation vocabulary.
 - **Machine advisory state:** `machine_change_detected`, `machine_change_notice`, `current_hostname`, `current_platform`, `session_hostname`, `session_platform`
 
-Compatibility note: Legacy raw-intake aliases stay nested under compatibility mirrors only; the current raw envelope can still surface nested compatibility cues such as `session_resume_file` inside `compat_resume_surface.segment_candidates`. Treat those cues as machine-intake names, not the top-level human vocabulary for continuation.
+Compatibility note: the current raw envelope can still surface nested compatibility cues such as `session_resume_file` inside `compat_resume_surface.segment_candidates`. Treat those cues as machine-intake names, not the top-level human vocabulary for continuation.
 
 Public resume vocabulary centers on `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, and `resume_candidates`.
+They are not part of the public top-level resume vocabulary.
 
 `state_exists` means INIT could recover usable state from `GPD/state.json`, `GPD/state.json.bak`, or `GPD/STATE.md`. A stray unreadable file path by itself does not count as recoverable state.
 
-Current public behavior distinguishes canonical continuation authority, continuity mirrors, and the derived execution head:
+The shared resume resolver still distinguishes canonical continuation authority, continuity mirrors, and the derived execution head:
 
 - **storage authority:** `GPD/state.json`, with `GPD/state.json.bak` as the recovery backup; canonical `continuation` lives here
 - **editable mirror:** `GPD/STATE.md`
 - **temporary handoff artifact:** `GPD/phases/.../.continue-here.md`
 - **derived execution head / live execution overlay:** `GPD/observability/current-execution.json`, used as a compatibility projection when canonical bounded-segment state is absent
 
-`gpd init resume` resolves the canonical continuation decision across those layers. It is canonical-first: `state.json.continuation` wins, the canonical bounded segment and recorded handoff fields define the primary resume target, and the derived execution head only fills compatibility gaps when bounded-segment state is missing. Do not treat any single `.continue-here.md` file or compatibility snapshot as the sole authority in isolation. Nested compatibility cues stay compatibility-only and do not define the public vocabulary.
+`gpd init resume` is the shared resolver across those layers. It is canonical-first: `state.json.continuation` wins, the canonical bounded segment and recorded handoff fields define the primary resume target, and the derived execution head only fills compatibility gaps when bounded-segment state is missing. The shared resume-surface resolver owns the canonical candidate kind/origin semantics, so raw source labels remain nested compatibility intake only. Do not treat any single `.continue-here.md` file or compatibility snapshot as the sole authority in isolation. Nested compatibility cues stay compatibility-only and do not define the public vocabulary.
 
 **If `state_exists` is true:** Proceed to load_state
 **If `state_exists` is false but `roadmap_exists` or `project_exists` is true:** Offer to reconstruct STATE.md
@@ -235,7 +235,7 @@ fi
 
 **Bounded execution segment detection:** If `active_resume_kind` is `bounded_segment`, `execution_resumable` is true, and `active_resume_pointer` is present, treat that bounded continuation as the primary resume target. The runtime currently ranks three semantic recovery families into `resume_candidates`: a resumable live execution snapshot, a recorded handoff, and an interrupted-agent marker. In the current raw envelope those families may still appear as nested compatibility cues inside `compat_resume_surface.segment_candidates`. If the live snapshot lacks a portable usable resume file, keep it visible only as advisory context. Do NOT invent additional candidates from plan files without summaries, auto-checkpoints, or other ad hoc checkpoints.
 
-The derived execution head and the temporary handoff artifact are both subordinate to the storage authority chain. They refine the continuation target; they do not replace `GPD/state.json > GPD/state.json.bak > GPD/STATE.md`, and the compatibility mirror only backfills bounded-segment state for legacy compatibility when canonical bounded-segment state is absent. Nested raw-envelope aliases never outrank canonical fields.
+The shared resume resolver keeps the derived execution head and the temporary handoff artifact subordinate to the storage authority chain. They refine the continuation target; they do not replace `GPD/state.json > GPD/state.json.bak > GPD/STATE.md`, and the compatibility mirror only backfills bounded-segment state for legacy compatibility when canonical bounded-segment state is absent. Nested raw-envelope aliases never outrank canonical fields.
 
 Reason-scoped clears still matter on resume: a `first_result` clear does not retire `pre_fanout` or skeptical fields, and a `fanout unlock` does not clear the review gate by itself.
 

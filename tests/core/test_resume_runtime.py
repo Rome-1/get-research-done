@@ -152,6 +152,7 @@ def test_init_resume_surfaces_machine_change_and_session_resume_candidate(
     assert ctx["active_resume_origin"] == "continuation.handoff"
     assert ctx["active_resume_pointer"] == "GPD/phases/03-analysis/.continue-here.md"
     _assert_no_resume_compat_aliases(ctx)
+    assert set(ctx["compat_resume_surface"]) == set(RESUME_COMPATIBILITY_ALIAS_KEYS)
     assert ctx["compat_resume_surface"]["session_resume_file"] == "GPD/phases/03-analysis/.continue-here.md"
     assert ctx["compat_resume_surface"]["execution_resume_file"] == "GPD/phases/03-analysis/.continue-here.md"
     assert ctx["compat_resume_surface"]["execution_resume_file_source"] == "session_resume_file"
@@ -232,6 +233,7 @@ def test_init_resume_uses_canonical_continuation_when_legacy_session_conflicts(
     assert ctx["compat_resume_surface"]["session_resume_file"] == "GPD/phases/03-analysis/.continue-here.md"
     assert ctx["compat_resume_surface"]["execution_resume_file"] == "GPD/phases/03-analysis/.continue-here.md"
     assert ctx["compat_resume_surface"]["execution_resume_file_source"] == "session_resume_file"
+    assert set(ctx["compat_resume_surface"]) == set(RESUME_COMPATIBILITY_ALIAS_KEYS)
     assert ctx["resume_candidates"] == [
         {
             "status": "handoff",
@@ -739,6 +741,7 @@ def test_init_resume_surfaces_missing_session_handoff_as_advisory_candidate(
     assert ctx["active_resume_origin"] is None
     assert ctx["active_resume_pointer"] is None
     _assert_no_resume_compat_aliases(ctx)
+    assert set(ctx["compat_resume_surface"]) == set(RESUME_COMPATIBILITY_ALIAS_KEYS)
     assert ctx["compat_resume_surface"].get("session_resume_file") is None
     assert ctx["compat_resume_surface"]["recorded_session_resume_file"] == "GPD/phases/03-analysis/alternate-resume.md"
     assert ctx["compat_resume_surface"]["missing_session_resume_file"] == "GPD/phases/03-analysis/alternate-resume.md"

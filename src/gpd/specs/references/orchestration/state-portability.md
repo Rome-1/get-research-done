@@ -4,13 +4,13 @@ How GPD project state travels between machines, survives session interruptions, 
 
 ## Continuation Surface Contract
 
-The current continuation architecture separates execution provenance from bounded-resume authority. The portable execution story now has an append-only lineage record plus a derived execution head, while `gpd init resume` computes the canonical continuation view by reading `state.json.continuation` first and only consulting compatibility surfaces when the canonical bounded segment is missing or incomplete. The canonical public resume surface centers on `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `active_bounded_segment`, `derived_execution_head`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, and `resume_candidates`. Nested compatibility cues stay under `compat_resume_surface.segment_candidates` and the `session` mirror; they do not compete with the canonical fields. Legacy raw-intake aliases remain nested under `compat_resume_surface`. Nested compatibility-only cues remain available for migration and compatibility intake, but the public top-level resume vocabulary does not promote them alongside canonical fields; they are not part of the public top-level resume vocabulary. `session`, `.continue-here.md`, and `DERIVATION-STATE.md` are supporting projections only; they may mirror canonical continuation or provenance, but they do not compete with it:
+The current continuation architecture separates execution provenance from bounded-resume authority. The portable execution story now has an append-only lineage record plus a derived execution head, and `gpd init resume` is the shared resolver that reads `state.json.continuation` first before projecting the canonical continuation view from the storage, lineage, and recovery ladder. The shared resume-surface resolver owns the canonical candidate kind/origin semantics, so raw source labels remain intake-only compatibility cues. The canonical public resume surface centers on `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `active_bounded_segment`, `derived_execution_head`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, and `resume_candidates`. Nested compatibility cues stay under `compat_resume_surface.segment_candidates` and the `session` mirror; they do not compete with the canonical fields. `session`, `.continue-here.md`, and `DERIVATION-STATE.md` are supporting projections only; they may mirror canonical continuation or provenance, but they do not compete with it:
 
 `state.json.continuation` is the durable authority.
 
-Legacy raw-intake aliases stay nested under compatibility mirrors only.
-
 Public resume vocabulary centers on `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, and `resume_candidates`.
+Legacy raw-intake aliases stay nested under compatibility mirrors only.
+They are not part of the public top-level resume vocabulary.
 
 | Surface | Current Role | Authority |
 |---------|--------------|-----------|
@@ -21,7 +21,7 @@ Public resume vocabulary centers on `active_resume_kind`, `active_resume_origin`
 | Execution lineage | Append-only execution provenance | Authoritative for history only |
 | Derived execution head / `GPD/observability/current-execution.json` | Compatibility mirror showing the latest execution snapshot | Advisory unless canonical `continuation.bounded_segment` is absent |
 
-The resolver is `gpd init resume`. No single handoff file, lineage row, or execution snapshot is, by itself, the canonical continuation state. Canonical state in `state.json.continuation` wins first; the canonical bounded segment and recorded handoff fields define the primary resume target; and the derived execution head only fills compatibility gaps in the recovery ladder. Legacy `session` fields can still backfill missing canonical continuity during explicit migration or recovery, but they never outrank canonical continuation once that state exists.
+The shared resolver is `gpd init resume`. No single handoff file, lineage row, or execution snapshot is, by itself, the canonical continuation state. Canonical state in `state.json.continuation` wins first; the canonical bounded segment and recorded handoff fields define the primary resume target; and the derived execution head only fills compatibility gaps in the recovery ladder. Legacy `session` fields can still backfill missing canonical continuity during explicit migration or recovery, but they never outrank canonical continuation once that state exists.
 
 ## What Is Portable
 
@@ -38,7 +38,7 @@ Portable contents include:
 - Append-only execution lineage and its derived head projection
 - Session telemetry and agent history
 
-Portable references should stay anchored at the repository root. `state_record_session()` normalizes project-local absolute `resume_file` paths back to relative form before persisting them; any external absolute path that survives in state is advisory-only continuity metadata rather than a portable contract. The current canonical continuation view is therefore repo-root-relative even though it may be assembled from multiple surfaces. When `state.json.continuation.bounded_segment` exists, that durable bounded-segment state is authoritative; the derived execution head and `GPD/observability/current-execution.json` are compatibility projections, not the source of bounded-resume authority. `DERIVATION-STATE.md` stays supporting context for derivation history, not a competing store for resume ranking or project position. The public resume vocabulary still uses the canonical fields above; nested alias labels remain compatibility-only cues.
+Portable references should stay anchored at the repository root. `state_record_session()` normalizes project-local absolute `resume_file` paths back to relative form before persisting them; any external absolute path that survives in state is advisory-only continuity metadata rather than a portable contract. The shared resume resolver keeps the canonical continuation view repo-root-relative even though it may be assembled from multiple surfaces. When `state.json.continuation.bounded_segment` exists, that durable bounded-segment state is authoritative; the derived execution head and `GPD/observability/current-execution.json` are compatibility projections, not the source of bounded-resume authority. `DERIVATION-STATE.md` stays supporting context for derivation history, not a competing store for resume ranking or project position. The public resume vocabulary still uses the canonical fields above; nested alias labels remain compatibility-only cues.
 
 Resume and progress surfaces treat state as present only when it can actually be recovered from `state.json`, `state.json.bak`, or `STATE.md`. A lone unreadable file path does not count as portable recoverable state.
 
@@ -101,14 +101,14 @@ For most disagreements, `/gpd:sync-state` or `gpd state validate` will detect an
 
 `/gpd:resume-work` does not blindly reload the last session. It **infers** the current project state from the full artifact tree.
 
-Current public behavior therefore distinguishes canonical continuation authority, continuity mirrors, and the derived execution head, while keeping compatibility cues nested and out of the public top-level resume vocabulary:
+The shared resume resolver turns the storage authority chain into one canonical continuation view, while keeping compatibility cues nested and out of the public top-level resume vocabulary:
 
 - storage authority: `GPD/state.json` (including `continuation`), then `GPD/state.json.bak`, then `GPD/STATE.md`
 - editable mirror: `GPD/STATE.md`
 - temporary handoff artifact: `GPD/phases/.../.continue-here.md`
 - derived execution head / compatibility mirror: `GPD/observability/current-execution.json`
 
-The canonical continuation view shown by `/gpd:resume-work` and `gpd resume` is derived from those layers by `gpd init resume`:
+The canonical continuation view shown by `/gpd:resume-work` and `gpd resume` is derived once from those layers by `gpd init resume`:
 
 1. Reads `state.json` for the authoritative machine-readable position, including canonical `continuation` when present.
 2. Cross-references against the filesystem (phase directories, plan/summary pairs, resume artifacts).

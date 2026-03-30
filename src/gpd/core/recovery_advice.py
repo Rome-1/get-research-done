@@ -14,7 +14,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from gpd.core.context import init_resume
 from gpd.core.recent_projects import list_recent_projects
-from gpd.core.resume_surface import RESUME_COMPATIBILITY_ALIAS_KEYS, build_resume_compat_surface
+from gpd.core.resume_surface import (
+    lookup_resume_surface_list,
+    lookup_resume_surface_mapping,
+    lookup_resume_surface_text,
+    resolve_resume_compat_surface,
+    resume_candidate_kind,
+    resume_candidate_origin,
+    resume_source_from_origin,
+)
 from gpd.core.surface_phrases import (
     recovery_continue_reason,
     recovery_fast_next_reason,
@@ -29,14 +37,6 @@ __all__ = [
 ]
 
 RESUME_SURFACE_SCHEMA_VERSION = 1
-_COMPAT_SOURCE_TO_CANONICAL_ORIGIN = {
-    "current_execution": "compat.current_execution",
-    "session_resume_file": "compat.session_resume_file",
-    "interrupted_agent": "interrupted_agent_marker",
-}
-_CANONICAL_ORIGIN_TO_COMPAT_SOURCE = {
-    value: key for key, value in _COMPAT_SOURCE_TO_CANONICAL_ORIGIN.items()
-}
 
 
 class RecoveryAdviceAction(BaseModel):
@@ -106,9 +106,7 @@ class RecoveryAdvice(BaseModel):
 
     @property
     def execution_resume_file_source(self) -> str | None:
-        if self.active_resume_origin is None:
-            return None
-        return _CANONICAL_ORIGIN_TO_COMPAT_SOURCE.get(self.active_resume_origin)
+        return resume_source_from_origin(self.active_resume_origin)
 
     @property
     def has_session_resume_file(self) -> bool:
@@ -155,23 +153,8 @@ def _candidate_text(candidate: Mapping[str, object], field: str) -> str | None:
     return stripped or None
 
 
-def _mapping_field(payload: Mapping[str, object], field: str) -> Mapping[str, object] | None:
-    value = payload.get(field)
-    return value if isinstance(value, Mapping) else None
-
-
 def _compat_resume_surface(payload: Mapping[str, object]) -> Mapping[str, object] | None:
-    for value in payload.values():
-        if not isinstance(value, Mapping):
-            continue
-        nested_resume_surface = value.get("resume_surface")
-        if isinstance(nested_resume_surface, Mapping):
-            if any(alias_key in nested_resume_surface for alias_key in RESUME_COMPATIBILITY_ALIAS_KEYS):
-                return nested_resume_surface
-        if any(alias_key in value for alias_key in RESUME_COMPATIBILITY_ALIAS_KEYS):
-            return value
-
-    return build_resume_compat_surface(payload)
+    return resolve_resume_compat_surface(payload)
 
 
 def _canonical_text_field(
@@ -181,16 +164,13 @@ def _canonical_text_field(
     *,
     compat_fields: Sequence[str] = (),
 ) -> str | None:
-    value = _text_field(payload, field)
-    if value is not None:
-        return value
-    if compat_surface is None:
-        return None
-    for compat_field in (field, *compat_fields):
-        value = _text_field(compat_surface, compat_field)
-        if value is not None:
-            return value
-    return None
+    return lookup_resume_surface_text(
+        payload,
+        field,
+        compat_surface=compat_surface,
+        compat_key=field,
+        compat_keys=compat_fields,
+    )
 
 
 def _legacy_text_field(
@@ -200,12 +180,14 @@ def _legacy_text_field(
     *,
     compat_fields: Sequence[str] = (),
 ) -> str | None:
-    if compat_surface is not None:
-        for compat_field in (field, *compat_fields):
-            value = _text_field(compat_surface, compat_field)
-            if value is not None:
-                return value
-    return _text_field(payload, field)
+    return lookup_resume_surface_text(
+        payload,
+        field,
+        compat_surface=compat_surface,
+        compat_key=field,
+        compat_keys=compat_fields,
+        prefer_compat=True,
+    )
 
 
 def _canonical_mapping_field(
@@ -215,16 +197,13 @@ def _canonical_mapping_field(
     *,
     compat_fields: Sequence[str] = (),
 ) -> Mapping[str, object] | None:
-    value = _mapping_field(payload, field)
-    if value is not None:
-        return value
-    if compat_surface is None:
-        return None
-    for compat_field in (field, *compat_fields):
-        value = _mapping_field(compat_surface, compat_field)
-        if value is not None:
-            return value
-    return None
+    return lookup_resume_surface_mapping(
+        payload,
+        field,
+        compat_surface=compat_surface,
+        compat_key=field,
+        compat_keys=compat_fields,
+    )
 
 
 def _legacy_mapping_field(
@@ -234,12 +213,14 @@ def _legacy_mapping_field(
     *,
     compat_fields: Sequence[str] = (),
 ) -> Mapping[str, object] | None:
-    if compat_surface is not None:
-        for compat_field in (field, *compat_fields):
-            value = _mapping_field(compat_surface, compat_field)
-            if value is not None:
-                return value
-    return _mapping_field(payload, field)
+    return lookup_resume_surface_mapping(
+        payload,
+        field,
+        compat_surface=compat_surface,
+        compat_key=field,
+        compat_keys=compat_fields,
+        prefer_compat=True,
+    )
 
 
 def _canonical_list_field(
@@ -249,16 +230,13 @@ def _canonical_list_field(
     *,
     compat_fields: Sequence[str] = (),
 ) -> list[object] | None:
-    value = payload.get(field)
-    if isinstance(value, list):
-        return value
-    if compat_surface is None:
-        return None
-    for compat_field in (field, *compat_fields):
-        value = compat_surface.get(compat_field)
-        if isinstance(value, list):
-            return value
-    return None
+    return lookup_resume_surface_list(
+        payload,
+        field,
+        compat_surface=compat_surface,
+        compat_key=field,
+        compat_keys=compat_fields,
+    )
 
 
 def _legacy_list_field(
@@ -268,46 +246,22 @@ def _legacy_list_field(
     *,
     compat_fields: Sequence[str] = (),
 ) -> list[object] | None:
-    if compat_surface is not None:
-        for compat_field in (field, *compat_fields):
-            value = compat_surface.get(compat_field)
-            if isinstance(value, list):
-                return value
-    value = payload.get(field)
-    if isinstance(value, list):
-        return value
-    return None
+    return lookup_resume_surface_list(
+        payload,
+        field,
+        compat_surface=compat_surface,
+        compat_key=field,
+        compat_keys=compat_fields,
+        prefer_compat=True,
+    )
 
 
 def _candidate_kind(candidate: Mapping[str, object]) -> str | None:
-    kind = _candidate_text(candidate, "kind")
-    if kind is not None:
-        return kind
-    origin = _candidate_text(candidate, "origin")
-    if origin == "interrupted_agent_marker":
-        return "interrupted_agent"
-    if origin in {"continuation.bounded_segment", "compat.current_execution"}:
-        return "bounded_segment"
-    if origin in {"continuation.handoff", "compat.session_resume_file"}:
-        return "continuity_handoff"
-    source = _candidate_text(candidate, "source")
-    if source == "interrupted_agent":
-        return "interrupted_agent"
-    if source == "current_execution":
-        return "bounded_segment"
-    if source == "session_resume_file":
-        return "continuity_handoff"
-    return None
+    return resume_candidate_kind(candidate)
 
 
 def _candidate_origin(candidate: Mapping[str, object]) -> str | None:
-    origin = _candidate_text(candidate, "origin")
-    if origin is not None:
-        return origin
-    source = _candidate_text(candidate, "source")
-    if source is None:
-        return None
-    return _COMPAT_SOURCE_TO_CANONICAL_ORIGIN.get(source)
+    return resume_candidate_origin(candidate)
 
 
 def _has_candidate(

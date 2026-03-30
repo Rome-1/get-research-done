@@ -430,6 +430,43 @@ def test_build_recovery_advice_recovers_nested_resume_surface_compat_wrapper(
     assert advice.current_workspace_has_resume_file is True
 
 
+def test_build_recovery_advice_recovers_arbitrary_nested_resume_surface_wrapper(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    handoff = project / "GPD" / "phases" / "12" / ".continue-here.md"
+    handoff.parent.mkdir(parents=True, exist_ok=True)
+    handoff.write_text("resume\n", encoding="utf-8")
+
+    advice = build_recovery_advice(
+        project,
+        recent_rows=[],
+        resume_payload={
+            "recovery": {
+                "resume_surface": {
+                    "execution_resume_file": "GPD/phases/12/.continue-here.md",
+                    "execution_resume_file_source": "session_resume_file",
+                    "segment_candidates": [
+                        {
+                            "source": "session_resume_file",
+                            "status": "handoff",
+                            "resume_file": "GPD/phases/12/.continue-here.md",
+                        }
+                    ],
+                }
+            },
+            "has_live_execution": False,
+        },
+    )
+
+    assert advice.status == "session-handoff"
+    assert advice.active_resume_kind == "continuity_handoff"
+    assert advice.active_resume_origin == "compat.session_resume_file"
+    assert advice.active_resume_pointer == "GPD/phases/12/.continue-here.md"
+    assert advice.has_continuity_handoff is True
+    assert advice.current_workspace_has_resume_file is True
+
+
 def test_build_recovery_advice_recovers_continuity_handoff_from_candidate_only_payload(tmp_path: Path) -> None:
     project = _project(tmp_path)
 

@@ -1283,6 +1283,7 @@ class TestInitResume:
         assert ctx["compat_resume_surface"]["segment_candidates"][0]["source"] == "current_execution"
         assert ctx["compat_resume_surface"]["resume_mode"] == "bounded_segment"
         _assert_no_resume_compat_aliases(ctx)
+        assert set(ctx["compat_resume_surface"]) == set(RESUME_COMPATIBILITY_ALIAS_KEYS)
         assert "segment_candidates" not in ctx
         assert ctx["resume_candidates"][0]["kind"] == "bounded_segment"
         assert ctx["resume_candidates"][0]["origin"] == "compat.current_execution"
@@ -1447,6 +1448,7 @@ class TestInitResume:
                 "resume_pointer": "GPD/phases/03-analysis/.continue-here.md",
             }
         ]
+        assert set(ctx["compat_resume_surface"]) == set(RESUME_COMPATIBILITY_ALIAS_KEYS)
         assert "source" not in ctx["resume_candidates"][0]
         assert ctx["compat_resume_surface"]["segment_candidates"][0]["source"] == "session_resume_file"
         assert ctx["compat_resume_surface"]["execution_resume_file_source"] == "session_resume_file"

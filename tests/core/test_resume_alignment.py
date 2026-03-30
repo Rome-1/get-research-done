@@ -26,6 +26,7 @@ def _write_state(tmp_path: Path, state: dict) -> None:
 
 def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     resume_doc = (ROOT / "src/gpd/specs/workflows/resume-work.md").read_text(encoding="utf-8")
+    help_doc = (ROOT / "src/gpd/specs/workflows/help.md").read_text(encoding="utf-8")
     portability_doc = (ROOT / "src/gpd/specs/references/orchestration/state-portability.md").read_text(encoding="utf-8")
     state_machine_doc = (ROOT / "src/gpd/specs/templates/state-machine.md").read_text(encoding="utf-8")
     continue_here_doc = (ROOT / "src/gpd/specs/templates/continue-here.md").read_text(encoding="utf-8")
@@ -35,7 +36,7 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     transition_doc = (ROOT / "src/gpd/specs/workflows/transition.md").read_text(encoding="utf-8")
     execute_plan_doc = (ROOT / "src/gpd/specs/workflows/execute-plan.md").read_text(encoding="utf-8")
 
-    for doc in (resume_doc, portability_doc):
+    for doc in (resume_doc, help_doc, portability_doc):
         assert ".gpd/" not in doc
         assert re.search(r"/gpd:resume(?!-work)\b", doc) is None
         assert "auto_checkpoint" not in doc
@@ -44,6 +45,11 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert_resume_authority_contract(
         resume_doc,
         allow_explicit_alias_examples=True,
+        require_generic_compatibility_note=True,
+    )
+    assert_resume_authority_contract(
+        help_doc,
+        allow_explicit_alias_examples=False,
         require_generic_compatibility_note=True,
     )
     assert_resume_authority_contract(
@@ -56,6 +62,9 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "compat_resume_surface" in resume_doc
     assert "machine_change_detected" in resume_doc
     assert "Legacy raw-intake aliases stay nested under compatibility mirrors only" in resume_doc
+    assert "shared resume resolver" in help_doc
+    assert "shared resume-surface resolver owns canonical candidate kind/origin semantics" in help_doc
+    assert "`compat_resume_surface` is the nested intake-only compatibility surface" in help_doc
     assert resume_doc.index("active_resume_kind") < resume_doc.index("compat_resume_surface")
     assert "Recorded handoff artifact is missing" in resume_doc
     assert "stopped-at continuation point" in resume_doc
@@ -77,7 +86,8 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "The canonical public resume surface centers on `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`" in portability_doc
     assert "nested compatibility-only cues" in portability_doc
     assert "public top-level resume vocabulary" in portability_doc
-    assert "The current continuation architecture separates execution provenance from bounded-resume authority." in portability_doc
+    assert "shared resume resolver" in portability_doc
+    assert "shared resume-surface resolver owns the canonical candidate kind/origin semantics" in portability_doc
     assert "Execution lineage" in portability_doc
     assert "Compatibility mirror showing the latest execution snapshot" in portability_doc
     assert "No single handoff file, lineage row, or execution snapshot is, by itself, the canonical continuation state." in portability_doc
@@ -89,8 +99,9 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "temporary handoff artifact" in resume_doc
     assert "supporting continuity surfaces only" in resume_doc
     assert "Do not treat any single `.continue-here.md` file or compatibility snapshot as the sole authority in isolation." in resume_doc
-    assert "The derived execution head and the temporary handoff artifact are both subordinate to the storage authority chain." in resume_doc
-    assert "Current public behavior distinguishes canonical continuation authority, continuity mirrors, and the derived execution head:" in resume_doc
+    assert "shared resume-surface resolver owns the canonical candidate kind/origin semantics" in resume_doc
+    assert "The shared resume resolver keeps the derived execution head and the temporary handoff artifact subordinate to the storage authority chain." in resume_doc
+    assert "shared resolver across those layers" in resume_doc
     assert "project-relative paths" in portability_doc
     assert "normalizes project-local absolute `resume_file` paths back to relative form" in portability_doc
     assert "usable state from `GPD/state.json`, `GPD/state.json.bak`, or `GPD/STATE.md`" in resume_doc
