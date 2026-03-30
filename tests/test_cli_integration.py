@@ -414,7 +414,7 @@ def test_result_persist_derived_bridge_reuses_unique_equation_match_when_preferr
     ]
     state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
-    result = _invoke_result_persist_derived_like_bridge(
+    result = _invoke_result_persist_derived_bridge(
         gpd_project,
         "--id",
         "R-new",
@@ -445,7 +445,7 @@ def test_result_persist_derived_bridge_surfaces_persisted_result_in_init_progres
     state["intermediate_results"] = []
     state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
-    result = _invoke_result_persist_derived_like_bridge(
+    result = _invoke_result_persist_derived_bridge(
         gpd_project,
         "--id",
         "R-bridge-01",
@@ -465,6 +465,33 @@ def test_result_persist_derived_bridge_surfaces_persisted_result_in_init_progres
     init_payload = json.loads(init_result.output)
     assert init_payload["derived_intermediate_result_count"] == 1
     assert [entry["id"] for entry in init_payload["derived_intermediate_results"]] == ["R-bridge-01"]
+
+
+def test_result_persist_derived_bridge_reports_requested_result_id_from_slug(gpd_project: Path) -> None:
+    planning = gpd_project / "GPD"
+    state_path = planning / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["intermediate_results"] = []
+    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+    result = _invoke_result_persist_derived_bridge(
+        gpd_project,
+        "--derivation-slug",
+        "effective-mass",
+        "--equation",
+        "a = b + c",
+        "--description",
+        "Canonical bridge quantity",
+        "--phase",
+        "01",
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "persisted"
+    assert payload["requested_result_id"] == "R-01-effective-mass"
+    assert payload["result_id"] == "R-01-effective-mass"
+    assert payload["result"]["id"] == "R-01-effective-mass"
 
 
 def test_state_record_session_persists_last_result_id_in_session_and_handoff(gpd_project: Path) -> None:
@@ -592,23 +619,14 @@ def _result_command_names() -> set[str]:
     return {command.name for command in result_group.typer_instance.registered_commands}
 
 
-def _persist_derived_result_command_available() -> bool:
-    return "persist-derived" in _result_command_names()
-
-
-def _invoke_result_persist_derived_like_bridge(cwd: Path, *args: str) -> object:
-    """Invoke the derived-result persistence bridge when available.
-
-    The branch under test may not yet expose the dedicated command, so the
-    integration coverage falls back to the canonical `result upsert` writer.
-    The assertions below still lock the same persistence behavior and will
-    automatically exercise the dedicated bridge once it lands.
-    """
-    if _persist_derived_result_command_available():
-        command = ["result", "persist-derived", *args]
-    else:
-        command = ["result", "upsert", *args]
-    return runner.invoke(app, ["--raw", "--cwd", str(cwd), *command], catch_exceptions=False)
+def _invoke_result_persist_derived_bridge(cwd: Path, *args: str) -> object:
+    """Invoke the dedicated derived-result persistence bridge."""
+    assert "persist-derived" in _result_command_names()
+    return runner.invoke(
+        app,
+        ["--raw", "--cwd", str(cwd), "result", "persist-derived", *args],
+        catch_exceptions=False,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
