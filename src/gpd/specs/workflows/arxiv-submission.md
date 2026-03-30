@@ -19,7 +19,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `commit_docs`, `state_exists`, `project_exists`.
+Parse JSON for: `commit_docs`, `state_exists`, `project_exists`, `derived_manuscript_reference_status`, `derived_manuscript_reference_status_count`.
 
 Run centralized context preflight before continuing:
 
@@ -45,7 +45,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-If review preflight exits nonzero because of missing project state, missing manuscript, missing compiled manuscript, unresolved publication blockers, degraded review integrity, or missing conventions, STOP and fix those blockers before packaging.
+If review preflight exits nonzero because of missing project state, missing manuscript, missing compiled manuscript, unresolved publication blockers, degraded review integrity, or missing conventions, STOP and fix those blockers before packaging. If `derived_manuscript_reference_status` is present, use it as a first-pass summary of reference coverage and citation freshness, but keep the resolved manuscript root's `ARTIFACT-MANIFEST.json` and `BIBLIOGRAPHY-AUDIT.json` authoritative for strict packaging decisions.
 Strict preflight also requires `ARTIFACT-MANIFEST.json` and `BIBLIOGRAPHY-AUDIT.json` beside the resolved manuscript entry point. If `$ARGUMENTS` resolves to `submission/main.tex`, those review artifacts must come from `submission/`, not from legacy `GPD/paper/` copies or some other manuscript directory.
 Treat `gpd paper-build` as the authoritative step that regenerates `BIBLIOGRAPHY-AUDIT.json` for the resolved manuscript root. Do not package stale audit artifacts, even if the bibliography only changed indirectly through a citation-source handoff.
 If `GPD/review/REVIEW-LEDGER*.json` / `GPD/review/REFEREE-DECISION*.json` exist, strict preflight treats the latest round-specific pair as authoritative submission-gate input. That pair must validate against the active manuscript, and packaging may continue only when the latest recommendation is `accept` or `minor_revision` with no unresolved blocking issues. A latest `major_revision` or `reject` decision is a hard stop for submission packaging.
@@ -92,7 +92,7 @@ SUBMISSION_DIR="arxiv-submission"
 <step name="paper_build_gate">
 **Require the built manuscript contract before packaging:**
 
-The resolved manuscript must already have been materialized by `gpd paper-build`. If `${PAPER_DIR}/PAPER-CONFIG.json` exists, refresh the manuscript and artifact manifest with `gpd paper-build "${PAPER_DIR}/PAPER-CONFIG.json" --output-dir "${PAPER_DIR}"` before packaging. If the build artifacts are missing, stale, or invalid, STOP and tell the user to run `gpd paper-build` first. Do not treat manual `pdflatex` runs as the source of build truth.
+The resolved manuscript must already have been materialized by `gpd paper-build`. If `${PAPER_DIR}/PAPER-CONFIG.json` exists, refresh the manuscript and artifact manifest with `gpd paper-build "${PAPER_DIR}/PAPER-CONFIG.json" --output-dir "${PAPER_DIR}"` before packaging. If `derived_manuscript_reference_status` is present, use it as a fast sanity check for whether citation state is likely fresh or stale, but do not package on that basis alone. If the build artifacts are missing, stale, or invalid, STOP and tell the user to run `gpd paper-build` first. Do not treat manual `pdflatex` runs as the source of build truth.
 </step>
 
 <step name="paper_quality_gate">
