@@ -345,6 +345,52 @@ def test_build_resume_segment_candidate_projects_segment_fields_into_raw_resume_
     assert candidate["last_result_id"] == "result-9"
 
 
+def test_canonicalize_resume_public_payload_keeps_candidate_continuity_nested_without_adding_top_level_fields() -> None:
+    continuity_candidate = build_resume_candidate(
+        {
+            "status": "handoff",
+            "resume_file": "GPD/phases/04/.continue-here.md",
+        },
+        kind="continuity_handoff",
+        origin="continuation.handoff",
+        resume_pointer="GPD/phases/04/.continue-here.md",
+    )
+    payload = {
+        "active_resume_kind": "continuity_handoff",
+        "active_resume_origin": "continuation.handoff",
+        "active_resume_pointer": "GPD/phases/04/.continue-here.md",
+        "compat_resume_surface": {
+            "resume_mode": "continuity_handoff",
+            "segment_candidates": [
+                {
+                    "source": "session_resume_file",
+                    "status": "handoff",
+                    "resume_file": "GPD/phases/04/.continue-here.md",
+                }
+            ],
+            "session_resume_file": "GPD/phases/04/.continue-here.md",
+        },
+        "resume_candidates": [continuity_candidate],
+    }
+
+    canonical = canonicalize_resume_public_payload(payload)
+
+    assert set(canonical) == {
+        "active_resume_kind",
+        "active_resume_origin",
+        "active_resume_pointer",
+        "compat_resume_surface",
+        "resume_candidates",
+    }
+    assert canonical["resume_candidates"] == [continuity_candidate]
+    assert canonical["resume_candidates"][0]["kind"] == "continuity_handoff"
+    assert canonical["resume_candidates"][0]["origin"] == "continuation.handoff"
+    assert canonical["resume_candidates"][0]["resume_pointer"] == "GPD/phases/04/.continue-here.md"
+    assert "segment_candidates" not in canonical
+    assert "resume_mode" not in canonical
+    assert "session_resume_file" not in canonical
+
+
 def test_canonicalize_resume_public_payload_removes_legacy_top_level_aliases_and_preserves_canonical_fields() -> None:
     payload = {
         "active_resume_kind": "bounded_segment",
