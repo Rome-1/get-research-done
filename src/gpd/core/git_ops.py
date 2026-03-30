@@ -46,6 +46,7 @@ class FileCheckDetail(BaseModel):
     storage_valid: bool | None = None
     storage_class: str | None = None
     frontmatter_valid: bool | None = None
+    assert_convention_valid: bool | None = None
     has_nan: bool = False
     warnings: list[str] = Field(default_factory=list)
 
@@ -104,6 +105,7 @@ _ASSIGNMENT_NONFINITE_RE = re.compile(
     """,
     re.VERBOSE,
 )
+_DERIVATION_MARKDOWN_RE = re.compile(r"(?i)^derivation-(?!state\.md$).+\.md$")
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +160,43 @@ def _expand_check_inputs(cwd: Path, files: list[str]) -> list[str]:
             expanded.append(normalized)
 
     return expanded
+
+
+def _is_derivation_markdown_target(file_path: str) -> bool:
+    """Return whether a file is a derivation markdown artifact subject to ASSERT gating."""
+    return bool(_DERIVATION_MARKDOWN_RE.fullmatch(Path(file_path).name))
+
+
+def _load_active_convention_lock(cwd: Path) -> tuple[object | None, bool]:
+    """Load the project convention lock if it has any active values."""
+    from gpd.core.conventions import ConventionLock, is_bogus_value
+    from gpd.core.state import load_state_json
+
+    try:
+        state = load_state_json(cwd) or {}
+    except Exception:
+        return None, False
+
+    lock_data = state.get("convention_lock")
+    if not isinstance(lock_data, dict):
+        return None, False
+
+    has_active_values = any(
+        not is_bogus_value(value) for key, value in lock_data.items() if key != "custom_conventions"
+    )
+    custom_conventions = lock_data.get("custom_conventions")
+    if isinstance(custom_conventions, dict):
+        has_active_values = has_active_values or any(
+            not is_bogus_value(value) for value in custom_conventions.values()
+        )
+
+    if not has_active_values:
+        return None, False
+
+    try:
+        return ConventionLock.model_validate(lock_data), True
+    except Exception:
+        return None, False
 
 
 def _token_is_nonfinite(token: str) -> bool:
@@ -296,7 +335,49 @@ def _check_storage_path(layout: ProjectStorageLayout, full_path: Path, detail: F
         detail.warnings.append(str(exc))
 
 
-def _check_single_file(cwd: Path, file_path: str, *, layout: ProjectStorageLayout) -> FileCheckDetail:
+def _check_assert_conventions(
+    content: str,
+    detail: FileCheckDetail,
+    *,
+    file_path: str,
+    convention_lock: object | None,
+) -> None:
+    """Validate ASSERT_CONVENTION coverage for derivation markdown artifacts."""
+    if convention_lock is None:
+        detail.warnings.append(
+            f"Skipping ASSERT_CONVENTION checks for {file_path}: no active convention lock"
+        )
+        return
+
+    from gpd.core.conventions import parse_assert_conventions, validate_assertions
+
+    assertions = parse_assert_conventions(content)
+    if not assertions:
+        detail.assert_convention_valid = False
+        detail.warnings.append(f"Missing ASSERT_CONVENTION header in derivation artifact: {file_path}")
+        return
+
+    mismatches = validate_assertions(content, convention_lock, filename=file_path)
+    if mismatches:
+        detail.assert_convention_valid = False
+        for mismatch in mismatches:
+            detail.warnings.append(
+                "ASSERT_CONVENTION mismatch in "
+                f"{mismatch.file}: {mismatch.key}={mismatch.file_value!r} "
+                f"does not match lock value {mismatch.lock_value!r}"
+            )
+        return
+
+    detail.assert_convention_valid = True
+
+
+def _check_single_file(
+    cwd: Path,
+    file_path: str,
+    *,
+    layout: ProjectStorageLayout,
+    convention_lock: object | None = None,
+) -> FileCheckDetail:
     """Run pre-commit checks on a single file."""
     detail = FileCheckDetail(file=file_path)
     full_path = Path(file_path) if Path(file_path).is_absolute() else cwd / file_path
@@ -323,6 +404,13 @@ def _check_single_file(cwd: Path, file_path: str, *, layout: ProjectStorageLayou
     suffix = full_path.suffix.lower()
     if suffix in (".md", ".markdown"):
         _check_markdown(content, detail)
+        if _is_derivation_markdown_target(file_path):
+            _check_assert_conventions(
+                content,
+                detail,
+                file_path=file_path,
+                convention_lock=convention_lock,
+            )
     elif suffix == ".json":
         _check_json(content, detail)
     elif _text_contains_nonfinite_value(content):
@@ -344,6 +432,7 @@ def cmd_pre_commit_check(cwd: Path, files: list[str]) -> PreCommitCheckResult:
     1. Storage-path policy for commit targets
     2. Frontmatter YAML validity (for .md files)
     3. NaN/Inf detection in serialized file content
+    4. ASSERT_CONVENTION coverage for derivation markdown artifacts with an active lock
 
     Behavior:
     - If *files* is empty, validates the currently staged files.
@@ -355,22 +444,30 @@ def cmd_pre_commit_check(cwd: Path, files: list[str]) -> PreCommitCheckResult:
         return PreCommitCheckResult(passed=True, files_checked=0)
 
     layout = ProjectStorageLayout(cwd)
+    convention_lock, convention_lock_active = _load_active_convention_lock(cwd)
     details: list[FileCheckDetail] = []
     all_warnings: list[str] = []
 
     for file_path in resolved_files:
-        detail = _check_single_file(cwd, file_path, layout=layout)
+        detail = _check_single_file(
+            cwd,
+            file_path,
+            layout=layout,
+            convention_lock=convention_lock if convention_lock_active else None,
+        )
         details.append(detail)
         all_warnings.extend(detail.warnings)
 
     # Determine overall pass/fail
-    # Fail on: storage violations, invalid frontmatter, NaN detected, missing files
+    # Fail on: storage violations, invalid frontmatter, NaN detected, missing files,
+    # and derivation ASSERT_CONVENTION mismatches or missing required assertions.
     passed = all(
         detail.exists
         and detail.regular_file
         and detail.readable
         and detail.storage_valid is not False
         and detail.frontmatter_valid is not False
+        and detail.assert_convention_valid is not False
         and not detail.has_nan
         for detail in details
     )
