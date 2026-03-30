@@ -2051,7 +2051,7 @@ def test_pause_resume_and_help_wiring_keep_runtime_handoff_and_local_snapshot_bo
     assert "reloads that project's canonical state" in resume_work
     assert "machine-readable intake" in resume_work
     assert "resume_candidates" in resume_work
-    assert "legacy candidate/source labels" in resume_work
+    assert "Legacy raw-envelope names stay nested as compatibility-only cues and do not define the public vocabulary." in resume_work
     assert "nested compatibility cues" in resume_work
     assert "Do NOT invent additional candidates from plan files without summaries, auto-checkpoints, or other ad hoc checkpoints." in resume_work
     assert "/gpd:resume-work" in pause_work
@@ -2196,11 +2196,11 @@ def test_publication_workflows_refresh_bibliography_audit_after_bibliography_cha
     respond = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
     peer_review = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
 
-    assert "If the bibliography changed after the last audit, refresh `paper/BIBLIOGRAPHY-AUDIT.json` before strict review." in write_paper
-    assert "Refresh `paper/BIBLIOGRAPHY-AUDIT.json` after the bibliography changes before entering strict review or `pre_submission_review`." in write_paper
-    assert "If the manuscript bibliography or citation set changed after the last audit, refresh `paper/BIBLIOGRAPHY-AUDIT.json` before building the reproducibility manifest." in write_paper
+    assert "`gpd paper-build` is the authoritative step that regenerates `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` for the emitted bibliography." in write_paper
+    assert "Rerun it whenever the bibliography or citation set changes before strict review." in write_paper
+    assert "For the default bootstrap path, this means: rerun `paper-build` so `paper/BIBLIOGRAPHY-AUDIT.json` reflects the current bibliography before strict review." in write_paper
     assert "refresh `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` before generating the response letter or proceeding to final review" in respond
-    assert "If the manuscript bibliography changed after the last audit, refresh `BIBLIOGRAPHY_AUDIT_PATH` before proceeding." in peer_review
+    assert "`gpd paper-build` is the step that regenerates `BIBLIOGRAPHY-AUDIT.json` for the current bibliography; rerun it before proceeding whenever the manuscript bibliography or citation set has changed." in peer_review
     assert "absent, stale, or not review-ready" in peer_review
 
 
