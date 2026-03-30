@@ -245,5 +245,190 @@ class TestIntegration:
         assert (output_dir / "summary_report.png").exists()
 
 
+# --- Stage 5: Token Attribution tests ---
+
+class TestTokenAttribution:
+    """Test token-manifold attribution on synthetic data with known labels."""
+
+    def _make_synthetic_metadata(self, n_tokens, condition="test"):
+        """Create synthetic TokenMetadata for testing."""
+        from research.manifold_pipeline.activation_extraction import TokenMetadata
+
+        # Simulate two groups of tokens: function words and content words
+        function_words = ["the", " the", "a", " a", "is", " is", "and", " and"]
+        content_words = ["cat", " cat", "dog", " dog", "tree", " tree", "run", " run"]
+        all_words = function_words + content_words
+
+        rng = np.random.RandomState(42)
+        token_ids = rng.randint(0, 50000, size=n_tokens)
+        token_strings = [rng.choice(all_words) for _ in range(n_tokens)]
+        positions = rng.randint(0, 128, size=n_tokens).astype(np.int32)
+        text_indices = np.arange(n_tokens, dtype=np.int32) // 128
+
+        return TokenMetadata(
+            token_ids=token_ids.astype(np.int64),
+            token_strings=token_strings,
+            positions=positions,
+            text_indices=text_indices,
+            condition=condition,
+        )
+
+    def test_profile_manifold_tokens(self):
+        """Token profiling should produce correct statistics."""
+        from research.manifold_pipeline.token_attribution import profile_manifold_tokens
+
+        meta = self._make_synthetic_metadata(200)
+        mask = np.zeros(200, dtype=bool)
+        mask[:100] = True  # first 100 tokens in manifold
+
+        profile = profile_manifold_tokens("test", 0, meta, mask)
+
+        assert profile.n_tokens == 100
+        assert profile.condition == "test"
+        assert profile.manifold_id == 0
+        assert len(profile.top_tokens) > 0
+        assert profile.token_entropy > 0  # multiple token types
+        assert 0 < profile.uniqueness_ratio <= 1.0
+        assert sum(c for _, c, _ in profile.top_tokens) <= 100
+
+    def test_attribution_result_structure(self):
+        """Full attribution should produce profiles for each manifold."""
+        from research.manifold_pipeline.token_attribution import (
+            attribute_tokens_to_manifolds,
+        )
+        from research.manifold_pipeline.stage1_decompose import DecompositionResult
+
+        n = 200
+        meta = self._make_synthetic_metadata(n, "cond_a")
+
+        # Simulate decomposition with 3 manifolds
+        labels = np.array([0] * 80 + [1] * 70 + [2] * 50)
+        decomp = DecompositionResult(
+            labels=labels,
+            k=3,
+            affinity=np.eye(n),
+            eigenvalues=np.arange(20, dtype=float),
+            local_dims=np.ones(n),
+        )
+        X = np.random.RandomState(42).randn(n, 10)
+
+        result = attribute_tokens_to_manifolds(
+            {"cond_a": (decomp, X)},
+            {"cond_a": meta},
+        )
+
+        assert "cond_a" in result.condition_profiles
+        profiles = result.condition_profiles["cond_a"]
+        assert len(profiles) == 3
+        assert profiles[0].n_tokens == 80
+        assert profiles[1].n_tokens == 70
+        assert profiles[2].n_tokens == 50
+
+    def test_empty_manifold_skipped(self):
+        """Manifolds with zero tokens should be skipped."""
+        from research.manifold_pipeline.token_attribution import (
+            attribute_tokens_to_manifolds,
+        )
+        from research.manifold_pipeline.stage1_decompose import DecompositionResult
+
+        n = 100
+        meta = self._make_synthetic_metadata(n)
+
+        # k=3 but no tokens assigned to manifold 2
+        labels = np.array([0] * 60 + [1] * 40)
+        decomp = DecompositionResult(
+            labels=labels, k=3,
+            affinity=np.eye(n),
+            eigenvalues=np.arange(20, dtype=float),
+            local_dims=np.ones(n),
+        )
+        X = np.random.RandomState(42).randn(n, 10)
+
+        result = attribute_tokens_to_manifolds(
+            {"test": (decomp, X)}, {"test": meta},
+        )
+        profiles = result.condition_profiles["test"]
+        assert len(profiles) == 2  # only M0 and M1
+
+    def test_entropy_uniform_vs_concentrated(self):
+        """Uniform token distribution should have higher entropy than concentrated."""
+        from research.manifold_pipeline.token_attribution import _compute_entropy
+        from collections import Counter
+
+        # Concentrated: all same token
+        concentrated = Counter({"the": 100})
+        # Uniform: 10 tokens each appearing 10 times
+        uniform = Counter({f"tok_{i}": 10 for i in range(10)})
+
+        assert _compute_entropy(concentrated) == 0.0
+        assert _compute_entropy(uniform) > _compute_entropy(concentrated)
+
+    def test_metadata_subsampling_preserves_alignment(self):
+        """Subsampling activations and metadata should keep them aligned."""
+        from research.manifold_pipeline.activation_extraction import TokenMetadata
+
+        n = 500
+        rng = np.random.RandomState(42)
+        token_ids = np.arange(n, dtype=np.int64)
+        token_strings = [f"tok_{i}" for i in range(n)]
+        positions = np.arange(n, dtype=np.int32) % 128
+        text_indices = np.arange(n, dtype=np.int32) // 128
+
+        meta = TokenMetadata(
+            token_ids=token_ids,
+            token_strings=token_strings,
+            positions=positions,
+            text_indices=text_indices,
+            condition="test",
+        )
+
+        # Subsample like extract_and_reduce_with_tokens does
+        target = 200
+        idx = rng.choice(n, target, replace=False)
+        idx.sort()
+
+        sub_meta = TokenMetadata(
+            token_ids=meta.token_ids[idx],
+            token_strings=[meta.token_strings[i] for i in idx],
+            positions=meta.positions[idx],
+            text_indices=meta.text_indices[idx],
+            condition="test",
+        )
+
+        assert len(sub_meta.token_strings) == target
+        assert sub_meta.token_ids.shape == (target,)
+        # Check alignment: token string should match original index
+        for j, orig_idx in enumerate(idx):
+            assert sub_meta.token_strings[j] == f"tok_{orig_idx}"
+            assert sub_meta.token_ids[j] == orig_idx
+
+    def test_format_report_runs(self):
+        """Attribution report formatting should not error."""
+        from research.manifold_pipeline.token_attribution import (
+            attribute_tokens_to_manifolds,
+            format_attribution_report,
+        )
+        from research.manifold_pipeline.stage1_decompose import DecompositionResult
+
+        n = 100
+        meta = self._make_synthetic_metadata(n)
+        labels = np.array([0] * 50 + [1] * 50)
+        decomp = DecompositionResult(
+            labels=labels, k=2,
+            affinity=np.eye(n),
+            eigenvalues=np.arange(20, dtype=float),
+            local_dims=np.ones(n),
+        )
+        X = np.random.RandomState(42).randn(n, 10)
+
+        result = attribute_tokens_to_manifolds(
+            {"test": (decomp, X)}, {"test": meta},
+        )
+        report = format_attribution_report(result)
+        assert "TOKEN-MANIFOLD ATTRIBUTION REPORT" in report
+        assert "test" in report
+        assert "M0" in report
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

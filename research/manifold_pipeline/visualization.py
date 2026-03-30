@@ -169,6 +169,96 @@ def plot_diffusion_coordinates(
     plt.close()
 
 
+def plot_token_distribution(
+    profile,  # ManifoldTokenProfile
+    output_dir: Path,
+):
+    """Plot token frequency and position distributions for a manifold."""
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Panel 1: Top tokens bar chart
+    top = profile.top_tokens[:15]
+    if top:
+        labels = [repr(t[0]).strip("'") for t in top]
+        counts = [t[1] for t in top]
+        y_pos = range(len(labels))
+        ax1.barh(y_pos, counts, color="steelblue")
+        ax1.set_yticks(y_pos)
+        ax1.set_yticklabels(labels, fontsize=8)
+        ax1.invert_yaxis()
+        ax1.set_xlabel("Count")
+        ax1.set_title(f"Top Tokens — {profile.condition}/M{profile.manifold_id}\n"
+                       f"(entropy={profile.token_entropy:.2f} bits, "
+                       f"unique={profile.uniqueness_ratio:.3f})")
+
+    # Panel 2: Position distribution
+    ax2.bar(range(len(profile.position_histogram)), profile.position_histogram,
+            color="coral")
+    ax2.set_xlabel("Position bin")
+    ax2.set_ylabel("Count")
+    ax2.set_title(f"Position Distribution\n"
+                   f"(mean={profile.mean_position:.1f}, "
+                   f"std={profile.position_std:.1f})")
+
+    plt.tight_layout()
+    plt.savefig(
+        output_dir / f"tokens_{profile.condition}_M{profile.manifold_id}.png",
+        dpi=150,
+    )
+    plt.close()
+
+
+def plot_attribution_summary(
+    attribution_result,  # AttributionResult
+    output_dir: Path,
+):
+    """Plot summary of token-manifold attribution across all conditions."""
+    profiles_flat = []
+    for profiles in attribution_result.condition_profiles.values():
+        profiles_flat.extend(profiles)
+
+    if not profiles_flat:
+        return
+
+    n = len(profiles_flat)
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+
+    # Panel 1: Manifold sizes
+    ax = axes[0]
+    labels = [f"{p.condition[:4]}/M{p.manifold_id}" for p in profiles_flat]
+    sizes = [p.n_tokens for p in profiles_flat]
+    ax.bar(range(n), sizes, color="steelblue")
+    ax.set_xticks(range(n))
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
+    ax.set_ylabel("Tokens")
+    ax.set_title("Manifold Sizes (token count)")
+
+    # Panel 2: Token entropy per manifold
+    ax = axes[1]
+    entropies = [p.token_entropy for p in profiles_flat]
+    ax.bar(range(n), entropies, color="coral")
+    ax.set_xticks(range(n))
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
+    ax.set_ylabel("Entropy (bits)")
+    ax.set_title("Token Diversity (Shannon entropy)")
+
+    # Panel 3: Mean position per manifold
+    ax = axes[2]
+    positions = [p.mean_position for p in profiles_flat]
+    stds = [p.position_std for p in profiles_flat]
+    ax.bar(range(n), positions, yerr=stds, color="seagreen", capsize=3)
+    ax.set_xticks(range(n))
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
+    ax.set_ylabel("Mean position")
+    ax.set_title("Positional Bias per Manifold")
+
+    plt.suptitle("Token-Manifold Attribution Summary", fontsize=14, fontweight="bold")
+    plt.tight_layout()
+    plt.savefig(output_dir / "attribution_summary.png", dpi=150)
+    plt.close()
+    print(f"  Attribution summary saved to {output_dir / 'attribution_summary.png'}")
+
+
 def plot_summary_report(
     decompositions: dict,
     scores: list,

@@ -19,12 +19,18 @@ from .stage1_decompose import decompose
 from .stage2_match import compute_all_descriptors, match_all_conditions
 from .stage3_score import score_all_matches
 from .stage4_characterize import characterize_top_manifolds
+from .token_attribution import (
+    attribute_tokens_to_manifolds,
+    format_attribution_report,
+)
 from .visualization import (
     plot_eigengap,
     plot_clusters_2d,
     plot_persistence_diagram,
     plot_variation_heatmap,
     plot_diffusion_coordinates,
+    plot_token_distribution,
+    plot_attribution_summary,
     plot_summary_report,
 )
 
@@ -72,19 +78,20 @@ def run_synthetic(config: PipelineConfig) -> dict:
 
 def run_gpt2(config: PipelineConfig) -> dict:
     """Run pipeline on GPT-2 Small activations."""
-    from .activation_extraction import extract_and_reduce
+    from .activation_extraction import extract_and_reduce_with_tokens
 
     print("=" * 60)
     print("GPT-2 SMALL VALIDATION")
     print("=" * 60)
 
-    samples = extract_and_reduce(config)
-    return _run_pipeline(samples, config)
+    samples, token_metadata = extract_and_reduce_with_tokens(config)
+    return _run_pipeline(samples, config, token_metadata=token_metadata)
 
 
 def _run_pipeline(
     samples: dict[str, np.ndarray],
     config: PipelineConfig,
+    token_metadata: dict | None = None,
 ) -> dict:
     """Core pipeline execution on pre-extracted samples."""
     results = {}
@@ -178,6 +185,39 @@ def _run_pipeline(
     t4 = time.time()
     print(f"\nStage 4 complete in {t4 - t3:.1f}s")
 
+    # --- Stage 5: Token Attribution ---
+    attribution = None
+    if token_metadata is not None:
+        print("\n" + "=" * 60)
+        print("STAGE 5: TOKEN-MANIFOLD ATTRIBUTION")
+        print("=" * 60)
+
+        attribution = attribute_tokens_to_manifolds(
+            decompositions, token_metadata,
+        )
+
+        # Print report
+        report = format_attribution_report(attribution)
+        print(report)
+
+        # Save report
+        report_path = config.output_dir / "attribution_report.txt"
+        with open(report_path, "w") as f:
+            f.write(report)
+        print(f"\nAttribution report saved to {report_path}")
+
+        # Visualize per-manifold token distributions
+        for profiles in attribution.condition_profiles.values():
+            for profile in profiles:
+                plot_token_distribution(profile, config.output_dir)
+
+        plot_attribution_summary(attribution, config.output_dir)
+
+        t5 = time.time()
+        print(f"\nStage 5 complete in {t5 - t4:.1f}s")
+    else:
+        t5 = t4
+
     # --- Summary ---
     print("\n" + "=" * 60)
     print("SUMMARY")
@@ -185,7 +225,7 @@ def _run_pipeline(
 
     plot_summary_report(decompositions, scores, characterizations, config.output_dir)
 
-    total_time = t4 - t0
+    total_time = t5 - t0
     print(f"\nTotal pipeline time: {total_time:.1f}s ({total_time / 60:.1f} min)")
 
     # Build results dict
@@ -218,6 +258,26 @@ def _run_pipeline(
         ],
         "total_time_seconds": round(total_time, 1),
     }
+
+    # Add attribution data if available
+    if attribution is not None:
+        results["attribution"] = {}
+        for condition, profiles in attribution.condition_profiles.items():
+            results["attribution"][condition] = [
+                {
+                    "manifold_id": p.manifold_id,
+                    "n_tokens": p.n_tokens,
+                    "token_entropy": round(p.token_entropy, 2),
+                    "uniqueness_ratio": round(p.uniqueness_ratio, 3),
+                    "mean_position": round(p.mean_position, 1),
+                    "position_std": round(p.position_std, 1),
+                    "top_tokens": [
+                        {"token": tok, "count": cnt, "fraction": round(frac, 4)}
+                        for tok, cnt, frac in p.top_tokens[:10]
+                    ],
+                }
+                for p in profiles
+            ]
 
     # Save results
     results_path = config.output_dir / "results.json"
