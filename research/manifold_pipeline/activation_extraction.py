@@ -252,18 +252,20 @@ def extract_and_reduce(
         all_raw.append(acts)
         print(f"  {condition}: {acts.shape[0]} tokens, dim={acts.shape[1]}")
 
-    # Fit PCA on all conditions jointly (shared coordinate system)
-    combined = np.concatenate(all_raw, axis=0)
-    print(f"Fitting PCA: {combined.shape} -> {config.pca_dim} components")
-    pca = PCA(n_components=config.pca_dim, random_state=config.random_seed)
-    pca.fit(combined)
-    print(f"  Explained variance: {pca.explained_variance_ratio_.sum():.3f}")
+    # PCA reduction (skip if pca_dim is None)
+    if config.pca_dim is not None:
+        combined = np.concatenate(all_raw, axis=0)
+        print(f"Fitting PCA: {combined.shape} -> {config.pca_dim} components")
+        pca = PCA(n_components=config.pca_dim, random_state=config.random_seed)
+        pca.fit(combined)
+        print(f"  Explained variance: {pca.explained_variance_ratio_.sum():.3f}")
 
-    # Transform each condition
-    offset = 0
-    for condition, raw in zip(config.conditions, all_raw):
-        results[condition] = pca.transform(raw)
-        offset += raw.shape[0]
+        for condition, raw in zip(config.conditions, all_raw):
+            results[condition] = pca.transform(raw)
+    else:
+        print(f"Skipping PCA — using raw {all_raw[0].shape[1]}-dim activations")
+        for condition, raw in zip(config.conditions, all_raw):
+            results[condition] = raw
 
     # Cache
     np.savez(cache_path, **results)
@@ -321,26 +323,33 @@ def extract_and_reduce_with_tokens(
         all_pos.append(pos)
         print(f"  {condition}: {acts.shape[0]} tokens, dim={acts.shape[1]}")
 
-    # Fit PCA on all conditions jointly
-    combined = np.concatenate(all_raw, axis=0)
-    print(f"Fitting PCA: {combined.shape} -> {config.pca_dim} components")
-    pca = PCA(n_components=config.pca_dim, random_state=config.random_seed)
-    pca.fit(combined)
-    print(f"  Explained variance: {pca.explained_variance_ratio_.sum():.3f}")
-
-    # Transform and build results
+    # PCA reduction (skip if pca_dim is None)
     results = {}
     cache_arrays = {}
-    for condition, raw, tids, pos in zip(config.conditions, all_raw, all_tids, all_pos):
-        reduced = pca.transform(raw)
-        results[condition] = ExtractionResult(
-            activations=reduced,
-            token_ids=tids,
-            positions=pos,
-        )
-        cache_arrays[f"{condition}_acts"] = reduced
-        cache_arrays[f"{condition}_token_ids"] = tids
-        cache_arrays[f"{condition}_positions"] = pos
+    if config.pca_dim is not None:
+        combined = np.concatenate(all_raw, axis=0)
+        print(f"Fitting PCA: {combined.shape} -> {config.pca_dim} components")
+        pca = PCA(n_components=config.pca_dim, random_state=config.random_seed)
+        pca.fit(combined)
+        print(f"  Explained variance: {pca.explained_variance_ratio_.sum():.3f}")
+
+        for condition, raw, tids, pos in zip(config.conditions, all_raw, all_tids, all_pos):
+            reduced = pca.transform(raw)
+            results[condition] = ExtractionResult(
+                activations=reduced, token_ids=tids, positions=pos,
+            )
+            cache_arrays[f"{condition}_acts"] = reduced
+            cache_arrays[f"{condition}_token_ids"] = tids
+            cache_arrays[f"{condition}_positions"] = pos
+    else:
+        print(f"Skipping PCA — using raw {all_raw[0].shape[1]}-dim activations")
+        for condition, raw, tids, pos in zip(config.conditions, all_raw, all_tids, all_pos):
+            results[condition] = ExtractionResult(
+                activations=raw, token_ids=tids, positions=pos,
+            )
+            cache_arrays[f"{condition}_acts"] = raw
+            cache_arrays[f"{condition}_token_ids"] = tids
+            cache_arrays[f"{condition}_positions"] = pos
 
     np.savez(cache_path, **cache_arrays)
     print(f"Cached activations+tokens to {cache_path}")

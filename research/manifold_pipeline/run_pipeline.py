@@ -45,7 +45,7 @@ def run_synthetic(config: PipelineConfig) -> dict:
 
     # Generate synthetic data: two moons embedded in R^100
     n_per = 500
-    D = config.pca_dim
+    D = config.pca_dim or 100
 
     # Condition 1: two moons
     X_moons, y_moons = make_moons(n_samples=n_per * 2, noise=0.05, random_state=42)
@@ -349,6 +349,8 @@ def main():
                         help="Tokens per condition (default: 2000)")
     parser.add_argument("--pca-dim", type=int, default=100,
                         help="PCA reduction dimension (default: 100)")
+    parser.add_argument("--no-pca", action="store_true",
+                        help="Skip PCA — use raw activations")
     parser.add_argument("--smce-alpha", type=float, default=0.05,
                         help="SMCE L1 penalty (default: 0.05)")
     parser.add_argument("--layer", type=int, default=None,
@@ -360,7 +362,7 @@ def main():
 
     overrides = dict(
         n_tokens_per_condition=args.n_tokens,
-        pca_dim=args.pca_dim,
+        pca_dim=None if args.no_pca else args.pca_dim,
         smce_alpha=args.smce_alpha,
         n_permutations=args.permutations,
     )

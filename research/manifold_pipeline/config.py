@@ -14,7 +14,7 @@ class PipelineConfig:
 
     # Sampling
     n_tokens_per_condition: int = 2000
-    pca_dim: int = 100
+    pca_dim: int | None = 100  # None = skip PCA, use raw activations
     batch_size: int = 64
     max_seq_len: int = 128
 
