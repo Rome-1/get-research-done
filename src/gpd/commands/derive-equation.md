@@ -46,5 +46,5 @@ The workflow will:
 2. Guide you through a step-by-step derivation with checkpoints
 3. Verify dimensional consistency at each step
 4. Check limiting cases of the final result
-5. Record the derived equation in the project's `intermediate_results` registry using `gpd result upsert` when project state is available; the workflow still uses the existing `gpd result add` / `gpd result update` path internally. standalone runs stop after writing the derivation document and do not write project registry state
+5. Record the derived equation in the project's `intermediate_results` registry through the executable `gpd result upsert` bridge when project state is available; the workflow reuses or carries forward a stable `result_id` on reruns. standalone runs stop after writing the derivation document and do not write project registry state
 </process>

@@ -439,12 +439,12 @@ Write to `GPD/analysis/derivation-{slug}.md`.
 <step name="persist_result">
 **Step 6: Persist Canonical Result**
 
-Persist the final derived equation back into the existing result registry when project state is available.
+Persist the final derived equation through the executable `gpd result upsert` bridge when project state is available.
 
 - If `state_exists` is true:
   1. Resolve a stable `result_id`. On reruns, prefer the `result_id` already associated with the derivation record or invocation context if one is available. Otherwise derive a deterministic ID from the derivation slug and phase.
   2. Re-check `state.json.intermediate_results` for the same `result_id` or an existing canonical equation for the same target. If a matching entry already exists, reuse its `result_id` instead of creating a duplicate.
-  3. Persist the final result using the canonical upsert surface first:
+  3. Persist the final result with the bridge:
 
 ```bash
 gpd result upsert --id "{result_id}" --equation "{final_equation}" --description "{short description}" --phase "{phase}" --validity "{validity}" [--depends-on "{comma-separated ids}"]
@@ -456,21 +456,9 @@ If no stable `result_id` is available yet, use the equation-matching form instea
 gpd result upsert --equation "{final_equation}" --description "{short description}" --phase "{phase}" --validity "{validity}" [--depends-on "{comma-separated ids}"]
 ```
 
-This updates the existing canonical entry when `result_id` is already present, reuses a unique exact equation match in the same phase when `result_id` is absent, falls back to a unique exact description match when the equation is not yet stable, and only adds a new registry entry when no safe match exists.
+This bridge updates the existing canonical entry when `result_id` is already present, reuses a unique exact equation match in the same phase when `result_id` is absent, falls back to a unique exact description match when the equation is not yet stable, and only adds a new registry entry when no safe match exists.
 
 If `gpd result upsert` reports multiple matches for the same equation or description, STOP and disambiguate with an explicit `result_id` or narrower `phase`. Do not guess which registry entry should be canonical.
-
-If the upsert path is unavailable, fall back to the existing add/update pair:
-
-```bash
-gpd result add --id "{result_id}" --equation "{final_equation}" --description "{short description}" --phase "{phase}" --validity "{validity}" [--depends-on "{comma-separated ids}"]
-```
-
-or, on reruns / matching entries:
-
-```bash
-gpd result update "{result_id}" --equation "{final_equation}" --description "{short description}" --phase "{phase}" --validity "{validity}" [--depends-on "{comma-separated ids}"]
-```
 
   4. Carry the resulting `result_id` forward in the derivation workflow context so later reruns can target the same canonical registry entry.
   5. Keep `verified=false` unless the derivation also produced verification evidence that should be recorded separately.
@@ -521,7 +509,7 @@ This keeps standalone derivations safe while making project-mode derivations reu
 - [ ] Regime of validity stated
 - [ ] All relevant limiting cases verified
 - [ ] Connection to known results documented
-- [ ] Final derived equation persisted through `gpd result upsert` in project mode, with the chosen `result_id` retained for later reruns
+- [ ] Final derived equation persisted through the executable `gpd result upsert` bridge in project mode, with the chosen `result_id` retained for later reruns
 - [ ] Standalone mode skipped registry write-back and stayed self-contained
 - [ ] Complete derivation document written
 
