@@ -1,10 +1,19 @@
 """Extract activations from GPT-2 Small via TransformerLens."""
 
 import numpy as np
+from dataclasses import dataclass
 from pathlib import Path
 from sklearn.decomposition import PCA
 
 from .config import PipelineConfig
+
+
+@dataclass
+class ExtractionResult:
+    """Activations with token metadata for attribution analysis."""
+    activations: np.ndarray   # (N, pca_dim) PCA-reduced
+    token_ids: np.ndarray     # (N,) vocab token ID per activation
+    positions: np.ndarray     # (N,) sequence position per activation
 
 
 # --- Condition text generators ---
@@ -141,6 +150,55 @@ def extract_activations(
     return np.concatenate(all_activations, axis=0)
 
 
+def extract_activations_with_tokens(
+    model,
+    texts: list[str],
+    hook_point: str,
+    max_seq_len: int = 128,
+    batch_size: int = 64,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Extract activations with token metadata.
+
+    Returns:
+        activations: (total_tokens, hidden_dim)
+        token_ids: (total_tokens,) vocab ID per token
+        positions: (total_tokens,) sequence position per token
+    """
+    import torch
+
+    all_activations = []
+    all_token_ids = []
+    all_positions = []
+
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        tokens = model.to_tokens(batch, prepend_bos=True)
+        if tokens.shape[1] > max_seq_len:
+            tokens = tokens[:, :max_seq_len]
+
+        batch_size_actual, seq_len = tokens.shape
+
+        with torch.no_grad():
+            _, cache = model.run_with_cache(tokens, names_filter=[hook_point])
+
+        acts = cache[hook_point].cpu().numpy()
+        acts = acts.reshape(-1, acts.shape[-1])
+        all_activations.append(acts)
+
+        # Token IDs: flatten (batch, seq_len) -> (batch * seq_len,)
+        all_token_ids.append(tokens.cpu().numpy().reshape(-1))
+
+        # Positions: [0, 1, ..., seq_len-1] repeated per batch item
+        pos = np.tile(np.arange(seq_len), batch_size_actual)
+        all_positions.append(pos)
+
+    return (
+        np.concatenate(all_activations, axis=0),
+        np.concatenate(all_token_ids, axis=0),
+        np.concatenate(all_positions, axis=0),
+    )
+
+
 def extract_and_reduce(
     config: PipelineConfig,
     model=None,
@@ -194,5 +252,81 @@ def extract_and_reduce(
     # Cache
     np.savez(cache_path, **results)
     print(f"Cached activations to {cache_path}")
+
+    return results
+
+
+def extract_and_reduce_with_tokens(
+    config: PipelineConfig,
+    model=None,
+) -> dict[str, ExtractionResult]:
+    """Extract activations with token metadata, PCA reduce, and cache.
+
+    Returns dict mapping condition name to ExtractionResult with
+    (activations, token_ids, positions) all aligned.
+    """
+    cache_path = config.cache_dir / "activations_with_tokens.npz"
+    if cache_path.exists():
+        print(f"Loading cached activations+tokens from {cache_path}")
+        data = np.load(cache_path)
+        results = {}
+        for cond in config.conditions:
+            results[cond] = ExtractionResult(
+                activations=data[f"{cond}_acts"],
+                token_ids=data[f"{cond}_token_ids"],
+                positions=data[f"{cond}_positions"],
+            )
+        return results
+
+    if model is None:
+        model = load_model(config.model_name)
+
+    all_raw = []
+    all_tids = []
+    all_pos = []
+
+    for condition in config.conditions:
+        print(f"Extracting activations+tokens for condition: {condition}")
+        n_texts = max(config.n_tokens_per_condition // (config.max_seq_len // 2), 20)
+        texts = generate_condition_texts(condition, n_texts, config.max_seq_len)
+        acts, tids, pos = extract_activations_with_tokens(
+            model, texts, config.hook_point,
+            config.max_seq_len, config.batch_size,
+        )
+        # Subsample to target token count (preserving alignment)
+        if acts.shape[0] > config.n_tokens_per_condition:
+            rng = np.random.RandomState(config.random_seed)
+            idx = rng.choice(acts.shape[0], config.n_tokens_per_condition, replace=False)
+            acts = acts[idx]
+            tids = tids[idx]
+            pos = pos[idx]
+        all_raw.append(acts)
+        all_tids.append(tids)
+        all_pos.append(pos)
+        print(f"  {condition}: {acts.shape[0]} tokens, dim={acts.shape[1]}")
+
+    # Fit PCA on all conditions jointly
+    combined = np.concatenate(all_raw, axis=0)
+    print(f"Fitting PCA: {combined.shape} -> {config.pca_dim} components")
+    pca = PCA(n_components=config.pca_dim, random_state=config.random_seed)
+    pca.fit(combined)
+    print(f"  Explained variance: {pca.explained_variance_ratio_.sum():.3f}")
+
+    # Transform and build results
+    results = {}
+    cache_arrays = {}
+    for condition, raw, tids, pos in zip(config.conditions, all_raw, all_tids, all_pos):
+        reduced = pca.transform(raw)
+        results[condition] = ExtractionResult(
+            activations=reduced,
+            token_ids=tids,
+            positions=pos,
+        )
+        cache_arrays[f"{condition}_acts"] = reduced
+        cache_arrays[f"{condition}_token_ids"] = tids
+        cache_arrays[f"{condition}_positions"] = pos
+
+    np.savez(cache_path, **cache_arrays)
+    print(f"Cached activations+tokens to {cache_path}")
 
     return results

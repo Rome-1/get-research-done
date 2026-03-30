@@ -19,6 +19,10 @@ from .stage1_decompose import decompose
 from .stage2_match import compute_all_descriptors, match_all_conditions
 from .stage3_score import score_all_matches
 from .stage4_characterize import characterize_top_manifolds
+from .token_attribution import (
+    compute_token_attribution,
+    run_phase1_gate,
+)
 from .visualization import (
     plot_eigengap,
     plot_clusters_2d,
@@ -71,22 +75,30 @@ def run_synthetic(config: PipelineConfig) -> dict:
 
 
 def run_gpt2(config: PipelineConfig) -> dict:
-    """Run pipeline on GPT-2 Small activations."""
-    from .activation_extraction import extract_and_reduce
+    """Run pipeline on GPT-2 Small activations with token attribution."""
+    from .activation_extraction import extract_and_reduce_with_tokens
 
     print("=" * 60)
     print("GPT-2 SMALL VALIDATION")
     print("=" * 60)
 
-    samples = extract_and_reduce(config)
-    return _run_pipeline(samples, config)
+    extraction_results = extract_and_reduce_with_tokens(config)
+    samples = {cond: er.activations for cond, er in extraction_results.items()}
+    return _run_pipeline(samples, config, extraction_results=extraction_results)
 
 
 def _run_pipeline(
     samples: dict[str, np.ndarray],
     config: PipelineConfig,
+    extraction_results=None,
 ) -> dict:
-    """Core pipeline execution on pre-extracted samples."""
+    """Core pipeline execution on pre-extracted samples.
+
+    Args:
+        samples: condition -> (N, D) activation arrays
+        config: pipeline configuration
+        extraction_results: optional dict of ExtractionResult with token metadata
+    """
     results = {}
     t0 = time.time()
 
@@ -178,6 +190,56 @@ def _run_pipeline(
     t4 = time.time()
     print(f"\nStage 4 complete in {t4 - t3:.1f}s")
 
+    # --- Stage 5: Token-Manifold Attribution (Phase 1 go/kill gate) ---
+    phase1_result = None
+    if extraction_results is not None:
+        print("\n" + "=" * 60)
+        print("STAGE 5: TOKEN-MANIFOLD ATTRIBUTION (PHASE 1 GATE)")
+        print("=" * 60)
+
+        from .activation_extraction import load_model
+        model = load_model(config.model_name)
+        tokenizer = model.tokenizer
+
+        condition_attr_results = {}
+        for condition in samples:
+            er = extraction_results[condition]
+            decomp, _ = decompositions[condition]
+            print(f"\nCondition: {condition} (k={decomp.k} manifolds)")
+            attr_results = compute_token_attribution(
+                manifold_labels=decomp.labels,
+                token_ids=er.token_ids,
+                positions=er.positions,
+                tokenizer=tokenizer,
+                n_permutations=config.n_permutations,
+                seed=config.random_seed,
+            )
+            condition_attr_results[condition] = attr_results
+
+        phase1_result = run_phase1_gate(condition_attr_results)
+
+        t5 = time.time()
+        print(f"\nStage 5 complete in {t5 - t4:.1f}s")
+
+        if phase1_result.proceed:
+            print("\n" + "=" * 60)
+            print("PHASE 1 GATE: *** PROCEED ***")
+            print("Manifolds show significant token selectivity.")
+            print("=" * 60)
+            # Report which types were significant
+            for cond, results_list in phase1_result.results_by_condition.items():
+                sig = [r for r in results_list if r.significant]
+                if sig:
+                    types_str = ", ".join(f"{r.token_type}(p={r.p_value:.4f})" for r in sig)
+                    print(f"  {cond}: {types_str}")
+        else:
+            print("\n" + "=" * 60)
+            print("PHASE 1 GATE: *** KILL ***")
+            print(phase1_result.kill_reason)
+            print("=" * 60)
+
+        t4 = t5  # update for total time calculation
+
     # --- Summary ---
     print("\n" + "=" * 60)
     print("SUMMARY")
@@ -218,6 +280,27 @@ def _run_pipeline(
         ],
         "total_time_seconds": round(total_time, 1),
     }
+
+    # Add Phase 1 gate results if available
+    if phase1_result is not None:
+        results["phase1_gate"] = {
+            "proceed": phase1_result.proceed,
+            "kill_reason": phase1_result.kill_reason,
+            "attribution": {
+                cond: [
+                    {
+                        "token_type": r.token_type,
+                        "mi_observed": round(r.mi_observed, 6),
+                        "mi_null_mean": round(r.mi_null_mean, 6),
+                        "mi_null_std": round(r.mi_null_std, 6),
+                        "p_value": round(r.p_value, 4),
+                        "significant": r.significant,
+                    }
+                    for r in results_list
+                ]
+                for cond, results_list in phase1_result.results_by_condition.items()
+            },
+        }
 
     # Save results
     results_path = config.output_dir / "results.json"
