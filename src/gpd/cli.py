@@ -2167,6 +2167,43 @@ def _split_depends_on_option(depends_on: str | None) -> list[str] | None:
     return [item for item in parsed if item]
 
 
+def _resolve_derived_result_id(
+    state: dict,
+    *,
+    result_id: str | None,
+    derivation_slug: str | None,
+    phase: str | None,
+    equation: str | None,
+    description: str | None,
+) -> str | None:
+    """Resolve a stable result ID for a derivation-oriented persistence request."""
+    resolved_id = result_id.strip() if isinstance(result_id, str) else None
+    if resolved_id:
+        return resolved_id
+
+    slug_source = derivation_slug or description or equation
+    if not slug_source:
+        return None
+
+    from gpd.core.utils import generate_slug, phase_normalize
+
+    slug = generate_slug(slug_source)
+    if slug is None:
+        return None
+
+    resolved_phase = phase
+    if resolved_phase is None:
+        position = state.get("position", {})
+        if isinstance(position, dict):
+            current_phase = position.get("current_phase")
+            if current_phase is not None:
+                resolved_phase = str(current_phase)
+    if resolved_phase is None:
+        resolved_phase = "0"
+
+    return f"R-{phase_normalize(str(resolved_phase))}-{slug[:48]}"
+
+
 @result_app.command("add")
 def result_add(
     id: str | None = typer.Option(None, "--id", help="Result ID"),
@@ -2210,6 +2247,88 @@ def result_add(
         )
         save_state_json_locked(cwd, state)
     _output(res)
+
+
+@result_app.command("persist-derived")
+def result_persist_derived(
+    id: str | None = typer.Option(None, "--id", help="Stable result ID to reuse when present"),
+    derivation_slug: str | None = typer.Option(
+        None,
+        "--derivation-slug",
+        help="Slug for the derivation; used to derive a stable result ID when `--id` is absent",
+    ),
+    equation: str | None = typer.Option(None, "--equation", help="LaTeX equation"),
+    description: str | None = typer.Option(None, "--description", help="Description"),
+    units: str | None = typer.Option(None, "--units", help="Physical units"),
+    validity: str | None = typer.Option(None, "--validity", help="Validity range"),
+    phase: str | None = typer.Option(None, "--phase", help="Phase number"),
+    depends_on: str | None = typer.Option(None, "--depends-on", help="Comma-separated dependency IDs"),
+    verified: bool | None = typer.Option(None, "--verified/--no-verified", help="Mark as verified or un-verify"),
+) -> None:
+    """Persist a derivation result through the canonical registry writer path."""
+    import json as _json
+
+    from gpd.core.constants import ProjectLayout
+    from gpd.core.results import result_upsert as _result_upsert
+    from gpd.core.state import peek_state_json, save_state_json_locked
+    from gpd.core.utils import file_lock
+
+    cwd = _get_cwd()
+    layout = ProjectLayout(cwd)
+    state_path = layout.state_json
+
+    preflight_state, _preflight_issues, _preflight_source = peek_state_json(cwd)
+    if preflight_state is None:
+        _output(
+            {
+                "status": "skipped",
+                "reason": "no_recoverable_project_state",
+                "state_exists": False,
+                "recoverable_state_exists": False,
+            }
+        )
+        return
+
+    with file_lock(state_path):
+        try:
+            state = _json.loads(state_path.read_text(encoding="utf-8"))
+        except OSError:
+            state = preflight_state
+        except _json.JSONDecodeError:
+            state = preflight_state
+        if not isinstance(state, dict):
+            _error(f"state.json must be a JSON object, got {type(state).__name__}")
+
+        resolved_id = _resolve_derived_result_id(
+            state,
+            result_id=id,
+            derivation_slug=derivation_slug,
+            phase=phase,
+            equation=equation,
+            description=description,
+        )
+        res = _result_upsert(
+            state,
+            result_id=resolved_id,
+            equation=equation,
+            description=description,
+            units=units,
+            validity=validity,
+            phase=phase,
+            depends_on=_split_depends_on_option(depends_on),
+            verified=verified,
+        )
+        save_state_json_locked(cwd, state)
+
+    payload = res.model_dump(mode="json")
+    _output(
+        {
+            "status": "persisted",
+            "requested_result_id": resolved_id,
+            "result_id": payload["result"]["id"],
+            **payload,
+        }
+    )
 
 
 def _load_state_dict() -> dict:
