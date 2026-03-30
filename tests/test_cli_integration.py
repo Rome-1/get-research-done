@@ -654,6 +654,7 @@ class TestResume:
             "handoff": {
                 "resume_file": "GPD/phases/01-test-phase/.continue-here.md",
                 "stopped_at": "Paused in phase 01",
+                "last_result_id": "R-bridge-01",
             },
         }
         state_path.write_text(json.dumps(state), encoding="utf-8")
@@ -668,6 +669,7 @@ class TestResume:
         assert parsed["has_live_execution"] is False
         assert parsed["recovery_status"] == "session-handoff"
         assert parsed["recovery_status_label"] == "Continuity handoff"
+        assert parsed["resume_candidates"][0]["last_result_id"] == "R-bridge-01"
         assert parsed["resume_candidates"][0]["kind"] == "continuity_handoff"
         assert parsed["resume_candidates"][0]["origin"] == "continuation.handoff"
         assert parsed["recovery_candidates"][0]["kind"] == "continuity_handoff"
@@ -681,6 +683,7 @@ class TestResume:
         assert compat["segment_candidates"][0]["source"] == "session_resume_file"
         assert compat["segment_candidates"][0]["status"] == "handoff"
         assert compat["segment_candidates"][0]["resume_file"] == "GPD/phases/01-test-phase/.continue-here.md"
+        assert compat["segment_candidates"][0]["last_result_id"] == "R-bridge-01"
         assert compat["segment_candidates"][0]["resumable"] is False
 
     def test_resume_raw_marks_missing_continuity_handoff_as_canonical_missing_state(
@@ -694,6 +697,7 @@ class TestResume:
             "handoff": {
                 "resume_file": "GPD/phases/01-test-phase/.continue-here.md",
                 "stopped_at": "Paused in phase 01",
+                "last_result_id": "R-bridge-01",
             },
         }
         state_path.write_text(json.dumps(state), encoding="utf-8")
@@ -873,6 +877,7 @@ class TestResume:
             "handoff": {
                 "resume_file": "GPD/phases/01-test-phase/.continue-here.md",
                 "stopped_at": "Paused in phase 01",
+                "last_result_id": "R-bridge-01",
             },
         }
         state_path.write_text(json.dumps(state), encoding="utf-8")
@@ -885,6 +890,9 @@ class TestResume:
         assert "handoff is available" in normalized.lower()
         assert "no resumable" in normalized.lower()
         assert "currently active" in normalized.lower()
+        assert "rerun" in normalized.lower()
+        assert "anchor:" in normalized.lower()
+        assert "R-bridge" in normalized
         assert "Canonical candidate kinds" in normalized
         assert "continuity_handoff" in normalized
         assert "Continuity handoff" in result.output

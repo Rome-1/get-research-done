@@ -1303,6 +1303,10 @@ def test_resume_plain_output_surfaces_session_handoff_status(tmp_path: Path, mon
     assert "Recovery context is available, but no live bounded segment is currently resumable." not in result.output
 
 
+def test_resume_candidate_rerun_anchor_uses_last_result_id() -> None:
+    assert cli_module._resume_candidate_rerun_anchor({"last_result_id": "R-bridge-01"}) == "rerun anchor: R-bridge-01"
+
+
 def test_resume_plain_output_surfaces_bounded_segment_status_from_canonical_resume_mode(
     tmp_path: Path, monkeypatch
 ) -> None:

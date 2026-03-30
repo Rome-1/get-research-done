@@ -38,6 +38,7 @@ def _update_state_session(
     platform: str,
     stopped_at: str | None = None,
     resume_file: str | None,
+    last_result_id: str | None = None,
 ) -> None:
     state_path = cwd / "GPD" / "state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -48,6 +49,7 @@ def _update_state_session(
             "platform": platform,
             "stopped_at": stopped_at,
             "resume_file": resume_file,
+            "last_result_id": last_result_id,
         }
     )
     state_path.write_text(json.dumps(state), encoding="utf-8")
@@ -88,6 +90,7 @@ def test_state_record_session_persists_machine_identity(
     assert (
         "**Stopped at:** Phase 03 Plan 2\n"
         "**Resume file:** next-step.md\n"
+        "**Last result ID:** —\n"
         "**Hostname:** builder-01\n"
         "**Platform:** Linux 6.1 x86_64\n"
     ) in markdown
@@ -483,6 +486,7 @@ def test_init_resume_reads_canonical_continuation_from_state_json(
             "recorded_at": "2026-03-29T12:00:00+00:00",
             "stopped_at": "Phase 03 Plan 02 Task 04",
             "resume_file": "GPD/phases/03-analysis/alternate-resume.md",
+            "last_result_id": "result-canonical",
         },
         "machine": {
             "recorded_at": "2026-03-29T12:00:00+00:00",
@@ -516,6 +520,7 @@ def test_init_resume_reads_canonical_continuation_from_state_json(
             "status": "handoff",
             "resume_file": "GPD/phases/03-analysis/alternate-resume.md",
             "resumable": False,
+            "last_result_id": "result-canonical",
             "kind": "continuity_handoff",
             "origin": "continuation.handoff",
             "resume_pointer": "GPD/phases/03-analysis/alternate-resume.md",
@@ -530,6 +535,7 @@ def test_init_resume_reads_canonical_continuation_from_state_json(
             "status": "handoff",
             "resume_file": "GPD/phases/03-analysis/alternate-resume.md",
             "resumable": False,
+            "last_result_id": "result-canonical",
         }
     ]
 
@@ -797,6 +803,7 @@ def test_init_resume_surfaces_missing_session_handoff_as_advisory_candidate(
         hostname="builder-01",
         platform="Linux 6.1 x86_64",
         resume_file="GPD/phases/03-analysis/alternate-resume.md",
+        last_result_id="result-missing",
     )
     missing_handoff = cwd / "GPD" / "phases" / "03-analysis" / "alternate-resume.md"
     missing_handoff.unlink()
@@ -828,6 +835,7 @@ def test_init_resume_surfaces_missing_session_handoff_as_advisory_candidate(
             "resume_file": "GPD/phases/03-analysis/alternate-resume.md",
             "resumable": False,
             "advisory": True,
+            "last_result_id": "result-missing",
             "kind": "continuity_handoff",
             "origin": "continuation.handoff",
             "resume_pointer": "GPD/phases/03-analysis/alternate-resume.md",
@@ -841,6 +849,7 @@ def test_init_resume_surfaces_missing_session_handoff_as_advisory_candidate(
             "resume_file": "GPD/phases/03-analysis/alternate-resume.md",
             "resumable": False,
             "advisory": True,
+            "last_result_id": "result-missing",
         }
     ]
 

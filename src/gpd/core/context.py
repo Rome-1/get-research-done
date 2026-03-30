@@ -1163,6 +1163,16 @@ def _handoff_resume_origin(resume_projection: object) -> str:
     )
 
 
+def _handoff_last_result_id(resume_projection: object) -> str | None:
+    continuation = getattr(resume_projection, "continuation", None)
+    handoff = getattr(continuation, "handoff", None)
+    last_result_id = getattr(handoff, "last_result_id", None)
+    if not isinstance(last_result_id, str):
+        return None
+    stripped = last_result_id.strip()
+    return stripped or None
+
+
 def _interrupted_agent_resume_origin() -> str:
     return resume_origin_for_interrupted_agent()
 
@@ -1374,6 +1384,7 @@ def _build_resume_read_state(
         bounded_segment = getattr(resume_projection.continuation, "bounded_segment", None)
         bounded_segment_origin = _bounded_segment_resume_origin(resume_projection)
         handoff_origin = _handoff_resume_origin(resume_projection)
+        handoff_last_result_id = _handoff_last_result_id(resume_projection)
         active_execution_segment = None
         active_bounded_segment = None
         if bounded_segment is not None:
@@ -1409,6 +1420,8 @@ def _build_resume_read_state(
                     "resume_file": resume_projection.handoff_resume_file,
                     "resumable": False,
                 }
+                if handoff_last_result_id is not None:
+                    candidate["last_result_id"] = handoff_last_result_id
                 segment_candidates.append(candidate)
                 resume_candidates.append(
                     _canonical_resume_candidate(
@@ -1432,6 +1445,8 @@ def _build_resume_read_state(
                     "resumable": False,
                     "advisory": True,
                 }
+                if handoff_last_result_id is not None:
+                    candidate["last_result_id"] = handoff_last_result_id
                 segment_candidates.append(candidate)
                 resume_candidates.append(
                     _canonical_resume_candidate(

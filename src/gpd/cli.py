@@ -1242,6 +1242,21 @@ def _resume_candidate_target(candidate: dict[str, object]) -> str:
     return "—"
 
 
+def _resume_candidate_rerun_anchor(candidate: dict[str, object]) -> str | None:
+    """Return the canonical rerun anchor note for one candidate, if any."""
+    last_result_id = candidate.get("last_result_id")
+    last_result_label = candidate.get("last_result_label")
+    if not isinstance(last_result_id, str) or not last_result_id.strip():
+        if isinstance(last_result_label, str) and last_result_label.strip():
+            return f"last result: {last_result_label.strip()}"
+        return None
+
+    last_result_id_text = last_result_id.strip()
+    if isinstance(last_result_label, str) and last_result_label.strip():
+        return f"rerun anchor: {last_result_label.strip()} ({last_result_id_text})"
+    return f"rerun anchor: {last_result_id_text}"
+
+
 def _resume_candidate_origin(
     candidate: dict[str, object],
     *,
@@ -1377,9 +1392,9 @@ def _resume_candidate_notes(
     if isinstance(blocked_reason, str) and blocked_reason.strip():
         notes.append(f"blocked: {blocked_reason.strip()}")
 
-    last_result_label = candidate.get("last_result_label")
-    if isinstance(last_result_label, str) and last_result_label.strip():
-        notes.append(f"last result: {last_result_label.strip()}")
+    rerun_anchor = _resume_candidate_rerun_anchor(candidate)
+    if rerun_anchor is not None:
+        notes.append(rerun_anchor)
 
     if bool(candidate.get("first_result_gate_pending")):
         notes.append("first-result gate pending")
