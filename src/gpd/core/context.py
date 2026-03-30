@@ -88,6 +88,17 @@ _REFERENCE_ROLE_PRIORITY = {
 
 _RESUME_FILE_CLEAR_VALUES = frozenset({"[not set]", "none", "null"})
 _RESUME_SURFACE_SCHEMA_VERSION = 1
+_RESUME_COMPAT_ALIAS_KEYS = frozenset(
+    {
+        "current_execution_resume_file",
+        "session_resume_file",
+        "recorded_session_resume_file",
+        "missing_session_resume_file",
+        "execution_resume_file",
+        "execution_resume_file_source",
+        "execution_resumable",
+    }
+)
 
 # Directories to skip when scanning for research files.
 _RUNTIME_IGNORED_SCAN_PATHS = frozenset(
@@ -2026,7 +2037,11 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
         key: value for key, value in execution_context.items() if key != "resume_projection"
     }
     result.update(execution_public)
-    result["compat_resume_surface"] = _build_resume_compat_surface(result)
+    compat_resume_surface = _build_resume_compat_surface(result)
+    # Keep the canonical top-level resume surface authoritative; legacy aliases stay nested.
+    for key in _RESUME_COMPAT_ALIAS_KEYS:
+        result.pop(key, None)
+    result["compat_resume_surface"] = compat_resume_surface
     return result
 
 
