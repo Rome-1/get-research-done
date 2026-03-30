@@ -1978,6 +1978,38 @@ def test_state_record_session_forwards_last_result_id(mock_record_session):
     assert kwargs["last_result_id"] == "R-bridge-01"
 
 
+@patch("gpd.core.state.state_record_session")
+def test_state_record_session_exits_nonzero_for_invalid_last_result_id(mock_record_session):
+    mock_result = MagicMock()
+    mock_result.model_dump.return_value = {
+        "recorded": False,
+        "error": "Unknown canonical result ID: R-missing",
+    }
+    mock_record_session.return_value = mock_result
+
+    result = runner.invoke(
+        app,
+        [
+            "state",
+            "record-session",
+            "--stopped-at",
+            "Paused at task 2/5",
+            "--resume-file",
+            "GPD/phases/01-test-phase/.continue-here.md",
+            "--last-result-id",
+            "R-missing",
+        ],
+    )
+
+    assert result.exit_code == 1
+    mock_record_session.assert_called_once()
+    _, kwargs = mock_record_session.call_args
+    assert kwargs["stopped_at"] == "Paused at task 2/5"
+    assert kwargs["resume_file"] == "GPD/phases/01-test-phase/.continue-here.md"
+    assert kwargs["last_result_id"] == "R-missing"
+    assert "Unknown canonical result ID: R-missing" in result.output
+
+
 @patch("gpd.core.state.state_validate")
 def test_state_validate_pass(mock_validate):
     mock_result = MagicMock()

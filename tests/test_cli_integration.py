@@ -605,6 +605,22 @@ def test_state_record_session_persists_last_result_id_in_session_and_handoff(gpd
     handoff.parent.mkdir(parents=True, exist_ok=True)
     handoff.write_text("resume\n", encoding="utf-8")
 
+    state_path = gpd_project / "GPD" / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["intermediate_results"].append(
+        {
+            "id": "R-bridge-01",
+            "equation": "R = A + B",
+            "description": "Canonical bridge result",
+            "phase": "01",
+            "depends_on": [],
+            "verified": False,
+            "verification_records": [],
+        }
+    )
+    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    (gpd_project / "GPD" / "STATE.md").write_text(generate_state_markdown(state), encoding="utf-8")
+
     result = runner.invoke(
         app,
         [
@@ -633,6 +649,41 @@ def test_state_record_session_persists_last_result_id_in_session_and_handoff(gpd
 
     state_md = (gpd_project / "GPD" / "STATE.md").read_text(encoding="utf-8")
     assert "**Last result ID:** R-bridge-01" in state_md
+
+
+def test_state_record_session_rejects_unknown_last_result_id_and_leaves_state_unchanged(
+    gpd_project: Path,
+) -> None:
+    handoff = gpd_project / "GPD" / "phases" / "01-test-phase" / ".continue-here.md"
+    handoff.parent.mkdir(parents=True, exist_ok=True)
+    handoff.write_text("resume\n", encoding="utf-8")
+
+    state_path = gpd_project / "GPD" / "state.json"
+    state_md_path = gpd_project / "GPD" / "STATE.md"
+    before_state = state_path.read_text(encoding="utf-8")
+    before_state_md = state_md_path.read_text(encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        [
+            "--raw",
+            "--cwd",
+            str(gpd_project),
+            "state",
+            "record-session",
+            "--stopped-at",
+            "Paused at task 2/5",
+            "--resume-file",
+            "GPD/phases/01-test-phase/.continue-here.md",
+            "--last-result-id",
+            "missing-canonical-result",
+        ],
+    )
+
+    assert result.exit_code == 1, result.output
+
+    assert state_path.read_text(encoding="utf-8") == before_state
+    assert state_md_path.read_text(encoding="utf-8") == before_state_md
 
 
 @pytest.fixture(autouse=True)

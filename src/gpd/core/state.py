@@ -660,6 +660,19 @@ def _optional_state_text(value: object) -> str | None:
     return stripped or None
 
 
+def _state_has_canonical_result_id(state_obj: dict[str, object], result_id: str) -> bool:
+    """Return whether the state tracks a canonical intermediate result with this ID."""
+    results = state_obj.get("intermediate_results")
+    if not isinstance(results, list):
+        return False
+    for item in results:
+        if isinstance(item, dict) and _optional_state_text(item.get("id")) == result_id:
+            return True
+        if isinstance(item, IntermediateResult) and _optional_state_text(item.id) == result_id:
+            return True
+    return False
+
+
 def _blank_session_payload() -> dict[str, str | None]:
     return SessionInfo().model_dump()
 
@@ -3845,6 +3858,14 @@ def state_record_session(
             if resume_file is None
             else _normalize_session_resume_file(cwd, resume_file)
         )
+        requested_last_result_id = _optional_state_text(last_result_id) if last_result_id is not None else None
+        if last_result_id is not None:
+            if requested_last_result_id is None:
+                raise StateError("last_result_id must be a non-empty string when provided")
+            if not _state_has_canonical_result_id(state_obj, requested_last_result_id):
+                raise StateError(
+                    f'last_result_id "{requested_last_result_id}" does not match any canonical result in intermediate_results'
+                )
         updated: list[str] = []
 
         updated.append("Last session")
@@ -3854,7 +3875,7 @@ def state_record_session(
             updated.append("Platform")
         desired_stopped_at = stopped_at if stopped_at is not None else existing_handoff.stopped_at
         desired_last_result_id = (
-            _optional_state_text(last_result_id) if last_result_id is not None else _optional_state_text(existing_handoff.last_result_id)
+            requested_last_result_id if last_result_id is not None else _optional_state_text(existing_handoff.last_result_id)
         )
         if desired_stopped_at != existing_handoff.stopped_at:
             updated.append("Stopped at")

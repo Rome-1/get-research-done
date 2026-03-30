@@ -846,14 +846,16 @@ def state_record_session(
     """Record a session boundary for context tracking."""
     from gpd.core.state import state_record_session
 
-    _output(
-        state_record_session(
-            _get_cwd(),
-            stopped_at=stopped_at,
-            resume_file=resume_file,
-            last_result_id=last_result_id,
-        )
+    result = state_record_session(
+        _get_cwd(),
+        stopped_at=stopped_at,
+        resume_file=resume_file,
+        last_result_id=last_result_id,
     )
+    payload = result.model_dump(mode="json") if hasattr(result, "model_dump") else result
+    _output(payload)
+    if isinstance(payload, dict) and payload.get("error"):
+        raise typer.Exit(code=1)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

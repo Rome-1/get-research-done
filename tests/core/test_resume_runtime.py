@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+from gpd.core.errors import StateError
 from gpd.core import context as context_module
 from gpd.core import state as state_module
 from gpd.core.context import init_resume
@@ -131,6 +134,33 @@ def test_state_record_session_normalizes_project_local_absolute_resume_file(
     assert result.recorded is True
     assert stored["session"]["resume_file"] == "GPD/phases/03-analysis/.continue-here.md"
     assert "**Resume file:** GPD/phases/03-analysis/.continue-here.md" in markdown
+
+
+def test_state_record_session_rejects_unknown_last_result_id_without_persisting(
+    tmp_path: Path, state_project_factory, monkeypatch
+) -> None:
+    cwd = state_project_factory(tmp_path)
+    monkeypatch.setattr(
+        state_module,
+        "_current_machine_identity",
+        lambda: {"hostname": "builder-01", "platform": "Linux 6.1 x86_64"},
+    )
+
+    state_path = cwd / "GPD" / "state.json"
+    markdown_path = cwd / "GPD" / "STATE.md"
+    before_state = state_path.read_text(encoding="utf-8")
+    before_markdown = markdown_path.read_text(encoding="utf-8")
+
+    with pytest.raises(StateError, match='last_result_id "result-missing" does not match any canonical result'):
+        state_record_session(
+            cwd,
+            stopped_at="Paused",
+            resume_file="next-step.md",
+            last_result_id="result-missing",
+        )
+
+    assert state_path.read_text(encoding="utf-8") == before_state
+    assert markdown_path.read_text(encoding="utf-8") == before_markdown
 
 
 def test_init_resume_surfaces_machine_change_and_session_resume_candidate(

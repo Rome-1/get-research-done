@@ -208,7 +208,8 @@ timestamp=$(gpd --raw timestamp full)
 # see the same recorded continuation pointer
 gpd state record-session \
   --stopped-at "Paused at task [X]/[Y] in phase [{phase_slug}]" \
-  --resume-file "GPD/phases/[{phase_slug}]/.continue-here.md"
+  --resume-file "GPD/phases/[{phase_slug}]/.continue-here.md" \
+  [--last-result-id "{result_id}"]
 if [ $? -ne 0 ]; then echo "WARNING: state record-session failed — resume info may be lost"; fi
 
 # Set status to Paused so resume-work detects it. This updates the session
