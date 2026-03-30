@@ -283,6 +283,21 @@ def test_validate_assertions_unset_convention_skipped():
     assert mismatches == []
 
 
+def test_validate_assertions_custom_convention_match():
+    lock = ConventionLock()
+    lock.custom_conventions["my_custom_convention"] = "enabled"
+    content = "<!-- ASSERT_CONVENTION: my_custom_convention=enabled -->"
+    mismatches = validate_assertions(content, lock, filename="test.md")
+    assert mismatches == []
+
+
+def test_validate_assertions_no_assertions_is_no_op():
+    lock = ConventionLock(metric_signature="mostly-plus")
+    content = "Just regular text with no assertions."
+    mismatches = validate_assertions(content, lock, filename="test.md")
+    assert mismatches == []
+
+
 # ─── Edge cases: empty/unicode/long values ────────────────────────────────
 
 
