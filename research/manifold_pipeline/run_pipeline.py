@@ -87,6 +87,118 @@ def run_gpt2(config: PipelineConfig) -> dict:
     return _run_pipeline(samples, config, extraction_results=extraction_results)
 
 
+def run_attribution_only(config: PipelineConfig) -> dict:
+    """Run only SMCE decomposition + Phase 1 attribution (skip topology stages).
+
+    Much faster than full pipeline — skips persistent homology (Stages 2-4)
+    which is O(N³) and infeasible on high-dim data. Use for diagnostic
+    comparisons where only MI(SMCE) vs MI(k-means) matters.
+    """
+    from .activation_extraction import extract_and_reduce_with_tokens, load_model
+    from .stage1_decompose import decompose
+
+    print("=" * 60)
+    print("ATTRIBUTION-ONLY PIPELINE")
+    print("=" * 60)
+
+    extraction_results = extract_and_reduce_with_tokens(config)
+    t0 = time.time()
+
+    # Stage 1 only: SMCE decomposition
+    print("\n" + "=" * 60)
+    print("STAGE 1: DECOMPOSE (SMCE)")
+    print("=" * 60)
+
+    decompositions = {}
+    for condition, er in extraction_results.items():
+        X = er.activations
+        print(f"\nDecomposing {condition} ({X.shape[0]} points, dim={X.shape[1]})")
+        decomp = decompose(
+            X,
+            alpha=config.smce_alpha,
+            max_k=config.max_k_manifolds,
+            max_iter=config.smce_max_iter,
+        )
+        decompositions[condition] = (decomp, X)
+
+    t1 = time.time()
+    print(f"\nStage 1 complete in {t1 - t0:.1f}s")
+
+    # Stage 5: Token attribution
+    print("\n" + "=" * 60)
+    print("STAGE 5: TOKEN-MANIFOLD ATTRIBUTION (PHASE 1 GATE)")
+    print("=" * 60)
+
+    model = load_model(config.model_name)
+    tokenizer = model.tokenizer
+
+    condition_attr_results = {}
+    for condition in extraction_results:
+        er = extraction_results[condition]
+        decomp, _ = decompositions[condition]
+        print(f"\nCondition: {condition} (k={decomp.k} manifolds)")
+        attr_results = compute_token_attribution(
+            manifold_labels=decomp.labels,
+            token_ids=er.token_ids,
+            positions=er.positions,
+            tokenizer=tokenizer,
+            activations=er.activations,
+            n_permutations=config.n_permutations,
+            seed=config.random_seed,
+        )
+        condition_attr_results[condition] = attr_results
+
+    phase1_result = run_phase1_gate(condition_attr_results)
+
+    t2 = time.time()
+    print(f"\nAttribution complete in {t2 - t1:.1f}s")
+    print(f"Total time: {t2 - t0:.1f}s")
+
+    if phase1_result.proceed:
+        print("\n" + "=" * 60)
+        print("PHASE 1 GATE: *** PROCEED ***")
+        print("=" * 60)
+    else:
+        print("\n" + "=" * 60)
+        print("PHASE 1 GATE: *** KILL ***")
+        print(phase1_result.kill_reason)
+        print("=" * 60)
+
+    # Build results
+    results = {
+        "conditions": list(extraction_results.keys()),
+        "manifold_counts": {c: int(d.k) for c, (d, _) in decompositions.items()},
+        "total_time_seconds": round(t2 - t0, 1),
+        "phase1_gate": {
+            "proceed": phase1_result.proceed,
+            "kill_reason": phase1_result.kill_reason,
+            "attribution": {
+                cond: [
+                    {
+                        "token_type": r.token_type,
+                        "mi_observed": round(float(r.mi_observed), 6),
+                        "mi_kmeans": round(float(r.mi_kmeans), 6),
+                        "nmi_observed": round(float(r.nmi_observed), 4),
+                        "nmi_kmeans": round(float(r.nmi_kmeans), 4),
+                        "mi_null_mean": round(float(r.mi_null_mean), 6),
+                        "mi_null_std": round(float(r.mi_null_std), 6),
+                        "p_value": round(float(r.p_value), 4),
+                        "significant": bool(r.significant),
+                    }
+                    for r in results_list
+                ]
+                for cond, results_list in phase1_result.results_by_condition.items()
+            },
+        },
+    }
+
+    results_path = config.output_dir / "results.json"
+    with open(results_path, "w") as f:
+        json.dump(results, f, indent=2)
+
+    return results
+
+
 def run_gemma2(config: PipelineConfig = None) -> dict:
     """Run pipeline on Gemma 2 2B activations with token attribution.
 

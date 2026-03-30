@@ -56,35 +56,35 @@ def run_diag_a(n_tokens: int = 500):
     from pathlib import Path
 
     from research.manifold_pipeline.config import PipelineConfig
-    from research.manifold_pipeline.run_pipeline import run_gpt2
+    from research.manifold_pipeline.run_pipeline import run_attribution_only
 
     results = {}
 
-    # --- Run 1: PCA (control) ---
+    # --- Run 1: PCA (control) — attribution only ---
     print("\n" + "=" * 70)
     print("DIAGNOSTIC A — RUN 1: PCA 768→100 (control)")
     print("=" * 70)
-    output_pca = Path("/root/data/manifold-pipeline/diag-a/pca")
+    output_pca = Path("/root/data/manifold-pipeline/diag-a-v2/pca")
     config_pca = PipelineConfig.gpt2(
         n_tokens_per_condition=n_tokens,
         pca_dim=100,
         output_dir=output_pca,
         cache_dir=output_pca / "cache",
     )
-    results["pca"] = run_gpt2(config_pca)
+    results["pca"] = run_attribution_only(config_pca)
 
-    # --- Run 2: No PCA (test) ---
+    # --- Run 2: No PCA (test) — attribution only ---
     print("\n" + "=" * 70)
     print("DIAGNOSTIC A — RUN 2: RAW 768-dim (no PCA)")
     print("=" * 70)
-    output_raw = Path("/root/data/manifold-pipeline/diag-a/raw")
+    output_raw = Path("/root/data/manifold-pipeline/diag-a-v2/raw")
     config_raw = PipelineConfig.gpt2(
         n_tokens_per_condition=n_tokens,
         pca_dim=None,
         output_dir=output_raw,
         cache_dir=output_raw / "cache",
     )
-    results["raw"] = run_gpt2(config_raw)
+    results["raw"] = run_attribution_only(config_raw)
 
     # --- Comparison ---
     print("\n" + "=" * 70)
@@ -152,7 +152,7 @@ def run_diag_a(n_tokens: int = 500):
         print(">>> PCA actually helps SMCE! Raw space too noisy.")
 
     # Save comparison
-    comp_path = Path("/root/data/manifold-pipeline/diag-a/comparison.json")
+    comp_path = Path("/root/data/manifold-pipeline/diag-a-v2/comparison.json")
     comp_path.parent.mkdir(parents=True, exist_ok=True)
     with open(comp_path, "w") as f:
         json.dump(comparison, f, indent=2)
