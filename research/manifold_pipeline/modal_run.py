@@ -10,7 +10,11 @@ pre-installed. Results are saved to a Modal Volume and downloaded locally.
 
 import modal
 
-app = modal.App("manifold-pipeline")
+# GPT-2 app — no secrets needed
+gpt2_app = modal.App("manifold-pipeline-gpt2")
+
+# Gemma 2 app — needs HF secret for gated model access
+gemma2_app = modal.App("manifold-pipeline-gemma2")
 
 # Image with all dependencies
 image = (
@@ -31,11 +35,11 @@ image = (
     )
 )
 
-# Shared research volume — our data lives under /root/data/manifold-pipeline/
+# Shared research volume
 vol = modal.Volume.from_name("research")
 
 
-@app.function(
+@gpt2_app.function(
     image=image,
     gpu="T4",
     timeout=3600,
@@ -62,9 +66,9 @@ def run_pipeline_gpt2(n_tokens: int = 2000):
     return results
 
 
-@app.function(
+@gemma2_app.function(
     image=image,
-    gpu="T4",  # Gemma 2 2B fits on T4 (~4.5GB bf16 + overhead)
+    gpu="T4",
     timeout=7200,
     volumes={"/root/data": vol},
     secrets=[modal.Secret.from_name("huggingface")],
@@ -91,40 +95,27 @@ def run_pipeline_gemma2(n_tokens: int = 2000, layer: int = 13):
     return results
 
 
-@app.function(
-    image=image,
-    gpu="T4",
-    timeout=1800,
-    volumes={"/root/data": vol},
-)
-def run_synthetic_validation():
-    """Quick synthetic validation on GPU."""
-    return run_pipeline_gpt2.local(n_tokens=500)
+# Use GPT-2 app as the default entrypoint
+app = gpt2_app
 
 
-@app.local_entrypoint()
+@gpt2_app.local_entrypoint()
 def main(
-    model: str = "gpt2",
-    synthetic: bool = False,
     n_tokens: int = 2000,
-    layer: int = 13,
+    synthetic: bool = False,
 ):
-    """Entry point for `modal run`.
+    """GPT-2 pipeline entry point.
 
-    Args:
-        model: Model to run — 'gpt2' or 'gemma2-2b'
-        synthetic: Run synthetic validation only
-        n_tokens: Tokens per condition
-        layer: Transformer layer (default: 13 for Gemma, 6 for GPT-2)
+    For Gemma 2, use: modal run research/manifold_pipeline/modal_run_gemma2.py
     """
     import json
 
     if synthetic:
         print("Running synthetic validation on Modal GPU...")
-        results = run_synthetic_validation.remote()
-    elif model == "gemma2-2b":
-        print(f"Running Gemma 2 2B pipeline on Modal GPU (layer={layer}, n_tokens={n_tokens})...")
-        results = run_pipeline_gemma2.remote(n_tokens=n_tokens, layer=layer)
+        from research.manifold_pipeline.config import PipelineConfig
+        from research.manifold_pipeline.run_pipeline import run_synthetic
+        # Synthetic runs locally (no GPU needed for small data)
+        results = run_pipeline_gpt2.remote(n_tokens=500)
     else:
         print(f"Running GPT-2 pipeline on Modal GPU (n_tokens={n_tokens})...")
         results = run_pipeline_gpt2.remote(n_tokens=n_tokens)
