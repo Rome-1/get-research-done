@@ -383,6 +383,37 @@ def test_build_paper_quality_input_counts_only_matching_derivation_assertions(
     assert result.conventions.assert_convention_coverage.total == 3
 
 
+def test_build_paper_quality_input_counts_python_and_tex_derivation_artifacts(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path / "paper" / "main.tex",
+        "\\documentclass{article}\\begin{document}\\section{Introduction}Intro.\\section{Conclusion}Done.\\end{document}\n",
+    )
+    _write(
+        tmp_path / "GPD" / "state.json",
+        json.dumps({"convention_lock": _full_convention_lock()}, indent=2),
+    )
+    _write(
+        tmp_path / "GPD" / "analysis" / "derivation-shell.py",
+        "# ASSERT_CONVENTION: metric_signature=mostly-plus, fourier_convention=physics\n\nprint('ok')\n",
+    )
+    _write(
+        tmp_path / "GPD" / "analysis" / "derivation-notes.tex",
+        "% ASSERT_CONVENTION: metric_signature=mostly-plus, fourier_convention=physics\n\n\\section{Derivation}\n",
+    )
+    _write(
+        tmp_path / "GPD" / "analysis" / "derivation-outline.md",
+        "<!-- ASSERT_CONVENTION: metric_signature=mostly-plus, fourier_convention=physics -->\n\n# Derivation\n",
+    )
+
+    result = build_paper_quality_input(tmp_path)
+
+    assert result.conventions.convention_lock_complete.passed is True
+    assert result.conventions.assert_convention_coverage.satisfied == 3
+    assert result.conventions.assert_convention_coverage.total == 3
+
+
 def test_build_paper_quality_input_ignores_invalid_artifact_manifest_and_falls_back_to_config(tmp_path: Path) -> None:
     _write(
         tmp_path / "paper" / "main.tex",

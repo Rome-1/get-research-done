@@ -612,6 +612,15 @@ def required_assertion_keys(lock: ConventionLock) -> list[str]:
     return required
 
 
+def _lookup_lock_value(lock: ConventionLock, key: str) -> str | None:
+    """Return the active value for a canonical or custom convention key."""
+    if key in KNOWN_CONVENTIONS:
+        value = getattr(lock, key, None)
+        if value is not None:
+            return str(value)
+    return lock.custom_conventions.get(key)
+
+
 @instrument_gpd_function("conventions.validate_assertions")
 def validate_assertions(
     content: str,
@@ -636,12 +645,7 @@ def _collect_assertion_mismatches(
     mismatches: list[AssertionMismatch] = []
 
     for key, asserted_value in assertions:
-        # Look up the lock value: canonical field, then custom_conventions
-        lock_value: str | None = None
-        if key in KNOWN_CONVENTIONS:
-            lock_value = getattr(lock, key, None)
-        if lock_value is None:
-            lock_value = lock.custom_conventions.get(key)
+        lock_value = _lookup_lock_value(lock, key)
 
         if lock_value is None:
             # Convention not set in lock — skip (can't validate)
@@ -703,7 +707,7 @@ def check_assertions(
     missing_required_keys = [
         key
         for key in normalized_required_keys
-        if key not in asserted_keys and not is_bogus_value(getattr(lock, key, None))
+        if key not in asserted_keys and not is_bogus_value(_lookup_lock_value(lock, key))
     ]
     mismatches = _collect_assertion_mismatches(assertions, lock, filename=filename)
     warnings: list[str] = []

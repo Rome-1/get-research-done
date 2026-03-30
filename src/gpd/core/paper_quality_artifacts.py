@@ -45,7 +45,8 @@ _CONCLUSION_RE = re.compile(r"\\section\*?\{[^}]*conclusion[^}]*\}", re.IGNORECA
 _SUPPLEMENT_RE = re.compile(r"appendix|supplement", re.IGNORECASE)
 _CITE_RE = re.compile(r"\\cite\{([^}]*)\}")
 _BIB_ENTRY_RE = re.compile(r"@\w+\s*\{\s*([^,\s]+)\s*,")
-_DERIVATION_ARTIFACT_RE = re.compile(r"(?i)^derivation-(?!state\.md$).+\.md$")
+_DERIVATION_ARTIFACT_RE = re.compile(r"(?i)^derivation-(?!state\.).+\.(?:md|markdown|tex|py)$")
+_DERIVATION_ARTIFACT_SUFFIXES = (".md", ".markdown", ".tex", ".py")
 
 
 class _FigureTrackerEntry(BaseModel):
@@ -177,7 +178,13 @@ def _derivation_artifacts(project_root: Path) -> list[Path]:
     gpd_root = project_root / "GPD"
     if not gpd_root.exists():
         return []
-    return sorted(path for path in gpd_root.rglob("*.md") if _DERIVATION_ARTIFACT_RE.fullmatch(path.name))
+    return sorted(
+        path
+        for path in gpd_root.rglob("derivation-*")
+        if path.is_file()
+        and path.suffix.lower() in _DERIVATION_ARTIFACT_SUFFIXES
+        and _DERIVATION_ARTIFACT_RE.fullmatch(path.name)
+    )
 
 
 def _build_conventions_input(project_root: Path) -> ConventionsQualityInput:

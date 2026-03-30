@@ -327,6 +327,23 @@ def test_check_assertions_missing_required_key_fails():
     assert result.missing_required_keys == ["fourier_convention"]
 
 
+def test_check_assertions_missing_custom_required_key_fails():
+    lock = ConventionLock(metric_signature="mostly-plus")
+    lock.custom_conventions["my_custom_convention"] = "enabled"
+    content = "<!-- ASSERT_CONVENTION: metric=mostly-plus -->"
+
+    result = check_assertions(
+        content,
+        lock,
+        filename="test.md",
+        require_assertions=True,
+        required_keys=["my_custom_convention"],
+    )
+
+    assert result.passed is False
+    assert result.missing_required_keys == ["my_custom_convention"]
+
+
 # ─── Edge cases: empty/unicode/long values ────────────────────────────────
 
 
