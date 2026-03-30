@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,6 +13,7 @@ __all__ = [
     "ArtifactReference",
     "ArtifactReferenceIntake",
     "ArtifactReferenceIngestion",
+    "CitationSourceRecord",
     "ingest_reference_artifacts",
 ]
 
@@ -197,11 +199,52 @@ class ArtifactReferenceIntake:
 
 
 @dataclass
+class CitationSourceRecord:
+    """Normalized citation metadata derived from review-sidecar JSON."""
+
+    reference_id: str
+    source_type: str
+    title: str
+    authors: list[str] = field(default_factory=list)
+    year: str = ""
+    arxiv_id: str = ""
+    doi: str = ""
+    url: str = ""
+    journal: str = ""
+    volume: str = ""
+    pages: str = ""
+    bibtex_key: str = ""
+    source_artifacts: list[str] = field(default_factory=list)
+    source_kind: str = "citation_source"
+
+    def to_context_dict(self) -> dict[str, object]:
+        return {
+            "reference_id": self.reference_id,
+            "source_type": self.source_type,
+            "title": self.title,
+            "authors": list(self.authors),
+            "year": self.year,
+            "arxiv_id": self.arxiv_id or None,
+            "doi": self.doi or None,
+            "url": self.url or None,
+            "journal": self.journal,
+            "volume": self.volume,
+            "pages": self.pages,
+            "bibtex_key": self.bibtex_key or None,
+            "source_artifacts": list(self.source_artifacts),
+            "source_kind": self.source_kind,
+        }
+
+
+@dataclass
 class ArtifactReferenceIngestion:
     """Structured anchor view derived from literature and research-map artifacts."""
 
     references: list[ArtifactReference] = field(default_factory=list)
     intake: ArtifactReferenceIntake = field(default_factory=ArtifactReferenceIntake)
+    citation_sources: list[CitationSourceRecord] = field(default_factory=list)
+    citation_source_files: list[str] = field(default_factory=list)
+    citation_source_warnings: list[str] = field(default_factory=list)
 
 
 def _append_unique(items: list[str], value: str | None) -> None:
@@ -318,6 +361,95 @@ def _reference_identity_tokens(*values: object) -> list[str]:
         if normalized and normalized not in tokens:
             tokens.append(normalized)
     return tokens
+
+
+def _normalize_citation_authors(value: object) -> list[str]:
+    if isinstance(value, list):
+        authors = [_clean_text(item) for item in value]
+    elif isinstance(value, str):
+        authors = [part.strip() for part in re.split(r"\s*(?:;|/|\|)\s*", value)]
+    else:
+        authors = []
+    return [author for author in authors if author]
+
+
+def _citation_source_from_payload(
+    payload: object,
+    *,
+    source_path: str,
+    index: int,
+) -> tuple[CitationSourceRecord | None, str | None]:
+    if not isinstance(payload, dict):
+        return None, f"citation source {source_path}[{index}] is not an object"
+
+    reference_id = _clean_text(payload.get("reference_id"))
+    title = _clean_text(payload.get("title"))
+    source_type = _clean_text(payload.get("source_type")).casefold() or "paper"
+    if not reference_id:
+        fallback_seed = title or _clean_text(payload.get("doi")) or _clean_text(payload.get("arxiv_id")) or source_path
+        reference_id = _reference_id(fallback_seed, fallback_seed, "citation")
+        warning = f"citation source {source_path}[{index}] missing reference_id; synthesized {reference_id}"
+    else:
+        warning = None
+    if not title:
+        return None, f"citation source {source_path}[{index}] is missing a title"
+
+    record = CitationSourceRecord(
+        reference_id=reference_id,
+        source_type=source_type,
+        title=title,
+        authors=_normalize_citation_authors(payload.get("authors")),
+        year=_clean_text(payload.get("year")),
+        arxiv_id=_clean_text(payload.get("arxiv_id")),
+        doi=_clean_text(payload.get("doi")),
+        url=_clean_text(payload.get("url")),
+        journal=_clean_text(payload.get("journal")),
+        volume=_clean_text(payload.get("volume")),
+        pages=_clean_text(payload.get("pages")),
+        bibtex_key=_clean_text(payload.get("bibtex_key")),
+        source_artifacts=[source_path],
+    )
+    return record, warning
+
+
+def _ingest_citation_source_sidecar(cwd: Path, path: Path, result: ArtifactReferenceIngestion) -> None:
+    rel_path = path.relative_to(cwd).as_posix()
+    try:
+        raw_text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        result.citation_source_warnings.append(f"skipping citation source sidecar {rel_path}: {exc}")
+        return
+
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        result.citation_source_warnings.append(f"skipping citation source sidecar {rel_path}: {exc}")
+        return
+
+    if not isinstance(payload, list):
+        result.citation_source_warnings.append(f"skipping citation source sidecar {rel_path}: expected a JSON array")
+        return
+
+    seen_ids: set[str] = {item.reference_id for item in result.citation_sources}
+    for index, item in enumerate(payload):
+        record, warning = _citation_source_from_payload(item, source_path=rel_path, index=index)
+        if warning:
+            result.citation_source_warnings.append(warning)
+        if record is None:
+            continue
+        if record.reference_id in seen_ids:
+            continue
+        result.citation_sources.append(record)
+        seen_ids.add(record.reference_id)
+    result.citation_source_files.append(rel_path)
+
+
+def _ingest_citation_source_sidecars(cwd: Path, result: ArtifactReferenceIngestion) -> None:
+    literature_dir = cwd / "GPD" / "literature"
+    if not literature_dir.exists():
+        return
+    for path in sorted(literature_dir.glob("*-CITATION-SOURCES.json")):
+        _ingest_citation_source_sidecar(cwd, path, result)
 
 
 def _extract_section(content: str, heading: str) -> str | None:
@@ -853,6 +985,7 @@ def ingest_reference_artifacts(
             continue
         _ingest_reference_map(content, rel_path, result)
 
+    _ingest_citation_source_sidecars(cwd, result)
     _populate_intake_from_references(result)
     result.references.sort(key=lambda item: (item.must_surface is False, item.role, item.id))
     return result
