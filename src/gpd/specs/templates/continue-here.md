@@ -11,6 +11,8 @@ This is the canonical temporary phase handoff artifact written by `/gpd:pause-wo
 
 This file is **not** the authoritative store for project position, session continuity, or resume ranking. Current public behavior keeps those responsibilities split across `GPD/state.json` (authoritative storage), `GPD/state.json.bak` (recovery backup), `GPD/STATE.md` (editable mirror), append-only execution lineage, and the derived execution head / `GPD/observability/current-execution.json` compatibility mirror. `gpd init resume` resolves the current canonical continuation view across those surfaces and may reach this file through session continuity or the derived execution head. The body below is a readable projection for humans and recovery tooling, not a second state source:
 
+If this pause follows a successful derivation write-back, the canonical `result_id` for that derivation should be carried forward explicitly as `last_result_id`. That is the rerun anchor; do not rely on prose alone to recover it later.
+
 ```yaml
 ---
 phase: XX-name
@@ -56,6 +58,8 @@ last_updated: 2026-03-15T14:30:00Z
 <intermediate_results>
 [Expressions, values, and partial derivations that the next session needs.
 Each entry should have: LaTeX equation, explicit units, and validity range.]
+
+If a canonical derived result was persisted this session, record its `result_id` here and repeat it as `last_result_id` so a later rerun can target the same registry entry directly.
 
 Equations:
 
@@ -125,6 +129,7 @@ the handoff is consumed on resume. That file is append-only and cumulative.
 
 <!-- Reference the result IDs added to state.json this session -->
 <!-- Each entry links back to the state.json intermediate_results key -->
+<!-- If a derived result is the rerun anchor, repeat it explicitly as last_result_id. -->
 
 - Result ID: [id] -- [brief description of what was computed]
 

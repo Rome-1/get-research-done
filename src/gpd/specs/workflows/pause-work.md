@@ -34,6 +34,7 @@ If no active phase detected, ask user which phase they're pausing work on.
 10. **Blockers/issues**: Anything stuck (divergence encountered, numerical instability, missing input data)
 11. **Mental context**: The theoretical approach, next steps, "vibe" of where this is going
 12. **Files modified**: What's changed but not committed (scripts, notebooks, LaTeX, data files)
+13. **Result continuity**: If a canonical derived result was just persisted, capture its `result_id` as the active `last_result_id` rerun anchor.
 
 Ask user for clarifications if needed via conversational questions.
 </step>
@@ -50,7 +51,7 @@ permanent record that prevents lossy compression across context resets.
 
    - Every equation derived (LaTeX form, units, validity range, derivation method)
    - Every convention choice made or confirmed (metric, Fourier, normalization, regularization)
-   - Every intermediate result added to state.json (with result IDs)
+   - Every intermediate result added to state.json (with result IDs), plus the canonical `last_result_id` rerun anchor when this session produced a persisted derivation result
    - Every approximation invoked (name, validity regime, how checked)
 
 2. **Append to `GPD/DERIVATION-STATE.md`** (create if it doesn't exist):
@@ -175,6 +176,7 @@ Use the shared template at `@{GPD_INSTALL_DIR}/templates/continue-here.md` as th
 - `<remaining_work>` for what is still left
 - `<decisions_made>` for physics or method choices that must not be silently re-debated
 - `<intermediate_results>` for equations, values, outputs, and convention snapshots needed on return
+- If a canonical derived result was persisted this session, call out its `result_id` as `last_result_id` so reruns can target the same registry entry directly.
 - `<blockers>` for active blockers and physics impact
 - `<context>` for the reasoning chain and overall approach
 - `<next_action>` for the exact first thing to do on return
