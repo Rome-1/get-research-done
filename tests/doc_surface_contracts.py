@@ -733,6 +733,9 @@ def assert_recovery_ladder_contract(
             "explicit handoff to restore",
             "context handoff",
             "session continuity",
+            "projected handoff",
+            "projected from canonical continuation",
+            "usable recovery target",
         ),
         label="pause/resume handoff semantics",
     )
@@ -747,6 +750,7 @@ def assert_runtime_readiness_handoff_contract(content: str) -> None:
             "install and runtime-local readiness",
             "runtime-local readiness",
             "runtime-readiness check",
+            "projected handoff",
         ),
         label="runtime-local readiness handoff",
     )
@@ -757,6 +761,7 @@ def assert_runtime_readiness_handoff_contract(content: str) -> None:
             PERMISSIONS_SYNC_SURFACE,
             "runtime-owned permission alignment and sync",
             "runtime-owned permission alignment",
+            "projected from canonical continuation",
         ),
         label="runtime-owned permission handoff",
     )

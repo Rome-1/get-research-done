@@ -7,7 +7,7 @@ Use this workflow when:
 </trigger>
 
 <purpose>
-Instantly restore full research project context so "Where were we?" has an immediate, complete answer -- including the state of derivations, parameter values, intermediate results, theoretical assumptions, and the current canonical continuation view assembled from `state.json.continuation`, the editable mirror, the temporary handoff artifact, and the derived execution head compatibility mirror.
+Instantly restore full research project context so "Where were we?" has an immediate, complete answer -- including the state of derivations, parameter values, intermediate results, theoretical assumptions, and the current canonical continuation view assembled from `state.json.continuation`, the editable `session` mirror, the temporary handoff artifact, and the derived execution head compatibility mirror.
 </purpose>
 
 <required_reading>
@@ -61,7 +61,7 @@ If `active_execution_segment.first_result_gate_pending` is true, do not treat la
 
 **machine_change_detection:** Compare the current hostname/platform with `session.hostname` and `session.platform` from `state.json`. If they differ, display the non-blocking machine-change notice from INIT and recommend rerunning the installer so runtime-local config stays current. The project state itself remains portable and does not require repair.
 
-**canonical handoff path:** `/gpd:pause-work` records a canonical phase handoff by writing `GPD/phases/.../.continue-here.md` and persisting that pointer into session continuity. That file is a temporary handoff artifact, not the authoritative store for project position or resume ranking. `state.json.continuation` is the durable canonical resume payload, and `execution_resume_file` is surfaced from the live execution snapshot or `session.resume_file` for display and logging. The runtime also ranks `session.resume_file` as a `session_resume_file` handoff candidate in `segment_candidates` when it is distinct from the live execution resume file. Treat it as a ranked non-bounded handoff candidate and continuity pointer, not as proof that a resumable bounded segment still exists. If a handoff file is missing but state authority is intact, the project state still exists and resume should report the missing artifact rather than treating the whole project as lost. The same machine-readable intake powers the local `gpd resume` summary. If you need to rediscover the project first, use `gpd resume --recent` before dropping into the per-project resume flow. The picker is advisory; the selected workspace becomes the authoritative project context again when `/gpd:resume-work` reloads its state.
+**canonical handoff path:** `/gpd:pause-work` records a canonical phase handoff by writing `GPD/phases/.../.continue-here.md` and projecting that pointer into the legacy `session` mirror. That file is a temporary handoff artifact, not the authoritative store for project position or resume ranking. `state.json.continuation` is the durable canonical resume payload, and `execution_resume_file` is surfaced from the live execution snapshot or projected `session.resume_file` for display and logging. The runtime also ranks `session.resume_file` as a `session_resume_file` handoff candidate in `segment_candidates` when it is distinct from the live execution resume file. Treat it as a ranked non-bounded handoff candidate and continuity pointer, not as proof that a resumable bounded segment still exists. If a handoff file is missing but state authority is intact, the project state still exists and resume should report the missing artifact rather than treating the whole project as lost. The same machine-readable intake powers the local `gpd resume` summary. If you need to rediscover the project first, use `gpd resume --recent` before dropping into the per-project resume flow. The picker is advisory; the selected workspace becomes the authoritative project context again when `/gpd:resume-work` reloads its state.
 
 Read and parse STATE.md, then PROJECT.md:
 
@@ -476,9 +476,9 @@ Based on user selection, route to appropriate workflow:
 - **Something else** -> Ask what they need
   </step>
 
-<step name="update_session">
-Before proceeding to routed workflow, update session continuity via CLI
-(keeps STATE.md and state.json in sync):
+<step name="update_continuation">
+Before proceeding to routed workflow, refresh canonical continuation via CLI
+(which then reprojects STATE.md and the legacy `session` continuity mirror):
 
 ```bash
 gpd state record-session \
@@ -486,7 +486,7 @@ gpd state record-session \
   --resume-file "[updated if applicable; omit to keep the current pointer, or pass `—` to clear it]"
 ```
 
-This ensures if session ends unexpectedly, next resume knows the state.
+This ensures the canonical continuation payload reflects the resumed handoff state if the session ends unexpectedly. STATE.md and the legacy `session` fields should mirror that authoritative update after persistence.
 </step>
 
 </process>

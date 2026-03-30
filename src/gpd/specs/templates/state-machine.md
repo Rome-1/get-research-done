@@ -17,18 +17,18 @@ Phase 5 separates three layers that were previously blurred together:
 2. A derived execution head projects the latest resumable execution state for compatibility surfaces.
 3. `state.json.continuation.bounded_segment` remains the durable bounded-resume authority.
 
-Current public behavior keeps the canonical continuation decision in `gpd init resume`, which reads `state.json.continuation` first and only consults compatibility surfaces when canonical continuation is missing or incomplete.
+Current public behavior keeps the canonical continuation decision in `gpd init resume`, which reads `state.json.continuation` first and only consults compatibility surfaces when canonical continuation is missing or incomplete. `session` is a compatibility mirror of the canonical continuation view, and `.continue-here.md` plus `current-execution.json` are projections or advisory compatibility surfaces, not peer authorities.
 
 | Surface | Role | Authority Level | Notes |
 |---------|------|-----------------|-------|
-| `GPD/state.json` | Storage authority | Authoritative | Machine-readable project state, including canonical `continuation` and session continuity |
+| `GPD/state.json` | Storage authority | Authoritative | Machine-readable project state, including canonical `continuation`; `session` is the compatibility mirror of its handoff/machine view |
 | `GPD/state.json.bak` | Recovery backup | Fallback only | Used when the primary JSON state is unreadable or unavailable |
 | `GPD/STATE.md` | Editable mirror | Reconstruction/edit surface | Human-readable mirror of state; also the final reconstruction source if both JSON files are unavailable |
 | Execution lineage | Append-only execution history | Authoritative for provenance only | Records execution/workflow transitions and can rebuild the execution head |
 | Derived execution head / `GPD/observability/current-execution.json` | Compatibility mirror | Non-authoritative | Latest execution snapshot rebuilt from lineage; used by legacy consumers and live status surfaces |
-| `GPD/phases/.../.continue-here.md` | Temporary handoff artifact | Non-authoritative | Written by `/gpd:pause-work`; may be referenced by session continuity or a live execution snapshot |
+| `GPD/phases/.../.continue-here.md` | Temporary handoff artifact | Non-authoritative | Written by `/gpd:pause-work`; may be referenced by canonical continuation, session compatibility, or a live execution snapshot |
 
-The canonical continuation decision comes from `gpd init resume`, not from reading any one of these files in isolation. Canonical `state.json.continuation.bounded_segment` wins first; the derived execution head only fills compatibility gaps when the canonical continuation is incomplete.
+The canonical continuation decision comes from `gpd init resume`, not from reading any one of these files in isolation. Canonical `state.json.continuation.bounded_segment` wins first; the derived execution head only fills compatibility gaps when the canonical continuation is incomplete. The temporary handoff artifact and derived execution head remain projections of that decision, not independent sources of truth.
 
 ---
 
@@ -40,10 +40,10 @@ The canonical continuation decision comes from `gpd init resume`, not from readi
 Created → Active → Paused → Active → Complete → Archived
 ```
 
-- **Owner surfaces**: `GPD/state.json` (authoritative state, including canonical `continuation`), `GPD/STATE.md` (editable mirror), append-only execution lineage, derived execution head / `GPD/observability/current-execution.json` compatibility mirror, optional `.continue-here.md` temporary handoff artifact
+- **Owner surfaces**: `GPD/state.json` (authoritative state, including canonical `continuation`), `GPD/STATE.md` (editable mirror), append-only execution lineage, derived execution head / `GPD/observability/current-execution.json` compatibility mirror, optional `.continue-here.md` temporary handoff projection
 - **Created → Active**: `/gpd:new-project` completes (ROADMAP.md exists, STATE.md initialized)
-- **Active → Paused**: `/gpd:pause-work` (explicit user action, records session continuity and may write `.continue-here.md`)
-- **Paused → Active**: `/gpd:resume-work` (restores context from authoritative state plus any handoff artifact or derived execution head compatibility mirror)
+- **Active → Paused**: `/gpd:pause-work` (explicit user action, records canonical continuation and may write `.continue-here.md`)
+- **Paused → Active**: `/gpd:resume-work` (restores context from authoritative state plus any handoff projection or derived execution head compatibility mirror)
 - **Active → Complete**: All phases reach `complete` status
 - **Complete → Archived**: `/gpd:complete-milestone` (archives ROADMAP.md, REQUIREMENTS.md to `milestones/`, updates MILESTONES.md)
 
@@ -152,7 +152,7 @@ Active → Audited → Complete → Archived
 | Blockers | STATE.md (Blockers section) | `gpd state add-blocker/resolve-blocker` |
 | Approximations | state.json (`approximations`) | `gpd approximation add/list/check` |
 | Propagated Uncertainties | state.json (`propagated_uncertainties`) | `gpd uncertainty add/list` |
-| Session Continuity | state.json (`session`) + STATE.md (mirror) | `gpd state record-session` |
+| Session Continuity | state.json (`continuation` authority + `session` compatibility mirror) + STATE.md | `gpd state record-session` |
 | Performance Metrics | STATE.md (Performance Metrics table) | `gpd state record-metric` |
 | Phase Completion | ROADMAP.md (checkbox `[x]`) | `gpd phase complete` |
 | Milestone Completion | MILESTONES.md | `gpd milestone complete` |
@@ -164,8 +164,8 @@ Active → Audited → Complete → Archived
 | Transition | Command / Workflow | Files Modified |
 |-----------|---------|---------------|
 | Project: Created → Active | `/gpd:new-project` | PROJECT.md, ROADMAP.md, STATE.md, state.json, config.json created |
-| Project: Active → Paused | `/gpd:pause-work` | state.json + STATE.md (session continuity / paused marker), `.continue-here.md` temporary handoff may be created |
-| Project: Paused → Active | `/gpd:resume-work` | Guided by `gpd init resume` over state authority, editable mirror, temporary handoff artifact, and any derived execution head compatibility mirror; STATE.md paused marker may be cleared and the handoff artifact may be consumed |
+| Project: Active → Paused | `/gpd:pause-work` | state.json + STATE.md (canonical continuation / paused marker), `.continue-here.md` temporary handoff projection may be created |
+| Project: Paused → Active | `/gpd:resume-work` | Guided by `gpd init resume` over canonical state, editable mirror, temporary handoff projection, and any derived execution head compatibility mirror; STATE.md paused marker may be cleared and the handoff projection may be consumed |
 | Phase: Not started → Discussed | `/gpd:discuss-phase` | `{NN}-CONTEXT.md` created |
 | Phase: → Researched | `/gpd:research-phase` or `/gpd:plan-phase` | `{NN}-RESEARCH.md` created |
 | Phase: Researched → Planned | `/gpd:plan-phase` | `{NN}-{plan}-PLAN.md` files created, STATE.md updated |
@@ -182,7 +182,7 @@ Active → Audited → Complete → Archived
 | Blocker resolved | `gpd state resolve-blocker` | STATE.md (Blockers section), state.json synced |
 | Metric recorded | `gpd state record-metric` | STATE.md (Performance Metrics table), state.json synced |
 | Progress recalculated | `gpd state update-progress` | STATE.md (Progress bar), state.json synced |
-| Session recorded | `gpd state record-session` | STATE.md (Session section), state.json synced |
+| Session recorded | `gpd state record-session` | STATE.md (Session section), state.json synced through canonical continuation |
 | State compacted | `gpd state compact` | STATE.md (trimmed), STATE-ARCHIVE.md (appended) |
 
 ---
@@ -225,7 +225,7 @@ STATE.md and state.json are kept in sync via `sync_state_json()`:
 
 For continuation specifically:
 
-- `.continue-here.md` is the canonical temporary handoff artifact, not the storage authority
+- `.continue-here.md` is the canonical temporary handoff projection, not the storage authority
 - append-only execution lineage is the provenance record, not the bounded-resume authority
 - the derived execution head and `GPD/observability/current-execution.json` are compatibility mirrors, not the storage authority
 - `gpd init resume` resolves the canonical continuation view with `state.json.continuation` first and compatibility fallback only for legacy or incomplete bounded-segment recovery

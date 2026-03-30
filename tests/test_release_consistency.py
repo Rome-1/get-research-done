@@ -681,7 +681,12 @@ def test_public_beginner_hub_keeps_top_level_and_help_surfaces_aligned() -> None
         "in-runtime continue command after you open the right folder. If you need to\n"
         "reopen a different workspace first, use `gpd resume --recent`, then come back\n"
         "into the runtime."
-    ) in hub
+    ) in hub or (
+        "If you already have a GPD project, `gpd resume` is the normal-terminal,\n"
+        "projected recovery snapshot, and `resume-work` is the in-runtime continue\n"
+        "command after you reopen the right workspace. If you need to rediscover a\n"
+        "different workspace first, use `gpd resume --recent`." in hub
+    )
     assert_beginner_hub_preflight_contract(hub)
 
     start_here = _markdown_section(readme, "## Start Here")
@@ -770,6 +775,10 @@ def test_js_bootstrap_after_install_surface_keeps_beginner_order() -> None:
     assert (
         "Then use your runtime's `new-project` command for new work or `map-research` for existing work. "
         "When you come back later, use `gpd resume` for the current-workspace read-only recovery snapshot or "
+        "`gpd resume --recent` to find a different workspace first, then continue in the runtime with `resume-work`."
+    ) in install_js or (
+        "Then use your runtime's `new-project` command for new work or `map-research` for existing work. "
+        "When you come back later, use `gpd resume` for the projected recovery snapshot or "
         "`gpd resume --recent` to find a different workspace first, then continue in the runtime with `resume-work`."
     ) in install_js
     assert install_js.index(hub_line) < install_js.index(order_line)

@@ -475,7 +475,7 @@ Ready to plan the next phase of investigation.
 - Phase complete but next phase not planned → offer `/gpd:plan-phase [next]`
 - All work complete → offer milestone completion
 - Blockers present → highlight before offering to continue
-- Handoff file exists → mention it, offer `/gpd:resume-work`
+- Projected handoff file exists → mention it as a recovery pointer, offer `/gpd:resume-work`
 - If the user may be outside the project entirely → mention `gpd resume --recent` as the explicit rediscovery step before `/gpd:resume-work`
 
 </process>
@@ -487,5 +487,5 @@ Ready to plan the next phase of investigation.
 - [ ] What's next clearly explained
 - [ ] Smart routing: /gpd:execute-phase if plans exist, /gpd:plan-phase if not
 - [ ] User confirms before any action
-- [ ] Seamless handoff to appropriate gpd command
+- [ ] Seamless transition to appropriate gpd command
       </success_criteria>

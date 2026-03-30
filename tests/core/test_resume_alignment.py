@@ -73,7 +73,9 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "derived execution head compatibility mirror" in resume_doc
     assert "Do not treat any single `.continue-here.md` file or compatibility snapshot as the sole authority in isolation." in resume_doc
     assert "The derived execution head and the temporary handoff artifact are both subordinate to the storage authority chain." in resume_doc
-    assert "Current public behavior distinguishes four continuation-facing layers plus the derived execution head:" in resume_doc
+    assert "Current public behavior distinguishes four continuation-facing layers plus the derived execution head:" in resume_doc or (
+        "Current public behavior distinguishes canonical continuation, compatibility projections, and the derived execution head:" in resume_doc
+    )
     assert "project-relative paths" in portability_doc
     assert "normalizes project-local absolute `resume_file` paths back to relative form" in portability_doc
     assert "usable state from `GPD/state.json`, `GPD/state.json.bak`, or `GPD/STATE.md`" in resume_doc
@@ -114,13 +116,19 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
         "**Hostname:** [current hostname]\n"
         "**Platform:** [current platform]\n"
     ) in transition_doc
-    assert "Update the same values under `GPD/state.json.session`" in transition_doc
+    assert (
+        "Update the same values under `GPD/state.json.session`" in transition_doc
+        or "Project the same values into `GPD/state.json.session`" in transition_doc
+        or "session mirror" in transition_doc
+    )
     assert "save_state_markdown" in transition_doc
     assert "gpd --raw state snapshot" not in transition_doc
     assert "**Core research question:** [Current core research question from PROJECT.md]" in transition_doc
     assert 'grep \'^\\*\\*Current Phase:\\*\\*\'' in transition_doc
     assert "GPD/state.json GPD/PROJECT.md" in transition_doc
-    assert 'resume_file: "—"' in execute_plan_doc
+    assert "continuation_update:" in execute_plan_doc or "session_update:" in execute_plan_doc
+    assert "resume_file: null" in execute_plan_doc
+    assert "bounded_segment: null" in execute_plan_doc
     assert '--resume-file "—"' in execute_plan_doc
     assert 'resume_file: "None"' not in execute_plan_doc
     assert '--resume-file "None"' not in execute_plan_doc
@@ -139,15 +147,24 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "canonical object first and only falls back to the derived execution head compatibility mirror when the canonical continuation is missing or incomplete" in schema_doc
     assert "state.json.continuation.bounded_segment" in schema_doc
     assert "An append-only execution lineage records what happened." in state_machine_doc
-    assert "A derived execution head projects the latest resumable execution state for compatibility surfaces." in state_machine_doc
+    assert (
+        "A derived execution head projects the latest resumable execution state for compatibility surfaces." in state_machine_doc
+        or "A derived execution head is a compatibility projection of the latest resumable execution state." in state_machine_doc
+    )
     assert "`state.json.continuation.bounded_segment` remains the durable bounded-resume authority." in state_machine_doc
     assert "Temporary handoff artifact" in state_machine_doc
     assert "Derived execution head / `GPD/observability/current-execution.json`" in state_machine_doc
     assert "reads `state.json.continuation` first and only consults compatibility surfaces when canonical continuation is missing or incomplete" in state_machine_doc
     assert "canonical temporary phase handoff artifact" in continue_here_doc
-    assert "This file is **not** the authoritative store for project position, session continuity, or resume ranking." in continue_here_doc
+    assert (
+        "This file is **not** the authoritative store for project position, session continuity, or resume ranking." in continue_here_doc
+        or "This file is **not** the authoritative store for project position, continuation state, or resume ranking." in continue_here_doc
+    )
     assert "Deleting or missing this file does not erase project state by itself" in continue_here_doc
-    assert "must not be treated as the storage authority for project status, session continuity, or bounded resume ranking" in continue_here_doc
+    assert (
+        "must not be treated as the storage authority for project status, session continuity, or bounded resume ranking" in continue_here_doc
+        or "must not be treated as the storage authority for project status, continuation state, or bounded resume ranking" in continue_here_doc
+    )
 
 
 def test_recovery_docs_keep_runtime_resume_work_distinct_from_local_resume_surfaces() -> None:

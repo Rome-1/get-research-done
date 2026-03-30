@@ -49,6 +49,6 @@
     "cross_workspace_phrase": "find the workspace first",
     "resume_phrase": "continue inside that workspace",
     "next_phrase": "the fastest next command",
-    "pause_phrase": "an explicit handoff to restore"
+    "pause_phrase": "an explicit handoff to restore, projected from canonical continuation"
   }
 }

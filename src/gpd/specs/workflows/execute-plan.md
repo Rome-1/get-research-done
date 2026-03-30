@@ -395,7 +395,7 @@ Context is finite (~200k tokens, ~80% usable). After completing each task:
 
 Signs of context pressure: re-reading files you already read, losing track of parameter values or sign conventions, derivation steps getting sloppy. A fresh context with saved state outperforms a saturated one.
 
-If pausing mid-plan: commit current work, create `.continue-here.md` with full derivation state, and persist the matching `execution_segment` as `continuation.bounded_segment` if the stop is meant to be resumable. Record the same pause in execution lineage so the execution head can be rebuilt later. Recommend `/clear` + `/gpd:resume-work`. See `{GPD_INSTALL_DIR}/references/orchestration/context-budget.md` for budget guidelines. The markdown handoff file and `session` record are discovery surfaces; `continuation.bounded_segment` is the bounded authority for the pause.
+If pausing mid-plan: commit current work, create `.continue-here.md` with full derivation state, and persist the matching `execution_segment` as `continuation.bounded_segment` if the stop is meant to be resumable. Record the same pause in execution lineage so the execution head can be rebuilt later. Recommend `/clear` + `/gpd:resume-work`. See `{GPD_INSTALL_DIR}/references/orchestration/context-budget.md` for budget guidelines. The markdown handoff file and legacy `session` record are discovery surfaces that mirror canonical continuation; `continuation.bounded_segment` is the bounded authority for the pause.
 
 **Auto-checkpoint protocol (autonomy-aware):**
 
@@ -422,9 +422,9 @@ CHECKPOINT
 2. If above 75% (or 85% in yolo mode): Proactively trigger pause protocol:
    - Commit all current work
    - Create `.continue-here.md` with full derivation state and a bounded execution segment summary
-   - Update STATE.md session info as a handoff pointer
+   - Update STATE.md as a projected continuation pointer
   - **supervised/balanced:** Suggest `/clear` + `/gpd:resume-work`
-  - **yolo:** Prepare the bounded resume handoff automatically and continue only if the runtime can spawn the continuation with explicit segment state; otherwise suggest `/clear` + `/gpd:resume-work`
+   - **yolo:** Prepare the bounded resume handoff automatically and continue only if the runtime can spawn the continuation with explicit segment state; otherwise suggest `/clear` + `/gpd:resume-work`
 
 Also stop when either bound is hit, even if context looks healthy:
 
@@ -550,7 +550,7 @@ fi
 <step name="create_summary">
 Create `${phase}-${plan}-SUMMARY.md` at `${phase_dir}/`. Use `{GPD_INSTALL_DIR}/templates/summary.md`.
 
-Note: DERIVATION-STATE.md is updated by /gpd:pause-work for session handoff. On natural completion (no pause), key equations and results are captured in SUMMARY.md instead. If you want cumulative derivation state across sessions, run /gpd:pause-work before ending.
+Note: DERIVATION-STATE.md is updated by /gpd:pause-work as the projected pause handoff record. On natural completion (no pause), key equations and results are captured in SUMMARY.md instead. If you want cumulative derivation state across sessions, run /gpd:pause-work before ending.
 
 If the selected plan artifact is the standalone `PLAN.md`, write the canonical standalone summary as `SUMMARY.md`. Where this workflow shows numbered examples like `${phase}-${plan}-SUMMARY.md`, substitute the standalone `SUMMARY.md` filename instead.
 
@@ -642,14 +642,18 @@ gpd state add-blocker --text "Blocker description"
 
 </step>
 
-<step name="update_session_continuity">
-Include session update in the `gpd_return` envelope:
+<step name="update_continuation">
+Include continuation update in the `gpd_return` envelope:
 
 ```yaml
 gpd_return:
-  session_update:
-    stopped_at: "Completed ${phase}-${plan}-PLAN.md"
-    resume_file: "—"
+  continuation_update:
+    handoff:
+      recorded_at: "[current ISO timestamp]"
+      recorded_by: "execute-plan"
+      stopped_at: "Completed ${phase}-${plan}-PLAN.md"
+      resume_file: null
+    bounded_segment: null
 ```
 
 **Exception:** If executing in Pattern C (main context, no subagent), apply directly:
@@ -661,7 +665,7 @@ gpd state record-session \
 gpd observe event session continuity-updated --phase "${phase}" --plan "${plan}" --data "{\"stopped_at\":\"Completed ${phase}-${plan}-PLAN.md\",\"resume_file\":\"—\"}" 2>/dev/null || true
 ```
 
-This session update is a handoff pointer only. If plan completion would otherwise leave a stale `continuation.bounded_segment` pointing at this work, clear that bounded segment as part of completion cleanup so no bounded stop survives past the completed plan. The matching execution-lineage record remains as history even after the bounded stop is retired.
+This continuation update is the authoritative completion cleanup boundary. It retires any stale `continuation.bounded_segment` that still points at the completed work and clears the canonical handoff pointer for this plan. The matching execution-lineage record remains as history even after the bounded stop is retired. `session` and STATE.md are projection surfaces that should reflect this update after persistence, not independent authorities.
 
 Keep STATE.md under 150 lines.
 </step>
