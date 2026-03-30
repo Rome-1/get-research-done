@@ -70,6 +70,7 @@ fi
 ```
 
 - **If init succeeds** (non-empty JSON with `state_exists: true`): Extract `convention_lock` for metric signature, Fourier transform convention, and index ranges. Extract active approximations and their validity ranges. Load any previously established notation from STATE.md.
+- If project state exists, inspect `intermediate_results` before re-deriving. Capture any existing canonical equation/result entries related to the target, including `id`, `equation`, `description`, `phase`, `depends_on`, and `verified`, so you can reuse the authoritative result instead of restating it.
 - **If init fails or `state_exists` is false** (standalone usage): Proceed with explicit convention declarations required from user in Step 1. All conventions must be stated explicitly before any derivation begins.
 
 **This is the most critical workflow to have convention context.** Derivations without locked conventions risk sign errors, missing factors of 2pi, and metric signature inconsistencies that propagate silently through all subsequent steps.
@@ -365,6 +366,7 @@ status: completed | draft
 assumptions: [A1, A2, ...]
 method: [variational, perturbative, etc.]
 result: [brief form of final expression]
+result_id: [stable registry ID, if persisted]
 verified_limits: [list of limits checked]
 ---
 
@@ -433,6 +435,35 @@ mkdir -p GPD/analysis
 Write to `GPD/analysis/derivation-{slug}.md`.
 </step>
 
+<step name="persist_result">
+**Step 6: Persist Canonical Result**
+
+Persist the final derived equation back into the existing result registry when project state is available.
+
+- If `state_exists` is true:
+  1. Resolve a stable `result_id`. On reruns, prefer the `result_id` already written into the derivation document frontmatter. Otherwise derive a deterministic ID from the derivation slug and phase.
+  2. Re-check `state.json.intermediate_results` for the same `result_id` or an existing canonical equation for the same target. If a matching entry already exists, reuse its `result_id` and update it instead of creating a duplicate.
+  3. Persist the final result using the existing CLI surface only:
+
+```bash
+gpd result add --id "{result_id}" --equation "{final_equation}" --description "{short description}" --phase "{phase}" --validity "{validity}" [--depends-on "{comma-separated ids}"]
+```
+
+or, on reruns / matching entries:
+
+```bash
+gpd result update "{result_id}" --equation "{final_equation}" --description "{short description}" --phase "{phase}" --validity "{validity}" [--depends-on "{comma-separated ids}"]
+```
+
+  4. Write the resulting `result_id` into the derivation document frontmatter so later reruns update the same canonical registry entry.
+  5. Keep `verified=false` unless the derivation also produced verification evidence that should be recorded separately.
+- If `state_exists` is false:
+  - Skip registry write-back entirely.
+  - Keep the derivation document self-contained under `GPD/analysis/` and do not invent a project result entry.
+
+This keeps standalone derivations safe while making project-mode derivations reusable as canonical structured memory.
+</step>
+
 </process>
 
 <common_derivation_pitfalls>
@@ -458,6 +489,7 @@ Write to `GPD/analysis/derivation-{slug}.md`.
 - [ ] ASSERT_CONVENTION comment included in derivation document header AND per derivation step
 - [ ] No convention drift: every step's ASSERT_CONVENTION matches Step 1 declaration and project lock
 - [ ] Cross-phase convention consistency verified (if combining with prior results)
+- [ ] Existing `intermediate_results` inspected before re-deriving, and matching canonical results reused when present
 - [ ] Derivation objective clearly stated
 - [ ] All assumptions numbered and explicit
 - [ ] All notation defined before use
@@ -472,6 +504,8 @@ Write to `GPD/analysis/derivation-{slug}.md`.
 - [ ] Regime of validity stated
 - [ ] All relevant limiting cases verified
 - [ ] Connection to known results documented
+- [ ] Final derived equation persisted through `gpd result add` or `gpd result update` in project mode, with `result_id` recorded in frontmatter
+- [ ] Standalone mode skipped registry write-back and stayed self-contained
 - [ ] Complete derivation document written
 
 </success_criteria>
