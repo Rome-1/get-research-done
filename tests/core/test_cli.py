@@ -3832,6 +3832,38 @@ def test_observe_show_falls_back_to_session_logs(tmp_path: Path) -> None:
     assert result.events[0]["session_id"] == "cli-a"
 
 
+def test_observe_export_resolves_output_dir_relative_to_cwd(tmp_path: Path) -> None:
+    (tmp_path / "GPD").mkdir()
+
+    captured: dict[str, object] = {}
+
+    def fake_export_logs(cwd: Path, **kwargs: object) -> SimpleNamespace:
+        captured["cwd"] = cwd
+        captured.update(kwargs)
+        return SimpleNamespace(exported=True)
+
+    with (
+        patch("gpd.core.observability.export_logs", side_effect=fake_export_logs),
+        patch("gpd.cli._output"),
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "--raw",
+                "--cwd",
+                str(tmp_path),
+                "observe",
+                "export",
+                "--output-dir",
+                "exports/logs",
+            ],
+        )
+
+    assert result.exit_code == 0
+    assert captured["cwd"] == tmp_path.resolve()
+    assert captured["output_dir"] == str((tmp_path / "exports" / "logs").resolve(strict=False))
+
+
 def test_observe_event_appends_event(tmp_path: Path) -> None:
     (tmp_path / "GPD").mkdir()
 

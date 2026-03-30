@@ -1884,3 +1884,85 @@ def test_list_sessions_no_gpd_dir(tmp_path: Path) -> None:
 
     result = list_sessions(tmp_path)
     assert result.count == 0
+
+
+def test_export_logs_writes_filtered_json_exports(tmp_path: Path) -> None:
+    project = _bootstrap_project(tmp_path)
+    sessions_dir = project / "GPD" / "observability" / "sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    traces_dir = project / "GPD" / "traces"
+    traces_dir.mkdir(parents=True, exist_ok=True)
+
+    session_id = "session-export"
+    (sessions_dir / f"{session_id}.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "timestamp": "2026-03-10T00:00:00+00:00",
+                        "event_id": "evt-1",
+                        "session_id": session_id,
+                        "category": "session",
+                        "name": "lifecycle",
+                        "action": "start",
+                        "status": "active",
+                        "command": "execute-phase",
+                        "data": {"cwd": str(project), "source": "cli", "pid": 100, "metadata": {}},
+                    }
+                ),
+                json.dumps(
+                    {
+                        "timestamp": "2026-03-10T00:00:05+00:00",
+                        "event_id": "evt-2",
+                        "session_id": session_id,
+                        "category": "workflow",
+                        "name": "wave-start",
+                        "action": "start",
+                        "status": "active",
+                        "command": "execute-phase",
+                        "phase": "03",
+                        "data": {"wave": 1},
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (traces_dir / "trace-export.jsonl").write_text(
+        json.dumps({"timestamp": "2026-03-10T00:00:06+00:00", "type": "span", "summary": "trace entry"}) + "\n",
+        encoding="utf-8",
+    )
+
+    from gpd.core.observability import export_logs
+
+    output_dir = project / "exports"
+    result = export_logs(project, output_dir=str(output_dir), phase="03", format="json")
+
+    assert result.exported is True
+    assert result.output_dir == str(output_dir)
+    assert result.sessions_exported == 1
+    assert result.events_exported == 1
+    assert result.traces_exported == 1
+    assert len(result.files_written) == 3
+
+    sessions_payload = json.loads((output_dir / Path(result.files_written[0]).name).read_text(encoding="utf-8"))
+    events_payload = json.loads((output_dir / Path(result.files_written[1]).name).read_text(encoding="utf-8"))
+    traces_payload = json.loads((output_dir / Path(result.files_written[2]).name).read_text(encoding="utf-8"))
+
+    assert sessions_payload[0]["session_id"] == session_id
+    assert events_payload == [
+        {
+            "timestamp": "2026-03-10T00:00:05+00:00",
+            "event_id": "evt-2",
+            "session_id": session_id,
+            "category": "workflow",
+            "name": "wave-start",
+            "action": "start",
+            "status": "active",
+            "command": "execute-phase",
+            "phase": "03",
+            "data": {"wave": 1},
+        }
+    ]
+    assert traces_payload[0]["summary"] == "trace entry"

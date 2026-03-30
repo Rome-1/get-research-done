@@ -445,6 +445,7 @@ GPD stores project-local observability under `GPD/observability/` and detailed p
 |---------|--------------|
 | `gpd observe sessions [--status ...] [--command ...] [--last N]` | List recorded observability sessions |
 | `gpd observe show [--session ...] [--category ...] [--name ...] [--action ...] [--status ...] [--command ...] [--phase ...] [--plan ...] [--last N]` | Show logged observability events with filters |
+| `gpd observe export [--format {jsonl,json,markdown}] [--session ...] [--command ...] [--phase ...] [--last N] [--no-traces] [--output-dir ...]` | Export filtered observability sessions, events, and optional traces to files |
 | `gpd observe execution` | Show read-only live execution status for the current workspace, including progress / waiting state, conservative `possibly stalled` wording, and the next read-only checks to run |
 | `gpd cost` | Show the read-only machine-local usage / cost summary from recorded local telemetry, optional USD budget guardrails, and the current profile tier mix; advisory only, not live budget enforcement or provider billing truth. If telemetry is missing, the USD view stays partial or estimated rather than exact |
 | `gpd observe event <category> <name> [--action ...] [--status ...] [--command ...] [--phase ...] [--plan ...] [--session ...] [--data <json>]` | Append an explicit observability event with optional structured metadata |
