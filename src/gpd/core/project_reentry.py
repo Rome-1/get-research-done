@@ -51,6 +51,9 @@ class ProjectReentryCandidate(BaseModel):
     resume_target_recorded_at: str | None = None
     resume_file_available: bool | None = None
     resume_file_reason: str | None = None
+    hostname: str | None = None
+    platform: str | None = None
+    availability_reason: str | None = None
     last_session_at: str | None = None
     stopped_at: str | None = None
     source_kind: str | None = None
@@ -84,6 +87,18 @@ class ProjectReentryResolution(BaseModel):
         if not isinstance(self.project_root, str) or not self.project_root.strip():
             return None
         return Path(self.project_root).expanduser().resolve(strict=False)
+
+    @property
+    def selected_candidate(self) -> ProjectReentryCandidate | None:
+        if not isinstance(self.project_root, str) or not self.project_root.strip():
+            return None
+        selected_root = self.project_root.strip()
+        if isinstance(self.source, str) and self.source.strip():
+            selected_source = self.source.strip()
+            for candidate in self.candidates:
+                if candidate.project_root == selected_root and candidate.source == selected_source:
+                    return candidate
+        return next((candidate for candidate in self.candidates if candidate.project_root == selected_root), None)
 
 
 def recoverable_project_context(project_root: Path) -> tuple[bool, bool, bool]:
@@ -178,6 +193,9 @@ def _candidate_from_recent_row(row: Mapping[str, object]) -> ProjectReentryCandi
         resume_target_recorded_at=recovery.resume_target_recorded_at,
         resume_file_available=resume_file_available,
         resume_file_reason=_normalize_recent_text(row, "resume_file_reason"),
+        hostname=_normalize_recent_text(row, "hostname"),
+        platform=_normalize_recent_text(row, "platform"),
+        availability_reason=_normalize_recent_text(row, "availability_reason"),
         last_session_at=_normalize_recent_text(row, "last_session_at", "last_seen_at", "last_event_at"),
         stopped_at=_normalize_recent_text(row, "stopped_at"),
         source_kind=_normalize_recent_text(row, "source_kind"),
@@ -193,6 +211,42 @@ def _candidate_from_recent_row(row: Mapping[str, object]) -> ProjectReentryCandi
         update={
             "confidence": "high" if concrete_target else "medium" if recoverable else "low",
             "reason": recovery.candidate_reason(recoverable=recoverable),
+        }
+    )
+
+
+def _enrich_candidate_from_recent_row(
+    candidate: ProjectReentryCandidate,
+    row: Mapping[str, object],
+) -> ProjectReentryCandidate:
+    """Overlay advisory recent-project metadata onto an already-selected candidate."""
+    resume_file_available = row.get("resume_file_available")
+    if not isinstance(resume_file_available, bool):
+        resume_file_available = None
+    resumable = bool(row.get("resumable", candidate.resumable))
+    if resume_file_available is True:
+        resumable = True
+    recovery = classify_recent_project_recovery(row)
+    return candidate.model_copy(
+        update={
+            "resumable": resumable,
+            "resume_file": _normalize_recent_text(row, "resume_file"),
+            "resume_target_kind": recovery.resume_target_kind,
+            "resume_target_recorded_at": recovery.resume_target_recorded_at,
+            "resume_file_available": resume_file_available,
+            "resume_file_reason": _normalize_recent_text(row, "resume_file_reason"),
+            "hostname": _normalize_recent_text(row, "hostname"),
+            "platform": _normalize_recent_text(row, "platform"),
+            "availability_reason": _normalize_recent_text(row, "availability_reason"),
+            "last_session_at": _normalize_recent_text(row, "last_session_at", "last_seen_at", "last_event_at"),
+            "stopped_at": _normalize_recent_text(row, "stopped_at"),
+            "source_kind": _normalize_recent_text(row, "source_kind"),
+            "source_session_id": _normalize_recent_text(row, "source_session_id"),
+            "source_segment_id": _normalize_recent_text(row, "source_segment_id"),
+            "source_transition_id": _normalize_recent_text(row, "source_transition_id"),
+            "source_recorded_at": _normalize_recent_text(row, "source_recorded_at"),
+            "recovery_phase": _normalize_recent_text(row, "recovery_phase"),
+            "recovery_plan": _normalize_recent_text(row, "recovery_plan"),
         }
     )
 
@@ -254,7 +308,13 @@ def resolve_project_reentry(
         if not isinstance(row_payload, Mapping):
             continue
         candidate = _candidate_from_recent_row(row_payload)
-        if candidate is None or candidate.project_root in seen_roots:
+        if candidate is None:
+            continue
+        if current_candidate is not None and candidate.project_root == current_candidate.project_root:
+            current_candidate = _enrich_candidate_from_recent_row(current_candidate, row_payload)
+            candidates[0] = current_candidate
+            continue
+        if candidate.project_root in seen_roots:
             continue
         candidates.append(candidate)
         seen_roots.add(candidate.project_root)

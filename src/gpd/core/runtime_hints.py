@@ -105,21 +105,10 @@ def workflow_preset_surface_note() -> str:
     return _workflow_preset_surface_note_text()
 
 
-def _row_value(row: object, field: str, default: object = None) -> object:
-    return getattr(row, field, default)
-
-
-def _current_project_row(
-    rows: list[object],
-    *,
-    project_root: str,
-) -> dict[str, object] | None:
-    for row in rows:
-        if _row_value(row, "project_root") == project_root:
-            return _model_dump(row)
-        if isinstance(row, dict) and row.get("project_root") == project_root:
-            return dict(row)
-    return None
+def _selected_reentry_candidate(reentry: object) -> dict[str, object] | None:
+    selected_candidate = getattr(reentry, "selected_candidate", None)
+    candidate_payload = _model_dump(selected_candidate)
+    return candidate_payload if isinstance(candidate_payload, dict) else None
 
 
 def _normalized_row_text(row: dict[str, object] | None, field: str) -> str | None:
@@ -423,7 +412,7 @@ def build_runtime_hint_payload(
     execution = _model_dump(execution_visibility)
 
     recent_rows = list_recent_projects(data_root, last=recent_projects_last) if include_recovery else []
-    current_project = _current_project_row(recent_rows, project_root=project_root.as_posix()) if include_recovery else None
+    current_project = _selected_reentry_candidate(reentry) if include_recovery else None
     resume_context = _resume_context(workspace_hint, data_root=data_root) if include_recovery else {}
     if include_recovery:
         resume_context = _hydrate_resume_context_from_recent_project(

@@ -79,6 +79,9 @@ def test_resolve_project_reentry_prefers_current_workspace_recovery(tmp_path: Pa
     assert resolution.project_root == workspace.resolve(strict=False).as_posix()
     assert resolution.recoverable_candidates_count == 1
     assert len(resolution.candidates) == 1
+    assert resolution.selected_candidate is not None
+    assert resolution.selected_candidate.source == "current_workspace"
+    assert resolution.selected_candidate.project_root == workspace.resolve(strict=False).as_posix()
     assert resolution.candidates[0].source == "current_workspace"
     assert resolution.candidates[0].recoverable is True
     assert resolution.candidates[0].project_exists is True
@@ -144,11 +147,112 @@ def test_resolve_project_reentry_auto_selects_unique_recoverable_recent_project(
     assert resolution.project_root == project.resolve(strict=False).as_posix()
     assert resolution.recoverable_candidates_count == 1
     assert len(resolution.candidates) == 1
+    assert resolution.selected_candidate is not None
+    assert resolution.selected_candidate.source == "recent_project"
+    assert resolution.selected_candidate.project_root == project.resolve(strict=False).as_posix()
     assert resolution.candidates[0].source == "recent_project"
     assert resolution.candidates[0].auto_selectable is True
     assert resolution.candidates[0].recoverable is True
     assert resolution.candidates[0].resume_target_kind == "handoff"
     assert resolution.candidates[0].reason == "recent project cache entry with projected continuity handoff"
+
+
+def test_resolve_project_reentry_exposes_selected_candidate_metadata_for_bounded_segment_recent_project(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    project = _make_gpd_workspace(tmp_path / "recent-bounded", project=True)
+
+    resolution = resolve_project_reentry(
+        workspace,
+        recent_rows=[
+            _recent_row(
+                project,
+                last_session_at="2026-03-28T12:00:00+00:00",
+                resume_target_kind="bounded_segment",
+            )
+        ],
+    )
+
+    assert resolution.mode == "auto-recent-project"
+    assert resolution.source == "recent_project"
+    assert resolution.selected_candidate is not None
+    assert resolution.selected_candidate.project_root == project.resolve(strict=False).as_posix()
+    assert resolution.selected_candidate.source == "recent_project"
+    assert resolution.selected_candidate.auto_selectable is True
+    assert resolution.selected_candidate.resume_target_kind == "bounded_segment"
+    assert resolution.selected_candidate.resume_target_recorded_at == "2026-03-28T12:00:00+00:00"
+    assert resolution.selected_candidate.source_kind == "continuation.bounded_segment"
+    assert resolution.selected_candidate.source_segment_id == f"segment-{project.name}"
+    assert resolution.selected_candidate.source_transition_id == f"transition-{project.name}"
+    assert resolution.selected_candidate.recovery_phase == "02"
+    assert resolution.selected_candidate.recovery_plan == "01"
+
+
+def test_resolve_project_reentry_leaves_selected_candidate_empty_for_missing_handoff_only_recent_project(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    project = _make_gpd_workspace(tmp_path / "recent-missing-handoff", project=True)
+
+    resolution = resolve_project_reentry(
+        workspace,
+        recent_rows=[
+            {
+                **_recent_row(
+                    project,
+                    last_session_at="2026-03-28T12:00:00+00:00",
+                    resumable=False,
+                ),
+                "resume_file": None,
+                "resume_file_available": False,
+            }
+        ],
+    )
+
+    assert resolution.mode == "recent-projects"
+    assert resolution.source is None
+    assert resolution.project_root is None
+    assert resolution.selected_candidate is None
+    assert resolution.recoverable_candidates_count == 1
+    assert len(resolution.candidates) == 1
+    assert resolution.candidates[0].source == "recent_project"
+    assert resolution.candidates[0].resume_target_kind == "handoff"
+    assert resolution.candidates[0].resume_file is None
+    assert resolution.candidates[0].resume_file_available is False
+    assert resolution.candidates[0].auto_selectable is False
+
+
+def test_resolve_project_reentry_enriches_current_workspace_selected_candidate_from_matching_recent_row(
+    tmp_path: Path,
+) -> None:
+    workspace = _make_gpd_workspace(tmp_path / "workspace", project=True)
+
+    resolution = resolve_project_reentry(
+        workspace,
+        recent_rows=[
+            {
+                **_recent_row(workspace, last_session_at="2026-03-28T12:00:00+00:00"),
+                "hostname": "builder-01",
+                "platform": "Linux 6.1 x86_64",
+            }
+        ],
+    )
+
+    assert resolution.mode == "current-workspace"
+    assert resolution.source == "current_workspace"
+    assert len(resolution.candidates) == 1
+    assert resolution.selected_candidate is not None
+    assert resolution.selected_candidate.source == "current_workspace"
+    assert resolution.selected_candidate.project_root == workspace.resolve(strict=False).as_posix()
+    assert resolution.selected_candidate.resume_file == "GPD/phases/02/.continue-here.md"
+    assert resolution.selected_candidate.resume_target_kind == "handoff"
+    assert resolution.selected_candidate.resume_file_available is True
+    assert resolution.selected_candidate.resumable is True
+    assert resolution.selected_candidate.hostname == "builder-01"
+    assert resolution.selected_candidate.platform == "Linux 6.1 x86_64"
 
 
 def test_resolve_project_reentry_prefers_unique_strong_recent_candidate_over_weak_recent_candidate(
@@ -328,6 +432,9 @@ def test_resolve_project_reentry_prefers_current_workspace_over_recent_project(t
     assert resolution.auto_selected is False
     assert resolution.requires_user_selection is False
     assert resolution.project_root == workspace.resolve(strict=False).as_posix()
+    assert resolution.selected_candidate is not None
+    assert resolution.selected_candidate.source == "current_workspace"
+    assert resolution.selected_candidate.project_root == workspace.resolve(strict=False).as_posix()
     assert resolution.candidates[0].source == "current_workspace"
     assert resolution.candidates[0].project_root == workspace.resolve(strict=False).as_posix()
     assert resolution.candidates[1].source == "recent_project"

@@ -231,6 +231,7 @@ def test_build_runtime_hint_payload_merges_source_sections_and_actions(tmp_path:
     assert payload.execution["review_reason"] == "first-result review pending"
 
     assert len(payload.recovery["recent_projects"]) == 1
+    assert payload.recovery["current_project"]["source"] == "current_workspace"
     assert payload.recovery["current_project"]["resumable"] is True
     assert payload.recovery["current_project"]["resume_file_available"] is True
     assert payload.recovery["current_project_summary"] == payload.recovery["current_project"]["summary"]
@@ -384,7 +385,12 @@ def test_build_runtime_hint_payload_handles_absent_execution_snapshot(tmp_path: 
     assert payload.execution["has_live_execution"] is False
     assert payload.execution["status_classification"] == "idle"
     assert len(payload.recovery["recent_projects"]) == 1
-    assert payload.recovery["current_project"] is None
+    assert payload.recovery["current_project"] is not None
+    assert payload.recovery["current_project"]["source"] == "current_workspace"
+    assert payload.recovery["current_project"]["recoverable"] is False
+    assert payload.recovery["current_project"]["resumable"] is False
+    assert payload.recovery["current_project"]["summary"] is None
+    assert payload.recovery["current_project_summary"] is None
     assert payload.recovery["project_reentry_summary"] == "GPD found recent projects on this machine, but none are ready to reopen automatically."
     assert payload.orientation["mode"] == "recent-projects"
     assert payload.orientation["primary_command"] == "gpd resume --recent"
@@ -430,8 +436,15 @@ def test_build_runtime_hint_payload_auto_selects_unique_recoverable_recent_proje
     assert payload.recovery["project_reentry"]["project_root"] == project.resolve(strict=False).as_posix()
     assert payload.recovery["project_reentry"]["mode"] == "auto-recent-project"
     assert payload.recovery["project_reentry"]["auto_selected"] is True
+    assert payload.recovery["current_project"]["source"] == "recent_project"
     assert payload.recovery["current_project"]["resume_target_kind"] == "handoff"
     assert payload.recovery["current_project"]["resume_target_recorded_at"] == "2026-03-27T11:55:00+00:00"
+    assert payload.recovery["current_project"]["resume_file_reason"] is None
+    assert payload.recovery["current_project_summary"] == "last seen 2026-03-27T11:55:00+00:00; stopped at Phase 01; resume file ready"
+    assert payload.recovery["current_project_summary"] == payload.recovery["current_project"]["summary"]
+    assert payload.recovery["project_reentry"]["candidates"][0]["resume_target_kind"] == "handoff"
+    assert payload.recovery["project_reentry"]["candidates"][0]["auto_selectable"] is True
+    assert payload.recovery["project_reentry"]["candidates"][0]["reason"] == "recent project cache entry with projected continuity handoff"
     assert (
         payload.recovery["project_reentry_summary"]
         == "GPD auto-selected the only recoverable recent project on this machine. last seen 2026-03-27T11:55:00+00:00; stopped at Phase 01; resume file ready."
@@ -514,11 +527,17 @@ def test_build_runtime_hint_payload_auto_selected_bounded_segment_recent_project
 
     assert payload.source_meta["project_root"] == project.resolve(strict=False).as_posix()
     assert payload.recovery["current_project"]["project_root"] == project.resolve(strict=False).as_posix()
+    assert payload.recovery["current_project"]["source"] == "recent_project"
     assert payload.recovery["current_project"]["resume_target_kind"] == "bounded_segment"
     assert payload.recovery["current_project"]["resume_target_recorded_at"] == "2026-03-27T11:55:00+00:00"
+    assert payload.recovery["current_project"]["resume_file_reason"] is None
     assert payload.recovery["current_project"]["resumable"] is True
     assert payload.recovery["project_reentry"]["mode"] == "auto-recent-project"
     assert payload.recovery["project_reentry"]["auto_selected"] is True
+    assert payload.recovery["current_project_summary"] == "last seen 2026-03-27T11:55:00+00:00; stopped at Phase 02; resume file ready"
+    assert payload.recovery["current_project_summary"] == payload.recovery["current_project"]["summary"]
+    assert payload.recovery["project_reentry"]["candidates"][0]["resume_target_kind"] == "bounded_segment"
+    assert payload.recovery["project_reentry"]["candidates"][0]["reason"] == "recent project cache entry with confirmed bounded segment resume target"
     assert payload.orientation["decision_source"] == "auto-selected-recent-project"
     assert payload.orientation["mode"] == "current-workspace"
     assert payload.orientation["status"] == "bounded-segment"
@@ -575,7 +594,14 @@ def test_build_runtime_hint_payload_prefers_selected_project_resume_state_for_au
 
     assert payload.source_meta["project_root"] == project.resolve(strict=False).as_posix()
     assert payload.recovery["current_project"]["project_root"] == project.resolve(strict=False).as_posix()
+    assert payload.recovery["current_project"]["source"] == "recent_project"
     assert payload.recovery["project_reentry"]["mode"] == "auto-recent-project"
+    assert payload.recovery["current_project"]["resume_target_kind"] == "handoff"
+    assert payload.recovery["current_project"]["resume_file_reason"] is None
+    assert payload.recovery["current_project_summary"] == "last seen 2026-03-27T12:05:00+00:00; stopped at Phase 03; resume file ready"
+    assert payload.recovery["current_project_summary"] == payload.recovery["current_project"]["summary"]
+    assert payload.recovery["project_reentry"]["candidates"][0]["resume_target_kind"] == "handoff"
+    assert payload.recovery["project_reentry"]["candidates"][0]["reason"] == "recent project cache entry with projected continuity handoff"
     assert payload.orientation["mode"] == "current-workspace"
     assert payload.orientation["status"] == "bounded-segment"
     assert payload.orientation["decision_source"] == "auto-selected-recent-project"
