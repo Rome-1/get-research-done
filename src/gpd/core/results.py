@@ -9,6 +9,7 @@ import logging
 import re
 import secrets
 import time
+import unicodedata
 from collections import deque
 from datetime import UTC, datetime
 
@@ -31,6 +32,7 @@ __all__ = [
     "result_list",
     "result_search",
     "result_upsert",
+    "result_upsert_derived",
     "result_deps",
     "result_verify",
     "result_update",
@@ -236,6 +238,29 @@ def _normalized_identifier_matches(identifier: str, value: object) -> bool:
 def _normalize_equation_for_match(value: str | None) -> str:
     """Return an equation token normalized only for whitespace-insensitive equality."""
     return re.sub(r"\s+", "", str(value or ""))
+
+
+def _normalize_ascii_slug(value: object) -> str:
+    """Return an ASCII-safe slug token for stable identifier construction."""
+    normalized = unicodedata.normalize("NFKD", str(value or "").strip().casefold())
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_text)
+    return re.sub(r"-+", "-", slug).strip("-")
+
+
+def _stable_derivation_result_id(state: dict, derivation_slug: str, *, phase: str | None = None) -> str:
+    """Build a deterministic result ID from the current phase and derivation slug."""
+    resolved_phase = phase
+    if resolved_phase is None:
+        position = state.get("position", {})
+        raw_phase = position.get("current_phase")
+        resolved_phase = str(raw_phase) if raw_phase is not None else "0"
+
+    phase_token = phase_normalize(str(resolved_phase)).replace(".", "_")
+    slug_token = _normalize_ascii_slug(derivation_slug)
+    if not slug_token:
+        raise ResultError("derivation_slug must normalize to a non-empty ASCII identifier")
+    return f"R-{phase_token}-{slug_token}"
 
 
 def _collect_upsert_updates(
@@ -551,6 +576,45 @@ def result_upsert(
         verification_records=verification_records,
     )
     return ResultUpsertResult(action="added", result=added, updated_fields=[])
+
+
+@instrument_gpd_function("results.upsert_derived")
+def result_upsert_derived(
+    state: dict,
+    *,
+    derivation_slug: str | None = None,
+    equation: str | None = None,
+    description: str | None = None,
+    units: str | None = None,
+    validity: str | None = None,
+    phase: str | None = None,
+    depends_on: list[str] | str | None = None,
+    verified: bool | None = None,
+    verification_records: list[VerificationEvidence | dict[str, object]] | None = None,
+    result_id: str | None = None,
+) -> ResultUpsertResult:
+    """Persist a derivation result through the canonical upsert path.
+
+    Reuses an explicit ``result_id`` when present. Otherwise, if a derivation
+    slug is supplied, derives a deterministic stable ID from the target phase
+    and slug before delegating to ``result_upsert``.
+    """
+    effective_result_id = result_id
+    if effective_result_id is None and derivation_slug is not None:
+        effective_result_id = _stable_derivation_result_id(state, derivation_slug, phase=phase)
+
+    return result_upsert(
+        state,
+        equation=equation,
+        description=description,
+        units=units,
+        validity=validity,
+        phase=phase,
+        depends_on=depends_on,
+        verified=verified,
+        verification_records=verification_records,
+        result_id=effective_result_id,
+    )
 
 
 @instrument_gpd_function("results.deps")
