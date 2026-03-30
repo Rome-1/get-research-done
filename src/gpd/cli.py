@@ -1196,6 +1196,16 @@ _RESUME_COMPATIBILITY_KEYS = (
     "session_resume_file",
 )
 
+_RESUME_COMPATIBILITY_SURFACE_KEYS = frozenset(
+    {
+        "compat_resume_surface",
+        "legacy_resume_surface",
+        "compatibility_resume_surface",
+        "resume_surface_compat",
+        "compat_resume",
+    }
+)
+
 
 def _resume_compat_surface(payload: dict[str, object]) -> dict[str, object] | None:
     """Return the nested compatibility resume block when it exists or can be synthesized."""
@@ -1219,6 +1229,16 @@ def _resume_compat_surface(payload: dict[str, object]) -> dict[str, object] | No
             compat_surface[key] = value
 
     return compat_surface or None
+
+
+def _resume_public_payload(payload: dict[str, object]) -> dict[str, object]:
+    """Return the raw resume payload with compatibility-only peers removed."""
+    public_payload: dict[str, object] = {}
+    for key, value in payload.items():
+        if key in _RESUME_COMPATIBILITY_SURFACE_KEYS or key in _RESUME_COMPATIBILITY_KEYS:
+            continue
+        public_payload[key] = value
+    return public_payload
 
 
 def _resume_surface_value(
@@ -1796,7 +1816,6 @@ def _resume_follow_up_actions(recovery_advice: RecoveryAdvice) -> list[str]:
 def _resume_augmented_payload(payload: dict[str, object], *, cwd: Path | None = None) -> dict[str, object]:
     """Augment the raw resume payload with canonical recovery projections."""
     recovery_advice = _resume_recovery_advice(resume_payload=payload, recent_rows=[], cwd=cwd)
-    augmented = dict(payload)
     compat_surface = _resume_compat_surface(payload)
     active_bounded_segment = _resume_surface_value(payload, compat_surface, "active_bounded_segment")
     derived_execution_head = _resume_surface_value(payload, compat_surface, "derived_execution_head")
@@ -1805,6 +1824,7 @@ def _resume_augmented_payload(payload: dict[str, object], *, cwd: Path | None = 
     current_execution_raw = _resume_surface_value(payload, compat_surface, "current_execution")
     current_execution = current_execution_raw if isinstance(current_execution_raw, dict) else None
     segment_candidates = _resume_visible_candidates(payload, compat_surface)
+    augmented: dict[str, object] = {}
     projected_candidates = [
         _resume_candidate_projection(
             candidate,
@@ -1816,13 +1836,14 @@ def _resume_augmented_payload(payload: dict[str, object], *, cwd: Path | None = 
     augmented["recovery_status"] = recovery_advice.status
     augmented["recovery_status_label"] = _resume_status_label(recovery_advice.status)
     augmented["recovery_summary"] = _resume_status_message(payload, recovery_advice=recovery_advice)
-    augmented["resume_mode_label"] = _resume_mode_label(_resume_surface_value(payload, compat_surface, "resume_mode"))
+    augmented["resume_mode_label"] = _resume_mode_label(recovery_advice.resume_mode)
     augmented["recovery_advice"] = recovery_advice.model_dump(mode="json")
     augmented["recovery_candidates"] = projected_candidates
-    if compat_surface is not None:
-        augmented["compat_resume_surface"] = compat_surface
     if projected_candidates:
         augmented["primary_recovery_target"] = projected_candidates[0]
+    augmented.update(_resume_public_payload(payload))
+    if compat_surface is not None:
+        augmented["compat_resume_surface"] = compat_surface
     return augmented
 
 
@@ -1918,7 +1939,7 @@ def _render_resume_summary(payload: dict[str, object]) -> None:
         )
     summary.add_row("Status", _resume_status_message(payload, recovery_advice=recovery_advice))
     summary.add_row("Recovery", _resume_status_label(recovery_advice.status))
-    summary.add_row("Resume mode", _resume_mode_label(_resume_surface_value(payload, compat_surface, "resume_mode")))
+    summary.add_row("Resume mode", _resume_mode_label(recovery_advice.resume_mode))
     summary.add_row("Candidates", str(len(segment_candidates)))
     summary.add_row("Live execution", "yes" if bool(payload.get("has_live_execution")) else "no")
     summary.add_row("Autonomy", str(payload.get("autonomy") or "unknown"))
@@ -1928,7 +1949,7 @@ def _render_resume_summary(payload: dict[str, object]) -> None:
     if isinstance(paused_at, str) and paused_at.strip():
         summary.add_row("Paused at", paused_at.strip())
 
-    primary_resume_file = _resume_surface_value(payload, compat_surface, "active_resume_pointer")
+    primary_resume_file = recovery_advice.active_resume_pointer
     if not isinstance(primary_resume_file, str) or not primary_resume_file.strip():
         primary_resume_file = _resume_surface_value(payload, compat_surface, "execution_resume_file")
     if isinstance(primary_resume_file, str) and primary_resume_file.strip():
@@ -1953,7 +1974,7 @@ def _render_resume_summary(payload: dict[str, object]) -> None:
         blocked_reason = active_execution.get("blocked_reason")
         if isinstance(blocked_reason, str) and blocked_reason.strip():
             notices.append(f"Execution is blocked: {blocked_reason.strip()}")
-    missing_session_resume_file = _resume_surface_value(payload, compat_surface, "missing_continuity_handoff_file")
+    missing_session_resume_file = recovery_advice.missing_continuity_handoff_file
     if not isinstance(missing_session_resume_file, str) or not missing_session_resume_file.strip():
         missing_session_resume_file = _resume_surface_value(payload, compat_surface, "missing_session_resume_file")
     if isinstance(missing_session_resume_file, str) and missing_session_resume_file.strip():
