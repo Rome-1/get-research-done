@@ -442,8 +442,8 @@ Write to `GPD/analysis/derivation-{slug}.md`.
 Persist the final derived equation through the executable `gpd result persist-derived` bridge when project state is available.
 
 - If `state_exists` is true:
-  1. Resolve a stable `result_id`. On reruns, prefer the `result_id` already associated with the derivation record or invocation context if one is available. Otherwise derive a deterministic ID from the derivation slug and phase.
-  2. Re-check `state.json.intermediate_results` for the same `result_id` or an existing canonical equation for the same target. If a matching entry already exists, reuse its `result_id` instead of creating a duplicate.
+  1. Resolve a stable `result_id` request. On reruns, prefer the `result_id` already associated with the derivation record or invocation context if one is available. Otherwise derive a deterministic ID from the derivation slug and phase.
+  2. Re-check `state.json.intermediate_results` for the same preferred `result_id` or an existing canonical equation for the same target. If a matching entry already exists, reuse its actual canonical `result_id` instead of creating a duplicate.
   3. Persist the final result with the bridge:
 
 ```bash
@@ -456,12 +456,16 @@ If no stable `result_id` is available yet, use the derivation-slug form instead:
 gpd result persist-derived --derivation-slug "{derivation_slug}" --equation "{final_equation}" --description "{short description}" --phase "{phase}" --validity "{validity}" [--depends-on "{comma-separated ids}"]
 ```
 
-This bridge reuses an explicit `result_id` when one is already known. Otherwise it derives a stable `result_id` from the derivation slug and phase before delegating to the canonical upsert path, which reuses a unique exact equation match in the same phase when the existing canonical entry already exists, falls back to a unique exact description match when the equation is not yet stable, and only adds a new registry entry when no safe match exists.
+This bridge reuses an explicit `result_id` request when one is already known. Otherwise it derives a stable `requested_result_id` from the derivation slug and phase before delegating to the canonical upsert path, which reuses a unique exact equation match in the same phase when the existing canonical entry already exists, falls back to a unique exact description match when the equation is not yet stable, and only adds a new registry entry when no safe match exists.
 
 If `gpd result persist-derived` reports multiple matches for the same equation or description, STOP and disambiguate with an explicit `result_id` or narrower `phase`. Do not guess which registry entry should be canonical.
 
-  4. Carry the resulting `result_id` forward in the derivation workflow context and any downstream handoff metadata (`last_result_id` in pause/resume surfaces) so later reruns can target the same canonical registry entry without rediscovering it from prose.
-  5. Keep `verified=false` unless the derivation also produced verification evidence that should be recorded separately.
+  4. Read the bridge output carefully:
+     - `requested_result_id` is the stable derivation-oriented ID the workflow asked for.
+     - `result_id` is the actual canonical registry entry that was persisted or reused.
+     If the bridge reused an existing canonical entry, `result_id` may differ from `requested_result_id`; carry the actual `result_id` forward for later reruns and handoff continuity.
+  5. Carry the resulting `result_id` forward in the derivation workflow context and any downstream handoff metadata (`last_result_id` in pause/resume surfaces) so later reruns can target the same canonical registry entry without rediscovering it from prose.
+  6. Keep `verified=false` unless the derivation also produced verification evidence that should be recorded separately.
 - If `state_exists` is false:
   - Skip registry write-back entirely.
   - Keep the derivation document self-contained under `GPD/analysis/` and do not invent a project result entry.
@@ -511,7 +515,7 @@ This keeps standalone derivations safe while making project-mode derivations reu
 - [ ] Regime of validity stated
 - [ ] All relevant limiting cases verified
 - [ ] Connection to known results documented
-- [ ] Final derived equation persisted through the executable `gpd result persist-derived` bridge in project mode, with the chosen `result_id` retained for later reruns and carried into handoff/resume continuity
+- [ ] Final derived equation persisted through the executable `gpd result persist-derived` bridge in project mode, with the actual persisted canonical `result_id` retained for later reruns and carried into handoff/resume continuity
 - [ ] Standalone mode skipped registry write-back and stayed self-contained
 - [ ] Complete derivation document written
 

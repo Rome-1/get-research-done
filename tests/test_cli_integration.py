@@ -334,6 +334,8 @@ def test_result_upsert_reuses_unique_equation_match_when_preferred_id_is_new(gpd
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["requested_result_id"] == "R-new"
+    assert payload["result_id"] == "R-01"
     assert payload["action"] == "updated"
     assert payload["result"]["id"] == "R-01"
     assert payload["result"]["description"] == "Canonical description"

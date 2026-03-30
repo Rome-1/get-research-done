@@ -46,5 +46,5 @@ The workflow will:
 2. Guide you through a step-by-step derivation with checkpoints
 3. Verify dimensional consistency at each step
 4. Check limiting cases of the final result
-5. Record the derived equation in the project's `intermediate_results` registry through the executable `gpd result persist-derived` bridge when project state is available; the workflow reuses or carries forward a stable `result_id` on reruns and skips cleanly when no recoverable project state exists. standalone runs stop after writing the derivation document and do not write project registry state
+5. Record the derived equation in the project's `intermediate_results` registry through the executable `gpd result persist-derived` bridge when project state is available; the workflow reuses or carries forward a stable `result_id` request on reruns, preserves the actual canonical `result_id` when the bridge reuses an existing entry, and skips cleanly when no recoverable project state exists. standalone runs stop after writing the derivation document and do not write project registry state
 </process>
