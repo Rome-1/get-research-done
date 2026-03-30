@@ -334,9 +334,8 @@ def test_result_upsert_reuses_unique_equation_match_when_preferred_id_is_new(gpd
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["requested_result_id"] == "R-new"
-    assert payload["result_id"] == "R-01"
     assert payload["action"] == "updated"
+    assert payload["matched_by"] == "equation"
     assert payload["result"]["id"] == "R-01"
     assert payload["result"]["description"] == "Canonical description"
 
@@ -395,6 +394,120 @@ def test_result_upsert_reuses_unique_description_match_when_preferred_id_is_new(
     assert reloaded["intermediate_results"][0]["validity"] == "g << 1"
 
 
+def test_result_upsert_refreshes_live_execution_caches_for_active_anchor(gpd_project: Path) -> None:
+    planning = gpd_project / "GPD"
+    state_path = planning / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["intermediate_results"] = [
+        {
+            "id": "R-01",
+            "equation": "E = mc^2",
+            "description": "Original description",
+            "phase": "01",
+            "depends_on": [],
+            "verified": False,
+            "verification_records": [],
+        }
+    ]
+    state["continuation"]["bounded_segment"] = {
+        "resume_file": "GPD/phases/01-test-phase/.continue-here.md",
+        "phase": "01",
+        "plan": "01",
+        "segment_id": "seg-test",
+        "segment_status": "paused",
+        "transition_id": "transition-test",
+        "last_result_id": "R-01",
+    }
+    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    segment_resume = planning / "phases" / "01-test-phase" / ".continue-here.md"
+    segment_resume.parent.mkdir(parents=True, exist_ok=True)
+    segment_resume.write_text("resume\n", encoding="utf-8")
+    _write_live_execution_caches(
+        planning,
+        current_execution={
+            "session_id": "sess-live",
+            "phase": "01",
+            "plan": "01",
+            "segment_id": "seg-test",
+            "segment_status": "paused",
+            "resume_file": "GPD/phases/01-test-phase/.continue-here.md",
+            "transition_id": "transition-test",
+            "last_result_id": "R-01",
+            "last_result_label": "Stale label",
+            "updated_at": "2026-03-10T12:00:00+00:00",
+        },
+        execution_head={
+            "schema_version": 1,
+            "reducer_version": "1",
+            "last_applied_seq": 17,
+            "last_applied_event_id": "evt-17",
+            "recorded_at": "2026-03-10T12:00:00+00:00",
+            "execution": {
+                "session_id": "sess-live",
+                "phase": "01",
+                "plan": "01",
+                "segment_id": "seg-test",
+                "segment_status": "paused",
+                "resume_file": "GPD/phases/01-test-phase/.continue-here.md",
+                "transition_id": "transition-test",
+                "last_result_id": "R-01",
+                "last_result_label": "Stale label",
+                "updated_at": "2026-03-10T12:00:00+00:00",
+            },
+            "bounded_segment": {
+                "resume_file": "GPD/phases/01-test-phase/.continue-here.md",
+                "phase": "01",
+                "plan": "01",
+                "segment_id": "seg-test",
+                "segment_status": "paused",
+                "transition_id": "transition-test",
+                "last_result_id": "R-01",
+            },
+        },
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--raw",
+            "--cwd",
+            str(gpd_project),
+            "result",
+            "upsert",
+            "--id",
+            "R-new",
+            "--equation",
+            "E=mc^2",
+            "--description",
+            "Canonical description",
+            "--phase",
+            "01",
+        ],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["action"] == "updated"
+    assert payload["matched_by"] == "equation"
+    assert payload["result"]["id"] == "R-01"
+    assert payload["result"]["description"] == "Canonical description"
+
+    current_execution = json.loads((planning / "observability" / "current-execution.json").read_text(encoding="utf-8"))
+    assert current_execution["last_result_id"] == "R-01"
+    assert current_execution["last_result_label"] == "Canonical description"
+    assert current_execution["updated_at"] == "2026-03-10T12:00:00+00:00"
+
+    execution_head = json.loads((planning / "lineage" / "execution-head.json").read_text(encoding="utf-8"))
+    assert execution_head["execution"]["last_result_id"] == "R-01"
+    assert execution_head["execution"]["last_result_label"] == "Canonical description"
+    assert execution_head["execution"]["updated_at"] == "2026-03-10T12:00:00+00:00"
+    assert execution_head["bounded_segment"]["last_result_id"] == "R-01"
+    assert execution_head["last_applied_seq"] == 17
+    assert execution_head["last_applied_event_id"] == "evt-17"
+    assert execution_head["recorded_at"] == "2026-03-10T12:00:00+00:00"
+
+
 def test_result_persist_derived_bridge_reuses_unique_equation_match_when_preferred_id_is_new(
     gpd_project: Path,
 ) -> None:
@@ -440,6 +553,113 @@ def test_result_persist_derived_bridge_reuses_unique_equation_match_when_preferr
     assert len(reloaded["intermediate_results"]) == 1
     assert reloaded["intermediate_results"][0]["id"] == "R-01"
     assert reloaded["intermediate_results"][0]["description"] == "Canonical description"
+
+
+def test_result_update_refreshes_live_execution_caches_for_active_anchor(gpd_project: Path) -> None:
+    planning = gpd_project / "GPD"
+    state_path = planning / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["intermediate_results"] = [
+        {
+            "id": "R-01",
+            "equation": "E = mc^2",
+            "description": "Original description",
+            "phase": "01",
+            "depends_on": [],
+            "verified": False,
+            "verification_records": [],
+        }
+    ]
+    state["continuation"]["bounded_segment"] = {
+        "resume_file": "GPD/phases/01-test-phase/.continue-here.md",
+        "phase": "01",
+        "plan": "01",
+        "segment_id": "seg-test",
+        "segment_status": "paused",
+        "transition_id": "transition-test",
+        "last_result_id": "R-01",
+    }
+    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    segment_resume = planning / "phases" / "01-test-phase" / ".continue-here.md"
+    segment_resume.parent.mkdir(parents=True, exist_ok=True)
+    segment_resume.write_text("resume\n", encoding="utf-8")
+    _write_live_execution_caches(
+        planning,
+        current_execution={
+            "session_id": "sess-live",
+            "phase": "01",
+            "plan": "01",
+            "segment_id": "seg-test",
+            "segment_status": "paused",
+            "resume_file": "GPD/phases/01-test-phase/.continue-here.md",
+            "transition_id": "transition-test",
+            "last_result_id": "R-01",
+            "last_result_label": "Stale label",
+            "updated_at": "2026-03-10T12:00:00+00:00",
+        },
+        execution_head={
+            "schema_version": 1,
+            "reducer_version": "1",
+            "last_applied_seq": 17,
+            "last_applied_event_id": "evt-17",
+            "recorded_at": "2026-03-10T12:00:00+00:00",
+            "execution": {
+                "session_id": "sess-live",
+                "phase": "01",
+                "plan": "01",
+                "segment_id": "seg-test",
+                "segment_status": "paused",
+                "resume_file": "GPD/phases/01-test-phase/.continue-here.md",
+                "transition_id": "transition-test",
+                "last_result_id": "R-01",
+                "last_result_label": "Stale label",
+                "updated_at": "2026-03-10T12:00:00+00:00",
+            },
+            "bounded_segment": {
+                "resume_file": "GPD/phases/01-test-phase/.continue-here.md",
+                "phase": "01",
+                "plan": "01",
+                "segment_id": "seg-test",
+                "segment_status": "paused",
+                "transition_id": "transition-test",
+                "last_result_id": "R-01",
+            },
+        },
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--raw",
+            "--cwd",
+            str(gpd_project),
+            "result",
+            "update",
+            "R-01",
+            "--description",
+            "Canonical description",
+        ],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["id"] == "R-01"
+    assert payload["description"] == "Canonical description"
+
+    current_execution = json.loads((planning / "observability" / "current-execution.json").read_text(encoding="utf-8"))
+    assert current_execution["last_result_id"] == "R-01"
+    assert current_execution["last_result_label"] == "Canonical description"
+    assert current_execution["updated_at"] == "2026-03-10T12:00:00+00:00"
+
+    execution_head = json.loads((planning / "lineage" / "execution-head.json").read_text(encoding="utf-8"))
+    assert execution_head["execution"]["last_result_id"] == "R-01"
+    assert execution_head["execution"]["last_result_label"] == "Canonical description"
+    assert execution_head["execution"]["updated_at"] == "2026-03-10T12:00:00+00:00"
+    assert execution_head["bounded_segment"]["last_result_id"] == "R-01"
+    assert execution_head["last_applied_seq"] == 17
+    assert execution_head["last_applied_event_id"] == "evt-17"
+    assert execution_head["recorded_at"] == "2026-03-10T12:00:00+00:00"
 
 
 def test_result_persist_derived_bridge_seeds_canonical_continuity_for_later_record_session(
