@@ -53,3 +53,33 @@ class PipelineConfig:
     def __post_init__(self):
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def gpt2(cls, **overrides) -> "PipelineConfig":
+        """GPT-2 Small (117M) — baseline model."""
+        defaults = dict(
+            model_name="gpt2",
+            layer=6,
+            hook_point="blocks.6.hook_resid_post",
+            activation_dim=768,
+        )
+        defaults.update(overrides)
+        return cls(**defaults)
+
+    @classmethod
+    def gemma2_2b(cls, layer: int = 13, **overrides) -> "PipelineConfig":
+        """Gemma 2 2B (2.6B) — primary model with Gemma Scope SAEs.
+
+        Default layer 13 (mid-network of 26 layers). Gemma Scope provides
+        SAEs at all layers for direct comparison.
+        """
+        defaults = dict(
+            model_name="google/gemma-2-2b",
+            layer=layer,
+            hook_point=f"blocks.{layer}.hook_resid_post",
+            activation_dim=2304,  # Gemma 2 2B hidden dim
+            batch_size=16,  # smaller batches for larger model
+            max_seq_len=128,
+        )
+        defaults.update(overrides)
+        return cls(**defaults)

@@ -87,6 +87,25 @@ def run_gpt2(config: PipelineConfig) -> dict:
     return _run_pipeline(samples, config, extraction_results=extraction_results)
 
 
+def run_gemma2(config: PipelineConfig = None) -> dict:
+    """Run pipeline on Gemma 2 2B activations with token attribution.
+
+    Uses Gemma Scope-compatible layer (default: 13 of 26).
+    """
+    from .activation_extraction import extract_and_reduce_with_tokens
+
+    if config is None:
+        config = PipelineConfig.gemma2_2b()
+
+    print("=" * 60)
+    print(f"GEMMA 2 2B — Layer {config.layer}")
+    print("=" * 60)
+
+    extraction_results = extract_and_reduce_with_tokens(config)
+    samples = {cond: er.activations for cond, er in extraction_results.items()}
+    return _run_pipeline(samples, config, extraction_results=extraction_results)
+
+
 def _run_pipeline(
     samples: dict[str, np.ndarray],
     config: PipelineConfig,
@@ -315,30 +334,41 @@ def main():
     parser = argparse.ArgumentParser(description="Multi-manifold detection pipeline")
     parser.add_argument("--synthetic", action="store_true",
                         help="Run on synthetic data only (quick validation)")
+    parser.add_argument("--model", type=str, default="gpt2",
+                        choices=["gpt2", "gemma2-2b"],
+                        help="Model to run (default: gpt2)")
     parser.add_argument("--n-tokens", type=int, default=2000,
                         help="Tokens per condition (default: 2000)")
     parser.add_argument("--pca-dim", type=int, default=100,
                         help="PCA reduction dimension (default: 100)")
     parser.add_argument("--smce-alpha", type=float, default=0.05,
                         help="SMCE L1 penalty (default: 0.05)")
-    parser.add_argument("--layer", type=int, default=6,
-                        help="Transformer layer (default: 6)")
+    parser.add_argument("--layer", type=int, default=None,
+                        help="Transformer layer (default: model-specific)")
     parser.add_argument("--permutations", type=int, default=1000,
                         help="Number of permutations for significance test")
 
     args = parser.parse_args()
 
-    config = PipelineConfig(
+    overrides = dict(
         n_tokens_per_condition=args.n_tokens,
         pca_dim=args.pca_dim,
         smce_alpha=args.smce_alpha,
-        layer=args.layer,
-        hook_point=f"blocks.{args.layer}.hook_resid_post",
         n_permutations=args.permutations,
     )
+    if args.layer is not None:
+        overrides["layer"] = args.layer
+        overrides["hook_point"] = f"blocks.{args.layer}.hook_resid_post"
+
+    if args.model == "gemma2-2b":
+        config = PipelineConfig.gemma2_2b(**overrides)
+    else:
+        config = PipelineConfig.gpt2(**overrides)
 
     if args.synthetic:
         results = run_synthetic(config)
+    elif args.model == "gemma2-2b":
+        results = run_gemma2(config)
     else:
         results = run_gpt2(config)
 

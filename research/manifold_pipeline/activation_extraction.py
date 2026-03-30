@@ -109,9 +109,21 @@ def generate_condition_texts(
 
 
 def load_model(model_name: str = "gpt2"):
-    """Load GPT-2 Small via TransformerLens."""
+    """Load model via TransformerLens.
+
+    Supports GPT-2 ('gpt2') and Gemma 2 ('google/gemma-2-2b').
+    """
+    import torch
     from transformer_lens import HookedTransformer
-    model = HookedTransformer.from_pretrained(model_name)
+
+    dtype = torch.float32
+    if "gemma" in model_name.lower():
+        dtype = torch.bfloat16  # Gemma 2 expects bf16
+
+    model = HookedTransformer.from_pretrained(
+        model_name,
+        dtype=dtype,
+    )
     model.eval()
     return model
 
