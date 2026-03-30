@@ -903,8 +903,9 @@ def test_init_help_surfaces_local_onboarding_entrypoints() -> None:
 def test_resume_help_surfaces_read_only_local_recovery_role() -> None:
     result = runner.invoke(app, ["resume", "--help"])
     assert result.exit_code == 0
-    assert "--recent" in result.output
-    assert "List recent GPD projects on this machine" in result.output
+    normalized = " ".join(result.output.split())
+    assert "--recent" in normalized
+    assert "Summarize local recovery state or list machine-local recent projects." in normalized
 
 
 def test_resume_recovery_advice_uses_resolved_runtime_commands(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -950,6 +951,8 @@ def test_resume_recent_raw_surfaces_machine_local_recent_projects(
 
     resumable_root = tmp_path / "projects" / "alpha"
     resumable_root.mkdir(parents=True, exist_ok=True)
+    (resumable_root / "GPD" / "phases" / "04").mkdir(parents=True, exist_ok=True)
+    (resumable_root / "GPD" / "phases" / "04" / ".continue-here.md").write_text("resume\n", encoding="utf-8")
     unavailable_root = tmp_path / "projects" / "beta-missing"
 
     (recent_index_dir / "index.json").write_text(
@@ -968,6 +971,7 @@ def test_resume_recent_raw_surfaces_machine_local_recent_projects(
                         "last_session_at": "2026-03-21T10:30:00+00:00",
                         "stopped_at": "Phase 4",
                         "status": "paused",
+                        "resume_file": "GPD/phases/04/.continue-here.md",
                         "resumable": True,
                     },
                 ]
@@ -983,7 +987,7 @@ def test_resume_recent_raw_surfaces_machine_local_recent_projects(
     assert parsed["count"] == 2
     assert parsed["projects"][0]["project_root"] == str(resumable_root)
     assert parsed["projects"][0]["resumable"] is True
-    assert parsed["projects"][0]["status"] == "paused"
+    assert parsed["projects"][0]["status"] == "resumable"
     assert parsed["projects"][1]["project_root"] == str(unavailable_root)
     assert parsed["projects"][1]["available"] is False
     assert parsed["projects"][1]["status"] == "unavailable"
@@ -992,38 +996,36 @@ def test_resume_recent_raw_surfaces_machine_local_recent_projects(
 def test_resume_recent_human_output_surfaces_command_and_missing_projects(
     tmp_path: Path, monkeypatch
 ) -> None:
-    home = tmp_path / "home"
-    recent_index_dir = home / ".gpd" / "recent-projects"
-    recent_index_dir.mkdir(parents=True, exist_ok=True)
-
     resumable_root = tmp_path / "projects" / "gamma"
     resumable_root.mkdir(parents=True, exist_ok=True)
+    (resumable_root / "GPD" / "phases" / "04").mkdir(parents=True, exist_ok=True)
+    (resumable_root / "GPD" / "phases" / "04" / ".continue-here.md").write_text("resume\n", encoding="utf-8")
     missing_root = tmp_path / "projects" / "delta-missing"
-
-    (recent_index_dir / "index.json").write_text(
-        json.dumps(
+    monkeypatch.setattr(
+        "gpd.core.recent_projects.list_recent_projects",
+        lambda store_root=None, last=None: [
             {
-                "projects": [
-                    {
-                        "project_root": str(resumable_root),
-                        "last_session_at": "2026-03-21T11:00:00+00:00",
-                        "stopped_at": "Phase 1",
-                        "status": "paused",
-                        "resumable": True,
-                    },
-                    {
-                        "project_root": str(missing_root),
-                        "last_session_at": "2026-03-19T08:00:00+00:00",
-                        "stopped_at": "Phase 3",
-                        "status": "paused",
-                        "resumable": False,
-                    },
-                ]
-            }
-        ),
-        encoding="utf-8",
+                "project_root": str(resumable_root),
+                "last_session_at": "2026-03-21T11:00:00+00:00",
+                "stopped_at": "Phase 1",
+                "status": "paused",
+                "label": "Alpha project",
+                "summary": "Working through the verification sweep",
+                "current_phase": "04",
+                "current_phase_name": "Verification",
+                "progress": "75% complete",
+                "resume_file": "GPD/phases/04/.continue-here.md",
+                "resumable": True,
+            },
+            {
+                "project_root": str(missing_root),
+                "last_session_at": "2026-03-19T08:00:00+00:00",
+                "stopped_at": "Phase 3",
+                "status": "paused",
+                "resumable": False,
+            },
+        ],
     )
-    monkeypatch.setattr(cli_module.Path, "home", lambda: home)
 
     result = runner.invoke(app, ["resume", "--recent"])
 
@@ -1033,6 +1035,10 @@ def test_resume_recent_human_output_surfaces_command_and_missing_projects(
     assert "gpd --cwd" in result.output
     assert "resume-work" in result.output
     assert "suggest-next" in result.output
+    assert "Label: Alpha project" in result.output
+    assert "Summary: Working through the verification sweep" in result.output
+    assert "Current: phase 04 (Verification) · paused · 75% complete" in result.output
+    assert "Why shown: shown because it still has a usable handoff target" in result.output
     assert "ready to reopen" in result.output
     assert "project root missing" in result.output or "project unavailable on this machine" in result.output
 
@@ -1114,6 +1120,8 @@ def test_resume_plain_output_surfaces_auto_selected_recent_project(tmp_path: Pat
             "project_root": project_root.as_posix(),
             "project_root_source": "recent_project",
             "project_root_auto_selected": True,
+            "project_label": "Alpha project",
+            "project_summary": "Working through the verification sweep",
             "project_reentry_mode": "auto-recent-project",
             "project_reentry_requires_selection": False,
             "project_reentry_candidates": [],
@@ -1137,7 +1145,10 @@ def test_resume_plain_output_surfaces_auto_selected_recent_project(tmp_path: Pat
 
     assert result.exit_code == 0
     assert "Project" in result.output
+    assert "Project label" in result.output
+    assert "Project summary" in result.output
     assert "auto-selected recent project" in result.output
+    assert "machine-local recent-project index" in result.output
 
 
 def test_resume_plain_output_keeps_recent_project_selection_explicit_when_not_auto_selected(
@@ -1178,6 +1189,7 @@ def test_resume_plain_output_keeps_recent_project_selection_explicit_when_not_au
     assert result.exit_code == 0
     assert "Project" in result.output
     assert "auto-selected recent project" not in result.output
+    assert "recent project selected explicitly" in result.output
 
 
 def test_resume_plain_output_surfaces_session_handoff_status(tmp_path: Path, monkeypatch) -> None:

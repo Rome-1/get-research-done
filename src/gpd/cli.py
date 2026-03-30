@@ -1080,6 +1080,22 @@ def _resume_mode_label(value: object) -> str:
     return value.replace("_", " ")
 
 
+def _project_root_source_label(source: object, *, auto_selected: bool = False) -> str:
+    """Map a project-root source to a plain-language re-entry label."""
+    labels = {
+        "current_workspace": "current workspace",
+        "workspace": "current workspace",
+        "recent_project": "machine-local recent-project index",
+    }
+    source_text = str(source).strip() if source is not None else ""
+    label = labels.get(source_text, source_text.replace("_", " ") if source_text else "unknown")
+    if source_text == "recent_project":
+        if auto_selected:
+            return f"auto-selected recent project (unique recoverable match from the {label})"
+        return f"recent project selected explicitly from the {label}"
+    return label
+
+
 def _resume_candidate_source_label(source: object) -> str:
     """Map internal resume candidate sources to concise user-facing labels."""
     labels = {
@@ -1117,6 +1133,73 @@ def _resume_candidate_target(candidate: dict[str, object]) -> str:
     if isinstance(resume_file, str) and resume_file.strip():
         return _format_display_path(resume_file.strip())
     return "—"
+
+
+def _recent_project_label(row: dict[str, object]) -> str | None:
+    """Return an optional human label for one recent-project row."""
+    return _recent_project_text(row, "label", "title", "project_label", "project_title", "name")
+
+
+def _recent_project_summary(row: dict[str, object]) -> str | None:
+    """Return an optional human summary for one recent-project row."""
+    return _recent_project_text(row, "summary", "project_summary", "description", "project_description")
+
+
+def _recent_project_current_state(row: dict[str, object]) -> str | None:
+    """Return an optional phase/status/progress summary for one recent-project row."""
+    current_phase = row.get("current_phase")
+    if isinstance(current_phase, dict):
+        phase = _recent_project_text(current_phase, "phase", "id", "number", "name", "title")
+        phase_label = _recent_project_text(current_phase, "label", "name", "title")
+        status = _recent_project_text(current_phase, "status", "state")
+        progress = _recent_project_text(current_phase, "progress", "progress_summary", "summary")
+        pieces: list[str] = []
+        if phase and phase_label and phase_label != phase:
+            pieces.append(f"phase {phase} ({phase_label})")
+        elif phase_label:
+            pieces.append(phase_label)
+        elif phase:
+            pieces.append(f"phase {phase}" if not phase.lower().startswith("phase") else phase)
+        if status is not None:
+            pieces.append(status.replace("_", " "))
+        if progress is not None:
+            pieces.append(progress)
+        return " · ".join(pieces) if pieces else None
+
+    phase = _recent_project_text(row, "current_phase", "phase")
+    phase_label = _recent_project_text(row, "current_phase_name", "phase_name")
+    status = _recent_project_text(row, "project_status", "status", "state")
+    progress = _recent_project_text(row, "progress", "progress_summary", "phase_progress")
+    pieces: list[str] = []
+    if phase and phase_label and phase_label != phase:
+        pieces.append(f"phase {phase} ({phase_label})")
+    elif phase_label:
+        pieces.append(phase_label)
+    elif phase:
+        pieces.append(f"phase {phase}" if not phase.lower().startswith("phase") else phase)
+    if status is not None and status.replace("_", " ") not in {"recent", "resumable", "unavailable"}:
+        pieces.append(status.replace("_", " "))
+    if progress is not None:
+        pieces.append(progress)
+    return " · ".join(pieces) if pieces else None
+
+
+def _recent_project_selection_reason(row: dict[str, object]) -> str:
+    """Return a plain-language explanation for why a recent-project row is shown."""
+    if not bool(row.get("available")):
+        reason = row.get("availability_reason")
+        if isinstance(reason, str) and reason.strip():
+            return reason.strip()
+        return "shown because the project root is missing on this machine"
+    if bool(row.get("resumable")):
+        reason = row.get("resume_file_reason")
+        if isinstance(reason, str) and reason.strip():
+            return f"shown because it still has a usable handoff target ({reason.strip()})"
+        return "shown because it still has a usable handoff target"
+    resume_file = row.get("resume_file")
+    if isinstance(resume_file, str) and resume_file.strip():
+        return "shown because the checkout is available, but the recorded handoff is not currently usable"
+    return "shown because the checkout is available, but no recovery handoff is recorded"
 
 
 def _resume_candidate_notes(
@@ -1442,7 +1525,7 @@ def _render_recent_resume_summary(rows: list[dict[str, object]]) -> None:
     recovery_advice = _resume_recovery_advice(recent_rows=rows, force_recent=True)
 
     console.print("[bold]Recent Projects[/]")
-    console.print("[dim]Machine-local recovery index. Select a project, inspect it with the command shown in the table, then continue inside that workspace with the runtime `resume-work` command.[/]")
+    console.print("[dim]Machine-local recovery index. Recent projects are ordered by recovery strength, then recency. A single recoverable match can auto-select; otherwise choose explicitly with the command shown for each row.[/]")
     if isinstance(recovery_advice.continue_command, str) and recovery_advice.continue_command.strip() and not recovery_advice.continue_command.startswith("runtime `"):
         console.print(f"[dim]In the selected workspace, continue with `{recovery_advice.continue_command}`.[/]")
     if isinstance(recovery_advice.fast_next_command, str) and recovery_advice.fast_next_command.strip() and not recovery_advice.fast_next_command.startswith("runtime `"):
@@ -1455,13 +1538,23 @@ def _render_recent_resume_summary(rows: list[dict[str, object]]) -> None:
         return
 
     for idx, row in enumerate(rows, start=1):
+        label = _recent_project_label(row)
+        summary = _recent_project_summary(row)
+        current_state = _recent_project_current_state(row)
         console.print(
             f"[bold]{idx}.[/] "
             f"{str(row.get('workspace') or _format_display_path(str(row.get('project_root') or '')) or 'unknown')}"
         )
+        if label is not None:
+            console.print(f"   Label: {label}")
+        if summary is not None:
+            console.print(f"   Summary: {summary}")
+        if current_state is not None:
+            console.print(f"   Current: {current_state}")
         console.print(f"   Last session: {str(row.get('last_session_at') or row.get('last_seen_at') or row.get('last_event_at') or '—')}")
         console.print(f"   Stopped at: {str(row.get('stopped_at') or '—')}")
         console.print(f"   Resumable: {'yes' if bool(row.get('resumable')) else 'no'}")
+        console.print(f"   Why shown: {_recent_project_selection_reason(row)}")
         console.print(f"   Notes: {_resume_recent_project_notes(row)}")
         console.print(f"   Inspect: {_resume_recent_project_command(row)}")
         console.print()
@@ -1489,11 +1582,25 @@ def _render_resume_summary(payload: dict[str, object]) -> None:
     summary.add_column()
     workspace_root = payload.get("workspace_root")
     project_root = payload.get("project_root")
+    project_label = _recent_project_text(payload, "project_label", "project_title", "project_name")
+    project_summary = _recent_project_text(payload, "project_summary", "summary", "description")
     summary.add_row("Workspace", _format_display_path(str(workspace_root or _get_cwd())))
     if isinstance(project_root, str) and project_root.strip():
         summary.add_row("Project", _format_display_path(project_root.strip()))
+    if isinstance(project_label, str) and project_label.strip():
+        summary.add_row("Project label", project_label.strip())
+    if isinstance(project_summary, str) and project_summary.strip():
+        summary.add_row("Project summary", project_summary.strip())
     if bool(payload.get("project_root_auto_selected")):
-        summary.add_row("Re-entry", "auto-selected recent project")
+        summary.add_row(
+            "Re-entry",
+            _project_root_source_label(payload.get("project_root_source"), auto_selected=True),
+        )
+    elif isinstance(payload.get("project_root_source"), str) and str(payload.get("project_root_source")).strip():
+        summary.add_row(
+            "Re-entry",
+            _project_root_source_label(payload.get("project_root_source"), auto_selected=False),
+        )
     summary.add_row("Status", _resume_status_message(payload, recovery_advice=recovery_advice))
     summary.add_row("Resume mode", _resume_mode_label(payload.get("resume_mode")))
     summary.add_row("Candidates", str(len(segment_candidates)))
@@ -1586,7 +1693,7 @@ def resume(
     recent: bool = typer.Option(
         False,
         "--recent",
-        help="List recent GPD projects on this machine instead of the current workspace recovery summary",
+        help="Show machine-local recent projects with path, label, and recovery evidence instead of the current workspace recovery summary",
     ),
 ) -> None:
     """Summarize local recovery state or list machine-local recent projects."""
