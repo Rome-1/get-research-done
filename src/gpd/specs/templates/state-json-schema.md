@@ -466,7 +466,7 @@ Verifying, Complete, Blocked, Ready to plan, Milestone complete
 
 `session` stores the markdown-compatible session timestamp, advisory machine identity, stop location, and handoff resume file. Keep `resume_file` project-relative when it points inside the repository; `gpd state record-session` normalizes project-local absolute paths back to that form before persisting them. Omitting `--resume-file` preserves the current handoff pointer, while explicit placeholders such as `—`, `None`, or `null` clear it. `gpd resume` is the public local read-only recovery surface, while `gpd init resume` remains the machine-readable backend. That backend may rank `session.resume_file` as a non-resumable `session_resume_file` candidate, uses it as `execution_resume_file` only when no usable live-execution pointer exists, and compares `hostname`/`platform` with the current machine to emit a non-blocking `machine_change_notice` that recommends rerunning the installer when runtime-local config may be stale.
 
-`session` remains the source that STATE.md can render directly. The durable JSON-only `continuation` object below mirrors the same handoff and machine facts so future runtime layers can read one canonical continuation payload without depending on markdown parsing. `gpd init resume` treats this canonical object first and only falls back to the live execution overlay when the canonical continuation is missing or incomplete, including legacy projects without persisted bounded-segment state.
+`session` remains the source that STATE.md can render directly. The durable JSON-only `continuation` object below mirrors the same handoff and machine facts so future runtime layers can read one canonical continuation payload without depending on markdown parsing. `gpd init resume` treats this canonical object first and only falls back to the derived execution head compatibility mirror when the canonical continuation is missing or incomplete, including legacy projects without persisted bounded-segment state.
 
 ### `ContinuationObject`
 
@@ -502,7 +502,7 @@ Verifying, Complete, Blocked, Ready to plan, Milestone complete
 | `stopped_at` | `string \| null` | Human-readable stop location |
 | `resume_file` | `string \| null` | Project-relative handoff artifact when available |
 
-`state.json.continuation.bounded_segment` is the durable authoritative bounded-segment state stored in `state.json`. When present, it is the canonical bounded-segment resume source. When the canonical continuation is missing or incomplete, `gpd init resume` may project a bounded-segment candidate from `GPD/observability/current-execution.json` for compatibility, but the overlay does not replace the persisted canonical state.
+`state.json.continuation.bounded_segment` is the durable authoritative bounded-segment state stored in `state.json`. When present, it is the canonical bounded-segment resume source. The live execution head is derived from execution lineage and may be mirrored into `GPD/observability/current-execution.json` for compatibility, but that mirror does not replace the persisted canonical state. When the canonical continuation is missing or incomplete, `gpd init resume` may project a bounded-segment candidate from that compatibility mirror for legacy recovery only.
 
 `continuation.machine` is the canonical recorded machine state:
 

@@ -9,7 +9,7 @@ template_version: 1
 Copy and fill this structure for `GPD/phases/XX-name/.continue-here.md`.
 This is the canonical temporary phase handoff artifact written by `/gpd:pause-work` and consumed by `/gpd:resume-work` plus the local `gpd resume` recovery surface. The machine-readable backend remains `gpd init resume`.
 
-This file is **not** the authoritative store for project position, session continuity, or resume ranking. Current public behavior keeps those responsibilities split across `GPD/state.json` (authoritative storage), `GPD/state.json.bak` (recovery backup), `GPD/STATE.md` (editable mirror), and `GPD/observability/current-execution.json` (live execution overlay). `gpd init resume` resolves the current canonical continuation view across those surfaces and may reach this file through session continuity or the live execution overlay:
+This file is **not** the authoritative store for project position, session continuity, or resume ranking. Current public behavior keeps those responsibilities split across `GPD/state.json` (authoritative storage), `GPD/state.json.bak` (recovery backup), `GPD/STATE.md` (editable mirror), append-only execution lineage, and the derived execution head / `GPD/observability/current-execution.json` compatibility mirror. `gpd init resume` resolves the current canonical continuation view across those surfaces and may reach this file through session continuity or the derived execution head:
 
 ```yaml
 ---

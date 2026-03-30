@@ -4,7 +4,7 @@ template_version: 1
 
 # Executor Continuation Prompt Template
 
-Template for spawning a fresh gpd-executor agent to continue plan execution after a checkpoint pause. Uses a fresh agent with explicit state instead of resume to avoid serialization issues with parallel tool calls. The `<execution_segment>` block is the workflow/runtime handoff payload; if the pause is durably recorded, the same content is mirrored into `continuation.bounded_segment` as the persisted storage shape.
+Template for spawning a fresh gpd-executor agent to continue plan execution after a checkpoint pause. Uses a fresh agent with explicit state instead of resume to avoid serialization issues with parallel tool calls. The `<execution_segment>` block is the workflow/runtime handoff payload; if the pause is durably recorded, the bounded stop is persisted in `continuation.bounded_segment` and also recorded in the append-only execution lineage so the execution head can be rebuilt without parsing prose.
 
 Referenced by `workflows/execute-phase.md` checkpoint_handling step.
 
@@ -38,7 +38,7 @@ Return state updates (position, decisions, metrics) in your response -- do NOT w
 {execution_segment}
 </execution_segment>
 
-`execution_segment` is the transient runtime handoff payload. `continuation.bounded_segment` is the persisted storage shape that records the same bounded stop when the orchestrator durably writes or refreshes the pause state. Clear or replace that persisted field when the bounded stop is consumed, retired, or superseded by a newer segment. Keep `.continue-here.md` and `session` as handoff surfaces only.
+`execution_segment` is the transient runtime handoff payload. `continuation.bounded_segment` is the persisted storage shape that records the same bounded stop when the orchestrator durably writes or refreshes the pause state. Clear or replace that persisted field when the bounded stop is consumed, retired, or superseded by a newer segment. Keep `.continue-here.md` and `session` as handoff surfaces only, and treat the derived execution head as a compatibility projection rather than the bounded authority.
 
 If the execution segment indicates `pre_fanout_review_pending: true`, do not unlock downstream dependent work until the review outcome has been incorporated into this continuation.
 

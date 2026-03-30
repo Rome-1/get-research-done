@@ -7,7 +7,7 @@ Use this workflow when:
 </trigger>
 
 <purpose>
-Instantly restore full research project context so "Where were we?" has an immediate, complete answer -- including the state of derivations, parameter values, intermediate results, theoretical assumptions, and the current canonical continuation view assembled from `state.json.continuation`, the editable mirror, the temporary handoff artifact, and the live execution overlay.
+Instantly restore full research project context so "Where were we?" has an immediate, complete answer -- including the state of derivations, parameter values, intermediate results, theoretical assumptions, and the current canonical continuation view assembled from `state.json.continuation`, the editable mirror, the temporary handoff artifact, and the derived execution head compatibility mirror.
 </purpose>
 
 <required_reading>
@@ -33,24 +33,24 @@ Parse JSON for: `state_exists`, `roadmap_exists`, `project_exists`, `planning_ex
 
 `state_exists` means INIT could recover usable state from `GPD/state.json`, `GPD/state.json.bak`, or `GPD/STATE.md`. A stray unreadable file path by itself does not count as recoverable state.
 
-Current public behavior distinguishes four continuation-facing layers:
+Current public behavior distinguishes four continuation-facing layers plus the derived execution head:
 
 - **storage authority:** `GPD/state.json`, with `GPD/state.json.bak` as the recovery backup; canonical `continuation` lives here
 - **editable mirror:** `GPD/STATE.md`
 - **temporary handoff artifact:** `GPD/phases/.../.continue-here.md`
-- **live execution overlay:** `GPD/observability/current-execution.json`, used as compatibility fallback when canonical bounded-segment state is absent
+- **derived execution head / live execution overlay:** `GPD/observability/current-execution.json`, used as a compatibility projection when canonical bounded-segment state is absent
 
-`gpd init resume` resolves the canonical continuation decision across those layers. It is canonical-first: `state.json.continuation` wins, and the live execution overlay only fills legacy gaps when bounded-segment state is missing. Do not treat any single `.continue-here.md` file or live execution snapshot as the sole authority in isolation.
+`gpd init resume` resolves the canonical continuation decision across those layers. It is canonical-first: `state.json.continuation` wins, and the derived execution head only fills legacy gaps when bounded-segment state is missing. Do not treat any single `.continue-here.md` file or compatibility snapshot as the sole authority in isolation.
 
 **If `state_exists` is true:** Proceed to load_state
 **If `state_exists` is false but `roadmap_exists` or `project_exists` is true:** Offer to reconstruct STATE.md
 **If `planning_exists` is false:** This is a new project - route to /gpd:new-project
 
-If `resume_mode="bounded_segment"` and `active_execution_segment` exists, treat that as the primary bounded resume target. On newer projects this usually comes from `state.json.continuation.bounded_segment`, but the live execution overlay may still project the bounded segment whenever canonical continuation is missing or incomplete. Do not infer a second resume system from ad hoc handoff files or stale notes outside the canonical handoff path.
+If `resume_mode="bounded_segment"` and `active_execution_segment` exists, treat that as the primary bounded resume target. On newer projects this usually comes from `state.json.continuation.bounded_segment`, but the derived execution head may still project the bounded segment whenever canonical continuation is missing or incomplete. Do not infer a second resume system from ad hoc handoff files or stale notes outside the canonical handoff path.
 
 `resume_mode` is narrower than the overall recovery status. A recorded `session_resume_file`, a `missing_session_resume_file`, or advisory live execution can still exist when `resume_mode` is `None`.
 
-If `active_execution_segment` exists but `execution_resumable` is false, treat that live snapshot as advisory context only. If `current_execution_resume_file` is empty, non-project, or missing on disk, call that out explicitly; in all such cases it is not a ranked bounded-segment resume candidate and does not justify `resume_mode="bounded_segment"`.
+If `active_execution_segment` exists but `execution_resumable` is false, treat that derived head snapshot as advisory context only. If `current_execution_resume_file` is empty, non-project, or missing on disk, call that out explicitly; in all such cases it is not a ranked bounded-segment resume candidate and does not justify `resume_mode="bounded_segment"`.
 
 If `active_execution_segment.pre_fanout_review_pending` is true, the gate is still live even when a resume file exists. If `active_execution_segment.pre_fanout_review_cleared` is true, the review outcome was recorded but the separate fanout unlock is still missing.
 
@@ -224,7 +224,7 @@ fi
 
 **Bounded execution segment detection:** If `active_execution_segment` is present, `execution_resumable` is true, and `current_execution_resume_file` is present, treat that live snapshot as the primary resume target. The runtime currently ranks three source families into `segment_candidates`: a resumable live execution snapshot (`current_execution`), a non-resumable or advisory `session_resume_file` handoff source, and an interrupted-agent marker. If the live snapshot lacks a portable usable resume file, keep it visible only as advisory context. Do NOT invent additional candidates from plan files without summaries, auto-checkpoints, or other ad hoc checkpoints.
 
-The live execution overlay and the temporary handoff artifact are both subordinate to the storage authority chain. They refine the continuation target; they do not replace `GPD/state.json > GPD/state.json.bak > GPD/STATE.md`, and the overlay only backfills bounded-segment state for legacy compatibility when canonical bounded-segment state is absent.
+The derived execution head and the temporary handoff artifact are both subordinate to the storage authority chain. They refine the continuation target; they do not replace `GPD/state.json > GPD/state.json.bak > GPD/STATE.md`, and the compatibility mirror only backfills bounded-segment state for legacy compatibility when canonical bounded-segment state is absent.
 
 Reason-scoped clears still matter on resume: a `first_result` clear does not retire `pre_fanout` or skeptical fields, and a `fanout unlock` does not clear the review gate by itself.
 

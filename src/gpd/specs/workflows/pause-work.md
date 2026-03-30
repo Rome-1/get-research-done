@@ -180,7 +180,7 @@ Use the shared template at `@{GPD_INSTALL_DIR}/templates/continue-here.md` as th
 - `<next_action>` for the exact first thing to do on return
 - `<persistent_state>` for the subset that must be appended to `GPD/DERIVATION-STATE.md`
 
-The `.continue-here.md` file and `session` record are handoff surfaces only. If the pause produces a resumable bounded stop, persist the matching `execution_segment` into `continuation.bounded_segment`; that persisted field is the bounded authority for later resume logic. If the bounded stop is later consumed, retired, or replaced by a newer bounded stop, clear or supersede `continuation.bounded_segment` as part of that state update. Do not treat the markdown handoff file as the durable authority.
+The `.continue-here.md` file and `session` record are handoff surfaces only. If the pause produces a resumable bounded stop, persist the matching `execution_segment` into `continuation.bounded_segment`; that persisted field is the bounded authority for later resume logic. Record the same pause in the execution lineage so the derived execution head can be rebuilt if the compatibility cache is lost. If the bounded stop is later consumed, retired, or replaced by a newer bounded stop, clear or supersede `continuation.bounded_segment` as part of that state update. Do not treat the markdown handoff file or derived execution head as the durable authority.
 
 Fold older ad hoc notions such as separate `parameter_values`, `approximations_active`, or `open_questions` into the canonical sections above instead of creating extra top-level tags. For example:
 
