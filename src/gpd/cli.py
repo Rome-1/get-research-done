@@ -2787,6 +2787,7 @@ def result_upsert(
             verified=verified,
         )
         save_state_json_locked(cwd, state)
+        _sync_execution_visibility_projection(cwd, state_obj=state)
     _output(res)
 
 
@@ -2864,6 +2865,7 @@ def result_update(
             _error(f"Malformed state.json: {e}")
         _fields, updated = result_update(state, result_id, **opts)
         save_state_json_locked(cwd, state)
+        _sync_execution_visibility_projection(cwd, state_obj=state)
     _output(updated)
 
 

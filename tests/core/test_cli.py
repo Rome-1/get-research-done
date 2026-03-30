@@ -2484,6 +2484,73 @@ def test_result_upsert_without_explicit_id(mock_upsert, tmp_path: Path):
     assert kwargs["depends_on"] == ["R-01"]
 
 
+@patch("gpd.core.state.save_state_json_locked")
+@patch("gpd.core.observability.sync_execution_visibility_from_canonical_continuation", create=True)
+@patch("gpd.core.results.result_upsert", create=True)
+def test_result_upsert_projects_execution_visibility_after_save(
+    mock_upsert,
+    mock_sync_visibility,
+    mock_save_state,
+    tmp_path: Path,
+):
+    mock_result = MagicMock()
+    mock_result.model_dump.return_value = {
+        "action": "updated",
+        "updated_fields": ["description"],
+        "result": {
+            "id": "R-02",
+            "equation": "a = b + c",
+            "description": "Canonical quantity",
+            "phase": "2",
+            "depends_on": ["R-01"],
+            "verified": False,
+        },
+    }
+    mock_upsert.return_value = mock_result
+    ordered_calls = MagicMock()
+    ordered_calls.attach_mock(mock_save_state, "save")
+    ordered_calls.attach_mock(mock_sync_visibility, "sync")
+    planning = tmp_path / "GPD"
+    planning.mkdir()
+    (planning / "state.json").write_text("{}", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        [
+            "--raw",
+            "--cwd",
+            str(tmp_path),
+            "result",
+            "upsert",
+            "--id",
+            "R-02",
+            "--description",
+            "Canonical quantity",
+        ],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["action"] == "updated"
+    assert payload["updated_fields"] == ["description"]
+    assert payload["result"]["id"] == "R-02"
+    assert payload["result"]["description"] == "Canonical quantity"
+    assert "observability_synced" not in payload
+    mock_save_state.assert_called_once()
+    mock_sync_visibility.assert_called_once()
+    sync_args, sync_kwargs = mock_sync_visibility.call_args
+    assert sync_args[0] == tmp_path
+    assert sync_kwargs["state_obj"] is not None
+    save_args, _save_kwargs = mock_save_state.call_args
+    assert save_args[0] == tmp_path
+    assert save_args[1] is sync_kwargs["state_obj"]
+    assert ordered_calls.mock_calls == [
+        call.save(tmp_path, ANY),
+        call.sync(tmp_path, state_obj=ANY),
+    ]
+
+
 @patch("gpd.cli._resolve_derived_result_id")
 @patch("gpd.core.state.state_carry_forward_continuation_last_result_id")
 @patch("gpd.core.observability.sync_execution_visibility_from_canonical_continuation", create=True)
@@ -2705,6 +2772,68 @@ def test_result_persist_derived_uses_resolved_result_id_for_real_state_write(
     assert [item["id"] for item in state["intermediate_results"]] == ["R-02-effective-mass"]
     assert state["session"]["last_result_id"] is None
     assert state["continuation"]["handoff"]["last_result_id"] is None
+
+
+@patch("gpd.core.state.save_state_json_locked")
+@patch("gpd.core.observability.sync_execution_visibility_from_canonical_continuation", create=True)
+@patch("gpd.core.results.result_update", create=True)
+def test_result_update_projects_execution_visibility_after_save(
+    mock_result_update,
+    mock_sync_visibility,
+    mock_save_state,
+    tmp_path: Path,
+):
+    mock_result = MagicMock()
+    mock_result.model_dump.return_value = {
+        "id": "R-02",
+        "equation": "a = b + c",
+        "description": "Updated quantity",
+        "phase": "2",
+        "depends_on": ["R-01"],
+        "verified": False,
+    }
+    mock_result_update.return_value = (["description"], mock_result)
+    ordered_calls = MagicMock()
+    ordered_calls.attach_mock(mock_save_state, "save")
+    ordered_calls.attach_mock(mock_sync_visibility, "sync")
+    planning = tmp_path / "GPD"
+    planning.mkdir()
+    (planning / "state.json").write_text("{}", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        [
+            "--raw",
+            "--cwd",
+            str(tmp_path),
+            "result",
+            "update",
+            "R-02",
+            "--description",
+            "Updated quantity",
+        ],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    mock_result_update.assert_called_once()
+    assert payload["id"] == "R-02"
+    assert payload["description"] == "Updated quantity"
+    assert payload["equation"] == "a = b + c"
+    assert "observability_synced" not in payload
+    mock_save_state.assert_called_once()
+    mock_sync_visibility.assert_called_once()
+    sync_args, sync_kwargs = mock_sync_visibility.call_args
+    assert sync_args[0] == tmp_path
+    assert sync_kwargs["state_obj"] is not None
+    save_args, _save_kwargs = mock_save_state.call_args
+    assert save_args[0] == tmp_path
+    assert save_args[1] is sync_kwargs["state_obj"]
+    assert ordered_calls.mock_calls == [
+        call.save(tmp_path, ANY),
+        call.sync(tmp_path, state_obj=ANY),
+    ]
 
 
 def test_result_persist_derived_raw_skips_cleanly_without_project_state(tmp_path: Path) -> None:
