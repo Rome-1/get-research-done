@@ -1173,6 +1173,68 @@ def _handoff_last_result_id(resume_projection: object) -> str | None:
     return stripped or None
 
 
+def _build_resume_result_lookup(cwd: Path) -> dict[str, dict[str, object]]:
+    """Return canonical results keyed by ID for resume hydration."""
+    state, _state_issues, _state_source = _peek_state_json(cwd)
+    if not isinstance(state, dict):
+        return {}
+    try:
+        return {
+            result.id: result.model_dump(mode="json")
+            for result in result_list(state)
+            if isinstance(result.id, str) and result.id.strip()
+        }
+    except (PydanticValidationError, TypeError, ValueError) as exc:
+        logger.warning("Resume result hydration unavailable: %s", exc)
+        return {}
+
+
+def _hydrate_resume_result(
+    candidate: Mapping[str, object],
+    result_lookup_by_id: Mapping[str, dict[str, object]],
+) -> dict[str, object]:
+    """Attach the canonical result payload when a candidate carries `last_result_id`."""
+    hydrated = dict(candidate)
+    last_result_id = hydrated.get("last_result_id")
+    if not isinstance(last_result_id, str):
+        return hydrated
+    lookup_key = last_result_id.strip()
+    if not lookup_key:
+        return hydrated
+    last_result = result_lookup_by_id.get(lookup_key)
+    if isinstance(last_result, Mapping):
+        hydrated["last_result"] = dict(last_result)
+    return hydrated
+
+
+def _select_active_resume_candidate(
+    resume_candidates: list[dict[str, object]],
+    *,
+    active_resume_kind: str | None,
+    active_resume_pointer: str | None,
+) -> dict[str, object] | None:
+    """Return the candidate currently selected as the active resume target."""
+    if not isinstance(active_resume_kind, str):
+        return None
+    active_kind = active_resume_kind.strip()
+    if not active_kind:
+        return None
+    active_pointer = active_resume_pointer.strip() if isinstance(active_resume_pointer, str) and active_resume_pointer.strip() else None
+
+    if active_pointer is not None:
+        for candidate in resume_candidates:
+            if str(candidate.get("kind") or "").strip() != active_kind:
+                continue
+            if candidate.get("resume_pointer") != active_pointer:
+                continue
+            return candidate
+
+    for candidate in resume_candidates:
+        if str(candidate.get("kind") or "").strip() == active_kind:
+            return candidate
+    return None
+
+
 def _interrupted_agent_resume_origin() -> str:
     return resume_origin_for_interrupted_agent()
 
@@ -1236,6 +1298,7 @@ def _build_legacy_resume_state(
     execution_context: dict[str, object],
     *,
     interrupted_agent_id: str | None,
+    result_lookup_by_id: dict[str, dict[str, object]],
 ) -> dict[str, object]:
     segment_candidates: list[dict[str, object]] = []
     current_execution = execution_context.get("current_execution")
@@ -1341,6 +1404,13 @@ def _build_legacy_resume_state(
         active_resume_origin = None
         active_resume_pointer = None
 
+    hydrated_resume_candidates = [_hydrate_resume_result(candidate, result_lookup_by_id) for candidate in resume_candidates]
+    active_resume_candidate = _select_active_resume_candidate(
+        hydrated_resume_candidates,
+        active_resume_kind=active_resume_kind,
+        active_resume_pointer=active_resume_pointer,
+    )
+
     result = {
         "resume_surface_schema_version": _RESUME_SURFACE_SCHEMA_VERSION,
         "active_bounded_segment": active_bounded_segment if isinstance(active_bounded_segment, dict) else None,
@@ -1358,7 +1428,7 @@ def _build_legacy_resume_state(
             (isinstance(session_resume_file, str) and session_resume_file)
             or (isinstance(missing_session_resume_file, str) and missing_session_resume_file)
         ),
-        "resume_candidates": resume_candidates,
+        "resume_candidates": hydrated_resume_candidates,
         "active_resume_kind": active_resume_kind,
         "active_resume_origin": active_resume_origin,
         "active_resume_pointer": active_resume_pointer,
@@ -1368,6 +1438,10 @@ def _build_legacy_resume_state(
         "has_interrupted_agent": interrupted_agent_id is not None,
         "interrupted_agent_id": interrupted_agent_id,
     }
+    if isinstance(active_resume_candidate, dict):
+        active_resume_result = active_resume_candidate.get("last_result")
+        if isinstance(active_resume_result, Mapping):
+            result["active_resume_result"] = dict(active_resume_result)
     result["compat_resume_surface"] = build_resume_compat_surface(result) or {}
     return result
 
@@ -1376,6 +1450,7 @@ def _build_resume_read_state(
     execution_context: dict[str, object],
     *,
     interrupted_agent_id: str | None,
+    result_lookup_by_id: dict[str, dict[str, object]],
 ) -> dict[str, object]:
     resume_projection = execution_context.get("resume_projection")
     if hasattr(resume_projection, "continuation"):
@@ -1482,6 +1557,8 @@ def _build_resume_read_state(
                     )
                 )
 
+        hydrated_resume_candidates = [_hydrate_resume_result(candidate, result_lookup_by_id) for candidate in resume_candidates]
+
         if resume_projection.resumable:
             resume_mode = "bounded_segment"
         elif interrupted_agent_id is not None:
@@ -1506,6 +1583,12 @@ def _build_resume_read_state(
             active_resume_origin = None
             active_resume_pointer = None
 
+        active_resume_candidate = _select_active_resume_candidate(
+            hydrated_resume_candidates,
+            active_resume_kind=active_resume_kind,
+            active_resume_pointer=active_resume_pointer,
+        )
+
         result = {
             "resume_surface_schema_version": _RESUME_SURFACE_SCHEMA_VERSION,
             "active_bounded_segment": active_bounded_segment,
@@ -1514,7 +1597,7 @@ def _build_resume_read_state(
             "recorded_continuity_handoff_file": resume_projection.recorded_handoff_resume_file,
             "missing_continuity_handoff_file": resume_projection.missing_handoff_resume_file,
             "has_continuity_handoff": resume_projection.recorded_handoff_resume_file is not None,
-            "resume_candidates": resume_candidates,
+            "resume_candidates": hydrated_resume_candidates,
             "active_resume_kind": active_resume_kind,
             "active_resume_origin": active_resume_origin,
             "active_resume_pointer": active_resume_pointer,
@@ -1524,11 +1607,19 @@ def _build_resume_read_state(
             "has_interrupted_agent": interrupted_agent_id is not None,
             "interrupted_agent_id": interrupted_agent_id,
         }
+        if isinstance(active_resume_candidate, dict):
+            active_resume_result = active_resume_candidate.get("last_result")
+            if isinstance(active_resume_result, Mapping):
+                result["active_resume_result"] = dict(active_resume_result)
         result["compat_resume_surface"] = build_resume_compat_surface(result) or {}
         return result
 
     try:
-        return _build_legacy_resume_state(execution_context, interrupted_agent_id=interrupted_agent_id)
+        return _build_legacy_resume_state(
+            execution_context,
+            interrupted_agent_id=interrupted_agent_id,
+            result_lookup_by_id=result_lookup_by_id,
+        )
     except Exception as exc:
         logger.warning(
             "Legacy resume synthesis failed; returning empty resume state: %s",
@@ -2143,6 +2234,7 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
     effective_cwd, reentry_metadata = _resolve_reentry_context(requested_cwd, data_root=data_root)
     config = load_config(effective_cwd)
     execution_context = _build_execution_runtime_context(effective_cwd)
+    result_lookup_by_id = _build_resume_result_lookup(effective_cwd)
 
     # Check for interrupted agent
     interrupted_agent_id = None
@@ -2155,6 +2247,7 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
     continuation_state = _build_resume_read_state(
         execution_context,
         interrupted_agent_id=interrupted_agent_id,
+        result_lookup_by_id=result_lookup_by_id,
     )
     continuation_state, recent_bounded_segment_promoted = _promote_auto_selected_recent_bounded_segment(
         continuation_state,
@@ -2199,6 +2292,9 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
     resume_mode = continuation_state.get("resume_mode")
     if not isinstance(resume_mode, str) or not resume_mode.strip():
         resume_mode = None
+    active_resume_result = continuation_state.get("active_resume_result")
+    if not isinstance(active_resume_result, dict):
+        active_resume_result = None
 
     result = {
         "workspace_root": reentry_metadata["workspace_root"],
@@ -2240,6 +2336,7 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
         "active_resume_kind": active_resume_kind,
         "active_resume_origin": active_resume_origin,
         "active_resume_pointer": active_resume_pointer,
+        "active_resume_result": active_resume_result,
         "resume_candidates": resume_candidates,
         "active_execution_segment": current_execution,
         "segment_candidates": segment_candidates,

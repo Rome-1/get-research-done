@@ -32,7 +32,7 @@ fi
 Parse JSON once and read it semantically:
 
 - **Availability and contract authority:** `state_exists`, `roadmap_exists`, `project_exists`, `planning_exists`, `commit_docs`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`
-- **Canonical continuation and recovery authority:** `resume_surface_schema_version`, `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `active_bounded_segment`, `derived_execution_head`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, `has_continuity_handoff`, `resume_candidates`, `execution_resumable`, `execution_paused_at`, `execution_review_pending`, `execution_pre_fanout_review_pending`, `execution_skeptical_requestioning_required`, `execution_downstream_locked`, `has_interrupted_agent`, `interrupted_agent_id`
+- **Canonical continuation and recovery authority:** `resume_surface_schema_version`, `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `active_bounded_segment`, `derived_execution_head`, `active_resume_result`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, `has_continuity_handoff`, `resume_candidates`, `execution_resumable`, `execution_paused_at`, `execution_review_pending`, `execution_pre_fanout_review_pending`, `execution_skeptical_requestioning_required`, `execution_downstream_locked`, `has_interrupted_agent`, `interrupted_agent_id`
 - **Compatibility-only raw intake:** `compat_resume_surface`
   - Legacy raw-intake aliases stay nested under compatibility mirrors only; they are intake names, not public continuation vocabulary.
 - **Machine advisory state:** `machine_change_detected`, `machine_change_notice`, `current_hostname`, `current_platform`, `session_hostname`, `session_platform`
@@ -41,6 +41,8 @@ Compatibility note: the current raw envelope can still surface nested compatibil
 
 Public resume vocabulary centers on `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, and `resume_candidates`.
 Those legacy raw-intake aliases are not part of the public top-level resume vocabulary.
+
+When `active_resume_result` is present, treat it as the hydrated canonical result context for the current resume target. Use its `id` as the continuity anchor, but prefer its structured fields for the user-facing resume summary instead of restating only the raw identifier.
 
 `state_exists` means INIT could recover usable state from `GPD/state.json`, `GPD/state.json.bak`, or `GPD/STATE.md`. A stray unreadable file path by itself does not count as recoverable state.
 
@@ -60,6 +62,8 @@ The shared resume resolver still distinguishes canonical continuation authority,
 If `active_resume_kind="bounded_segment"` and `active_bounded_segment` exists, treat that as the primary bounded resume target. On newer projects this usually comes from `state.json.continuation.bounded_segment`, but the derived execution head may still project the bounded segment whenever canonical continuation is missing or incomplete. Do not infer a second resume system from ad hoc handoff files or stale notes outside the canonical handoff path.
 
 `active_resume_kind` is narrower than the overall recovery status. A recorded handoff, a missing recorded handoff artifact, or advisory live execution can still exist when `active_resume_kind` is `None`. In the current machine-readable envelope those compatibility cues still surface through `continuity_handoff_file`, `missing_continuity_handoff_file`, and nested compatibility cues under `compat_resume_surface`.
+
+If `active_resume_result` exists, surface it alongside the primary resume target so `/gpd:resume-work` can recover the last canonical result context immediately. If a resume candidate carries a hydrated `last_result`, prefer that structured payload over `last_result_id`-only notes, while still preserving the ID as the rerun anchor.
 
 If `derived_execution_head` exists but `execution_resumable` is false, treat that live snapshot as advisory context only. If `active_resume_pointer` is empty, non-project, or missing on disk, call that out explicitly; in all such cases it is not a ranked bounded-segment resume candidate and does not justify `active_resume_kind="bounded_segment"`.
 

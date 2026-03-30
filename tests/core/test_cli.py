@@ -1307,6 +1307,76 @@ def test_resume_candidate_rerun_anchor_uses_last_result_id() -> None:
     assert cli_module._resume_candidate_rerun_anchor({"last_result_id": "R-bridge-01"}) == "rerun anchor: R-bridge-01"
 
 
+def test_resume_candidate_notes_prefers_hydrated_result_context() -> None:
+    notes = cli_module._resume_candidate_notes(
+        {
+            "last_result_id": "R-bridge-01",
+            "last_result": {
+                "id": "R-bridge-01",
+                "description": "Benchmark reproduction",
+                "equation": "F = ma",
+                "verified": True,
+            },
+        },
+        active_execution=None,
+        current_execution=None,
+    )
+
+    assert "Benchmark reproduction" in notes
+    assert "R-bridge-01" in notes
+
+
+def test_resume_plain_output_surfaces_hydrated_last_result_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    hydrated_result = {
+        "id": "R-bridge-01",
+        "description": "Benchmark reproduction",
+        "equation": "F = ma",
+        "verified": True,
+    }
+    monkeypatch.setattr(
+        "gpd.core.context.init_resume",
+        lambda _cwd: {
+            "planning_exists": True,
+            "state_exists": True,
+            "roadmap_exists": True,
+            "project_exists": True,
+            "resume_candidates": [
+                {
+                    "kind": "continuity_handoff",
+                    "status": "handoff",
+                    "resume_file": "GPD/phases/01/.continue-here.md",
+                    "resumable": False,
+                    "origin": "canonical_continuation",
+                    "last_result_id": "R-bridge-01",
+                    "last_result": hydrated_result,
+                }
+            ],
+            "active_resume_result": hydrated_result,
+            "continuity_handoff_file": "GPD/phases/01/.continue-here.md",
+            "active_resume_kind": "continuity_handoff",
+            "active_resume_origin": "canonical_continuation",
+            "active_resume_pointer": "GPD/phases/01/.continue-here.md",
+            "has_live_execution": False,
+            "execution_resumable": False,
+            "execution_paused_at": None,
+            "autonomy": None,
+            "research_mode": None,
+        },
+    )
+
+    result = runner.invoke(app, ["resume"])
+
+    assert result.exit_code == 0
+    normalized = " ".join(result.output.split())
+    assert "Resume Summary" in result.output
+    assert "Benchmark reproduction" in result.output
+    assert "R-bridge-01" in result.output
+    assert "A continuity handoff is available" in normalized
+
+
 def test_resume_plain_output_surfaces_bounded_segment_status_from_canonical_resume_mode(
     tmp_path: Path, monkeypatch
 ) -> None:

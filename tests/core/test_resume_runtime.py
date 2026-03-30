@@ -61,6 +61,20 @@ def _update_state_session(
         resume_path.write_text("resume\n", encoding="utf-8")
 
 
+def _resolved_resume_result(
+    ctx: dict[str, object],
+    candidate: dict[str, object] | None = None,
+) -> dict[str, object] | None:
+    if isinstance(candidate, dict):
+        candidate_result = candidate.get("last_result")
+        if isinstance(candidate_result, dict):
+            return candidate_result
+    active_result = ctx.get("active_resume_result")
+    if isinstance(active_result, dict):
+        return active_result
+    return None
+
+
 def test_state_record_session_persists_machine_identity(
     tmp_path: Path, state_project_factory, monkeypatch
 ) -> None:
@@ -211,6 +225,7 @@ def test_init_resume_uses_canonical_continuation_when_legacy_session_conflicts(
             "recorded_at": "2026-03-04T09:15:00+00:00",
             "stopped_at": "Canonical stop",
             "resume_file": "GPD/phases/03-analysis/.continue-here.md",
+            "last_result_id": "result-canonical",
         },
         "bounded_segment": None,
         "machine": {
@@ -219,6 +234,19 @@ def test_init_resume_uses_canonical_continuation_when_legacy_session_conflicts(
             "platform": "CanonicalOS",
         },
     }
+    state["intermediate_results"] = [
+        {
+            "id": "result-canonical",
+            "equation": "R = A + B",
+            "description": "Canonical bridge result",
+            "units": "arb",
+            "validity": "validated",
+            "phase": "03",
+            "depends_on": ["seed-result"],
+            "verified": True,
+            "verification_records": [],
+        }
+    ]
     state_path.write_text(json.dumps(state), encoding="utf-8")
     monkeypatch.setattr(
         context_module,
@@ -241,24 +269,30 @@ def test_init_resume_uses_canonical_continuation_when_legacy_session_conflicts(
     assert ctx["compat_resume_surface"]["execution_resume_file"] == "GPD/phases/03-analysis/.continue-here.md"
     assert ctx["compat_resume_surface"]["execution_resume_file_source"] == "session_resume_file"
     assert set(ctx["compat_resume_surface"]) == set(RESUME_COMPATIBILITY_ALIAS_KEYS)
-    assert ctx["resume_candidates"] == [
-        {
-            "status": "handoff",
-            "resume_file": "GPD/phases/03-analysis/.continue-here.md",
-            "resumable": False,
-            "kind": "continuity_handoff",
-            "origin": "continuation.handoff",
-            "resume_pointer": "GPD/phases/03-analysis/.continue-here.md",
-        }
-    ]
+    assert len(ctx["resume_candidates"]) == 1
+    assert ctx["resume_candidates"][0]["status"] == "handoff"
+    assert ctx["resume_candidates"][0]["resume_file"] == "GPD/phases/03-analysis/.continue-here.md"
+    assert ctx["resume_candidates"][0]["resumable"] is False
+    assert ctx["resume_candidates"][0]["kind"] == "continuity_handoff"
+    assert ctx["resume_candidates"][0]["origin"] == "continuation.handoff"
+    assert ctx["resume_candidates"][0]["resume_pointer"] == "GPD/phases/03-analysis/.continue-here.md"
+    assert ctx["resume_candidates"][0]["last_result_id"] == "result-canonical"
     assert ctx["compat_resume_surface"]["segment_candidates"] == [
         {
             "source": "session_resume_file",
             "status": "handoff",
             "resume_file": "GPD/phases/03-analysis/.continue-here.md",
             "resumable": False,
+            "last_result_id": "result-canonical",
         }
     ]
+    canonical_candidate = ctx["resume_candidates"][0]
+    hydrated_result = _resolved_resume_result(ctx, canonical_candidate)
+    assert hydrated_result is not None
+    assert hydrated_result["id"] == "result-canonical"
+    assert hydrated_result["equation"] == "R = A + B"
+    assert hydrated_result["description"] == "Canonical bridge result"
+    assert hydrated_result["phase"] == "03"
 
 
 def test_init_resume_auto_selects_unique_recoverable_recent_project(tmp_path: Path, state_project_factory, monkeypatch) -> None:
@@ -494,6 +528,19 @@ def test_init_resume_reads_canonical_continuation_from_state_json(
             "platform": "Linux 6.1 x86_64",
         },
     }
+    state["intermediate_results"] = [
+        {
+            "id": "result-canonical",
+            "equation": "R = A + B",
+            "description": "Canonical bridge result",
+            "units": "arb",
+            "validity": "validated",
+            "phase": "03",
+            "depends_on": ["seed-result"],
+            "verified": True,
+            "verification_records": [],
+        }
+    ]
     state_path.write_text(json.dumps(state), encoding="utf-8")
     handoff = cwd / "GPD" / "phases" / "03-analysis" / "alternate-resume.md"
     handoff.parent.mkdir(parents=True, exist_ok=True)
@@ -515,17 +562,14 @@ def test_init_resume_reads_canonical_continuation_from_state_json(
     assert ctx["active_resume_pointer"] == "GPD/phases/03-analysis/alternate-resume.md"
     assert ctx["compat_resume_surface"]["execution_resume_file"] == "GPD/phases/03-analysis/alternate-resume.md"
     assert ctx["compat_resume_surface"]["execution_resume_file_source"] == "session_resume_file"
-    assert ctx["resume_candidates"] == [
-        {
-            "status": "handoff",
-            "resume_file": "GPD/phases/03-analysis/alternate-resume.md",
-            "resumable": False,
-            "last_result_id": "result-canonical",
-            "kind": "continuity_handoff",
-            "origin": "continuation.handoff",
-            "resume_pointer": "GPD/phases/03-analysis/alternate-resume.md",
-        }
-    ]
+    assert len(ctx["resume_candidates"]) == 1
+    assert ctx["resume_candidates"][0]["status"] == "handoff"
+    assert ctx["resume_candidates"][0]["resume_file"] == "GPD/phases/03-analysis/alternate-resume.md"
+    assert ctx["resume_candidates"][0]["resumable"] is False
+    assert ctx["resume_candidates"][0]["last_result_id"] == "result-canonical"
+    assert ctx["resume_candidates"][0]["kind"] == "continuity_handoff"
+    assert ctx["resume_candidates"][0]["origin"] == "continuation.handoff"
+    assert ctx["resume_candidates"][0]["resume_pointer"] == "GPD/phases/03-analysis/alternate-resume.md"
     _assert_no_resume_compat_aliases(ctx)
     assert ctx["session_hostname"] == "builder-01"
     assert ctx["session_platform"] == "Linux 6.1 x86_64"
@@ -575,6 +619,19 @@ def test_init_resume_prefers_canonical_bounded_segment_over_lineage_head_snapsho
             "platform": "Linux 6.1 x86_64",
         },
     }
+    state["intermediate_results"] = [
+        {
+            "id": "result-canonical",
+            "equation": "R = A + B",
+            "description": "Canonical bridge result",
+            "units": "arb",
+            "validity": "validated",
+            "phase": "03",
+            "depends_on": ["seed-result"],
+            "verified": True,
+            "verification_records": [],
+        }
+    ]
     state_path.write_text(json.dumps(state), encoding="utf-8")
     canonical_resume = cwd / "GPD" / "phases" / "03-analysis" / ".continue-here.md"
     canonical_resume.parent.mkdir(parents=True, exist_ok=True)
@@ -628,6 +685,13 @@ def test_init_resume_prefers_canonical_bounded_segment_over_lineage_head_snapsho
     assert ctx["compat_resume_surface"]["segment_candidates"][0]["source"] == "current_execution"
     assert ctx["resume_candidates"][0]["kind"] == "bounded_segment"
     assert ctx["resume_candidates"][0]["origin"] == "continuation.bounded_segment"
+    bounded_candidate = ctx["resume_candidates"][0]
+    hydrated_result = _resolved_resume_result(ctx, bounded_candidate)
+    assert hydrated_result is not None
+    assert hydrated_result["id"] == "result-canonical"
+    assert hydrated_result["equation"] == "R = A + B"
+    assert hydrated_result["description"] == "Canonical bridge result"
+    assert hydrated_result["phase"] == "03"
 
 
 def test_init_resume_deduplicates_matching_session_handoff_and_ranks_interrupted_agent_last(
@@ -852,6 +916,70 @@ def test_init_resume_surfaces_missing_session_handoff_as_advisory_candidate(
             "last_result_id": "result-missing",
         }
     ]
+
+
+def test_init_resume_leaves_missing_result_id_unhydrated(
+    tmp_path: Path, state_project_factory, monkeypatch
+) -> None:
+    cwd = state_project_factory(tmp_path)
+    state_path = cwd / "GPD" / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["session"] = {
+        "last_date": None,
+        "hostname": "builder-01",
+        "platform": "Linux 6.1 x86_64",
+        "stopped_at": None,
+        "resume_file": None,
+        "last_result_id": None,
+    }
+    state["continuation"] = {
+        "schema_version": 1,
+        "handoff": {
+            "recorded_at": "2026-03-29T12:00:00+00:00",
+            "stopped_at": "Phase 03 Plan 02 Task 04",
+            "resume_file": "GPD/phases/03-analysis/alternate-resume.md",
+            "last_result_id": "result-missing",
+        },
+        "machine": {
+            "recorded_at": "2026-03-29T12:00:00+00:00",
+            "hostname": "builder-01",
+            "platform": "Linux 6.1 x86_64",
+        },
+    }
+    state["intermediate_results"] = [
+        {
+            "id": "result-other",
+            "equation": "Q = X - Y",
+            "description": "Unrelated result",
+            "units": "arb",
+            "validity": "validated",
+            "phase": "03",
+            "depends_on": [],
+            "verified": False,
+            "verification_records": [],
+        }
+    ]
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    handoff = cwd / "GPD" / "phases" / "03-analysis" / "alternate-resume.md"
+    handoff.parent.mkdir(parents=True, exist_ok=True)
+    handoff.write_text("resume\n", encoding="utf-8")
+    monkeypatch.setattr(
+        context_module,
+        "_current_machine_identity",
+        lambda: {"hostname": "builder-01", "platform": "Linux 6.1 x86_64"},
+    )
+
+    ctx = init_resume(tmp_path)
+
+    candidate = ctx["resume_candidates"][0]
+    assert ctx["active_resume_kind"] == "continuity_handoff"
+    assert ctx["active_resume_origin"] == "continuation.handoff"
+    assert ctx["active_resume_pointer"] == "GPD/phases/03-analysis/alternate-resume.md"
+    assert candidate["last_result_id"] == "result-missing"
+    assert candidate.get("last_result") is None
+    assert ctx.get("active_resume_result") is None
+    assert _resolved_resume_result(ctx, candidate) is None
+    assert ctx["compat_resume_surface"]["segment_candidates"][0]["last_result_id"] == "result-missing"
 
 
 def test_init_resume_treats_missing_live_resume_file_as_advisory_only(

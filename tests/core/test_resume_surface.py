@@ -356,6 +356,13 @@ def test_canonicalize_resume_public_payload_keeps_candidate_continuity_nested_wi
         resume_pointer="GPD/phases/04/.continue-here.md",
     )
     payload = {
+        "active_resume_result": {
+            "id": "result-canonical",
+            "description": "Hydrated canonical result",
+            "equation": "E = mc^2",
+            "phase": "04",
+            "verified": True,
+        },
         "active_resume_kind": "continuity_handoff",
         "active_resume_origin": "continuation.handoff",
         "active_resume_pointer": "GPD/phases/04/.continue-here.md",
@@ -375,17 +382,23 @@ def test_canonicalize_resume_public_payload_keeps_candidate_continuity_nested_wi
 
     canonical = canonicalize_resume_public_payload(payload)
 
-    assert set(canonical) == {
-        "active_resume_kind",
-        "active_resume_origin",
-        "active_resume_pointer",
-        "compat_resume_surface",
-        "resume_candidates",
+    assert canonical["active_resume_kind"] == "continuity_handoff"
+    assert canonical["active_resume_origin"] == "continuation.handoff"
+    assert canonical["active_resume_pointer"] == "GPD/phases/04/.continue-here.md"
+    assert canonical["active_resume_result"] == {
+        "id": "result-canonical",
+        "description": "Hydrated canonical result",
+        "equation": "E = mc^2",
+        "phase": "04",
+        "verified": True,
     }
+    assert "compat_resume_surface" in canonical
+    assert "resume_candidates" in canonical
     assert canonical["resume_candidates"] == [continuity_candidate]
     assert canonical["resume_candidates"][0]["kind"] == "continuity_handoff"
     assert canonical["resume_candidates"][0]["origin"] == "continuation.handoff"
     assert canonical["resume_candidates"][0]["resume_pointer"] == "GPD/phases/04/.continue-here.md"
+    assert "active_resume_result" not in canonical["compat_resume_surface"]
     assert "segment_candidates" not in canonical
     assert "resume_mode" not in canonical
     assert "session_resume_file" not in canonical
@@ -396,6 +409,13 @@ def test_canonicalize_resume_public_payload_removes_legacy_top_level_aliases_and
         "active_resume_kind": "bounded_segment",
         "active_resume_origin": "compat.current_execution",
         "active_resume_pointer": "GPD/phases/03/.continue-here.md",
+        "active_resume_result": {
+            "id": "result-hydrated",
+            "description": "Hydrated canonical result",
+            "equation": "x = y",
+            "phase": "03",
+            "verified": False,
+        },
         "execution_resumable": True,
         "execution_resume_file": "GPD/phases/03/.continue-here.md",
         "execution_resume_file_source": "current_execution",
@@ -416,6 +436,13 @@ def test_canonicalize_resume_public_payload_removes_legacy_top_level_aliases_and
     assert canonical["active_resume_kind"] == "bounded_segment"
     assert canonical["active_resume_origin"] == "compat.current_execution"
     assert canonical["active_resume_pointer"] == "GPD/phases/03/.continue-here.md"
+    assert canonical["active_resume_result"] == {
+        "id": "result-hydrated",
+        "description": "Hydrated canonical result",
+        "equation": "x = y",
+        "phase": "03",
+        "verified": False,
+    }
     assert canonical["execution_resumable"] is True
     assert "execution_resume_file" not in canonical
     assert "execution_resume_file_source" not in canonical
@@ -437,6 +464,13 @@ def test_canonicalize_resume_public_payload_is_idempotent_on_already_canonical_p
         "active_resume_kind": "continuity_handoff",
         "active_resume_origin": "continuation.handoff",
         "active_resume_pointer": "GPD/phases/04/.continue-here.md",
+        "active_resume_result": {
+            "id": "result-idempotent",
+            "description": "Hydrated canonical result",
+            "equation": "a = b",
+            "phase": "04",
+            "verified": True,
+        },
         "has_continuity_handoff": True,
         "compat_resume_surface": {
             "execution_resume_file": "GPD/phases/04/.continue-here.md",
@@ -453,6 +487,13 @@ def test_canonicalize_resume_public_payload_is_idempotent_on_already_canonical_p
     assert once["active_resume_kind"] == "continuity_handoff"
     assert once["active_resume_origin"] == "continuation.handoff"
     assert once["active_resume_pointer"] == "GPD/phases/04/.continue-here.md"
+    assert once["active_resume_result"] == {
+        "id": "result-idempotent",
+        "description": "Hydrated canonical result",
+        "equation": "a = b",
+        "phase": "04",
+        "verified": True,
+    }
     assert "resume_mode" not in once
     assert "execution_resume_file" not in once
     assert "execution_resume_file_source" not in once
