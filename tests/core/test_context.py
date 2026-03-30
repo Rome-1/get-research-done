@@ -344,6 +344,29 @@ review_summary:
     )
 
 
+def _write_literature_citation_source_file(tmp_path: Path) -> None:
+    literature_dir = tmp_path / "GPD" / "literature"
+    literature_dir.mkdir(parents=True, exist_ok=True)
+    (literature_dir / "benchmark-CITATION-SOURCES.json").write_text(
+        json.dumps(
+            [
+                {
+                    "reference_id": "ref-benchmark",
+                    "source_type": "paper",
+                    "title": "Benchmark Ref 2024",
+                    "authors": ["A. Author", "B. Benchmarker"],
+                    "year": "2024",
+                    "doi": "10.1000/benchmark.2024",
+                    "arxiv_id": "2401.01234",
+                    "url": "https://example.org/benchmark",
+                    "journal": "J. Benchmarks",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def _write_research_map_anchor_files(tmp_path: Path) -> None:
     map_dir = tmp_path / "GPD" / "research-map"
     map_dir.mkdir(parents=True, exist_ok=True)
@@ -695,6 +718,28 @@ class TestInitPlanPhase:
         assert "GPD/research-map/VALIDATION.md" in ctx["reference_artifact_files"]
         assert "benchmark details" in ctx["reference_artifacts_content"]
         assert "anchor registry" in ctx["reference_artifacts_content"]
+
+    def test_surfaces_derived_citation_sources_without_changing_reference_artifact_fields(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "02-analysis")
+        _write_project_contract_state(tmp_path)
+        _write_literature_review_anchor_file(tmp_path)
+        _write_literature_citation_source_file(tmp_path)
+        _write_research_map_anchor_files(tmp_path)
+
+        ctx = init_plan_phase(tmp_path, "2")
+
+        assert "GPD/literature/benchmark-CITATION-SOURCES.json" in ctx["citation_source_files"]
+        assert ctx["citation_source_count"] == 1
+        assert ctx["citation_source_warnings"] == []
+        assert ctx["derived_citation_source_count"] == 1
+        assert ctx["derived_citation_sources"][0]["reference_id"] == "ref-benchmark"
+        assert ctx["derived_citation_sources"][0]["title"] == "Benchmark Ref 2024"
+        assert ctx["derived_citation_sources"][0]["doi"] == "10.1000/benchmark.2024"
+        assert ctx["derived_citation_sources"][0]["arxiv_id"] == "2401.01234"
+        assert "GPD/literature/benchmark-CITATION-SOURCES.json" not in ctx["reference_artifact_files"]
+        assert "Benchmark Survey" in ctx["reference_artifacts_content"]
+        assert "Active Anchor Registry" in ctx["reference_artifacts_content"]
 
     def test_merges_contract_and_artifact_reference_intake(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -1075,20 +1120,29 @@ class TestInitResume:
         ctx = init_resume(tmp_path)
 
         assert ctx["resume_surface_schema_version"] == 1
-        assert ctx["resume_mode"] == "bounded_segment"
+        assert "resume_mode" not in ctx
         assert ctx["active_resume_kind"] == "bounded_segment"
         assert ctx["active_resume_origin"] == "derived_execution_head"
         assert ctx["active_resume_pointer"] == "GPD/phases/03-analysis/.continue-here.md"
         assert ctx["active_bounded_segment"]["segment_id"] == "seg-4"
         assert ctx["derived_execution_head"]["segment_id"] == "seg-4"
-        assert ctx["active_execution_segment"]["segment_id"] == "seg-4"
+        assert ctx["compat_resume_surface"]["current_execution"]["segment_id"] == "seg-4"
         assert ctx["compat_resume_surface"]["execution_resume_file_source"] == "current_execution"
         assert ctx["compat_resume_surface"]["active_execution_segment"]["segment_id"] == "seg-4"
         assert ctx["compat_resume_surface"]["segment_candidates"][0]["source"] == "current_execution"
         assert ctx["compat_resume_surface"]["resume_mode"] == "bounded_segment"
-        assert ctx["segment_candidates"][0]["source"] == "current_execution"
-        assert "kind" not in ctx["segment_candidates"][0]
-        assert "origin" not in ctx["segment_candidates"][0]
+        for key in (
+            "active_execution_segment",
+            "current_execution",
+            "current_execution_resume_file",
+            "execution_resume_file",
+            "execution_resume_file_source",
+            "missing_session_resume_file",
+            "recorded_session_resume_file",
+            "session_resume_file",
+        ):
+            assert key not in ctx
+        assert "segment_candidates" not in ctx
         assert ctx["resume_candidates"][0]["kind"] == "bounded_segment"
         assert ctx["resume_candidates"][0]["origin"] == "derived_execution_head"
         assert ctx["resume_candidates"][0]["resume_pointer"] == "GPD/phases/03-analysis/.continue-here.md"
@@ -1112,10 +1166,10 @@ class TestInitResume:
 
         ctx = init_resume(tmp_path)
 
-        assert ctx["active_execution_segment"]["phase"] == "03"
-        assert ctx["active_execution_segment"]["plan"] == "02"
-        assert ctx["active_execution_segment"]["checkpoint_reason"] == "pre_fanout"
-        candidate = ctx["segment_candidates"][0]
+        assert ctx["active_bounded_segment"]["phase"] == "03"
+        assert ctx["active_bounded_segment"]["plan"] == "02"
+        assert ctx["active_bounded_segment"]["checkpoint_reason"] == "pre_fanout"
+        candidate = ctx["resume_candidates"][0]
         assert candidate["phase"] == "03"
         assert candidate["plan"] == "02"
         assert candidate["checkpoint_reason"] == "pre_fanout"
@@ -1145,10 +1199,10 @@ class TestInitResume:
 
         ctx = init_resume(tmp_path)
 
-        assert ctx["resume_mode"] == "bounded_segment"
+        assert "resume_mode" not in ctx
         assert ctx["execution_pre_fanout_review_pending"] is True
         assert ctx["execution_skeptical_requestioning_required"] is True
-        candidate = ctx["segment_candidates"][0]
+        candidate = ctx["resume_candidates"][0]
         assert candidate["checkpoint_reason"] == "pre_fanout"
         assert candidate["pre_fanout_review_pending"] is True
         assert candidate["skeptical_requestioning_required"] is True
@@ -1177,12 +1231,12 @@ class TestInitResume:
 
         ctx = init_resume(tmp_path)
 
-        assert ctx["resume_mode"] == "bounded_segment"
+        assert "resume_mode" not in ctx
         assert ctx["execution_pre_fanout_review_pending"] is True
         assert ctx["execution_downstream_locked"] is True
-        assert ctx["active_execution_segment"]["pre_fanout_review_cleared"] is True
-        assert ctx["segment_candidates"][0]["checkpoint_reason"] == "pre_fanout"
-        assert ctx["segment_candidates"][0]["pre_fanout_review_cleared"] is True
+        assert ctx["active_bounded_segment"]["pre_fanout_review_cleared"] is True
+        assert ctx["resume_candidates"][0]["checkpoint_reason"] == "pre_fanout"
+        assert ctx["resume_candidates"][0]["pre_fanout_review_cleared"] is True
 
     def test_non_resumable_live_execution_does_not_create_resume_candidate(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -1201,16 +1255,28 @@ class TestInitResume:
 
         ctx = init_resume(tmp_path)
 
-        assert ctx["resume_mode"] is None
+        assert "resume_mode" not in ctx
         assert ctx["active_bounded_segment"] is None
         assert ctx["derived_execution_head"]["segment_id"] == "seg-4"
         assert ctx["active_resume_kind"] is None
+        assert ctx["compat_resume_surface"]["current_execution"]["segment_id"] == "seg-4"
         assert ctx["compat_resume_surface"]["active_execution_segment"]["segment_id"] == "seg-4"
         assert ctx["compat_resume_surface"]["segment_candidates"] == []
-        assert ctx["compat_resume_surface"]["resume_mode"] is None
-        assert ctx["segment_candidates"] == []
+        assert ctx["compat_resume_surface"].get("resume_mode") is None
+        for key in (
+            "active_execution_segment",
+            "current_execution",
+            "current_execution_resume_file",
+            "execution_resume_file",
+            "execution_resume_file_source",
+            "missing_session_resume_file",
+            "recorded_session_resume_file",
+            "session_resume_file",
+        ):
+            assert key not in ctx
+        assert "segment_candidates" not in ctx
         assert ctx["resume_candidates"] == []
-        assert ctx["active_execution_segment"]["segment_id"] == "seg-4"
+        assert "active_execution_segment" not in ctx
 
 # ─── init_verify_work ─────────────────────────────────────────────────────────
 

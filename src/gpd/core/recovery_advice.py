@@ -460,18 +460,15 @@ def serialize_recovery_orientation(advice: RecoveryAdvice) -> dict[str, object]:
         "current_workspace_has_recovery": advice.current_workspace_has_recovery,
         "current_workspace_has_resume_file": advice.current_workspace_has_resume_file,
         "current_workspace_candidate_count": advice.current_workspace_candidate_count,
-        "resume_mode": advice.resume_mode,
         "active_resume_kind": advice.active_resume_kind,
         "active_resume_origin": advice.active_resume_origin,
         "active_resume_pointer": advice.active_resume_pointer,
-        "execution_resume_file": advice.execution_resume_file,
-        "execution_resume_file_source": advice.execution_resume_file_source,
         "continuity_handoff_file": advice.continuity_handoff_file,
         "recorded_continuity_handoff_file": advice.recorded_continuity_handoff_file,
         "missing_continuity_handoff_file": advice.missing_continuity_handoff_file,
         "has_continuity_handoff": advice.has_continuity_handoff,
         "has_local_recovery_target": advice.has_local_recovery_target,
-        "segment_candidates_count": advice.segment_candidates_count,
+        "resume_candidates_count": advice.segment_candidates_count,
         "has_live_execution": advice.has_live_execution,
         "execution_resumable": advice.execution_resumable,
         "has_interrupted_agent": advice.has_interrupted_agent,
@@ -479,9 +476,6 @@ def serialize_recovery_orientation(advice: RecoveryAdvice) -> dict[str, object]:
         "resumable_projects_count": advice.resumable_projects_count,
         "available_projects_count": advice.available_projects_count,
         "machine_change_notice": advice.machine_change_notice,
-        # Compatibility aliases for existing consumers while canonical fields roll out.
-        "has_session_resume_file": advice.has_session_resume_file,
-        "missing_session_resume_file": advice.missing_session_resume_file,
     }
 
 

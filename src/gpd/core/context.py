@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -51,6 +52,12 @@ from gpd.core.phases import _milestone_completion_snapshot
 from gpd.core.project_reentry import resolve_project_reentry
 from gpd.core.protocol_bundles import render_protocol_bundle_context, select_protocol_bundles
 from gpd.core.reference_ingestion import ingest_reference_artifacts
+from gpd.core.resume_surface import (
+    build_resume_compat_surface as _build_resume_compat_surface_shared,
+)
+from gpd.core.resume_surface import (
+    canonicalize_resume_public_payload as _canonicalize_resume_public_payload,
+)
 from gpd.core.state import (
     EM_DASH,
     _current_machine_identity,
@@ -794,6 +801,7 @@ def _build_reference_runtime_context(cwd: Path) -> dict[str, object]:
         research_map_reference_files=list(artifact_payload["research_map_reference_files"]),
     )
     derived_references = [ref.to_context_dict() for ref in artifact_ingestion.references]
+    derived_citation_sources = [item.to_context_dict() for item in artifact_ingestion.citation_sources]
     active_references = _merge_active_references(_serialize_active_references(contract), derived_references)
     effective_reference_intake = _merge_reference_intake(
         contract,
@@ -838,6 +846,11 @@ def _build_reference_runtime_context(cwd: Path) -> dict[str, object]:
         "effective_reference_intake": effective_reference_intake,
         "derived_active_references": derived_references,
         "derived_active_reference_count": len(derived_references),
+        "citation_source_files": list(artifact_ingestion.citation_source_files),
+        "citation_source_count": len(artifact_ingestion.citation_source_files),
+        "citation_source_warnings": list(artifact_ingestion.citation_source_warnings),
+        "derived_citation_sources": derived_citation_sources,
+        "derived_citation_source_count": len(derived_citation_sources),
         "active_references": active_references,
         "active_reference_count": len(active_references),
         "selected_protocol_bundle_ids": [bundle.bundle_id for bundle in selected_protocol_bundles],
@@ -1118,30 +1131,15 @@ def _has_resume_candidate(
     return False
 
 
-def _build_resume_compat_surface(payload: dict[str, object]) -> dict[str, object]:
+def _build_resume_compat_surface(*sources: Mapping[str, object] | None) -> dict[str, object]:
     """Return the legacy resume envelope grouped under a compatibility block."""
-    return {
-        "current_execution": payload.get("current_execution"),
-        "current_execution_resume_file": payload.get("current_execution_resume_file"),
-        "session_resume_file": payload.get("session_resume_file"),
-        "recorded_session_resume_file": payload.get("recorded_session_resume_file"),
-        "missing_session_resume_file": payload.get("missing_session_resume_file"),
-        "execution_resume_file": payload.get("execution_resume_file"),
-        "execution_resume_file_source": payload.get("execution_resume_file_source"),
-        "execution_resumable": payload.get("execution_resumable"),
-        "execution_paused_at": payload.get("execution_paused_at"),
-        "execution_review_pending": payload.get("execution_review_pending"),
-        "execution_pre_fanout_review_pending": payload.get("execution_pre_fanout_review_pending"),
-        "execution_skeptical_requestioning_required": payload.get("execution_skeptical_requestioning_required"),
-        "execution_downstream_locked": payload.get("execution_downstream_locked"),
-        "execution_blocked": payload.get("execution_blocked"),
-        "active_execution_segment": payload.get("active_execution_segment"),
-        "segment_candidates": payload.get("segment_candidates"),
-        "resume_mode": payload.get("resume_mode"),
-        "has_interrupted_agent": payload.get("has_interrupted_agent"),
-        "interrupted_agent_id": payload.get("interrupted_agent_id"),
-        "has_live_execution": payload.get("has_live_execution"),
-    }
+    surface = _build_resume_compat_surface_shared(*sources)
+    return surface or {}
+
+
+def _strip_resume_public_compat_aliases(payload: dict[str, object]) -> dict[str, object]:
+    """Return the public resume surface with legacy aliases nested only under compat_resume_surface."""
+    return _canonicalize_resume_public_payload(payload)
 
 
 def _build_legacy_resume_state(
@@ -1935,16 +1933,9 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
         execution_context,
         interrupted_agent_id=interrupted_agent_id,
     )
-    current_execution = continuation_state.get("active_execution_segment")
-    segment_candidates = continuation_state.get("segment_candidates")
-    if not isinstance(segment_candidates, list):
-        segment_candidates = []
     active_bounded_segment = continuation_state.get("active_bounded_segment")
     if not isinstance(active_bounded_segment, dict):
         active_bounded_segment = None
-    resume_mode = continuation_state.get("resume_mode")
-    if not isinstance(resume_mode, str) or not resume_mode.strip():
-        resume_mode = None
     has_interrupted_agent = bool(continuation_state.get("has_interrupted_agent"))
     normalized_interrupted_agent_id = continuation_state.get("interrupted_agent_id")
     if not isinstance(normalized_interrupted_agent_id, str) or not normalized_interrupted_agent_id.strip():
@@ -1959,6 +1950,10 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
     missing_continuity_handoff_file = continuation_state.get("missing_continuity_handoff_file")
     if not isinstance(missing_continuity_handoff_file, str) or not missing_continuity_handoff_file.strip():
         missing_continuity_handoff_file = None
+    current_execution = continuation_state.get("active_execution_segment")
+    segment_candidates = continuation_state.get("segment_candidates")
+    if not isinstance(segment_candidates, list):
+        segment_candidates = []
     derived_execution_head = continuation_state.get("derived_execution_head")
     if not isinstance(derived_execution_head, dict):
         derived_execution_head = execution_context.get("current_execution") if isinstance(execution_context.get("current_execution"), dict) else None
@@ -1974,6 +1969,9 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
     active_resume_pointer = continuation_state.get("active_resume_pointer")
     if not isinstance(active_resume_pointer, str) or not active_resume_pointer.strip():
         active_resume_pointer = None
+    resume_mode = continuation_state.get("resume_mode")
+    if not isinstance(resume_mode, str) or not resume_mode.strip():
+        resume_mode = None
 
     result = {
         "workspace_root": reentry_metadata["workspace_root"],
@@ -2026,8 +2024,8 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
         key: value for key, value in execution_context.items() if key != "resume_projection"
     }
     result.update(execution_public)
-    result["compat_resume_surface"] = _build_resume_compat_surface(result)
-    return result
+    result["compat_resume_surface"] = _build_resume_compat_surface(result, continuation_state, execution_context)
+    return _strip_resume_public_compat_aliases(result)
 
 
 def init_verify_work(cwd: Path, phase: str | None) -> dict:

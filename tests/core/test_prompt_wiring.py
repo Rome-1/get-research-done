@@ -1935,6 +1935,7 @@ def test_stage5_execution_surfaces_use_bounded_review_cadence_and_first_result_g
     assert "Do NOT narrow just because a wave advanced or one proxy passed." in execute_phase
     assert "What decisive evidence is still owed before downstream work is trustworthy?" in resume_work
     assert "Pattern D: Auto-bounded" in executor_agent
+    assert "compat_resume_surface" in resume_work
     assert "active_execution_segment" in resume_work
     assert "execution_segment" in continuation
     assert "Required Checkpoint Payload" in checkpoints
@@ -1991,6 +1992,7 @@ def test_resume_workflow_surfaces_contract_load_and_validation_state() -> None:
     assert "resume_candidates" in resume_work
     assert "Compatibility-only raw envelope cues:" in resume_work
     assert "Canonical continuation and recovery authority:" in resume_work
+    assert "compat_resume_surface" in resume_work
     assert "nested legacy labels" in resume_work
     assert "session_resume_file" in resume_work
     assert "current_execution" in resume_work

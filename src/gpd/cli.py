@@ -1792,7 +1792,10 @@ def _resume_augmented_payload(payload: dict[str, object], *, cwd: Path | None = 
     augmented["recovery_status"] = recovery_advice.status
     augmented["recovery_status_label"] = _resume_status_label(recovery_advice.status)
     augmented["recovery_summary"] = _resume_status_message(public_payload, recovery_advice=recovery_advice)
-    augmented["resume_mode_label"] = _resume_mode_label(_resume_surface_value(public_payload, compat_surface, "resume_mode"))
+    active_resume_kind = public_payload.get("active_resume_kind")
+    if not isinstance(active_resume_kind, str) or not active_resume_kind.strip():
+        active_resume_kind = _resume_surface_value(public_payload, compat_surface, "resume_mode")
+    augmented["active_resume_kind_label"] = _resume_mode_label(active_resume_kind)
     augmented["recovery_advice"] = recovery_advice.model_dump(mode="json")
     augmented["recovery_candidates"] = projected_candidates
     if projected_candidates:

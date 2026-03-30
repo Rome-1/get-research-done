@@ -7,7 +7,7 @@ Use this workflow when:
 </trigger>
 
 <purpose>
-Instantly restore full research project context so "Where were we?" has an immediate, complete answer -- including the state of derivations, parameter values, intermediate results, theoretical assumptions, and the current canonical continuation view. `state.json.continuation` is the durable authority; the editable `session` mirror, the temporary handoff artifact, and the derived execution head are supporting continuity surfaces only.
+Instantly restore full research project context so "Where were we?" has an immediate, complete answer -- including the state of derivations, parameter values, intermediate results, theoretical assumptions, and the current canonical continuation view. `state.json.continuation` is the durable authority; the editable `session` mirror, the temporary handoff artifact, and the derived execution head are supporting continuity surfaces only. Legacy raw-envelope names stay nested as compatibility-only cues and do not define the public vocabulary.
 </purpose>
 
 <required_reading>
@@ -33,10 +33,20 @@ Parse JSON once and read it semantically:
 
 - **Availability and contract authority:** `state_exists`, `roadmap_exists`, `project_exists`, `planning_exists`, `commit_docs`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`
 - **Canonical continuation and recovery authority:** `resume_surface_schema_version`, `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `active_bounded_segment`, `derived_execution_head`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, `has_continuity_handoff`, `resume_candidates`, `execution_resumable`, `execution_paused_at`, `execution_review_pending`, `execution_pre_fanout_review_pending`, `execution_skeptical_requestioning_required`, `execution_downstream_locked`, `has_interrupted_agent`, `interrupted_agent_id`
-- **Compatibility-only raw envelope cues:** `active_execution_segment`, `segment_candidates`, `resume_mode`, `execution_resume_file`, `execution_resume_file_source`, `current_execution_resume_file`, `session_resume_file`, `missing_session_resume_file`
+- **Compatibility-only raw envelope cues:**
+  - grouped under nested compatibility-only aliases in `compat_resume_surface`
+  - `active_execution_segment`
+  - `segment_candidates`
+    - nested legacy labels: `current_execution`, `session_resume_file`, `interrupted_agent`
+  - `resume_mode`
+  - `execution_resume_file`
+  - `execution_resume_file_source`
+  - `current_execution_resume_file`
+  - `session_resume_file`
+  - `missing_session_resume_file`
 - **Machine advisory state:** `machine_change_detected`, `machine_change_notice`, `current_hostname`, `current_platform`, `session_hostname`, `session_platform`
 
-Compatibility note: the current raw envelope still uses legacy candidate/source labels such as `current_execution`, `session_resume_file`, and `interrupted_agent` inside `segment_candidates`. Treat those labels as machine-intake names and compatibility aliases, not the top-level human vocabulary for continuation.
+Compatibility note: the current raw envelope still uses legacy candidate/source labels such as `current_execution`, `session_resume_file`, and `interrupted_agent` inside `compat_resume_surface.segment_candidates`. Treat those labels as machine-intake names and nested compatibility-only aliases, not the top-level human vocabulary for continuation.
 
 `state_exists` means INIT could recover usable state from `GPD/state.json`, `GPD/state.json.bak`, or `GPD/STATE.md`. A stray unreadable file path by itself does not count as recoverable state.
 
@@ -47,7 +57,7 @@ Current public behavior distinguishes canonical continuation authority, continui
 - **temporary handoff artifact:** `GPD/phases/.../.continue-here.md`
 - **derived execution head / live execution overlay:** `GPD/observability/current-execution.json`, used as a compatibility projection when canonical bounded-segment state is absent
 
-`gpd init resume` resolves the canonical continuation decision across those layers. It is canonical-first: `state.json.continuation` wins, the canonical bounded segment and recorded handoff fields define the primary resume target, and the derived execution head only fills compatibility gaps when bounded-segment state is missing. Do not treat any single `.continue-here.md` file or compatibility snapshot as the sole authority in isolation.
+`gpd init resume` resolves the canonical continuation decision across those layers. It is canonical-first: `state.json.continuation` wins, the canonical bounded segment and recorded handoff fields define the primary resume target, and the derived execution head only fills compatibility gaps when bounded-segment state is missing. Do not treat any single `.continue-here.md` file or compatibility snapshot as the sole authority in isolation. Nested legacy aliases stay compatibility-only cues and do not define the public vocabulary.
 
 **If `state_exists` is true:** Proceed to load_state
 **If `state_exists` is false but `roadmap_exists` or `project_exists` is true:** Offer to reconstruct STATE.md
@@ -55,7 +65,7 @@ Current public behavior distinguishes canonical continuation authority, continui
 
 If `active_resume_kind="bounded_segment"` and `active_bounded_segment` exists, treat that as the primary bounded resume target. On newer projects this usually comes from `state.json.continuation.bounded_segment`, but the derived execution head may still project the bounded segment whenever canonical continuation is missing or incomplete. Do not infer a second resume system from ad hoc handoff files or stale notes outside the canonical handoff path.
 
-`active_resume_kind` is narrower than the overall recovery status. A recorded handoff, a missing recorded handoff artifact, or advisory live execution can still exist when `active_resume_kind` is `None`. In the current machine-readable envelope those compatibility cues still surface through `continuity_handoff_file`, `missing_continuity_handoff_file`, and the legacy `session_resume_file` / `missing_session_resume_file` aliases.
+`active_resume_kind` is narrower than the overall recovery status. A recorded handoff, a missing recorded handoff artifact, or advisory live execution can still exist when `active_resume_kind` is `None`. In the current machine-readable envelope those compatibility cues still surface through `continuity_handoff_file`, `missing_continuity_handoff_file`, and the nested `compat_resume_surface.session_resume_file` / `compat_resume_surface.missing_session_resume_file` aliases.
 
 If `derived_execution_head` exists but `execution_resumable` is false, treat that live snapshot as advisory context only. If `active_resume_pointer` is empty, non-project, or missing on disk, call that out explicitly; in all such cases it is not a ranked bounded-segment resume candidate and does not justify `active_resume_kind="bounded_segment"`.
 
@@ -68,7 +78,7 @@ If `active_bounded_segment.first_result_gate_pending` is true, do not treat late
 
 **machine_change_detection:** Compare the current hostname/platform with `session.hostname` and `session.platform` from `state.json`. If they differ, display the non-blocking machine-change notice from INIT and recommend rerunning the installer so runtime-local config stays current. The project state itself remains portable and does not require repair.
 
-**canonical handoff path:** `/gpd:pause-work` records a canonical phase handoff by writing `GPD/phases/.../.continue-here.md` and mirroring that pointer into the legacy `session` surface. `state.json.continuation.handoff` is the durable handoff authority, while `session.resume_file` remains its compatibility mirror for older consumers and raw-envelope reads. That file is a temporary handoff artifact, not the authoritative store for project position or resume ranking. `state.json.continuation` is the durable canonical resume payload, and `active_resume_pointer` is surfaced from the canonical continuation view for display and logging. The runtime may still expose that recorded handoff as a compatibility `session_resume_file` candidate in `segment_candidates` when it is distinct from the live execution resume file. Treat it as a ranked non-bounded handoff candidate and continuity pointer, not as proof that a resumable bounded segment still exists. If a handoff file is missing but state authority is intact, the project state still exists and resume should report the missing artifact rather than treating the whole project as lost. The same machine-readable intake powers the local `gpd resume` summary. If you need to rediscover the project first, use `gpd resume --recent` before dropping into the per-project resume flow. The picker is advisory; the selected workspace becomes the authoritative project context again when `/gpd:resume-work` reloads its state.
+**canonical handoff path:** `/gpd:pause-work` records a canonical phase handoff by writing `GPD/phases/.../.continue-here.md` and mirroring that pointer into the legacy `session` surface. `state.json.continuation.handoff` is the durable handoff authority, while `session.resume_file` remains its compatibility mirror for older consumers and raw-envelope reads. That file is a temporary handoff artifact, not the authoritative store for project position or resume ranking. `state.json.continuation` is the durable canonical resume payload, and `active_resume_pointer` is surfaced from the canonical continuation view for display and logging. The runtime may still expose that recorded handoff as a nested compatibility `session_resume_file` alias plus a `session_resume_file` candidate inside `compat_resume_surface.segment_candidates` when it is distinct from the live execution resume file. Treat it as a ranked non-bounded handoff candidate and continuity pointer, not as proof that a resumable bounded segment still exists. If a handoff file is missing but state authority is intact, the project state still exists and resume should report the missing artifact rather than treating the whole project as lost. The same machine-readable intake powers the local `gpd resume` summary. If you need to rediscover the project first, use `gpd resume --recent` before dropping into the per-project resume flow. The picker is advisory; the selected workspace becomes the authoritative project context again when `/gpd:resume-work` reloads its state.
 
 Read and parse STATE.md, then PROJECT.md:
 
@@ -229,9 +239,9 @@ if [ "$has_interrupted_agent" = "true" ]; then
 fi
 ```
 
-**Bounded execution segment detection:** If `active_resume_kind` is `bounded_segment`, `execution_resumable` is true, and `active_resume_pointer` is present, treat that bounded continuation as the primary resume target. The runtime currently ranks three semantic recovery families into `resume_candidates`: a resumable live execution snapshot, a recorded handoff, and an interrupted-agent marker. In the current raw envelope those families still appear as `current_execution`, `session_resume_file`, and `interrupted_agent`. If the live snapshot lacks a portable usable resume file, keep it visible only as advisory context. Do NOT invent additional candidates from plan files without summaries, auto-checkpoints, or other ad hoc checkpoints.
+**Bounded execution segment detection:** If `active_resume_kind` is `bounded_segment`, `execution_resumable` is true, and `active_resume_pointer` is present, treat that bounded continuation as the primary resume target. The runtime currently ranks three semantic recovery families into `resume_candidates`: a resumable live execution snapshot, a recorded handoff, and an interrupted-agent marker. In the current raw envelope those families still appear as the nested compatibility aliases `current_execution`, `session_resume_file`, and `interrupted_agent` inside `compat_resume_surface.segment_candidates`. If the live snapshot lacks a portable usable resume file, keep it visible only as advisory context. Do NOT invent additional candidates from plan files without summaries, auto-checkpoints, or other ad hoc checkpoints.
 
-The derived execution head and the temporary handoff artifact are both subordinate to the storage authority chain. They refine the continuation target; they do not replace `GPD/state.json > GPD/state.json.bak > GPD/STATE.md`, and the compatibility mirror only backfills bounded-segment state for legacy compatibility when canonical bounded-segment state is absent.
+The derived execution head and the temporary handoff artifact are both subordinate to the storage authority chain. They refine the continuation target; they do not replace `GPD/state.json > GPD/state.json.bak > GPD/STATE.md`, and the compatibility mirror only backfills bounded-segment state for legacy compatibility when canonical bounded-segment state is absent. Nested raw-envelope aliases never outrank canonical fields.
 
 Reason-scoped clears still matter on resume: a `first_result` clear does not retire `pre_fanout` or skeptical fields, and a `fanout unlock` does not clear the review gate by itself.
 

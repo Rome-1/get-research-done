@@ -23,6 +23,7 @@ from gpd.core.recovery_advice import (
     build_recovery_advice,
     serialize_recovery_orientation,
 )
+from gpd.core.resume_surface import canonicalize_resume_public_payload
 from gpd.core.root_resolution import normalize_workspace_hint, resolve_project_roots
 from gpd.core.surface_phrases import (
     command_follow_up_action,
@@ -450,7 +451,14 @@ def build_runtime_hint_payload(
         orientation["project_root_source"] = reentry.source
         orientation["project_root_auto_selected"] = bool(reentry.auto_selected)
         orientation["project_reentry_mode"] = reentry.mode
-
+    orientation = canonicalize_resume_public_payload(orientation)
+    has_session_resume_file = orientation.pop("has_session_resume_file", None)
+    if has_session_resume_file is not None:
+        compat_surface = orientation.get("compat_resume_surface")
+        if not isinstance(compat_surface, dict):
+            compat_surface = {}
+        compat_surface["has_session_resume_file"] = has_session_resume_file
+        orientation["compat_resume_surface"] = compat_surface
     cost_summary = build_cost_summary(project_root, data_root=data_root, last_sessions=cost_last_sessions) if include_cost else None
     cost = _cost_payload(cost_summary) if cost_summary is not None else {}
     cost_advisory = _cost_advisory(cost_summary) if cost_summary is not None else None

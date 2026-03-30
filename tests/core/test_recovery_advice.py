@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gpd.core.recovery_advice import build_recovery_advice
+from gpd.core.recovery_advice import build_recovery_advice, serialize_recovery_orientation
 
 
 def _project(tmp_path: Path, name: str = "project") -> Path:
@@ -68,6 +68,53 @@ def test_build_recovery_advice_treats_canonical_bounded_segment_as_authoritative
     assert advice.active_resume_pointer == "GPD/phases/06/.continue-here.md"
     assert advice.execution_resume_file == "GPD/phases/06/.continue-here.md"
     assert advice.execution_resume_file_source == "current_execution"
+
+
+def test_serialize_recovery_orientation_is_canonical_first_and_omits_legacy_resume_aliases(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+
+    advice = build_recovery_advice(
+        project,
+        recent_rows=[],
+        resume_payload={
+            "resume_mode": "bounded_segment",
+            "segment_candidates": [
+                {
+                    "source": "current_execution",
+                    "resume_file": "GPD/phases/06/.continue-here.md",
+                }
+            ],
+            "execution_resumable": True,
+            "execution_resume_file": "GPD/phases/06/.continue-here.md",
+            "execution_resume_file_source": "current_execution",
+            "has_live_execution": True,
+        },
+    )
+
+    orientation = serialize_recovery_orientation(advice)
+
+    assert list(orientation)[:10] == [
+        "resume_surface_schema_version",
+        "mode",
+        "status",
+        "decision_source",
+        "primary_command",
+        "primary_reason",
+        "continue_command",
+        "continue_reason",
+        "fast_next_command",
+        "fast_next_reason",
+    ]
+    assert orientation["active_resume_kind"] == "bounded_segment"
+    assert orientation["active_resume_origin"] == "compat.current_execution"
+    assert orientation["active_resume_pointer"] == "GPD/phases/06/.continue-here.md"
+    assert "resume_mode" not in orientation
+    assert "execution_resume_file" not in orientation
+    assert "execution_resume_file_source" not in orientation
+    assert "has_session_resume_file" not in orientation
+    assert "missing_session_resume_file" not in orientation
 
 
 def test_build_recovery_advice_marks_auto_selected_recent_project_recovery(

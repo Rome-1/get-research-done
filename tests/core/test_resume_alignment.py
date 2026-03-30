@@ -42,10 +42,14 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "/gpd:resume-work" in portability_doc
     assert "active_resume_kind" in resume_doc
     assert "resume_candidates" in resume_doc
+    assert "Canonical continuation and recovery authority:" in resume_doc
+    assert "nested compatibility-only aliases" in resume_doc
     assert "active_resume_kind" in portability_doc
     assert "resume_candidates" in portability_doc
     assert "machine_change_detected" in resume_doc
     assert "Compatibility-only raw envelope cues:" in resume_doc
+    assert "nested legacy labels" in resume_doc
+    assert resume_doc.index("active_resume_kind") < resume_doc.index("session_resume_file")
     assert "missing_session_resume_file" in resume_doc
     assert "session_resume_file" in resume_doc
     assert "Compatibility note: the current raw envelope still uses legacy candidate/source labels" in resume_doc
@@ -64,8 +68,11 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "advisory continuity context only" in portability_doc
     assert "does not create a resumable bounded-segment candidate" in portability_doc
     assert "current raw compatibility label for that candidate family remains `current_execution`" in portability_doc
+    assert portability_doc.index("active_resume_kind") < portability_doc.index("session_resume_file")
     assert 'set `active_resume_kind="bounded_segment"`' in portability_doc
     assert "The canonical public resume surface centers on `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`" in portability_doc
+    assert "nested compatibility-only cues" in portability_doc
+    assert "Legacy alias names stay nested as compatibility-only cues" in portability_doc
     assert "The current continuation architecture separates execution provenance from bounded-resume authority." in portability_doc
     assert "Execution lineage" in portability_doc
     assert "Compatibility mirror showing the latest execution snapshot" in portability_doc
@@ -149,6 +156,10 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "recommends rerunning the installer when runtime-local config may be stale" in schema_doc
     assert "Durable canonical continuation payload; `bounded_segment` stores the authoritative bounded-segment state" in schema_doc
     assert "canonical object first and only falls back to the derived execution head compatibility mirror when the canonical continuation is missing or incomplete" in schema_doc
+    assert "That backend treats `continuation` as primary" in schema_doc
+    assert schema_doc.index("| `continuation`") < schema_doc.index("| `session`")
+    assert "nested compatibility-only cues" in schema_doc
+    assert "Legacy alias names remain nested compatibility-only cues" in schema_doc
     assert "state.json.continuation.bounded_segment" in schema_doc
     assert "An append-only execution lineage records what happened." in state_machine_doc
     assert (
@@ -229,11 +240,12 @@ def test_init_resume_surfaces_machine_change_and_session_resume_candidate(
 
     ctx = init_resume(tmp_path)
 
-    assert ctx["execution_resume_file"] == "GPD/phases/03-analysis/.continue-here.md"
-    assert ctx["execution_resume_file_source"] == "session_resume_file"
+    assert ctx["active_resume_pointer"] == "GPD/phases/03-analysis/.continue-here.md"
+    assert ctx["active_resume_origin"] == "canonical_continuation"
     assert ctx["execution_paused_at"] is None
-    assert ctx["resume_mode"] is None
-    assert ctx["segment_candidates"] == [
+    assert "resume_mode" not in ctx
+    assert "segment_candidates" not in ctx
+    assert ctx["compat_resume_surface"]["segment_candidates"] == [
         {
             "source": "session_resume_file",
             "status": "handoff",
@@ -241,7 +253,7 @@ def test_init_resume_surfaces_machine_change_and_session_resume_candidate(
             "resumable": False,
         }
     ]
-    assert ctx["active_execution_segment"] is None
+    assert "active_execution_segment" not in ctx
     assert ctx["has_interrupted_agent"] is False
     assert ctx["session_hostname"] == "old-host"
     assert ctx["session_platform"] == "Linux 5.15 x86_64"

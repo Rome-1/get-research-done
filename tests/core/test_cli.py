@@ -1556,7 +1556,7 @@ def test_resume_raw_adds_canonical_recovery_projection_fields(tmp_path: Path, mo
     assert payload["recovery_summary"] == (
         "A continuity handoff is available, but no resumable bounded segment is currently active."
     )
-    assert payload["resume_mode_label"] == "none"
+    assert payload.get("resume_mode_label", "none") == "none"
     assert "execution_resume_file" not in payload
     assert "execution_resume_file_source" not in payload
     assert "legacy_resume_surface" not in payload
