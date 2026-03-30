@@ -93,8 +93,8 @@ def recovery_primary_reason(
     execution_resumable: bool,
     has_interrupted_agent: bool,
     has_live_execution: bool,
-    has_session_resume_file: bool,
-    missing_session_resume_file: bool,
+    has_continuity_handoff: bool,
+    missing_continuity_handoff_file: str | None,
     machine_change_notice: str | None,
 ) -> str:
     if mode == "recent-projects":
@@ -107,9 +107,9 @@ def recovery_primary_reason(
         return "Current workspace has a bounded resumable execution segment."
     if has_interrupted_agent:
         return "Current workspace has an interrupted-agent marker to inspect."
-    if has_session_resume_file:
+    if has_continuity_handoff:
         return "Current workspace has a continuity handoff projected from canonical continuation."
-    if missing_session_resume_file:
+    if missing_continuity_handoff_file:
         return "Current workspace has canonical recovery state, but the last projected handoff file is missing."
     if has_live_execution:
         return "Current workspace has a live execution snapshot that should be inspected first."

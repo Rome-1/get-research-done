@@ -91,8 +91,6 @@ class RecoveryAdvice(BaseModel):
     segment_candidates_count: int = 0
     has_live_execution: bool = False
     execution_resumable: bool = False
-    has_session_resume_file: bool = False
-    missing_session_resume_file: bool = False
     has_interrupted_agent: bool = False
     recent_projects_count: int = 0
     resumable_projects_count: int = 0
@@ -479,9 +477,6 @@ def serialize_recovery_orientation(advice: RecoveryAdvice) -> dict[str, object]:
         "resumable_projects_count": advice.resumable_projects_count,
         "available_projects_count": advice.available_projects_count,
         "machine_change_notice": advice.machine_change_notice,
-        # Compatibility aliases for existing consumers while canonical fields roll out.
-        "has_session_resume_file": advice.has_session_resume_file,
-        "missing_session_resume_file": advice.missing_session_resume_file,
     }
 
 
@@ -490,8 +485,8 @@ def _status(
     execution_resumable: bool,
     has_interrupted_agent: bool,
     has_live_execution: bool,
-    has_session_resume_file: bool,
-    missing_session_resume_file: bool,
+    has_continuity_handoff: bool,
+    missing_continuity_handoff: bool,
     current_workspace_has_recovery: bool,
     recent_projects_count: int,
 ) -> str:
@@ -499,9 +494,9 @@ def _status(
         return "bounded-segment"
     if has_interrupted_agent:
         return "interrupted-agent"
-    if has_session_resume_file:
+    if has_continuity_handoff:
         return "session-handoff"
-    if missing_session_resume_file:
+    if missing_continuity_handoff:
         return "missing-handoff"
     if has_live_execution:
         return "live-execution"
@@ -762,8 +757,6 @@ def build_recovery_advice(
             and not has_continuity_handoff
         )
     )
-    has_session_resume_file = has_continuity_handoff
-    missing_session_resume_file = missing_continuity_handoff
     current_workspace_has_resume_file = (
         execution_resume_file is not None
         or continuity_handoff_file is not None
@@ -806,8 +799,8 @@ def build_recovery_advice(
         execution_resumable=execution_resumable,
         has_interrupted_agent=has_interrupted_agent,
         has_live_execution=has_live_execution,
-        has_session_resume_file=has_continuity_handoff,
-        missing_session_resume_file=missing_continuity_handoff,
+        has_continuity_handoff=has_continuity_handoff,
+        missing_continuity_handoff=missing_continuity_handoff,
         current_workspace_has_recovery=current_workspace_has_recovery,
         recent_projects_count=recent_projects_count,
     )
@@ -866,8 +859,8 @@ def build_recovery_advice(
         execution_resumable=execution_resumable,
         has_interrupted_agent=has_interrupted_agent,
         has_live_execution=has_live_execution,
-        has_session_resume_file=has_session_resume_file,
-        missing_session_resume_file=missing_session_resume_file,
+        has_continuity_handoff=has_continuity_handoff,
+        missing_continuity_handoff_file=missing_continuity_handoff_file,
         machine_change_notice=machine_change_notice,
     )
     if project_reentry_reason is not None:
@@ -909,8 +902,6 @@ def build_recovery_advice(
         segment_candidates_count=len(segment_candidates),
         has_live_execution=has_live_execution,
         execution_resumable=execution_resumable,
-        has_session_resume_file=has_session_resume_file,
-        missing_session_resume_file=missing_session_resume_file,
         has_interrupted_agent=has_interrupted_agent,
         recent_projects_count=recent_projects_count,
         resumable_projects_count=resumable_projects_count,

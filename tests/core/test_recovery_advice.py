@@ -197,7 +197,7 @@ def test_build_recovery_advice_keeps_missing_handoff_in_current_workspace_priori
     assert advice.status == "missing-handoff"
     assert advice.decision_source == "current-workspace"
     assert advice.primary_command == "gpd resume"
-    assert advice.missing_session_resume_file is True
+    assert advice.missing_continuity_handoff_file == "GPD/phases/04/.continue-here.md"
     assert advice.recent_projects_count == 1
 
 
@@ -283,7 +283,7 @@ def test_build_recovery_advice_prefers_canonical_continuity_fields_over_conflict
     assert advice.has_continuity_handoff is True
     assert advice.execution_resume_file == "GPD/phases/09/.continue-here.md"
     assert advice.execution_resume_file_source == "session_resume_file"
-    assert advice.has_session_resume_file is True
+    assert advice.missing_continuity_handoff_file is None
     assert advice.has_local_recovery_target is True
 
 
@@ -335,7 +335,7 @@ def test_build_recovery_advice_prefers_nested_compat_resume_surface_over_legacy_
     assert advice.execution_resume_file_source == "session_resume_file"
     assert advice.execution_resumable is False
     assert advice.current_workspace_has_resume_file is True
-    assert advice.has_session_resume_file is True
+    assert advice.has_continuity_handoff is True
 
 
 def test_build_recovery_advice_recovers_session_handoff_from_candidate_only_payload(tmp_path: Path) -> None:
@@ -358,7 +358,7 @@ def test_build_recovery_advice_recovers_session_handoff_from_candidate_only_payl
     assert advice.mode == "current-workspace"
     assert advice.status == "session-handoff"
     assert advice.decision_source == "current-workspace"
-    assert advice.has_session_resume_file is True
+    assert advice.has_continuity_handoff is True
     assert advice.current_workspace_has_resume_file is True
 
 
@@ -379,6 +379,7 @@ def test_build_recovery_advice_keeps_missing_handoff_without_false_resume_file(t
     assert advice.primary_command == "gpd resume"
     assert advice.current_workspace_has_recovery is True
     assert advice.current_workspace_has_resume_file is False
+    assert advice.missing_continuity_handoff_file == "GPD/phases/06/.continue-here.md"
     assert advice.has_local_recovery_target is False
 
 
@@ -398,6 +399,7 @@ def test_build_recovery_advice_prefers_missing_handoff_over_advisory_live_execut
     assert advice.status == "missing-handoff"
     assert advice.primary_command == "gpd resume"
     assert advice.current_workspace_has_resume_file is False
+    assert advice.missing_continuity_handoff_file == "GPD/phases/08/.continue-here.md"
     assert advice.has_local_recovery_target is False
     assert advice.primary_reason == "Current workspace has canonical recovery state, but the last projected handoff file is missing."
 

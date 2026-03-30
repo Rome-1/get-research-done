@@ -58,8 +58,8 @@ def test_recovery_surface_phrases_cover_current_and_cross_project_paths() -> Non
             execution_resumable=True,
             has_interrupted_agent=False,
             has_live_execution=False,
-            has_session_resume_file=False,
-            missing_session_resume_file=False,
+            has_continuity_handoff=False,
+            missing_continuity_handoff_file=None,
             machine_change_notice=None,
         )
         == "Current workspace has a bounded resumable execution segment."
@@ -71,8 +71,8 @@ def test_recovery_surface_phrases_cover_current_and_cross_project_paths() -> Non
             execution_resumable=False,
             has_interrupted_agent=False,
             has_live_execution=False,
-            has_session_resume_file=False,
-            missing_session_resume_file=False,
+            has_continuity_handoff=False,
+            missing_continuity_handoff_file=None,
             machine_change_notice=None,
         )
         == "Use the machine-local recent-project index to find the workspace you want to reopen."
@@ -84,8 +84,8 @@ def test_recovery_surface_phrases_cover_current_and_cross_project_paths() -> Non
             execution_resumable=False,
             has_interrupted_agent=False,
             has_live_execution=False,
-            has_session_resume_file=False,
-            missing_session_resume_file=False,
+            has_continuity_handoff=False,
+            missing_continuity_handoff_file=None,
             machine_change_notice=None,
         )
         == "Use the machine-local recent-project index to choose the workspace you want to reopen."

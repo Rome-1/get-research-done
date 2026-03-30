@@ -238,6 +238,10 @@ def test_build_runtime_hint_payload_merges_source_sections_and_actions(tmp_path:
     assert payload.orientation["active_resume_pointer"] == "GPD/phases/03/.continue-here.md"
     assert payload.orientation["execution_resume_file"] == "GPD/phases/03/.continue-here.md"
     assert payload.orientation["execution_resume_file_source"] == "current_execution"
+    assert payload.orientation["has_continuity_handoff"] is False
+    assert payload.orientation["missing_continuity_handoff_file"] is None
+    assert "has_session_resume_file" not in payload.orientation
+    assert "missing_session_resume_file" not in payload.orientation
     assert payload.orientation["segment_candidates_count"] >= 1
     assert payload.orientation["has_local_recovery_target"] is True
     assert "resume-work" in str(payload.orientation["continue_command"])
@@ -833,7 +837,9 @@ def test_build_runtime_hint_payload_prefers_canonical_continuity_fields_over_con
     assert payload.orientation["execution_resume_file"] == "GPD/phases/09/.continue-here.md"
     assert payload.orientation["execution_resume_file_source"] == "session_resume_file"
     assert payload.orientation["has_continuity_handoff"] is True
-    assert payload.orientation["has_session_resume_file"] is True
+    assert payload.orientation["missing_continuity_handoff_file"] is None
+    assert "has_session_resume_file" not in payload.orientation
+    assert "missing_session_resume_file" not in payload.orientation
     assert "actions" not in payload.orientation
     assert any("resume-work" in action for action in payload.next_actions)
     assert any("suggest-next" in action for action in payload.next_actions)
@@ -897,7 +903,9 @@ def test_build_runtime_hint_payload_prefers_nested_compat_resume_surface_over_le
     assert payload.orientation["execution_resume_file"] == "GPD/phases/10/.continue-here.md"
     assert payload.orientation["execution_resume_file_source"] == "session_resume_file"
     assert payload.orientation["has_continuity_handoff"] is True
-    assert payload.orientation["has_session_resume_file"] is True
+    assert payload.orientation["missing_continuity_handoff_file"] is None
+    assert "has_session_resume_file" not in payload.orientation
+    assert "missing_session_resume_file" not in payload.orientation
     assert "actions" not in payload.orientation
     assert any("resume-work" in action for action in payload.next_actions)
     assert any("suggest-next" in action for action in payload.next_actions)
@@ -1128,6 +1136,10 @@ def test_build_runtime_hint_payload_missing_handoff_keeps_local_resume_without_i
 
     assert payload.orientation["mode"] == "current-workspace"
     assert payload.orientation["status"] == "missing-handoff"
+    assert payload.orientation["has_continuity_handoff"] is False
+    assert payload.orientation["missing_continuity_handoff_file"] is None
+    assert "has_session_resume_file" not in payload.orientation
+    assert "missing_session_resume_file" not in payload.orientation
     assert payload.orientation["has_local_recovery_target"] is False
     assert any(action.startswith("Run `gpd resume`") for action in payload.next_actions)
     assert not any("resume-work" in action for action in payload.next_actions)
