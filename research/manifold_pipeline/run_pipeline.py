@@ -290,11 +290,11 @@ def _run_pipeline(
                 cond: [
                     {
                         "token_type": r.token_type,
-                        "mi_observed": round(r.mi_observed, 6),
-                        "mi_null_mean": round(r.mi_null_mean, 6),
-                        "mi_null_std": round(r.mi_null_std, 6),
-                        "p_value": round(r.p_value, 4),
-                        "significant": r.significant,
+                        "mi_observed": round(float(r.mi_observed), 6),
+                        "mi_null_mean": round(float(r.mi_null_mean), 6),
+                        "mi_null_std": round(float(r.mi_null_std), 6),
+                        "p_value": round(float(r.p_value), 4),
+                        "significant": bool(r.significant),
                     }
                     for r in results_list
                 ]
