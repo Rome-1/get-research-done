@@ -7,6 +7,7 @@ from gpd.core import context as context_module
 from gpd.core import state as state_module
 from gpd.core.context import init_resume
 from gpd.core.observability import CurrentExecutionState
+from gpd.core.recent_projects import record_recent_project
 from gpd.core.state import parse_state_to_json, state_record_session
 
 
@@ -145,6 +146,33 @@ def test_init_resume_surfaces_machine_change_and_session_resume_candidate(
             "resumable": False,
         }
     ]
+
+
+def test_init_resume_auto_selects_unique_recoverable_recent_project(tmp_path: Path, state_project_factory, monkeypatch) -> None:
+    project_parent = tmp_path / "project-root"
+    project_parent.mkdir()
+    project_root = state_project_factory(project_parent)
+    workspace = tmp_path / "outside"
+    workspace.mkdir()
+    record_recent_project(
+        project_root,
+        session_data={
+            "last_date": "2026-03-29T12:00:00+00:00",
+            "stopped_at": "Phase 03",
+        },
+        store_root=tmp_path / "data",
+    )
+    monkeypatch.setenv("GPD_DATA_DIR", str(tmp_path / "data"))
+
+    ctx = init_resume(workspace)
+
+    assert ctx["workspace_root"] == workspace.resolve(strict=False).as_posix()
+    assert ctx["project_root"] == project_root.resolve(strict=False).as_posix()
+    assert ctx["project_root_source"] == "recent_project"
+    assert ctx["project_root_auto_selected"] is True
+    assert ctx["project_reentry_mode"] == "auto-recent-project"
+    assert ctx["planning_exists"] is True
+    assert ctx["project_exists"] is True
 
 
 def test_init_resume_keeps_current_execution_primary_and_includes_session_resume_file(

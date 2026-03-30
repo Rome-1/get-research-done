@@ -59,6 +59,8 @@ If `project_exists` is false (no `GPD/` directory):
 ```
 No planning structure found.
 
+If you are trying to reopen existing work, use `gpd resume --recent` first so you can rediscover the project explicitly, then continue in that workspace with `/gpd:resume-work`.
+
 Run /gpd:new-project to start a new research project.
 ```
 
@@ -474,6 +476,7 @@ Ready to plan the next phase of investigation.
 - All work complete → offer milestone completion
 - Blockers present → highlight before offering to continue
 - Handoff file exists → mention it, offer `/gpd:resume-work`
+- If the user may be outside the project entirely → mention `gpd resume --recent` as the explicit rediscovery step before `/gpd:resume-work`
 
 </process>
 

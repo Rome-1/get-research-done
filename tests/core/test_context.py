@@ -1326,6 +1326,9 @@ class TestInitMilestoneOp:
         assert ctx["project_contract"]["scope"]["question"] == "What benchmark must the project recover?"
         assert ctx["project_contract_load_info"]["status"] in {"loaded", "loaded_with_approval_blockers"}
         assert ctx["project_contract_validation"] is not None
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert ctx["project_contract_gate"]["status"] == ctx["project_contract_load_info"]["status"]
+        assert ctx["project_contract_gate"]["authoritative"] == ctx["project_contract_validation"]["valid"]
         assert "valid" in ctx["project_contract_validation"]
         assert "[ref-benchmark]" in ctx["active_reference_context"]
 
@@ -1588,6 +1591,16 @@ class TestInitProgress:
         assert load_info["status"] == "blocked_schema"
         assert ctx["project_contract"] is None
         assert ctx["project_contract_load_info"]["status"] == "blocked_schema"
+        assert ctx["project_contract_gate"] == {
+            "status": "blocked_schema",
+            "visible": False,
+            "blocked": True,
+            "load_blocked": True,
+            "approval_blocked": False,
+            "authoritative": False,
+            "repair_required": True,
+            "source_path": ctx["project_contract_load_info"]["source_path"],
+        }
         assert ctx["project_contract_load_info"]["source_path"].endswith("state.json")
 
     def test_load_project_contract_accepts_list_shape_drift_from_raw_state(self, tmp_path: Path) -> None:
@@ -1649,6 +1662,10 @@ class TestInitProgress:
         assert any("duplicate" in error for error in load_info["errors"])
         assert ctx["project_contract"] is not None
         assert ctx["project_contract_load_info"]["status"] == "blocked_integrity"
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert ctx["project_contract_gate"]["blocked"] is True
+        assert ctx["project_contract_gate"]["authoritative"] is False
+        assert ctx["project_contract_gate"]["status"] == "blocked_integrity"
         assert any("duplicate" in error for error in load_info["errors"])
 
     def test_load_project_contract_rejects_whole_singleton_defaulting_from_raw_state(self, tmp_path: Path) -> None:

@@ -141,7 +141,7 @@ Other useful options, only if one of these is what you need:
 - Explain one concept - use `/gpd:explain`.
 - Show all commands - use `/gpd:help --all`.
 
-If you need to reopen a different GPD project, use `gpd resume --recent` in your normal terminal first. That is the discovery step in the recovery ladder; then open the workspace and continue with `/gpd:resume-work`.
+If you need to reopen a different GPD project, use `gpd resume --recent` in your normal terminal first. That is the explicit multi-project picker in the recovery ladder; if it finds exactly one recoverable project it may auto-select it, otherwise choose from the list. Then open the workspace and continue with `/gpd:resume-work`.
 
 Add one final sentence before asking for the choice:
 
@@ -206,6 +206,7 @@ Route immediately into the real existing workflow for the chosen path.
 - Do not silently switch projects from inside the runtime.
 - Explain exactly:
   - `Use \`gpd resume --recent\` in your normal terminal to find the project first.`
+  - `If there is exactly one recoverable project, GPD may auto-select it; otherwise choose the project explicitly from the recent-project picker.`
   - `Then open that project folder in the runtime and run \`/gpd:resume-work\`.`
   - `In GPD terms, \`resume-work\` is the in-runtime continuation step once the recovery ladder has identified the right project.`
 - STOP after giving those instructions.

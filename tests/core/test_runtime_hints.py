@@ -32,6 +32,14 @@ def _bootstrap_project(tmp_path: Path) -> Path:
     return project
 
 
+def _bootstrap_recoverable_project(tmp_path: Path) -> Path:
+    project = _bootstrap_project(tmp_path)
+    (project / "GPD" / "STATE.md").write_text("# Research State\n", encoding="utf-8")
+    (project / "GPD" / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+    (project / "GPD" / "PROJECT.md").write_text("# Project\n", encoding="utf-8")
+    return project
+
+
 def _write_current_session(project: Path, *, session_id: str) -> None:
     current_session_path = project / "GPD" / "observability" / "current-session.json"
     current_session_path.write_text(
@@ -374,6 +382,77 @@ def test_build_runtime_hint_payload_handles_absent_execution_snapshot(tmp_path: 
     assert not any("resume-work" in action for action in payload.next_actions)
     assert not any("suggest-next" in action for action in payload.next_actions)
     assert any("base runtime-readiness" in action for action in payload.next_actions)
+
+
+def test_build_runtime_hint_payload_auto_selects_unique_recoverable_recent_project(tmp_path: Path) -> None:
+    workspace = tmp_path / "outside"
+    workspace.mkdir()
+    project = _bootstrap_recoverable_project(tmp_path / "project-root")
+    data_root = tmp_path / "data"
+    record_recent_project(
+        project,
+        session_data={
+            "last_date": "2026-03-27T11:55:00+00:00",
+            "stopped_at": "Phase 01",
+        },
+        store_root=data_root,
+    )
+
+    payload = build_runtime_hint_payload(
+        workspace,
+        data_root=data_root,
+        base_ready=True,
+        latex_capability=_latex_capability(),
+    )
+
+    assert payload.source_meta["project_root"] == project.resolve(strict=False).as_posix()
+    assert payload.recovery["current_project"]["project_root"] == project.resolve(strict=False).as_posix()
+    assert payload.recovery["project_reentry"]["project_root"] == project.resolve(strict=False).as_posix()
+    assert payload.recovery["project_reentry"]["mode"] == "auto-recent-project"
+    assert payload.recovery["project_reentry"]["auto_selected"] is True
+    assert payload.orientation["primary_command"] == "gpd resume --recent"
+    assert any("resume-work" in action for action in payload.next_actions)
+    assert any("suggest-next" in action for action in payload.next_actions)
+
+
+def test_build_runtime_hint_payload_keeps_ambiguous_recent_projects_explicit(tmp_path: Path) -> None:
+    workspace = tmp_path / "outside"
+    workspace.mkdir()
+    first_project = _bootstrap_recoverable_project(tmp_path / "first-project")
+    second_project = _bootstrap_recoverable_project(tmp_path / "second-project")
+    data_root = tmp_path / "data"
+
+    record_recent_project(
+        first_project,
+        session_data={
+            "last_date": "2026-03-27T11:55:00+00:00",
+            "stopped_at": "Phase 01",
+        },
+        store_root=data_root,
+    )
+    record_recent_project(
+        second_project,
+        session_data={
+            "last_date": "2026-03-27T11:56:00+00:00",
+            "stopped_at": "Phase 02",
+        },
+        store_root=data_root,
+    )
+
+    payload = build_runtime_hint_payload(
+        workspace,
+        data_root=data_root,
+        base_ready=True,
+        latex_capability=_latex_capability(),
+    )
+
+    assert payload.source_meta["project_root"] == workspace.resolve(strict=False).as_posix()
+    assert payload.recovery["project_reentry"]["mode"] == "ambiguous-recent-projects"
+    assert payload.recovery["project_reentry"]["requires_user_selection"] is True
+    assert payload.recovery["current_project"] is None
+    assert payload.orientation["primary_command"] == "gpd resume --recent"
+    assert not any("resume-work" in action for action in payload.next_actions)
+    assert not any("suggest-next" in action for action in payload.next_actions)
 
 
 def test_build_runtime_hint_payload_keeps_cost_guidance_quiet_when_best_effort_telemetry_has_no_guardrail(

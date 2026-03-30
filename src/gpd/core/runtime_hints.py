@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from gpd.core.context import init_resume
 from gpd.core.costs import build_cost_summary, resolve_cost_advisory
 from gpd.core.observability import derive_execution_visibility
+from gpd.core.project_reentry import resolve_project_reentry
 from gpd.core.recent_projects import list_recent_projects
 from gpd.core.recovery_advice import RecoveryAdvice, build_recovery_advice
 from gpd.core.root_resolution import normalize_workspace_hint, resolve_project_roots
@@ -124,7 +125,12 @@ def _resume_context(cwd: Path) -> dict[str, object]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _recovery_next_actions(advice: RecoveryAdvice, *, existing_actions: list[str] | None = None) -> list[str]:
+def _recovery_next_actions(
+    advice: RecoveryAdvice,
+    *,
+    existing_actions: list[str] | None = None,
+    allow_after_selection: bool = False,
+) -> list[str]:
     existing = list(existing_actions or [])
     actions = list(advice.actions)
     if any("`gpd resume`" in action for action in existing):
@@ -137,7 +143,7 @@ def _recovery_next_actions(advice: RecoveryAdvice, *, existing_actions: list[str
         actions=actions,
         mode=advice.mode,
         existing_actions=existing,
-        allowed_availability={"now"},
+        allowed_availability={"now", "after_selection"} if allow_after_selection else {"now"},
         include_primary=True,
     )
 
@@ -232,15 +238,19 @@ def build_runtime_hint_payload(
     workspace_hint = normalize_workspace_hint(cwd) if cwd is not None else None
     if workspace_hint is None:
         workspace_hint = Path.cwd().resolve(strict=False)
+    reentry = resolve_project_reentry(workspace_hint, data_root=data_root)
     resolution = resolve_project_roots(workspace_hint)
-    project_root = resolution.project_root if resolution is not None else workspace_hint
+    project_root = (
+        reentry.resolved_project_root
+        or (resolution.project_root if resolution is not None else workspace_hint)
+    )
 
     execution_visibility = derive_execution_visibility(project_root)
     execution = _model_dump(execution_visibility)
 
     recent_rows = list_recent_projects(data_root, last=recent_projects_last) if include_recovery else []
     current_project = _current_project_row(recent_rows, project_root=project_root.as_posix()) if include_recovery else None
-    resume_context = _resume_context(project_root) if include_recovery else {}
+    resume_context = _resume_context(workspace_hint) if include_recovery else {}
     recovery_advice = (
         build_recovery_advice(
             project_root,
@@ -256,12 +266,19 @@ def build_runtime_hint_payload(
     recovery = (
         {
             "current_project": current_project,
+            "project_reentry": _model_dump(reentry),
             "recent_projects": [_model_dump(row) or row for row in recent_rows],
         }
         if include_recovery
         else {}
     )
     orientation = recovery_advice.model_dump(mode="json") if recovery_advice is not None else {}
+    if include_recovery:
+        orientation["workspace_root"] = workspace_hint.as_posix()
+        orientation["project_root"] = _path_text(reentry.resolved_project_root)
+        orientation["project_root_source"] = reentry.source
+        orientation["project_root_auto_selected"] = bool(reentry.auto_selected)
+        orientation["project_reentry_mode"] = reentry.mode
 
     cost_summary = build_cost_summary(project_root, data_root=data_root, last_sessions=cost_last_sessions) if include_cost else None
     cost = _cost_payload(cost_summary) if cost_summary is not None else {}
@@ -299,7 +316,13 @@ def build_runtime_hint_payload(
 
     next_action_parts: list[str] = [*execution_actions]
     if recovery_advice is not None:
-        next_action_parts.extend(_recovery_next_actions(recovery_advice, existing_actions=execution_actions))
+        next_action_parts.extend(
+            _recovery_next_actions(
+                recovery_advice,
+                existing_actions=execution_actions,
+                allow_after_selection=bool(getattr(reentry, "auto_selected", False)),
+            )
+        )
     if cost_summary is not None:
         if cost_advisory is not None:
             next_action = cost_advisory.get("next_action")

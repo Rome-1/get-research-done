@@ -19,7 +19,7 @@ Instantly restore full research project context so "Where were we?" has an immed
 <process>
 
 <step name="initialize">
-Load the shared resume context in one call. `/gpd:resume-work` is the guided runtime path for the selected project, `gpd resume` is the public local read-only summary, `gpd resume --recent` is the cross-project discovery surface, and `gpd init resume` is the machine-readable intake they share:
+Load the shared resume context in one call. `/gpd:resume-work` is the guided runtime path for the selected project, `gpd resume` is the public local read-only summary, `gpd resume --recent` is the explicit multi-project picker and cross-project discovery surface, and `gpd init resume` is the machine-readable intake they share:
 
 ```bash
 INIT=$(gpd init resume)

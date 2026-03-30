@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gpd.core.recent_projects import record_recent_project
 from gpd.core.recovery_advice import build_recovery_advice
 
 
@@ -29,6 +28,8 @@ def test_build_recovery_advice_prefers_current_workspace_recovery_state(tmp_path
 
     assert advice.mode == "current-workspace"
     assert advice.status == "bounded-segment"
+    assert advice.decision_source == "current-workspace"
+    assert advice.project_reentry_mode == "current-workspace"
     assert advice.primary_command == "gpd resume"
     assert advice.current_workspace_has_recovery is True
     assert advice.current_workspace_resumable is True
@@ -56,6 +57,8 @@ def test_build_recovery_advice_treats_canonical_bounded_segment_as_authoritative
 
     assert advice.mode == "current-workspace"
     assert advice.status == "bounded-segment"
+    assert advice.decision_source == "current-workspace"
+    assert advice.project_reentry_mode == "current-workspace"
     assert advice.primary_command == "gpd resume"
     assert advice.current_workspace_resumable is True
     assert advice.current_workspace_has_resume_file is True
@@ -64,37 +67,106 @@ def test_build_recovery_advice_treats_canonical_bounded_segment_as_authoritative
     assert advice.execution_resume_file_source == "current_execution"
 
 
-def test_build_recovery_advice_uses_recent_projects_when_workspace_is_idle(tmp_path: Path) -> None:
-    project = _project(tmp_path)
-    other = _project(tmp_path, "other")
-    resume_file = other / "GPD" / "phases" / "02" / ".continue-here.md"
+def test_build_recovery_advice_marks_auto_selected_recent_project_recovery(
+    tmp_path: Path,
+) -> None:
+    workspace = _project(tmp_path)
+    selected_project = _project(tmp_path, "selected")
+    resume_file = selected_project / "GPD" / "phases" / "02" / ".continue-here.md"
     resume_file.parent.mkdir(parents=True, exist_ok=True)
     resume_file.write_text("resume\n", encoding="utf-8")
 
-    record_recent_project(
-        other,
-        session_data={
-            "last_date": "2026-03-28T11:00:00+00:00",
-            "stopped_at": "Phase 02",
-            "resume_file": "GPD/phases/02/.continue-here.md",
+    advice = build_recovery_advice(
+        workspace,
+        recent_rows=[
+            {
+                "project_root": selected_project.as_posix(),
+                "available": True,
+                "resumable": True,
+            }
+        ],
+        resume_payload={
+            "project_root": selected_project.as_posix(),
+            "project_root_source": "recent_project",
+            "project_root_auto_selected": True,
+            "project_reentry_mode": "auto-recent-project",
+            "segment_candidates": [
+                {
+                    "source": "current_execution",
+                    "resume_file": "GPD/phases/02/.continue-here.md",
+                    "status": "waiting",
+                }
+            ],
+            "execution_resumable": True,
+            "has_live_execution": True,
         },
-        store_root=tmp_path / "data",
     )
 
+    assert advice.mode == "current-workspace"
+    assert advice.status == "bounded-segment"
+    assert advice.decision_source == "auto-selected-recent-project"
+    assert advice.project_reentry_mode == "auto-recent-project"
+    assert advice.project_root_auto_selected is True
+    assert advice.primary_command == "gpd resume --recent"
+    assert advice.current_workspace_has_recovery is True
+    assert advice.actions[0].availability == "now"
+    assert advice.actions[1].availability == "now"
+    assert advice.actions[2].availability == "now"
+
+
+def test_build_recovery_advice_marks_ambiguous_recent_projects_as_explicit_selection(
+    tmp_path: Path,
+) -> None:
+    workspace = _project(tmp_path)
+    first = _project(tmp_path, "first")
+    second = _project(tmp_path, "second")
+
     advice = build_recovery_advice(
-        project,
-        data_root=tmp_path / "data",
-        recent_rows=None,
-        resume_payload={"segment_candidates": [], "has_live_execution": False},
+        workspace,
+        recent_rows=[
+            {"project_root": first.as_posix(), "available": True, "resumable": True},
+            {"project_root": second.as_posix(), "available": True, "resumable": True},
+        ],
+        resume_payload={
+            "project_reentry_mode": "ambiguous-recent-projects",
+            "project_reentry_requires_selection": True,
+            "segment_candidates": [],
+            "has_live_execution": False,
+        },
     )
 
     assert advice.mode == "recent-projects"
     assert advice.status == "recent-projects"
+    assert advice.decision_source == "ambiguous-recent-projects"
+    assert advice.project_reentry_mode == "ambiguous-recent-projects"
+    assert advice.project_reentry_requires_selection is True
     assert advice.primary_command == "gpd resume --recent"
-    assert advice.recent_projects_count == 1
+    assert advice.recent_projects_count == 2
     assert advice.actions[0].availability == "now"
     assert advice.actions[1].availability == "after_selection"
     assert advice.actions[2].availability == "after_selection"
+
+
+def test_build_recovery_advice_uses_no_recovery_when_nothing_is_available(tmp_path: Path) -> None:
+    workspace = _project(tmp_path)
+
+    advice = build_recovery_advice(
+        workspace,
+        recent_rows=[],
+        resume_payload={
+            "segment_candidates": [],
+            "has_live_execution": False,
+        },
+    )
+
+    assert advice.mode == "idle"
+    assert advice.status == "no-recovery"
+    assert advice.decision_source == "no-recovery"
+    assert advice.project_reentry_mode == "no-recovery"
+    assert advice.primary_command is None
+    assert advice.continue_command is None
+    assert advice.fast_next_command is None
+    assert advice.actions == []
 
 
 def test_build_recovery_advice_keeps_missing_handoff_in_current_workspace_priority(tmp_path: Path) -> None:
@@ -118,6 +190,7 @@ def test_build_recovery_advice_keeps_missing_handoff_in_current_workspace_priori
 
     assert advice.mode == "current-workspace"
     assert advice.status == "missing-handoff"
+    assert advice.decision_source == "current-workspace"
     assert advice.primary_command == "gpd resume"
     assert advice.missing_session_resume_file is True
     assert advice.recent_projects_count == 1
@@ -134,6 +207,7 @@ def test_build_recovery_advice_keeps_interrupted_agent_in_current_workspace_mode
 
     assert advice.mode == "current-workspace"
     assert advice.status == "interrupted-agent"
+    assert advice.decision_source == "current-workspace"
     assert advice.primary_command == "gpd resume"
     assert advice.current_workspace_has_recovery is True
     assert advice.current_workspace_resumable is False
@@ -157,6 +231,7 @@ def test_build_recovery_advice_prefers_session_handoff_over_advisory_live_execut
 
     assert advice.mode == "current-workspace"
     assert advice.status == "session-handoff"
+    assert advice.decision_source == "current-workspace"
     assert advice.primary_command == "gpd resume"
     assert advice.current_workspace_has_resume_file is True
     assert advice.primary_reason == "Current workspace has a recorded session handoff."
@@ -181,6 +256,7 @@ def test_build_recovery_advice_recovers_session_handoff_from_candidate_only_payl
 
     assert advice.mode == "current-workspace"
     assert advice.status == "session-handoff"
+    assert advice.decision_source == "current-workspace"
     assert advice.has_session_resume_file is True
     assert advice.current_workspace_has_resume_file is True
 
@@ -198,6 +274,7 @@ def test_build_recovery_advice_keeps_missing_handoff_without_false_resume_file(t
 
     assert advice.mode == "current-workspace"
     assert advice.status == "missing-handoff"
+    assert advice.decision_source == "current-workspace"
     assert advice.primary_command == "gpd resume"
     assert advice.current_workspace_has_recovery is True
     assert advice.current_workspace_has_resume_file is False
@@ -243,6 +320,7 @@ def test_build_recovery_advice_keeps_machine_change_notice_in_current_workspace_
 
     assert advice.mode == "current-workspace"
     assert advice.status == "workspace-recovery"
+    assert advice.decision_source == "current-workspace"
     assert advice.primary_command == "gpd resume"
     assert advice.recent_projects_count == 1
     assert advice.machine_change_notice is not None

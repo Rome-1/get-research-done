@@ -29,6 +29,7 @@ from gpd.contracts import (
     ProjectContractParseResult,
     ResearchContract,
     VerificationEvidence,
+    collect_contract_integrity_errors,
     contract_from_data,
     parse_project_contract_data_strict,
 )
@@ -290,6 +291,9 @@ class StateLoadResult(BaseModel):
     integrity_status: str = "healthy"
     integrity_issues: list[str] = Field(default_factory=list)
     state_source: str | None = None
+    project_contract_load_info: dict | None = None
+    project_contract_validation: dict | None = None
+    project_contract_gate: dict | None = None
 
 
 class StateGetResult(BaseModel):
@@ -495,6 +499,174 @@ def _blank_session_payload() -> dict[str, str | None]:
 
 def _blank_continuation_payload() -> dict[str, object]:
     return ContinuationState().model_dump(mode="python")
+
+
+def _project_contract_source_path(cwd: Path, source_path: Path) -> str:
+    """Return a stable display path for project-contract diagnostics."""
+
+    try:
+        return source_path.relative_to(cwd).as_posix()
+    except ValueError:
+        return str(source_path)
+
+
+def _project_contract_load_payload(
+    *,
+    status: str,
+    source_path: str,
+    errors: list[str] | None = None,
+    warnings: list[str] | None = None,
+) -> dict[str, object]:
+    """Build structured project-contract load diagnostics."""
+
+    return {
+        "status": status,
+        "source_path": source_path,
+        "errors": list(errors or []),
+        "warnings": list(warnings or []),
+    }
+
+
+def _classify_project_contract_payload(
+    *,
+    cwd: Path,
+    source_path: Path,
+    raw_contract: object,
+) -> tuple[ResearchContract | None, dict[str, object]]:
+    """Classify a raw project-contract payload into visibility diagnostics."""
+
+    source_label = _project_contract_source_path(cwd, source_path)
+    if raw_contract is None:
+        return None, _project_contract_load_payload(status="missing", source_path=source_label)
+    if not isinstance(raw_contract, dict):
+        logger.warning("Skipping project_contract from %s because it is not a JSON object", source_path)
+        return None, _project_contract_load_payload(
+            status="blocked_type",
+            source_path=source_label,
+            errors=["project contract must be a JSON object"],
+        )
+
+    list_shape_drift_errors = _collect_list_shape_drift_errors(raw_contract)
+    normalized_contract, schema_findings = salvage_project_contract(raw_contract)
+    schema_warnings, schema_errors = _split_project_contract_schema_findings(
+        schema_findings,
+        allow_singleton_defaults=False,
+    )
+    schema_warnings = list(dict.fromkeys([*schema_warnings, *list_shape_drift_errors]))
+    if schema_errors or normalized_contract is None:
+        logger.warning(
+            "Skipping project_contract from %s because blocking schema normalization would be required: %s",
+            source_path,
+            "; ".join(schema_errors) if schema_errors else "validation failed",
+        )
+        return None, _project_contract_load_payload(
+            status="blocked_schema",
+            source_path=source_label,
+            errors=schema_errors or ["blocking schema normalization would be required"],
+            warnings=schema_warnings,
+        )
+
+    integrity_errors = collect_contract_integrity_errors(normalized_contract)
+    if integrity_errors:
+        logger.warning(
+            "Loaded blocked project_contract from %s because semantic integrity checks failed: %s",
+            source_path,
+            "; ".join(integrity_errors),
+        )
+        return normalized_contract, _project_contract_load_payload(
+            status="blocked_integrity",
+            source_path=source_label,
+            errors=integrity_errors,
+            warnings=schema_warnings,
+        )
+
+    if schema_warnings:
+        logger.warning(
+            "Loaded project_contract from %s after recoverable schema normalization: %s",
+            source_path,
+            "; ".join(schema_warnings),
+        )
+
+    load_info = _project_contract_load_payload(
+        status="loaded",
+        source_path=source_label,
+        warnings=schema_warnings,
+    )
+    approval_validation = validate_project_contract(normalized_contract, mode="approved", project_root=cwd)
+    if not approval_validation.valid:
+        logger.warning(
+            "Loaded project_contract from %s with approval blockers: %s",
+            source_path,
+            "; ".join(approval_validation.errors) if approval_validation.errors else "validation failed",
+        )
+        load_info["status"] = "loaded_with_approval_blockers"
+    return normalized_contract, load_info
+
+
+def _project_contract_gate_payload(
+    contract: ResearchContract | None,
+    *,
+    load_info: dict[str, object] | None,
+    validation: dict[str, object] | None,
+) -> dict[str, object]:
+    """Return a single visible-vs-authoritative contract gate payload."""
+
+    load_status = str((load_info or {}).get("status") or ("loaded" if contract is not None else "missing"))
+    approval_valid = validation.get("valid") if isinstance(validation, dict) else None
+    load_blocked = load_status.startswith("blocked")
+    approval_blocked = approval_valid is False
+    visible = contract is not None
+    authoritative = visible and not load_blocked and approval_valid is True
+    blocked = load_blocked or approval_blocked
+    return {
+        "status": load_status,
+        "visible": visible,
+        "blocked": blocked,
+        "load_blocked": load_blocked,
+        "approval_blocked": approval_blocked,
+        "authoritative": authoritative,
+        "repair_required": blocked,
+        "source_path": (load_info or {}).get("source_path"),
+    }
+
+
+def _finalize_project_contract_gate(
+    cwd: Path,
+    contract: ResearchContract | None,
+    load_info: dict[str, object],
+) -> tuple[dict[str, object], dict[str, object] | None, dict[str, object]]:
+    """Normalize final load info, approval validation, and gate payload."""
+
+    finalized_load_info = {
+        "status": load_info.get("status"),
+        "source_path": load_info.get("source_path"),
+        "errors": list(load_info.get("errors") or []),
+        "warnings": list(load_info.get("warnings") or []),
+    }
+    validation_payload: dict[str, object] | None = None
+    if contract is not None:
+        draft_validation = validate_project_contract(contract, mode="draft", project_root=cwd)
+        if not draft_validation.valid:
+            finalized_load_info["status"] = "blocked_integrity"
+            finalized_load_info["errors"] = list(
+                dict.fromkeys([*list(finalized_load_info.get("errors") or []), *draft_validation.errors])
+            )
+        validation_payload = validate_project_contract(contract, mode="approved", project_root=cwd).model_dump(
+            mode="json"
+        )
+        if finalized_load_info["status"] != "blocked_integrity":
+            finalized_load_info["status"] = (
+                "loaded"
+                if validation_payload.get("valid") is True
+                else "loaded_with_approval_blockers"
+            )
+
+    gate_payload = _project_contract_gate_payload(
+        contract,
+        load_info=finalized_load_info,
+        validation=validation_payload,
+    )
+    return finalized_load_info, validation_payload, gate_payload
 
 
 def _normalize_continuation_payload(continuation: object) -> dict[str, object]:
@@ -2377,6 +2549,87 @@ def _load_state_json_from_backup(
         return None, []
 
 
+def _project_contract_runtime_payload_for_state(
+    cwd: Path,
+    *,
+    state_obj: dict | None,
+    state_source: str | None,
+) -> tuple[dict[str, object], dict[str, object] | None, dict[str, object]]:
+    """Build shared project-contract diagnostics for state-facing read paths."""
+
+    layout = ProjectLayout(cwd)
+    if state_source == "state.json":
+        source_path = layout.state_json
+    elif state_source == "state.json.bak":
+        source_path = layout.state_json_backup
+    elif state_source == "STATE.md":
+        source_path = layout.state_md
+    else:
+        source_path = layout.state_json
+
+    raw_contract: object = None
+    if source_path.name in {STATE_JSON_FILENAME, STATE_JSON_BACKUP_FILENAME}:
+        try:
+            parsed = json.loads(source_path.read_text(encoding="utf-8"))
+            if isinstance(parsed, dict):
+                raw_contract = parsed.get("project_contract")
+        except (FileNotFoundError, TypeError, json.JSONDecodeError, OSError, UnicodeDecodeError):
+            raw_contract = None
+
+    contract, load_info = _classify_project_contract_payload(
+        cwd=cwd,
+        source_path=source_path,
+        raw_contract=raw_contract,
+    )
+    if contract is None and isinstance(state_obj, dict):
+        visible_contract = contract_from_data(
+            state_obj.get("project_contract"),
+            require_draft_validity=False,
+            project_root=cwd,
+        )
+        if visible_contract is not None:
+            contract = visible_contract
+            if load_info.get("status") == "missing":
+                load_info = _project_contract_load_payload(
+                    status="loaded",
+                    source_path=_project_contract_source_path(cwd, source_path),
+                )
+
+    if contract is not None:
+        from gpd.core.context import (
+            _canonicalize_project_contract,
+            _merge_active_references,
+            _merge_reference_intake,
+            _serialize_active_references,
+        )
+
+        active_references = _merge_active_references(_serialize_active_references(contract), [])
+        effective_reference_intake = _merge_reference_intake(
+            contract,
+            {
+                "must_read_refs": [],
+                "must_include_prior_outputs": [],
+                "user_asserted_anchors": [],
+                "known_good_baselines": [],
+                "context_gaps": [],
+                "crucial_inputs": [],
+            },
+            active_references,
+        )
+        contract, canonicalization_warnings = _canonicalize_project_contract(
+            contract,
+            active_references=active_references,
+            effective_reference_intake=effective_reference_intake,
+        )
+        if canonicalization_warnings:
+            load_info = {
+                **load_info,
+                "warnings": list(dict.fromkeys([*list(load_info.get("warnings") or []), *canonicalization_warnings])),
+            }
+
+    return _finalize_project_contract_gate(cwd, contract, load_info)
+
+
 @instrument_gpd_function("state.load_json")
 def load_state_json(cwd: Path, integrity_mode: str = "standard") -> dict | None:
     """Load state.json with intent recovery and fallback to STATE.md.
@@ -2496,6 +2749,9 @@ def state_load(cwd: Path, integrity_mode: str = "standard") -> StateLoadResult:
 
     layout = ProjectLayout(cwd)
     state_raw = safe_read_file(layout.state_md) or ""
+    project_contract_load_info, project_contract_validation, project_contract_gate = (
+        _project_contract_runtime_payload_for_state(cwd, state_obj=state_obj, state_source=state_source)
+    )
 
     return StateLoadResult(
         state=state_obj or {},
@@ -2507,6 +2763,9 @@ def state_load(cwd: Path, integrity_mode: str = "standard") -> StateLoadResult:
         integrity_status=validation.integrity_status,
         integrity_issues=integrity_issues,
         state_source=state_source,
+        project_contract_load_info=project_contract_load_info,
+        project_contract_validation=project_contract_validation,
+        project_contract_gate=project_contract_gate,
     )
 
 

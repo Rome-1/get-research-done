@@ -1102,6 +1102,84 @@ def test_resume_plain_output_hints_recent_when_workspace_is_missing(tmp_path: Pa
     assert "gpd resume --recent" in result.output
 
 
+def test_resume_plain_output_surfaces_auto_selected_recent_project(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path / "outside"
+    workspace.mkdir()
+    project_root = tmp_path / "project"
+    monkeypatch.chdir(workspace)
+    monkeypatch.setattr(
+        "gpd.core.context.init_resume",
+        lambda _cwd: {
+            "workspace_root": workspace.as_posix(),
+            "project_root": project_root.as_posix(),
+            "project_root_source": "recent_project",
+            "project_root_auto_selected": True,
+            "project_reentry_mode": "auto-recent-project",
+            "project_reentry_requires_selection": False,
+            "project_reentry_candidates": [],
+            "planning_exists": True,
+            "state_exists": True,
+            "roadmap_exists": True,
+            "project_exists": True,
+            "segment_candidates": [],
+            "has_live_execution": True,
+            "resume_mode": "bounded_segment",
+            "execution_resume_file": "GPD/phases/03/.continue-here.md",
+            "execution_resume_file_source": "current_execution",
+            "execution_paused_at": None,
+            "autonomy": None,
+            "research_mode": None,
+            "active_execution_segment": None,
+        },
+    )
+
+    result = runner.invoke(app, ["resume"])
+
+    assert result.exit_code == 0
+    assert "Project" in result.output
+    assert "auto-selected recent project" in result.output
+
+
+def test_resume_plain_output_keeps_recent_project_selection_explicit_when_not_auto_selected(
+    tmp_path: Path, monkeypatch
+) -> None:
+    workspace = tmp_path / "outside-explicit"
+    workspace.mkdir()
+    project_root = tmp_path / "project-explicit"
+    monkeypatch.chdir(workspace)
+    monkeypatch.setattr(
+        "gpd.core.context.init_resume",
+        lambda _cwd: {
+            "workspace_root": workspace.as_posix(),
+            "project_root": project_root.as_posix(),
+            "project_root_source": "recent_project",
+            "project_root_auto_selected": False,
+            "project_reentry_mode": "ambiguous-recent-projects",
+            "project_reentry_requires_selection": True,
+            "project_reentry_candidates": [],
+            "planning_exists": True,
+            "state_exists": True,
+            "roadmap_exists": True,
+            "project_exists": True,
+            "segment_candidates": [],
+            "has_live_execution": True,
+            "resume_mode": "bounded_segment",
+            "execution_resume_file": "GPD/phases/03/.continue-here.md",
+            "execution_resume_file_source": "current_execution",
+            "execution_paused_at": None,
+            "autonomy": None,
+            "research_mode": None,
+            "active_execution_segment": None,
+        },
+    )
+
+    result = runner.invoke(app, ["resume"])
+
+    assert result.exit_code == 0
+    assert "Project" in result.output
+    assert "auto-selected recent project" not in result.output
+
+
 def test_resume_plain_output_surfaces_session_handoff_status(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(

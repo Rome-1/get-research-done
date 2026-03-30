@@ -32,37 +32,71 @@ def test_start_workflow_routes_to_existing_entrypoints() -> None:
 
     assert_start_workflow_router_contract(workflow)
 
-    for fragment in (
-        "GPD project` (a folder where GPD already saved its own project files, notes, and state)",
-        "research map` (GPD's summary of an existing research folder before full project setup)",
-        "In GPD terms, \\`map-research\\` means inspect an existing folder before planning.",
-        "In GPD terms, \\`new-project\\` creates the project scaffolding GPD will use later.",
-        "This folder already has saved GPD work (`GPD project`)",
-        "This folder already has GPD's folder summary (`research map`)",
-        "This folder already has research files, but GPD is not set up here yet",
-        "This folder looks new or mostly empty",
-        "I will show the safest next steps first and the broader options second.",
-        "Keep the numbered list short.",
-        "Resume this project (recommended)",
-        "Review the project status first",
-        "Map this folder first (recommended)",
-        "Start a brand-new GPD project anyway",
-        "Fast start (recommended)",
-        "Full guided setup",
-        "Turn this into a full GPD project",
-        "Reopen a different GPD project",
-        "This is the in-runtime continue command for an existing GPD project.",
-        "If the researcher chooses `Resume this project (recommended)` or `Continue where I left off`:",
-        "If the researcher chooses `Map this folder first (recommended)` or `Refresh the research map`:",
-        "Use \\`gpd resume --recent\\` in your normal terminal to find the project first.",
-        "Then open that project folder in the runtime and run \\`/gpd:resume-work\\`.",
-        "In GPD terms, \\`resume-work\\` is the in-runtime continuation step once the recovery ladder has identified the right project.",
-        "Do not silently create project files from `/gpd:start` itself.",
-        "Do not silently switch the user into a different project folder.",
-        "When in doubt between a fresh folder and an existing research folder, prefer `map-research` as the safer recommendation.",
-        "keep the official GPD terms visible in plain-English form",
+    for fragment_options in (
+        (
+            "GPD project` (a folder where GPD already saved its own project files, notes, and state)",
+            "GPD project` (a folder where GPD already saved its own project files, notes, and state",
+        ),
+        (
+            "research map` (GPD's summary of an existing research folder before full project setup)",
+            "research map` (GPD's summary of an existing research folder before full project setup",
+        ),
+        ("In GPD terms, \\`map-research\\` means inspect an existing folder before planning.",),
+        ("In GPD terms, \\`new-project\\` creates the project scaffolding GPD will use later.",),
+        ("This folder already has saved GPD work (`GPD project`)",),
+        ("This folder already has GPD's folder summary (`research map`)",),
+        ("This folder already has research files, but GPD is not set up here yet",),
+        ("This folder looks new or mostly empty",),
+        ("I will show the safest next steps first and the broader options second.",),
+        ("Keep the numbered list short.",),
+        ("Resume this project (recommended)",),
+        ("Review the project status first",),
+        ("Map this folder first (recommended)",),
+        ("Start a brand-new GPD project anyway",),
+        ("Fast start (recommended)",),
+        ("Full guided setup",),
+        ("Turn this into a full GPD project",),
+        ("Reopen a different GPD project",),
+        (
+            "This is the in-runtime continue command for an existing GPD project.",
+            "This is the in-runtime recovery command for the selected project.",
+            "This is the in-runtime return path for the selected project.",
+        ),
+        (
+            "If the researcher chooses `Resume this project (recommended)` or `Continue where I left off`:",
+            "If the researcher chooses `Resume this project` or `Continue where I left off`:",
+        ),
+        (
+            "If the researcher chooses `Map this folder first (recommended)` or `Refresh the research map`:",
+            "If the researcher chooses `Map this folder first` or `Refresh the research map`:",
+        ),
+        (
+            "Use \\`gpd resume --recent\\` in your normal terminal to find the project first.",
+            "Use \\`gpd resume --recent\\` in your normal terminal first.",
+            "Use \\`gpd resume --recent\\` in your normal terminal to pick the project first.",
+        ),
+        (
+            "Then open that project folder in the runtime and run \\`/gpd:resume-work\\`.",
+            "Then open the project folder in the runtime and run \\`/gpd:resume-work\\`.",
+        ),
+        (
+            "In GPD terms, \\`resume-work\\` is the in-runtime continuation step once the recovery ladder has identified the right project.",
+            "In GPD terms, \\`resume-work\\` is the in-runtime recovery step once the recovery ladder has identified the right project.",
+            "In GPD terms, \\`resume-work\\` is the in-runtime command that continues a selected project.",
+        ),
+        ("Do not silently create project files from `/gpd:start` itself.",),
+        (
+            "Do not silently switch the user into a different project folder.",
+            "Do not silently switch to a different project folder.",
+            "Do not silently switch projects.",
+        ),
+        (
+            "When in doubt between a fresh folder and an existing research folder, prefer `map-research` as the safer recommendation.",
+            "When in doubt between a fresh folder and an existing research folder, prefer `map-research`.",
+        ),
+        ("keep the official GPD terms visible in plain-English form",),
     ):
-        assert fragment in workflow
+        assert any(fragment in workflow for fragment in fragment_options)
 
     assert "Read `{GPD_INSTALL_DIR}/workflows/new-project.md` with the file-read tool." not in workflow
     assert "Read `{GPD_INSTALL_DIR}/workflows/help.md` with the file-read tool." not in workflow

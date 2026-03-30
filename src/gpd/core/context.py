@@ -18,7 +18,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from gpd.adapters.install_utils import AGENTS_DIR_NAME, FLAT_COMMANDS_DIR_NAME, GPD_INSTALL_DIR_NAME, HOOKS_DIR_NAME
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
-from gpd.contracts import ResearchContract, collect_contract_integrity_errors
+from gpd.contracts import ResearchContract
 from gpd.core.config import GPDProjectConfig
 from gpd.core.config import load_config as _load_config_structured
 from gpd.core.config import resolve_model as _resolve_model_canonical
@@ -46,17 +46,20 @@ from gpd.core.constants import (
     ProjectLayout,
 )
 from gpd.core.continuation import ContinuationResumeSource, resolve_continuation
-from gpd.core.contract_validation import (
-    _collect_list_shape_drift_errors,
-    _split_project_contract_schema_findings,
-    salvage_project_contract,
-    validate_project_contract,
-)
 from gpd.core.errors import ValidationError
 from gpd.core.phases import _milestone_completion_snapshot
+from gpd.core.project_reentry import resolve_project_reentry
 from gpd.core.protocol_bundles import render_protocol_bundle_context, select_protocol_bundles
 from gpd.core.reference_ingestion import ingest_reference_artifacts
-from gpd.core.state import EM_DASH, _current_machine_identity, _load_state_json_with_integrity_issues
+from gpd.core.state import (
+    EM_DASH,
+    _classify_project_contract_payload,
+    _current_machine_identity,
+    _finalize_project_contract_gate,
+    _load_state_json_with_integrity_issues,
+    _project_contract_load_payload,
+    _project_contract_source_path,
+)
 from gpd.core.state import peek_state_json as _peek_state_json
 from gpd.core.utils import (
     generate_slug as _generate_slug_impl,
@@ -151,6 +154,24 @@ def _state_exists(cwd: Path) -> bool:
     """Return whether the project has recoverable state from JSON or STATE.md."""
     state, _state_issues, _state_source = _peek_state_json(cwd)
     return isinstance(state, dict)
+
+
+def _resolve_reentry_context(cwd: Path, *, data_root: Path | None = None) -> tuple[Path, dict[str, object]]:
+    """Return the effective project root plus shared re-entry metadata."""
+
+    resolution = resolve_project_reentry(cwd, data_root=data_root)
+    selected_project_root = resolution.resolved_project_root
+    effective_cwd = selected_project_root or cwd.expanduser().resolve(strict=False)
+    metadata: dict[str, object] = {
+        "workspace_root": resolution.workspace_root,
+        "project_root": selected_project_root.as_posix() if selected_project_root is not None else None,
+        "project_root_source": resolution.source or "workspace",
+        "project_root_auto_selected": resolution.auto_selected,
+        "project_reentry_mode": resolution.mode,
+        "project_reentry_requires_selection": resolution.requires_user_selection,
+        "project_reentry_candidates": [candidate.model_dump(mode="json") for candidate in resolution.candidates],
+    }
+    return effective_cwd, metadata
 
 
 def _generate_slug(text: str | None) -> str | None:
@@ -267,108 +288,6 @@ def _load_raw_project_contract_payload(cwd: Path) -> tuple[Path, object] | None:
     return source_path, raw_contract
 
 
-def _project_contract_source_path(cwd: Path, source_path: Path) -> str:
-    """Return a stable display path for project-contract diagnostics."""
-
-    try:
-        return source_path.relative_to(cwd).as_posix()
-    except ValueError:
-        return str(source_path)
-
-
-def _project_contract_load_payload(
-    *,
-    status: str,
-    source_path: str,
-    errors: list[str] | None = None,
-    warnings: list[str] | None = None,
-) -> dict[str, object]:
-    """Build structured project-contract load diagnostics for init payloads."""
-
-    return {
-        "status": status,
-        "source_path": source_path,
-        "errors": list(errors or []),
-        "warnings": list(warnings or []),
-    }
-
-
-def _classify_project_contract_payload(
-    *,
-    cwd: Path,
-    source_path: Path,
-    raw_contract: object,
-) -> tuple[ResearchContract | None, dict[str, object]]:
-    """Classify a raw project contract payload into a load result."""
-
-    source_label = _project_contract_source_path(cwd, source_path)
-    if raw_contract is None:
-        return None, _project_contract_load_payload(status="missing", source_path=source_label)
-    if not isinstance(raw_contract, dict):
-        logger.warning("Skipping project_contract from %s because it is not a JSON object", source_path)
-        return None, _project_contract_load_payload(
-            status="blocked_type",
-            source_path=source_label,
-            errors=["project contract must be a JSON object"],
-        )
-
-    list_shape_drift_errors = _collect_list_shape_drift_errors(raw_contract)
-    normalized_contract, schema_findings = salvage_project_contract(raw_contract)
-    schema_warnings, schema_errors = _split_project_contract_schema_findings(
-        schema_findings,
-        allow_singleton_defaults=False,
-    )
-    schema_warnings = list(dict.fromkeys([*schema_warnings, *list_shape_drift_errors]))
-    if schema_errors or normalized_contract is None:
-        logger.warning(
-            "Skipping project_contract from %s because blocking schema normalization would be required: %s",
-            source_path,
-            "; ".join(schema_errors) if schema_errors else "validation failed",
-        )
-        return None, _project_contract_load_payload(
-            status="blocked_schema",
-            source_path=source_label,
-            errors=schema_errors or ["blocking schema normalization would be required"],
-            warnings=schema_warnings,
-        )
-
-    integrity_errors = collect_contract_integrity_errors(normalized_contract)
-    if integrity_errors:
-        logger.warning(
-            "Loaded blocked project_contract from %s because semantic integrity checks failed: %s",
-            source_path,
-            "; ".join(integrity_errors),
-        )
-        return normalized_contract, _project_contract_load_payload(
-            status="blocked_integrity",
-            source_path=source_label,
-            errors=integrity_errors,
-            warnings=schema_warnings,
-        )
-
-    if schema_warnings:
-        logger.warning(
-            "Loaded project_contract from %s after recoverable schema normalization: %s",
-            source_path,
-            "; ".join(schema_warnings),
-        )
-    contract = normalized_contract
-    load_info = _project_contract_load_payload(
-        status="loaded",
-        source_path=source_label,
-        warnings=schema_warnings,
-    )
-    approval_validation = validate_project_contract(contract, mode="approved", project_root=cwd)
-    if not approval_validation.valid:
-        logger.warning(
-            "Loaded project_contract from %s with approval blockers: %s",
-            source_path,
-            "; ".join(approval_validation.errors) if approval_validation.errors else "validation failed",
-        )
-        load_info["status"] = "loaded_with_approval_blockers"
-    return contract, load_info
-
-
 def _load_project_contract(cwd: Path) -> tuple[ResearchContract | None, dict[str, object]]:
     """Load the canonical project contract and return load diagnostics."""
     layout = ProjectLayout(cwd)
@@ -399,18 +318,6 @@ def _load_project_contract(cwd: Path) -> tuple[ResearchContract | None, dict[str
             raw_contract=state.get("project_contract"),
         )
     return contract, load_info
-
-
-def _project_contract_validation_payload(
-    contract: ResearchContract | None,
-    *,
-    cwd: Path,
-) -> dict[str, object] | None:
-    """Return approval-mode validation metadata for a loaded project contract."""
-
-    if contract is None:
-        return None
-    return validate_project_contract(contract, mode="approved", project_root=cwd).model_dump(mode="json")
 
 
 def _sorted_markdown_files(directory: Path) -> list[Path]:
@@ -987,16 +894,11 @@ def _build_reference_runtime_context(cwd: Path) -> dict[str, object]:
             **project_contract_load_info,
             "warnings": [*list(project_contract_load_info.get("warnings") or []), *canonicalization_warnings],
         }
-    if visible_contract is not None:
-        draft_validation = validate_project_contract(visible_contract, mode="draft", project_root=cwd)
-        if not draft_validation.valid:
-            existing_errors = list(project_contract_load_info.get("errors") or [])
-            project_contract_load_info = {
-                **project_contract_load_info,
-                "status": "blocked_integrity",
-                "errors": list(dict.fromkeys([*existing_errors, *draft_validation.errors])),
-            }
-    project_contract_validation = _project_contract_validation_payload(visible_contract, cwd=cwd)
+    project_contract_load_info, project_contract_validation, project_contract_gate = _finalize_project_contract_gate(
+        cwd,
+        visible_contract,
+        project_contract_load_info,
+    )
     project_text = _safe_read_file(cwd / PLANNING_DIR_NAME / PROJECT_FILENAME)
     selected_protocol_bundles = select_protocol_bundles(project_text, visible_contract)
 
@@ -1015,6 +917,7 @@ def _build_reference_runtime_context(cwd: Path) -> dict[str, object]:
         "project_contract": visible_contract.model_dump(mode="json") if visible_contract is not None else None,
         "project_contract_validation": project_contract_validation,
         "project_contract_load_info": project_contract_load_info,
+        "project_contract_gate": project_contract_gate,
         "contract_intake": visible_contract.context_intake.model_dump(mode="json") if visible_contract is not None else None,
         "effective_reference_intake": effective_reference_intake,
         "derived_active_references": derived_references,
@@ -1848,14 +1751,16 @@ def init_quick(cwd: Path, description: str | None = None) -> dict:
     return result
 
 
-def init_resume(cwd: Path) -> dict:
+def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
     """Assemble context for resuming work."""
-    config = load_config(cwd)
-    execution_context = _build_execution_runtime_context(cwd)
+    requested_cwd = cwd.expanduser().resolve(strict=False)
+    effective_cwd, reentry_metadata = _resolve_reentry_context(requested_cwd, data_root=data_root)
+    config = load_config(effective_cwd)
+    execution_context = _build_execution_runtime_context(effective_cwd)
 
     # Check for interrupted agent
     interrupted_agent_id = None
-    agent_id_file = cwd / PLANNING_DIR_NAME / AGENT_ID_FILENAME
+    agent_id_file = effective_cwd / PLANNING_DIR_NAME / AGENT_ID_FILENAME
     try:
         interrupted_agent_id = agent_id_file.read_text(encoding="utf-8").strip() or None
     except (FileNotFoundError, OSError):
@@ -1878,11 +1783,18 @@ def init_resume(cwd: Path) -> dict:
         normalized_interrupted_agent_id = interrupted_agent_id
 
     result = {
+        "workspace_root": reentry_metadata["workspace_root"],
+        "project_root": reentry_metadata["project_root"],
+        "project_root_source": reentry_metadata["project_root_source"],
+        "project_root_auto_selected": reentry_metadata["project_root_auto_selected"],
+        "project_reentry_mode": reentry_metadata["project_reentry_mode"],
+        "project_reentry_requires_selection": reentry_metadata["project_reentry_requires_selection"],
+        "project_reentry_candidates": reentry_metadata["project_reentry_candidates"],
         # File existence
-        "state_exists": _state_exists(cwd),
-        "roadmap_exists": _path_exists(cwd, f"{PLANNING_DIR_NAME}/{ROADMAP_FILENAME}"),
-        "project_exists": _path_exists(cwd, f"{PLANNING_DIR_NAME}/{PROJECT_FILENAME}"),
-        "planning_exists": _path_exists(cwd, PLANNING_DIR_NAME),
+        "state_exists": _state_exists(effective_cwd),
+        "roadmap_exists": _path_exists(effective_cwd, f"{PLANNING_DIR_NAME}/{ROADMAP_FILENAME}"),
+        "project_exists": _path_exists(effective_cwd, f"{PLANNING_DIR_NAME}/{PROJECT_FILENAME}"),
+        "planning_exists": _path_exists(effective_cwd, PLANNING_DIR_NAME),
         # Agent state
         "has_interrupted_agent": has_interrupted_agent,
         "interrupted_agent_id": normalized_interrupted_agent_id,
@@ -1895,9 +1807,9 @@ def init_resume(cwd: Path) -> dict:
         "segment_candidates": segment_candidates,
         "resume_mode": resume_mode,
         # Platform
-        "platform": _detect_platform(cwd),
+        "platform": _detect_platform(effective_cwd),
     }
-    result.update(_build_reference_runtime_context(cwd))
+    result.update(_build_reference_runtime_context(effective_cwd))
     execution_public = {
         key: value for key, value in execution_context.items() if key != "resume_projection"
     }
@@ -2140,7 +2052,7 @@ def init_map_research(cwd: Path) -> dict:
     return result
 
 
-def init_progress(cwd: Path, includes: set[str] | None = None) -> dict:
+def init_progress(cwd: Path, includes: set[str] | None = None, *, data_root: Path | None = None) -> dict:
     """Assemble context for progress checking.
 
     Args:
@@ -2148,11 +2060,13 @@ def init_progress(cwd: Path, includes: set[str] | None = None) -> dict:
         includes: Optional set of file sections to embed (state, roadmap, project, config).
     """
     includes = includes or set()
-    config = load_config(cwd)
-    milestone = _try_get_milestone_info(cwd)
+    requested_cwd = cwd.expanduser().resolve(strict=False)
+    effective_cwd, reentry_metadata = _resolve_reentry_context(requested_cwd, data_root=data_root)
+    config = load_config(effective_cwd)
+    milestone = _try_get_milestone_info(effective_cwd)
 
     # Analyze phases
-    layout = ProjectLayout(cwd)
+    layout = ProjectLayout(effective_cwd)
     phases_dir = layout.phases_dir
     phases: list[dict[str, object]] = []
     current_phase: dict[str, object] | None = None
@@ -2206,7 +2120,7 @@ def init_progress(cwd: Path, includes: set[str] | None = None) -> dict:
 
     # Check for paused work
     paused_at: str | None = None
-    state_content = _safe_read_file(cwd / PLANNING_DIR_NAME / STATE_MD_FILENAME)
+    state_content = _safe_read_file(effective_cwd / PLANNING_DIR_NAME / STATE_MD_FILENAME)
     if state_content:
         status_match = re.search(r"\*\*Status:\*\*\s*(.+)", state_content)
         if status_match and status_match.group(1).strip().lower() == "paused":
@@ -2214,9 +2128,16 @@ def init_progress(cwd: Path, includes: set[str] | None = None) -> dict:
             paused_at = stopped_match.group(1).strip() if stopped_match else "true"
 
     result: dict[str, object] = {
+        "workspace_root": reentry_metadata["workspace_root"],
+        "project_root": reentry_metadata["project_root"],
+        "project_root_source": reentry_metadata["project_root_source"],
+        "project_root_auto_selected": reentry_metadata["project_root_auto_selected"],
+        "project_reentry_mode": reentry_metadata["project_reentry_mode"],
+        "project_reentry_requires_selection": reentry_metadata["project_reentry_requires_selection"],
+        "project_reentry_candidates": reentry_metadata["project_reentry_candidates"],
         # Models
-        "executor_model": _resolve_model(cwd, "gpd-executor", config),
-        "planner_model": _resolve_model(cwd, "gpd-planner", config),
+        "executor_model": _resolve_model(effective_cwd, "gpd-executor", config),
+        "planner_model": _resolve_model(effective_cwd, "gpd-planner", config),
         # Config
         "commit_docs": config["commit_docs"],
         "autonomy": config["autonomy"],
@@ -2236,14 +2157,14 @@ def init_progress(cwd: Path, includes: set[str] | None = None) -> dict:
         "paused_at": paused_at,
         "has_work_in_progress": current_phase is not None,
         # File existence
-        "project_exists": _path_exists(cwd, f"{PLANNING_DIR_NAME}/{PROJECT_FILENAME}"),
-        "roadmap_exists": _path_exists(cwd, f"{PLANNING_DIR_NAME}/{ROADMAP_FILENAME}"),
-        "state_exists": _state_exists(cwd),
+        "project_exists": _path_exists(effective_cwd, f"{PLANNING_DIR_NAME}/{PROJECT_FILENAME}"),
+        "roadmap_exists": _path_exists(effective_cwd, f"{PLANNING_DIR_NAME}/{ROADMAP_FILENAME}"),
+        "state_exists": _state_exists(effective_cwd),
         # Platform
-        "platform": _detect_platform(cwd),
+        "platform": _detect_platform(effective_cwd),
     }
-    result.update(_build_reference_runtime_context(cwd))
-    result.update(_build_execution_runtime_context(cwd))
+    result.update(_build_reference_runtime_context(effective_cwd))
+    result.update(_build_execution_runtime_context(effective_cwd))
     if result.get("execution_paused_at"):
         result["paused_at"] = result["execution_paused_at"]
     if result.get("current_execution") and result["current_phase"] is None:
@@ -2261,7 +2182,7 @@ def init_progress(cwd: Path, includes: set[str] | None = None) -> dict:
         result["has_work_in_progress"] = True
 
     # Include file contents
-    planning = cwd / PLANNING_DIR_NAME
+    planning = effective_cwd / PLANNING_DIR_NAME
     if "state" in includes:
         result["state_content"] = _safe_read_file_truncated(planning / STATE_MD_FILENAME)
     if "roadmap" in includes:

@@ -1206,6 +1206,9 @@ def test_state_load_matches_context_progress_for_recoverably_normalized_project_
     ctx = init_progress(tmp_path)
 
     assert loaded.state["project_contract"] == ctx["project_contract"]
+    assert loaded.project_contract_gate == ctx["project_contract_gate"]
+    assert loaded.project_contract_load_info == ctx["project_contract_load_info"]
+    assert loaded.project_contract_validation == ctx["project_contract_validation"]
     assert "notes" not in loaded.state["project_contract"]["claims"][0]
 
 

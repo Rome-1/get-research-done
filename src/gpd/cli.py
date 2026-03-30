@@ -54,6 +54,11 @@ from gpd.core.constants import (
     RECENT_PROJECTS_INDEX_FILENAME,
 )
 from gpd.core.errors import ConfigError, GPDError
+from gpd.core.project_reentry import (
+    ProjectReentryResolution,
+    recoverable_project_context,
+    resolve_project_reentry,
+)
 from gpd.core.recovery_advice import RecoveryAdvice, build_recovery_advice
 from gpd.core.surface_phrases import (
     local_cli_bridge_note,
@@ -150,35 +155,19 @@ def _get_cwd() -> Path:
     return _cwd.resolve()
 
 
-def _resolve_project_root_or_cwd(cwd: Path | None = None) -> Path:
-    """Resolve the ancestor project root when present, otherwise keep the workspace cwd."""
-    from gpd.core.observability import resolve_project_root
-
+def _status_command_reentry(cwd: Path | None = None) -> ProjectReentryResolution:
+    """Resolve the shared re-entry contract for recovery/status commands."""
     workspace_cwd = (cwd or _get_cwd()).expanduser().resolve(strict=False)
-    project_root = resolve_project_root(workspace_cwd)
-    if project_root is None:
-        return workspace_cwd
-    return project_root.expanduser().resolve(strict=False)
+    return resolve_project_reentry(workspace_cwd)
 
 
 def _status_command_cwd(cwd: Path | None = None) -> Path:
     """Resolve the effective cwd for read-only status/recovery commands."""
-    return _resolve_project_root_or_cwd(cwd)
-
-
-def _recoverable_project_context(layout) -> tuple[bool, bool, bool]:
-    """Return whether a workspace has enough durable state for recovery surfaces."""
-    state_exists = any(
-        path.exists()
-        for path in (
-            layout.state_json,
-            layout.state_json_backup,
-            layout.state_md,
-        )
-    )
-    roadmap_exists = layout.roadmap.exists()
-    project_exists = layout.project_md.exists()
-    return state_exists, roadmap_exists, project_exists
+    resolution = _status_command_reentry(cwd)
+    if resolution.resolved_project_root is not None:
+        return resolution.resolved_project_root
+    workspace_cwd = (cwd or _get_cwd()).expanduser().resolve(strict=False)
+    return workspace_cwd
 
 
 def _split_global_cli_options(argv: list[str]) -> tuple[list[str], list[str]]:
@@ -1017,12 +1006,15 @@ _RECENT_PROJECTS_INDEX_FILENAMES = (RECENT_PROJECTS_INDEX_FILENAME,)
 
 def _resume_status_message(payload: dict[str, object], *, recovery_advice: RecoveryAdvice) -> str:
     """Return a concise human summary of resume readiness for this workspace."""
+    auto_selected = bool(payload.get("project_root_auto_selected"))
     if not bool(payload.get("planning_exists")):
         return "No GPD planning directory is present in this workspace."
     if not any(bool(payload.get(key)) for key in ("state_exists", "roadmap_exists", "project_exists")):
         return "Planning scaffolding exists, but there is no recoverable project state yet."
 
     if recovery_advice.status == "bounded-segment":
+        if auto_selected:
+            return "A bounded execution segment is resumable from an auto-selected recent project."
         return "A bounded execution segment is resumable from the current workspace state."
     if recovery_advice.status == "interrupted-agent":
         return "An interrupted agent marker is present, but no bounded resume segment is active."
@@ -1495,7 +1487,13 @@ def _render_resume_summary(payload: dict[str, object]) -> None:
     summary = Table.grid(padding=(0, 2))
     summary.add_column(style=f"bold {_INSTALL_ACCENT_COLOR}")
     summary.add_column()
-    summary.add_row("Workspace", _format_display_path(_get_cwd()))
+    workspace_root = payload.get("workspace_root")
+    project_root = payload.get("project_root")
+    summary.add_row("Workspace", _format_display_path(str(workspace_root or _get_cwd())))
+    if isinstance(project_root, str) and project_root.strip():
+        summary.add_row("Project", _format_display_path(project_root.strip()))
+    if bool(payload.get("project_root_auto_selected")):
+        summary.add_row("Re-entry", "auto-selected recent project")
     summary.add_row("Status", _resume_status_message(payload, recovery_advice=recovery_advice))
     summary.add_row("Resume mode", _resume_mode_label(payload.get("resume_mode")))
     summary.add_row("Candidates", str(len(segment_candidates)))
@@ -1602,7 +1600,7 @@ def resume(
 
     from gpd.core.context import init_resume
 
-    payload = init_resume(_status_command_cwd())
+    payload = init_resume(_get_cwd())
     if _raw:
         _output(payload)
         return
@@ -3046,7 +3044,7 @@ def init_resume() -> None:
     """Assemble context for resuming previous work."""
     from gpd.core.context import init_resume
 
-    _output(init_resume(_status_command_cwd()))
+    _output(init_resume(_get_cwd()))
 
 
 @init_app.command("verify-work")
@@ -3071,7 +3069,7 @@ def init_progress(
         command_name="gpd init progress",
         allowed=_INIT_PROGRESS_INCLUDES,
     )
-    _output(init_progress(_status_command_cwd(), includes=includes))
+    _output(init_progress(_get_cwd(), includes=includes))
 
 
 @init_app.command("map-research")
@@ -4785,7 +4783,38 @@ def _build_command_context_preflight(
 
     if command.context_mode == "project-required":
         if command.name in _PROJECT_ROOT_AWARE_STATUS_COMMANDS:
-            state_exists, roadmap_exists, project_exists = _recoverable_project_context(layout)
+            reentry = _status_command_reentry(cwd)
+            selected_root = reentry.resolved_project_root or context_cwd
+            layout = ProjectLayout(selected_root)
+            state_exists, roadmap_exists, project_exists = recoverable_project_context(selected_root)
+            if reentry.auto_selected and reentry.project_root:
+                add_check(
+                    "project_reentry",
+                    True,
+                    f"auto-selected recoverable recent project {_format_display_path(reentry.project_root)}",
+                    blocking=False,
+                )
+            elif reentry.requires_user_selection:
+                add_check(
+                    "project_reentry",
+                    False,
+                    "multiple recoverable recent projects are available; explicit selection required",
+                    blocking=False,
+                )
+            elif reentry.has_current_workspace_candidate:
+                add_check(
+                    "project_reentry",
+                    True,
+                    "current workspace or ancestor project root is recoverable",
+                    blocking=False,
+                )
+            else:
+                add_check(
+                    "project_reentry",
+                    False,
+                    "no recoverable current-workspace or uniquely recoverable recent-project target found",
+                    blocking=False,
+                )
             add_check(
                 "state_exists",
                 state_exists,
@@ -4816,11 +4845,15 @@ def _build_command_context_preflight(
                 ),
                 blocking=False,
             )
-            recoverable = state_exists or roadmap_exists or project_exists
+            recoverable = (state_exists or roadmap_exists or project_exists) and not reentry.requires_user_selection
             guidance = (
                 ""
                 if recoverable
                 else (
+                    "This command found multiple recoverable recent GPD projects and will not switch silently. "
+                    "Use `gpd resume --recent` to pick the right project explicitly, then reopen it in the runtime."
+                    if reentry.requires_user_selection
+                    else
                     "This command requires a recoverable GPD workspace. "
                     "Open the right project, use `gpd resume --recent` to rediscover it, or "
                     f"initialize a new project with `{init_command}` in the runtime surface or `gpd init new-project` in the local CLI."

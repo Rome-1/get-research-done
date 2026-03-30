@@ -23,6 +23,7 @@ from typer.testing import CliRunner
 from gpd.adapters import get_adapter
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors, list_runtime_names
 from gpd.cli import app
+from gpd.core.recent_projects import record_recent_project
 from gpd.core.state import StateUpdateResult, default_state_dict, generate_state_markdown
 
 runner = CliRunner()
@@ -1195,6 +1196,7 @@ class TestReviewValidationCommands:
     ) -> None:
         outside_dir = tmp_path.parent / f"{tmp_path.name}-outside"
         outside_dir.mkdir()
+        monkeypatch.setenv("GPD_DATA_DIR", str(tmp_path / "data"))
         monkeypatch.chdir(outside_dir)
 
         result = runner.invoke(
@@ -1291,6 +1293,119 @@ class TestReviewValidationCommands:
             assert checks["state_exists"]["passed"] is True
             assert checks["roadmap_exists"]["passed"] is True
             assert checks["project_exists"]["passed"] is False
+
+    def test_command_context_progress_auto_selects_unique_recoverable_recent_project(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        workspace = tmp_path.parent / f"{tmp_path.name}-outside-unique"
+        workspace.mkdir()
+        project = tmp_path / "recoverable-project"
+        gpd_dir = project / "GPD"
+        gpd_dir.mkdir(parents=True)
+        (gpd_dir / "STATE.md").write_text("# Research State\n", encoding="utf-8")
+        (gpd_dir / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+        (gpd_dir / "PROJECT.md").write_text("# Project\n", encoding="utf-8")
+        data_root = tmp_path / "data"
+        monkeypatch.setenv("GPD_DATA_DIR", str(data_root))
+        record_recent_project(
+            project,
+            session_data={
+                "last_date": "2026-03-29T12:00:00+00:00",
+                "stopped_at": "Phase 01",
+            },
+            store_root=data_root,
+        )
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(workspace), "validate", "command-context", "progress"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["passed"] is True
+        assert checks["project_reentry"]["passed"] is True
+        assert "auto-selected recoverable recent project" in checks["project_reentry"]["detail"]
+
+    def test_command_context_resume_work_auto_selects_unique_recoverable_recent_project(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        workspace = tmp_path.parent / f"{tmp_path.name}-outside-unique-resume"
+        workspace.mkdir()
+        project = tmp_path / "recoverable-resume-project"
+        gpd_dir = project / "GPD"
+        gpd_dir.mkdir(parents=True)
+        (gpd_dir / "STATE.md").write_text("# Research State\n", encoding="utf-8")
+        (gpd_dir / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+        (gpd_dir / "PROJECT.md").write_text("# Project\n", encoding="utf-8")
+        data_root = tmp_path / "data"
+        monkeypatch.setenv("GPD_DATA_DIR", str(data_root))
+        record_recent_project(
+            project,
+            session_data={
+                "last_date": "2026-03-29T12:00:00+00:00",
+                "stopped_at": "Phase 02",
+            },
+            store_root=data_root,
+        )
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(workspace), "validate", "command-context", "resume-work"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["passed"] is True
+        assert checks["project_reentry"]["passed"] is True
+        assert "auto-selected recoverable recent project" in checks["project_reentry"]["detail"]
+
+    def test_command_context_resume_work_requires_explicit_selection_when_recent_projects_are_ambiguous(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        workspace = tmp_path.parent / f"{tmp_path.name}-outside-ambiguous"
+        workspace.mkdir()
+        data_root = tmp_path / "data"
+        monkeypatch.setenv("GPD_DATA_DIR", str(data_root))
+
+        for name, stopped_at in (("project-a", "Phase 01"), ("project-b", "Phase 02")):
+            project = tmp_path / name
+            gpd_dir = project / "GPD"
+            gpd_dir.mkdir(parents=True)
+            (gpd_dir / "STATE.md").write_text("# Research State\n", encoding="utf-8")
+            (gpd_dir / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+            (gpd_dir / "PROJECT.md").write_text("# Project\n", encoding="utf-8")
+            record_recent_project(
+                project,
+                session_data={
+                    "last_date": "2026-03-29T12:00:00+00:00",
+                    "stopped_at": stopped_at,
+                },
+                store_root=data_root,
+            )
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(workspace), "validate", "command-context", "resume-work"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["passed"] is False
+        assert checks["project_reentry"]["passed"] is False
+        assert "multiple recoverable recent GPD projects" in payload["guidance"]
 
     def test_command_context_projectless_passes_without_project(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, codex_command_prefix: str

@@ -17,13 +17,14 @@ allowed-tools:
 <objective>
 Restore complete research context and resume work seamlessly from the latest canonical pause/resume handoff and live session state.
 
-This is the in-runtime return path for the selected project. Use `gpd resume` for the current-workspace read-only recovery snapshot, `gpd resume --recent` if you need to find the workspace first, then run `/gpd:resume-work` in the reopened project. After resuming, `/gpd:suggest-next` is the fastest next command when you only need the next action.
+This is the runtime recovery command for the selected project. Use `gpd resume` for the current-workspace read-only recovery snapshot, `gpd resume --recent` when you need the explicit multi-project picker, then run `/gpd:resume-work` in the reopened project. If `gpd resume --recent` finds exactly one recoverable project, that can become the fast re-entry path; otherwise the project choice stays explicit. After resuming, `/gpd:suggest-next` is the fastest next command when you only need the next action.
 
 Routes to the resume-work workflow which handles:
 
 - STATE.md loading (or reconstruction if missing)
 - Active execution checkpoint detection
 - Canonical `.continue-here.md` handoff detection from pause-work session continuity
+- Explicit recent-project re-entry when the selected project has to be rediscovered first
 - Incomplete work detection (PLAN without SUMMARY)
 - Full awareness of where the calculation or derivation left off
 - Restoration of parameter values, intermediate results, and assumptions

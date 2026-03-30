@@ -44,7 +44,7 @@ class RecoveryAdvice(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     mode: str = "idle"
-    status: str = "idle"
+    status: str = "no-recovery"
     decision_source: str = "none"
     primary_command: str | None = None
     primary_reason: str | None = None
@@ -52,6 +52,12 @@ class RecoveryAdvice(BaseModel):
     continue_reason: str | None = None
     fast_next_command: str | None = None
     fast_next_reason: str | None = None
+    workspace_root: str | None = None
+    project_root: str | None = None
+    project_root_source: str | None = None
+    project_root_auto_selected: bool = False
+    project_reentry_mode: str | None = None
+    project_reentry_requires_selection: bool = False
     current_workspace_resumable: bool = False
     current_workspace_has_recovery: bool = False
     current_workspace_has_resume_file: bool = False
@@ -172,7 +178,7 @@ def _status(
         return "workspace-recovery"
     if recent_projects_count > 0:
         return "recent-projects"
-    return "idle"
+    return "no-recovery"
 
 
 def _build_actions(
@@ -254,6 +260,12 @@ def build_recovery_advice(
     execution_resume_file_source = _text_field(payload, "execution_resume_file_source")
     session_resume_file = _text_field(payload, "session_resume_file")
     recorded_session_resume_file = _text_field(payload, "recorded_session_resume_file")
+    workspace_root = _text_field(payload, "workspace_root")
+    project_root = _text_field(payload, "project_root")
+    project_root_source = _text_field(payload, "project_root_source")
+    project_root_auto_selected = _bool_field(payload, "project_root_auto_selected")
+    project_reentry_mode = _text_field(payload, "project_reentry_mode")
+    project_reentry_requires_selection = _bool_field(payload, "project_reentry_requires_selection")
 
     has_bounded_segment_candidate = _has_usable_segment_candidate(
         segment_candidates,
@@ -322,7 +334,20 @@ def build_recovery_advice(
         or has_interrupted_agent
         or has_session_resume_file
     )
-    status = _status(
+    inferred_reentry_mode = project_reentry_mode or (
+        "auto-recent-project"
+        if project_root_auto_selected
+        else "current-workspace"
+        if current_workspace_has_recovery
+        else "ambiguous-recent-projects"
+        if project_reentry_requires_selection or recent_projects_count > 0
+        else "no-recovery"
+    )
+    auto_selected_recent_project = inferred_reentry_mode == "auto-recent-project" or (
+        project_root_auto_selected and current_workspace_has_recovery
+    )
+    ambiguous_recent_projects = inferred_reentry_mode == "ambiguous-recent-projects"
+    resolved_status = _status(
         execution_resumable=execution_resumable,
         has_interrupted_agent=has_interrupted_agent,
         has_live_execution=has_live_execution,
@@ -332,79 +357,59 @@ def build_recovery_advice(
         recent_projects_count=recent_projects_count,
     )
 
-    resolved_continue_command = _normalize_command(continue_command, fallback="runtime `resume-work`")
-    resolved_fast_next_command = _normalize_command(fast_next_command, fallback="runtime `suggest-next`")
-
+    decision_source: str
     if force_recent:
         if recent_projects_count > 0:
-            mode = "recent-projects"
             decision_source = "forced-recent-projects"
             primary_command = "gpd resume --recent"
-            primary_reason = recovery_primary_reason(
-                mode=mode,
-                forced_recent=True,
-                execution_resumable=execution_resumable,
-                has_interrupted_agent=has_interrupted_agent,
-                has_live_execution=has_live_execution,
-                has_session_resume_file=has_session_resume_file,
-                missing_session_resume_file=missing_session_resume_file,
-                machine_change_notice=machine_change_notice,
-            )
         else:
-            mode = "idle"
-            decision_source = "forced-recent-projects"
+            decision_source = "no-recovery"
             primary_command = None
-            primary_reason = recovery_primary_reason(
-                mode=mode,
-                execution_resumable=execution_resumable,
-                has_interrupted_agent=has_interrupted_agent,
-                has_live_execution=has_live_execution,
-                has_session_resume_file=has_session_resume_file,
-                missing_session_resume_file=missing_session_resume_file,
-                machine_change_notice=machine_change_notice,
-            )
+    elif auto_selected_recent_project:
+        decision_source = "auto-selected-recent-project"
+        primary_command = "gpd resume --recent"
     elif current_workspace_has_recovery:
-        mode = "current-workspace"
         decision_source = "current-workspace"
         primary_command = "gpd resume"
-        primary_reason = recovery_primary_reason(
-            mode=mode,
-            execution_resumable=execution_resumable,
-            has_interrupted_agent=has_interrupted_agent,
-            has_live_execution=has_live_execution,
-            has_session_resume_file=has_session_resume_file,
-            missing_session_resume_file=missing_session_resume_file,
-            machine_change_notice=machine_change_notice,
-        )
+    elif ambiguous_recent_projects:
+        decision_source = "ambiguous-recent-projects"
+        primary_command = "gpd resume --recent" if recent_projects_count > 0 else None
     elif recent_projects_count > 0:
-        mode = "recent-projects"
         decision_source = "recent-projects"
         primary_command = "gpd resume --recent"
-        primary_reason = recovery_primary_reason(
-            mode=mode,
-            execution_resumable=execution_resumable,
-            has_interrupted_agent=has_interrupted_agent,
-            has_live_execution=has_live_execution,
-            has_session_resume_file=has_session_resume_file,
-            missing_session_resume_file=missing_session_resume_file,
-            machine_change_notice=machine_change_notice,
-        )
     else:
-        mode = "idle"
-        decision_source = "none"
+        decision_source = "no-recovery"
         primary_command = None
-        primary_reason = recovery_primary_reason(
-            mode=mode,
-            execution_resumable=execution_resumable,
-            has_interrupted_agent=has_interrupted_agent,
-            has_live_execution=has_live_execution,
-            has_session_resume_file=has_session_resume_file,
-            missing_session_resume_file=missing_session_resume_file,
-            machine_change_notice=machine_change_notice,
-        )
 
-    continue_reason = recovery_continue_reason(mode=mode)
-    fast_next_reason = recovery_fast_next_reason()
+    if decision_source == "no-recovery":
+        resolved_continue_command = None
+        resolved_fast_next_command = None
+        continue_reason = "No recoverable workspace is currently available."
+        fast_next_reason = "No next action is available until a workspace can be recovered."
+        mode = "idle"
+    else:
+        resolved_continue_command = _normalize_command(continue_command, fallback="runtime `resume-work`")
+        resolved_fast_next_command = _normalize_command(fast_next_command, fallback="runtime `suggest-next`")
+        continue_reason = recovery_continue_reason(mode="current-workspace" if auto_selected_recent_project or current_workspace_has_recovery else "recent-projects")
+        fast_next_reason = recovery_fast_next_reason()
+
+    mode = "current-workspace" if (auto_selected_recent_project or current_workspace_has_recovery) else "recent-projects" if recent_projects_count > 0 and decision_source != "no-recovery" else "idle"
+    primary_reason = recovery_primary_reason(
+        mode="current-workspace"
+        if decision_source == "current-workspace"
+        else "recent-projects"
+        if decision_source
+        in {"auto-selected-recent-project", "ambiguous-recent-projects", "forced-recent-projects", "recent-projects"}
+        else "idle",
+        forced_recent=force_recent,
+        execution_resumable=execution_resumable,
+        has_interrupted_agent=has_interrupted_agent,
+        has_live_execution=has_live_execution,
+        has_session_resume_file=has_session_resume_file,
+        missing_session_resume_file=missing_session_resume_file,
+        machine_change_notice=machine_change_notice,
+    )
+    status = "no-recovery" if decision_source == "no-recovery" else resolved_status
 
     return RecoveryAdvice(
         mode=mode,
@@ -416,6 +421,12 @@ def build_recovery_advice(
         continue_reason=continue_reason,
         fast_next_command=resolved_fast_next_command,
         fast_next_reason=fast_next_reason,
+        workspace_root=workspace_root,
+        project_root=project_root,
+        project_root_source=project_root_source,
+        project_root_auto_selected=project_root_auto_selected,
+        project_reentry_mode=inferred_reentry_mode,
+        project_reentry_requires_selection=project_reentry_requires_selection,
         current_workspace_resumable=execution_resumable,
         current_workspace_has_recovery=current_workspace_has_recovery,
         current_workspace_has_resume_file=current_workspace_has_resume_file,

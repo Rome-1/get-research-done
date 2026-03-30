@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 import re
+from collections.abc import Iterable
 
-from gpd.core.public_surface_contract import beginner_onboarding_caveats, beginner_preflight_requirements
 from gpd.core.onboarding_surfaces import beginner_startup_ladder_text
+from gpd.core.public_surface_contract import beginner_onboarding_caveats, beginner_preflight_requirements
 from gpd.core.surface_phrases import post_start_settings_note, post_start_settings_recommendation
 
 DOCTOR_RUNTIME_SCOPE_RE = re.compile(r"gpd doctor --runtime <runtime> --local\|--global")
@@ -423,6 +423,15 @@ def assert_start_workflow_router_contract(content: str) -> None:
     _assert_contains_any(
         content,
         (
+            "chooser, not a second implementation",
+            "not a parallel onboarding state machine",
+            "first-stop chooser",
+        ),
+        label="start chooser-vs-executor boundary",
+    )
+    _assert_contains_any(
+        content,
+        (
             "Reply with the number or the option name.",
             "Ask for exactly one choice.",
         ),
@@ -455,6 +464,8 @@ def assert_start_workflow_router_contract(content: str) -> None:
             "normal-terminal recovery command",
             "normal terminal to find the project first",
             "This is a normal-terminal recovery command",
+            "normal-terminal recent-project picker",
+            "choose the project explicitly",
         ),
         label="start normal-terminal recovery boundary",
     )
@@ -684,6 +695,10 @@ def assert_recovery_ladder_contract(
             "wrong workspace",
             "find the workspace you want to reopen",
             "find the workspace you need to reopen",
+            "choose the project explicitly",
+            "select the project explicitly",
+            "pick the right project first",
+            "choose one of the recent projects",
         ),
         label="cross-workspace recovery discovery wording",
     )
@@ -695,6 +710,8 @@ def assert_recovery_ladder_contract(
             "continue there",
             "continue inside that workspace",
             "continue paused work",
+            "single recoverable recent project",
+            "auto-selected recent project",
         ),
         label="resume continuation semantics",
     )
