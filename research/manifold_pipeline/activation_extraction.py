@@ -19,12 +19,16 @@ class ExtractionResult:
 # --- Condition text generators ---
 
 def _positional_texts(n: int, seq_len: int) -> list[str]:
-    """Repeated token sequences — positional encoding should dominate."""
+    """Single repeated token — isolates positional encoding.
+
+    Uses only "the" to ensure all tokens have identical embeddings.
+    Any manifold structure must come from positional encoding, not
+    token identity. (Previous version cycled 8 tokens, confounding
+    token_frequency with token_id.)
+    """
     texts = []
-    tokens = ["the", "a", "an", "one", "is", "was", "and", "but"]
-    for i in range(n):
-        tok = tokens[i % len(tokens)]
-        texts.append((tok + " ") * (seq_len // 2))
+    for _ in range(n):
+        texts.append(("the " * (seq_len // 2)).strip())
     return texts
 
 

@@ -230,6 +230,7 @@ def _run_pipeline(
                 token_ids=er.token_ids,
                 positions=er.positions,
                 tokenizer=tokenizer,
+                activations=er.activations,
                 n_permutations=config.n_permutations,
                 seed=config.random_seed,
             )
@@ -243,14 +244,18 @@ def _run_pipeline(
         if phase1_result.proceed:
             print("\n" + "=" * 60)
             print("PHASE 1 GATE: *** PROCEED ***")
-            print("Manifolds show significant token selectivity.")
+            print("SMCE manifolds capture more token structure than k-means.")
             print("=" * 60)
-            # Report which types were significant
             for cond, results_list in phase1_result.results_by_condition.items():
                 sig = [r for r in results_list if r.significant]
                 if sig:
-                    types_str = ", ".join(f"{r.token_type}(p={r.p_value:.4f})" for r in sig)
-                    print(f"  {cond}: {types_str}")
+                    parts = []
+                    for r in sig:
+                        delta = ((r.mi_observed - r.mi_kmeans) / r.mi_kmeans * 100
+                                 if r.mi_kmeans > 0 else float('inf'))
+                        parts.append(f"{r.token_type}(SMCE={r.nmi_observed:.3f} "
+                                     f"vs km={r.nmi_kmeans:.3f}, +{delta:.0f}%)")
+                    print(f"  {cond}: {', '.join(parts)}")
         else:
             print("\n" + "=" * 60)
             print("PHASE 1 GATE: *** KILL ***")
@@ -310,6 +315,9 @@ def _run_pipeline(
                     {
                         "token_type": r.token_type,
                         "mi_observed": round(float(r.mi_observed), 6),
+                        "mi_kmeans": round(float(r.mi_kmeans), 6),
+                        "nmi_observed": round(float(r.nmi_observed), 4),
+                        "nmi_kmeans": round(float(r.nmi_kmeans), 4),
                         "mi_null_mean": round(float(r.mi_null_mean), 6),
                         "mi_null_std": round(float(r.mi_null_std), 6),
                         "p_value": round(float(r.p_value), 4),
