@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from gpd.core.context import init_resume
 from gpd.core.costs import build_cost_summary, resolve_cost_advisory
 from gpd.core.observability import derive_execution_visibility
-from gpd.core.project_reentry import resolve_project_reentry
+from gpd.core.project_reentry import project_reentry_candidate_summary, resolve_project_reentry
 from gpd.core.recent_projects import list_recent_projects
 from gpd.core.recovery_advice import (
     RecoveryAdvice,
@@ -108,7 +108,12 @@ def workflow_preset_surface_note() -> str:
 def _selected_reentry_candidate(reentry: object) -> dict[str, object] | None:
     selected_candidate = getattr(reentry, "selected_candidate", None)
     candidate_payload = _model_dump(selected_candidate)
-    return candidate_payload if isinstance(candidate_payload, dict) else None
+    if not isinstance(candidate_payload, dict):
+        return None
+    summary = project_reentry_candidate_summary(selected_candidate)
+    if summary is not None:
+        candidate_payload["summary"] = summary
+    return candidate_payload
 
 
 def _normalized_row_text(row: dict[str, object] | None, field: str) -> str | None:
@@ -122,39 +127,15 @@ def _normalized_row_text(row: dict[str, object] | None, field: str) -> str | Non
 
 
 def _recent_project_summary(row: dict[str, object] | None) -> str | None:
-    if row is None:
-        return None
+    return project_reentry_candidate_summary(row)
 
-    bits: list[str] = []
-    last_seen = _normalized_row_text(row, "last_session_at") or _normalized_row_text(row, "last_seen_at")
-    stopped_at = _normalized_row_text(row, "stopped_at")
-    hostname = _normalized_row_text(row, "hostname")
-    platform = _normalized_row_text(row, "platform")
-    resume_file_reason = _normalized_row_text(row, "resume_file_reason")
-    availability_reason = _normalized_row_text(row, "availability_reason")
 
-    if last_seen is not None:
-        bits.append(f"last seen {last_seen}")
-    if stopped_at is not None:
-        bits.append(f"stopped at {stopped_at}")
-    if hostname is not None and platform is not None:
-        bits.append(f"on {hostname} ({platform})")
-    elif hostname is not None:
-        bits.append(f"on {hostname}")
-    elif platform is not None:
-        bits.append(f"on {platform}")
-
-    resumable = bool(row.get("resumable"))
-    if resumable:
-        bits.append("resume file ready")
-    elif resume_file_reason is not None:
-        bits.append(resume_file_reason)
-    elif availability_reason is not None:
-        bits.append(availability_reason)
-
-    if not bits:
-        return None
-    return "; ".join(bits)
+def _selected_project_summary(reentry: object, current_project: dict[str, object] | None) -> str | None:
+    selected_candidate = getattr(reentry, "selected_candidate", None)
+    selected_summary = _suggestion_text(selected_candidate, "summary")
+    if selected_summary is not None:
+        return selected_summary
+    return _recent_project_summary(current_project)
 
 
 def _project_reentry_summary(
@@ -169,7 +150,7 @@ def _project_reentry_summary(
 
     if auto_selected:
         summary = "GPD auto-selected the only recoverable recent project on this machine."
-        current_project_summary = _recent_project_summary(current_project)
+        current_project_summary = _selected_project_summary(reentry, current_project)
         if current_project_summary is not None:
             summary = f"{summary} {current_project_summary}."
         return summary
@@ -435,11 +416,11 @@ def build_runtime_hint_payload(
     recovery = (
         {
             "current_project": (
-                {**current_project, "summary": _recent_project_summary(current_project)}
+                {**current_project, "summary": _selected_project_summary(reentry, current_project)}
                 if current_project is not None
                 else None
             ),
-            "current_project_summary": _recent_project_summary(current_project),
+            "current_project_summary": _selected_project_summary(reentry, current_project),
             "project_reentry": _model_dump(reentry),
             "project_reentry_summary": _project_reentry_summary(
                 reentry,

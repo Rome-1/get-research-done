@@ -623,6 +623,77 @@ def test_build_runtime_hint_payload_prefers_selected_project_resume_state_for_au
     assert any("suggest-next" in action for action in payload.next_actions)
 
 
+def test_build_runtime_hint_payload_uses_selected_project_reentry_candidate_for_summary_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / "outside"
+    workspace.mkdir()
+    selected_project = _bootstrap_recoverable_project(tmp_path / "selected-project")
+    fallback_project = _bootstrap_recoverable_project(tmp_path / "fallback-project")
+    selected_root = selected_project.resolve(strict=False).as_posix()
+    fallback_root = fallback_project.resolve(strict=False).as_posix()
+
+    monkeypatch.setattr(
+        "gpd.core.runtime_hints.resolve_project_reentry",
+        lambda _workspace_hint, data_root=None: SimpleNamespace(
+            resolved_project_root=selected_project,
+            source="recent_project",
+            auto_selected=True,
+            requires_user_selection=False,
+            mode="auto-recent-project",
+            project_root=selected_root,
+            project_root_source="recent_project",
+            project_root_auto_selected=True,
+            selected_candidate={
+                "project_root": selected_root,
+                "source": "recent_project",
+                "last_session_at": "2026-03-27T12:15:00+00:00",
+                "stopped_at": "Phase 08",
+                "resumable": True,
+                "resume_file_available": True,
+                "resume_target_kind": "handoff",
+                "resume_target_recorded_at": "2026-03-27T12:15:00+00:00",
+                "source_kind": "continuation.handoff",
+                "reason": "recent project cache entry with projected continuity handoff",
+            },
+            candidates=[
+                {
+                    "project_root": fallback_root,
+                    "source": "recent_project",
+                    "last_session_at": "2026-03-27T11:55:00+00:00",
+                    "stopped_at": "Phase 02",
+                    "resumable": True,
+                    "resume_file_available": True,
+                    "resume_target_kind": "bounded_segment",
+                    "resume_target_recorded_at": "2026-03-27T11:55:00+00:00",
+                    "source_kind": "continuation.bounded_segment",
+                    "reason": "recent project cache entry with confirmed bounded segment resume target",
+                }
+            ],
+        ),
+    )
+    monkeypatch.setattr("gpd.core.runtime_hints._resume_context", lambda _cwd, data_root=None: {})
+    monkeypatch.setattr("gpd.core.runtime_hints.list_recent_projects", lambda store_root=None, last=None: [])
+
+    payload = build_runtime_hint_payload(
+        workspace,
+        data_root=tmp_path / "data",
+        base_ready=True,
+        latex_capability=_latex_capability(),
+    )
+
+    assert payload.recovery["current_project"]["project_root"] == selected_root
+    assert payload.recovery["current_project"]["summary"] == "last seen 2026-03-27T12:15:00+00:00; stopped at Phase 08; resume file ready"
+    assert payload.recovery["current_project_summary"] == payload.recovery["current_project"]["summary"]
+    assert payload.recovery["current_project_summary"] == "last seen 2026-03-27T12:15:00+00:00; stopped at Phase 08; resume file ready"
+    assert payload.recovery["project_reentry_summary"] == (
+        "GPD auto-selected the only recoverable recent project on this machine. "
+        "last seen 2026-03-27T12:15:00+00:00; stopped at Phase 08; resume file ready."
+    )
+    assert "Phase 02" not in payload.recovery["current_project_summary"]
+    assert "Phase 02" not in payload.recovery["project_reentry_summary"]
+
+
 def test_build_runtime_hint_payload_preserves_existing_local_target_over_recent_project_hydration(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

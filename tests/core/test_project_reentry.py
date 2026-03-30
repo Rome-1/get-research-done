@@ -150,6 +150,7 @@ def test_resolve_project_reentry_auto_selects_unique_recoverable_recent_project(
     assert resolution.selected_candidate is not None
     assert resolution.selected_candidate.source == "recent_project"
     assert resolution.selected_candidate.project_root == project.resolve(strict=False).as_posix()
+    assert resolution.selected_candidate.summary == "last seen 2026-03-28T12:00:00+00:00; stopped at Phase 02; resume file ready"
     assert resolution.candidates[0].source == "recent_project"
     assert resolution.candidates[0].auto_selectable is True
     assert resolution.candidates[0].recoverable is True
@@ -183,6 +184,7 @@ def test_resolve_project_reentry_exposes_selected_candidate_metadata_for_bounded
     assert resolution.selected_candidate.auto_selectable is True
     assert resolution.selected_candidate.resume_target_kind == "bounded_segment"
     assert resolution.selected_candidate.resume_target_recorded_at == "2026-03-28T12:00:00+00:00"
+    assert resolution.selected_candidate.summary == "last seen 2026-03-28T12:00:00+00:00; stopped at Phase 02; resume file ready"
     assert resolution.selected_candidate.source_kind == "continuation.bounded_segment"
     assert resolution.selected_candidate.source_segment_id == f"segment-{project.name}"
     assert resolution.selected_candidate.source_transition_id == f"transition-{project.name}"

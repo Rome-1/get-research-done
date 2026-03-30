@@ -26,6 +26,7 @@ from gpd.core.root_resolution import (
 __all__ = [
     "ProjectReentryCandidate",
     "ProjectReentryResolution",
+    "project_reentry_candidate_summary",
     "recoverable_project_context",
     "resolve_project_reentry",
 ]
@@ -43,6 +44,7 @@ class ProjectReentryCandidate(BaseModel):
     resumable: bool
     confidence: str
     reason: str
+    summary: str | None = None
     state_exists: bool = False
     roadmap_exists: bool = False
     project_exists: bool = False
@@ -64,7 +66,6 @@ class ProjectReentryCandidate(BaseModel):
     recovery_phase: str | None = None
     recovery_plan: str | None = None
     auto_selectable: bool = False
-
 
 class ProjectReentryResolution(BaseModel):
     """Shared re-entry decision payload for recovery/status commands."""
@@ -100,6 +101,10 @@ class ProjectReentryResolution(BaseModel):
                     return candidate
         return next((candidate for candidate in self.candidates if candidate.project_root == selected_root), None)
 
+    @property
+    def selected_candidate_summary(self) -> str | None:
+        return project_reentry_candidate_summary(self.selected_candidate)
+
 
 def recoverable_project_context(project_root: Path) -> tuple[bool, bool, bool]:
     """Return whether a project root has enough durable state for recovery."""
@@ -116,6 +121,63 @@ def recoverable_project_context(project_root: Path) -> tuple[bool, bool, bool]:
     roadmap_exists = layout.roadmap.exists()
     project_exists = layout.project_md.exists()
     return state_exists, roadmap_exists, project_exists
+
+
+def _summary_value(candidate: ProjectReentryCandidate | Mapping[str, object] | None, field: str) -> object:
+    if candidate is None:
+        return None
+    if isinstance(candidate, Mapping):
+        return candidate.get(field)
+    return getattr(candidate, field, None)
+
+
+def _summary_text(candidate: ProjectReentryCandidate | Mapping[str, object] | None, *fields: str) -> str | None:
+    for field in fields:
+        value = _summary_value(candidate, field)
+        if not isinstance(value, str):
+            continue
+        stripped = value.strip()
+        if stripped:
+            return stripped
+    return None
+
+
+def project_reentry_candidate_summary(
+    candidate: ProjectReentryCandidate | Mapping[str, object] | None,
+) -> str | None:
+    if candidate is None:
+        return None
+
+    bits: list[str] = []
+    last_seen = _summary_text(candidate, "last_session_at", "last_seen_at")
+    stopped_at = _summary_text(candidate, "stopped_at")
+    hostname = _summary_text(candidate, "hostname")
+    platform = _summary_text(candidate, "platform")
+    resume_file_reason = _summary_text(candidate, "resume_file_reason")
+    availability_reason = _summary_text(candidate, "availability_reason")
+
+    if last_seen is not None:
+        bits.append(f"last seen {last_seen}")
+    if stopped_at is not None:
+        bits.append(f"stopped at {stopped_at}")
+    if hostname is not None and platform is not None:
+        bits.append(f"on {hostname} ({platform})")
+    elif hostname is not None:
+        bits.append(f"on {hostname}")
+    elif platform is not None:
+        bits.append(f"on {platform}")
+
+    resumable = bool(_summary_value(candidate, "resumable"))
+    if resumable:
+        bits.append("resume file ready")
+    elif resume_file_reason is not None:
+        bits.append(resume_file_reason)
+    elif availability_reason is not None:
+        bits.append(availability_reason)
+
+    if not bits:
+        return None
+    return "; ".join(bits)
 
 
 def _candidate_sort_key(candidate: ProjectReentryCandidate) -> tuple[int, int, int, int, int, str, str]:
@@ -162,6 +224,10 @@ def _normalize_recent_text(row: Mapping[str, object], *keys: str) -> str | None:
     return None
 
 
+def _recent_project_summary(row: Mapping[str, object]) -> str | None:
+    return project_reentry_candidate_summary(row)
+
+
 def _candidate_from_recent_row(row: Mapping[str, object]) -> ProjectReentryCandidate | None:
     project_root_text = _normalize_recent_text(row, "project_root", "workspace_root", "cwd", "path")
     if project_root_text is None:
@@ -185,6 +251,7 @@ def _candidate_from_recent_row(row: Mapping[str, object]) -> ProjectReentryCandi
         resumable=resumable,
         confidence="medium" if recoverable else "low",
         reason="recent project cache entry",
+        summary=_recent_project_summary(row),
         state_exists=state_exists,
         roadmap_exists=roadmap_exists,
         project_exists=project_exists,
@@ -211,6 +278,7 @@ def _candidate_from_recent_row(row: Mapping[str, object]) -> ProjectReentryCandi
         update={
             "confidence": "high" if concrete_target else "medium" if recoverable else "low",
             "reason": recovery.candidate_reason(recoverable=recoverable),
+            "summary": _recent_project_summary(row),
         }
     )
 
@@ -279,6 +347,7 @@ def _current_workspace_candidate(workspace: Path | None) -> ProjectReentryCandid
         resumable=False,
         confidence=resolution.confidence.value if isinstance(resolution.confidence, RootResolutionConfidence) else str(resolution.confidence),
         reason=reason,
+        summary=reason,
         state_exists=state_exists,
         roadmap_exists=roadmap_exists,
         project_exists=project_exists,
