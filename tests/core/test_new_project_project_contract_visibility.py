@@ -45,6 +45,8 @@ def test_state_schema_surfaces_the_exact_approved_mode_grounding_rule() -> None:
         "`user_asserted_anchors[]` and `known_good_baselines[]` should use at least three words and name a concrete benchmark, baseline, reference, paper, notebook, figure, table, dataset, curve, result, derivation, observable, limit, comparison, or comparable anchor phrase."
         in state_schema_text
     )
+    assert "gpd --raw validate project-contract - --mode approved" in state_schema_text
+    assert "`context_intake` must not be empty." in state_schema_text
     assert "already exists inside the current project root" in state_schema_text
     assert "already exists inside the current project root" in state_schema_text
     assert "Placeholder or `TBD` text does not count as concrete grounding." in state_schema_text
@@ -58,6 +60,8 @@ def test_new_project_and_questioning_gate_do_not_treat_missing_anchor_notes_as_a
     assert "At least one concrete anchor, reference, prior-output constraint, or baseline" in new_project_text
     assert "If the decisive anchor is still unknown, keep that blocker explicit" in new_project_text
     assert "Missing-anchor notes preserve uncertainty, but they do not satisfy approval on their own." in new_project_text
+    assert "do not offer approval yet" in new_project_text
+    assert "must ground approval or be carried forward" in new_project_text
     assert "do not invent extra keys or collapse list fields into scalars" in questioning_text
     assert "Array fields stay arrays, even for singletons" in questioning_text
     assert "blank or duplicate list items are invalid after trimming whitespace" in questioning_text

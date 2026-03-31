@@ -2453,6 +2453,18 @@ def test_parse_state_to_json_structure():
     assert len(result["blockers"]) == 1
 
 
+def test_parse_state_to_json_preserves_session_last_result_id() -> None:
+    content = MINIMAL_STATE_MD.replace(
+        "**Resume file:** —\n",
+        "**Resume file:** GPD/phases/03-analysis/.continue-here.md\n**Last result ID:** result-03\n",
+    )
+
+    result = parse_state_to_json(content)
+
+    assert result["session"]["last_result_id"] == "result-03"
+    assert result["continuation"]["handoff"]["last_result_id"] == "result-03"
+
+
 def test_state_record_session_does_not_emit_local_observability_events(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 

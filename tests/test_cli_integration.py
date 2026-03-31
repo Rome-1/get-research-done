@@ -1827,6 +1827,23 @@ class TestResume:
         assert alpha_marker in result.output
         assert result.output.index(beta_marker) < result.output.index(alpha_marker)
 
+    def test_resume_recent_surfaces_recent_project_index_errors(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        data_dir = tmp_path / "gpd-data"
+        monkeypatch.setenv("GPD_DATA_DIR", str(data_dir))
+        recent_root = data_dir / "recent-projects"
+        recent_root.mkdir(parents=True, exist_ok=True)
+        (recent_root / "index.json").write_text("{not-json", encoding="utf-8")
+
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        monkeypatch.chdir(outside)
+
+        result = runner.invoke(app, ["--raw", "resume", "--recent"], catch_exceptions=False)
+
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.output)
+        assert "Malformed recent-project index" in payload["error"]
+
     def test_resume_outside_project_hints_recent_selector(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:

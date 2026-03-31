@@ -6,7 +6,10 @@ from pathlib import Path
 import pytest
 
 from gpd import registry
-from gpd.core.review_contract_prompt import render_review_contract_prompt
+from gpd.core.review_contract_prompt import (
+    extract_review_contract_frontmatter_block,
+    render_review_contract_prompt,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMANDS_DIR = REPO_ROOT / "src/gpd/commands"
@@ -67,6 +70,33 @@ def test_review_contract_renderer_rejects_unknown_keys() -> None:
 
     with pytest.raises(ValueError, match="Unknown review-contract field"):
         render_review_contract_prompt(contract)
+
+
+def test_review_contract_renderer_rejects_unknown_keys_inside_wrapped_payload() -> None:
+    with pytest.raises(ValueError, match="Unknown review-contract field"):
+        render_review_contract_prompt(
+            {
+                "review_contract": {
+                    "schema_version": 1,
+                    "review_mode": "review",
+                    "legacy_note": "stale",
+                }
+            }
+        )
+
+
+def test_review_contract_frontmatter_extractor_accepts_underscore_alias() -> None:
+    frontmatter = (
+        "name: gpd:test\n"
+        "review_contract:\n"
+        "  schema_version: 1\n"
+        "  review_mode: review\n"
+    )
+
+    block = extract_review_contract_frontmatter_block(frontmatter)
+
+    assert block.startswith("review_contract:")
+    assert "review_mode: review" in block
 
 
 def test_review_contract_renderer_rejects_incomplete_payloads() -> None:

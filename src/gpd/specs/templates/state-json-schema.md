@@ -167,7 +167,7 @@ Stored as the canonical machine-readable contract once Stage 1 wiring is complet
 Preferred validation + persistence path for prompt-authored contracts:
 
 ```bash
-printf '%s\n' "$PROJECT_CONTRACT_JSON" | gpd --raw validate project-contract -
+printf '%s\n' "$PROJECT_CONTRACT_JSON" | gpd --raw validate project-contract - --mode approved
 printf '%s\n' "$PROJECT_CONTRACT_JSON" | gpd state set-project-contract -
 ```
 
@@ -186,6 +186,8 @@ Project contracts must include at least one observable, claim, or deliverable.
 Canonical IDs and other required string fields are trimmed before validation. Blank-after-trim values are invalid, and duplicates that differ only by surrounding whitespace still collide after normalization.
 
 `scope.in_scope` must name at least one project boundary or objective.
+
+`context_intake` must not be empty. At least one of `must_read_refs`, `must_include_prior_outputs`, `user_asserted_anchors`, `known_good_baselines`, `context_gaps`, or `crucial_inputs` must carry a non-empty item.
 
 #### Closed Schema And List Shape
 

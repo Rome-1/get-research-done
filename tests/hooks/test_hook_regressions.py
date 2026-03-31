@@ -207,7 +207,7 @@ def test_installed_update_command_uses_manifest_runtime_metadata_for_custom_targ
     assert str(explicit_target) in command
 
 
-def test_installed_update_command_normalizes_manifest_runtime_alias(tmp_path: Path) -> None:
+def test_installed_update_command_rejects_noncanonical_manifest_runtime(tmp_path: Path) -> None:
     from gpd.hooks.install_metadata import installed_update_command
 
     explicit_target = tmp_path / "custom-runtime-dir"
@@ -226,9 +226,7 @@ def test_installed_update_command_normalizes_manifest_runtime_alias(tmp_path: Pa
 
     command = installed_update_command(explicit_target)
 
-    assert command is not None
-    assert "--codex" in command
-    assert "--target-dir" in command
+    assert command is None
 
 
 @pytest.mark.parametrize("runtime_arg", ["Claude Code", "claude"])

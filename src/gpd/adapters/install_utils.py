@@ -19,7 +19,10 @@ from pathlib import Path, PurePosixPath
 from gpd.adapters.runtime_catalog import get_runtime_descriptor, resolve_global_config_dir
 from gpd.adapters.tool_names import CONTEXTUAL_TOOL_REFERENCE_NAMES
 from gpd.core.constants import HOME_DATA_DIR_NAME
-from gpd.core.review_contract_prompt import extract_frontmatter_block, render_review_contract_prompt
+from gpd.core.review_contract_prompt import (
+    extract_review_contract_frontmatter_block,
+    render_review_contract_prompt,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -454,7 +457,7 @@ def _inject_review_contract_prompt_from_frontmatter(content: str) -> str:
         return content
     if _body_has_review_contract_section(body):
         return content
-    section = render_review_contract_prompt(extract_frontmatter_block(frontmatter, "review-contract"))
+    section = render_review_contract_prompt(extract_review_contract_frontmatter_block(frontmatter))
     if not section:
         return content
     return render_markdown_frontmatter(

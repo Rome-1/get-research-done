@@ -901,7 +901,7 @@ class TestManifestConsistency:
         assert manifest["explicit_target"] is True
 
     @pytest.mark.parametrize("manifest_runtime", _CLAUDE_MANIFEST_RUNTIME_COMPAT_VALUES)
-    def test_uninstall_accepts_display_name_and_alias_manifest_runtime(
+    def test_uninstall_rejects_display_name_and_alias_manifest_runtime(
         self,
         manifest_runtime: str,
         tmp_path: Path,
@@ -923,10 +923,10 @@ class TestManifestConsistency:
         manifest["runtime"] = manifest_runtime
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-        result = adapter.uninstall(target)
+        with pytest.raises(RuntimeError, match="manifest cannot be trusted"):
+            adapter.uninstall(target)
 
-        assert result["removed"]
-        assert not manifest_path.exists()
+        assert manifest_path.exists()
 
     def test_target_dir_matching_global_dir_infers_global_scope(self, tmp_path: Path) -> None:
         from unittest.mock import patch

@@ -123,6 +123,30 @@ def test_resolve_project_reentry_surfaces_partial_recoverable_workspace(tmp_path
     assert resolution.candidates[0].state_exists is True
 
 
+def test_resolve_project_reentry_ignores_empty_gpd_workspace_when_unique_recent_project_is_recoverable(
+    tmp_path: Path,
+) -> None:
+    workspace = _make_gpd_workspace(tmp_path / "workspace")
+    project = _make_gpd_workspace(tmp_path / "recent-project", project=True)
+
+    resolution = resolve_project_reentry(
+        workspace,
+        recent_rows=[
+            _recent_row(
+                project,
+                last_session_at="2026-03-28T12:00:00+00:00",
+            )
+        ],
+    )
+
+    assert resolution.mode == "auto-recent-project"
+    assert resolution.source == "recent_project"
+    assert resolution.auto_selected is True
+    assert resolution.has_current_workspace_candidate is False
+    assert resolution.has_recoverable_current_workspace is False
+    assert resolution.project_root == project.resolve(strict=False).as_posix()
+
+
 def test_resolve_project_reentry_auto_selects_unique_recoverable_recent_project(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()

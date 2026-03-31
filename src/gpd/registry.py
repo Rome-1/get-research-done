@@ -331,7 +331,19 @@ VALID_REVIEW_PREFLIGHT_CHECKS: tuple[str, ...] = (
     "phase_artifacts",
 )
 VALID_REVIEW_REQUIRED_STATES: tuple[str, ...] = ("phase_executed",)
-_DEFAULT_REVIEW_CONTRACTS: dict[str, dict[str, object]] = {}
+
+
+def _review_contract_frontmatter_value(meta: dict[str, object], *, command_name: str) -> object:
+    """Return the single supported review-contract frontmatter payload."""
+
+    dashed = meta.get("review-contract")
+    underscored = meta.get("review_contract")
+    if dashed is not None and underscored is not None:
+        raise ValueError(
+            f"review-contract for {command_name} must use only one frontmatter key: "
+            "'review-contract' or 'review_contract'"
+        )
+    return dashed if dashed is not None else underscored
 
 
 def _parse_context_mode(raw: object, *, command_name: str) -> str:
@@ -655,7 +667,10 @@ def _parse_command_file(path: Path, source: str) -> CommandDef:
     allowed_tools = _parse_allowed_tools(meta.get("allowed-tools"), command_name=command_name)
 
     try:
-        review_contract = _parse_review_contract(meta.get("review-contract"), command_name)
+        review_contract = _parse_review_contract(
+            _review_contract_frontmatter_value(meta, command_name=command_name),
+            command_name,
+        )
     except ValueError as exc:
         raise ValueError(f"Invalid review-contract in {path}: {exc}") from exc
 

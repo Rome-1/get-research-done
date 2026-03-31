@@ -61,6 +61,19 @@ def extract_frontmatter_block(frontmatter: str, field_name: str) -> str:
     return "\n".join(collected)
 
 
+def extract_review_contract_frontmatter_block(frontmatter: str) -> str:
+    """Return the single review-contract frontmatter block for either supported alias."""
+
+    matches = [
+        block
+        for key in REVIEW_CONTRACT_WRAPPER_KEYS
+        if (block := extract_frontmatter_block(frontmatter, key))
+    ]
+    if len(matches) > 1:
+        raise ValueError("review contract frontmatter must use only one wrapper key")
+    return matches[0] if matches else ""
+
+
 def _load_review_contract_payload(review_contract: object) -> tuple[dict[str, object], bool]:
     """Return a strict review-contract mapping and whether it was wrapped."""
 
@@ -81,12 +94,14 @@ def _load_review_contract_payload(review_contract: object) -> tuple[dict[str, ob
     if not isinstance(loaded, dict):
         raise ValueError(f"review contract must parse to a mapping, got {type(loaded).__name__}")
 
-    wrapped = None
-    for key in REVIEW_CONTRACT_WRAPPER_KEYS:
-        candidate = loaded.get(key)
-        if isinstance(candidate, Mapping):
-            wrapped = dict(candidate)
-            break
+    wrapped_payloads = [
+        dict(candidate)
+        for key in REVIEW_CONTRACT_WRAPPER_KEYS
+        if isinstance((candidate := loaded.get(key)), Mapping)
+    ]
+    if len(wrapped_payloads) > 1:
+        raise ValueError("review contract must use only one wrapper key")
+    wrapped = wrapped_payloads[0] if wrapped_payloads else None
 
     if wrapped is not None:
         unknown_top_level_keys = sorted(
@@ -94,6 +109,10 @@ def _load_review_contract_payload(review_contract: object) -> tuple[dict[str, ob
         )
         if unknown_top_level_keys:
             formatted = ", ".join(unknown_top_level_keys)
+            raise ValueError(f"Unknown review-contract field(s): {formatted}")
+        unknown_inner_keys = sorted(str(key) for key in wrapped if str(key) not in REVIEW_CONTRACT_KEYS)
+        if unknown_inner_keys:
+            formatted = ", ".join(unknown_inner_keys)
             raise ValueError(f"Unknown review-contract field(s): {formatted}")
         return wrapped, True
 

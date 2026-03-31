@@ -49,6 +49,7 @@ class ProjectReentryCandidate(BaseModel):
     roadmap_exists: bool = False
     project_exists: bool = False
     resume_file: str | None = None
+    last_result_id: str | None = None
     resume_target_kind: str | None = None
     resume_target_recorded_at: str | None = None
     resume_file_available: bool | None = None
@@ -256,6 +257,7 @@ def _candidate_from_recent_row(row: Mapping[str, object]) -> ProjectReentryCandi
         roadmap_exists=roadmap_exists,
         project_exists=project_exists,
         resume_file=resume_file,
+        last_result_id=_normalize_recent_text(row, "last_result_id"),
         resume_target_kind=recovery.resume_target_kind,
         resume_target_recorded_at=recovery.resume_target_recorded_at,
         resume_file_available=resume_file_available,
@@ -299,6 +301,7 @@ def _enrich_candidate_from_recent_row(
         update={
             "resumable": resumable,
             "resume_file": _normalize_recent_text(row, "resume_file"),
+            "last_result_id": _normalize_recent_text(row, "last_result_id"),
             "resume_target_kind": recovery.resume_target_kind,
             "resume_target_recorded_at": recovery.resume_target_recorded_at,
             "resume_file_available": resume_file_available,
@@ -327,7 +330,7 @@ def _current_workspace_candidate(workspace: Path | None) -> ProjectReentryCandid
     project_root = resolution.project_root.expanduser().resolve(strict=False)
     state_exists, roadmap_exists, project_exists = recoverable_project_context(project_root)
     recoverable = state_exists or roadmap_exists or project_exists
-    if not resolution.has_project_layout and not recoverable:
+    if not recoverable:
         return None
 
     if resolution.basis == "workspace" and resolution.has_project_layout and resolution.walk_up_steps > 0:

@@ -50,6 +50,7 @@ class RecentProjectEntry(BaseModel):
     last_seen_at: str | None = None
     stopped_at: str | None = None
     resume_file: str | None = None
+    last_result_id: str | None = None
     resume_target_kind: str | None = None
     resume_target_recorded_at: str | None = None
     resume_file_available: bool | None = None
@@ -73,6 +74,7 @@ class RecentProjectEntry(BaseModel):
         "last_seen_at",
         "stopped_at",
         "resume_file",
+        "last_result_id",
         "resume_target_recorded_at",
         "resume_file_reason",
         "hostname",
@@ -442,6 +444,11 @@ def record_recent_project(
         "last_session_at",
     )
     normalized_resume_file = _updated_text(session_data, existing.resume_file if existing is not None else None, "resume_file")
+    normalized_last_result_id = _updated_text(
+        session_data,
+        existing.last_result_id if existing is not None else None,
+        "last_result_id",
+    )
     resume_target_kind = _updated_text(
         session_data,
         existing.resume_target_kind if existing is not None else None,
@@ -504,6 +511,7 @@ def record_recent_project(
         last_seen_at=last_seen_at,
         stopped_at=_updated_text(session_data, existing.stopped_at if existing is not None else None, "stopped_at"),
         resume_file=normalized_resume_file,
+        last_result_id=normalized_last_result_id,
         resume_target_kind=resume_target_kind,
         resume_target_recorded_at=resume_target_recorded_at,
         hostname=normalized_hostname,

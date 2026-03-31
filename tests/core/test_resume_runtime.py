@@ -140,6 +140,31 @@ def test_state_record_session_normalizes_project_local_absolute_resume_file(
     assert "**Resume file:** GPD/phases/03-analysis/.continue-here.md" in markdown
 
 
+def test_state_record_session_rejects_nonportable_resume_file(
+    tmp_path: Path, state_project_factory, monkeypatch
+) -> None:
+    cwd = state_project_factory(tmp_path)
+    outside_resume = tmp_path.parent / f"{tmp_path.name}-outside" / "resume.md"
+    outside_resume.parent.mkdir(parents=True, exist_ok=True)
+    outside_resume.write_text("resume\n", encoding="utf-8")
+    monkeypatch.setattr(
+        state_module,
+        "_current_machine_identity",
+        lambda: {"hostname": "builder-01", "platform": "Linux 6.1 x86_64"},
+    )
+
+    state_path = cwd / "GPD" / "state.json"
+    markdown_path = cwd / "GPD" / "STATE.md"
+    before_state = state_path.read_text(encoding="utf-8")
+    before_markdown = markdown_path.read_text(encoding="utf-8")
+
+    with pytest.raises(StateError, match="resume_file must be a repo-relative path inside the project root"):
+        state_record_session(cwd, stopped_at="Paused", resume_file=str(outside_resume))
+
+    assert state_path.read_text(encoding="utf-8") == before_state
+    assert markdown_path.read_text(encoding="utf-8") == before_markdown
+
+
 def test_state_carry_forward_continuation_last_result_id_updates_canonical_continuation_without_session_boundary(
     tmp_path: Path, state_project_factory
 ) -> None:
@@ -518,7 +543,22 @@ def test_init_resume_promotes_auto_selected_recent_bounded_segment_over_same_poi
         platform="Linux 6.1 x86_64",
         stopped_at="Phase 03",
         resume_file=resume_file,
+        last_result_id="result-recent-03",
     )
+    state_path = project_root / "GPD" / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["intermediate_results"] = [
+        {
+            "id": "result-recent-03",
+            "equation": "R = A + B",
+            "description": "Recent bounded-segment anchor",
+            "phase": "03",
+            "depends_on": [],
+            "verified": True,
+            "verification_records": [],
+        }
+    ]
+    state_path.write_text(json.dumps(state), encoding="utf-8")
     data_root = tmp_path / "data"
     record_recent_project(
         project_root,
@@ -526,6 +566,7 @@ def test_init_resume_promotes_auto_selected_recent_bounded_segment_over_same_poi
             "last_date": "2026-03-29T12:00:00+00:00",
             "stopped_at": "Phase 03",
             "resume_file": resume_file,
+            "last_result_id": "result-recent-03",
             "resume_target_kind": "bounded_segment",
             "resume_target_recorded_at": "2026-03-29T12:00:00+00:00",
             "source_kind": "continuation.bounded_segment",
@@ -557,15 +598,20 @@ def test_init_resume_promotes_auto_selected_recent_bounded_segment_over_same_poi
     assert ctx["active_bounded_segment"]["segment_id"] == "seg-recent-03"
     assert ctx["active_bounded_segment"]["phase"] == "03"
     assert ctx["active_bounded_segment"]["plan"] == "01"
+    assert ctx["active_bounded_segment"]["last_result_id"] == "result-recent-03"
     assert ctx["active_resume_kind"] == "bounded_segment"
     assert ctx["active_resume_origin"] == "continuation.bounded_segment"
     assert ctx["active_resume_pointer"] == resume_file
     assert ctx["execution_resumable"] is True
     assert ctx["resume_candidates"][0]["kind"] == "bounded_segment"
     assert ctx["resume_candidates"][0]["origin"] == "continuation.bounded_segment"
+    assert ctx["resume_candidates"][0]["last_result_id"] == "result-recent-03"
+    assert ctx["resume_candidates"][0]["last_result"]["id"] == "result-recent-03"
+    assert ctx["active_resume_result"]["id"] == "result-recent-03"
     assert ctx["continuity_handoff_file"] == resume_file
     assert ctx["compat_resume_surface"]["resume_mode"] == "bounded_segment"
     assert ctx["compat_resume_surface"]["active_execution_segment"]["resume_file"] == resume_file
+    assert ctx["compat_resume_surface"]["active_execution_segment"]["last_result_id"] == "result-recent-03"
     assert ctx["compat_resume_surface"]["segment_candidates"][0]["source"] == "recent_project"
 
 

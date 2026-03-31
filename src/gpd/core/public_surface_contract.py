@@ -72,6 +72,8 @@ class ResumeAuthorityContract:
     durable_authority_phrase: str
     public_vocabulary_intro: str
     public_fields: tuple[str, ...]
+    compat_surface: str
+    session_mirror: str
     compatibility_phrase: str
     top_level_boundary_phrase: str
 
@@ -285,6 +287,16 @@ def load_public_surface_contract() -> PublicSurfaceContract:
             ),
             public_fields=resume_authority_public_fields,
             public_vocabulary_intro=resume_authority_public_vocabulary_intro,
+            compat_surface=_require_string(
+                resume_authority_payload,
+                "compat_surface",
+                label="resume_authority",
+            ),
+            session_mirror=_require_string(
+                resume_authority_payload,
+                "session_mirror",
+                label="resume_authority",
+            ),
             compatibility_phrase=_require_string(
                 resume_authority_payload,
                 "compatibility_phrase",

@@ -48,6 +48,7 @@ from gpd.core.continuation import (
     ContinuationBoundedSegment,
     ContinuationState,
     normalize_continuation,
+    normalize_continuation_reference,
     resolve_continuation,
 )
 from gpd.core.contract_validation import (
@@ -269,6 +270,12 @@ def _project_recent_project_entry(
         session.get("platform") if isinstance(session, dict) else None,
         existing.platform if existing is not None else None,
     )
+    last_result_id = _pick(
+        bounded_segment.last_result_id if bounded_segment is not None and target_kind == "bounded_segment" else None,
+        handoff.last_result_id if target_kind == "handoff" else None,
+        session.get("last_result_id") if isinstance(session, dict) else None,
+        existing.last_result_id if existing is not None else None,
+    )
     resume_file = None
     if bounded_segment is not None and bounded_segment.resume_file is not None:
         resume_file = bounded_segment.resume_file
@@ -299,6 +306,7 @@ def _project_recent_project_entry(
         last_seen_at=last_seen_at,
         stopped_at=stopped_at,
         resume_file=resume_file,
+        last_result_id=last_result_id,
         resume_target_kind=target_kind,
         resume_target_recorded_at=resume_target_recorded_at,
         resume_file_available=None,
@@ -1585,12 +1593,14 @@ def parse_state_to_json(content: str) -> dict:
     platform_value = _strip_placeholder(parsed["session"]["platform"])
     stopped_at = _strip_placeholder(parsed["session"]["stopped_at"])
     resume_file = _strip_placeholder(parsed["session"]["resume_file"])
+    last_result_id = _strip_placeholder(parsed["session"]["last_result_id"])
     session: dict[str, str | None] = {
         "last_date": last_date,
         "hostname": hostname,
         "platform": platform_value,
         "stopped_at": stopped_at,
         "resume_file": resume_file,
+        "last_result_id": last_result_id,
     }
     continuation = _continuation_from_session_payload(session)
 
@@ -3908,15 +3918,7 @@ def _normalize_session_resume_file(cwd: Path, resume_file: str | None) -> str | 
         or normalized.casefold() in {"none", "null"}
     ):
         return None
-
-    candidate = Path(normalized).expanduser()
-    if not candidate.is_absolute():
-        return normalized
-
-    try:
-        return candidate.resolve(strict=False).relative_to(cwd.resolve(strict=False)).as_posix()
-    except (OSError, ValueError):
-        return normalized
+    return normalize_continuation_reference(cwd, normalized)
 
 
 @instrument_gpd_function("state.record_session")
@@ -3962,6 +3964,14 @@ def state_record_session(
             if resume_file is None
             else _normalize_session_resume_file(cwd, resume_file)
         )
+        if (
+            resume_file is not None
+            and normalized_resume_file is None
+            and resume_file.strip()
+            and resume_file.strip() not in {EM_DASH, "[Not set]"}
+            and resume_file.strip().casefold() not in {"none", "null"}
+        ):
+            raise StateError("resume_file must be a repo-relative path inside the project root")
         requested_last_result_id = _optional_state_text(last_result_id) if last_result_id is not None else None
         if last_result_id is not None:
             if requested_last_result_id is None:

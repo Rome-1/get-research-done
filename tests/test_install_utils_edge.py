@@ -376,6 +376,24 @@ class TestReviewContractInjection:
         assert result == content
         assert result.count("## Review Contract") == 1
 
+    def test_review_contract_alias_is_injected_once(self) -> None:
+        content = (
+            "---\n"
+            "review_contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: review\n"
+            "  required_outputs:\n"
+            "    - GPD/review/output.md\n"
+            "---\n"
+            "Body.\n"
+        )
+
+        result = _inject_review_contract_prompt_from_frontmatter(content)
+
+        assert result.count("## Review Contract") == 1
+        assert "review_contract:" in result
+        assert "review-contract:" not in result[result.index("## Review Contract") :]
+
 
 class TestTranslateFrontmatterToolNames:
     def test_inline_yaml_array_tools_are_translated(self) -> None:

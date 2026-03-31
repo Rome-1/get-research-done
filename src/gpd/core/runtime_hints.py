@@ -16,7 +16,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from gpd.core.context import init_resume
 from gpd.core.costs import build_cost_summary, resolve_cost_advisory
 from gpd.core.observability import derive_execution_visibility
-from gpd.core.project_reentry import project_reentry_candidate_summary, resolve_project_reentry
+from gpd.core.project_reentry import (
+    project_reentry_candidate_summary,
+    recoverable_project_context,
+    resolve_project_reentry,
+)
 from gpd.core.recent_projects import list_recent_projects
 from gpd.core.recovery_advice import (
     RecoveryAdvice,
@@ -105,16 +109,72 @@ def workflow_preset_surface_note() -> str:
     return _workflow_preset_surface_note_text()
 
 
-def _selected_reentry_candidate(reentry: object) -> dict[str, object] | None:
+def _selected_reentry_candidate(
+    reentry: object,
+    *,
+    workspace_hint: Path | None = None,
+    recent_rows: list[object] | None = None,
+) -> dict[str, object] | None:
     candidates = list(getattr(reentry, "candidates", []) or [])
     selected_candidate = next(
         (candidate for candidate in candidates if _suggestion_text(candidate, "source") == "current_workspace"),
         getattr(reentry, "selected_candidate", None),
     )
     candidate_payload = _model_dump(selected_candidate)
+    if candidate_payload is None and workspace_hint is not None:
+        resolution = resolve_project_roots(workspace_hint)
+        if resolution is not None and resolution.has_project_layout:
+            project_root = resolution.project_root.resolve(strict=False)
+            state_exists, roadmap_exists, project_exists = recoverable_project_context(project_root)
+            candidate_payload = {
+                "source": "current_workspace",
+                "project_root": project_root.as_posix(),
+                "available": project_root.is_dir(),
+                "recoverable": state_exists or roadmap_exists or project_exists,
+                "resumable": False,
+                "confidence": str(getattr(resolution.confidence, "value", resolution.confidence)),
+                "reason": "workspace already points at a GPD project",
+                "state_exists": state_exists,
+                "roadmap_exists": roadmap_exists,
+                "project_exists": project_exists,
+            }
+            for row in recent_rows or []:
+                row_payload = _model_dump(row) if not isinstance(row, dict) else dict(row)
+                if not isinstance(row_payload, dict):
+                    continue
+                if _normalized_row_text(row_payload, "project_root") != project_root.as_posix():
+                    continue
+                candidate_payload.update(
+                    {
+                        key: row_payload.get(key)
+                        for key in (
+                            "resume_file",
+                            "last_result_id",
+                            "resume_target_kind",
+                            "resume_target_recorded_at",
+                            "resume_file_available",
+                            "resume_file_reason",
+                            "hostname",
+                            "platform",
+                            "availability_reason",
+                            "last_session_at",
+                            "stopped_at",
+                            "source_kind",
+                            "source_session_id",
+                            "source_segment_id",
+                            "source_transition_id",
+                            "source_recorded_at",
+                            "recovery_phase",
+                            "recovery_plan",
+                        )
+                    }
+                )
+                if row_payload.get("resume_file_available") is True or bool(row_payload.get("resumable")):
+                    candidate_payload["resumable"] = True
+                break
     if not isinstance(candidate_payload, dict):
         return None
-    summary = project_reentry_candidate_summary(selected_candidate)
+    summary = project_reentry_candidate_summary(selected_candidate or candidate_payload)
     candidate_payload["summary"] = summary
     return candidate_payload
 
@@ -408,7 +468,11 @@ def build_runtime_hint_payload(
     execution = _model_dump(execution_visibility)
 
     recent_rows = list_recent_projects(data_root, last=recent_projects_last) if include_recovery else []
-    current_project = _selected_reentry_candidate(reentry) if include_recovery else None
+    current_project = (
+        _selected_reentry_candidate(reentry, workspace_hint=workspace_hint, recent_rows=recent_rows)
+        if include_recovery
+        else None
+    )
     resume_context = _resume_context(workspace_hint, data_root=data_root) if include_recovery else {}
     if include_recovery:
         resume_context = _hydrate_resume_context_from_recent_project(

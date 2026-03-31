@@ -961,7 +961,9 @@ def test_new_project_minimal_mode_and_planning_wiring_allow_coarse_scoped_decomp
         "benchmark, or baseline."
         in workflow_text
     )
-    assert 'If the user named a prior output, review checkpoint, or "come back to me before continuing" condition, carry it into `context_intake.must_include_prior_outputs` or `context_intake.crucial_inputs` rather than leaving it only in prose.' in workflow_text
+    assert "put it in `context_intake.must_include_prior_outputs`" in workflow_text
+    assert "`context_intake.crucial_inputs` for user-stated observables, stop conditions, review requests, or constraints" in workflow_text
+    assert "Missing-anchor notes preserve uncertainty, but they do not satisfy approval on their own." in workflow_text
     assert "A full phase breakdown is not required at this stage;" in workflow_text
     assert "Use the coarsest decomposition the approved contract actually supports." in workflow_text
     assert "Do NOT invent literature, numerics, or paper phases unless the requirements or contract demand them." in workflow_text

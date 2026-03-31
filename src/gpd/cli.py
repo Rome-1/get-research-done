@@ -44,10 +44,9 @@ from gpd.core.cli_args import (
     split_root_global_cli_options as _split_root_global_cli_options,
 )
 from gpd.core.constants import (
+    ENV_DATA_DIR,
     ENV_GPD_DISABLE_CHECKOUT_REEXEC,
     HOME_DATA_DIR_NAME,
-    RECENT_PROJECTS_DIR_NAME,
-    RECENT_PROJECTS_INDEX_FILENAME,
 )
 from gpd.core.errors import ConfigError, GPDError
 from gpd.core.onboarding_surfaces import (
@@ -187,6 +186,12 @@ def _status_command_cwd(cwd: Path | None = None) -> Path:
 
 def _state_command_cwd(cwd: Path | None = None) -> Path:
     """Resolve the effective cwd for state and project-contract commands."""
+    from gpd.core.root_resolution import resolve_project_root
+
+    workspace_cwd = (cwd or _get_cwd()).expanduser().resolve(strict=False)
+    resolved = resolve_project_root(workspace_cwd, require_layout=True)
+    if resolved is not None:
+        return resolved
     return _status_command_cwd(cwd)
 
 
@@ -1032,9 +1037,6 @@ def milestone_complete(
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-_RECENT_PROJECTS_INDEX_FILENAMES = (RECENT_PROJECTS_INDEX_FILENAME,)
-
-
 def _resume_status_message(payload: dict[str, object], *, recovery_advice: RecoveryAdvice) -> str:
     """Return a concise human summary of resume readiness for this workspace."""
     auto_selected = bool(payload.get("project_root_auto_selected"))
@@ -1612,13 +1614,10 @@ def _recent_project_resume_file_state(project_root: object, resume_file: object)
 
 def _recent_projects_data_root() -> Path:
     """Return the machine-local home data root for cross-project recovery metadata."""
+    configured = os.environ.get(ENV_DATA_DIR, "").strip()
+    if configured:
+        return Path(configured).expanduser()
     return Path.home() / HOME_DATA_DIR_NAME
-
-
-def _recent_projects_index_paths() -> list[Path]:
-    """Return candidate index paths for recent-project recovery data."""
-    root = _recent_projects_data_root() / RECENT_PROJECTS_DIR_NAME
-    return [root / filename for filename in _RECENT_PROJECTS_INDEX_FILENAMES]
 
 
 def _recent_project_text(payload: dict[str, object], *keys: str) -> str | None:
@@ -1761,49 +1760,12 @@ def _recent_project_sort_key(row: dict[str, object]) -> tuple[int, str, str]:
 
 def _load_recent_projects_rows() -> list[dict[str, object]]:
     """Load the recent-project index, preferring the shared helper module when present."""
+    from gpd.core.recent_projects import RecentProjectsError, list_recent_projects
+
     try:
-        from gpd.core import recent_projects as recent_projects_module
-    except Exception:
-        recent_projects_module = None
-
-    if recent_projects_module is not None:
-        for attr_name, arg_sets in (
-            ("list_recent_projects", ((),)),
-            ("load_recent_projects", ((),)),
-            ("load_recent_projects_index", ((),)),
-            ("get_recent_projects", ((),)),
-        ):
-            loader = getattr(recent_projects_module, attr_name, None)
-            if not callable(loader):
-                continue
-            for args in arg_sets:
-                try:
-                    payload = loader(*args)
-                except TypeError:
-                    continue
-                except Exception:
-                    continue
-                rows = _coerce_recent_project_rows(payload)
-                if rows:
-                    rows.sort(key=_recent_project_sort_key, reverse=True)
-                    rows.sort(key=lambda row: 0 if bool(row.get("resumable")) else 1)
-                    return rows
-
-    rows: list[dict[str, object]] = []
-    for index_path in _recent_projects_index_paths():
-        try:
-            raw = index_path.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            continue
-        except OSError:
-            continue
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-        rows = _coerce_recent_project_rows(payload)
-        if rows:
-            break
+        rows = _coerce_recent_project_rows(list_recent_projects(_recent_projects_data_root()))
+    except RecentProjectsError as exc:
+        raise GPDError(str(exc)) from exc
 
     rows.sort(key=_recent_project_sort_key, reverse=True)
     rows.sort(key=lambda row: 0 if bool(row.get("resumable")) else 1)
@@ -2167,7 +2129,10 @@ def resume(
 ) -> None:
     """Summarize local recovery state or list machine-local recent projects."""
     if recent:
-        rows = _annotate_recent_project_rows(_load_recent_projects_rows())
+        try:
+            rows = _annotate_recent_project_rows(_load_recent_projects_rows())
+        except GPDError as exc:
+            _error(str(exc))
         recovery_advice = _resume_recovery_advice(recent_rows=rows, force_recent=True)
         if _raw:
             _output(
@@ -3135,12 +3100,15 @@ def suggest(
     limit: int | None = typer.Option(None, "--limit", help="Max suggestions to return"),
 ) -> None:
     """Suggest what to do next based on project state."""
+    from gpd.core.root_resolution import resolve_project_root
     from gpd.core.suggest import suggest_next
 
     kwargs: dict[str, int] = {}
     if limit is not None:
         kwargs["limit"] = limit
-    _output(suggest_next(_status_command_cwd(), **kwargs))
+    workspace_cwd = _get_cwd().expanduser().resolve(strict=False)
+    suggest_cwd = resolve_project_root(workspace_cwd, require_layout=True) or _status_command_cwd()
+    _output(suggest_next(suggest_cwd, **kwargs))
 
 
 # ═══════════════════════════════════════════════════════════════════════════

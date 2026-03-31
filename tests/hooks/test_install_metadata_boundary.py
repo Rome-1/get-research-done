@@ -170,6 +170,7 @@ def test_assess_install_target_classifies_foreign_and_untrusted_manifests(
         ("[]", "invalid", None),
         (json.dumps({"install_scope": "local"}), "missing_runtime", None),
         (json.dumps({"install_scope": "local", "runtime": 123}), "malformed_runtime", None),
+        (json.dumps({"install_scope": "local", "runtime": "Codex"}), "malformed_runtime", None),
         (json.dumps({"install_scope": "local", "runtime": "codex"}), "ok", "codex"),
     ],
 )
@@ -272,3 +273,11 @@ def test_runtime_cli_uses_shared_manifest_runtime_helper() -> None:
     assert "config_dir_has_managed_install_markers" in source
     assert "def _manifest_runtime_status" not in source
     assert "def _has_managed_install_markers" not in source
+
+
+def test_install_metadata_keeps_manifest_boundary_free_of_install_utils_imports() -> None:
+    import gpd.hooks.install_metadata as install_metadata
+
+    source = inspect.getsource(install_metadata)
+
+    assert "from gpd.adapters.install_utils import" not in source

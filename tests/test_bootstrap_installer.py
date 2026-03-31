@@ -708,10 +708,13 @@ def test_bootstrap_public_surface_contract_validator_matches_canonical_shape() -
     result = _run_node_contract_validation(
         r"""
 const assert = require("node:assert/strict");
-const { validateSharedPublicSurfaceContract } = require("./bin/install.js");
+const { loadSharedPublicSurfaceText, validateSharedPublicSurfaceContract } = require("./bin/install.js");
 const payload = require("./src/gpd/core/public_surface_contract.json");
 
 assert.doesNotThrow(() => validateSharedPublicSurfaceContract(payload));
+const sharedText = loadSharedPublicSurfaceText();
+assert.equal(sharedText.resumeAuthority.compatSurface, payload.resume_authority.compat_surface);
+assert.equal(sharedText.resumeAuthority.sessionMirror, payload.resume_authority.session_mirror);
 
 const blankSessionMirror = JSON.parse(JSON.stringify(payload));
 blankSessionMirror.resume_authority.session_mirror = "";

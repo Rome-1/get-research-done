@@ -8,7 +8,6 @@ import pytest
 
 from gpd import registry
 from gpd.registry import (
-    _DEFAULT_REVIEW_CONTRACTS,
     AgentDef,
     CommandDef,
     SkillDef,
@@ -109,10 +108,6 @@ class TestParseFrontmatter:
 
         assert meta == {"description": "first\n---\nsecond\n"}
         assert body == "Body."
-
-
-def test_review_contract_registry_defaults_are_empty() -> None:
-    assert _DEFAULT_REVIEW_CONTRACTS == {}
 
 
 class TestParseTools:
@@ -728,6 +723,46 @@ class TestParseCommandFile:
         )
 
         with pytest.raises(ValueError, match=r"Invalid review-contract in .*write-paper\.md.*approval_gate"):
+            _parse_command_file(f, source="commands")
+
+    def test_command_review_contract_accepts_review_contract_frontmatter_alias(self, tmp_path: Path) -> None:
+        f = tmp_path / "write-paper.md"
+        f.write_text(
+            "---\n"
+            "name: gpd:write-paper\n"
+            "review_contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: publication\n"
+            "  required_outputs:\n"
+            "    - GPD/output.md\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        command = _parse_command_file(f, source="commands")
+
+        assert command.review_contract is not None
+        assert command.review_contract.review_mode == "publication"
+        assert command.review_contract.required_outputs == ["GPD/output.md"]
+
+    def test_command_review_contract_rejects_duplicate_frontmatter_aliases(self, tmp_path: Path) -> None:
+        f = tmp_path / "write-paper.md"
+        f.write_text(
+            "---\n"
+            "name: gpd:write-paper\n"
+            "review-contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: publication\n"
+            "review_contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: publication\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match=r"Invalid review-contract in .*write-paper\.md.*must use only one frontmatter key"):
             _parse_command_file(f, source="commands")
 
 

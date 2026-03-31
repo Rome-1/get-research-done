@@ -275,7 +275,7 @@ class TestResolveEffectiveRuntime:
         assert result.source == SOURCE_UNKNOWN
         assert result.has_gpd_install is False
 
-    def test_manifest_runtime_alias_is_normalized_for_installed_runtime(self, tmp_path: Path) -> None:
+    def test_manifest_runtime_alias_fails_closed_for_installed_runtime(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
         home = tmp_path / "home"
         workspace.mkdir()
@@ -294,9 +294,9 @@ class TestResolveEffectiveRuntime:
         ):
             result = resolve_effective_runtime()
 
-        assert result.runtime == RUNTIME_CODEX
-        assert result.source == SOURCE_LOCAL
-        assert result.has_gpd_install is True
+        assert result.runtime == RUNTIME_UNKNOWN
+        assert result.source == SOURCE_UNKNOWN
+        assert result.has_gpd_install is False
 
     def test_invalid_manifest_runtime_fails_closed(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"

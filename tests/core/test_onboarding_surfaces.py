@@ -18,6 +18,7 @@ from gpd.core.public_surface_contract import (
     beginner_onboarding_caveats,
     beginner_preflight_requirements,
     load_public_surface_contract,
+    resume_authority_contract,
 )
 
 
@@ -75,6 +76,13 @@ def test_beginner_runtime_surfaces_follow_runtime_catalog() -> None:
 def test_beginner_runtime_surface_single_lookup_matches_bulk_surface() -> None:
     for surface in beginner_runtime_surfaces():
         assert beginner_runtime_surface(surface.runtime_name) == surface
+
+
+def test_resume_authority_contract_exposes_full_validated_surface() -> None:
+    contract = resume_authority_contract()
+
+    assert contract.compat_surface == "compat_resume_surface"
+    assert contract.session_mirror == "legacy session mirror nested under compat_resume_surface"
 
 
 def test_public_surface_contract_loader_rejects_shape_drift(monkeypatch, tmp_path: Path) -> None:

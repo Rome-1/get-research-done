@@ -16,5 +16,7 @@ def test_state_json_schema_surfaces_hidden_grounding_requirements() -> None:
     assert "Blank list entries are invalid." in schema
     assert "Duplicate list entries are also invalid after trimming whitespace" in schema
     assert "at least three words" in schema
+    assert "gpd --raw validate project-contract - --mode approved" in schema
+    assert "`context_intake` must not be empty." in schema
     assert "already exists inside the current project root" in schema
     assert "already exists inside the current project root" in schema

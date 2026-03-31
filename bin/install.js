@@ -305,6 +305,7 @@ function loadSharedPublicSurfaceText() {
     beginnerCaveats: contract.beginnerCaveats,
     beginnerStartupLadder: contract.beginnerStartupLadder,
     localCliBridgeCommands: contract.localCliBridgeCommands,
+    resumeAuthority: contract.resumeAuthority,
     recoveryLadder: contract.recoveryLadder,
     settingsCommandSentence: contract.settingsCommandSentence,
     settingsRecommendationSentence: contract.settingsRecommendationSentence,

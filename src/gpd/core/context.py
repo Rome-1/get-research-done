@@ -1704,6 +1704,7 @@ def _promote_auto_selected_recent_bounded_segment(
         "plan": _mapping_text(selected_candidate, "recovery_plan"),
         "segment_id": _mapping_text(selected_candidate, "source_segment_id"),
         "transition_id": _mapping_text(selected_candidate, "source_transition_id"),
+        "last_result_id": _mapping_text(selected_candidate, "last_result_id"),
         "updated_at": (
             _mapping_text(selected_candidate, "resume_target_recorded_at")
             or _mapping_text(selected_candidate, "source_recorded_at")
@@ -1741,7 +1742,19 @@ def _promote_auto_selected_recent_bounded_segment(
                 item_kind in {None, "continuity_handoff"} if canonical else item_status in {"handoff", "missing"}
             ):
                 if not replaced:
-                    updated.append(dict(replacement))
+                    promoted_replacement = dict(replacement)
+                    if canonical:
+                        replacement_last_result_id = _mapping_text(promoted_replacement, "last_result_id")
+                        item_last_result_id = _mapping_text(item, "last_result_id")
+                        item_last_result = item.get("last_result")
+                        if (
+                            replacement_last_result_id is not None
+                            and replacement_last_result_id == item_last_result_id
+                            and isinstance(item_last_result, Mapping)
+                            and "last_result" not in promoted_replacement
+                        ):
+                            promoted_replacement["last_result"] = dict(item_last_result)
+                    updated.append(promoted_replacement)
                     replaced = True
                 continue
             updated.append(item)

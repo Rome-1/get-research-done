@@ -4,17 +4,50 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
 
-from gpd.adapters import get_adapter
-from gpd.adapters.install_utils import (
-    AGENTS_DIR_NAME,
-    COMMANDS_DIR_NAME,
-    FLAT_COMMANDS_DIR_NAME,
-    GPD_INSTALL_DIR_NAME,
-    MANIFEST_NAME,
-    build_runtime_install_repair_command,
-)
+AGENTS_DIR_NAME = "agents"
+COMMANDS_DIR_NAME = "commands"
+FLAT_COMMANDS_DIR_NAME = "command"
+GPD_INSTALL_DIR_NAME = "get-physics-done"
+MANIFEST_NAME = "gpd-file-manifest.json"
+
+
+def get_adapter(runtime: str):
+    """Lazily resolve the runtime adapter to keep manifest parsing lightweight."""
+    return import_module("gpd.adapters").get_adapter(runtime)
+
+
+def build_runtime_install_repair_command(
+    runtime: str,
+    *,
+    install_scope: str | None,
+    target_dir: Path,
+    explicit_target: bool = False,
+) -> str:
+    """Lazily resolve the public repair-command helper."""
+    install_utils = import_module("gpd.adapters.install_utils")
+    return install_utils.build_runtime_install_repair_command(
+        runtime,
+        install_scope=install_scope,
+        target_dir=target_dir,
+        explicit_target=explicit_target,
+    )
+
+
+def _canonical_manifest_runtime_name(value: str) -> str | None:
+    """Return the exact canonical runtime id stored in trusted install manifests."""
+
+    normalized = value.strip()
+    if not normalized:
+        return None
+
+    runtime_catalog = import_module("gpd.adapters.runtime_catalog")
+    for descriptor in runtime_catalog.iter_runtime_descriptors():
+        if normalized == descriptor.runtime_name:
+            return descriptor.runtime_name
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,9 +137,7 @@ def load_install_manifest_runtime_status(config_dir: Path) -> tuple[str, dict[st
     if not normalized_runtime:
         return "malformed_runtime", payload, None
 
-    from gpd.hooks.runtime_detect import normalize_runtime_name
-
-    canonical_runtime = normalize_runtime_name(normalized_runtime)
+    canonical_runtime = _canonical_manifest_runtime_name(normalized_runtime)
     if canonical_runtime is None:
         return "malformed_runtime", payload, None
     return "ok", payload, canonical_runtime
