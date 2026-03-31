@@ -5678,6 +5678,15 @@ def _build_project_aware_guidance(explicit_inputs: list[str], *, init_command: s
     return f"Either provide {requirement_text} explicitly, or {init_guidance}."
 
 
+def _build_recoverable_workspace_guidance(*, init_command: str) -> str:
+    """Render the standardized recovery guidance string for project-required commands."""
+    return (
+        "This command requires a recoverable GPD workspace. "
+        "Open the right project, use `gpd resume --recent` to rediscover it, or "
+        f"initialize a new project with `{init_command}` in the runtime surface or `gpd init new-project` in the local CLI."
+    )
+
+
 def _active_runtime_command_prefix(*, cwd: Path | None = None) -> str | None:
     """Return the public command prefix for the active runtime, if available."""
     from gpd.adapters import get_adapter
@@ -5745,6 +5754,31 @@ def _command_required_files_present(
     matched = [*matched_literals, *matched_globs]
     missing = [*missing_literals, *missing_globs]
     return passed, matched, missing
+
+
+def _command_required_files_override_detail(
+    project_root: Path,
+    command: object,
+    arguments: str | None,
+) -> str | None:
+    """Return a detail string when explicit review inputs satisfy required-file gating."""
+    if not isinstance(arguments, str) or not arguments.strip():
+        return None
+    if getattr(command, "name", "") not in {"gpd:peer-review", "gpd:arxiv-submission"}:
+        return None
+    contract = getattr(command, "review_contract", None)
+    preflight_checks = getattr(contract, "preflight_checks", ())
+    if "manuscript" not in preflight_checks:
+        return None
+
+    manuscript, _ = _resolve_review_preflight_manuscript(
+        project_root,
+        arguments,
+        allow_markdown=getattr(command, "name", "") != "gpd:arxiv-submission",
+    )
+    if manuscript is None:
+        return None
+    return f"explicit manuscript target satisfies command context: {_format_display_path(manuscript)}"
 
 
 def _validated_runtime_surface(*, cwd: Path | None = None) -> str:
@@ -5950,11 +5984,20 @@ def _build_command_context_preflight(
                     selected_root,
                     command,
                 )
+                override_detail = None
+                if not required_files_present:
+                    override_detail = _command_required_files_override_detail(selected_root, command, arguments)
+                    if override_detail is not None:
+                        required_files_present = True
+                        matched_patterns = [override_detail]
+                        missing_patterns = []
                 add_check(
                     "required_files",
                     required_files_present,
                     (
-                        "matching required files present: " + ", ".join(matched_patterns)
+                        override_detail
+                        if required_files_present and override_detail is not None
+                        else "matching required files present: " + ", ".join(matched_patterns)
                         if required_files_present
                         else "missing required files or unmatched patterns: " + ", ".join(missing_patterns)
                     ),
@@ -5969,7 +6012,7 @@ def _build_command_context_preflight(
                     "Use `gpd resume --recent` to pick the right project explicitly, then reopen it in the runtime."
                     if reentry.requires_user_selection
                     else (
-                        "This command requires a recoverable GPD workspace."
+                        _build_recoverable_workspace_guidance(init_command=init_command)
                         if not (state_exists or roadmap_exists or project_exists)
                         else "This command requires one of the declared required files: "
                         + ", ".join(required_file_patterns)
@@ -6002,11 +6045,20 @@ def _build_command_context_preflight(
                 context_cwd,
                 command,
             )
+            override_detail = None
+            if not required_files_present:
+                override_detail = _command_required_files_override_detail(context_cwd, command, arguments)
+                if override_detail is not None:
+                    required_files_present = True
+                    matched_patterns = [override_detail]
+                    missing_patterns = []
             add_check(
                 "required_files",
                 required_files_present,
                 (
-                    "matching required files present: " + ", ".join(matched_patterns)
+                    override_detail
+                    if required_files_present and override_detail is not None
+                    else "matching required files present: " + ", ".join(matched_patterns)
                     if required_files_present
                     else "missing required files or unmatched patterns: " + ", ".join(missing_patterns)
                 ),

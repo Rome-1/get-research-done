@@ -20,6 +20,7 @@ from gpd.adapters.install_utils import (
     _inject_review_contract_prompt_from_frontmatter,
     _is_hook_command_for_script,
     build_hook_command,
+    compile_markdown_for_runtime,
     convert_tool_references_in_body,
     copy_with_path_replacement,
     ensure_update_hook,
@@ -343,7 +344,7 @@ class TestProtectRuntimeAgentPrompt:
 
 
 class TestReviewContractInjection:
-    def test_existing_review_contract_section_is_not_duplicated(self) -> None:
+    def test_existing_review_contract_section_is_replaced_by_canonical_frontmatter_render(self) -> None:
         content = (
             "---\n"
             "review-contract:\n"
@@ -373,13 +374,16 @@ class TestReviewContractInjection:
 
         result = _inject_review_contract_prompt_from_frontmatter(content)
 
-        assert result == content
         assert result.count("## Review Contract") == 1
+        assert result.index("## Review Contract") < result.index("Prose before the existing section.")
+        assert "Already present in the body." not in result
+        assert "review_contract:" in result
+        assert "phase_executed" in result
 
-    def test_review_contract_alias_is_injected_once(self) -> None:
+    def test_review_contract_canonical_frontmatter_is_injected_once(self) -> None:
         content = (
             "---\n"
-            "review_contract:\n"
+            "review-contract:\n"
             "  schema_version: 1\n"
             "  review_mode: review\n"
             "  required_outputs:\n"
@@ -393,6 +397,38 @@ class TestReviewContractInjection:
         assert result.count("## Review Contract") == 1
         assert "review_contract:" in result
         assert "review-contract:" not in result[result.index("## Review Contract") :]
+
+    def test_review_contract_frontmatter_alias_is_rejected_by_install_injection(self) -> None:
+        content = (
+            "---\n"
+            "review_contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: review\n"
+            "  required_outputs:\n"
+            "    - GPD/review/output.md\n"
+            "---\n"
+            "Body.\n"
+        )
+
+        with pytest.raises(ValueError, match="must use the canonical frontmatter key 'review-contract'"):
+            _inject_review_contract_prompt_from_frontmatter(content)
+
+    def test_compile_markdown_rejects_invalid_review_contract_schema_version(self) -> None:
+        content = (
+            "---\n"
+            "review-contract:\n"
+            "  schema_version: true\n"
+            "  review_mode: review\n"
+            "---\n"
+            "Prompt body.\n"
+        )
+
+        with pytest.raises(ValueError, match="schema_version .* must be the integer 1"):
+            compile_markdown_for_runtime(
+                content,
+                runtime="codex",
+                path_prefix="/tmp/.codex/",
+            )
 
 
 class TestTranslateFrontmatterToolNames:

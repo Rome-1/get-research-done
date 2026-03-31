@@ -1817,15 +1817,15 @@ def test_command_supports_project_reentry_prefers_explicit_metadata() -> None:
         )
         is False
     )
-
-
-def test_command_supports_project_reentry_falls_back_to_legacy_default_when_metadata_missing() -> None:
     assert (
         cli_module._command_supports_project_reentry(
             SimpleNamespace(name="gpd:progress", context_mode="project-required")
         )
-        is True
+        is False
     )
+
+
+def test_command_supports_project_reentry_requires_explicit_positive_metadata() -> None:
     assert (
         cli_module._command_supports_project_reentry(
             SimpleNamespace(name="gpd:plan-phase", context_mode="project-required")

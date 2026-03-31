@@ -292,17 +292,6 @@ def _strip_unknown_model_keys(
     return cleaned
 
 
-def _top_level_extra_input_findings(findings: list[str]) -> list[str]:
-    """Return project-contract findings for unknown top-level keys only."""
-
-    blocking: list[str] = []
-    for finding in findings:
-        location, separator, message = finding.partition(": ")
-        if separator and message == "Extra inputs are not permitted" and "." not in location:
-            blocking.append(finding)
-    return blocking
-
-
 def _salvage_model_mapping(
     value: object,
     *,
@@ -388,7 +377,6 @@ def salvage_project_contract(contract: dict[str, object]) -> tuple[ResearchContr
 
     working = _strip_unknown_model_keys(scalar_sanitized, path_prefix="", model=ResearchContract, errors=errors)
     normalized_contract = copy.deepcopy(working)
-    top_level_extra_key_errors = _top_level_extra_input_findings(errors)
 
     collection_models: dict[str, type[BaseModel]] = {
         "observables": ContractObservable,
@@ -444,9 +432,6 @@ def salvage_project_contract(contract: dict[str, object]) -> tuple[ResearchContr
         except PydanticValidationError:
             errors.append("schema_version: Input should be 1")
             normalized_contract.pop("schema_version", None)
-
-    if top_level_extra_key_errors:
-        return None, errors
 
     try:
         return ResearchContract.model_validate(normalized_contract), errors
@@ -647,7 +632,11 @@ def _is_project_artifact_path(value: str, *, project_root: Path | None = None) -
     return _resolve_project_artifact_path(candidate, project_root=project_root) is not None
 
 
-def _is_concrete_text_grounding(value: str) -> bool:
+def _is_concrete_text_grounding(
+    value: str,
+    *,
+    project_root: Path | None = None,
+) -> bool:
     """Return whether *value* names a substantive text anchor rather than filler."""
 
     lowered = value.casefold().strip()
@@ -664,6 +653,15 @@ def _is_concrete_text_grounding(value: str) -> bool:
         and any(pattern.search(lowered) for pattern in _ANCHOR_UNKNOWN_SELECTION_PATTERNS)
     ):
         return False
+    if any(pattern.search(lowered) for pattern in _REFERENCE_LOCATOR_CONCRETE_PATTERNS):
+        return True
+    if any(
+        _is_concrete_external_http_locator(value, reference_kind=reference_kind)
+        for reference_kind in ("dataset", "spec", "prior_artifact")
+    ):
+        return True
+    if _is_project_artifact_path(value, project_root=project_root):
+        return True
     words = [word for word in re.split(r"\s+", lowered) if word]
     if len(words) < 3:
         return False
@@ -692,7 +690,7 @@ def _is_concrete_reference_locator(
     if _is_concrete_external_http_locator(value, reference_kind=reference_kind):
         return True
     if reference_kind == "user_anchor":
-        return _is_concrete_text_grounding(value)
+        return _is_concrete_text_grounding(value, project_root=project_root)
     if any(pattern.search(lowered) for pattern in _PROJECT_ARTIFACT_PATH_PATTERNS):
         if reference_kind in {"dataset", "prior_artifact", "spec"}:
             return _is_project_artifact_path(value, project_root=project_root)
@@ -720,7 +718,7 @@ def _has_concrete_grounding_entries(
     if field_name == "must_include_prior_outputs":
         return any(_is_project_artifact_path(value, project_root=project_root) for value in values)
     if field_name in {"user_asserted_anchors", "known_good_baselines"}:
-        return any(_is_concrete_text_grounding(value) for value in values)
+        return any(_is_concrete_text_grounding(value, project_root=project_root) for value in values)
     raise ValueError(f"Unsupported grounding field {field_name!r}")
 
 

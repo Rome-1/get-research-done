@@ -98,7 +98,7 @@ def test_review_contract_renderer_rejects_conflicting_wrapper_aliases_when_secon
         )
 
 
-def test_review_contract_frontmatter_extractor_accepts_underscore_alias() -> None:
+def test_review_contract_frontmatter_extractor_rejects_underscore_alias() -> None:
     frontmatter = (
         "name: gpd:test\n"
         "review_contract:\n"
@@ -106,10 +106,8 @@ def test_review_contract_frontmatter_extractor_accepts_underscore_alias() -> Non
         "  review_mode: review\n"
     )
 
-    block = extract_review_contract_frontmatter_block(frontmatter)
-
-    assert block.startswith("review_contract:")
-    assert "review_mode: review" in block
+    with pytest.raises(ValueError, match="must use the canonical frontmatter key 'review-contract'"):
+        extract_review_contract_frontmatter_block(frontmatter)
 
 
 def test_review_contract_renderer_rejects_incomplete_payloads() -> None:
@@ -120,6 +118,47 @@ def test_review_contract_renderer_rejects_incomplete_payloads() -> None:
 def test_review_contract_renderer_rejects_empty_wrapped_payloads() -> None:
     with pytest.raises(ValueError, match="review contract must set schema_version, review_mode"):
         render_review_contract_prompt({"review_contract": {}})
+
+
+def test_review_contract_renderer_rejects_non_integer_schema_version() -> None:
+    with pytest.raises(ValueError, match="schema_version must be the integer 1"):
+        render_review_contract_prompt({"schema_version": "1", "review_mode": "review"})
+
+
+def test_review_contract_renderer_rejects_unknown_review_mode() -> None:
+    with pytest.raises(ValueError, match="review_mode must be one of: publication, review"):
+        render_review_contract_prompt({"schema_version": 1, "review_mode": "publication-review"})
+
+
+def test_review_contract_renderer_rejects_unknown_preflight_checks() -> None:
+    with pytest.raises(ValueError, match="preflight_checks must contain only:"):
+        render_review_contract_prompt(
+            {
+                "schema_version": 1,
+                "review_mode": "review",
+                "preflight_checks": ["compiled_manuscript", "legacy_gate"],
+            }
+        )
+
+
+def test_review_contract_renderer_rejects_invalid_bool_and_required_state_fields() -> None:
+    with pytest.raises(ValueError, match="requires_fresh_context_per_stage must be a boolean"):
+        render_review_contract_prompt(
+            {
+                "schema_version": 1,
+                "review_mode": "review",
+                "requires_fresh_context_per_stage": "later",
+            }
+        )
+
+    with pytest.raises(ValueError, match="required_state must be one of: phase_executed"):
+        render_review_contract_prompt(
+            {
+                "schema_version": 1,
+                "review_mode": "review",
+                "required_state": "phase_planned",
+            }
+        )
 
 
 def test_review_contract_renderer_fills_canonical_defaults_for_minimal_payload() -> None:

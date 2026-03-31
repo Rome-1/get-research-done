@@ -243,9 +243,11 @@ def _project_reentry_summary(
 def _runtime_command(action: str, *, cwd: Path) -> str | None:
     try:
         from gpd.adapters import get_adapter
-        from gpd.hooks.runtime_detect import detect_runtime_for_gpd_use
+        from gpd.hooks.runtime_detect import detect_active_runtime_with_gpd_install
 
-        runtime_name = detect_runtime_for_gpd_use(cwd=cwd)
+        runtime_name = detect_active_runtime_with_gpd_install(cwd=cwd)
+        if not isinstance(runtime_name, str) or not runtime_name.strip() or runtime_name == "unknown":
+            return None
         return str(get_adapter(runtime_name).format_command(action)).strip()
     except Exception:
         return None
@@ -457,11 +459,13 @@ def build_runtime_hint_payload(
     workspace_hint = normalize_workspace_hint(cwd) if cwd is not None else None
     if workspace_hint is None:
         workspace_hint = Path.cwd().resolve(strict=False)
-    reentry = resolve_project_reentry(workspace_hint, data_root=data_root)
     resolution = resolve_project_roots(workspace_hint)
+    workspace_project_root = resolution.project_root if resolution is not None else workspace_hint
+    reentry = resolve_project_reentry(workspace_hint, data_root=data_root) if include_recovery else None
     project_root = (
         reentry.resolved_project_root
-        or (resolution.project_root if resolution is not None else workspace_hint)
+        if include_recovery and reentry is not None and reentry.resolved_project_root is not None
+        else workspace_project_root
     )
 
     execution_visibility = derive_execution_visibility(project_root)
@@ -470,11 +474,11 @@ def build_runtime_hint_payload(
     recent_rows = list_recent_projects(data_root, last=recent_projects_last) if include_recovery else []
     current_project = (
         _selected_reentry_candidate(reentry, workspace_hint=workspace_hint, recent_rows=recent_rows)
-        if include_recovery
+        if include_recovery and reentry is not None
         else None
     )
     resume_context = _resume_context(workspace_hint, data_root=data_root) if include_recovery else {}
-    if include_recovery:
+    if include_recovery and reentry is not None:
         resume_context = _hydrate_resume_context_from_recent_project(
             resume_context,
             reentry=reentry,
@@ -500,8 +504,9 @@ def build_runtime_hint_payload(
             else:
                 resume_context.pop("project_reentry_candidates", None)
                 resume_context.pop("project_reentry_selected_candidate", None)
-    recovery_advice = (
-        build_recovery_advice(
+    recovery_advice = None
+    if include_recovery and reentry is not None:
+        recovery_advice = build_recovery_advice(
             project_root,
             data_root=data_root,
             recent_rows=recent_rows,
@@ -509,17 +514,14 @@ def build_runtime_hint_payload(
             continue_command=_runtime_command("resume-work", cwd=project_root),
             fast_next_command=_runtime_command("suggest-next", cwd=project_root),
         )
-        if include_recovery
-        else None
-    )
     recovery = (
         {
             "current_project": (
                 {**current_project, "summary": _selected_project_summary(reentry, current_project)}
-                if current_project is not None
+                if current_project is not None and reentry is not None
                 else None
             ),
-            "current_project_summary": _selected_project_summary(reentry, current_project),
+            "current_project_summary": _selected_project_summary(reentry, current_project) if reentry is not None else None,
             "project_reentry": _model_dump(reentry),
             "project_reentry_summary": _project_reentry_summary(
                 reentry,
@@ -528,11 +530,11 @@ def build_runtime_hint_payload(
             ),
             "recent_projects": [_model_dump(row) or row for row in recent_rows],
         }
-        if include_recovery
+        if include_recovery and reentry is not None
         else {}
     )
     orientation = serialize_recovery_orientation(recovery_advice) if recovery_advice is not None else {}
-    if include_recovery:
+    if include_recovery and reentry is not None:
         orientation["workspace_root"] = workspace_hint.as_posix()
         orientation["project_root"] = _path_text(reentry.resolved_project_root)
         orientation["project_root_source"] = _suggestion_text(reentry, "source")

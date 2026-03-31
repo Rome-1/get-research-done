@@ -19,10 +19,7 @@ from pathlib import Path, PurePosixPath
 from gpd.adapters.runtime_catalog import get_runtime_descriptor, resolve_global_config_dir
 from gpd.adapters.tool_names import CONTEXTUAL_TOOL_REFERENCE_NAMES
 from gpd.core.constants import HOME_DATA_DIR_NAME
-from gpd.core.review_contract_prompt import (
-    extract_review_contract_frontmatter_block,
-    render_review_contract_prompt,
-)
+from gpd.registry import render_review_contract_section_from_frontmatter
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -445,8 +442,27 @@ def render_markdown_frontmatter(preamble: str, frontmatter: str, separator: str,
     return rendered + body
 
 
-def _body_has_review_contract_section(body: str) -> bool:
-    return bool(re.search(r"(?m)^## Review Contract(?:\s*$|\s)", body))
+def _strip_top_level_markdown_section(body: str, *, heading: str) -> str:
+    """Remove one top-level markdown section when present."""
+
+    lines = body.splitlines(keepends=True)
+    start_index: int | None = None
+
+    for index, line in enumerate(lines):
+        if line.lstrip().startswith(f"## {heading}"):
+            start_index = index
+            break
+
+    if start_index is None:
+        return body
+
+    end_index = len(lines)
+    for index in range(start_index + 1, len(lines)):
+        if lines[index].startswith("## "):
+            end_index = index
+            break
+
+    return "".join([*lines[:start_index], *lines[end_index:]])
 
 
 def _inject_review_contract_prompt_from_frontmatter(content: str) -> str:
@@ -455,16 +471,15 @@ def _inject_review_contract_prompt_from_frontmatter(content: str) -> str:
     preamble, frontmatter, separator, body = split_markdown_frontmatter(content)
     if not frontmatter:
         return content
-    if _body_has_review_contract_section(body):
-        return content
-    section = render_review_contract_prompt(extract_review_contract_frontmatter_block(frontmatter))
+    section = render_review_contract_section_from_frontmatter(frontmatter, command_name="installed markdown")
     if not section:
         return content
+    body_without_review_contract = _strip_top_level_markdown_section(body, heading="Review Contract").strip("\n")
     return render_markdown_frontmatter(
         preamble,
         frontmatter,
         separator,
-        f"{section}\n\n{body}" if body else section,
+        f"{section}\n\n{body_without_review_contract}" if body_without_review_contract else section,
     )
 
 

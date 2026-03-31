@@ -1273,6 +1273,23 @@ class TestReviewValidationCommands:
         assert payload["passed"] is True
         assert checks["project_exists"]["passed"] is True
 
+    def test_command_context_resume_work_requires_literal_files_in_project_root(self, gpd_project: Path) -> None:
+        (gpd_project / "GPD" / "ROADMAP.md").unlink()
+
+        result = runner.invoke(
+            app,
+            ["--raw", "validate", "command-context", "resume-work"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:resume-work"
+        assert payload["context_mode"] == "project-required"
+        assert payload["passed"] is False
+        assert checks["project_exists"]["passed"] is True
+
     def test_command_context_recovery_surfaces_accept_partial_recoverable_workspace(
         self,
         tmp_path: Path,
@@ -1294,14 +1311,54 @@ class TestReviewValidationCommands:
                 catch_exceptions=False,
             )
 
-            assert result.exit_code == 0, result.output
+            assert result.exit_code == (0 if command_name == "resume-work" else 1), result.output
             payload = json.loads(result.output)
             checks = {check["name"]: check for check in payload["checks"]}
-            assert payload["passed"] is True
+            assert payload["passed"] is (command_name == "resume-work")
             assert payload["project_exists"] is False
             assert checks["state_exists"]["passed"] is True
             assert checks["roadmap_exists"]["passed"] is True
             assert checks["project_exists"]["passed"] is False
+            assert checks["required_files"]["passed"] is (command_name == "resume-work")
+
+    def test_command_context_plan_milestone_gaps_requires_globbed_files_in_project_root(
+        self, gpd_project: Path
+    ) -> None:
+        result = runner.invoke(
+            app,
+            ["--raw", "validate", "command-context", "plan-milestone-gaps"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:plan-milestone-gaps"
+        assert payload["context_mode"] == "project-required"
+        assert payload["passed"] is False
+        assert checks["project_exists"]["passed"] is True
+
+    def test_command_context_plan_milestone_gaps_resolves_ancestor_project_root_for_nested_workspace(
+        self,
+        gpd_project: Path,
+    ) -> None:
+        nested = gpd_project / "workspace" / "notes"
+        nested.mkdir(parents=True)
+        (gpd_project / "GPD" / "v1-MILESTONE-AUDIT.md").write_text("# Audit\n", encoding="utf-8")
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(nested), "validate", "command-context", "plan-milestone-gaps"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:plan-milestone-gaps"
+        assert payload["context_mode"] == "project-required"
+        assert payload["passed"] is True
+        assert checks["project_exists"]["passed"] is True
 
     def test_command_context_progress_auto_selects_unique_recoverable_recent_project(
         self,
@@ -1579,13 +1636,13 @@ class TestReviewValidationCommands:
     def test_command_context_project_aware_requires_explicit_inputs_without_project(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, codex_command_prefix: str
     ) -> None:
-        empty_dir = tmp_path / "empty-context"
-        empty_dir.mkdir()
-        monkeypatch.chdir(empty_dir)
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-aware"
+        outside_dir.mkdir()
+        monkeypatch.chdir(outside_dir)
 
         result = runner.invoke(
             app,
-            ["--raw", "--cwd", str(empty_dir), "validate", "command-context", "discover"],
+            ["--raw", "--cwd", str(outside_dir), "validate", "command-context", "discover"],
             catch_exceptions=False,
         )
 
@@ -1655,13 +1712,13 @@ class TestReviewValidationCommands:
     def test_command_context_project_aware_rejects_short_flag_without_topic(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        empty_dir = tmp_path / "empty-context"
-        empty_dir.mkdir()
-        monkeypatch.chdir(empty_dir)
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-aware-short"
+        outside_dir.mkdir()
+        monkeypatch.chdir(outside_dir)
 
         result = runner.invoke(
             app,
-            ["--raw", "validate", "command-context", "discover", "-d", "deep"],
+            ["--raw", "--cwd", str(outside_dir), "validate", "command-context", "discover", "-d", "deep"],
             catch_exceptions=False,
         )
 
@@ -1674,13 +1731,13 @@ class TestReviewValidationCommands:
     def test_command_context_explain_requires_explicit_inputs_without_project(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, codex_command_prefix: str
     ) -> None:
-        empty_dir = tmp_path / "empty-context"
-        empty_dir.mkdir()
-        monkeypatch.chdir(empty_dir)
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-explain"
+        outside_dir.mkdir()
+        monkeypatch.chdir(outside_dir)
 
         result = runner.invoke(
             app,
-            ["--raw", "--cwd", str(empty_dir), "validate", "command-context", "explain"],
+            ["--raw", "--cwd", str(outside_dir), "validate", "command-context", "explain"],
             catch_exceptions=False,
         )
 
@@ -1698,13 +1755,13 @@ class TestReviewValidationCommands:
     def test_command_context_compare_results_requires_explicit_inputs_without_project(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, codex_command_prefix: str
     ) -> None:
-        empty_dir = tmp_path / "empty-context"
-        empty_dir.mkdir()
-        monkeypatch.chdir(empty_dir)
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-compare"
+        outside_dir.mkdir()
+        monkeypatch.chdir(outside_dir)
 
         result = runner.invoke(
             app,
-            ["--raw", "--cwd", str(empty_dir), "validate", "command-context", "compare-results"],
+            ["--raw", "--cwd", str(outside_dir), "validate", "command-context", "compare-results"],
             catch_exceptions=False,
         )
 
@@ -1941,12 +1998,12 @@ class TestReviewValidationCommands:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        empty_dir = tmp_path / "empty-context"
-        empty_dir.mkdir()
-        monkeypatch.chdir(empty_dir)
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-aware-explicit"
+        outside_dir.mkdir()
+        monkeypatch.chdir(outside_dir)
         result = runner.invoke(
             app,
-            ["--raw", "--cwd", str(empty_dir), "validate", "command-context", "discover", "7"],
+            ["--raw", "--cwd", str(outside_dir), "validate", "command-context", "discover", "7"],
             catch_exceptions=False,
         )
 
@@ -1964,12 +2021,12 @@ class TestReviewValidationCommands:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        empty_dir = tmp_path / "empty-context"
-        empty_dir.mkdir()
-        monkeypatch.chdir(empty_dir)
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-required"
+        outside_dir.mkdir()
+        monkeypatch.chdir(outside_dir)
         result = runner.invoke(
             app,
-            ["--raw", "--cwd", str(empty_dir), "validate", "command-context", "quick"],
+            ["--raw", "--cwd", str(outside_dir), "validate", "command-context", "quick"],
             catch_exceptions=False,
         )
 
@@ -2215,7 +2272,31 @@ class TestReviewValidationCommands:
         assert payload["command"] == "gpd:respond-to-referees"
         assert payload["passed"] is False
         checks = {check["name"]: check for check in payload["checks"]}
+        assert checks["command_context"]["passed"] is False
+        assert checks["referee_report_source"]["passed"] is True
         assert checks["manuscript"]["passed"] is False
+        assert "declared required files" in checks["command_context"]["detail"]
+
+    def test_review_preflight_peer_review_resolves_ancestor_project_root_for_nested_workspace(
+        self,
+        gpd_project: Path,
+    ) -> None:
+        nested = gpd_project / "workspace" / "notes"
+        nested.mkdir(parents=True)
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(nested), "validate", "review-preflight", "peer-review", "--strict"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:peer-review"
+        assert payload["passed"] is True
+        assert checks["manuscript"]["passed"] is True
+        assert "paper/main.tex" in checks["manuscript"]["detail"]
 
 
     def test_review_preflight_peer_review_strict_requires_artifact_audits(self, gpd_project: Path) -> None:

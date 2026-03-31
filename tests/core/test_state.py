@@ -411,13 +411,14 @@ def test_ensure_state_schema_valid_project_contract():
     ]
 
 
-def test_ensure_state_schema_drops_project_contract_with_top_level_extra_key():
+def test_ensure_state_schema_salvages_project_contract_with_top_level_extra_key():
     contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
     contract["legacy_notes"] = "forwarded from a prior schema revision"
 
     result = ensure_state_schema({"project_contract": contract})
 
-    assert result["project_contract"] is None
+    assert result["project_contract"] is not None
+    assert "legacy_notes" not in result["project_contract"]
 
 
 def test_ensure_state_schema_invalid_project_contract_resets_to_none():

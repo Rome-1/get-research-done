@@ -473,7 +473,7 @@ def test_build_runtime_hint_payload_auto_selects_unique_recoverable_recent_proje
     )
     assert "resume file ready" in payload.recovery["current_project_summary"]
     assert payload.orientation["resume_surface_schema_version"] == 1
-    assert payload.orientation["mode"] == "current-workspace"
+    assert payload.orientation["mode"] == "recent-projects"
     assert payload.orientation["status"] == "session-handoff"
     assert payload.orientation["decision_source"] == "auto-selected-recent-project"
     assert payload.orientation["active_resume_kind"] == "continuity_handoff"
@@ -628,7 +628,7 @@ def test_build_runtime_hint_payload_prefers_selected_project_resume_state_for_au
     )
     assert payload.recovery["project_reentry"]["candidates"][0]["resume_target_kind"] == "handoff"
     assert payload.recovery["project_reentry"]["candidates"][0]["reason"] == "recent project cache entry with projected continuity handoff"
-    assert payload.orientation["mode"] == "current-workspace"
+    assert payload.orientation["mode"] == "recent-projects"
     assert payload.orientation["status"] == "bounded-segment"
     assert payload.orientation["decision_source"] == "auto-selected-recent-project"
     assert payload.orientation["project_root_auto_selected"] is True
@@ -636,7 +636,7 @@ def test_build_runtime_hint_payload_prefers_selected_project_resume_state_for_au
     assert payload.orientation["active_resume_origin"] == "compat.current_execution"
     assert payload.orientation["active_resume_pointer"] == "GPD/phases/03/.continue-here.md"
     assert payload.orientation["continuity_handoff_file"] is None
-    assert payload.orientation["current_workspace_resumable"] is True
+    assert payload.orientation["current_workspace_resumable"] is False
     assert payload.orientation["has_local_recovery_target"] is True
     assert payload.orientation["primary_command"] == "gpd resume --recent"
     assert "resume-work" in str(payload.orientation["continue_command"])
@@ -696,7 +696,7 @@ def test_build_runtime_hint_payload_promotes_auto_selected_recent_bounded_segmen
     assert payload.recovery["project_reentry"]["candidates"][0]["source_segment_id"] == "seg-recent-04"
     assert payload.recovery["project_reentry"]["candidates"][0]["source_transition_id"] == "transition-recent-04"
     assert payload.orientation["decision_source"] == "auto-selected-recent-project"
-    assert payload.orientation["mode"] == "current-workspace"
+    assert payload.orientation["mode"] == "recent-projects"
     assert payload.orientation["status"] == "bounded-segment"
     assert payload.orientation["project_root_auto_selected"] is True
     assert payload.orientation["active_resume_kind"] == "bounded_segment"
@@ -704,7 +704,7 @@ def test_build_runtime_hint_payload_promotes_auto_selected_recent_bounded_segmen
     assert payload.orientation["active_resume_pointer"] == "GPD/phases/04/.continue-here.md"
     assert payload.orientation["continuity_handoff_file"] == "GPD/phases/04/.continue-here.md"
     assert payload.orientation["has_continuity_handoff"] is True
-    assert payload.orientation["current_workspace_resumable"] is True
+    assert payload.orientation["current_workspace_resumable"] is False
     assert payload.orientation["has_local_recovery_target"] is True
     assert payload.orientation["resume_candidates_count"] == 1
     assert payload.orientation["primary_command"] == "gpd resume --recent"
@@ -1543,6 +1543,52 @@ def test_build_runtime_hint_payload_formats_generic_runtime_follow_up_when_runti
     assert not any("`runtime `resume-work``" in action for action in payload.next_actions)
 
 
+def test_build_runtime_hint_payload_uses_generic_runtime_commands_when_no_install_authoritative_runtime(
+    tmp_path: Path, monkeypatch
+) -> None:
+    project = _bootstrap_project(tmp_path)
+    data_root = tmp_path / "data"
+    resume_file = project / "GPD" / "phases" / "02" / ".continue-here.md"
+    resume_file.parent.mkdir(parents=True, exist_ok=True)
+    resume_file.write_text("resume\n", encoding="utf-8")
+
+    record_recent_project(
+        project,
+        session_data={
+            "last_date": "2026-03-27T12:05:00+00:00",
+            "stopped_at": "Phase 02",
+            "resume_file": "GPD/phases/02/.continue-here.md",
+        },
+        store_root=data_root,
+    )
+    _write_current_execution(
+        project,
+        session_id="sess-013",
+        extra_execution={
+            "phase": "02",
+            "plan": "01",
+            "resume_file": "GPD/phases/02/.continue-here.md",
+        },
+    )
+    monkeypatch.setattr(
+        "gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install",
+        lambda *args, **kwargs: "unknown",
+    )
+
+    payload = build_runtime_hint_payload(
+        project,
+        data_root=data_root,
+        base_ready=True,
+        latex_capability=_latex_capability(),
+    )
+
+    assert payload.orientation["continue_command"] == "runtime `resume-work`"
+    assert payload.orientation["fast_next_command"] == "runtime `suggest-next`"
+    assert "runtime `resume-work` continues in-runtime from the selected project state." in payload.next_actions
+    assert "runtime `suggest-next` is the fastest post-resume next command when you only need the next action." in payload.next_actions
+    assert not any(action.startswith("runtime-under-test ") for action in payload.next_actions)
+
+
 def test_build_runtime_hint_payload_machine_change_only_keeps_local_resume_without_in_runtime_followups(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -1617,6 +1663,52 @@ def test_build_runtime_hint_payload_missing_handoff_keeps_local_resume_without_i
     assert any(action.startswith("Run `gpd resume`") for action in payload.next_actions)
     assert not any("resume-work" in action for action in payload.next_actions)
     assert not any("suggest-next" in action for action in payload.next_actions)
+
+
+def test_build_runtime_hint_payload_include_recovery_false_ignores_recent_project_state(
+    tmp_path: Path, monkeypatch
+) -> None:
+    workspace = tmp_path / "outside-workspace"
+    workspace.mkdir()
+    recent_project = _bootstrap_recoverable_project(tmp_path / "recent-project")
+    data_root = tmp_path / "data"
+
+    record_recent_project(
+        recent_project,
+        session_data={
+            "last_date": "2026-03-27T12:20:00+00:00",
+            "stopped_at": "Phase 06",
+            "resume_file": "GPD/phases/06/.continue-here.md",
+        },
+        store_root=data_root,
+    )
+
+    monkeypatch.setattr(
+        "gpd.core.runtime_hints.resolve_project_reentry",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("resolve_project_reentry should not run")),
+    )
+    monkeypatch.setattr(
+        "gpd.core.runtime_hints.list_recent_projects",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("list_recent_projects should not run")),
+    )
+    monkeypatch.setattr(
+        "gpd.core.runtime_hints._resume_context",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("_resume_context should not run")),
+    )
+
+    payload = build_runtime_hint_payload(
+        workspace,
+        data_root=data_root,
+        include_recovery=False,
+        include_cost=False,
+        include_workflow_presets=False,
+    )
+
+    assert payload.source_meta["project_root"] == workspace.resolve(strict=False).as_posix()
+    assert payload.recovery == {}
+    assert payload.orientation == {}
+    assert payload.next_actions == []
+    assert recent_project.resolve(strict=False).as_posix() not in payload.source_meta["project_root"]
 
 
 def test_build_runtime_hint_payload_suppresses_duplicate_resume_recovery_nudge(tmp_path: Path) -> None:

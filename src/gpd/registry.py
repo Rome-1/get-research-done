@@ -16,6 +16,9 @@ import yaml
 
 from gpd.command_labels import canonical_command_label, canonical_skill_label, command_slug_from_label
 from gpd.core.review_contract_prompt import (
+    VALID_REVIEW_MODES,
+    VALID_REVIEW_PREFLIGHT_CHECKS,
+    VALID_REVIEW_REQUIRED_STATES,
     _load_review_contract_payload,
     render_review_contract_prompt,
 )
@@ -319,20 +322,6 @@ VALID_AGENT_SURFACES: tuple[str, ...] = ("public", "internal")
 VALID_AGENT_ROLE_FAMILIES: tuple[str, ...] = ("worker", "analysis", "verification", "review", "coordination")
 VALID_AGENT_ARTIFACT_WRITE_AUTHORITIES: tuple[str, ...] = ("scoped_write", "read_only")
 VALID_AGENT_SHARED_STATE_AUTHORITIES: tuple[str, ...] = ("return_only", "direct")
-VALID_REVIEW_MODES: tuple[str, ...] = ("publication", "review")
-VALID_REVIEW_PREFLIGHT_CHECKS: tuple[str, ...] = (
-    "project_state",
-    "roadmap",
-    "conventions",
-    "research_artifacts",
-    "manuscript",
-    "compiled_manuscript",
-    "referee_report_source",
-    "phase_artifacts",
-)
-VALID_REVIEW_REQUIRED_STATES: tuple[str, ...] = ("phase_executed",)
-
-
 def _review_contract_frontmatter_value(meta: dict[str, object], *, command_name: str) -> object:
     """Return the canonical review-contract frontmatter payload."""
 
@@ -485,6 +474,25 @@ def render_review_contract_section(review_contract: ReviewCommandContract | None
     if review_contract is None:
         return ""
     return render_review_contract_prompt(_review_contract_payload(review_contract))
+
+
+def render_review_contract_section_from_frontmatter(frontmatter: str, *, command_name: str) -> str:
+    """Render a canonical review-contract section from raw command frontmatter."""
+
+    try:
+        meta = yaml.safe_load(frontmatter) if frontmatter.strip() else {}
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Malformed frontmatter for {command_name}: {exc}") from exc
+    if meta is None:
+        return ""
+    if not isinstance(meta, dict):
+        raise ValueError(f"Frontmatter for {command_name} must parse to a mapping")
+
+    review_contract = _parse_review_contract(
+        _review_contract_frontmatter_value(meta, command_name=command_name),
+        command_name=command_name,
+    )
+    return render_review_contract_section(review_contract)
 
 
 def _command_model_content(body: str, review_contract: ReviewCommandContract | None) -> str:

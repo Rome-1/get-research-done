@@ -125,6 +125,18 @@ def test_parse_project_contract_data_salvage_reports_recoverable_findings() -> N
     assert result.errors == result.recoverable_errors
 
 
+def test_parse_project_contract_data_salvage_preserves_contract_with_top_level_extra_keys() -> None:
+    contract = _load_contract_fixture()
+    contract["legacy_notes"] = "forwarded from a prior schema revision"
+
+    result: ProjectContractParseResult = parse_project_contract_data_salvage(contract)
+
+    assert result.contract is not None
+    assert result.blocking_errors == []
+    assert result.recoverable_errors == ["legacy_notes: Extra inputs are not permitted"]
+    assert "legacy_notes" not in result.contract.model_dump()
+
+
 def test_parse_project_contract_data_strict_rejects_singleton_list_drift() -> None:
     contract = _load_contract_fixture()
     contract["context_intake"]["must_read_refs"] = "ref-benchmark"
@@ -482,6 +494,31 @@ def test_validate_project_contract_approved_mode_rejects_vague_reference_locator
     ],
 )
 def test_validate_project_contract_approved_mode_accepts_substantive_text_grounding(
+    field_name: str, value: list[str]
+) -> None:
+    contract = _load_contract_fixture()
+    contract["references"] = []
+    _remove_incidental_grounding(contract)
+    contract["context_intake"]["must_include_prior_outputs"] = []
+    contract["context_intake"]["user_asserted_anchors"] = []
+    contract["context_intake"]["known_good_baselines"] = []
+    contract["context_intake"][field_name] = value
+    contract["scope"]["unresolved_questions"] = []
+
+    result = validate_project_contract(contract, mode="approved")
+
+    assert result.valid is True
+    assert result.mode == "approved"
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [
+        ("user_asserted_anchors", ["arXiv:2401.12345"]),
+        ("known_good_baselines", ["doi:10.1234/example"]),
+    ],
+)
+def test_validate_project_contract_approved_mode_accepts_short_concrete_locator_grounding(
     field_name: str, value: list[str]
 ) -> None:
     contract = _load_contract_fixture()
