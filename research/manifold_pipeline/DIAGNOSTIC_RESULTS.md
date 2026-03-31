@@ -213,3 +213,58 @@ Before declaring the thesis alive or dead:
 **Conclusion:** SMCE decomposition does not find manifold structure in transformer residual streams that exceeds naive k-means clustering. The activation space is linearly separable. This falsifies the geometric routing hypothesis at the SMCE + MI-attribution level of analysis.
 
 **Recommended pivot:** SAE feature directions, not manifold decomposition, are the correct geometric abstraction for transformer representations at this scale and in this paradigm.
+
+---
+
+## Diagnostic SAE: Linear Feature Directions vs K-Means
+
+**Question:** Do pretrained SAE feature directions capture token routing better than k-means? If yes, the geometry is linear (SAE wins); if no, there is no routing structure at all.
+
+**Method:** Load Joseph Bloom's GPT-2 Small layer 6 SAE (24,576 features, `gpt2-small-res-jb`, `blocks.6.hook_resid_pre`). Test three labeling strategies against k-means on PCA activations using the same MI-attribution classifiers as Phase 1. N=500 tokens/condition.
+
+**Strategies:**
+1. `top1_feature` — argmax feature per token (dominant feature ID)
+2. `top3_bucket` — hash of top-3 active feature IDs (interaction patterns), 50 buckets
+3. `sae_kmeans` — k-means in sparse feature space (same k as SMCE)
+
+### Results
+
+| Strategy | Significant | Avg Δ vs k-means | Verdict |
+|---|:--:|:--:|---|
+| top1_feature | **12/12** | **+783%** | SAE WINS every test |
+| top3_bucket | **11/12** | **+185%** | Near-universal SAE advantage |
+| sae_kmeans | 0/12 | -4.6% | Feature space k-means no better than PCA k-means |
+
+**Selected individual results (top1_feature):**
+
+| Condition | Token Type | SAE MI | k-means MI | Δ |
+|---|---|:--:|:--:|:--:|
+| numeric | punctuation | — | — | **+2836%** |
+| syntactic | punctuation | — | — | **+2245%** |
+| numeric | token_frequency | — | — | **+774%** |
+| positional | position_bucket | — | — | **+74%** |
+
+**SAE feature sparsity:** ~60 features active/token on average (sparsity ≈ 0.0024 of 24,576 features).
+
+### Verdict: `SAE_STRONGLY_BEATS_SMCE`
+
+- **Linear geometry is confirmed.** SAE feature directions capture token-type routing structure that k-means in PCA space misses by a wide margin.
+- The dominant feature (top1) is a better routing label than any manifold decomposition strategy.
+- Feature co-activation patterns (top3_bucket) also substantially outperform k-means.
+- K-means in SAE feature space (sae_kmeans) offers no improvement — the information is in *which* features fire, not in the geometry of the feature activation vector.
+- **The manifold thesis is falsified at SMCE decomposition.** SMCE finds linearly separable clusters. SAE directions are the correct abstraction for this scale and paradigm.
+
+---
+
+## Final Synthesis: All Five Hypotheses Falsified + SAE Confirmation
+
+| Hypothesis | Diagnostic | Result |
+|---|:--:|---|
+| PCA destroys curved geometry | A | Partial — advantage *relocates*, doesn't improve |
+| Wrong layer (layer 6 atypical) | B | SMCE advantage peaks at 3-6, collapses at depth |
+| Wrong classifiers (coarse features) | C | Computational classifiers add nothing |
+| Nonlinear preprocessing reveals structure | **E** | PCA is best; UMAP/diffusion make it worse |
+| GPT-2 too small (scale) | **D** | Gemma 2 2B is worse; KILL at layer 13 |
+| SAE directions beat manifold labels? | **SAE** | **Yes — top1_feature: 12/12 sig, +783% avg delta** |
+
+**Conclusion:** Transformer residual stream activations at GPT-2 Small layer 6 are linearly separable at the granularity that matters. SMCE finds clusters with near-identical MI to k-means because the geometry IS linear. SAE feature directions, not curved manifolds, are the correct abstraction. The manifold thesis is falsified; pivot to SAE-based analysis is warranted.
