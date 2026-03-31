@@ -1,7 +1,9 @@
 # Phase 1 Diagnostic Results: SMCE vs K-Means Parity Investigation
 
-**Date:** 2026-03-30 | **Model:** GPT-2 Small (117M) | **N:** 500 tokens/condition
-**Runtime:** All diagnostics on Modal T4 GPU | **Code:** `modal_run_diag_{a,b,c}.py`
+**Date:** 2026-03-30 to 2026-03-31 | **Models:** GPT-2 Small (117M) + Gemma 2 2B (2.6B) | **N:** 500 tokens/condition
+**Runtime:** All diagnostics on Modal T4 GPU | **Code:** `modal_run_diag_{a,b,c,d,e}.py`
+
+> **FINAL VERDICT: The manifold thesis is falsified at SMCE decomposition.** All five diagnostic hypotheses failed. Transformer residual stream activations are linearly separable at the granularity SMCE operates. K-means captures all token-routing structure SMCE finds. SAE-style linear directions are the correct abstraction.
 
 ---
 
@@ -147,3 +149,67 @@ Before declaring the thesis alive or dead:
 - **Attribution-only pipeline** (`run_attribution_only`) was used for Diagnostic A to avoid O(N³) persistent homology on 768-dim data.
 - **Layer 0 failure** is expected — token embeddings before any transformer block are too uniform for spectral clustering.
 - **Layers 3/6 identical results** need investigation (bead filed).
+
+---
+
+## Diagnostic D: Scale Test — Gemma 2 2B
+
+**Question:** Does manifold structure emerge at scale? GPT-2 may be too small.
+
+**Method:** Attribution-only pipeline on Gemma 2 2B (2.6B, 2304-dim) at layers 6, 13, 20.
+
+### Results
+
+| Layer | k (pos/num/syn) | Gate | Significant | Avg MI(SMCE-km) |
+|:--:|---|:--:|:--:|:--:|
+| 6 | 2/5/2 | PROCEED | 3/12 | **-0.041** |
+| 13 | 9/5/3 | **KILL** | **0/12** | **-0.157** |
+| 20 | 2/5/5 | PROCEED | 2/12 | **-0.050** |
+
+**GPT-2 best avg_delta for comparison: +0.028**
+
+### Verdict: SCALE_DOES_NOT_HELP
+
+- Gemma 2 2B is *worse* for SMCE vs k-means than GPT-2 at every layer
+- Layer 13 (canonical mid-network) gives a clean **KILL**: k-means beats SMCE on 0 of 12 tests
+- More parameters and higher hidden dim (2304 vs 768) don't create curved manifold structure
+- The scale hypothesis is falsified
+
+---
+
+## Diagnostic E: Nonlinear Preprocessing — UMAP and Diffusion Maps
+
+**Question:** Does PCA linearize activation space, erasing the manifold structure SMCE needs?
+
+**Method:** Compare attribution-only pipeline with PCA→100 vs UMAP→50 vs diffusion maps→5.
+
+### Results
+
+| Method | k (pos/num/syn) | Significant | Avg MI(SMCE-km) |
+|---|---|:--:|:--:|
+| PCA→100 | 2/2/3 | 3/12 | **+0.028** |
+| UMAP→50 | 4/6/6 | 2/12 | **-0.054** |
+| Diffusion→5 | 7/10/2 | 4/12 | **-0.074** |
+
+### Verdict: PCA_IS_FINE
+
+- PCA has the *highest* SMCE advantage (+0.028), better than both nonlinear methods
+- UMAP and diffusion maps find more manifolds (k up to 10) but SMCE advantage **shrinks**
+- The extra manifolds from nonlinear preprocessing don't correspond to structure k-means misses
+- Preprocessing is not the bottleneck — the geometry is linear regardless
+
+---
+
+## Final Synthesis: All Five Hypotheses Falsified
+
+| Hypothesis | Diagnostic | Result |
+|---|:--:|---|
+| PCA destroys curved geometry | A | Partial — advantage *relocates*, doesn't improve |
+| Wrong layer (layer 6 atypical) | B | SMCE advantage peaks at 3-6, collapses at depth |
+| Wrong classifiers (coarse features) | C | Computational classifiers add nothing |
+| Nonlinear preprocessing reveals structure | **E** | PCA is best; UMAP/diffusion make it worse |
+| GPT-2 too small (scale) | **D** | Gemma 2 2B is worse; KILL at layer 13 |
+
+**Conclusion:** SMCE decomposition does not find manifold structure in transformer residual streams that exceeds naive k-means clustering. The activation space is linearly separable. This falsifies the geometric routing hypothesis at the SMCE + MI-attribution level of analysis.
+
+**Recommended pivot:** SAE feature directions, not manifold decomposition, are the correct geometric abstraction for transformer representations at this scale and in this paradigm.
