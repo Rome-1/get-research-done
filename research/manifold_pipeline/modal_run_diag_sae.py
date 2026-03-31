@@ -112,16 +112,16 @@ def run_diag_sae(n_tokens: int = 500, layer: int = 6):
     for condition, er in extraction_results.items():
         print(f"\n--- Condition: {condition} ({er.activations.shape[0]} tokens) ---")
 
-        # We need raw (pre-PCA) activations for SAE. Re-extract without PCA.
-        # The SAE was trained on raw model activations, not PCA-reduced.
-        # We extract raw activations separately.
+        # SAE was trained on hook_resid_pre, not hook_resid_post.
+        # Re-extract raw activations from the correct hook point.
         from research.manifold_pipeline.activation_extraction import (
             generate_condition_texts, extract_activations_with_tokens,
         )
+        sae_hook = f"blocks.{layer}.hook_resid_pre"
         n_texts = max(n_tokens // (config.max_seq_len // 2), 20)
         texts = generate_condition_texts(condition, n_texts, config.max_seq_len)
         raw_acts, _, _ = extract_activations_with_tokens(
-            model, texts, config.hook_point,
+            model, texts, sae_hook,
             config.max_seq_len, config.batch_size,
         )
         # Subsample to match PCA extraction

@@ -40,7 +40,7 @@ def load_sae(layer: int = 6, device: str = "cpu"):
     from sae_lens import SAE
 
     release = "gpt2-small-res-jb"
-    sae_id = f"blocks.{layer}.hook_resid_post"
+    sae_id = f"blocks.{layer}.hook_resid_pre"
 
     print(f"Loading SAE: release={release}, sae_id={sae_id}")
     sae, cfg_dict, _ = SAE.from_pretrained(
