@@ -218,7 +218,7 @@ def extract_activations(
             _, cache = model.run_with_cache(tokens, names_filter=[hook_point])
 
         # cache[hook_point] shape: (batch, seq_len, hidden_dim)
-        acts = cache[hook_point].cpu().numpy()
+        acts = cache[hook_point].cpu().float().numpy()
         # Flatten batch and seq dimensions
         acts = acts.reshape(-1, acts.shape[-1])
         all_activations.append(acts)
@@ -257,7 +257,7 @@ def extract_activations_with_tokens(
         with torch.no_grad():
             _, cache = model.run_with_cache(tokens, names_filter=[hook_point])
 
-        acts = cache[hook_point].cpu().numpy()
+        acts = cache[hook_point].cpu().float().numpy()
         acts = acts.reshape(-1, acts.shape[-1])
         all_activations.append(acts)
 
