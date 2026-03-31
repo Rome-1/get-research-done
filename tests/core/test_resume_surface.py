@@ -60,13 +60,9 @@ def test_build_resume_compat_surface_extracts_top_level_legacy_fields() -> None:
     assert compat["session_resume_file"] == "GPD/phases/03/alternate.md"
 
 
-@pytest.mark.parametrize(
-    "wrapper_key",
-    ["compat_resume_surface", "legacy_resume_surface", "compatibility_resume_surface"],
-)
-def test_build_resume_compat_surface_extracts_wrapper_aliases(wrapper_key: str) -> None:
+def test_build_resume_compat_surface_extracts_canonical_compat_surface() -> None:
     payload = {
-        wrapper_key: {
+        "compat_resume_surface": {
             "execution_resume_file": "GPD/phases/04/.continue-here.md",
             "execution_resume_file_source": "session_resume_file",
             "resume_mode": "continuity_handoff",
@@ -85,6 +81,24 @@ def test_build_resume_compat_surface_extracts_wrapper_aliases(wrapper_key: str) 
     assert compat["session_resume_file"] == "GPD/phases/04/.continue-here.md"
 
 
+@pytest.mark.parametrize(
+    "wrapper_key",
+    ["legacy_resume_surface", "compatibility_resume_surface", "resume_surface", "resume_surface_compat"],
+)
+def test_build_resume_compat_surface_ignores_legacy_wrapper_aliases(wrapper_key: str) -> None:
+    payload = {
+        wrapper_key: {
+            "execution_resume_file": "GPD/phases/04/.continue-here.md",
+            "execution_resume_file_source": "session_resume_file",
+            "resume_mode": "continuity_handoff",
+            "segment_candidates": [{"source": "session_resume_file", "status": "handoff"}],
+            "session_resume_file": "GPD/phases/04/.continue-here.md",
+        }
+    }
+
+    assert build_resume_compat_surface(payload) is None
+
+
 def test_build_resume_compat_surface_merges_sources_with_explicit_precedence() -> None:
     payload_one = {
         "compat_resume_surface": {
@@ -93,16 +107,12 @@ def test_build_resume_compat_surface_merges_sources_with_explicit_precedence() -
         },
     }
     payload_two = {
-        "compatibility_resume_surface": {
+        "compat_resume_surface": {
             "session_resume_file": "GPD/phases/02/legacy.md",
             "execution_resume_file_source": "session_resume_file",
         }
     }
     payload_three = {
-        "legacy_resume_surface": {
-            "recorded_session_resume_file": "GPD/phases/03/legacy.md",
-            "session_resume_file": "GPD/phases/03/legacy.md",
-        },
         "execution_resume_file": "GPD/phases/03/.continue-here.md",
         "resume_mode": "continuity_handoff",
     }
@@ -113,27 +123,21 @@ def test_build_resume_compat_surface_merges_sources_with_explicit_precedence() -
     assert compat["execution_resume_file"] == "GPD/phases/03/.continue-here.md"
     assert compat["execution_resume_file_source"] == "session_resume_file"
     assert compat["resume_mode"] == "continuity_handoff"
-    assert compat["recorded_session_resume_file"] == "GPD/phases/03/legacy.md"
-    assert compat["session_resume_file"] == "GPD/phases/03/legacy.md"
+    assert compat["session_resume_file"] == "GPD/phases/02/legacy.md"
 
 
-def test_resolve_resume_compat_surface_discovers_nested_resume_surface_wrapper() -> None:
+def test_resolve_resume_compat_surface_ignores_arbitrary_nested_compat_like_dicts() -> None:
     payload = {
         "recovery": {
+            "segment_candidates": [{"source": "current_execution", "status": "paused"}],
             "resume_surface": {
                 "execution_resume_file": "GPD/phases/05/.continue-here.md",
                 "execution_resume_file_source": "current_execution",
-                "segment_candidates": [{"source": "current_execution", "status": "paused"}],
-            }
+            },
         }
     }
 
-    compat = resolve_resume_compat_surface(payload)
-
-    assert compat is not None
-    assert compat["execution_resume_file"] == "GPD/phases/05/.continue-here.md"
-    assert compat["execution_resume_file_source"] == "current_execution"
-    assert compat["segment_candidates"] == [{"source": "current_execution", "status": "paused"}]
+    assert resolve_resume_compat_surface(payload) is None
 
 
 def test_lookup_resume_surface_helpers_respect_canonical_and_compat_precedence() -> None:
@@ -426,8 +430,14 @@ def test_canonicalize_resume_public_payload_removes_legacy_top_level_aliases_and
             "recorded_session_resume_file": "GPD/phases/03/legacy.md",
         },
         "compat_resume_surface": {
+            "recorded_session_resume_file": "GPD/phases/03/legacy.md",
             "session_resume_file": "GPD/phases/03/legacy.md",
             "resume_mode": "bounded_segment",
+            "segment_candidates": [{"source": "current_execution"}],
+            "resume_surface": {
+                "session_resume_file": "GPD/phases/03/nested-legacy.md",
+                "resume_mode": "continuity_handoff",
+            },
         },
     }
 
@@ -457,6 +467,7 @@ def test_canonicalize_resume_public_payload_removes_legacy_top_level_aliases_and
     assert canonical["compat_resume_surface"]["session_resume_file"] == "GPD/phases/03/legacy.md"
     assert canonical["compat_resume_surface"]["recorded_session_resume_file"] == "GPD/phases/03/legacy.md"
     assert canonical["compat_resume_surface"]["missing_session_resume_file"] is None
+    assert "resume_surface" not in canonical["compat_resume_surface"]
 
 
 def test_canonicalize_resume_public_payload_is_idempotent_on_already_canonical_payload() -> None:

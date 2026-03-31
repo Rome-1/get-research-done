@@ -15,7 +15,6 @@ from collections.abc import Mapping, Sequence
 __all__ = [
     "RESUME_COMPATIBILITY_ALIAS_FIELDS",
     "RESUME_COMPATIBILITY_SCHEMA",
-    "RESUME_COMPATIBILITY_NESTED_SURFACE_ALIASES",
     "RESUME_COMPATIBILITY_WRAPPER_ALIASES",
     "RESUME_COMPATIBILITY_ALIAS_KEYS",
     "RESUME_CANDIDATE_KIND_BOUNDED_SEGMENT",
@@ -63,22 +62,12 @@ RESUME_COMPATIBILITY_ALIAS_FIELDS: tuple[str, ...] = (
     "session_resume_file",
 )
 
-RESUME_COMPATIBILITY_WRAPPER_ALIASES: tuple[str, ...] = (
-    "compat_resume_surface",
-    "legacy_resume_surface",
-    "compatibility_resume_surface",
-)
-
-RESUME_COMPATIBILITY_NESTED_SURFACE_ALIASES: tuple[str, ...] = (
-    "resume_surface",
-    "resume_surface_compat",
-)
+RESUME_COMPATIBILITY_WRAPPER_ALIASES: tuple[str, ...] = ("compat_resume_surface",)
 
 RESUME_COMPATIBILITY_SCHEMA: dict[str, tuple[str, ...] | str] = {
     "surface_key": "compat_resume_surface",
     "alias_fields": RESUME_COMPATIBILITY_ALIAS_FIELDS,
     "wrapper_aliases": RESUME_COMPATIBILITY_WRAPPER_ALIASES,
-    "nested_surface_aliases": RESUME_COMPATIBILITY_NESTED_SURFACE_ALIASES,
 }
 
 # Backward-compatible alias for callers that still import the older constant name.
@@ -139,62 +128,25 @@ def resolve_resume_compat_surface(
     *sources: Mapping[str, object] | None,
     fields: Sequence[str] = RESUME_COMPATIBILITY_ALIAS_FIELDS,
     wrapper_aliases: Sequence[str] = RESUME_COMPATIBILITY_WRAPPER_ALIASES,
-    nested_surface_aliases: Sequence[str] = RESUME_COMPATIBILITY_NESTED_SURFACE_ALIASES,
 ) -> dict[str, object] | None:
     """Return the nested compatibility resume block for one payload."""
-    if nested_surface_aliases:
-        for source in sources:
-            if not isinstance(source, Mapping):
-                continue
-            direct_surface = _resolve_resume_surface_mapping(
-                source,
-                aliases=(*wrapper_aliases, *nested_surface_aliases),
-            )
-            if isinstance(direct_surface, Mapping) and any(field in direct_surface for field in fields):
-                return dict(direct_surface)
-
-        for source in sources:
-            if not isinstance(source, Mapping):
-                continue
-            for value in source.values():
-                if not isinstance(value, Mapping):
-                    continue
-                nested_resume_surface = _resolve_resume_surface_mapping(
-                    value,
-                    aliases=nested_surface_aliases,
-                )
-                if isinstance(nested_resume_surface, Mapping) and any(field in nested_resume_surface for field in fields):
-                    return dict(nested_resume_surface)
-                if any(field in value for field in fields):
-                    return dict(value)
-
     compat: dict[str, object] = dict.fromkeys(fields)
     found_alias_data = False
 
     for source in sources:
         if not isinstance(source, Mapping):
             continue
-        value = _resolve_resume_surface_mapping(
-            source,
-            aliases=(*wrapper_aliases, *nested_surface_aliases),
-        )
+        value = _resolve_resume_surface_mapping(source, aliases=wrapper_aliases)
         if isinstance(value, Mapping):
-            nested_alias_data = False
             for field in fields:
                 if field in value:
                     compat[field] = value.get(field)
-                    nested_alias_data = True
-            if nested_alias_data:
-                found_alias_data = True
-        if any(key in source for key in fields):
-            found_alias_data = True
-
-    for key in fields:
-        for source in sources:
-            if not isinstance(source, Mapping) or key not in source:
+                    found_alias_data = True
+        for field in fields:
+            if field not in source:
                 continue
-            compat[key] = source.get(key)
-            break
+            compat[field] = source.get(field)
+            found_alias_data = True
 
     return compat if found_alias_data else None
 
@@ -208,7 +160,6 @@ def build_resume_compat_surface(
         *sources,
         fields=fields,
         wrapper_aliases=RESUME_COMPATIBILITY_WRAPPER_ALIASES,
-        nested_surface_aliases=(),
     )
 
 
@@ -630,19 +581,16 @@ def canonicalize_resume_public_payload(
 ) -> dict[str, object]:
     """Group legacy resume aliases under ``compat_resume_surface`` only."""
     canonical = dict(payload)
-    nested_sources = [
-        value
-        for key in RESUME_COMPATIBILITY_NESTED_SURFACE_ALIASES
-        if isinstance((value := canonical.get(key)), Mapping)
-    ]
-    compat = build_resume_compat_surface(canonical, *nested_sources, fields=compat_fields)
+    compat = build_resume_compat_surface(canonical, fields=compat_fields)
 
     for key in RESUME_COMPATIBILITY_ALIAS_FIELDS:
         canonical.pop(key, None)
     for key in RESUME_COMPATIBILITY_WRAPPER_ALIASES:
         canonical.pop(key, None)
-    for key in RESUME_COMPATIBILITY_NESTED_SURFACE_ALIASES:
-        canonical.pop(key, None)
+    canonical.pop("resume_surface", None)
+    canonical.pop("resume_surface_compat", None)
+    canonical.pop("legacy_resume_surface", None)
+    canonical.pop("compatibility_resume_surface", None)
 
     if compat is not None:
         canonical["compat_resume_surface"] = compat

@@ -730,15 +730,8 @@ def build_recovery_advice(
     if derived_execution_head is None:
         derived_execution_head = _legacy_mapping_field(payload, compat_resume_surface, "current_execution")
 
-    def _compat_bool(field: str) -> bool | None:
-        if compat_resume_surface is None or field not in compat_resume_surface:
-            return None
-        return bool(compat_resume_surface.get(field))
-
     has_bounded_segment_candidate = _has_usable_candidate(segment_candidates, kind="bounded_segment")
-    execution_resumable_flag = _compat_bool("execution_resumable")
-    if execution_resumable_flag is None:
-        execution_resumable_flag = _bool_field(payload, "execution_resumable")
+    execution_resumable_flag = _bool_field(payload, "execution_resumable")
     if active_resume_kind == "bounded_segment":
         execution_resumable = bool(
             active_resume_pointer
@@ -754,9 +747,7 @@ def build_recovery_advice(
             or resume_mode == "bounded_segment"
             or has_bounded_segment_candidate
         )
-    interrupted_agent_flag = _compat_bool("has_interrupted_agent")
-    if interrupted_agent_flag is None:
-        interrupted_agent_flag = _bool_field(payload, "has_interrupted_agent")
+    interrupted_agent_flag = _bool_field(payload, "has_interrupted_agent")
     has_interrupted_agent = (
         interrupted_agent_flag
         or active_resume_kind == "interrupted_agent"
@@ -767,9 +758,7 @@ def build_recovery_advice(
             status="interrupted",
         )
     )
-    live_execution_flag = _compat_bool("has_live_execution")
-    if live_execution_flag is None:
-        live_execution_flag = _bool_field(payload, "has_live_execution")
+    live_execution_flag = _bool_field(payload, "has_live_execution")
     has_live_execution = (
         live_execution_flag
         or derived_execution_head is not None

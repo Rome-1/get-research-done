@@ -518,7 +518,7 @@ def test_build_recovery_advice_prefers_canonical_continuity_fields_over_conflict
     assert advice.has_local_recovery_target is True
 
 
-def test_build_recovery_advice_prefers_nested_compat_resume_surface_over_legacy_top_level_aliases(
+def test_build_recovery_advice_prefers_canonical_resume_fields_over_legacy_top_level_aliases(
     tmp_path: Path,
 ) -> None:
     project = _project(tmp_path)
@@ -530,12 +530,12 @@ def test_build_recovery_advice_prefers_nested_compat_resume_surface_over_legacy_
         project,
         recent_rows=[],
         resume_payload={
+            "active_resume_kind": "continuity_handoff",
+            "active_resume_origin": "continuation.handoff",
+            "active_resume_pointer": "GPD/phases/10/.continue-here.md",
             "compat_resume_surface": {
-                "active_resume_kind": "continuity_handoff",
-                "active_resume_origin": "continuation.handoff",
-                "active_resume_pointer": "GPD/phases/10/.continue-here.md",
-                "continuity_handoff_file": "GPD/phases/10/.continue-here.md",
-                "recorded_continuity_handoff_file": "GPD/phases/10/.continue-here.md",
+                "session_resume_file": "GPD/phases/10/.continue-here.md",
+                "recorded_session_resume_file": "GPD/phases/10/.continue-here.md",
                 "resume_candidates": [
                     {
                         "kind": "continuity_handoff",
@@ -544,10 +544,9 @@ def test_build_recovery_advice_prefers_nested_compat_resume_surface_over_legacy_
                         "resume_file": "GPD/phases/10/.continue-here.md",
                     }
                 ],
-                "execution_resumable": False,
+                "resume_mode": "continuity_handoff",
                 "execution_resume_file": "GPD/phases/10/.continue-here.md",
                 "execution_resume_file_source": "session_resume_file",
-                "has_live_execution": False,
             },
             "resume_mode": "bounded_segment",
             "execution_resumable": True,
@@ -567,7 +566,7 @@ def test_build_recovery_advice_prefers_nested_compat_resume_surface_over_legacy_
     assert advice.has_continuity_handoff is True
 
 
-def test_build_recovery_advice_recovers_nested_resume_surface_compat_wrapper(
+def test_build_recovery_advice_ignores_nested_resume_surface_compat_wrapper(
     tmp_path: Path,
 ) -> None:
     project = _project(tmp_path)
@@ -597,15 +596,15 @@ def test_build_recovery_advice_recovers_nested_resume_surface_compat_wrapper(
         },
     )
 
-    assert advice.status == "session-handoff"
-    assert advice.active_resume_kind == "continuity_handoff"
-    assert advice.active_resume_origin == "compat.session_resume_file"
-    assert advice.active_resume_pointer == "GPD/phases/11/.continue-here.md"
-    assert advice.has_continuity_handoff is True
-    assert advice.current_workspace_has_resume_file is True
+    assert advice.status == "no-recovery"
+    assert advice.active_resume_kind is None
+    assert advice.active_resume_origin is None
+    assert advice.active_resume_pointer is None
+    assert advice.has_continuity_handoff is False
+    assert advice.current_workspace_has_resume_file is False
 
 
-def test_build_recovery_advice_recovers_arbitrary_nested_resume_surface_wrapper(
+def test_build_recovery_advice_ignores_arbitrary_nested_resume_surface_wrapper(
     tmp_path: Path,
 ) -> None:
     project = _project(tmp_path)
@@ -634,12 +633,35 @@ def test_build_recovery_advice_recovers_arbitrary_nested_resume_surface_wrapper(
         },
     )
 
-    assert advice.status == "session-handoff"
-    assert advice.active_resume_kind == "continuity_handoff"
-    assert advice.active_resume_origin == "compat.session_resume_file"
-    assert advice.active_resume_pointer == "GPD/phases/12/.continue-here.md"
-    assert advice.has_continuity_handoff is True
-    assert advice.current_workspace_has_resume_file is True
+    assert advice.status == "no-recovery"
+    assert advice.active_resume_kind is None
+    assert advice.active_resume_origin is None
+    assert advice.active_resume_pointer is None
+    assert advice.has_continuity_handoff is False
+    assert advice.current_workspace_has_resume_file is False
+
+
+def test_build_recovery_advice_ignores_compat_boolean_flags_without_canonical_support(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+
+    advice = build_recovery_advice(
+        project,
+        recent_rows=[],
+        resume_payload={
+            "compat_resume_surface": {
+                "execution_resumable": True,
+                "has_interrupted_agent": True,
+                "has_live_execution": True,
+            }
+        },
+    )
+
+    assert advice.status == "no-recovery"
+    assert advice.execution_resumable is False
+    assert advice.has_interrupted_agent is False
+    assert advice.has_live_execution is False
 
 
 def test_build_recovery_advice_recovers_continuity_handoff_from_candidate_only_payload(tmp_path: Path) -> None:

@@ -1293,6 +1293,17 @@ def test_build_runtime_hint_payload_prefers_canonical_continuity_fields_over_con
             "has_live_execution": True,
         },
     )
+    monkeypatch.setattr(
+        "gpd.core.runtime_hints.resolve_project_reentry",
+        lambda _workspace_hint, data_root=None: SimpleNamespace(
+            resolved_project_root=project,
+            candidates=[],
+            selected_candidate=None,
+            auto_selected=False,
+            requires_user_selection=False,
+            mode="current-workspace",
+        ),
+    )
 
     payload = build_runtime_hint_payload(
         project,
@@ -1315,7 +1326,7 @@ def test_build_runtime_hint_payload_prefers_canonical_continuity_fields_over_con
     assert any("suggest-next" in action for action in payload.next_actions)
 
 
-def test_build_runtime_hint_payload_prefers_nested_compat_resume_surface_over_legacy_top_level_aliases(
+def test_build_runtime_hint_payload_prefers_canonical_resume_fields_over_legacy_top_level_aliases(
     tmp_path: Path, monkeypatch
 ) -> None:
     project = _bootstrap_project(tmp_path)
@@ -1330,12 +1341,12 @@ def test_build_runtime_hint_payload_prefers_nested_compat_resume_surface_over_le
             "state_exists": True,
             "roadmap_exists": True,
             "project_exists": True,
+            "active_resume_kind": "continuity_handoff",
+            "active_resume_origin": "continuation.handoff",
+            "active_resume_pointer": "GPD/phases/10/.continue-here.md",
             "compat_resume_surface": {
-                "active_resume_kind": "continuity_handoff",
-                "active_resume_origin": "continuation.handoff",
-                "active_resume_pointer": "GPD/phases/10/.continue-here.md",
-                "continuity_handoff_file": "GPD/phases/10/.continue-here.md",
-                "recorded_continuity_handoff_file": "GPD/phases/10/.continue-here.md",
+                "session_resume_file": "GPD/phases/10/.continue-here.md",
+                "recorded_session_resume_file": "GPD/phases/10/.continue-here.md",
                 "resume_candidates": [
                     {
                         "kind": "continuity_handoff",
@@ -1344,10 +1355,9 @@ def test_build_runtime_hint_payload_prefers_nested_compat_resume_surface_over_le
                         "resume_file": "GPD/phases/10/.continue-here.md",
                     }
                 ],
-                "execution_resumable": False,
+                "resume_mode": "continuity_handoff",
                 "execution_resume_file": "GPD/phases/10/.continue-here.md",
                 "execution_resume_file_source": "session_resume_file",
-                "has_live_execution": False,
             },
             "resume_mode": "bounded_segment",
             "execution_resumable": True,

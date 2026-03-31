@@ -1234,13 +1234,6 @@ def _resume_visible_candidates(payload: dict[str, object], compat_surface: dict[
         compat_key="resume_candidates",
         compat_keys=("segment_candidates",),
     )
-    if candidates is None:
-        candidates = lookup_resume_surface_list(
-            payload,
-            "segment_candidates",
-            compat_surface=compat_surface,
-            compat_key="segment_candidates",
-        )
     if not isinstance(candidates, list):
         return []
     return [item for item in candidates if isinstance(item, dict)]
@@ -1442,7 +1435,7 @@ def _recent_project_current_state(row: dict[str, object]) -> str | None:
 
     phase = _recent_project_text(row, "current_phase", "phase")
     phase_label = _recent_project_text(row, "current_phase_name", "phase_name")
-    status = _recent_project_text(row, "project_status", "status", "state")
+    status = _recent_project_text(row, "project_status", "status")
     progress = _recent_project_text(row, "progress", "progress_summary", "phase_progress")
     pieces: list[str] = []
     if phase and phase_label and phase_label != phase:
@@ -1631,85 +1624,63 @@ def _recent_project_text(payload: dict[str, object], *keys: str) -> str | None:
     return None
 
 
-def _coerce_recent_project_rows(payload: object) -> list[dict[str, object]]:
-    """Normalize a recent-project payload into a list of row dictionaries."""
-    if payload is None:
-        return []
-
-    data = payload
-    if hasattr(data, "model_dump"):
-        try:
-            data = data.model_dump(mode="json")  # type: ignore[assignment]
-        except Exception:
-            return []
-
-    if isinstance(data, dict):
-        for key in ("projects", "rows", "entries"):
-            value = data.get(key)
-            if isinstance(value, list):
-                return [item for item in (_normalize_recent_project_row(row) for row in value) if item is not None]
-        return [item for item in (_normalize_recent_project_row(data),) if item is not None]
-
-    if isinstance(data, list):
-        normalized_rows: list[dict[str, object]] = []
-        for row in data:
-            row_payload = row
-            if hasattr(row_payload, "model_dump"):
-                try:
-                    row_payload = row_payload.model_dump(mode="json")
-                except Exception:
-                    continue
-            normalized = _normalize_recent_project_row(row_payload)
-            if normalized is not None:
-                normalized_rows.append(normalized)
-        return normalized_rows
-
-    return []
-
-
 def _normalize_recent_project_row(row: object) -> dict[str, object] | None:
-    """Normalize one recent-project row without dropping missing entries."""
+    """Project one canonical recent-project row into the CLI display shape."""
     if not isinstance(row, dict):
         return None
 
-    normalized = dict(row)
-    project_root = _recent_project_text(normalized, "project_root", "workspace_root", "cwd", "path")
-    if project_root is not None:
-        normalized["project_root"] = project_root
-        project_path = Path(project_root).expanduser()
-        normalized["workspace"] = _format_display_path(project_path)
-        normalized["available"] = project_path.exists()
-        normalized["missing"] = not normalized["available"]
-        normalized["command"] = normalized.get("command") or (
-            f"gpd --cwd {shlex.quote(str(project_path.resolve(strict=False)))} resume"
-            if project_path.is_absolute()
-            else None
-        )
-    else:
-        normalized["project_root"] = None
-        normalized["workspace"] = "unknown"
-        normalized["available"] = False
-        normalized["missing"] = True
-        normalized["command"] = normalized.get("command") or None
+    from gpd.core.recent_projects import RecentProjectEntry
 
-    last_session_at = _recent_project_text(
-        normalized,
+    unexpected_fields = sorted(key for key in row if key not in RecentProjectEntry.model_fields)
+    if unexpected_fields:
+        formatted = ", ".join(unexpected_fields)
+        raise ValueError(f"recent-project row contains unexpected field(s): {formatted}")
+
+    project_root = _recent_project_text(row, "project_root")
+    if project_root is None:
+        return None
+
+    project_path = Path(project_root).expanduser()
+    available = project_path.exists()
+    normalized: dict[str, object] = {
+        "project_root": project_root,
+        "workspace": _format_display_path(project_path),
+        "available": available,
+        "missing": not available,
+    }
+    if project_path.is_absolute():
+        normalized["command"] = f"gpd --cwd {shlex.quote(str(project_path.resolve(strict=False)))} resume"
+    else:
+        normalized["command"] = None
+
+    for key in (
+        "schema_version",
         "last_session_at",
         "last_seen_at",
-        "last_event_at",
-        "updated_at",
-        "started_at",
-    )
-    if last_session_at is not None:
-        normalized["last_session_at"] = last_session_at
+        "stopped_at",
+        "resume_file",
+        "resume_file_available",
+        "resume_file_reason",
+        "status",
+        "resumable",
+        "availability_reason",
+        "last_result_id",
+        "resume_target_kind",
+        "resume_target_recorded_at",
+        "hostname",
+        "platform",
+        "source_kind",
+        "source_session_id",
+        "source_segment_id",
+        "source_transition_id",
+        "source_event_id",
+        "source_recorded_at",
+        "recovery_phase",
+        "recovery_plan",
+    ):
+        if key in row:
+            normalized[key] = row[key]
 
-    stopped_at = _recent_project_text(normalized, "stopped_at")
-    if stopped_at is not None:
-        normalized["stopped_at"] = stopped_at
-
-    resume_file = _recent_project_text(normalized, "resume_file")
-    if resume_file is not None:
-        normalized["resume_file"] = resume_file
     resume_file_available, resume_file_reason = _recent_project_resume_file_state(
         normalized.get("project_root"),
         normalized.get("resume_file"),
@@ -1719,7 +1690,7 @@ def _normalize_recent_project_row(row: object) -> dict[str, object] | None:
     if resume_file_reason is not None:
         normalized["resume_file_reason"] = resume_file_reason
 
-    status = _recent_project_text(normalized, "status", "state")
+    status = _recent_project_text(normalized, "status")
     if not bool(normalized["available"]):
         status = "unavailable"
     elif status is None:
@@ -1730,8 +1701,6 @@ def _normalize_recent_project_row(row: object) -> dict[str, object] | None:
     normalized["status"] = status
 
     resumable_value = normalized.get("resumable")
-    if resumable_value is None:
-        resumable_value = normalized.get("can_resume")
     if resumable_value is None:
         resumable_value = bool(normalized.get("resume_file"))
     normalized["resumable"] = (
@@ -1750,9 +1719,6 @@ def _recent_project_sort_key(row: dict[str, object]) -> tuple[int, str, str]:
         row,
         "last_session_at",
         "last_seen_at",
-        "last_event_at",
-        "updated_at",
-        "started_at",
     ) or ""
     workspace = str(row.get("workspace") or row.get("project_root") or "")
     return resumable_rank, timestamp, workspace
@@ -1763,9 +1729,20 @@ def _load_recent_projects_rows() -> list[dict[str, object]]:
     from gpd.core.recent_projects import RecentProjectsError, list_recent_projects
 
     try:
-        rows = _coerce_recent_project_rows(list_recent_projects(_recent_projects_data_root()))
+        raw_rows = list_recent_projects(_recent_projects_data_root())
     except RecentProjectsError as exc:
         raise GPDError(str(exc)) from exc
+
+    rows: list[dict[str, object]] = []
+    for row in raw_rows:
+        row_payload = row.model_dump(mode="json") if hasattr(row, "model_dump") else row
+        try:
+            normalized = _normalize_recent_project_row(row_payload)
+        except ValueError as exc:
+            raise GPDError(str(exc)) from exc
+        if normalized is None:
+            raise GPDError("recent-project cache returned a malformed canonical row")
+        rows.append(normalized)
 
     rows.sort(key=_recent_project_sort_key, reverse=True)
     rows.sort(key=lambda row: 0 if bool(row.get("resumable")) else 1)
@@ -1949,7 +1926,7 @@ def _render_recent_resume_summary(rows: list[dict[str, object]]) -> None:
             console.print(f"   Summary: {summary}")
         if current_state is not None:
             console.print(f"   Current: {current_state}")
-        console.print(f"   Last session: {str(row.get('last_session_at') or row.get('last_seen_at') or row.get('last_event_at') or '—')}")
+        console.print(f"   Last session: {str(row.get('last_session_at') or row.get('last_seen_at') or '—')}")
         console.print(f"   Stopped at: {str(row.get('stopped_at') or '—')}")
         recovery_label = _recent_project_text(row, "recovery_status_label")
         if recovery_label is not None:
