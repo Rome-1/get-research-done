@@ -66,6 +66,10 @@ class TestIsOlderThan:
     def test_pep440_post_release_is_not_older_than_base_release(self) -> None:
         assert _is_older_than("1.2.3.post1", "1.2.3") is False
 
+    def test_unknown_local_suffix_is_not_older_than_final_release(self) -> None:
+        assert _is_older_than("1.2.3-local", "1.2.3") is False
+        assert _is_older_than("1.2.3-local.1", "1.2.3") is False
+
 
 def test_version_comparison_does_not_depend_on_packaging_modules() -> None:
     assert _is_older_than("1.0.0rc1", "1.0.0") is True

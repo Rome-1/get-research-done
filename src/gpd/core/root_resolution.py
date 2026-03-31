@@ -90,7 +90,7 @@ def _walk_project_root(candidate: Path | None) -> tuple[Path | None, int]:
         return None, 0
 
     for steps, path in enumerate((candidate, *candidate.parents)):
-        if ProjectLayout(path).gpd.exists():
+        if ProjectLayout(path).gpd.is_dir():
             return path, steps
     return None, 0
 

@@ -635,18 +635,8 @@ sync_execution_visibility_from_canonical_continuation = _sync_execution_visibili
 
 
 def _bounded_segment_helper() -> Callable | None:
-    for helper_name in (
-        "canonical_bounded_segment_from_execution_snapshot",
-        "bounded_segment_from_normalized_execution_snapshot",
-        "derive_bounded_segment_from_normalized_execution_snapshot",
-        "build_bounded_segment_from_normalized_execution_snapshot",
-        "bounded_segment_from_current_execution",
-        "_bounded_segment_from_current_execution",
-    ):
-        helper = getattr(_continuation_module, helper_name, None)
-        if callable(helper):
-            return helper
-    return None
+    helper = getattr(_continuation_module, "canonical_bounded_segment_from_execution_snapshot", None)
+    return helper if callable(helper) else None
 
 
 def _bounded_segment_from_normalized_execution_snapshot(

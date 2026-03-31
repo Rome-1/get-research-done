@@ -7,10 +7,12 @@ Entry point: python -m gpd.mcp.servers.protocols_server
 Console script: gpd-mcp-protocols
 """
 
+import json
 import logging
 import re
 import sys
 import threading
+from functools import lru_cache
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -31,6 +33,7 @@ logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(name)s %(le
 logger = logging.getLogger("gpd-protocols")
 
 PROTOCOLS_DIR = SPECS_DIR / "references" / "protocols"
+PROTOCOL_DOMAINS_MANIFEST = PROTOCOLS_DIR / "protocol-domains.json"
 
 # ---------------------------------------------------------------------------
 # Parsing
@@ -76,81 +79,50 @@ def _extract_steps_and_checkpoints(body: str) -> tuple[list[str], list[str]]:
     return steps, checkpoints
 
 
-def _infer_domain(name: str, _load_when: list[str]) -> str:
-    """Infer a domain category from the protocol name and load_when keywords."""
-    # Domain mapping based on shared-protocols.md categories
-    core_derivation = {
-        "derivation-discipline",
-        "integral-evaluation",
-        "perturbation-theory",
-        "renormalization-group",
-        "path-integrals",
-        "effective-field-theory",
-        "electrodynamics",
-        "analytic-continuation",
-        "order-of-limits",
-        "classical-mechanics",
-        "hamiltonian-mechanics",
-        "scattering-theory",
-        "supersymmetry",
-        "string-field-theory",
-        "cosmological-perturbation-theory",
-        "holography-ads-cft",
-        "quantum-error-correction",
-        "resummation",
-        "asymptotic-symmetries",
-        "generalized-symmetries",
-    }
-    computational = {
-        "monte-carlo",
-        "variational-methods",
-        "density-functional-theory",
-        "lattice-gauge-theory",
-        "tensor-networks",
-        "symmetry-analysis",
-        "non-equilibrium-transport",
-        "finite-temperature-field-theory",
-        "conformal-bootstrap",
-        "numerical-relativity",
-        "exact-diagonalization",
-        "many-body-perturbation-theory",
-        "molecular-dynamics",
-        "machine-learning-physics",
-        "stochastic-processes",
-        "kinetic-theory",
-        "bethe-ansatz",
-        "random-matrix-theory",
-    }
-    mathematical = {
-        "algebraic-qft",
-        "group-theory",
-        "topological-methods",
-        "green-functions",
-        "wkb-semiclassical",
-        "large-n-expansion",
-        "statistical-inference",
-    }
-    numerical = {"numerical-computation", "symbolic-to-numerical"}
-    domain_standalone = {
-        "general-relativity": "gr_cosmology",
-        "fluid-dynamics-mhd": "fluid_plasma",
-        "open-quantum-systems": "quantum_info",
-        "quantum-many-body": "condensed_matter",
-        "de-sitter-space": "gr_cosmology",
-        "phenomenology": "nuclear_particle",
-    }
+@lru_cache(maxsize=1)
+def _load_protocol_domain_manifest() -> dict[str, str]:
+    """Load the authoritative protocol-domain manifest."""
+    try:
+        raw = json.loads(PROTOCOL_DOMAINS_MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Failed to read protocol domain manifest {PROTOCOL_DOMAINS_MANIFEST}: {exc}") from exc
 
-    if name in domain_standalone:
-        return domain_standalone[name]
-    if name in core_derivation:
-        return "core_derivation"
-    if name in computational:
-        return "computational_methods"
-    if name in mathematical:
-        return "mathematical_methods"
-    if name in numerical:
-        return "numerical_translation"
-    return "general"
+    if not isinstance(raw, dict):
+        raise ValueError("Protocol domain manifest must be a JSON object")
+
+    allowed_keys = {"schema_version", "protocol_domains"}
+    extra_keys = sorted(str(key) for key in raw if str(key) not in allowed_keys)
+    if extra_keys:
+        raise ValueError(f"Protocol domain manifest has unexpected keys: {', '.join(extra_keys)}")
+
+    if raw.get("schema_version") != 1:
+        raise ValueError(f"Unsupported protocol domain manifest schema_version: {raw.get('schema_version')!r}")
+
+    protocol_domains = raw.get("protocol_domains")
+    if not isinstance(protocol_domains, dict) or not protocol_domains:
+        raise ValueError("Protocol domain manifest must include a non-empty protocol_domains object")
+
+    domains: dict[str, str] = {}
+    for protocol_name, domain in protocol_domains.items():
+        if not isinstance(protocol_name, str) or not protocol_name.strip():
+            raise ValueError("Protocol domain manifest contains a blank protocol name")
+        if not isinstance(domain, str) or not domain.strip():
+            raise ValueError(f"Protocol domain manifest for {protocol_name!r} must be a non-empty string")
+        normalized_name = protocol_name.strip()
+        normalized_domain = domain.strip()
+        if normalized_name in domains:
+            raise ValueError(f"Protocol domain manifest contains duplicate protocol {normalized_name!r}")
+        domains[normalized_name] = normalized_domain
+    return domains
+
+
+def _protocol_domain(name: str) -> str:
+    """Return the authoritative domain for one protocol name."""
+    domains = _load_protocol_domain_manifest()
+    try:
+        return domains[name]
+    except KeyError as exc:
+        raise ValueError(f"Protocol {name!r} is missing domain metadata in {PROTOCOL_DOMAINS_MANIFEST.name}") from exc
 
 
 def _normalize_protocol_tier(raw: object, *, protocol_name: str) -> int:
@@ -189,7 +161,10 @@ class ProtocolStore:
         if not protocols_dir.is_dir():
             logger.warning("Protocols directory not found: %s", protocols_dir)
             return
-        for path in sorted(protocols_dir.glob("*.md")):
+        domain_manifest = _load_protocol_domain_manifest()
+        protocol_files = sorted(protocols_dir.glob("*.md"))
+        protocol_names = {path.stem for path in protocol_files}
+        for path in protocol_files:
             name = path.stem
             try:
                 text = path.read_text(encoding="utf-8")
@@ -204,7 +179,7 @@ class ProtocolStore:
             tier = _normalize_protocol_tier(meta.get("tier", 2), protocol_name=name)
             context_cost = meta.get("context_cost", "medium")
 
-            domain = _infer_domain(name, load_when)
+            domain = _protocol_domain(name)
             steps, checkpoints = _extract_steps_and_checkpoints(body)
 
             # Extract title from first H1
@@ -222,6 +197,12 @@ class ProtocolStore:
                 "checkpoints": checkpoints,
                 "body": body,
             }
+
+        unused_manifest_entries = sorted(name for name in domain_manifest if name not in protocol_names)
+        if unused_manifest_entries:
+            raise ValueError(
+                "Protocol domain manifest has entries without protocol files: " + ", ".join(unused_manifest_entries)
+            )
 
         logger.info("Loaded %d protocols from %s", len(self._protocols), protocols_dir)
 

@@ -98,6 +98,23 @@ def test_resolve_project_roots_falls_back_to_workspace_when_only_workspace_hint_
     assert resolution.walk_up_steps == 0
 
 
+def test_resolve_project_roots_ignores_a_file_named_gpd(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    workspace = project / "workspace"
+    workspace.mkdir(parents=True)
+    (project / "GPD").write_text("not a layout directory", encoding="utf-8")
+
+    resolution = resolve_project_roots(workspace)
+
+    assert resolution is not None
+    assert resolution.project_root == workspace.resolve(strict=False)
+    assert resolution.basis == RootResolutionBasis.WORKSPACE
+    assert resolution.confidence == RootResolutionConfidence.LOW
+    assert resolution.has_project_layout is False
+    assert resolution.walk_up_steps == 0
+    assert resolve_project_root(workspace, require_layout=True) is None
+
+
 def test_resolve_project_root_require_layout_rejects_unverified_fallback(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()

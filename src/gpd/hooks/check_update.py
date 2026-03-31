@@ -47,7 +47,7 @@ def _suffix_rank(suffix: str) -> tuple[int, int]:
         return -1, _extract_number("beta") or _extract_number("b")
     if "rc" in normalized:
         return 0, _extract_number("rc")
-    return -1, 0
+    return 1, 0
 
 
 def _version_key(version: str) -> tuple[tuple[int, ...], int, int, str]:

@@ -105,6 +105,52 @@ def test_resolve_project_root_uses_shared_root_resolution_for_nested_workspace(t
     assert resolved == project
 
 
+def test_bounded_segment_helper_uses_the_canonical_continuation_symbol_only(tmp_path: Path, monkeypatch) -> None:
+    project = _bootstrap_project(tmp_path)
+    resume_file = project / "GPD" / "phases" / "01-test" / ".continue-here.md"
+    resume_file.parent.mkdir(parents=True, exist_ok=True)
+    resume_file.write_text("", encoding="utf-8")
+
+    import gpd.core.continuation as continuation
+    import gpd.core.observability as observability
+
+    calls: list[str] = []
+
+    def canonical_helper(project_root: Path, execution_snapshot: dict[str, object]) -> dict[str, object]:
+        calls.append("canonical")
+        assert project_root == project
+        assert execution_snapshot["resume_file"] == "GPD/phases/01-test/.continue-here.md"
+        return {
+            "resume_file": "GPD/phases/01-test/.continue-here.md",
+            "segment_status": "paused",
+        }
+
+    monkeypatch.setattr(
+        continuation,
+        "canonical_bounded_segment_from_execution_snapshot",
+        canonical_helper,
+    )
+    monkeypatch.setattr(
+        continuation,
+        "bounded_segment_from_normalized_execution_snapshot",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("legacy helper should not be probed")),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        observability,
+        "_normalized_execution_snapshot",
+        lambda snapshot: {"resume_file": "GPD/phases/01-test/.continue-here.md"},
+    )
+
+    helper = observability._bounded_segment_helper()
+    assert helper is canonical_helper
+
+    derived = observability._bounded_segment_from_normalized_execution_snapshot(project, object())
+    assert derived is not None
+    assert derived.resume_file == "GPD/phases/01-test/.continue-here.md"
+    assert calls == ["canonical"]
+
+
 def test_observe_event_appends_session_event_and_finish_marker(tmp_path: Path, monkeypatch) -> None:
     project = _bootstrap_project(tmp_path)
     monkeypatch.chdir(project)

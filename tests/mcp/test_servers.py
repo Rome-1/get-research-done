@@ -2627,17 +2627,40 @@ Not a checkpoint.
         _steps, checkpoints = _extract_steps_and_checkpoints(body)
         assert len(checkpoints) == 2
 
-    def test_infer_domain(self):
-        from gpd.mcp.servers.protocols_server import _infer_domain
+    def test_protocol_domain_manifest_covers_all_protocol_files(self):
+        from gpd.mcp.servers.protocols_server import PROTOCOLS_DIR, _load_protocol_domain_manifest
 
-        assert _infer_domain("perturbation-theory", []) == "core_derivation"
-        assert _infer_domain("algebraic-qft", []) == "mathematical_methods"
-        assert _infer_domain("string-field-theory", []) == "core_derivation"
-        assert _infer_domain("monte-carlo", []) == "computational_methods"
-        assert _infer_domain("group-theory", []) == "mathematical_methods"
-        assert _infer_domain("numerical-computation", []) == "numerical_translation"
-        assert _infer_domain("general-relativity", []) == "gr_cosmology"
-        assert _infer_domain("unknown-protocol", []) == "general"
+        domains = _load_protocol_domain_manifest()
+        protocol_names = {path.stem for path in PROTOCOLS_DIR.glob("*.md")}
+
+        assert set(domains) == protocol_names
+        assert domains["perturbation-theory"] == "core_derivation"
+        assert domains["general-relativity"] == "gr_cosmology"
+        assert domains["reproducibility"] == "general"
+
+    def test_protocol_store_rejects_missing_domain_metadata(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from gpd.mcp.servers.protocols_server import ProtocolStore
+
+        protocols_dir = tmp_path / "protocols"
+        protocols_dir.mkdir()
+        (protocols_dir / "demo.md").write_text("---\n---\n# Demo\nBody\n", encoding="utf-8")
+        (protocols_dir / "protocol-domains.json").write_text(
+            json.dumps({"schema_version": 1, "protocol_domains": {}}),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr("gpd.mcp.servers.protocols_server.PROTOCOLS_DIR", protocols_dir)
+        monkeypatch.setattr(
+            "gpd.mcp.servers.protocols_server.PROTOCOL_DOMAINS_MANIFEST",
+            protocols_dir / "protocol-domains.json",
+        )
+        monkeypatch.setattr(
+            "gpd.mcp.servers.protocols_server._load_protocol_domain_manifest",
+            lambda: {},
+        )
+
+        with pytest.raises(ValueError, match="missing domain metadata"):
+            ProtocolStore(protocols_dir)
 
 
 # ---------------------------------------------------------------------------
