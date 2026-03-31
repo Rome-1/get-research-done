@@ -10,9 +10,26 @@ Usage:
     modal run research/manifold_pipeline/modal_run_diag_sae.py
 """
 
+import json
+
 import modal
 
 app = modal.App("manifold-diag-sae")
+
+
+class _NumpyEncoder(json.JSONEncoder):
+    """JSON encoder that handles numpy scalar types."""
+    def default(self, obj):
+        import numpy as np
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -51,7 +68,6 @@ def run_diag_sae(n_tokens: int = 500, layer: int = 6):
     import sys
     sys.path.insert(0, "/root")
 
-    import json
     import time
     import numpy as np
     from pathlib import Path
@@ -298,18 +314,6 @@ def run_diag_sae(n_tokens: int = 500, layer: int = 6):
         ],
     }
 
-    class _NumpyEncoder(json.JSONEncoder):
-        def default(self, obj):
-            if isinstance(obj, np.integer):
-                return int(obj)
-            if isinstance(obj, np.floating):
-                return float(obj)
-            if isinstance(obj, np.bool_):
-                return bool(obj)
-            if isinstance(obj, np.ndarray):
-                return obj.tolist()
-            return super().default(obj)
-
     results_path = output_dir / "sae_results.json"
     with open(results_path, "w") as f:
         json.dump(output, f, indent=2, cls=_NumpyEncoder)
@@ -320,10 +324,9 @@ def run_diag_sae(n_tokens: int = 500, layer: int = 6):
 
 @app.local_entrypoint()
 def main(n_tokens: int = 500, layer: int = 6):
-    import json
     print(f"Running SAE diagnostic (N={n_tokens}, layer={layer})...")
     result = run_diag_sae.remote(n_tokens=n_tokens, layer=layer)
     print("\n" + "=" * 70)
     print("DIAGNOSTIC SAE RESULTS")
     print("=" * 70)
-    print(json.dumps(result, indent=2))
+    print(json.dumps(result, indent=2, cls=_NumpyEncoder))
