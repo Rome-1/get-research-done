@@ -298,9 +298,21 @@ def run_diag_sae(n_tokens: int = 500, layer: int = 6):
         ],
     }
 
+    class _NumpyEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, np.integer):
+                return int(obj)
+            if isinstance(obj, np.floating):
+                return float(obj)
+            if isinstance(obj, np.bool_):
+                return bool(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            return super().default(obj)
+
     results_path = output_dir / "sae_results.json"
     with open(results_path, "w") as f:
-        json.dump(output, f, indent=2)
+        json.dump(output, f, indent=2, cls=_NumpyEncoder)
 
     vol.commit()
     return output
