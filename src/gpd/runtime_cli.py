@@ -126,7 +126,8 @@ def _resolve_local_config_dir(raw_value: str, *, runtime: str, cli_cwd: Path) ->
     """Resolve a local config dir reference against the nearest matching ancestor."""
     relative = Path(raw_value).expanduser()
     resolved_cwd = cli_cwd.resolve(strict=False)
-    fallback: Path | None = None
+    manifest_backed_fallback: Path | None = None
+    marker_only_fallback: Path | None = None
     adapter = get_adapter(runtime)
     for base in (resolved_cwd, *resolved_cwd.parents):
         candidate = (base / relative).resolve(strict=False)
@@ -135,10 +136,15 @@ def _resolve_local_config_dir(raw_value: str, *, runtime: str, cli_cwd: Path) ->
         manifest_status, _, _ = load_install_manifest_runtime_status(candidate)
         if manifest_status == "ok" and adapter.has_complete_install(candidate):
             return candidate
-        if fallback is None:
-            fallback = candidate
-    if fallback is not None:
-        return fallback
+        if manifest_status == "ok" and manifest_backed_fallback is None:
+            manifest_backed_fallback = candidate
+            continue
+        if marker_only_fallback is None:
+            marker_only_fallback = candidate
+    if manifest_backed_fallback is not None:
+        return manifest_backed_fallback
+    if marker_only_fallback is not None:
+        return marker_only_fallback
     return (resolved_cwd / relative).resolve(strict=False)
 
 

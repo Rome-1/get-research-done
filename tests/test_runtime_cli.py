@@ -15,6 +15,7 @@ from gpd.adapters import get_adapter
 from gpd.adapters.install_utils import AGENTS_DIR_NAME, HOOKS_DIR_NAME
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors, resolve_global_config_dir
 from gpd.core.constants import ENV_GPD_ACTIVE_RUNTIME, ENV_GPD_DISABLE_CHECKOUT_REEXEC
+from gpd.hooks.install_metadata import GPD_INSTALL_DIR_NAME
 from gpd.runtime_cli import _parse_args, _resolve_cli_cwd_from_argv, main
 
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
@@ -1008,6 +1009,45 @@ def test_runtime_cli_rejects_manifestless_ancestor_local_candidate_before_dispat
     assert "GPD runtime bridge rejected missing install manifest" in captured.err
     assert str(config_dir) in captured.err
     assert str(nested_cwd / descriptor.config_dir_name) not in captured.err
+
+
+@pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+def test_runtime_cli_prefers_manifest_backed_ancestor_over_nearer_marker_only_candidate(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+    descriptor,
+) -> None:
+    adapter = get_adapter(descriptor.runtime_name)
+    ancestor_config_dir = tmp_path / descriptor.config_dir_name
+    _mark_incomplete_install(ancestor_config_dir, runtime=descriptor.runtime_name)
+    nested_cwd = tmp_path / "workspace" / "research" / "notes"
+    (nested_cwd / GPD_INSTALL_DIR_NAME).mkdir(parents=True)
+    monkeypatch.chdir(nested_cwd)
+    monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: None)
+    monkeypatch.setattr(
+        "gpd.cli.entrypoint",
+        lambda: (_ for _ in ()).throw(AssertionError("entrypoint should not run for incomplete manifests")),
+    )
+
+    exit_code = main(
+        [
+            "--runtime",
+            descriptor.runtime_name,
+            "--config-dir",
+            f"./{adapter.config_dir_name}",
+            "--install-scope",
+            "local",
+            "state",
+            "load",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 127
+    assert f"GPD runtime install incomplete for {adapter.display_name}" in captured.err
+    assert str(ancestor_config_dir) in captured.err
+    assert str(nested_cwd / adapter.config_dir_name) not in captured.err
 
 
 @pytest.mark.parametrize("managed_surface", [AGENTS_DIR_NAME, HOOKS_DIR_NAME])

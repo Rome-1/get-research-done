@@ -1638,6 +1638,98 @@ def test_install_interactive_accepts_unique_fuzzy_runtime_name(tmp_path: Path):
     ]
 
 
+def test_install_interactive_accepts_exact_runtime_display_name_before_fuzzy(tmp_path: Path) -> None:
+    """An exact display-name match should win before any fuzzy fallback."""
+    target_descriptor = _PRIMARY_INSTALL_DESCRIPTOR
+    competing_descriptor = _SECONDARY_INSTALL_DESCRIPTOR
+    captured_calls: list[dict[str, object]] = []
+
+    def mock_install_single(runtime_name, *, is_global, target_dir_override=None):
+        captured_calls.append(
+            {
+                "runtime": runtime_name,
+                "is_global": is_global,
+                "target_dir_override": target_dir_override,
+            }
+        )
+        return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path / runtime_name)}
+
+    target_adapter = _mock_install_adapter(target_descriptor, display_name="Open Code")
+    competing_adapter = _mock_install_adapter(competing_descriptor, display_name="Open Code Plus")
+
+    with (
+        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch(
+            "gpd.adapters.list_runtimes",
+            return_value=[target_descriptor.runtime_name, competing_descriptor.runtime_name],
+        ),
+        patch("gpd.adapters.get_adapter") as mock_get,
+    ):
+        mock_get.side_effect = lambda runtime: {
+            target_descriptor.runtime_name: target_adapter,
+            competing_descriptor.runtime_name: competing_adapter,
+        }[runtime]
+
+        result = runner.invoke(app, ["install"], input="Open Code\n1\n")
+
+    assert result.exit_code == 0
+    assert captured_calls == [
+        {
+            "runtime": target_descriptor.runtime_name,
+            "is_global": False,
+            "target_dir_override": None,
+        }
+    ]
+
+
+def test_install_interactive_accepts_exact_runtime_selection_alias_before_fuzzy(tmp_path: Path) -> None:
+    """An exact selection alias should win before any fuzzy fallback."""
+    target_descriptor = _descriptor_with_selection_alias_fragment("open code")
+    competing_descriptor = _SECONDARY_INSTALL_DESCRIPTOR
+    captured_calls: list[dict[str, object]] = []
+
+    def mock_install_single(runtime_name, *, is_global, target_dir_override=None):
+        captured_calls.append(
+            {
+                "runtime": runtime_name,
+                "is_global": is_global,
+                "target_dir_override": target_dir_override,
+            }
+        )
+        return {"runtime": runtime_name, "commands": 5, "agents": 3, "target": str(tmp_path / runtime_name)}
+
+    target_adapter = _mock_install_adapter(
+        target_descriptor,
+        display_name="Open Code",
+        selection_aliases=("open code",),
+    )
+    competing_adapter = _mock_install_adapter(competing_descriptor, display_name="Open Code Plus")
+
+    with (
+        patch("gpd.cli._install_single_runtime", side_effect=mock_install_single),
+        patch(
+            "gpd.adapters.list_runtimes",
+            return_value=[target_descriptor.runtime_name, competing_descriptor.runtime_name],
+        ),
+        patch("gpd.adapters.get_adapter") as mock_get,
+    ):
+        mock_get.side_effect = lambda runtime: {
+            target_descriptor.runtime_name: target_adapter,
+            competing_descriptor.runtime_name: competing_adapter,
+        }[runtime]
+
+        result = runner.invoke(app, ["install"], input="open code\n1\n")
+
+    assert result.exit_code == 0
+    assert captured_calls == [
+        {
+            "runtime": target_descriptor.runtime_name,
+            "is_global": False,
+            "target_dir_override": None,
+        }
+    ]
+
+
 def test_install_accepts_runtime_display_name_alias(tmp_path: Path) -> None:
     """Non-interactive install should accept runtime display-name aliases."""
     target_descriptor = _PRIMARY_INSTALL_DESCRIPTOR
