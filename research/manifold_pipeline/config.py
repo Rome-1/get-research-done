@@ -15,6 +15,9 @@ class PipelineConfig:
     # Sampling
     n_tokens_per_condition: int = 2000
     pca_dim: int | None = 100  # None = skip PCA, use raw activations
+    dim_reduction: str = "pca"  # "pca", "umap", "diffusion", or "none"
+    umap_n_components: int = 50  # UMAP output dim (if dim_reduction="umap")
+    umap_n_neighbors: int = 30   # UMAP neighborhood size
     batch_size: int = 64
     max_seq_len: int = 128
 

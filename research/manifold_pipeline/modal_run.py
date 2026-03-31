@@ -71,7 +71,7 @@ def run_pipeline_gpt2(n_tokens: int = 2000):
     gpu="T4",
     timeout=7200,
     volumes={"/root/data": vol},
-    secrets=[modal.Secret.from_name("huggingface")],
+    secrets=[modal.Secret.from_name("hf_token")],
 )
 def run_pipeline_gemma2(n_tokens: int = 2000, layer: int = 13):
     """Run the manifold detection pipeline on Gemma 2 2B."""

@@ -275,6 +275,137 @@ def extract_activations_with_tokens(
     )
 
 
+def _apply_dim_reduction(
+    all_raw: list[np.ndarray],
+    config: "PipelineConfig",
+) -> list[np.ndarray]:
+    """Apply dimensionality reduction to raw activation arrays.
+
+    Supports: "pca", "umap", "diffusion", "none".
+    Fits on combined data across all conditions (shared coordinate space).
+
+    Returns list of reduced arrays in same order as all_raw.
+    """
+    method = getattr(config, "dim_reduction", "pca")
+    # Legacy: if dim_reduction not set, infer from pca_dim
+    if method == "pca" and getattr(config, "pca_dim", None) is None:
+        method = "none"
+
+    combined = np.concatenate(all_raw, axis=0)
+    sizes = [r.shape[0] for r in all_raw]
+
+    if method == "pca":
+        target_dim = config.pca_dim
+        print(f"Fitting PCA: {combined.shape} -> {target_dim} components")
+        pca = PCA(n_components=target_dim, random_state=config.random_seed)
+        pca.fit(combined)
+        print(f"  Explained variance: {pca.explained_variance_ratio_.sum():.3f}")
+        reduced_all = pca.transform(combined)
+
+    elif method == "umap":
+        try:
+            import umap
+        except ImportError:
+            raise ImportError("UMAP not installed. Add 'umap-learn' to pip dependencies.")
+        n_components = getattr(config, "umap_n_components", 50)
+        n_neighbors = getattr(config, "umap_n_neighbors", 30)
+        print(f"Fitting UMAP: {combined.shape} -> {n_components} components "
+              f"(n_neighbors={n_neighbors})")
+        reducer = umap.UMAP(
+            n_components=n_components,
+            n_neighbors=n_neighbors,
+            random_state=config.random_seed,
+            verbose=False,
+        )
+        reduced_all = reducer.fit_transform(combined)
+        print(f"  UMAP complete: {reduced_all.shape}")
+
+    elif method == "diffusion":
+        print(f"Fitting diffusion maps: {combined.shape} -> {config.diffusion_n_components} components")
+        reduced_all = _diffusion_map_reduce(combined, config)
+        print(f"  Diffusion maps complete: {reduced_all.shape}")
+
+    elif method == "none":
+        print(f"No dim reduction — using raw {combined.shape[1]}-dim activations")
+        reduced_all = combined
+
+    else:
+        raise ValueError(f"Unknown dim_reduction method: {method!r}. "
+                         f"Choose from: pca, umap, diffusion, none")
+
+    # Split back into per-condition arrays
+    result = []
+    offset = 0
+    for size in sizes:
+        result.append(reduced_all[offset:offset + size])
+        offset += size
+    return result
+
+
+def _diffusion_map_reduce(X: np.ndarray, config: "PipelineConfig") -> np.ndarray:
+    """Compute diffusion map coordinates for dimensionality reduction.
+
+    Uses a Gaussian kernel with automatic bandwidth (median heuristic).
+    Returns top-k diffusion coordinates (excluding trivial constant component).
+    """
+    from scipy.spatial.distance import cdist
+
+    N = X.shape[0]
+    n_components = config.diffusion_n_components
+
+    # Subsample if too large (diffusion maps are O(N²))
+    max_pts = 2000
+    if N > max_pts:
+        print(f"  Subsampling {N} -> {max_pts} for diffusion map kernel")
+        rng = np.random.RandomState(config.random_seed)
+        idx = rng.choice(N, max_pts, replace=False)
+        X_sub = X[idx]
+    else:
+        X_sub = X
+        idx = None
+
+    # Pairwise distances
+    dists = cdist(X_sub, X_sub, metric="euclidean")
+
+    # Bandwidth: median heuristic
+    epsilon = np.median(dists) ** 2
+    print(f"  Diffusion map bandwidth epsilon={epsilon:.2f}")
+
+    # Gaussian kernel
+    K = np.exp(-dists ** 2 / epsilon)
+
+    # Normalize (Markov normalization)
+    D = K.sum(axis=1)
+    M = K / (D[:, None] * D[None, :])
+
+    # Symmetric normalization for eigendecomposition
+    D_sqrt_inv = 1.0 / np.sqrt(M.sum(axis=1))
+    M_sym = M * D_sqrt_inv[:, None] * D_sqrt_inv[None, :]
+
+    # Top eigenvectors
+    from scipy.linalg import eigh
+    eigenvalues, eigenvectors = eigh(M_sym, subset_by_index=[N - n_components - 1, N - 2])
+    # Sort descending
+    order = np.argsort(eigenvalues)[::-1]
+    eigenvalues = eigenvalues[order]
+    eigenvectors = eigenvectors[:, order]
+
+    # Diffusion coordinates = eigenvectors scaled by eigenvalues
+    coords_sub = eigenvectors * eigenvalues[None, :]
+
+    if idx is not None:
+        # Nystrom extension: embed remaining points
+        dists_full = cdist(X, X_sub, metric="euclidean")
+        K_full = np.exp(-dists_full ** 2 / epsilon)
+        D_full = K_full.sum(axis=1)
+        K_norm = K_full / D_full[:, None]
+        coords = K_norm @ coords_sub / eigenvalues[None, :]
+    else:
+        coords = coords_sub
+
+    return coords.astype(np.float32)
+
+
 def extract_and_reduce(
     config: PipelineConfig,
     model=None,
@@ -312,20 +443,10 @@ def extract_and_reduce(
         all_raw.append(acts)
         print(f"  {condition}: {acts.shape[0]} tokens, dim={acts.shape[1]}")
 
-    # PCA reduction (skip if pca_dim is None)
-    if config.pca_dim is not None:
-        combined = np.concatenate(all_raw, axis=0)
-        print(f"Fitting PCA: {combined.shape} -> {config.pca_dim} components")
-        pca = PCA(n_components=config.pca_dim, random_state=config.random_seed)
-        pca.fit(combined)
-        print(f"  Explained variance: {pca.explained_variance_ratio_.sum():.3f}")
-
-        for condition, raw in zip(config.conditions, all_raw):
-            results[condition] = pca.transform(raw)
-    else:
-        print(f"Skipping PCA — using raw {all_raw[0].shape[1]}-dim activations")
-        for condition, raw in zip(config.conditions, all_raw):
-            results[condition] = raw
+    # Dimensionality reduction
+    reduced_per_condition = _apply_dim_reduction(all_raw, config)
+    for condition, reduced in zip(config.conditions, reduced_per_condition):
+        results[condition] = reduced
 
     # Cache
     np.savez(cache_path, **results)
@@ -383,33 +504,20 @@ def extract_and_reduce_with_tokens(
         all_pos.append(pos)
         print(f"  {condition}: {acts.shape[0]} tokens, dim={acts.shape[1]}")
 
-    # PCA reduction (skip if pca_dim is None)
+    # Dimensionality reduction (PCA / UMAP / diffusion maps / none)
+    reduced_per_condition = _apply_dim_reduction(all_raw, config)
+
     results = {}
     cache_arrays = {}
-    if config.pca_dim is not None:
-        combined = np.concatenate(all_raw, axis=0)
-        print(f"Fitting PCA: {combined.shape} -> {config.pca_dim} components")
-        pca = PCA(n_components=config.pca_dim, random_state=config.random_seed)
-        pca.fit(combined)
-        print(f"  Explained variance: {pca.explained_variance_ratio_.sum():.3f}")
-
-        for condition, raw, tids, pos in zip(config.conditions, all_raw, all_tids, all_pos):
-            reduced = pca.transform(raw)
-            results[condition] = ExtractionResult(
-                activations=reduced, token_ids=tids, positions=pos,
-            )
-            cache_arrays[f"{condition}_acts"] = reduced
-            cache_arrays[f"{condition}_token_ids"] = tids
-            cache_arrays[f"{condition}_positions"] = pos
-    else:
-        print(f"Skipping PCA — using raw {all_raw[0].shape[1]}-dim activations")
-        for condition, raw, tids, pos in zip(config.conditions, all_raw, all_tids, all_pos):
-            results[condition] = ExtractionResult(
-                activations=raw, token_ids=tids, positions=pos,
-            )
-            cache_arrays[f"{condition}_acts"] = raw
-            cache_arrays[f"{condition}_token_ids"] = tids
-            cache_arrays[f"{condition}_positions"] = pos
+    for condition, reduced, tids, pos in zip(
+        config.conditions, reduced_per_condition, all_tids, all_pos
+    ):
+        results[condition] = ExtractionResult(
+            activations=reduced, token_ids=tids, positions=pos,
+        )
+        cache_arrays[f"{condition}_acts"] = reduced
+        cache_arrays[f"{condition}_token_ids"] = tids
+        cache_arrays[f"{condition}_positions"] = pos
 
     np.savez(cache_path, **cache_arrays)
     print(f"Cached activations+tokens to {cache_path}")
