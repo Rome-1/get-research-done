@@ -104,11 +104,16 @@ We study the geometric structure of sparse autoencoder (SAE) feature spaces in t
 - As SAE alignment improves, benchmark performance *decreases*
 - Table: timeline of capability peaks vs geometric transitions
 
-### 4.5 Layer-Dependent Alignment Wave
-- Layer 0: aligns at step 113k (79%), non-monotonic path
+### 4.5 Non-Sequential Layer-Dependent Alignment
+- Layer 1: aligns at step 10k (**7%**), then de-aligns, re-aligns at 143k
+- Layer 4: aligns at step 99k (69%), near epoch boundary
+- Layer 2: aligns at step 103k (72%)
+- Layer 0: aligns at step 113k (79%), non-monotonic
 - Layer 3: aligns at step 113k (79%), monotonic convergence
-- Layer 5: aligns at step 133k (93%), late divergence then rapid catch-up
-- Interpretation: alignment wave propagates input → output
+- Layer 5: aligns at step 143k (100%), latest — continuously reorganized
+- NOT a simple input→output wave; Layer 1 is 10x earlier than Layer 0
+- Non-monotonic alignment is the norm (4/6 layers)
+- Epoch boundary (step ~99k) is a critical event: 4/6 layers align within 14k steps of it
 
 ### 4.6 Step-32 Anomaly: Transient Representation Collapse
 - At steps 32-64, layer 3 experiences extreme sparsification (L0: 96, 96% dead features)
@@ -163,7 +168,7 @@ SAE features partition transformer residual streams into hyperplane arrangements
 
 1. **Fig 1:** Schematic: hyperplane arrangement in 2D/3D showing convex polytopes, feature boundaries, sparsity patterns
 2. **Fig 2:** Convexity and linearity heatmap across 154 checkpoints (showing stability)
-3. **Fig 3:** var_explained trajectory for all 6 layers (cross-layer comparison)
+3. **Fig 3:** var_explained trajectory for all 6 layers (the non-sequential alignment plot — key figure)
 4. **Fig 4:** Capability benchmarks overlaid on var_explained (the dissociation plot)
 5. **Fig 5:** Three-phase diagram: capability (blue) vs geometry (red) vs L0 (green)
 6. **Fig 6:** Intrinsic dimension evolution by layer
