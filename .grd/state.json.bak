@@ -1,0 +1,98 @@
+{
+  "project_reference": {
+    "project_md_updated": null,
+    "core_research_question": null,
+    "current_focus": null
+  },
+  "project_contract": null,
+  "position": {
+    "current_phase": null,
+    "current_phase_name": null,
+    "total_phases": null,
+    "current_plan": null,
+    "total_plans_in_phase": null,
+    "status": null,
+    "last_activity": null,
+    "last_activity_desc": null,
+    "progress_percent": 0,
+    "paused_at": null
+  },
+  "active_calculations": [],
+  "intermediate_results": [
+    {
+      "id": "R1",
+      "equation": "F=ma",
+      "description": "Updated",
+      "units": "N",
+      "validity": null,
+      "phase": "01",
+      "depends_on": [],
+      "verified": true,
+      "verification_records": [
+        {
+          "verified_at": "2026-03-25T00:15:42.819243+00:00",
+          "verifier": null,
+          "method": "manual",
+          "confidence": "medium",
+          "evidence_path": null,
+          "trace_id": null,
+          "commit_sha": null,
+          "notes": null,
+          "claim_id": null,
+          "deliverable_id": null,
+          "acceptance_test_id": null,
+          "reference_id": null
+        },
+        {
+          "verified_at": "2026-03-25T00:16:40.986734+00:00",
+          "verifier": null,
+          "method": "manual",
+          "confidence": "medium",
+          "evidence_path": null,
+          "trace_id": null,
+          "commit_sha": null,
+          "notes": null,
+          "claim_id": null,
+          "deliverable_id": null,
+          "acceptance_test_id": null,
+          "reference_id": null
+        }
+      ],
+      "metadata": {
+        "tensor_rank": "2"
+      }
+    },
+    {
+      "id": "R2",
+      "equation": null,
+      "description": "Derived",
+      "units": null,
+      "validity": null,
+      "phase": null,
+      "depends_on": [
+        "R1"
+      ],
+      "verified": false,
+      "verification_records": [],
+      "metadata": {}
+    }
+  ],
+  "open_questions": [],
+  "performance_metrics": {
+    "rows": []
+  },
+  "decisions": [],
+  "approximations": [],
+  "convention_lock": {
+    "conventions": {}
+  },
+  "propagated_uncertainties": [],
+  "pending_todos": [],
+  "blockers": [],
+  "session": {
+    "last_date": null,
+    "stopped_at": null,
+    "resume_file": null
+  },
+  "domain": "physics"
+}
