@@ -113,10 +113,74 @@ The key insight is that the **residual stream itself** may have tropical structu
 
 ---
 
+## 7. Supporting Literature
+
+### Intrinsic Dimensionality in Transformers
+
+Valeriani et al. (2023, arXiv 2302.00294) measured ID across transformer layers
+using Two-NN. Key finding: **ID expands in early layers, contracts sharply in
+middle layers, then plateaus.** Layer 6 of GPT-2 (mid-network) likely sits at
+this compression point, which would explain why the geometry is low-dimensional
+and linearly structured.
+
+Song et al. (2025, arXiv 2503.22547) confirm effective models compress tokens
+onto ~10-dimensional submanifolds. Viswanathan et al. (2025, arXiv 2501.10573)
+show ID correlates with next-token prediction loss — higher-loss prompts occupy
+higher-dimensional regions.
+
+### SAE Feature Geometry at Scale
+
+Li, Michaud, Baek et al. (2024, arXiv 2410.19750) "The Geometry of Concepts"
+analyzed SAE features at three scales: (a) atomic parallelogram "crystals"
+(man-woman-king-queen generalized), (b) spatial modularity (math/code features
+form lobes), (c) global power-law eigenvalue spectrum steepest in middle layers.
+This directly supports our polyhedral view — features have discrete, structured
+spatial relationships.
+
+Prieto et al. (2026, arXiv 2603.09972) show correlated features arrange by
+co-activation patterns, creating semantic clusters and cyclical structures.
+This explains our P3 result (independence ratio 2.29 — features are correlated,
+not independent).
+
+### Topology and Polyhedral Structure
+
+Naitzat, Zhitnikov & Lim (2020, arXiv 2004.06093) showed networks simplify
+topology layer-by-layer (Betti numbers → trivial). ReLU simplifies faster
+than tanh. Trivial topology at layer 6 would confirm the cone/subspace
+hypothesis: contractible point clouds = convex cones.
+
+Liu et al. (2023, arXiv 2306.17418) connected ReLU polyhedral decomposition
+to persistent homology — the dual graph of the polyhedral complex retains
+enough structure for TDA despite being a coarse quantization.
+
+Brandenburg, Loho & Montúfar (2024, arXiv 2403.11871) refined the tropical
+geometry connection: the "activation polytope" normal fan captures classification
+combinatorics. The classification fan's sublevel sets are subfans.
+
+### Subspace Clustering in Activations
+
+Vielhaben et al. (2022, arXiv 2203.06043) applied SSC directly to hidden
+layer activations for concept discovery — defined concepts as low-dimensional
+subspaces. When activations are already linearly structured (as ours are),
+raw SSC should work without deep transformation.
+
+---
+
 ## References
 
-1. Elhage et al. (2022). "Toy Models of Superposition." Anthropic.
+1. Elhage et al. (2022). "Toy Models of Superposition." Anthropic. arXiv 2209.10652.
 2. Facco et al. (2017). "Estimating the intrinsic dimension of datasets by a minimal neighborhood information." Scientific Reports.
-3. Montúfar et al. (2014). "On the Number of Linear Regions of Deep Neural Networks." NeurIPS.
-4. Zhang et al. (2018). "Tropical Geometry of Deep Neural Networks." ICML.
+3. Montúfar et al. (2014). "On the Number of Linear Regions of Deep Neural Networks." NeurIPS. arXiv 1402.1869.
+4. Zhang, Naitzat & Lim (2018). "Tropical Geometry of Deep Neural Networks." ICML. arXiv 1805.07091.
 5. Elhamifar & Vidal (2013). "Sparse Manifold Clustering and Embedding." NeurIPS.
+6. Valeriani et al. (2023). "Geometry of transformer representations." arXiv 2302.00294.
+7. Song et al. (2025). "Dimensional reduction in transformers." arXiv 2503.22547.
+8. Li, Michaud, Baek et al. (2024). "The Geometry of Concepts." arXiv 2410.19750.
+9. Naitzat, Zhitnikov & Lim (2020). "Topology and geometry of deep ReLU networks." arXiv 2004.06093.
+10. Liu et al. (2023). "ReLU polyhedral decomposition and persistent homology." arXiv 2306.17418.
+11. Brandenburg, Loho & Montúfar (2024). "Real tropical geometry of neural networks." arXiv 2403.11871.
+12. Prieto et al. (2026). "From Data Statistics to Feature Geometry." arXiv 2603.09972.
+13. Vielhaben et al. (2022). "SSC for concept discovery." arXiv 2203.06043.
+14. Chanin et al. (2024). "A is for Absorption." arXiv 2409.14507.
+15. Viswanathan et al. (2025). "Geometry of tokens." arXiv 2501.10573.
+16. Bereska et al. (2025). "Superposition as lossy compression." arXiv 2512.13568.
