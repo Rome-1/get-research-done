@@ -1,0 +1,1125 @@
+{
+  "meta": {
+    "n_tokens": 500,
+    "layer": 6,
+    "model": "gpt2",
+    "use_raw": false,
+    "timestamp": "2026-04-01 05:51:31",
+    "pca_explained_variance": 0.9990001916885376
+  },
+  "intrinsic_dimension": {
+    "two_nn": {
+      "dim": 8.503798986679067,
+      "std": 0.2175835656200801,
+      "n_valid": 1094,
+      "fraction": 0.9
+    },
+    "local_pca": {
+      "median_dim": 4.063886627532526,
+      "std": 4.669267339079492,
+      "dim_percentiles": {
+        "p10": 1.0079010935517374,
+        "p25": 1.0181116043949123,
+        "p50": 4.063886627532526,
+        "p75": 6.838811416930822,
+        "p90": 13.709656536853752
+      },
+      "k_neighbors": 50,
+      "threshold_dim_median": 11.0,
+      "threshold_dim_std": 8.49751155731292,
+      "dim_histogram": [
+        491,
+        17,
+        22,
+        0,
+        5,
+        33,
+        33,
+        81,
+        29,
+        101,
+        62,
+        47,
+        52,
+        23,
+        19,
+        42,
+        34,
+        28,
+        17,
+        33,
+        4,
+        5,
+        2,
+        2,
+        1,
+        1,
+        5,
+        7,
+        10,
+        6,
+        8,
+        14,
+        15,
+        12,
+        10,
+        13,
+        22,
+        12,
+        17,
+        23,
+        15,
+        16,
+        16,
+        23,
+        22,
+        14,
+        20,
+        9,
+        5,
+        2
+      ]
+    },
+    "correlation": {
+      "dim": 0.8856853014810169,
+      "n_points_used": 1000,
+      "n_radii": 30,
+      "r_range": [
+        15.095925475829187,
+        76.3093820437719
+      ],
+      "log_r": [
+        2.7144248713707824,
+        2.770299734195823,
+        2.826174597020863,
+        2.8820494598459034,
+        2.9379243226709435,
+        2.993799185495984,
+        3.049674048321025,
+        3.1055489111460646,
+        3.1614237739711055,
+        3.217298636796145,
+        3.273173499621186,
+        3.3290483624462257,
+        3.3849232252712667,
+        3.440798088096307,
+        3.4966729509213472,
+        3.5525478137463877,
+        3.6084226765714282,
+        3.6642975393964683,
+        3.720172402221509,
+        3.776047265046549,
+        3.83192212787159,
+        3.8877969906966294,
+        3.9436718535216704,
+        3.9995467163467104,
+        4.0554215791717505,
+        4.1112964419967915,
+        4.1671713048218315,
+        4.2230461676468725,
+        4.2789210304719125,
+        4.334795893296953
+      ],
+      "log_C": [
+        -2.995732273553991,
+        -2.9410014507994395,
+        -2.89091244458141,
+        -2.840535380152301,
+        -2.7898336622475477,
+        -2.7393456455694474,
+        -2.6937090838315525,
+        -2.6480829230047767,
+        -2.606426387959177,
+        -2.563780871238373,
+        -2.525678595510667,
+        -2.4857959339728843,
+        -2.4497830223283885,
+        -2.4140368621320447,
+        -2.3751880767050966,
+        -2.340949316182739,
+        -2.3024249456581547,
+        -2.2606538040584976,
+        -2.2180893901734025,
+        -2.1675608212742596,
+        -2.0973221733496645,
+        -1.9898881863778357,
+        -1.8603920452688463,
+        -1.7183973779199064,
+        -1.5316060089966648,
+        -1.2927000943671252,
+        -1.005368123667241,
+        -0.6731836209550799,
+        -0.40830999179588506,
+        -0.22314855633173983
+      ]
+    },
+    "by_feature_region": {
+      "n_features_analyzed": 20,
+      "features": [
+        {
+          "feature_id": 18648,
+          "n_active": 632,
+          "n_inactive": 868,
+          "activation_rate": 0.42133333333333334,
+          "dim_active": 1.0177617201736306,
+          "dim_inactive": 5.354981263614043,
+          "n_boundary": 64,
+          "dim_boundary": 4.7873036912503135
+        },
+        {
+          "feature_id": 5405,
+          "n_active": 631,
+          "n_inactive": 869,
+          "activation_rate": 0.4206666666666667,
+          "dim_active": 1.016628599729199,
+          "dim_inactive": 5.600506637095267,
+          "n_boundary": 63,
+          "dim_boundary": 6.832783736742263
+        },
+        {
+          "feature_id": 21311,
+          "n_active": 610,
+          "n_inactive": 890,
+          "activation_rate": 0.4066666666666667,
+          "dim_active": 1.0175581923216288,
+          "dim_inactive": 5.941148386335761,
+          "n_boundary": 61,
+          "dim_boundary": 1.018448937027598
+        },
+        {
+          "feature_id": 18803,
+          "n_active": 538,
+          "n_inactive": 962,
+          "activation_rate": 0.3586666666666667,
+          "dim_active": 1.0140302743492617,
+          "dim_inactive": 5.570611078751709,
+          "n_boundary": 54,
+          "dim_boundary": 3.5484840556695847
+        },
+        {
+          "feature_id": 6247,
+          "n_active": 510,
+          "n_inactive": 990,
+          "activation_rate": 0.34,
+          "dim_active": 1.0154641272852538,
+          "dim_inactive": 4.939185393982401,
+          "n_boundary": 51,
+          "dim_boundary": 1.005017662076331
+        },
+        {
+          "feature_id": 21221,
+          "n_active": 498,
+          "n_inactive": 1002,
+          "activation_rate": 0.332,
+          "dim_active": 1.0135097037188967,
+          "dim_inactive": 5.5126601056444855,
+          "n_boundary": 48,
+          "dim_boundary": 1.587712594932814
+        },
+        {
+          "feature_id": 11153,
+          "n_active": 490,
+          "n_inactive": 1010,
+          "activation_rate": 0.32666666666666666,
+          "dim_active": 1.0135097037188967,
+          "dim_inactive": 5.503019033268228,
+          "n_boundary": 44,
+          "dim_boundary": 1.0324540401341304
+        },
+        {
+          "feature_id": 3582,
+          "n_active": 488,
+          "n_inactive": 1012,
+          "activation_rate": 0.3253333333333333,
+          "dim_active": 1.0135097037188967,
+          "dim_inactive": 5.482001551278139,
+          "n_boundary": 48,
+          "dim_boundary": 1.034548706995855
+        },
+        {
+          "feature_id": 23446,
+          "n_active": 483,
+          "n_inactive": 1017,
+          "activation_rate": 0.322,
+          "dim_active": 1.0134420056710935,
+          "dim_inactive": 5.473524660575588,
+          "n_boundary": 43,
+          "dim_boundary": 1.034548706995855
+        },
+        {
+          "feature_id": 22381,
+          "n_active": 479,
+          "n_inactive": 1021,
+          "activation_rate": 0.31933333333333336,
+          "dim_active": 1.0135097037188967,
+          "dim_inactive": 4.629980210560806,
+          "n_boundary": 48,
+          "dim_boundary": 6.343024407469004
+        },
+        {
+          "feature_id": 8594,
+          "n_active": 477,
+          "n_inactive": 1023,
+          "activation_rate": 0.318,
+          "dim_active": 1.0134420056710935,
+          "dim_inactive": 5.374741500676687,
+          "n_boundary": 42,
+          "dim_boundary": 1.026101189454283
+        },
+        {
+          "feature_id": 24058,
+          "n_active": 475,
+          "n_inactive": 1025,
+          "activation_rate": 0.31666666666666665,
+          "dim_active": 1.0134420056710935,
+          "dim_inactive": 4.001258956554443,
+          "n_boundary": 47,
+          "dim_boundary": 1.0109429453996694
+        },
+        {
+          "feature_id": 3834,
+          "n_active": 474,
+          "n_inactive": 1026,
+          "activation_rate": 0.316,
+          "dim_active": 1.0135097037188967,
+          "dim_inactive": 5.029900877495669,
+          "n_boundary": 40,
+          "dim_boundary": 1.008251968843757
+        },
+        {
+          "feature_id": 16915,
+          "n_active": 473,
+          "n_inactive": 1027,
+          "activation_rate": 0.31533333333333335,
+          "dim_active": 1.0134420056710935,
+          "dim_inactive": 5.3833229928022845,
+          "n_boundary": 46,
+          "dim_boundary": 1.0379369187073784
+        },
+        {
+          "feature_id": 20777,
+          "n_active": 458,
+          "n_inactive": 1042,
+          "activation_rate": 0.30533333333333335,
+          "dim_active": 1.0133092245635091,
+          "dim_inactive": 5.256868304793031,
+          "n_boundary": 36,
+          "dim_boundary": 6.838015338821709
+        },
+        {
+          "feature_id": 1430,
+          "n_active": 457,
+          "n_inactive": 1043,
+          "activation_rate": 0.30466666666666664,
+          "dim_active": 1.0133092245635091,
+          "dim_inactive": 5.312281660998789,
+          "n_boundary": 46,
+          "dim_boundary": 1.0410095558675516
+        },
+        {
+          "feature_id": 4092,
+          "n_active": 451,
+          "n_inactive": 1049,
+          "activation_rate": 0.3006666666666667,
+          "dim_active": 1.0179720357178108,
+          "dim_inactive": 3.8822089741854446,
+          "n_boundary": 38,
+          "dim_boundary": 2.820619089829499
+        },
+        {
+          "feature_id": 23123,
+          "n_active": 436,
+          "n_inactive": 1064,
+          "activation_rate": 0.2906666666666667,
+          "dim_active": 1.013029003392691,
+          "dim_inactive": 5.179661124680245,
+          "n_boundary": 38,
+          "dim_boundary": 1.4782735316040099
+        },
+        {
+          "feature_id": 22527,
+          "n_active": 435,
+          "n_inactive": 1065,
+          "activation_rate": 0.29,
+          "dim_active": 1.0175514046294507,
+          "dim_inactive": 5.126703587855017,
+          "n_boundary": 40,
+          "dim_boundary": 1.0117512730216098
+        },
+        {
+          "feature_id": 22446,
+          "n_active": 432,
+          "n_inactive": 1068,
+          "activation_rate": 0.288,
+          "dim_active": 1.0130290708010437,
+          "dim_inactive": 5.163160523834778,
+          "n_boundary": 37,
+          "dim_boundary": 1.2411855833794847
+        }
+      ]
+    }
+  },
+  "feature_regions": {
+    "n_analyzed": 30,
+    "regions": [
+      {
+        "feature_id": 18648,
+        "n_active": 632,
+        "activation_rate": 0.42133333333333334,
+        "convexity_score": 0.9680277998220426,
+        "codimension": 93.6740604828627,
+        "angular_spread": 0.6809088587760925,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 5405,
+        "n_active": 631,
+        "activation_rate": 0.4206666666666667,
+        "convexity_score": 0.9659836952600823,
+        "codimension": 89.18106233178789,
+        "angular_spread": 0.6436959505081177,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 21311,
+        "n_active": 610,
+        "activation_rate": 0.4066666666666667,
+        "convexity_score": 0.9300315032585432,
+        "codimension": 93.5988321564812,
+        "angular_spread": 0.6715216636657715,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 18803,
+        "n_active": 538,
+        "activation_rate": 0.3586666666666667,
+        "convexity_score": 0.9799557511483058,
+        "codimension": 97.62118021881851,
+        "angular_spread": 0.554620623588562,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 6247,
+        "n_active": 510,
+        "activation_rate": 0.34,
+        "convexity_score": 0.9100113026958132,
+        "codimension": 94.5378641705049,
+        "angular_spread": 0.7011913657188416,
+        "boundary_linearity": 0.996
+      },
+      {
+        "feature_id": 21221,
+        "n_active": 498,
+        "activation_rate": 0.332,
+        "convexity_score": 0.9840078878387802,
+        "codimension": 97.37156356737404,
+        "angular_spread": 0.5845808982849121,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 11153,
+        "n_active": 490,
+        "activation_rate": 0.32666666666666666,
+        "convexity_score": 0.991991919774908,
+        "codimension": 98.96792458985293,
+        "angular_spread": 0.5999997854232788,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 3582,
+        "n_active": 488,
+        "activation_rate": 0.3253333333333333,
+        "convexity_score": 0.9840078878387802,
+        "codimension": 98.74373534025159,
+        "angular_spread": 0.6047739386558533,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 23446,
+        "n_active": 483,
+        "activation_rate": 0.322,
+        "convexity_score": 0.9959839357429718,
+        "codimension": 98.98764064073949,
+        "angular_spread": 0.6103764176368713,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 22381,
+        "n_active": 479,
+        "activation_rate": 0.31933333333333336,
+        "convexity_score": 0.9000072144866893,
+        "codimension": 91.36906518078243,
+        "angular_spread": 0.5504091382026672,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 8594,
+        "n_active": 477,
+        "activation_rate": 0.318,
+        "convexity_score": 0.9579996633239545,
+        "codimension": 96.87360292400629,
+        "angular_spread": 0.5584248304367065,
+        "boundary_linearity": 0.996
+      },
+      {
+        "feature_id": 24058,
+        "n_active": 475,
+        "activation_rate": 0.31666666666666665,
+        "convexity_score": 0.9320275112425751,
+        "codimension": 96.3915729580061,
+        "angular_spread": 0.6865245699882507,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 3834,
+        "n_active": 474,
+        "activation_rate": 0.316,
+        "convexity_score": 0.9700238078060744,
+        "codimension": 98.67328851625761,
+        "angular_spread": 0.5664147734642029,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 16915,
+        "n_active": 473,
+        "activation_rate": 0.31533333333333335,
+        "convexity_score": 0.9820239039992305,
+        "codimension": 96.95872562420453,
+        "angular_spread": 0.5829846262931824,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 20777,
+        "n_active": 458,
+        "activation_rate": 0.30533333333333335,
+        "convexity_score": 0.9579635908905081,
+        "codimension": 94.41665425659569,
+        "angular_spread": 0.45787882804870605,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 1430,
+        "n_active": 457,
+        "activation_rate": 0.30466666666666664,
+        "convexity_score": 1.0,
+        "codimension": 98.89665701595449,
+        "angular_spread": 0.5960514545440674,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 4092,
+        "n_active": 451,
+        "activation_rate": 0.3006666666666667,
+        "convexity_score": 0.922011398888969,
+        "codimension": 96.89991505582378,
+        "angular_spread": 0.7595712542533875,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 23123,
+        "n_active": 436,
+        "activation_rate": 0.2906666666666667,
+        "convexity_score": 0.9739797513406921,
+        "codimension": 96.16708643333449,
+        "angular_spread": 0.385221928358078,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 22527,
+        "n_active": 435,
+        "activation_rate": 0.29,
+        "convexity_score": 0.924007406873001,
+        "codimension": 97.1305382110287,
+        "angular_spread": 0.6772964000701904,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 22446,
+        "n_active": 432,
+        "activation_rate": 0.288,
+        "convexity_score": 0.9339754226486785,
+        "codimension": 96.10029995784363,
+        "angular_spread": 0.5902627110481262,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 3693,
+        "n_active": 415,
+        "activation_rate": 0.27666666666666667,
+        "convexity_score": 0.9260034148570329,
+        "codimension": 94.33271567566698,
+        "angular_spread": 0.5852577090263367,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 12250,
+        "n_active": 393,
+        "activation_rate": 0.262,
+        "convexity_score": 0.9539835990669264,
+        "codimension": 97.51001996212212,
+        "angular_spread": 0.48869505524635315,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 14342,
+        "n_active": 389,
+        "activation_rate": 0.25933333333333336,
+        "convexity_score": 0.9819878315657841,
+        "codimension": 98.41573373297254,
+        "angular_spread": 0.5128362774848938,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 21440,
+        "n_active": 384,
+        "activation_rate": 0.256,
+        "convexity_score": 0.8880071182935335,
+        "codimension": 86.11636218507442,
+        "angular_spread": 0.29214510321617126,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 23101,
+        "n_active": 383,
+        "activation_rate": 0.25533333333333336,
+        "convexity_score": 0.8940071663901114,
+        "codimension": 94.23229029433818,
+        "angular_spread": 0.6245368719100952,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 8064,
+        "n_active": 372,
+        "activation_rate": 0.248,
+        "convexity_score": 0.846006781617488,
+        "codimension": 95.23365192182018,
+        "angular_spread": 0.6429722905158997,
+        "boundary_linearity": 0.998
+      },
+      {
+        "feature_id": 22277,
+        "n_active": 365,
+        "activation_rate": 0.24333333333333335,
+        "convexity_score": 0.8600509823726042,
+        "codimension": 97.64047959656466,
+        "angular_spread": 0.6774416565895081,
+        "boundary_linearity": 0.998
+      },
+      {
+        "feature_id": 5642,
+        "n_active": 362,
+        "activation_rate": 0.24133333333333334,
+        "convexity_score": 0.8660029338912536,
+        "codimension": 98.9347017754396,
+        "angular_spread": 0.5751628279685974,
+        "boundary_linearity": 0.984
+      },
+      {
+        "feature_id": 23111,
+        "n_active": 359,
+        "activation_rate": 0.23933333333333334,
+        "convexity_score": 0.9480075992593128,
+        "codimension": 97.26815500862722,
+        "angular_spread": 0.4225383996963501,
+        "boundary_linearity": 1.0
+      },
+      {
+        "feature_id": 10295,
+        "n_active": 357,
+        "activation_rate": 0.238,
+        "convexity_score": 0.9540196715003727,
+        "codimension": 98.29820387734993,
+        "angular_spread": 0.43366798758506775,
+        "boundary_linearity": 1.0
+      }
+    ],
+    "summary": {
+      "mean_convexity": 0.9427366151231672,
+      "mean_codimension": 96.01811945541623,
+      "mean_boundary_linearity": 0.9990666666666667
+    }
+  },
+  "intersections": {
+    "n_pairs": 105,
+    "pairs": [
+      {
+        "feature_a": 18648,
+        "feature_b": 5405,
+        "n_both_active": 504,
+        "jaccard": 0.6640316205533597,
+        "independence_ratio": 1.8957250897711087,
+        "direction_angle_rad": 0.9220903805957955,
+        "intersection_convexity": 0.9399874948897385
+      },
+      {
+        "feature_a": 18648,
+        "feature_b": 21311,
+        "n_both_active": 454,
+        "jaccard": 0.5761421319796954,
+        "independence_ratio": 1.766445320605935,
+        "direction_angle_rad": 0.8927007869077991,
+        "intersection_convexity": 0.9039751821657888
+      },
+      {
+        "feature_a": 18648,
+        "feature_b": 18803,
+        "n_both_active": 405,
+        "jaccard": 0.5294117647058824,
+        "independence_ratio": 1.786680626794033,
+        "direction_angle_rad": 1.0331958086789186,
+        "intersection_convexity": 0.9920159680638722
+      },
+      {
+        "feature_a": 18648,
+        "feature_b": 6247,
+        "n_both_active": 417,
+        "jaccard": 0.5751724137931035,
+        "independence_ratio": 1.9406180193596423,
+        "direction_angle_rad": 1.0590537781694906,
+        "intersection_convexity": 0.8739268451049709
+      },
+      {
+        "feature_a": 18648,
+        "feature_b": 21221,
+        "n_both_active": 419,
+        "jaccard": 0.5893108298171589,
+        "independence_ratio": 1.9969116974226018,
+        "direction_angle_rad": 0.9447221560790711,
+        "intersection_convexity": 0.9760238559026525
+      },
+      {
+        "feature_a": 18648,
+        "feature_b": 11153,
+        "n_both_active": 404,
+        "jaccard": 0.5626740947075209,
+        "independence_ratio": 1.9568586928442262,
+        "direction_angle_rad": 0.895495821361664,
+        "intersection_convexity": 0.9880239520958084
+      },
+      {
+        "feature_a": 18648,
+        "feature_b": 3582,
+        "n_both_active": 408,
+        "jaccard": 0.5730337078651685,
+        "independence_ratio": 1.9843328491388257,
+        "direction_angle_rad": 0.9785407634134289,
+        "intersection_convexity": 0.9840199119832623
+      },
+      {
+        "feature_a": 18648,
+        "feature_b": 23446,
+        "n_both_active": 404,
+        "jaccard": 0.5682137834036568,
+        "independence_ratio": 1.9852189637550122,
+        "direction_angle_rad": 1.0106627276985418,
+        "intersection_convexity": 0.9880239520958084
+      },
+      {
+        "feature_a": 18648,
+        "feature_b": 22381,
+        "n_both_active": 405,
+        "jaccard": 0.5736543909348442,
+        "independence_ratio": 2.006751935731085,
+        "direction_angle_rad": 0.9542458742698293,
+        "intersection_convexity": 0.9900199600798403
+      },
+      {
+        "feature_a": 18648,
+        "feature_b": 8594,
+        "n_both_active": 414,
+        "jaccard": 0.5956834532374101,
+        "independence_ratio": 2.059947456412706,
+        "direction_angle_rad": 0.9999871460367764,
+        "intersection_convexity": 0.9339994709376428
+      },
+      {
+        "feature_a": 18648,
+        "feature_b": 24058,
+        "n_both_active": 315,
+        "jaccard": 0.3977272727272727,
+        "independence_ratio": 1.5739506995336443,
+        "direction_angle_rad": 1.056427627040783,
+        "intersection_convexity": 0.9160714715148016
+      },
+      {
+        "feature_a": 18648,
+        "feature_b": 3834,
+        "n_both_active": 457,
+        "jaccard": 0.7041602465331279,
+        "independence_ratio": 2.2882951450088127,
+        "direction_angle_rad": 1.0582466866928346,
+        "intersection_convexity": 0.9779837914532381
+      },
+      {
+        "feature_a": 18648,
+        "feature_b": 16915,
+        "n_both_active": 404,
+        "jaccard": 0.5763195435092725,
+        "independence_ratio": 2.027189766371397,
+        "direction_angle_rad": 0.9580322144198828,
+        "intersection_convexity": 0.9880239520958084
+      },
+      {
+        "feature_a": 18648,
+        "feature_b": 20777,
+        "n_both_active": 408,
+        "jaccard": 0.5982404692082112,
+        "independence_ratio": 2.1143109833618925,
+        "direction_angle_rad": 0.9879822675830113,
+        "intersection_convexity": 0.9800158718707164
+      },
+      {
+        "feature_a": 5405,
+        "feature_b": 21311,
+        "n_both_active": 462,
+        "jaccard": 0.5930680359435173,
+        "independence_ratio": 1.8004208776077524,
+        "direction_angle_rad": 0.8092131832940396,
+        "intersection_convexity": 0.918007358776423
+      },
+      {
+        "feature_a": 5405,
+        "feature_b": 18803,
+        "n_both_active": 449,
+        "jaccard": 0.6236111111111111,
+        "independence_ratio": 1.983928266338319,
+        "direction_angle_rad": 0.9863755550885948,
+        "intersection_convexity": 0.9720558882235529
+      },
+      {
+        "feature_a": 5405,
+        "feature_b": 6247,
+        "n_both_active": 344,
+        "jaccard": 0.4316185696361355,
+        "independence_ratio": 1.6034305956931105,
+        "direction_angle_rad": 1.0723426906446947,
+        "intersection_convexity": 0.895967101940697
+      },
+      {
+        "feature_a": 5405,
+        "feature_b": 21221,
+        "n_both_active": 442,
+        "jaccard": 0.6433770014556041,
+        "independence_ratio": 2.1098657705306163,
+        "direction_angle_rad": 0.9742674932353923,
+        "intersection_convexity": 0.9760118317581705
+      },
+      {
+        "feature_a": 5405,
+        "feature_b": 11153,
+        "n_both_active": 433,
+        "jaccard": 0.6293604651162791,
+        "independence_ratio": 2.100650085707817,
+        "direction_angle_rad": 0.8921118280530765,
+        "intersection_convexity": 1.0
+      },
+      {
+        "feature_a": 5405,
+        "feature_b": 3582,
+        "n_both_active": 437,
+        "jaccard": 0.6407624633431085,
+        "independence_ratio": 2.1287443818035383,
+        "direction_angle_rad": 0.9126423538438075,
+        "intersection_convexity": 0.9960079840319361
+      },
+      {
+        "feature_a": 5405,
+        "feature_b": 23446,
+        "n_both_active": 433,
+        "jaccard": 0.6358296622613803,
+        "independence_ratio": 2.13109428984851,
+        "direction_angle_rad": 1.0213077474812349,
+        "intersection_convexity": 1.0
+      },
+      {
+        "feature_a": 5405,
+        "feature_b": 22381,
+        "n_both_active": 415,
+        "jaccard": 0.5971223021582733,
+        "independence_ratio": 2.0595601639707657,
+        "direction_angle_rad": 0.9530946349484856,
+        "intersection_convexity": 0.9740278479186206
+      },
+      {
+        "feature_a": 5405,
+        "feature_b": 8594,
+        "n_both_active": 446,
+        "jaccard": 0.6737160120845922,
+        "independence_ratio": 2.222687358590238,
+        "direction_angle_rad": 0.934321052819306,
+        "intersection_convexity": 0.9379794627612247
+      },
+      {
+        "feature_a": 5405,
+        "feature_b": 24058,
+        "n_both_active": 352,
+        "jaccard": 0.46684350132625996,
+        "independence_ratio": 1.7616148135791143,
+        "direction_angle_rad": 0.9555606269810505,
+        "intersection_convexity": 0.9300074549695788
+      },
+      {
+        "feature_a": 5405,
+        "feature_b": 3834,
+        "n_both_active": 461,
+        "jaccard": 0.7158385093167702,
+        "independence_ratio": 2.311982186202331,
+        "direction_angle_rad": 1.0486368496406437,
+        "intersection_convexity": 0.9780318880311666
+      },
+      {
+        "feature_a": 5405,
+        "feature_b": 16915,
+        "n_both_active": 437,
+        "jaccard": 0.6551724137931034,
+        "independence_ratio": 2.196252131755025,
+        "direction_angle_rad": 0.8712494475827124,
+        "intersection_convexity": 0.9940119760479043
+      },
+      {
+        "feature_a": 5405,
+        "feature_b": 20777,
+        "n_both_active": 433,
+        "jaccard": 0.6600609756097561,
+        "independence_ratio": 2.2474203973729923,
+        "direction_angle_rad": 0.8968055595424365,
+        "intersection_convexity": 0.9640237597094967
+      },
+      {
+        "feature_a": 21311,
+        "feature_b": 18803,
+        "n_both_active": 372,
+        "jaccard": 0.4793814432989691,
+        "independence_ratio": 1.7002864281796575,
+        "direction_angle_rad": 0.9491012762365185,
+        "intersection_convexity": 0.9240434793064475
+      },
+      {
+        "feature_a": 21311,
+        "feature_b": 6247,
+        "n_both_active": 424,
+        "jaccard": 0.6091954022988506,
+        "independence_ratio": 2.0443587270973964,
+        "direction_angle_rad": 0.9564062445622414,
+        "intersection_convexity": 0.9100714234182238
+      },
+      {
+        "feature_a": 21311,
+        "feature_b": 21221,
+        "n_both_active": 375,
+        "jaccard": 0.5115961800818554,
+        "independence_ratio": 1.8516689709658305,
+        "direction_angle_rad": 0.91251552805658,
+        "intersection_convexity": 0.9280354952745112
+      },
+      {
+        "feature_a": 21311,
+        "feature_b": 11153,
+        "n_both_active": 368,
+        "jaccard": 0.5027322404371585,
+        "independence_ratio": 1.8467714954834393,
+        "direction_angle_rad": 0.8359212484097853,
+        "intersection_convexity": 0.9299353101026862
+      },
+      {
+        "feature_a": 21311,
+        "feature_b": 3582,
+        "n_both_active": 373,
+        "jaccard": 0.5144827586206897,
+        "independence_ratio": 1.8795350712174148,
+        "direction_angle_rad": 0.8921240604701093,
+        "intersection_convexity": 0.9200274150494193
+      },
+      {
+        "feature_a": 21311,
+        "feature_b": 23446,
+        "n_both_active": 368,
+        "jaccard": 0.5075862068965518,
+        "independence_ratio": 1.8735362997658078,
+        "direction_angle_rad": 0.9746466190321502,
+        "intersection_convexity": 0.9299353101026862
+      },
+      {
+        "feature_a": 21311,
+        "feature_b": 22381,
+        "n_both_active": 339,
+        "jaccard": 0.452,
+        "independence_ratio": 1.7403059652965533,
+        "direction_angle_rad": 0.9215575980140133,
+        "intersection_convexity": 0.8959430536517328
+      },
+      {
+        "feature_a": 21311,
+        "feature_b": 8594,
+        "n_both_active": 383,
+        "jaccard": 0.5440340909090909,
+        "independence_ratio": 1.9744303536447054,
+        "direction_angle_rad": 0.9380658204845925,
+        "intersection_convexity": 0.9539835990669264
+      },
+      {
+        "feature_a": 21311,
+        "feature_b": 24058,
+        "n_both_active": 326,
+        "jaccard": 0.4295125164690382,
+        "independence_ratio": 1.6876617773943055,
+        "direction_angle_rad": 0.9021603663630485,
+        "intersection_convexity": 0.9139431979414665
+      },
+      {
+        "feature_a": 21311,
+        "feature_b": 3834,
+        "n_both_active": 384,
+        "jaccard": 0.5485714285714286,
+        "independence_ratio": 1.9921145465864287,
+        "direction_angle_rad": 1.0253758667249044,
+        "intersection_convexity": 0.9079070774114423
+      },
+      {
+        "feature_a": 21311,
+        "feature_b": 16915,
+        "n_both_active": 371,
+        "jaccard": 0.5210674157303371,
+        "independence_ratio": 1.9287422451738119,
+        "direction_angle_rad": 0.8478634850618798,
+        "intersection_convexity": 0.9219873506000048
+      },
+      {
+        "feature_a": 21311,
+        "feature_b": 20777,
+        "n_both_active": 360,
+        "jaccard": 0.5084745762711864,
+        "independence_ratio": 1.932851313623022,
+        "direction_angle_rad": 0.9077286953046796,
+        "intersection_convexity": 0.8840271264699516
+      },
+      {
+        "feature_a": 18803,
+        "feature_b": 6247,
+        "n_both_active": 269,
+        "jaccard": 0.3453145057766367,
+        "independence_ratio": 1.4705882352941173,
+        "direction_angle_rad": 1.045452669426426,
+        "intersection_convexity": 0.8980112065026574
+      },
+      {
+        "feature_a": 18803,
+        "feature_b": 21221,
+        "n_both_active": 483,
+        "jaccard": 0.8734177215189873,
+        "independence_ratio": 2.704125050387423,
+        "direction_angle_rad": 0.9220065119586967,
+        "intersection_convexity": 0.9959839357429718
+      },
+      {
+        "feature_a": 18803,
+        "feature_b": 11153,
+        "n_both_active": 483,
+        "jaccard": 0.8862385321100917,
+        "independence_ratio": 2.748274030801912,
+        "direction_angle_rad": 0.8725940913778247,
+        "intersection_convexity": 0.9959839357429718
+      },
+      {
+        "feature_a": 18803,
+        "feature_b": 3582,
+        "n_both_active": 483,
+        "jaccard": 0.8895027624309392,
+        "independence_ratio": 2.759537448960936,
+        "direction_angle_rad": 0.9037617454592209,
+        "intersection_convexity": 0.9959839357429718
+      },
+      {
+        "feature_a": 18803,
+        "feature_b": 23446,
+        "n_both_active": 483,
+        "jaccard": 0.8977695167286245,
+        "independence_ratio": 2.7881040892193307,
+        "direction_angle_rad": 0.9742040704193691,
+        "intersection_convexity": 0.9959839357429718
+      },
+      {
+        "feature_a": 18803,
+        "feature_b": 22381,
+        "n_both_active": 404,
+        "jaccard": 0.6590538336052202,
+        "independence_ratio": 2.3515533445607715,
+        "direction_angle_rad": 0.9632582277084296,
+        "intersection_convexity": 0.9880239520958084
+      },
+      {
+        "feature_a": 18803,
+        "feature_b": 8594,
+        "n_both_active": 458,
+        "jaccard": 0.822262118491921,
+        "independence_ratio": 2.6770475322064016,
+        "direction_angle_rad": 0.9904173244265729,
+        "intersection_convexity": 0.9719717192121781
+      },
+      {
+        "feature_a": 18803,
+        "feature_b": 24058,
+        "n_both_active": 363,
+        "jaccard": 0.5584615384615385,
+        "independence_ratio": 2.1306984934455095,
+        "direction_angle_rad": 1.0030541560280548,
+        "intersection_convexity": 0.9319914388091287
+      },
+      {
+        "feature_a": 18803,
+        "feature_b": 3834,
+        "n_both_active": 404,
+        "jaccard": 0.6644736842105263,
+        "independence_ratio": 2.376358759587784,
+        "direction_angle_rad": 1.0935704889635778,
+        "intersection_convexity": 0.9880239520958084
+      },
+      {
+        "feature_a": 18803,
+        "feature_b": 16915,
+        "n_both_active": 466,
+        "jaccard": 0.8550458715596331,
+        "independence_ratio": 2.746842506503611,
+        "direction_angle_rad": 0.9593722842232474,
+        "intersection_convexity": 1.0
+      },
+      {
+        "feature_a": 18803,
+        "feature_b": 20777,
+        "n_both_active": 426,
+        "jaccard": 0.7473684210526316,
+        "independence_ratio": 2.593302056784792,
+        "direction_angle_rad": 0.9486661654261175,
+        "intersection_convexity": 0.9819998557102663
+      }
+    ],
+    "summary": {
+      "mean_independence_ratio": 2.2930537489495877,
+      "median_independence_ratio": 2.164105916966329,
+      "mean_direction_angle_deg": 56.27112771927382
+    }
+  },
+  "sparsity_patterns": {
+    "n_features_analyzed": 30,
+    "n_tokens": 1500,
+    "n_unique_patterns": 345,
+    "max_possible_patterns": 1073741824,
+    "pattern_compression": NaN,
+    "top_10_pattern_frequencies": [
+      230,
+      140,
+      59,
+      45,
+      38,
+      28,
+      27,
+      27,
+      24,
+      24
+    ],
+    "features_per_token_mean": 9.137333333333334,
+    "features_per_token_std": 10.190378119688308,
+    "features_per_token_median": 4.0,
+    "coactivation_density": 0.9311111111111111
+  }
+}

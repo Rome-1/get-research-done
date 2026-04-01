@@ -54,7 +54,7 @@ def run_geometry_analysis(
 
     print("[2/6] Loading SAE...")
     from sae_lens import SAE
-    sae, _ = SAE.from_pretrained(
+    sae, cfg_dict, _ = SAE.from_pretrained(
         release="gpt2-small-res-jb",
         sae_id=f"blocks.{layer}.hook_resid_pre",
         device="cpu",
