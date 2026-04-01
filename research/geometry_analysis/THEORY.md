@@ -184,3 +184,10 @@ raw SSC should work without deep transformation.
 14. Chanin et al. (2024). "A is for Absorption." arXiv 2409.14507.
 15. Viswanathan et al. (2025). "Geometry of tokens." arXiv 2501.10573.
 16. Bereska et al. (2025). "Superposition as lossy compression." arXiv 2512.13568.
+17. **Black et al. (2022). "Interpreting Neural Networks through the Polytope Lens." arXiv 2211.12312.** [MOST DIRECT PREDECESSOR — polytopes in GPT-2 MLPs, does NOT connect to SAEs]
+18. **Hindupur et al. (2025). "Projecting Assumptions: The Duality Between SAEs and Concept Geometry." NeurIPS 2025. arXiv 2503.01822.** [Explicitly states ReLU/JumpReLU SAE receptive fields are half-spaces; TopK SAEs produce hyperpyramids; does NOT develop hyperplane arrangement composition]
+19. **Balestriero & Baraniuk (2018). "A Spline Theory of Deep Networks." ICML 2018.** [Proves deep ReLU networks are spline operators tessellating input space via hyperplane arrangements — general theory, does NOT discuss transformers/SAEs]
+20. Inglis (2024). "Sparse Features Through Time." [Pythia-70M, 20 checkpoints, feature matching]
+21. Xu et al. (2024). "Tracking Feature Dynamics in LLM Training." [SAE-Track, semantic evolution]
+22. Engels et al. (2025). "Feature manifolds and intrinsic dimension." [Feature manifold geometry]
+23. Biderman et al. (2023). "Pythia: A Suite for Analyzing Large Language Models Across Training and Scaling." ICML 2023. arXiv 2304.01373.

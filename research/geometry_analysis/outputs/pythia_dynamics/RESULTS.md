@@ -64,6 +64,36 @@ The activation space expands in intrinsic dimension as training progresses, cons
 
 ---
 
+## 6. Capability-Geometry Correlation (ge-97d)
+
+**Data source:** EleutherAI published zero-shot evals at 20 checkpoints, matched with our geometry metrics.
+
+### Finding 6: Capability and geometry are DISSOCIATED
+
+| Correlation | Pearson r | p-value |
+|---|---|---|
+| var_explained vs aggregate capability | **-0.451** | 0.079 |
+| var_explained vs LAMBADA acc | -0.442 | 0.087 |
+| var_explained vs SciQ acc | -0.448 | 0.082 |
+
+The negative correlation means: as the SAE alignment improves, benchmark performance **decreases**.
+
+### Three-phase model:
+
+1. **Capability Acquisition (steps 1k-23k, 1-16% of training):** Aggregate acc rises 0.25 → 0.49; var_explained stays deeply negative (-93 to -2600). The model acquires 90%+ of its final capability while being "geometrically incompatible" with the final SAE.
+
+2. **Plateau & Divergence (steps 23k-99k, 16-69% of training):** Capabilities plateau. L0 drops 12.5k → 539. Dead features explode 0.3% → 79%. Epoch boundary at ~step 99k.
+
+3. **Geometric Consolidation (steps 99k-143k, 69-100% of training):** var_explained crosses zero at step 113k. Capabilities slightly decline. The model spends 84% of total compute reorganizing HOW it represents information, not WHAT.
+
+### Implication:
+
+The step-113k alignment transition is a **geometric consolidation** event, not capability emergence. Capabilities are acquired in a geometrically unstable regime (Phase 1). The late-training transition likely reflects the epoch boundary (step ~99k, deduped Pile = 207B tokens) — seeing data for the second time triggers representation finalization.
+
+See `CAPABILITY_CORRELATION.md` for full analysis.
+
+---
+
 ## Limitations
 
 1. **Fixed SAE probe bias:** The SAE was trained on the final model. Negative `var_explained` at early steps doesn't mean no structure — it means the structure differs from the final model's. A proper per-checkpoint SAE would separate "SAE quality" from "activation alignment."
@@ -78,11 +108,13 @@ The activation space expands in intrinsic dimension as training progresses, cons
 
 1. **Per-checkpoint SAEs (ideal):** Train fresh SAEs on a subset of checkpoints (steps 0, 32, 64, 1000, 10000, 50000, 113000, 143000) to separate architecture-driven geometry from alignment.
 
-2. **Capability emergence correlation:** Overlay published Pythia-70m capability benchmarks (arithmetic, ICL) against the step-113,000 alignment transition. Does capability emerge at the same time the SAE alignment happens?
+2. ~~**Capability emergence correlation:**~~ **DONE (ge-97d).** Result: capabilities emerge at steps 1k-23k (first 15% of training), while the geometric alignment transition at step 113k occurs during capability *degradation*. Negative correlation (r=-0.451). See `CAPABILITY_CORRELATION.md`.
 
 3. **Multiple layers:** Run the same pipeline on layers 0, 1, 2, 4, 5 to see if the step-113,000 transition is layer-specific or global.
 
 4. **Step-32 anomaly investigation:** What happens at step 32? Is this a known training artifact for Pythia-70m?
+
+5. **(NEW) Higher-resolution capability evals:** The 20-checkpoint eval grid is coarse. Running lm-eval-harness at more checkpoints (every 10k steps) would strengthen the correlation analysis (currently p=0.079).
 
 ---
 
