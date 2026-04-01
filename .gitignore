@@ -27,3 +27,7 @@ htmlcov/
 .claude/commands/
 .logs/
 .beads/
+
+# Gas Town (added by gt)
+.claude/
+state.json
