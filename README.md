@@ -16,7 +16,9 @@
   <a href="#supported-runtimes"><img alt="OpenCode supported" src="https://img.shields.io/badge/OpenCode-supported-cfcecd?style=flat&labelColor=565656&logo=data%3Aimage%2Fpng%3Bbase64%2CiVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAABzUlEQVR4AeycQQrCQBAEF1%2Bg6J%2F0o5LPCXmCnnNx0E2nNqGEPciw024VffV0PZ%2FfHo7BqflBCSgAxd%2BaAhQAE4DjbYACYAJwvA1QAEwAjrcBCgAIDBRpA2AZClAATACOtwEKgAnA8TZAATABOD7egNc8tz2ftJ%2B4gPQD9r5fAbDBDQXALx00XgGwGAUoACYAx9sABcAE4HgboACYABxvAxSwJHC7XFryLNP4bzYg7KBar4CKUHiugDDgar0CKkLhuQLCgKv1CqgIhecKCAOu1iugIhSeKyAMuFqvgIpQeK6AMOBq%2FXAC7o9H6z5fdlRAtp4PJ2BrAHSeAmADClAATACOtwEKgAnA8TZAATABON4GKAAmAMev2AD4JTuNVwAsTgEKgAnA8TZAATABON4GKAAmAMfbAAXABOB4G9ApoPe6AnoJdt5XQCfA3uvDCXhOU0ueXmBr3x9OwNoPHH2fAmBDClAATACOtwEKgAnA8TZAAX8QONAVGwDLVIACYAJwfLwByf%2F%2B2WJ32k9cQPoBe9%2BvANigAhQAE4DjbYACYAJw%2FA8NgH%2FpQeMVAItVgAJgAnC8DVAATACOtwEKgAnA8TZAATABON4GFALS4w8AAAD%2F%2Fx7wkLQAAAAGSURBVAMAKj5LkLSa6SQAAAAASUVORK5CYII%3D"></a>
 </p>
 
-Get Research Done is an open-source AI copilot for research from [Physical Superintelligence PBC (PSI)](https://www.psi.inc), released as a community contribution. GRD helps turn a research question into a structured workflow: scope the problem, plan the work, derive results, verify them, and package the output.
+Get Research Done is an open-source AI copilot for structured research — a generalization of [Get Physics Done](https://github.com/psi-oss/get-physics-done) that works across any scientific or technical domain. GRD helps turn a research question into a rigorous workflow: scope the problem, plan the work, derive results, verify them, and package the output.
+
+GRD started in physics and is built to go further. Biology, chemistry, ML, economics, engineering — if the domain has hypotheses, evidence, and conclusions, GRD is designed to support it. Contributions that extend GRD to new domains, runtimes, or verification methods are actively welcome, from humans and agents alike.
 
 https://github.com/user-attachments/assets/e79f8153-c0bd-484f-b69e-da8f142649e0
 
@@ -28,7 +30,7 @@ GRD is for hard research problems that cannot be handled reliably with manual pr
 
 It is designed for long-horizon projects that require rigorous verification, structured research memory, multi-step analytical work, complex numerical studies, and manuscript writing or review.
 
-We welcome contributions and feedback via GitHub issues or pull requests; if GRD is useful in your work, please star the repo, and share it with colleagues who might benefit.
+We welcome contributions via GitHub issues or pull requests — domain extensions, new runtime integrations, verification methods, and everything in between. Human contributors and AI agents both welcome. If GRD is useful in your work, star the repo and share it with collaborators who might benefit.
 
 ### Two interfaces
 
