@@ -13,13 +13,20 @@ import gpd.cli as cli_module
 import gpd.runtime_cli as runtime_cli
 from gpd.adapters import get_adapter
 from gpd.adapters.install_utils import AGENTS_DIR_NAME, HOOKS_DIR_NAME
-from gpd.adapters.runtime_catalog import iter_runtime_descriptors, resolve_global_config_dir
+from gpd.adapters.runtime_catalog import (
+    get_shared_install_metadata,
+    iter_runtime_descriptors,
+    resolve_global_config_dir,
+)
 from gpd.core.constants import ENV_GPD_ACTIVE_RUNTIME, ENV_GPD_DISABLE_CHECKOUT_REEXEC
 from gpd.hooks.install_metadata import GPD_INSTALL_DIR_NAME
 from gpd.runtime_cli import _parse_args, _resolve_cli_cwd_from_argv, main
 
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
 _RUNTIME_NAMES = tuple(descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS)
+_SHARED_INSTALL = get_shared_install_metadata()
+MANIFEST_NAME = _SHARED_INSTALL.manifest_name
+BOOTSTRAP_COMMAND = _SHARED_INSTALL.bootstrap_command
 _RUNTIME_CANONICALIZATION_TOKENS: list[tuple[str, str, str]] = []
 _SEEN_CANONICALIZATION_TOKENS: set[tuple[str, str]] = set()
 for descriptor in _RUNTIME_DESCRIPTORS:
@@ -79,7 +86,7 @@ def _mark_complete_install(config_dir: Path, *, runtime: str, install_scope: str
 
 def _mark_incomplete_install(config_dir: Path, *, runtime: str, install_scope: str = "local") -> None:
     config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "gpd-file-manifest.json").write_text(
+    (config_dir / MANIFEST_NAME).write_text(
         json.dumps({"runtime": runtime, "install_scope": install_scope}),
         encoding="utf-8",
     )
@@ -162,9 +169,9 @@ def test_runtime_cli_fails_cleanly_for_incomplete_install(tmp_path: Path, capsys
     captured = capsys.readouterr()
     assert exit_code == 127
     assert f"GPD runtime install incomplete for {adapter.display_name}" in captured.err
-    assert "`gpd-file-manifest.json`" in captured.err
-    assert "`get-physics-done`" in captured.err
-    assert f"npx -y get-physics-done {adapter.install_flag} --local" in captured.err
+    assert f"`{MANIFEST_NAME}`" in captured.err
+    assert f"`{_SHARED_INSTALL.install_root_dir_name}`" in captured.err
+    assert f"{BOOTSTRAP_COMMAND} {adapter.install_flag} --local" in captured.err
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
@@ -197,7 +204,7 @@ def test_runtime_cli_ancestor_local_repair_command_targets_resolved_install(
     captured = capsys.readouterr()
     assert exit_code == 127
     assert f"--target-dir {config_dir}" in captured.err
-    assert f"npx -y get-physics-done {adapter.install_flag} --local" in captured.err
+    assert f"{BOOTSTRAP_COMMAND} {adapter.install_flag} --local" in captured.err
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
@@ -297,7 +304,7 @@ def test_runtime_cli_fails_when_manifest_runtime_is_missing_or_unrecognized(
     adapter = get_adapter(descriptor.runtime_name)
     config_dir = tmp_path / adapter.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
-    manifest_path = config_dir / "gpd-file-manifest.json"
+    manifest_path = config_dir / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["runtime"] = runtime_value
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -338,7 +345,7 @@ def test_runtime_cli_fails_when_manifest_runtime_field_is_missing(
     adapter = get_adapter(descriptor.runtime_name)
     config_dir = tmp_path / adapter.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
-    manifest_path = config_dir / "gpd-file-manifest.json"
+    manifest_path = config_dir / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest.pop("runtime", None)
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -378,7 +385,7 @@ def test_runtime_cli_preserves_custom_global_target_in_missing_runtime_repair_gu
 ) -> None:
     config_dir = tmp_path / "custom-global" / descriptor.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name, install_scope="global")
-    manifest_path = config_dir / "gpd-file-manifest.json"
+    manifest_path = config_dir / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest.pop("runtime", None)
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -418,7 +425,7 @@ def test_runtime_cli_preserves_custom_global_target_in_malformed_runtime_repair_
 ) -> None:
     config_dir = tmp_path / "custom-global" / descriptor.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name, install_scope="global")
-    manifest_path = config_dir / "gpd-file-manifest.json"
+    manifest_path = config_dir / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["runtime"] = ""
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -843,7 +850,7 @@ def test_runtime_cli_rejects_local_config_dir_from_ancestor_workspace_without_ma
 ) -> None:
     config_dir = tmp_path / descriptor.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
-    manifest_path = config_dir / "gpd-file-manifest.json"
+    manifest_path = config_dir / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest.pop("runtime", None)
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -889,7 +896,7 @@ def test_runtime_cli_rejects_local_candidate_with_file_prefixes_but_no_runtime(
     candidate = tmp_path / adapter.config_dir_name
     candidate.mkdir()
     manifest_prefix = descriptor.manifest_file_prefixes[0]
-    (candidate / "gpd-file-manifest.json").write_text(
+    (candidate / MANIFEST_NAME).write_text(
         json.dumps(
             {
                 "install_scope": "local",
@@ -914,7 +921,7 @@ def test_runtime_cli_rejects_corrupt_manifest_before_dispatch(
 ) -> None:
     config_dir = tmp_path / descriptor.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
-    (config_dir / "gpd-file-manifest.json").write_text("not-json", encoding="utf-8")
+    (config_dir / MANIFEST_NAME).write_text("not-json", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: None)
     monkeypatch.setattr(
@@ -950,7 +957,7 @@ def test_runtime_cli_rejects_missing_manifest_before_dispatch(
 ) -> None:
     config_dir = tmp_path / descriptor.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
-    (config_dir / "gpd-file-manifest.json").unlink()
+    (config_dir / MANIFEST_NAME).unlink()
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: None)
     monkeypatch.setattr(
@@ -974,7 +981,7 @@ def test_runtime_cli_rejects_missing_manifest_before_dispatch(
     captured = capsys.readouterr()
     assert exit_code == 127
     assert "GPD runtime bridge rejected missing install manifest" in captured.err
-    assert "`gpd-file-manifest.json`" in captured.err
+    assert f"`{MANIFEST_NAME}`" in captured.err
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
@@ -986,7 +993,7 @@ def test_runtime_cli_rejects_manifestless_ancestor_local_candidate_before_dispat
 ) -> None:
     config_dir = tmp_path / descriptor.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
-    (config_dir / "gpd-file-manifest.json").unlink()
+    (config_dir / MANIFEST_NAME).unlink()
     nested_cwd = tmp_path / "research" / "notes"
     nested_cwd.mkdir(parents=True)
     monkeypatch.chdir(nested_cwd)
@@ -1107,7 +1114,7 @@ def test_runtime_cli_preserves_custom_global_target_in_untrusted_manifest_repair
 ) -> None:
     config_dir = tmp_path / "custom-global" / descriptor.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name, install_scope="global")
-    (config_dir / "gpd-file-manifest.json").write_text("not-json", encoding="utf-8")
+    (config_dir / MANIFEST_NAME).write_text("not-json", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: None)
     monkeypatch.setattr(
@@ -1144,7 +1151,7 @@ def test_runtime_cli_rejects_non_utf8_manifest_before_dispatch(
 ) -> None:
     config_dir = tmp_path / descriptor.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
-    (config_dir / "gpd-file-manifest.json").write_bytes(b"\xff")
+    (config_dir / MANIFEST_NAME).write_bytes(b"\xff")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: None)
     monkeypatch.setattr(
@@ -1298,7 +1305,7 @@ def test_runtime_cli_forwarded_cli_cwd_drives_local_repair_guidance(
     captured = capsys.readouterr()
     assert exit_code == 127
     assert f"--target-dir {config_dir}" in captured.err
-    assert f"npx -y get-physics-done {adapter.install_flag} --local" in captured.err
+    assert f"{BOOTSTRAP_COMMAND} {adapter.install_flag} --local" in captured.err
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
@@ -1312,7 +1319,7 @@ def test_runtime_cli_fails_when_resolved_local_config_dir_manifest_runtime_misma
     adapter = get_adapter(descriptor.runtime_name)
     config_dir = tmp_path / adapter.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
-    manifest_path = config_dir / "gpd-file-manifest.json"
+    manifest_path = config_dir / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["runtime"] = foreign_runtime
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -1337,7 +1344,7 @@ def test_runtime_cli_fails_when_resolved_local_config_dir_manifest_runtime_misma
     assert f"GPD runtime bridge mismatch for {adapter.display_name}" in captured.err
     assert f"{get_adapter(foreign_runtime).display_name} (`{foreign_runtime}`)" in captured.err
     assert f"--target-dir {config_dir}" in captured.err
-    assert f"npx -y get-physics-done {get_adapter(foreign_runtime).install_flag} --local" in captured.err
+    assert f"{BOOTSTRAP_COMMAND} {get_adapter(foreign_runtime).install_flag} --local" in captured.err
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
@@ -1351,7 +1358,7 @@ def test_runtime_cli_fails_when_explicit_target_manifest_runtime_mismatches(
     adapter = get_adapter(descriptor.runtime_name)
     config_dir = tmp_path / f"custom-{descriptor.runtime_name}-dir"
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
-    manifest_path = config_dir / "gpd-file-manifest.json"
+    manifest_path = config_dir / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["runtime"] = foreign_runtime
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -1377,7 +1384,7 @@ def test_runtime_cli_fails_when_explicit_target_manifest_runtime_mismatches(
     assert f"GPD runtime bridge mismatch for {adapter.display_name}" in captured.err
     assert f"{get_adapter(foreign_runtime).display_name} (`{foreign_runtime}`)" in captured.err
     assert f"--target-dir {config_dir}" in captured.err
-    assert f"npx -y get-physics-done {get_adapter(foreign_runtime).install_flag} --local" in captured.err
+    assert f"{BOOTSTRAP_COMMAND} {get_adapter(foreign_runtime).install_flag} --local" in captured.err
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
@@ -1390,7 +1397,7 @@ def test_runtime_cli_uses_manifest_owner_scope_for_mismatch_repair_guidance(
     foreign_runtime = next(name for name in _RUNTIME_NAMES if name != descriptor.runtime_name)
     config_dir = tmp_path / f"custom-{descriptor.runtime_name}-dir"
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name)
-    manifest_path = config_dir / "gpd-file-manifest.json"
+    manifest_path = config_dir / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["runtime"] = foreign_runtime
     manifest["install_scope"] = "global"
@@ -1416,7 +1423,7 @@ def test_runtime_cli_uses_manifest_owner_scope_for_mismatch_repair_guidance(
     assert exit_code == 127
     assert f"GPD runtime bridge mismatch for {get_adapter(descriptor.runtime_name).display_name}" in captured.err
     assert f"{get_adapter(foreign_runtime).display_name} (`{foreign_runtime}`)" in captured.err
-    assert f"npx -y get-physics-done {get_adapter(foreign_runtime).install_flag}" in captured.err
+    assert f"{BOOTSTRAP_COMMAND} {get_adapter(foreign_runtime).install_flag}" in captured.err
     assert "--global" in captured.err
     assert "--local" not in captured.err
 
@@ -1431,7 +1438,7 @@ def test_runtime_cli_preserves_custom_global_target_in_mismatch_repair_guidance_
     foreign_runtime = next(name for name in _RUNTIME_NAMES if name != descriptor.runtime_name)
     config_dir = tmp_path / "custom-global" / descriptor.config_dir_name
     _mark_complete_install(config_dir, runtime=descriptor.runtime_name, install_scope="global")
-    manifest_path = config_dir / "gpd-file-manifest.json"
+    manifest_path = config_dir / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["runtime"] = foreign_runtime
     manifest["install_scope"] = "global"

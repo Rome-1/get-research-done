@@ -21,13 +21,13 @@ from gpd.adapters import get_adapter
 from gpd.adapters.install_utils import (
     build_runtime_install_repair_command,
 )
+from gpd.adapters.runtime_catalog import get_shared_install_metadata, normalize_runtime_name
 from gpd.core.cli_args import resolve_root_global_cli_cwd_from_argv as _resolve_cli_cwd_from_argv
 from gpd.core.constants import ENV_GPD_ACTIVE_RUNTIME, ENV_GPD_DISABLE_CHECKOUT_REEXEC
 from gpd.hooks.install_metadata import (
     config_dir_has_managed_install_markers,
     load_install_manifest_runtime_status,
 )
-from gpd.hooks.runtime_detect import normalize_runtime_name
 
 
 def _parse_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
@@ -363,9 +363,10 @@ def _missing_manifest_error_message(
             cli_cwd=cli_cwd,
         ),
     )
+    shared_install = get_shared_install_metadata()
     return (
         f"GPD runtime bridge rejected missing install manifest at `{config_dir}`.\n"
-        "Managed installs must include `gpd-file-manifest.json` so runtime identity stays authoritative.\n"
+        f"Managed installs must include `{shared_install.manifest_name}` so runtime identity stays authoritative.\n"
         f"Repair or reinstall with: `{repair_command}`\n"
     )
 

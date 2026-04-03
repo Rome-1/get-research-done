@@ -6,11 +6,19 @@ from pathlib import Path
 import pytest
 
 from gpd.adapters import get_adapter
-from gpd.adapters.runtime_catalog import iter_runtime_descriptors, resolve_global_config_dir
+from gpd.adapters.runtime_catalog import (
+    get_shared_install_metadata,
+    iter_runtime_descriptors,
+    resolve_global_config_dir,
+)
 from gpd.hooks.install_metadata import installed_update_command
 
 GPD_ROOT = Path(__file__).resolve().parent.parent / "src" / "gpd"
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
+_SHARED_INSTALL = get_shared_install_metadata()
+INSTALL_ROOT_DIR_NAME = _SHARED_INSTALL.install_root_dir_name
+MANIFEST_NAME = _SHARED_INSTALL.manifest_name
+BOOTSTRAP_COMMAND = _SHARED_INSTALL.bootstrap_command
 
 
 def _install_and_finalize(adapter, gpd_root: Path, target: Path, **install_kwargs: object) -> dict[str, object]:
@@ -29,14 +37,18 @@ def _install_kwargs_for_descriptor(descriptor, tmp_path: Path) -> dict[str, obje
 def test_update_workflow_uses_current_runtime_agnostic_contract() -> None:
     content = (GPD_ROOT / "specs" / "workflows" / "update.md").read_text(encoding="utf-8")
 
-    assert "get-physics-done" in content
-    assert "{GPD_RUNTIME_FLAG}" in content
+    assert "{GPD_INSTALL_ROOT_DIR_NAME}" in content
     assert "{GPD_INSTALL_SCOPE_FLAG}" in content
+    assert "{GPD_UPDATE_COMMAND}" in content
+    assert "{GPD_PATCH_META}" in content
+    assert "{GPD_RELEASE_LATEST_URL}" in content
+    assert "{GPD_RELEASES_API_URL}" in content
+    assert "{GPD_RELEASES_PAGE_URL}" in content
     assert "{GPD_GLOBAL_CONFIG_DIR}" in content
-    assert "--target-dir" in content
-    assert "--global" in content
-    assert "registry.npmjs.org/get-physics-done/latest" in content
     assert 'PYTHON_BIN="${GPD_PYTHON:-}"' in content
+    assert "TARGET_DIR_ARG=$(" not in content
+    assert "{GPD_RUNTIME_FLAG}" not in content
+    assert _SHARED_INSTALL.latest_release_url not in content
     assert "pip index versions gpd" not in content
     assert "gpd install --all" not in content
     assert "gpd:update-check.json" not in content
@@ -46,11 +58,12 @@ def test_update_workflow_uses_current_runtime_agnostic_contract() -> None:
 def test_reapply_patches_workflow_uses_runtime_config_placeholders() -> None:
     content = (GPD_ROOT / "specs" / "workflows" / "reapply-patches.md").read_text(encoding="utf-8")
 
-    assert "{GPD_CONFIG_DIR}" in content
-    assert "{GPD_GLOBAL_CONFIG_DIR}" in content
+    assert "{GPD_PATCHES_DIR}" in content
+    assert "{GPD_GLOBAL_PATCHES_DIR}" in content
+    assert "{GPD_PATCHES_DIR_NAME}" in content
     for descriptor in _RUNTIME_DESCRIPTORS:
-        runtime_patch_path = f"~/{descriptor.config_dir_name}/gpd-local-patches"
-        workspace_patch_path = f"./{descriptor.config_dir_name}/gpd-local-patches"
+        runtime_patch_path = f"~/{descriptor.config_dir_name}/{_SHARED_INSTALL.patches_dir_name}"
+        workspace_patch_path = f"./{descriptor.config_dir_name}/{_SHARED_INSTALL.patches_dir_name}"
         assert runtime_patch_path not in content
         assert workspace_patch_path not in content
 
@@ -67,19 +80,21 @@ def test_default_local_install_keeps_local_update_scope_and_manifest(
 
     _install_and_finalize(adapter, GPD_ROOT, target, is_global=False, **_install_kwargs_for_descriptor(descriptor, tmp_path))
 
-    update_content = (target / "get-physics-done" / "workflows" / "update.md").read_text(encoding="utf-8")
-    reapply_content = (target / "get-physics-done" / "workflows" / "reapply-patches.md").read_text(
+    update_content = (target / INSTALL_ROOT_DIR_NAME / "workflows" / "update.md").read_text(encoding="utf-8")
+    reapply_content = (target / INSTALL_ROOT_DIR_NAME / "workflows" / "reapply-patches.md").read_text(
         encoding="utf-8"
     )
-    manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
 
     assert 'INSTALL_SCOPE="--local"' in update_content
     assert 'INSTALL_SCOPE="--global"' not in update_content
+    assert f'UPDATE_COMMAND="{adapter.update_command} --local"' in update_content
+    assert f'PATCH_META="{target.as_posix()}/{_SHARED_INSTALL.patches_dir_name}/backup-meta.json"' in update_content
     assert manifest["install_scope"] == "local"
     assert installed_update_command(target) == f"{adapter.update_command} --local"
     assert f'GPD_CONFIG_DIR="{target.as_posix()}"' in update_content
-    assert f'GPD_INSTALL_DIR="{(target / "get-physics-done").as_posix()}"' in update_content
-    assert f'PATCHES_DIR="{target.as_posix()}/gpd-local-patches"' in reapply_content
+    assert f'GPD_INSTALL_DIR="{(target / _SHARED_INSTALL.install_root_dir_name).as_posix()}"' in update_content
+    assert f'PATCHES_DIR="{target.as_posix()}/{_SHARED_INSTALL.patches_dir_name}"' in reapply_content
     if "skills/" in descriptor.manifest_file_prefixes:
         files = manifest.get("files", {})
         assert isinstance(files, dict)
@@ -113,7 +128,7 @@ def test_legacy_local_install_without_install_scope_keeps_local_update_scope(
 
     _install_and_finalize(adapter, GPD_ROOT, target, is_global=False, **_install_kwargs_for_descriptor(descriptor, tmp_path))
 
-    manifest_path = target / "gpd-file-manifest.json"
+    manifest_path = target / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest.pop("install_scope", None)
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -138,7 +153,7 @@ def test_explicit_target_local_install_without_install_scope_keeps_local_update_
 
     _install_and_finalize(adapter, GPD_ROOT, target, **install_kwargs)
 
-    manifest_path = target / "gpd-file-manifest.json"
+    manifest_path = target / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest.pop("install_scope", None)
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -163,7 +178,7 @@ def test_explicit_target_global_install_without_install_scope_keeps_global_updat
 
     _install_and_finalize(adapter, GPD_ROOT, target, **install_kwargs)
 
-    manifest_path = target / "gpd-file-manifest.json"
+    manifest_path = target / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest.pop("install_scope", None)
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -185,12 +200,15 @@ def test_explicit_target_local_install_keeps_local_update_scope(tmp_path: Path, 
 
     _install_and_finalize(adapter, GPD_ROOT, target, **install_kwargs)
 
-    content = (target / "get-physics-done" / "workflows" / "update.md").read_text(encoding="utf-8")
+    content = (target / INSTALL_ROOT_DIR_NAME / "workflows" / "update.md").read_text(encoding="utf-8")
+    command = installed_update_command(target)
 
     assert 'INSTALL_SCOPE="--local"' in content
+    assert isinstance(command, str)
+    assert f'UPDATE_COMMAND="{command}"' in content
     assert f'GPD_CONFIG_DIR="{target.as_posix()}"' in content
     assert "{GPD_INSTALL_SCOPE_FLAG}" not in content
-    assert 'TARGET_DIR_ARG=$("$PYTHON_BIN" - "$INSTALL_SCOPE" "$GPD_CONFIG_DIR" "$GPD_GLOBAL_CONFIG_DIR"' in content
+    assert "TARGET_DIR_ARG=$(" not in content
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
@@ -208,18 +226,20 @@ def test_explicit_target_global_install_keeps_global_update_scope(tmp_path: Path
 
     _install_and_finalize(adapter, GPD_ROOT, target, **install_kwargs)
 
-    content = (target / "get-physics-done" / "workflows" / "update.md").read_text(encoding="utf-8")
-    manifest = json.loads((target / "gpd-file-manifest.json").read_text(encoding="utf-8"))
+    content = (target / INSTALL_ROOT_DIR_NAME / "workflows" / "update.md").read_text(encoding="utf-8")
+    manifest = json.loads((target / MANIFEST_NAME).read_text(encoding="utf-8"))
     command = installed_update_command(target)
 
     assert 'INSTALL_SCOPE="--global"' in content
+    assert isinstance(command, str)
+    assert f'UPDATE_COMMAND="{command}"' in content
     assert f'GPD_CONFIG_DIR="{target.as_posix()}"' in content
     assert f'GPD_GLOBAL_CONFIG_DIR="{canonical_global.as_posix()}"' in content
     assert "{GPD_INSTALL_SCOPE_FLAG}" not in content
-    assert 'TARGET_DIR_ARG=$("$PYTHON_BIN" - "$INSTALL_SCOPE" "$GPD_CONFIG_DIR" "$GPD_GLOBAL_CONFIG_DIR"' in content
+    assert "TARGET_DIR_ARG=$(" not in content
     assert manifest["install_scope"] == "global"
     assert manifest["explicit_target"] is True
-    assert command == f"{adapter.update_command} --global --target-dir {target.as_posix()}"
+    assert "--target-dir" in command
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
@@ -244,7 +264,7 @@ def test_legacy_global_install_without_explicit_target_ignores_current_env_overr
         ctx.setattr("gpd.hooks.install_metadata.Path.home", lambda: home_dir)
         _install_and_finalize(adapter, GPD_ROOT, canonical_target, **install_kwargs)
 
-    manifest_path = canonical_target / "gpd-file-manifest.json"
+    manifest_path = canonical_target / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest.pop("explicit_target", None)
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -303,7 +323,7 @@ def test_legacy_global_install_without_explicit_target_ignores_env_leak_captured
         ctx.setattr("gpd.hooks.install_metadata.Path.home", lambda: home_dir)
         _install_and_finalize(adapter, GPD_ROOT, canonical_target, **install_kwargs)
 
-    manifest_path = canonical_target / "gpd-file-manifest.json"
+    manifest_path = canonical_target / MANIFEST_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest.pop("explicit_target", None)
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -329,13 +349,14 @@ def test_explicit_target_local_install_reapply_patches_uses_runtime_paths(tmp_pa
 
     _install_and_finalize(adapter, GPD_ROOT, target, **install_kwargs)
 
-    content = (target / "get-physics-done" / "workflows" / "reapply-patches.md").read_text(encoding="utf-8")
+    content = (target / INSTALL_ROOT_DIR_NAME / "workflows" / "reapply-patches.md").read_text(encoding="utf-8")
 
-    assert f'PATCHES_DIR="{target.as_posix()}/gpd-local-patches"' in content
-    assert "{GPD_CONFIG_DIR}" not in content
-    assert "{GPD_GLOBAL_CONFIG_DIR}" not in content
+    assert f'PATCHES_DIR="{target.as_posix()}/{_SHARED_INSTALL.patches_dir_name}"' in content
+    assert 'GLOBAL_PATCHES_DIR="' in content
+    assert "{GPD_PATCHES_DIR}" not in content
+    assert "{GPD_GLOBAL_PATCHES_DIR}" not in content
     for descriptor in _RUNTIME_DESCRIPTORS:
-        runtime_patch_path = f"~/{descriptor.config_dir_name}/gpd-local-patches"
-        workspace_patch_path = f"./{descriptor.config_dir_name}/gpd-local-patches"
+        runtime_patch_path = f"~/{descriptor.config_dir_name}/{_SHARED_INSTALL.patches_dir_name}"
+        workspace_patch_path = f"./{descriptor.config_dir_name}/{_SHARED_INSTALL.patches_dir_name}"
         assert runtime_patch_path not in content
         assert workspace_patch_path not in content

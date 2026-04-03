@@ -14,7 +14,8 @@ from unittest.mock import patch
 import pytest
 
 from gpd.adapters import get_adapter
-from gpd.adapters.runtime_catalog import iter_runtime_descriptors
+from gpd.adapters.runtime_catalog import get_shared_install_metadata, iter_runtime_descriptors
+from gpd.adapters.runtime_catalog import normalize_runtime_name as catalog_normalize_runtime_name
 from gpd.hooks.install_metadata import installed_runtime
 from gpd.hooks.runtime_detect import (
     RUNTIME_UNKNOWN,
@@ -50,6 +51,7 @@ from tests.hooks.helpers import mark_complete_install as _mark_complete_install
 
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
 _RUNTIME_BY_NAME = {descriptor.runtime_name: descriptor for descriptor in _RUNTIME_DESCRIPTORS}
+_SHARED_INSTALL = get_shared_install_metadata()
 RUNTIME_CLAUDE = _RUNTIME_BY_NAME["claude-code"].runtime_name
 RUNTIME_CODEX = _RUNTIME_BY_NAME["codex"].runtime_name
 RUNTIME_GEMINI = _RUNTIME_BY_NAME["gemini"].runtime_name
@@ -361,9 +363,14 @@ class TestNormalizeRuntimeName:
         assert normalize_runtime_name("Claude Code") == RUNTIME_CLAUDE
         assert normalize_runtime_name("claude") == RUNTIME_CLAUDE
         assert normalize_runtime_name("open code") == RUNTIME_OPENCODE
+        assert catalog_normalize_runtime_name("claude-code") == RUNTIME_CLAUDE
+        assert catalog_normalize_runtime_name("Claude Code") == RUNTIME_CLAUDE
+        assert catalog_normalize_runtime_name("claude") == RUNTIME_CLAUDE
+        assert catalog_normalize_runtime_name("open code") == RUNTIME_OPENCODE
 
     def test_rejects_unknown_runtime_names(self) -> None:
         assert normalize_runtime_name("not-a-runtime") is None
+        assert catalog_normalize_runtime_name("not-a-runtime") is None
 
 
 class TestDetectActiveRuntimeWithInstall:
@@ -1299,7 +1306,7 @@ class TestUpdateCommand:
             assert update_command_for_runtime(runtime) == get_adapter(runtime).update_command
 
     def test_unknown_runtime_uses_runtime_neutral_update_command(self) -> None:
-        assert update_command_for_runtime(RUNTIME_UNKNOWN) == "npx -y get-physics-done"
+        assert update_command_for_runtime(RUNTIME_UNKNOWN) == _SHARED_INSTALL.bootstrap_command
 
     def test_claude_runtime_uses_claude_flag(self) -> None:
         assert update_command_for_runtime(RUNTIME_CLAUDE).endswith(" --claude")

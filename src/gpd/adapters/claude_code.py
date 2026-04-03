@@ -10,6 +10,7 @@ from pathlib import Path
 from gpd.adapters.base import RuntimeAdapter
 from gpd.adapters.install_utils import (
     HOOK_SCRIPTS,
+    MANIFEST_NAME,
     _is_hook_command_for_script,
     build_hook_command,
     compile_markdown_for_runtime,
@@ -137,6 +138,7 @@ class ClaudeCodeAdapter(RuntimeAdapter):
             markdown_transform=_translate,
             workflow_paths=True,
             workflow_target_dir=target_dir,
+            explicit_target=getattr(self, "_install_explicit_target", False),
         )
         if verify_installed(commands_dest, "commands/gpd"):
             logger.info("Installed commands/gpd")
@@ -186,6 +188,7 @@ class ClaudeCodeAdapter(RuntimeAdapter):
                 self.runtime_name,
                 install_scope=self._current_install_scope_flag(),
                 markdown_transform=_translate,
+                explicit_target=getattr(self, "_install_explicit_target", False),
             )
         )
 
@@ -467,7 +470,7 @@ class ClaudeCodeAdapter(RuntimeAdapter):
 
     def uninstall(self, target_dir: Path) -> dict[str, object]:
         """Remove GPD from Claude Code config and clean the matching MCP config."""
-        manifest = read_settings(target_dir / "gpd-file-manifest.json")
+        manifest = read_settings(target_dir / MANIFEST_NAME)
         install_scope = manifest.get("install_scope")
         has_authoritative_manifest = self._has_authoritative_install_manifest(target_dir)
         result = super().uninstall(target_dir)

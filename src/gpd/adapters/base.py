@@ -17,6 +17,7 @@ from gpd.adapters.install_utils import (
     GPD_INSTALL_DIR_NAME,
     HOOKS_DIR_NAME,
     MANIFEST_NAME,
+    PATCHES_DIR_NAME,
     UPDATE_CACHE_FILENAME,
     build_runtime_cli_bridge_command,
     compute_path_prefix,
@@ -34,7 +35,7 @@ from gpd.adapters.install_utils import (
     write_manifest,
     write_version_file,
 )
-from gpd.adapters.runtime_catalog import get_runtime_descriptor, resolve_global_config_dir
+from gpd.adapters.runtime_catalog import get_runtime_descriptor, get_shared_install_metadata, resolve_global_config_dir
 from gpd.adapters.tool_names import (
     build_runtime_alias_map,
     reference_translation_map,
@@ -272,7 +273,7 @@ class RuntimeAdapter(abc.ABC):
     @property
     def update_command(self) -> str:
         """Public bootstrap command that updates this runtime install."""
-        base = "npx -y get-physics-done"
+        base = get_shared_install_metadata().bootstrap_command
         return f"{base} {self.install_flag}".strip()
 
     def install_detection_relpaths(self) -> tuple[str, ...]:
@@ -586,6 +587,7 @@ class RuntimeAdapter(abc.ABC):
                 self.runtime_name,
                 install_scope=self._current_install_scope_flag(),
                 markdown_transform=self.translate_shared_markdown,
+                explicit_target=getattr(self, "_install_explicit_target", False),
             )
         )
 
@@ -734,16 +736,16 @@ class RuntimeAdapter(abc.ABC):
                 removed.extend(self._cleanup_runtime_config(target_dir))
 
             # Remove file manifest
-            manifest = target_dir / "gpd-file-manifest.json"
+            manifest = target_dir / MANIFEST_NAME
             if manifest.exists():
                 manifest.unlink()
-                removed.append("gpd-file-manifest.json")
+                removed.append(MANIFEST_NAME)
 
             # Remove local patches directory
-            patches_dir = target_dir / "gpd-local-patches"
+            patches_dir = target_dir / PATCHES_DIR_NAME
             if patches_dir.is_dir():
                 shutil.rmtree(patches_dir)
-                removed.append("gpd-local-patches/")
+                removed.append(f"{PATCHES_DIR_NAME}/")
 
             for path in (
                 target_dir / COMMANDS_DIR_NAME,

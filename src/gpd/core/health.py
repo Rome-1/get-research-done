@@ -1429,7 +1429,7 @@ def _nearest_existing_ancestor(path: Path) -> Path:
 
 def _doctor_normalize_runtime(runtime: str) -> str:
     """Resolve a runtime alias to its canonical runtime id."""
-    from gpd.hooks.runtime_detect import normalize_runtime_name
+    from gpd.adapters.runtime_catalog import normalize_runtime_name
 
     normalized = normalize_runtime_name(runtime)
     if normalized is None:

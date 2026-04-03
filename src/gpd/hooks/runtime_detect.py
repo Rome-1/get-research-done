@@ -17,7 +17,10 @@ from gpd.adapters.install_utils import (
     UPDATE_CACHE_FILENAME,
 )
 from gpd.adapters.runtime_catalog import (
-    iter_runtime_descriptors,
+    get_shared_install_metadata,
+)
+from gpd.adapters.runtime_catalog import (
+    normalize_runtime_name as _normalize_runtime_name,
 )
 from gpd.adapters.runtime_catalog import (
     resolve_global_config_dir as _resolve_global_config_dir,
@@ -32,7 +35,7 @@ SOURCE_ENV = "env"
 SOURCE_LOCAL = "local"
 SOURCE_GLOBAL = "global"
 SOURCE_UNKNOWN = "unknown"
-RUNTIME_NEUTRAL_UPDATE_COMMAND = "npx -y get-physics-done"
+RUNTIME_NEUTRAL_UPDATE_COMMAND = get_shared_install_metadata().bootstrap_command
 
 ALL_RUNTIMES = list_runtimes()
 
@@ -74,21 +77,7 @@ def _adapter(runtime: str):
 
 def normalize_runtime_name(value: str | None) -> str | None:
     """Resolve a runtime id, display name, or alias to a canonical runtime name."""
-    if not isinstance(value, str):
-        return None
-
-    normalized = value.strip().casefold()
-    if not normalized:
-        return None
-
-    for descriptor in iter_runtime_descriptors():
-        if normalized in {
-            descriptor.runtime_name.casefold(),
-            descriptor.display_name.casefold(),
-            *(alias.casefold() for alias in descriptor.selection_aliases),
-        }:
-            return descriptor.runtime_name
-    return None
+    return _normalize_runtime_name(value)
 
 
 def _paths_equal(left: Path, right: Path) -> bool:

@@ -53,6 +53,26 @@ class HookPayloadPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class SharedInstallMetadata:
+    bootstrap_package_name: str
+    bootstrap_command: str
+    latest_release_url: str
+    releases_api_url: str
+    releases_page_url: str
+    install_root_dir_name: str
+    manifest_name: str
+    patches_dir_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class ManagedInstallSurfacePolicy:
+    gpd_content_globs: tuple[str, ...] = ()
+    nested_command_globs: tuple[str, ...] = ()
+    flat_command_globs: tuple[str, ...] = ()
+    managed_agent_globs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeCapabilityPolicy:
     permissions_surface: str = "unsupported"
     permission_surface_kind: str = "none"
@@ -89,6 +109,18 @@ class RuntimeDescriptor:
     manifest_file_prefixes: tuple[str, ...] = ()
     native_include_support: bool = False
     agent_prompt_uses_dollar_templates: bool = False
+
+
+_SHARED_INSTALL_METADATA = SharedInstallMetadata(
+    bootstrap_package_name="get-physics-done",
+    bootstrap_command="npx -y get-physics-done",
+    latest_release_url="https://registry.npmjs.org/get-physics-done/latest",
+    releases_api_url="https://api.github.com/repos/psi-oss/get-physics-done/releases",
+    releases_page_url="https://github.com/psi-oss/get-physics-done/releases",
+    install_root_dir_name="get-physics-done",
+    manifest_name="gpd-file-manifest.json",
+    patches_dir_name="gpd-local-patches",
+)
 
 
 def _catalog_path() -> Path:
@@ -439,12 +471,60 @@ def _merge_unique(groups: Iterable[tuple[str, ...]]) -> tuple[str, ...]:
     return tuple(merged)
 
 
+def get_shared_install_metadata() -> SharedInstallMetadata:
+    """Return the canonical shared install/update metadata."""
+    return _SHARED_INSTALL_METADATA
+
+
+def _runtime_managed_install_surface_policy(descriptor: RuntimeDescriptor) -> ManagedInstallSurfacePolicy:
+    install_root = get_shared_install_metadata().install_root_dir_name
+    flat_command_runtime = "command/" in descriptor.manifest_file_prefixes
+    external_command_runtime = "skills/" in descriptor.manifest_file_prefixes
+    return ManagedInstallSurfacePolicy(
+        gpd_content_globs=(f"{install_root}/**/*",),
+        nested_command_globs=() if flat_command_runtime or external_command_runtime else ("commands/gpd/**/*",),
+        flat_command_globs=("command/gpd-*.md",) if flat_command_runtime else (),
+        managed_agent_globs=("agents/gpd-*.md", "agents/gpd-*.toml"),
+    )
+
+
+def get_managed_install_surface_policy(runtime: str | None = None) -> ManagedInstallSurfacePolicy:
+    """Return managed install-surface detection globs for one runtime or the merged catalog."""
+    descriptors = (get_runtime_descriptor(runtime),) if runtime is not None else iter_runtime_descriptors()
+    policies = tuple(_runtime_managed_install_surface_policy(descriptor) for descriptor in descriptors)
+    return ManagedInstallSurfacePolicy(
+        gpd_content_globs=_merge_unique(policy.gpd_content_globs for policy in policies),
+        nested_command_globs=_merge_unique(policy.nested_command_globs for policy in policies),
+        flat_command_globs=_merge_unique(policy.flat_command_globs for policy in policies),
+        managed_agent_globs=_merge_unique(policy.managed_agent_globs for policy in policies),
+    )
+
+
 def iter_runtime_descriptors() -> tuple[RuntimeDescriptor, ...]:
     return _load_catalog()
 
 
 def list_runtime_names() -> list[str]:
     return [descriptor.runtime_name for descriptor in iter_runtime_descriptors()]
+
+
+def normalize_runtime_name(value: str | None) -> str | None:
+    """Resolve a runtime id, display name, or alias to a canonical runtime name."""
+    if not isinstance(value, str):
+        return None
+
+    normalized = value.strip().casefold()
+    if not normalized:
+        return None
+
+    for descriptor in iter_runtime_descriptors():
+        if normalized in {
+            descriptor.runtime_name.casefold(),
+            descriptor.display_name.casefold(),
+            *(alias.casefold() for alias in descriptor.selection_aliases),
+        }:
+            return descriptor.runtime_name
+    return None
 
 
 def get_runtime_descriptor(runtime: str) -> RuntimeDescriptor:
@@ -530,12 +610,17 @@ def resolve_global_config_dir(
 __all__ = [
     "GlobalConfigPolicy",
     "HookPayloadPolicy",
+    "ManagedInstallSurfacePolicy",
     "RuntimeCapabilityPolicy",
     "RuntimeDescriptor",
+    "SharedInstallMetadata",
     "get_hook_payload_policy",
+    "get_managed_install_surface_policy",
     "get_runtime_capabilities",
     "get_runtime_descriptor",
+    "get_shared_install_metadata",
     "iter_runtime_descriptors",
     "list_runtime_names",
+    "normalize_runtime_name",
     "resolve_global_config_dir",
 ]

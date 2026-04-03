@@ -12,10 +12,13 @@ import pytest
 import gpd.adapters.runtime_catalog as runtime_catalog
 from gpd.adapters.runtime_catalog import (
     get_hook_payload_policy,
+    get_managed_install_surface_policy,
     get_runtime_capabilities,
     get_runtime_descriptor,
+    get_shared_install_metadata,
     iter_runtime_descriptors,
     list_runtime_names,
+    normalize_runtime_name,
     resolve_global_config_dir,
 )
 
@@ -75,6 +78,46 @@ def test_runtime_catalog_records_native_include_support() -> None:
     assert get_runtime_descriptor("codex").native_include_support is False
     assert get_runtime_descriptor("gemini").native_include_support is False
     assert get_runtime_descriptor("opencode").native_include_support is False
+
+
+def test_shared_install_metadata_is_centralized_in_runtime_catalog() -> None:
+    metadata = get_shared_install_metadata()
+
+    assert metadata.bootstrap_package_name == "get-physics-done"
+    assert metadata.bootstrap_command == "npx -y get-physics-done"
+    assert metadata.latest_release_url == "https://registry.npmjs.org/get-physics-done/latest"
+    assert metadata.releases_api_url == "https://api.github.com/repos/psi-oss/get-physics-done/releases"
+    assert metadata.releases_page_url == "https://github.com/psi-oss/get-physics-done/releases"
+    assert metadata.install_root_dir_name == "get-physics-done"
+    assert metadata.manifest_name == "gpd-file-manifest.json"
+    assert metadata.patches_dir_name == "gpd-local-patches"
+
+
+def test_normalize_runtime_name_is_centralized_in_runtime_catalog() -> None:
+    assert normalize_runtime_name("claude-code") == "claude-code"
+    assert normalize_runtime_name("Claude Code") == "claude-code"
+    assert normalize_runtime_name("claude") == "claude-code"
+    assert normalize_runtime_name("open code") == "opencode"
+    assert normalize_runtime_name("not-a-runtime") is None
+
+
+def test_managed_install_surface_policy_is_derived_from_runtime_metadata() -> None:
+    claude_policy = get_managed_install_surface_policy("claude-code")
+    opencode_policy = get_managed_install_surface_policy("opencode")
+    codex_policy = get_managed_install_surface_policy("codex")
+    merged_policy = get_managed_install_surface_policy()
+
+    assert claude_policy.gpd_content_globs == ("get-physics-done/**/*",)
+    assert claude_policy.nested_command_globs == ("commands/gpd/**/*",)
+    assert claude_policy.flat_command_globs == ()
+    assert claude_policy.managed_agent_globs == ("agents/gpd-*.md", "agents/gpd-*.toml")
+
+    assert opencode_policy.nested_command_globs == ()
+    assert opencode_policy.flat_command_globs == ("command/gpd-*.md",)
+    assert codex_policy.nested_command_globs == ()
+    assert codex_policy.flat_command_globs == ()
+    assert merged_policy.nested_command_globs == ("commands/gpd/**/*",)
+    assert merged_policy.flat_command_globs == ("command/gpd-*.md",)
 
 
 def test_runtime_catalog_runtime_keys_are_unique() -> None:

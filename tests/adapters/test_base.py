@@ -10,14 +10,18 @@ import pytest
 
 from gpd.adapters import get_adapter
 from gpd.adapters.install_utils import copy_hook_scripts
-from gpd.adapters.runtime_catalog import list_runtime_names
+from gpd.adapters.runtime_catalog import get_shared_install_metadata, list_runtime_names
 
 RUNTIME_NAMES = list_runtime_names()
+_SHARED_INSTALL = get_shared_install_metadata()
+INSTALL_ROOT_DIR_NAME = _SHARED_INSTALL.install_root_dir_name
+MANIFEST_NAME = _SHARED_INSTALL.manifest_name
+PATCHES_DIR_NAME = _SHARED_INSTALL.patches_dir_name
 
 
 def _write_owned_manifest(target: Path, *, runtime: str = "claude-code") -> None:
     target.mkdir(parents=True, exist_ok=True)
-    (target / "gpd-file-manifest.json").write_text(
+    (target / MANIFEST_NAME).write_text(
         json.dumps({"runtime": runtime, "install_scope": "local"}),
         encoding="utf-8",
     )
@@ -57,12 +61,12 @@ class TestUninstallBase:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         _write_owned_manifest(target)
-        (target / "get-physics-done").mkdir(parents=True)
-        (target / "get-physics-done" / "file.md").write_text("x", encoding="utf-8")
+        (target / INSTALL_ROOT_DIR_NAME).mkdir(parents=True)
+        (target / INSTALL_ROOT_DIR_NAME / "file.md").write_text("x", encoding="utf-8")
 
         result = adapter.uninstall(target)
-        assert not (target / "get-physics-done").exists()
-        assert "get-physics-done/" in result["removed"]
+        assert not (target / INSTALL_ROOT_DIR_NAME).exists()
+        assert f"{INSTALL_ROOT_DIR_NAME}/" in result["removed"]
 
     def test_removes_only_gpd_agents(self, tmp_path: Path) -> None:
         adapter = get_adapter("claude-code")
@@ -113,7 +117,7 @@ class TestUninstallBase:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         (target / "commands" / "gpd").mkdir(parents=True)
-        (target / "get-physics-done").mkdir(parents=True)
+        (target / INSTALL_ROOT_DIR_NAME).mkdir(parents=True)
         hooks = target / "hooks"
         hooks.mkdir(parents=True)
         bundled_hooks = Path(__file__).resolve().parents[2] / "src" / "gpd" / "hooks"
@@ -124,7 +128,7 @@ class TestUninstallBase:
         assert "1 GPD hooks" in result["removed"]
         assert not (hooks / "statusline.py").exists()
         assert not (target / "commands" / "gpd").exists()
-        assert not (target / "get-physics-done").exists()
+        assert not (target / INSTALL_ROOT_DIR_NAME).exists()
 
     def test_removes_manifest_tracked_gpd_hooks(self, tmp_path: Path) -> None:
         adapter = get_adapter("claude-code")
@@ -134,7 +138,7 @@ class TestUninstallBase:
         (hooks / "statusline.py").write_text("s", encoding="utf-8")
         (hooks / "check_update.py").write_text("u", encoding="utf-8")
         (hooks / "user-hook.py").write_text("keep", encoding="utf-8")
-        (target / "gpd-file-manifest.json").write_text(
+        (target / MANIFEST_NAME).write_text(
             json.dumps(
                 {
                     "runtime": "claude-code",
@@ -159,23 +163,23 @@ class TestUninstallBase:
         _write_owned_manifest(target)
 
         adapter.uninstall(target)
-        assert not (target / "gpd-file-manifest.json").exists()
+        assert not (target / MANIFEST_NAME).exists()
 
     def test_refuses_untrusted_manifest_without_runtime(self, tmp_path: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
         target.mkdir(parents=True)
-        (target / "gpd-file-manifest.json").write_text("{}", encoding="utf-8")
+        (target / MANIFEST_NAME).write_text("{}", encoding="utf-8")
 
         with pytest.raises(RuntimeError, match="manifest cannot be trusted"):
             adapter.uninstall(target)
 
-        assert (target / "gpd-file-manifest.json").exists()
+        assert (target / MANIFEST_NAME).exists()
 
     def test_removes_patches_dir(self, tmp_path: Path) -> None:
         adapter = get_adapter("claude-code")
         target = tmp_path / ".claude"
-        patches = target / "gpd-local-patches"
+        patches = target / PATCHES_DIR_NAME
         patches.mkdir(parents=True)
         (patches / "backup.md").write_text("b", encoding="utf-8")
 
@@ -246,7 +250,7 @@ class TestInstallValidationAndHooks:
         agents.mkdir(parents=True)
         (agents / "gpd-verifier.md").write_text("agent\n", encoding="utf-8")
         (target / "commands" / "gpd").mkdir(parents=True)
-        (target / "get-physics-done").mkdir(parents=True)
+        (target / INSTALL_ROOT_DIR_NAME).mkdir(parents=True)
 
         adapter.validate_target_runtime(target, action="install into")
 
