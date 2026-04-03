@@ -248,6 +248,64 @@ def get_config(project_dir: AbsoluteProjectDirInput) -> dict:
             return stable_mcp_error(exc)
 
 
+@mcp.tool()
+def emit_phase_event(
+    project_dir: AbsoluteProjectDirInput,
+    event_type: str,
+    phase: str,
+    agent_type: str = "",
+    details: str = "",
+) -> dict:
+    """Emit a phase lifecycle event for frontend navigation.
+
+    Call this tool at phase boundaries during pipeline execution to help
+    the frontend build a navigable outline of the research session.
+
+    Event types:
+    - "phase.started": A new pipeline phase has begun (e.g., planning, execution)
+    - "phase.completed": A pipeline phase has finished successfully
+    - "phase.failed": A pipeline phase encountered an error
+    - "agent.started": A subagent has been spawned for a specific task
+    - "agent.completed": A subagent has finished its work
+    - "checkpoint": A significant milestone within a phase
+
+    Args:
+        project_dir: Absolute path to the project root directory.
+        event_type: One of "phase.started", "phase.completed", "phase.failed",
+                    "agent.started", "agent.completed", "checkpoint".
+        phase: Phase identifier (e.g., "formulate", "plan", "execute", "verify",
+               "write", "review", or a phase number like "1", "2.1").
+        agent_type: For agent events, the subagent type (e.g., "phase-researcher",
+                    "planner", "plan-checker", "executor", "verifier").
+        details: Optional human-readable description of the event.
+    """
+    from datetime import datetime, UTC
+
+    cwd = resolve_absolute_project_dir(project_dir)
+    if cwd is None:
+        return stable_mcp_error("project_dir must be an absolute path")
+
+    valid_types = {
+        "phase.started", "phase.completed", "phase.failed",
+        "agent.started", "agent.completed", "checkpoint",
+    }
+    if event_type not in valid_types:
+        return stable_mcp_error(
+            f"Invalid event_type: {event_type}. Must be one of: {', '.join(sorted(valid_types))}"
+        )
+
+    timestamp = datetime.now(tz=UTC).isoformat()
+
+    return stable_mcp_response({
+        "event_type": event_type,
+        "phase": phase,
+        "agent_type": agent_type or None,
+        "details": details or None,
+        "timestamp": timestamp,
+        "project_dir": str(cwd),
+    })
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------

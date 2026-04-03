@@ -215,6 +215,15 @@ Explore mode may surface this choice more often, but it still does not auto-appr
 
 **Exploit-mode rule:** If `research_mode=exploit`, suppress optional tangents entirely unless the user explicitly requests them or the current approach is blocked by contract, anchor, or physics-validity failure. Do not volunteer `/gpd:branch-hypothesis` as the default response in exploit mode.
 
+## 4.7. Phase Lifecycle Events
+
+At each major step boundary, emit a phase event for frontend navigation:
+- Before research: call `gpd-state_emit_phase_event` with `event_type="phase.started"`, `phase="{phase_number}"`, `details="Starting plan-phase: research step"`
+- Before planner spawn: call `gpd-state_emit_phase_event` with `event_type="agent.started"`, `agent_type="planner"`, `phase="{phase_number}"`
+- Before plan-checker: call `gpd-state_emit_phase_event` with `event_type="agent.started"`, `agent_type="plan-checker"`, `phase="{phase_number}"`
+- On completion: call `gpd-state_emit_phase_event` with `event_type="phase.completed"`, `phase="{phase_number}"`
+- On failure: call `gpd-state_emit_phase_event` with `event_type="phase.failed"`, `phase="{phase_number}"`, `details="{error}"`
+
 ## 5. Handle Research
 
 **Skip if:** `--gaps` flag, `--skip-research` flag, or `research_enabled` is false (from init) without `--research` override.

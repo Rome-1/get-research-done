@@ -445,6 +445,13 @@ When `RESEARCH_MODE=exploit`, suppress optional tangents by default: classify th
 <step name="execute_waves">
 Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true` AND `FORCE_SEQUENTIAL=false`, sequential otherwise. (Literature phases force sequential execution — see `adapt_to_computation_type`.)
 
+**Phase lifecycle events:** At each wave boundary, emit a phase event for frontend navigation:
+- Before wave 1: call `gpd-state_emit_phase_event` with `event_type="phase.started"`, `phase="{phase_number}"`, `details="Starting wave 1 of {total_waves}"`
+- After each wave completes: call `gpd-state_emit_phase_event` with `event_type="checkpoint"`, `phase="{phase_number}"`, `details="Wave {N} complete"`
+- After all waves: call `gpd-state_emit_phase_event` with `event_type="phase.completed"`, `phase="{phase_number}"`
+- On failure: call `gpd-state_emit_phase_event` with `event_type="phase.failed"`, `phase="{phase_number}"`, `details="{error}"`
+- Before spawning each agent: call `gpd-state_emit_phase_event` with `event_type="agent.started"`, `agent_type="{agent_type}"`, `phase="{phase_number}"`
+
 **For each wave:**
 
 1. **Convention lock check (before parallel execution):**
