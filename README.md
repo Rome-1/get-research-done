@@ -397,12 +397,14 @@ Available profiles are `deep-theory`, `numerical`, `exploratory`, `review`, and 
 <details>
 <summary><strong>Runtime-specific model string examples</strong></summary>
 
-When you set explicit tier overrides, the model string is runtime-native. GPD passes it through unchanged, so it must match what that runtime already accepts:
+When you set explicit tier overrides, the model string is runtime-native. GPD passes it through unchanged, so it must match what that runtime already accepts.
 
-- **Claude Code**: aliases like `opus`, `sonnet`, `haiku`, `default`, `sonnet[1m]`, or a provider-native pinned model ID. If your Claude Code install is backed by Bedrock, Vertex, or Foundry, use that provider's deployment/version identifier.
-- **Codex**: the exact string Codex accepts for its `model` setting. If you configured a non-default Codex `model_provider`, keep that provider's exact model ID format. For OpenAI-hosted Codex tiers, the recommended mapping is `tier-1 = gpt-5.4`, `tier-2 = gpt-5.4-mini`, `tier-3 = gpt-5.4-nano`.
-- **Gemini CLI**: an exact Gemini model name accepted by your installed Gemini runtime. Prefer exact model names for GPD tier overrides rather than the interactive Auto picker.
-- **OpenCode**: a full `provider/model` string such as `anthropic/<model>`, `openai/<model>`, or `google/<model>`.
+- **Claude Code**: use the exact model or deployment identifier accepted by your install.
+- **Codex**: use the exact `model` string accepted by your configured provider.
+- **Gemini CLI**: use the exact Gemini model name accepted by your install.
+- **OpenCode**: use the exact `provider/model` string accepted by your install.
+
+If you are unsure, keep the runtime defaults and tune tiers later through `gpd:set-tier-models`.
 
 </details>
 
@@ -416,19 +418,19 @@ Per-project tier settings live in `GPD/config.json` under `model_overrides`:
   "model_profile": "review",
   "model_overrides": {
     "codex": {
-      "tier-1": "gpt-5.4",
-      "tier-2": "gpt-5.4-mini",
-      "tier-3": "gpt-5.4-nano"
+      "tier-1": "<runtime-native-model-id>",
+      "tier-2": "<runtime-native-model-id>",
+      "tier-3": "<runtime-native-model-id>"
     },
     "claude-code": {
-      "tier-1": "opus",
-      "tier-2": "sonnet",
-      "tier-3": "haiku"
+      "tier-1": "<runtime-native-model-id>",
+      "tier-2": "<runtime-native-model-id>",
+      "tier-3": "<runtime-native-model-id>"
     },
     "gemini": {
-      "tier-1": "your-tier-1-gemini-model",
-      "tier-2": "your-tier-2-gemini-model",
-      "tier-3": "your-tier-3-gemini-model"
+      "tier-1": "<runtime-native-model-id>",
+      "tier-2": "<runtime-native-model-id>",
+      "tier-3": "<runtime-native-model-id>"
     }
   }
 }

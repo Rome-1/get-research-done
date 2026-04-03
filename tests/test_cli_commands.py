@@ -47,11 +47,14 @@ _CANONICAL_MANUSCRIPT_REL = canonical_manuscript_relpath()
 _CANONICAL_MANUSCRIPT_BASENAME = f"{CANONICAL_MANUSCRIPT_STEM}.tex"
 _CANONICAL_MANUSCRIPT_PDF_BASENAME = f"{CANONICAL_MANUSCRIPT_STEM}.pdf"
 _CANONICAL_MARKDOWN_BASENAME = f"{CANONICAL_MANUSCRIPT_STEM}.md"
-_DOLLAR_COMMAND_DESCRIPTOR = next(descriptor for descriptor in _RUNTIME_DESCRIPTORS if descriptor.command_prefix.startswith("$"))
+_DOLLAR_COMMAND_DESCRIPTOR = next(
+    descriptor for descriptor in _RUNTIME_DESCRIPTORS if descriptor.validated_command_surface == "public_runtime_dollar_command"
+)
 _SLASH_COMMAND_DESCRIPTOR = next(
     descriptor
     for descriptor in _RUNTIME_DESCRIPTORS
-    if descriptor.command_prefix.startswith("/") and descriptor.runtime_name != _DOLLAR_COMMAND_DESCRIPTOR.runtime_name
+    if descriptor.validated_command_surface == "public_runtime_slash_command"
+    and descriptor.runtime_name != _DOLLAR_COMMAND_DESCRIPTOR.runtime_name
 )
 
 
@@ -412,6 +415,12 @@ def _write_review_stage_artifacts(
                     f"manuscript_path: {manuscript_path}\n"
                     f"manuscript_sha256: {manuscript_sha256}\n"
                     f"round: {1 if not round_suffix else int(round_suffix.removeprefix('-R'))}\n"
+                    "missing_parameter_symbols: []\n"
+                    "missing_hypothesis_ids: []\n"
+                    "coverage_gaps: []\n"
+                    "scope_status: matched\n"
+                    "quantifier_status: matched\n"
+                    "counterexample_status: none_found\n"
                     "---\n\n"
                     "# Proof Redteam\n"
                     "## Proof Inventory\n"
@@ -428,7 +437,7 @@ def _write_review_stage_artifacts(
                     "## Coverage Ledger\n"
                     "### Named-Parameter Coverage\n"
                     "| Parameter | Role / Domain | Proof Location | Status | Notes |\n"
-                    "| --- | --- | --- | --- | --- |\n"
+                    "| --- | --- | --- | --- |\n"
                     f"| `r_0` | target radius | {manuscript_path}:1 | covered | Tracked explicitly. |\n"
                     "### Hypothesis Coverage\n"
                     "| Hypothesis | Proof Location | Status | Notes |\n"
@@ -466,6 +475,39 @@ def _write_legacy_publication_artifacts(project_root: Path, artifact_names: tupl
     for artifact_name in artifact_names:
         source = paper_dir / artifact_name
         (legacy_dir / artifact_name).write_bytes(source.read_bytes())
+
+
+def _write_secondary_manuscript_root(project_root: Path, *, root_name: str = "manuscript") -> Path:
+    manuscript_dir = project_root / root_name
+    manuscript_dir.mkdir(parents=True, exist_ok=True)
+    manuscript = manuscript_dir / _CANONICAL_MANUSCRIPT_BASENAME
+    manuscript.write_text(
+        "\\documentclass{article}\n\\begin{document}\nSecondary manuscript.\n\\end{document}\n",
+        encoding="utf-8",
+    )
+    (manuscript_dir / "ARTIFACT-MANIFEST.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prl",
+                "created_at": "2026-03-10T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": f"manuscript-{root_name}",
+                        "category": "tex",
+                        "path": _CANONICAL_MANUSCRIPT_BASENAME,
+                        "sha256": compute_sha256(manuscript),
+                        "produced_by": "tests.test_cli_commands",
+                        "sources": [],
+                        "metadata": {"role": "manuscript"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manuscript
 
 
 def _write_publication_review_outcome(
@@ -1717,7 +1759,8 @@ class TestReviewValidationCommands:
         assert payload["command"] == "gpd:map-research"
         assert payload["context_mode"] == "projectless"
         assert payload["passed"] is True
-        assert f"public `{codex_command_prefix}*` runtime command surface" in payload["dispatch_note"]
+        assert payload["public_runtime_command_prefix"] == "$gpd-"
+        assert f"public command surface rooted at `{codex_command_prefix}`" in payload["dispatch_note"]
 
     def test_command_context_start_passes_without_project(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, codex_command_prefix: str
@@ -1735,7 +1778,8 @@ class TestReviewValidationCommands:
         assert payload["command"] == "gpd:start"
         assert payload["context_mode"] == "projectless"
         assert payload["passed"] is True
-        assert f"public `{codex_command_prefix}*` runtime command surface" in payload["dispatch_note"]
+        assert payload["public_runtime_command_prefix"] == "$gpd-"
+        assert f"public command surface rooted at `{codex_command_prefix}`" in payload["dispatch_note"]
 
     def test_command_context_tour_passes_without_project(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, codex_command_prefix: str
@@ -1753,7 +1797,8 @@ class TestReviewValidationCommands:
         assert payload["command"] == "gpd:tour"
         assert payload["context_mode"] == "projectless"
         assert payload["passed"] is True
-        assert f"public `{codex_command_prefix}*` runtime command surface" in payload["dispatch_note"]
+        assert payload["public_runtime_command_prefix"] == "$gpd-"
+        assert f"public command surface rooted at `{codex_command_prefix}`" in payload["dispatch_note"]
 
     @pytest.mark.parametrize("command_name", ["health", "suggest-next"])
     def test_command_context_projectless_recovery_commands_pass_without_project(
@@ -1787,8 +1832,9 @@ class TestReviewValidationCommands:
         payload = json.loads(result.output)
         assert payload["command"] == command_name
         assert payload["validated_surface"] == "public_runtime_dollar_command"
+        assert payload["public_runtime_command_prefix"] == "$gpd-"
         assert payload["local_cli_equivalence_guaranteed"] is False
-        assert f"public `{codex_command_prefix}*` runtime command surface" in payload["dispatch_note"]
+        assert f"public command surface rooted at `{codex_command_prefix}`" in payload["dispatch_note"]
         assert "same-name local `gpd` subcommand" in payload["dispatch_note"]
 
     @pytest.mark.parametrize("command_name", ["gpd:settings", "gpd:set-tier-models"])
@@ -1807,8 +1853,9 @@ class TestReviewValidationCommands:
         payload = json.loads(result.output)
         assert payload["command"] == command_name
         assert payload["validated_surface"] == "public_runtime_slash_command"
+        assert payload["public_runtime_command_prefix"] == "/gpd:"
         assert payload["local_cli_equivalence_guaranteed"] is False
-        assert f"public `{claude_code_command_prefix}*` runtime command surface" in payload["dispatch_note"]
+        assert f"public command surface rooted at `{claude_code_command_prefix}`" in payload["dispatch_note"]
         assert "same-name local `gpd` subcommand" in payload["dispatch_note"]
 
     @pytest.mark.parametrize("command_name", ["gpd:settings", "gpd:set-tier-models"])
@@ -1830,6 +1877,7 @@ class TestReviewValidationCommands:
         payload = json.loads(result.output)
         assert payload["command"] == command_name
         assert payload["validated_surface"] == "public_runtime_command_surface"
+        assert payload["public_runtime_command_prefix"] == ""
         assert payload["local_cli_equivalence_guaranteed"] is False
         assert "the active runtime command surface" in payload["dispatch_note"]
         assert "same-name local `gpd` subcommand" in payload["dispatch_note"]
@@ -1887,8 +1935,9 @@ class TestReviewValidationCommands:
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         assert payload["validated_surface"] == "public_runtime_dollar_command"
+        assert payload["public_runtime_command_prefix"] == "$gpd-"
         assert payload["local_cli_equivalence_guaranteed"] is False
-        assert f"public `{codex_command_prefix}*` runtime command surface" in payload["dispatch_note"]
+        assert f"public command surface rooted at `{codex_command_prefix}`" in payload["dispatch_note"]
         assert payload["conditional_requirements"] == [
             {
                 "when": "theorem-bearing claims are present",
@@ -1923,6 +1972,7 @@ class TestReviewValidationCommands:
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         assert payload["validated_surface"] == "public_runtime_command_surface"
+        assert payload["public_runtime_command_prefix"] == ""
         assert payload["local_cli_equivalence_guaranteed"] is False
         assert "the active runtime command surface" in payload["dispatch_note"]
 
@@ -2052,7 +2102,7 @@ class TestReviewValidationCommands:
         assert checks["manuscript_proof_review"]["passed"] is True
         assert (gpd_project / "paper" / "PROOF-REVIEW-MANIFEST.json").exists()
 
-    def test_review_preflight_write_paper_enforces_theorem_bearing_proof_review_without_strict(
+    def test_review_preflight_write_paper_reports_theorem_bearing_proof_review_without_blocking(
         self,
         gpd_project: Path,
     ) -> None:
@@ -2069,14 +2119,15 @@ class TestReviewValidationCommands:
             catch_exceptions=False,
         )
 
-        assert result.exit_code == 1, result.output
+        assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["manuscript_proof_review"]["passed"] is False
-        assert checks["manuscript_proof_review"]["blocking"] is True
+        assert checks["manuscript_proof_review"]["blocking"] is False
         assert "PROOF-REDTEAM.md" in checks["manuscript_proof_review"]["detail"]
+        assert "write-paper will run its own staged proof-review loop" in checks["manuscript_proof_review"]["detail"]
 
-    def test_review_preflight_write_paper_requires_math_anchor_for_theorem_bearing_claim_inventory(
+    def test_review_preflight_write_paper_reports_theorem_bearing_claim_inventory_without_blocking(
         self,
         gpd_project: Path,
     ) -> None:
@@ -2093,14 +2144,14 @@ class TestReviewValidationCommands:
             catch_exceptions=False,
         )
 
-        assert result.exit_code == 1, result.output
+        assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["manuscript_proof_review"]["passed"] is False
-        assert checks["manuscript_proof_review"]["blocking"] is True
+        assert checks["manuscript_proof_review"]["blocking"] is False
         assert "no prior staged math review artifact matches the active manuscript" in checks["manuscript_proof_review"]["detail"]
 
-    def test_review_preflight_write_paper_detects_theorem_bearing_manuscript_text_without_stage_artifacts(
+    def test_review_preflight_write_paper_reports_theorem_bearing_manuscript_text_without_blocking(
         self,
         gpd_project: Path,
     ) -> None:
@@ -2119,14 +2170,14 @@ class TestReviewValidationCommands:
             catch_exceptions=False,
         )
 
-        assert result.exit_code == 1, result.output
+        assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["manuscript_proof_review"]["passed"] is False
-        assert checks["manuscript_proof_review"]["blocking"] is True
+        assert checks["manuscript_proof_review"]["blocking"] is False
         assert "no prior staged math review artifact matches the active manuscript" in checks["manuscript_proof_review"]["detail"]
 
-    def test_review_preflight_write_paper_detects_theorem_bearing_nested_section_text_without_stage_artifacts(
+    def test_review_preflight_write_paper_reports_theorem_bearing_nested_section_text_without_blocking(
         self,
         gpd_project: Path,
     ) -> None:
@@ -2152,14 +2203,14 @@ class TestReviewValidationCommands:
             catch_exceptions=False,
         )
 
-        assert result.exit_code == 1, result.output
+        assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["manuscript_proof_review"]["passed"] is False
-        assert checks["manuscript_proof_review"]["blocking"] is True
+        assert checks["manuscript_proof_review"]["blocking"] is False
         assert "no prior staged math review artifact matches the active manuscript" in checks["manuscript_proof_review"]["detail"]
 
-    def test_review_preflight_write_paper_blocks_stale_manuscript_proof_review(
+    def test_review_preflight_write_paper_reports_stale_manuscript_proof_review_without_blocking(
         self,
         gpd_project: Path,
     ) -> None:
@@ -2184,14 +2235,14 @@ class TestReviewValidationCommands:
             catch_exceptions=False,
         )
 
-        assert result.exit_code == 1, result.output
+        assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["manuscript_proof_review"]["passed"] is False
-        assert checks["manuscript_proof_review"]["blocking"] is True
+        assert checks["manuscript_proof_review"]["blocking"] is False
         assert "stale" in checks["manuscript_proof_review"]["detail"]
 
-    def test_review_preflight_write_paper_blocks_missing_proof_redteam_for_proof_bearing_manuscript(
+    def test_review_preflight_write_paper_reports_missing_proof_redteam_for_proof_bearing_manuscript_without_blocking(
         self,
         gpd_project: Path,
     ) -> None:
@@ -2207,11 +2258,11 @@ class TestReviewValidationCommands:
             catch_exceptions=False,
         )
 
-        assert result.exit_code == 1, result.output
+        assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["manuscript_proof_review"]["passed"] is False
-        assert checks["manuscript_proof_review"]["blocking"] is True
+        assert checks["manuscript_proof_review"]["blocking"] is False
         assert "PROOF-REDTEAM.md" in checks["manuscript_proof_review"]["detail"]
 
     def test_review_preflight_write_paper_accepts_passed_proof_redteam_for_proof_bearing_manuscript(
@@ -2286,6 +2337,80 @@ class TestReviewValidationCommands:
         assert "fresh bootstrap is allowed" in checks["manuscript"]["detail"]
         assert "reproducibility_manifest" not in checks
         assert "reproducibility_ready" not in checks
+
+    @pytest.mark.parametrize(
+        ("command", "extra_args"),
+        [
+            ("write-paper", []),
+            ("respond-to-referees", ["reports/referee-report.md"]),
+            ("peer-review", []),
+            ("arxiv-submission", []),
+        ],
+    )
+    def test_review_preflight_fails_closed_on_ambiguous_manuscript_state(
+        self,
+        gpd_project: Path,
+        command: str,
+        extra_args: list[str],
+    ) -> None:
+        _write_secondary_manuscript_root(gpd_project)
+
+        result = runner.invoke(
+            app,
+            ["--raw", "validate", "review-preflight", command, *extra_args, "--strict"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.output)
+        assert payload["passed"] is False
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert checks["manuscript"]["passed"] is False
+        assert "ambiguous or inconsistent manuscript roots" in checks["manuscript"]["detail"]
+        if command == "write-paper":
+            assert "reproducibility_manifest" not in checks
+            assert "reproducibility_ready" not in checks
+
+    @pytest.mark.parametrize(
+        ("command", "extra_args"),
+        [
+            ("write-paper", []),
+            ("respond-to-referees", ["reports/referee-report.md"]),
+            ("peer-review", []),
+            ("arxiv-submission", []),
+        ],
+    )
+    def test_review_preflight_fails_closed_on_inconsistent_manuscript_state(
+        self,
+        gpd_project: Path,
+        command: str,
+        extra_args: list[str],
+    ) -> None:
+        paper_dir = gpd_project / "paper"
+        (paper_dir / "PAPER-CONFIG.json").write_text(
+            json.dumps(
+                {
+                    "title": "Alternate Title",
+                    "authors": [{"name": "A. Researcher"}],
+                    "abstract": "Abstract.",
+                    "sections": [{"heading": "Intro", "content": "Hello."}],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(
+            app,
+            ["--raw", "validate", "review-preflight", command, *extra_args, "--strict"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.output)
+        assert payload["passed"] is False
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert checks["manuscript"]["passed"] is False
+        assert "ambiguous or inconsistent manuscript roots" in checks["manuscript"]["detail"]
 
     def test_review_preflight_write_paper_strict_recognizes_markdown_resume_directory(self, gpd_project: Path) -> None:
         paper_dir = gpd_project / "paper"
@@ -2886,6 +3011,27 @@ class TestReviewValidationCommands:
         assert checks["manuscript"]["passed"] is True
         assert "resolved to" in checks["manuscript"]["detail"]
 
+    @pytest.mark.parametrize(("command", "extra_args"), [("peer-review", ["paper"]), ("arxiv-submission", ["paper"])])
+    def test_review_preflight_explicit_manuscript_path_fails_closed_on_ambiguous_state(
+        self,
+        gpd_project: Path,
+        command: str,
+        extra_args: list[str],
+    ) -> None:
+        _write_secondary_manuscript_root(gpd_project)
+
+        result = runner.invoke(
+            app,
+            ["--raw", "validate", "review-preflight", command, *extra_args, "--strict"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert checks["manuscript"]["passed"] is False
+        assert "ambiguous or inconsistent manuscript roots" in checks["manuscript"]["detail"]
+
     def test_review_preflight_peer_review_directory_rejects_missing_main_entrypoint(
         self,
         gpd_project: Path,
@@ -3480,6 +3626,53 @@ class TestReviewValidationCommands:
         checks = {check["name"]: check for check in payload["checks"]}
         assert checks["manuscript"]["passed"] is False
         assert "must stay under `paper/`, `manuscript/`, or `draft/`" in checks["manuscript"]["detail"]
+
+    def test_command_context_arxiv_submission_rejects_explicit_target_outside_supported_roots(
+        self,
+        gpd_project: Path,
+    ) -> None:
+        paper_dir = gpd_project / "paper"
+        (paper_dir / _CANONICAL_MANUSCRIPT_BASENAME).unlink()
+        submission_dir = gpd_project / "submission"
+        submission_dir.mkdir()
+        (submission_dir / _CANONICAL_MANUSCRIPT_BASENAME).write_text(
+            "\\documentclass{article}\n\\begin{document}\nSubmission manuscript.\n\\end{document}\n",
+            encoding="utf-8",
+        )
+        (submission_dir / "ARTIFACT-MANIFEST.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "paper_title": "Submission Manuscript",
+                    "journal": "jhep",
+                    "created_at": "2026-03-10T00:00:00+00:00",
+                    "artifacts": [
+                        {
+                            "artifact_id": "manuscript",
+                            "category": "tex",
+                            "path": _CANONICAL_MANUSCRIPT_BASENAME,
+                            "sha256": compute_sha256(submission_dir / _CANONICAL_MANUSCRIPT_BASENAME),
+                            "produced_by": "tests.test_cli_commands",
+                            "sources": [],
+                            "metadata": {"role": "manuscript"},
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(
+            app,
+            ["--raw", "validate", "command-context", "arxiv-submission", "submission"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert checks["required_files"]["passed"] is False
+        assert "explicit manuscript target satisfies command context" not in checks["required_files"]["detail"]
 
     def test_review_preflight_arxiv_submission_strict_does_not_fall_back_to_legacy_gpd_paper_artifacts(
         self,

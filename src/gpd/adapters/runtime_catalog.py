@@ -110,6 +110,8 @@ class RuntimeDescriptor:
     native_include_support: bool = False
     agent_prompt_uses_dollar_templates: bool = False
     installer_help_example_scope: str | None = None
+    validated_command_surface: str = "public_runtime_command_surface"
+    public_command_surface_prefix: str = ""
 
 
 _SHARED_INSTALL_METADATA = SharedInstallMetadata(
@@ -151,11 +153,16 @@ _RUNTIME_ENTRY_OPTIONAL_KEYS = frozenset(
         "native_include_support",
         "agent_prompt_uses_dollar_templates",
         "installer_help_example_scope",
+        "validated_command_surface",
+        "public_command_surface_prefix",
     }
 )
 _RUNTIME_ENTRY_ALLOWED_KEYS = _RUNTIME_ENTRY_REQUIRED_KEYS | _RUNTIME_ENTRY_OPTIONAL_KEYS
 _RUNTIME_GLOBAL_CONFIG_STRATEGIES = frozenset({"env_or_home", "xdg_app"})
 _RUNTIME_INSTALL_HELP_EXAMPLE_SCOPES = frozenset({"global", "local"})
+_RUNTIME_VALIDATED_COMMAND_SURFACES = frozenset(
+    {"public_runtime_command_surface", "public_runtime_slash_command", "public_runtime_dollar_command"}
+)
 _RUNTIME_CAPABILITY_ENUMS = {
     "permissions_surface": frozenset({"config-file", "launch-wrapper", "unsupported"}),
     "permission_surface_kind": frozenset(
@@ -376,6 +383,30 @@ def _parse_install_help_example_scope(value: object, *, label: str) -> str | Non
     return scope
 
 
+def _parse_validated_command_surface(value: object, *, label: str) -> str:
+    if value is None:
+        return "public_runtime_command_surface"
+    surface = _require_string(value, label=label)
+    if surface not in _RUNTIME_VALIDATED_COMMAND_SURFACES:
+        allowed = ", ".join(sorted(_RUNTIME_VALIDATED_COMMAND_SURFACES))
+        raise ValueError(f"{label} must be one of: {allowed}")
+    return surface
+
+
+def _parse_public_command_surface_prefix(
+    value: object,
+    *,
+    label: str,
+    command_prefix: str,
+) -> str:
+    if value is None:
+        return command_prefix
+    prefix = _require_string(value, label=label)
+    if prefix != command_prefix:
+        raise ValueError(f"{label} must match command_prefix")
+    return prefix
+
+
 def _parse_hook_payload(entry: object, *, label: str) -> HookPayloadPolicy:
     payload = _require_mapping(entry, label=label)
     _require_allowed_keys(payload, label=label, allowed_keys=_RUNTIME_HOOK_PAYLOAD_KEYS)
@@ -469,6 +500,15 @@ def _load_catalog() -> tuple[RuntimeDescriptor, ...]:
                 installer_help_example_scope=_parse_install_help_example_scope(
                     payload.get("installer_help_example_scope"),
                     label=f"{label}.installer_help_example_scope",
+                ),
+                validated_command_surface=_parse_validated_command_surface(
+                    payload.get("validated_command_surface"),
+                    label=f"{label}.validated_command_surface",
+                ),
+                public_command_surface_prefix=_parse_public_command_surface_prefix(
+                    payload.get("public_command_surface_prefix"),
+                    label=f"{label}.public_command_surface_prefix",
+                    command_prefix=_require_string(payload["command_prefix"], label=f"{label}.command_prefix"),
                 ),
             )
         )

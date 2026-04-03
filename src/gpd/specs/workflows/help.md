@@ -130,7 +130,8 @@ For the exact beginner-first startup order, use the shared onboarding surfaces i
 
 ## Invocation Surfaces
 
-This reference lists canonical in-runtime slash-command names in `/gpd:*` form.
+This reference lists canonical commands in the installed runtime's public command surface.
+Depending on the runtime, that surface may appear as slash-command names, dollar-prefixed commands, or another adapter-specific prefix.
 
 - If you are new to terminals or runtime setup, start with the Beginner Onboarding Hub linked from the README and installer output.
 - That shared onboarding surface keeps the OS guides, runtime guides, and beginner startup checklist in one place.
@@ -138,7 +139,7 @@ This reference lists canonical in-runtime slash-command names in `/gpd:*` form.
 - The bootstrap installer owns Node.js / Python / `venv` prerequisites. The local `gpd` CLI may expose different `gpd ...` subcommands and grouping. Use `gpd --help` to inspect the executable local install/readiness/permissions/diagnostics surface directly.
 - Use `gpd validate unattended-readiness --runtime <runtime> --autonomy balanced` for the unattended or overnight verdict, and `gpd permissions sync --runtime <runtime> --autonomy balanced` when runtime-owned permissions need realignment.
 - `gpd doctor` checks the selected install target and runtime-local readiness signals. `gpd validate unattended-readiness ...` returns `ready`, `relaunch-required`, `not-ready`, or `unresolved`. Add `--live-executable-probes` if you also want cheap local executable probes such as `pdflatex --version` or `wolframscript -version`. `gpd permissions ...` checks runtime-owned approval/alignment only.
-- If you need to validate whether a slash-command can run in the current workspace, use `gpd validate command-context gpd:<name>`.
+- If you need to validate whether a public runtime command can run in the current workspace, use `gpd validate command-context gpd:<name>`.
 - If a plan declares specialized `tool_requirements`, use `gpd validate plan-preflight <PLAN.md>` from your normal terminal before execution.
 - For a normal-terminal, current-workspace read-only recovery snapshot without launching the runtime, use `gpd resume`.
 - For cross-project discovery from your normal terminal, use `gpd resume --recent` first, then open the selected project and continue there with the runtime `resume-work` command.

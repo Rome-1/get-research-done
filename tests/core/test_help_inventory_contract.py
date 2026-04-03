@@ -36,3 +36,14 @@ def test_help_inventory_covers_registry_command_inventory() -> None:
 
     missing = sorted(registry_commands - help_inventory)
     assert missing == []
+
+
+def test_help_inventory_avoids_slash_command_framing_in_shared_source() -> None:
+    help_sources = [
+        _read("src/gpd/commands/help.md"),
+        _read("src/gpd/specs/workflows/help.md"),
+    ]
+
+    assert all("canonical in-runtime slash-command names in `/gpd:*` form" not in content for content in help_sources)
+    assert all("/gpd:*" not in content for content in help_sources)
+    assert any("slash-command names" in content for content in help_sources)

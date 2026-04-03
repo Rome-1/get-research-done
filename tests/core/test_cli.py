@@ -592,7 +592,7 @@ def _sample_cost_summary(workspace: Path) -> CostSummary:
             )
         ],
         guidance=[
-            f"Current model posture: profile `review` with {_COST_TEST_RUNTIME} runtime defaults. Use the runtime `settings` command only if you want explicit tier-model overrides.",
+            f"Current model posture: profile `review` with {_COST_TEST_RUNTIME} runtime defaults. Use `gpd:set-tier-models` to pin explicit tier-1, tier-2, and tier-3 model IDs.",
         ],
     )
 
@@ -603,7 +603,7 @@ def _assert_cost_posture_semantics(output: str) -> None:
     assert "runtime defaults" in output
     assert "tier-1=13, tier-2=10, tier-3=1" in output
     assert "Advisory only; counts profile-to-tier assignments" in output
-    assert "tier-model overrides" in output
+    assert "set-tier-models" in output
 
 
 def test_cost_help_surfaces_machine_local_advisory_role() -> None:
@@ -3965,31 +3965,22 @@ def test_validate_unattended_readiness_infers_global_target_scope_and_propagates
 
 def test_runtime_surface_helpers_track_the_active_runtime_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     runtime_name = list_runtimes()[0]
-    prefix = get_adapter(runtime_name).command_prefix
+    adapter = get_adapter(runtime_name)
+    prefix = adapter.command_prefix
     workspace = Path("/tmp/runtime-surface")
 
     monkeypatch.setattr(cli_module, "detect_runtime_for_gpd_use", lambda cwd=None: runtime_name)
 
     assert cli_module._active_runtime_command_prefix(cwd=workspace) == prefix
-    assert cli_module._active_runtime_command_family(cwd=workspace) == f"{prefix}*"
-    assert cli_module._active_runtime_new_project_command(cwd=workspace) == f"{prefix}new-project"
+    assert cli_module._active_runtime_command_family(cwd=workspace) == prefix
+    assert cli_module._active_runtime_new_project_command(cwd=workspace) == adapter.format_command("new-project")
     assert cli_module._runtime_surface_dispatch_note(cwd=workspace) == (
-        f"This preflight validates the public `{prefix}*` runtime command surface from the command registry. "
+        f"This preflight validates the public command surface rooted at `{prefix}` from the command registry. "
         "It does not guarantee a same-name local `gpd` subcommand exists."
     )
 
     validated_surface = cli_module._validated_runtime_surface(cwd=workspace)
-    assert validated_surface in {
-        "public_runtime_command_surface",
-        "public_runtime_slash_command",
-        "public_runtime_dollar_command",
-    }
-    if prefix.startswith("/"):
-        assert validated_surface == "public_runtime_slash_command"
-    elif prefix.startswith("$"):
-        assert validated_surface == "public_runtime_dollar_command"
-    else:
-        assert validated_surface == "public_runtime_command_surface"
+    assert validated_surface == adapter.runtime_descriptor.validated_command_surface
 
 
 def test_runtime_surface_helpers_fall_back_when_runtime_resolution_fails(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -4976,6 +4967,96 @@ def test_resolve_review_preflight_manuscript_directory_uses_manifest_declared_en
 
     assert resolved == manuscript
     assert detail.endswith("/paper resolved to " + str(manuscript))
+
+
+def test_resolve_review_preflight_manuscript_reports_ambiguous_project_state(tmp_path: Path) -> None:
+    for root_name in ("paper", "manuscript"):
+        manuscript_dir = tmp_path / root_name
+        manuscript_dir.mkdir()
+        manuscript = manuscript_dir / "curvature_flow_bounds.tex"
+        manuscript.write_text("\\documentclass{article}\\begin{document}Hello\\end{document}", encoding="utf-8")
+        (manuscript_dir / "ARTIFACT-MANIFEST.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "paper_title": "Curvature Flow Bounds",
+                    "journal": "prl",
+                    "created_at": "2026-04-02T00:00:00+00:00",
+                    "artifacts": [
+                        {
+                            "artifact_id": f"tex-{root_name}",
+                            "category": "tex",
+                            "path": "curvature_flow_bounds.tex",
+                            "sha256": "0" * 64,
+                            "produced_by": "test",
+                            "sources": [],
+                            "metadata": {},
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    resolved, detail = cli_module._resolve_review_preflight_manuscript(
+        tmp_path,
+        None,
+        allow_markdown=True,
+    )
+
+    assert resolved is None
+    assert "ambiguous or inconsistent manuscript roots" in detail
+    assert "multiple manuscript roots resolve" in detail
+
+
+def test_resolve_review_preflight_manuscript_reports_inconsistent_project_state(tmp_path: Path) -> None:
+    manuscript_dir = tmp_path / "paper"
+    manuscript_dir.mkdir()
+    manuscript = manuscript_dir / "curvature_flow_bounds.tex"
+    manuscript.write_text("\\documentclass{article}\\begin{document}Hello\\end{document}", encoding="utf-8")
+    (manuscript_dir / "ARTIFACT-MANIFEST.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prl",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (manuscript_dir / "PAPER-CONFIG.json").write_text(
+        json.dumps(
+            {
+                "title": "Alternate Title",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    resolved, detail = cli_module._resolve_review_preflight_manuscript(
+        tmp_path,
+        None,
+        allow_markdown=True,
+    )
+
+    assert resolved is None
+    assert "ambiguous or inconsistent manuscript roots" in detail
+    assert "does not resolve to a readable manuscript entrypoint" in detail
 
 
 def test_paper_build_without_bibliography_does_not_import_pybtex(tmp_path: Path, monkeypatch) -> None:

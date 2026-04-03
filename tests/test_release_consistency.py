@@ -431,13 +431,13 @@ def test_readme_documents_runtime_specific_tier_model_formats() -> None:
 
     assert "## Optional: Model Profiles And Tier Overrides" in readme
     assert "Runtime-specific model string examples" in readme
-    assert "`opus`, `sonnet`, `haiku`" in readme
-    assert "the exact string Codex accepts" in readme
-    assert '"gpt-5.4"' in readme
-    assert '"gpt-5.4-mini"' in readme
-    assert '"gpt-5.4-nano"' in readme
-    assert '"your-tier-1-gemini-model"' in readme
-    assert "`provider/model`" in readme
+    assert "<runtime-native-model-id>" in readme
+    assert "use the exact model or deployment identifier accepted by your install" in readme
+    assert "keep the runtime defaults and tune tiers later through `gpd:set-tier-models`" in readme
+    assert "gpt-5.4" not in readme
+    assert "opus" not in readme
+    assert "sonnet" not in readme
+    assert "haiku" not in readme
 
 
 def test_export_workflow_uses_release_attribution_footer() -> None:

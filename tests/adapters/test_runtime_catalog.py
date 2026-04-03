@@ -81,6 +81,14 @@ def test_runtime_catalog_records_native_include_support() -> None:
     assert get_runtime_descriptor("opencode").native_include_support is False
     assert get_runtime_descriptor("claude-code").installer_help_example_scope == "global"
     assert get_runtime_descriptor("codex").installer_help_example_scope == "local"
+    assert get_runtime_descriptor("claude-code").validated_command_surface == "public_runtime_slash_command"
+    assert get_runtime_descriptor("gemini").validated_command_surface == "public_runtime_slash_command"
+    assert get_runtime_descriptor("codex").validated_command_surface == "public_runtime_dollar_command"
+    assert get_runtime_descriptor("opencode").validated_command_surface == "public_runtime_slash_command"
+    assert get_runtime_descriptor("claude-code").public_command_surface_prefix == "/gpd:"
+    assert get_runtime_descriptor("gemini").public_command_surface_prefix == "/gpd:"
+    assert get_runtime_descriptor("codex").public_command_surface_prefix == "$gpd-"
+    assert get_runtime_descriptor("opencode").public_command_surface_prefix == "/gpd-"
 
 
 def test_runtime_catalog_marks_install_help_example_runtimes() -> None:

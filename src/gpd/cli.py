@@ -52,8 +52,11 @@ from gpd.core.constants import (
 )
 from gpd.core.errors import ConfigError, GPDError
 from gpd.core.manuscript_artifacts import (
+    _resolve_manuscript_entrypoint_from_root_resolution as resolve_manuscript_entrypoint_from_root_resolution,
+)
+from gpd.core.manuscript_artifacts import (
     resolve_current_manuscript_entrypoint,
-    resolve_manuscript_entrypoint_from_root,
+    resolve_current_manuscript_resolution,
 )
 from gpd.core.onboarding_surfaces import (
     beginner_onboarding_hub_url,
@@ -311,6 +314,7 @@ class ReviewPreflightResult:
     blocking_conditions: list[str]
     conditional_requirements: list[ReviewContractConditionalRequirement]
     validated_surface: str = "public_runtime_command_surface"
+    public_runtime_command_prefix: str = ""
     local_cli_equivalence_guaranteed: bool = False
     dispatch_note: str = ""
 
@@ -347,6 +351,7 @@ class CommandContextPreflightResult:
     guidance: str
     checks: list[CommandContextCheck]
     validated_surface: str = "public_runtime_command_surface"
+    public_runtime_command_prefix: str = ""
     local_cli_equivalence_guaranteed: bool = False
     dispatch_note: str = ""
 
@@ -4957,6 +4962,9 @@ def _resolve_review_preflight_manuscript(
 
         if not target.exists():
             return None, f"missing explicit manuscript target {_format_display_path(target)}"
+        project_resolution = resolve_current_manuscript_resolution(cwd, allow_markdown=allow_markdown)
+        if project_resolution.status in {"ambiguous", "invalid"}:
+            return None, f"ambiguous or inconsistent manuscript roots: {project_resolution.detail}"
         if restrict_to_supported_roots and not _supported_explicit_manuscript_target(target):
             return (
                 None,
@@ -4971,21 +4979,31 @@ def _resolve_review_preflight_manuscript(
             return None, f"explicit manuscript target must be a .tex or .md file: {_format_display_path(target)}"
 
         if target.is_dir():
-            candidate = resolve_manuscript_entrypoint_from_root(target, allow_markdown=allow_markdown)
-            if candidate is not None:
-                return candidate, f"{_format_display_path(target)} resolved to {_format_display_path(candidate)}"
-            return None, f"no manuscript entry point found under {_format_display_path(target)}"
+            resolution = resolve_manuscript_entrypoint_from_root_resolution(target, allow_markdown=allow_markdown)
+            if resolution.status == "resolved" and resolution.manuscript_entrypoint is not None:
+                return resolution.manuscript_entrypoint, f"{_format_display_path(target)} resolved to {_format_display_path(resolution.manuscript_entrypoint)}"
+            if resolution.status == "missing":
+                return None, f"no manuscript entry point found under {_format_display_path(target)}"
+            return None, f"{_format_display_path(target)} is ambiguous or inconsistent: {resolution.detail}"
 
-    manuscript = resolve_current_manuscript_entrypoint(cwd, allow_markdown=allow_markdown)
-    if manuscript is not None:
+    resolution = resolve_current_manuscript_resolution(cwd, allow_markdown=allow_markdown)
+    manuscript = resolution.manuscript_entrypoint
+    if manuscript is not None and resolution.status == "resolved":
         return manuscript, f"{_format_display_path(manuscript)} present"
     if allow_markdown:
+        if resolution.status == "missing":
+            return (
+                None,
+                "no manuscript entrypoint found under paper/, manuscript/, or draft/ "
+                "(expected ARTIFACT-MANIFEST.json or PAPER-CONFIG.json-derived output)",
+            )
         return (
             None,
-            "no manuscript entrypoint found under paper/, manuscript/, or draft/ "
-            "(expected ARTIFACT-MANIFEST.json or PAPER-CONFIG.json-derived output)",
+            f"ambiguous or inconsistent manuscript roots: {resolution.detail}",
         )
-    return None, "no LaTeX manuscript entrypoint found under paper/, manuscript/, or draft/"
+    if resolution.status == "missing":
+        return None, "no LaTeX manuscript entrypoint found under paper/, manuscript/, or draft/"
+    return None, f"ambiguous or inconsistent manuscript roots: {resolution.detail}"
 
 
 def _resolve_review_preflight_publication_artifact(manuscript: Path, *filenames: str) -> Path | None:
@@ -5802,6 +5820,28 @@ def _active_runtime_command_prefix(*, cwd: Path | None = None) -> str | None:
         return None
 
 
+def _active_runtime_validated_surface(*, cwd: Path | None = None) -> str | None:
+    """Return the machine-readable public command surface for the active runtime."""
+    from gpd.adapters import get_adapter
+
+    try:
+        runtime_name = detect_runtime_for_gpd_use(cwd=cwd or _get_cwd())
+        return get_adapter(runtime_name).runtime_descriptor.validated_command_surface
+    except Exception:
+        return None
+
+
+def _active_runtime_formatted_command(action: str, *, cwd: Path | None = None) -> str | None:
+    """Return one adapter-formatted public command for the active runtime."""
+    from gpd.adapters import get_adapter
+
+    try:
+        runtime_name = detect_runtime_for_gpd_use(cwd=cwd or _get_cwd())
+        return get_adapter(runtime_name).format_command(action)
+    except Exception:
+        return None
+
+
 def _command_required_file_patterns(command: object) -> list[str]:
     """Return normalized ``requires.files`` patterns from command metadata."""
     requires = getattr(command, "requires", None)
@@ -5879,34 +5919,71 @@ def _command_required_files_override_detail(
         project_root,
         arguments,
         allow_markdown=getattr(command, "name", "") != "gpd:arxiv-submission",
+        restrict_to_supported_roots=getattr(command, "name", "") == "gpd:arxiv-submission",
     )
     if manuscript is None:
         return None
     return f"explicit manuscript target satisfies command context: {_format_display_path(manuscript)}"
 
 
+def _command_requires_manuscript_context(command: object) -> bool:
+    """Return whether command context should use canonical manuscript resolution."""
+    contract = getattr(command, "review_contract", None)
+    preflight_checks = getattr(contract, "preflight_checks", ())
+    return isinstance(preflight_checks, tuple | list) and "manuscript" in preflight_checks
+
+
+def _command_context_manuscript_check(
+    project_root: Path,
+    command: object,
+    arguments: str | None,
+) -> tuple[bool, str] | None:
+    """Return a canonical manuscript-context check for publication commands."""
+    if not _command_requires_manuscript_context(command):
+        return None
+
+    command_name = getattr(command, "name", "")
+    if command_name in {"gpd:peer-review", "gpd:arxiv-submission"}:
+        manuscript, detail = _resolve_review_preflight_manuscript(
+            project_root,
+            arguments,
+            allow_markdown=command_name != "gpd:arxiv-submission",
+            restrict_to_supported_roots=command_name == "gpd:arxiv-submission",
+        )
+        return manuscript is not None, detail
+
+    resolution = resolve_current_manuscript_resolution(
+        project_root,
+        allow_markdown=command_name != "gpd:arxiv-submission",
+    )
+    if command_name == "gpd:write-paper" and resolution.status == "missing":
+        return (
+            True,
+            "no manuscript entrypoint found under paper/, manuscript/, or draft/; "
+            "fresh bootstrap is allowed and will scaffold a topic-specific manuscript stem under ./paper/",
+        )
+    if resolution.status == "resolved" and resolution.manuscript_entrypoint is not None:
+        return True, f"{_format_display_path(resolution.manuscript_entrypoint)} present"
+    if resolution.status == "missing":
+        return False, resolution.detail
+    return False, f"ambiguous or inconsistent manuscript roots: {resolution.detail}"
+
+
 def _validated_runtime_surface(*, cwd: Path | None = None) -> str:
-    """Return the machine-readable surface label for the active runtime command prefix."""
-    prefix = _active_runtime_command_prefix(cwd=cwd)
-    if not prefix:
-        return "public_runtime_command_surface"
-    if prefix.startswith("/"):
-        return "public_runtime_slash_command"
-    if prefix.startswith("$"):
-        return "public_runtime_dollar_command"
-    return "public_runtime_command_surface"
+    """Return the machine-readable surface label for the active runtime."""
+    return _active_runtime_validated_surface(cwd=cwd) or "public_runtime_command_surface"
 
 
 def _active_runtime_command_family(*, cwd: Path | None = None) -> str:
-    """Return the runtime-native public command family, if it can be resolved."""
-    prefix = _active_runtime_command_prefix(cwd=cwd)
-    return f"{prefix}*" if prefix else "the active runtime command surface"
+    """Return the runtime-native public command prefix, if it can be resolved."""
+    family = _active_runtime_command_prefix(cwd=cwd)
+    return family if family else "the active runtime command surface"
 
 
 def _active_runtime_new_project_command(*, cwd: Path | None = None) -> str:
     """Return the runtime-native new-project command, if it can be resolved."""
-    prefix = _active_runtime_command_prefix(cwd=cwd)
-    return f"{prefix}new-project" if prefix else "the active runtime's `new-project` command"
+    command = _active_runtime_formatted_command("new-project", cwd=cwd)
+    return command if command else "the active runtime's `new-project` command"
 
 
 def _runtime_surface_dispatch_note(*, cwd: Path | None = None) -> str:
@@ -5915,7 +5992,7 @@ def _runtime_surface_dispatch_note(*, cwd: Path | None = None) -> str:
     if family == "the active runtime command surface":
         surface_text = family
     else:
-        surface_text = f"the public `{family}` runtime command surface"
+        surface_text = f"the public command surface rooted at `{family}`"
     return (
         f"This preflight validates {surface_text} from the command registry. "
         "It does not guarantee a same-name local `gpd` subcommand exists."
@@ -5989,6 +6066,7 @@ def _build_command_context_preflight(
             guidance="",
             checks=checks,
             validated_surface=_validated_runtime_surface(cwd=cwd),
+            public_runtime_command_prefix=_active_runtime_command_prefix(cwd=cwd) or "",
             dispatch_note=dispatch_note,
         )
 
@@ -6012,6 +6090,7 @@ def _build_command_context_preflight(
             guidance="",
             checks=checks,
             validated_surface=_validated_runtime_surface(cwd=cwd),
+            public_runtime_command_prefix=_active_runtime_command_prefix(cwd=cwd) or "",
             dispatch_note=dispatch_note,
         )
 
@@ -6083,6 +6162,8 @@ def _build_command_context_preflight(
             required_files_present = True
             matched_patterns: list[str] = []
             missing_patterns: list[str] = []
+            manuscript_context_passed = True
+            manuscript_context_detail = ""
             if required_file_patterns:
                 required_files_present, matched_patterns, missing_patterns = _command_required_files_present(
                     selected_root,
@@ -6107,7 +6188,21 @@ def _build_command_context_preflight(
                     ),
                     blocking=False,
                 )
-            recoverable = (state_exists or roadmap_exists or project_exists) and required_files_present and not reentry.requires_user_selection
+            manuscript_context = _command_context_manuscript_check(selected_root, command, arguments)
+            if manuscript_context is not None:
+                manuscript_context_passed, manuscript_context_detail = manuscript_context
+                add_check(
+                    "manuscript",
+                    manuscript_context_passed,
+                    manuscript_context_detail,
+                    blocking=False,
+                )
+            recoverable = (
+                (state_exists or roadmap_exists or project_exists)
+                and required_files_present
+                and manuscript_context_passed
+                and not reentry.requires_user_selection
+            )
             guidance = (
                 ""
                 if recoverable
@@ -6118,6 +6213,8 @@ def _build_command_context_preflight(
                     else (
                         _build_recoverable_workspace_guidance(init_command=init_command)
                         if not (state_exists or roadmap_exists or project_exists)
+                        else manuscript_context_detail
+                        if not manuscript_context_passed
                         else "This command requires one of the declared required files: "
                         + ", ".join(required_file_patterns)
                     )
@@ -6132,6 +6229,7 @@ def _build_command_context_preflight(
                 guidance=guidance,
                 checks=checks,
                 validated_surface=_validated_runtime_surface(cwd=cwd),
+                public_runtime_command_prefix=_active_runtime_command_prefix(cwd=cwd) or "",
                 dispatch_note=dispatch_note,
             )
         add_check(
@@ -6144,6 +6242,7 @@ def _build_command_context_preflight(
             ),
         )
         required_file_patterns = _command_required_file_patterns(command)
+        manuscript_context = _command_context_manuscript_check(context_cwd, command, arguments)
         if required_file_patterns:
             required_files_present, matched_patterns, missing_patterns = _command_required_files_present(
                 context_cwd,
@@ -6169,13 +6268,24 @@ def _build_command_context_preflight(
             )
         else:
             required_files_present = True
-        passed = project_exists and required_files_present
+        manuscript_context_passed = True
+        manuscript_context_detail = ""
+        if manuscript_context is not None:
+            manuscript_context_passed, manuscript_context_detail = manuscript_context
+            add_check(
+                "manuscript",
+                manuscript_context_passed,
+                manuscript_context_detail,
+            )
+        passed = project_exists and required_files_present and manuscript_context_passed
         guidance = (
             ""
             if passed
             else (
                 "This command requires an initialized GPD project."
                 if not project_exists
+                else manuscript_context_detail
+                if not manuscript_context_passed
                 else "This command requires one of the declared required files: " + ", ".join(required_file_patterns)
             )
         )
@@ -6188,6 +6298,7 @@ def _build_command_context_preflight(
             guidance=guidance,
             checks=checks,
             validated_surface=_validated_runtime_surface(cwd=cwd),
+            public_runtime_command_prefix=_active_runtime_command_prefix(cwd=cwd) or "",
             dispatch_note=dispatch_note,
         )
 
@@ -6227,6 +6338,7 @@ def _build_command_context_preflight(
         guidance=guidance,
         checks=checks,
         validated_surface=_validated_runtime_surface(cwd=cwd),
+        public_runtime_command_prefix=_active_runtime_command_prefix(cwd=cwd) or "",
         dispatch_note=dispatch_note,
     )
 
@@ -6375,12 +6487,15 @@ def _build_review_preflight(
             manuscript, manuscript_detail = _resolve_review_preflight_manuscript(project_cwd, None, allow_markdown=True)
         else:
             manuscript, manuscript_detail = resolve_current_manuscript_entrypoint(project_cwd), ""
-        if command.name == "gpd:write-paper" and manuscript is None:
-            manuscript_passed = True
+        resolution = resolve_current_manuscript_resolution(project_cwd, allow_markdown=True)
+        if command.name == "gpd:write-paper" and subject is None and resolution.status == "missing":
             manuscript_detail = (
                 "no manuscript entrypoint found under paper/, manuscript/, or draft/; "
                 "fresh bootstrap is allowed and will scaffold a topic-specific manuscript stem under ./paper/"
             )
+            manuscript_passed = True
+        elif subject is None:
+            manuscript_passed = resolution.status == "resolved"
         else:
             manuscript_passed = manuscript is not None
         add_check(
@@ -6390,7 +6505,7 @@ def _build_review_preflight(
             if command.name in {"gpd:peer-review", "gpd:arxiv-submission"}
             else (
                 manuscript_detail
-                if command.name == "gpd:write-paper" and manuscript is None
+                if command.name == "gpd:write-paper" and subject is None and resolution.status == "missing"
                 else (
                     f"{_format_display_path(manuscript)} present"
                     if manuscript is not None
@@ -6748,7 +6863,12 @@ def _build_review_preflight(
                     elif command.name == "gpd:write-paper":
                         if theorem_bearing_review_required:
                             manuscript_proof_review_passed = manuscript_proof_review.can_rely_on_prior_review
-                            manuscript_proof_review_blocking = True
+                            manuscript_proof_review_blocking = False
+                            if not manuscript_proof_review_passed:
+                                manuscript_proof_review_detail = (
+                                    manuscript_proof_review.detail
+                                    + "; write-paper will run its own staged proof-review loop"
+                                )
                         elif manuscript_proof_review.state in manuscript_proof_review_blocking_states:
                             manuscript_proof_review_blocking = True
                     add_check(
@@ -6855,6 +6975,7 @@ def _build_review_preflight(
         blocking_conditions=contract.blocking_conditions,
         conditional_requirements=list(contract.conditional_requirements),
         validated_surface=context_preflight.validated_surface,
+        public_runtime_command_prefix=context_preflight.public_runtime_command_prefix,
         local_cli_equivalence_guaranteed=context_preflight.local_cli_equivalence_guaranteed,
         dispatch_note=context_preflight.dispatch_note,
     )

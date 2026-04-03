@@ -38,11 +38,14 @@ from tests.runtime_install_helpers import seed_complete_runtime_install
 
 runner = CliRunner()
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
-_DOLLAR_COMMAND_DESCRIPTOR = next(descriptor for descriptor in _RUNTIME_DESCRIPTORS if descriptor.command_prefix.startswith("$"))
+_DOLLAR_COMMAND_DESCRIPTOR = next(
+    descriptor for descriptor in _RUNTIME_DESCRIPTORS if descriptor.validated_command_surface == "public_runtime_dollar_command"
+)
 _SLASH_COMMAND_DESCRIPTOR = next(
     descriptor
     for descriptor in _RUNTIME_DESCRIPTORS
-    if descriptor.command_prefix.startswith("/") and descriptor.runtime_name != _DOLLAR_COMMAND_DESCRIPTOR.runtime_name
+    if descriptor.validated_command_surface == "public_runtime_slash_command"
+    and descriptor.runtime_name != _DOLLAR_COMMAND_DESCRIPTOR.runtime_name
 )
 _ENV_OVERRIDE_DESCRIPTOR = next(
     descriptor
@@ -2427,8 +2430,9 @@ class TestCommandContextSurface:
 
         assert payload["command"] == command_name
         assert payload["validated_surface"] == "public_runtime_dollar_command"
+        assert payload["public_runtime_command_prefix"] == "$gpd-"
         assert payload["local_cli_equivalence_guaranteed"] is False
-        assert f"public `{codex_command_prefix}*` runtime command surface" in payload["dispatch_note"]
+        assert f"public command surface rooted at `{codex_command_prefix}`" in payload["dispatch_note"]
         assert "same-name local `gpd` subcommand" in payload["dispatch_note"]
 
     @pytest.mark.parametrize("command_name", ["gpd:settings", "gpd:set-tier-models"])
@@ -2440,8 +2444,9 @@ class TestCommandContextSurface:
 
         assert payload["command"] == command_name
         assert payload["validated_surface"] == "public_runtime_slash_command"
+        assert payload["public_runtime_command_prefix"] == "/gpd:"
         assert payload["local_cli_equivalence_guaranteed"] is False
-        assert f"public `{claude_code_command_prefix}*` runtime command surface" in payload["dispatch_note"]
+        assert f"public command surface rooted at `{claude_code_command_prefix}`" in payload["dispatch_note"]
         assert "same-name local `gpd` subcommand" in payload["dispatch_note"]
 
     @pytest.mark.parametrize("command_name", ["gpd:settings", "gpd:set-tier-models"])
@@ -2458,6 +2463,7 @@ class TestCommandContextSurface:
 
         assert payload["command"] == command_name
         assert payload["validated_surface"] == "public_runtime_command_surface"
+        assert payload["public_runtime_command_prefix"] == ""
         assert payload["local_cli_equivalence_guaranteed"] is False
         assert "the active runtime command surface" in payload["dispatch_note"]
 
