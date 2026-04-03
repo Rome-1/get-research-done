@@ -29,7 +29,7 @@ GPD is not a standalone app. It installs physics-research commands into Claude C
 To install GPD, run this in your system terminal:
 ```bash
 # Requires Node.js.
-npx -y get-physics-done
+npx get-physics-done
 ```
 
 <details>
@@ -87,7 +87,7 @@ Run its help command first: Claude Code / Gemini CLI use `/gpd:help`. Codex uses
 
 Expert fast path:
 
-- From inside the folder where your project should live, install GPD with the matching `npx -y get-physics-done` bootstrap command from [Start Here](#start-here), then launch `claude`, `codex`, `gemini`, or `opencode`.
+- From inside the folder where your project should live, install GPD with the matching `npx get-physics-done` bootstrap command from [Start Here](#start-here), then launch `claude`, `codex`, `gemini`, or `opencode`.
 - Run the matching GPD help command shown in [Supported Runtimes](#supported-runtimes).
 - Then use `start` if you are not sure what fits this folder, `tour` for a read-only walkthrough, `new-project --minimal` for new work, `map-research` for existing work, or `resume-work` when you return later.
 - Treat the new-work choice as distinct from the existing-work choice; pick one, then follow it through.
@@ -508,7 +508,7 @@ Low-level function and span calls are not recorded automatically. Observability 
 
 ## System Requirements
 
-- Node.js with `npm`/`npx` (see the `Don't have npm yet?` note above if `npm` is missing)
+- Node.js with `npm`/`npx` (see the `Need Node.js?` note above if Node.js is missing)
 - Python 3.11+ with the standard `venv` module (see the OS guides above for beginner setup steps on macOS, Linux, and Windows)
 - Network access to npm and GitHub for the bootstrap installer
 - One of: Claude Code, Gemini CLI, Codex, or OpenCode
