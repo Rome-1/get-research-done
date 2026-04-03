@@ -86,12 +86,10 @@ Guidance for that follow-up:
 - Treat blank / `runtime default` / `none` as "no override for this tier".
 - Treat literal `default` as a real model alias only when the active runtime supports it and the user explicitly intends that alias.
 
-Runtime-native examples:
-
-- **Claude Code**: aliases like `opus`, `sonnet`, or `haiku`, or a provider-native pinned deployment id
-- **Codex**: exact Codex model strings; the standard OpenAI-hosted mapping is `tier-1 = gpt-5.4`, `tier-2 = gpt-5.4-mini`, `tier-3 = gpt-5.4-nano`
-- **Gemini CLI**: exact Gemini model names accepted by the installed runtime
-- **OpenCode**: full `provider/model` strings such as `anthropic/<model>`, `openai/<model>`, or `google/<model>`
+Runtime-native examples are intentionally not hard-coded here. The installer
+projects the active runtime's own example guidance from the adapter catalog, so
+this shared workflow stays generic while still allowing each runtime to show its
+accepted model-string style.
 </step>
 
 <step name="update_config">

@@ -382,8 +382,10 @@ def test_public_bootstrap_installer_documents_public_flags_and_runtime_aliases()
     assert "`--help`" in readme
     assert "`-h`" in readme
     assert 'require("../src/gpd/adapters/runtime_catalog.json")' in content
-    assert "runtimeInstallFlag(dollarCommandRuntime)" in content
-    assert "runtimeConfigDirName(dollarCommandRuntime)" in content
+    assert "installer_help_example_scope" in content
+    assert 'runtimeHelpExampleRuntime("global", primaryRuntime)' in content
+    assert 'runtimeHelpExampleRuntime("local", globalHelpRuntime)' in content
+    assert 'startsWith("$")' not in content
     assert 'args.includes("--all")' in content
     assert 'documentedRuntimeFlags().join("/")' in content
     assert "runtimeSelectionFlags(runtime)" in content

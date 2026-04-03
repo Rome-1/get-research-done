@@ -743,6 +743,8 @@ const { validateRuntimeCatalog } = require("./bin/install.js");
 const catalog = require("./src/gpd/adapters/runtime_catalog.json");
 
 assert.doesNotThrow(() => validateRuntimeCatalog(catalog));
+assert.equal(catalog.find((runtime) => runtime.runtime_name === "claude-code").installer_help_example_scope, "global");
+assert.equal(catalog.find((runtime) => runtime.runtime_name === "codex").installer_help_example_scope, "local");
 
 const unknownKeyCatalog = JSON.parse(JSON.stringify(catalog));
 unknownKeyCatalog[0].legacy_note = "unexpected";
@@ -764,10 +766,37 @@ assert.throws(
   () => validateRuntimeCatalog(badFlagCatalog),
   /runtime catalog entry 0\.native_include_support must be a boolean/
 );
+
+const badHelpScopeCatalog = JSON.parse(JSON.stringify(catalog));
+badHelpScopeCatalog[0].installer_help_example_scope = "sideways";
+assert.throws(
+  () => validateRuntimeCatalog(badHelpScopeCatalog),
+  /runtime catalog entry 0\.installer_help_example_scope must be one of: global, local/
+);
 """
     )
 
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is required for bootstrap installer tests")
+def test_bootstrap_help_uses_catalog_driven_example_runtimes() -> None:
+    node_path = shutil.which("node")
+    assert node_path is not None
+
+    result = subprocess.run(
+        [node_path, "bin/install.js", "--help"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert "# Install for Claude Code globally" in result.stdout
+    assert "# Install for Codex locally" in result.stdout
+    assert "startsWith(\"$\")" not in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")

@@ -11,6 +11,7 @@
     "activation_env_vars": ["CLAUDE_CODE_SESSION", "CLAUDE_CODE"],
     "selection_flags": ["--claude-code", "--claude"],
     "selection_aliases": ["claude-code", "claude code", "claude"],
+    "installer_help_example_scope": "global",
     "capabilities": {
       "permissions_surface": "config-file",
       "permission_surface_kind": "settings.json:permissions.defaultMode",
@@ -123,6 +124,7 @@
     "selection_flags": ["--codex"],
     "selection_aliases": ["codex"],
     "manifest_file_prefixes": ["skills/"],
+    "installer_help_example_scope": "local",
     "capabilities": {
       "permissions_surface": "config-file",
       "permission_surface_kind": "config.toml:approval_policy+sandbox_mode",

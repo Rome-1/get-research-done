@@ -105,6 +105,10 @@ function runtimeLaunchCommand(runtime) {
   return runtimeRecord(runtime).launch_command;
 }
 
+function runtimeInstallerHelpExampleScope(runtime) {
+  return runtimeRecord(runtime).installer_help_example_scope || null;
+}
+
 const PUBLIC_SURFACE_CONTRACT_KEYS = [
   "schema_version",
   "beginner_onboarding",
@@ -153,7 +157,12 @@ const RUNTIME_CATALOG_ENTRY_KEYS = {
     "capabilities",
     "hook_payload",
   ],
-  optional: ["manifest_file_prefixes", "native_include_support", "agent_prompt_uses_dollar_templates"],
+  optional: [
+    "manifest_file_prefixes",
+    "native_include_support",
+    "agent_prompt_uses_dollar_templates",
+    "installer_help_example_scope",
+  ],
 };
 const RUNTIME_CATALOG_ALLOWED_KEYS = new Set([
   ...RUNTIME_CATALOG_ENTRY_KEYS.required,
@@ -479,6 +488,15 @@ function validateRuntimeCatalogEntry(entry, index) {
         : false,
       `${label}.agent_prompt_uses_dollar_templates`
     ),
+    installer_help_example_scope: Object.prototype.hasOwnProperty.call(payload, "installer_help_example_scope")
+      ? (() => {
+          const scope = requireStrictString(payload.installer_help_example_scope, `${label}.installer_help_example_scope`);
+          if (scope !== "global" && scope !== "local") {
+            throw new Error(`${label}.installer_help_example_scope must be one of: global, local`);
+          }
+          return scope;
+        })()
+      : null,
   };
 }
 
@@ -1697,8 +1715,8 @@ function documentedRuntimeFlags() {
   return RUNTIME_CATALOG.flatMap((runtime) => runtimeSelectionFlagList(runtime.runtime_name));
 }
 
-function findRuntime(predicate, fallback = ALL_RUNTIMES[0]) {
-  const match = RUNTIME_CATALOG.find(predicate);
+function runtimeHelpExampleRuntime(scope, fallback = ALL_RUNTIMES[0]) {
+  const match = RUNTIME_CATALOG.find((runtime) => runtimeInstallerHelpExampleScope(runtime.runtime_name) === scope);
   return match ? match.runtime_name : fallback;
 }
 
@@ -1719,10 +1737,11 @@ function printBanner() {
 function printHelp() {
   const installCommand = "npx -y get-physics-done";
   const primaryRuntime = ALL_RUNTIMES[0];
-  const dollarCommandRuntime = findRuntime((runtime) => runtime.command_prefix.startsWith("$"), primaryRuntime);
-  const primaryFlag = runtimeInstallFlag(primaryRuntime);
-  const dollarCommandFlag = runtimeInstallFlag(dollarCommandRuntime);
-  const targetDirExample = `/path/to/${runtimeConfigDirName(dollarCommandRuntime)}`;
+  const globalHelpRuntime = runtimeHelpExampleRuntime("global", primaryRuntime);
+  const localHelpRuntime = runtimeHelpExampleRuntime("local", globalHelpRuntime);
+  const primaryFlag = runtimeInstallFlag(globalHelpRuntime);
+  const helpExampleFlag = runtimeInstallFlag(localHelpRuntime);
+  const targetDirExample = `/path/to/${runtimeConfigDirName(localHelpRuntime)}`;
   console.log(` ${yellow}Usage:${reset} ${installCommand} [install|uninstall] [options]`);
   console.log("");
   console.log(` ${dim}${productPositioning}${reset}`);
@@ -1750,8 +1769,8 @@ function printHelp() {
   console.log(` ${dim}# Install for ${runtimeDisplayName(primaryRuntime)} globally${reset}`);
   console.log(` ${installCommand} ${primaryFlag} --global`);
   console.log("");
-  console.log(` ${dim}# Install for ${runtimeDisplayName(dollarCommandRuntime)} locally${reset}`);
-  console.log(` ${installCommand} ${dollarCommandFlag} --local`);
+  console.log(` ${dim}# Install for ${runtimeDisplayName(localHelpRuntime)} locally${reset}`);
+  console.log(` ${installCommand} ${helpExampleFlag} --local`);
   console.log("");
   console.log(` ${dim}# Reinstall the matching managed GitHub source${reset}`);
   console.log(` ${installCommand} --reinstall ${primaryFlag} --local`);
@@ -1763,7 +1782,7 @@ function printHelp() {
   console.log(` ${installCommand} --all --global`);
   console.log("");
   console.log(` ${dim}# Install into an explicit local target directory${reset}`);
-  console.log(` ${installCommand} ${dollarCommandFlag} --local --target-dir ${targetDirExample}`);
+  console.log(` ${installCommand} ${helpExampleFlag} --local --target-dir ${targetDirExample}`);
   console.log("");
   console.log(` ${dim}# Interactive uninstall${reset}`);
   console.log(` ${installCommand} --uninstall`);

@@ -112,11 +112,6 @@ _RUNTIME_IGNORED_SCAN_PATHS = frozenset(
         (descriptor.config_dir_name,)
         for descriptor in iter_runtime_descriptors()
     }
-    | {
-        (".config", descriptor.global_config.xdg_subdir)
-        for descriptor in iter_runtime_descriptors()
-        if descriptor.global_config.xdg_subdir
-    }
 )
 _IGNORE_DIRS = frozenset(
     {

@@ -109,6 +109,7 @@ class RuntimeDescriptor:
     manifest_file_prefixes: tuple[str, ...] = ()
     native_include_support: bool = False
     agent_prompt_uses_dollar_templates: bool = False
+    installer_help_example_scope: str | None = None
 
 
 _SHARED_INSTALL_METADATA = SharedInstallMetadata(
@@ -149,10 +150,12 @@ _RUNTIME_ENTRY_OPTIONAL_KEYS = frozenset(
         "manifest_file_prefixes",
         "native_include_support",
         "agent_prompt_uses_dollar_templates",
+        "installer_help_example_scope",
     }
 )
 _RUNTIME_ENTRY_ALLOWED_KEYS = _RUNTIME_ENTRY_REQUIRED_KEYS | _RUNTIME_ENTRY_OPTIONAL_KEYS
 _RUNTIME_GLOBAL_CONFIG_STRATEGIES = frozenset({"env_or_home", "xdg_app"})
+_RUNTIME_INSTALL_HELP_EXAMPLE_SCOPES = frozenset({"global", "local"})
 _RUNTIME_CAPABILITY_ENUMS = {
     "permissions_surface": frozenset({"config-file", "launch-wrapper", "unsupported"}),
     "permission_surface_kind": frozenset(
@@ -363,6 +366,16 @@ def _parse_capabilities(entry: object, *, label: str) -> RuntimeCapabilityPolicy
     )
 
 
+def _parse_install_help_example_scope(value: object, *, label: str) -> str | None:
+    if value is None:
+        return None
+    scope = _require_string(value, label=label)
+    if scope not in _RUNTIME_INSTALL_HELP_EXAMPLE_SCOPES:
+        allowed = ", ".join(sorted(_RUNTIME_INSTALL_HELP_EXAMPLE_SCOPES))
+        raise ValueError(f"{label} must be one of: {allowed}")
+    return scope
+
+
 def _parse_hook_payload(entry: object, *, label: str) -> HookPayloadPolicy:
     payload = _require_mapping(entry, label=label)
     _require_allowed_keys(payload, label=label, allowed_keys=_RUNTIME_HOOK_PAYLOAD_KEYS)
@@ -453,6 +466,10 @@ def _load_catalog() -> tuple[RuntimeDescriptor, ...]:
                     payload.get("agent_prompt_uses_dollar_templates", False),
                     label=f"{label}.agent_prompt_uses_dollar_templates",
                 ),
+                installer_help_example_scope=_parse_install_help_example_scope(
+                    payload.get("installer_help_example_scope"),
+                    label=f"{label}.installer_help_example_scope",
+                ),
             )
         )
     descriptors.sort(key=lambda descriptor: (descriptor.priority, descriptor.runtime_name))
@@ -502,6 +519,18 @@ def get_managed_install_surface_policy(runtime: str | None = None) -> ManagedIns
 
 def iter_runtime_descriptors() -> tuple[RuntimeDescriptor, ...]:
     return _load_catalog()
+
+
+def get_runtime_help_example_runtime(scope: str) -> str | None:
+    """Return the runtime tagged as the install-help example for *scope*."""
+
+    if scope not in _RUNTIME_INSTALL_HELP_EXAMPLE_SCOPES:
+        allowed = ", ".join(sorted(_RUNTIME_INSTALL_HELP_EXAMPLE_SCOPES))
+        raise ValueError(f"scope must be one of: {allowed}")
+    for descriptor in iter_runtime_descriptors():
+        if descriptor.installer_help_example_scope == scope:
+            return descriptor.runtime_name
+    return None
 
 
 def list_runtime_names() -> list[str]:
@@ -618,6 +647,7 @@ __all__ = [
     "get_managed_install_surface_policy",
     "get_runtime_capabilities",
     "get_runtime_descriptor",
+    "get_runtime_help_example_runtime",
     "get_shared_install_metadata",
     "iter_runtime_descriptors",
     "list_runtime_names",

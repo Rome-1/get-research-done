@@ -14,6 +14,7 @@ from gpd.core.context import (
     _load_project_contract,
     _merge_reference_intake,
     _normalize_phase_name,
+    _should_skip_research_scan_entry,
     _state_exists,
     init_execute_phase,
     init_map_research,
@@ -229,16 +230,26 @@ def _create_roadmap(tmp_path: Path, content: str) -> Path:
     return roadmap
 
 
-def _runtime_mirror_dirs(root: Path) -> tuple[Path, ...]:
-    """Return runtime-owned mirror directories derived from the catalog."""
+def _runtime_owned_local_install_dirs(root: Path) -> tuple[Path, ...]:
+    """Return runtime-owned local install roots derived from the catalog."""
     paths: list[Path] = []
     for descriptor in _RUNTIME_DESCRIPTORS:
         paths.append(root / descriptor.config_dir_name)
-        if descriptor.global_config.home_subpath:
-            paths.append(root / descriptor.global_config.home_subpath)
-        if descriptor.global_config.xdg_subdir:
-            paths.append(root / ".config" / descriptor.global_config.xdg_subdir)
     return tuple(dict.fromkeys(paths))
+
+
+def test_research_scan_skips_only_runtime_owned_install_roots(tmp_path: Path) -> None:
+    workspace = tmp_path
+    runtime_root = workspace / ".opencode"
+    runtime_root.mkdir()
+    xdg_mirror = workspace / ".config" / "opencode"
+    xdg_mirror.mkdir(parents=True)
+    foreign_mirror = workspace / ".config" / "opencode" / "notes"
+    foreign_mirror.mkdir(parents=True)
+
+    assert _should_skip_research_scan_entry(workspace, runtime_root) is True
+    assert _should_skip_research_scan_entry(workspace, xdg_mirror) is False
+    assert _should_skip_research_scan_entry(workspace, foreign_mirror) is False
 
 
 def _write_project_contract_state(tmp_path: Path) -> None:
@@ -1303,7 +1314,7 @@ class TestInitNewProject:
         assert ctx["has_existing_project"] is True
 
     def test_ignores_runtime_owned_dirs_when_detecting_research_files(self, tmp_path: Path) -> None:
-        for runtime_dir in _runtime_mirror_dirs(tmp_path):
+        for runtime_dir in _runtime_owned_local_install_dirs(tmp_path):
             runtime_dir.mkdir(parents=True, exist_ok=True)
             (runtime_dir / "mirror.py").write_text("print('runtime mirror')", encoding="utf-8")
 
@@ -1315,6 +1326,25 @@ class TestInitNewProject:
     def test_detects_non_runtime_config_research_files(self, tmp_path: Path) -> None:
         (tmp_path / ".config").mkdir()
         (tmp_path / ".config" / "notes.py").write_text("print('research notes')", encoding="utf-8")
+
+        ctx = init_new_project(tmp_path)
+
+        assert ctx["has_research_files"] is True
+        assert ctx["has_existing_project"] is True
+
+    def test_detects_xdg_config_subdir_research_files_inside_a_project(self, tmp_path: Path) -> None:
+        opencode_descriptor = next(
+            descriptor
+            for descriptor in _RUNTIME_DESCRIPTORS
+            if descriptor.global_config.xdg_subdir
+        )
+        (tmp_path / ".config" / opencode_descriptor.global_config.xdg_subdir).mkdir(parents=True)
+        (
+            tmp_path
+            / ".config"
+            / opencode_descriptor.global_config.xdg_subdir
+            / "notes.py"
+        ).write_text("print('research notes')", encoding="utf-8")
 
         ctx = init_new_project(tmp_path)
 
@@ -2358,7 +2388,7 @@ class TestInitProgress:
         loaded, load_info = _load_project_contract(tmp_path)
 
         assert loaded is not None
-        assert load_info["status"] == "loaded"
+        assert load_info["status"] == "loaded_with_schema_normalization"
         assert load_info["errors"] == []
 
     def test_load_project_contract_fallback_salvages_nested_metadata_must_surface(
