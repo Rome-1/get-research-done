@@ -62,7 +62,7 @@ def _build_result(output_dir: Path) -> MagicMock:
     result = MagicMock()
     result.manifest_path = output_dir / "ARTIFACT-MANIFEST.json"
     result.bibliography_audit_path = None
-    result.pdf_path = output_dir / "main.pdf"
+    result.pdf_path = output_dir / "curvature_flow_bounds.pdf"
     result.success = True
     result.errors = []
     return result

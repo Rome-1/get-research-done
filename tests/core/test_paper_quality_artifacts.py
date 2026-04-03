@@ -197,6 +197,96 @@ comparison_verdicts:
     assert result.results.decisive_artifacts_benchmark_anchored.satisfied == 1
 
 
+def test_build_paper_quality_input_recurses_into_nested_manuscript_files(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "paper" / "topic_specific_stem.tex",
+        r"""
+\documentclass{article}
+\begin{document}
+\section{Introduction}
+Root introduction only.
+\end{document}
+""".strip()
+        + "\n",
+    )
+    _write(
+        tmp_path / "paper" / "sections" / "analysis.tex",
+        r"""
+\begin{abstract}
+Nested abstract with \cite{bench2026}.
+\end{abstract}
+\section{Abstract}
+Nested methods body.
+\section{Methods}
+Nested methods body.
+""".strip()
+        + "\n",
+    )
+    _write(
+        tmp_path / "paper" / "appendix" / "conclusion.md",
+        """# Conclusion
+
+TODO finalize the nested conclusion.
+""",
+    )
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Recursive Manuscript",
+                "journal": "generic",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "topic_specific_stem.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        ),
+    )
+    _write(
+        tmp_path / "paper" / "BIBLIOGRAPHY-AUDIT.json",
+        json.dumps(
+            {
+                "generated_at": "2026-04-02T00:00:00+00:00",
+                "total_sources": 1,
+                "resolved_sources": 1,
+                "partial_sources": 0,
+                "unverified_sources": 0,
+                "failed_sources": 0,
+                "entries": [
+                    {
+                        "key": "bench2026",
+                        "source_type": "paper",
+                        "title": "Benchmark",
+                        "resolution_status": "provided",
+                        "verification_status": "verified",
+                    }
+                ],
+            }
+        ),
+    )
+    _write(
+        tmp_path / "paper" / "PAPER-CONFIG.json",
+        json.dumps(_paper_config_payload("Recursive Manuscript", "generic")),
+    )
+
+    result = build_paper_quality_input(tmp_path)
+
+    assert result.completeness.required_sections_present.satisfied == 3
+    assert result.citations.citation_keys_resolve.satisfied == 1
+    assert result.citations.citation_keys_resolve.total == 1
+    assert result.citations.missing_placeholders.passed is True
+    assert result.completeness.placeholders_cleared.passed is False
+
+
 def test_build_paper_quality_input_falls_back_to_supported_config_journal_when_manifest_is_unsupported(
     tmp_path: Path,
 ) -> None:

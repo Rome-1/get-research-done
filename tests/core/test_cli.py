@@ -4728,7 +4728,7 @@ def test_paper_build_prefers_paper_dir_before_later_config_roots(tmp_path: Path)
     result_payload.manifest_path = paper_dir / "ARTIFACT-MANIFEST.json"
     result_payload.bibliography_audit_path = None
     result_payload.bibliography_audit = None
-    result_payload.pdf_path = paper_dir / "main.pdf"
+    result_payload.pdf_path = paper_dir / "paper_uppercase.pdf"
     result_payload.success = True
     result_payload.errors = []
 
@@ -4775,7 +4775,7 @@ def test_paper_build_prefers_manuscript_before_draft(tmp_path: Path) -> None:
     result_payload = MagicMock()
     result_payload.manifest_path = manuscript_dir / "ARTIFACT-MANIFEST.json"
     result_payload.bibliography_audit_path = None
-    result_payload.pdf_path = manuscript_dir / "main.pdf"
+    result_payload.pdf_path = manuscript_dir / "manuscript_uppercase.pdf"
     result_payload.success = True
     result_payload.errors = []
 
@@ -4906,7 +4906,7 @@ def test_paper_build_prefers_config_dir_bibliography_before_output_and_reference
     result_payload = MagicMock()
     result_payload.manifest_path = output_dir / "ARTIFACT-MANIFEST.json"
     result_payload.bibliography_audit_path = output_dir / "BIBLIOGRAPHY-AUDIT.json"
-    result_payload.pdf_path = output_dir / "main.pdf"
+    result_payload.pdf_path = output_dir / "configured_paper.pdf"
     result_payload.success = True
     result_payload.errors = []
 
@@ -4927,7 +4927,7 @@ def test_paper_build_prefers_config_dir_bibliography_before_output_and_reference
 def test_resolve_review_preflight_publication_artifacts_bundle(tmp_path: Path) -> None:
     manuscript_dir = tmp_path / "paper"
     manuscript_dir.mkdir()
-    manuscript = manuscript_dir / "main.tex"
+    manuscript = manuscript_dir / "curvature_flow_bounds.tex"
     manuscript.write_text("\\documentclass{article}\\begin{document}Hello\\end{document}", encoding="utf-8")
     (manuscript_dir / "ARTIFACT-MANIFEST.json").write_text("{}", encoding="utf-8")
     (manuscript_dir / "BIBLIOGRAPHY-AUDIT.json").write_text("{}", encoding="utf-8")
@@ -5008,7 +5008,7 @@ def test_paper_build_without_bibliography_does_not_import_pybtex(tmp_path: Path,
     result_payload = MagicMock()
     result_payload.manifest_path = paper_dir / "ARTIFACT-MANIFEST.json"
     result_payload.bibliography_audit_path = None
-    result_payload.pdf_path = paper_dir / "main.pdf"
+    result_payload.pdf_path = paper_dir / "configured_paper.pdf"
     result_payload.success = True
     result_payload.errors = []
 
@@ -5057,7 +5057,7 @@ def test_paper_build_auto_discovers_single_literature_citation_sources_sidecar(t
     result_payload = MagicMock()
     result_payload.manifest_path = paper_dir / "ARTIFACT-MANIFEST.json"
     result_payload.bibliography_audit_path = None
-    result_payload.pdf_path = paper_dir / "main.pdf"
+    result_payload.pdf_path = paper_dir / "configured_paper.pdf"
     result_payload.success = True
     result_payload.errors = []
 
@@ -5121,7 +5121,7 @@ def test_paper_build_warns_when_multiple_literature_citation_sidecars_exist(tmp_
     result_payload = MagicMock()
     result_payload.manifest_path = paper_dir / "ARTIFACT-MANIFEST.json"
     result_payload.bibliography_audit_path = None
-    result_payload.pdf_path = paper_dir / "main.pdf"
+    result_payload.pdf_path = paper_dir / "configured_paper.pdf"
     result_payload.success = True
     result_payload.errors = []
 

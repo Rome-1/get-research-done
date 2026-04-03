@@ -62,7 +62,10 @@ def _create_config(tmp_path: Path, config: dict) -> Path:
 
 
 def _write_manuscript_proof_review_artifacts(tmp_path: Path) -> Path:
-    return _write_manuscript_proof_review_artifacts_with_proof_path(tmp_path, proof_artifact_path="paper/main.tex")
+    return _write_manuscript_proof_review_artifacts_with_proof_path(
+        tmp_path,
+        proof_artifact_path="paper/curvature_flow_bounds.tex",
+    )
 
 
 def _write_manuscript_proof_review_artifacts_with_proof_path(
@@ -70,10 +73,23 @@ def _write_manuscript_proof_review_artifacts_with_proof_path(
     *,
     proof_artifact_path: str,
 ) -> Path:
-    manuscript_path = tmp_path / "paper" / "main.tex"
+    manuscript_path = tmp_path / "paper" / "curvature_flow_bounds.tex"
     manuscript_path.parent.mkdir(parents=True, exist_ok=True)
     manuscript_path.write_text(
         "\\documentclass{article}\n\\begin{document}\n\\begin{theorem}For every r_0 > 0, the orbit intersects the target annulus.\\end{theorem}\n\\end{document}\n",
+        encoding="utf-8",
+    )
+    (manuscript_path.parent / "PAPER-CONFIG.json").write_text(
+        json.dumps(
+            {
+                "title": "Curvature Flow Bounds",
+                "authors": [{"name": "Test Author"}],
+                "abstract": "A test manuscript used to exercise proof-review freshness.",
+                "sections": [],
+                "journal": "jhep",
+                "output_filename": "curvature_flow_bounds",
+            }
+        ),
         encoding="utf-8",
     )
     proof_artifact = tmp_path / proof_artifact_path
@@ -84,8 +100,8 @@ def _write_manuscript_proof_review_artifacts_with_proof_path(
             encoding="utf-8",
         )
     proof_redteam_artifact_paths = f"  - {proof_artifact_path}\n"
-    if proof_artifact_path != "paper/main.tex":
-        proof_redteam_artifact_paths += "  - paper/main.tex\n"
+    if proof_artifact_path != "paper/curvature_flow_bounds.tex":
+        proof_redteam_artifact_paths += "  - paper/curvature_flow_bounds.tex\n"
     review_dir = tmp_path / "GPD" / "review"
     review_dir.mkdir(parents=True, exist_ok=True)
     manuscript_sha256 = compute_sha256(manuscript_path)
@@ -93,7 +109,7 @@ def _write_manuscript_proof_review_artifacts_with_proof_path(
         json.dumps(
             {
                 "version": 1,
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": "paper/curvature_flow_bounds.tex",
                 "manuscript_sha256": manuscript_sha256,
                 "claims": [
                     {
@@ -121,7 +137,7 @@ def _write_manuscript_proof_review_artifacts_with_proof_path(
                 "round": 1,
                 "stage_id": "math",
                 "stage_kind": "math",
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": "paper/curvature_flow_bounds.tex",
                 "manuscript_sha256": manuscript_sha256,
                 "claims_reviewed": ["CLM-001"],
                 "summary": "math review",
@@ -155,7 +171,7 @@ def _write_manuscript_proof_review_artifacts_with_proof_path(
                 "  - CLM-001\n"
                 "proof_artifact_paths:\n"
                 f"{proof_redteam_artifact_paths}"
-                "manuscript_path: paper/main.tex\n"
+                "manuscript_path: paper/curvature_flow_bounds.tex\n"
                 f"manuscript_sha256: {manuscript_sha256}\n"
                 "round: 1\n"
                 "---\n\n"

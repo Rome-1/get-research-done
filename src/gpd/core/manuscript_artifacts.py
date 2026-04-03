@@ -21,10 +21,7 @@ __all__ = [
 
 
 _MANUSCRIPT_ROOTS = ("paper", "manuscript", "draft")
-_REPRODUCIBILITY_MANIFEST_FILENAMES = (
-    "reproducibility-manifest.json",
-    "REPRODUCIBILITY-MANIFEST.json",
-)
+_REPRODUCIBILITY_MANIFEST_FILENAME = "reproducibility-manifest.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,5 +165,5 @@ def resolve_current_manuscript_artifacts(
         manuscript_entrypoint=entrypoint,
         artifact_manifest=locate_publication_artifact(manuscript_root, "ARTIFACT-MANIFEST.json"),
         bibliography_audit=locate_publication_artifact(manuscript_root, "BIBLIOGRAPHY-AUDIT.json"),
-        reproducibility_manifest=locate_publication_artifact(manuscript_root, *_REPRODUCIBILITY_MANIFEST_FILENAMES),
+        reproducibility_manifest=locate_publication_artifact(manuscript_root, _REPRODUCIBILITY_MANIFEST_FILENAME),
     )

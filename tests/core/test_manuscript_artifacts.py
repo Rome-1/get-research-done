@@ -57,7 +57,7 @@ def test_resolve_current_manuscript_artifacts_prefers_manifest_declared_entrypoi
     assert resolve_current_manuscript_root(tmp_path) == tmp_path / "paper"
 
 
-def test_resolve_current_manuscript_artifacts_supports_config_derived_markdown_and_uppercase_reproducibility(
+def test_resolve_current_manuscript_artifacts_supports_config_derived_markdown_and_canonical_reproducibility(
     tmp_path: Path,
 ) -> None:
     _write(
@@ -75,16 +75,57 @@ def test_resolve_current_manuscript_artifacts_supports_config_derived_markdown_a
     _write(tmp_path / "manuscript" / "asymptotic_matching_note.md", "# Manuscript\n")
     _write(tmp_path / "manuscript" / "ARTIFACT-MANIFEST.json", "{}\n")
     _write(tmp_path / "manuscript" / "BIBLIOGRAPHY-AUDIT.json", "{}\n")
-    _write(tmp_path / "manuscript" / "REPRODUCIBILITY-MANIFEST.json", "{}\n")
+    _write(tmp_path / "manuscript" / "reproducibility-manifest.json", "{}\n")
 
     artifacts = resolve_current_manuscript_artifacts(tmp_path)
 
     assert artifacts.manuscript_entrypoint == tmp_path / "manuscript" / "asymptotic_matching_note.md"
     assert artifacts.manuscript_root == tmp_path / "manuscript"
-    assert artifacts.reproducibility_manifest in {
-        tmp_path / "manuscript" / "reproducibility-manifest.json",
-        tmp_path / "manuscript" / "REPRODUCIBILITY-MANIFEST.json",
-    }
+    assert artifacts.reproducibility_manifest == tmp_path / "manuscript" / "reproducibility-manifest.json"
+
+
+def test_resolve_current_manuscript_artifacts_ignores_uppercase_reproducibility_manifest_alias(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _write(
+        tmp_path / "manuscript" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Asymptotic Matching Note",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        )
+        + "\n",
+    )
+    _write(tmp_path / "manuscript" / "asymptotic_matching_note.md", "# Manuscript\n")
+    _write(tmp_path / "manuscript" / "REPRODUCIBILITY-MANIFEST.json", "{}\n")
+
+    requested_filenames: list[tuple[str, ...]] = []
+
+    def fake_locate_publication_artifact(manuscript_root: Path, *filenames: str) -> Path | None:
+        requested_filenames.append(filenames)
+        if filenames == ("ARTIFACT-MANIFEST.json",):
+            return manuscript_root / "ARTIFACT-MANIFEST.json"
+        if filenames == ("BIBLIOGRAPHY-AUDIT.json",):
+            return manuscript_root / "BIBLIOGRAPHY-AUDIT.json"
+        if filenames == ("reproducibility-manifest.json",):
+            return manuscript_root / "reproducibility-manifest.json"
+        return None
+
+    monkeypatch.setattr("gpd.core.manuscript_artifacts.locate_publication_artifact", fake_locate_publication_artifact)
+
+    artifacts = resolve_current_manuscript_artifacts(tmp_path)
+
+    assert artifacts.manuscript_entrypoint == tmp_path / "manuscript" / "asymptotic_matching_note.md"
+    assert requested_filenames == [
+        ("ARTIFACT-MANIFEST.json",),
+        ("BIBLIOGRAPHY-AUDIT.json",),
+        ("reproducibility-manifest.json",),
+    ]
+    assert artifacts.reproducibility_manifest == tmp_path / "manuscript" / "reproducibility-manifest.json"
 
 
 def test_locate_publication_artifact_accepts_named_entrypoint_path(tmp_path: Path) -> None:

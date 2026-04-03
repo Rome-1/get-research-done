@@ -1588,6 +1588,7 @@ def test_contract_schema_references_stay_wired_into_templates_and_review_docs() 
     assert "--ledger GPD/review/REVIEW-LEDGER{round_suffix}.json" in peer_review
     assert "before trusting any final recommendation" in peer_review
     assert "Keep `manuscript_path` non-empty and identical across `GPD/review/REVIEW-LEDGER{round_suffix}.json`" in peer_review
+    assert "REPRODUCIBILITY-MANIFEST.json" not in peer_review
     assert "templates/paper/review-ledger-schema.md" in panel
     assert "templates/paper/referee-decision-schema.md" in panel
     assert "--ledger GPD/review/REVIEW-LEDGER{round_suffix}.json" in panel
@@ -1643,6 +1644,17 @@ def test_contract_schema_references_stay_wired_into_templates_and_review_docs() 
     assert "Effective Reference Intake:" in plan_phase
     assert "Contract Intake:" in verify_work
     assert "Effective Reference Intake:" in verify_work
+
+
+def test_manuscript_documentation_uses_current_manuscript_root_paths_only() -> None:
+    explain = (WORKFLOWS_DIR / "explain.md").read_text(encoding="utf-8")
+    manuscript_outline = (TEMPLATES_DIR / "paper" / "manuscript-outline.md").read_text(encoding="utf-8")
+    execute_phase = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
+
+    assert "GPD/paper/" not in explain
+    assert "GPD/paper/" not in manuscript_outline
+    assert "${PAPER_DIR}/EXPERIMENTAL_COMPARISON.md" in execute_phase
+    assert "GPD/paper/EXPERIMENTAL_COMPARISON.md" not in execute_phase
 
 
 def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_contract_context() -> None:

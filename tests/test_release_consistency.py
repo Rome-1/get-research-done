@@ -622,6 +622,7 @@ def test_public_docs_use_topic_specific_manuscript_stems_instead_of_main_legacy_
     assert "paper-config.json" not in test_readme
     assert "paper/main.tex" not in test_readme
     assert "main.pdf" not in test_readme
+    assert "REPRODUCIBILITY-MANIFEST.json" not in test_readme
 
     assert "ARTIFACT-MANIFEST.json" in hypothesis_research
     assert "PAPER-CONFIG.json" in hypothesis_research

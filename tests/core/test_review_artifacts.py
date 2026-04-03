@@ -34,17 +34,19 @@ from gpd.mcp.paper.review_artifacts import (
     write_stage_review_report,
 )
 
+MANUSCRIPT_PATH = "paper/curvature_flow_bounds.tex"
+
 
 def test_review_artifact_round_trip(tmp_path: Path) -> None:
     claim_index = ClaimIndex(
-        manuscript_path="paper/main.tex",
+        manuscript_path=MANUSCRIPT_PATH,
         manuscript_sha256="a" * 64,
         claims=[
             ClaimRecord(
                 claim_id="CLM-001",
                 claim_type=ClaimType.significance,
                 text="The result has broad impact.",
-                artifact_path="paper/main.tex",
+                artifact_path=MANUSCRIPT_PATH,
                 section="Conclusion",
                 theorem_assumptions=["N is compact"],
                 theorem_parameters=["r_0"],
@@ -54,7 +56,7 @@ def test_review_artifact_round_trip(tmp_path: Path) -> None:
     stage_report = StageReviewReport(
         stage_id="interestingness",
         stage_kind=ReviewStageKind.interestingness,
-        manuscript_path="paper/main.tex",
+        manuscript_path=MANUSCRIPT_PATH,
         manuscript_sha256="a" * 64,
         claims_reviewed=["CLM-001"],
         summary="Impact claim is overstated.",
@@ -65,7 +67,7 @@ def test_review_artifact_round_trip(tmp_path: Path) -> None:
                 claim_ids=["CLM-001"],
                 severity=ReviewIssueSeverity.major,
                 summary="Broad-impact claim is unsupported.",
-                evidence_refs=["paper/main.tex#Conclusion"],
+                evidence_refs=[f"{MANUSCRIPT_PATH}#Conclusion"],
                 support_status=ReviewSupportStatus.unsupported,
                 blocking=True,
                 required_action="Narrow the significance claim to the demonstrated regime.",
@@ -76,7 +78,7 @@ def test_review_artifact_round_trip(tmp_path: Path) -> None:
                 claim_id="CLM-001",
                 theorem_assumptions_checked=["N is compact"],
                 theorem_parameters_checked=[],
-                proof_locations=["paper/main.tex:42"],
+                proof_locations=[f"{MANUSCRIPT_PATH}:42"],
                 uncovered_parameters=["r_0"],
                 coverage_gaps=["Proof establishes only the centered case."],
                 alignment_status=ProofAuditStatus.misaligned,
@@ -87,7 +89,7 @@ def test_review_artifact_round_trip(tmp_path: Path) -> None:
         recommendation_ceiling=ReviewRecommendation.major_revision,
     )
     ledger = ReviewLedger(
-        manuscript_path="paper/main.tex",
+        manuscript_path=MANUSCRIPT_PATH,
         issues=[
             ReviewIssue(
                 issue_id="REF-001",
@@ -101,7 +103,7 @@ def test_review_artifact_round_trip(tmp_path: Path) -> None:
         ],
     )
     decision = RefereeDecisionInput(
-        manuscript_path="paper/main.tex",
+        manuscript_path=MANUSCRIPT_PATH,
         target_journal="jhep",
         final_recommendation=ReviewRecommendation.major_revision,
         final_confidence=ReviewConfidence.high,
@@ -133,7 +135,7 @@ def test_stage_review_report_rejects_duplicate_proof_audit_claim_ids() -> None:
         StageReviewReport(
             stage_id="math",
             stage_kind=ReviewStageKind.math,
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             manuscript_sha256="a" * 64,
             claims_reviewed=["CLM-001"],
             summary="Summary",
@@ -156,7 +158,7 @@ def test_proof_audit_rejects_aligned_status_with_coverage_gaps() -> None:
         ProofAuditRecord(
             claim_id="CLM-001",
             theorem_parameters_checked=["r_0"],
-            proof_locations=["paper/main.tex:3"],
+            proof_locations=[f"{MANUSCRIPT_PATH}:3"],
             uncovered_parameters=["r_0"],
             alignment_status=ProofAuditStatus.aligned,
         )
@@ -168,7 +170,7 @@ def test_claim_index_rejects_invalid_sha256(tmp_path: Path) -> None:
         json.dumps(
             {
                 "version": 1,
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "manuscript_sha256": "abc123",
                 "claims": [],
             }
@@ -186,7 +188,7 @@ def test_claim_index_rejects_uppercase_sha256(tmp_path: Path) -> None:
         json.dumps(
             {
                 "version": 1,
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "manuscript_sha256": "A" * 64,
                 "claims": [],
             }
@@ -225,7 +227,7 @@ def test_stage_review_report_requires_issue_ids(tmp_path: Path) -> None:
                 "round": 1,
                 "stage_id": "reader",
                 "stage_kind": "reader",
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "manuscript_sha256": "a" * 64,
                 "claims_reviewed": ["CLM-001"],
                 "summary": "Summary",
@@ -283,7 +285,7 @@ def test_stage_review_report_requires_stage_id_to_match_stage_kind(tmp_path: Pat
                 "round": 1,
                 "stage_id": "literature",
                 "stage_kind": "reader",
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "manuscript_sha256": "a" * 64,
                 "claims_reviewed": ["CLM-001"],
                 "summary": "Summary",
@@ -307,7 +309,7 @@ def test_review_ledger_rejects_unexpected_extra_fields(tmp_path: Path) -> None:
             {
                 "version": 1,
                 "round": 1,
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "issues": [
                     {
                         "issue_id": "REF-001",
@@ -334,7 +336,7 @@ def test_review_ledger_rejects_invalid_issue_and_claim_id_formats(tmp_path: Path
             {
                 "version": 1,
                 "round": 1,
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "issues": [
                     {
                         "issue_id": "ISSUE-001",
@@ -361,7 +363,7 @@ def test_review_ledger_rejects_invalid_issue_and_claim_id_formats(tmp_path: Path
             ClaimIndex,
             {
                 "version": 2,
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "manuscript_sha256": "a" * 64,
                 "claims": [],
             },
@@ -373,7 +375,7 @@ def test_review_ledger_rejects_invalid_issue_and_claim_id_formats(tmp_path: Path
                 "round": 1,
                 "stage_id": "reader",
                 "stage_kind": ReviewStageKind.reader,
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "manuscript_sha256": "a" * 64,
                 "claims_reviewed": [],
                 "summary": "Summary",
@@ -388,7 +390,7 @@ def test_review_ledger_rejects_invalid_issue_and_claim_id_formats(tmp_path: Path
             {
                 "version": 2,
                 "round": 1,
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "issues": [],
             },
         ),
@@ -409,7 +411,7 @@ def test_review_artifacts_pin_version_to_one(model_cls, kwargs) -> None:
                 "round": 0,
                 "stage_id": "reader",
                 "stage_kind": ReviewStageKind.reader,
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "manuscript_sha256": "a" * 64,
                 "claims_reviewed": [],
                 "summary": "Summary",
@@ -424,7 +426,7 @@ def test_review_artifacts_pin_version_to_one(model_cls, kwargs) -> None:
             {
                 "version": 1,
                 "round": 0,
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "issues": [],
             },
         ),
@@ -440,7 +442,7 @@ def test_read_referee_decision_rejects_unknown_top_level_keys(tmp_path: Path) ->
     decision_path.write_text(
         json.dumps(
             {
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "target_journal": "jhep",
                 "final_recommendation": "major_revision",
                 "unexpected": "boom",
@@ -458,7 +460,7 @@ def test_read_referee_decision_rejects_malformed_blocking_issue_ids(tmp_path: Pa
     decision_path.write_text(
         json.dumps(
             {
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "target_journal": "jhep",
                 "final_recommendation": "major_revision",
                 "blocking_issue_ids": ["REF-001", "not-a-ref"],

@@ -16,6 +16,7 @@ from gpd.core.frontmatter import (
     reconstruct_frontmatter,
     splice_frontmatter,
     validate_frontmatter,
+    verify_artifacts,
     verify_summary,
 )
 
@@ -1431,8 +1432,6 @@ class TestVerifyArtifacts:
         assert any("contract not found" in issue.lower() for artifact in result.artifacts for issue in artifact.issues)
 
     def test_contract_deliverable_exists(self, tmp_path):
-        from gpd.core.frontmatter import verify_artifacts
-
         (tmp_path / "figures").mkdir()
         (tmp_path / "figures" / "main.png").write_text("figure-bytes")
         f = tmp_path / "plan.md"
@@ -1441,17 +1440,27 @@ class TestVerifyArtifacts:
         assert result.all_passed is True
         assert result.passed_count == 1
 
-    def test_contract_deliverable_missing(self, tmp_path):
-        from gpd.core.frontmatter import verify_artifacts
+    def test_contract_deliverable_without_verifiable_path_fails_closed(self, tmp_path):
+        f = tmp_path / "plan.md"
+        content = _valid_plan_contract_frontmatter().replace("      path: figures/main.png\n", "", 1) + "Body.\n"
+        f.write_text(content)
 
+        result = verify_artifacts(tmp_path, f)
+
+        assert result.all_passed is False
+        assert result.passed_count == 0
+        assert result.total == 1
+        assert any(
+            "none have a verifiable path" in issue for artifact in result.artifacts for issue in artifact.issues
+        )
+
+    def test_contract_deliverable_missing(self, tmp_path):
         f = tmp_path / "plan.md"
         f.write_text(_valid_plan_contract_frontmatter() + "Body.\n")
         result = verify_artifacts(tmp_path, f)
         assert result.all_passed is False
 
     def test_contract_deliverable_must_contain_check(self, tmp_path):
-        from gpd.core.frontmatter import verify_artifacts
-
         (tmp_path / "figures").mkdir()
         (tmp_path / "figures" / "main.png").write_text("benchmark evidence\nreference within tolerance\n")
         f = tmp_path / "plan.md"
@@ -1463,8 +1472,6 @@ class TestVerifyArtifacts:
         assert result.all_passed is True
 
     def test_contract_deliverable_missing_required_fragment(self, tmp_path):
-        from gpd.core.frontmatter import verify_artifacts
-
         (tmp_path / "figures").mkdir()
         (tmp_path / "figures" / "main.png").write_text("benchmark evidence only\n")
         f = tmp_path / "plan.md"

@@ -70,7 +70,7 @@ Also check for nearby high-value context when present:
 
 - `GPD/research-map/*.md`
 - Current phase `PLAN.md`, `SUMMARY.md`, `RESEARCH.md`, `VERIFICATION.md`
-- `paper/`, `manuscript/`, or `GPD/paper/`
+- `paper/`, `manuscript/`, or `draft/`
 - Existing `GPD/literature/*REVIEW.md`
 - Existing `GPD/literature/*-CITATION-SOURCES.json`
 - Existing manuscript-local `BIBLIOGRAPHY-AUDIT.json` when available

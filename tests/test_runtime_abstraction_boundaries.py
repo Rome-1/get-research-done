@@ -309,6 +309,13 @@ def _runtime_fixture_literal_findings(content: str, *, minimum_matches: int = 2)
     return findings
 
 
+def test_runtime_fixture_literal_findings_flags_single_runtime_literal_block() -> None:
+    runtime_literal = _RUNTIME_DESCRIPTORS[0].runtime_name
+    findings = _runtime_fixture_literal_findings(f'(["{runtime_literal}"])', minimum_matches=1)
+
+    assert findings == [f'(["{runtime_literal}"])']
+
+
 def _readme_optional_terminal_reference() -> str:
     content = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     match = re.search(

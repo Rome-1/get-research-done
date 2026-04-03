@@ -57,7 +57,7 @@ After resolution, keep all manuscript-local support artifacts rooted at the same
 - `MANUSCRIPT_ROOT` = parent directory of `RESOLVED_MANUSCRIPT`
 - `ARTIFACT_MANIFEST_PATH` = `${MANUSCRIPT_ROOT}/ARTIFACT-MANIFEST.json`
 - `BIBLIOGRAPHY_AUDIT_PATH` = `${MANUSCRIPT_ROOT}/BIBLIOGRAPHY-AUDIT.json`
-- `REPRODUCIBILITY_MANIFEST_PATH` = first existing of `${MANUSCRIPT_ROOT}/reproducibility-manifest.json` or `${MANUSCRIPT_ROOT}/REPRODUCIBILITY-MANIFEST.json`
+- `REPRODUCIBILITY_MANIFEST_PATH` = `${MANUSCRIPT_ROOT}/reproducibility-manifest.json`
 - `PAPER_CONFIG_PATH` = `${MANUSCRIPT_ROOT}/PAPER-CONFIG.json`
 - `LOCAL_BIB_FILES` = all `*.bib` files under `${MANUSCRIPT_ROOT}`
 

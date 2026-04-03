@@ -1810,6 +1810,18 @@ def verify_artifacts(cwd: Path, plan_file_path: Path) -> ArtifactVerification:
         )
 
     deliverables = [deliverable for deliverable in contract.deliverables if deliverable.path]
+    if contract.deliverables and not deliverables:
+        return ArtifactVerification(
+            all_passed=False,
+            passed_count=0,
+            total=len(contract.deliverables),
+            artifacts=[
+                ArtifactCheck(
+                    path=str(plan_file_path),
+                    issues=["Plan contract declares deliverables, but none have a verifiable path"],
+                )
+            ],
+        )
     if not deliverables:
         return ArtifactVerification(
             all_passed=True,

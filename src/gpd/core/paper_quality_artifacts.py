@@ -64,6 +64,7 @@ _CITE_RE = re.compile(r"\\cite\{([^}]*)\}")
 _BIB_ENTRY_RE = re.compile(r"@\w+\s*\{\s*([^,\s]+)\s*,")
 _DERIVATION_ARTIFACT_RE = re.compile(r"(?i)^derivation-(?!state\.).+\.(?:md|markdown|tex|py)$")
 _DERIVATION_ARTIFACT_SUFFIXES = (".md", ".markdown", ".tex", ".py")
+_MANUSCRIPT_CONTENT_SUFFIXES = (".tex", ".md")
 
 
 class _FigureTrackerEntry(BaseModel):
@@ -199,12 +200,25 @@ def _collect_manuscript_content(
     entrypoint: Path | None,
 ) -> tuple[list[Path], str]:
     content_files: list[Path] = []
-    if entrypoint is not None and entrypoint.exists():
-        content_files.append(entrypoint)
+    seen: set[Path] = set()
 
-    for tex_file in sorted(manuscript_dir.glob("*.tex")):
-        if tex_file not in content_files:
-            content_files.append(tex_file)
+    def add_candidate(path: Path) -> None:
+        if path in seen or not path.exists() or not path.is_file():
+            return
+        if path.suffix.lower() not in _MANUSCRIPT_CONTENT_SUFFIXES:
+            return
+        seen.add(path)
+        content_files.append(path)
+
+    if entrypoint is not None:
+        add_candidate(entrypoint)
+
+    for candidate in sorted(
+        path
+        for path in manuscript_dir.rglob("*")
+        if path.is_file() and path.suffix.lower() in _MANUSCRIPT_CONTENT_SUFFIXES
+    ):
+        add_candidate(candidate)
 
     bodies = []
     for content_file in content_files:

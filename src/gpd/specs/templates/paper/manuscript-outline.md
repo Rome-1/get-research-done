@@ -6,7 +6,7 @@ template_version: 1
 
 # Manuscript Outline Template
 
-Template for `GPD/paper/MANUSCRIPT_OUTLINE.md` — maps research results to paper sections following standard physics paper structure.
+Template for `${PAPER_DIR}/MANUSCRIPT_OUTLINE.md` — maps research results to paper sections following standard physics paper structure.
 
 ---
 

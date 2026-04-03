@@ -4935,11 +4935,6 @@ validate_app = typer.Typer(help="Validation checks")
 app.add_typer(validate_app, name="validate")
 
 
-def _find_manuscript_main(cwd: Path, *, allow_markdown: bool = False) -> Path | None:
-    """Locate the primary manuscript entry point if one exists."""
-    return resolve_current_manuscript_entrypoint(cwd, allow_markdown=allow_markdown)
-
-
 def _resolve_review_preflight_manuscript(
     cwd: Path,
     subject: str | None,
@@ -5012,11 +5007,7 @@ def _resolve_review_preflight_publication_artifacts(manuscript: Path) -> Manuscr
     return ManuscriptPublicationArtifacts(
         artifact_manifest=_resolve_review_preflight_publication_artifact(manuscript, "ARTIFACT-MANIFEST.json"),
         bibliography_audit=_resolve_review_preflight_publication_artifact(manuscript, "BIBLIOGRAPHY-AUDIT.json"),
-        reproducibility_manifest=_resolve_review_preflight_publication_artifact(
-            manuscript,
-            "reproducibility-manifest.json",
-            "REPRODUCIBILITY-MANIFEST.json",
-        ),
+        reproducibility_manifest=_resolve_review_preflight_publication_artifact(manuscript, "reproducibility-manifest.json"),
     )
 
 
@@ -6383,7 +6374,7 @@ def _build_review_preflight(
         elif command.name in {"gpd:write-paper", "gpd:respond-to-referees"}:
             manuscript, manuscript_detail = _resolve_review_preflight_manuscript(project_cwd, None, allow_markdown=True)
         else:
-            manuscript, manuscript_detail = _find_manuscript_main(project_cwd), ""
+            manuscript, manuscript_detail = resolve_current_manuscript_entrypoint(project_cwd), ""
         if command.name == "gpd:write-paper" and manuscript is None:
             manuscript_passed = True
             manuscript_detail = (
