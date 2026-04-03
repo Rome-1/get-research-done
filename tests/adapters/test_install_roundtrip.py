@@ -217,6 +217,38 @@ def _read_runtime_agent_prompt(target: Path, runtime: str, agent_name: str) -> s
     raise AssertionError(f"Unsupported runtime {runtime}")
 
 
+def _assert_installed_contract_visibility(
+    verifier: str,
+    executor: str,
+    new_project: str,
+    *,
+    runtime: str,
+) -> None:
+    verifier = _canonicalize_runtime_markdown(verifier, runtime=runtime)
+    executor = _canonicalize_runtime_markdown(executor, runtime=runtime)
+    new_project = _canonicalize_runtime_markdown(new_project, runtime=runtime)
+
+    assert "templates/contract-results-schema.md" in verifier
+    assert "plan_contract_ref" in verifier
+    assert "contract_results" in verifier
+    assert "comparison_verdicts" in verifier
+    assert "suggested_contract_checks" in verifier
+    assert "contract_results.uncertainty_markers" in verifier
+
+    assert "templates/contract-results-schema.md" in executor
+    assert "plan_contract_ref" in executor
+    assert "contract_results" in executor
+    assert "comparison_verdicts" in executor
+    assert "These ledgers are user-visible evidence." in executor
+
+    assert "templates/state-json-schema.md" in new_project
+    assert "project_contract_load_info" in new_project
+    assert "project_contract_validation" in new_project
+    assert "`schema_version` must be the integer `1`" in new_project
+    assert "`references[].must_surface` must be a boolean `true` or `false`" in new_project
+    assert "`context_intake`, `approach_policy`, and `uncertainty_markers` are objects, not strings or lists" in new_project
+
+
 @pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
 def test_install_artifacts_pin_checkout_python_when_running_from_checkout(
     tmp_path: Path,
@@ -855,6 +887,19 @@ def test_real_installed_opencode_artifacts_rewrite_gpd_cli_calls_to_runtime_brid
     assert f'INIT=$({expected_bridge} init plan-phase "<PHASE>")' in agent
     assert 'INIT=$(gpd init progress --include state,config)' not in workflow
     assert 'INIT=$(gpd init plan-phase "<PHASE>")' not in agent
+
+
+@pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
+def test_installed_prompt_contract_visibility_survives_adapter_projection(
+    tmp_path: Path,
+    runtime: str,
+) -> None:
+    target = _install_real_repo_for_runtime(tmp_path, runtime)
+    verifier = _read_runtime_agent_prompt(target, runtime, "gpd-verifier")
+    executor = _read_runtime_agent_prompt(target, runtime, "gpd-executor")
+    new_project = _read_runtime_command_prompt(tmp_path, target, runtime, "new-project")
+
+    _assert_installed_contract_visibility(verifier, executor, new_project, runtime=runtime)
 
 
 # ---------------------------------------------------------------------------

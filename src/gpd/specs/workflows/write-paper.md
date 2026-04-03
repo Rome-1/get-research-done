@@ -1013,6 +1013,8 @@ When revising a paper in response to referee reports:
 
 2. **Produce `GPD/AUTHOR-RESPONSE{round_suffix}.md`:** Spawn a paper-writer agent to produce the structured author response that the gpd-referee expects for multi-round review:
 
+   > **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+
    ```
    task(
      subagent_type="gpd-paper-writer",

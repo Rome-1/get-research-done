@@ -10,6 +10,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = REPO_ROOT / "src/gpd/specs/workflows"
 REFERENCES_DIR = REPO_ROOT / "src/gpd/specs/references"
 TEMPLATES_DIR = REPO_ROOT / "src/gpd/specs/templates"
+WORKFLOW_PATHS = (
+    WORKFLOWS_DIR / "verify-work.md",
+    WORKFLOWS_DIR / "write-paper.md",
+    WORKFLOWS_DIR / "new-project.md",
+    WORKFLOWS_DIR / "map-research.md",
+)
 
 RUNTIME_NOTE_FRAGMENT = "Runtime delegation:"
 MODEL_OMISSION_FRAGMENT = (
@@ -68,6 +74,22 @@ def _extract_task_blocks(text: str) -> list[TaskBlock]:
             index += 1
         else:
             raise AssertionError("Unterminated task() block")
+
+
+def _task_agent_name(task_text: str) -> str:
+    match = re.search(r'subagent_type="([^"]+)"', task_text)
+    assert match is not None, f"task() block missing subagent_type:\n{task_text}"
+    return match.group(1)
+
+
+def _preceding_text(text: str, start: int, *, window: int = 800) -> str:
+    return text[max(0, start - window) : start]
+
+
+def _task_is_commented_out(text: str, start: int) -> bool:
+    line_start = text.rfind("\n", 0, start) + 1
+    line_prefix = text[line_start:start].lstrip()
+    return line_prefix.startswith("#")
 
 
 def _task_blocks_by_agent(path: Path, agent_name: str) -> list[TaskBlock]:
@@ -152,6 +174,27 @@ def test_representative_workflows_keep_runtime_note_and_agent_prompt_bootstrap()
         _assert_runtime_note_present(path)
         for agent_name in agent_names:
             _assert_prompt_bootstrap(_find_single_task(path, agent_name), agent_name)
+
+
+def test_every_workflow_task_block_carries_runtime_delegation_note_and_bootstrap() -> None:
+    for path in WORKFLOW_PATHS:
+        content = _read(path)
+        for task in _extract_task_blocks(content):
+            if 'subagent_type="' not in task.text:
+                continue
+            if _task_is_commented_out(content, task.start):
+                continue
+            agent_name = _task_agent_name(task.text)
+            preceding = _preceding_text(content, task.start)
+
+            assert RUNTIME_NOTE_FRAGMENT in preceding, f"{path.relative_to(REPO_ROOT)} missing runtime note before {agent_name}"
+            assert MODEL_OMISSION_FRAGMENT in preceding, (
+                f"{path.relative_to(REPO_ROOT)} missing model-omission instruction before {agent_name}"
+            )
+            assert READONLY_RUNTIME_NOTE_FRAGMENT in preceding, (
+                f"{path.relative_to(REPO_ROOT)} missing readonly=false instruction before {agent_name}"
+            )
+            _assert_prompt_bootstrap(task, agent_name)
 
 
 def test_quick_and_write_paper_gate_handoffs_on_expected_artifacts() -> None:

@@ -129,6 +129,8 @@ When runtime delegation is available and a required proof-redteam artifact is mi
 CHECK_PROOF_MODEL=$(gpd resolve-model gpd-check-proof)
 ```
 
+> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+
 ```
 task(
   subagent_type="gpd-check-proof",

@@ -70,6 +70,15 @@ def _runtime_command_prefix_patterns() -> list[str]:
     return sorted({re.escape(descriptor.command_prefix) for descriptor in _RUNTIME_DESCRIPTORS if descriptor.command_prefix})
 
 
+def _runtime_tool_alias_patterns() -> list[str]:
+    aliases: set[str] = set()
+    for adapter in iter_adapters():
+        for canonical_name, runtime_name in adapter.tool_name_map.items():
+            if runtime_name and runtime_name != canonical_name and re.search(r"[_-]", runtime_name):
+                aliases.add(runtime_name)
+    return sorted(aliases)
+
+
 def _runtime_owned_path_patterns() -> list[str]:
     patterns: set[str] = set()
     for descriptor in _RUNTIME_DESCRIPTORS:
@@ -310,6 +319,14 @@ def _runtime_fixture_literal_findings(content: str, *, minimum_matches: int = 2)
     return findings
 
 
+def _runtime_tool_alias_literal_pattern() -> re.Pattern[str]:
+    aliases = _runtime_tool_alias_patterns()
+    if not aliases:
+        return re.compile(r"$^")
+    pieces = [rf'["\'`]{re.escape(alias)}["\'`]' for alias in aliases]
+    return re.compile(r"(?:%s)" % "|".join(pieces))
+
+
 def test_runtime_fixture_literal_findings_flags_single_runtime_literal_block() -> None:
     runtime_literal = _RUNTIME_DESCRIPTORS[0].runtime_name
     findings = _runtime_fixture_literal_findings(f'(["{runtime_literal}"])', minimum_matches=1)
@@ -417,6 +434,23 @@ def test_shared_python_surfaces_do_not_hardcode_runtime_command_prefixes() -> No
 
     assert leaks == [], (
         "Shared Python surfaces should stay canonical instead of hardcoding runtime command prefixes:\n"
+        f"{_format_failures(leaks)}"
+    )
+
+
+def test_shared_source_surfaces_do_not_hardcode_runtime_tool_alias_literals() -> None:
+    alias_pattern = _runtime_tool_alias_literal_pattern()
+    leaks = _scan_paths_for_pattern((REPO_ROOT / "src/gpd",), alias_pattern)
+    leaks = [
+        (path, line_no, snippet)
+        for path, line_no, snippet in leaks
+        if path.suffix in {".py", ".md", ".json", ".toml"}
+        and not path.as_posix().startswith("src/gpd/adapters/")
+        and path.as_posix() != "src/gpd/hooks/runtime_detect.py"
+    ]
+
+    assert leaks == [], (
+        "Shared source surfaces should not hardcode runtime-specific tool aliases outside adapter files:\n"
         f"{_format_failures(leaks)}"
     )
 
