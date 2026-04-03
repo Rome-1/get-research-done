@@ -983,12 +983,20 @@ def _finalize_project_contract_gate(
     return finalized_load_info, validation_payload, gate_payload
 
 
-def _normalize_continuation_payload(continuation: object) -> dict[str, object]:
-    return _normalize_continuation_payload_with_issues(continuation)[0]
+def _normalize_continuation_payload(
+    continuation: object,
+    *,
+    project_root: Path | None = None,
+) -> dict[str, object]:
+    return _normalize_continuation_payload_with_issues(continuation, project_root=project_root)[0]
 
 
-def _normalize_continuation_payload_with_issues(continuation: object) -> tuple[dict[str, object], list[str]]:
-    normalized, issues = normalize_continuation_with_issues(None, continuation)
+def _normalize_continuation_payload_with_issues(
+    continuation: object,
+    *,
+    project_root: Path | None = None,
+) -> tuple[dict[str, object], list[str]]:
+    normalized, issues = normalize_continuation_with_issues(project_root, continuation)
     return normalized.model_dump(mode="python"), issues
 
 
@@ -1674,6 +1682,7 @@ def _normalize_state_schema(
     raw: dict | None,
     *,
     allow_project_contract_salvage: bool = True,
+    project_root: Path | None = None,
 ) -> tuple[dict, list[str]]:
     """Normalize a raw state dict and capture integrity-affecting coercions."""
     if not raw:
@@ -1707,6 +1716,7 @@ def _normalize_state_schema(
         normalized,
         integrity_issues,
         allow_project_contract_salvage=allow_project_contract_salvage,
+        project_root=project_root,
     )
 
     try:
@@ -1981,6 +1991,7 @@ def _salvage_state_sections(
     integrity_issues: list[str],
     *,
     allow_project_contract_salvage: bool,
+    project_root: Path | None = None,
 ) -> dict[str, object]:
     if normalized.get("project_contract") is not None:
         normalized["project_contract"] = _normalize_project_contract_section(
@@ -1995,7 +2006,8 @@ def _salvage_state_sections(
         )
     if normalized.get("continuation") is not None:
         continuation_payload, continuation_issues = _normalize_continuation_payload_with_issues(
-            normalized.get("continuation")
+            normalized.get("continuation"),
+            project_root=project_root,
         )
         normalized["continuation"] = continuation_payload
         for issue in continuation_issues:
@@ -2019,11 +2031,12 @@ def ensure_state_schema(raw: dict | None) -> dict:
     return normalized
 
 
-def _normalize_state_for_persistence(raw: dict | None) -> dict:
+def _normalize_state_for_persistence(raw: dict | None, *, project_root: Path | None = None) -> dict:
     """Normalize state for writes without silently salvaging malformed contracts."""
     normalized, integrity_issues = _normalize_state_schema(
         raw,
         allow_project_contract_salvage=False,
+        project_root=project_root,
     )
     if any("project_contract" in issue for issue in integrity_issues):
         logger.warning("state.json persistence normalized project_contract with issue(s): %s", "; ".join(integrity_issues))
@@ -2692,7 +2705,7 @@ def _build_state_from_markdown(cwd: Path, md_content: str, *, recover_intent: bo
     else:
         merged = parsed
 
-    return _normalize_state_for_persistence(merged)
+    return _normalize_state_for_persistence(merged, project_root=cwd)
 
 
 def _write_state_pair_locked(
@@ -2716,7 +2729,7 @@ def _write_state_pair_locked(
     json_backup = safe_read_file(json_path)
     md_backup = safe_read_file(md_path)
 
-    normalized = _normalize_state_for_persistence(state_obj)
+    normalized = _normalize_state_for_persistence(state_obj, project_root=cwd)
     if normalized.get("project_contract") is None and isinstance(preserve_raw_project_contract, dict):
         normalized = copy.deepcopy(normalized)
         normalized["project_contract"] = copy.deepcopy(preserve_raw_project_contract)
@@ -3185,7 +3198,7 @@ def save_state_json_locked(cwd: Path, state_obj: dict) -> None:
     Caller MUST hold the canonical state lock.
     """
     _recover_intent_locked(cwd)
-    normalized = _normalize_state_for_persistence(state_obj)
+    normalized = _normalize_state_for_persistence(state_obj, project_root=cwd)
     _write_state_pair_locked(cwd, state_obj=normalized, md_content=generate_state_markdown(normalized))
 
 

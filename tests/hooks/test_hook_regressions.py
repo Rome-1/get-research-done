@@ -275,8 +275,9 @@ def test_installed_runtime_fails_closed_for_invalid_manifest_runtime(tmp_path: P
     adapter = get_adapter(runtime)
     gpd_root = Path(__file__).resolve().parents[2] / "src" / "gpd"
     target_dir = tmp_path / adapter.config_dir_name
+    skills_dir = tmp_path / ".agents" / "skills"
     target_dir.mkdir(parents=True, exist_ok=True)
-    result = adapter.install(gpd_root, target_dir, is_global=True)
+    result = adapter.install(gpd_root, target_dir, is_global=True, skills_dir=skills_dir)
     adapter.finalize_install(result)
 
     manifest_path = target_dir / "gpd-file-manifest.json"

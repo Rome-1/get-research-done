@@ -1648,21 +1648,28 @@ def _doctor_check_latex_toolchain() -> HealthCheck:
 def _doctor_check_workflow_presets(*, latex_check: HealthCheck, base_ready: bool) -> HealthCheck:
     """Report readiness for workflow presets backed by known checks."""
     latex_capability = dict(latex_check.details)
-    if "compiler_available" not in latex_capability:
-        legacy_available = latex_capability.get("paper_build_ready")
-        if legacy_available is None:
-            legacy_available = latex_capability.get("available")
-        if legacy_available is None and latex_check.status == CheckStatus.OK:
-            legacy_available = True
-        legacy_available_bool = bool(legacy_available)
-        latex_capability.setdefault("available", legacy_available_bool)
-        latex_capability.setdefault("compiler_available", legacy_available_bool)
-        latex_capability.setdefault("bibtex_available", legacy_available_bool)
-        latex_capability.setdefault("paper_build_ready", legacy_available_bool)
-        latex_capability.setdefault("arxiv_submission_ready", legacy_available_bool)
+    if "warnings" not in latex_capability:
+        latex_capability["warnings"] = list(latex_check.warnings)
+    if not any(
+        key in latex_capability
+        for key in (
+            "available",
+            "compiler_available",
+            "bibtex_available",
+            "latexmk_available",
+            "kpsewhich_available",
+            "paper_build_ready",
+            "arxiv_submission_ready",
+        )
+    ):
+        legacy_available = latex_check.status == CheckStatus.OK
+        latex_capability.setdefault("available", legacy_available)
+        latex_capability.setdefault("compiler_available", legacy_available)
+        latex_capability.setdefault("bibtex_available", legacy_available)
+        latex_capability.setdefault("paper_build_ready", legacy_available)
+        latex_capability.setdefault("arxiv_submission_ready", legacy_available)
         latex_capability.setdefault("latexmk_available", None)
-        latex_capability.setdefault("kpsewhich_available", legacy_available_bool)
-        latex_capability.setdefault("warnings", list(latex_check.warnings))
+        latex_capability.setdefault("kpsewhich_available", legacy_available)
 
     details = resolve_workflow_preset_readiness(base_ready=base_ready, latex_capability=latex_capability)
     capability_details = details.get("latex_capability")

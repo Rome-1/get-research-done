@@ -72,7 +72,7 @@ ls GPD/review/REFEREE_RESPONSE*.md 2>/dev/null
 ls GPD/review/REVIEW-LEDGER*.json GPD/review/REFEREE-DECISION*.json 2>/dev/null
 ```
 
-Use centralized preflight to resolve the active manuscript only from the canonical manuscript roots `paper/`, `manuscript/`, or `draft/` via the manuscript-root manifest/config/entrypoint resolver. For this command, the explicit argument is the referee-report source path (or the `paste` sentinel), not a manuscript selector. Do not reintroduce first-match glob discovery here.
+Use centralized preflight to resolve the active manuscript only from the canonical manuscript roots `paper/`, `manuscript/`, or `draft/` via the manuscript-root manifest/config/entrypoint resolver. For this command, the explicit argument is the referee-report source path (or the `paste` sentinel), not a manuscript selector. Do not reintroduce first-match wildcard discovery here.
 
 </context>
 

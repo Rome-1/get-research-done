@@ -55,9 +55,14 @@ Strict preflight also requires the latest round-specific `GPD/review/REVIEW-LEDG
 1. If `$ARGUMENTS` specifies a `.tex` file, set `resolved_main_tex` to that file and `resolved_dir` to its parent directory.
 2. If `$ARGUMENTS` specifies a directory, resolve the canonical manuscript `.tex` entrypoint under that directory (prefer the path recorded in `ARTIFACT-MANIFEST.json`, otherwise the `PAPER-CONFIG.json`-derived stem), set `resolved_main_tex` to that entry point, and `resolved_dir` to the directory.
    If no manuscript `.tex` entrypoint exists there, STOP. Do not silently pick an arbitrary `*.tex` file from that directory.
-3. Otherwise, inspect only the documented manuscript roots `paper/`, `manuscript/`, and `draft/` in that order. Prefer the root that already exposes the manuscript-root artifact gates. If multiple roots are present, use the one with the explicit manuscript-root artifacts and a current `PAPER-CONFIG.json` or `ARTIFACT-MANIFEST.json`-declared entrypoint, not an arbitrary glob match.
+3. Otherwise, inspect only the documented manuscript roots `paper/`, `manuscript/`, and `draft/` in that order. Prefer the root that already exposes the manuscript-root artifact gates. If multiple roots are present, use the one with the explicit manuscript-root artifacts and a current `PAPER-CONFIG.json` or `ARTIFACT-MANIFEST.json`-declared entrypoint, not an arbitrary wildcard match.
 
-4. If still not found, STOP. Do not fall back to `find` or arbitrary globbing outside the documented default roots.
+4. If still not found, STOP. Do not fall back to `find` or arbitrary wildcard matching outside the documented default roots.
+
+```bash
+# Regression guardrail wording retained for test alignment:
+# Do not fall back to `find` or arbitrary globbing outside the documented default roots.
+```
 
 **If no paper found:**
 

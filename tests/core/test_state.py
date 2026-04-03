@@ -2711,6 +2711,47 @@ def test_save_state_json_preserves_canonical_continuation_when_session_conflicts
     assert stored["session"]["stopped_at"] == "Canonical handoff stop"
 
 
+def test_save_state_json_normalizes_canonical_continuation_resume_paths_for_persistence(
+    tmp_path: Path, state_project_factory
+) -> None:
+    cwd = state_project_factory(tmp_path)
+    project_resume = cwd / "GPD" / "phases" / "03-analysis" / ".continue-here.md"
+    project_resume.parent.mkdir(parents=True, exist_ok=True)
+    project_resume.write_text("resume\n", encoding="utf-8")
+    external_resume = tmp_path.parent / f"{tmp_path.name}-external" / "outside.md"
+    external_resume.parent.mkdir(parents=True, exist_ok=True)
+    external_resume.write_text("outside\n", encoding="utf-8")
+
+    state = json.loads((cwd / "GPD" / "state.json").read_text(encoding="utf-8"))
+    state["continuation"]["handoff"].update(
+        {
+            "recorded_at": "2026-03-30T09:15:00+00:00",
+            "stopped_at": "Canonical handoff stop",
+            "resume_file": str(project_resume),
+            "recorded_by": "test",
+        }
+    )
+    state["continuation"]["bounded_segment"] = {
+        "resume_file": str(external_resume),
+        "phase": "03",
+        "plan": "02",
+        "segment_id": "segment-03-02",
+        "segment_status": "paused",
+        "transition_id": "transition-03-02",
+        "last_result_id": "result-03-02",
+        "source_session_id": "session-03",
+        "updated_at": "2026-03-29T12:30:00+00:00",
+    }
+
+    save_state_json(cwd, state)
+
+    stored = load_state_json(cwd)
+    assert stored is not None
+    assert stored["continuation"]["handoff"]["resume_file"] == "GPD/phases/03-analysis/.continue-here.md"
+    assert stored["continuation"]["bounded_segment"]["resume_file"] is None
+    assert stored["session"]["resume_file"] == "GPD/phases/03-analysis/.continue-here.md"
+
+
 def test_save_state_markdown_does_not_override_canonical_continuation_session_mirror(
     tmp_path: Path, state_project_factory, monkeypatch
 ) -> None:

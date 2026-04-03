@@ -82,6 +82,15 @@ def _resolved_resume_result(
     return None
 
 
+def test_build_resume_read_state_requires_canonical_resume_projection() -> None:
+    with pytest.raises(RuntimeError, match="resume_projection missing from execution context"):
+        context_module._build_resume_read_state(
+            {"current_execution": {"segment_id": "seg-1"}},
+            interrupted_agent_id=None,
+            result_lookup_by_id={},
+        )
+
+
 def test_state_record_session_persists_machine_identity(
     tmp_path: Path, state_project_factory, monkeypatch
 ) -> None:

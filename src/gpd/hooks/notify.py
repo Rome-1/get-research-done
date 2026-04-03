@@ -313,16 +313,6 @@ def main() -> None:
             project_root=project_root,
             explicit_project_dir=bool(explicit_project_dir),
         )
-        if not explicit_project_dir:
-            try:
-                resolved_workspace = Path(workspace_dir).expanduser().resolve(strict=False)
-                resolved_project_root = Path(project_root).expanduser().resolve(strict=False)
-                relative_workspace = resolved_workspace.relative_to(resolved_project_root)
-            except (OSError, ValueError):
-                relative_workspace = None
-            if relative_workspace is not None and len(relative_workspace.parts) == 1:
-                project_root = workspace_dir
-                runtime_lookup_dir = workspace_dir
         hook_payload = _hook_payload_policy(runtime_lookup_dir)
         allowed_event_types = hook_payload.notify_event_types
         event_type = data.get("type")

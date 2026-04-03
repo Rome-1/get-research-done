@@ -102,9 +102,10 @@ If the manuscript depends on any theorem-style or `proof_obligation` result, tre
 **Resolve paper directory (if resuming):**
 
 If strict preflight or init already resolved an active manuscript under `paper/`, `manuscript/`, or `draft/`, keep that manuscript root as `PAPER_DIR`. Prefer the manuscript-root `ARTIFACT-MANIFEST.json`, then `PAPER-CONFIG.json`, then the canonical current manuscript entrypoint rules within those roots. Do not choose `PAPER_DIR` by first-match `*.tex` or `*.md` globbing.
+When strict preflight resolves a manuscript root, bind it explicitly as `PAPER_DIR="$DIR"` where `$DIR` is that resolved manuscript directory, and treat `${PAPER_DIR}/{topic_specific_stem}.tex` as the canonical emitted manuscript path recorded by `${PAPER_DIR}/ARTIFACT-MANIFEST.json`.
 
 If a manuscript root was resolved, the workflow is resuming or revising that manuscript directory. Strict review for that resume path uses `${PAPER_DIR}/ARTIFACT-MANIFEST.json`, `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json`, and `${PAPER_DIR}/reproducibility-manifest.json` from the same directory.
-If no manuscript root was resolved, set `PAPER_DIR=paper` and bootstrap a fresh scaffold there.
+If no manuscript root was resolved, set `PAPER_DIR="paper"` and bootstrap a fresh scaffold there.
 
 **Check optional local LaTeX compiler availability for smoke tests (cross-platform):**
 

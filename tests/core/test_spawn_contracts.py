@@ -44,6 +44,11 @@ def _extract_task_blocks(text: str) -> list[TaskBlock]:
         if start == -1:
             return blocks
 
+        line_start = text.rfind("\n", 0, start) + 1
+        if text[line_start:start].lstrip().startswith("#"):
+            cursor = start + len("task(")
+            continue
+
         index = start + len("task(")
         depth = 1
         quote: str | None = None

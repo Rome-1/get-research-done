@@ -86,7 +86,7 @@ Paper topic: $ARGUMENTS
 
 Check for existing drafts:
 
-Let centralized preflight resolve any existing manuscript entrypoint only from `paper/`, `manuscript/`, or `draft/`, using the manuscript-root `ARTIFACT-MANIFEST.json` first and then `PAPER-CONFIG.json`. Do not fall back to ad hoc `find` or first-match globbing for manuscript selection.
+Let centralized preflight resolve any existing manuscript entrypoint only from `paper/`, `manuscript/`, or `draft/`, using the manuscript-root `ARTIFACT-MANIFEST.json` first and then `PAPER-CONFIG.json`. Do not fall back to ad hoc `find` or first-match wildcard expansion for manuscript selection.
 
 Load research context:
 
@@ -102,7 +102,7 @@ cat GPD/research-map/FORMALISM.md 2>/dev/null
 **Follow the write-paper workflow** from `@{GPD_INSTALL_DIR}/workflows/write-paper.md`.
 
 When the workflow asks for constrained artifacts such as `${PAPER_DIR}/PAPER-CONFIG.json`, `${PAPER_DIR}/ARTIFACT-MANIFEST.json`, `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json`, `${PAPER_DIR}/reproducibility-manifest.json`, or `${PAPER_DIR}/FIGURE_TRACKER.md`, use the canonical schema/template surfaces it loads there rather than inventing keys from memory.
-If the workflow is resuming an existing manuscript, keep the active manuscript root bound to the canonical manifest/config/entrypoint resolver rather than picking the first matching `*.tex` or `*.md` file by glob.
+If the workflow is resuming an existing manuscript, keep the active manuscript root bound to the canonical manifest/config/entrypoint resolver rather than picking the first matching `*.tex` or `*.md` file by wildcard expansion.
 
 The workflow handles all logic including:
 

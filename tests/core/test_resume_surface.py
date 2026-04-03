@@ -108,6 +108,30 @@ def test_build_resume_compat_surface_merges_sources_with_explicit_precedence() -
     assert compat["session_resume_file"] == "GPD/phases/02/legacy.md"
 
 
+def test_build_resume_compat_surface_keeps_concrete_values_over_later_none_placeholders() -> None:
+    payload_one = {
+        "compat_resume_surface": {
+            "execution_resume_file": "GPD/phases/01/.continue-here.md",
+            "active_execution_segment": {"segment_id": "seg-1"},
+            "session_resume_file": "GPD/phases/01/legacy.md",
+        }
+    }
+    payload_two = {
+        "compat_resume_surface": {
+            "execution_resume_file": None,
+            "active_execution_segment": None,
+            "session_resume_file": None,
+        }
+    }
+
+    compat = build_resume_compat_surface(payload_one, payload_two)
+
+    assert compat is not None
+    assert compat["execution_resume_file"] == "GPD/phases/01/.continue-here.md"
+    assert compat["active_execution_segment"] == {"segment_id": "seg-1"}
+    assert compat["session_resume_file"] == "GPD/phases/01/legacy.md"
+
+
 def test_resolve_resume_compat_surface_ignores_arbitrary_nested_compat_like_dicts() -> None:
     payload = {
         "recovery": {
@@ -441,6 +465,35 @@ def test_canonicalize_resume_public_payload_preserves_canonical_fields_and_compa
     assert canonical["compat_resume_surface"]["session_resume_file"] == "GPD/phases/03/legacy.md"
     assert canonical["compat_resume_surface"]["recorded_session_resume_file"] == "GPD/phases/03/legacy.md"
     assert canonical["compat_resume_surface"]["missing_session_resume_file"] is None
+
+
+def test_canonicalize_resume_public_payload_preserves_nested_compat_values_over_none_placeholders() -> None:
+    payload = {
+        "active_resume_kind": "continuity_handoff",
+        "active_resume_origin": "continuation.handoff",
+        "active_resume_pointer": "GPD/phases/04/.continue-here.md",
+        "execution_resume_file": None,
+        "active_execution_segment": None,
+        "compat_resume_surface": {
+            "execution_resume_file": "GPD/phases/04/.continue-here.md",
+            "active_execution_segment": {"segment_id": "seg-4"},
+            "execution_resume_file_source": "session_resume_file",
+            "resume_mode": "continuity_handoff",
+            "segment_candidates": [{"source": "session_resume_file", "status": "handoff"}],
+            "session_resume_file": "GPD/phases/04/.continue-here.md",
+        },
+    }
+
+    canonical = canonicalize_resume_public_payload(payload)
+
+    assert "execution_resume_file" not in canonical
+    assert "active_execution_segment" not in canonical
+    assert canonical["compat_resume_surface"]["execution_resume_file"] == "GPD/phases/04/.continue-here.md"
+    assert canonical["compat_resume_surface"]["active_execution_segment"] == {"segment_id": "seg-4"}
+    assert canonical["compat_resume_surface"]["execution_resume_file_source"] == "session_resume_file"
+    assert canonical["compat_resume_surface"]["resume_mode"] == "continuity_handoff"
+    assert canonical["compat_resume_surface"]["segment_candidates"] == [{"source": "session_resume_file", "status": "handoff"}]
+    assert canonical["compat_resume_surface"]["session_resume_file"] == "GPD/phases/04/.continue-here.md"
 
 
 def test_canonicalize_resume_public_payload_is_idempotent_on_already_canonical_payload() -> None:

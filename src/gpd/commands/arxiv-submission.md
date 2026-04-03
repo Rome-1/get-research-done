@@ -91,7 +91,7 @@ Resolve the paper directory from the explicit argument when provided. Otherwise 
 - `ARTIFACT-MANIFEST.json` identifies the canonical manuscript entry point when present.
 - `BIBLIOGRAPHY-AUDIT.json` must live beside that resolved manuscript root before packaging and must be semantically clean (`bibliography_audit_clean`).
 - `PAPER-CONFIG.json` / `gpd paper-build` may refresh the manuscript and bibliography audit for that same root.
-- Do not scan arbitrary `*.tex` files or rely on glob-based discovery.
+- Do not scan arbitrary `*.tex` files or rely on wildcard-based discovery.
 
 If no manuscript root is found, suggest `/gpd:write-paper` first.
 

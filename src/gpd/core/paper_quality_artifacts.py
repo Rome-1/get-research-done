@@ -26,7 +26,7 @@ from gpd.core.frontmatter import (
     _validate_contract_mapping,
     extract_frontmatter,
 )
-from gpd.core.manuscript_artifacts import resolve_current_manuscript_artifacts
+from gpd.core.manuscript_artifacts import locate_publication_artifact, resolve_current_manuscript_artifacts
 from gpd.core.paper_quality import (
     BinaryCheck,
     CitationsQualityInput,
@@ -697,8 +697,12 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
     root = Path(project_root)
     manuscript_artifacts = resolve_current_manuscript_artifacts(root, allow_markdown=True)
     paper_dir = manuscript_artifacts.manuscript_root or root / "paper"
-    artifact_manifest = _load_artifact_manifest(manuscript_artifacts.artifact_manifest)
-    bibliography_audit = _load_bibliography_audit(manuscript_artifacts.bibliography_audit)
+    artifact_manifest = _load_artifact_manifest(
+        manuscript_artifacts.artifact_manifest or locate_publication_artifact(paper_dir, "ARTIFACT-MANIFEST.json")
+    )
+    bibliography_audit = _load_bibliography_audit(
+        manuscript_artifacts.bibliography_audit or locate_publication_artifact(paper_dir, "BIBLIOGRAPHY-AUDIT.json")
+    )
     paper_config = _load_manuscript_config(paper_dir)
 
     manuscript_files, manuscript_content = _collect_manuscript_content(

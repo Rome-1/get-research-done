@@ -8,6 +8,7 @@ from gpd.core.continuation import (
     canonical_bounded_segment_from_execution_snapshot,
     normalize_continuation,
     normalize_continuation_reference,
+    normalize_continuation_with_issues,
     resolve_continuation,
     synthesize_legacy_continuation,
 )
@@ -61,6 +62,27 @@ def test_normalize_continuation_normalizes_canonical_references(tmp_path: Path) 
     assert continuation.bounded_segment.resume_file == "GPD/phases/03-analysis/.continue-here.md"
     assert continuation.bounded_segment.phase == "03"
     assert continuation.bounded_segment.plan == "02"
+
+
+def test_normalize_continuation_with_issues_drops_malformed_boolean_gate_fields(tmp_path: Path) -> None:
+    continuation, issues = normalize_continuation_with_issues(
+        tmp_path,
+        {
+            "bounded_segment": {
+                "resume_file": "GPD/phases/03-analysis/.continue-here.md",
+                "segment_status": "paused",
+                "waiting_for_review": "yes",
+            }
+        },
+    )
+
+    assert continuation.bounded_segment is not None
+    assert continuation.bounded_segment.waiting_for_review is False
+    assert any(
+        'schema normalization: dropped malformed "continuation.bounded_segment.waiting_for_review"'
+        in issue
+        for issue in issues
+    )
 
 
 def test_canonical_bounded_segment_from_execution_snapshot_normalizes_lineage_fields(

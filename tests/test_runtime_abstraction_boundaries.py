@@ -324,7 +324,7 @@ def _runtime_tool_alias_literal_pattern() -> re.Pattern[str]:
     if not aliases:
         return re.compile(r"$^")
     pieces = [rf'["\'`]{re.escape(alias)}["\'`]' for alias in aliases]
-    return re.compile(r"(?:%s)" % "|".join(pieces))
+    return re.compile(rf"(?:{'|'.join(pieces)})")
 
 
 def test_runtime_fixture_literal_findings_flags_single_runtime_literal_block() -> None:

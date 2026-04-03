@@ -21,6 +21,7 @@ from gpd.core.health import (
     HealthReport,
     HealthSummary,
     _doctor_check_latex_toolchain,
+    _doctor_check_workflow_presets,
     build_unattended_readiness_result,
     check_checkpoint_tags,
     check_compaction_needed,
@@ -461,6 +462,25 @@ class TestDoctorCheckLatexToolchain:
         assert result.details["arxiv_submission_ready"] is False
         assert result.details["missing_components"] == ["pdflatex"]
         assert result.warnings == ["No LaTeX compiler found.\nInstall a LaTeX distribution."]
+
+    def test_workflow_presets_do_not_backfill_publication_readiness_from_minimal_legacy_latex_payload(self) -> None:
+        result = _doctor_check_workflow_presets(
+            latex_check=HealthCheck(
+                status=CheckStatus.OK,
+                label="LaTeX Toolchain",
+                details={"available": True},
+                warnings=[],
+            ),
+            base_ready=True,
+        )
+
+        checks = {preset["id"]: preset for preset in result.details["presets"]}
+        publication = checks["publication-manuscript"]
+
+        assert publication["status"] == "degraded"
+        assert publication["summary"] == "degraded without BibTeX support: draft/review remain usable, but build/submission stay blocked"
+        assert publication["ready_workflows"] == []
+        assert publication["blocked_workflows"] == ["paper-build", "arxiv-submission"]
 
 
 class TestCheckProjectStructure:
@@ -1593,10 +1613,12 @@ trigger:
 
     def test_runtime_advisories_are_non_blocking(self, tmp_path: Path):
         specs_dir = self._make_specs_dir(tmp_path)
+        target_dir = runtime_target_dir(tmp_path, PRIMARY_RUNTIME)
 
         with (
             patch("gpd.core.health._doctor_active_virtualenv", return_value=True),
             patch("gpd.core.health.shutil.which", return_value=_PRIMARY_LAUNCHER_PATH),
+            patch("gpd.core.health.os.access", return_value=True),
             patch(
                 "gpd.core.health._doctor_check_bootstrap_network_access",
                 return_value=HealthCheck(
@@ -1624,7 +1646,7 @@ trigger:
             patch(
                 "gpd.core.health.assess_install_target",
                 return_value=InstallTargetAssessment(
-                    config_dir=runtime_target_dir(Path("/tmp"), PRIMARY_RUNTIME),
+                    config_dir=target_dir.resolve(strict=False),
                     expected_runtime=PRIMARY_RUNTIME,
                     state="clean",
                     manifest_state="missing",
@@ -1633,7 +1655,13 @@ trigger:
                 ),
             ),
         ):
-            report = run_doctor(specs_dir=specs_dir, version="0.1.0", runtime=PRIMARY_RUNTIME, install_scope="global")
+            report = run_doctor(
+                specs_dir=specs_dir,
+                version="0.1.0",
+                runtime=PRIMARY_RUNTIME,
+                install_scope="global",
+                target_dir=target_dir,
+            )
 
         checks = {check.label: check for check in report.checks}
 

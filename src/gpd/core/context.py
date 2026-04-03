@@ -1328,103 +1328,132 @@ def _has_resume_candidate(
     return False
 
 
-def _build_legacy_resume_state(
+def _build_resume_read_state(
     execution_context: dict[str, object],
     *,
     interrupted_agent_id: str | None,
     result_lookup_by_id: dict[str, dict[str, object]],
 ) -> dict[str, object]:
+    resume_projection = execution_context.get("resume_projection")
+    if not hasattr(resume_projection, "continuation"):
+        raise RuntimeError("resume_projection missing from execution context")
+
+    current_execution_raw = execution_context.get("current_execution")
+    current_execution = current_execution_raw if isinstance(current_execution_raw, dict) else None
+    bounded_segment = getattr(resume_projection.continuation, "bounded_segment", None)
+    bounded_segment_origin = _bounded_segment_resume_origin(resume_projection)
+    handoff_origin = _handoff_resume_origin(resume_projection)
+    handoff_last_result_id = _handoff_last_result_id(resume_projection)
+    active_execution_segment = None
+    active_bounded_segment = None
+    if bounded_segment is not None:
+        active_bounded_segment = bounded_segment.model_dump(mode="json")
+        active_execution_segment = active_bounded_segment
+    elif current_execution is not None:
+        active_execution_segment = current_execution
+
     segment_candidates: list[dict[str, object]] = []
-    current_execution = execution_context.get("current_execution")
-    active_bounded_segment = current_execution if execution_context.get("execution_resumable") and isinstance(current_execution, dict) else None
     resume_candidates: list[dict[str, object]] = []
-    if isinstance(active_bounded_segment, dict):
-        current_candidate = _resume_candidate_from_segment(active_bounded_segment)
-        segment_candidates.append(current_candidate)
+    if resume_projection.resumable and isinstance(active_execution_segment, dict):
+        candidate_payload = dict(active_execution_segment)
+        candidate_payload["resume_file"] = resume_projection.bounded_segment_resume_file
+        candidate = _resume_candidate_from_segment(candidate_payload)
+        segment_candidates.append(candidate)
         resume_candidates.append(
             _canonical_resume_candidate(
-                current_candidate,
+                candidate,
                 kind="bounded_segment",
-                origin="compat.current_execution",
-                resume_pointer=current_candidate.get("resume_file")
-                if isinstance(current_candidate.get("resume_file"), str)
-                else None,
+                origin=bounded_segment_origin,
+                resume_pointer=resume_projection.bounded_segment_resume_file,
             )
         )
 
-    session_resume_file = execution_context.get("session_resume_file")
-    if isinstance(session_resume_file, str) and session_resume_file:
-        session_candidate = {
-            "source": "session_resume_file",
-            "status": "handoff",
-            "resume_file": session_resume_file,
-            "resumable": False,
-        }
+    if isinstance(resume_projection.handoff_resume_file, str) and resume_projection.handoff_resume_file:
         if not any(
-            candidate.get("resume_file") == session_candidate["resume_file"]
+            candidate.get("resume_file") == resume_projection.handoff_resume_file
             for candidate in segment_candidates
         ):
-            segment_candidates.append(session_candidate)
+            candidate = {
+                "source": "session_resume_file",
+                "status": "handoff",
+                "resume_file": resume_projection.handoff_resume_file,
+                "resumable": False,
+            }
+            if handoff_last_result_id is not None:
+                candidate["last_result_id"] = handoff_last_result_id
+            segment_candidates.append(candidate)
             resume_candidates.append(
                 _canonical_resume_candidate(
-                    session_candidate,
+                    candidate,
                     kind="continuity_handoff",
-                    origin="compat.session_resume_file",
-                    resume_pointer=session_resume_file,
+                    origin=handoff_origin,
+                    resume_pointer=resume_projection.handoff_resume_file,
                 )
             )
 
-    missing_session_resume_file = execution_context.get("missing_session_resume_file")
-    if isinstance(missing_session_resume_file, str) and missing_session_resume_file:
-        missing_session_candidate = {
-            "source": "session_resume_file",
-            "status": "missing",
-            "resume_file": missing_session_resume_file,
-            "resumable": False,
-            "advisory": True,
-        }
-        if not any(
-            candidate.get("resume_file") == missing_session_candidate["resume_file"]
-            and candidate.get("source") == missing_session_candidate["source"]
-            for candidate in segment_candidates
+    if isinstance(resume_projection.missing_handoff_resume_file, str) and resume_projection.missing_handoff_resume_file:
+        if not _has_candidate(
+            segment_candidates,
+            source="session_resume_file",
+            resume_file=resume_projection.missing_handoff_resume_file,
         ):
-            segment_candidates.append(missing_session_candidate)
+            candidate = {
+                "source": "session_resume_file",
+                "status": "missing",
+                "resume_file": resume_projection.missing_handoff_resume_file,
+                "resumable": False,
+                "advisory": True,
+            }
+            if handoff_last_result_id is not None:
+                candidate["last_result_id"] = handoff_last_result_id
+            segment_candidates.append(candidate)
             resume_candidates.append(
                 _canonical_resume_candidate(
-                    missing_session_candidate,
+                    candidate,
                     kind="continuity_handoff",
-                    origin="compat.session_resume_file",
-                    resume_pointer=missing_session_resume_file,
+                    origin=handoff_origin,
+                    resume_pointer=resume_projection.missing_handoff_resume_file,
                 )
             )
 
-    if interrupted_agent_id is not None:
-        interrupted_candidate = {
+    if interrupted_agent_id is not None and not _has_candidate(
+        segment_candidates,
+        source="interrupted_agent",
+        agent_id=interrupted_agent_id,
+    ):
+        candidate = {
             "source": "interrupted_agent",
             "status": "interrupted",
             "agent_id": interrupted_agent_id,
         }
-        segment_candidates.append(interrupted_candidate)
-        resume_candidates.append(
-            _canonical_resume_candidate(
-                interrupted_candidate,
-                kind="interrupted_agent",
-                origin="interrupted_agent_marker",
-                resume_pointer=interrupted_agent_id,
+        segment_candidates.append(candidate)
+        if not _has_resume_candidate(
+            resume_candidates,
+            kind="interrupted_agent",
+            agent_id=interrupted_agent_id,
+        ):
+            resume_candidates.append(
+                _canonical_resume_candidate(
+                    candidate,
+                    kind="interrupted_agent",
+                    origin=_interrupted_agent_resume_origin(),
+                    resume_pointer=interrupted_agent_id,
+                )
             )
-        )
 
-    if execution_context.get("execution_resumable") and isinstance(current_execution, dict):
+    hydrated_resume_candidates = [_hydrate_resume_result(candidate, result_lookup_by_id) for candidate in resume_candidates]
+
+    if resume_projection.active_resume_source == ContinuationResumeSource.BOUNDED_SEGMENT:
         active_resume_kind = "bounded_segment"
-        active_resume_origin = "compat.current_execution"
-        active_resume_pointer = current_execution.get("resume_file")
-    elif isinstance(session_resume_file, str) and session_resume_file:
+        active_resume_origin = bounded_segment_origin
+        active_resume_pointer = resume_projection.active_resume_file
+    elif resume_projection.active_resume_source == ContinuationResumeSource.HANDOFF:
         active_resume_kind = "continuity_handoff"
-        active_resume_origin = "compat.session_resume_file"
-        active_resume_pointer = session_resume_file
+        active_resume_origin = handoff_origin
+        active_resume_pointer = resume_projection.active_resume_file
     elif interrupted_agent_id is not None:
         active_resume_kind = "interrupted_agent"
-        active_resume_origin = "interrupted_agent_marker"
+        active_resume_origin = _interrupted_agent_resume_origin()
         active_resume_pointer = interrupted_agent_id
     else:
         active_resume_kind = None
@@ -1433,7 +1462,6 @@ def _build_legacy_resume_state(
 
     resume_mode = _resume_mode_for_kind(active_resume_kind)
 
-    hydrated_resume_candidates = [_hydrate_resume_result(candidate, result_lookup_by_id) for candidate in resume_candidates]
     active_resume_candidate = _select_active_resume_candidate(
         hydrated_resume_candidates,
         active_resume_kind=active_resume_kind,
@@ -1442,26 +1470,17 @@ def _build_legacy_resume_state(
 
     result = {
         "resume_surface_schema_version": _RESUME_SURFACE_SCHEMA_VERSION,
-        "active_bounded_segment": active_bounded_segment if isinstance(active_bounded_segment, dict) else None,
-        "derived_execution_head": current_execution if isinstance(current_execution, dict) else None,
-        "continuity_handoff_file": session_resume_file if isinstance(session_resume_file, str) and session_resume_file else None,
-        "recorded_continuity_handoff_file": (
-            session_resume_file if isinstance(session_resume_file, str) and session_resume_file else missing_session_resume_file
-        ),
-        "missing_continuity_handoff_file": (
-            missing_session_resume_file
-            if isinstance(missing_session_resume_file, str) and missing_session_resume_file
-            else None
-        ),
-        "has_continuity_handoff": bool(
-            (isinstance(session_resume_file, str) and session_resume_file)
-            or (isinstance(missing_session_resume_file, str) and missing_session_resume_file)
-        ),
+        "active_bounded_segment": active_bounded_segment,
+        "derived_execution_head": current_execution,
+        "continuity_handoff_file": resume_projection.handoff_resume_file,
+        "recorded_continuity_handoff_file": resume_projection.recorded_handoff_resume_file,
+        "missing_continuity_handoff_file": resume_projection.missing_handoff_resume_file,
+        "has_continuity_handoff": resume_projection.recorded_handoff_resume_file is not None,
         "resume_candidates": hydrated_resume_candidates,
         "active_resume_kind": active_resume_kind,
         "active_resume_origin": active_resume_origin,
         "active_resume_pointer": active_resume_pointer,
-        "active_execution_segment": current_execution if isinstance(current_execution, dict) else None,
+        "active_execution_segment": active_execution_segment,
         "segment_candidates": segment_candidates,
         "resume_mode": resume_mode,
         "has_interrupted_agent": interrupted_agent_id is not None,
@@ -1473,206 +1492,6 @@ def _build_legacy_resume_state(
             result["active_resume_result"] = dict(active_resume_result)
     result["compat_resume_surface"] = build_resume_compat_surface(result) or {}
     return result
-
-
-def _build_resume_read_state(
-    execution_context: dict[str, object],
-    *,
-    interrupted_agent_id: str | None,
-    result_lookup_by_id: dict[str, dict[str, object]],
-) -> dict[str, object]:
-    resume_projection = execution_context.get("resume_projection")
-    if hasattr(resume_projection, "continuation"):
-        current_execution_raw = execution_context.get("current_execution")
-        current_execution = current_execution_raw if isinstance(current_execution_raw, dict) else None
-        bounded_segment = getattr(resume_projection.continuation, "bounded_segment", None)
-        bounded_segment_origin = _bounded_segment_resume_origin(resume_projection)
-        handoff_origin = _handoff_resume_origin(resume_projection)
-        handoff_last_result_id = _handoff_last_result_id(resume_projection)
-        active_execution_segment = None
-        active_bounded_segment = None
-        if bounded_segment is not None:
-            active_bounded_segment = bounded_segment.model_dump(mode="json")
-            active_execution_segment = active_bounded_segment
-        elif current_execution is not None:
-            active_execution_segment = current_execution
-
-        segment_candidates: list[dict[str, object]] = []
-        resume_candidates: list[dict[str, object]] = []
-        if resume_projection.resumable and isinstance(active_execution_segment, dict):
-            candidate_payload = dict(active_execution_segment)
-            candidate_payload["resume_file"] = resume_projection.bounded_segment_resume_file
-            candidate = _resume_candidate_from_segment(candidate_payload)
-            segment_candidates.append(candidate)
-            resume_candidates.append(
-                _canonical_resume_candidate(
-                    candidate,
-                    kind="bounded_segment",
-                    origin=bounded_segment_origin,
-                    resume_pointer=resume_projection.bounded_segment_resume_file,
-                )
-            )
-
-        if isinstance(resume_projection.handoff_resume_file, str) and resume_projection.handoff_resume_file:
-            if not any(
-                candidate.get("resume_file") == resume_projection.handoff_resume_file
-                for candidate in segment_candidates
-            ):
-                candidate = {
-                    "source": "session_resume_file",
-                    "status": "handoff",
-                    "resume_file": resume_projection.handoff_resume_file,
-                    "resumable": False,
-                }
-                if handoff_last_result_id is not None:
-                    candidate["last_result_id"] = handoff_last_result_id
-                segment_candidates.append(candidate)
-                resume_candidates.append(
-                    _canonical_resume_candidate(
-                        candidate,
-                        kind="continuity_handoff",
-                        origin=handoff_origin,
-                        resume_pointer=resume_projection.handoff_resume_file,
-                    )
-                )
-
-        if isinstance(resume_projection.missing_handoff_resume_file, str) and resume_projection.missing_handoff_resume_file:
-            if not _has_candidate(
-                segment_candidates,
-                source="session_resume_file",
-                resume_file=resume_projection.missing_handoff_resume_file,
-            ):
-                candidate = {
-                    "source": "session_resume_file",
-                    "status": "missing",
-                    "resume_file": resume_projection.missing_handoff_resume_file,
-                    "resumable": False,
-                    "advisory": True,
-                }
-                if handoff_last_result_id is not None:
-                    candidate["last_result_id"] = handoff_last_result_id
-                segment_candidates.append(candidate)
-                resume_candidates.append(
-                    _canonical_resume_candidate(
-                        candidate,
-                        kind="continuity_handoff",
-                        origin=handoff_origin,
-                        resume_pointer=resume_projection.missing_handoff_resume_file,
-                    )
-                )
-
-        if interrupted_agent_id is not None and not _has_candidate(
-            segment_candidates,
-            source="interrupted_agent",
-            agent_id=interrupted_agent_id,
-        ):
-            candidate = {
-                "source": "interrupted_agent",
-                "status": "interrupted",
-                "agent_id": interrupted_agent_id,
-            }
-            segment_candidates.append(candidate)
-            if not _has_resume_candidate(
-                resume_candidates,
-                kind="interrupted_agent",
-                agent_id=interrupted_agent_id,
-            ):
-                resume_candidates.append(
-                    _canonical_resume_candidate(
-                        candidate,
-                        kind="interrupted_agent",
-                        origin=_interrupted_agent_resume_origin(),
-                        resume_pointer=interrupted_agent_id,
-                    )
-                )
-
-        hydrated_resume_candidates = [_hydrate_resume_result(candidate, result_lookup_by_id) for candidate in resume_candidates]
-
-        if resume_projection.active_resume_source == ContinuationResumeSource.BOUNDED_SEGMENT:
-            active_resume_kind = "bounded_segment"
-            active_resume_origin = bounded_segment_origin
-            active_resume_pointer = resume_projection.active_resume_file
-        elif resume_projection.active_resume_source == ContinuationResumeSource.HANDOFF:
-            active_resume_kind = "continuity_handoff"
-            active_resume_origin = handoff_origin
-            active_resume_pointer = resume_projection.active_resume_file
-        elif interrupted_agent_id is not None:
-            active_resume_kind = "interrupted_agent"
-            active_resume_origin = _interrupted_agent_resume_origin()
-            active_resume_pointer = interrupted_agent_id
-        else:
-            active_resume_kind = None
-            active_resume_origin = None
-            active_resume_pointer = None
-
-        resume_mode = _resume_mode_for_kind(active_resume_kind)
-
-        active_resume_candidate = _select_active_resume_candidate(
-            hydrated_resume_candidates,
-            active_resume_kind=active_resume_kind,
-            active_resume_pointer=active_resume_pointer,
-        )
-
-        result = {
-            "resume_surface_schema_version": _RESUME_SURFACE_SCHEMA_VERSION,
-            "active_bounded_segment": active_bounded_segment,
-            "derived_execution_head": current_execution,
-            "continuity_handoff_file": resume_projection.handoff_resume_file,
-            "recorded_continuity_handoff_file": resume_projection.recorded_handoff_resume_file,
-            "missing_continuity_handoff_file": resume_projection.missing_handoff_resume_file,
-            "has_continuity_handoff": resume_projection.recorded_handoff_resume_file is not None,
-            "resume_candidates": hydrated_resume_candidates,
-            "active_resume_kind": active_resume_kind,
-            "active_resume_origin": active_resume_origin,
-            "active_resume_pointer": active_resume_pointer,
-            "active_execution_segment": active_execution_segment,
-            "segment_candidates": segment_candidates,
-            "resume_mode": resume_mode,
-            "has_interrupted_agent": interrupted_agent_id is not None,
-            "interrupted_agent_id": interrupted_agent_id,
-        }
-        if isinstance(active_resume_candidate, dict):
-            active_resume_result = active_resume_candidate.get("last_result")
-            if isinstance(active_resume_result, Mapping):
-                result["active_resume_result"] = dict(active_resume_result)
-        result["compat_resume_surface"] = build_resume_compat_surface(result) or {}
-        return result
-
-    try:
-        return _build_legacy_resume_state(
-            execution_context,
-            interrupted_agent_id=interrupted_agent_id,
-            result_lookup_by_id=result_lookup_by_id,
-        )
-    except Exception as exc:
-        logger.warning(
-            "Legacy resume synthesis failed; returning empty resume state: %s",
-            exc,
-        )
-        result = {
-            "resume_surface_schema_version": _RESUME_SURFACE_SCHEMA_VERSION,
-            "active_bounded_segment": None,
-            "derived_execution_head": execution_context.get("current_execution")
-            if isinstance(execution_context.get("current_execution"), dict)
-            else None,
-            "continuity_handoff_file": None,
-            "recorded_continuity_handoff_file": None,
-            "missing_continuity_handoff_file": None,
-            "has_continuity_handoff": False,
-            "resume_candidates": [],
-            "active_resume_kind": "interrupted_agent" if interrupted_agent_id is not None else None,
-            "active_resume_origin": _interrupted_agent_resume_origin() if interrupted_agent_id is not None else None,
-            "active_resume_pointer": interrupted_agent_id,
-            "active_execution_segment": execution_context.get("current_execution")
-            if isinstance(execution_context.get("current_execution"), dict)
-            else None,
-            "segment_candidates": [],
-            "resume_mode": None,
-            "has_interrupted_agent": interrupted_agent_id is not None,
-            "interrupted_agent_id": interrupted_agent_id,
-        }
-        result["compat_resume_surface"] = build_resume_compat_surface(result) or {}
-        return result
 
 
 def _mapping_text(value: Mapping[str, object] | None, key: str) -> str | None:

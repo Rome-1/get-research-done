@@ -130,8 +130,8 @@ For the exact beginner-first startup order, use the shared onboarding surfaces i
 
 ## Invocation Surfaces
 
-This reference lists canonical commands in the installed runtime's public command surface.
-Depending on the runtime, that surface may appear as slash-command names, dollar-prefixed commands, or another adapter-specific prefix.
+This reference lists the canonical in-runtime command names for the installed runtime's public command surface.
+Depending on the runtime, those names may be rendered with slash prefixes, dollar prefixes, or another adapter-specific convention.
 
 - If you are new to terminals or runtime setup, start with the Beginner Onboarding Hub linked from the README and installer output.
 - That shared onboarding surface keeps the OS guides, runtime guides, and beginner startup checklist in one place.

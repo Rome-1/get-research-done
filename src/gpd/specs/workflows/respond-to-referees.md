@@ -85,6 +85,7 @@ Run /gpd:write-paper first to generate a manuscript from research results.
 Exit.
 
 Use `MANUSCRIPT_BASENAME` for the basename of the resolved manuscript entrypoint in `${PAPER_DIR}`. If `${PAPER_DIR}/ARTIFACT-MANIFEST.json` exists, prefer the `.tex` artifact recorded there rather than assuming any legacy default stem.
+Treat every resolved manuscript file path as rooted under `${PAPER_DIR}`, including nested section files such as `${PAPER_DIR}/{section}.tex` and the response-letter companion `${PAPER_DIR}/response-letter.tex` when the revision round keeps a manuscript-local response artifact.
 
 **Convention verification** — referee responses must use the same conventions as the paper:
 

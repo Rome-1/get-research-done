@@ -905,7 +905,7 @@ def parse_comparison_verdicts_data_strict(value: object) -> list[ComparisonVerdi
     if value is None:
         return []
     if not isinstance(value, list):
-        raise ValueError("must be a list")
+        raise ValueError("expected a list")
 
     verdicts: list[ComparisonVerdict] = []
     for index, entry in enumerate(value):

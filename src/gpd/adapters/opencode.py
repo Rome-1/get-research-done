@@ -98,7 +98,6 @@ _SHELL_FENCE_LANGUAGES = frozenset({"bash", "sh", "shell", "zsh"})
 _INLINE_GPD_COMMAND_RE = re.compile(r"`(?P<command>gpd(?=\s)[^`]*?)`")
 _OPENCODE_PERMISSION_DECISIONS = frozenset({"allow", "ask", "deny"})
 _OPENCODE_YOLO_PERMISSION = "allow"
-_OPENCODE_HELP_WORDING_RE = re.compile(r"\bslash-command\b")
 _MANIFEST_OPENCODE_GENERATED_COMMAND_FILES_KEY = "opencode_generated_command_files"
 
 # ---------------------------------------------------------------------------
@@ -259,11 +258,6 @@ def convert_claude_to_opencode_frontmatter(content: str, path_prefix: str | None
 
     new_frontmatter = "\n".join(new_lines).strip()
     return render_markdown_frontmatter(preamble, new_frontmatter, separator, body)
-
-
-def _rewrite_opencode_help_wording(content: str) -> str:
-    """Remove slash-command wording from the installed OpenCode help surface."""
-    return _OPENCODE_HELP_WORDING_RE.sub("command", content)
 
 
 def _rewrite_gpd_cli_invocations(content: str, bridge_command: str) -> str:
@@ -431,8 +425,6 @@ def copy_flattened_commands(
             if bridge_command:
                 content = _rewrite_gpd_cli_invocations(content, bridge_command)
             content = convert_claude_to_opencode_frontmatter(content, path_prefix)
-            if dest_name == "gpd-help.md":
-                content = _rewrite_opencode_help_wording(content)
 
             dest_path.write_text(content, encoding="utf-8")
             if managed_command_files is not None and dest_name.startswith("gpd-"):

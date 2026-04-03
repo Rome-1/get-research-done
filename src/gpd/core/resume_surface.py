@@ -166,12 +166,16 @@ def resolve_resume_compat_surface(
         if isinstance(value, Mapping):
             for field in fields:
                 if field in value:
-                    compat[field] = value.get(field)
+                    candidate = value.get(field)
+                    if candidate is not None:
+                        compat[field] = candidate
                     found_alias_data = True
         for field in fields:
             if field not in source:
                 continue
-            compat[field] = source.get(field)
+            candidate = source.get(field)
+            if candidate is not None:
+                compat[field] = candidate
             found_alias_data = True
 
     return compat if found_alias_data else None

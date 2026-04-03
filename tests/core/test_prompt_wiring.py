@@ -1809,7 +1809,7 @@ def test_peer_review_command_limits_default_manuscript_targets_to_canonical_root
 
     assert "The default manuscript family is limited to `paper/`, `manuscript/`, and `draft/`." in peer_review_command
     assert "then `PAPER-CONFIG.json`, then the canonical current manuscript entrypoint rules" in peer_review_command
-    assert "Do not use ad hoc glob discovery." in peer_review_command
+    assert "Do not use ad hoc wildcard discovery." in peer_review_command
     assert "find paper manuscript draft" not in peer_review_command
     assert "find . -maxdepth 3" not in peer_review_command
     assert "pass an explicit manuscript path or paper directory" in peer_review_command

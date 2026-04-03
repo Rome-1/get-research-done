@@ -57,7 +57,9 @@ def _normalize_optional_text(value: object) -> str | None:
 def _normalize_optional_bool(value: object) -> object:
     if value is None:
         return False
-    return value
+    if type(value) is bool:
+        return value
+    raise ValueError("must be a boolean")
 
 
 def _project_root_path(project_root: Path | str) -> Path:

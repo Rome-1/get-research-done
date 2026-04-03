@@ -981,8 +981,9 @@ def assert_help_workflow_runtime_reference_contract(
         content,
         (
             "`/gpd:*`",
-            "slash-command names",
-            "in-runtime slash-command",
+            "canonical in-runtime command names",
+            "slash prefixes",
+            "dollar prefixes",
         ),
         label="runtime command-surface framing",
     )
