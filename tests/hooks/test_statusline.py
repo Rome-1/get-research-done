@@ -1229,7 +1229,7 @@ class TestMain:
             main()
 
         mock_runtime_lookup.assert_called_once()
-        assert mock_policy.call_args_list == [call(str(nested))]
+        assert mock_policy.call_args_list == [call(str(nested)), call(str(nested))]
         mock_hints.assert_called_once_with(str(nested))
         mock_execution.assert_called_once_with(str(nested))
         mock_position.assert_called_once_with(str(nested))
@@ -1296,7 +1296,7 @@ class TestMain:
             main()
 
         mock_runtime_lookup.assert_called_once()
-        assert mock_policy.call_args_list == [call(str(project))]
+        assert mock_policy.call_args_list == [call(str(nested)), call(str(project))]
         mock_hints.assert_called_once_with(str(project))
         mock_execution.assert_called_once_with(str(project))
         mock_position.assert_called_once_with(str(project))
@@ -1364,7 +1364,7 @@ class TestMain:
             main()
 
         mock_runtime_lookup.assert_called_once()
-        assert mock_policy.call_args_list == [call(str(nested))]
+        assert mock_policy.call_args_list == [call(str(nested)), call(str(nested))]
         mock_hints.assert_called_once_with(str(nested))
         mock_execution.assert_called_once_with(str(nested))
         mock_position.assert_called_once_with(str(nested))
