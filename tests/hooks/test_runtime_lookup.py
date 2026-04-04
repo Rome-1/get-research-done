@@ -244,3 +244,20 @@ def test_resolve_hook_lookup_context_normalizes_unknown_and_alias_runtime_hints(
     assert resolved.lookup_cwd == workspace
     assert resolved.active_runtime == "claude-code"
     assert resolved.preferred_runtime == "claude-code"
+
+
+def test_resolve_hook_lookup_context_drops_noncanonical_active_runtime_hint(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    home = tmp_path / "home"
+    workspace.mkdir()
+    home.mkdir()
+
+    resolved = resolve_hook_lookup_context(
+        cwd=workspace,
+        home=home,
+        active_installed_runtime="not-a-runtime",
+        preferred_runtime="codex",
+    )
+
+    assert resolved.active_runtime is None
+    assert resolved.preferred_runtime == "codex"

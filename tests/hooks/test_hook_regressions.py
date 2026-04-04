@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from gpd.adapters.runtime_catalog import list_runtime_names
-from tests.hooks.helpers import repair_command as _repair_command
 
 
 @pytest.mark.parametrize(
@@ -76,7 +75,7 @@ def test_check_update_uses_shared_update_resolution_candidates() -> None:
         patch("gpd.hooks.check_update._self_config_dir", return_value=None),
         patch(
             "gpd.hooks.update_resolution.resolve_update_cache_inputs",
-            return_value=(Path("/tmp/workspace"), Path("/tmp/home"), "unknown", "codex"),
+            return_value=(Path("/tmp/workspace"), Path("/tmp/home"), None, "codex"),
         ) as mock_inputs,
         patch("gpd.hooks.update_resolution.ordered_update_cache_candidates", return_value=[candidate]) as mock_candidates,
         patch("gpd.hooks.update_resolution.primary_update_cache_file", return_value=candidate.path) as mock_primary,
@@ -373,7 +372,7 @@ def test_installed_update_command_treats_scope_less_explicit_local_named_target_
     assert command is None
 
 
-def test_installed_update_command_recovers_stable_target_dir_when_manifest_omits_explicit_target(
+def test_installed_update_command_returns_none_when_manifest_omits_explicit_target(
     tmp_path: Path,
 ) -> None:
     from gpd.hooks.install_metadata import installed_update_command
@@ -405,9 +404,7 @@ def test_installed_update_command_recovers_stable_target_dir_when_manifest_omits
     )
 
     command = installed_update_command(explicit_target)
-
-    expected = _repair_command("codex", install_scope="local", target_dir=explicit_target, explicit_target=True)
-    assert command == expected
+    assert command is None
 
 
 @pytest.mark.parametrize(

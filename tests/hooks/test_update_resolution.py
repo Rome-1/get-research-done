@@ -120,7 +120,7 @@ def test_resolve_update_cache_inputs_uses_the_runtime_for_gpd_use_as_preference(
 
     assert workspace_path == workspace
     assert resolved_home == home
-    assert active_runtime == "unknown"
+    assert active_runtime is None
     assert preferred_runtime == "codex"
 
 
@@ -140,7 +140,7 @@ def test_resolve_update_cache_inputs_normalizes_explicit_home_overrides(tmp_path
         tilde_result = resolve_update_cache_inputs(cwd=workspace, home="~")
         canonical_result = resolve_update_cache_inputs(cwd=workspace, home=canonical_home)
 
-    expected = (workspace, canonical_home.resolve(strict=False), "unknown", "codex")
+    expected = (workspace, canonical_home.resolve(strict=False), None, "codex")
     assert relative_result == expected
     assert tilde_result == expected
     assert canonical_result == expected
@@ -163,7 +163,7 @@ def test_resolve_update_cache_inputs_uses_explicit_preference_without_runtime_lo
 
     assert workspace_path == workspace
     assert resolved_home == home
-    assert active_runtime == "unknown"
+    assert active_runtime is None
     assert preferred_runtime == "codex"
 
 
@@ -184,7 +184,7 @@ def test_resolve_update_cache_inputs_uses_non_project_cwd_for_runtime_preference
 
     assert workspace_path == workspace
     assert resolved_home == home
-    assert active_runtime == "unknown"
+    assert active_runtime is None
     assert preferred_runtime == "codex"
     assert mock_preferred.call_args.kwargs["cwd"] == workspace
 
@@ -472,7 +472,7 @@ def test_update_command_for_candidate_prefers_self_owned_install_command(tmp_pat
     assert command == expected
 
 
-def test_update_command_for_candidate_recovers_self_owned_command_when_manifest_omits_explicit_target(
+def test_update_command_for_candidate_returns_none_when_self_owned_manifest_omits_explicit_target(
     tmp_path: Path,
 ) -> None:
     from gpd.hooks.install_context import SelfOwnedInstallContext
@@ -495,8 +495,7 @@ def test_update_command_for_candidate_recovers_self_owned_command_when_manifest_
     with patch("gpd.hooks.install_context.detect_self_owned_install", return_value=self_install):
         command = update_command_for_candidate(candidate, hook_file=__file__, cwd=str(tmp_path))
 
-    expected = _repair_command("codex", install_scope="local", target_dir=explicit_target, explicit_target=True)
-    assert command == expected
+    assert command is None
 
 
 def test_update_command_for_candidate_uses_cache_runtime_when_install_exists(tmp_path: Path) -> None:

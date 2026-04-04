@@ -66,11 +66,27 @@ def resolve_runtime_lookup_dir(
     """Return the cwd hook surfaces should use for runtime-owned lookups."""
     normalized_runtime = _normalized_runtime_hint(active_runtime)
     if _project_dir_is_trusted(explicit_project_dir, project_dir_trusted):
+        resolved_workspace = Path(workspace_dir).expanduser().resolve(strict=False)
+        resolved_project = Path(project_root).expanduser().resolve(strict=False)
+        if normalized_runtime is None:
+            for runtime in ALL_RUNTIMES:
+                install_target = detect_runtime_install_target(runtime, cwd=resolved_workspace)
+                if install_target is not None and install_target.install_scope == SCOPE_LOCAL:
+                    return str(resolved_workspace)
+            return project_root
         if normalized_runtime is not None:
-            resolved_workspace = Path(workspace_dir).expanduser().resolve(strict=False)
             install_target = detect_runtime_install_target(normalized_runtime, cwd=resolved_workspace)
             if install_target is not None and install_target.install_scope == SCOPE_LOCAL:
                 return workspace_dir
+            project_target = detect_runtime_install_target(normalized_runtime, cwd=resolved_project)
+            if project_target is not None and project_target.install_scope == SCOPE_LOCAL:
+                return project_root
+            for runtime in ALL_RUNTIMES:
+                if runtime == normalized_runtime:
+                    continue
+                install_target = detect_runtime_install_target(runtime, cwd=resolved_workspace)
+                if install_target is not None and install_target.install_scope == SCOPE_LOCAL:
+                    return str(resolved_workspace)
         return project_root
 
     return str(Path(workspace_dir).expanduser().resolve(strict=False))

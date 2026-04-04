@@ -291,12 +291,7 @@ def installed_update_command(config_dir: Path) -> str | None:
         return None
 
     explicit_target = manifest.get("explicit_target")
-    if explicit_target is None:
-        if scope == "global":
-            return None
-        install_target_dir = manifest.get("install_target_dir")
-        explicit_target = isinstance(install_target_dir, str) and bool(install_target_dir.strip())
-    elif not isinstance(explicit_target, bool):
+    if not isinstance(explicit_target, bool):
         return None
 
     try:

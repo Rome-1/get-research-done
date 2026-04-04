@@ -9,7 +9,6 @@ from pathlib import Path
 import gpd.hooks.install_context as hook_layout
 from gpd.adapters.install_utils import CACHE_DIR_NAME, UPDATE_CACHE_FILENAME
 from gpd.core.constants import PLANNING_DIR_NAME
-from gpd.hooks.install_metadata import build_runtime_install_repair_command
 
 DebugLogger = Callable[[str], None]
 
@@ -183,17 +182,7 @@ def update_command_for_candidate(
     self_install = hook_layout.detect_self_owned_install(hook_file)
     candidate_path = getattr(candidate, "path", None)
     if self_install is not None and candidate_path == self_install.cache_file:
-        command = self_install.update_command
-        if command is not None:
-            return command
-        if self_install.runtime is not None and self_install.install_scope in {"local", "global"}:
-            return build_runtime_install_repair_command(
-                self_install.runtime,
-                install_scope=self_install.install_scope,
-                target_dir=self_install.config_dir,
-                explicit_target=True,
-            )
-        return None
+        return self_install.update_command
 
     runtime = getattr(candidate, "runtime", None) or RUNTIME_UNKNOWN
     scope = getattr(candidate, "scope", None)

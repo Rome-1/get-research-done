@@ -7,7 +7,6 @@ from typing import Literal
 
 import gpd.hooks.install_context as hook_layout
 from gpd.adapters.runtime_catalog import get_hook_payload_policy, get_runtime_capabilities
-from gpd.hooks.runtime_detect import RUNTIME_UNKNOWN
 
 HookSurface = Literal["notify", "statusline"]
 
@@ -35,8 +34,7 @@ def resolve_hook_surface_runtime(
     if self_install is not None and _surface_is_explicit(self_install.runtime, surface=surface):
         return self_install.runtime
 
-    runtime = hook_layout.resolve_hook_lookup_context(cwd=cwd).active_runtime
-    return None if runtime == RUNTIME_UNKNOWN else runtime
+    return hook_layout.resolve_hook_lookup_context(cwd=cwd).active_runtime
 
 
 def resolve_hook_payload_policy(
