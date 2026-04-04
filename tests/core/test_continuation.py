@@ -10,7 +10,6 @@ from gpd.core.continuation import (
     normalize_continuation_reference,
     normalize_continuation_with_issues,
     resolve_continuation,
-    synthesize_legacy_continuation,
 )
 
 
@@ -276,19 +275,13 @@ def test_resolve_continuation_falls_back_to_handoff_when_canonical_bounded_segme
     assert projection.resumable is False
 
 
-def test_synthesize_legacy_continuation_uses_portable_current_execution_and_session(tmp_path: Path) -> None:
+def test_resolve_continuation_projects_portable_current_execution_when_canonical_continuation_is_missing(
+    tmp_path: Path,
+) -> None:
     _write_resume(tmp_path, "GPD/phases/03-analysis/.continue-here.md")
-    _write_resume(tmp_path, "GPD/phases/03-analysis/handoff.md")
 
-    continuation = synthesize_legacy_continuation(
+    projection = resolve_continuation(
         tmp_path,
-        session={
-            "last_date": "2026-03-29T12:00:00+00:00",
-            "hostname": "builder-01",
-            "platform": "Linux 6.1 x86_64",
-            "stopped_at": "Phase 03 Plan 02 Task 04",
-            "resume_file": "GPD/phases/03-analysis/handoff.md",
-        },
         current_execution={
             "session_id": "sess-1",
             "phase": "3",
@@ -301,56 +294,23 @@ def test_synthesize_legacy_continuation_uses_portable_current_execution_and_sess
         },
     )
 
-    assert continuation.machine.recorded_at == "2026-03-29T12:00:00+00:00"
-    assert continuation.machine.hostname == "builder-01"
-    assert continuation.handoff.resume_file == "GPD/phases/03-analysis/handoff.md"
-    assert continuation.handoff.recorded_by == "legacy_session"
-    assert continuation.bounded_segment is not None
-    assert continuation.bounded_segment.resume_file == "GPD/phases/03-analysis/.continue-here.md"
-    assert continuation.bounded_segment.phase == "03"
-    assert continuation.bounded_segment.plan == "02"
-    assert continuation.bounded_segment.pre_fanout_review_pending is True
-
-    projection = resolve_continuation(
-        tmp_path,
-        state={
-            "session": {
-                "last_date": continuation.machine.recorded_at,
-                "hostname": continuation.machine.hostname,
-                "platform": continuation.machine.platform,
-                "stopped_at": continuation.handoff.stopped_at,
-                "resume_file": continuation.handoff.resume_file,
-            }
-        },
-        current_execution={
-            "session_id": "sess-1",
-            "phase": "3",
-            "plan": "2",
-            "segment_id": "seg-4",
-            "segment_status": "paused",
-            "resume_file": "GPD/phases/03-analysis/.continue-here.md",
-        },
-    )
-
-    assert projection.source == ContinuationSource.LEGACY
+    assert projection.source == ContinuationSource.DERIVED_EXECUTION
+    assert projection.continuation.handoff.is_empty is True
+    assert projection.continuation.bounded_segment is not None
+    assert projection.continuation.bounded_segment.recorded_by == "derived_execution_head"
+    assert projection.continuation.bounded_segment.resume_file == "GPD/phases/03-analysis/.continue-here.md"
+    assert projection.continuation.bounded_segment.phase == "03"
+    assert projection.continuation.bounded_segment.plan == "02"
+    assert projection.continuation.bounded_segment.pre_fanout_review_pending is True
     assert projection.active_resume_source == ContinuationResumeSource.BOUNDED_SEGMENT
-    assert projection.handoff_resume_file == "GPD/phases/03-analysis/handoff.md"
+    assert projection.handoff_resume_file is None
     assert projection.active_resume_file == "GPD/phases/03-analysis/.continue-here.md"
     assert projection.resumable is True
 
 
-def test_synthesize_legacy_continuation_preserves_session_last_result_id(tmp_path: Path) -> None:
-    continuation = synthesize_legacy_continuation(
-        tmp_path,
-        session={
-            "last_date": "2026-03-29T12:00:00+00:00",
-            "last_result_id": "result-03",
-        },
-    )
-
-    assert continuation.handoff.last_result_id == "result-03"
-    assert continuation.handoff.recorded_by == "legacy_session"
-
+def test_resolve_continuation_does_not_use_session_last_result_id_without_canonical_continuation(
+    tmp_path: Path,
+) -> None:
     projection = resolve_continuation(
         tmp_path,
         state={
@@ -361,29 +321,18 @@ def test_synthesize_legacy_continuation_preserves_session_last_result_id(tmp_pat
         },
     )
 
-    assert projection.source == ContinuationSource.LEGACY
-    assert projection.continuation.handoff.last_result_id == "result-03"
+    assert projection.source == ContinuationSource.EMPTY
+    assert projection.continuation.is_empty is True
+    assert projection.active_resume_file is None
 
 
-def test_synthesize_legacy_continuation_ignores_nonportable_or_missing_live_snapshot(tmp_path: Path) -> None:
-    _write_resume(tmp_path, "GPD/phases/03-analysis/handoff.md")
+def test_resolve_continuation_ignores_nonportable_or_missing_live_snapshot_without_promoting_session_handoff(
+    tmp_path: Path,
+) -> None:
     external_root = tmp_path.parent / f"{tmp_path.name}-external"
     external_resume = external_root / ".continue-here.md"
     external_resume.parent.mkdir(parents=True, exist_ok=True)
     external_resume.write_text("resume\n", encoding="utf-8")
-
-    continuation = synthesize_legacy_continuation(
-        tmp_path,
-        session={"resume_file": "GPD/phases/03-analysis/handoff.md"},
-        current_execution={
-            "segment_status": "paused",
-            "segment_id": "seg-4",
-            "resume_file": str(external_resume),
-        },
-    )
-
-    assert continuation.bounded_segment is None
-    assert continuation.handoff.resume_file == "GPD/phases/03-analysis/handoff.md"
 
     projection = resolve_continuation(
         tmp_path,
@@ -395,13 +344,16 @@ def test_synthesize_legacy_continuation_ignores_nonportable_or_missing_live_snap
         },
     )
 
-    assert projection.source == ContinuationSource.LEGACY
-    assert projection.active_resume_source == ContinuationResumeSource.HANDOFF
-    assert projection.active_resume_file == "GPD/phases/03-analysis/handoff.md"
+    assert projection.source == ContinuationSource.EMPTY
+    assert projection.handoff_resume_file is None
+    assert projection.active_resume_source is None
+    assert projection.active_resume_file is None
     assert projection.resumable is False
 
 
-def test_resolve_continuation_surfaces_missing_handoff_pointer_without_promoting_it(tmp_path: Path) -> None:
+def test_resolve_continuation_does_not_promote_session_handoff_without_canonical_continuation(
+    tmp_path: Path,
+) -> None:
     projection = resolve_continuation(
         tmp_path,
         state={
@@ -413,16 +365,18 @@ def test_resolve_continuation_surfaces_missing_handoff_pointer_without_promoting
         },
     )
 
-    assert projection.source == ContinuationSource.LEGACY
-    assert projection.recorded_handoff_resume_file == "GPD/phases/03-analysis/handoff.md"
+    assert projection.source == ContinuationSource.EMPTY
+    assert projection.recorded_handoff_resume_file is None
     assert projection.handoff_resume_file is None
-    assert projection.missing_handoff_resume_file == "GPD/phases/03-analysis/handoff.md"
+    assert projection.missing_handoff_resume_file is None
     assert projection.active_resume_file is None
     assert projection.active_resume_source is None
     assert projection.resumable is False
 
 
-def test_resolve_continuation_returns_empty_projection_without_canonical_or_legacy_state(tmp_path: Path) -> None:
+def test_resolve_continuation_returns_empty_projection_without_canonical_or_live_execution(
+    tmp_path: Path,
+) -> None:
     projection = resolve_continuation(tmp_path)
 
     assert projection.source == ContinuationSource.EMPTY
@@ -432,9 +386,10 @@ def test_resolve_continuation_returns_empty_projection_without_canonical_or_lega
     assert projection.resumable is False
 
 
-def test_resolve_continuation_ignores_empty_canonical_state_and_falls_back_to_legacy_inputs(tmp_path: Path) -> None:
+def test_resolve_continuation_ignores_empty_canonical_state_and_projects_live_execution_only(
+    tmp_path: Path,
+) -> None:
     _write_resume(tmp_path, "GPD/phases/03-analysis/.continue-here.md")
-    _write_resume(tmp_path, "GPD/phases/03-analysis/handoff.md")
 
     projection = resolve_continuation(
         tmp_path,
@@ -458,10 +413,10 @@ def test_resolve_continuation_ignores_empty_canonical_state_and_falls_back_to_le
         },
     )
 
-    assert projection.source == ContinuationSource.LEGACY
+    assert projection.source == ContinuationSource.DERIVED_EXECUTION
     assert projection.active_resume_source == ContinuationResumeSource.BOUNDED_SEGMENT
     assert projection.active_resume_file == "GPD/phases/03-analysis/.continue-here.md"
-    assert projection.handoff_resume_file == "GPD/phases/03-analysis/handoff.md"
+    assert projection.handoff_resume_file is None
 
 
 def test_resolve_continuation_preserves_partial_canonical_state_without_falling_back_to_session(

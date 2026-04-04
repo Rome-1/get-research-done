@@ -301,12 +301,9 @@ def _normalize_resume_target_kind(value: object) -> str | None:
 
 
 def _backfill_recent_project_recovery_fields(row: object) -> tuple[str | None, str | None]:
-    """Resolve canonical recovery fields from normalized or legacy row data."""
+    """Resolve canonical recovery fields from explicit row metadata."""
 
     resume_target_kind = _normalize_resume_target_kind(_row_value(row, "resume_target_kind"))
-    if resume_target_kind is None:
-        resume_target_kind = infer_recent_project_resume_target_kind(row)
-
     resume_target_recorded_at = _normalize_recent_text(_row_value(row, "resume_target_recorded_at"))
     if resume_target_recorded_at is None and resume_target_kind in _RECENT_PROJECT_TARGET_KINDS:
         resume_target_recorded_at = (
@@ -322,31 +319,6 @@ def _row_value(row: object, field: str) -> object:
     if isinstance(row, dict):
         return row.get(field)
     return getattr(row, field, None)
-
-
-def _legacy_recent_project_resume_target_kind(row: object) -> str | None:
-    resume_file = _normalize_recent_text(_row_value(row, "resume_file"))
-    if resume_file is None:
-        return None
-
-    source_kind = _normalize_recent_text(_row_value(row, "source_kind"))
-    if source_kind in {"continuation.bounded_segment", "bounded_segment"}:
-        return "bounded_segment"
-    if source_kind in {"continuation.handoff", "handoff", "legacy_session"}:
-        return "handoff"
-    if isinstance(source_kind, str) and source_kind.startswith("segment."):
-        return "bounded_segment"
-
-    return "handoff"
-
-
-def infer_recent_project_resume_target_kind(row: object) -> str | None:
-    """Infer one additive resume target classification for a recent-project row."""
-
-    explicit = _normalize_resume_target_kind(_row_value(row, "resume_target_kind"))
-    if explicit is not None:
-        return explicit
-    return _legacy_recent_project_resume_target_kind(row)
 
 
 def _session_text(session_data: dict[str, object], *keys: str) -> str | None:
@@ -534,6 +506,14 @@ def record_recent_project(
             "recovery_plan",
             "plan",
         )
+        if normalized_resume_file is not None and resume_target_kind is None:
+            resume_target_kind = "handoff"
+        if (
+            normalized_resume_file is not None
+            and resume_target_recorded_at is None
+            and resume_target_kind in _RECENT_PROJECT_TARGET_KINDS
+        ):
+            resume_target_recorded_at = source_recorded_at or last_session_at or last_seen_at
         if "resume_file" in session_data and normalized_resume_file is None:
             resume_target_kind = None
             resume_target_recorded_at = None

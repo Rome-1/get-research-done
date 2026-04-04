@@ -85,3 +85,11 @@ def test_resolve_checkout_python_falls_back_when_checkout_has_no_local_virtualen
     nested.mkdir(parents=True)
 
     assert gpd_version.resolve_checkout_python(nested, fallback="/managed/python") == "/managed/python"
+
+
+def test_resolve_checkout_python_returns_none_when_no_checkout_exists(tmp_path: Path) -> None:
+    outside = tmp_path / "standalone"
+    outside.mkdir(parents=True)
+
+    with patch.object(gpd_version, "checkout_root", return_value=None):
+        assert gpd_version.resolve_checkout_python(outside, fallback="/managed/python") is None

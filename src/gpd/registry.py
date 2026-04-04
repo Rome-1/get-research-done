@@ -407,19 +407,46 @@ def render_review_contract_section(review_contract: ReviewCommandContract | None
     return render_review_contract_prompt(_review_contract_payload(review_contract))
 
 
-def render_command_requires_section(requires: dict[str, object]) -> str:
-    """Render model-visible launch requirements from command frontmatter."""
+def _command_visibility_payload(
+    *,
+    context_mode: str,
+    project_reentry_capable: bool,
+    allowed_tools: list[str],
+    requires: dict[str, object],
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "context_mode": context_mode,
+        "project_reentry_capable": project_reentry_capable,
+    }
+    if allowed_tools:
+        payload["allowed_tools"] = list(allowed_tools)
+    if requires:
+        payload["requires"] = requires
+    return payload
 
-    if not requires:
-        return ""
+
+def render_command_requires_section(
+    *,
+    context_mode: str,
+    project_reentry_capable: bool,
+    allowed_tools: list[str],
+    requires: dict[str, object],
+) -> str:
+    """Render model-visible execution constraints from command frontmatter."""
+
     rendered = yaml.safe_dump(
-        {"requires": requires},
+        _command_visibility_payload(
+            context_mode=context_mode,
+            project_reentry_capable=project_reentry_capable,
+            allowed_tools=allowed_tools,
+            requires=requires,
+        ),
         sort_keys=False,
         allow_unicode=False,
     ).rstrip()
     return (
         "## Command Requirements\n\n"
-        "The following launch requirements are enforced before this command runs. "
+        "The following execution envelope and launch requirements are enforced before this command runs. "
         "Plan around them directly in the work you produce.\n\n"
         f"```yaml\n{rendered}\n```"
     )
@@ -427,15 +454,23 @@ def render_command_requires_section(requires: dict[str, object]) -> str:
 
 def render_command_visibility_sections(
     *,
+    context_mode: str,
+    project_reentry_capable: bool,
+    allowed_tools: list[str],
     requires: dict[str, object],
     review_contract: ReviewCommandContract | None,
 ) -> str:
     """Render model-visible command constraints in canonical prompt order."""
 
     sections: list[str] = []
-    requires_section = render_command_requires_section(requires)
-    if requires_section:
-        sections.append(requires_section)
+    sections.append(
+        render_command_requires_section(
+            context_mode=context_mode,
+            project_reentry_capable=project_reentry_capable,
+            allowed_tools=allowed_tools,
+            requires=requires,
+        )
+    )
 
     review_section = render_review_contract_section(review_contract)
     if review_section:
@@ -457,18 +492,45 @@ def render_command_visibility_sections_from_frontmatter(frontmatter: str, *, com
         raise ValueError(f"Frontmatter for {command_name} must parse to a mapping")
 
     requires = _parse_requires(meta.get("requires"), command_name=command_name)
+    allowed_tools = _parse_allowed_tools(meta.get("allowed-tools"), command_name=command_name)
+    context_mode = _parse_context_mode(meta.get("context_mode"), command_name=command_name)
+    project_reentry_capable = _parse_project_reentry_capable(
+        meta.get("project_reentry_capable"),
+        command_name=command_name,
+        context_mode=context_mode,
+    )
     review_contract = _parse_review_contract(
         _review_contract_frontmatter_value(meta, command_name=command_name),
         command_name=command_name,
     )
-    return render_command_visibility_sections(requires=requires, review_contract=review_contract)
+    return render_command_visibility_sections(
+        context_mode=context_mode,
+        project_reentry_capable=project_reentry_capable,
+        allowed_tools=allowed_tools,
+        requires=requires,
+        review_contract=review_contract,
+    )
 
 
-def _command_model_content(body: str, review_contract: ReviewCommandContract | None, requires: dict[str, object]) -> str:
+def _command_model_content(
+    body: str,
+    review_contract: ReviewCommandContract | None,
+    *,
+    context_mode: str,
+    project_reentry_capable: bool,
+    allowed_tools: list[str],
+    requires: dict[str, object],
+) -> str:
     """Return the model-visible command body, including enforced command constraints."""
 
     sections: list[str] = []
-    visibility_sections = render_command_visibility_sections(requires=requires, review_contract=review_contract)
+    visibility_sections = render_command_visibility_sections(
+        context_mode=context_mode,
+        project_reentry_capable=project_reentry_capable,
+        allowed_tools=allowed_tools,
+        requires=requires,
+        review_contract=review_contract,
+    )
     if visibility_sections:
         sections.append(visibility_sections)
     if body:
@@ -622,7 +684,14 @@ def _parse_command_file(path: Path, source: str) -> CommandDef:
         requires=requires,
         allowed_tools=allowed_tools,
         review_contract=review_contract,
-        content=_command_model_content(body, review_contract, requires),
+        content=_command_model_content(
+            body,
+            review_contract,
+            context_mode=context_mode,
+            project_reentry_capable=project_reentry_capable,
+            allowed_tools=allowed_tools,
+            requires=requires,
+        ),
         path=str(path),
         source=source,
     )

@@ -616,6 +616,33 @@ def test_build_recovery_advice_keeps_missing_handoff_in_current_workspace_priori
     assert advice.recent_projects_count == 1
 
 
+def test_build_recovery_advice_prefers_resumable_bounded_segment_over_missing_handoff_advisory(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+
+    advice = build_recovery_advice(
+        project,
+        recent_rows=[],
+        resume_payload={
+            "missing_continuity_handoff_file": "GPD/phases/04/.continue-here.md",
+            "resume_candidates": [
+                {
+                    "kind": "bounded_segment",
+                    "origin": "continuation.bounded_segment",
+                    "status": "paused",
+                    "resume_file": "GPD/phases/04/04-01-EXECUTE.md",
+                }
+            ],
+        },
+    )
+
+    assert advice.mode == "current-workspace"
+    assert advice.status == "bounded-segment"
+    assert advice.active_resume_kind == "bounded_segment"
+    assert advice.active_resume_origin == "continuation.bounded_segment"
+    assert advice.execution_resumable is True
+    assert advice.missing_continuity_handoff is True
+
+
 def test_build_recovery_advice_keeps_interrupted_agent_in_current_workspace_mode(tmp_path: Path) -> None:
     project = _project(tmp_path)
 
@@ -1099,16 +1126,18 @@ def test_build_recovery_advice_keeps_machine_change_notice_in_current_workspace_
         },
     )
 
-    assert advice.mode == "current-workspace"
-    assert advice.status == "workspace-recovery"
-    assert advice.decision_source == "current-workspace"
-    assert advice.primary_command == "gpd resume"
+    assert advice.mode == "recent-projects"
+    assert advice.status == "recent-projects"
+    assert advice.decision_source == "recent-projects"
+    assert advice.primary_command == "gpd resume --recent"
     assert advice.recent_projects_count == 1
     assert advice.machine_change_notice is not None
-    assert advice.primary_reason == "Current workspace has recorded recovery state and a machine-change notice to inspect."
+    assert advice.primary_reason == "GPD found recent projects on this machine, but none are selected automatically."
     assert "Rerun the installer" in advice.machine_change_notice
-    assert [(action.kind, action.command, action.availability) for action in advice.actions] == [
-        ("primary", "gpd resume", "now")
+    assert [(action.kind, action.availability) for action in advice.actions] == [
+        ("primary", "now"),
+        ("continue", "after_selection"),
+        ("fast-next", "after_selection"),
     ]
 
 

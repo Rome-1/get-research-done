@@ -289,9 +289,12 @@ class TestBuiltinServerDescriptors:
         descriptor = build_public_descriptors()["gpd-state"]
         python_module = descriptor["alternatives"]["python_module"]
 
-        assert python_module["command"] == "python3"
+        assert python_module["command"] == "${GPD_PYTHON}"
         assert isinstance(python_module["command"], str)
-        assert python_module["notes"] == "Requires gpd package installed and Python >=3.11"
+        assert (
+            python_module["notes"]
+            == "Replace `${GPD_PYTHON}` with a Python >=3.11 interpreter that has GPD installed."
+        )
 
     def test_state_public_descriptor_lists_only_live_tools(self):
         from gpd.mcp.builtin_servers import build_public_descriptors
@@ -1087,6 +1090,8 @@ class TestSkillsServer:
             "---\n"
             "name: gpd:execute-phase\n"
             "description: Execute all plans in a phase.\n"
+            "requires:\n"
+            "  files: [\"GPD/ROADMAP.md\"]\n"
             "---\n"
             "\n"
             "Canonical execute command.\n",
@@ -1127,9 +1132,16 @@ class TestSkillsServer:
             "name: gpd:peer-review\n"
             "description: Conduct standalone peer review.\n"
             "context_mode: project-required\n"
+            "requires:\n"
+            "  files: [\"paper/*.tex\", \"paper/*.md\", \"manuscript/*.tex\", \"manuscript/*.md\", \"draft/*.tex\", \"draft/*.md\"]\n"
             "review-contract:\n"
             "  review_mode: publication\n"
             "  schema_version: 1\n"
+            "  required_outputs: []\n"
+            "  required_evidence: []\n"
+            "  blocking_conditions: []\n"
+            "  preflight_checks: []\n"
+            "  stage_artifacts: []\n"
             "  conditional_requirements:\n"
             "    - when: theorem-bearing claims are present\n"
             "      required_outputs:\n"
@@ -1197,6 +1209,17 @@ class TestSkillsServer:
         result = get_skill("gpd-execute-phase")
         assert result["name"] == "gpd-execute-phase"
         assert "Canonical execute command" in result["content"]
+        assert result["requires"] == {"files": ["GPD/ROADMAP.md"]}
+        assert result["content_authority"] == "canonical"
+        assert result["structured_metadata_authority"] == {
+            "content": "canonical",
+            "context_mode": "mirrored",
+            "project_reentry_capable": "mirrored",
+            "allowed_tools": "mirrored",
+            "requires": "mirrored",
+            "review_contract": "mirrored",
+        }
+        assert "treat `content` as authoritative" in result["loading_hint"]
         assert result["file_count"] == 1
         assert result["allowed_tools_surface"] == "command.allowed-tools"
 
@@ -1225,7 +1248,16 @@ class TestSkillsServer:
         assert "Referee Decision Schema" in schema_documents["referee-decision-schema.md"]["body"]
         assert "review-ledger-schema.md" in contract_documents
         assert "schema_documents and contract_documents already include" in result["loading_hint"]
-        assert "inject `review_contract` alongside `content`" in result["loading_hint"]
+        assert result["content_authority"] == "canonical"
+        assert result["structured_metadata_authority"] == {
+            "content": "canonical",
+            "context_mode": "mirrored",
+            "project_reentry_capable": "mirrored",
+            "allowed_tools": "mirrored",
+            "requires": "mirrored",
+            "review_contract": "mirrored",
+        }
+        assert "treat `content` as authoritative" in result["loading_hint"]
         assert result["context_mode"] == "project-required"
         assert result["project_reentry_capable"] is False
         assert result["review_contract"] is not None

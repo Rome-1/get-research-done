@@ -1746,10 +1746,11 @@ def test_build_runtime_hint_payload_machine_change_only_keeps_local_resume_witho
         include_workflow_presets=False,
     )
 
-    assert payload.orientation["mode"] == "current-workspace"
-    assert payload.orientation["status"] == "workspace-recovery"
+    assert payload.orientation["mode"] == "idle"
+    assert payload.orientation["status"] == "no-recovery"
     assert payload.orientation["has_local_recovery_target"] is False
-    assert any(action.startswith("Run `gpd resume`") for action in payload.next_actions)
+    assert payload.orientation["machine_change_notice"] is not None
+    assert not any(action.startswith("Run `gpd resume`") for action in payload.next_actions)
     assert not any("resume-work" in action for action in payload.next_actions)
     assert not any("suggest-next" in action for action in payload.next_actions)
 

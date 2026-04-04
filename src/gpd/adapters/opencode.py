@@ -689,7 +689,7 @@ def write_manifest(
     if explicit_target is not None:
         manifest["explicit_target"] = bool(explicit_target)
     elif isinstance(runtime, str) and runtime.strip() and normalized_scope in {"--local", "--global"}:
-        default_target = _default_install_target(config_dir, runtime.strip(), normalized_scope)
+        default_target = _default_install_target(runtime.strip(), normalized_scope)
         if default_target is not None:
             manifest["explicit_target"] = not _paths_equal(config_dir, default_target)
     if managed_command_file_names:

@@ -140,7 +140,7 @@ class ClaudeCodeAdapter(RuntimeAdapter):
             workflow_target_dir=target_dir,
             explicit_target=getattr(self, "_install_explicit_target", False),
         )
-        if verify_installed(commands_dest, "commands/gpd"):
+        if verify_installed(commands_dest):
             logger.info("Installed commands/gpd")
         else:
             failures.append("commands/gpd")
@@ -160,7 +160,7 @@ class ClaudeCodeAdapter(RuntimeAdapter):
             content_transform=lambda content: _rewrite_gpd_cli_invocations(content, bridge_command),
             body_tool_reference_map=self.tool_reference_translation_map(),
         )
-        if verify_installed(agents_dest, "agents"):
+        if verify_installed(agents_dest):
             logger.info("Installed agents")
         else:
             failures.append("agents")

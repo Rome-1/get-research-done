@@ -10,6 +10,8 @@ stale managed-environment package contents.
 from __future__ import annotations
 
 import os
+import re
+import sys
 import tomllib
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -73,17 +75,45 @@ def _checkout_python_candidates(root: Path) -> tuple[Path, ...]:
     """Return plausible checkout-local Python interpreter paths."""
     if os.name == "nt":
         relpaths = (
-            Path(".venv") / "Scripts" / "python.exe",
-            Path("venv") / "Scripts" / "python.exe",
+            Path(".venv") / "Scripts",
+            Path("venv") / "Scripts",
         )
     else:
         relpaths = (
-            Path(".venv") / "bin" / "python",
-            Path(".venv") / "bin" / "python3",
-            Path("venv") / "bin" / "python",
-            Path("venv") / "bin" / "python3",
+            Path(".venv") / "bin",
+            Path("venv") / "bin",
         )
-    return tuple(root / relpath for relpath in relpaths)
+    candidates: list[Path] = []
+    seen: set[Path] = set()
+
+    def add_candidate(path: Path) -> None:
+        if path in seen:
+            return
+        seen.add(path)
+        candidates.append(path)
+
+    pattern = re.compile(r"^python(?:\d+(?:\.\d+)?)?(?:\.exe)?$")
+    preferred_name = "python.exe" if os.name == "nt" else "python"
+    for relpath in relpaths:
+        bindir = root / relpath
+        add_candidate(bindir / preferred_name)
+        if not bindir.is_dir():
+            continue
+        for child in sorted(bindir.iterdir()):
+            if not child.is_file():
+                continue
+            if child.name == preferred_name or not pattern.fullmatch(child.name):
+                continue
+            add_candidate(child)
+    return tuple(candidates)
+
+
+def current_python_executable() -> str | None:
+    """Return the active interpreter path when Python knows it explicitly."""
+    executable = sys.executable if isinstance(sys.executable, str) else None
+    if executable:
+        executable = executable.strip()
+    return executable or None
 
 
 def resolve_checkout_python(start: Path | None = None, *, fallback: str | None = None) -> str | None:
@@ -92,7 +122,9 @@ def resolve_checkout_python(start: Path | None = None, *, fallback: str | None =
     When a source checkout is available, installed runtime artifacts should
     point at the checkout's own virtualenv if present so copied hook scripts,
     MCP servers, and runtime bridges all import the same live source tree.
-    Fall back to *fallback* when no checkout-local interpreter exists.
+    Return ``None`` when no checkout is available so managed-install callers
+    can keep their own interpreter selection. Fall back to *fallback* only
+    when a checkout exists but its local virtualenv is missing.
     """
     root = checkout_root(start)
     if root is None:
@@ -145,6 +177,7 @@ except PackageNotFoundError:
 __all__ = [
     "__version__",
     "checkout_root",
+    "current_python_executable",
     "resolve_checkout_python",
     "resolve_active_version",
     "resolve_install_gpd_root",

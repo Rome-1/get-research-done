@@ -17,7 +17,7 @@ from unittest.mock import patch
 import pytest
 
 from gpd.adapters.install_utils import (
-    _inject_review_contract_prompt_from_frontmatter,
+    _inject_command_visibility_sections_from_frontmatter,
     _is_hook_command_for_script,
     build_hook_command,
     build_runtime_install_repair_command,
@@ -370,7 +370,55 @@ class TestProtectRuntimeAgentPrompt:
             assert protect_runtime_agent_prompt(content, runtime) == content
 
 
-class TestReviewContractInjection:
+class TestCommandVisibilityInjection:
+    def test_requires_only_section_is_injected_once_before_body(self) -> None:
+        content = (
+            "---\n"
+            "requires:\n"
+            "  files:\n"
+            "    - GPD/ROADMAP.md\n"
+            "---\n"
+            "Lead paragraph.\n\n"
+            "## Command Requirements\n\n"
+            "Stale body section.\n"
+        )
+
+        result = _inject_command_visibility_sections_from_frontmatter(content)
+
+        assert result.count("## Command Requirements") == 1
+        assert "## Review Contract" not in result
+        assert result.index("## Command Requirements") < result.index("Lead paragraph.")
+        assert "Stale body section." not in result
+        assert "GPD/ROADMAP.md" in result
+
+    def test_combined_command_visibility_sections_are_deduplicated_and_ordered(self) -> None:
+        content = (
+            "---\n"
+            "requires:\n"
+            "  files:\n"
+            "    - GPD/ROADMAP.md\n"
+            "review-contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: review\n"
+            "  required_outputs:\n"
+            "    - GPD/review/output.md\n"
+            "---\n"
+            "Lead paragraph.\n\n"
+            "## Review Contract\n\n"
+            "Stale review section.\n\n"
+            "## Command Requirements\n\n"
+            "Stale requirements section.\n"
+        )
+
+        result = _inject_command_visibility_sections_from_frontmatter(content)
+
+        assert result.count("## Command Requirements") == 1
+        assert result.count("## Review Contract") == 1
+        assert result.index("## Command Requirements") < result.index("## Review Contract")
+        assert result.index("## Review Contract") < result.index("Lead paragraph.")
+        assert "Stale review section." not in result
+        assert "Stale requirements section." not in result
+
     def test_existing_review_contract_section_is_replaced_by_canonical_frontmatter_render(self) -> None:
         content = (
             "---\n"
@@ -394,7 +442,7 @@ class TestReviewContractInjection:
             "Already present in the body.\n"
         )
 
-        result = _inject_review_contract_prompt_from_frontmatter(content)
+        result = _inject_command_visibility_sections_from_frontmatter(content)
 
         assert result.count("## Review Contract") == 1
         assert result.index("## Review Contract") < result.index("Prose before the existing section.")
@@ -414,7 +462,7 @@ class TestReviewContractInjection:
             "Body.\n"
         )
 
-        result = _inject_review_contract_prompt_from_frontmatter(content)
+        result = _inject_command_visibility_sections_from_frontmatter(content)
 
         assert result.count("## Review Contract") == 1
         assert "review_contract:" in result
@@ -434,7 +482,7 @@ class TestReviewContractInjection:
             "Body.\n"
         )
 
-        result = _inject_review_contract_prompt_from_frontmatter(content)
+        result = _inject_command_visibility_sections_from_frontmatter(content)
 
         assert "conditional_requirements:" in result
         assert "when: theorem-bearing claims are present" in result
@@ -452,7 +500,7 @@ class TestReviewContractInjection:
             "Body.\r\n"
         )
 
-        result = _inject_review_contract_prompt_from_frontmatter(content)
+        result = _inject_command_visibility_sections_from_frontmatter(content)
 
         assert "\r\n" in result
         assert "---\r\n" in result
@@ -476,7 +524,7 @@ class TestReviewContractInjection:
             "Body.\n"
         )
 
-        result = _inject_review_contract_prompt_from_frontmatter(content)
+        result = _inject_command_visibility_sections_from_frontmatter(content)
 
         assert result.count("## Review Contract") == 2
         assert "example heading inside a fenced code block" in result
@@ -495,7 +543,7 @@ class TestReviewContractInjection:
         )
 
         with pytest.raises(ValueError, match="must use the canonical frontmatter key 'review-contract'"):
-            _inject_review_contract_prompt_from_frontmatter(content)
+            _inject_command_visibility_sections_from_frontmatter(content)
 
     def test_compile_markdown_rejects_invalid_review_contract_schema_version(self) -> None:
         content = (
@@ -702,6 +750,7 @@ class TestBuildHookCommand:
         monkeypatch.setattr(Path, "home", lambda: fake_home)
         monkeypatch.setattr("gpd.adapters.install_utils.sys.executable", "/ambient/python")
         monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: None)
+        monkeypatch.setattr("gpd.version.resolve_checkout_python", lambda start=None, fallback=None: "/ambient/python")
 
         assert hook_python_interpreter() == str(managed_python)
 
@@ -715,6 +764,23 @@ class TestBuildHookCommand:
         monkeypatch.setenv("GPD_HOME", str(managed_home))
         monkeypatch.setattr("gpd.adapters.install_utils.sys.executable", "/ambient/python")
         monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: None)
+        monkeypatch.setattr("gpd.version.resolve_checkout_python", lambda start=None, fallback=None: "/ambient/python")
+
+        assert hook_python_interpreter() == str(managed_python)
+
+    def test_outside_checkout_ignores_checkout_python_resolution_semantics(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        managed_home = tmp_path / "managed-home"
+        managed_python = managed_home / "venv" / "bin" / "python"
+        managed_python.parent.mkdir(parents=True)
+        managed_python.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+
+        monkeypatch.delenv("GPD_PYTHON", raising=False)
+        monkeypatch.setenv("GPD_HOME", str(managed_home))
+        monkeypatch.setattr("gpd.adapters.install_utils.sys.executable", "/ambient/python")
+        monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: None)
+        monkeypatch.setattr("gpd.version.resolve_checkout_python", lambda start=None, fallback=None: "/ambient/python")
 
         assert hook_python_interpreter() == str(managed_python)
 
@@ -736,6 +802,10 @@ class TestBuildHookCommand:
         checkout_python.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
         monkeypatch.setattr("gpd.adapters.install_utils.sys.executable", "/managed/gpd/venv/bin/python")
         monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: checkout_root)
+        monkeypatch.setattr(
+            "gpd.version.resolve_checkout_python",
+            lambda start=None, fallback=None: str(checkout_python),
+        )
 
         assert hook_python_interpreter() == str(checkout_python)
 
@@ -753,6 +823,10 @@ class TestBuildHookCommand:
         monkeypatch.setenv("GPD_HOME", str(managed_home))
         monkeypatch.setattr("gpd.adapters.install_utils.sys.executable", "/ambient/python")
         monkeypatch.setattr("gpd.version.checkout_root", lambda start=None: tmp_path / "repo")
+        monkeypatch.setattr(
+            "gpd.version.resolve_checkout_python",
+            lambda start=None, fallback=None: fallback or "/ambient/python",
+        )
 
         assert hook_python_interpreter() == "/ambient/python"
 
@@ -1284,4 +1358,4 @@ def test_verify_installed_rejects_unresolved_include_markers(tmp_path: Path) -> 
     install_dir.mkdir()
     (install_dir / "prompt.md").write_text("<!-- @ include not resolved: foo.md -->\n", encoding="utf-8")
 
-    assert verify_installed(install_dir, "installed prompt dir") is False
+    assert verify_installed(install_dir) is False

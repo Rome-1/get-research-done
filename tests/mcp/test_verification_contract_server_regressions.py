@@ -862,17 +862,17 @@ def test_contract_tools_reject_coercive_contract_scalars() -> None:
     [
         (
             "context_intake",
-            "Invalid contract payload: context_intake must not be empty",
+            "Invalid contract payload: context_intake must be an object, not list",
             False,
         ),
         (
             "approach_policy",
-            None,
-            True,
+            "Invalid contract payload: approach_policy must be an object, not list",
+            False,
         ),
         (
             "uncertainty_markers",
-            "Invalid contract payload: missing uncertainty_markers.disconfirming_observations; missing uncertainty_markers.weakest_anchors",
+            "Invalid contract payload: uncertainty_markers must be an object, not list",
             False,
         ),
     ],
@@ -915,7 +915,7 @@ def test_contract_tools_reject_missing_context_intake() -> None:
     contract = _load_project_contract_fixture()
     contract.pop("context_intake", None)
 
-    _assert_contract_tools_reject(contract, "missing context_intake")
+    _assert_contract_tools_reject(contract, "context_intake is required")
 
 
 def test_contract_tools_reject_empty_context_intake() -> None:
@@ -923,6 +923,38 @@ def test_contract_tools_reject_empty_context_intake() -> None:
     contract["context_intake"] = {}
 
     _assert_contract_tools_reject(contract, "context_intake must not be empty")
+
+
+def test_contract_tools_reject_missing_uncertainty_marker_subfields() -> None:
+    from gpd.mcp.servers.verification_server import run_contract_check, suggest_contract_checks
+
+    contract = _load_project_contract_fixture()
+    contract["uncertainty_markers"] = {}
+
+    expected_details = [
+        "uncertainty_markers.disconfirming_observations is required",
+        "uncertainty_markers.weakest_anchors is required",
+    ]
+    expected_error = (
+        "Invalid contract payload: uncertainty_markers.disconfirming_observations is required; "
+        "uncertainty_markers.weakest_anchors is required"
+    )
+
+    run_result = run_contract_check(
+        {
+            "check_key": "contract.benchmark_reproduction",
+            "contract": contract,
+            "binding": {"claim_ids": ["claim-benchmark"]},
+            "metadata": {"source_reference_id": "ref-benchmark"},
+            "observed": {"metric_value": 0.01, "threshold_value": 0.02},
+        }
+    )
+    suggest_result = suggest_contract_checks(contract)
+
+    for result in (run_result, suggest_result):
+        assert result["schema_version"] == 1
+        assert result["error"] == expected_error
+        assert result["contract_error_details"] == expected_details
 
 
 @pytest.mark.parametrize("field_name", ["regime", "units"])
@@ -1043,6 +1075,13 @@ def test_contract_tools_accept_recoverable_mapping_scalar_to_list_contract_drift
     assert suggest_result["suggested_count"] > 0
     assert suggest_result["contract_salvaged"] is True
     assert expected_finding in suggest_result["contract_salvage_findings"]
+
+
+def test_contract_tools_preserve_non_string_list_member_parse_error() -> None:
+    contract = _load_project_contract_fixture()
+    contract["context_intake"]["must_read_refs"] = [{"id": "ref-benchmark"}]
+
+    _assert_contract_tools_reject(contract, "context_intake.must_read_refs.0: Input should be a valid string")
 
 
 def test_suggest_contract_checks_derives_request_templates_from_contract() -> None:
@@ -2225,7 +2264,7 @@ def test_contract_tools_preserve_stable_error_envelopes_at_mcp_boundary(
         ),
         (
             lambda contract: contract["references"][0]["required_actions"].append(17),
-            "references.0.required_actions[3] must be a non-empty string",
+            "references.0.required_actions.3: Input should be 'read', 'use', 'compare', 'cite' or 'avoid'",
         ),
     ],
 )
@@ -2563,7 +2602,7 @@ def test_contract_tools_surface_full_contract_error_details_for_multi_error_payl
         "scope.in_scope must not be blank",
         "claims.0.references must not be blank",
         "references.0.aliases must not be blank",
-        "references.0.required_actions[3] must be a non-empty string",
+        "references.0.required_actions.3: Input should be 'read', 'use', 'compare', 'cite' or 'avoid'",
     ]
 
     assert run_result["error"] == "Invalid contract payload: scope.in_scope must not be blank; claims.0.references must not be blank; references.0.aliases must not be blank; +1 more"

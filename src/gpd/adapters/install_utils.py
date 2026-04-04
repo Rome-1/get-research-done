@@ -23,7 +23,7 @@ from gpd.adapters.runtime_catalog import (
 )
 from gpd.adapters.tool_names import CONTEXTUAL_TOOL_REFERENCE_NAMES
 from gpd.core.constants import HOME_DATA_DIR_NAME
-from gpd.registry import render_review_contract_section_from_frontmatter
+from gpd.registry import render_command_visibility_sections_from_frontmatter
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -92,7 +92,7 @@ def _paths_equal(left: Path, right: Path) -> bool:
         return left.expanduser() == right.expanduser()
 
 
-def _default_install_target(config_dir: Path, runtime: str, scope_flag: str | None) -> Path | None:
+def _default_install_target(runtime: str, scope_flag: str | None) -> Path | None:
     """Return the default install location for *runtime* and *scope_flag* when known."""
     descriptor = get_runtime_descriptor(runtime)
     if scope_flag == "--local":
@@ -397,7 +397,6 @@ _UNRESOLVED_INCLUDE_MARKERS = (
     "@ include depth limit reached:",
 )
 _TEXT_INSTALL_ARTIFACT_SUFFIXES = frozenset({".md", ".toml"})
-_GPD_HOOK_IMPORT_RE = re.compile(r"(?m)^\s*(?:from|import)\s+gpd(?:\.|\b)")
 
 
 def protect_runtime_agent_prompt(content: str, runtime: str) -> str:
@@ -499,21 +498,39 @@ def _strip_top_level_markdown_section(body: str, *, heading: str) -> str:
     return "".join([*lines[:start_index], *lines[end_index:]])
 
 
-def _inject_review_contract_prompt_from_frontmatter(content: str) -> str:
-    """Front-load any review-contract block into the model-visible body once."""
+def _inject_command_visibility_sections_from_frontmatter(content: str) -> str:
+    """Front-load model-visible command constraints into installed markdown once."""
 
     preamble, frontmatter, separator, body = split_markdown_frontmatter(content)
     if not frontmatter:
         return content
+    command_name_match = re.search(r"(?m)^name:\s*(?P<name>.+?)\s*$", frontmatter)
+    command_name = command_name_match.group("name").strip().strip("\"'") if command_name_match is not None else ""
+    has_command_only_frontmatter = any(
+        re.search(pattern, frontmatter, flags=re.MULTILINE) is not None
+        for pattern in (
+            r"^review-contract:\s*$",
+            r"^review_contract:\s*$",
+            r"^requires:\s*$",
+            r"^context_mode:\s*.+$",
+            r"^project_reentry_capable:\s*.+$",
+        )
+    )
+    if not command_name.startswith("gpd:") and not has_command_only_frontmatter:
+        return content
     eol = _preferred_markdown_eol(preamble, frontmatter, separator, body)
-    section = render_review_contract_section_from_frontmatter(frontmatter, command_name="installed markdown")
+    section = render_command_visibility_sections_from_frontmatter(frontmatter, command_name=command_name)
     if not section:
         return content
     normalized_section = _normalize_markdown_eol(section, eol=eol)
-    body_without_review_contract = _strip_top_level_markdown_section(body, heading="Review Contract").strip("\r\n")
+    body_without_constraints = _strip_top_level_markdown_section(body, heading="Review Contract")
+    body_without_constraints = _strip_top_level_markdown_section(
+        body_without_constraints,
+        heading="Command Requirements",
+    ).strip("\r\n")
     trailing_newline = eol if body.endswith(("\r\n", "\n", "\r")) else ""
     new_body = (
-        f"{normalized_section}{eol}{eol}{body_without_review_contract}" if body_without_review_contract else normalized_section
+        f"{normalized_section}{eol}{eol}{body_without_constraints}" if body_without_constraints else normalized_section
     )
     if trailing_newline and not new_body.endswith(("\r\n", "\n", "\r")):
         new_body += trailing_newline
@@ -915,7 +932,7 @@ def compile_markdown_for_runtime(
             explicit_target=explicit_target,
         )
 
-    return _inject_review_contract_prompt_from_frontmatter(content)
+    return _inject_command_visibility_sections_from_frontmatter(content)
 
 
 def expand_at_includes(
@@ -1230,7 +1247,7 @@ def _copy_dir_contents(
                     explicit_target=explicit_target,
                 )
             content = materialize_first_round_review_schema_headings(content)
-            content = _inject_review_contract_prompt_from_frontmatter(content)
+            content = _inject_command_visibility_sections_from_frontmatter(content)
             dest.write_text(content, encoding="utf-8")
         else:
             # Binary copy
@@ -1324,7 +1341,7 @@ def write_manifest(
     if explicit_target is not None:
         manifest["explicit_target"] = bool(explicit_target)
     elif isinstance(runtime, str) and runtime.strip() and normalized_scope in {"--local", "--global"}:
-        default_target = _default_install_target(config_dir, runtime.strip(), normalized_scope)
+        default_target = _default_install_target(runtime.strip(), normalized_scope)
         if default_target is not None:
             manifest["explicit_target"] = not _paths_equal(config_dir, default_target)
     files: dict[str, str] = {}
@@ -1379,8 +1396,6 @@ def write_manifest(
 
 def _tracked_hook_paths_for_cleanup(
     config_dir: Path,
-    *,
-    skills_dir: str | Path | None = None,
 ) -> set[str]:
     """Return managed hook paths that pre-install cleanup may safely remove."""
     return managed_hook_paths(config_dir)
@@ -1407,31 +1422,12 @@ def tracked_hook_paths_from_manifest(config_dir: Path) -> set[str]:
     return {str(path) for path in raw_files if str(path).startswith("hooks/")}
 
 
-def _looks_like_manifestless_gpd_hook_residue(hook_path: Path) -> bool:
-    """Return whether *hook_path* looks like a legacy GPD-managed hook.
-
-    Manifestless installs from older versions can leave behind bundled hook
-    filenames with modified contents, so hash matching alone is not sufficient.
-    Keep the heuristic narrow: only claim reserved hook slots when the file
-    still imports the ``gpd`` package.
-    """
-    if not hook_path.is_file():
-        return False
-
-    try:
-        content = hook_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return False
-    return _GPD_HOOK_IMPORT_RE.search(content) is not None
-
-
 def managed_hook_paths(config_dir: Path) -> set[str]:
     """Return bundled hook paths that are safe to treat as GPD-managed.
 
-    Besides manifest-tracked and exact hash-matched files, this also claims
-    manifestless legacy hook residue when a reserved bundled hook filename still
-    imports the ``gpd`` package. That keeps install/uninstall repair flows from
-    leaving stale GPD hook code active indefinitely.
+    Only manifest-tracked and exact hash-matched bundled hooks are treated as
+    GPD-managed. Unknown hook files must be preserved even if they import
+    ``gpd`` or reuse a reserved bundled hook filename.
     """
     tracked = tracked_hook_paths_from_manifest(config_dir)
     managed: set[str] = set()
@@ -1452,8 +1448,6 @@ def managed_hook_paths(config_dir: Path) -> set[str]:
                 continue
         except (FileNotFoundError, OSError):
             pass
-        if _looks_like_manifestless_gpd_hook_residue(installed_hook):
-            managed.add(rel_path)
 
     return managed
 
@@ -1615,7 +1609,7 @@ def save_local_patches(
 # ---------------------------------------------------------------------------
 
 
-def verify_installed(dir_path: str | Path, description: str) -> bool:
+def verify_installed(dir_path: str | Path) -> bool:
     """Verify a directory exists and is non-empty.
 
     Returns ``True`` if valid, ``False`` with a logged message otherwise.
@@ -1642,7 +1636,7 @@ def verify_installed(dir_path: str | Path, description: str) -> bool:
     return True
 
 
-def verify_file_installed(file_path: str | Path, description: str) -> bool:
+def verify_file_installed(file_path: str | Path) -> bool:
     """Verify a file exists.  Returns ``True`` if it does."""
     return Path(file_path).exists()
 
@@ -1693,7 +1687,7 @@ def pre_install_cleanup(
     if gpd_dir.exists():
         _shutil.rmtree(gpd_dir)
 
-    for rel_path in sorted(_tracked_hook_paths_for_cleanup(target_dir, skills_dir=skills_dir)):
+    for rel_path in sorted(_tracked_hook_paths_for_cleanup(target_dir)):
         hook_path = target_dir / rel_path
         if hook_path.exists():
             hook_path.unlink()
@@ -1732,7 +1726,7 @@ def install_gpd_content(
                 explicit_target=explicit_target,
             )
 
-    if verify_installed(gpd_dest, GPD_INSTALL_DIR_NAME):
+    if verify_installed(gpd_dest):
         subdir_info = []
         for subdir in GPD_CONTENT_DIRS:
             subdir_path = gpd_dest / subdir
@@ -1759,7 +1753,7 @@ def write_version_file(gpd_dest: Path, version: str) -> list[str]:
     version_dest.parent.mkdir(parents=True, exist_ok=True)
     version_dest.write_text(version, encoding="utf-8")
 
-    if verify_file_installed(version_dest, "VERSION"):
+    if verify_file_installed(version_dest):
         _install_logger.info("Wrote VERSION (%s)", version)
         return []
 
@@ -1788,7 +1782,7 @@ def copy_hook_scripts(gpd_root: Path, target_dir: Path) -> list[str]:
                 continue
             _shutil.copy2(hook_file, dest)
 
-    if verify_installed(hooks_dest, "hooks"):
+    if verify_installed(hooks_dest):
         _install_logger.info("Installed hooks (bundled)")
         return []
 
@@ -2051,9 +2045,13 @@ def hook_python_interpreter() -> str:
         return override
 
     try:
-        from gpd.version import resolve_checkout_python
+        from gpd.version import checkout_root, resolve_checkout_python
 
-        checkout_python = resolve_checkout_python(fallback=sys.executable or "python3")
+        active_checkout_root = checkout_root()
+        if active_checkout_root is not None:
+            checkout_python = resolve_checkout_python(active_checkout_root, fallback=sys.executable or "python3")
+        else:
+            checkout_python = None
     except Exception:
         checkout_python = None
     if checkout_python:

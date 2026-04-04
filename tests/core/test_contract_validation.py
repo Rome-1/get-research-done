@@ -117,16 +117,48 @@ def test_contract_from_data_salvage_accepts_recoverable_list_drift() -> None:
     assert parsed.context_intake.must_read_refs == ["ref-benchmark"]
 
 
-@pytest.mark.parametrize("section_name", ["context_intake", "approach_policy", "uncertainty_markers"])
-def test_contract_from_data_salvage_accepts_whole_singleton_section_corruption(section_name: str) -> None:
+def test_contract_from_data_salvage_rejects_non_object_approach_policy() -> None:
     contract = _load_contract_fixture()
-    contract[section_name] = []
+    contract["approach_policy"] = []
 
     parsed = parse_project_contract_data_salvage(contract)
 
-    assert parsed.contract is not None
-    assert contract_from_data_salvage(contract) is not None
-    assert any(f"{section_name} must be an object, not list" in error for error in parsed.errors)
+    assert parsed.contract is None
+    assert parsed.blocking_errors == ["approach_policy must be an object, not list"]
+    assert contract_from_data_salvage(contract) is None
+
+
+@pytest.mark.parametrize(
+    ("field_name", "expected_error"),
+    [
+        ("schema_version", "schema_version is required"),
+        ("context_intake", "context_intake is required"),
+        ("uncertainty_markers", "uncertainty_markers is required"),
+    ],
+)
+def test_contract_from_data_salvage_rejects_missing_required_sections(field_name: str, expected_error: str) -> None:
+    contract = _load_contract_fixture()
+    contract.pop(field_name)
+
+    parsed = parse_project_contract_data_salvage(contract)
+
+    assert parsed.contract is None
+    assert expected_error in parsed.blocking_errors
+    assert contract_from_data_salvage(contract) is None
+
+
+def test_contract_from_data_salvage_rejects_missing_uncertainty_marker_subfields() -> None:
+    contract = _load_contract_fixture()
+    contract["uncertainty_markers"] = {}
+
+    parsed = parse_project_contract_data_salvage(contract)
+
+    assert parsed.contract is None
+    assert parsed.blocking_errors == [
+        "uncertainty_markers.weakest_anchors is required",
+        "uncertainty_markers.disconfirming_observations is required",
+    ]
+    assert contract_from_data_salvage(contract) is None
 
 
 def test_parse_project_contract_data_salvage_reports_recoverable_findings() -> None:
@@ -1284,11 +1316,13 @@ def test_validate_project_contract_reports_nested_object_schema_errors() -> None
 
 
 def test_validate_project_contract_propagates_schema_errors() -> None:
-    result = validate_project_contract({"scope": {"question": "x"}})
+    contract = _load_contract_fixture()
+    contract["scope"]["in_scope"] = []
+
+    result = validate_project_contract(contract)
 
     assert result.valid is False
     assert "scope.in_scope must name at least one project boundary or objective" in result.errors
-    assert "project contract must include at least one observable, claim, or deliverable" in result.errors
 
 
 def test_validate_project_contract_rejects_reference_aliases_list_shape_drift_at_validation_boundary() -> None:
@@ -1431,8 +1465,8 @@ def test_validate_project_contract_revalidates_typed_research_contract_instances
 
     assert result.valid is False
     assert result.mode == "approved"
-    assert "context_intake must be an object, not str" in result.warnings
-    assert "context_intake must not be empty" in result.errors
+    assert result.warnings == []
+    assert result.errors == ["context_intake must be an object, not str"]
 
 
 @pytest.mark.parametrize(
@@ -1470,38 +1504,47 @@ def test_validate_project_contract_warns_when_optional_sections_are_missing_but_
     assert "no forbidden_proxies recorded yet" in result.warnings
 
 
+@pytest.mark.parametrize(
+    ("field_name", "expected_valid", "expected_warning", "expected_errors"),
+    [
+        ("context_intake", False, None, ["context_intake must be an object, not str"]),
+        ("approach_policy", False, None, ["approach_policy must be an object, not str"]),
+        ("uncertainty_markers", False, None, ["uncertainty_markers must be an object, not str"]),
+    ],
+)
 @pytest.mark.parametrize("mode", ["draft", "approved"])
-def test_validate_project_contract_salvages_whole_singleton_defaulting(mode: str) -> None:
-    cases = {
-        "context_intake": (
-            False,
-            ["context_intake must not be empty"],
-        ),
-        "approach_policy": (
-            True,
-            [],
-        ),
-        "uncertainty_markers": (
-            False,
-            [
-                "uncertainty_markers.weakest_anchors must identify what is least certain",
-                "uncertainty_markers.disconfirming_observations must identify what would force a rethink",
-            ],
-        ),
-    }
-    for field_name, (expected_valid, expected_errors) in cases.items():
-        contract = _load_contract_fixture()
-        contract[field_name] = "not-a-dict"
+def test_validate_project_contract_rejects_wrong_type_for_singleton_sections(
+    mode: str,
+    field_name: str,
+    expected_valid: bool,
+    expected_warning: str | None,
+    expected_errors: list[str],
+) -> None:
+    contract = _load_contract_fixture()
+    contract[field_name] = "not-a-dict"
 
-        result = validate_project_contract(contract, mode=mode)
+    result = validate_project_contract(contract, mode=mode)
 
-        assert result.valid is expected_valid
-        assert result.mode == mode
-        assert f"{field_name} must be an object, not str" in result.warnings
-        for expected_error in expected_errors:
-            assert expected_error in result.errors
-        if not expected_errors:
-            assert result.errors == []
+    assert result.valid is expected_valid
+    assert result.mode == mode
+    if expected_warning is None:
+        assert result.warnings == []
+    else:
+        assert expected_warning in result.warnings
+    assert result.errors == expected_errors
+
+
+def test_validate_project_contract_rejects_missing_uncertainty_marker_subfields() -> None:
+    contract = _load_contract_fixture()
+    contract["uncertainty_markers"] = {}
+
+    result = validate_project_contract(contract)
+
+    assert result.valid is False
+    assert result.errors == [
+        "uncertainty_markers.weakest_anchors is required",
+        "uncertainty_markers.disconfirming_observations is required",
+    ]
 
 
 def test_contract_results_strict_mode_requires_explicit_uncertainty_markers() -> None:

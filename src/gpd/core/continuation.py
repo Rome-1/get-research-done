@@ -5,11 +5,13 @@ This module keeps the durable continuation contract intentionally small:
 - ``ContinuationState`` is the portable JSON-side schema
 - ``resolve_continuation()`` returns the canonical state plus a normalized
   projection for resume/status callers
-- when canonical ``state["continuation"]`` is absent, the resolver synthesizes
-  that state from legacy ``session`` plus the current execution snapshot
+- when canonical ``state["continuation"]`` is absent, callers may still get a
+  bounded-segment projection from the current execution snapshot alone
 
 Only portable repo-local references survive into the canonical continuation
 state. File existence remains a read-time concern surfaced by the projection.
+Legacy ``session`` mirrors remain advisory metadata; they do not hydrate
+continuation authority.
 """
 
 from __future__ import annotations
@@ -37,7 +39,6 @@ __all__ = [
     "normalize_continuation_with_issues",
     "normalize_continuation_reference",
     "resolve_continuation",
-    "synthesize_legacy_continuation",
 ]
 
 EM_DASH = "\u2014"
@@ -223,7 +224,7 @@ class ContinuationSource(StrEnum):
     """Where the resolved continuation state came from."""
 
     CANONICAL = "canonical"
-    LEGACY = "legacy"
+    DERIVED_EXECUTION = "derived_execution_head"
     EMPTY = "empty"
 
 
@@ -484,47 +485,15 @@ def normalize_continuation(
     return model
 
 
-def synthesize_legacy_continuation(
+def _continuation_from_execution_snapshot(
     project_root: Path | str,
-    *,
-    session: Mapping[str, object] | BaseModel | None = None,
     current_execution: Mapping[str, object] | BaseModel | None = None,
 ) -> ContinuationState:
-    """Build canonical continuation state from legacy ``session`` plus live execution."""
+    """Project one bounded segment from the live execution snapshot only."""
 
-    session_payload = _as_mapping(session) or {}
-    current_execution_payload = _as_mapping(current_execution) or {}
-
-    last_seen_at = _normalize_optional_text(session_payload.get("last_date"))
-    handoff_resume_file = normalize_continuation_reference(project_root, session_payload.get("resume_file"))
-    handoff_stopped_at = _normalize_optional_text(session_payload.get("stopped_at"))
-    handoff_last_result_id = _normalize_optional_text(session_payload.get("last_result_id"))
-    handoff_recorded_by = (
-        "legacy_session"
-        if any((handoff_resume_file, handoff_stopped_at, last_seen_at, handoff_last_result_id))
-        else None
-    )
-    normalized_handoff = ContinuationHandoff(
-        resume_file=handoff_resume_file,
-        stopped_at=handoff_stopped_at,
-        last_result_id=handoff_last_result_id,
-        recorded_at=last_seen_at,
-        recorded_by=handoff_recorded_by,
-    )
-    machine = ContinuationMachine(
-        recorded_at=last_seen_at,
-        hostname=session_payload.get("hostname"),
-        platform=session_payload.get("platform"),
-    )
-
-    segment = canonical_bounded_segment_from_execution_snapshot(project_root, current_execution_payload)
+    segment = canonical_bounded_segment_from_execution_snapshot(project_root, current_execution)
     bounded_segment = segment if segment is not None and segment.resume_file and segment.is_resumable_status else None
-
-    return ContinuationState(
-        handoff=normalized_handoff,
-        bounded_segment=bounded_segment,
-        machine=machine,
-    )
+    return ContinuationState(bounded_segment=bounded_segment)
 
 
 def canonical_bounded_segment_from_execution_snapshot(
@@ -563,7 +532,7 @@ def canonical_bounded_segment_from_execution_snapshot(
         last_result_id=execution_payload.get("last_result_id"),
         updated_at=execution_payload.get("updated_at"),
         source_session_id=execution_payload.get("session_id"),
-        recorded_by="legacy_current_execution",
+        recorded_by="derived_execution_head",
     )
     return segment if segment.resume_file and segment.is_resumable_status else None
 
@@ -627,9 +596,9 @@ def resolve_continuation(
     """Resolve canonical continuation and project active pointers for callers.
 
     If ``state["continuation"]`` exists, it is authoritative and validated as
-    the canonical schema. Otherwise the projection synthesizes a canonical
-    continuation from the legacy ``session`` block and the live execution
-    snapshot.
+    the canonical schema. Otherwise the projection may derive one bounded
+    segment from the live execution snapshot. Legacy ``session`` mirrors are
+    not used as continuation authority.
     """
 
     state_payload = _as_mapping(state) or {}
@@ -645,10 +614,6 @@ def resolve_continuation(
         if has_continuation_drift:
             return _project_continuation(project_root, source=ContinuationSource.CANONICAL, continuation=continuation)
 
-    legacy = synthesize_legacy_continuation(
-        project_root,
-        session=state_payload.get("session"),
-        current_execution=current_execution,
-    )
-    source = ContinuationSource.LEGACY if not legacy.is_empty else ContinuationSource.EMPTY
-    return _project_continuation(project_root, source=source, continuation=legacy)
+    derived = _continuation_from_execution_snapshot(project_root, current_execution)
+    source = ContinuationSource.DERIVED_EXECUTION if not derived.is_empty else ContinuationSource.EMPTY
+    return _project_continuation(project_root, source=source, continuation=derived)

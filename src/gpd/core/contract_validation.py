@@ -109,7 +109,7 @@ _RECOVERABLE_SCHEMA_WARNING_PATTERNS = (
     re.compile(r"^.+: Extra inputs are not permitted$"),
 )
 _DEFAULTABLE_SINGLETON_SCHEMA_WARNING_PATTERNS = (
-    re.compile(r"^(?:context_intake|approach_policy|uncertainty_markers) must be an object, not .+$"),
+    re.compile(r"^(?:context_intake|uncertainty_markers) must be an object, not .+$"),
 )
 _AUTHORITATIVE_SCALAR_FINDING_PATTERNS = (
     re.compile(r"^schema_version must be the integer 1$"),
@@ -254,6 +254,10 @@ def _sanitize_contract_scalars(
     return copy.deepcopy(value)
 
 
+def _required_project_contract_section_error(field_name: str) -> str:
+    return f"{field_name} is required"
+
+
 def _strip_unknown_model_keys(
     value: dict[str, object],
     *,
@@ -278,13 +282,27 @@ def _salvage_model_mapping(
     model: type[BaseModel],
     errors: list[str],
     default_value: dict[str, object] | None = None,
+    required_fields: tuple[str, ...] = (),
+    missing_is_default: bool = False,
 ) -> dict[str, object] | None:
+    if value is None:
+        if missing_is_default and default_value is not None:
+            return copy.deepcopy(default_value)
+        actual_type = type(value).__name__
+        errors.append(f"{path_prefix} must be an object, not {actual_type}")
+        return copy.deepcopy(default_value) if default_value is not None else None
     if not isinstance(value, dict):
         actual_type = type(value).__name__
         errors.append(f"{path_prefix} must be an object, not {actual_type}")
         return copy.deepcopy(default_value) if default_value is not None else None
 
     cleaned = _strip_unknown_model_keys(value, path_prefix=path_prefix, model=model, errors=errors)
+    missing_required_fields = [field_name for field_name in required_fields if field_name not in cleaned]
+    if missing_required_fields:
+        for field_name in missing_required_fields:
+            errors.append(f"{path_prefix}.{field_name} is required")
+        return None
+
     while True:
         try:
             return model.model_validate(cleaned).model_dump()
@@ -377,6 +395,9 @@ def _normalize_blank_list_fields(contract: dict[str, object]) -> None:
 
 def salvage_project_contract(contract: dict[str, object]) -> tuple[ResearchContract | None, list[str]]:
     errors: list[str] = []
+    raw_required_section_presence = {
+        field_name: field_name in contract for field_name in ("schema_version", "context_intake", "uncertainty_markers")
+    }
     scalar_sanitized = _sanitize_contract_scalars(contract, errors=errors)
     if not isinstance(scalar_sanitized, dict):
         return None, errors
@@ -384,6 +405,13 @@ def salvage_project_contract(contract: dict[str, object]) -> tuple[ResearchContr
     working = _strip_unknown_model_keys(scalar_sanitized, path_prefix="", model=ResearchContract, errors=errors)
     normalized_contract = copy.deepcopy(working)
     _normalize_blank_list_fields(normalized_contract)
+
+    missing_required_section_errors: list[str] = []
+    for field_name in ("schema_version", "context_intake", "uncertainty_markers"):
+        if field_name not in normalized_contract and not raw_required_section_presence[field_name]:
+            missing_required_section_errors.append(_required_project_contract_section_error(field_name))
+    if missing_required_section_errors:
+        return None, [*errors, *missing_required_section_errors]
 
     collection_models: dict[str, type[BaseModel]] = {
         "observables": ContractObservable,
@@ -414,22 +442,37 @@ def salvage_project_contract(contract: dict[str, object]) -> tuple[ResearchContr
         return None, errors
     normalized_contract["scope"] = scope
 
-    defaultable_singletons: dict[str, type[BaseModel]] = {
-        "context_intake": ContractContextIntake,
-        "approach_policy": ContractApproachPolicy,
-        "uncertainty_markers": ContractUncertaintyMarkers,
-    }
-    for field_name, model in defaultable_singletons.items():
-        if field_name not in normalized_contract:
-            continue
-        default_value = model.model_validate({}).model_dump()
-        normalized_contract[field_name] = _salvage_model_mapping(
-            normalized_contract.get(field_name),
-            path_prefix=field_name,
-            model=model,
+    context_intake = _salvage_model_mapping(
+        normalized_contract.get("context_intake"),
+        path_prefix="context_intake",
+        model=ContractContextIntake,
+        errors=errors,
+    )
+    if context_intake is None:
+        return None, errors
+    normalized_contract["context_intake"] = context_intake
+
+    if "approach_policy" in normalized_contract:
+        approach_policy = _salvage_model_mapping(
+            normalized_contract.get("approach_policy"),
+            path_prefix="approach_policy",
+            model=ContractApproachPolicy,
             errors=errors,
-            default_value=default_value,
         )
+        if approach_policy is None:
+            return None, errors
+        normalized_contract["approach_policy"] = approach_policy
+
+    uncertainty_markers = _salvage_model_mapping(
+        normalized_contract.get("uncertainty_markers"),
+        path_prefix="uncertainty_markers",
+        model=ContractUncertaintyMarkers,
+        errors=errors,
+        required_fields=("weakest_anchors", "disconfirming_observations"),
+    )
+    if uncertainty_markers is None:
+        return None, errors
+    normalized_contract["uncertainty_markers"] = uncertainty_markers
 
     if "schema_version" in normalized_contract:
         try:

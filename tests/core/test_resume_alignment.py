@@ -258,13 +258,14 @@ def test_init_resume_surfaces_machine_change_and_continuity_handoff_candidate(
 
     ctx = init_resume(tmp_path)
 
-    assert ctx["active_resume_pointer"] == "GPD/phases/03-analysis/.continue-here.md"
-    assert ctx["active_resume_origin"] == "continuation.handoff"
+    assert ctx["active_resume_pointer"] is None
+    assert ctx["active_resume_origin"] is None
     assert ctx["execution_paused_at"] is None
     assert "resume_mode" not in ctx
     assert "segment_candidates" not in ctx
     assert "active_execution_segment" not in ctx
     assert "compat_resume_surface" not in ctx
+    assert ctx["resume_candidates"] == []
     assert ctx["has_interrupted_agent"] is False
     assert ctx["session_hostname"] == "old-host"
     assert ctx["session_platform"] == "Linux 5.15 x86_64"

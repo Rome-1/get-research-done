@@ -70,13 +70,13 @@ def test_review_grade_commands_prepend_model_visible_review_contract_to_registry
 
         assert contract is not None
         expected_section = render_review_contract_prompt(dataclasses.asdict(contract))
+        assert command.content.startswith("## Command Requirements\n")
+        assert "## Command Requirements" in command.content
+        assert "context_mode:" in command.content
+        assert "project_reentry_capable:" in command.content
+        assert "The following execution envelope and launch requirements are enforced before this command runs." in command.content
         if command.requires:
-            assert command.content.startswith("## Command Requirements\n")
-            assert "## Command Requirements" in command.content
             assert "requires:" in command.content
-            assert "The following launch requirements are enforced before this command runs." in command.content
-        else:
-            assert command.content.startswith("## Review Contract\n")
         assert "## Review Contract" in command.content
         assert expected_section in command.content
         assert "review_contract:" in command.content
@@ -112,6 +112,24 @@ def test_review_contract_renderer_rejects_unknown_keys() -> None:
 
     with pytest.raises(ValueError, match="Unknown review-contract field"):
         render_review_contract_prompt(contract)
+
+
+def test_non_review_commands_with_requires_still_prepend_model_visible_command_requirements() -> None:
+    for command_name in registry.list_commands():
+        command = registry.get_command(command_name)
+        if not command.requires or command.review_contract is not None:
+            continue
+
+        assert command.content.startswith("## Command Requirements\n")
+        assert "requires:" in command.content
+        assert "The following execution envelope and launch requirements are enforced before this command runs." in command.content
+        for require_key, require_value in command.requires.items():
+            assert str(require_key) in command.content
+            if isinstance(require_value, list):
+                for item in require_value:
+                    assert str(item) in command.content
+            else:
+                assert str(require_value) in command.content
 
 
 def test_review_contract_renderer_rejects_unknown_keys_inside_wrapped_payload() -> None:
@@ -224,6 +242,41 @@ def test_review_contract_normalizer_accepts_singleton_string_list_fields() -> No
             "stage_artifacts": [],
         }
     ]
+
+
+def test_review_contract_normalizer_canonicalizes_case_only_enum_drift() -> None:
+    payload = {
+        "schema_version": 1,
+        "review_mode": "Publication",
+        "preflight_checks": ["Manuscript", "Compiled_Manuscript", "manuscript"],
+        "required_state": "PHASE_EXECUTED",
+        "conditional_requirements": [
+            {
+                "when": "Theorem-Bearing Claims Are Present",
+                "blocking_preflight_checks": ["Compiled_Manuscript"],
+                "required_outputs": "GPD/review/PROOF-REDTEAM{round_suffix}.md",
+            }
+        ],
+    }
+
+    normalized = normalize_review_contract_payload(payload)
+    parsed = registry._parse_review_contract(payload, "gpd:test")
+
+    assert normalized["review_mode"] == "publication"
+    assert normalized["preflight_checks"] == ["manuscript", "compiled_manuscript"]
+    assert normalized["required_state"] == "phase_executed"
+    assert normalized["conditional_requirements"] == [
+        {
+            "when": "theorem-bearing claims are present",
+            "required_outputs": ["GPD/review/PROOF-REDTEAM{round_suffix}.md"],
+            "required_evidence": [],
+            "blocking_conditions": [],
+            "blocking_preflight_checks": ["compiled_manuscript"],
+            "stage_artifacts": [],
+        }
+    ]
+    assert parsed is not None
+    assert dataclasses.asdict(parsed) == normalized
 
 
 def test_review_contract_prompt_and_registry_share_singleton_string_list_normalization() -> None:

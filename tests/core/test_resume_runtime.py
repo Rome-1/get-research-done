@@ -59,6 +59,22 @@ def _update_state_session(
             "last_result_id": last_result_id,
         }
     )
+    state["continuation"]["handoff"].update(
+        {
+            "recorded_at": last_date,
+            "stopped_at": stopped_at,
+            "resume_file": resume_file,
+            "last_result_id": last_result_id,
+            "recorded_by": "test",
+        }
+    )
+    state["continuation"]["machine"].update(
+        {
+            "recorded_at": last_date,
+            "hostname": hostname,
+            "platform": platform,
+        }
+    )
     state_path.write_text(json.dumps(state), encoding="utf-8")
     if isinstance(resume_file, str) and resume_file:
         resume_path = Path(resume_file)
@@ -218,7 +234,7 @@ def test_state_carry_forward_continuation_last_result_id_updates_canonical_conti
             "last_result_id": "result-legacy",
             "updated_at": "2026-03-29T12:00:00+00:00",
             "source_session_id": "sess-1",
-            "recorded_by": "legacy_current_execution",
+            "recorded_by": "derived_execution_head",
         },
         "machine": {
             "recorded_at": "2026-03-29T12:00:00+00:00",
@@ -315,7 +331,7 @@ def test_state_record_session_uses_bounded_segment_last_result_id_when_explicit_
             "last_result_id": "result-canonical",
             "updated_at": "2026-03-29T12:00:00+00:00",
             "source_session_id": "sess-1",
-            "recorded_by": "legacy_current_execution",
+            "recorded_by": "derived_execution_head",
         },
         "machine": {
             "recorded_at": "2026-03-29T12:00:00+00:00",

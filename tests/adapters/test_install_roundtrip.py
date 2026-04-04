@@ -40,6 +40,12 @@ def _review_contract_section(content: str) -> str:
     return match.group(0)
 
 
+def _command_requirements_section(content: str) -> str:
+    match = re.search(r"## Command Requirements\n\n.*?\n```\n", content, flags=re.DOTALL)
+    assert match is not None
+    return match.group(0)
+
+
 def expected_opencode_bridge(target: Path, *, is_global: bool = False, explicit_target: bool = False) -> str:
     return build_runtime_cli_bridge_command(
         "opencode",
@@ -1092,6 +1098,10 @@ def test_real_installed_contract_and_review_surfaces_keep_required_schema_bodies
 ) -> None:
     target = _install_real_repo_for_runtime(tmp_path, runtime)
 
+    progress = _canonicalize_runtime_markdown(
+        _read_runtime_command_prompt(tmp_path, target, runtime, "progress"),
+        runtime=runtime,
+    )
     verify_work = _canonicalize_runtime_markdown(
         _read_runtime_command_prompt(tmp_path, target, runtime, "verify-work"),
         runtime=runtime,
@@ -1153,6 +1163,11 @@ def test_real_installed_contract_and_review_surfaces_keep_required_schema_bodies
     assert 'gap_subject_kind: "{check_subject_kind}"' in verify_work
     assert "\nsubject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in verify_work
     assert "check_subject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in verify_work
+    progress_requirements = _command_requirements_section(progress)
+    assert "requires:" in progress_requirements
+    assert "files:" in progress_requirements
+    assert "GPD/PROJECT.md" in progress_requirements
+    assert progress.count("## Command Requirements") == 1
     assert "# state.json Schema" in sync_state
     write_paper_section = _review_contract_section(write_paper)
     assert "review_contract:" in write_paper_section

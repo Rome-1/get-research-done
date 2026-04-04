@@ -358,7 +358,7 @@ class TestNonGpdFilesPreserved:
         assert unmanaged_hook.read_text(encoding="utf-8") == "# third-party statusline hook\n"
         assert (target / "hooks" / "check_update.py").exists()
 
-    def test_install_replaces_manifestless_gpd_hook_residue_with_matching_basename(self, tmp_path: Path) -> None:
+    def test_install_preserves_manifestless_hook_residue_with_matching_basename(self, tmp_path: Path) -> None:
         gpd_root = _make_gpd_root(tmp_path)
         adapter = get_adapter(PRIMARY_RUNTIME)
         target = tmp_path / adapter.config_dir_name
@@ -368,9 +368,9 @@ class TestNonGpdFilesPreserved:
 
         adapter.install(gpd_root, target, is_global=True)
 
-        assert stale_hook.read_text(encoding="utf-8") == "print('ok')\n"
+        assert stale_hook.read_text(encoding="utf-8") == _legacy_gpd_hook_body()
 
-    def test_uninstall_removes_manifestless_gpd_hook_residue_with_matching_basename(self, tmp_path: Path) -> None:
+    def test_uninstall_preserves_manifestless_hook_residue_with_matching_basename(self, tmp_path: Path) -> None:
         adapter = get_adapter(PRIMARY_RUNTIME)
         target = tmp_path / adapter.config_dir_name
         stale_hook = target / "hooks" / "statusline.py"
@@ -379,8 +379,8 @@ class TestNonGpdFilesPreserved:
 
         result = adapter.uninstall(target)
 
-        assert "1 GPD hooks" in result["removed"]
-        assert not stale_hook.exists()
+        assert "1 GPD hooks" not in result["removed"]
+        assert stale_hook.exists()
 
 
 # =========================================================================

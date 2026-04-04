@@ -3136,9 +3136,14 @@ def _normalize_contract_parse_error(error: str, *, contract_raw: dict[str, objec
         return error
 
     value = _contract_value_at_path(contract_raw, path)
+    if value is None:
+        parent = ".".join(str(token) for token in tokens[:-1])
+        return f"{parent}[{tokens[-1]}] must be a non-empty string"
     if isinstance(value, str) and value.strip() and " is a duplicate" in error:
         return error
     if isinstance(value, str) and value.strip() and "must not be blank" not in error and ": Input should" not in error:
+        return error
+    if not isinstance(value, str):
         return error
 
     parent = ".".join(str(token) for token in tokens[:-1])

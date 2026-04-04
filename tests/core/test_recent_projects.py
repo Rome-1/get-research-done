@@ -194,9 +194,11 @@ class TestRecentProjectsIndexPersistence:
                             "last_seen_at": "2026-03-26T12:00:00+00:00",
                             "stopped_at": "Phase 3",
                             "resume_file": "GPD/phases/03/.continue-here.md",
+                            "resume_target_kind": "bounded_segment",
+                            "resume_target_recorded_at": "2026-03-26T12:34:56+00:00",
                             "hostname": "builder-01",
                             "platform": "Linux 6.1 x86_64",
-                            "source_kind": "segment.pause",
+                            "source_kind": "continuation.bounded_segment",
                             "source_session_id": "session-123",
                             "source_segment_id": "segment-7",
                             "source_transition_id": "transition-9",
@@ -219,7 +221,7 @@ class TestRecentProjectsIndexPersistence:
         assert row.schema_version == 1
         assert row.last_session_at == "2026-03-26T12:00:00+00:00"
         assert row.last_seen_at == "2026-03-26T12:00:00+00:00"
-        assert row.source_kind == "segment.pause"
+        assert row.source_kind == "continuation.bounded_segment"
         assert row.source_session_id == "session-123"
         assert row.source_segment_id == "segment-7"
         assert row.source_transition_id == "transition-9"
@@ -469,9 +471,9 @@ class TestRecentProjectsIndexPersistence:
             }
         )
 
-        assert classification.resume_target_kind == "handoff"
+        assert classification.resume_target_kind is None
         assert classification.target_priority == 1
-        assert classification.candidate_reason(recoverable=True) == "recent project cache entry with projected continuity handoff"
+        assert classification.candidate_reason(recoverable=True) == "recent project cache entry with confirmed resume target"
 
 
 class TestRecentProjectsListing:

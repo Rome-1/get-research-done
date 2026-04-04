@@ -1683,8 +1683,7 @@ class TestResume:
         assert "F = ma" in result.output
         assert "R-bridge-01" in result.output
 
-    def test_resume_human_output_marks_missing_continuity_handoff_as_advisory(self, gpd_project: Path) -> None:
-        # Compatibility-only regression: keep the legacy session mirror callable until it fully ages out.
+    def test_resume_human_output_does_not_promote_session_only_handoff_state(self, gpd_project: Path) -> None:
         state_path = gpd_project / "GPD" / "state.json"
         state = json.loads(state_path.read_text(encoding="utf-8"))
         state["position"]["status"] = "Paused"
@@ -1693,10 +1692,9 @@ class TestResume:
 
         result = _invoke("resume")
 
-        assert "handoff is missing" in result.output.lower()
         assert "Canonical candidate kinds" in result.output
-        assert "continuity_handoff" in result.output
-        assert "./GPD/phases/01-test-phase/.continue-here.md" in result.output
+        assert "handoff is missing" not in result.output.lower()
+        assert "./GPD/phases/01-test-phase/.continue-here.md" not in result.output
 
     def test_resume_raw_promotes_auto_selected_recent_bounded_segment_over_same_pointer_handoff(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

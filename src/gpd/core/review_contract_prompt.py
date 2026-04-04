@@ -159,10 +159,11 @@ def _normalize_review_contract_string_list(value: object, *, field_name: str) ->
 
 def _normalize_review_contract_choice(value: object, *, field_name: str, valid_values: tuple[str, ...]) -> str:
     normalized = _normalize_review_contract_required_str(value, field_name=field_name)
-    if normalized not in valid_values:
-        valid = ", ".join(valid_values)
-        raise ValueError(f"{field_name} must be one of: {valid}; got {normalized!r}")
-    return normalized
+    for valid_value in valid_values:
+        if normalized.casefold() == valid_value.casefold():
+            return valid_value
+    valid = ", ".join(valid_values)
+    raise ValueError(f"{field_name} must be one of: {valid}; got {normalized!r}")
 
 
 def _normalize_review_contract_choice_list(
@@ -172,12 +173,23 @@ def _normalize_review_contract_choice_list(
     valid_values: tuple[str, ...],
 ) -> list[str]:
     normalized = _normalize_review_contract_string_list(value, field_name=field_name)
-    invalid_values = [item for item in normalized if item not in valid_values]
+    canonicalized: list[str] = []
+    invalid_values: list[str] = []
+    seen: set[str] = set()
+    for item in normalized:
+        matched = next((valid_value for valid_value in valid_values if item.casefold() == valid_value.casefold()), None)
+        if matched is None:
+            invalid_values.append(item)
+            continue
+        if matched in seen:
+            continue
+        seen.add(matched)
+        canonicalized.append(matched)
     if invalid_values:
         valid = ", ".join(valid_values)
         formatted = ", ".join(repr(item) for item in invalid_values)
         raise ValueError(f"{field_name} must contain only: {valid}; got {formatted}")
-    return normalized
+    return canonicalized
 
 
 def _normalize_review_contract_conditional_when(value: object, *, field_name: str) -> str:
@@ -286,9 +298,12 @@ def _normalize_review_contract_payload(
         required_state_raw,
         field_name="required_state",
     )
-    if required_state and required_state not in VALID_REVIEW_REQUIRED_STATES:
-        valid = ", ".join(VALID_REVIEW_REQUIRED_STATES)
-        raise ValueError(f"required_state must be one of: {valid}; got {required_state!r}")
+    if required_state:
+        required_state = _normalize_review_contract_choice(
+            required_state,
+            field_name="required_state",
+            valid_values=VALID_REVIEW_REQUIRED_STATES,
+        )
 
     preflight_checks = _normalize_review_contract_choice_list(
         loaded.get("preflight_checks"),
@@ -365,6 +380,18 @@ def render_review_contract_prompt(review_contract: object) -> str:
     payload = normalize_review_contract_payload(review_contract)
     if not payload:
         return ""
+    guidance_lines = [
+        "The model sees the following review contract, and command preflight/validation use the same structure. "
+        "Satisfy it directly in the generated artifacts."
+    ]
+    if any(
+        isinstance(requirement, dict) and requirement.get("blocking_preflight_checks")
+        for requirement in payload.get("conditional_requirements", [])
+        if isinstance(payload, dict)
+    ):
+        guidance_lines.append(
+            "Each `conditional_requirements[].blocking_preflight_checks` entry must also appear in `preflight_checks`."
+        )
     rendered = yaml.safe_dump(
         {REVIEW_CONTRACT_PROMPT_WRAPPER_KEY: payload},
         sort_keys=False,
@@ -372,7 +399,6 @@ def render_review_contract_prompt(review_contract: object) -> str:
     ).rstrip()
     return (
         "## Review Contract\n\n"
-        "The model sees the following review contract, and command preflight/validation use the same structure. "
-        "Satisfy it directly in the generated artifacts.\n\n"
+        f"{' '.join(guidance_lines)}\n\n"
         f"```yaml\n{rendered}\n```"
     )

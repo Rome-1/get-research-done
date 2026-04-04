@@ -1181,7 +1181,7 @@ class GeminiAdapter(RuntimeAdapter):
             bridge_command=bridge_command,
             explicit_target=getattr(self, "_install_explicit_target", False),
         )
-        if verify_installed(commands_dest, "commands/gpd"):
+        if verify_installed(commands_dest):
             logger.info("Installed commands/gpd (TOML format)")
         else:
             failures.append("commands/gpd")
@@ -1200,7 +1200,7 @@ class GeminiAdapter(RuntimeAdapter):
             install_scope=self._current_install_scope_flag(),
             bridge_command=bridge_command,
         )
-        if verify_installed(agents_dest, "agents"):
+        if verify_installed(agents_dest):
             logger.info("Installed agents")
         else:
             failures.append("agents")

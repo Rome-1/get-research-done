@@ -189,7 +189,7 @@ def _uses_effective_explicit_target(
 
 def _maybe_reexec_from_checkout(raw_argv: list[str], *, cli_cwd: Path) -> None:
     """Re-exec through a checkout when the active package does not match it."""
-    from gpd.version import checkout_root, resolve_checkout_python
+    from gpd.version import checkout_root, current_python_executable, resolve_checkout_python
 
     if os.environ.get(ENV_GPD_DISABLE_CHECKOUT_REEXEC) == "1":
         return
@@ -209,7 +209,10 @@ def _maybe_reexec_from_checkout(raw_argv: list[str], *, cli_cwd: Path) -> None:
     if checkout_src not in existing_pythonpath:
         env["PYTHONPATH"] = os.pathsep.join([checkout_src, *existing_pythonpath]) if existing_pythonpath else checkout_src
     env[ENV_GPD_DISABLE_CHECKOUT_REEXEC] = "1"
-    checkout_python = resolve_checkout_python(root, fallback=sys.executable or "python3") or (sys.executable or "python3")
+    active_python = current_python_executable()
+    checkout_python = resolve_checkout_python(root, fallback=active_python) or active_python
+    if checkout_python is None:
+        return
     os.execve(checkout_python, [checkout_python, "-m", "gpd.runtime_cli", *raw_argv], env)
 
 

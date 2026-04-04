@@ -189,11 +189,6 @@ def _candidate_kind(candidate: Mapping[str, object]) -> str | None:
 def _candidate_origin(candidate: Mapping[str, object]) -> str | None:
     return resume_candidate_origin(candidate)
 
-
-def _canonical_resume_origin(origin: str | None) -> str | None:
-    return origin
-
-
 def _has_candidate(
     segment_candidates: Sequence[Mapping[str, object]],
     *,
@@ -273,12 +268,12 @@ def _derive_active_resume_kind(
         return "bounded_segment"
     if explicit_origin == "continuation.handoff":
         return "continuity_handoff"
+    if _has_usable_candidate(resume_candidates, kind="bounded_segment"):
+        return "bounded_segment"
     if missing_continuity_handoff_file is not None:
         return "continuity_handoff"
     if _has_candidate(resume_candidates, kind="continuity_handoff", status="missing"):
         return "continuity_handoff"
-    if _has_candidate(resume_candidates, kind="bounded_segment"):
-        return "bounded_segment"
     if continuity_handoff_file is not None:
         return "continuity_handoff"
     if _has_candidate(resume_candidates, kind="continuity_handoff", status="handoff"):
@@ -295,7 +290,7 @@ def _derive_active_resume_origin(
 ) -> str | None:
     explicit = _text_field(payload, "active_resume_origin")
     if explicit is not None:
-        return _canonical_resume_origin(explicit)
+        return explicit
 
     if active_resume_kind == "bounded_segment":
         return "continuation.bounded_segment"
@@ -619,7 +614,6 @@ def build_recovery_advice(
         or has_continuity_handoff
         or missing_continuity_handoff
         or has_live_execution
-        or machine_change_notice is not None
         or recorded_continuity_handoff_file is not None
         or (active_resume_pointer is not None and active_resume_kind is not None)
     )

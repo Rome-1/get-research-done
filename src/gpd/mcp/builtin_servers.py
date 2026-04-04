@@ -17,6 +17,11 @@ from copy import deepcopy
 
 logger = logging.getLogger(__name__)
 
+_PYTHON_COMMAND_SENTINEL = "__GPD_PYTHON__"
+_PUBLIC_PYTHON_PLACEHOLDER = "${GPD_PYTHON}"
+_PYTHON_LAUNCH_NOTES = (
+    f"Replace `{_PUBLIC_PYTHON_PLACEHOLDER}` with a Python >=3.11 interpreter that has GPD installed."
+)
 
 # Canonical definition of all GPD built-in MCP servers.
 # Mirrors infra/*.json but lives inside the package so it ships with the wheel.
@@ -24,42 +29,42 @@ _ServerDef = dict[str, str | list[str] | dict[str, str] | bool]
 
 _BUILTIN_SERVERS: dict[str, _ServerDef] = {
     "gpd-conventions": {
-        "command": "python",
+        "command": _PYTHON_COMMAND_SENTINEL,
         "args": ["-m", "gpd.mcp.servers.conventions_server"],
         "env": {"LOG_LEVEL": "${LOG_LEVEL:-WARNING}"},
     },
     "gpd-errors": {
-        "command": "python",
+        "command": _PYTHON_COMMAND_SENTINEL,
         "args": ["-m", "gpd.mcp.servers.errors_mcp"],
         "env": {"LOG_LEVEL": "${LOG_LEVEL:-WARNING}"},
     },
     "gpd-patterns": {
-        "command": "python",
+        "command": _PYTHON_COMMAND_SENTINEL,
         "args": ["-m", "gpd.mcp.servers.patterns_server"],
         "env": {"LOG_LEVEL": "${LOG_LEVEL:-WARNING}"},
     },
     "gpd-protocols": {
-        "command": "python",
+        "command": _PYTHON_COMMAND_SENTINEL,
         "args": ["-m", "gpd.mcp.servers.protocols_server"],
         "env": {"LOG_LEVEL": "${LOG_LEVEL:-WARNING}"},
     },
     "gpd-skills": {
-        "command": "python",
+        "command": _PYTHON_COMMAND_SENTINEL,
         "args": ["-m", "gpd.mcp.servers.skills_server"],
         "env": {"LOG_LEVEL": "${LOG_LEVEL:-WARNING}"},
     },
     "gpd-state": {
-        "command": "python",
+        "command": _PYTHON_COMMAND_SENTINEL,
         "args": ["-m", "gpd.mcp.servers.state_server"],
         "env": {"LOG_LEVEL": "${LOG_LEVEL:-WARNING}"},
     },
     "gpd-verification": {
-        "command": "python",
+        "command": _PYTHON_COMMAND_SENTINEL,
         "args": ["-m", "gpd.mcp.servers.verification_server"],
         "env": {"LOG_LEVEL": "${LOG_LEVEL:-WARNING}"},
     },
     "gpd-arxiv": {
-        "command": "python",
+        "command": _PYTHON_COMMAND_SENTINEL,
         "args": ["-m", "arxiv_mcp_server"],
         "env": {},
         "optional": True,
@@ -68,7 +73,7 @@ _BUILTIN_SERVERS: dict[str, _ServerDef] = {
 }
 
 _PUBLIC_BOOTSTRAP_PREREQUISITE = "Install GPD before enabling built-in MCP servers."
-_ENTRY_POINT_NOTES = "Requires gpd package installed and Python >=3.11"
+_ENTRY_POINT_NOTES = _PYTHON_LAUNCH_NOTES
 
 _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
     "gpd-conventions": {
@@ -293,7 +298,7 @@ def _build_public_alternatives(name: str) -> dict[str, dict[str, object]] | None
     args = list(raw.get("args", [])) if isinstance(raw.get("args"), list) else []
     return {
         "python_module": {
-            "command": "python3",
+            "command": _PUBLIC_PYTHON_PLACEHOLDER,
             "args": args,
             "notes": _ENTRY_POINT_NOTES,
         }
@@ -311,6 +316,8 @@ def build_public_descriptor(name: str) -> dict[str, object]:
     if name != "gpd-arxiv" and name.startswith("gpd-"):
         command = f"gpd-mcp-{name.removeprefix('gpd-')}"
         args = []
+    elif command == _PYTHON_COMMAND_SENTINEL:
+        command = _PUBLIC_PYTHON_PLACEHOLDER
     descriptor: dict[str, object] = {
         "name": name,
         "description": str(metadata["description"]),
@@ -334,6 +341,8 @@ def build_public_descriptor(name: str) -> dict[str, object]:
             descriptor["availability_condition"] = (
                 f"Available only when the optional Python module '{module_check}' is installed."
             )
+    if command == _PUBLIC_PYTHON_PLACEHOLDER:
+        descriptor["notes"] = _PYTHON_LAUNCH_NOTES
     return descriptor
 
 
@@ -428,7 +437,7 @@ def build_mcp_servers_dict(
                 continue
 
         cmd = str(raw["command"])
-        if cmd == "python":
+        if cmd == _PYTHON_COMMAND_SENTINEL:
             cmd = python_path
 
         raw_args = raw.get("args", [])

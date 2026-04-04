@@ -11,6 +11,7 @@ Usage:
     gpd-mcp-skills
 """
 
+import copy
 import dataclasses
 import re
 from collections.abc import Callable
@@ -97,6 +98,17 @@ def _public_skill(skill: content_registry.SkillDef) -> dict[str, str]:
 
 def _skill_index_label(skill: content_registry.SkillDef) -> str:
     """Render a canonical skill label for the shared MCP surface."""
+    if skill.source_kind == "command":
+        command = content_registry.get_command(skill.registry_name)
+        qualifiers = [f"context={command.context_mode}"]
+        qualifiers.append(f"reentry={'yes' if command.project_reentry_capable else 'no'}")
+        if command.allowed_tools:
+            qualifiers.append("restricted-tools")
+        if command.requires:
+            qualifiers.append("launch-requires")
+        if command.review_contract is not None:
+            qualifiers.append("review-contract")
+        return f"{skill.name} [{' ; '.join(qualifiers)}]"
     return skill.name
 
 
@@ -417,11 +429,16 @@ def get_skill(name: str) -> dict:
             if skill.source_kind == "command":
                 command = content_registry.get_command(skill.registry_name)
                 allowed_tools = _normalize_allowed_tools(command.allowed_tools)
-                command_loading_hint = loading_hint
+                command_loading_hint = (
+                    loading_hint
+                    + " The content field already includes a model-visible `Command Requirements` section for "
+                    + "`context_mode`, `project_reentry_capable`, `allowed_tools`, and any launch `requires`; "
+                    + "treat `content` as authoritative rather than injecting mirrored command metadata separately."
+                )
                 if command.review_contract is not None:
                     command_loading_hint += (
-                        " The content field already includes a model-visible `Review Contract` section; "
-                        "if you also pass structured metadata, inject `review_contract` alongside `content`."
+                        " You do not need to inject `review_contract` alongside `content` because the content field "
+                        "already includes a model-visible `Review Contract` section; `review_contract` is a mirrored projection."
                     )
                 payload.update(
                     {
@@ -429,10 +446,20 @@ def get_skill(name: str) -> dict:
                         "project_reentry_capable": command.project_reentry_capable,
                         "argument_hint": command.argument_hint,
                         "loading_hint": command_loading_hint,
+                        "requires": copy.deepcopy(command.requires),
                         "review_contract": (
                             dataclasses.asdict(command.review_contract) if command.review_contract is not None else None
                         ),
                         "allowed_tools_surface": "command.allowed-tools",
+                        "content_authority": "canonical",
+                        "structured_metadata_authority": {
+                            "content": "canonical",
+                            "context_mode": "mirrored",
+                            "project_reentry_capable": "mirrored",
+                            "allowed_tools": "mirrored",
+                            "requires": "mirrored",
+                            "review_contract": "mirrored",
+                        },
                     }
                 )
                 payload["allowed_tools"] = allowed_tools
@@ -574,11 +601,21 @@ def get_skill_index() -> dict:
         try:
             skills = _load_skill_index()
             by_category: dict[str, list[str]] = {}
+            command_envelopes: dict[str, dict[str, object]] = {}
             for skill in skills:
                 cat = skill.category
                 if cat not in by_category:
                     by_category[cat] = []
                 by_category[cat].append(_skill_index_label(skill))
+                if skill.source_kind == "command":
+                    command = content_registry.get_command(skill.registry_name)
+                    command_envelopes[skill.name] = {
+                        "context_mode": command.context_mode,
+                        "project_reentry_capable": command.project_reentry_capable,
+                        "allowed_tools": _normalize_allowed_tools(command.allowed_tools),
+                        "requires": copy.deepcopy(command.requires),
+                        "has_review_contract": command.review_contract is not None,
+                    }
 
             lines = ["# Available GPD Skills", ""]
             for cat in sorted(by_category):
@@ -592,6 +629,7 @@ def get_skill_index() -> dict:
                     "index_text": "\n".join(lines),
                     "total_skills": len(skills),
                     "categories": sorted(by_category),
+                    "command_envelopes": command_envelopes,
                 }
             )
         except (GPDError, OSError, ValueError, TimeoutError) as e:

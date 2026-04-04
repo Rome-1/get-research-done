@@ -483,6 +483,7 @@ def _write_numerical_relativity_contract_state(tmp_path: Path) -> None:
 
     state = default_state_dict()
     state["project_contract"] = {
+        "schema_version": 1,
         "scope": {
             "question": "Does the BSSN evolution reproduce benchmark waveform and remnant behavior?",
             "in_scope": ["Recover the decisive waveform and remnant benchmark for the BSSN evolution"],
@@ -1852,7 +1853,7 @@ class TestInitResume:
         assert "active_execution_segment" not in ctx
         assert "compat_resume_surface" not in ctx
 
-    def test_with_legacy_session_resume_file_uses_canonical_handoff_kind(self, tmp_path: Path) -> None:
+    def test_session_resume_file_no_longer_hydrates_resume_authority(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         from gpd.core.state import default_state_dict
 
@@ -1868,22 +1869,12 @@ class TestInitResume:
 
         ctx = init_resume(tmp_path)
 
-        assert ctx["active_resume_kind"] == "continuity_handoff"
-        assert ctx["active_resume_origin"] == "continuation.handoff"
-        assert ctx["active_resume_pointer"] == "GPD/phases/03-analysis/.continue-here.md"
-        assert ctx["continuity_handoff_file"] == "GPD/phases/03-analysis/.continue-here.md"
-        assert ctx["recorded_continuity_handoff_file"] == "GPD/phases/03-analysis/.continue-here.md"
-        assert ctx["resume_candidates"] == [
-            {
-                "status": "handoff",
-                "resume_file": "GPD/phases/03-analysis/.continue-here.md",
-                "resumable": False,
-                "kind": "continuity_handoff",
-                "origin": "continuation.handoff",
-                "resume_pointer": "GPD/phases/03-analysis/.continue-here.md",
-            }
-        ]
-        assert "source" not in ctx["resume_candidates"][0]
+        assert ctx["active_resume_kind"] is None
+        assert ctx["active_resume_origin"] is None
+        assert ctx["active_resume_pointer"] is None
+        assert ctx["continuity_handoff_file"] is None
+        assert ctx["recorded_continuity_handoff_file"] is None
+        assert ctx["resume_candidates"] == []
         assert "compat_resume_surface" not in ctx
 
     def test_init_resume_propagates_unexpected_continuation_errors(self, tmp_path: Path, monkeypatch) -> None:
@@ -2325,6 +2316,28 @@ class TestInitProgress:
         assert ctx["paused_at"] == "2026-03-11T08:00:00+00:00"
         assert ctx["execution_resumable"] is True
         assert ctx["has_work_in_progress"] is True
+
+    def test_progress_normalizes_absolute_live_execution_resume_file(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        resume_path = tmp_path / "GPD" / "phases" / "02-analysis" / ".continue-here.md"
+        resume_path.parent.mkdir(parents=True, exist_ok=True)
+        resume_path.write_text("resume\n", encoding="utf-8")
+        _write_current_execution(
+            tmp_path,
+            {
+                "session_id": "sess-2",
+                "phase": "02",
+                "segment_status": "paused",
+                "resume_file": str(resume_path),
+                "updated_at": "2026-03-11T08:00:00+00:00",
+            },
+        )
+
+        ctx = init_progress(tmp_path)
+
+        assert ctx["current_execution"]["resume_file"] == "GPD/phases/02-analysis/.continue-here.md"
+        assert ctx["current_execution_resume_file"] == "GPD/phases/02-analysis/.continue-here.md"
+        assert ctx["execution_resume_file"] == "GPD/phases/02-analysis/.continue-here.md"
 
     def test_progress_normalizes_live_execution_phase_when_no_phase_inventory_exists(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)

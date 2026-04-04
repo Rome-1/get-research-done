@@ -300,7 +300,7 @@ class TestParseContractBlock:
             1,
         ) + "Body.\n"
 
-        with pytest.raises(FrontmatterValidationError, match="missing context_intake"):
+        with pytest.raises(FrontmatterValidationError, match="context_intake is required"):
             parse_contract_block(content)
 
     def test_empty_context_intake_raises(self):
@@ -351,10 +351,14 @@ class TestParseContractBlock:
             "  schema_version: 1\n"
             "  scope:\n"
             "    question: What benchmark must this plan recover?\n"
+            "  context_intake: {}\n"
             "  claims:\n"
             "    - id: claim-main\n"
             "      statement: Recover the benchmark value\n"
             "      deliverables: [deliv-main]\n"
+            "  uncertainty_markers:\n"
+            "    weakest_anchors: [Benchmark interpretation remains fragile]\n"
+            "    disconfirming_observations: [The claimed recovery disappears after normalization]\n"
             "---\n\nBody."
         )
         with pytest.raises(FrontmatterValidationError, match="missing acceptance_tests"):
@@ -508,7 +512,7 @@ class TestValidateFrontmatter:
         result = validate_frontmatter(content, "plan")
 
         assert result.valid is False
-        assert any("missing context_intake" in error for error in result.errors)
+        assert any("context_intake is required" in error for error in result.errors)
 
     def test_plan_rejects_empty_context_intake(self):
         content = _valid_plan_contract_frontmatter().replace(
@@ -872,6 +876,7 @@ class TestValidateFrontmatter:
             "  schema_version: 1\n"
             "  scope:\n"
             "    question: What benchmark must this plan recover?\n"
+            "  context_intake: {}\n"
             "  claims:\n"
             "    - id: claim-main\n"
             "      statement: Recover the benchmark value\n"
@@ -881,6 +886,9 @@ class TestValidateFrontmatter:
             "      kind: figure\n"
             "      path: figures/main.png\n"
             "      description: Main figure\n"
+            "  uncertainty_markers:\n"
+            "    weakest_anchors: [Reference tolerance interpretation]\n"
+            "    disconfirming_observations: [Benchmark agreement disappears after normalization fix]\n"
             "---\n\nBody."
         )
         result = validate_frontmatter(content, "plan")
@@ -888,7 +896,7 @@ class TestValidateFrontmatter:
         assert any("missing acceptance_tests" in error for error in result.errors)
         assert any("missing references or explicit grounding context" in error for error in result.errors)
         assert any("missing forbidden_proxies" in error for error in result.errors)
-        assert any("missing uncertainty_markers.disconfirming_observations" in error for error in result.errors)
+        assert any("context_intake must not be empty" in error for error in result.errors)
 
     def test_exploratory_plan_contract_can_use_non_reference_grounding(self):
         content = (
@@ -1000,6 +1008,7 @@ class TestValidateFrontmatter:
             "  schema_version: 1\n"
             "  scope:\n"
             "    question: What benchmark must this plan recover?\n"
+            "  context_intake: {}\n"
             "  claims:\n"
             "    - id: claim-main\n"
             "      statement: Recover the benchmark value\n"
@@ -1539,6 +1548,10 @@ class TestVerifyArtifacts:
             "  schema_version: 1\n"
             "  scope:\n"
             "    question: What benchmark must this plan recover?\n"
+            "  context_intake: {}\n"
+            "  uncertainty_markers:\n"
+            "    weakest_anchors: [Missing benchmark decomposition]\n"
+            "    disconfirming_observations: [The expected benchmark target is not the decisive observable]\n"
             "---\n\nBody.\n"
         )
         f.write_text(content)
@@ -1716,6 +1729,7 @@ class TestVerifyPlanStructure:
             "  schema_version: 1\n"
             "  scope:\n"
             "    question: What benchmark must this plan recover?\n"
+            "  context_intake: {}\n"
             "  claims:\n"
             "    - id: claim-main\n"
             "      statement: Recover the benchmark value\n"
@@ -1725,6 +1739,9 @@ class TestVerifyPlanStructure:
             "      kind: figure\n"
             "      path: figures/main.png\n"
             "      description: Main figure\n"
+            "  uncertainty_markers:\n"
+            "    weakest_anchors: [Reference tolerance interpretation]\n"
+            "    disconfirming_observations: [Benchmark agreement disappears after normalization fix]\n"
             "---\n\n"
             '<task type="code">\n'
             "  <name>Implement feature</name>\n"
@@ -1753,6 +1770,7 @@ class TestVerifyPlanStructure:
             "  schema_version: 1\n"
             "  scope:\n"
             "    question: What benchmark must this plan recover?\n"
+            "  context_intake: {}\n"
             "  claims:\n"
             "    - id: claim-main\n"
             "      statement: Recover the benchmark value within tolerance\n"

@@ -234,7 +234,7 @@ def _resolve_cli_cwd_from_argv(argv: list[str]) -> Path:
 
 def _maybe_reexec_from_checkout(argv: list[str] | None = None) -> None:
     """Re-exec through the nearest checkout when launched from an installed package."""
-    from gpd.version import checkout_root, resolve_checkout_python
+    from gpd.version import checkout_root, current_python_executable, resolve_checkout_python
 
     if os.environ.get(ENV_GPD_DISABLE_CHECKOUT_REEXEC) == "1":
         return
@@ -255,7 +255,10 @@ def _maybe_reexec_from_checkout(argv: list[str] | None = None) -> None:
     if checkout_src not in existing_pythonpath:
         env["PYTHONPATH"] = os.pathsep.join([checkout_src, *existing_pythonpath]) if existing_pythonpath else checkout_src
     env[ENV_GPD_DISABLE_CHECKOUT_REEXEC] = "1"
-    checkout_python = resolve_checkout_python(root, fallback=sys.executable or "python3") or (sys.executable or "python3")
+    active_python = current_python_executable()
+    checkout_python = resolve_checkout_python(root, fallback=active_python) or active_python
+    if checkout_python is None:
+        return
     os.execve(checkout_python, [checkout_python, "-m", "gpd.cli", *effective_argv], env)
 
 
@@ -1116,6 +1119,8 @@ def _resume_status_message(payload: dict[str, object], *, recovery_advice: Recov
         return "A machine change was detected, but the project state is portable and does not require repair."
     if recovery_advice.status == "workspace-recovery":
         return "Current workspace has recorded recovery context to inspect."
+    if recovery_advice.machine_change_notice:
+        return "A machine change was detected, but the project state is portable and does not require repair."
     return "No recent local recovery target is currently recorded."
 
 

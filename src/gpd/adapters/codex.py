@@ -670,7 +670,7 @@ class CodexAdapter(RuntimeAdapter):
             explicit_target=getattr(self, "_install_explicit_target", False),
         )
         self._generated_skill_dirs = tuple(sorted(generated_skill_dirs))
-        if verify_installed(self._skills_dir, "command skills"):
+        if verify_installed(self._skills_dir):
             logger.info("Installed command skills")
         else:
             failures.append("command skills")
@@ -722,7 +722,7 @@ class CodexAdapter(RuntimeAdapter):
                 launcher=launcher,
             )
             _write_codex_agent_role_files(agents_dest, runtime_agents)
-            if verify_installed(agents_dest, "agents"):
+            if verify_installed(agents_dest):
                 logger.info("Installed Codex agent role files")
             else:
                 failures.append("agents")

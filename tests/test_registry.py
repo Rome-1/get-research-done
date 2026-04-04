@@ -398,7 +398,8 @@ class TestParseCommandFile:
         f.write_text("---\nname: extra\nversion: 99\nfoo: bar\n---\nBody.", encoding="utf-8")
         cmd = _parse_command_file(f, source="commands")
         assert cmd.name == "extra"
-        assert cmd.content == "Body."
+        assert cmd.content.startswith("## Command Requirements\n")
+        assert cmd.content.endswith("Body.")
 
     def test_command_parses_explicit_context_mode(self, tmp_path: Path) -> None:
         f = tmp_path / "help.md"
@@ -1096,7 +1097,8 @@ class TestSkillDiscovery:
 
         assert set(skills) == {"gpd-debugger", "gpd-help"}
         assert skills["gpd-help"].source_kind == "command"
-        assert skills["gpd-help"].content == "Primary help body."
+        assert skills["gpd-help"].content.startswith("## Command Requirements\n")
+        assert skills["gpd-help"].content.endswith("Primary help body.")
         assert skills["gpd-debugger"].source_kind == "agent"
         assert skills["gpd-debugger"].content == "Primary debugger prompt."
 
@@ -1427,7 +1429,8 @@ class TestPublicAPI:
         assert skill.name == "gpd-execute-phase"
         assert skill.registry_name == "execute-phase"
         assert skill.source_kind == "command"
-        assert skill.content == "Execute body."
+        assert skill.content.startswith("## Command Requirements\n")
+        assert skill.content.endswith("Execute body.")
 
     def test_get_skill_accepts_registry_name(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
