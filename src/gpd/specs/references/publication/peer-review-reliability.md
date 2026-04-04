@@ -57,7 +57,7 @@ All of the following must hold before the review phase begins:
 1. **Manuscript completeness.** All sections referenced in the paper structure are drafted. No placeholder or stub sections remain.
 2. **Artifact readiness.** `ARTIFACT-MANIFEST.json` and `BIBLIOGRAPHY-AUDIT.json` exist and pass validation. In strict mode the bibliography audit must also clear `bibliography_audit_clean`, and the reproducibility manifest must clear `reproducibility_ready`.
 3. **Verification coverage.** At least one verification report exists under `GPD/phases/`.
-4. **Preflight pass.** `gpd validate review-preflight peer-review --strict` exits zero.
+4. **Preflight pass.** `gpd validate review-preflight peer-review "$ARGUMENTS" --strict` exits zero.
 
 ### Exit Criteria
 

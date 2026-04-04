@@ -24,6 +24,7 @@
   "local_cli_bridge": {
     "commands": [
       "gpd --help",
+      "gpd doctor",
       "gpd validate unattended-readiness --runtime <runtime> --autonomy balanced",
       "gpd permissions status --runtime <runtime> --autonomy balanced",
       "gpd permissions sync --runtime <runtime> --autonomy balanced",
@@ -38,7 +39,7 @@
     "purpose_phrase": "the broader local diagnostics, readiness, recovery, visibility, cost, preset, and shared Wolfram integration surface"
   },
   "post_start_settings": {
-    "primary_sentence": "After your first successful start or later, use the runtime `settings` command to review autonomy, workflow defaults, and model-cost posture.",
+    "primary_sentence": "After your first successful start or later, use the runtime `settings` command to review autonomy, workflow defaults, model-cost posture, runtime permission sync, and preset/tier overrides.",
     "default_sentence": "The safest starting point is `review` plus runtime defaults."
   },
   "resume_authority": {
@@ -53,9 +54,6 @@
       "missing_continuity_handoff_file",
       "resume_candidates"
     ],
-    "compat_surface": "compat_resume_surface",
-    "session_mirror": "legacy session mirror nested under compat_resume_surface",
-    "compatibility_phrase": "`compat_resume_surface` nested intake-only compatibility surface",
     "top_level_boundary_phrase": "public top-level resume vocabulary only"
   },
   "recovery_ladder": {

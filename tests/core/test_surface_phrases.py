@@ -233,6 +233,7 @@ def test_preset_and_local_bridge_phrases_remain_command_oriented() -> None:
     bridge_note = local_cli_bridge_note()
     for token in (
         "gpd --help",
+        "gpd doctor",
         "gpd validate unattended-readiness --runtime <runtime> --autonomy balanced",
         "gpd permissions status --runtime <runtime> --autonomy balanced",
         "gpd permissions sync --runtime <runtime> --autonomy balanced",
@@ -246,6 +247,6 @@ def test_preset_and_local_bridge_phrases_remain_command_oriented() -> None:
         assert token in bridge_note
     assert (
         post_start_settings_note()
-        == "After your first successful start or later, use the runtime `settings` command to review autonomy, workflow defaults, and model-cost posture."
+        == "After your first successful start or later, use the runtime `settings` command to review autonomy, workflow defaults, model-cost posture, runtime permission sync, and preset/tier overrides."
     )
     assert post_start_settings_recommendation() == "The safest starting point is `review` plus runtime defaults."

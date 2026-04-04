@@ -25,7 +25,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `executor_model`, `verifier_model`, `commit_docs`, `autonomy`, `review_cadence`, `research_mode`, `parallelization`, `max_unattended_minutes_per_plan`, `max_unattended_minutes_per_wave`, `checkpoint_after_n_tasks`, `checkpoint_after_first_load_bearing_result`, `checkpoint_before_downstream_dependent_tasks`, `verifier_enabled`, `branching_strategy`, `branch_name`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `plans`, `incomplete_plans`, `plan_count`, `incomplete_count`, `state_exists`, `roadmap_exists`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`, `state_load_source`, `state_integrity_issues`, `convention_lock`, `convention_lock_count`, `intermediate_results`, `intermediate_result_count`, `approximations`, `approximation_count`, `propagated_uncertainties`, `propagated_uncertainty_count`, `derived_convention_lock`, `derived_convention_lock_count`, `derived_intermediate_results`, `derived_intermediate_result_count`, `derived_approximations`, `derived_approximation_count`, `selected_protocol_bundle_ids`, `protocol_bundle_context`.
+Parse JSON for: `executor_model`, `verifier_model`, `commit_docs`, `autonomy`, `review_cadence`, `research_mode`, `parallelization`, `max_unattended_minutes_per_plan`, `max_unattended_minutes_per_wave`, `checkpoint_after_n_tasks`, `checkpoint_after_first_load_bearing_result`, `checkpoint_before_downstream_dependent_tasks`, `verifier_enabled`, `branching_strategy`, `branch_name`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `plans`, `incomplete_plans`, `plan_count`, `incomplete_count`, `state_exists`, `roadmap_exists`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`, `state_load_source`, `state_integrity_issues`, `convention_lock`, `convention_lock_count`, `intermediate_results`, `intermediate_result_count`, `approximations`, `approximation_count`, `propagated_uncertainties`, `propagated_uncertainty_count`, `derived_convention_lock`, `derived_convention_lock_count`, `derived_intermediate_results`, `derived_intermediate_result_count`, `derived_approximations`, `derived_approximation_count`, `selected_protocol_bundle_ids`, `protocol_bundle_context`.
 
 **If `phase_found` is false:** Error -- phase directory not found.
 **If `plan_count` is 0:** Error -- no plans found in phase.
@@ -839,18 +839,32 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
 
    If `pdflatex` is available, compile the paper after each wave to catch LaTeX errors early:
 
+   If a manuscript root has already been resolved for this workflow, bind it as `MANUSCRIPT_ROOT` before compiling from that root. Otherwise, resolve it locally from `paper/`, `manuscript/`, or `draft/` before checking for the manifest.
+
    ```bash
-   if command -v pdflatex &>/dev/null && [ -f paper/ARTIFACT-MANIFEST.json ]; then
-     MANUSCRIPT_BASENAME="$(python - <<'PY'
+   if [ -z "${MANUSCRIPT_ROOT:-}" ]; then
+     for candidate in paper manuscript draft; do
+       if [ -f "${candidate}/ARTIFACT-MANIFEST.json" ]; then
+         MANUSCRIPT_ROOT="${candidate}"
+         break
+       fi
+     done
+   fi
+   if command -v pdflatex &>/dev/null && [ -f "${MANUSCRIPT_ROOT}/ARTIFACT-MANIFEST.json" ]; then
+     MANIFEST_PATH="${MANUSCRIPT_ROOT}/ARTIFACT-MANIFEST.json"
+     MANUSCRIPT_BASENAME="$(MANIFEST_PATH="$MANIFEST_PATH" python - <<'PY'
 import json
+import os
 from pathlib import Path
-manifest = json.loads(Path('paper/ARTIFACT-MANIFEST.json').read_text(encoding='utf-8'))
+manifest = json.loads(Path(os.environ["MANIFEST_PATH"]).read_text(encoding='utf-8'))
 tex_path = next(artifact["path"] for artifact in manifest["artifacts"] if artifact["category"] == "tex")
 print(Path(tex_path).name)
 PY
 )"
-     cd paper && pdflatex -interaction=nonstopmode "${MANUSCRIPT_BASENAME}" 2>&1 | grep -E "^!" | head -5
-     cd ..
+     (
+       cd "${MANUSCRIPT_ROOT}" || exit 1
+       pdflatex -interaction=nonstopmode "${MANUSCRIPT_BASENAME}"
+     ) 2>&1 | grep -E "^!" | head -5
    fi
    ```
 

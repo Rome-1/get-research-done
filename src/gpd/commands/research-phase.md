@@ -48,7 +48,7 @@ Normalize phase input in step 1 before any directory lookups.
 INIT=$(gpd init phase-op "$ARGUMENTS")
 ```
 
-Extract from init JSON: `phase_dir`, `phase_number`, `phase_name`, `phase_found`, `commit_docs`, `has_research`, `project_contract`, `active_reference_context`, `reference_artifacts_content`.
+Extract from init JSON: `phase_dir`, `phase_number`, `phase_name`, `phase_found`, `commit_docs`, `has_research`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, `active_reference_context`, `reference_artifacts_content`. Treat `project_contract` as authoritative only when `project_contract_gate.authoritative` is true.
 
 Resolve researcher model:
 

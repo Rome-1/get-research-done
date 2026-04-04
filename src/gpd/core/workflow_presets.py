@@ -32,13 +32,18 @@ __all__ = [
 
 _GUIDANCE_ONLY_PRESET_KEYS = frozenset({"model_cost_posture"})
 _LATEX_CAPABILITY_DEFAULTS: dict[str, object] = {
+    "compiler": "pdflatex",
     "available": False,
     "compiler_available": False,
+    "full_toolchain_available": False,
     "compiler_path": None,
     "distribution": None,
-    "bibtex_available": False,
+    "bibtex_available": None,
+    "bibliography_support_available": False,
     "latexmk_available": None,
     "kpsewhich_available": None,
+    "readiness_state": "blocked",
+    "message": "",
     "warnings": [],
     "paper_build_ready": False,
     "arxiv_submission_ready": False,
@@ -121,6 +126,10 @@ def _normalize_latex_capability(
     if latex_capability is None and legacy_available is None:
         return {**_LATEX_CAPABILITY_DEFAULTS, "warnings": []}
 
+    compiler_name = _capability_value(latex_capability, "compiler")
+    if not isinstance(compiler_name, str) or not compiler_name.strip():
+        compiler_name = "pdflatex"
+
     compiler_value = _capability_value(latex_capability, "compiler_available", "available", "latex_available")
     if compiler_value is None:
         compiler_available = bool(legacy_available) if legacy_available is not None else False
@@ -128,15 +137,15 @@ def _normalize_latex_capability(
         compiler_available = bool(compiler_value)
 
     bibtex_value = _capability_value(latex_capability, "bibtex_available", "bibtex", "bibliography_available")
-    if bibtex_value is None:
-        bibtex_available = False
-    else:
-        bibtex_available = bool(bibtex_value)
+    bibtex_available = bool(bibtex_value) if bibtex_value is not None else None
 
     latexmk_value = _capability_value(latex_capability, "latexmk_available", "latexmk")
     kpsewhich_value = _capability_value(latex_capability, "kpsewhich_available", "kpsewhich")
-    compiler_path = _capability_value(latex_capability, "compiler_path", "compiler")
+    full_toolchain_value = _capability_value(latex_capability, "full_toolchain_available", "full_toolchain_ready")
+    compiler_path = _capability_value(latex_capability, "compiler_path")
     distribution = _capability_value(latex_capability, "distribution")
+    readiness_value = _capability_value(latex_capability, "readiness_state")
+    message_value = _capability_value(latex_capability, "message")
     warnings_value = _capability_value(latex_capability, "warnings")
     if isinstance(warnings_value, str):
         warnings = [warnings_value]
@@ -145,19 +154,46 @@ def _normalize_latex_capability(
     else:
         warnings = []
 
+    bibtex_ready = bibtex_available is True
+    bibliography_support_available = compiler_available and bibtex_ready
+    paper_build_ready = compiler_available
+    arxiv_submission_ready = bibliography_support_available and kpsewhich_value is True
+    if isinstance(readiness_value, str) and readiness_value in {"blocked", "degraded", "ready"}:
+        readiness_state = readiness_value
+    elif not compiler_available:
+        readiness_state = "blocked"
+    elif bibtex_ready:
+        readiness_state = "ready"
+    else:
+        readiness_state = "degraded"
+
+    if isinstance(message_value, str) and message_value.strip():
+        message = message_value
+    elif not compiler_available:
+        message = f"No LaTeX compiler found for `{compiler_name}`."
+    elif bibtex_ready:
+        message = f"{compiler_name} found."
+    else:
+        message = f"{compiler_name} found, but BibTeX support is unavailable."
+
     normalized = {
+        "compiler": compiler_name,
         "available": compiler_available,
         "compiler_available": compiler_available,
+        "full_toolchain_available": bool(full_toolchain_value)
+        if full_toolchain_value is not None
+        else compiler_available and bibtex_ready and bool(latexmk_value) and bool(kpsewhich_value),
         "compiler_path": compiler_path,
         "distribution": distribution,
         "bibtex_available": bibtex_available,
+        "bibliography_support_available": bibliography_support_available,
         "latexmk_available": bool(latexmk_value) if latexmk_value is not None else None,
         "kpsewhich_available": bool(kpsewhich_value) if kpsewhich_value is not None else None,
+        "readiness_state": readiness_state,
+        "message": message,
         "warnings": warnings,
-        "paper_build_ready": compiler_available and bibtex_available,
-        "arxiv_submission_ready": compiler_available and bibtex_available and bool(kpsewhich_value)
-        if kpsewhich_value is not None
-        else False,
+        "paper_build_ready": paper_build_ready,
+        "arxiv_submission_ready": arxiv_submission_ready,
     }
     return normalized
 
@@ -408,7 +444,7 @@ def resolve_workflow_preset_readiness(
 
     capability = _normalize_latex_capability(latex_capability, legacy_available=latex_available)
     compiler_ready = bool(capability["compiler_available"])
-    bibtex_ready = bool(capability["bibtex_available"])
+    bibliography_support_ready = bool(capability.get("bibliography_support_available"))
     latexmk_available = capability.get("latexmk_available")
     kpsewhich_available = capability.get("kpsewhich_available")
     paper_build_ready = bool(capability["paper_build_ready"])
@@ -432,13 +468,20 @@ def resolve_workflow_preset_readiness(
         elif preset.requires_extra_tooling and not paper_build_ready:
             status = "degraded"
             usable = True
-            if not compiler_ready:
-                summary = "degraded without a LaTeX compiler: draft/review remain usable, but build/submission stay blocked"
-            else:
-                summary = "degraded without BibTeX support: draft/review remain usable, but build/submission stay blocked"
+            summary = "degraded without a LaTeX compiler: draft/review remain usable, but build/submission stay blocked"
             ready_workflows = []
             degraded_workflows = list(preset.degraded_workflows)
             blocked_workflows = list(preset.blocked_workflows)
+        elif preset.requires_extra_tooling and not bibliography_support_ready:
+            status = "degraded"
+            usable = True
+            summary = (
+                "degraded without bibliography tooling: draft/review remain usable, while paper-build and "
+                "arxiv-submission may fail for manuscripts that require bibliography processing"
+            )
+            ready_workflows = list(preset.degraded_workflows)
+            degraded_workflows = ["paper-build", "arxiv-submission"]
+            blocked_workflows = []
         elif preset.requires_extra_tooling and not arxiv_submission_ready:
             status = "degraded"
             usable = True
@@ -467,9 +510,9 @@ def resolve_workflow_preset_readiness(
                 warnings.append(
                     "No LaTeX compiler detected: draft/review workflows remain usable, but build/submission stay blocked."
                 )
-            elif not bibtex_ready:
+            elif not bibliography_support_ready:
                 warnings.append(
-                    "BibTeX support is missing: draft/review workflows remain usable, but build/submission stay blocked."
+                    "BibTeX support is missing: bibliography-free manuscripts may still build, but citation-bearing builds and submission prep can fail outright."
                 )
             elif not arxiv_submission_ready:
                 warnings.append(

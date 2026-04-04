@@ -125,9 +125,6 @@ const PUBLIC_SURFACE_CONTRACT_SECTION_KEYS = {
     "durable_authority_phrase",
     "public_vocabulary_intro",
     "public_fields",
-    "compat_surface",
-    "session_mirror",
-    "compatibility_phrase",
     "top_level_boundary_phrase",
   ],
   recovery_ladder: [
@@ -513,13 +510,9 @@ function validateRuntimeCatalogEntry(entry, index) {
     validated_command_surface: Object.prototype.hasOwnProperty.call(payload, "validated_command_surface")
       ? (() => {
           const surface = requireStrictString(payload.validated_command_surface, `${label}.validated_command_surface`);
-          if (
-            surface !== "public_runtime_command_surface" &&
-            surface !== "public_runtime_slash_command" &&
-            surface !== "public_runtime_dollar_command"
-          ) {
+          if (!/^public_runtime_[a-z0-9_]+_command$/.test(surface)) {
             throw new Error(
-              `${label}.validated_command_surface must be one of: public_runtime_command_surface, public_runtime_dollar_command, public_runtime_slash_command`
+              `${label}.validated_command_surface must match /^public_runtime_[a-z0-9_]+_command$/`
             );
           }
           return surface;
@@ -586,9 +579,6 @@ function validateSharedPublicSurfaceContract(contractPayload) {
   );
   const publicVocabularyIntro = requireNonEmptyString(resumeAuthority, "public_vocabulary_intro", "resume_authority");
   const publicFields = requireNonEmptyStringList(resumeAuthority, "public_fields", "resume_authority");
-  const compatSurface = requireNonEmptyString(resumeAuthority, "compat_surface", "resume_authority");
-  const sessionMirror = requireNonEmptyString(resumeAuthority, "session_mirror", "resume_authority");
-  const compatibilityPhrase = requireNonEmptyString(resumeAuthority, "compatibility_phrase", "resume_authority");
   const topLevelBoundaryPhrase = requireNonEmptyString(
     resumeAuthority,
     "top_level_boundary_phrase",
@@ -634,9 +624,6 @@ function validateSharedPublicSurfaceContract(contractPayload) {
       durableAuthorityPhrase,
       publicVocabularyIntro,
       publicFields,
-      compatSurface,
-      sessionMirror,
-      compatibilityPhrase,
       topLevelBoundaryPhrase,
     },
     recoveryLadder: {

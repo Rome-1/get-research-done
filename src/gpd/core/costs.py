@@ -53,17 +53,17 @@ _COMPLETED_SEGMENT_STATES = {"completed", "complete", "done", "finished"}
 
 
 def _active_runtime_tier_models_command(*, cwd: Path | None = None) -> str:
-    """Return the active runtime tier-model command, or the canonical local fallback."""
+    """Return the active runtime tier-model command, or a runtime-surface-neutral fallback."""
     from gpd.adapters import get_adapter
     from gpd.hooks.runtime_detect import RUNTIME_UNKNOWN, detect_runtime_for_gpd_use
 
     try:
         detected_runtime = detect_runtime_for_gpd_use(cwd=cwd)
         if detected_runtime == RUNTIME_UNKNOWN:
-            return "gpd:set-tier-models"
+            return "the active runtime's `set-tier-models` command"
         return get_adapter(detected_runtime).format_command("set-tier-models")
     except Exception:
-        return "gpd:set-tier-models"
+        return "the active runtime's `set-tier-models` command"
 
 
 class UsageRecord(BaseModel):

@@ -4813,7 +4813,7 @@ def _permissions_status_payload(
 
 
 permissions_app = typer.Typer(
-    help="Runtime permission readiness and sync. Use `gpd:settings` for guided runtime changes."
+    help="Runtime permission readiness and sync. Use the active runtime's `settings` command for guided runtime changes."
 )
 app.add_typer(permissions_app, name="permissions")
 
@@ -4832,7 +4832,7 @@ def permissions_status(
     "sync",
     help=(
         "Advanced: persist runtime-owned permission settings for the requested autonomy. "
-        "Use `gpd:settings` for guided runtime changes."
+        "Use the active runtime's `settings` command for guided runtime changes."
     ),
 )
 def permissions_sync(
@@ -4978,12 +4978,26 @@ def _resolve_review_preflight_manuscript(
     restrict_to_supported_roots: bool = False,
 ) -> tuple[Path | None, str]:
     """Resolve a review-preflight manuscript target from an explicit subject or defaults."""
+
     def _supported_explicit_manuscript_target(target: Path) -> bool:
         try:
             relative = target.resolve(strict=False).relative_to(cwd.resolve(strict=False))
         except ValueError:
             return False
         return bool(relative.parts) and relative.parts[0] in {"paper", "manuscript", "draft"}
+
+    def _supported_root_resolution_for_target(target: Path) -> tuple[Path, object] | tuple[None, None]:
+        try:
+            relative = target.resolve(strict=False).relative_to(cwd.resolve(strict=False))
+        except ValueError:
+            return None, None
+        if not relative.parts or relative.parts[0] not in {"paper", "manuscript", "draft"}:
+            return None, None
+        manuscript_root = cwd / relative.parts[0]
+        return manuscript_root, resolve_manuscript_entrypoint_from_root_resolution(
+            manuscript_root,
+            allow_markdown=allow_markdown,
+        )
 
     if subject:
         target = Path(subject)
@@ -5000,6 +5014,22 @@ def _resolve_review_preflight_manuscript(
             )
         if target.is_file():
             if target.suffix == ".tex" or (allow_markdown and target.suffix == ".md"):
+                manuscript_root, root_resolution = _supported_root_resolution_for_target(target)
+                if manuscript_root is not None and root_resolution is not None:
+                    if root_resolution.status != "resolved" or root_resolution.manuscript_entrypoint is None:
+                        return (
+                            None,
+                            f"{_format_display_path(manuscript_root)} is ambiguous or inconsistent: {root_resolution.detail}",
+                        )
+                    if root_resolution.manuscript_entrypoint.resolve(strict=False) != target.resolve(strict=False):
+                        return (
+                            None,
+                            (
+                                f"{_format_display_path(target)} does not match the resolved manuscript entrypoint "
+                                f"{_format_display_path(root_resolution.manuscript_entrypoint)} under "
+                                f"{_format_display_path(manuscript_root)}"
+                            ),
+                        )
                 return target, f"{_format_display_path(target)} present"
             if target.suffix == ".md":
                 return None, f"explicit manuscript target must be a .tex file: {_format_display_path(target)}"
@@ -5887,9 +5917,14 @@ def _active_runtime_formatted_command(action: str, *, cwd: Path | None = None) -
         return None
 
 
+def _generic_runtime_command_reference(action: str) -> str:
+    """Return a runtime-surface-neutral reference for one public command."""
+    return f"the active runtime's `{action}` command"
+
+
 def _active_runtime_settings_command(*, cwd: Path | None = None) -> str:
-    """Return the active runtime's settings command, or the canonical local fallback."""
-    return _active_runtime_formatted_command("settings", cwd=cwd) or "gpd:settings"
+    """Return the active runtime's settings command, or a runtime-surface-neutral fallback."""
+    return _active_runtime_formatted_command("settings", cwd=cwd) or _generic_runtime_command_reference("settings")
 
 
 def _command_required_file_patterns(command: object) -> list[str]:

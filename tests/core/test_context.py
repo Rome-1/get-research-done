@@ -30,11 +30,16 @@ from gpd.core.context import (
     load_config,
 )
 from gpd.core.errors import ConfigError, ValidationError
+from gpd.core.recent_projects import record_recent_project
 from gpd.core.reproducibility import compute_sha256
 from gpd.core.resume_surface import RESUME_COMPATIBILITY_ALIAS_KEYS
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
+_XDG_RUNTIME_DESCRIPTOR = next(
+    (descriptor for descriptor in _RUNTIME_DESCRIPTORS if descriptor.global_config.xdg_subdir),
+    None,
+)
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -244,13 +249,15 @@ def _runtime_owned_local_install_dirs(root: Path) -> tuple[Path, ...]:
     return tuple(dict.fromkeys(paths))
 
 
+@pytest.mark.skipif(_XDG_RUNTIME_DESCRIPTOR is None, reason="No runtime advertises an XDG mirror path")
 def test_research_scan_skips_only_runtime_owned_install_roots(tmp_path: Path) -> None:
     workspace = tmp_path
-    runtime_root = workspace / ".opencode"
+    assert _XDG_RUNTIME_DESCRIPTOR is not None
+    runtime_root = workspace / _XDG_RUNTIME_DESCRIPTOR.config_dir_name
     runtime_root.mkdir()
-    xdg_mirror = workspace / ".config" / "opencode"
+    xdg_mirror = workspace / ".config" / _XDG_RUNTIME_DESCRIPTOR.global_config.xdg_subdir
     xdg_mirror.mkdir(parents=True)
-    foreign_mirror = workspace / ".config" / "opencode" / "notes"
+    foreign_mirror = xdg_mirror / "notes"
     foreign_mirror.mkdir(parents=True)
 
     assert _should_skip_research_scan_entry(workspace, runtime_root) is True
@@ -1222,8 +1229,19 @@ class TestInitPlanPhase:
         assert ctx["project_contract"] is not None
         assert ctx["project_contract_gate"]["authoritative"] is False
         assert ctx["project_contract_gate"]["repair_required"] is True
+        assert ctx["contract_intake"] is None
         assert ctx["selected_protocol_bundle_ids"] == []
         assert ctx["active_reference_count"] == 0
+        assert ctx["effective_reference_intake"] == {
+            "must_read_refs": [],
+            "must_include_prior_outputs": [],
+            "user_asserted_anchors": [],
+            "known_good_baselines": [],
+            "context_gaps": [],
+            "crucial_inputs": [],
+        }
+        assert "ref-benchmark" not in ctx["active_reference_context"]
+        assert "Author et al., Journal, 2024" not in ctx["active_reference_context"]
 
     def test_ambiguous_reference_tokens_remain_unresolved(self) -> None:
         active_references = [
@@ -1247,7 +1265,7 @@ class TestInitPlanPhase:
 
         assert intake["must_read_refs"] == ["shared-token", "ref-a"]
 
-    def test_surfaces_canonicalized_reference_fields_in_project_contract_context(self, tmp_path: Path) -> None:
+    def test_keeps_project_contract_references_raw_and_surfaces_derived_reference_fields(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         _create_phase_dir(tmp_path, "02-analysis")
         _write_project_contract_state(tmp_path)
@@ -1258,13 +1276,15 @@ class TestInitPlanPhase:
         project_references = {ref["id"]: ref for ref in ctx["project_contract"]["references"]}
         active_references = {ref["id"]: ref for ref in ctx["active_references"]}
 
-        assert project_references["ref-benchmark"].get("aliases", []) == ["benchmark-paper"]
+        assert project_references["ref-benchmark"].get("aliases", []) == []
         assert project_references["ref-benchmark"].get("applies_to", []) == ["claim-benchmark"]
-        assert project_references["ref-benchmark"].get("carry_forward_to", []) == ["verification", "writing"]
+        assert project_references["ref-benchmark"].get("carry_forward_to", []) == []
         assert project_references["ref-benchmark"]["required_actions"] == ["read", "compare", "cite"]
         assert project_references["ref-benchmark"]["must_surface"] is True
         assert "prior-baseline" not in project_references
         assert ctx["project_contract_validation"]["valid"] is True
+        assert ctx["project_contract_gate"]["authoritative"] is True
+        assert ctx["project_contract_load_info"]["warnings"] == []
 
         assert active_references["ref-benchmark"]["aliases"] == ["benchmark-paper"]
         assert active_references["ref-benchmark"]["applies_to"] == ["claim-benchmark"]
@@ -1296,28 +1316,6 @@ class TestInitPlanPhase:
         assert stored["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
         assert before == after
         assert not (tmp_path / "GPD" / "STATE.md").exists()
-
-    def test_reports_canonical_project_contract_merge_validation_failures(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        _setup_project(tmp_path)
-        _create_phase_dir(tmp_path, "02-analysis")
-        _write_project_contract_state(tmp_path)
-
-        def _invalid_merge(existing: dict[str, object], derived: dict[str, object], *, allowed_subject_ids: set[str]) -> dict[str, object]:
-            merged = dict(existing)
-            if derived is not None:
-                merged["role"] = "not-a-valid-role"
-            return merged
-
-        monkeypatch.setattr("gpd.core.context._merge_contract_reference_payload", _invalid_merge)
-
-        ctx = init_progress(tmp_path)
-
-        assert ctx["project_contract"] is not None
-        assert ctx["project_contract"]["references"][0]["role"] == "benchmark"
-        assert any(
-            "canonical project_contract merge failed validation" in warning
-            for warning in ctx["project_contract_load_info"]["warnings"]
-        )
 
     def test_reports_missing_active_references_explicitly(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -2226,6 +2224,53 @@ class TestInitProgress:
         ctx = init_progress(tmp_path)
         assert ctx["paused_at"] == "2026-03-01T12:00:00Z"
 
+    def test_progress_can_skip_recent_project_reentry_for_projectless_config_bootstrap(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        workspace = tmp_path / "workspace"
+        candidate = tmp_path / "recoverable-project"
+        data_root = tmp_path / "data"
+
+        (workspace / "GPD" / "phases").mkdir(parents=True)
+        _create_config(
+            workspace,
+            {
+                "autonomy": "balanced",
+                "review_cadence": "adaptive",
+                "research_mode": "balanced",
+            },
+        )
+
+        gpd_dir = candidate / "GPD"
+        gpd_dir.mkdir(parents=True)
+        (gpd_dir / "STATE.md").write_text("# Research State\n", encoding="utf-8")
+        (gpd_dir / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+        (gpd_dir / "PROJECT.md").write_text("# Project\n", encoding="utf-8")
+        resume_file = gpd_dir / "phases" / "01" / ".continue-here.md"
+        resume_file.parent.mkdir(parents=True, exist_ok=True)
+        resume_file.write_text("resume\n", encoding="utf-8")
+        record_recent_project(
+            candidate,
+            session_data={
+                "last_date": "2026-03-29T12:00:00+00:00",
+                "stopped_at": "Phase 01",
+                "resume_file": "GPD/phases/01/.continue-here.md",
+            },
+            store_root=data_root,
+        )
+
+        ctx = init_progress(workspace, includes={"config"}, data_root=data_root, include_project_reentry=False)
+
+        assert ctx["workspace_root"] == workspace.resolve().as_posix()
+        assert ctx["project_root"] == workspace.resolve().as_posix()
+        assert ctx["project_root_source"] == "workspace"
+        assert ctx["project_root_auto_selected"] is False
+        assert ctx["config_content"] is not None
+        assert "project_reentry_mode" not in ctx
+        assert "project_reentry_candidates" not in ctx
+        assert "project_reentry_selected_candidate" not in ctx
+
     def test_progress_rejects_legacy_autonomy_values(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         _create_config(tmp_path, {"autonomy": "guided"})
@@ -2340,7 +2385,9 @@ class TestInitProgress:
         assert "notes" not in ctx["project_contract"]["claims"][0]
         assert ctx["project_contract_gate"]["authoritative"] is False
         assert ctx["project_contract_gate"]["repair_required"] is True
+        assert ctx["contract_intake"] is None
         assert "Recover known limiting behavior" not in ctx["active_reference_context"]
+        assert "ref-benchmark" not in ctx["effective_reference_intake"]["must_read_refs"]
         assert "None confirmed in `state.json.project_contract.references` yet." in ctx["active_reference_context"]
 
     def test_progress_matches_state_loader_for_recoverably_normalized_project_contract(

@@ -29,5 +29,6 @@ def test_arxiv_submission_workflow_resolves_manifest_based_manuscript_root_witho
     assert "BIBLIOGRAPHY-AUDIT.json" in workflow
     assert "bibliography_audit_clean" in workflow
     assert "gpd paper-build" in workflow
+    assert "STOP and require an explicit manuscript path or a repaired manuscript-root state" in workflow
     assert "Do not fall back to `find` or arbitrary wildcard matching outside the documented default roots." in workflow
     assert 'ls "${DIR}"/*.tex' not in workflow

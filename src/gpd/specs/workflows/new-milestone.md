@@ -22,7 +22,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `research_enabled`, `current_milestone`, `current_milestone_name`, `project_exists`, `roadmap_exists`, `state_exists`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifact_files`, `reference_artifacts_content`.
+Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `research_enabled`, `current_milestone`, `current_milestone_name`, `project_exists`, `roadmap_exists`, `state_exists`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifact_files`, `reference_artifacts_content`.
 
 **Mode-aware behavior:**
 - `autonomy=supervised`: Pause for user confirmation after requirements gathering and before roadmap generation.
@@ -410,6 +410,9 @@ Read these files using the file_read tool before proceeding:
 
 <contract_context>
 Project contract: {project_contract}
+Project contract gate: {project_contract_gate}
+Project contract validation: {project_contract_validation}
+Project contract load info: {project_contract_load_info}
 Contract intake: {contract_intake}
 Active references: {active_reference_context}
 Effective reference intake: {effective_reference_intake}
@@ -419,7 +422,7 @@ Reference artifacts: {reference_artifacts_content}
 <instructions>
 Create research roadmap for milestone v[X.Y]:
 1. Start phase numbering from [N]
-2. Derive phases from THIS MILESTONE's objectives, the approved project contract, and the effective reference intake
+2. Derive phases from THIS MILESTONE's objectives, the approved project contract only when `project_contract_gate.authoritative` is true, and the effective reference intake
 3. Map every objective to exactly one phase
 4. For each phase, include explicit contract coverage in ROADMAP.md showing decisive contract items, anchor coverage, required prior outputs, and forbidden proxies advanced by that phase
 5. Treat `must_read_refs`, `must_include_prior_outputs`, `user_asserted_anchors`, `known_good_baselines`, and `crucial_inputs` as binding milestone context, and surface unresolved `context_gaps`

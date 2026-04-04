@@ -19,7 +19,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `project_contract`, `project_contract_load_info`, `project_contract_validation`, `active_reference_context`, `derived_convention_lock`
+Parse JSON for: `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, `active_reference_context`, `derived_convention_lock`
 
 If the relevant phase or artifact is contract-backed, resolve:
 - `subject_id`

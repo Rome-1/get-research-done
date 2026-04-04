@@ -149,10 +149,22 @@ gpd config ensure-section
 Then run:
 
 ```bash
-gpd init progress --include state,config
+gpd init progress --include state,config --no-project-reentry
 ```
 
 If the init command fails, stop, surface the error, and do not proceed."""
+_GEMINI_SET_PROFILE_BLOCK_RE = re.compile(
+    r"```bash\n"
+    r"gpd config ensure-section\n"
+    r"(?:#.*\n)*"
+    r"INIT=\$\((?:gpd init progress --include state,config(?: --no-project-reentry)?)\)\n"
+    r"if \[ \$\? -ne 0 \]; then\n"
+    r"  echo \"ERROR: gpd initialization failed: \$INIT\"\n"
+    r"  # STOP — display the error to the user and do not proceed\.\n"
+    r"fi\n"
+    r"```",
+    re.MULTILINE,
+)
 _GEMINI_MINIMAL_COMMIT_BLOCK = """```bash
 mkdir -p GPD
 
@@ -452,7 +464,7 @@ def _rewrite_gemini_shell_workflow_guidance(content: str) -> str:
     denied before GPD ever runs.
     """
     content = content.replace(_GEMINI_NEW_PROJECT_INIT_BLOCK, _GEMINI_NEW_PROJECT_INIT_REPLACEMENT)
-    content = content.replace(_GEMINI_SET_PROFILE_BLOCK, _GEMINI_SET_PROFILE_REPLACEMENT)
+    content = _GEMINI_SET_PROFILE_BLOCK_RE.sub(_GEMINI_SET_PROFILE_REPLACEMENT, content)
     content = content.replace(_GEMINI_MINIMAL_COMMIT_BLOCK, _GEMINI_MINIMAL_COMMIT_REPLACEMENT)
     content = re.sub(
         r'(?m)^([ \t]*)PRE_CHECK=\$\((gpd pre-commit-check --files [^\n]+) 2>&1\) \|\| true\n\1echo "\$PRE_CHECK"$',

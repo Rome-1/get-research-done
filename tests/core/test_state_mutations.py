@@ -7,14 +7,50 @@ import pytest
 
 from gpd.core.state import (
     default_state_dict,
+    generate_state_markdown,
     load_state_json,
     save_state_json,
+    state_add_blocker,
     state_add_decision,
+    state_advance_plan,
     state_clear_continuation_bounded_segment,
+    state_compact,
+    state_patch,
     state_record_metric,
     state_record_session,
+    state_resolve_blocker,
     state_set_continuation_bounded_segment,
+    state_update,
+    state_update_progress,
 )
+
+
+def _bootstrap_markdown_recovery_project(tmp_path: Path, *, state: dict[str, object] | None = None) -> Path:
+    cwd = tmp_path
+    gpd_dir = cwd / "GPD"
+    gpd_dir.mkdir(parents=True, exist_ok=True)
+    (gpd_dir / "PROJECT.md").write_text("# Project\n", encoding="utf-8")
+    (gpd_dir / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+
+    phase_dir = gpd_dir / "phases" / "03-phase"
+    phase_dir.mkdir(parents=True, exist_ok=True)
+    (phase_dir / "PLAN.md").write_text("# Plan\n", encoding="utf-8")
+    (phase_dir / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+
+    state_obj = state or default_state_dict()
+    position = state_obj.setdefault("position", {})
+    if position.get("current_phase") is None:
+        position["current_phase"] = "03"
+    if position.get("status") is None:
+        position["status"] = "Executing"
+    if position.get("current_plan") is None:
+        position["current_plan"] = "1"
+    if position.get("total_plans_in_phase") is None:
+        position["total_plans_in_phase"] = 3
+    if position.get("progress_percent") is None:
+        position["progress_percent"] = 33
+    save_state_json(cwd, state_obj)
+    return cwd
 
 
 class TestStateAddDecision:
@@ -272,6 +308,83 @@ class TestStateRecordSession:
 
         assert result.recorded is False
         assert "not found" in (result.error or "").lower()
+
+
+@pytest.mark.parametrize(
+    ("name", "invoke", "assert_success"),
+    [
+        (
+            "state_update",
+            lambda cwd: state_update(cwd, "Current Phase Name", "Recovered phase name"),
+            lambda result: result.updated is True,
+        ),
+        (
+            "state_patch",
+            lambda cwd: state_patch(cwd, {"Current Phase Name": "Recovered phase name"}),
+            lambda result: "Current Phase Name" in result.updated,
+        ),
+        (
+            "state_advance_plan",
+            lambda cwd: state_advance_plan(cwd),
+            lambda result: result.advanced is True and result.current_plan == 2,
+        ),
+        (
+            "state_record_metric",
+            lambda cwd: state_record_metric(cwd, phase="03", plan="01", duration="15min"),
+            lambda result: result.recorded is True,
+        ),
+        (
+            "state_update_progress",
+            lambda cwd: state_update_progress(cwd),
+            lambda result: result.updated is True and result.percent == 100,
+        ),
+        (
+            "state_add_decision",
+            lambda cwd: state_add_decision(cwd, summary="Recovered decision", phase="03"),
+            lambda result: result.added is True,
+        ),
+        (
+            "state_add_blocker",
+            lambda cwd: state_add_blocker(cwd, "Recovered blocker"),
+            lambda result: result.added is True,
+        ),
+        (
+            "state_compact",
+            lambda cwd: state_compact(cwd),
+            lambda result: result.error is None,
+        ),
+    ],
+)
+def test_markdown_mutators_recover_missing_state_markdown_from_state_json(
+    tmp_path: Path,
+    name: str,
+    invoke,
+    assert_success,
+) -> None:
+    cwd = _bootstrap_markdown_recovery_project(tmp_path)
+    state_md = cwd / "GPD" / "STATE.md"
+    state_md.unlink()
+
+    result = invoke(cwd)
+
+    assert assert_success(result), name
+    assert state_md.exists()
+    regenerated = generate_state_markdown(load_state_json(cwd) or default_state_dict())
+    assert regenerated.startswith("# Research State")
+
+
+def test_state_resolve_blocker_recovers_missing_state_markdown_from_state_json(tmp_path: Path) -> None:
+    state = default_state_dict()
+    state["blockers"] = ["Recovered blocker"]
+    cwd = _bootstrap_markdown_recovery_project(tmp_path, state=state)
+    state_md = cwd / "GPD" / "STATE.md"
+    state_md.unlink()
+
+    result = state_resolve_blocker(cwd, "Recovered blocker")
+
+    assert result.resolved is True
+    assert state_md.exists()
+    assert "Recovered blocker" not in state_md.read_text(encoding="utf-8")
 
 
 class TestStateContinuationBoundedSegment:

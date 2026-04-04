@@ -236,17 +236,15 @@ def check_state_validity(cwd: Path) -> HealthCheck:
                 if issue in warnings:
                     warnings.remove(issue)
 
-    # Additional: check phase ID format
-    layout = ProjectLayout(cwd)
-    try:
-        state_obj = json.loads(layout.state_json.read_text(encoding="utf-8"))
-        if isinstance(state_obj, dict) and state_obj.get("position", {}).get("current_phase") is not None:
-            phase = str(state_obj["position"]["current_phase"])
+    # Additional: check phase ID format against the effective recovered state.
+    if isinstance(state_obj, dict) and isinstance(state_obj.get("position"), dict):
+        phase_value = state_obj["position"].get("current_phase")
+        if phase_value is not None:
+            phase = str(phase_value)
             if not re.match(r"^\d{2,}(\.\d+)*$", phase):
                 warnings.append(f'phase ID format: "{phase}" -- expected zero-padded')
-    except (FileNotFoundError, json.JSONDecodeError, OSError, AttributeError, KeyError, TypeError):
-        pass
 
+    layout = ProjectLayout(cwd)
     details: dict[str, object] = {
         "has_json": layout.state_json.exists(),
         "has_md": layout.state_md.exists(),
@@ -1465,7 +1463,7 @@ def _doctor_check_runtime_launcher(runtime: str) -> HealthCheck:
 
 
 def _doctor_active_runtime_settings_command(*, cwd: Path | None = None) -> str:
-    """Return the active runtime settings command, or the canonical local fallback."""
+    """Return the active runtime settings command, or a runtime-surface-neutral fallback."""
     from gpd.adapters import get_adapter
     from gpd.hooks.runtime_detect import detect_runtime_for_gpd_use
 
@@ -1473,7 +1471,7 @@ def _doctor_active_runtime_settings_command(*, cwd: Path | None = None) -> str:
         runtime_name = detect_runtime_for_gpd_use(cwd=cwd)
         return get_adapter(runtime_name).format_command("settings")
     except Exception:
-        return "gpd:settings"
+        return "the active runtime's `settings` command"
 
 
 def _doctor_runtime_install_issue(assessment: InstallTargetAssessment, runtime: str | None) -> str | None:
@@ -1584,13 +1582,19 @@ def _doctor_check_latex_toolchain() -> HealthCheck:
             status=CheckStatus.WARN,
             label="LaTeX Toolchain",
             details={
+                "compiler": "pdflatex",
                 "available": False,
                 "compiler_available": False,
+                "full_toolchain_available": False,
                 "compiler_path": None,
                 "distribution": None,
                 "latexmk_available": None,
                 "bibtex_available": None,
+                "bibliography_support_available": False,
                 "kpsewhich_available": None,
+                "readiness_state": "blocked",
+                "message": "Could not load LaTeX detection helpers.",
+                "warnings": [f"Could not load LaTeX detection helpers: {exc}"],
                 "paper_build_ready": False,
                 "arxiv_submission_ready": False,
                 "missing_components": [],
@@ -1599,16 +1603,15 @@ def _doctor_check_latex_toolchain() -> HealthCheck:
         )
 
     latex_status = detect_latex_toolchain()
-    compiler_available = bool(latex_status.available)
-    latexmk_available = shutil.which("latexmk") is not None
-    bibtex_available = shutil.which("bibtex") is not None
-    kpsewhich_available = shutil.which("kpsewhich") is not None
-    paper_build_ready = compiler_available and bibtex_available
-    arxiv_submission_ready = paper_build_ready and kpsewhich_available
-    full_toolchain_available = compiler_available and latexmk_available and bibtex_available and kpsewhich_available
+    capability_details = latex_status.model_dump(mode="python")
+    compiler_available = bool(capability_details["compiler_available"])
+    latexmk_available = bool(capability_details["latexmk_available"])
+    bibtex_available = bool(capability_details["bibtex_available"])
+    kpsewhich_available = bool(capability_details["kpsewhich_available"])
+    full_toolchain_available = bool(capability_details["full_toolchain_available"])
     missing_components: list[str] = []
     if not compiler_available:
-        missing_components.append("pdflatex")
+        missing_components.append(str(capability_details.get("compiler") or "pdflatex"))
     if compiler_available and not latexmk_available:
         missing_components.append("latexmk")
     if compiler_available and not bibtex_available:
@@ -1616,10 +1619,8 @@ def _doctor_check_latex_toolchain() -> HealthCheck:
     if compiler_available and not kpsewhich_available:
         missing_components.append("kpsewhich")
 
-    warnings: list[str] = []
-    if not compiler_available:
-        warnings.append(latex_status.message or "No LaTeX compiler found.")
-    elif missing_components:
+    warnings = list(capability_details.get("warnings", [])) if isinstance(capability_details.get("warnings"), list) else []
+    if compiler_available and missing_components:
         missing_text = ", ".join(f"`{component}`" for component in missing_components)
         warnings.append(
             "LaTeX compiler found, but the toolchain is partial: "
@@ -1630,15 +1631,7 @@ def _doctor_check_latex_toolchain() -> HealthCheck:
         status=CheckStatus.OK if full_toolchain_available else CheckStatus.WARN,
         label="LaTeX Toolchain",
         details={
-            "available": full_toolchain_available,
-            "compiler_available": compiler_available,
-            "compiler_path": latex_status.compiler_path,
-            "distribution": latex_status.distribution,
-            "latexmk_available": latexmk_available,
-            "bibtex_available": bibtex_available,
-            "kpsewhich_available": kpsewhich_available,
-            "paper_build_ready": paper_build_ready,
-            "arxiv_submission_ready": arxiv_submission_ready,
+            **capability_details,
             "missing_components": missing_components,
         },
         warnings=warnings,
@@ -1650,40 +1643,34 @@ def _doctor_check_workflow_presets(*, latex_check: HealthCheck, base_ready: bool
     latex_capability = dict(latex_check.details)
     if "warnings" not in latex_capability:
         latex_capability["warnings"] = list(latex_check.warnings)
-    if not any(
-        key in latex_capability
-        for key in (
-            "available",
-            "compiler_available",
-            "bibtex_available",
-            "latexmk_available",
-            "kpsewhich_available",
-            "paper_build_ready",
-            "arxiv_submission_ready",
-        )
-    ):
-        legacy_available = latex_check.status == CheckStatus.OK
-        latex_capability.setdefault("available", legacy_available)
-        latex_capability.setdefault("compiler_available", legacy_available)
-        latex_capability.setdefault("bibtex_available", legacy_available)
-        latex_capability.setdefault("paper_build_ready", legacy_available)
-        latex_capability.setdefault("arxiv_submission_ready", legacy_available)
-        latex_capability.setdefault("latexmk_available", None)
-        latex_capability.setdefault("kpsewhich_available", legacy_available)
 
     details = resolve_workflow_preset_readiness(base_ready=base_ready, latex_capability=latex_capability)
     capability_details = details.get("latex_capability")
-    paper_build_ready = bool(capability_details.get("paper_build_ready", False)) if isinstance(capability_details, dict) else False
+    compiler_ready = (
+        bool(capability_details.get("compiler_available", capability_details.get("available", False)))
+        if isinstance(capability_details, dict)
+        else False
+    )
+    bibliography_support_ready = (
+        bool(capability_details.get("bibliography_support_available", False))
+        if isinstance(capability_details, dict)
+        else False
+    )
     arxiv_submission_ready = (
         bool(capability_details.get("arxiv_submission_ready", False)) if isinstance(capability_details, dict) else False
     )
     warnings: list[str] = []
     if not base_ready:
         warnings.append("Workflow preset readiness is blocked until the base runtime-readiness failures are fixed.")
-    elif not paper_build_ready:
+    elif not compiler_ready:
         warnings.append(
-            "Publication / manuscript and full research presets are degraded without a paper-build-ready LaTeX toolchain: "
-            "`write-paper` and `peer-review` remain usable, but `paper-build` and `arxiv-submission` need compiler and bibliography support."
+            "Publication / manuscript and full research presets are degraded without a LaTeX compiler: "
+            "`write-paper` and `peer-review` remain usable, but `paper-build` and `arxiv-submission` stay blocked."
+        )
+    elif not bibliography_support_ready:
+        warnings.append(
+            "Publication / manuscript and full research presets are degraded without bibliography tooling: "
+            "`write-paper` and `peer-review` remain usable, while `paper-build` and `arxiv-submission` may fail for manuscripts that require bibliography processing."
         )
     elif not arxiv_submission_ready:
         warnings.append(

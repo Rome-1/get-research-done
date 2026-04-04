@@ -46,6 +46,11 @@ _CANONICAL_MANUSCRIPT_REL = canonical_manuscript_relpath()
 _CANONICAL_MANUSCRIPT_BASENAME = f"{CANONICAL_MANUSCRIPT_STEM}.tex"
 _CANONICAL_MANUSCRIPT_PDF_BASENAME = f"{CANONICAL_MANUSCRIPT_STEM}.pdf"
 _CANONICAL_MARKDOWN_BASENAME = f"{CANONICAL_MANUSCRIPT_STEM}.md"
+_ALIASABLE_RUNTIME_DESCRIPTOR = next(
+    descriptor
+    for descriptor in _RUNTIME_DESCRIPTORS
+    if any(alias != descriptor.runtime_name for alias in descriptor.selection_aliases)
+)
 _DOLLAR_COMMAND_DESCRIPTOR = next(
     descriptor for descriptor in _RUNTIME_DESCRIPTORS if descriptor.validated_command_surface == "public_runtime_dollar_command"
 )
@@ -939,6 +944,64 @@ class TestInitCommands:
         assert payload["project_exists"] is True
         assert payload["roadmap_exists"] is True
         assert payload["state_exists"] is True
+
+    def test_init_progress_can_skip_recent_project_reentry_for_projectless_config_bootstrap(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        workspace = tmp_path / "workspace"
+        candidate = tmp_path / "recoverable-project"
+        data_root = tmp_path / "data"
+
+        (workspace / "GPD" / "phases").mkdir(parents=True)
+        (workspace / "GPD" / "config.json").write_text(
+            json.dumps(
+                {
+                    "autonomy": "balanced",
+                    "review_cadence": "adaptive",
+                    "research_mode": "balanced",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        gpd_dir = candidate / "GPD"
+        gpd_dir.mkdir(parents=True)
+        (gpd_dir / "STATE.md").write_text("# Research State\n", encoding="utf-8")
+        (gpd_dir / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+        (gpd_dir / "PROJECT.md").write_text("# Project\n", encoding="utf-8")
+        resume_file = gpd_dir / "phases" / "01" / ".continue-here.md"
+        resume_file.parent.mkdir(parents=True, exist_ok=True)
+        resume_file.write_text("resume\n", encoding="utf-8")
+        monkeypatch.setenv("GPD_DATA_DIR", str(data_root))
+        record_recent_project(
+            candidate,
+            session_data={
+                "last_date": "2026-03-29T12:00:00+00:00",
+                "stopped_at": "Phase 01",
+                "resume_file": "GPD/phases/01/.continue-here.md",
+            },
+            store_root=data_root,
+        )
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(workspace), "init", "progress", "--include", "config", "--no-project-reentry"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["workspace_root"] == str(workspace.resolve())
+        assert payload["project_root"] == str(workspace.resolve())
+        assert payload["project_root_source"] == "workspace"
+        assert payload["project_root_auto_selected"] is False
+        assert payload["config_content"] is not None
+        assert payload["project_exists"] is False
+        assert "project_reentry_mode" not in payload
+        assert "project_reentry_candidates" not in payload
+        assert "project_reentry_selected_candidate" not in payload
 
     def test_plan_phase_surfaces_artifact_derived_reference_context(self, gpd_project: Path) -> None:
         literature_dir = gpd_project / "GPD" / "literature"
@@ -3028,7 +3091,7 @@ class TestReviewValidationCommands:
         assert "resolved to" in checks["manuscript"]["detail"]
 
     @pytest.mark.parametrize(("command", "extra_args"), [("peer-review", ["paper"]), ("arxiv-submission", ["paper"])])
-    def test_review_preflight_explicit_manuscript_path_fails_closed_on_ambiguous_state(
+    def test_review_preflight_explicit_manuscript_path_disambiguates_supported_root(
         self,
         gpd_project: Path,
         command: str,
@@ -3042,11 +3105,11 @@ class TestReviewValidationCommands:
             catch_exceptions=False,
         )
 
-        assert result.exit_code == 1, result.output
+        assert result.exit_code == (1 if command == "arxiv-submission" else 0), result.output
         payload = json.loads(result.output)
         checks = {check["name"]: check for check in payload["checks"]}
-        assert checks["manuscript"]["passed"] is False
-        assert "ambiguous or inconsistent manuscript roots" in checks["manuscript"]["detail"]
+        assert checks["manuscript"]["passed"] is True
+        assert "resolved to ./paper/curvature_flow_bounds.tex" in checks["manuscript"]["detail"]
 
     def test_review_preflight_peer_review_directory_rejects_missing_main_entrypoint(
         self,
@@ -4000,6 +4063,10 @@ class TestReviewValidationCommands:
                 {
                     "title": "Benchmark Paper",
                     "journal": "jhep",
+                    "output_filename": CANONICAL_MANUSCRIPT_STEM,
+                    "authors": [{"name": "A. Researcher"}],
+                    "abstract": "Benchmark abstract.",
+                    "sections": [{"heading": "Introduction", "content": "Intro."}],
                 }
             ),
             encoding="utf-8",
@@ -5323,14 +5390,17 @@ def test_resolve_model_normalizes_runtime_aliases(monkeypatch: pytest.MonkeyPatc
     import gpd.cli as cli_module
     import gpd.core.config as config_module
 
+    alias = next(
+        value for value in _ALIASABLE_RUNTIME_DESCRIPTOR.selection_aliases if value != _ALIASABLE_RUNTIME_DESCRIPTOR.runtime_name
+    )
     monkeypatch.setattr(cli_module, "_supported_runtime_names", list_runtime_names)
     monkeypatch.setattr(config_module, "validate_agent_name", lambda agent_name: None)
     monkeypatch.setattr(config_module, "resolve_model", lambda cwd, agent_name, runtime=None: runtime)
 
-    result = runner.invoke(app, ["resolve-model", "gpd-executor", "--runtime", "claude"], catch_exceptions=False)
+    result = runner.invoke(app, ["resolve-model", "gpd-executor", "--runtime", alias], catch_exceptions=False)
 
     assert result.exit_code == 0, result.output
-    assert "claude-code" in result.output
+    assert _ALIASABLE_RUNTIME_DESCRIPTOR.runtime_name in result.output
 
 
 def test_target_dir_scope_detection_uses_canonical_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

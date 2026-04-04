@@ -834,6 +834,33 @@ def test_contract_tools_reject_coercive_contract_scalars() -> None:
     assert suggest_result == expected
 
 
+@pytest.mark.parametrize(
+    ("field_name", "expected_error"),
+    [
+        (
+            "context_intake",
+            "context_intake must be an object, not NoneType",
+        ),
+        (
+            "approach_policy",
+            "approach_policy must be an object, not NoneType",
+        ),
+        (
+            "uncertainty_markers",
+            "uncertainty_markers must be an object, not NoneType",
+        ),
+    ],
+)
+def test_contract_tools_reject_lossy_singleton_section_salvage(
+    field_name: str,
+    expected_error: str,
+) -> None:
+    contract = _load_project_contract_fixture()
+    contract[field_name] = []
+
+    _assert_contract_tools_reject(contract, expected_error)
+
+
 def test_contract_tools_reject_missing_context_intake() -> None:
     contract = _load_project_contract_fixture()
     contract.pop("context_intake", None)

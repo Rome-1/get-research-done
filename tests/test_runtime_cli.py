@@ -21,6 +21,7 @@ from gpd.adapters.runtime_catalog import (
 from gpd.core.constants import ENV_GPD_ACTIVE_RUNTIME, ENV_GPD_DISABLE_CHECKOUT_REEXEC
 from gpd.hooks.install_metadata import GPD_INSTALL_DIR_NAME
 from gpd.runtime_cli import _parse_args, _resolve_cli_cwd_from_argv, main
+from tests.runtime_install_helpers import seed_complete_runtime_install
 
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
 _RUNTIME_NAMES = tuple(descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS)
@@ -54,7 +55,7 @@ def _runtime_env_prefixes() -> tuple[str, ...]:
 
 
 def _runtime_env_vars_to_clear() -> set[str]:
-    env_vars = {"GPD_ACTIVE_RUNTIME", "XDG_CONFIG_HOME"}
+    env_vars = {"GPD_ACTIVE_RUNTIME", "XDG_CONFIG_HOME", "CODEX_SKILLS_DIR"}
     for descriptor in _RUNTIME_DESCRIPTORS:
         global_config = descriptor.global_config
         for env_var in (global_config.env_var, global_config.env_dir_var, global_config.env_file_var):
@@ -77,11 +78,13 @@ def _reset_runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _mark_complete_install(config_dir: Path, *, runtime: str, install_scope: str = "local") -> None:
     adapter = get_adapter(runtime)
-    config_dir.mkdir(parents=True, exist_ok=True)
-    result = adapter.install(GPD_ROOT, config_dir, is_global=install_scope == "global")
-    finalize_install = getattr(adapter, "finalize_install", None)
-    if callable(finalize_install):
-        finalize_install(result)
+    seed_complete_runtime_install(
+        config_dir,
+        runtime=runtime,
+        install_scope=install_scope,
+        home=config_dir.parent if install_scope == "global" else None,
+        explicit_target=config_dir.name != adapter.config_dir_name,
+    )
 
 
 def _mark_incomplete_install(config_dir: Path, *, runtime: str, install_scope: str = "local") -> None:
@@ -414,6 +417,21 @@ def test_runtime_cli_preserves_custom_global_target_in_missing_runtime_repair_gu
     assert "GPD runtime bridge rejected incomplete install manifest" in captured.err
     assert "--global" in captured.err
     assert f"--target-dir {config_dir}" in captured.err
+
+
+def test_codex_custom_global_install_seeding_stays_within_temp_root(monkeypatch, tmp_path: Path) -> None:
+    outside_root = tmp_path.parent / "codex-skills-leak"
+    leak_skills_dir = outside_root / ".agents" / "skills"
+    monkeypatch.setenv("CODEX_SKILLS_DIR", str(leak_skills_dir))
+
+    adapter = get_adapter("codex")
+    config_dir = tmp_path / "custom-global" / adapter.config_dir_name
+    _mark_complete_install(config_dir, runtime=adapter.runtime_name, install_scope="global")
+
+    safe_skills_dir = config_dir.parent / ".agents" / "skills"
+    assert safe_skills_dir.is_relative_to(tmp_path)
+    assert safe_skills_dir.exists()
+    assert not leak_skills_dir.exists()
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
@@ -1638,6 +1656,52 @@ def test_runtime_cli_does_not_treat_canonical_global_dir_as_local_when_runtime_e
 
     canonical_global_dir = resolve_global_config_dir(descriptor, home=home, environ={})
     _mark_complete_install(canonical_global_dir, runtime=descriptor.runtime_name, install_scope="global")
+
+    override_dir = tmp_path / "override" / descriptor.config_dir_name
+    override_dir.mkdir(parents=True)
+    global_config = descriptor.global_config
+    env_var = global_config.env_var or global_config.env_dir_var or global_config.env_file_var
+    assert env_var is not None
+    env_value = str(override_dir / "config.json") if env_var == global_config.env_file_var else str(override_dir)
+    monkeypatch.setenv(env_var, env_value)
+
+    cli_cwd = home / "research" / "notes"
+    cli_cwd.mkdir(parents=True)
+    expected_missing_target = cli_cwd / descriptor.config_dir_name
+
+    exit_code, observed = _run_runtime_cli_with_recording(
+        monkeypatch,
+        cwd=cli_cwd,
+        argv=[
+            "--runtime",
+            descriptor.runtime_name,
+            "--config-dir",
+            f"./{descriptor.config_dir_name}",
+            "--install-scope",
+            "local",
+            "state",
+            "load",
+        ],
+        runtime=descriptor.runtime_name,
+    )
+
+    assert exit_code == 127
+    assert observed["config_dir"] == expected_missing_target
+
+
+@pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+def test_runtime_cli_does_not_treat_marker_only_canonical_global_dir_as_local_when_runtime_env_overrides_elsewhere(
+    monkeypatch,
+    tmp_path: Path,
+    descriptor,
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    canonical_global_dir = resolve_global_config_dir(descriptor, home=home, environ={})
+    _mark_complete_install(canonical_global_dir, runtime=descriptor.runtime_name, install_scope="global")
+    (canonical_global_dir / MANIFEST_NAME).unlink()
 
     override_dir = tmp_path / "override" / descriptor.config_dir_name
     override_dir.mkdir(parents=True)

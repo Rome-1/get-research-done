@@ -279,7 +279,7 @@ def emit_phase_event(
                     "planner", "plan-checker", "executor", "verifier").
         details: Optional human-readable description of the event.
     """
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
 
     cwd = resolve_absolute_project_dir(project_dir)
     if cwd is None:

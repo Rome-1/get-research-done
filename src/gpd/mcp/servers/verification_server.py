@@ -48,6 +48,7 @@ _CONTRACT_ERROR_PATH_RE = re.compile(
 )
 _AUTHORITATIVE_CONTRACT_PARSE_ERROR_PATTERNS = (
     re.compile(r"^schema_version must be the integer 1$"),
+    re.compile(r"^schema_version must be 1$"),
     re.compile(r"^schema_version: Input should be 1$"),
     re.compile(r"^references\.\d+\.must_surface must be a boolean$"),
 )
@@ -3298,6 +3299,11 @@ def _is_recoverable_contract_parse_error(error: str, *, contract_raw: dict[str, 
     )
 
 
+def _is_lossy_singleton_contract_error(error: str) -> bool:
+    """Return whether a singleton contract section was corrupted into a non-object."""
+    return _is_defaultable_singleton_contract_error(error)
+
+
 def _validate_contract_integrity(
     contract: ResearchContract,
     *,
@@ -3339,6 +3345,11 @@ def _parse_contract_payload(contract_raw: dict[str, object]) -> tuple[ResearchCo
             if _is_recoverable_contract_parse_error(error, contract_raw=contract_raw)
         ]
         blocking = [error for error in normalized_strict_errors if error not in recoverable]
+        lossy_singleton_errors = [
+            error for error in normalized_strict_errors if _is_lossy_singleton_contract_error(error)
+        ]
+        if lossy_singleton_errors:
+            return None, [], _contract_payload_error(lossy_singleton_errors)
         if blocking:
             return None, [], _contract_payload_error(blocking)
         contract = salvage_result.contract

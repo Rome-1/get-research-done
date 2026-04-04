@@ -16,6 +16,7 @@ from gpd.adapters.gemini import (
     _convert_gemini_tool_name,
     _convert_to_gemini_toml,
     _render_gemini_policy_toml,
+    _rewrite_gemini_shell_workflow_guidance,
     _rewrite_gpd_cli_invocations,
 )
 from gpd.adapters.install_utils import build_runtime_cli_bridge_command
@@ -264,6 +265,30 @@ class TestConvertToGeminiToml:
         assert "prompt" in result
         # The prompt is JSON-encoded, not wrapped in '''
         assert "prompt = '''" not in result
+
+
+class TestRewriteGeminiShellWorkflowGuidance:
+    def test_rewrites_updated_set_profile_block_with_reentry_comment_and_flag(self) -> None:
+        content = (
+            "```bash\n"
+            "gpd config ensure-section\n"
+            "# Compatibility note for installer text checks:\n"
+            "# INIT=$(gpd init progress --include state,config)\n"
+            "INIT=$(gpd init progress --include state,config --no-project-reentry)\n"
+            "if [ $? -ne 0 ]; then\n"
+            '  echo "ERROR: gpd initialization failed: $INIT"\n'
+            "  # STOP — display the error to the user and do not proceed.\n"
+            "fi\n"
+            "```"
+        )
+
+        result = _rewrite_gemini_shell_workflow_guidance(content)
+
+        assert "Run these as separate shell calls in Gemini auto-edit mode." in result
+        assert "gpd config ensure-section" in result
+        assert "gpd init progress --include state,config --no-project-reentry" in result
+        assert "INIT=$(" not in result
+        assert "if [ $? -ne 0 ]" not in result
 
 
 class TestInstall:
@@ -832,7 +857,7 @@ class TestInstall:
         assert "INIT=$(" not in content
         assert "if [ $? -ne 0 ]" not in content
         assert expected_gemini_bridge(target) + " config ensure-section" in content
-        assert expected_gemini_bridge(target) + " init progress --include state,config" in content
+        assert expected_gemini_bridge(target) + " init progress --include state,config --no-project-reentry" in content
 
 
     def test_install_agents_replace_runtime_placeholders(

@@ -206,10 +206,10 @@ class TestLoadStateJsonFallback:
         assert result["position"]["current_phase"] == "01"
         assert result["position"]["status"] == "Executing"
 
-    def test_tier3_falls_back_to_state_md_without_overwriting_unreadable_state_json(
+    def test_tier3_repairs_unreadable_state_json_from_state_md(
         self, tmp_path: Path
     ) -> None:
-        """Unreadable state.json should remain untouched when STATE.md is used as fallback."""
+        """Unreadable state.json should be repaired from STATE.md instead of remaining corrupt."""
         cwd = _make_planning(tmp_path)
         layout = ProjectLayout(cwd)
         layout.state_json.write_text("CORRUPT", encoding="utf-8")
@@ -219,7 +219,9 @@ class TestLoadStateJsonFallback:
 
         assert result is not None
         assert result["position"]["current_phase"] == "01"
-        assert layout.state_json.read_text(encoding="utf-8") == "CORRUPT"
+        repaired = json.loads(layout.state_json.read_text(encoding="utf-8"))
+        assert repaired["position"]["current_phase"] == "01"
+        assert repaired["position"]["status"] == "Executing"
 
     def test_returns_none_when_no_state_exists(self, tmp_path: Path) -> None:
         """When no state files exist at all, return None (not raise)."""

@@ -64,6 +64,23 @@ def _dir_contains_files(path: Path) -> bool:
         return True
 
 
+def _remove_manifestless_flat_command_residue(flat_commands: Path) -> int:
+    """Remove only managed flat command files when no manifest proves ownership."""
+    removed = 0
+    try:
+        entries = list(flat_commands.iterdir())
+    except OSError:
+        return 0
+
+    for entry in entries:
+        if not entry.is_file():
+            continue
+        if entry.name.startswith("gpd-") and entry.suffix == ".md":
+            entry.unlink()
+            removed += 1
+    return removed
+
+
 def _has_only_agent_residue(target_dir: Path) -> bool:
     """Return whether *target_dir* contains only agent-surface residue.
 
@@ -701,8 +718,13 @@ class RuntimeAdapter(abc.ABC):
             # Remove flat command/ directory used by some runtimes.
             flat_commands = target_dir / FLAT_COMMANDS_DIR_NAME
             if flat_commands.is_dir():
-                shutil.rmtree(flat_commands)
-                removed.append(f"{FLAT_COMMANDS_DIR_NAME}/")
+                if assessment.manifest_state == "ok":
+                    shutil.rmtree(flat_commands)
+                    removed.append(f"{FLAT_COMMANDS_DIR_NAME}/")
+                else:
+                    removed_flat_commands = _remove_manifestless_flat_command_residue(flat_commands)
+                    if removed_flat_commands:
+                        removed.append(f"{removed_flat_commands} flat GPD commands")
 
             # Remove the shared GPD install root.
             gpd_dir = target_dir / GPD_INSTALL_DIR_NAME

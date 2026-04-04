@@ -124,6 +124,28 @@ def test_resolve_update_cache_inputs_uses_the_runtime_for_gpd_use_as_preference(
     assert preferred_runtime == "codex"
 
 
+def test_resolve_update_cache_inputs_normalizes_explicit_home_overrides(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    canonical_home = tmp_path / "home"
+    canonical_home.mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(canonical_home))
+
+    with (
+        patch("gpd.hooks.runtime_detect.detect_active_runtime_with_gpd_install", return_value="unknown"),
+        patch("gpd.hooks.runtime_detect.detect_runtime_for_gpd_use", return_value="codex"),
+    ):
+        relative_result = resolve_update_cache_inputs(cwd=workspace, home="home")
+        tilde_result = resolve_update_cache_inputs(cwd=workspace, home="~")
+        canonical_result = resolve_update_cache_inputs(cwd=workspace, home=canonical_home)
+
+    expected = (workspace, canonical_home.resolve(strict=False), "unknown", "codex")
+    assert relative_result == expected
+    assert tilde_result == expected
+    assert canonical_result == expected
+
+
 def test_resolve_update_cache_inputs_uses_explicit_preference_without_runtime_lookup(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -214,6 +236,22 @@ def test_resolve_update_cache_inputs_prefers_nested_local_install_when_runtime_h
     assert resolved_home == home
     assert active_runtime == "claude-code"
     assert preferred_runtime == "claude-code"
+
+
+def test_primary_update_cache_file_normalizes_explicit_home_overrides(tmp_path: Path, monkeypatch) -> None:
+    canonical_home = tmp_path / "home"
+    canonical_home.mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(canonical_home))
+
+    relative_cache = primary_update_cache_file([], home="home")
+    tilde_cache = primary_update_cache_file([], home="~")
+    canonical_cache = primary_update_cache_file([], home=canonical_home)
+
+    expected = canonical_home.resolve(strict=False) / "GPD" / "cache" / "gpd-update-check.json"
+    assert relative_cache == expected
+    assert tilde_cache == expected
+    assert canonical_cache == expected
 
 
 def test_resolve_update_cache_inputs_falls_back_to_ancestor_project_root_install_when_nested_cwd_has_none(

@@ -21,7 +21,7 @@ from gpd.adapters import get_adapter
 from gpd.adapters.install_utils import (
     build_runtime_install_repair_command,
 )
-from gpd.adapters.runtime_catalog import get_shared_install_metadata, normalize_runtime_name
+from gpd.adapters.runtime_catalog import get_shared_install_metadata, normalize_runtime_name, resolve_global_config_dir
 from gpd.core.cli_args import resolve_root_global_cli_cwd_from_argv as _resolve_cli_cwd_from_argv
 from gpd.core.constants import ENV_GPD_ACTIVE_RUNTIME, ENV_GPD_DISABLE_CHECKOUT_REEXEC
 from gpd.hooks.install_metadata import (
@@ -102,7 +102,7 @@ def _is_matching_local_install_candidate(candidate: Path, *, runtime: str) -> bo
 
     adapter = get_adapter(runtime)
     manifest_status, manifest, manifest_runtime = load_install_manifest_runtime_status(candidate)
-    canonical_global_dir = adapter.resolve_global_config_dir(home=Path.home())
+    canonical_global_dir = resolve_global_config_dir(adapter.runtime_descriptor, home=Path.home(), environ={})
     if manifest_status == "ok":
         if manifest_runtime != runtime:
             return False

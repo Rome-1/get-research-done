@@ -9,7 +9,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, computed_field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 from gpd.contracts import statement_looks_theorem_like
 from gpd.mcp.paper.bibliography import BibliographyAudit
@@ -364,33 +364,39 @@ class PaperToolchainCapability(BaseModel):
     compiler_available: bool = False
     compiler_path: str | None = None
     distribution: str | None = None
-    bibtex_available: bool = False
-    latexmk_available: bool = False
-    kpsewhich_available: bool = False
+    bibtex_available: bool | None = None
+    bibliography_support_available: bool = False
+    latexmk_available: bool | None = None
+    kpsewhich_available: bool | None = None
+    available: bool = False
+    full_toolchain_available: bool = False
+    paper_build_ready: bool = False
+    arxiv_submission_ready: bool = False
     readiness_state: Literal["blocked", "degraded", "ready"] = "blocked"
     message: str = ""
     warnings: list[str] = Field(default_factory=list)
 
-    @computed_field
-    @property
-    def available(self) -> bool:
-        """Backward-compatible alias for compiler availability."""
+    @model_validator(mode="after")
+    def _sync_derived_status_fields(self) -> PaperToolchainCapability:
+        compiler_available = bool(self.compiler_available)
+        bibtex_available = self.bibtex_available is True
+        latexmk_available = self.latexmk_available is True
+        kpsewhich_available = self.kpsewhich_available is True
 
-        return self.compiler_available
-
-    @computed_field
-    @property
-    def paper_build_ready(self) -> bool:
-        """Whether the basic paper build toolchain is usable."""
-
-        return self.compiler_available and self.bibtex_available
-
-    @computed_field
-    @property
-    def arxiv_submission_ready(self) -> bool:
-        """Whether the build environment can produce bibliography-resolved PDFs."""
-
-        return self.compiler_available and self.bibtex_available and self.kpsewhich_available
+        self.available = compiler_available
+        self.bibliography_support_available = compiler_available and bibtex_available
+        self.paper_build_ready = compiler_available
+        self.full_toolchain_available = (
+            compiler_available and bibtex_available and latexmk_available and kpsewhich_available
+        )
+        self.arxiv_submission_ready = self.bibliography_support_available and kpsewhich_available
+        if not compiler_available:
+            self.readiness_state = "blocked"
+        elif bibtex_available:
+            self.readiness_state = "ready"
+        else:
+            self.readiness_state = "degraded"
+        return self
 
 
 class PaperConfig(BaseModel):

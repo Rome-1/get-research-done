@@ -140,7 +140,7 @@ def resolve_hook_lookup_context(
     )
 
     resolved_cwd = Path(cwd).expanduser().resolve(strict=False) if cwd is not None else None
-    resolved_home = Path.home() if home is None else Path(home)
+    resolved_home = Path.home() if home is None else Path(home).expanduser().resolve(strict=False)
     active_runtime_hint = (
         active_installed_runtime
         if active_installed_runtime is not None

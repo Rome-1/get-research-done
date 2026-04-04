@@ -13,13 +13,13 @@ from pathlib import Path
 
 import gpd.hooks.install_context as hook_layout
 from gpd.adapters.runtime_catalog import get_hook_payload_policy
-from gpd.core.constants import ENV_GPD_DEBUG, PLANNING_DIR_NAME, STATE_JSON_FILENAME
+from gpd.core.constants import ENV_GPD_DEBUG
 from gpd.core.root_resolution import resolve_project_root
+from gpd.core.state import load_state_json
 from gpd.hooks.payload_policy import resolve_hook_payload_policy, resolve_hook_surface_runtime
-from gpd.hooks.payload_roots import project_root_from_payload as _shared_project_root_from_payload
 from gpd.hooks.payload_roots import resolve_payload_roots as _resolve_payload_roots
-from gpd.hooks.payload_roots import workspace_dir_from_payload as _shared_workspace_dir_from_payload
-from gpd.hooks.runtime_lookup import resolve_runtime_lookup_dir
+from gpd.hooks.runtime_detect import SCOPE_LOCAL, detect_runtime_install_target
+from gpd.hooks.runtime_lookup import resolve_runtime_lookup_context_from_payload_roots
 from gpd.hooks.update_resolution import latest_update_cache as _shared_latest_update_cache
 from gpd.hooks.update_resolution import update_command_for_candidate as _shared_update_command_for_candidate
 
@@ -91,6 +91,27 @@ def _object_string(value: object, key: str) -> str:
     """Return a non-empty string field from either a mapping or an object."""
     candidate = _object_value(value, key)
     return candidate if isinstance(candidate, str) and candidate else ""
+
+
+def _workspace_mapping_prefers_local_statusline_lookup(
+    data: dict[str, object],
+    *,
+    hook_payload: object,
+) -> bool:
+    """Keep alias-only workspace mappings anchored to the runtime-owned workspace."""
+
+    workspace_value = data.get("workspace")
+    if not isinstance(workspace_value, dict):
+        return False
+    workspace_keys = tuple(getattr(hook_payload, "workspace_keys", ()) or ())
+    project_dir_keys = tuple(getattr(hook_payload, "project_dir_keys", ()) or ())
+    if not workspace_keys or not project_dir_keys:
+        return False
+    return bool(
+        _first_string(workspace_value, *workspace_keys)
+        and _first_string(workspace_value, *project_dir_keys)
+        and not _first_string(workspace_value, workspace_keys[0])
+    )
 
 
 def _compact_age_label(value: object) -> str:
@@ -204,27 +225,25 @@ def _read_workspace_label(
 def _read_position(workspace_dir: str) -> str:
     """Read research position from GPD/state.json."""
     workspace_root = resolve_project_root(workspace_dir, require_layout=True) or Path(workspace_dir).expanduser().resolve(strict=False)
-    state_file = workspace_root / PLANNING_DIR_NAME / STATE_JSON_FILENAME
-    if not state_file.exists():
-        return ""
     try:
-        state = json.loads(state_file.read_text(encoding="utf-8"))
-        if not isinstance(state, dict):
-            return ""
-        pos = state.get("position", {})
-        phase = pos.get("current_phase")
-        total_phases = pos.get("total_phases")
-        if phase is None or total_phases is None:
-            return ""
-        result = f"P{phase}/{total_phases}"
-        plan = pos.get("current_plan")
-        total_plans = pos.get("total_plans_in_phase")
-        if plan is not None and total_plans is not None:
-            result += f" plan {plan}/{total_plans}"
-        return result
+        state = load_state_json(workspace_root)
     except Exception as exc:
-        _debug(f"Failed to read state.json: {exc}")
+        _debug(f"Failed to read state via canonical loader: {exc}")
         return ""
+
+    if not isinstance(state, dict):
+        return ""
+    pos = state.get("position", {})
+    phase = pos.get("current_phase")
+    total_phases = pos.get("total_phases")
+    if phase is None or total_phases is None:
+        return ""
+    result = f"P{phase}/{total_phases}"
+    plan = pos.get("current_plan")
+    total_plans = pos.get("total_plans_in_phase")
+    if plan is not None and total_plans is not None:
+        result += f" plan {plan}/{total_plans}"
+    return result
 
 
 def _matching_todo_files(todos_dir: Path, session_id: str) -> list[tuple[float, Path]]:
@@ -271,56 +290,19 @@ def _read_current_task(session_id: str, workspace_dir: str | None = None) -> str
         hook_file=__file__,
         cwd=workspace_dir,
     )
-    todo_files: list[tuple[float, Path]] = []
     for candidate in todo_candidates:
         todos_dir = candidate.path
         if not todos_dir.is_dir():
             continue
-        todo_files.extend(_matching_todo_files(todos_dir, session_id))
-
-    todo_files.sort(key=lambda item: item[0], reverse=True)
-    for _mtime, todo_file in todo_files:
-        for todo in _read_todo_entries(todo_file):
-            if todo.get("status") != "in_progress":
-                continue
-            active_form = todo.get("activeForm")
-            if isinstance(active_form, str) and active_form:
-                return active_form
+        for _mtime, todo_file in _matching_todo_files(todos_dir, session_id):
+            for todo in _read_todo_entries(todo_file):
+                if todo.get("status") != "in_progress":
+                    continue
+                active_form = todo.get("activeForm")
+                if isinstance(active_form, str) and active_form:
+                    return active_form
 
     return ""
-
-
-def _workspace_dir_from_payload(data: dict[str, object], *, cwd: str | None = None) -> str:
-    """Extract the raw workspace directory from a runtime hook payload."""
-    return _shared_workspace_dir_from_payload(
-        data,
-        policy_getter=_root_resolution_policy,
-        cwd=cwd,
-    )
-
-
-def _project_root_from_payload(
-    data: dict[str, object],
-    workspace_dir: str,
-    *,
-    cwd: str | None = None,
-) -> str:
-    """Resolve the project root for one hook payload workspace."""
-    return _shared_project_root_from_payload(
-        data,
-        workspace_dir,
-        policy_getter=_root_resolution_policy,
-        cwd=cwd,
-    )
-
-
-def _resolved_project_root_from_payload(data: dict[str, object], *, cwd: str | None = None) -> str:
-    """Return the resolved project root for one statusline payload workspace."""
-    return _resolve_payload_roots(
-        data,
-        policy_getter=_root_resolution_policy,
-        cwd=cwd,
-    ).project_root
 
 
 def _read_context_remaining(data: dict[str, object], hook_payload) -> float | int | None:
@@ -332,7 +314,7 @@ def _read_context_remaining(data: dict[str, object], hook_payload) -> float | in
 
 
 def _read_session_id(data: dict[str, object], hook_payload) -> str:
-    """Read the runtime session id using the adapter-owned contract, with legacy fallback."""
+    """Read the runtime session id using the adapter-owned contract."""
     for container in (
         data,
         data.get("workspace"),
@@ -343,9 +325,7 @@ def _read_session_id(data: dict[str, object], hook_payload) -> str:
         session_id = _first_string(container, *hook_payload.runtime_session_id_keys)
         if session_id:
             return session_id
-
-    legacy_session_id = data.get("session_id")
-    return legacy_session_id if isinstance(legacy_session_id, str) and legacy_session_id else ""
+    return ""
 
 
 def _read_execution_state(workspace_dir: str | None = None) -> dict[str, object]:
@@ -368,6 +348,45 @@ def _read_runtime_hints(workspace_dir: str | None = None) -> dict[str, object]:
         include_workflow_presets=False,
     )
     return payload.model_dump(mode="json")
+
+
+def _project_state_dir(
+    data: dict[str, object],
+    *,
+    workspace_dir: str,
+    project_root: str,
+    runtime_lookup_dir: str,
+    active_runtime: str | None,
+    hook_payload: object,
+) -> str:
+    """Route project-owned state helpers to the project root unless the workspace owns the live runtime."""
+
+    if runtime_lookup_dir != workspace_dir:
+        return runtime_lookup_dir
+    if not project_root or project_root == workspace_dir:
+        return runtime_lookup_dir
+    if _workspace_mapping_prefers_local_statusline_lookup(data, hook_payload=hook_payload):
+        return runtime_lookup_dir
+
+    raw_project_dir = _first_string(data.get("workspace"), *hook_payload.project_dir_keys) or _first_string(
+        data,
+        *hook_payload.project_dir_keys,
+    )
+    normalized_project_root = str(Path(project_root).expanduser().resolve(strict=False))
+    if raw_project_dir:
+        normalized_project_dir = str(Path(raw_project_dir).expanduser().resolve(strict=False))
+        if normalized_project_dir != normalized_project_root:
+            return runtime_lookup_dir
+
+    if isinstance(active_runtime, str) and active_runtime:
+        install_target = detect_runtime_install_target(
+            active_runtime,
+            cwd=Path(workspace_dir).expanduser().resolve(strict=False),
+        )
+        if install_target is not None and install_target.install_scope == SCOPE_LOCAL:
+            return runtime_lookup_dir
+
+    return normalized_project_root
 
 
 def _execution_reason_label(reason: str | None, *, default: str) -> str:
@@ -552,38 +571,39 @@ def main() -> None:
         roots = _resolve_payload_roots(data, policy_getter=_root_resolution_policy)
         workspace_dir = roots.workspace_dir
         project_root = roots.project_root
-        workspace_value = data.get("workspace")
-        preflight_payload = _hook_payload_policy(project_root)
-        explicit_project_dir = _first_string(workspace_value, *preflight_payload.project_dir_keys) or _first_string(
-            data,
-            *preflight_payload.project_dir_keys,
+        runtime_lookup = resolve_runtime_lookup_context_from_payload_roots(
+            roots,
+            runtime_resolver=_payload_runtime,
         )
-        runtime_lookup_dir = resolve_runtime_lookup_dir(
-            workspace_dir=workspace_dir,
-            project_root=project_root,
-            explicit_project_dir=bool(explicit_project_dir),
-            active_runtime=_payload_runtime(project_root),
-        )
+        runtime_lookup_dir = runtime_lookup.lookup_dir
 
         hook_payload = _hook_payload_policy(runtime_lookup_dir)
+        project_state_dir = _project_state_dir(
+            data,
+            workspace_dir=workspace_dir,
+            project_root=project_root,
+            runtime_lookup_dir=runtime_lookup_dir,
+            active_runtime=runtime_lookup.active_runtime,
+            hook_payload=hook_payload,
+        )
 
         session_id = _read_session_id(data, hook_payload)
         remaining = _read_context_remaining(data, hook_payload)
-        runtime_hints = _read_runtime_hints(runtime_lookup_dir)
+        runtime_hints = _read_runtime_hints(project_state_dir)
         visibility = _mapping(runtime_hints.get("execution"))
-        execution = _mapping(visibility.get("current_execution")) or _read_execution_state(runtime_lookup_dir)
+        execution = _mapping(visibility.get("current_execution")) or _read_execution_state(project_state_dir)
 
         ctx = _context_bar(remaining) if isinstance(remaining, (int, float)) and math.isfinite(remaining) else ""
-        position = _read_position(runtime_lookup_dir)
+        position = _read_position(project_state_dir)
         execution_badge = _execution_badge(execution, visibility or None)
         execution_task = _object_string(visibility, "current_task") or _first_string(execution, "current_task")
-        task = execution_task or _read_current_task(session_id, runtime_lookup_dir)
+        task = execution_task or _read_current_task(session_id, project_state_dir)
         if execution_task:
             task = execution_task
         elif execution_badge:
             task = ""
         artifact_label = _execution_artifact_label(execution)
-        gpd_update = _check_update(runtime_lookup_dir)
+        gpd_update = _check_update(project_state_dir)
         model_label = _read_model_label(data, hook_payload)
         workspace_label = _read_workspace_label(
             data,

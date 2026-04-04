@@ -118,7 +118,10 @@ def detect_latex_toolchain(compiler: str = "pdflatex") -> LatexToolchainStatus:
 
     if compiler_available:
         if not bibtex_available:
-            warnings.append("bibtex not found; bibliography processing will require a fallback path.")
+            warnings.append(
+                "bibtex not found; bibliography-free builds may still work, but citation-bearing builds and "
+                "submission prep can fail without bibtex."
+            )
         if not latexmk_available:
             warnings.append("latexmk not found; multi-pass compilation will fall back to manual passes.")
         if not kpsewhich_available:
@@ -270,34 +273,58 @@ def _reference_bibtex_keys_from_audit(audit: BibliographyAudit | None) -> dict[s
     return reference_bibtex_keys
 
 
-def check_tex_file(resource_name: str, install_hint: str | None = None) -> tuple[bool, str]:
+def check_tex_file(
+    resource_name: str,
+    install_hint: str | None = None,
+    *,
+    assume_present_when_unavailable: bool = True,
+) -> tuple[bool, str]:
     """Check if a TeX resource file is available via kpsewhich.
 
     Returns:
         (available, message) tuple. If kpsewhich is not installed,
         assumes the resource is present.
     """
+    kpsewhich = find_latex_compiler("kpsewhich")
+    hint = install_hint or _default_install_hint(Path(resource_name).stem)
+    if not kpsewhich:
+        if assume_present_when_unavailable:
+            return True, "kpsewhich not available, assuming TeX resource present"
+        return False, f"kpsewhich not available; cannot verify {resource_name}. {hint}"
+
     try:
         result = subprocess.run(
-            ["kpsewhich", resource_name],
+            [kpsewhich, resource_name],
             capture_output=True,
             text=True,
             timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():
             return True, result.stdout.strip()
-        hint = install_hint or _default_install_hint(Path(resource_name).stem)
         return False, f"{resource_name} not found. {hint}"
     except FileNotFoundError:
-        return True, "kpsewhich not available, assuming TeX resource present"
+        if assume_present_when_unavailable:
+            return True, "kpsewhich not available, assuming TeX resource present"
+        return False, f"kpsewhich not available; cannot verify {resource_name}. {hint}"
     except subprocess.TimeoutExpired:
-        return True, "kpsewhich timed out, assuming TeX resource present"
+        if assume_present_when_unavailable:
+            return True, "kpsewhich timed out, assuming TeX resource present"
+        return False, f"kpsewhich timed out while checking {resource_name}. {hint}"
 
 
-def check_class_file(document_class: str, install_hint: str | None = None) -> tuple[bool, str]:
+def check_class_file(
+    document_class: str,
+    install_hint: str | None = None,
+    *,
+    assume_present_when_unavailable: bool = True,
+) -> tuple[bool, str]:
     """Check if a LaTeX class file is available via kpsewhich."""
     hint = install_hint or _default_install_hint(_get_tlmgr_package(document_class))
-    return check_tex_file(f"{document_class}.cls", install_hint=hint)
+    return check_tex_file(
+        f"{document_class}.cls",
+        install_hint=hint,
+        assume_present_when_unavailable=assume_present_when_unavailable,
+    )
 
 
 def check_journal_dependencies(spec: JournalSpec) -> tuple[bool, list[str]]:
@@ -305,12 +332,18 @@ def check_journal_dependencies(spec: JournalSpec) -> tuple[bool, list[str]]:
     errors: list[str] = []
     install_hint = spec.install_hint or _default_install_hint(spec.texlive_package)
 
-    available, message = check_class_file(spec.document_class, install_hint=install_hint)
+    available, message = check_class_file(
+        spec.document_class,
+        install_hint=install_hint,
+    )
     if not available:
         errors.append(message)
 
     for resource_name in spec.required_tex_files:
-        available, message = check_tex_file(resource_name, install_hint=install_hint)
+        available, message = check_tex_file(
+            resource_name,
+            install_hint=install_hint,
+        )
         if not available:
             errors.append(message)
 
@@ -352,17 +385,24 @@ async def compile_paper(tex_path: Path, output_dir: Path, compiler: str = "pdfla
             error=f"Compiler '{compiler}' not found. {guidance}",
         )
 
-    if shutil.which("latexmk"):
-        return await _compile_with_latexmk(tex_path, output_dir, compiler)
+    latexmk_path = find_latex_compiler("latexmk")
+    if latexmk_path:
+        return await _compile_with_latexmk(tex_path, output_dir, compiler, latexmk_path=latexmk_path)
     return await _compile_manual_multipass(tex_path, output_dir, compiler)
 
 
-async def _compile_with_latexmk(tex_path: Path, output_dir: Path, compiler: str) -> CompilationResult:
+async def _compile_with_latexmk(
+    tex_path: Path,
+    output_dir: Path,
+    compiler: str,
+    *,
+    latexmk_path: str,
+) -> CompilationResult:
     """Compile using latexmk (handles bibtex + multiple passes automatically)."""
     if compiler == "xelatex":
-        cmd = ["latexmk", "-xelatex", "-interaction=nonstopmode", f"-output-directory={output_dir}", str(tex_path)]
+        cmd = [latexmk_path, "-xelatex", "-interaction=nonstopmode", f"-output-directory={output_dir}", str(tex_path)]
     else:
-        cmd = ["latexmk", "-pdf", "-interaction=nonstopmode", f"-output-directory={output_dir}", str(tex_path)]
+        cmd = [latexmk_path, "-pdf", "-interaction=nonstopmode", f"-output-directory={output_dir}", str(tex_path)]
 
     logger.info("Compiling with latexmk: %s", " ".join(cmd))
 
@@ -455,6 +495,26 @@ async def _compile_manual_multipass(tex_path: Path, output_dir: Path, compiler: 
             return False
         return initial_signature is None or current_signature != initial_signature
 
+    def aux_requires_bibliography(aux_path: Path) -> bool:
+        try:
+            content = aux_path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            return False
+        return "\\citation" in content or "\\bibdata" in content
+
+    def record_missing_bibtex_requirement() -> None:
+        if bibtex or not aux_path.exists() or not aux_requires_bibliography(aux_path):
+            return
+        warning = "bibtex not found -- bibliography will not be processed; citations will show as [?]"
+        logger.warning(warning)
+        if warning + "\n" not in combined_log_parts:
+            combined_log_parts.append(warning + "\n")
+        error = "bibtex not found but citations require bibliography processing"
+        if error not in compile_errors:
+            compile_errors.append(error)
+        if error not in fatal_errors:
+            fatal_errors.append(error)
+
     try:
         # Pass 1: pdflatex
         returncode, log = await run_cmd(base_cmd, cwd)
@@ -462,9 +522,9 @@ async def _compile_manual_multipass(tex_path: Path, output_dir: Path, compiler: 
 
         # bibtex
         aux_path = output_dir / f"{tex_path.stem}.aux"
-        bibtex = shutil.which("bibtex")
+        bibtex = find_latex_compiler("bibtex")
         if not bibtex:
-            logger.warning("bibtex not found -- bibliography will not be processed; citations will show as [?]")
+            record_missing_bibtex_requirement()
         if bibtex and aux_path.exists():
             returncode, log = await run_cmd([bibtex, str(aux_path)], cwd)
             record_result("bibtex", returncode, log, fatal=True)
@@ -502,6 +562,8 @@ async def _compile_manual_multipass(tex_path: Path, output_dir: Path, compiler: 
             if bibtex and aux_path.exists():
                 returncode, log = await run_cmd([bibtex, str(aux_path)], cwd)
                 record_result("bibtex autofix", returncode, log, fatal=True)
+            if not bibtex:
+                record_missing_bibtex_requirement()
             returncode, log = await run_cmd(base_cmd, cwd)
             record_result("pdflatex autofix pass 2", returncode, log)
             returncode, log = await run_cmd(base_cmd, cwd)

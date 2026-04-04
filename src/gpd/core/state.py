@@ -17,6 +17,7 @@ import os
 import platform as py_platform
 import re
 import socket
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -237,9 +238,14 @@ def _project_recent_project_entry(
         if target_kind == "handoff"
         else None
     )
+    session_recorded_at = _pick(
+        machine.recorded_at,
+        session.get("last_date") if isinstance(session, dict) else None,
+    )
 
     last_session_at = _pick(
         resume_target_recorded_at,
+        session_recorded_at,
         existing.last_session_at if existing is not None else None,
     )
     last_seen_at = last_session_at or (existing.last_seen_at if existing is not None else None)
@@ -735,50 +741,27 @@ def _load_raw_project_contract_payload(cwd: Path) -> tuple[Path, object] | None:
 
     layout = ProjectLayout(cwd)
 
-    def _backup_project_contract(reason: str) -> tuple[Path, object] | None:
-        try:
-            raw_backup = json.loads(layout.state_json_backup.read_text(encoding="utf-8"))
-        except (FileNotFoundError, json.JSONDecodeError, OSError, UnicodeDecodeError):
-            return None
-        if not isinstance(raw_backup, dict):
-            return None
-        logger.warning(
-            "Using project_contract from %s because %s",
-            layout.state_json_backup,
-            reason,
-        )
-        return layout.state_json_backup, raw_backup.get("project_contract")
-
-    def _read_state_payload(path: Path) -> object:
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (FileNotFoundError, json.JSONDecodeError, OSError, UnicodeDecodeError):
-            return None
-
     if layout.state_intent.exists():
         _load_state_json_with_integrity_issues(cwd, persist_recovery=True)
-
-    raw_state = _read_state_payload(layout.state_json)
-    source_path = layout.state_json
-
-    if raw_state is None:
-        backup_payload = _backup_project_contract("the primary state.json was unavailable or unreadable")
-        if backup_payload is not None:
-            return backup_payload
+    _state_obj, _state_issues, state_source = peek_state_json(
+        cwd,
+        recover_intent=True,
+        surface_blocked_project_contract=True,
+    )
+    if state_source == "state.json":
+        source_path = layout.state_json
+    elif state_source == "state.json.bak":
+        source_path = layout.state_json_backup
+    else:
         return None
 
+    try:
+        raw_state = json.loads(source_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None
     if not isinstance(raw_state, dict):
-        backup_payload = _backup_project_contract("the primary state.json content was not a JSON object")
-        if backup_payload is not None:
-            return backup_payload
         return None
-
-    raw_contract = raw_state.get("project_contract")
-    if raw_contract is None:
-        return source_path, None
-    if not isinstance(raw_contract, dict):
-        return source_path, raw_contract
-    return source_path, raw_contract
+    return source_path, raw_state.get("project_contract")
 
 
 def _classify_project_contract_payload(
@@ -888,7 +871,7 @@ def _load_project_contract_for_runtime_context(cwd: Path) -> tuple[ResearchContr
             provenance="raw",
         )
 
-    state, _state_issues, state_source = peek_state_json(cwd)
+    state, _state_issues, state_source = peek_state_json(cwd, surface_blocked_project_contract=True)
     default_source = _project_contract_source_path(cwd, layout.state_json)
     if not isinstance(state, dict):
         return None, _project_contract_load_payload(status="missing", source_path=default_source)
@@ -1000,21 +983,46 @@ def _normalize_continuation_payload_with_issues(
     return normalized.model_dump(mode="python"), issues
 
 
-def _load_state_snapshot_for_mutation(cwd: Path) -> dict:
-    """Load the current state for an authoritative write, preferring primary JSON."""
+def _load_state_snapshot_for_mutation(cwd: Path, *, recover_intent: bool = True) -> dict:
+    """Load one mutable state snapshot through the full non-persisting recovery ladder."""
 
-    for path in (_state_json_path(cwd), _state_json_path(cwd).parent / STATE_JSON_BACKUP_FILENAME):
-        raw = safe_read_file(path)
-        if raw is None:
-            continue
-        try:
-            parsed = json.loads(raw)
-        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-            continue
-        if isinstance(parsed, dict):
-            return parsed
+    recovered_state, _integrity_issues, _state_source = _load_state_json_with_integrity_issues(
+        cwd,
+        persist_recovery=False,
+        recover_intent=recover_intent,
+        acquire_lock=False,
+    )
+    if isinstance(recovered_state, dict):
+        return recovered_state
 
     return default_state_dict()
+
+
+def _load_or_rebuild_state_markdown_locked(cwd: Path) -> str | None:
+    """Return STATE.md content, rebuilding the markdown mirror from structured state when possible."""
+
+    md_path = _state_md_path(cwd)
+    try:
+        return md_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        pass
+    except (OSError, UnicodeDecodeError):
+        logger.warning("STATE.md is unreadable during mutation; attempting to rebuild from structured state")
+
+    recovered_state, _integrity_issues, state_source = _load_state_json_with_integrity_issues(
+        cwd,
+        persist_recovery=False,
+        recover_intent=False,
+        acquire_lock=False,
+    )
+    if not isinstance(recovered_state, dict) or state_source is None:
+        return None
+
+    save_state_json_locked(cwd, recovered_state)
+    try:
+        return md_path.read_text(encoding="utf-8")
+    except (FileNotFoundError, OSError, UnicodeDecodeError):
+        return None
 
 
 def _session_payload_has_values(payload: object) -> bool:
@@ -1678,6 +1686,27 @@ def parse_state_to_json(content: str) -> dict:
 # ─── Schema Enforcement ───────────────────────────────────────────────────────
 
 
+def _coerce_position_identifiers(
+    normalized: dict[str, object],
+    integrity_issues: list[str],
+) -> None:
+    """Coerce legacy integer position identifiers without dropping the section."""
+
+    position = normalized.get("position")
+    if not isinstance(position, dict):
+        return
+
+    current_phase = position.get("current_phase")
+    if isinstance(current_phase, int) and not isinstance(current_phase, bool):
+        position["current_phase"] = str(current_phase)
+        integrity_issues.append('schema normalization: coerced "position.current_phase" integer to string')
+
+    current_plan = position.get("current_plan")
+    if isinstance(current_plan, int) and not isinstance(current_plan, bool):
+        position["current_plan"] = str(current_plan)
+        integrity_issues.append('schema normalization: coerced "position.current_plan" integer to string')
+
+
 def _normalize_state_schema(
     raw: dict | None,
     *,
@@ -1712,6 +1741,7 @@ def _normalize_state_schema(
                     )
                     del normalized[key]
 
+    _coerce_position_identifiers(normalized, integrity_issues)
     normalized = _salvage_state_sections(
         normalized,
         integrity_issues,
@@ -1895,6 +1925,16 @@ def _normalize_project_contract_section(
     if list_member_errors:
         integrity_issues.extend(_integrity_issue_from_contract_error(error) for error in list_member_errors)
     if normalized_contract is None:
+        if combined_errors:
+            integrity_issues.extend(_integrity_issue_from_contract_error(error) for error in combined_errors)
+            if _has_authoritative_scalar_schema_findings(combined_errors):
+                integrity_issues.append(
+                    'schema normalization: dropped "project_contract" because authoritative scalar fields required normalization'
+                )
+            else:
+                integrity_issues.append(
+                    'schema normalization: dropped "project_contract" because contract schema required normalization'
+                )
         return None
     if combined_errors:
         # Run contract salvage before any direct Pydantic acceptance so coercive
@@ -2618,8 +2658,11 @@ def _build_state_from_markdown(cwd: Path, md_content: str, *, recover_intent: bo
             # project_contract exists only in JSON, so a corrupt primary file must
             # not resurrect stale backup contract state during a markdown sync.
             existing["project_contract"] = None
-            existing["session"] = _blank_session_payload()
-            existing["continuation"] = _blank_continuation_payload()
+            existing_continuation = existing.get("continuation")
+            if _continuation_payload_has_values(existing_continuation):
+                existing["session"] = _session_from_continuation_payload(existing_continuation)
+            else:
+                existing["session"] = _blank_session_payload()
 
     if existing and isinstance(existing, dict):
         project_contract = existing.get("project_contract")
@@ -2847,18 +2890,19 @@ def _load_state_json_with_integrity_issues(
     persist_recovery: bool = True,
     recover_intent: bool = True,
     surface_blocked_project_contract: bool = False,
+    acquire_lock: bool = True,
 ) -> tuple[dict | None, list[str], str | None]:
     """Load state.json and return the normalized state, integrity issues, and source."""
     json_path = _state_json_path(cwd)
     bak_path = json_path.parent / STATE_JSON_BACKUP_FILENAME
 
-    with _state_lock(cwd):
+    lock_context = _state_lock(cwd) if acquire_lock else nullcontext()
+    with lock_context:
         if recover_intent:
             _recover_intent_locked(cwd)
         # Read paths must not silently default malformed singleton contract sections.
         allow_project_contract_salvage = False
         parse_issue: str | None = None
-        primary_unreadable = False
 
         try:
             raw = json_path.read_text(encoding="utf-8")
@@ -2927,7 +2971,6 @@ def _load_state_json_with_integrity_issues(
                     )
                 return restored, integrity_issues, "state.json.bak"
         except TypeError as e:
-            primary_unreadable = True
             if os.environ.get(ENV_GPD_DEBUG):
                 logger.debug("state.json structural error: %s", e)
             structural_issue = f"state.json structural error: {e}"
@@ -2955,7 +2998,6 @@ def _load_state_json_with_integrity_issues(
                 logger.warning("state.json structural error blocks review-mode loading: %s", e)
                 return None, [structural_issue], None
         except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
-            primary_unreadable = True
             if os.environ.get(ENV_GPD_DEBUG):
                 logger.debug("state.json parse error: %s", e)
             parse_issue = f"state.json parse error: {e}"
@@ -2996,8 +3038,13 @@ def _load_state_json_with_integrity_issues(
             integrity_issues = ["state.json root was recovered from STATE.md after primary state.json was unavailable or unreadable"]
             if parse_issue is not None:
                 integrity_issues.insert(0, parse_issue)
-            if persist_recovery and not primary_unreadable:
-                atomic_write(json_path, json.dumps(state_from_md, indent=2) + "\n")
+            if persist_recovery:
+                _write_state_pair_locked(
+                    cwd,
+                    state_obj=state_from_md,
+                    md_content=content,
+                    preserve_raw_project_contract=state_from_md.get("project_contract"),
+                )
             return state_from_md, integrity_issues, "STATE.md"
         except (FileNotFoundError, OSError, UnicodeDecodeError):
             if os.environ.get(ENV_GPD_DEBUG):
@@ -3328,12 +3375,13 @@ def state_load(cwd: Path, integrity_mode: str = "standard") -> StateLoadResult:
 def state_get(cwd: Path, section: str | None = None) -> StateGetResult:
     """Get full STATE.md content or a specific field/section."""
     md_path = _state_md_path(cwd)
-    content = safe_read_file(md_path)
-    if content is None:
-        raise StateError(
-            f"STATE.md not found at {md_path}. "
-            "Run 'gpd init' to create the project state file."
-        )
+    with _state_lock(cwd):
+        content = _load_or_rebuild_state_markdown_locked(cwd)
+        if content is None:
+            raise StateError(
+                f"STATE.md not found at {md_path}. "
+                "Run 'gpd init' to create the project state file."
+            )
 
     if not section:
         return StateGetResult(content=content)
@@ -3371,13 +3419,11 @@ def state_update(cwd: Path, field: str, value: str) -> StateUpdateResult:
             reason=f'Invalid status: "{value}". Valid: {", ".join(VALID_STATUSES)}',
         )
 
-    md_path = _state_md_path(cwd)
-
     with _state_lock(cwd):
         _recover_intent_locked(cwd)
-        if not md_path.exists():
+        content = _load_or_rebuild_state_markdown_locked(cwd)
+        if content is None:
             return StateUpdateResult(updated=False, reason="STATE.md not found")
-        content = md_path.read_text(encoding="utf-8")
         field_norm = field.replace("_", " ")
 
         # Validate state transitions
@@ -3406,12 +3452,12 @@ def state_patch(cwd: Path, patches: dict[str, str]) -> StatePatchResult:
 
     with _state_lock(cwd):
         _recover_intent_locked(cwd)
-        if not md_path.exists():
+        content = _load_or_rebuild_state_markdown_locked(cwd)
+        if content is None:
             raise StateError(
                 f"STATE.md not found at {md_path}. "
                 "Run 'gpd init' to create the project state file before patching."
             )
-        content = md_path.read_text(encoding="utf-8")
         updated: list[str] = []
         failed: list[str] = []
 
@@ -3512,24 +3558,26 @@ def state_set_project_contract(cwd: Path, contract_data: dict[str, object] | Res
             warnings=warning_messages,
         )
 
-    state_obj = load_state_json(cwd) or default_state_dict()
+    with _state_lock(cwd):
+        _recover_intent_locked(cwd)
+        state_obj = _load_state_snapshot_for_mutation(cwd, recover_intent=False)
 
-    state_obj["project_contract"] = contract_payload
+        state_obj["project_contract"] = contract_payload
 
-    unresolved = [question.strip() for question in parsed.scope.unresolved_questions if question and question.strip()]
-    if unresolved:
-        existing_questions = {
-            item.strip()
-            for item in state_obj.get("open_questions", [])
-            if isinstance(item, str) and item.strip()
-        }
-        for question in unresolved:
-            if question not in existing_questions:
-                state_obj.setdefault("open_questions", []).append(question)
-                existing_questions.add(question)
+        unresolved = [question.strip() for question in parsed.scope.unresolved_questions if question and question.strip()]
+        if unresolved:
+            existing_questions = {
+                item.strip()
+                for item in state_obj.get("open_questions", [])
+                if isinstance(item, str) and item.strip()
+            }
+            for question in unresolved:
+                if question not in existing_questions:
+                    state_obj.setdefault("open_questions", []).append(question)
+                    existing_questions.add(question)
 
-    save_state_json(cwd, state_obj)
-    return StateUpdateResult(updated=True, warnings=warning_messages)
+        save_state_json_locked(cwd, state_obj)
+        return StateUpdateResult(updated=True, warnings=warning_messages)
 
 
 @instrument_gpd_function("state.set_continuation_bounded_segment")
@@ -3564,7 +3612,7 @@ def state_set_continuation_bounded_segment(
 
     with _state_lock(cwd):
         _recover_intent_locked(cwd)
-        state_obj = _load_state_snapshot_for_mutation(cwd)
+        state_obj = _load_state_snapshot_for_mutation(cwd, recover_intent=False)
         current_continuation = _normalize_continuation_payload(state_obj.get("continuation"))
         desired_continuation = normalize_continuation(
             cwd,
@@ -3646,7 +3694,7 @@ def state_carry_forward_continuation_last_result_id(
 
     with _state_lock(cwd):
         _recover_intent_locked(cwd)
-        loaded_state_obj = _load_state_snapshot_for_mutation(cwd)
+        loaded_state_obj = _load_state_snapshot_for_mutation(cwd, recover_intent=False)
         result = _apply(loaded_state_obj)
         if result.updated:
             save_state_json_locked(cwd, loaded_state_obj)
@@ -3659,7 +3707,7 @@ def state_clear_continuation_bounded_segment(cwd: Path) -> StateUpdateResult:
 
     with _state_lock(cwd):
         _recover_intent_locked(cwd)
-        state_obj = _load_state_snapshot_for_mutation(cwd)
+        state_obj = _load_state_snapshot_for_mutation(cwd, recover_intent=False)
         current_continuation = _normalize_continuation_payload(state_obj.get("continuation"))
 
         if current_continuation.get("bounded_segment") is None:
@@ -3681,13 +3729,11 @@ def state_clear_continuation_bounded_segment(cwd: Path) -> StateUpdateResult:
 @instrument_gpd_function("state.advance_plan")
 def state_advance_plan(cwd: Path) -> AdvancePlanResult:
     """Advance to the next plan, or mark phase complete if on last plan."""
-    md_path = _state_md_path(cwd)
-
     with _state_lock(cwd):
         _recover_intent_locked(cwd)
-        if not md_path.exists():
+        content = _load_or_rebuild_state_markdown_locked(cwd)
+        if content is None:
             return AdvancePlanResult(advanced=False, error="STATE.md not found")
-        content = md_path.read_text(encoding="utf-8")
         current_plan_raw = state_extract_field(content, "Current Plan")
         total_plans_raw = state_extract_field(content, "Total Plans in Phase")
 
@@ -3744,16 +3790,14 @@ def state_record_metric(
     files: str | None = None,
 ) -> RecordMetricResult:
     """Record a performance metric in STATE.md."""
-    md_path = _state_md_path(cwd)
-
     if not phase or not plan or not duration:
         return RecordMetricResult(recorded=False, error="phase, plan, and duration required")
 
     with _state_lock(cwd):
         _recover_intent_locked(cwd)
-        if not md_path.exists():
+        content = _load_or_rebuild_state_markdown_locked(cwd)
+        if content is None:
             return RecordMetricResult(recorded=False, error="STATE.md not found")
-        content = md_path.read_text(encoding="utf-8")
 
         pattern = re.compile(
             r"(##\s*Performance Metrics[\s\S]*?\n\|[^\n]+\n\|[-|\s]+\n)([\s\S]*?)(?=\n##|\n$|$)",
@@ -3781,13 +3825,11 @@ def state_record_metric(
 @instrument_gpd_function("state.update_progress")
 def state_update_progress(cwd: Path) -> UpdateProgressResult:
     """Recalculate progress from plan/summary counts across all phases."""
-    md_path = _state_md_path(cwd)
-
     with _state_lock(cwd):
         _recover_intent_locked(cwd)
-        if not md_path.exists():
+        content = _load_or_rebuild_state_markdown_locked(cwd)
+        if content is None:
             return UpdateProgressResult(updated=False, error="STATE.md not found")
-        content = md_path.read_text(encoding="utf-8")
 
         phases_dir = ProjectLayout(cwd).phases_dir
         total_plans = 0
@@ -3833,7 +3875,6 @@ def state_add_decision(
     rationale: str | None = None,
 ) -> AddDecisionResult:
     """Add a decision to STATE.md."""
-    md_path = _state_md_path(cwd)
     if not summary:
         return AddDecisionResult(added=False, error="summary required")
 
@@ -3843,9 +3884,9 @@ def state_add_decision(
 
     with _state_lock(cwd):
         _recover_intent_locked(cwd)
-        if not md_path.exists():
+        content = _load_or_rebuild_state_markdown_locked(cwd)
+        if content is None:
             return AddDecisionResult(added=False, error="STATE.md not found")
-        content = md_path.read_text(encoding="utf-8")
         pattern = re.compile(
             r"(###?\s*Decisions\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)",
             re.IGNORECASE,
@@ -3867,7 +3908,6 @@ def state_add_decision(
 @instrument_gpd_function("state.add_blocker")
 def state_add_blocker(cwd: Path, text: str) -> AddBlockerResult:
     """Add a blocker to STATE.md."""
-    md_path = _state_md_path(cwd)
     if not text:
         return AddBlockerResult(added=False, error="text required")
 
@@ -3876,9 +3916,9 @@ def state_add_blocker(cwd: Path, text: str) -> AddBlockerResult:
 
     with _state_lock(cwd):
         _recover_intent_locked(cwd)
-        if not md_path.exists():
+        content = _load_or_rebuild_state_markdown_locked(cwd)
+        if content is None:
             return AddBlockerResult(added=False, error="STATE.md not found")
-        content = md_path.read_text(encoding="utf-8")
         pattern = re.compile(
             r"(###?\s*Blockers/Concerns\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)",
             re.IGNORECASE,
@@ -3901,7 +3941,6 @@ def state_add_blocker(cwd: Path, text: str) -> AddBlockerResult:
 @instrument_gpd_function("state.resolve_blocker")
 def state_resolve_blocker(cwd: Path, text: str) -> ResolveBlockerResult:
     """Resolve (remove) a blocker from STATE.md."""
-    md_path = _state_md_path(cwd)
     if not text:
         return ResolveBlockerResult(resolved=False, error="text required")
     if len(text) < 3:
@@ -3911,9 +3950,9 @@ def state_resolve_blocker(cwd: Path, text: str) -> ResolveBlockerResult:
 
     with _state_lock(cwd):
         _recover_intent_locked(cwd)
-        if not md_path.exists():
+        content = _load_or_rebuild_state_markdown_locked(cwd)
+        if content is None:
             return ResolveBlockerResult(resolved=False, error="STATE.md not found")
-        content = md_path.read_text(encoding="utf-8")
         pattern = re.compile(
             r"(###?\s*Blockers/Concerns\s*\n)([\s\S]*?)(?=\n###?|\n##[^#]|$)",
             re.IGNORECASE,
@@ -4004,22 +4043,16 @@ def state_record_session(
     last_result_id: str | None = None,
 ) -> RecordSessionResult:
     """Record session continuity through canonical continuation state."""
-    md_path = _state_md_path(cwd)
-
     with _state_lock(cwd):
         _recover_intent_locked(cwd)
-        if not md_path.exists():
-            with gpd_span(
-                "session.continuity.missing_state",
-                cwd=str(cwd),
-                stopped_at=stopped_at or "",
-                resume_file=resume_file or EM_DASH,
-                last_result_id=last_result_id or EM_DASH,
-            ):
-                pass
-            return RecordSessionResult(recorded=False, error="STATE.md not found")
-
-        state_obj = _load_state_snapshot_for_mutation(cwd)
+        state_obj, _integrity_issues, state_source = _load_state_json_with_integrity_issues(
+            cwd,
+            persist_recovery=False,
+            recover_intent=False,
+            acquire_lock=False,
+        )
+        if not isinstance(state_obj, dict) or state_source is None:
+            return RecordSessionResult(recorded=False, error="State not found")
         now = datetime.now(tz=UTC).isoformat()
         machine = _current_machine_identity()
         current_continuation = normalize_continuation(
@@ -4376,13 +4409,11 @@ def state_validate(
 @instrument_gpd_function("state.compact")
 def state_compact(cwd: Path) -> StateCompactResult:
     """Compact STATE.md by archiving old decisions, blockers, metrics, and sessions."""
-    md_path = _state_md_path(cwd)
-
     with _state_lock(cwd):
         _recover_intent_locked(cwd)
-        if not md_path.exists():
+        content = _load_or_rebuild_state_markdown_locked(cwd)
+        if content is None:
             return StateCompactResult(compacted=False, error="STATE.md not found")
-        content = md_path.read_text(encoding="utf-8")
         lines = content.split("\n")
         total_lines = len(lines)
         warn_threshold = STATE_LINES_TARGET
@@ -4394,11 +4425,8 @@ def state_compact(cwd: Path) -> StateCompactResult:
         soft_mode = total_lines < line_budget
 
         # Determine current phase
-        state_obj = None
-        try:
-            state_obj = ensure_state_schema(json.loads(_state_json_path(cwd).read_text(encoding="utf-8")))
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
-            pass
+        loaded_state = _load_state_snapshot_for_mutation(cwd, recover_intent=False)
+        state_obj = ensure_state_schema(loaded_state) if isinstance(loaded_state, dict) else None
 
         current_phase = state_obj["position"].get("current_phase") if state_obj and state_obj.get("position") else None
 

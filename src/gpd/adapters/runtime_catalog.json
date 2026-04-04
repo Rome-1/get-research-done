@@ -32,7 +32,7 @@
     },
     "hook_payload": {
       "notify_event_types": [],
-      "workspace_keys": ["current_dir", "cwd", "path", "workspace_dir"],
+      "workspace_keys": ["cwd", "current_dir", "path", "workspace_dir"],
       "project_dir_keys": ["project_dir"],
       "runtime_session_id_keys": [],
       "model_keys": ["display_name", "name", "id"],
@@ -89,7 +89,7 @@
     },
     "hook_payload": {
       "notify_event_types": [],
-      "workspace_keys": ["current_dir", "cwd", "path", "workspace_dir"],
+      "workspace_keys": ["cwd", "current_dir", "path", "workspace_dir"],
       "project_dir_keys": ["project_dir"],
       "runtime_session_id_keys": [],
       "model_keys": ["display_name", "name", "id"],
@@ -147,7 +147,7 @@
     },
     "hook_payload": {
       "notify_event_types": ["agent-turn-complete"],
-      "workspace_keys": ["current_dir", "cwd", "path", "workspace_dir"],
+      "workspace_keys": ["cwd", "current_dir", "path", "workspace_dir"],
       "project_dir_keys": ["project_dir"],
       "runtime_session_id_keys": [],
       "model_keys": ["display_name", "name", "id"],

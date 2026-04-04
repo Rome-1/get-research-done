@@ -17,6 +17,7 @@ from gpd.core.state import (
     VALID_STATUSES,
     ResearchState,
     _load_recent_projects_index,
+    _load_state_snapshot_for_mutation,
     _normalize_state_schema,
     _recent_projects_index_path,
     default_state_dict,
@@ -30,6 +31,7 @@ from gpd.core.state import (
     save_state_json,
     save_state_markdown,
     state_extract_field,
+    state_get,
     state_has_field,
     state_load,
     state_record_session,
@@ -1278,6 +1280,25 @@ def test_load_state_json_recovers_backup_continuation_when_primary_continuation_
     assert persisted["session"]["resume_file"] == "GPD/phases/03-analysis/.continue-here.md"
 
 
+def test_load_state_json_repairs_primary_json_from_state_markdown_when_primary_is_unreadable(tmp_path: Path) -> None:
+    recovered_state = default_state_dict()
+    recovered_state["position"]["current_phase"] = "05"
+    recovered_state["position"]["status"] = "Executing"
+    save_state_json(tmp_path, recovered_state)
+    save_state_markdown(tmp_path, generate_state_markdown(recovered_state))
+
+    layout = ProjectLayout(tmp_path)
+    layout.state_json.write_text("{not-json", encoding="utf-8")
+    layout.state_json_backup.unlink(missing_ok=True)
+
+    loaded = load_state_json(tmp_path)
+
+    assert loaded is not None
+    assert loaded["position"]["current_phase"] == "05"
+    assert loaded["position"]["status"] == "Executing"
+    assert json.loads(layout.state_json.read_text(encoding="utf-8"))["position"]["current_phase"] == "05"
+
+
 def test_load_state_json_primary_file_preserves_project_contract_when_singleton_list_drift_is_salvageable(
     tmp_path: Path,
 ):
@@ -1381,6 +1402,30 @@ def test_state_load_recovers_backup_only_state_when_primary_json_is_missing(tmp_
     assert json.loads(layout.state_json.read_text(encoding="utf-8"))["project_contract"]["scope"]["question"] == (
         "Recovered from backup state"
     )
+
+
+def test_state_load_and_runtime_context_use_project_contract_from_recovered_backup_root(tmp_path: Path) -> None:
+    from gpd.core.context import init_progress
+
+    primary_state = default_state_dict()
+    primary_state["position"] = "stale-root"
+    primary_state["project_contract"] = _project_contract_with_question("stale primary contract")
+
+    backup_state = default_state_dict()
+    backup_state["project_contract"] = _project_contract_with_question("recovered backup contract")
+
+    save_state_json(tmp_path, backup_state)
+    layout = ProjectLayout(tmp_path)
+    layout.state_json.write_text(json.dumps(primary_state, indent=2) + "\n", encoding="utf-8")
+    layout.state_json_backup.write_text(json.dumps(backup_state, indent=2) + "\n", encoding="utf-8")
+
+    loaded = state_load(tmp_path)
+    ctx = init_progress(tmp_path)
+
+    assert loaded.state["project_contract"]["scope"]["question"] == "recovered backup contract"
+    assert ctx["project_contract"]["scope"]["question"] == "recovered backup contract"
+    assert loaded.project_contract_load_info["source_path"].endswith(STATE_JSON_BACKUP_FILENAME)
+    assert ctx["project_contract_load_info"]["source_path"].endswith(STATE_JSON_BACKUP_FILENAME)
 
 
 def test_state_load_reports_state_exists_false_when_only_unrecoverable_state_file_is_present(tmp_path: Path) -> None:
@@ -1638,6 +1683,61 @@ def test_state_validate_rejects_state_markdown_missing_canonical_section(tmp_pat
     assert any('STATE.md missing "## Current Position" section' in issue for issue in result.issues)
 
 
+def test_load_state_json_coerces_integer_current_plan_without_dropping_position(tmp_path: Path) -> None:
+    save_state_json(tmp_path, default_state_dict())
+    layout = ProjectLayout(tmp_path)
+    stored = json.loads(layout.state_json.read_text(encoding="utf-8"))
+    stored["position"] = {
+        "current_phase": "03",
+        "current_plan": 2,
+        "status": "Executing",
+        "total_plans_in_phase": 4,
+    }
+    layout.state_json.write_text(json.dumps(stored, indent=2) + "\n", encoding="utf-8")
+
+    loaded = load_state_json(tmp_path)
+
+    assert loaded is not None
+    assert loaded["position"]["current_phase"] == "03"
+    assert loaded["position"]["current_plan"] == "2"
+    assert loaded["position"]["status"] == "Executing"
+
+
+def test_load_state_json_coerces_integer_current_phase_without_dropping_position(tmp_path: Path) -> None:
+    save_state_json(tmp_path, default_state_dict())
+    layout = ProjectLayout(tmp_path)
+    stored = json.loads(layout.state_json.read_text(encoding="utf-8"))
+    stored["position"] = {
+        "current_phase": 3,
+        "current_plan": 2,
+        "status": "Executing",
+        "total_phases": 10,
+        "total_plans_in_phase": 4,
+    }
+    layout.state_json.write_text(json.dumps(stored, indent=2) + "\n", encoding="utf-8")
+
+    loaded = load_state_json(tmp_path)
+
+    assert loaded is not None
+    assert loaded["position"]["current_phase"] == "3"
+    assert loaded["position"]["current_plan"] == "2"
+    assert loaded["position"]["status"] == "Executing"
+    assert loaded["position"]["total_phases"] == 10
+    assert loaded["position"]["total_plans_in_phase"] == 4
+
+
+def test_state_get_rebuilds_missing_state_markdown_from_state_json(tmp_path: Path) -> None:
+    save_state_json(tmp_path, default_state_dict())
+    layout = ProjectLayout(tmp_path)
+    layout.state_md.unlink()
+
+    result = state_get(tmp_path)
+
+    assert result.content is not None
+    assert "# Research State" in result.content
+    assert layout.state_md.exists()
+
+
 def test_peek_state_json_keeps_normalized_primary_when_unrelated_section_is_schema_corrupt(tmp_path: Path) -> None:
     save_state_json(tmp_path, default_state_dict())
     layout = ProjectLayout(tmp_path)
@@ -1754,6 +1854,23 @@ def test_peek_state_json_fallback_does_not_consume_intent_marker(tmp_path: Path)
     assert layout.state_intent.read_text(encoding="utf-8") == before_intent
 
 
+def test_mutation_snapshot_recovers_from_state_markdown_when_json_and_backup_are_unreadable(tmp_path: Path) -> None:
+    recovered_state = default_state_dict()
+    recovered_state["position"]["current_phase"] = "05"
+    recovered_state["position"]["status"] = "Executing"
+    save_state_json(tmp_path, recovered_state)
+    save_state_markdown(tmp_path, generate_state_markdown(recovered_state))
+
+    layout = ProjectLayout(tmp_path)
+    layout.state_json.write_text("{bad json\n", encoding="utf-8")
+    layout.state_json_backup.write_text("{also bad json\n", encoding="utf-8")
+
+    loaded = _load_state_snapshot_for_mutation(tmp_path)
+
+    assert loaded["position"]["current_phase"] == "05"
+    assert loaded["position"]["status"] == "Executing"
+
+
 def test_save_state_markdown_preserves_backup_project_contract_without_resurrecting_other_backup_only_json_fields(
     tmp_path: Path,
 ) -> None:
@@ -1780,6 +1897,39 @@ def test_save_state_markdown_preserves_backup_project_contract_without_resurrect
     assert stored["project_contract"] is not None
     assert stored["project_contract"]["scope"]["question"] == "backup-only contract"
     assert stored["session"]["resume_file"] is None
+
+
+def test_save_state_markdown_preserves_backup_continuation_without_reviving_backup_only_session_resume_file(
+    tmp_path: Path,
+) -> None:
+    baseline = default_state_dict()
+    save_state_json(tmp_path, baseline)
+    layout = ProjectLayout(tmp_path)
+
+    backup_state = default_state_dict()
+    backup_state["session"]["resume_file"] = "stale-session-only.md"
+    backup_state["continuation"]["handoff"].update(
+        {
+            "resume_file": "GPD/phases/06-analysis/.continue-here.md",
+            "stopped_at": "Phase 06 Plan 2",
+            "recorded_at": "2026-04-03T12:00:00+00:00",
+        }
+    )
+    layout.state_json_backup.write_text(json.dumps(backup_state, indent=2) + "\n", encoding="utf-8")
+    layout.state_json.write_text("{bad json\n", encoding="utf-8")
+
+    md_state = default_state_dict()
+    md_state["position"]["current_phase"] = "06"
+    md_state["position"]["status"] = "Paused"
+
+    result = save_state_markdown(tmp_path, generate_state_markdown(md_state))
+    stored = json.loads(layout.state_json.read_text(encoding="utf-8"))
+
+    assert result["continuation"]["handoff"]["resume_file"] == "GPD/phases/06-analysis/.continue-here.md"
+    assert result["session"]["resume_file"] == "GPD/phases/06-analysis/.continue-here.md"
+    assert result["session"]["stopped_at"] == "Phase 06 Plan 2"
+    assert stored["continuation"]["handoff"]["resume_file"] == "GPD/phases/06-analysis/.continue-here.md"
+    assert stored["session"]["resume_file"] == "GPD/phases/06-analysis/.continue-here.md"
 
 
 def test_save_state_markdown_preserves_backup_project_contract_when_primary_root_is_not_an_object(
@@ -1833,6 +1983,45 @@ def test_save_state_markdown_recovers_pending_intent_before_merging_existing_sta
     assert not layout.state_intent.exists()
 
 
+def test_state_load_persists_state_md_recovery_to_backup_and_recent_projects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GPD_DATA_DIR", str(tmp_path / "gpd-data"))
+
+    layout = ProjectLayout(tmp_path)
+    layout.gpd.mkdir(parents=True, exist_ok=True)
+    state = default_state_dict()
+    state["continuation"]["handoff"].update(
+        {
+            "recorded_at": "2026-03-29T12:00:00+00:00",
+            "stopped_at": "Phase 03 Plan 2",
+            "resume_file": "NEXT.md",
+            "recorded_by": "state_record_session",
+        }
+    )
+    state["continuation"]["machine"].update(
+        {
+            "recorded_at": "2026-03-29T12:00:00+00:00",
+            "hostname": "builder-03",
+            "platform": "Linux 6.3 x86_64",
+        }
+    )
+    layout.state_md.write_text(generate_state_markdown(state), encoding="utf-8")
+
+    loaded = state_load(tmp_path)
+    backup = json.loads(layout.state_json_backup.read_text(encoding="utf-8"))
+    index = _load_recent_projects_index()
+
+    assert loaded.state["continuation"]["handoff"]["resume_file"] == "NEXT.md"
+    assert layout.state_json.exists()
+    assert layout.state_json_backup.exists()
+    assert backup["continuation"]["handoff"]["resume_file"] == "NEXT.md"
+    assert index.rows[0].project_root == tmp_path.resolve(strict=False).as_posix()
+    assert index.rows[0].resume_file == "NEXT.md"
+    assert index.rows[0].resume_target_recorded_at == "2026-03-29T12:00:00+00:00"
+
+
 def test_sync_state_json_does_not_resurrect_backup_only_json_fields_when_primary_is_unreadable(tmp_path: Path) -> None:
     baseline = default_state_dict()
     save_state_json(tmp_path, baseline)
@@ -1855,6 +2044,48 @@ def test_sync_state_json_does_not_resurrect_backup_only_json_fields_when_primary
     assert result["session"]["resume_file"] is None
     assert stored["project_contract"] is None
     assert stored["session"]["resume_file"] is None
+
+
+def test_state_set_project_contract_does_not_fall_back_to_persisting_loader(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    save_state_json(tmp_path, default_state_dict())
+    contract = _project_contract_with_question("safe contract write")
+
+    def _unexpected_loader(_cwd: Path) -> dict[str, object]:
+        raise AssertionError("legacy persisting loader should not be used")
+
+    monkeypatch.setattr("gpd.core.state.load_state_json", _unexpected_loader)
+
+    result = state_set_project_contract(tmp_path, contract)
+
+    assert result.updated is True
+    stored = json.loads((tmp_path / "GPD" / "state.json").read_text(encoding="utf-8"))
+    assert stored["project_contract"]["scope"]["question"] == "safe contract write"
+
+
+def test_state_set_project_contract_recovers_intent_under_state_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    save_state_json(tmp_path, default_state_dict())
+    contract = _project_contract_with_question("locked contract write")
+    observed_lock_states: list[bool] = []
+    original_recover_intent = state_module._recover_intent_locked
+
+    def _record_recover_intent(cwd: Path) -> None:
+        lock_path = (cwd / "GPD" / "state.json").with_suffix(".json.lock")
+        observed_lock_states.append(lock_path.exists())
+        original_recover_intent(cwd)
+
+    monkeypatch.setattr(state_module, "_recover_intent_locked", _record_recover_intent)
+
+    result = state_set_project_contract(tmp_path, contract)
+
+    assert result.updated is True
+    assert observed_lock_states
+    assert all(observed_lock_states)
 
 
 def test_sync_state_json_recovers_pending_intent_before_merging_markdown(tmp_path: Path) -> None:
@@ -2558,6 +2789,31 @@ def test_state_record_session_does_not_emit_local_observability_events(tmp_path,
     assert not observability_dir.exists()
 
 
+def test_state_record_session_recovers_when_state_markdown_is_missing(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        state_module,
+        "_current_machine_identity",
+        lambda: {"hostname": "builder-01", "platform": "Linux 6.1 x86_64"},
+    )
+
+    state = default_state_dict()
+    state["position"]["current_phase"] = "4"
+    state["position"]["status"] = "Executing"
+    save_state_json(tmp_path, state)
+
+    layout = ProjectLayout(tmp_path)
+    layout.state_md.unlink()
+
+    result = state_record_session(tmp_path, stopped_at="Phase 4 P2", resume_file="NEXT.md")
+
+    assert result.recorded is True
+    assert layout.state_md.exists()
+    repaired = json.loads(layout.state_json.read_text(encoding="utf-8"))
+    assert repaired["session"]["stopped_at"] == "Phase 4 P2"
+    assert repaired["continuation"]["handoff"]["resume_file"] == "NEXT.md"
+
+
 def test_state_record_session_updates_recent_project_index(
     tmp_path: Path, state_project_factory, monkeypatch
 ) -> None:
@@ -2591,6 +2847,34 @@ def test_state_record_session_updates_recent_project_index(
     assert row.source_segment_id is None
     assert row.source_transition_id is None
     assert row.available is True
+
+
+def test_state_record_session_without_resume_file_updates_recent_project_freshness(
+    tmp_path: Path,
+    state_project_factory,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("GPD_DATA_DIR", str(tmp_path / "gpd-data"))
+    monkeypatch.setattr(
+        state_module,
+        "_current_machine_identity",
+        lambda: {"hostname": "builder-01", "platform": "Linux 6.1 x86_64"},
+    )
+
+    cwd = state_project_factory(tmp_path)
+    result = state_record_session(cwd, stopped_at="Phase 4 P2")
+
+    index = _load_recent_projects_index()
+    row = index.rows[0]
+
+    assert result.recorded is True
+    assert row.project_root == cwd.resolve(strict=False).as_posix()
+    assert row.last_session_at is not None
+    assert row.last_seen_at == row.last_session_at
+    assert row.resume_file is None
+    assert row.resume_target_kind is None
+    assert row.resume_target_recorded_at is None
+    assert row.stopped_at == "Phase 4 P2"
 
 
 def test_save_state_markdown_backfills_missing_canonical_machine_from_session_surface(tmp_path: Path) -> None:
@@ -3026,6 +3310,41 @@ def test_state_compact_recovers_intent_before_reading(tmp_path):
 
     # state_compact itself should return a sensible result
     assert result.error is None
+
+
+def test_state_compact_uses_recovered_state_snapshot_when_primary_json_is_unreadable(tmp_path: Path) -> None:
+    from gpd.core.constants import STATE_ARCHIVE_FILENAME
+    from gpd.core.state import state_compact
+
+    state = default_state_dict()
+    state["position"]["current_phase"] = "05"
+    save_state_json(tmp_path, state)
+    save_state_markdown(
+        tmp_path,
+        "\n".join(
+            [
+                "# Project State",
+                "",
+                "### Decisions",
+                "- [Phase 03] Archive me",
+                "- [Phase 05] Keep me",
+            ]
+            + [f"filler {idx}" for idx in range(170)]
+        ),
+    )
+    planning = tmp_path / "GPD"
+    layout = ProjectLayout(tmp_path)
+    backup_state = default_state_dict()
+    backup_state["position"]["current_phase"] = "05"
+    layout.state_json_backup.write_text(json.dumps(backup_state, indent=2) + "\n", encoding="utf-8")
+    layout.state_json.write_text("{bad json\n", encoding="utf-8")
+
+    result = state_compact(tmp_path)
+
+    assert result.compacted is True
+    archive = (planning / STATE_ARCHIVE_FILENAME).read_text(encoding="utf-8")
+    assert "Archive me" in archive
+    assert "Keep me" in (planning / "STATE.md").read_text(encoding="utf-8")
 
 
 # ─── Issue 2: unreachable code removed from state_advance_plan ────────────────

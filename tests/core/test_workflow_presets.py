@@ -11,20 +11,7 @@ from gpd.core.workflow_presets import (
     preview_workflow_preset_application,
     resolve_workflow_preset_readiness,
 )
-
-
-def _latex_capability(**overrides: object) -> dict[str, object]:
-    capability = {
-        "compiler_available": True,
-        "compiler_path": "/usr/bin/pdflatex",
-        "distribution": "TeX Live",
-        "bibtex_available": True,
-        "latexmk_available": True,
-        "kpsewhich_available": True,
-        "warnings": [],
-    }
-    capability.update(overrides)
-    return capability
+from tests.latex_test_support import latex_capability_payload as _latex_capability
 
 
 def test_workflow_preset_inventory_is_stable_and_non_persisted() -> None:
@@ -211,8 +198,13 @@ def test_workflow_preset_readiness_degrades_publication_family_when_arxiv_submis
     assert readiness["ready"] == 3
     assert readiness["degraded"] == 2
     assert readiness["blocked"] == 0
+    assert readiness["latex_capability"]["compiler"] == "pdflatex"
+    assert readiness["latex_capability"]["readiness_state"] == "ready"
+    assert readiness["latex_capability"]["message"] == "pdflatex found (TeX Live): /usr/bin/pdflatex"
+    assert readiness["latex_capability"]["bibliography_support_available"] is True
     assert readiness["latex_capability"]["paper_build_ready"] is True
     assert readiness["latex_capability"]["arxiv_submission_ready"] is False
+    assert readiness["latex_capability"]["full_toolchain_available"] is False
     assert statuses["core-research"] == "ready"
     assert statuses["theory"] == "ready"
     assert statuses["numerics"] == "ready"
@@ -236,13 +228,15 @@ def test_workflow_preset_readiness_degrades_publication_family_when_bibtex_is_mi
     assert readiness["ready"] == 3
     assert readiness["degraded"] == 2
     assert readiness["blocked"] == 0
-    assert readiness["latex_capability"]["paper_build_ready"] is False
+    assert readiness["latex_capability"]["bibliography_support_available"] is False
+    assert readiness["latex_capability"]["paper_build_ready"] is True
     assert readiness["latex_capability"]["arxiv_submission_ready"] is False
+    assert readiness["latex_capability"]["full_toolchain_available"] is False
     assert statuses["publication-manuscript"] == "degraded"
     assert statuses["full-research"] == "degraded"
-    assert publication["ready_workflows"] == []
-    assert publication["degraded_workflows"] == ["write-paper", "peer-review"]
-    assert publication["blocked_workflows"] == ["paper-build", "arxiv-submission"]
+    assert publication["ready_workflows"] == ["write-paper", "peer-review"]
+    assert publication["degraded_workflows"] == ["paper-build", "arxiv-submission"]
+    assert publication["blocked_workflows"] == []
     assert any("BibTeX support is missing" in warning for warning in publication["warnings"])
 
 
@@ -254,9 +248,33 @@ def test_workflow_preset_readiness_does_not_backfill_legacy_paper_build_flag_to_
     assert readiness["degraded"] == 2
     assert readiness["latex_capability"]["paper_build_ready"] is False
     assert readiness["latex_capability"]["arxiv_submission_ready"] is False
+    assert readiness["latex_capability"]["full_toolchain_available"] is False
+    assert readiness["latex_capability"]["bibliography_support_available"] is False
     assert publication["status"] == "degraded"
     assert publication["ready_workflows"] == []
     assert publication["blocked_workflows"] == ["paper-build", "arxiv-submission"]
+
+
+def test_workflow_preset_readiness_normalizes_unknown_bibtex_without_none_full_toolchain() -> None:
+    readiness = resolve_workflow_preset_readiness(
+        base_ready=True,
+        latex_capability={
+            "compiler": "pdflatex",
+            "compiler_available": True,
+            "bibtex_available": None,
+            "latexmk_available": True,
+            "kpsewhich_available": True,
+            "readiness_state": "degraded",
+            "message": "pdflatex found, but bibliography tooling is unknown.",
+            "warnings": ["bibtex probe unavailable"],
+        },
+    )
+
+    assert readiness["latex_capability"]["full_toolchain_available"] is False
+    assert readiness["latex_capability"]["paper_build_ready"] is True
+    assert readiness["latex_capability"]["arxiv_submission_ready"] is False
+    assert readiness["latex_capability"]["bibtex_available"] is None
+    assert readiness["latex_capability"]["bibliography_support_available"] is False
 
 
 def test_workflow_preset_readiness_degrades_publication_family_when_compiler_is_missing() -> None:
@@ -282,6 +300,17 @@ def test_workflow_preset_readiness_degrades_publication_family_when_compiler_is_
     assert any("No LaTeX compiler detected" in warning for warning in publication["warnings"])
     assert any("latexmk is missing" in warning for warning in publication["warnings"])
     assert any("kpsewhich is missing" in warning for warning in publication["warnings"])
+    assert readiness["latex_capability"]["full_toolchain_available"] is False
+
+
+def test_workflow_preset_readiness_surfaces_explicit_full_toolchain_flag_when_all_helpers_are_present() -> None:
+    readiness = resolve_workflow_preset_readiness(base_ready=True, latex_capability=_latex_capability())
+
+    assert readiness["latex_capability"]["available"] is True
+    assert readiness["latex_capability"]["compiler_available"] is True
+    assert readiness["latex_capability"]["full_toolchain_available"] is True
+    assert readiness["latex_capability"]["paper_build_ready"] is True
+    assert readiness["latex_capability"]["arxiv_submission_ready"] is True
 
 
 def test_workflow_preset_readiness_blocks_everything_when_base_runtime_is_not_ready() -> None:

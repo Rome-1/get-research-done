@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+from gpd.core.errors import GPDError
 from gpd.core.paper_quality import score_paper_quality
 from gpd.core.paper_quality_artifacts import build_paper_quality_input
 
@@ -275,7 +278,7 @@ TODO finalize the nested conclusion.
     )
     _write(
         tmp_path / "paper" / "PAPER-CONFIG.json",
-        json.dumps(_paper_config_payload("Recursive Manuscript", "generic")),
+        json.dumps(_paper_config_payload("Recursive Manuscript", "jhep", output_filename="topic_specific_stem")),
     )
 
     result = build_paper_quality_input(tmp_path)
@@ -313,7 +316,7 @@ def test_build_paper_quality_input_falls_back_to_supported_config_journal_when_m
 
     result = build_paper_quality_input(tmp_path)
 
-    assert result.title == "Manifest Title"
+    assert result.title == "Config Fallback Title"
     assert result.journal == "jhep"
 
 
@@ -440,6 +443,133 @@ def test_build_paper_quality_input_is_conservative_when_artifacts_are_missing(tm
 
     report = score_paper_quality(result)
     assert report.categories["verification"].checks["contract_targets_verified"] == 5.0
+
+
+def test_build_paper_quality_input_does_not_fall_back_to_paper_root_when_manuscript_resolution_is_ambiguous(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path / "paper" / "curvature_flow_bounds.tex",
+        "\\documentclass{article}\\begin{document}Paper root.\\end{document}\n",
+    )
+    _write(
+        tmp_path / "paper" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Paper Root Title",
+                "output_filename": "curvature_flow_bounds",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        ),
+    )
+    _write(
+        tmp_path / "manuscript" / "curvature_flow_bounds.tex",
+        "\\documentclass{article}\\begin{document}Manuscript root.\\end{document}\n",
+    )
+    _write(
+        tmp_path / "manuscript" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Manuscript Root Title",
+                "output_filename": "curvature_flow_bounds",
+                "authors": [{"name": "B. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        ),
+    )
+
+    with pytest.raises(GPDError, match="paper-quality artifact resolution requires an unambiguous manuscript root"):
+        build_paper_quality_input(tmp_path)
+
+
+def test_build_paper_quality_input_does_not_fall_back_to_paper_root_when_manuscript_resolution_is_invalid(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "paper" / "config-entry.tex", "\\documentclass{article}\\begin{document}Config.\\end{document}\n")
+    _write(
+        tmp_path / "paper" / "manifest-entry.tex",
+        "\\documentclass{article}\\begin{document}Manifest.\\end{document}\n",
+    )
+    _write(
+        tmp_path / "paper" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Paper Root Title",
+                "output_filename": "config-entry",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        ),
+    )
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Paper Root Title",
+                "journal": "prd",
+                "created_at": "2026-03-13T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "main-tex",
+                        "category": "tex",
+                        "path": "manifest-entry.tex",
+                        "sha256": "a" * 64,
+                        "produced_by": "paper-compiler",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        ),
+    )
+
+    with pytest.raises(GPDError, match="paper-quality artifact resolution requires an unambiguous manuscript root"):
+        build_paper_quality_input(tmp_path)
+
+
+def test_build_paper_quality_input_ignores_stale_manifest_metadata_when_config_entrypoint_is_active(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path / "paper" / "config-entry.tex",
+        "\\documentclass{article}\\begin{document}\\begin{abstract}A.\\end{abstract}\\section{Introduction}Intro.\\section{Conclusion}Done.\\end{document}\n",
+    )
+    _write(
+        tmp_path / "paper" / "PAPER-CONFIG.json",
+        json.dumps(_paper_config_payload("Config Title", "jhep") | {"output_filename": "config-entry"}),
+    )
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Stale Manifest Title",
+                "journal": "prd",
+                "created_at": "2026-03-13T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "main-tex",
+                        "category": "tex",
+                        "path": "missing-entry.tex",
+                        "sha256": "b" * 64,
+                        "produced_by": "paper-compiler",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        ),
+    )
+
+    result = build_paper_quality_input(tmp_path)
+
+    assert result.title == "Config Title"
+    assert result.journal == "jhep"
 
 
 def test_build_paper_quality_input_surfaces_convention_lock_and_derivation_assertion_coverage(
@@ -1174,6 +1304,29 @@ def test_build_paper_quality_input_marks_malformed_contract_results_frontmatter_
 
     assert result.journal_extra_checks["contract_results_parse_ok"] is False
     assert result.journal_extra_checks["contract_results_alignment_ok"] is False
+
+
+def test_build_paper_quality_input_ignores_unrelated_phase_markdown_frontmatter_errors(
+    tmp_path: Path,
+) -> None:
+    plan_dir = tmp_path / "GPD" / "phases" / "01-benchmark"
+    _write(plan_dir / "01-01-PLAN.md", (STAGE0_FIXTURES_DIR / "plan_with_contract.md").read_text(encoding="utf-8"))
+    _write(plan_dir / "01-SUMMARY.md", (FIXTURES_DIR / "summary_with_contract_results.md").read_text(encoding="utf-8"))
+    _write(
+        plan_dir / "README.md",
+        """---
+notes: [unterminated
+---
+
+# Notes
+""",
+    )
+
+    result = build_paper_quality_input(tmp_path)
+
+    assert result.journal_extra_checks["contract_results_parse_ok"] is True
+    assert result.journal_extra_checks["contract_results_alignment_ok"] is True
+    assert result.journal_extra_checks["comparison_verdicts_valid"] is True
 
 
 def test_build_paper_quality_input_marks_explicit_null_contract_results_ledger_parse_failure(

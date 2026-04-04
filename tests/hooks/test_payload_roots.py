@@ -112,6 +112,7 @@ def test_project_root_from_payload_prefers_explicit_project_dir_alias(tmp_path) 
     workspace = tmp_path / "project" / "src" / "notes"
     project = tmp_path / "project"
     workspace.mkdir(parents=True)
+    (project / "GPD").mkdir()
 
     result = project_root_from_payload(
         {"workspace": {"current_dir": str(workspace), "project_root": str(project)}},
@@ -141,6 +142,7 @@ def test_project_root_from_payload_uses_workspace_dir_as_policy_context_when_cwd
     project = tmp_path / "project"
     workspace.mkdir()
     project.mkdir()
+    (project / "GPD").mkdir()
     policy_getter = Mock(return_value=_policy(project_dir_keys=("project_root",)))
 
     result = project_root_from_payload(
@@ -150,10 +152,62 @@ def test_project_root_from_payload_uses_workspace_dir_as_policy_context_when_cwd
     )
 
     policy_getter.assert_called_once_with(str(workspace))
-    assert result == str(project.resolve(strict=False))
+    assert result == str(workspace.resolve(strict=False))
 
 
 def test_resolve_payload_roots_preserves_raw_workspace_and_resolved_project_root(tmp_path) -> None:
+    project = tmp_path / "project"
+    workspace = project / "src" / "notes"
+    workspace.mkdir(parents=True)
+    (project / "GPD").mkdir()
+
+    roots = resolve_payload_roots(
+        {"workspace": {"cwd": str(workspace), "project_dir": str(project)}},
+        policy_getter=lambda _cwd: _policy(workspace_keys=("cwd",), project_dir_keys=("project_dir",)),
+    )
+
+    assert roots.workspace_dir == str(workspace.resolve(strict=False))
+    assert roots.project_root == str(project.resolve(strict=False))
+    assert roots.workspace_dir != roots.project_root
+    assert roots.project_dir_present is True
+    assert roots.project_dir_trusted is True
+
+
+def test_resolve_payload_roots_marks_untrusted_project_dir_when_workspace_walkup_wins(tmp_path) -> None:
+    project = tmp_path / "project"
+    workspace = project / "src" / "notes"
+    workspace.mkdir(parents=True)
+    (project / "GPD").mkdir()
+
+    roots = resolve_payload_roots(
+        {"workspace": {"cwd": str(workspace), "project_dir": str(tmp_path / "stale-project-dir")}},
+        policy_getter=lambda _cwd: _policy(workspace_keys=("cwd",), project_dir_keys=("project_dir",)),
+    )
+
+    assert roots.workspace_dir == str(workspace.resolve(strict=False))
+    assert roots.project_root == str(project.resolve(strict=False))
+    assert roots.project_dir_present is True
+    assert roots.project_dir_trusted is False
+
+
+def test_resolve_payload_roots_trusts_explicit_project_dir_when_it_is_the_selected_verified_root_basis(tmp_path) -> None:
+    project = tmp_path / "project"
+    workspace = project / "src" / "notes"
+    workspace.mkdir(parents=True)
+    (project / "GPD").mkdir()
+
+    roots = resolve_payload_roots(
+        {"workspace": {"cwd": str(workspace), "project_dir": str(project)}},
+        policy_getter=lambda _cwd: _policy(workspace_keys=("cwd",), project_dir_keys=("project_dir",)),
+    )
+
+    assert roots.workspace_dir == str(workspace.resolve(strict=False))
+    assert roots.project_root == str(project.resolve(strict=False))
+    assert roots.project_dir_present is True
+    assert roots.project_dir_trusted is True
+
+
+def test_resolve_payload_roots_does_not_trust_unverified_explicit_project_dir_even_when_selected(tmp_path) -> None:
     project = tmp_path / "project"
     workspace = project / "src" / "notes"
     workspace.mkdir(parents=True)
@@ -164,14 +218,56 @@ def test_resolve_payload_roots_preserves_raw_workspace_and_resolved_project_root
     )
 
     assert roots.workspace_dir == str(workspace.resolve(strict=False))
+    assert roots.project_root == str(workspace.resolve(strict=False))
+    assert roots.project_dir_present is True
+    assert roots.project_dir_trusted is False
+
+
+def test_resolve_payload_roots_rejects_unrelated_verified_project_dir_hint(tmp_path) -> None:
+    project = tmp_path / "project"
+    workspace = project / "src" / "notes"
+    workspace.mkdir(parents=True)
+    (project / "GPD").mkdir()
+
+    unrelated = tmp_path / "other-project"
+    unrelated.mkdir()
+    (unrelated / "GPD").mkdir()
+
+    roots = resolve_payload_roots(
+        {"workspace": {"cwd": str(workspace), "project_dir": str(unrelated)}},
+        policy_getter=lambda _cwd: _policy(workspace_keys=("cwd",), project_dir_keys=("project_dir",)),
+    )
+
+    assert roots.workspace_dir == str(workspace.resolve(strict=False))
     assert roots.project_root == str(project.resolve(strict=False))
-    assert roots.workspace_dir != roots.project_root
+    assert roots.project_dir_present is True
+    assert roots.project_dir_trusted is False
+
+
+def test_resolve_payload_roots_ignores_unrelated_verified_project_dir_when_workspace_is_not_a_project(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    unrelated = tmp_path / "other-project"
+    unrelated.mkdir()
+    (unrelated / "GPD").mkdir()
+
+    roots = resolve_payload_roots(
+        {"workspace": {"cwd": str(workspace), "project_dir": str(unrelated)}},
+        policy_getter=lambda _cwd: _policy(workspace_keys=("cwd",), project_dir_keys=("project_dir",)),
+    )
+
+    assert roots.workspace_dir == str(workspace.resolve(strict=False))
+    assert roots.project_root == str(workspace.resolve(strict=False))
+    assert roots.project_dir_present is True
+    assert roots.project_dir_trusted is False
 
 
 def test_project_root_from_payload_prefers_policy_root_resolution_service(tmp_path) -> None:
     project = tmp_path / "project"
     workspace = project / "src" / "notes"
     project.mkdir(parents=True)
+    (project / "GPD").mkdir()
     workspace.mkdir(parents=True, exist_ok=True)
     service = Mock(
         return_value={
@@ -198,6 +294,7 @@ def test_resolve_payload_roots_accepts_compatibility_aliases_from_shared_service
     project = tmp_path / "project"
     workspace = project / "src" / "notes"
     workspace.mkdir(parents=True)
+    (project / "GPD").mkdir()
     service = Mock(
         return_value=SimpleNamespace(
             raw_workspace_dir=str(workspace),
@@ -224,6 +321,7 @@ def test_resolve_payload_roots_keeps_raw_workspace_when_service_only_returns_pro
     project = tmp_path / "project"
     workspace = project / "src" / "notes"
     workspace.mkdir(parents=True)
+    (project / "GPD").mkdir()
     service = Mock(return_value=str(project))
 
     roots = resolve_payload_roots(

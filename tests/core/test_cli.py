@@ -741,7 +741,7 @@ def test_permissions_help_surfaces_status_and_sync_roles() -> None:
     assert "status" in result.output
     assert "ready for unattended use" in result.output
     assert "sync" in result.output
-    assert "gpd:settings" in result.output
+    assert "active runtime's `settings` command" in result.output
 
 
 def test_permissions_status_help_surfaces_readiness_options() -> None:
@@ -760,10 +760,16 @@ def test_permissions_sync_help_surfaces_guided_runtime_changes() -> None:
     normalized_output = _normalize_cli_output(result.output)
     assert result.exit_code == 0
     assert "persist runtime-owned permission settings" in normalized_output
-    assert "gpd:settings" in normalized_output
+    assert "active runtime's `settings` command" in normalized_output
     assert "--runtime" in normalized_output
     assert "--autonomy" in normalized_output
     assert "--target-dir" in normalized_output
+
+
+def test_active_runtime_settings_command_falls_back_to_runtime_neutral_reference(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli_module, "detect_runtime_for_gpd_use", lambda cwd=None: (_ for _ in ()).throw(RuntimeError("no runtime")))
+
+    assert cli_module._active_runtime_settings_command(cwd=Path("/tmp")) == "the active runtime's `settings` command"
 
 
 def test_permissions_status_surfaces_runtime_capabilities_and_config_scope() -> None:
@@ -5572,6 +5578,59 @@ def test_resolve_review_preflight_manuscript_explicit_supported_root_bypasses_pr
     assert resolved == tmp_path / "paper" / "curvature_flow_bounds.tex"
     assert "resolved to" in detail
     assert "curvature_flow_bounds.tex" in detail
+
+
+def test_resolve_review_preflight_manuscript_explicit_supported_file_requires_matching_root_resolution(
+    tmp_path: Path,
+) -> None:
+    manuscript_dir = tmp_path / "paper"
+    manuscript_dir.mkdir()
+    manuscript = manuscript_dir / "curvature_flow_bounds.tex"
+    manuscript.write_text("\\documentclass{article}\\begin{document}Hello\\end{document}", encoding="utf-8")
+    (manuscript_dir / "ARTIFACT-MANIFEST.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prl",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (manuscript_dir / "PAPER-CONFIG.json").write_text(
+        json.dumps(
+            {
+                "title": "Alternate Title",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    resolved, detail = cli_module._resolve_review_preflight_manuscript(
+        tmp_path,
+        "paper/curvature_flow_bounds.tex",
+        allow_markdown=True,
+        restrict_to_supported_roots=True,
+    )
+
+    assert resolved is None
+    assert "/paper is ambiguous or inconsistent" in detail
+    assert "does not resolve to a readable manuscript entrypoint" in detail
 
 
 def test_resolve_review_preflight_manuscript_reports_inconsistent_project_state(tmp_path: Path) -> None:

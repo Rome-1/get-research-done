@@ -72,14 +72,10 @@ For each file in `backup-meta.json`:
    - `Skipped` -- modification already in upstream
    - `Conflict` -- user chose resolution
 
-## Step 4: Update manifest
+## Step 4: Record modified files
 
-After reapplying, regenerate the file manifest so future updates correctly detect these as user modifications:
-
-```bash
-# The manifest will be regenerated on next /gpd:update
-# For now, just note which files were modified
-```
+After reapplying, do not invent a manual manifest-regeneration step.
+The managed file manifest is rebuilt by the next `/gpd:update`; for now, just record which installed files were modified so the user can review what was re-applied.
 
 ## Step 5: Cleanup option
 

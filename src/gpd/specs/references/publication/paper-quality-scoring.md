@@ -97,7 +97,7 @@ The artifact-driven path is intentionally conservative: it can infer many figure
 ## Integration Points
 
 - **`/gpd:write-paper`**: Runs quality scoring after all sections drafted, before generating submission package
-- **`/gpd:arxiv-submission`**: Requires score ≥ 80 to proceed (override with `--force`)
+- **`/gpd:arxiv-submission`**: Requires the resolved journal profile's `minimum_submission_score` to proceed (override with `--force`)
 - **`/gpd:respond-to-referees`**: Re-scores after revision to track improvement
 - **VERIFICATION.md**: Quality score recorded in paper section of verification report
 
@@ -155,6 +155,11 @@ Different journals emphasize different quality dimensions. Apply these multiplie
 - Figures: **1.3x** (data visualization is central to astro papers)
 - **Extra check (+3 points):** Is a `\software{}` statement present?
 - **Minimum for submission:** 75
+
+### Generic Fallback Profiles
+
+- `mnras` and `jfm` currently use the generic weighting profile unless a dedicated journal-specific scorer is added.
+- The scorer still emits a per-journal `minimum_submission_score`, and `/gpd:arxiv-submission` uses that surfaced minimum instead of a universal 80-point threshold.
 
 ## Scoring Summary Report Template
 

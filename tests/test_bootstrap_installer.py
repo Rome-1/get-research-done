@@ -713,14 +713,15 @@ const payload = require("./src/gpd/core/public_surface_contract.json");
 
 assert.doesNotThrow(() => validateSharedPublicSurfaceContract(payload));
 const sharedText = loadSharedPublicSurfaceText();
-assert.equal(sharedText.resumeAuthority.compatSurface, payload.resume_authority.compat_surface);
-assert.equal(sharedText.resumeAuthority.sessionMirror, payload.resume_authority.session_mirror);
+assert.equal(sharedText.resumeAuthority.publicVocabularyIntro, payload.resume_authority.public_vocabulary_intro);
+assert.deepEqual(sharedText.resumeAuthority.publicFields, payload.resume_authority.public_fields);
+assert.equal(sharedText.resumeAuthority.topLevelBoundaryPhrase, payload.resume_authority.top_level_boundary_phrase);
 
-const blankSessionMirror = JSON.parse(JSON.stringify(payload));
-blankSessionMirror.resume_authority.session_mirror = "";
+const blankPublicFields = JSON.parse(JSON.stringify(payload));
+blankPublicFields.resume_authority.public_fields = [];
 assert.throws(
-  () => validateSharedPublicSurfaceContract(blankSessionMirror),
-  /resume_authority\.session_mirror must be a non-empty string/
+  () => validateSharedPublicSurfaceContract(blankPublicFields),
+  /resume_authority\.public_fields must be a non-empty list/
 );
 
 const extraResumeKey = JSON.parse(JSON.stringify(payload));
@@ -788,8 +789,12 @@ const badSurfaceCatalog = JSON.parse(JSON.stringify(catalog));
 badSurfaceCatalog[0].validated_command_surface = "hex-command";
 assert.throws(
   () => validateRuntimeCatalog(badSurfaceCatalog),
-  /runtime catalog entry 0\.validated_command_surface must be one of: public_runtime_command_surface, public_runtime_dollar_command, public_runtime_slash_command/
+  /runtime catalog entry 0\.validated_command_surface must match \/\^public_runtime_\[a-z0-9_\]\+_command\$\/$/
 );
+
+const futureSurfaceCatalog = JSON.parse(JSON.stringify(catalog));
+futureSurfaceCatalog[0].validated_command_surface = "public_runtime_semicolon_command";
+assert.equal(validateRuntimeCatalog(futureSurfaceCatalog)[0].validated_command_surface, "public_runtime_semicolon_command");
 
 const mismatchedSurfaceCatalog = JSON.parse(JSON.stringify(catalog));
 mismatchedSurfaceCatalog[0].public_command_surface_prefix = `${mismatchedSurfaceCatalog[0].command_prefix}x`;

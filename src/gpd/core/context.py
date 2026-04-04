@@ -68,6 +68,7 @@ from gpd.core.resume_surface import (
     resume_origin_for_handoff,
     resume_origin_for_interrupted_agent,
 )
+from gpd.core.root_resolution import resolve_project_root
 from gpd.core.state import (
     EM_DASH,
     _current_machine_identity,
@@ -535,83 +536,6 @@ def _merge_reference_intake(
     return merged
 
 
-def _canonical_contract_reference_payload(
-    active_references: list[dict[str, object]],
-    *,
-    allowed_subject_ids: set[str],
-) -> list[dict[str, object]]:
-    """Return contract-safe reference payloads derived from active references."""
-
-    payloads: list[dict[str, object]] = []
-    for ref in active_references:
-        ref_id = str(ref.get("id") or "").strip()
-        locator = str(ref.get("locator") or "").strip()
-        if not ref_id or not locator:
-            continue
-        payloads.append(
-            {
-                "id": ref_id,
-                "kind": str(ref.get("kind") or "other"),
-                "locator": locator,
-                "aliases": [str(item).strip() for item in list(ref.get("aliases") or []) if str(item).strip()],
-                "role": str(ref.get("role") or "other"),
-                "why_it_matters": str(ref.get("why_it_matters") or "").strip() or locator,
-                "applies_to": [item for item in list(ref.get("applies_to") or []) if item in allowed_subject_ids],
-                "carry_forward_to": [
-                    str(item).strip() for item in list(ref.get("carry_forward_to") or []) if str(item).strip()
-                ],
-                "must_surface": bool(ref.get("must_surface")),
-                "required_actions": list(ref.get("required_actions") or []),
-            }
-        )
-    return payloads
-
-
-def _merge_contract_reference_payload(
-    existing: dict[str, object],
-    derived: dict[str, object],
-    *,
-    allowed_subject_ids: set[str],
-) -> dict[str, object]:
-    """Merge one derived anchor into an existing contract reference payload."""
-
-    payload = dict(existing)
-    if not str(payload.get("kind") or "").strip():
-        payload["kind"] = derived.get("kind")
-    if not str(payload.get("locator") or "").strip():
-        payload["locator"] = derived.get("locator")
-    merged_aliases: list[str] = [str(item).strip() for item in list(payload.get("aliases") or []) if str(item).strip()]
-    _append_unique_strings(merged_aliases, list(derived.get("aliases") or []))
-    payload["aliases"] = merged_aliases
-    if str(payload.get("role") or "other").strip() == "other" and str(derived.get("role") or "").strip():
-        payload["role"] = derived.get("role")
-
-    existing_why = str(payload.get("why_it_matters") or "").strip()
-    derived_why = str(derived.get("why_it_matters") or "").strip()
-    if not existing_why and derived_why:
-        payload["why_it_matters"] = derived_why
-    elif existing_why and derived_why and derived_why not in existing_why:
-        payload["why_it_matters"] = f"{existing_why}; {derived_why}"
-
-    merged_applies_to: list[str] = [item for item in list(payload.get("applies_to") or []) if item in allowed_subject_ids]
-    _append_unique_strings(
-        merged_applies_to,
-        [item for item in list(derived.get("applies_to") or []) if item in allowed_subject_ids],
-    )
-    payload["applies_to"] = merged_applies_to
-    merged_carry_forward_to: list[str] = [
-        str(item).strip() for item in list(payload.get("carry_forward_to") or []) if str(item).strip()
-    ]
-    _append_unique_strings(merged_carry_forward_to, list(derived.get("carry_forward_to") or []))
-    payload["carry_forward_to"] = merged_carry_forward_to
-
-    merged_actions: list[str] = list(payload.get("required_actions") or [])
-    _append_unique_strings(merged_actions, list(derived.get("required_actions") or []))
-    payload["required_actions"] = merged_actions
-    payload["must_surface"] = bool(payload.get("must_surface") or derived.get("must_surface"))
-    return payload
-
-
 def _canonical_contract_intake(
     contract: ResearchContract,
     *,
@@ -642,7 +566,7 @@ def _canonicalize_project_contract(
     active_references: list[dict[str, object]],
     effective_reference_intake: dict[str, list[str]],
 ) -> tuple[ResearchContract | None, list[str]]:
-    """Return the canonical contract after merging durable anchor context."""
+    """Return the canonical contract after intake-token normalization."""
 
     if contract is None:
         return None, []
@@ -653,39 +577,6 @@ def _canonicalize_project_contract(
         active_references=active_references,
         effective_reference_intake=effective_reference_intake,
     )
-    allowed_subject_ids = {
-        str(item.get("id") or "").strip()
-        for item in [*payload.get("claims", []), *payload.get("deliverables", [])]
-        if str(item.get("id") or "").strip()
-    }
-    canonical_refs = _canonical_contract_reference_payload(
-        active_references,
-        allowed_subject_ids=allowed_subject_ids,
-    )
-    refs_by_id = {
-        str(ref.get("id") or "").strip(): ref
-        for ref in canonical_refs
-        if str(ref.get("id") or "").strip()
-    }
-    refs_by_locator = {
-        str(ref.get("locator") or "").strip().casefold(): ref
-        for ref in canonical_refs
-        if str(ref.get("locator") or "").strip()
-    }
-    merged_references: list[dict[str, object]] = []
-    for existing in list(payload.get("references") or []):
-        ref_id = str(existing.get("id") or "").strip()
-        locator_key = str(existing.get("locator") or "").strip().casefold()
-        derived = refs_by_id.get(ref_id)
-        if derived is None and locator_key:
-            derived = refs_by_locator.get(locator_key)
-        merged = (
-            _merge_contract_reference_payload(existing, derived, allowed_subject_ids=allowed_subject_ids)
-            if derived is not None
-            else existing
-        )
-        merged_references.append(merged)
-    payload["references"] = merged_references
     try:
         parsed = parse_project_contract_data_salvage(payload)
     except Exception as exc:
@@ -765,6 +656,9 @@ def _render_active_reference_context(
             lines.append("- Approval status: ready")
         else:
             lines.append("- Approval status: blocked")
+            lines.append(
+                "- Carry-forward anchors below remain visible for continuity, but approved-contract scope stays blocked until the contract is repaired."
+            )
         for error in list(contract_validation.get("errors") or []):
             lines.append(f"- Blocker: {error}")
         for warning in list(contract_validation.get("warnings") or []):
@@ -903,14 +797,14 @@ def _build_reference_runtime_context(
     )
     project_text = _safe_read_file(cwd / PLANNING_DIR_NAME / PROJECT_FILENAME)
     authoritative_contract = visible_contract if project_contract_gate.get("authoritative") else None
-    authoritative_active_references = _merge_active_references(
+    surfaced_active_references = _merge_active_references(
         _serialize_active_references(authoritative_contract),
         derived_references,
     )
-    authoritative_effective_reference_intake = _merge_reference_intake(
+    surfaced_effective_reference_intake = _merge_reference_intake(
         authoritative_contract,
         artifact_ingestion.intake.to_dict(),
-        authoritative_active_references,
+        surfaced_active_references,
     )
     selected_protocol_bundles = select_protocol_bundles(project_text, authoritative_contract)
 
@@ -930,8 +824,12 @@ def _build_reference_runtime_context(
         "project_contract_validation": project_contract_validation,
         "project_contract_load_info": project_contract_load_info,
         "project_contract_gate": project_contract_gate,
-        "contract_intake": visible_contract.context_intake.model_dump(mode="json") if visible_contract is not None else None,
-        "effective_reference_intake": authoritative_effective_reference_intake,
+        "contract_intake": (
+            authoritative_contract.context_intake.model_dump(mode="json")
+            if authoritative_contract is not None
+            else None
+        ),
+        "effective_reference_intake": surfaced_effective_reference_intake,
         "derived_active_references": derived_references,
         "derived_active_reference_count": len(derived_references),
         "citation_source_files": list(artifact_ingestion.citation_source_files),
@@ -942,15 +840,15 @@ def _build_reference_runtime_context(
         "derived_manuscript_reference_status": derived_manuscript_reference_status,
         "derived_manuscript_reference_status_count": len(derived_manuscript_reference_status),
         "derived_manuscript_proof_review_status": manuscript_proof_review_status.to_context_dict(cwd),
-        "active_references": authoritative_active_references,
-        "active_reference_count": len(authoritative_active_references),
+        "active_references": surfaced_active_references,
+        "active_reference_count": len(surfaced_active_references),
         "selected_protocol_bundle_ids": [bundle.bundle_id for bundle in selected_protocol_bundles],
         "protocol_bundle_count": len(selected_protocol_bundles),
         "protocol_bundle_verifier_extensions": bundle_verifier_extensions,
         "protocol_bundle_context": render_protocol_bundle_context(selected_protocol_bundles),
         "active_reference_context": _render_active_reference_context(
-            authoritative_active_references,
-            authoritative_effective_reference_intake,
+            surfaced_active_references,
+            surfaced_effective_reference_intake,
             artifact_payload["literature_review_files"],
             artifact_payload["research_map_reference_files"],
             project_contract_validation,
@@ -2468,7 +2366,13 @@ def init_map_research(cwd: Path) -> dict:
     return result
 
 
-def init_progress(cwd: Path, includes: set[str] | None = None, *, data_root: Path | None = None) -> dict:
+def init_progress(
+    cwd: Path,
+    includes: set[str] | None = None,
+    *,
+    data_root: Path | None = None,
+    include_project_reentry: bool = True,
+) -> dict:
     """Assemble context for progress checking.
 
     Args:
@@ -2477,7 +2381,16 @@ def init_progress(cwd: Path, includes: set[str] | None = None, *, data_root: Pat
     """
     includes = includes or set()
     requested_cwd = cwd.expanduser().resolve(strict=False)
-    effective_cwd, reentry_metadata = _resolve_reentry_context(requested_cwd, data_root=data_root)
+    if include_project_reentry:
+        effective_cwd, reentry_metadata = _resolve_reentry_context(requested_cwd, data_root=data_root)
+    else:
+        effective_cwd = resolve_project_root(requested_cwd, require_layout=True) or requested_cwd
+        reentry_metadata = {
+            "workspace_root": requested_cwd.as_posix(),
+            "project_root": effective_cwd.as_posix(),
+            "project_root_source": "workspace",
+            "project_root_auto_selected": False,
+        }
     config = load_config(effective_cwd)
     milestone = _try_get_milestone_info(effective_cwd)
 
@@ -2548,10 +2461,6 @@ def init_progress(cwd: Path, includes: set[str] | None = None, *, data_root: Pat
         "project_root": reentry_metadata["project_root"],
         "project_root_source": reentry_metadata["project_root_source"],
         "project_root_auto_selected": reentry_metadata["project_root_auto_selected"],
-        "project_reentry_mode": reentry_metadata["project_reentry_mode"],
-        "project_reentry_requires_selection": reentry_metadata["project_reentry_requires_selection"],
-        "project_reentry_selected_candidate": reentry_metadata.get("project_reentry_selected_candidate"),
-        "project_reentry_candidates": reentry_metadata["project_reentry_candidates"],
         # Models
         "executor_model": _resolve_model(effective_cwd, "gpd-executor", config),
         "planner_model": _resolve_model(effective_cwd, "gpd-planner", config),
@@ -2580,6 +2489,15 @@ def init_progress(cwd: Path, includes: set[str] | None = None, *, data_root: Pat
         # Platform
         "platform": _detect_platform(effective_cwd),
     }
+    if include_project_reentry:
+        result.update(
+            {
+                "project_reentry_mode": reentry_metadata["project_reentry_mode"],
+                "project_reentry_requires_selection": reentry_metadata["project_reentry_requires_selection"],
+                "project_reentry_selected_candidate": reentry_metadata.get("project_reentry_selected_candidate"),
+                "project_reentry_candidates": reentry_metadata["project_reentry_candidates"],
+            }
+        )
     result.update(_build_reference_runtime_context(effective_cwd))
     result.update(_build_state_memory_runtime_context(effective_cwd))
     result.update(_build_execution_runtime_context(effective_cwd))

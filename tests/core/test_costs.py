@@ -101,6 +101,17 @@ def _budget_thresholds_by_key(summary: costs.CostSummary) -> dict[str, costs.Cos
     return {threshold.config_key: threshold for threshold in summary.budget_thresholds}
 
 
+def test_active_runtime_tier_models_command_falls_back_to_runtime_neutral_reference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "gpd.hooks.runtime_detect.detect_runtime_for_gpd_use",
+        lambda cwd=None: (_ for _ in ()).throw(RuntimeError("no runtime")),
+    )
+
+    assert costs._active_runtime_tier_models_command(cwd=Path("/tmp")) == "the active runtime's `set-tier-models` command"
+
+
 def test_record_usage_writes_measured_records_and_builds_project_summary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

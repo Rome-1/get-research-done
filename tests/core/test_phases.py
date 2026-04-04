@@ -70,6 +70,24 @@ def _create_state(tmp_path: Path, content: str) -> Path:
     return state
 
 
+def _seed_state_pair(
+    tmp_path: Path,
+    *,
+    current_phase: str = "01",
+    current_phase_name: str = "Existing Phase",
+    total_phases: int = 1,
+    status: str = "Ready to plan",
+) -> dict:
+    state = default_state_dict()
+    state["position"]["current_phase"] = current_phase
+    state["position"]["current_phase_name"] = current_phase_name
+    state["position"]["total_phases"] = total_phases
+    state["position"]["status"] = status
+    _create_state(tmp_path, generate_state_markdown(state))
+    (tmp_path / "GPD" / "state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+    return state
+
+
 def _write_state_pair(tmp_path: Path, state: dict[str, object]) -> None:
     state_md = generate_state_markdown(state)
     _create_state(tmp_path, state_md)
@@ -359,6 +377,51 @@ def test_phase_add(tmp_path: Path) -> None:
     assert "Phase 2: New Feature" in roadmap
 
 
+def test_phase_add_updates_total_phases_when_roadmap_contains_decimal_phases(tmp_path: Path) -> None:
+    _setup_project(tmp_path)
+    _create_roadmap(
+        tmp_path,
+        """\
+        ### Phase 1: Setup
+        **Goal:** setup
+
+        ### Phase 1.1: Calibration
+        **Goal:** calibrate
+
+        ### Phase 2: Build
+        **Goal:** build
+        """,
+    )
+    _seed_state_pair(tmp_path, current_phase="01", current_phase_name="Setup", total_phases=3)
+
+    phase_add(tmp_path, "Validation")
+
+    state = (tmp_path / "GPD" / "STATE.md").read_text(encoding="utf-8")
+    state_json = json.loads((tmp_path / "GPD" / "state.json").read_text(encoding="utf-8"))
+    assert "**Total Phases:** 4" in state
+    assert state_json["position"]["total_phases"] == 4
+
+
+def test_phase_add_rebuilds_state_markdown_when_only_state_json_exists(tmp_path: Path) -> None:
+    _setup_project(tmp_path)
+    _create_roadmap(
+        tmp_path,
+        """\
+        ### Phase 1: Setup
+        **Goal:** setup
+        """,
+    )
+    _seed_state_pair(tmp_path, total_phases=1)
+    (tmp_path / "GPD" / "STATE.md").unlink()
+
+    phase_add(tmp_path, "Validation")
+
+    state = (tmp_path / "GPD" / "STATE.md").read_text(encoding="utf-8")
+    state_json = json.loads((tmp_path / "GPD" / "state.json").read_text(encoding="utf-8"))
+    assert "**Total Phases:** 2" in state
+    assert state_json["position"]["total_phases"] == 2
+
+
 def test_phase_add_empty_description(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     _create_roadmap(tmp_path, "### Phase 1: X\n")
@@ -384,18 +447,11 @@ def test_phase_add_leaves_state_files_unchanged_when_atomic_state_save_fails(tmp
         **Goal:** exist
         """,
     )
-
-    state = default_state_dict()
-    state["position"]["current_phase"] = "01"
-    state["position"]["current_phase_name"] = "Existing Phase"
-    state["position"]["total_phases"] = 1
-    state["position"]["status"] = "Ready to plan"
-    state_md = generate_state_markdown(state)
-    _create_state(tmp_path, state_md)
-    (tmp_path / "GPD" / "state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+    _seed_state_pair(tmp_path)
 
     before_md = (tmp_path / "GPD" / "STATE.md").read_text(encoding="utf-8")
     before_json = (tmp_path / "GPD" / "state.json").read_text(encoding="utf-8")
+    before_roadmap = (tmp_path / "GPD" / "ROADMAP.md").read_text(encoding="utf-8")
 
     def _boom(_cwd: Path, _state_content: str) -> None:
         raise RuntimeError("sync exploded")
@@ -407,6 +463,36 @@ def test_phase_add_leaves_state_files_unchanged_when_atomic_state_save_fails(tmp
 
     assert (tmp_path / "GPD" / "STATE.md").read_text(encoding="utf-8") == before_md
     assert (tmp_path / "GPD" / "state.json").read_text(encoding="utf-8") == before_json
+    assert (tmp_path / "GPD" / "ROADMAP.md").read_text(encoding="utf-8") == before_roadmap
+    assert sorted(d.name for d in (tmp_path / "GPD" / "phases").iterdir() if d.is_dir()) == []
+
+
+def test_phase_insert_rolls_back_roadmap_and_directory_when_atomic_state_save_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _setup_project(tmp_path)
+    _create_roadmap(
+        tmp_path,
+        """\
+        ### Phase 1: Existing Phase
+        **Goal:** exist
+        """,
+    )
+    _seed_state_pair(tmp_path)
+
+    before_roadmap = (tmp_path / "GPD" / "ROADMAP.md").read_text(encoding="utf-8")
+
+    def _boom(_cwd: Path, _state_content: str) -> None:
+        raise RuntimeError("sync exploded")
+
+    monkeypatch.setattr("gpd.core.state.save_state_markdown_locked", _boom)
+
+    with pytest.raises(RuntimeError, match="sync exploded"):
+        phase_insert(tmp_path, "1", "Hotfix")
+
+    assert (tmp_path / "GPD" / "ROADMAP.md").read_text(encoding="utf-8") == before_roadmap
+    assert sorted(d.name for d in (tmp_path / "GPD" / "phases").iterdir() if d.is_dir()) == []
 
 
 def _assert_canonical_state_lock_and_locked_writer(
@@ -509,6 +595,51 @@ def test_phase_remove_uses_canonical_state_lock_and_locked_writer(tmp_path: Path
     assert not any(path.name == "STATE.md" for path in lock_calls)
 
 
+def test_phase_remove_rolls_back_roadmap_and_phase_tree_when_atomic_state_save_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _setup_project(tmp_path)
+    _create_roadmap(
+        tmp_path,
+        """\
+        ### Phase 1: First
+        **Goal:** first
+
+        ### Phase 2: Second
+        **Goal:** second
+
+        ### Phase 3: Third
+        **Goal:** third
+        """,
+    )
+    _seed_state_pair(tmp_path, current_phase="02", current_phase_name="Second", total_phases=3, status="in_progress")
+    first_dir = _create_phase_dir(tmp_path, "01-first")
+    (first_dir / "01-01-PLAN.md").write_text("plan")
+    second_dir = _create_phase_dir(tmp_path, "02-second")
+    (second_dir / "02-01-PLAN.md").write_text("plan")
+    third_dir = _create_phase_dir(tmp_path, "03-third")
+    (third_dir / "03-01-PLAN.md").write_text("plan")
+
+    before_roadmap = (tmp_path / "GPD" / "ROADMAP.md").read_text(encoding="utf-8")
+    before_md = (tmp_path / "GPD" / "STATE.md").read_text(encoding="utf-8")
+    before_json = (tmp_path / "GPD" / "state.json").read_text(encoding="utf-8")
+    before_dirs = sorted(d.name for d in (tmp_path / "GPD" / "phases").iterdir() if d.is_dir())
+
+    def _boom(_cwd: Path, _state_content: str) -> None:
+        raise RuntimeError("sync exploded")
+
+    monkeypatch.setattr("gpd.core.state.save_state_markdown_locked", _boom)
+
+    with pytest.raises(RuntimeError, match="sync exploded"):
+        phase_remove(tmp_path, "2")
+
+    assert (tmp_path / "GPD" / "ROADMAP.md").read_text(encoding="utf-8") == before_roadmap
+    assert (tmp_path / "GPD" / "STATE.md").read_text(encoding="utf-8") == before_md
+    assert (tmp_path / "GPD" / "state.json").read_text(encoding="utf-8") == before_json
+    assert sorted(d.name for d in (tmp_path / "GPD" / "phases").iterdir() if d.is_dir()) == before_dirs
+
+
 def test_phase_complete_uses_canonical_state_lock_and_locked_writer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _create_roadmap(
         tmp_path,
@@ -545,6 +676,41 @@ def test_phase_complete_uses_canonical_state_lock_and_locked_writer(tmp_path: Pa
     assert not any(path.name == "STATE.md" for path in lock_calls)
 
 
+def test_phase_complete_rolls_back_roadmap_when_atomic_state_save_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _setup_project(tmp_path)
+    _create_roadmap(
+        tmp_path,
+        """\
+        ### Phase 1: Setup
+        **Goal:** setup
+        **Plans:** 1 plans
+
+        ### Phase 2: Build
+        **Goal:** build
+        """,
+    )
+    _seed_state_pair(tmp_path, current_phase="01", current_phase_name="Setup", total_phases=2, status="in_progress")
+    phase_dir = _create_phase_dir(tmp_path, "01-setup")
+    (phase_dir / "a-PLAN.md").write_text("plan")
+    (phase_dir / "a-SUMMARY.md").write_text("done")
+    _create_phase_dir(tmp_path, "02-build")
+
+    before_roadmap = (tmp_path / "GPD" / "ROADMAP.md").read_text(encoding="utf-8")
+
+    def _boom(_cwd: Path, _state_content: str) -> None:
+        raise RuntimeError("sync exploded")
+
+    monkeypatch.setattr("gpd.core.state.save_state_markdown_locked", _boom)
+
+    with pytest.raises(RuntimeError, match="sync exploded"):
+        phase_complete(tmp_path, "1")
+
+    assert (tmp_path / "GPD" / "ROADMAP.md").read_text(encoding="utf-8") == before_roadmap
+
+
 def test_milestone_complete_uses_canonical_state_lock_and_locked_writer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _create_roadmap(tmp_path, "## Milestone v1.0: Test\n### Phase 1: X\n**Goal:** x\n")
     state = default_state_dict()
@@ -563,6 +729,77 @@ def test_milestone_complete_uses_canonical_state_lock_and_locked_writer(tmp_path
     assert result.version == "v1.0"
     assert any(path.name == "state.json" for path in lock_calls)
     assert not any(path.name == "STATE.md" for path in lock_calls)
+
+
+def test_milestone_complete_rolls_back_archives_when_atomic_state_save_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _setup_project(tmp_path)
+    _create_roadmap(
+        tmp_path,
+        """\
+        ### Phase 1: Setup
+        **Goal:** setup
+        """,
+    )
+    _seed_state_pair(tmp_path, total_phases=1)
+    phase_dir = _create_phase_dir(tmp_path, "01-setup")
+    (phase_dir / "01-PLAN.md").write_text("plan")
+    (phase_dir / "01-SUMMARY.md").write_text("---\none-liner: Finished setup\n---\n\n# Summary\n")
+    audit_file = tmp_path / "GPD" / "v1.0-MILESTONE-AUDIT.md"
+    audit_file.write_text("# Audit\n", encoding="utf-8")
+
+    archive_dir = tmp_path / "GPD" / "milestones"
+
+    def _boom(_cwd: Path, _state_content: str) -> None:
+        raise RuntimeError("sync exploded")
+
+    monkeypatch.setattr("gpd.core.state.save_state_markdown_locked", _boom)
+
+    with pytest.raises(RuntimeError, match="sync exploded"):
+        milestone_complete(tmp_path, "v1.0", name="Test Milestone")
+
+    assert audit_file.exists()
+    assert not (archive_dir / "v1.0-ROADMAP.md").exists()
+    assert not (archive_dir / "v1.0-REQUIREMENTS.md").exists()
+    assert not (archive_dir / "v1.0-MILESTONE-AUDIT.md").exists()
+    assert not (tmp_path / "GPD" / "MILESTONES.md").exists()
+
+
+def test_milestone_complete_rolls_back_partial_archives_when_audit_move_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _setup_project(tmp_path)
+    _create_roadmap(
+        tmp_path,
+        """\
+        ### Phase 1: Setup
+        **Goal:** setup
+        """,
+    )
+    _seed_state_pair(tmp_path, total_phases=1)
+    phase_dir = _create_phase_dir(tmp_path, "01-setup")
+    (phase_dir / "01-PLAN.md").write_text("plan")
+    (phase_dir / "01-SUMMARY.md").write_text("---\none-liner: Finished setup\n---\n\n# Summary\n")
+    audit_file = tmp_path / "GPD" / "v1.0-MILESTONE-AUDIT.md"
+    audit_file.write_text("# Audit\n", encoding="utf-8")
+    archive_dir = tmp_path / "GPD" / "milestones"
+
+    def _boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("archive exploded")
+
+    monkeypatch.setattr("gpd.core.phases.shutil.move", _boom)
+
+    with pytest.raises(RuntimeError, match="archive exploded"):
+        milestone_complete(tmp_path, "v1.0", name="Test Milestone")
+
+    assert audit_file.exists()
+    assert not (archive_dir / "v1.0-ROADMAP.md").exists()
+    assert not (archive_dir / "v1.0-REQUIREMENTS.md").exists()
+    assert not (archive_dir / "v1.0-MILESTONE-AUDIT.md").exists()
+    assert not (tmp_path / "GPD" / "MILESTONES.md").exists()
 
 
 
@@ -718,6 +955,183 @@ def test_phase_remove_decimal_renumber_same_slug(tmp_path: Path) -> None:
     assert remaining == ["03-base", "03.1-fix", "03.2-fix"]
     assert (phases_dir / "03.1-fix" / "03.1-PLAN.md").exists()
     assert (phases_dir / "03.2-fix" / "03.2-PLAN.md").exists()
+
+
+def test_phase_remove_integer_removes_descendant_subtree_and_clears_removed_current_plan(tmp_path: Path) -> None:
+    _setup_project(tmp_path)
+    _create_roadmap(
+        tmp_path,
+        """\
+        ### Phase 1: Setup
+        **Goal:** setup
+
+        ### Phase 2: Main
+        **Goal:** main
+
+        ### Phase 2.1: Hotfix
+        **Goal:** hotfix
+
+        ### Phase 2.1.1: Detail
+        **Goal:** detail
+
+        ### Phase 3: Validation
+        **Goal:** validate
+        **Artifact:** 03-01-PLAN.md
+        """,
+    )
+    _create_state(
+        tmp_path,
+        """\
+        **Current Phase:** 2.1.1
+        **Current Phase Name:** Detail
+        **Total Phases:** 5
+        **Current Plan:** 2
+        **Total Plans in Phase:** 2
+        **Status:** in_progress
+        **Last Activity:** 2026-03-01
+        **Last Activity Description:** Debugging
+        """,
+    )
+
+    phases_dir = tmp_path / "GPD" / "phases"
+    setup_dir = _create_phase_dir(tmp_path, "01-setup")
+    (setup_dir / "01-01-PLAN.md").write_text("plan")
+    _create_phase_dir(tmp_path, "02-main")
+    _create_phase_dir(tmp_path, "02.1-hotfix")
+    _create_phase_dir(tmp_path, "02.1.1-detail")
+    validation_dir = _create_phase_dir(tmp_path, "03-validation")
+    (validation_dir / "03-01-PLAN.md").write_text("plan")
+
+    phase_remove(tmp_path, "2")
+
+    remaining = sorted(d.name for d in phases_dir.iterdir() if d.is_dir())
+    assert remaining == ["01-setup", "02-validation"]
+
+    roadmap = (tmp_path / "GPD" / "ROADMAP.md").read_text()
+    assert "### Phase 2: Validation" in roadmap
+    assert "### Phase 2.1:" not in roadmap
+    assert "### Phase 2.1.1:" not in roadmap
+
+    state = (tmp_path / "GPD" / "STATE.md").read_text()
+    assert "**Current Phase:** 02" in state
+    assert "**Current Phase Name:** Validation" in state
+    assert "**Current Plan:** \u2014" in state
+    assert "**Total Plans in Phase:** 1" in state
+
+
+def test_phase_remove_decimal_removes_descendants_and_renumbers_later_subtree_references(tmp_path: Path) -> None:
+    _setup_project(tmp_path)
+    _create_roadmap(
+        tmp_path,
+        """\
+        ## Phase Overview
+
+        - [ ] Phase 3: Base
+        - [ ] Phase 3.1: Fix
+        - [ ] Phase 3.1.1: Detail
+        - [ ] Phase 3.2: Follow-up
+        - [ ] Phase 3.2.1: Follow-up Detail
+
+        | Phase | Status | Updated |
+        |---|---|---|
+        | 3. Base | Ready | - |
+        | 3.1. Fix | Ready | - |
+        | 3.1.1. Detail | Ready | - |
+        | 3.2. Follow-up | Ready | - |
+        | 3.2.1. Follow-up Detail | Ready | - |
+
+        ### Phase 3: Base
+        **Goal:** base
+
+        ### Phase 3.1: Fix
+        **Goal:** fix
+
+        ### Phase 3.1.1: Detail
+        **Goal:** detail
+
+        ### Phase 3.2: Follow-up
+        **Goal:** follow-up
+        **Artifact:** 03.2-01-PLAN.md
+
+        ### Phase 3.2.1: Follow-up Detail
+        **Goal:** follow-up detail
+        **Depends on:** Phase 3.2
+        **Artifact:** 03.2.1-01-PLAN.md
+        """,
+    )
+    phases_dir = tmp_path / "GPD" / "phases"
+    _create_phase_dir(tmp_path, "03-base")
+    _create_phase_dir(tmp_path, "03.1-fix")
+    _create_phase_dir(tmp_path, "03.1.1-detail")
+    followup_dir = _create_phase_dir(tmp_path, "03.2-follow-up")
+    (followup_dir / "03.2-01-PLAN.md").write_text("plan")
+    detail_dir = _create_phase_dir(tmp_path, "03.2.1-follow-up-detail")
+    (detail_dir / "03.2.1-01-PLAN.md").write_text("plan")
+
+    phase_remove(tmp_path, "3.1", force=True)
+
+    remaining = sorted(d.name for d in phases_dir.iterdir() if d.is_dir())
+    assert remaining == ["03-base", "03.1-follow-up", "03.1.1-follow-up-detail"]
+    assert (phases_dir / "03.1-follow-up" / "03.1-01-PLAN.md").exists()
+    assert (phases_dir / "03.1.1-follow-up-detail" / "03.1.1-01-PLAN.md").exists()
+
+    roadmap = (tmp_path / "GPD" / "ROADMAP.md").read_text()
+    assert "### Phase 3.1: Follow-up" in roadmap
+    assert "### Phase 3.1.1: Follow-up Detail" in roadmap
+    assert "- [ ] Phase 3.1.1: Follow-up Detail" in roadmap
+    assert "| 3.1.1. Follow-up Detail | Ready | - |" in roadmap
+    assert "**Depends on:** Phase 3.1" in roadmap
+    assert "03.1.1-01-PLAN.md" in roadmap
+    assert "Phase 3.2" not in roadmap
+    assert "Phase 3.2.1" not in roadmap
+
+
+def test_phase_remove_decimal_descendant_current_phase_falls_back_to_previous_phase(tmp_path: Path) -> None:
+    _setup_project(tmp_path)
+    _create_roadmap(
+        tmp_path,
+        """\
+        ### Phase 3: Base
+        **Goal:** base
+
+        ### Phase 3.1: Fix
+        **Goal:** fix
+
+        ### Phase 3.1.1: Detail
+        **Goal:** detail
+
+        ### Phase 3.2: Follow-up
+        **Goal:** follow-up
+
+        ### Phase 3.2.1: Follow-up Detail
+        **Goal:** follow-up detail
+        """,
+    )
+    _create_state(
+        tmp_path,
+        """\
+        **Current Phase:** 3.1.1
+        **Current Phase Name:** Detail
+        **Total Phases:** 5
+        **Current Plan:** 2
+        **Total Plans in Phase:** 2
+        **Status:** in_progress
+        **Last Activity:** 2026-03-01
+        **Last Activity Description:** Debugging
+        """,
+    )
+    _create_phase_dir(tmp_path, "03-base")
+    _create_phase_dir(tmp_path, "03.1-fix")
+    _create_phase_dir(tmp_path, "03.1.1-detail")
+    _create_phase_dir(tmp_path, "03.2-follow-up")
+    _create_phase_dir(tmp_path, "03.2.1-follow-up-detail")
+
+    phase_remove(tmp_path, "3.1", force=True)
+
+    state = (tmp_path / "GPD" / "STATE.md").read_text(encoding="utf-8")
+    assert "**Current Phase:** 03" in state
+    assert "**Current Phase Name:** Base" in state
+    assert "**Current Plan:** \u2014" in state
 
 
 def test_phase_remove_with_summaries_needs_force(tmp_path: Path) -> None:

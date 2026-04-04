@@ -7,8 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from gpd.core.costs import UsageRecord, usage_ledger_path
-from gpd.core.costs import _profile_tier_mix
+from gpd.core.costs import UsageRecord, _profile_tier_mix, usage_ledger_path
 from gpd.core.recent_projects import record_recent_project
 from gpd.core.resume_surface import RESUME_COMPATIBILITY_ALIAS_KEYS
 from gpd.core.runtime_hints import build_runtime_hint_payload, workflow_preset_surface_note
@@ -17,6 +16,7 @@ from gpd.core.surface_phrases import (
     recovery_continue_reason,
     recovery_fast_next_reason,
 )
+from tests.latex_test_support import latex_capability_payload as _latex_capability
 
 _TEST_RUNTIME = "runtime-under-test"
 _TEST_MODEL = "model-under-test"
@@ -170,20 +170,6 @@ def _assert_no_resume_compat_aliases(orientation: dict[str, object]) -> None:
     assert "has_session_resume_file" not in orientation
 
 
-def _latex_capability(**overrides: object) -> dict[str, object]:
-    capability = {
-        "compiler_available": True,
-        "compiler_path": "/usr/bin/pdflatex",
-        "distribution": "TeX Live",
-        "bibtex_available": True,
-        "latexmk_available": True,
-        "kpsewhich_available": True,
-        "warnings": [],
-    }
-    capability.update(overrides)
-    return capability
-
-
 def _fake_cost_summary(workspace: Path, **overrides: object) -> SimpleNamespace:
     payload: dict[str, object] = {
         "current_session_id": "sess-cost",
@@ -244,9 +230,12 @@ def test_build_runtime_hint_payload_merges_source_sections_and_actions(tmp_path:
     assert payload.source_meta["current_session_id"] == session_id
     assert payload.source_meta["base_ready"] is True
     assert payload.source_meta["latex_capability"]["compiler_available"] is True
+    assert payload.source_meta["latex_capability"]["compiler"] == "pdflatex"
     assert payload.source_meta["latex_capability"]["bibtex_available"] is True
     assert payload.source_meta["latex_capability"]["latexmk_available"] is False
     assert payload.source_meta["latex_capability"]["kpsewhich_available"] is False
+    assert payload.source_meta["latex_capability"]["readiness_state"] == "ready"
+    assert payload.source_meta["latex_capability"]["message"] == "pdflatex found (TeX Live): /usr/bin/pdflatex"
     assert payload.source_meta["latex_available"] is True
 
     assert payload.execution is not None
@@ -268,7 +257,7 @@ def test_build_runtime_hint_payload_merges_source_sections_and_actions(tmp_path:
     assert payload.orientation["fast_next_reason"] == recovery_fast_next_reason()
     _assert_no_resume_compat_aliases(payload.orientation)
     assert payload.orientation["active_resume_kind"] == "bounded_segment"
-    assert payload.orientation["active_resume_origin"] == "compat.current_execution"
+    assert payload.orientation["active_resume_origin"] == "continuation.bounded_segment"
     assert payload.orientation["active_resume_pointer"] == "GPD/phases/03/.continue-here.md"
     assert payload.orientation["resume_candidates_count"] >= 1
     assert payload.orientation["has_local_recovery_target"] is True
@@ -371,7 +360,8 @@ def test_build_runtime_hint_payload_reports_degraded_publication_presets_when_bi
     assert payload.workflow_presets["ready"] == 3
     assert payload.workflow_presets["degraded"] == 2
     assert payload.workflow_presets["blocked"] == 0
-    assert payload.workflow_presets["latex_capability"]["paper_build_ready"] is False
+    assert payload.workflow_presets["latex_capability"]["bibliography_support_available"] is False
+    assert payload.workflow_presets["latex_capability"]["paper_build_ready"] is True
     assert any(
         "BibTeX support" in warning
         for preset in payload.workflow_presets["presets"]
@@ -634,7 +624,7 @@ def test_build_runtime_hint_payload_prefers_selected_project_resume_state_for_au
     assert payload.orientation["decision_source"] == "auto-selected-recent-project"
     assert payload.orientation["project_root_auto_selected"] is True
     assert payload.orientation["active_resume_kind"] == "bounded_segment"
-    assert payload.orientation["active_resume_origin"] == "compat.current_execution"
+    assert payload.orientation["active_resume_origin"] == "continuation.bounded_segment"
     assert payload.orientation["active_resume_pointer"] == "GPD/phases/03/.continue-here.md"
     assert payload.orientation["continuity_handoff_file"] is None
     assert payload.orientation["current_workspace_resumable"] is False
@@ -842,7 +832,7 @@ def test_build_runtime_hint_payload_preserves_existing_local_target_over_recent_
     assert payload.orientation["mode"] == "current-workspace"
     assert payload.orientation["status"] == "bounded-segment"
     assert payload.orientation["active_resume_kind"] == "bounded_segment"
-    assert payload.orientation["active_resume_origin"] == "compat.current_execution"
+    assert payload.orientation["active_resume_origin"] == "continuation.bounded_segment"
     assert payload.orientation["active_resume_pointer"] == "GPD/phases/08/.continue-here.md"
     assert payload.orientation["continuity_handoff_file"] is None
     assert payload.orientation["has_local_recovery_target"] is True
@@ -1215,7 +1205,7 @@ def test_build_runtime_hint_payload_uses_shared_resume_contract_without_recent_p
     assert payload.orientation["mode"] == "current-workspace"
     assert payload.orientation["primary_command"] == "gpd resume"
     assert payload.orientation["active_resume_kind"] == "bounded_segment"
-    assert payload.orientation["active_resume_origin"] == "compat.current_execution"
+    assert payload.orientation["active_resume_origin"] == "continuation.bounded_segment"
     assert payload.orientation["active_resume_pointer"] == "GPD/phases/05/.continue-here.md"
     assert payload.orientation["execution_resumable"] is True
     _assert_no_resume_compat_aliases(payload.orientation)

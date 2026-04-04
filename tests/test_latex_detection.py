@@ -103,6 +103,7 @@ class TestDetectLatexToolchain:
         assert status.compiler_available is True
         assert status.available is True
         assert status.bibtex_available is True
+        assert status.bibliography_support_available is True
         assert status.latexmk_available is True
         assert status.kpsewhich_available is True
         assert status.readiness_state == "ready"
@@ -129,17 +130,19 @@ class TestDetectLatexToolchain:
         assert status.compiler_available is True
         assert status.available is True
         assert status.bibtex_available is False
+        assert status.bibliography_support_available is False
         assert status.latexmk_available is False
         assert status.kpsewhich_available is False
         assert status.readiness_state == "degraded"
-        assert status.paper_build_ready is False
+        assert status.paper_build_ready is True
         assert status.arxiv_submission_ready is False
         assert "BibTeX missing" in status.message
         assert status.warnings
+        assert any("citation-bearing builds" in warning for warning in status.warnings)
 
 
 class TestPaperToolchainCapability:
-    def test_paper_build_requires_bibtex_and_arxiv_submission_requires_kpsewhich(self) -> None:
+    def test_paper_build_requires_compiler_and_bibliography_support_is_tracked_separately(self) -> None:
         status = PaperToolchainCapability(
             compiler_available=True,
             bibtex_available=False,
@@ -147,11 +150,19 @@ class TestPaperToolchainCapability:
             kpsewhich_available=True,
         )
 
-        assert status.paper_build_ready is False
+        assert status.paper_build_ready is True
+        assert status.bibliography_support_available is False
         assert status.arxiv_submission_ready is False
 
-        readiness = status.model_copy(update={"bibtex_available": True, "kpsewhich_available": False})
+        readiness = PaperToolchainCapability.model_validate(
+            {
+                **status.model_dump(mode="python"),
+                "bibtex_available": True,
+                "kpsewhich_available": False,
+            }
+        )
 
+        assert readiness.bibliography_support_available is True
         assert readiness.paper_build_ready is True
         assert readiness.arxiv_submission_ready is False
 
@@ -174,6 +185,7 @@ class TestPaperToolchainCapability:
         assert status.compiler_available is False
         assert status.available is False
         assert status.bibtex_available is True
+        assert status.bibliography_support_available is False
         assert status.latexmk_available is True
         assert status.kpsewhich_available is True
         assert status.readiness_state == "blocked"

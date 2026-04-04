@@ -319,49 +319,8 @@ def _derive_active_resume_origin(
         prefer_compat=True,
     )
     if active_resume_kind == "bounded_segment":
-        if lookup_resume_surface_mapping(payload, "active_bounded_segment", compat_surface=compat_surface) is not None:
-            return "continuation.bounded_segment"
-        if lookup_resume_surface_mapping(payload, "derived_execution_head", compat_surface=compat_surface) is not None or lookup_resume_surface_mapping(
-            payload,
-            "current_execution",
-            compat_surface=compat_surface,
-            prefer_compat=True,
-        ) is not None:
-            return "continuation.bounded_segment"
-        if _has_candidate(resume_candidates, origin="compat.current_execution", kind="bounded_segment"):
-            return "continuation.bounded_segment"
-        if _has_candidate(resume_candidates, origin="continuation.bounded_segment", kind="bounded_segment"):
-            return "continuation.bounded_segment"
-        if legacy_source == "current_execution":
-            return "continuation.bounded_segment"
-        if lookup_resume_surface_mapping(
-            payload,
-            "active_execution_segment",
-            compat_surface=compat_surface,
-            prefer_compat=True,
-        ) is not None:
-            return "continuation.bounded_segment"
         return "continuation.bounded_segment"
     if active_resume_kind == "continuity_handoff":
-        if any(
-            value is not None
-            for value in (
-                lookup_resume_surface_text(payload, "continuity_handoff_file", compat_surface=compat_surface),
-                lookup_resume_surface_text(payload, "recorded_continuity_handoff_file", compat_surface=compat_surface),
-                lookup_resume_surface_text(payload, "missing_continuity_handoff_file", compat_surface=compat_surface),
-            )
-        ):
-            return "continuation.handoff"
-        if any(value is not None for value in (continuity_handoff_file, recorded_continuity_handoff_file, missing_continuity_handoff_file)):
-            return "continuation.handoff"
-        if _has_candidate(resume_candidates, origin="compat.session_resume_file", kind="continuity_handoff"):
-            return "continuation.handoff"
-        if _has_candidate(resume_candidates, origin="continuation.handoff", kind="continuity_handoff"):
-            return "continuation.handoff"
-        if legacy_source == "session_resume_file":
-            return "continuation.handoff"
-        if missing_continuity_handoff_file is not None:
-            return "continuation.handoff"
         return "continuation.handoff"
     if active_resume_kind == "interrupted_agent":
         return "interrupted_agent_marker"

@@ -17,7 +17,9 @@ from gpd.contracts import (
     parse_comparison_verdicts_data_strict,
     parse_contract_results_data_strict,
 )
+from gpd.core.constants import STANDALONE_VALIDATION, VALIDATION_SUFFIX, ProjectLayout
 from gpd.core.conventions import check_assertions, convention_check
+from gpd.core.errors import GPDError
 from gpd.core.frontmatter import (
     FrontmatterParseError,
     _find_matching_plan_contract,
@@ -26,7 +28,7 @@ from gpd.core.frontmatter import (
     _validate_contract_mapping,
     extract_frontmatter,
 )
-from gpd.core.manuscript_artifacts import locate_publication_artifact, resolve_current_manuscript_artifacts
+from gpd.core.manuscript_artifacts import locate_publication_artifact, resolve_current_manuscript_resolution
 from gpd.core.paper_quality import (
     BinaryCheck,
     CitationsQualityInput,
@@ -40,7 +42,7 @@ from gpd.core.paper_quality import (
     VerificationQualityInput,
 )
 from gpd.mcp.paper.bibliography import BibliographyAudit
-from gpd.mcp.paper.models import ArtifactManifest, is_supported_paper_journal
+from gpd.mcp.paper.models import ArtifactManifest, PaperConfig, is_supported_paper_journal
 
 __all__ = ["build_paper_quality_input"]
 
@@ -237,7 +239,46 @@ def _first_existing_path(*candidates: Path) -> Path | None:
 
 def _load_manuscript_config(manuscript_dir: Path) -> dict[str, object]:
     config_path = _first_existing_path(manuscript_dir / "PAPER-CONFIG.json")
-    return _load_json(config_path) if config_path is not None else {}
+    if config_path is None:
+        return {}
+    payload = _load_json(config_path)
+    if not payload:
+        return {}
+    try:
+        return PaperConfig.model_validate(payload).model_dump(mode="python")
+    except PydanticValidationError:
+        return payload
+
+
+def _best_effort_manuscript_root(project_root: Path) -> Path | None:
+    resolution = resolve_current_manuscript_resolution(project_root, allow_markdown=True)
+    if resolution.status == "resolved" and resolution.manuscript_root is not None:
+        return resolution.manuscript_root
+    if resolution.status == "ambiguous":
+        return None
+
+    candidates: list[Path] = []
+    for root_name in ("paper", "manuscript", "draft"):
+        candidate = project_root / root_name
+        if not candidate.exists() or not candidate.is_dir():
+            continue
+        has_publication_artifacts = any(
+            (candidate / artifact_name).exists()
+            for artifact_name in (
+                "PAPER-CONFIG.json",
+                "ARTIFACT-MANIFEST.json",
+                "BIBLIOGRAPHY-AUDIT.json",
+                "FIGURE_TRACKER.md",
+                "reproducibility-manifest.json",
+            )
+        )
+        has_manuscript_content = any(
+            path.is_file() and path.suffix.lower() in _MANUSCRIPT_CONTENT_SUFFIXES for path in candidate.rglob("*")
+        )
+        if has_publication_artifacts or has_manuscript_content:
+            candidates.append(candidate)
+
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def _derivation_artifacts(project_root: Path) -> list[Path]:
@@ -390,9 +431,11 @@ def _collect_comparison_verdicts(
 ) -> tuple[list[ComparisonVerdict], bool]:
     verdicts_by_key: dict[tuple[str, str | None, str | None, str], ComparisonVerdict] = {}
     parse_errors: list[str] = []
+    layout = ProjectLayout(project_root)
+    phase_root = project_root / "GPD" / "phases"
 
     candidate_roots = [
-        project_root / "GPD" / "phases",
+        phase_root,
         project_root / "GPD" / "comparisons",
     ]
     if manuscript_root is not None:
@@ -401,6 +444,8 @@ def _collect_comparison_verdicts(
         if not root.exists():
             continue
         for path in sorted(root.rglob("*.md")):
+            if root == phase_root and not _is_contract_coverage_artifact(path, layout):
+                continue
             meta = _extract_meta(path, parse_errors=parse_errors)
             for verdict in _parse_comparison_verdict_entries(meta.get("comparison_verdicts"), errors=parse_errors):
                 key = _comparison_verdict_key(verdict)
@@ -427,6 +472,37 @@ def _resolve_paper_journal(artifact_manifest: ArtifactManifest | None, paper_con
     return "generic"
 
 
+def _manifest_metadata_matches_active_entrypoint(
+    artifact_manifest: ArtifactManifest | None,
+    *,
+    manuscript_root: Path | None,
+    manuscript_entrypoint: Path | None,
+) -> bool:
+    """Return whether manifest metadata matches the currently resolved manuscript entrypoint."""
+    if artifact_manifest is None or manuscript_root is None or manuscript_entrypoint is None:
+        return False
+    resolved_entrypoint = manuscript_entrypoint.resolve(strict=False)
+    for artifact in artifact_manifest.artifacts:
+        if artifact.category != "tex":
+            continue
+        candidate = manuscript_root / artifact.path
+        if candidate.exists() and candidate.resolve(strict=False) == resolved_entrypoint:
+            return True
+    return False
+
+
+def _is_contract_coverage_artifact(path: Path, layout: ProjectLayout) -> bool:
+    """Return whether a phase markdown file participates in contract coverage."""
+    filename = path.name
+    return (
+        layout.is_plan_file(filename)
+        or layout.is_summary_file(filename)
+        or layout.is_verification_file(filename)
+        or filename.endswith(VALIDATION_SUFFIX)
+        or filename == STANDALONE_VALIDATION
+    )
+
+
 def _collect_contract_coverage(project_root: Path) -> _ContractCoverage:
     total_claims: set[str] = set()
     total_deliverables: set[str] = set()
@@ -447,8 +523,11 @@ def _collect_contract_coverage(project_root: Path) -> _ContractCoverage:
     phases_root = project_root / "GPD" / "phases"
     if not phases_root.exists():
         return _ContractCoverage()
+    layout = ProjectLayout(project_root)
 
     for path in sorted(phases_root.rglob("*.md")):
+        if not _is_contract_coverage_artifact(path, layout):
+            continue
         parse_errors: list[str] = []
         meta = _extract_meta(path, parse_errors=parse_errors)
         if parse_errors:
@@ -695,31 +774,52 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
     """Build a conservative :class:`PaperQualityInput` from project artifacts."""
 
     root = Path(project_root)
-    manuscript_artifacts = resolve_current_manuscript_artifacts(root, allow_markdown=True)
-    paper_dir = manuscript_artifacts.manuscript_root or root / "paper"
-    artifact_manifest = _load_artifact_manifest(
-        manuscript_artifacts.artifact_manifest or locate_publication_artifact(paper_dir, "ARTIFACT-MANIFEST.json")
-    )
-    bibliography_audit = _load_bibliography_audit(
-        manuscript_artifacts.bibliography_audit or locate_publication_artifact(paper_dir, "BIBLIOGRAPHY-AUDIT.json")
-    )
-    paper_config = _load_manuscript_config(paper_dir)
+    manuscript_resolution = resolve_current_manuscript_resolution(root, allow_markdown=True)
+    if manuscript_resolution.status in {"ambiguous", "invalid"}:
+        raise GPDError(
+            "paper-quality artifact resolution requires an unambiguous manuscript root; "
+            f"found {manuscript_resolution.status}: {manuscript_resolution.detail}"
+        )
 
-    manuscript_files, manuscript_content = _collect_manuscript_content(
-        paper_dir,
-        entrypoint=manuscript_artifacts.manuscript_entrypoint,
+    paper_dir = manuscript_resolution.manuscript_root or _best_effort_manuscript_root(root)
+    manuscript_entrypoint = manuscript_resolution.manuscript_entrypoint
+    artifact_manifest = None
+    bibliography_audit = None
+    paper_config: dict[str, object] = {}
+    manuscript_files: list[Path] = []
+    manuscript_content = ""
+    if paper_dir is not None:
+        artifact_manifest = _load_artifact_manifest(
+            locate_publication_artifact(paper_dir, "ARTIFACT-MANIFEST.json")
+        )
+        bibliography_audit = _load_bibliography_audit(
+            locate_publication_artifact(paper_dir, "BIBLIOGRAPHY-AUDIT.json")
+        )
+        paper_config = _load_manuscript_config(paper_dir)
+        manuscript_files, manuscript_content = _collect_manuscript_content(
+            paper_dir,
+            entrypoint=manuscript_entrypoint,
+        )
+    trusted_artifact_manifest = (
+        artifact_manifest
+        if _manifest_metadata_matches_active_entrypoint(
+            artifact_manifest,
+            manuscript_root=paper_dir,
+            manuscript_entrypoint=manuscript_entrypoint,
+        )
+        else None
     )
     title = (
-        artifact_manifest.paper_title
-        if artifact_manifest is not None
+        trusted_artifact_manifest.paper_title
+        if trusted_artifact_manifest is not None
         else str(paper_config.get("title") or paper_config.get("paper_title") or "")
     )
-    journal = _resolve_paper_journal(artifact_manifest, paper_config)
+    journal = _resolve_paper_journal(trusted_artifact_manifest, paper_config)
 
-    figure_registry = _load_figure_registry(paper_dir)
+    figure_registry = _load_figure_registry(paper_dir) if paper_dir is not None else {}
     verdicts, verdicts_parse_ok = _collect_comparison_verdicts(
         root,
-        manuscript_root=manuscript_artifacts.manuscript_root,
+        manuscript_root=paper_dir,
     )
     contract_coverage = _collect_contract_coverage(root)
     figures, results = _build_figures_input(
@@ -753,7 +853,7 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
     partial_sources = bibliography_audit.partial_sources if bibliography_audit is not None else 0
     unverified_sources = bibliography_audit.unverified_sources if bibliography_audit is not None else 0
     failed_sources = bibliography_audit.failed_sources if bibliography_audit is not None else 0
-    available_citation_keys = _available_citation_keys(paper_dir, bibliography_audit)
+    available_citation_keys = _available_citation_keys(paper_dir, bibliography_audit) if paper_dir is not None else set()
 
     if cite_keys:
         resolved_citations = sum(1 for key in cite_keys if key in available_citation_keys)

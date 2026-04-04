@@ -268,9 +268,6 @@ def _salvage_model_mapping(
 ) -> dict[str, object] | None:
     if not isinstance(value, dict):
         actual_type = type(value).__name__
-        if default_value is not None:
-            errors.append(f"{path_prefix} must be an object, not {actual_type}")
-            return copy.deepcopy(default_value)
         errors.append(f"{path_prefix} must be an object, not {actual_type}")
         return None
 
@@ -578,20 +575,23 @@ def _is_concrete_external_http_locator(
 ) -> bool:
     """Return whether *value* is a concrete external URL for the requested kind."""
 
-    if reference_kind != "paper":
-        return False
-
     parsed = urlparse(value.strip())
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         return False
-    netloc = parsed.netloc.casefold()
     path = parsed.path.strip()
-    if netloc.endswith("doi.org") and path not in {"", "/"}:
+    if path in {"", "/"}:
+        return False
+
+    if reference_kind in {"dataset", "prior_artifact", "spec"}:
+        return True
+    if reference_kind != "paper":
+        return False
+
+    netloc = parsed.netloc.casefold()
+    if netloc.endswith("doi.org"):
         return True
     if netloc.endswith("arxiv.org") and path.startswith("/abs/") and len(path) > len("/abs/"):
         return True
-    if path in {"", "/"}:
-        return False
     lowered = value.casefold()
     if not re.search(r"\b10\.\d{4,9}/\S+", lowered):
         return False
@@ -649,7 +649,7 @@ def _is_concrete_text_grounding(
         return True
     if any(
         _is_concrete_external_http_locator(value, reference_kind=reference_kind)
-        for reference_kind in ("paper",)
+        for reference_kind in ("paper", "dataset", "prior_artifact", "spec")
     ):
         return True
     if _is_project_artifact_path(value, project_root=project_root):

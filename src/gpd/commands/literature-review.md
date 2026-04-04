@@ -57,7 +57,7 @@ fi
 INIT=$(gpd init progress --include state,roadmap,config)
 ```
 
-Extract `commit_docs`, `project_contract`, `active_reference_context`, and any existing `reference_artifact_files` from init JSON. Resolve reviewer model:
+Extract `commit_docs`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, `active_reference_context`, and any existing `reference_artifact_files` from init JSON. Treat `project_contract` as authoritative only when `project_contract_gate.authoritative` is true. Resolve reviewer model:
 
 ```bash
 REVIEWER_MODEL=$(gpd resolve-model gpd-literature-reviewer)

@@ -117,6 +117,18 @@ def test_contract_from_data_salvage_accepts_recoverable_list_drift() -> None:
     assert parsed.context_intake.must_read_refs == ["ref-benchmark"]
 
 
+@pytest.mark.parametrize("section_name", ["context_intake", "approach_policy", "uncertainty_markers"])
+def test_contract_from_data_salvage_rejects_whole_singleton_section_corruption(section_name: str) -> None:
+    contract = _load_contract_fixture()
+    contract[section_name] = []
+
+    parsed = parse_project_contract_data_salvage(contract)
+
+    assert parsed.contract is None
+    assert contract_from_data_salvage(contract) is None
+    assert any(f"{section_name} must be an object, not list" in error for error in parsed.errors)
+
+
 def test_parse_project_contract_data_salvage_reports_recoverable_findings() -> None:
     contract = _load_contract_fixture()
     contract["scope"]["legacy_notes"] = "nested extra field"
@@ -401,7 +413,7 @@ def test_validate_project_contract_approved_mode_accepts_concrete_reference_loca
         ("prior_artifact", "https://github.com/org/repo/blob/main/artifacts/report.json"),
     ],
 )
-def test_validate_project_contract_approved_mode_rejects_external_nonpaper_urls(
+def test_validate_project_contract_approved_mode_accepts_external_nonpaper_urls(
     reference_kind: str,
     locator: str,
 ) -> None:
@@ -414,7 +426,36 @@ def test_validate_project_contract_approved_mode_rejects_external_nonpaper_urls(
             "locator": locator,
             "aliases": [],
             "role": "benchmark",
-            "why_it_matters": "External nonpaper URLs should not satisfy approved grounding on their own.",
+            "why_it_matters": "Concrete external nonpaper URLs should satisfy approved grounding.",
+            "applies_to": ["claim-benchmark"],
+            "carry_forward_to": [],
+            "must_surface": True,
+            "required_actions": ["read"],
+        }
+    ]
+    contract["scope"]["unresolved_questions"] = []
+    contract["context_intake"]["must_read_refs"] = ["ref-anchor"]
+
+    result = validate_project_contract(contract, mode="approved")
+
+    assert result.valid is True
+    assert result.mode == "approved"
+
+
+@pytest.mark.parametrize("reference_kind", ["dataset", "spec", "prior_artifact"])
+def test_validate_project_contract_approved_mode_rejects_root_only_external_nonpaper_urls(
+    reference_kind: str,
+) -> None:
+    contract = _load_contract_fixture()
+    _remove_incidental_grounding(contract)
+    contract["references"] = [
+        {
+            "id": "ref-anchor",
+            "kind": reference_kind,
+            "locator": "https://example.org/",
+            "aliases": [],
+            "role": "benchmark",
+            "why_it_matters": "Root-only URLs should not satisfy approved grounding.",
             "applies_to": ["claim-benchmark"],
             "carry_forward_to": [],
             "must_surface": True,

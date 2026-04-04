@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -10,7 +11,13 @@ from pybtex.database import BibliographyData, Entry
 from pydantic import ConfigDict
 
 from gpd.mcp.paper.bibliography import CitationSource
-from gpd.mcp.paper.compiler import CompilationResult, _get_tlmgr_package, check_class_file
+from gpd.mcp.paper.compiler import (
+    CompilationResult,
+    _get_tlmgr_package,
+    check_class_file,
+    check_journal_dependencies,
+)
+from gpd.mcp.paper.journal_map import get_journal_spec
 from gpd.mcp.paper.models import Author, FigureRef, PaperConfig, Section, derive_output_filename
 
 
@@ -47,6 +54,40 @@ class TestCompilerWrapper:
         assert _get_tlmgr_package("aastex631") == "aastex"
         assert _get_tlmgr_package("mnras") == "mnras"
         assert _get_tlmgr_package("article") == "latex-base"
+
+    def test_check_class_file_uses_resolved_kpsewhich_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        observed_commands: list[list[str]] = []
+
+        monkeypatch.setattr(
+            "gpd.mcp.paper.compiler.find_latex_compiler",
+            lambda binary: "/opt/tex/bin/kpsewhich" if binary == "kpsewhich" else None,
+        )
+
+        def fake_run(command: list[str], capture_output: bool, text: bool, timeout: int) -> SimpleNamespace:
+            observed_commands.append(command)
+            return SimpleNamespace(returncode=0, stdout="/opt/tex/texmf-dist/tex/latex/base/article.cls\n")
+
+        monkeypatch.setattr("gpd.mcp.paper.compiler.subprocess.run", fake_run)
+
+        available, msg = check_class_file("article")
+
+        assert available is True
+        assert msg.endswith("article.cls")
+        assert observed_commands == [["/opt/tex/bin/kpsewhich", "article.cls"]]
+
+    def test_check_journal_dependencies_keep_best_effort_when_kpsewhich_is_unavailable(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(
+            "gpd.mcp.paper.compiler.find_latex_compiler",
+            lambda binary: None if binary == "kpsewhich" else f"/usr/bin/{binary}",
+        )
+
+        available, errors = check_journal_dependencies(get_journal_spec("jhep"))
+
+        assert available is True
+        assert errors == []
 
 
 # ---- build_paper integration test ----
@@ -627,7 +668,10 @@ class TestClassFileFallback:
 
         monkeypatch.setattr(
             "gpd.mcp.paper.compiler.check_class_file",
-            lambda dc, install_hint=None: (False, f"{dc}.cls not found. Install via: tlmgr install revtex"),
+            lambda dc, install_hint=None, assume_present_when_unavailable=True: (
+                False,
+                f"{dc}.cls not found. Install via: tlmgr install revtex",
+            ),
         )
 
         output = await build_paper(config, tmp_path)
@@ -653,10 +697,13 @@ class TestClassFileFallback:
             journal="jhep",
         )
 
-        monkeypatch.setattr("gpd.mcp.paper.compiler.check_class_file", lambda dc, install_hint=None: (True, "ok"))
+        monkeypatch.setattr(
+            "gpd.mcp.paper.compiler.check_class_file",
+            lambda dc, install_hint=None, assume_present_when_unavailable=True: (True, "ok"),
+        )
         monkeypatch.setattr(
             "gpd.mcp.paper.compiler.check_tex_file",
-            lambda resource_name, install_hint=None: (
+            lambda resource_name, install_hint=None, assume_present_when_unavailable=True: (
                 (False, "jheppub.sty not found. Install via: tlmgr install jhep")
                 if resource_name == "jheppub.sty"
                 else (True, "ok")

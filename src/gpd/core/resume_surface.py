@@ -30,7 +30,6 @@ __all__ = [
     "build_resume_segment_candidate",
     "build_resume_static_candidate",
     "canonicalize_resume_public_payload",
-    "canonicalize_resume_candidate",
     "lookup_resume_surface_list",
     "lookup_resume_surface_mapping",
     "lookup_resume_surface_text",
@@ -335,24 +334,6 @@ def build_resume_candidate(
     payload["origin"] = origin
     payload["resume_pointer"] = resume_pointer
     return payload
-
-
-def canonicalize_resume_candidate(
-    candidate: Mapping[str, object],
-    *,
-    kind: str,
-    origin: str,
-    resume_pointer: str | None = None,
-) -> dict[str, object]:
-    """Alias for :func:`build_resume_candidate` for semantically clearer call sites."""
-    return build_resume_candidate(
-        candidate,
-        kind=kind,
-        origin=origin,
-        resume_pointer=resume_pointer,
-    )
-
-
 def resume_candidate_kind_from_source(source: str | None) -> str | None:
     """Map a raw resume source label to the canonical candidate kind."""
     normalized = (source or "").strip()

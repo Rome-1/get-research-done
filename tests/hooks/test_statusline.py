@@ -13,16 +13,19 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import call, patch
 
+from gpd.core.state import default_state_dict, save_state_json
 from gpd.hooks.runtime_detect import TodoCandidate, update_command_for_runtime
 from gpd.hooks.statusline import (
     _check_update,
     _context_bar,
     _execution_badge,
     _format_context_window_size,
+    _project_state_dir,
     _read_current_task,
     _read_execution_state,
     _read_model_label,
     _read_position,
+    _read_session_id,
     _read_workspace_label,
     main,
 )
@@ -89,6 +92,26 @@ class _ExecutionSnapshot(SimpleNamespace):
 
     def __getattr__(self, name: str) -> object:
         return None
+
+
+def test_project_state_dir_keeps_workspace_lookup_for_policy_alias_only_workspace_mapping(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    nested = project / "src" / "notes"
+    nested.mkdir(parents=True)
+
+    result = _project_state_dir(
+        {"workspace": {"current_dir": str(nested), "project_root": str(project)}},
+        workspace_dir=str(nested),
+        project_root=str(project),
+        runtime_lookup_dir=str(nested),
+        active_runtime=None,
+        hook_payload=SimpleNamespace(
+            workspace_keys=("cwd", "current_dir"),
+            project_dir_keys=("project_dir", "project_root"),
+        ),
+    )
+
+    assert result == str(nested)
 
 # ─── _context_bar edge cases ───────────────────────────────────────────────
 
@@ -182,6 +205,21 @@ class TestStatusMetadata:
 
         label = _read_workspace_label({}, str(current))
         assert label == "[workspace]"
+
+    def test_read_session_id_uses_adapter_exposed_runtime_key_before_top_level_legacy_field(self) -> None:
+        payload = {
+            "session_id": "legacy-top-level",
+            "workspace": {"runtime_session_id": "runtime-owned"},
+        }
+        hook_payload = SimpleNamespace(runtime_session_id_keys=("runtime_session_id",))
+
+        assert _read_session_id(payload, hook_payload) == "runtime-owned"
+
+    def test_read_session_id_ignores_bare_top_level_session_id_when_runtime_key_is_unavailable(self) -> None:
+        payload = {"session_id": "legacy-top-level"}
+        hook_payload = SimpleNamespace(runtime_session_id_keys=())
+
+        assert _read_session_id(payload, hook_payload) == ""
 
 class TestExecutionBadge:
     def test_first_result_gate_badge_wins(self) -> None:
@@ -379,6 +417,31 @@ class TestReadPosition:
         (planning / "state.json").write_text("not valid json{{{")
         assert _read_position(str(tmp_path)) == ""
 
+    def test_recoverable_state_uses_backup_state_json(self, tmp_path: Path) -> None:
+        planning = tmp_path / "GPD"
+        planning.mkdir()
+        (planning / "state.json").write_text("not valid json{{{")
+        state = default_state_dict()
+        state["position"]["current_phase"] = 6
+        state["position"]["total_phases"] = 12
+        (planning / "state.json.bak").write_text(json.dumps(state), encoding="utf-8")
+
+        assert _read_position(str(tmp_path)) == "P6/12"
+
+    def test_recoverable_state_uses_state_markdown_fallback(self, tmp_path: Path) -> None:
+        state = default_state_dict()
+        state["position"]["current_phase"] = 5
+        state["position"]["total_phases"] = 9
+        save_state_json(tmp_path, state)
+
+        planning = tmp_path / "GPD"
+        (planning / "state.json").unlink()
+        backup_file = planning / "state.json.bak"
+        if backup_file.exists():
+            backup_file.unlink()
+
+        assert _read_position(str(tmp_path)) == "P5/9"
+
     def test_nested_workspace_walks_up_to_project_root(self, tmp_path: Path) -> None:
         planning = tmp_path / "GPD"
         planning.mkdir()
@@ -439,7 +502,10 @@ class TestReadCurrentTask:
         with patch("gpd.hooks.install_context.ordered_todo_lookup_candidates", return_value=_todo_candidates(todo_dir)):
             assert _read_current_task("session-123") == ""
 
-    def test_newest_allowed_todo_file_wins_across_candidate_dirs(self, tmp_path: Path) -> None:
+    def test_higher_priority_todo_candidate_wins_even_when_lower_priority_file_is_newer(
+        self,
+        tmp_path: Path,
+    ) -> None:
         local_todo_dir = tmp_path / ".codex" / "todos"
         global_todo_dir = tmp_path / "home" / ".codex" / "todos"
         local_todo_dir.mkdir(parents=True)
@@ -461,7 +527,31 @@ class TestReadCurrentTask:
             "gpd.hooks.install_context.ordered_todo_lookup_candidates",
             return_value=_todo_candidates(local_todo_dir, global_todo_dir),
         ):
-            assert _read_current_task("session-123") == "Do not prefer global"
+            assert _read_current_task("session-123") == "Prefer local"
+
+    def test_lower_priority_todo_candidate_is_used_when_higher_priority_candidate_has_no_in_progress_task(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        local_todo_dir = tmp_path / ".codex" / "todos"
+        global_todo_dir = tmp_path / "home" / ".codex" / "todos"
+        local_todo_dir.mkdir(parents=True)
+        global_todo_dir.mkdir(parents=True)
+
+        (local_todo_dir / "session-123-agent-local.json").write_text(
+            json.dumps([{"status": "completed", "activeForm": "Completed local"}]),
+            encoding="utf-8",
+        )
+        (global_todo_dir / "session-123-agent-global.json").write_text(
+            json.dumps([{"status": "in_progress", "activeForm": "Use global fallback"}]),
+            encoding="utf-8",
+        )
+
+        with patch(
+            "gpd.hooks.install_context.ordered_todo_lookup_candidates",
+            return_value=_todo_candidates(local_todo_dir, global_todo_dir),
+        ):
+            assert _read_current_task("session-123") == "Use global fallback"
 
     def test_corrupt_todo_file_returns_empty(self, tmp_path: Path) -> None:
         todo_dir = tmp_path / "todos"
@@ -1051,9 +1141,19 @@ class TestMain:
                 io.StringIO(json.dumps({"workspace": {"current_dir": str(nested), "project_dir": str(project)}})),
             ),
             patch("sys.stdout", captured),
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=process_cwd),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
-            patch("gpd.hooks.payload_roots.os.getcwd", return_value=str(process_cwd)),
+            patch(
+                "gpd.hooks.statusline._resolve_payload_roots",
+                return_value=SimpleNamespace(
+                    workspace_dir=str(nested),
+                    project_root=str(project),
+                    project_dir_present=True,
+                    project_dir_trusted=False,
+                ),
+            ),
+            patch(
+                "gpd.hooks.statusline.resolve_runtime_lookup_context_from_payload_roots",
+                return_value=SimpleNamespace(lookup_dir=str(nested), active_runtime=None),
+            ) as mock_runtime_lookup,
             patch("gpd.hooks.statusline._read_runtime_hints", return_value=_runtime_hints_payload(_visibility_state())) as mock_hints,
             patch("gpd.hooks.statusline._read_position", return_value="") as mock_position,
             patch("gpd.hooks.statusline._read_current_task", return_value="") as mock_task,
@@ -1062,11 +1162,12 @@ class TestMain:
         ):
             main()
 
-        mock_hints.assert_called_once_with(str(project))
-        mock_position.assert_called_once_with(str(project))
-        mock_task.assert_called_once_with("", str(project))
-        mock_execution.assert_called_once_with(str(project))
-        mock_update.assert_called_once_with(str(project))
+        mock_runtime_lookup.assert_called_once()
+        mock_hints.assert_called_once_with(str(nested))
+        mock_position.assert_called_once_with(str(nested))
+        mock_task.assert_called_once_with("", str(nested))
+        mock_execution.assert_called_once_with(str(nested))
+        mock_update.assert_called_once_with(str(nested))
         assert "[project/src/notes]" in captured.getvalue()
 
     def test_main_uses_workspace_local_runtime_lookup_and_runtime_session_id_keys(
@@ -1076,6 +1177,7 @@ class TestMain:
         project = tmp_path / "project"
         nested = project / "src" / "notes"
         nested.mkdir(parents=True)
+        (project / "GPD").mkdir(parents=True)
         _mark_complete_install(nested / ".codex", runtime="codex")
 
         payload = {
@@ -1095,7 +1197,12 @@ class TestMain:
             patch("sys.stdout", captured),
             patch(
                 "gpd.hooks.statusline._resolve_payload_roots",
-                return_value=SimpleNamespace(workspace_dir=str(nested), project_root=str(project)),
+                return_value=SimpleNamespace(
+                    workspace_dir=str(nested),
+                    project_root=str(project),
+                    project_dir_present=True,
+                    project_dir_trusted=False,
+                ),
             ),
             patch(
                 "gpd.hooks.install_context.resolve_hook_lookup_context",
@@ -1106,6 +1213,10 @@ class TestMain:
                     preferred_runtime="codex",
                 ),
             ),
+            patch(
+                "gpd.hooks.statusline.resolve_runtime_lookup_context_from_payload_roots",
+                return_value=SimpleNamespace(lookup_dir=str(nested), active_runtime="codex"),
+            ) as mock_runtime_lookup,
             patch("gpd.hooks.statusline._hook_payload_policy", return_value=hook_payload) as mock_policy,
             patch("gpd.hooks.statusline._read_runtime_hints", return_value=_runtime_hints_payload(_visibility_state())) as mock_hints,
             patch("gpd.hooks.statusline._read_execution_state", return_value={}) as mock_execution,
@@ -1117,7 +1228,8 @@ class TestMain:
         ):
             main()
 
-        assert mock_policy.call_args_list == [call(str(project)), call(str(nested))]
+        mock_runtime_lookup.assert_called_once()
+        assert mock_policy.call_args_list == [call(str(nested))]
         mock_hints.assert_called_once_with(str(nested))
         mock_execution.assert_called_once_with(str(nested))
         mock_position.assert_called_once_with(str(nested))
@@ -1148,12 +1260,30 @@ class TestMain:
             context_remaining_keys=(),
         )
 
+        def _payload_runtime(cwd: str | None = None) -> str | None:
+            if cwd == str(project):
+                return "codex"
+            if cwd == str(nested):
+                return "claude-code"
+            return None
+
         captured = io.StringIO()
         with (
             patch("sys.stdin", io.StringIO(json.dumps(payload))),
             patch("sys.stdout", captured),
-            patch("gpd.hooks.statusline._resolve_payload_roots", return_value=SimpleNamespace(workspace_dir=str(nested), project_root=str(project))),
-            patch("gpd.hooks.statusline._payload_runtime", return_value="codex"),
+            patch(
+                "gpd.hooks.statusline._resolve_payload_roots",
+                return_value=SimpleNamespace(
+                    workspace_dir=str(nested),
+                    project_root=str(project),
+                    project_dir_present=True,
+                    project_dir_trusted=True,
+                ),
+            ),
+            patch(
+                "gpd.hooks.statusline.resolve_runtime_lookup_context_from_payload_roots",
+                return_value=SimpleNamespace(lookup_dir=str(project), active_runtime="codex"),
+            ) as mock_runtime_lookup,
             patch("gpd.hooks.statusline._hook_payload_policy", return_value=hook_payload) as mock_policy,
             patch("gpd.hooks.statusline._read_runtime_hints", return_value=_runtime_hints_payload(_visibility_state())) as mock_hints,
             patch("gpd.hooks.statusline._read_execution_state", return_value={}) as mock_execution,
@@ -1165,7 +1295,8 @@ class TestMain:
         ):
             main()
 
-        assert mock_policy.call_args_list == [call(str(project)), call(str(project))]
+        mock_runtime_lookup.assert_called_once()
+        assert mock_policy.call_args_list == [call(str(project))]
         mock_hints.assert_called_once_with(str(project))
         mock_execution.assert_called_once_with(str(project))
         mock_position.assert_called_once_with(str(project))
@@ -1175,10 +1306,79 @@ class TestMain:
         mock_model.assert_called_once()
         assert "[project/src/notes]" in captured.getvalue()
 
+    def test_main_uses_workspace_runtime_lookup_when_project_dir_hint_is_not_authoritative(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        project = tmp_path / "project"
+        nested = project / "src" / "notes"
+        nested.mkdir(parents=True)
+        (project / "GPD").mkdir(parents=True)
+        _mark_complete_install(nested / ".codex", runtime="codex")
+
+        stale_project_dir = tmp_path / "stale" / "project"
+        payload = {
+            "workspace": {"cwd": str(nested), "project_dir": str(stale_project_dir)},
+            "runtime_session_id": "sess-runtime",
+        }
+        hook_payload = SimpleNamespace(
+            project_dir_keys=("project_dir",),
+            runtime_session_id_keys=("runtime_session_id",),
+            model_keys=(),
+            context_remaining_keys=(),
+        )
+
+        def _fake_payload_runtime(cwd: str | None = None) -> str | None:
+            if cwd == str(nested):
+                return "codex"
+            if cwd == str(project):
+                return None
+            return None
+
+        captured = io.StringIO()
+        with (
+            patch("sys.stdin", io.StringIO(json.dumps(payload))),
+            patch("sys.stdout", captured),
+            patch(
+                "gpd.hooks.statusline._resolve_payload_roots",
+                return_value=SimpleNamespace(
+                    workspace_dir=str(nested),
+                    project_root=str(project),
+                    project_dir_present=True,
+                    project_dir_trusted=False,
+                ),
+            ),
+            patch(
+                "gpd.hooks.statusline.resolve_runtime_lookup_context_from_payload_roots",
+                return_value=SimpleNamespace(lookup_dir=str(nested), active_runtime="codex"),
+            ) as mock_runtime_lookup,
+            patch("gpd.hooks.statusline._hook_payload_policy", return_value=hook_payload) as mock_policy,
+            patch("gpd.hooks.statusline._read_runtime_hints", return_value=_runtime_hints_payload(_visibility_state())) as mock_hints,
+            patch("gpd.hooks.statusline._read_execution_state", return_value={}) as mock_execution,
+            patch("gpd.hooks.statusline._read_position", return_value="") as mock_position,
+            patch("gpd.hooks.statusline._read_current_task", return_value="") as mock_task,
+            patch("gpd.hooks.statusline._check_update", return_value="") as mock_update,
+            patch("gpd.hooks.statusline._read_workspace_label", return_value="[project/src/notes]") as mock_label,
+            patch("gpd.hooks.statusline._read_model_label", return_value="model") as mock_model,
+        ):
+            main()
+
+        mock_runtime_lookup.assert_called_once()
+        assert mock_policy.call_args_list == [call(str(nested))]
+        mock_hints.assert_called_once_with(str(nested))
+        mock_execution.assert_called_once_with(str(nested))
+        mock_position.assert_called_once_with(str(nested))
+        mock_task.assert_called_once_with("sess-runtime", str(nested))
+        mock_update.assert_called_once_with(str(nested))
+        mock_label.assert_called_once()
+        mock_model.assert_called_once()
+        assert "[project/src/notes]" in captured.getvalue()
+
     def test_main_uses_project_root_for_project_state_helpers_when_workspace_is_nested_mapping(self, tmp_path: Path) -> None:
         project = tmp_path / "project"
         nested = project / "src" / "notes"
         nested.mkdir(parents=True)
+        (project / "GPD").mkdir()
 
         captured = io.StringIO()
         with (
@@ -1224,7 +1424,7 @@ class TestMain:
         mock_update.assert_called_once_with(str(project))
         assert "[project/src/notes]" in captured.getvalue()
 
-    def test_main_uses_project_root_for_top_level_project_dir_aliases(self, tmp_path: Path) -> None:
+    def test_main_uses_workspace_for_top_level_project_dir_aliases_without_project_layout(self, tmp_path: Path) -> None:
         project = tmp_path / "project"
         nested = project / "src" / "notes"
         nested.mkdir(parents=True)
@@ -1241,12 +1441,12 @@ class TestMain:
         ):
             main()
 
-        mock_hints.assert_called_once_with(str(project))
-        mock_position.assert_called_once_with(str(project))
-        mock_task.assert_called_once_with("", str(project))
-        mock_execution.assert_called_once_with(str(project))
-        mock_update.assert_called_once_with(str(project))
-        assert "[project/src/notes]" in captured.getvalue()
+        mock_hints.assert_called_once_with(str(nested))
+        mock_position.assert_called_once_with(str(nested))
+        mock_task.assert_called_once_with("", str(nested))
+        mock_execution.assert_called_once_with(str(nested))
+        mock_update.assert_called_once_with(str(nested))
+        assert "[notes]" in captured.getvalue()
 
     def test_main_prefers_live_execution_task_over_todo_fallback(self) -> None:
         captured = io.StringIO()

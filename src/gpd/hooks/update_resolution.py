@@ -110,7 +110,7 @@ def primary_update_cache_file(candidates: list[object], *, home: str | Path | No
         candidate_path = getattr(candidates[0], "path", None)
         if isinstance(candidate_path, Path):
             return candidate_path
-    resolved_home = Path.home() if home is None else Path(home)
+    resolved_home = Path.home() if home is None else Path(home).expanduser().resolve(strict=False)
     return resolved_home / PLANNING_DIR_NAME / CACHE_DIR_NAME / UPDATE_CACHE_FILENAME
 
 

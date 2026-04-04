@@ -203,7 +203,7 @@ GPD currently installs into four AI runtimes. To preselect one during install, u
 | OpenCode | `--opencode` | `/gpd-help` | `/gpd-start` | `/gpd-tour` | `/gpd-new-project --minimal` | `/gpd-map-research` | `/gpd-resume-work` |
 
 Each runtime uses its own command prefix, but the workflow is the same across all four. After installing GPD, open your chosen runtime normally from your system terminal and use the commands shown above.
-After your first successful start or later, use your runtime's `settings` command to review autonomy, workflow defaults, and model-cost posture.
+After your first successful start or later, use your runtime's `settings` command to review autonomy, workflow defaults, model-cost posture, runtime permission sync, and preset/tier overrides.
 
 Notes:
 - Claude Code-specific note: GPD writes `.claude/settings.json` for hooks and statusline. MCP servers are added to project `.mcp.json` for local installs or `~/.claude.json` for global installs.

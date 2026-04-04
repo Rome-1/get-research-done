@@ -124,6 +124,13 @@ def runtime_with_permissions_surface(surface: str) -> str:
     )
 
 
+def runtime_prompt_free_mode_value(runtime_name: str) -> str:
+    value = get_runtime_capabilities(runtime_name).prompt_free_mode_value
+    if not isinstance(value, str) or not value.strip():
+        raise LookupError(f"Runtime {runtime_name!r} does not advertise a prompt-free permissions mode value")
+    return value
+
+
 def runtime_with_multiword_alias(*, exclude: tuple[str, ...] = ()) -> tuple[str, str]:
     excluded = set(exclude)
     for descriptor in _RUNTIME_DESCRIPTORS:

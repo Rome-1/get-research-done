@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
+import gpd.core.health as health_module
 from gpd.core.constants import ProjectLayout
 from gpd.core.contract_validation import validate_project_contract
 from gpd.core.errors import ValidationError
@@ -46,16 +47,19 @@ from gpd.core.health import (
 from gpd.core.state import default_state_dict, generate_state_markdown, save_state_json
 from gpd.core.storage_paths import ProjectStorageLayout
 from gpd.hooks.install_metadata import InstallTargetAssessment
+from tests.latex_test_support import toolchain_capability as _toolchain_capability
 from tests.runtime_test_support import (
     FOREIGN_RUNTIME,
     PRIMARY_RUNTIME,
     runtime_config_dir_name,
     runtime_launch_executable,
     runtime_primary_config_filename,
+    runtime_prompt_free_mode_value,
     runtime_target_dir,
 )
 
 _PRIMARY_CONFIG_DIR = runtime_config_dir_name(PRIMARY_RUNTIME)
+_PRIMARY_PROMPT_FREE_MODE = runtime_prompt_free_mode_value(PRIMARY_RUNTIME)
 _PRIMARY_TARGET_DIR = runtime_target_dir(Path("/tmp/project"), PRIMARY_RUNTIME)
 _PRIMARY_LAUNCHER_PATH = f"/usr/bin/{runtime_launch_executable(PRIMARY_RUNTIME)}"
 _PRIMARY_RELAUNCH_STEP = f"Exit and relaunch {PRIMARY_RUNTIME} before treating unattended use as ready."
@@ -63,10 +67,34 @@ _PRIMARY_RELAUNCH_STEP = f"Exit and relaunch {PRIMARY_RUNTIME} before treating u
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
 
 
+def _latex_toolchain_check(**overrides: object) -> HealthCheck:
+    capability = _toolchain_capability(**overrides).model_dump(mode="python")
+    status = CheckStatus.OK if capability["full_toolchain_available"] else CheckStatus.WARN
+    return HealthCheck(
+        status=status,
+        label="LaTeX Toolchain",
+        details=capability,
+        warnings=list(capability.get("warnings", [])),
+    )
+
+
 def _draft_invalid_project_contract() -> dict[str, object]:
     contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
     contract["claims"][0]["references"] = ["missing-ref"]
     return contract
+
+
+def test_doctor_active_runtime_settings_command_falls_back_to_runtime_neutral_reference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "gpd.hooks.runtime_detect.detect_runtime_for_gpd_use",
+        lambda cwd=None: (_ for _ in ()).throw(RuntimeError("no runtime")),
+    )
+
+    assert health_module._doctor_active_runtime_settings_command(cwd=Path("/tmp")) == (
+        "the active runtime's `settings` command"
+    )
 
 # ─── Model Tests ─────────────────────────────────────────────────────────────
 
@@ -290,7 +318,7 @@ class TestHealthModels:
                 "autonomy": "balanced",
                 "target": str(_PRIMARY_TARGET_DIR),
                 "desired_mode": "default",
-                "configured_mode": "bypassPermissions",
+                "configured_mode": _PRIMARY_PROMPT_FREE_MODE,
                 "config_aligned": True,
                 "requires_relaunch": False,
             },
@@ -382,20 +410,7 @@ class TestDoctorCheckLatexToolchain:
     def test_full_toolchain_reports_ok(self, monkeypatch):
         monkeypatch.setattr(
             "gpd.mcp.paper.compiler.detect_latex_toolchain",
-            lambda: SimpleNamespace(
-                available=True,
-                compiler_path="/usr/bin/pdflatex",
-                distribution="TeX Live",
-                message="pdflatex found (TeX Live): /usr/bin/pdflatex",
-            ),
-        )
-        monkeypatch.setattr(
-            "gpd.core.health.shutil.which",
-            lambda binary: {
-                "latexmk": "/usr/bin/latexmk",
-                "bibtex": "/usr/bin/bibtex",
-                "kpsewhich": "/usr/bin/kpsewhich",
-            }.get(binary),
+            lambda: _toolchain_capability(),
         )
 
         result = _doctor_check_latex_toolchain()
@@ -403,6 +418,7 @@ class TestDoctorCheckLatexToolchain:
         assert result.status == CheckStatus.OK
         assert result.details["available"] is True
         assert result.details["compiler_available"] is True
+        assert result.details["full_toolchain_available"] is True
         assert result.details["latexmk_available"] is True
         assert result.details["bibtex_available"] is True
         assert result.details["kpsewhich_available"] is True
@@ -414,25 +430,22 @@ class TestDoctorCheckLatexToolchain:
     def test_partial_toolchain_reports_warn(self, monkeypatch):
         monkeypatch.setattr(
             "gpd.mcp.paper.compiler.detect_latex_toolchain",
-            lambda: SimpleNamespace(
-                available=True,
-                compiler_path="/usr/bin/pdflatex",
-                distribution="TeX Live",
-                message="pdflatex found (TeX Live): /usr/bin/pdflatex",
+            lambda: _toolchain_capability(
+                latexmk_available=False,
+                kpsewhich_available=False,
+                warnings=[
+                    "latexmk not found; multi-pass compilation will fall back to manual passes.",
+                    "kpsewhich not found; TeX resource checks will assume installed resources.",
+                ],
             ),
-        )
-        monkeypatch.setattr(
-            "gpd.core.health.shutil.which",
-            lambda binary: {
-                "bibtex": "/usr/bin/bibtex",
-            }.get(binary),
         )
 
         result = _doctor_check_latex_toolchain()
 
         assert result.status == CheckStatus.WARN
-        assert result.details["available"] is False
+        assert result.details["available"] is True
         assert result.details["compiler_available"] is True
+        assert result.details["full_toolchain_available"] is False
         assert result.details["latexmk_available"] is False
         assert result.details["bibtex_available"] is True
         assert result.details["kpsewhich_available"] is False
@@ -444,24 +457,60 @@ class TestDoctorCheckLatexToolchain:
     def test_missing_compiler_reports_warn(self, monkeypatch):
         monkeypatch.setattr(
             "gpd.mcp.paper.compiler.detect_latex_toolchain",
-            lambda: SimpleNamespace(
-                available=False,
+            lambda: _toolchain_capability(
+                compiler_available=False,
                 compiler_path=None,
                 distribution=None,
+                bibtex_available=False,
+                latexmk_available=False,
+                kpsewhich_available=False,
+                readiness_state="blocked",
                 message="No LaTeX compiler found.\nInstall a LaTeX distribution.",
+                warnings=["Install a LaTeX distribution to enable paper compilation."],
             ),
         )
-        monkeypatch.setattr("gpd.core.health.shutil.which", lambda *_args: None)
 
         result = _doctor_check_latex_toolchain()
 
         assert result.status == CheckStatus.WARN
         assert result.details["available"] is False
         assert result.details["compiler_available"] is False
+        assert result.details["full_toolchain_available"] is False
         assert result.details["paper_build_ready"] is False
         assert result.details["arxiv_submission_ready"] is False
         assert result.details["missing_components"] == ["pdflatex"]
-        assert result.warnings == ["No LaTeX compiler found.\nInstall a LaTeX distribution."]
+        assert result.details["readiness_state"] == "blocked"
+        assert result.details["message"] == "No LaTeX compiler found.\nInstall a LaTeX distribution."
+        assert result.warnings == ["Install a LaTeX distribution to enable paper compilation."]
+
+    def test_import_failure_keeps_latex_capability_shape_stable(self, monkeypatch):
+        import builtins
+
+        original_import = builtins.__import__
+
+        def _failing_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "gpd.mcp.paper.compiler":
+                raise ImportError("boom")
+            return original_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", _failing_import)
+
+        result = _doctor_check_latex_toolchain()
+
+        assert result.status == CheckStatus.WARN
+        assert result.details["available"] is False
+        assert result.details["compiler_available"] is False
+        assert result.details["full_toolchain_available"] is False
+        assert result.details["paper_build_ready"] is False
+        assert result.details["arxiv_submission_ready"] is False
+        assert result.details["compiler"] == "pdflatex"
+        assert result.details["latexmk_available"] is None
+        assert result.details["bibtex_available"] is None
+        assert result.details["kpsewhich_available"] is None
+        assert result.details["readiness_state"] == "blocked"
+        assert result.details["message"] == "Could not load LaTeX detection helpers."
+        assert any("Could not load LaTeX detection helpers" in warning for warning in result.details["warnings"])
+        assert any("Could not load LaTeX detection helpers" in warning for warning in result.warnings)
 
     def test_workflow_presets_do_not_backfill_publication_readiness_from_minimal_legacy_latex_payload(self) -> None:
         result = _doctor_check_workflow_presets(
@@ -478,9 +527,14 @@ class TestDoctorCheckLatexToolchain:
         publication = checks["publication-manuscript"]
 
         assert publication["status"] == "degraded"
-        assert publication["summary"] == "degraded without BibTeX support: draft/review remain usable, but build/submission stay blocked"
-        assert publication["ready_workflows"] == []
-        assert publication["blocked_workflows"] == ["paper-build", "arxiv-submission"]
+        assert publication["summary"] == (
+            "degraded without bibliography tooling: draft/review remain usable, while paper-build and "
+            "arxiv-submission may fail for manuscripts that require bibliography processing"
+        )
+        assert publication["ready_workflows"] == ["write-paper", "peer-review"]
+        assert publication["blocked_workflows"] == []
+        assert publication["degraded_workflows"] == ["paper-build", "arxiv-submission"]
+        assert result.details["latex_capability"]["full_toolchain_available"] is False
 
 
 class TestCheckProjectStructure:
@@ -1021,6 +1075,19 @@ class TestRunHealth:
         assert state_check.details["state_source"] == "state.json"
         assert report.fixes_applied == ["Regenerated state.json from STATE.md"]
 
+    def test_state_validity_phase_format_warning_uses_recovered_backup_state(self, tmp_path: Path) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        layout = ProjectLayout(cwd)
+
+        backup_state = default_state_dict()
+        backup_state["position"]["current_phase"] = "5"
+        save_state_json(cwd, backup_state)
+        layout.state_json.write_text("{bad json\n", encoding="utf-8")
+
+        result = check_state_validity(cwd)
+
+        assert any('phase ID format: "5" -- expected zero-padded' in warning for warning in result.warnings)
+
     def test_fix_mode_restores_state_pair_coherently(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
         layout = ProjectLayout(cwd)
@@ -1118,7 +1185,7 @@ class TestRunDoctor:
             ),
             patch(
                 "gpd.core.health._doctor_check_latex_toolchain",
-                return_value=HealthCheck(status=CheckStatus.OK, label="LaTeX Toolchain"),
+                return_value=_latex_toolchain_check(),
             ),
             patch("gpd.core.health.assess_install_target", return_value=assessment),
         ):
@@ -1498,7 +1565,7 @@ trigger:
             ),
             patch(
                 "gpd.core.health._doctor_check_latex_toolchain",
-                return_value=HealthCheck(status=CheckStatus.OK, label="LaTeX Toolchain"),
+                return_value=_latex_toolchain_check(),
             ),
         ):
             report = run_doctor(
@@ -1531,12 +1598,7 @@ trigger:
         assert publication["summary"] == "ready"
         assert publication["status"] == "ready"
         assert publication["depends_on"] == ["LaTeX Toolchain"]
-        assert publication["ready_workflows"] == [
-            "write-paper",
-            "peer-review",
-            "paper-build",
-            "arxiv-submission",
-        ]
+        assert publication["ready_workflows"] == ["write-paper", "peer-review", "paper-build", "arxiv-submission"]
         assert publication["degraded_workflows"] == []
         assert publication["blocked_workflows"] == []
         assert checks["Workflow Presets"].warnings == []
@@ -1557,7 +1619,7 @@ trigger:
             ),
             patch(
                 "gpd.core.health._doctor_check_latex_toolchain",
-                return_value=HealthCheck(status=CheckStatus.OK, label="LaTeX Toolchain"),
+                return_value=_latex_toolchain_check(),
             ),
         ):
             report = run_doctor(specs_dir=specs_dir, version="0.1.0", runtime=PRIMARY_RUNTIME, install_scope="global")
@@ -1596,7 +1658,7 @@ trigger:
             ),
             patch(
                 "gpd.core.health._doctor_check_latex_toolchain",
-                return_value=HealthCheck(status=CheckStatus.OK, label="LaTeX Toolchain"),
+                return_value=_latex_toolchain_check(),
             ),
         ):
             report = run_doctor(
@@ -1637,9 +1699,15 @@ trigger:
             ),
             patch(
                 "gpd.core.health._doctor_check_latex_toolchain",
-                return_value=HealthCheck(
-                    status=CheckStatus.WARN,
-                    label="LaTeX Toolchain",
+                return_value=_latex_toolchain_check(
+                    compiler_available=False,
+                    compiler_path=None,
+                    distribution=None,
+                    bibtex_available=False,
+                    latexmk_available=False,
+                    kpsewhich_available=False,
+                    readiness_state="blocked",
+                    message="No LaTeX compiler found.",
                     warnings=["latex not installed"],
                 ),
             ),
@@ -1690,8 +1758,8 @@ trigger:
             "arxiv-submission",
         ]
         assert checks["Workflow Presets"].warnings == [
-            "Publication / manuscript and full research presets are degraded without a paper-build-ready LaTeX toolchain: "
-            "`write-paper` and `peer-review` remain usable, but `paper-build` and `arxiv-submission` need compiler and bibliography support."
+            "Publication / manuscript and full research presets are degraded without a LaTeX compiler: "
+            "`write-paper` and `peer-review` remain usable, but `paper-build` and `arxiv-submission` stay blocked."
         ]
         assert all(
             checks[label].status != CheckStatus.FAIL
@@ -1721,7 +1789,7 @@ trigger:
             ),
             patch(
                 "gpd.core.health._doctor_check_latex_toolchain",
-                return_value=HealthCheck(status=CheckStatus.OK, label="LaTeX Toolchain"),
+                return_value=_latex_toolchain_check(),
             ),
         ):
             report = run_doctor(
@@ -1783,7 +1851,7 @@ trigger:
             ),
             patch(
                 "gpd.core.health._doctor_check_latex_toolchain",
-                return_value=HealthCheck(status=CheckStatus.OK, label="LaTeX Toolchain"),
+                return_value=_latex_toolchain_check(),
             ),
         ):
             report = run_doctor(
@@ -1820,7 +1888,7 @@ trigger:
             ),
             patch(
                 "gpd.core.health._doctor_check_latex_toolchain",
-                return_value=HealthCheck(status=CheckStatus.OK, label="LaTeX Toolchain"),
+                return_value=_latex_toolchain_check(),
             ),
         ):
             report = run_doctor(
@@ -1853,7 +1921,17 @@ trigger:
         )
         monkeypatch.setattr(
             "gpd.core.health._doctor_check_latex_toolchain",
-            lambda: HealthCheck(status=CheckStatus.WARN, label="LaTeX Toolchain", warnings=["optional"]),
+            lambda: _latex_toolchain_check(
+                compiler_available=False,
+                compiler_path=None,
+                distribution=None,
+                bibtex_available=False,
+                latexmk_available=False,
+                kpsewhich_available=False,
+                readiness_state="blocked",
+                message="No LaTeX compiler found.",
+                warnings=["optional"],
+            ),
         )
 
         report = run_doctor(
@@ -1920,21 +1998,8 @@ trigger:
             ),
             patch(
                 "gpd.core.health._doctor_check_latex_toolchain",
-                return_value=HealthCheck(
-                    status=CheckStatus.WARN,
-                    label="LaTeX Toolchain",
-                    details={
-                        "available": False,
-                        "compiler_available": True,
-                        "compiler_path": "/usr/bin/pdflatex",
-                        "distribution": "TeX Live",
-                        "latexmk_available": False,
-                        "bibtex_available": True,
-                        "kpsewhich_available": True,
-                        "paper_build_ready": True,
-                        "arxiv_submission_ready": True,
-                        "missing_components": ["latexmk"],
-                    },
+                return_value=_latex_toolchain_check(
+                    latexmk_available=False,
                     warnings=["latexmk missing"],
                 ),
             ),
@@ -1964,7 +2029,7 @@ trigger:
         )
         monkeypatch.setattr(
             "gpd.core.health._doctor_check_latex_toolchain",
-            lambda: HealthCheck(status=CheckStatus.OK, label="LaTeX Toolchain"),
+            lambda: _latex_toolchain_check(),
         )
 
         report = run_doctor(
@@ -1990,7 +2055,7 @@ trigger:
         )
         monkeypatch.setattr(
             "gpd.core.health._doctor_check_latex_toolchain",
-            lambda: HealthCheck(status=CheckStatus.OK, label="LaTeX Toolchain"),
+            lambda: _latex_toolchain_check(),
         )
 
         report = run_doctor(

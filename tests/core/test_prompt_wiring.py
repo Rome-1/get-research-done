@@ -896,9 +896,8 @@ def test_new_project_wiring_mentions_contract_persistence_and_contract_first_dow
     assert "gpd state set-project-contract -" in workflow_text
     assert "/tmp/gpd-project-contract.json" not in workflow_text
     assert "temporary JSON file if needed" not in workflow_text
-    assert "Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `project_exists`, `has_research_map`, `planning_exists`, `has_research_files`, `has_project_manifest`, `has_existing_project`, `needs_research_map`, `has_git`, `project_contract`, `project_contract_load_info`, `project_contract_validation`." in workflow_text
-    assert "If `project_contract` is present in the init JSON, keep `project_contract`, `project_contract_load_info`, and `project_contract_validation` visible while deciding whether this is fresh work or a continuation." in workflow_text
-    assert "If the init JSON already contains `project_contract`, `project_contract_load_info`, or `project_contract_validation`, preserve that state in the approval gate and continuation decision." in workflow_text
+    assert "Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `project_exists`, `has_research_map`, `planning_exists`, `has_research_files`, `has_project_manifest`, `has_existing_project`, `needs_research_map`, `has_git`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`." in workflow_text
+    assert "Treat `project_contract` as approved scope only when `project_contract_gate.authoritative` is true." in workflow_text
     assert "Read PROJECT.md and `GPD/state.json` and extract" in workflow_text
     assert "Derive phases from requirements AND the approved project contract" in workflow_text
     assert "If auto mode and `autonomy` is not `supervised`" in workflow_text
@@ -1015,8 +1014,10 @@ def test_planning_and_phase_templates_surface_active_reference_context() -> None
     assert "**Active References:** {active_reference_context}" in planner_prompt
     assert "@path/to/reference-or-benchmark-anchor.md" in phase_prompt
     assert "Planning requires an approved scoping contract in `GPD/state.json`" in workflow_text
+    assert "project_contract_gate" in workflow_text
     assert "project_contract_validation" in workflow_text
     assert "project_contract_load_info" in workflow_text
+    assert "Treat `project_contract` as authoritative only when `project_contract_gate.authoritative` is true." in workflow_text
     assert "visible-but-blocked contract is not an approved planning contract" in workflow_text
     assert "**Project Contract:** {project_contract}" in workflow_text
     assert "**Active References:** {active_reference_context}" in workflow_text
@@ -2253,6 +2254,15 @@ def test_resume_workflow_surfaces_contract_load_and_validation_state() -> None:
     assert "the structured contract stays visible for context, but it is not approved execution scope" in resume_work
     assert "Contract repair required:" in resume_work
     assert "Repair the blocked contract or state-integrity issue before planning or execution" in resume_work
+
+
+def test_resume_command_keeps_internal_resume_backend_details_out_of_public_prompt_surface() -> None:
+    resume_command = (COMMANDS_DIR / "resume-work.md").read_text(encoding="utf-8")
+
+    assert "Public resume vocabulary centers on canonical continuation fields" in resume_command
+    assert "compatibility-only intake fields stay internal" in resume_command
+    assert "compat_resume_surface" not in resume_command
+    assert "gpd init resume" not in resume_command
 
 
 def test_execution_observability_and_resume_workflow_surfaces_stay_conservative_about_stalls() -> None:
