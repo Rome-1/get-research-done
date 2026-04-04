@@ -23,6 +23,7 @@ from tests.doc_surface_contracts import (
     assert_unattended_readiness_contract,
     assert_wolfram_plan_boundary_contract,
     assert_workflow_preset_surface_contract,
+    resume_authority_public_vocabulary_intro,
     resume_compat_alias_fields,
 )
 
@@ -564,8 +565,10 @@ def test_help_prompt_session_management_keeps_pause_before_leave_and_resume_on_r
         allow_explicit_alias_examples=False,
         require_generic_compatibility_note=True,
     )
-    assert "`state.json.continuation.handoff.resume_file` is canonical" in help_workflow
-    assert "The raw compatibility fields remain intake names only under `compat_resume_surface`" in help_workflow
+    assert resume_authority_public_vocabulary_intro() in help_workflow
+    assert "Compatibility-only intake fields stay internal" in help_workflow
+    assert "state.json.continuation.handoff.resume_file" not in help_workflow
+    assert "compat_resume_surface" not in help_workflow
     assert resume_authority_fields() == (
         "active_resume_kind",
         "active_resume_origin",

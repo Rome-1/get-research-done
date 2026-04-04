@@ -9,7 +9,7 @@ from pathlib import Path
 from gpd.core import context as context_module
 from gpd.core.context import init_resume
 from gpd.core.state import default_state_dict, generate_state_markdown
-from tests.doc_surface_contracts import assert_resume_authority_contract
+from tests.doc_surface_contracts import assert_resume_authority_contract, resume_authority_public_vocabulary_intro
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -44,8 +44,8 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "/gpd:resume-work" in portability_doc
     assert_resume_authority_contract(
         resume_doc,
-        allow_explicit_alias_examples=True,
-        require_generic_compatibility_note=True,
+        allow_explicit_alias_examples=False,
+        require_generic_compatibility_note=False,
     )
     assert_resume_authority_contract(
         help_doc,
@@ -58,14 +58,18 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
         require_generic_compatibility_note=True,
     )
     assert "Canonical continuation and recovery authority:" in resume_doc
-    assert "Compatibility-only raw intake:" in resume_doc
-    assert "compat_resume_surface" in resume_doc
+    assert resume_authority_public_vocabulary_intro() in resume_doc
+    assert resume_authority_public_vocabulary_intro() in help_doc
+    assert resume_authority_public_vocabulary_intro() in portability_doc
+    assert "Those fields are the public top-level resume vocabulary only." in resume_doc
+    assert "Those fields are the public top-level resume vocabulary only." in help_doc
+    assert "Those fields are the public top-level resume vocabulary only." in portability_doc
+    assert "compat_resume_surface" not in resume_doc
+    assert "gpd init resume" not in resume_doc
     assert "machine_change_detected" in resume_doc
-    assert "Legacy raw-intake aliases stay nested under compatibility mirrors only" in resume_doc
+    assert "compat_resume_surface" in portability_doc
     assert "shared resume resolver" in help_doc
-    assert "shared resume-surface resolver owns canonical candidate kind/origin semantics" in help_doc
-    assert "`compat_resume_surface` is the nested intake-only compatibility surface" in help_doc
-    assert resume_doc.index("active_resume_kind") < resume_doc.index("compat_resume_surface")
+    assert "compat_resume_surface" not in help_doc
     assert "Recorded handoff artifact is missing" in resume_doc
     assert "stopped-at continuation point" in resume_doc
     assert "previous hostname/platform" in resume_doc
@@ -81,7 +85,6 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "advisory continuity context only" in portability_doc
     assert "does not create a resumable bounded-segment candidate" in portability_doc
     assert "stays nested and advisory only" in portability_doc
-    assert portability_doc.index("active_resume_kind") < portability_doc.index("compat_resume_surface")
     assert 'set `active_resume_kind="bounded_segment"`' in portability_doc
     assert "The canonical public resume surface centers on `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`" in portability_doc
     assert "nested compatibility-only cues" in portability_doc
@@ -174,8 +177,10 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "canonical object first and only falls back to the derived execution head compatibility mirror when the canonical continuation is missing or incomplete" in schema_doc
     assert "That backend treats `continuation` as primary" in schema_doc
     assert schema_doc.index("| `continuation`") < schema_doc.index("| `session`")
-    assert "Raw compatibility cues remain nested under `compat_resume_surface` rather than primary resume fields." in schema_doc
-    assert "Raw compatibility cues remain nested under `compat_resume_surface` rather than primary resume fields." in schema_doc
+    assert (
+        "Raw compatibility cues remain nested under `compat_resume_surface` on the `gpd init resume` backend rather than primary resume fields"
+        in schema_doc
+    )
     assert "state.json.continuation.bounded_segment" in schema_doc
     assert "An append-only execution lineage records what happened." in state_machine_doc
     assert (

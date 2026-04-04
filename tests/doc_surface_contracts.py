@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
 
+from gpd.core.resume_surface import RESUME_COMPATIBILITY_ALIAS_KEYS
 from gpd.core.surface_phrases import post_start_settings_note, post_start_settings_recommendation
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -53,6 +55,7 @@ __all__ = [
     "assert_unattended_readiness_contract",
     "assert_wolfram_plan_boundary_contract",
     "assert_workflow_preset_surface_contract",
+    "resume_authority_public_vocabulary_intro",
     "resume_compat_alias_fields",
 ]
 
@@ -106,17 +109,25 @@ def _public_surface_contract_payload() -> dict[str, object]:
         "recovery_ladder",
     }
     assert payload["schema_version"] == 1
-    return payload
+    return copy.deepcopy(payload)
 
 
 def _contract_section(name: str) -> dict[str, object]:
     section = _public_surface_contract_payload()[name]
     assert isinstance(section, dict), f"{name} must be a JSON object"
-    return section
+    return dict(section)
 
 
 def _contract_string(section: dict[str, object], key: str, *, label: str) -> str:
     value = section[key]
+    assert isinstance(value, str) and value.strip(), f"{label}.{key} must be a non-empty string"
+    return value
+
+
+def _contract_optional_string(section: dict[str, object], key: str, *, label: str) -> str | None:
+    value = section.get(key)
+    if value is None:
+        return None
     assert isinstance(value, str) and value.strip(), f"{label}.{key} must be a non-empty string"
     return value
 
@@ -152,21 +163,35 @@ def beginner_startup_ladder_text() -> str:
 
 def _resume_authority_contract() -> dict[str, object]:
     section = _contract_section("resume_authority")
-    assert set(section) == {
+    required_keys = {
         "durable_authority_phrase",
         "public_vocabulary_intro",
         "public_fields",
         "top_level_boundary_phrase",
     }
+    optional_keys = {
+        "compat_surface",
+        "session_mirror",
+        "compatibility_phrase",
+    }
+    assert required_keys.issubset(section)
+    assert not (set(section) - required_keys - optional_keys)
     _contract_string(section, "durable_authority_phrase", label="resume_authority")
     _contract_string(section, "public_vocabulary_intro", label="resume_authority")
     _contract_string_list(section, "public_fields", label="resume_authority")
     _contract_string(section, "top_level_boundary_phrase", label="resume_authority")
+    for key in optional_keys & set(section):
+        _contract_string(section, key, label="resume_authority")
     return section
 
 
+def resume_authority_public_vocabulary_intro() -> str:
+    section = _resume_authority_contract()
+    return _contract_string(section, "public_vocabulary_intro", label="resume_authority")
+
+
 def resume_compat_alias_fields() -> tuple[str, ...]:
-    return ()
+    return RESUME_COMPATIBILITY_ALIAS_KEYS
 
 
 def assert_unattended_readiness_contract(content: str) -> None:
@@ -876,41 +901,52 @@ def assert_resume_authority_contract(
 ) -> None:
     contract = _resume_authority_contract()
     assert _contract_string(contract, "durable_authority_phrase", label="resume_authority") in content
-    _assert_contains_any(
-        content,
-        (
-            _contract_string(contract, "public_vocabulary_intro", label="resume_authority"),
-            "Public resume vocabulary centers on",
-        ),
-        label="resume vocabulary intro",
-    )
+    assert _contract_string(contract, "public_vocabulary_intro", label="resume_authority") in content
     for field in _contract_string_list(contract, "public_fields", label="resume_authority"):
         assert f"`{field}`" in content
     _assert_contains_any(
         content,
         (
-            "public top-level resume vocabulary only",
-            "public top-level resume vocabulary",
+            _contract_string(contract, "top_level_boundary_phrase", label="resume_authority"),
         ),
         label="resume top-level boundary",
     )
-    _assert_contains_any(
-        content,
-        (
-            "canonical continuation fields",
-            "canonical resume vocabulary",
-            "canonical continuation view",
-            "Public resume vocabulary centers on",
-        ),
-        label="resume canonical vocabulary framing",
-    )
+    if allow_explicit_alias_examples:
+        _assert_contains_any(
+            content,
+            (
+                _contract_optional_string(contract, "compatibility_phrase", label="resume_authority")
+                or "Compatibility-only intake fields stay internal and are not part of the public top-level resume vocabulary",
+                "Compatibility-only backend intake (`gpd init resume` only):",
+                "nested compatibility cues",
+            ),
+            label="resume compatibility phrase",
+        )
+        _assert_contains_any(
+            content,
+            (
+                _contract_optional_string(contract, "session_mirror", label="resume_authority")
+                or "legacy session mirror nested under compat_resume_surface",
+                "compat_resume_surface",
+                "session.resume_file",
+                "session_resume_file",
+                "current_execution",
+                "interrupted_agent",
+            ),
+            label="compatibility alias examples",
+        )
+    else:
+        assert "compat_resume_surface" not in content
+        for alias in resume_compat_alias_fields():
+            assert alias not in content
+        assert "Compatibility-only backend intake (`gpd init resume` only):" not in content
     if require_generic_compatibility_note:
         _assert_contains_any(
             content,
             (
-                "canonical continuation view",
-                "canonical continuation state",
-                "public top-level resume vocabulary",
+                _contract_optional_string(contract, "compatibility_phrase", label="resume_authority")
+                or "Compatibility-only intake fields stay internal and are not part of the public top-level resume vocabulary",
+                _contract_string(contract, "top_level_boundary_phrase", label="resume_authority"),
             ),
             label="generic compatibility note",
         )
