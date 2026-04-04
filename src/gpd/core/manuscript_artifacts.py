@@ -238,14 +238,6 @@ def resolve_current_manuscript_resolution(project_root: Path, *, allow_markdown:
     resolved = [resolution for resolution in root_resolutions if resolution.status == "resolved"]
     invalid = [resolution for resolution in root_resolutions if resolution.status == "invalid"]
 
-    if invalid:
-        return ManuscriptResolution(
-            status="invalid",
-            manuscript_root=None,
-            manuscript_entrypoint=None,
-            detail="; ".join(resolution.detail for resolution in invalid[:3]),
-            root_resolutions=root_resolutions,
-        )
     if len(resolved) == 1:
         resolution = resolved[0]
         return ManuscriptResolution(
@@ -264,6 +256,14 @@ def resolve_current_manuscript_resolution(project_root: Path, *, allow_markdown:
             manuscript_root=None,
             manuscript_entrypoint=None,
             detail=detail,
+            root_resolutions=root_resolutions,
+        )
+    if invalid:
+        return ManuscriptResolution(
+            status="invalid",
+            manuscript_root=None,
+            manuscript_entrypoint=None,
+            detail="; ".join(resolution.detail for resolution in invalid[:3]),
             root_resolutions=root_resolutions,
         )
     return ManuscriptResolution(

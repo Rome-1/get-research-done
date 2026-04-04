@@ -857,6 +857,57 @@ class TestRuntimePermissions:
         assert "GPD runtime sandbox mode" not in content
         assert "gpd_runtime_permissions" not in manifest
 
+    def test_sync_runtime_permissions_balanced_cleans_live_role_yolo_state_after_manifest_drift(
+        self,
+        adapter: CodexAdapter,
+        gpd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".codex"
+        target.mkdir()
+        skills = tmp_path / "skills"
+        skills.mkdir()
+        adapter.install(gpd_root, target, skills_dir=skills)
+        adapter.sync_runtime_permissions(target, autonomy="yolo")
+
+        # Simulate drift: manifest runtime-permissions state and root yolo markers are lost,
+        # while role files remain yolo-configured.
+        manifest_path = target / "gpd-file-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest.pop("gpd_runtime_permissions", None)
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        (target / "config.toml").write_text("", encoding="utf-8")
+
+        # Additional drift: one role is manually edited back to default while others stay yolo.
+        role_path = target / "agents" / "gpd-executor.toml"
+        role_content = role_path.read_text(encoding="utf-8")
+        role_path.write_text(
+            role_content.replace('sandbox_mode = "danger-full-access"', 'sandbox_mode = "workspace-write"').replace(
+                'approval_policy = "never"\n',
+                "",
+            ),
+            encoding="utf-8",
+        )
+
+        status = adapter.runtime_permissions_status(target, autonomy="balanced")
+        assert status["managed_by_gpd"] is True
+        assert status["config_aligned"] is False
+
+        result = adapter.sync_runtime_permissions(target, autonomy="balanced")
+        assert result["changed"] is True
+        assert result["sync_applied"] is True
+
+        role_files = sorted((target / "agents").glob("gpd-*.toml"))
+        assert role_files
+        for role_file in role_files:
+            parsed_role = tomllib.loads(role_file.read_text(encoding="utf-8"))
+            assert parsed_role["sandbox_mode"] == "workspace-write"
+            assert "approval_policy" not in parsed_role
+
+        status_after = adapter.runtime_permissions_status(target, autonomy="balanced")
+        assert status_after["managed_by_gpd"] is False
+        assert status_after["config_aligned"] is True
+
     def test_malformed_config_toml_fails_closed_for_status_and_sync(
         self,
         adapter: CodexAdapter,
@@ -1303,7 +1354,7 @@ class TestUninstall:
         assert (preserved_skill / "SKILL.md").exists()
         assert "gpd-user-keep" not in tracked_skill_names
 
-    def test_manifest_generated_skill_metadata_is_required_for_completeness_and_uninstall(
+    def test_install_completeness_and_uninstall_fallback_to_live_skill_surface_when_manifest_drifts(
         self,
         adapter: CodexAdapter,
         gpd_root: Path,
@@ -1319,13 +1370,38 @@ class TestUninstall:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         tracked_skill_names = set(manifest["codex_generated_skill_dirs"])
         manifest.pop("codex_generated_skill_dirs", None)
-        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
-        assert adapter.has_complete_install(target) is False
+        assert adapter.has_complete_install(target) is True
 
         adapter.uninstall(target, skills_dir=skills)
 
-        assert any((skills / name).exists() for name in tracked_skill_names)
+        assert all(not (skills / name).exists() for name in tracked_skill_names)
+
+    def test_uninstall_falls_back_to_packaged_skill_surface_when_manifest_and_install_metadata_drift(
+        self,
+        adapter: CodexAdapter,
+        gpd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".codex"
+        target.mkdir()
+        skills = tmp_path / "skills"
+        skills.mkdir()
+
+        adapter.install(gpd_root, target, skills_dir=skills)
+
+        manifest_path = target / "gpd-file-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        tracked_skill_names = set(manifest["codex_generated_skill_dirs"])
+        manifest.pop("codex_generated_skill_dirs", None)
+        manifest.pop("files", None)
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        shutil.rmtree(target / "get-physics-done")
+
+        adapter.uninstall(target, skills_dir=skills)
+
+        assert all(not (skills / name).exists() for name in tracked_skill_names)
 
     def test_uninstall_removes_agents(self, adapter: CodexAdapter, gpd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".codex"

@@ -37,16 +37,11 @@ class BeginnerRuntimeSurface:
     settings_command: str
 
 
-def beginner_runtime_surface(runtime_name: str) -> BeginnerRuntimeSurface:
-    adapter = get_adapter(runtime_name)
-    descriptor = next(
-        descriptor
-        for descriptor in iter_runtime_descriptors()
-        if descriptor.runtime_name == runtime_name
-    )
+def _beginner_runtime_surface_from_adapter(adapter) -> BeginnerRuntimeSurface:
+    descriptor = adapter.runtime_descriptor
     new_project_command = adapter.new_project_command
     return BeginnerRuntimeSurface(
-        runtime_name=runtime_name,
+        runtime_name=adapter.runtime_name,
         display_name=descriptor.display_name,
         install_flag=descriptor.install_flag,
         launch_command=adapter.launch_command,
@@ -61,5 +56,13 @@ def beginner_runtime_surface(runtime_name: str) -> BeginnerRuntimeSurface:
     )
 
 
+def beginner_runtime_surface(runtime_name: str) -> BeginnerRuntimeSurface:
+    adapter = get_adapter(runtime_name)
+    return _beginner_runtime_surface_from_adapter(adapter)
+
+
 def beginner_runtime_surfaces() -> tuple[BeginnerRuntimeSurface, ...]:
-    return tuple(beginner_runtime_surface(descriptor.runtime_name) for descriptor in iter_runtime_descriptors())
+    return tuple(
+        _beginner_runtime_surface_from_adapter(get_adapter(descriptor.runtime_name))
+        for descriptor in iter_runtime_descriptors()
+    )

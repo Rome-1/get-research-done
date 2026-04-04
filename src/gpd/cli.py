@@ -19,7 +19,6 @@ import dataclasses
 import glob
 import json
 import os
-import posixpath
 import re
 import shlex
 import sys
@@ -55,7 +54,6 @@ from gpd.core.manuscript_artifacts import (
 )
 from gpd.core.manuscript_artifacts import (
     locate_publication_artifact,
-    resolve_current_manuscript_entrypoint,
     resolve_current_manuscript_resolution,
 )
 from gpd.core.onboarding_surfaces import (
@@ -71,6 +69,10 @@ from gpd.core.proof_review import (
     manuscript_requires_theorem_bearing_review,
     resolve_manuscript_proof_review_status,
     resolve_phase_proof_review_status,
+)
+from gpd.core.publication_review_paths import (
+    manuscript_matches_review_artifact_path,
+    review_artifact_round,
 )
 from gpd.core.recovery_advice import (
     RecoveryAdvice,
@@ -5195,27 +5197,18 @@ _REFEREE_DECISION_FILENAME_RE = re.compile(r"^REFEREE-DECISION(?P<round_suffix>-
 _CLAIMS_FILENAME_RE = re.compile(r"^CLAIMS(?P<round_suffix>-R(?P<round>\d+))?\.json$")
 
 
-def _review_artifact_round(path: Path, *, pattern: re.Pattern[str]) -> tuple[int, str] | None:
-    match = pattern.fullmatch(path.name)
-    if match is None:
-        return None
-    round_text = match.group("round")
-    round_number = int(round_text) if round_text else 1
-    return round_number, match.group("round_suffix") or ""
-
-
 def _latest_publication_review_artifacts(review_dir: Path) -> PublicationReviewArtifacts | None:
     """Return the latest round-specific review-ledger/decision pair, if any."""
     ledger_by_round: dict[int, Path] = {}
     decision_by_round: dict[int, Path] = {}
 
     for path in sorted(review_dir.glob("REVIEW-LEDGER*.json")):
-        details = _review_artifact_round(path, pattern=_REVIEW_LEDGER_FILENAME_RE)
+        details = review_artifact_round(path, pattern=_REVIEW_LEDGER_FILENAME_RE)
         if details is not None:
             ledger_by_round[details[0]] = path
 
     for path in sorted(review_dir.glob("REFEREE-DECISION*.json")):
-        details = _review_artifact_round(path, pattern=_REFEREE_DECISION_FILENAME_RE)
+        details = review_artifact_round(path, pattern=_REFEREE_DECISION_FILENAME_RE)
         if details is not None:
             decision_by_round[details[0]] = path
 
@@ -5230,32 +5223,6 @@ def _latest_publication_review_artifacts(review_dir: Path) -> PublicationReviewA
         review_ledger=ledger_by_round.get(round_number),
         referee_decision=decision_by_round.get(round_number),
     )
-
-
-def _normalize_review_path_label(value: str) -> str:
-    normalized = value.strip().replace("\\", "/")
-    if not normalized:
-        return ""
-    return posixpath.normpath(normalized)
-
-
-def _manuscript_matches_review_artifact_path(artifact_path: str, manuscript: Path, *, cwd: Path) -> bool:
-    normalized_artifact_path = _normalize_review_path_label(artifact_path)
-    if not normalized_artifact_path:
-        return False
-
-    resolved_manuscript = manuscript.expanduser().resolve(strict=False)
-    resolved_cwd = cwd.expanduser().resolve(strict=False)
-    candidates = {
-        _normalize_review_path_label(resolved_manuscript.as_posix()),
-        _normalize_review_path_label(manuscript.as_posix()),
-    }
-    try:
-        candidates.add(_normalize_review_path_label(resolved_manuscript.relative_to(resolved_cwd).as_posix()))
-    except ValueError:
-        pass
-    return normalized_artifact_path in candidates
-
 
 _PHASE_EXECUTED_STATUSES = {
     "phase complete — ready for verification",
@@ -5960,18 +5927,14 @@ def _command_required_files_override_detail(
     """Return a detail string when explicit review inputs satisfy required-file gating."""
     if not isinstance(arguments, str) or not arguments.strip():
         return None
-    if getattr(command, "name", "") not in {"gpd:peer-review", "gpd:arxiv-submission"}:
-        return None
-    contract = getattr(command, "review_contract", None)
-    preflight_checks = getattr(contract, "preflight_checks", ())
-    if "manuscript" not in preflight_checks:
+    if not _command_supports_explicit_manuscript_subject(command):
         return None
 
     manuscript, _ = _resolve_review_preflight_manuscript(
         project_root,
         arguments,
-        allow_markdown=getattr(command, "name", "") != "gpd:arxiv-submission",
-        restrict_to_supported_roots=getattr(command, "name", "") == "gpd:arxiv-submission",
+        allow_markdown=not _command_requires_compiled_manuscript(command),
+        restrict_to_supported_roots=_command_explicit_manuscript_subject_uses_supported_roots(command),
         workspace_cwd=workspace_cwd,
     )
     if manuscript is None:
@@ -5986,6 +5949,43 @@ def _command_requires_manuscript_context(command: object) -> bool:
     return isinstance(preflight_checks, tuple | list) and "manuscript" in preflight_checks
 
 
+def _command_requires_compiled_manuscript(command: object) -> bool:
+    """Return whether manuscript checks must resolve to a compiled-submission surface."""
+    contract = getattr(command, "review_contract", None)
+    return _review_contract_requests_check(contract, "compiled_manuscript")
+
+
+def _command_explicit_manuscript_subject_uses_supported_roots(command: object) -> bool:
+    """Return whether explicit manuscript arguments must stay under supported manuscript roots."""
+    if not _command_supports_explicit_manuscript_subject(command):
+        return False
+
+    supported_roots = {"paper", "manuscript", "draft"}
+    roots = {Path(pattern).parts[0] for pattern in _command_required_file_patterns(command) if Path(pattern).parts}
+    return bool(roots) and roots <= supported_roots
+
+
+def _command_supports_explicit_manuscript_subject(command: object) -> bool:
+    """Return whether one command interprets positional subject as manuscript target."""
+    contract = getattr(command, "review_contract", None)
+    if not _command_requires_manuscript_context(command):
+        return False
+    if _review_contract_requests_check(contract, "referee_report_source"):
+        return False
+    return bool(_command_required_file_patterns(command))
+
+
+def _command_allows_manuscript_bootstrap(command: object) -> bool:
+    """Return whether missing manuscript roots are expected to be bootstrapped."""
+    contract = getattr(command, "review_contract", None)
+    return (
+        _command_requires_manuscript_context(command)
+        and not _command_required_file_patterns(command)
+        and not _review_contract_requests_check(contract, "compiled_manuscript")
+        and not _review_contract_requests_check(contract, "referee_report_source")
+    )
+
+
 def _command_context_manuscript_check(
     project_root: Path,
     command: object,
@@ -5997,22 +5997,22 @@ def _command_context_manuscript_check(
     if not _command_requires_manuscript_context(command):
         return None
 
-    command_name = getattr(command, "name", "")
-    if command_name in {"gpd:peer-review", "gpd:arxiv-submission"}:
+    allow_markdown = not _command_requires_compiled_manuscript(command)
+    if _command_supports_explicit_manuscript_subject(command):
         manuscript, detail = _resolve_review_preflight_manuscript(
             project_root,
             arguments,
-            allow_markdown=command_name != "gpd:arxiv-submission",
-            restrict_to_supported_roots=command_name == "gpd:arxiv-submission",
+            allow_markdown=allow_markdown,
+            restrict_to_supported_roots=_command_explicit_manuscript_subject_uses_supported_roots(command),
             workspace_cwd=workspace_cwd,
         )
         return manuscript is not None, detail
 
     resolution = resolve_current_manuscript_resolution(
         project_root,
-        allow_markdown=command_name != "gpd:arxiv-submission",
+        allow_markdown=allow_markdown,
     )
-    if command_name == "gpd:write-paper" and resolution.status == "missing":
+    if _command_allows_manuscript_bootstrap(command) and resolution.status == "missing":
         return (
             True,
             "no manuscript entrypoint found under paper/, manuscript/, or draft/; "
@@ -6545,26 +6545,30 @@ def _build_review_preflight(
                 )
 
     if "manuscript" in contract.preflight_checks:
-        if command.name in {"gpd:peer-review", "gpd:arxiv-submission"}:
+        allow_markdown = not _command_requires_compiled_manuscript(command)
+        supports_explicit_manuscript_subject = _command_supports_explicit_manuscript_subject(command)
+        if supports_explicit_manuscript_subject:
             manuscript, manuscript_detail = _resolve_review_preflight_manuscript(
                 project_cwd,
                 subject,
-                allow_markdown=command.name != "gpd:arxiv-submission",
-                restrict_to_supported_roots=command.name == "gpd:arxiv-submission",
+                allow_markdown=allow_markdown,
+                restrict_to_supported_roots=_command_explicit_manuscript_subject_uses_supported_roots(command),
                 workspace_cwd=cwd,
             )
-        elif command.name in {"gpd:write-paper", "gpd:respond-to-referees"}:
-            manuscript, manuscript_detail = _resolve_review_preflight_manuscript(project_cwd, None, allow_markdown=True)
         else:
-            manuscript, manuscript_detail = resolve_current_manuscript_entrypoint(project_cwd), ""
-        resolution = resolve_current_manuscript_resolution(project_cwd, allow_markdown=True)
-        if command.name == "gpd:write-paper" and subject is None and resolution.status == "missing":
+            manuscript, manuscript_detail = _resolve_review_preflight_manuscript(
+                project_cwd,
+                None,
+                allow_markdown=allow_markdown,
+            )
+        resolution = resolve_current_manuscript_resolution(project_cwd, allow_markdown=allow_markdown)
+        if _command_allows_manuscript_bootstrap(command) and subject is None and resolution.status == "missing":
             manuscript_detail = (
                 "no manuscript entrypoint found under paper/, manuscript/, or draft/; "
                 "fresh bootstrap is allowed and will scaffold a topic-specific manuscript stem under ./paper/"
             )
             manuscript_passed = True
-        elif command.name == "gpd:arxiv-submission":
+        elif _command_requires_compiled_manuscript(command):
             manuscript_passed = manuscript is not None
         elif subject is None:
             manuscript_passed = resolution.status == "resolved"
@@ -6573,9 +6577,13 @@ def _build_review_preflight(
         add_check(
             "manuscript",
             manuscript_passed,
-            manuscript_detail if manuscript is None or command.name in {"gpd:peer-review", "gpd:arxiv-submission"} else f"{_format_display_path(manuscript)} present",
+            (
+                manuscript_detail
+                if manuscript is None or supports_explicit_manuscript_subject
+                else f"{_format_display_path(manuscript)} present"
+            ),
         )
-        if subject and command.name == "gpd:respond-to-referees" and subject != "paste":
+        if subject and _review_contract_requests_check(contract, "referee_report_source") and subject != "paste":
             report_path = Path(subject)
             if not report_path.is_absolute():
                 report_path = project_cwd / report_path
@@ -6588,21 +6596,19 @@ def _build_review_preflight(
                     else f"missing {_format_display_path(report_path)}"
                 ),
             )
-        if manuscript is not None and public_command_name in {
-            "gpd:peer-review",
-            "gpd:write-paper",
-            "gpd:arxiv-submission",
-        }:
-            active_conditional_requirements = _review_contract_active_conditional_requirements(
-                contract,
-                project_cwd=project_cwd,
-                manuscript=manuscript,
-            )
-            conditional_blocking_preflight_checks = {
-                check_name
-                for requirement in active_conditional_requirements
-                for check_name in list(getattr(requirement, "blocking_preflight_checks", []) or [])
-            }
+        if manuscript is not None:
+            conditional_blocking_preflight_checks: set[str] = set()
+            if list(getattr(contract, "conditional_requirements", []) or []):
+                active_conditional_requirements = _review_contract_active_conditional_requirements(
+                    contract,
+                    project_cwd=project_cwd,
+                    manuscript=manuscript,
+                )
+                conditional_blocking_preflight_checks = {
+                    check_name
+                    for requirement in active_conditional_requirements
+                    for check_name in list(getattr(requirement, "blocking_preflight_checks", []) or [])
+                }
             requested_publication_checks = {
                 check_name
                 for check_name in (
@@ -6771,7 +6777,7 @@ def _build_review_preflight(
                                         ),
                                     )
                             else:
-                                review_ledger_valid = _manuscript_matches_review_artifact_path(
+                                review_ledger_valid = manuscript_matches_review_artifact_path(
                                     review_ledger.manuscript_path,
                                     manuscript,
                                     cwd=project_cwd,
@@ -6818,7 +6824,7 @@ def _build_review_preflight(
                                     )
                             else:
                                 decision_reasons: list[str] = []
-                                manuscript_matches_decision = _manuscript_matches_review_artifact_path(
+                                manuscript_matches_decision = manuscript_matches_review_artifact_path(
                                     decision.manuscript_path,
                                     manuscript,
                                     cwd=project_cwd,
@@ -6912,7 +6918,7 @@ def _build_review_preflight(
                     )
                     manuscript_proof_review_blocking = False
                     manuscript_proof_review_detail = manuscript_proof_review.detail
-                    if command.name == "gpd:arxiv-submission":
+                    if _command_requires_compiled_manuscript(command):
                         if "manuscript_proof_review" in conditional_blocking_preflight_checks:
                             manuscript_proof_review_passed = manuscript_proof_review.can_rely_on_prior_review
                             manuscript_proof_review_blocking = True
@@ -6922,7 +6928,7 @@ def _build_review_preflight(
                                 "no theorem-bearing claims were detected in the latest matching staged claim inventory "
                                 "or staged math review; manuscript proof review is not required for submission"
                             )
-                    elif command.name == "gpd:write-paper":
+                    elif _command_allows_manuscript_bootstrap(command):
                         if theorem_bearing_review_required:
                             manuscript_proof_review_passed = manuscript_proof_review.can_rely_on_prior_review
                             manuscript_proof_review_blocking = False

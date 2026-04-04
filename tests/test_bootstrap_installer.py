@@ -745,6 +745,48 @@ assert.throws(
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
 
 
+def test_bootstrap_public_surface_contract_validator_normalizes_whitespace_and_duplicate_entries() -> None:
+    result = _run_node_contract_validation(
+        r"""
+const assert = require("node:assert/strict");
+const { validateSharedPublicSurfaceContract } = require("./bin/install.js");
+const payload = require("./src/gpd/core/public_surface_contract.json");
+
+const noisyPayload = JSON.parse(JSON.stringify(payload));
+noisyPayload.beginner_onboarding.hub_url = `  ${payload.beginner_onboarding.hub_url}  `;
+noisyPayload.beginner_onboarding.startup_ladder = [
+  `  ${payload.beginner_onboarding.startup_ladder[0]}  `,
+  ...payload.beginner_onboarding.startup_ladder.slice(1),
+  payload.beginner_onboarding.startup_ladder[1],
+];
+noisyPayload.local_cli_bridge.commands = [
+  `  ${payload.local_cli_bridge.commands[0]}  `,
+  ...payload.local_cli_bridge.commands.slice(1),
+  payload.local_cli_bridge.commands[0],
+];
+noisyPayload.post_start_settings.primary_sentence = `  ${payload.post_start_settings.primary_sentence}  `;
+noisyPayload.resume_authority.public_fields = [
+  payload.resume_authority.public_fields[0],
+  `  ${payload.resume_authority.public_fields[1]}  `,
+  ...payload.resume_authority.public_fields.slice(2),
+  payload.resume_authority.public_fields[1],
+];
+noisyPayload.recovery_ladder.title = `  ${payload.recovery_ladder.title}  `;
+
+const normalized = validateSharedPublicSurfaceContract(noisyPayload);
+
+assert.equal(normalized.beginnerHubUrl, payload.beginner_onboarding.hub_url);
+assert.deepEqual(normalized.beginnerStartupLadder, payload.beginner_onboarding.startup_ladder);
+assert.deepEqual(normalized.localCliBridgeCommands, payload.local_cli_bridge.commands);
+assert.equal(normalized.settingsCommandSentence, payload.post_start_settings.primary_sentence);
+assert.deepEqual(normalized.resumeAuthority.publicFields, payload.resume_authority.public_fields);
+assert.equal(normalized.recoveryLadder.title, payload.recovery_ladder.title);
+"""
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+
+
 def test_bootstrap_runtime_catalog_validator_rejects_malformed_records() -> None:
     result = _run_node_contract_validation(
         r"""

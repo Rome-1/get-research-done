@@ -136,56 +136,49 @@ def _protocol_domain(name: str) -> str:
 
 
 def _normalize_protocol_tier(raw: object, *, protocol_name: str) -> int:
-    """Return a safe integer tier for protocol sorting and ranking."""
-    if isinstance(raw, bool):
-        logger.warning("Protocol %s has invalid tier %r; defaulting to 2", protocol_name, raw)
-        return 2
-    if isinstance(raw, int):
-        return raw
-    if isinstance(raw, str):
-        stripped = raw.strip()
-        if stripped:
-            try:
-                return int(stripped)
-            except ValueError:
-                pass
-
-    logger.warning("Protocol %s has invalid tier %r; defaulting to 2", protocol_name, raw)
-    return 2
+    """Return an integer tier for protocol sorting and ranking."""
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise ValueError(f"Protocol {protocol_name!r} has invalid frontmatter: tier must be an integer, got {raw!r}")
+    return raw
 
 
 def _normalize_protocol_load_when(raw: object, *, protocol_name: str) -> list[str]:
-    """Return a safe ``load_when`` keyword list for protocol routing."""
+    """Return a validated ``load_when`` keyword list for protocol routing."""
     if raw is None:
         return []
     if not isinstance(raw, list):
-        logger.warning("Protocol %s has invalid load_when %r; defaulting to []", protocol_name, raw)
-        return []
+        raise ValueError(
+            f"Protocol {protocol_name!r} has invalid frontmatter: load_when must be a list of non-empty strings"
+        )
 
     cleaned: list[str] = []
-    invalid_item_seen = False
     for item in raw:
-        if isinstance(item, str):
-            stripped = item.strip()
-            if stripped:
-                cleaned.append(stripped)
-                continue
-        invalid_item_seen = True
-
-    if invalid_item_seen:
-        logger.warning("Protocol %s has invalid load_when entries %r; dropping non-string items", protocol_name, raw)
+        if not isinstance(item, str):
+            raise ValueError(
+                "Protocol "
+                f"{protocol_name!r} has invalid frontmatter: load_when contains non-string entry {item!r}"
+            )
+        stripped = item.strip()
+        if not stripped:
+            raise ValueError(
+                f"Protocol {protocol_name!r} has invalid frontmatter: load_when entries must be non-empty strings"
+            )
+        cleaned.append(stripped)
     return cleaned
 
 
 def _normalize_protocol_context_cost(raw: object, *, protocol_name: str) -> str:
-    """Return a safe string ``context_cost`` label for protocol metadata."""
-    if isinstance(raw, str):
-        stripped = raw.strip()
-        if stripped:
-            return stripped
-
-    logger.warning("Protocol %s has invalid context_cost %r; defaulting to 'medium'", protocol_name, raw)
-    return "medium"
+    """Return a validated string ``context_cost`` label for protocol metadata."""
+    if not isinstance(raw, str):
+        raise ValueError(
+            f"Protocol {protocol_name!r} has invalid frontmatter: context_cost must be a non-empty string, got {raw!r}"
+        )
+    stripped = raw.strip()
+    if not stripped:
+        raise ValueError(
+            f"Protocol {protocol_name!r} has invalid frontmatter: context_cost must be a non-empty string"
+        )
+    return stripped
 
 
 # ---------------------------------------------------------------------------
@@ -252,6 +245,8 @@ class ProtocolStore:
 
     def list_all(self, domain: str | None = None) -> list[dict[str, object]]:
         """List protocols, optionally filtered by domain."""
+        if domain is not None and domain not in self.domains:
+            raise ValueError(f"Unknown protocol domain: {domain}")
         result = []
         for p in self._protocols.values():
             if domain and p["domain"] != domain:
@@ -381,10 +376,12 @@ def list_protocols(domain: str | None = None) -> dict[str, object]:
     """List available physics computation protocols.
 
     Args:
-        domain: Optional domain filter. Available domains include:
+        domain: Optional domain filter. Use one of the values returned in
+                ``available_domains`` such as:
                 "core_derivation", "computational_methods", "mathematical_methods",
                 "numerical_translation", "gr_cosmology", "fluid_plasma",
-                "quantum_info", "condensed_matter", "general".
+                "quantum_info", "condensed_matter", "nuclear_particle",
+                "general".
     """
     with gpd_span("mcp.protocols.list", domain=domain or "all"):
         try:

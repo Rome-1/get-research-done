@@ -19,6 +19,33 @@ def get_adapter(runtime: str):
     return import_module("gpd.adapters").get_adapter(runtime)
 
 
+def _paths_equal(left: Path, right: Path) -> bool:
+    """Return whether two paths resolve to the same location when possible."""
+    try:
+        return left.expanduser().resolve(strict=False) == right.expanduser().resolve(strict=False)
+    except OSError:
+        return left.expanduser() == right.expanduser()
+
+
+def _infer_missing_explicit_target(runtime: str, *, install_scope: str, config_dir: Path) -> bool | None:
+    """Best-effort fallback for legacy manifests that omit ``explicit_target``."""
+    if install_scope == "local":
+        return True
+    if install_scope != "global":
+        return None
+
+    runtime_catalog = import_module("gpd.adapters.runtime_catalog")
+    adapter = get_adapter(runtime)
+    canonical_global_dir = runtime_catalog.resolve_global_config_dir(
+        adapter.runtime_descriptor,
+        home=Path.home(),
+        environ={},
+    )
+    if _paths_equal(config_dir, canonical_global_dir):
+        return None
+    return True
+
+
 def build_runtime_install_repair_command(
     runtime: str,
     *,
@@ -290,14 +317,16 @@ def installed_update_command(config_dir: Path) -> str | None:
     if scope not in {"local", "global"}:
         return None
 
-    explicit_target = manifest.get("explicit_target")
-    if not isinstance(explicit_target, bool):
-        return None
-
     try:
         get_adapter(runtime)
     except KeyError:
         return None
+
+    explicit_target = manifest.get("explicit_target")
+    if not isinstance(explicit_target, bool):
+        explicit_target = _infer_missing_explicit_target(runtime, install_scope=scope, config_dir=config_dir)
+        if explicit_target is None:
+            return None
 
     return build_runtime_install_repair_command(
         runtime,

@@ -290,6 +290,50 @@ def test_legacy_global_install_without_explicit_target_ignores_current_env_overr
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+def test_legacy_noncanonical_global_install_without_explicit_target_keeps_authoritative_target_dir(
+    tmp_path: Path,
+    descriptor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = get_adapter(descriptor.runtime_name)
+    explicit_target = tmp_path / "custom-global" / descriptor.config_dir_name
+    explicit_target.mkdir(parents=True)
+
+    install_kwargs: dict[str, object] = {"is_global": True, "explicit_target": True}
+    if "skills/" in descriptor.manifest_file_prefixes:
+        skills_dir = tmp_path / "legacy-global-explicit" / "skills"
+        skills_dir.mkdir(parents=True)
+        install_kwargs["skills_dir"] = skills_dir
+
+    _install_and_finalize(adapter, GPD_ROOT, explicit_target, **install_kwargs)
+
+    manifest_path = explicit_target / MANIFEST_NAME
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.pop("explicit_target", None)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    if descriptor.global_config.strategy == "env_or_home":
+        assert descriptor.global_config.env_var is not None
+        monkeypatch.setenv(descriptor.global_config.env_var, str(tmp_path / "override-config"))
+    elif descriptor.global_config.strategy == "xdg_app":
+        if descriptor.global_config.env_dir_var is not None:
+            monkeypatch.setenv(descriptor.global_config.env_dir_var, str(tmp_path / "override-config"))
+        elif descriptor.global_config.env_file_var is not None:
+            monkeypatch.setenv(descriptor.global_config.env_file_var, str(tmp_path / "override-config" / "config.json"))
+        else:
+            monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "override-config"))
+    else:
+        pytest.fail(f"Unsupported global config strategy: {descriptor.global_config.strategy}")
+
+    command = installed_update_command(explicit_target)
+
+    assert command is not None
+    assert "--global" in command
+    assert "--target-dir" in command
+    assert str(explicit_target) in command
+
+
+@pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
 def test_legacy_global_install_without_explicit_target_ignores_env_leak_captured_in_workflow(
     tmp_path: Path,
     descriptor,

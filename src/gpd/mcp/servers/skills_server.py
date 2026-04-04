@@ -21,7 +21,7 @@ from mcp.server.fastmcp import FastMCP
 
 from gpd import registry as content_registry
 from gpd.adapters.tool_names import canonical
-from gpd.command_labels import rewrite_runtime_command_surfaces
+from gpd.command_labels import CANONICAL_SKILL_PREFIX, rewrite_runtime_command_surfaces, runtime_command_prefixes
 from gpd.core.errors import GPDError
 from gpd.core.observability import gpd_span
 from gpd.mcp.servers import (
@@ -66,7 +66,6 @@ _SPEC_RELATIVE_REFERENCE_PREFIXES = (
     "subfields/",
     "orchestration/",
 )
-_RUNTIME_SLASH_PREFIX = "/" + "gpd:"
 _SKILL_COMMAND_PREFIX = "gpd-"
 _MARKDOWN_REFERENCE_RE = re.compile(
     r"(?P<path>(?:@?\{GPD_(?:INSTALL|AGENTS)_DIR\}/|(?:\.\./|\.\/)?"
@@ -115,10 +114,14 @@ def _skill_index_label(skill: content_registry.SkillDef) -> str:
 def _canonicalize_command_surface(content: str) -> str:
     """Rewrite runtime-facing command examples to canonical ``gpd-*`` names."""
     content = rewrite_runtime_command_surfaces(content, canonical="skill")
-    return content.replace(f"`{_RUNTIME_SLASH_PREFIX}*`", f"`{_SKILL_COMMAND_PREFIX}*`").replace(
-        f"{_RUNTIME_SLASH_PREFIX}*",
-        f"{_SKILL_COMMAND_PREFIX}*",
-    )
+    for prefix in runtime_command_prefixes():
+        if prefix == CANONICAL_SKILL_PREFIX:
+            continue
+        content = content.replace(f"`{prefix}*`", f"`{_SKILL_COMMAND_PREFIX}*`").replace(
+            f"{prefix}*",
+            f"{_SKILL_COMMAND_PREFIX}*",
+        )
+    return content
 
 
 def _portable_skill_content(content: str) -> str:

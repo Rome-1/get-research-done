@@ -21,7 +21,7 @@ def test_plan_contract_schema_surfaces_defaultable_semantic_fields_and_hard_cons
     assert "links[].relation" in plan_schema
     assert "their default is `other`" in plan_schema
     assert "`context_intake`, `approach_policy`, and `uncertainty_markers` are object-valued sections, not strings or lists." in plan_schema
-    assert "defaults to the integer `1`" in plan_schema
+    assert "required and must be the integer `1`" in plan_schema
     assert "`must_surface` is a boolean scalar. Use the YAML literals `true` and `false`;" in plan_schema
     assert "The defaultable semantic fields above do not relax the hard requirements on `context_intake` or `uncertainty_markers`" in plan_schema
     assert "`contract.context_intake` is required and must be a non-empty object, not a string or list." in plan_schema

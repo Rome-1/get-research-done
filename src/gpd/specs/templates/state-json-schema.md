@@ -201,12 +201,20 @@ Blank list entries are invalid. Duplicate list entries are also invalid after tr
 The following fields always store arrays of objects, never arrays of plain strings:
 
 - `observables[]` — `{ "id", "name", "kind", "definition", "regime?", "units?" }`
-- `claims[]` — `{ "id", "statement", "observables[]", "deliverables[]", "acceptance_tests[]", "references[]" }`
+- `claims[]` — `{ "id", "statement", "claim_kind", "observables[]", "deliverables[]", "acceptance_tests[]", "references[]", "parameters[]", "hypotheses[]", "quantifiers[]", "conclusion_clauses[]", "proof_deliverables[]" }`
 - `deliverables[]` — `{ "id", "kind", "path?", "description", "must_contain[]" }`
 - `acceptance_tests[]` — `{ "id", "subject", "kind", "procedure", "pass_condition", "evidence_required[]", "automation" }`
 - `references[]` — `{ "id", "kind", "locator", "aliases[]", "role", "why_it_matters", "applies_to[]", "carry_forward_to[]", "must_surface": true|false, "required_actions[]" }`
 - `forbidden_proxies[]` — `{ "id", "subject", "proxy", "reason" }`
 - `links[]` — `{ "id", "source", "target", "relation", "verified_by[]" }`
+
+Proof-bearing claim fields are required when the claim is theorem-like (`claim_kind` is `theorem`, `lemma`, `corollary`, or `proposition`) or when the claim touches a `proof_obligation` observable:
+
+- `claims[].claim_kind` must use the closed vocabulary: `theorem | lemma | corollary | proposition | result | claim | other`.
+- `claims[].proof_deliverables[]` must be non-empty and contain only `deliverables[].id` values.
+- `claims[].parameters[]`, `claims[].hypotheses[]`, and `claims[].conclusion_clauses[]` must each be non-empty.
+- `claims[].acceptance_tests[]` must include at least one proof-specific test kind (`proof_hypothesis_coverage`, `proof_parameter_coverage`, `proof_quantifier_domain`, `claim_to_proof_alignment`, `lemma_dependency_closure`, or `counterexample_search`).
+- `claims[].quantifiers[]` is optional but, when present, must stay a list (not a scalar string).
 
 If a project-contract reference sets `must_surface: true`, `required_actions[]` must not be empty.
 `required_actions[]` uses the same closed action vocabulary enforced downstream in contract ledgers: `read`, `use`, `compare`, `cite`, `avoid`.

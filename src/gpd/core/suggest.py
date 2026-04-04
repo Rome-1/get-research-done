@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import json
 import logging
-import posixpath
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import ValidationError as PydanticValidationError
 
+from gpd.command_labels import canonical_command_label
 from gpd.core.constants import (
     LITERATURE_DIR_NAME,
     PHASES_DIR_NAME,
@@ -41,6 +41,10 @@ from gpd.core.phases import _milestone_completion_snapshot
 from gpd.core.proof_review import (
     manuscript_requires_theorem_bearing_review,
     resolve_manuscript_proof_review_status,
+)
+from gpd.core.publication_review_paths import (
+    manuscript_matches_review_artifact_path,
+    review_artifact_round,
 )
 from gpd.core.reproducibility import compute_sha256
 from gpd.core.utils import (
@@ -233,7 +237,7 @@ def _format_local_cli_command(action: str) -> str:
     init_action = _LOCAL_CLI_INIT_COMMANDS.get(action)
     if init_action is not None:
         return f"gpd init {init_action}"
-    return f"gpd {action}"
+    return canonical_command_label(action)
 
 
 def _format_command(action: str, *, cwd: Path | None = None) -> str:
@@ -385,40 +389,6 @@ def _has_literature_review(cwd: Path) -> bool:
     return any(f.name.endswith("-REVIEW.md") for f in lit_dir.iterdir() if f.is_file())
 
 
-def _review_artifact_round(path: Path, *, pattern: re.Pattern[str]) -> tuple[int, str] | None:
-    match = pattern.fullmatch(path.name)
-    if match is None:
-        return None
-    round_text = match.group("round")
-    round_number = int(round_text) if round_text else 1
-    return round_number, match.group("round_suffix") or ""
-
-
-def _normalize_review_path_label(value: str) -> str:
-    normalized = value.strip().replace("\\", "/")
-    if not normalized:
-        return ""
-    return posixpath.normpath(normalized)
-
-
-def _manuscript_matches_review_artifact_path(artifact_path: str, manuscript: Path, *, cwd: Path) -> bool:
-    normalized_artifact_path = _normalize_review_path_label(artifact_path)
-    if not normalized_artifact_path:
-        return False
-
-    resolved_manuscript = manuscript.expanduser().resolve(strict=False)
-    resolved_cwd = cwd.expanduser().resolve(strict=False)
-    candidates = {
-        _normalize_review_path_label(resolved_manuscript.as_posix()),
-        _normalize_review_path_label(manuscript.as_posix()),
-    }
-    try:
-        candidates.add(_normalize_review_path_label(resolved_manuscript.relative_to(resolved_cwd).as_posix()))
-    except ValueError:
-        pass
-    return normalized_artifact_path in candidates
-
-
 def _has_author_response(cwd: Path) -> bool:
     responses_dir = _planning_dir(cwd)
     if not responses_dir.is_dir():
@@ -433,7 +403,7 @@ def _latest_referee_decision_recommendation(cwd: Path) -> str | None:
 
     decision_by_round: dict[int, Path] = {}
     for path in sorted(review_dir.glob("REFEREE-DECISION*.json")):
-        details = _review_artifact_round(path, pattern=_REFEREE_DECISION_FILENAME_RE)
+        details = review_artifact_round(path, pattern=_REFEREE_DECISION_FILENAME_RE)
         if details is not None:
             decision_by_round[details[0]] = path
 
@@ -452,20 +422,16 @@ def _latest_referee_decision_recommendation(cwd: Path) -> str | None:
     return normalized or None
 
 
-def _latest_referee_decision_allows_submission(cwd: Path, manuscript_entrypoint: Path | None) -> bool:
-    return _publication_review_package_allows_submission(cwd, manuscript_entrypoint)
-
-
 def _latest_publication_review_package(review_dir: Path) -> tuple[Path, Path] | None:
     ledger_by_round: dict[int, Path] = {}
     decision_by_round: dict[int, Path] = {}
 
     for path in sorted(review_dir.glob("REVIEW-LEDGER*.json")):
-        details = _review_artifact_round(path, pattern=_REVIEW_LEDGER_FILENAME_RE)
+        details = review_artifact_round(path, pattern=_REVIEW_LEDGER_FILENAME_RE)
         if details is not None:
             ledger_by_round[details[0]] = path
     for path in sorted(review_dir.glob("REFEREE-DECISION*.json")):
-        details = _review_artifact_round(path, pattern=_REFEREE_DECISION_FILENAME_RE)
+        details = review_artifact_round(path, pattern=_REFEREE_DECISION_FILENAME_RE)
         if details is not None:
             decision_by_round[details[0]] = path
 
@@ -561,9 +527,9 @@ def _publication_review_package_allows_submission(cwd: Path, manuscript_entrypoi
 
         review_ledger = read_review_ledger(ledger_path)
         decision = read_referee_decision(decision_path)
-        if not _manuscript_matches_review_artifact_path(review_ledger.manuscript_path, manuscript_entrypoint, cwd=cwd):
+        if not manuscript_matches_review_artifact_path(review_ledger.manuscript_path, manuscript_entrypoint, cwd=cwd):
             return False
-        manuscript_matches_decision = _manuscript_matches_review_artifact_path(
+        manuscript_matches_decision = manuscript_matches_review_artifact_path(
             decision.manuscript_path,
             manuscript_entrypoint,
             cwd=cwd,

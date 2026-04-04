@@ -788,14 +788,14 @@ def _is_concrete_reference_locator(
     lowered = value.casefold().strip()
     if not lowered:
         return False
-    if any(pattern.search(lowered) for pattern in _REFERENCE_LOCATOR_PLACEHOLDER_PATTERNS):
-        return False
     if any(pattern.search(lowered) for pattern in _REFERENCE_LOCATOR_CONCRETE_PATTERNS):
         return True
     if reference_kind == "paper" and _is_citation_like_locator(value):
         return True
     if _is_concrete_external_http_locator(value, reference_kind=reference_kind):
         return True
+    if any(pattern.search(lowered) for pattern in _REFERENCE_LOCATOR_PLACEHOLDER_PATTERNS):
+        return False
     if reference_kind == "user_anchor":
         return _is_concrete_text_grounding(value, project_root=project_root)
     if any(pattern.search(lowered) for pattern in _PROJECT_ARTIFACT_PATH_PATTERNS):

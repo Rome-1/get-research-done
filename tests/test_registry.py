@@ -18,6 +18,7 @@ from gpd.registry import (
     _parse_tools,
     _RegistryCache,
     load_agents_from_dir,
+    render_command_visibility_sections_from_frontmatter,
 )
 
 
@@ -396,9 +397,23 @@ class TestParseCommandFile:
     def test_command_unexpected_fields(self, tmp_path: Path) -> None:
         f = tmp_path / "extra.md"
         f.write_text("---\nname: extra\nversion: 99\nfoo: bar\n---\nBody.", encoding="utf-8")
+        with pytest.raises(ValueError, match=r"unknown frontmatter keys for extra: foo, version"):
+            _parse_command_file(f, source="commands")
+
+    def test_render_command_visibility_sections_rejects_unknown_frontmatter_keys(self) -> None:
+        with pytest.raises(ValueError, match=r"unknown frontmatter keys for gpd:test: foo"):
+            render_command_visibility_sections_from_frontmatter(
+                "name: gpd:test\nfoo: bar\n",
+                command_name="gpd:test",
+            )
+
+    def test_command_agent_frontmatter_key_is_explicitly_allowed(self, tmp_path: Path) -> None:
+        f = tmp_path / "plan-phase.md"
+        f.write_text("---\nname: gpd:plan-phase\nagent: gpd-planner\n---\nBody.", encoding="utf-8")
+
         cmd = _parse_command_file(f, source="commands")
-        assert cmd.name == "extra"
-        assert cmd.content.startswith("## Command Requirements\n")
+
+        assert cmd.name == "gpd:plan-phase"
         assert cmd.content.endswith("Body.")
 
     def test_command_parses_explicit_context_mode(self, tmp_path: Path) -> None:

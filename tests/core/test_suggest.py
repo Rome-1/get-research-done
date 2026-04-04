@@ -10,6 +10,7 @@ import pytest
 
 from gpd.adapters import get_adapter, list_runtimes
 from gpd.adapters.runtime_catalog import get_runtime_descriptor
+from gpd.core import suggest as suggest_module
 from gpd.core.constants import ENV_GPD_ACTIVE_RUNTIME
 from gpd.core.proof_review import resolve_manuscript_proof_review_status
 from gpd.core.reproducibility import compute_sha256
@@ -1203,6 +1204,10 @@ comparison_verdicts:
     assert execute is not None
     assert execute.priority <= 3  # boosted from 3 → 2
     assert result.context.adaptive_approach_locked is True
+
+
+def test_format_local_cli_command_falls_back_to_canonical_command_surface_for_unmapped_actions() -> None:
+    assert suggest_module._format_local_cli_command("discuss-phase") == "gpd:discuss-phase"
 
 
 # ─── Issue 3: current_phase int coercion ─────────────────────────────────────

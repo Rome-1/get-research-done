@@ -425,6 +425,69 @@ def test_resolve_current_manuscript_resolution_prefers_config_when_manifest_is_i
     assert "resolved from paper config" in resolution.detail
 
 
+def test_resolve_current_manuscript_resolution_prefers_single_resolved_root_over_stale_invalid_sibling(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "paper" / "paper-entry.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(
+        tmp_path / "paper" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Config Entry",
+                "output_filename": "paper-entry",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        )
+        + "\n",
+    )
+    _write(
+        tmp_path / "draft" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prl",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "draft-entry.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+    _write(tmp_path / "draft" / "draft-entry.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(tmp_path / "draft" / "other-entry.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(
+        tmp_path / "draft" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Mismatched Draft",
+                "output_filename": "other-entry",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        )
+        + "\n",
+    )
+
+    resolution = resolve_current_manuscript_resolution(tmp_path)
+
+    assert resolution.status == "resolved"
+    assert resolution.manuscript_entrypoint == tmp_path / "paper" / "paper-entry.tex"
+    assert "paper config" in resolution.detail
+
+
 def test_resolve_current_manuscript_resolution_ignores_invalid_manifest_entrypoints_without_valid_manifest(
     tmp_path: Path,
 ) -> None:

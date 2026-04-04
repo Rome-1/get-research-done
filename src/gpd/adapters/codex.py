@@ -30,6 +30,8 @@ from pathlib import Path
 from gpd.adapters.base import RuntimeAdapter
 from gpd.adapters.install_utils import (
     CACHE_DIR_NAME,
+    COMMANDS_DIR_NAME,
+    GPD_INSTALL_DIR_NAME,
     HOOK_SCRIPTS,
     MANIFEST_NAME,
     PATCHES_DIR_NAME,
@@ -95,6 +97,8 @@ _GPD_APPROVAL_POLICY_BACKUP_PREFIX = "# GPD original approval_policy: "
 _GPD_SANDBOX_MODE_COMMENT = "# GPD runtime sandbox mode"
 _GPD_SANDBOX_MODE_BACKUP_PREFIX = "# GPD original sandbox_mode: "
 _GPD_AGENT_ROLES_COMMENT = "# GPD agent roles"
+_GPD_AGENT_ROLE_FILE_MARKER = "# Managed by Get Physics Done (GPD)."
+_GPD_CODEX_SKILL_MARKER = "<!-- Managed by Get Physics Done (GPD). -->"
 _MANIFEST_CODEX_SKILLS_DIR_KEY = "codex_skills_dir"
 _MANIFEST_CODEX_GENERATED_SKILL_DIRS_KEY = "codex_generated_skill_dirs"
 _CODEX_DEFAULT_SANDBOX_MODE = "workspace-write"
@@ -251,6 +255,97 @@ def _load_manifest_codex_generated_skill_dirs(target_dir: Path) -> tuple[str, ..
     return ()
 
 
+def _planned_installed_codex_skill_dirs(target_dir: Path) -> tuple[str, ...]:
+    """Return generated Codex skill directories inferable from installed command files."""
+    commands_dir = target_dir / GPD_INSTALL_DIR_NAME / COMMANDS_DIR_NAME
+    if not commands_dir.is_dir():
+        return ()
+    try:
+        return tuple(sorted(_planned_codex_skill_dirs(commands_dir, "gpd")))
+    except OSError:
+        return ()
+
+
+def _planned_source_codex_skill_dirs() -> tuple[str, ...]:
+    """Return generated Codex skill directories inferable from the packaged source tree."""
+    commands_dir = Path(__file__).resolve().parents[1] / COMMANDS_DIR_NAME
+    if not commands_dir.is_dir():
+        return ()
+    try:
+        return tuple(sorted(_planned_codex_skill_dirs(commands_dir, "gpd")))
+    except OSError:
+        return ()
+
+
+def _load_live_managed_codex_skill_dirs(skills_dir: Path | None) -> tuple[str, ...]:
+    """Return live managed Codex skill directories identifiable by the GPD marker."""
+    if skills_dir is None or not skills_dir.is_dir():
+        return ()
+
+    names: list[str] = []
+    for entry in sorted(skills_dir.iterdir()):
+        if not entry.is_dir() or not entry.name.startswith("gpd-"):
+            continue
+        skill_md = entry / "SKILL.md"
+        try:
+            content = skill_md.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if _GPD_CODEX_SKILL_MARKER in content:
+            names.append(entry.name)
+    return tuple(names)
+
+
+def _load_manifest_tracked_codex_skill_dirs(target_dir: Path) -> tuple[str, ...]:
+    """Return generated Codex skill names inferred from manifest-tracked skill files."""
+    manifest_path = target_dir / MANIFEST_NAME
+    if not manifest_path.exists():
+        return ()
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return ()
+
+    if not isinstance(manifest, dict):
+        return ()
+
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        return ()
+
+    names: list[str] = []
+    for relpath in files:
+        if not isinstance(relpath, str):
+            continue
+        if not relpath.startswith("skills/") or not relpath.endswith("/SKILL.md"):
+            continue
+        parts = relpath.split("/")
+        if len(parts) != 3:
+            continue
+        skill_name = parts[1].strip()
+        if skill_name.startswith("gpd-"):
+            names.append(skill_name)
+    return tuple(dict.fromkeys(names))
+
+
+def _tracked_codex_generated_skill_dirs(target_dir: Path, *, skills_dir: Path | None = None) -> tuple[str, ...]:
+    """Return generated skill names, preferring live/manifest-tracked install surface."""
+    planned = _planned_installed_codex_skill_dirs(target_dir)
+    if planned:
+        return planned
+    live_managed = _load_live_managed_codex_skill_dirs(skills_dir)
+    if live_managed:
+        return live_managed
+    tracked_from_files = _load_manifest_tracked_codex_skill_dirs(target_dir)
+    if tracked_from_files:
+        return tracked_from_files
+    tracked_from_manifest = _load_manifest_codex_generated_skill_dirs(target_dir)
+    if tracked_from_manifest:
+        return tracked_from_manifest
+    return _planned_source_codex_skill_dirs()
+
+
 def _load_manifest_install_scope(target_dir: Path) -> str | None:
     """Return the install scope recorded in the local manifest, if present."""
     manifest_path = target_dir / MANIFEST_NAME
@@ -325,7 +420,7 @@ def _convert_to_codex_skill(content: str, skill_name: str) -> str:
 
     preamble, frontmatter, separator, body = split_markdown_frontmatter(converted)
     if not frontmatter:
-        return f"---\nname: {skill_name}\ndescription: GPD skill - {skill_name}\n---\n{converted}"
+        return f"---\nname: {skill_name}\ndescription: GPD skill - {skill_name}\n---\n{_GPD_CODEX_SKILL_MARKER}\n{converted}"
 
     fm_lines = frontmatter.split("\n")
     new_lines: list[str] = []
@@ -405,7 +500,8 @@ def _convert_to_codex_skill(content: str, skill_name: str) -> str:
             new_lines.append(f"  - {tool}")
 
     new_frontmatter = "\n".join(new_lines).strip()
-    return render_markdown_frontmatter(preamble, new_frontmatter, separator or "\n", body)
+    managed_body = f"{_GPD_CODEX_SKILL_MARKER}\n{body.lstrip()}" if body else f"{_GPD_CODEX_SKILL_MARKER}\n"
+    return render_markdown_frontmatter(preamble, new_frontmatter, separator or "\n", managed_body)
 
 
 def _toml_string(value: str) -> str:
@@ -814,9 +910,10 @@ class CodexAdapter(RuntimeAdapter):
         agents_dir = target_dir / "agents"
         role_sandbox_mode, role_approval_policy = _codex_agent_role_runtime_summary(agents_dir)
         has_role_files = any(agents_dir.glob("gpd-*.toml")) if agents_dir.exists() else False
+        roles_managed_yolo = _codex_agent_role_has_managed_yolo_state(agents_dir)
         desired_mode = "yolo" if autonomy == "yolo" else "default"
         managed_state = self._runtime_permissions_manifest_state(target_dir) or {}
-        managed_by_gpd = managed_state.get("mode") == "yolo" or root_managed
+        managed_by_gpd = managed_state.get("mode") == "yolo" or root_managed or roles_managed_yolo
         requires_relaunch = False
 
         next_step: str | None = None
@@ -952,7 +1049,20 @@ class CodexAdapter(RuntimeAdapter):
             }
 
         managed_state = self._runtime_permissions_manifest_state(target_dir) or {}
-        if managed_state.get("mode") == "yolo":
+        root_managed = _root_assignment_has_gpd_marker(
+            toml_content,
+            _GPD_APPROVAL_POLICY_COMMENT,
+            _GPD_APPROVAL_POLICY_BACKUP_PREFIX,
+        ) or _root_assignment_has_gpd_marker(
+            toml_content,
+            _GPD_SANDBOX_MODE_COMMENT,
+            _GPD_SANDBOX_MODE_BACKUP_PREFIX,
+        )
+        agents_dir = target_dir / "agents"
+        has_role_files = any(agents_dir.glob("gpd-*.toml")) if agents_dir.exists() else False
+        roles_managed_yolo = _codex_agent_role_has_managed_yolo_state(agents_dir)
+        managed_mode_yolo = managed_state.get("mode") == "yolo"
+        if managed_mode_yolo or root_managed or roles_managed_yolo:
             updated = _remove_gpd_root_string_setting(
                 toml_content,
                 key="approval_policy",
@@ -968,13 +1078,15 @@ class CodexAdapter(RuntimeAdapter):
             if updated != toml_content:
                 config_path.write_text(updated, encoding="utf-8")
                 changed = True
-            roles_changed = _rewrite_codex_agent_role_runtime_modes(
-                target_dir / "agents",
-                sandbox_mode=_CODEX_DEFAULT_SANDBOX_MODE,
-                approval_policy=None,
-            )
-            changed = changed or roles_changed
-            self._set_runtime_permissions_manifest_state(target_dir, None)
+            if has_role_files and (roles_managed_yolo or managed_mode_yolo):
+                roles_changed = _rewrite_codex_agent_role_runtime_modes(
+                    target_dir / "agents",
+                    sandbox_mode=_CODEX_DEFAULT_SANDBOX_MODE,
+                    approval_policy=None,
+                )
+                changed = changed or roles_changed
+            if managed_state:
+                self._set_runtime_permissions_manifest_state(target_dir, None)
 
         status = self.runtime_permissions_status(target_dir, autonomy=autonomy)
         sync_applied = bool(status.get("config_aligned"))
@@ -1026,7 +1138,7 @@ class CodexAdapter(RuntimeAdapter):
                 is_global=manifest_install_scope == "global" if manifest_install_scope is not None else _is_global_codex_target(target_dir),
             )
 
-        tracked_skill_dirs = _load_manifest_codex_generated_skill_dirs(target_dir)
+        tracked_skill_dirs = _tracked_codex_generated_skill_dirs(target_dir, skills_dir=skills_dir)
         try:
             has_gpd_skills = bool(tracked_skill_dirs) and skills_dir.is_dir() and all(
                 (skills_dir / name).is_dir() for name in tracked_skill_dirs
@@ -1075,9 +1187,10 @@ class CodexAdapter(RuntimeAdapter):
             removed: list[str] = []
             counts: dict[str, int] = {"skills": 0, "agents": 0, "hooks": 0}
             managed_hooks = managed_hook_paths(target_dir)
-            tracked_skill_dirs = _load_manifest_codex_generated_skill_dirs(target_dir)
+            tracked_skill_dirs = _tracked_codex_generated_skill_dirs(target_dir, skills_dir=skills_dir)
 
-            # 1. Remove only skill directories tracked as generated in the manifest.
+            # 1. Remove generated GPD skill directories tracked in the manifest,
+            # or inferred from installed command sources when metadata drifted.
             if skills_dir.exists() and tracked_skill_dirs:
                 for skill_name in tracked_skill_dirs:
                     entry = skills_dir / skill_name
@@ -1528,7 +1641,7 @@ def _render_codex_agent_role_lines(
     approval_policy: str | None = None,
 ) -> list[str]:
     lines = [
-        "# Managed by Get Physics Done (GPD).",
+        _GPD_AGENT_ROLE_FILE_MARKER,
         f'sandbox_mode = "{sandbox_mode}"',
     ]
     if approval_policy:
@@ -1625,6 +1738,36 @@ def _codex_agent_role_runtime_summary(agents_dest: Path) -> tuple[str | None, st
     sandbox_summary = sandbox_modes.pop() if len(sandbox_modes) == 1 else None
     approval_summary = approval_policies.pop() if len(approval_policies) == 1 else None
     return sandbox_summary, approval_summary
+
+
+def _is_gpd_managed_codex_agent_role(content: str) -> bool:
+    """Return True when a role TOML is managed by GPD."""
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        return stripped == _GPD_AGENT_ROLE_FILE_MARKER
+    return False
+
+
+def _codex_agent_role_has_managed_yolo_state(agents_dest: Path) -> bool:
+    """Return True when any GPD-managed role TOML is pinned to yolo runtime mode."""
+    if not agents_dest.exists():
+        return False
+
+    for role_path in sorted(agents_dest.glob("gpd-*.toml")):
+        try:
+            content = role_path.read_text(encoding="utf-8")
+            parsed = tomllib.loads(content)
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if not _is_gpd_managed_codex_agent_role(content):
+            continue
+        sandbox_mode = parsed.get("sandbox_mode")
+        approval_policy = parsed.get("approval_policy")
+        if sandbox_mode == _CODEX_YOLO_SANDBOX_MODE and approval_policy == _CODEX_YOLO_APPROVAL_POLICY:
+            return True
+    return False
 
 
 def _is_managed_codex_agent_role_section(existing_body: list[str] | None, agent_name: str) -> bool:

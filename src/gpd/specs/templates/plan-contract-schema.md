@@ -15,7 +15,7 @@ Use this file whenever you author, revise, or validate a PLAN contract. Do not i
 
 The PLAN `contract` value must be a YAML object with these top-level sections:
 
-- `schema_version` (optional, defaults to the integer `1`; no other value is supported)
+- `schema_version` (required and must be the integer `1`; no other value is supported)
 - `scope`
 - `context_intake`
 - `claims`
@@ -46,7 +46,7 @@ schema_version: 1
 
 Rules:
 
-- `schema_version` is optional in the YAML frontmatter only because it defaults to the integer `1`.
+- `schema_version` is required in the YAML frontmatter and must be the integer `1`.
 - No other value is supported.
 
 ### `scope`

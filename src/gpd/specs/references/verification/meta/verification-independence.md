@@ -174,6 +174,13 @@ Because the verifier only sees the PLAN frontmatter contract plus final artifact
 
 ```yaml
 contract:
+  schema_version: 1
+  scope:
+    question: "Do the partition-function and ground-state benchmarks hold in the stated limits?"
+  context_intake:
+    known_good_baselines:
+      - "Ideal-gas closed form at g = 0"
+      - "Exact diagonalization spectrum for N<=8"
   claims:
     - id: claim-partition-limit
       statement: "Partition function reduces to the ideal-gas result when coupling g -> 0"
@@ -205,6 +212,20 @@ contract:
       procedure: "Compare ground-state energies to exact diagonalization for N<=8"
       pass_condition: "relative error <= 1e-3 at every tested N"
       evidence_required: [deliv-spectrum]
+  forbidden_proxies:
+    - id: fp-partition-mention
+      subject: claim-partition-limit
+      proxy: "Notebook mentions the g -> 0 limit without evaluating the benchmark value"
+      reason: "Narrative mention is not computational evidence."
+    - id: fp-summary-only
+      subject: claim-ground-state
+      proxy: "Summary says the exact-diagonalization benchmark agrees without showing the data"
+      reason: "Agreement claims need the comparison values, not prose."
+  uncertainty_markers:
+    weakest_anchors:
+      - "Exact-diagonalization benchmarks must use the same Hamiltonian convention as the derivation."
+    disconfirming_observations:
+      - "Any tested N<=8 case with relative error above 1e-3 falsifies the claim."
   links:
     - id: link-thermo
       source: claim-partition-limit
@@ -219,6 +240,11 @@ The verifier can check these by performing the specified computations, without k
 
 ```yaml
 contract:
+  schema_version: 1
+  scope:
+    question: "Was task 3 completed successfully?"
+  context_intake:
+    user_asserted_anchors: ["The contract still needs outcome-level checks rather than process claims."]
   claims:
     - id: claim-task-done
       statement: "Task 3 was completed successfully" # Process, not outcome
@@ -240,6 +266,16 @@ contract:
       procedure: "Confirm the output matches the SUMMARY.md claim" # Circular
       pass_condition: "Limits are correct" # No specific test
       evidence_required: [deliv-output]
+  forbidden_proxies:
+    - id: fp-summary-loop
+      subject: claim-plan-works
+      proxy: "Treat SUMMARY.md prose as verification evidence"
+      reason: "This only repeats the plan's own claim instead of checking an outcome."
+  uncertainty_markers:
+    weakest_anchors:
+      - "The deliverable does not name any concrete observable, benchmark, or theorem."
+    disconfirming_observations:
+      - "A verifier cannot compute any decisive quantity from the contract as written."
 ```
 
 **Rule of thumb:** If a contract target cannot be verified by someone who has never seen the plan body and who must check it by performing a computation rather than by reading prose, rewrite it.

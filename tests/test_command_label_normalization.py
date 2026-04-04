@@ -112,6 +112,13 @@ def test_runtime_native_command_surfaces_rewrite_to_canonical_skill_labels(descr
     assert _canonicalize_command_surface(content) == rewritten
 
 
+@pytest.mark.parametrize("descriptor", iter_runtime_descriptors(), ids=lambda item: item.runtime_name)
+def test_runtime_native_command_wildcard_surfaces_rewrite_to_canonical_skill_wildcard(descriptor: object) -> None:
+    content = f"Use `{descriptor.command_prefix}*` to browse runtime commands.\n"
+
+    assert _canonicalize_command_surface(content) == "Use `gpd-*` to browse runtime commands.\n"
+
+
 def test_runtime_command_surface_rewrite_does_not_mutate_markdown_paths() -> None:
     content = "Read /tmp/specs/gpd-help.md and /tmp/agents/gpd-executor.md before continuing."
 

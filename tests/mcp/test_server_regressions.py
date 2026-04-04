@@ -503,7 +503,7 @@ def test_absolute_project_dir_schema_matches_current_host_path_semantics() -> No
         assert resolve_absolute_project_dir(r"C:\repo") is None
 
 
-def test_protocol_store_defaults_invalid_tier_for_sorting(
+def test_protocol_store_rejects_invalid_tier_frontmatter(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -522,23 +522,12 @@ def test_protocol_store_defaults_invalid_tier_for_sorting(
         "- First step\n",
         encoding="utf-8",
     )
-    (protocols_dir / "good-tier.md").write_text(
-        "---\n"
-        "tier: 1\n"
-        "load_when:\n"
-        "  - perturbative\n"
-        "---\n"
-        "# Good Tier\n"
-        "- First step\n",
-        encoding="utf-8",
-    )
     domain_manifest.write_text(
         json.dumps(
             {
                 "schema_version": 1,
                 "protocol_domains": {
                     "bad-tier": "general",
-                    "good-tier": "general",
                 },
             }
         ),
@@ -547,16 +536,12 @@ def test_protocol_store_defaults_invalid_tier_for_sorting(
     monkeypatch.setattr("gpd.mcp.servers.protocols_server.PROTOCOL_DOMAINS_MANIFEST", domain_manifest)
     _load_protocol_domain_manifest.cache_clear()
     try:
-        store = ProtocolStore(protocols_dir)
-        listed = store.list_all()
+        with pytest.raises(ValueError, match="bad-tier.*tier must be an integer"):
+            ProtocolStore(protocols_dir)
     finally:
         _load_protocol_domain_manifest.cache_clear()
 
-    assert [protocol["name"] for protocol in listed] == ["good-tier", "bad-tier"]
-    assert listed[1]["tier"] == 2
-
-
-def test_protocol_store_sanitizes_typed_frontmatter_drift(
+def test_protocol_store_rejects_invalid_load_when_frontmatter(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -564,63 +549,24 @@ def test_protocol_store_sanitizes_typed_frontmatter_drift(
 
     protocols_dir = tmp_path / "protocols"
     protocols_dir.mkdir()
-    (protocols_dir / "typed.md").write_text(
+    (protocols_dir / "bad-load-when.md").write_text(
         "---\n"
-        "tier: true\n"
+        "tier: 2\n"
         "load_when:\n"
         "  - asymptotic\n"
         "  - 5\n"
-        "  - ''\n"
-        "context_cost:\n"
-        "  family: expensive\n"
         "---\n"
-        "# Typed Drift\n"
+        "# Bad Load When\n"
         "- First step\n",
         encoding="utf-8",
     )
     domain_manifest = protocols_dir / "protocol-domains.json"
-    domain_manifest.write_text(
-        json.dumps({"schema_version": 1, "protocol_domains": {"typed": "general"}}),
-        encoding="utf-8",
-    )
-
-    monkeypatch.setattr("gpd.mcp.servers.protocols_server.PROTOCOL_DOMAINS_MANIFEST", domain_manifest)
-    _load_protocol_domain_manifest.cache_clear()
-    try:
-        store = ProtocolStore(protocols_dir)
-    finally:
-        _load_protocol_domain_manifest.cache_clear()
-
-    protocol = store.get("typed")
-    assert protocol is not None
-    assert protocol["tier"] == 2
-    assert protocol["load_when"] == ["asymptotic"]
-    assert protocol["context_cost"] == "medium"
-
-
-def test_protocol_not_found_tolerates_invalid_tier_catalog(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from gpd.mcp.servers.protocols_server import ProtocolStore, _load_protocol_domain_manifest, get_protocol
-
-    protocols_dir = tmp_path / "protocols"
-    protocols_dir.mkdir()
-    domain_manifest = protocols_dir / "protocol-domains.json"
-    (protocols_dir / "bad-tier.md").write_text(
-        "---\n"
-        "tier: high\n"
-        "---\n"
-        "# Bad Tier\n"
-        "- First step\n",
-        encoding="utf-8",
-    )
     domain_manifest.write_text(
         json.dumps(
             {
                 "schema_version": 1,
                 "protocol_domains": {
-                    "bad-tier": "general",
+                    "bad-load-when": "general",
                 },
             }
         ),
@@ -629,14 +575,79 @@ def test_protocol_not_found_tolerates_invalid_tier_catalog(
     monkeypatch.setattr("gpd.mcp.servers.protocols_server.PROTOCOL_DOMAINS_MANIFEST", domain_manifest)
     _load_protocol_domain_manifest.cache_clear()
     try:
-        store = ProtocolStore(protocols_dir)
+        with pytest.raises(ValueError, match="bad-load-when.*load_when contains non-string entry"):
+            ProtocolStore(protocols_dir)
     finally:
         _load_protocol_domain_manifest.cache_clear()
 
-    with patch("gpd.mcp.servers.protocols_server._get_store", return_value=store):
-        result = get_protocol("missing-protocol")
 
-    assert result["error"] == "Protocol 'missing-protocol' not found"
+def test_protocol_store_rejects_invalid_context_cost_frontmatter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from gpd.mcp.servers.protocols_server import ProtocolStore, _load_protocol_domain_manifest
+
+    protocols_dir = tmp_path / "protocols"
+    protocols_dir.mkdir()
+    (protocols_dir / "bad-context-cost.md").write_text(
+        "---\n"
+        "tier: 2\n"
+        "load_when:\n"
+        "  - asymptotic\n"
+        "context_cost:\n"
+        "  family: expensive\n"
+        "---\n"
+        "# Bad Context Cost\n"
+        "- First step\n",
+        encoding="utf-8",
+    )
+    domain_manifest = protocols_dir / "protocol-domains.json"
+    domain_manifest.write_text(
+        json.dumps({"schema_version": 1, "protocol_domains": {"bad-context-cost": "general"}}),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("gpd.mcp.servers.protocols_server.PROTOCOL_DOMAINS_MANIFEST", domain_manifest)
+    _load_protocol_domain_manifest.cache_clear()
+    try:
+        with pytest.raises(ValueError, match="bad-context-cost.*context_cost must be a non-empty string"):
+            ProtocolStore(protocols_dir)
+    finally:
+        _load_protocol_domain_manifest.cache_clear()
+
+
+def test_protocol_store_rejects_unknown_domain_filters(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from gpd.mcp.servers.protocols_server import ProtocolStore, _load_protocol_domain_manifest
+
+    protocols_dir = tmp_path / "protocols"
+    protocols_dir.mkdir()
+    (protocols_dir / "good.md").write_text(
+        "---\n"
+        "tier: 1\n"
+        "load_when:\n"
+        "  - asymptotic\n"
+        "---\n"
+        "# Good\n"
+        "- First step\n",
+        encoding="utf-8",
+    )
+    domain_manifest = protocols_dir / "protocol-domains.json"
+    domain_manifest.write_text(
+        json.dumps({"schema_version": 1, "protocol_domains": {"good": "general"}}),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("gpd.mcp.servers.protocols_server.PROTOCOL_DOMAINS_MANIFEST", domain_manifest)
+    _load_protocol_domain_manifest.cache_clear()
+    try:
+        store = ProtocolStore(protocols_dir)
+        with pytest.raises(ValueError, match="Unknown protocol domain: typo-domain"):
+            store.list_all("typo-domain")
+    finally:
+        _load_protocol_domain_manifest.cache_clear()
 
 
 def test_protocol_store_rejects_boolean_manifest_schema_version(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

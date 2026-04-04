@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from gpd.adapters import get_adapter, iter_runtime_descriptors
+from gpd.core import onboarding_surfaces as onboarding_surfaces_module
 from gpd.core import public_surface_contract as public_surface_contract_module
 from gpd.core.onboarding_surfaces import (
     beginner_onboarding_hub_url,
@@ -21,6 +22,7 @@ from gpd.core.public_surface_contract import (
     resume_authority_contract,
     resume_authority_fields,
 )
+from tests import doc_surface_contracts as doc_surface_contracts_module
 
 
 def _load_public_surface_contract_with_payload(
@@ -98,6 +100,24 @@ def test_beginner_runtime_surface_single_lookup_matches_bulk_surface() -> None:
         assert beginner_runtime_surface(surface.runtime_name) == surface
 
 
+def test_beginner_runtime_surface_single_lookup_uses_adapter_descriptor_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime_name = iter_runtime_descriptors()[0].runtime_name
+
+    def _boom() -> tuple[object, ...]:
+        raise AssertionError("single runtime lookup should not scan the runtime catalog")
+
+    monkeypatch.setattr(onboarding_surfaces_module, "iter_runtime_descriptors", _boom)
+
+    surface = onboarding_surfaces_module.beginner_runtime_surface(runtime_name)
+    adapter = get_adapter(runtime_name)
+
+    assert surface.display_name == adapter.display_name
+    assert surface.install_flag == adapter.install_flag
+    assert surface.settings_command == adapter.format_command("settings")
+
+
 def test_resume_authority_contract_exposes_full_validated_surface() -> None:
     contract = resume_authority_contract()
 
@@ -122,6 +142,48 @@ def test_public_surface_contract_loader_tolerates_additive_keys(monkeypatch, tmp
     contract = load_public_surface_contract()
 
     assert contract.beginner_onboarding.hub_url == canonical_payload["beginner_onboarding"]["hub_url"]
+    assert contract.resume_authority.public_fields == tuple(canonical_payload["resume_authority"]["public_fields"])
+    assert contract.recovery_ladder.title == canonical_payload["recovery_ladder"]["title"]
+    load_public_surface_contract.cache_clear()
+
+
+def test_public_surface_contract_loader_normalizes_whitespace_and_dedupes_lists(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    canonical_path = Path(__file__).resolve().parents[2] / "src" / "gpd" / "core" / "public_surface_contract.json"
+    canonical_payload = json.loads(canonical_path.read_text(encoding="utf-8"))
+    noisy_payload = copy.deepcopy(canonical_payload)
+
+    noisy_payload["beginner_onboarding"]["hub_url"] = f"  {canonical_payload['beginner_onboarding']['hub_url']}  "
+    noisy_payload["beginner_onboarding"]["startup_ladder"] = [
+        f"  {canonical_payload['beginner_onboarding']['startup_ladder'][0]}  ",
+        *canonical_payload["beginner_onboarding"]["startup_ladder"][1:],
+        canonical_payload["beginner_onboarding"]["startup_ladder"][1],
+    ]
+    noisy_payload["local_cli_bridge"]["commands"] = [
+        f"  {canonical_payload['local_cli_bridge']['commands'][0]}  ",
+        *canonical_payload["local_cli_bridge"]["commands"][1:],
+        canonical_payload["local_cli_bridge"]["commands"][0],
+    ]
+    noisy_payload["post_start_settings"]["primary_sentence"] = (
+        f"  {canonical_payload['post_start_settings']['primary_sentence']}  "
+    )
+    noisy_payload["resume_authority"]["public_fields"] = [
+        canonical_payload["resume_authority"]["public_fields"][0],
+        f"  {canonical_payload['resume_authority']['public_fields'][1]}  ",
+        *canonical_payload["resume_authority"]["public_fields"][2:],
+        canonical_payload["resume_authority"]["public_fields"][1],
+    ]
+    noisy_payload["recovery_ladder"]["title"] = f"  {canonical_payload['recovery_ladder']['title']}  "
+
+    _load_public_surface_contract_with_payload(monkeypatch, tmp_path, noisy_payload)
+    contract = load_public_surface_contract()
+
+    assert contract.beginner_onboarding.hub_url == canonical_payload["beginner_onboarding"]["hub_url"]
+    assert contract.beginner_onboarding.startup_ladder == tuple(canonical_payload["beginner_onboarding"]["startup_ladder"])
+    assert contract.local_cli_bridge.commands == tuple(canonical_payload["local_cli_bridge"]["commands"])
+    assert contract.post_start_settings.primary_sentence == canonical_payload["post_start_settings"]["primary_sentence"]
     assert contract.resume_authority.public_fields == tuple(canonical_payload["resume_authority"]["public_fields"])
     assert contract.recovery_ladder.title == canonical_payload["recovery_ladder"]["title"]
     load_public_surface_contract.cache_clear()
@@ -164,3 +226,50 @@ def test_public_surface_contract_loader_rejects_boolean_schema_version(monkeypat
         load_public_surface_contract()
 
     load_public_surface_contract.cache_clear()
+
+
+def test_doc_surface_contract_helpers_read_runtime_normalized_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = public_surface_contract_module.PublicSurfaceContract(
+        beginner_onboarding=public_surface_contract_module.BeginnerOnboardingContract(
+            hub_url="https://example.com/hub",
+            preflight_requirements=("Preflight A",),
+            caveats=("Caveat A",),
+            startup_ladder=("help", "start"),
+        ),
+        local_cli_bridge=public_surface_contract_module.LocalCliBridgeContract(
+            commands=("gpd --help",),
+            terminal_phrase="in your normal terminal",
+            purpose_phrase="workspace diagnostics",
+        ),
+        post_start_settings=public_surface_contract_module.PostStartSettingsContract(
+            primary_sentence="Run settings after start.",
+            default_sentence="Balanced defaults apply.",
+        ),
+        resume_authority=public_surface_contract_module.ResumeAuthorityContract(
+            durable_authority_phrase="Durable authority phrase",
+            public_vocabulary_intro="Public vocabulary intro",
+            public_fields=("resume_file",),
+            top_level_boundary_phrase="Top-level boundary phrase",
+        ),
+        recovery_ladder=public_surface_contract_module.RecoveryLadderContract(
+            title="Recovery ladder title",
+            local_snapshot_command="status",
+            local_snapshot_phrase="local snapshot",
+            cross_workspace_command="resume --recent",
+            cross_workspace_phrase="pick another workspace",
+            resume_phrase="continue with resume-work",
+            next_phrase="check suggest-next",
+            pause_phrase="fresh continuation breadcrumbs",
+        ),
+    )
+    monkeypatch.setattr(doc_surface_contracts_module, "load_public_surface_contract", lambda: contract)
+    doc_surface_contracts_module._public_surface_contract_payload.cache_clear()
+
+    assert doc_surface_contracts_module.beginner_preflight_requirements() == ("Preflight A",)
+    assert doc_surface_contracts_module.beginner_onboarding_caveats() == ("Caveat A",)
+    assert doc_surface_contracts_module.beginner_startup_ladder_text() == "`help -> start`"
+    assert doc_surface_contracts_module.resume_authority_public_vocabulary_intro() == "Public vocabulary intro"
+
+    doc_surface_contracts_module._public_surface_contract_payload.cache_clear()

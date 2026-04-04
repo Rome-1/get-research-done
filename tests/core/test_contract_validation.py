@@ -458,6 +458,7 @@ def test_validate_project_contract_approved_mode_accepts_prior_output_grounding(
     [
         ("paper", "doi:10.1234/example"),
         ("paper", "arXiv:2401.12345"),
+        ("paper", "https://doi.org/10.1234/unknown-example"),
     ],
 )
 def test_validate_project_contract_approved_mode_accepts_concrete_reference_locator_grounding(

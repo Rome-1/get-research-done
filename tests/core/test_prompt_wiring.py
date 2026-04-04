@@ -1635,6 +1635,8 @@ def test_contract_schema_references_stay_wired_into_templates_and_review_docs() 
     assert "`content` is the section body only" in paper_config_schema
     assert "`label` values are stored bare" in paper_config_schema
     assert "renderer adds the `sec:` / `fig:` prefix" in paper_config_schema
+    assert "label: string such as `sec:intro`" not in paper_config_schema
+    assert "label: LaTeX label such as `fig:benchmark`" not in paper_config_schema
     assert "XX-YY-SUMMARY.md" in contract_results_schema
     assert "XX-VERIFICATION.md" in contract_results_schema
     assert "Must be the canonical project-root-relative `GPD/phases/XX-name/XX-YY-PLAN.md#/contract` path" in contract_results_schema
@@ -2010,6 +2012,15 @@ def test_verification_and_agent_reference_prompts_expand_required_reference_bodi
     assert "The standalone `/gpd:verify-work` workflow reuses the same verification criteria through `verify-work.md`; this file itself is executed by the execute-phase orchestrator." in verify_phase
     assert "VERIFICATION_FILE=\"${phase_dir}/${phase_number}-VERIFICATION.md\"" in verify_phase
     assert "Return status (`passed` | `gaps_found` | `expert_needed` | `human_needed`)" in verify_phase
+
+
+def test_verification_independence_reference_examples_keep_required_contract_fields_visible() -> None:
+    reference = (REFERENCES_DIR / "verification" / "meta" / "verification-independence.md").read_text(encoding="utf-8")
+
+    assert reference.count("contract:\n  schema_version: 1") >= 2
+    assert "context_intake:" in reference
+    assert "forbidden_proxies:" in reference
+    assert "uncertainty_markers:" in reference
 
 
 def test_planner_and_summary_prompt_surfaces_expand_contract_schema_bodies() -> None:

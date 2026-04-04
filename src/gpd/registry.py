@@ -31,6 +31,31 @@ SPECS_DIR = _PKG_ROOT / "specs"
 
 _LEADING_BLANK_LINES_BEFORE_FRONTMATTER_RE = re.compile(r"^(?:[ \t]*\r?\n)+(?=---\r?\n)")
 _FRONTMATTER_DELIMITER_RE = re.compile(r"^---[ \t]*(?:\r?\n)?$")
+_COMMAND_FRONTMATTER_KEYS = frozenset(
+    {
+        "name",
+        "description",
+        "argument-hint",
+        # Runtime-projected prompt surfaces may still carry this presentation key.
+        "color",
+        "requires",
+        "allowed-tools",
+        "review-contract",
+        "context_mode",
+        "project_reentry_capable",
+        # plan-phase carries this metadata in canonical frontmatter even though
+        # registry consumers currently do not project it.
+        "agent",
+    }
+)
+
+
+def _validate_command_frontmatter_keys(meta: dict[object, object], *, command_name: str) -> None:
+    """Reject unknown command frontmatter keys so all command surfaces stay aligned."""
+
+    unknown_keys = sorted(str(key) for key in meta if str(key) not in _COMMAND_FRONTMATTER_KEYS)
+    if unknown_keys:
+        raise ValueError(f"unknown frontmatter keys for {command_name}: {', '.join(unknown_keys)}")
 
 
 # ─── Dataclasses ─────────────────────────────────────────────────────────────
@@ -490,6 +515,8 @@ def render_command_visibility_sections_from_frontmatter(frontmatter: str, *, com
         return ""
     if not isinstance(meta, dict):
         raise ValueError(f"Frontmatter for {command_name} must parse to a mapping")
+    review_contract_value = _review_contract_frontmatter_value(meta, command_name=command_name)
+    _validate_command_frontmatter_keys(meta, command_name=command_name)
 
     requires = _parse_requires(meta.get("requires"), command_name=command_name)
     allowed_tools = _parse_allowed_tools(meta.get("allowed-tools"), command_name=command_name)
@@ -500,7 +527,7 @@ def render_command_visibility_sections_from_frontmatter(frontmatter: str, *, com
         context_mode=context_mode,
     )
     review_contract = _parse_review_contract(
-        _review_contract_frontmatter_value(meta, command_name=command_name),
+        review_contract_value,
         command_name=command_name,
     )
     return render_command_visibility_sections(
@@ -648,8 +675,6 @@ def _parse_command_file(path: Path, source: str) -> CommandDef:
         default=path.stem,
         required=True,
     )
-    requires = _parse_requires(meta.get("requires"), command_name=command_name)
-    allowed_tools = _parse_allowed_tools(meta.get("allowed-tools"), command_name=command_name)
 
     try:
         review_contract = _parse_review_contract(
@@ -658,6 +683,9 @@ def _parse_command_file(path: Path, source: str) -> CommandDef:
         )
     except ValueError as exc:
         raise ValueError(f"Invalid review-contract in {path}: {exc}") from exc
+    _validate_command_frontmatter_keys(meta, command_name=command_name)
+    requires = _parse_requires(meta.get("requires"), command_name=command_name)
+    allowed_tools = _parse_allowed_tools(meta.get("allowed-tools"), command_name=command_name)
 
     body = body.strip()
     context_mode = _parse_context_mode(meta.get("context_mode"), command_name=command_name)

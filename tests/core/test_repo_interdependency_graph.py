@@ -138,6 +138,41 @@ def test_graph_captures_execute_plan_github_lifecycle_edge() -> None:
     )
 
 
+def test_graph_captures_contract_schema_dependencies_for_core_workflows() -> None:
+    graph = read_graph_text()
+
+    assert graph_has_edge(
+        "src/gpd/specs/workflows/plan-phase.md",
+        "src/gpd/specs/templates/plan-contract-schema.md",
+        graph,
+    )
+    assert graph_has_edge(
+        "src/gpd/specs/workflows/execute-plan.md",
+        "src/gpd/specs/templates/contract-results-schema.md",
+        graph,
+    )
+    assert graph_has_edge(
+        "src/gpd/specs/workflows/verify-work.md",
+        "src/gpd/specs/templates/contract-results-schema.md",
+        graph,
+    )
+    assert graph_has_edge(
+        "src/gpd/specs/workflows/verify-work.md",
+        "src/gpd/specs/templates/plan-contract-schema.md",
+        graph,
+    )
+    assert graph_has_edge(
+        "src/gpd/specs/workflows/write-paper.md",
+        "src/gpd/specs/templates/paper/{paper-config-schema.md,artifact-manifest-schema.md,bibliography-audit-schema.md,reproducibility-manifest.md}",
+        graph,
+    )
+    assert graph_has_edge(
+        "src/gpd/specs/workflows/new-project.md",
+        "src/gpd/specs/templates/state-json-schema.md",
+        graph,
+    )
+
+
 def test_graph_captures_staged_review_panel_wiring() -> None:
     graph = read_graph_text()
 

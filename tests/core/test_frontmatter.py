@@ -582,7 +582,7 @@ class TestValidateFrontmatter:
         assert result.valid is True
         assert result.errors == []
 
-    def test_plan_rejects_empty_tool_requirements(self):
+    def test_plan_accepts_empty_tool_requirements_as_no_requirements(self):
         content = (
             _valid_plan_contract_frontmatter()
             .replace(
@@ -602,8 +602,8 @@ class TestValidateFrontmatter:
 
         result = validate_frontmatter(content, "plan")
 
-        assert result.valid is False
-        assert "tool_requirements: must not be empty when present" in result.errors
+        assert result.valid is True
+        assert result.errors == []
 
     def test_missing_fields(self):
         content = "---\nphase: 01-test\n---\n\nBody."

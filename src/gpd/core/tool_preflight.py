@@ -147,7 +147,7 @@ def parse_plan_tool_requirements(raw: object) -> list[PlanToolRequirement]:
     if raw is None:
         return []
     if raw == []:
-        raise PlanToolPreflightError("must not be empty when present")
+        return []
     try:
         return _TOOL_REQUIREMENTS_ADAPTER.validate_python(raw)
     except PydanticValidationError as exc:

@@ -76,7 +76,7 @@ Each section object must include:
 
 Optional:
 
-- `label`: string such as `sec:intro`
+- `label`: string such as `intro`
 
 Notes:
 
@@ -91,7 +91,7 @@ Each figure object must include:
 
 - `path`: path to the figure file
 - `caption`: non-empty caption
-- `label`: LaTeX label such as `fig:benchmark`
+- `label`: LaTeX label such as `benchmark`
 
 Optional:
 

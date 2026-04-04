@@ -604,6 +604,9 @@ flowchart TD
 - `src/gpd/specs/workflows/plan-phase.md -> src/gpd/specs/templates/phase-prompt.md`
   `include`
 
+- `src/gpd/specs/workflows/plan-phase.md -> src/gpd/specs/templates/plan-contract-schema.md`
+  `include`
+
 - `src/gpd/specs/workflows/plan-phase.md -> src/gpd/specs/references/ui/ui-brand.md`
   `include`
 
@@ -743,6 +746,9 @@ flowchart TD
 - `src/gpd/specs/workflows/execute-plan.md -> src/gpd/specs/templates/calculation-log.md`
   `include`
 
+- `src/gpd/specs/workflows/execute-plan.md -> src/gpd/specs/templates/contract-results-schema.md`
+  `include`
+
 - `src/gpd/specs/workflows/execute-plan.md -> src/gpd/specs/templates/recovery-plan.md`
   `include`
 
@@ -755,10 +761,16 @@ flowchart TD
 - `src/gpd/specs/workflows/verify-work.md -> src/gpd/specs/templates/research-verification.md`
   `include`
 
+- `src/gpd/specs/workflows/verify-work.md -> src/gpd/specs/templates/contract-results-schema.md`
+  `include`
+
 - `src/gpd/specs/workflows/verify-work.md -> src/gpd/specs/references/protocols/error-propagation-protocol.md`
   `include`
 
 - `src/gpd/specs/workflows/verify-work.md -> src/gpd/specs/{references/verification/meta/verification-independence.md,workflows/debug.md}`
+  `include`
+
+- `src/gpd/specs/workflows/verify-work.md -> src/gpd/specs/templates/plan-contract-schema.md`
   `include`
 
 - `src/gpd/specs/workflows/verify-work.md -> src/gpd/agents/gpd-planner.md`
@@ -816,6 +828,9 @@ flowchart TD
 - `src/gpd/specs/workflows/write-paper.md -> src/gpd/specs/{references/publication/publication-pipeline-modes.md,references/publication/paper-quality-scoring.md,templates/latex-preamble.md,templates/paper/supplemental-material.md,templates/paper/experimental-comparison.md}`
   `include`
 
+- `src/gpd/specs/workflows/write-paper.md -> src/gpd/specs/templates/paper/{paper-config-schema.md,artifact-manifest-schema.md,bibliography-audit-schema.md,reproducibility-manifest.md}`
+  `include`
+
 - `src/gpd/specs/workflows/debug.md -> src/gpd/specs/templates/debug-subagent-prompt.md`
   `conditional-include`
   One per detected gap.
@@ -847,6 +862,9 @@ flowchart TD
   `include`
 
 - `src/gpd/specs/workflows/new-project.md -> src/gpd/specs/{references/research/questioning.md,references/conventions/subfield-convention-defaults.md}`
+  `include`
+
+- `src/gpd/specs/workflows/new-project.md -> src/gpd/specs/templates/state-json-schema.md`
   `include`
 
 - `src/gpd/specs/workflows/new-project.md -> src/gpd/specs/templates/research-project/PRIOR-WORK.md`

@@ -123,8 +123,7 @@ def _binding_condition_for_check(run_request_schema: dict[str, object], check_id
     raise AssertionError(f"No binding condition found for {check_identifier!r}")
 
 
-def _request_requirement_for_check(run_request_schema: dict[str, object], check_identifier: str) -> dict[str, object]:
-    fallback: dict[str, object] | None = None
+def _request_requirement_for_check(run_request_schema: dict[str, object], check_identifier: str) -> dict[str, object] | None:
     for clause in run_request_schema.get("allOf", []):
         if_branch = clause.get("if")
         if not isinstance(if_branch, dict):
@@ -139,13 +138,9 @@ def _request_requirement_for_check(run_request_schema: dict[str, object], check_
                 enum_values = field_schema.get("enum")
                 if isinstance(enum_values, list) and check_identifier in enum_values:
                     then_schema = clause.get("then")
-                    if isinstance(then_schema, dict):
-                        if "required" in then_schema:
-                            return then_schema
-                        fallback = then_schema
-    if fallback is not None:
-        return fallback
-    raise AssertionError(f"No request requirement condition found for {check_identifier!r}")
+                    if isinstance(then_schema, dict) and "required" in then_schema:
+                        return then_schema
+    return None
 
 
 def _assert_contract_schema_sections_closed(contract_schema: dict[str, object]) -> None:
@@ -422,7 +417,7 @@ def test_suggest_contract_checks_tool_description_surfaces_contract_requirements
 
 
 def test_contract_tools_list_tools_expose_structured_request_schemas() -> None:
-    from gpd.mcp.servers.verification_server import mcp
+    from gpd.mcp.servers.verification_server import list_verification_checks, mcp
 
     run_schema = _tool_input_schema(mcp, "run_contract_check")
     run_request = _schema_object(run_schema, run_schema["properties"]["request"])
@@ -433,8 +428,18 @@ def test_contract_tools_list_tools_expose_structured_request_schemas() -> None:
         for branch in run_request["anyOf"]
         if isinstance(branch, dict) and branch.get("required") == ["check_key"]
     )
+    expected_identifiers = {
+        str(entry["check_key"])
+        for entry in list_verification_checks()
+        if entry.get("contract_aware")
+    } | {
+        str(entry["check_id"])
+        for entry in list_verification_checks()
+        if entry.get("contract_aware")
+    }
     assert check_key_requirement["properties"]["check_key"]["type"] == "string"
     assert check_key_requirement["properties"]["check_key"]["pattern"] == r"^\S(?:[\s\S]*\S)?$"
+    assert set(check_key_requirement["properties"]["check_key"]["enum"]) == expected_identifiers
 
     check_id_requirement = next(
         branch
@@ -443,6 +448,7 @@ def test_contract_tools_list_tools_expose_structured_request_schemas() -> None:
     )
     assert check_id_requirement["properties"]["check_id"]["type"] == "string"
     assert check_id_requirement["properties"]["check_id"]["pattern"] == r"^\S(?:[\s\S]*\S)?$"
+    assert set(check_id_requirement["properties"]["check_id"]["enum"]) == expected_identifiers
 
     assert {"check_key", "check_id", "contract", "binding", "metadata", "observed", "artifact_content"} <= set(
         run_request["properties"]
@@ -450,7 +456,7 @@ def test_contract_tools_list_tools_expose_structured_request_schemas() -> None:
     check_key = _schema_anyof_string(run_request["properties"]["check_key"])
     assert check_key["minLength"] == 1
     assert check_key["pattern"] == r"^\S(?:[\s\S]*\S)?$"
-    assert "enum" not in check_key
+    assert set(check_key["enum"]) == expected_identifiers
     assert any(
         isinstance(branch, dict) and branch.get("type") == "null"
         for branch in run_request["properties"]["check_key"]["anyOf"]
@@ -459,7 +465,7 @@ def test_contract_tools_list_tools_expose_structured_request_schemas() -> None:
     check_id = _schema_anyof_string(run_request["properties"]["check_id"])
     assert check_id["minLength"] == 1
     assert check_id["pattern"] == r"^\S(?:[\s\S]*\S)?$"
-    assert "enum" not in check_id
+    assert set(check_id["enum"]) == expected_identifiers
     assert any(
         isinstance(branch, dict) and branch.get("type") == "null"
         for branch in run_request["properties"]["check_id"]["anyOf"]
@@ -553,36 +559,22 @@ def test_contract_tools_list_tools_expose_structured_request_schemas() -> None:
     assert artifact_content["pattern"] == r"\S"
 
     benchmark_requirements = _request_requirement_for_check(run_request, "contract.benchmark_reproduction")
-    assert set(benchmark_requirements["required"]) == {"observed"}
-    assert "metadata" not in benchmark_requirements.get("properties", {})
-    benchmark_observed = _schema_object(benchmark_requirements, benchmark_requirements["properties"]["observed"])
-    assert set(benchmark_observed["required"]) == {"metric_value", "threshold_value"}
+    assert benchmark_requirements is None
 
     limit_requirements = _request_requirement_for_check(run_request, "contract.limit_recovery")
-    assert "metadata" not in limit_requirements.get("required", [])
-    assert "metadata" not in limit_requirements.get("properties", {})
+    assert limit_requirements is None
 
     fit_requirements = _request_requirement_for_check(run_request, "contract.fit_family_mismatch")
-    assert set(fit_requirements["required"]) == {"observed"}
-    assert "metadata" not in fit_requirements.get("properties", {})
-    fit_observed = _schema_object(fit_requirements, fit_requirements["properties"]["observed"])
-    assert fit_observed["required"] == ["selected_family"]
+    assert fit_requirements is None
 
     estimator_requirements = _request_requirement_for_check(run_request, "contract.estimator_family_mismatch")
-    assert set(estimator_requirements["required"]) == {"observed"}
-    assert "metadata" not in estimator_requirements.get("properties", {})
-    estimator_observed = _schema_object(estimator_requirements, estimator_requirements["properties"]["observed"])
-    assert set(estimator_observed["required"]) == {"selected_family", "bias_checked", "calibration_checked"}
+    assert estimator_requirements is None
 
     proof_parameter_requirements = _request_requirement_for_check(run_request, "contract.proof_parameter_coverage")
-    assert set(proof_parameter_requirements["required"]) == {"observed"}
-    proof_parameter_observed = _schema_object(proof_parameter_requirements, proof_parameter_requirements["properties"]["observed"])
-    assert proof_parameter_observed["required"] == ["covered_parameter_symbols"]
+    assert proof_parameter_requirements is None
 
     proof_alignment_requirements = _request_requirement_for_check(run_request, "contract.claim_to_proof_alignment")
-    assert set(proof_alignment_requirements["required"]) == {"observed"}
-    proof_alignment_observed = _schema_object(proof_alignment_requirements, proof_alignment_requirements["properties"]["observed"])
-    assert set(proof_alignment_observed["required"]) == {"scope_status", "uncovered_conclusion_clause_ids"}
+    assert proof_alignment_requirements is None
 
     contract_schema = _schema_anyof_object(run_request["properties"]["contract"])
     _assert_contract_schema_sections_closed(contract_schema)

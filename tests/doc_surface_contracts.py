@@ -2,18 +2,13 @@
 
 from __future__ import annotations
 
-import copy
-import json
 import re
 from collections.abc import Iterable
 from functools import lru_cache
-from pathlib import Path
 
+from gpd.core.public_surface_contract import load_public_surface_contract
 from gpd.core.resume_surface import RESUME_COMPATIBILITY_ALIAS_FIELDS
 from gpd.core.surface_phrases import post_start_settings_note, post_start_settings_recommendation
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_SURFACE_CONTRACT_PATH = REPO_ROOT / "src/gpd/core/public_surface_contract.json"
 
 DOCTOR_RUNTIME_SCOPE_RE = re.compile(r"gpd doctor --runtime <runtime> --local\|--global")
 UNATTENDED_READINESS_SURFACE = "gpd validate unattended-readiness"
@@ -98,7 +93,41 @@ def _first_index_of_any(content: str, fragments: Iterable[str], *, label: str) -
 
 @lru_cache(maxsize=1)
 def _public_surface_contract_payload() -> dict[str, object]:
-    payload = json.loads(PUBLIC_SURFACE_CONTRACT_PATH.read_text(encoding="utf-8"))
+    contract = load_public_surface_contract()
+    payload = {
+        "schema_version": 1,
+        "beginner_onboarding": {
+            "hub_url": contract.beginner_onboarding.hub_url,
+            "preflight_requirements": list(contract.beginner_onboarding.preflight_requirements),
+            "caveats": list(contract.beginner_onboarding.caveats),
+            "startup_ladder": list(contract.beginner_onboarding.startup_ladder),
+        },
+        "local_cli_bridge": {
+            "commands": list(contract.local_cli_bridge.commands),
+            "terminal_phrase": contract.local_cli_bridge.terminal_phrase,
+            "purpose_phrase": contract.local_cli_bridge.purpose_phrase,
+        },
+        "post_start_settings": {
+            "primary_sentence": contract.post_start_settings.primary_sentence,
+            "default_sentence": contract.post_start_settings.default_sentence,
+        },
+        "resume_authority": {
+            "durable_authority_phrase": contract.resume_authority.durable_authority_phrase,
+            "public_vocabulary_intro": contract.resume_authority.public_vocabulary_intro,
+            "public_fields": list(contract.resume_authority.public_fields),
+            "top_level_boundary_phrase": contract.resume_authority.top_level_boundary_phrase,
+        },
+        "recovery_ladder": {
+            "title": contract.recovery_ladder.title,
+            "local_snapshot_command": contract.recovery_ladder.local_snapshot_command,
+            "local_snapshot_phrase": contract.recovery_ladder.local_snapshot_phrase,
+            "cross_workspace_command": contract.recovery_ladder.cross_workspace_command,
+            "cross_workspace_phrase": contract.recovery_ladder.cross_workspace_phrase,
+            "resume_phrase": contract.recovery_ladder.resume_phrase,
+            "next_phrase": contract.recovery_ladder.next_phrase,
+            "pause_phrase": contract.recovery_ladder.pause_phrase,
+        },
+    }
     assert isinstance(payload, dict), "public surface contract must be a JSON object"
     assert set(payload) == {
         "schema_version",
@@ -109,7 +138,7 @@ def _public_surface_contract_payload() -> dict[str, object]:
         "recovery_ladder",
     }
     assert payload["schema_version"] == 1
-    return copy.deepcopy(payload)
+    return payload
 
 
 def _contract_section(name: str) -> dict[str, object]:
@@ -121,7 +150,7 @@ def _contract_section(name: str) -> dict[str, object]:
 def _contract_string(section: dict[str, object], key: str, *, label: str) -> str:
     value = section[key]
     assert isinstance(value, str) and value.strip(), f"{label}.{key} must be a non-empty string"
-    return value
+    return value.strip()
 
 
 def _contract_optional_string(section: dict[str, object], key: str, *, label: str) -> str | None:
@@ -129,16 +158,21 @@ def _contract_optional_string(section: dict[str, object], key: str, *, label: st
     if value is None:
         return None
     assert isinstance(value, str) and value.strip(), f"{label}.{key} must be a non-empty string"
-    return value
+    return value.strip()
 
 
 def _contract_string_list(section: dict[str, object], key: str, *, label: str) -> tuple[str, ...]:
     value = section[key]
     assert isinstance(value, list) and value, f"{label}.{key} must be a non-empty list"
     items: list[str] = []
+    seen: set[str] = set()
     for item in value:
         assert isinstance(item, str) and item.strip(), f"{label}.{key} entries must be non-empty strings"
-        items.append(item)
+        normalized = item.strip()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        items.append(normalized)
     return tuple(items)
 
 

@@ -39,6 +39,10 @@ def test_parse_plan_tool_requirements_requires_command_for_command_tool() -> Non
         )
 
 
+def test_parse_plan_tool_requirements_treats_empty_list_as_no_requirements() -> None:
+    assert parse_plan_tool_requirements([]) == []
+
+
 def test_build_plan_tool_preflight_without_requirements_passes(tmp_path: Path) -> None:
     plan_path = tmp_path / "01-01-PLAN.md"
     plan_path.write_text(

@@ -252,7 +252,7 @@ function requireNonEmptyString(payload, key, label) {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(`${label}.${key} must be a non-empty string`);
   }
-  return value;
+  return value.trim();
 }
 
 function requireNonEmptyStringList(payload, key, label) {
@@ -261,11 +261,17 @@ function requireNonEmptyStringList(payload, key, label) {
     throw new Error(`${label}.${key} must be a non-empty list`);
   }
   const items = [];
+  const seen = new Set();
   for (const item of value) {
     if (typeof item !== "string" || !item.trim()) {
       throw new Error(`${label}.${key} entries must be non-empty strings`);
     }
-    items.push(item);
+    const normalized = item.trim();
+    if (seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    items.push(normalized);
   }
   return items;
 }

@@ -109,10 +109,7 @@ _CONTRACT_CHECK_REQUEST_HINTS: dict[str, dict[str, object]] = {
             "observed.metric_value",
             "observed.threshold_value",
         ],
-        "schema_required_request_fields": [
-            "observed.metric_value",
-            "observed.threshold_value",
-        ],
+        "schema_required_request_fields": [],
         "optional_request_fields": ["metadata.source_reference_id", "binding.*", "artifact_content"],
         "request_template": {
             "binding": {},
@@ -150,11 +147,11 @@ _CONTRACT_CHECK_REQUEST_HINTS: dict[str, dict[str, object]] = {
     },
     "contract.fit_family_mismatch": {
         "required_request_fields": ["metadata.declared_family", "observed.selected_family"],
-        "schema_required_request_fields": ["observed.selected_family"],
+        "schema_required_request_fields": [],
         "optional_request_fields": [
             "binding.*",
-            "metadata.allowed_families[]",
-            "metadata.forbidden_families[]",
+            "metadata.allowed_families",
+            "metadata.forbidden_families",
             "observed.competing_family_checked",
             "artifact_content",
         ],
@@ -179,15 +176,11 @@ _CONTRACT_CHECK_REQUEST_HINTS: dict[str, dict[str, object]] = {
             "observed.bias_checked",
             "observed.calibration_checked",
         ],
-        "schema_required_request_fields": [
-            "observed.selected_family",
-            "observed.bias_checked",
-            "observed.calibration_checked",
-        ],
+        "schema_required_request_fields": [],
         "optional_request_fields": [
             "binding.*",
-            "metadata.allowed_families[]",
-            "metadata.forbidden_families[]",
+            "metadata.allowed_families",
+            "metadata.forbidden_families",
             "artifact_content",
         ],
         "request_template": {
@@ -207,14 +200,14 @@ _CONTRACT_CHECK_REQUEST_HINTS: dict[str, dict[str, object]] = {
     },
     "contract.proof_hypothesis_coverage": {
         "required_request_fields": [
-            "metadata.hypothesis_ids[]",
-            "observed.covered_hypothesis_ids[]",
-        ],
-        "schema_required_request_fields": [
+            "contract",
+            "metadata.hypothesis_ids",
             "observed.covered_hypothesis_ids",
         ],
+        "schema_required_request_fields": [],
         "optional_request_fields": ["binding.*", "artifact_content"],
         "request_template": {
+            "contract": None,
             "binding": {},
             "metadata": {
                 "hypothesis_ids": None,
@@ -228,14 +221,14 @@ _CONTRACT_CHECK_REQUEST_HINTS: dict[str, dict[str, object]] = {
     },
     "contract.proof_parameter_coverage": {
         "required_request_fields": [
-            "metadata.theorem_parameter_symbols[]",
-            "observed.covered_parameter_symbols[]",
-        ],
-        "schema_required_request_fields": [
+            "contract",
+            "metadata.theorem_parameter_symbols",
             "observed.covered_parameter_symbols",
         ],
+        "schema_required_request_fields": [],
         "optional_request_fields": ["binding.*", "artifact_content"],
         "request_template": {
+            "contract": None,
             "binding": {},
             "metadata": {
                 "theorem_parameter_symbols": None,
@@ -249,15 +242,14 @@ _CONTRACT_CHECK_REQUEST_HINTS: dict[str, dict[str, object]] = {
     },
     "contract.proof_quantifier_domain": {
         "required_request_fields": [
+            "contract",
             "observed.quantifier_status",
             "observed.scope_status",
         ],
-        "schema_required_request_fields": [
-            "observed.quantifier_status",
-            "observed.scope_status",
-        ],
-        "optional_request_fields": ["binding.*", "metadata.quantifiers[]", "observed.uncovered_quantifiers[]", "artifact_content"],
+        "schema_required_request_fields": [],
+        "optional_request_fields": ["binding.*", "metadata.quantifiers", "observed.uncovered_quantifiers", "artifact_content"],
         "request_template": {
+            "contract": None,
             "binding": {},
             "metadata": {
                 "quantifiers": None,
@@ -272,21 +264,20 @@ _CONTRACT_CHECK_REQUEST_HINTS: dict[str, dict[str, object]] = {
     },
     "contract.claim_to_proof_alignment": {
         "required_request_fields": [
-            "observed.scope_status",
-            "observed.uncovered_conclusion_clause_ids[]",
-        ],
-        "schema_required_request_fields": [
+            "contract",
             "observed.scope_status",
             "observed.uncovered_conclusion_clause_ids",
         ],
+        "schema_required_request_fields": [],
         "optional_request_fields": [
             "binding.*",
             "metadata.claim_statement",
-            "metadata.conclusion_clause_ids[]",
-            "observed.uncovered_conclusion_clause_ids[]",
+            "metadata.conclusion_clause_ids",
+            "observed.uncovered_conclusion_clause_ids",
             "artifact_content",
         ],
         "request_template": {
+            "contract": None,
             "binding": {},
             "metadata": {
                 "claim_statement": None,
@@ -300,10 +291,11 @@ _CONTRACT_CHECK_REQUEST_HINTS: dict[str, dict[str, object]] = {
         },
     },
     "contract.counterexample_search": {
-        "required_request_fields": ["observed.counterexample_status"],
-        "schema_required_request_fields": ["observed.counterexample_status"],
+        "required_request_fields": ["contract", "observed.counterexample_status"],
+        "schema_required_request_fields": [],
         "optional_request_fields": ["binding.*", "metadata.claim_statement", "artifact_content"],
         "request_template": {
+            "contract": None,
             "binding": {},
             "metadata": {
                 "claim_statement": None,
@@ -1108,22 +1100,29 @@ _RUN_CONTRACT_CHECK_REQUIRED_FIELD_CONDITIONS = [
     for check_key, hint in _CONTRACT_CHECK_REQUEST_HINTS.items()
     if (condition := _run_contract_request_requirement_condition_schema(check_key, hint)) is not None
 ]
+_RUN_CONTRACT_CHECK_IDENTIFIER_SCHEMA: dict[str, object] = {
+    **dict(_trimmed_non_empty_string_schema()),
+    "enum": list(_CONTRACT_CHECK_IDENTIFIER_VALUES),
+}
+_RUN_CONTRACT_CHECK_IDENTIFIER_OR_NULL_SCHEMA: dict[str, object] = {
+    "anyOf": [dict(_RUN_CONTRACT_CHECK_IDENTIFIER_SCHEMA), {"type": "null"}]
+}
 _RUN_CONTRACT_CHECK_REQUEST_SCHEMA: dict[str, object] = {
     "type": "object",
     "additionalProperties": False,
     "anyOf": [
         {
             "required": ["check_key"],
-            "properties": {"check_key": dict(_trimmed_non_empty_string_schema())},
+            "properties": {"check_key": dict(_RUN_CONTRACT_CHECK_IDENTIFIER_SCHEMA)},
         },
         {
             "required": ["check_id"],
-            "properties": {"check_id": dict(_trimmed_non_empty_string_schema())},
+            "properties": {"check_id": dict(_RUN_CONTRACT_CHECK_IDENTIFIER_SCHEMA)},
         },
     ],
     "properties": {
-        "check_key": _trimmed_non_empty_string_or_null_schema(),
-        "check_id": _trimmed_non_empty_string_or_null_schema(),
+        "check_key": dict(_RUN_CONTRACT_CHECK_IDENTIFIER_OR_NULL_SCHEMA),
+        "check_id": dict(_RUN_CONTRACT_CHECK_IDENTIFIER_OR_NULL_SCHEMA),
         "contract": {"anyOf": [dict(_CONTRACT_PAYLOAD_INPUT_SCHEMA), {"type": "null"}]},
         "binding": {"anyOf": [dict(_CONTRACT_BINDING_INPUT_SCHEMA), {"type": "null"}]},
         "metadata": {"anyOf": [dict(_CONTRACT_METADATA_INPUT_SCHEMA), {"type": "null"}]},
@@ -1343,15 +1342,24 @@ def _contract_check_request_hint(check_key: str, *, contract: ResearchContract |
                         continue
                     metadata[field_name] = copy.deepcopy(value)
                     if field_name == "hypothesis_ids":
-                        _demote_required_field("metadata.hypothesis_ids[]")
+                        _demote_required_field("metadata.hypothesis_ids")
                     elif field_name == "theorem_parameter_symbols":
-                        _demote_required_field("metadata.theorem_parameter_symbols[]")
+                        _demote_required_field("metadata.theorem_parameter_symbols")
         elif len(_proof_claim_ids(contract)) > 1 or proof_claim_issue is not None:
             if "binding.claim_ids" not in enriched_hint["required_request_fields"]:
-                enriched_hint["required_request_fields"].insert(0, "binding.claim_ids")
-            for field_name in ("metadata.hypothesis_ids[]", "metadata.theorem_parameter_symbols[]"):
+                insert_at = 1 if "contract" in enriched_hint["required_request_fields"] else 0
+                enriched_hint["required_request_fields"].insert(insert_at, "binding.claim_ids")
+            for field_name in ("metadata.hypothesis_ids", "metadata.theorem_parameter_symbols"):
                 if field_name in enriched_hint["required_request_fields"]:
                     _demote_required_field(field_name)
+
+    if check_key in _PROOF_CHECK_KEYS:
+        if "contract" not in enriched_hint["required_request_fields"]:
+            enriched_hint["required_request_fields"].insert(0, "contract")
+        enriched_hint["request_template"]["contract"] = None
+        enriched_hint["optional_request_fields"] = [
+            field for field in enriched_hint["optional_request_fields"] if field not in enriched_hint["required_request_fields"]
+        ]
 
     return enriched_hint
 
@@ -3624,7 +3632,9 @@ def run_contract_check(request: RunContractCheckPayload) -> dict:
     ``contract.limit_recovery`` or ``contract.benchmark_reproduction``.
 
     ``request.contract`` is optional, but when supplied it must be a project or
-    phase contract object. ``schema_version`` is required and must equal ``1``.
+    phase contract object. Proof-oriented checks still require an authoritative
+    contract payload even when other checks can rely on metadata-only evidence.
+    ``schema_version`` is required and must equal ``1``.
     The payload is treated as a hard schema boundary for authoritative fields:
     unknown top-level keys, non-object sections,
     coercive scalars, blank strings, and malformed list members are rejected
@@ -4385,7 +4395,9 @@ def suggest_contract_checks(contract: SuggestContractPayload, active_checks: Str
     Each ``suggested_checks[]`` entry includes ``required_request_fields``,
     ``optional_request_fields``, ``supported_binding_fields``, and a
     ``request_template`` that is safe to use as the starting point for
-    ``run_contract_check(request=...)``.
+    ``run_contract_check(request=...)``. Proof-check templates surface an
+    explicit ``contract`` placeholder because runtime execution requires an
+    authoritative contract payload.
     """
 
     with gpd_span("mcp.verification.suggest_contract_checks"):

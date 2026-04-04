@@ -10,6 +10,18 @@ STATE_SCHEMA = REPO_ROOT / "src" / "gpd" / "specs" / "templates" / "state-json-s
 QUESTIONING = REPO_ROOT / "src" / "gpd" / "specs" / "references" / "research" / "questioning.md"
 
 
+def _extract_contract_rule_block_lines(text: str, start_marker: str) -> tuple[str, ...]:
+    lines = text.splitlines()
+    start = lines.index(start_marker)
+    end = next(
+        idx
+        for idx in range(start + 1, len(lines))
+        if lines[idx].startswith("Then present a concise scoping summary")
+        or lines[idx].startswith("Present a concise scoping summary")
+    )
+    return tuple(line.strip() for line in lines[start:end] if line.lstrip().startswith("- "))
+
+
 def test_new_project_prompt_surfaces_the_canonical_state_schema_for_project_contract_grounding() -> None:
     new_project_text = NEW_PROJECT.read_text(encoding="utf-8")
     parse_line = next(
@@ -28,6 +40,9 @@ def test_new_project_prompt_surfaces_the_canonical_state_schema_for_project_cont
     assert "`context_intake`, `approach_policy`, and `uncertainty_markers` are objects, not strings or lists" in new_project_text
     assert "`schema_version` must be the integer `1`" in new_project_text
     assert "`references[].must_surface` must be a boolean `true` or `false`" in new_project_text
+    assert "`claims[].proof_deliverables` must point only to declared `deliverables[].id` values" in new_project_text
+    assert "proof-bearing claims (theorem-like claim kinds, or claims linked to `proof_obligation` observables)" in new_project_text
+    assert "proof-bearing claims must include at least one proof-specific acceptance test kind" in new_project_text
     assert "project_contract_load_info" in new_project_text
     assert "project_contract_validation" in new_project_text
     assert "`context_intake`, `approach_policy`, and `uncertainty_markers` must each stay as objects, not strings or lists." in new_project_text
@@ -57,6 +72,20 @@ def test_new_project_prompt_surfaces_the_canonical_state_schema_for_project_cont
     assert "If the init JSON already contains `project_contract`, `project_contract_load_info`, or `project_contract_validation`, preserve that state in the approval gate and continuation decision." in new_project_text
 
 
+def test_new_project_duplicate_contract_rule_blocks_stay_in_sync() -> None:
+    new_project_text = NEW_PROJECT.read_text(encoding="utf-8")
+    show_block = _extract_contract_rule_block_lines(
+        new_project_text,
+        "Before you show the approval gate, build the raw contract as a literal JSON object for the `project_contract` subsection of `templates/state-json-schema.md`:",
+    )
+    ask_block = _extract_contract_rule_block_lines(
+        new_project_text,
+        "Before you ask for approval, build the raw contract as a literal JSON object for the `project_contract` subsection of `templates/state-json-schema.md`:",
+    )
+
+    assert show_block == ask_block
+
+
 def test_state_schema_surfaces_the_exact_approved_mode_grounding_rule() -> None:
     state_schema_text = STATE_SCHEMA.read_text(encoding="utf-8")
 
@@ -81,6 +110,11 @@ def test_state_schema_surfaces_the_exact_approved_mode_grounding_rule() -> None:
     assert "`schema_version` must be the integer `1`." in state_schema_text
     assert "`must_surface` is a boolean scalar. Use the JSON literals `true` and `false`;" in state_schema_text
     assert "`context_intake` must not be empty." in state_schema_text
+    assert '`claims[]` — `{ "id", "statement", "claim_kind", "observables[]", "deliverables[]", "acceptance_tests[]", "references[]", "parameters[]", "hypotheses[]", "quantifiers[]", "conclusion_clauses[]", "proof_deliverables[]" }`' in state_schema_text
+    assert "Proof-bearing claim fields are required when the claim is theorem-like" in state_schema_text
+    assert "claims[].proof_deliverables[]" in state_schema_text
+    assert "`claims[].parameters[]`, `claims[].hypotheses[]`, and `claims[].conclusion_clauses[]` must each be non-empty." in state_schema_text
+    assert "`claims[].acceptance_tests[]` must include at least one proof-specific test kind" in state_schema_text
     assert "already exists inside the current project root" in state_schema_text
     assert "already exists inside the current project root" in state_schema_text
     assert "Placeholder or `TBD` text does not count as concrete grounding." in state_schema_text

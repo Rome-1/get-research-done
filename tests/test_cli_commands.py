@@ -2065,6 +2065,72 @@ class TestReviewValidationCommands:
         assert cli_module._review_contract_requests_check(contract, "review_ledger") is False
         assert cli_module._review_preflight_check_is_blocking(contract, "review_ledger") is False
 
+    def test_command_required_files_override_detail_uses_contract_metadata_not_command_name(self, tmp_path: Path) -> None:
+        manuscript = canonical_manuscript_path(tmp_path)
+        manuscript.parent.mkdir(parents=True, exist_ok=True)
+        manuscript.write_text(
+            "\\documentclass{article}\n\\begin{document}\nDraft.\n\\end{document}\n",
+            encoding="utf-8",
+        )
+        command = SimpleNamespace(
+            name="gpd:custom-review",
+            requires={"files": ["paper/*.tex"]},
+            review_contract=SimpleNamespace(preflight_checks=["manuscript", "compiled_manuscript"]),
+        )
+
+        detail = cli_module._command_required_files_override_detail(
+            tmp_path,
+            command,
+            str(manuscript.relative_to(tmp_path)),
+            workspace_cwd=tmp_path,
+        )
+
+        assert detail is not None
+        assert "explicit manuscript target satisfies command context" in detail
+
+    def test_command_required_files_override_detail_skips_referee_source_commands(self, tmp_path: Path) -> None:
+        manuscript = canonical_manuscript_path(tmp_path)
+        manuscript.parent.mkdir(parents=True, exist_ok=True)
+        manuscript.write_text(
+            "\\documentclass{article}\n\\begin{document}\nDraft.\n\\end{document}\n",
+            encoding="utf-8",
+        )
+        command = SimpleNamespace(
+            name="gpd:custom-referees",
+            requires={"files": ["paper/*.tex"]},
+            review_contract=SimpleNamespace(preflight_checks=["manuscript", "referee_report_source"]),
+        )
+
+        detail = cli_module._command_required_files_override_detail(
+            tmp_path,
+            command,
+            str(manuscript.relative_to(tmp_path)),
+            workspace_cwd=tmp_path,
+        )
+
+        assert detail is None
+
+    def test_command_context_manuscript_check_allows_bootstrap_from_contract_metadata(self, tmp_path: Path) -> None:
+        isolated_root = tmp_path / "bootstrap-context"
+        isolated_root.mkdir(parents=True, exist_ok=True)
+        command = SimpleNamespace(
+            name="gpd:custom-write",
+            requires={},
+            review_contract=SimpleNamespace(preflight_checks=["manuscript"]),
+        )
+
+        result = cli_module._command_context_manuscript_check(
+            isolated_root,
+            command,
+            arguments=None,
+            workspace_cwd=isolated_root,
+        )
+
+        assert result is not None
+        passed, detail = result
+        assert passed is True
+        assert "fresh bootstrap is allowed" in detail
+
     def test_review_preflight_falls_back_when_runtime_resolution_fails(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -3077,7 +3143,10 @@ class TestReviewValidationCommands:
         assert "artifact manifest is invalid" in checks["artifact_manifest"]["detail"]
         assert "artifact_manifest.paper_title" in checks["artifact_manifest"]["detail"]
 
-    def test_review_preflight_peer_review_accepts_explicit_manuscript_path(self, gpd_project: Path) -> None:
+    def test_review_preflight_peer_review_rejects_explicit_manuscript_path_outside_supported_roots(
+        self,
+        gpd_project: Path,
+    ) -> None:
         canonical_manuscript_path(gpd_project).unlink()
 
         paper_dir = gpd_project / "paper"
@@ -3108,13 +3177,15 @@ class TestReviewValidationCommands:
             catch_exceptions=False,
         )
 
-        assert result.exit_code == 0, result.output
+        assert result.exit_code == 1, result.output
         payload = json.loads(result.output)
         assert payload["command"] == "gpd:peer-review"
-        assert payload["passed"] is True
+        assert payload["passed"] is False
         checks = {check["name"]: check for check in payload["checks"]}
-        assert checks["manuscript"]["passed"] is True
-        assert _manuscript_entrypoint_relpath(root_name="submission") in checks["manuscript"]["detail"]
+        assert checks["manuscript"]["passed"] is False
+        assert checks["manuscript"]["detail"] == (
+            "explicit manuscript target must stay under `paper/`, `manuscript/`, or `draft/` inside the current project"
+        )
 
     def test_review_preflight_peer_review_strict_does_not_fall_back_to_gpd_paper_for_explicit_manuscript(
         self,
@@ -3143,9 +3214,10 @@ class TestReviewValidationCommands:
         assert result.exit_code == 1, result.output
         payload = json.loads(result.output)
         checks = {check["name"]: check for check in payload["checks"]}
-        assert checks["artifact_manifest"]["passed"] is False
-        assert checks["bibliography_audit"]["passed"] is False
-        assert checks["reproducibility_manifest"]["passed"] is False
+        assert checks["manuscript"]["passed"] is False
+        assert checks["manuscript"]["detail"] == (
+            "explicit manuscript target must stay under `paper/`, `manuscript/`, or `draft/` inside the current project"
+        )
 
     def test_review_preflight_peer_review_accepts_explicit_manuscript_directory(self, gpd_project: Path) -> None:
         result = runner.invoke(
@@ -3850,6 +3922,37 @@ class TestReviewValidationCommands:
         assert checks["manuscript"]["passed"] is True
         assert checks["required_files"]["passed"] is True
         assert "../paper/" not in checks["manuscript"]["detail"]
+
+    def test_command_context_peer_review_rejects_explicit_manuscript_outside_supported_roots(
+        self,
+        gpd_project: Path,
+    ) -> None:
+        submission_dir = gpd_project / "submission"
+        submission_dir.mkdir()
+        (_manuscript_entrypoint_path(gpd_project, root_name="submission")).write_text(
+            "\\documentclass{article}\n\\begin{document}\nSubmission manuscript.\n\\end{document}\n",
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "--raw",
+                "validate",
+                "command-context",
+                "peer-review",
+                _manuscript_entrypoint_relpath(root_name="submission"),
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert checks["manuscript"]["passed"] is False
+        assert checks["manuscript"]["detail"] == (
+            "explicit manuscript target must stay under `paper/`, `manuscript/`, or `draft/` inside the current project"
+        )
 
     def test_review_preflight_arxiv_submission_strict_does_not_fall_back_to_legacy_gpd_paper_artifacts(
         self,

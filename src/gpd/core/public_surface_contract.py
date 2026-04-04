@@ -142,7 +142,7 @@ def _require_string(payload: dict[str, object], key: str, *, label: str) -> str:
     value = payload.get(key)
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{label}.{key} must be a non-empty string")
-    return value
+    return value.strip()
 
 
 def _require_string_list(payload: dict[str, object], key: str, *, label: str) -> tuple[str, ...]:
@@ -150,10 +150,15 @@ def _require_string_list(payload: dict[str, object], key: str, *, label: str) ->
     if not isinstance(value, list) or not value:
         raise ValueError(f"{label}.{key} must be a non-empty list")
     items: list[str] = []
+    seen: set[str] = set()
     for item in value:
         if not isinstance(item, str) or not item.strip():
             raise ValueError(f"{label}.{key} entries must be non-empty strings")
-        items.append(item)
+        normalized = item.strip()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        items.append(normalized)
     return tuple(items)
 
 

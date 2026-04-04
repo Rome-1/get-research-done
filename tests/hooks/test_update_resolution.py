@@ -472,7 +472,7 @@ def test_update_command_for_candidate_prefers_self_owned_install_command(tmp_pat
     assert command == expected
 
 
-def test_update_command_for_candidate_returns_none_when_self_owned_manifest_omits_explicit_target(
+def test_update_command_for_candidate_falls_back_to_authoritative_target_dir_when_self_owned_manifest_omits_explicit_target(
     tmp_path: Path,
 ) -> None:
     from gpd.hooks.install_context import SelfOwnedInstallContext
@@ -495,7 +495,8 @@ def test_update_command_for_candidate_returns_none_when_self_owned_manifest_omit
     with patch("gpd.hooks.install_context.detect_self_owned_install", return_value=self_install):
         command = update_command_for_candidate(candidate, hook_file=__file__, cwd=str(tmp_path))
 
-    assert command is None
+    expected = _repair_command("codex", install_scope="local", target_dir=explicit_target, explicit_target=True)
+    assert command == expected
 
 
 def test_update_command_for_candidate_uses_cache_runtime_when_install_exists(tmp_path: Path) -> None:
