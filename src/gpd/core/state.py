@@ -57,6 +57,7 @@ from gpd.core.continuation import (
 from gpd.core.contract_validation import (
     _collect_list_shape_drift_errors,
     _has_authoritative_scalar_schema_findings,
+    _project_contract_schema_version_missing_error,
     _split_project_contract_schema_findings,
     salvage_project_contract,
     validate_project_contract,
@@ -731,6 +732,32 @@ def _project_contract_load_payload(
     }
 
 
+def _project_contract_missing_required_schema_errors(raw_contract: object) -> list[str]:
+    """Return hard schema blockers that must stay non-authoritative in state loads."""
+
+    if not isinstance(raw_contract, dict):
+        return []
+
+    errors: list[str] = []
+    schema_version_error = _project_contract_schema_version_missing_error(raw_contract)
+    if schema_version_error is not None:
+        errors.append(schema_version_error)
+
+    if "context_intake" not in raw_contract:
+        errors.append("context_intake is required")
+
+    if "uncertainty_markers" not in raw_contract:
+        errors.append("uncertainty_markers is required")
+    else:
+        uncertainty_markers = raw_contract.get("uncertainty_markers")
+        if isinstance(uncertainty_markers, dict):
+            for field_name in ("weakest_anchors", "disconfirming_observations"):
+                if field_name not in uncertainty_markers:
+                    errors.append(f"uncertainty_markers.{field_name} is required")
+
+    return list(dict.fromkeys(errors))
+
+
 def _load_raw_project_contract_payload(cwd: Path) -> tuple[Path, object] | None:
     """Return the raw project_contract payload from state storage."""
 
@@ -788,6 +815,21 @@ def _classify_project_contract_payload(
 
     list_shape_drift_errors = _collect_list_shape_drift_errors(raw_contract)
     list_member_errors = _collect_project_contract_list_member_errors(raw_contract)
+    missing_required_schema_errors = _project_contract_missing_required_schema_errors(raw_contract)
+    if missing_required_schema_errors:
+        logger.warning(
+            "Skipping project_contract from %s because required schema fields are missing: %s",
+            source_path,
+            "; ".join(missing_required_schema_errors),
+        )
+        return None, _project_contract_load_payload(
+            status="blocked_schema",
+            source_path=source_label,
+            provenance=provenance,
+            raw_project_contract_classified=provenance == "raw",
+            errors=missing_required_schema_errors,
+            warnings=list(dict.fromkeys([*list_shape_drift_errors, *list_member_errors])),
+        )
     normalized_contract, schema_findings = salvage_project_contract(raw_contract)
     schema_warnings, schema_errors = _split_project_contract_schema_findings(
         schema_findings,

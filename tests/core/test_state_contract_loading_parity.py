@@ -160,6 +160,74 @@ def test_state_and_context_surface_blocked_primary_project_contract_when_primary
 
 
 @pytest.mark.parametrize(
+    ("mutate_contract", "expected_error"),
+    [
+        (lambda contract: contract.pop("schema_version"), "schema_version is required"),
+        (lambda contract: contract.pop("context_intake"), "context_intake is required"),
+        (lambda contract: contract.pop("uncertainty_markers"), "uncertainty_markers is required"),
+    ],
+)
+def test_state_and_context_block_raw_project_contract_missing_top_level_required_fields(
+    tmp_path: Path,
+    mutate_contract,
+    expected_error: str,
+) -> None:
+    _setup_project(tmp_path)
+    save_state_json(tmp_path, default_state_dict())
+
+    layout = ProjectLayout(tmp_path)
+    raw_state = json.loads(layout.state_json.read_text(encoding="utf-8"))
+    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+    mutate_contract(contract)
+    raw_state["project_contract"] = contract
+    layout.state_json.write_text(json.dumps(raw_state, indent=2) + "\n", encoding="utf-8")
+
+    loaded = state_load(tmp_path)
+    ctx = init_progress(tmp_path)
+
+    assert loaded.state["project_contract"] is None
+    assert loaded.project_contract_gate is not None
+    assert loaded.project_contract_gate["status"] == "blocked_schema"
+    assert loaded.project_contract_gate["authoritative"] is False
+    assert loaded.project_contract_gate["visible"] is False
+    assert ctx["project_contract"] is None
+    assert ctx["project_contract_load_info"]["status"] == "blocked_schema"
+    assert ctx["project_contract_gate"]["authoritative"] is False
+    assert ctx["project_contract_gate"]["visible"] is False
+    assert expected_error in ctx["project_contract_load_info"]["errors"]
+    assert ctx["project_contract_load_info"]["source_path"].endswith("GPD/state.json")
+
+
+def test_state_and_context_block_raw_project_contract_missing_uncertainty_markers_required_fields(
+    tmp_path: Path,
+) -> None:
+    _setup_project(tmp_path)
+    save_state_json(tmp_path, default_state_dict())
+
+    layout = ProjectLayout(tmp_path)
+    raw_state = json.loads(layout.state_json.read_text(encoding="utf-8"))
+    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+    contract["uncertainty_markers"].pop("weakest_anchors")
+    contract["uncertainty_markers"].pop("disconfirming_observations")
+    raw_state["project_contract"] = contract
+    layout.state_json.write_text(json.dumps(raw_state, indent=2) + "\n", encoding="utf-8")
+
+    loaded = state_load(tmp_path)
+    ctx = init_progress(tmp_path)
+
+    assert loaded.state["project_contract"] is None
+    assert loaded.project_contract_gate is not None
+    assert loaded.project_contract_gate["status"] == "blocked_schema"
+    assert loaded.project_contract_gate["authoritative"] is False
+    assert ctx["project_contract"] is None
+    assert ctx["project_contract_load_info"]["status"] == "blocked_schema"
+    assert ctx["project_contract_gate"]["authoritative"] is False
+    assert ctx["project_contract_gate"]["visible"] is False
+    assert "uncertainty_markers.weakest_anchors is required" in ctx["project_contract_load_info"]["errors"]
+    assert "uncertainty_markers.disconfirming_observations is required" in ctx["project_contract_load_info"]["errors"]
+
+
+@pytest.mark.parametrize(
     "primary_state_contents",
     [
         None,

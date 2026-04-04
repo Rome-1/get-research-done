@@ -1391,6 +1391,34 @@ def test_state_load_matches_context_progress_for_recoverably_normalized_project_
     assert "notes" not in loaded.state["project_contract"]["claims"][0]
 
 
+def test_state_load_blocks_raw_project_contract_missing_required_schema_fields(
+    tmp_path: Path,
+) -> None:
+    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+    contract.pop("schema_version")
+
+    planning = tmp_path / "GPD"
+    planning.mkdir(parents=True, exist_ok=True)
+    (planning / "phases").mkdir(exist_ok=True)
+    (planning / "PROJECT.md").write_text("# Project\nTest.\n", encoding="utf-8")
+    (planning / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+
+    state = default_state_dict()
+    state["project_contract"] = contract
+    (planning / "state.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+
+    loaded = state_load(tmp_path)
+
+    assert loaded.state["project_contract"] is None
+    assert loaded.project_contract_gate is not None
+    assert loaded.project_contract_gate["status"] == "blocked_schema"
+    assert loaded.project_contract_gate["authoritative"] is False
+    assert loaded.project_contract_gate["visible"] is False
+    assert loaded.project_contract_load_info is not None
+    assert loaded.project_contract_load_info["status"] == "blocked_schema"
+    assert "schema_version is required" in loaded.project_contract_load_info["errors"]
+
+
 def test_state_load_recovers_backup_only_state_when_primary_json_is_missing(tmp_path: Path) -> None:
     primary_state = default_state_dict()
     primary_state["position"]["status"] = "Executing"
