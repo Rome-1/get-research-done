@@ -15,7 +15,7 @@ import gpd.hooks.install_context as hook_layout
 from gpd.adapters.runtime_catalog import get_hook_payload_policy
 from gpd.core.constants import ENV_GPD_DEBUG, PLANNING_DIR_NAME, STATE_JSON_FILENAME
 from gpd.core.root_resolution import resolve_project_root
-from gpd.hooks.payload_policy import resolve_hook_payload_policy
+from gpd.hooks.payload_policy import resolve_hook_payload_policy, resolve_hook_surface_runtime
 from gpd.hooks.payload_roots import project_root_from_payload as _shared_project_root_from_payload
 from gpd.hooks.payload_roots import resolve_payload_roots as _resolve_payload_roots
 from gpd.hooks.payload_roots import workspace_dir_from_payload as _shared_workspace_dir_from_payload
@@ -115,6 +115,11 @@ def _root_resolution_policy(cwd: str | None = None):
     if cwd is None:
         return get_hook_payload_policy()
     return _hook_payload_policy(cwd)
+
+
+def _payload_runtime(cwd: str | None = None) -> str | None:
+    """Return the active installed runtime for one payload workspace, when known."""
+    return resolve_hook_surface_runtime(hook_file=__file__, cwd=cwd, surface="statusline")
 
 
 def _format_context_window_size(value: object) -> str:
@@ -557,6 +562,7 @@ def main() -> None:
             workspace_dir=workspace_dir,
             project_root=project_root,
             explicit_project_dir=bool(explicit_project_dir),
+            active_runtime=_payload_runtime(project_root),
         )
 
         hook_payload = _hook_payload_policy(runtime_lookup_dir)

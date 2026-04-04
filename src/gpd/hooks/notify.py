@@ -312,6 +312,7 @@ def main() -> None:
             workspace_dir=workspace_dir,
             project_root=project_root,
             explicit_project_dir=bool(explicit_project_dir),
+            active_runtime=_payload_runtime(project_root),
         )
         hook_payload = _hook_payload_policy(runtime_lookup_dir)
         allowed_event_types = hook_payload.notify_event_types

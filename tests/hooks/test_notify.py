@@ -803,6 +803,46 @@ def test_main_uses_workspace_local_runtime_lookup_when_available(tmp_path: Path)
     mock_execution.assert_called_once_with(str(nested))
 
 
+def test_main_uses_project_runtime_lookup_when_nested_workspace_has_unrelated_local_install(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    nested = project / "src" / "notes"
+    nested.mkdir(parents=True)
+    _mark_complete_install(project / ".codex", runtime="codex")
+    _mark_complete_install(nested / ".claude", runtime="claude-code")
+
+    payload = {
+        "type": "agent-turn-complete",
+        "workspace": {"cwd": str(nested), "project_dir": str(project)},
+    }
+    hook_payload = SimpleNamespace(
+        project_dir_keys=("project_dir",),
+        notify_event_types=("agent-turn-complete",),
+    )
+
+    with (
+        patch("sys.stdin", io.StringIO(json.dumps(payload))),
+        patch(
+            "gpd.hooks.notify._resolve_payload_roots",
+            return_value=SimpleNamespace(workspace_dir=str(nested), project_root=str(project)),
+        ),
+        patch("gpd.hooks.notify._payload_runtime", return_value="codex"),
+        patch("gpd.hooks.notify._hook_payload_policy", return_value=hook_payload) as mock_policy,
+        patch("gpd.hooks.notify._record_usage_telemetry") as mock_usage,
+        patch("gpd.hooks.notify._trigger_update_check") as mock_trigger,
+        patch("gpd.hooks.notify._check_and_notify_update") as mock_notify,
+        patch("gpd.hooks.notify._emit_execution_notification") as mock_execution,
+    ):
+        main()
+
+    assert mock_policy.call_args_list == [call(str(project)), call(str(project))]
+    mock_usage.assert_called_once_with(payload, workspace_dir=str(nested), project_root=str(project))
+    mock_trigger.assert_called_once_with(str(project))
+    mock_notify.assert_called_once_with(str(project))
+    mock_execution.assert_called_once_with(str(project))
+
+
 def test_main_prefers_project_dir_root_over_nested_workspace_cwd(tmp_path: Path) -> None:
     project = tmp_path / "project"
     nested = project / "src" / "notes"
