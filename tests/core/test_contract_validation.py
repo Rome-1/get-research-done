@@ -372,8 +372,6 @@ def test_validate_project_contract_approved_mode_accepts_prior_output_grounding(
     [
         ("paper", "doi:10.1234/example"),
         ("paper", "arXiv:2401.12345"),
-        ("paper", "Table 2"),
-        ("paper", "Fig. 3"),
     ],
 )
 def test_validate_project_contract_approved_mode_accepts_concrete_reference_locator_grounding(
@@ -403,6 +401,56 @@ def test_validate_project_contract_approved_mode_accepts_concrete_reference_loca
 
     assert result.valid is True
     assert result.mode == "approved"
+
+
+@pytest.mark.parametrize(("reference_kind", "locator"), [("paper", "Table 2"), ("paper", "Fig. 3"), ("paper", "Section 4")])
+def test_validate_project_contract_approved_mode_rejects_bare_reference_locator_grounding(
+    reference_kind: str,
+    locator: str,
+) -> None:
+    contract = _load_contract_fixture()
+    _remove_incidental_grounding(contract)
+    contract["references"] = [
+        {
+            "id": "ref-anchor",
+            "kind": reference_kind,
+            "locator": locator,
+            "aliases": [],
+            "role": "benchmark",
+            "why_it_matters": "Bare section/table/figure locators must not ground approved mode.",
+            "applies_to": ["claim-benchmark"],
+            "carry_forward_to": [],
+            "must_surface": True,
+            "required_actions": ["read"],
+        }
+    ]
+    contract["scope"]["unresolved_questions"] = []
+    contract["context_intake"]["must_read_refs"] = ["ref-anchor"]
+
+    result = validate_project_contract(contract, mode="approved")
+
+    assert result.valid is False
+    assert any("approved project contract requires at least one concrete anchor" in error for error in result.errors)
+
+
+@pytest.mark.parametrize(("field_name", "value"), [("user_asserted_anchors", "Nature benchmark"), ("known_good_baselines", "Science benchmark")])
+def test_validate_project_contract_approved_mode_rejects_journal_only_text_grounding(
+    field_name: str,
+    value: str,
+) -> None:
+    contract = _load_contract_fixture()
+    contract["references"] = []
+    _remove_incidental_grounding(contract)
+    contract["context_intake"]["must_include_prior_outputs"] = []
+    contract["context_intake"]["user_asserted_anchors"] = []
+    contract["context_intake"]["known_good_baselines"] = []
+    contract["context_intake"][field_name] = [value]
+    contract["scope"]["unresolved_questions"] = []
+
+    result = validate_project_contract(contract, mode="approved")
+
+    assert result.valid is False
+    assert any("approved project contract requires at least one concrete anchor" in error for error in result.errors)
 
 
 @pytest.mark.parametrize(
@@ -1000,6 +1048,44 @@ def test_validate_project_contract_rejects_blank_scalar_to_list_drift(
 
     assert result.valid is False
     assert expected_error in result.errors
+
+
+@pytest.mark.parametrize(
+    ("mutator", "expected_path"),
+    [
+        (
+            lambda contract: contract["context_intake"].__setitem__("must_read_refs", ""),
+            "context_intake.must_read_refs",
+        ),
+        (
+            lambda contract: contract["references"][0].__setitem__("required_actions", ""),
+            "references.0.required_actions",
+        ),
+        (
+            lambda contract: contract["scope"].__setitem__("in_scope", ""),
+            "scope.in_scope",
+        ),
+    ],
+)
+def test_parse_project_contract_data_salvage_normalizes_blank_string_list_corruption(
+    mutator,
+    expected_path: str,
+) -> None:
+    contract = _load_contract_fixture()
+    mutator(contract)
+
+    result = parse_project_contract_data_salvage(contract)
+
+    assert result.contract is not None
+    assert result.blocking_errors == []
+    assert any(expected_path in error and "must not be blank" in error for error in result.recoverable_errors)
+
+    if expected_path == "context_intake.must_read_refs":
+        assert result.contract.context_intake.must_read_refs == []
+    elif expected_path == "references.0.required_actions":
+        assert result.contract.references[0].required_actions == []
+    else:
+        assert result.contract.scope.in_scope == []
 
 
 def test_validate_project_contract_rejects_coercive_reference_must_surface_scalar() -> None:

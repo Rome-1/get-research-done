@@ -90,12 +90,12 @@ _REFERENCE_LOCATOR_PLACEHOLDER_PATTERNS = (
     re.compile(r"\bplaceholder\b"),
     re.compile(r"\bto be determined\b"),
 )
-_STRUCTURED_TEXT_LOCATOR_PATTERNS = (
-    re.compile(r"\b(?:journal|proceedings?|conference|volume|vol\.|issue|pp?\.|phys\.|rev\.|letters?|nature|science)\b"),
-)
 _REFERENCE_LOCATOR_CONCRETE_PATTERNS = (
     re.compile(r"\b(?:doi\s*[:/]|https?://(?:doi\.org/|arxiv\.org/abs/)|arxiv\s*:)\S+"),
-    re.compile(r"\b(?:fig(?:ure)?|table|eq(?:uation)?|section|sec\.?|chapter|ch\.?|appendix)\.?\s*\d+[a-z]?\b"),
+)
+_CITATION_LOCATOR_CONCRETE_PATTERNS = (
+    re.compile(r"\bet al\."),
+    re.compile(r"\b(?:19|20)\d{2}\b"),
 )
 _PROJECT_ARTIFACT_PATH_PATTERNS = (
     re.compile(r"[\\/]+"),
@@ -332,6 +332,36 @@ def _salvage_contract_collection(
     return normalized_items
 
 
+def _normalize_blank_list_fields(contract: dict[str, object]) -> None:
+    """Coerce blank-string list fields to empty lists during salvage."""
+
+    def _blank_string(value: object) -> bool:
+        return isinstance(value, str) and not value.strip()
+
+    for field_name in PROJECT_CONTRACT_TOP_LEVEL_LIST_FIELDS:
+        if field_name in contract and _blank_string(contract[field_name]):
+            contract[field_name] = []
+
+    for section_name, field_names in PROJECT_CONTRACT_MAPPING_LIST_FIELDS.items():
+        section = contract.get(section_name)
+        if not isinstance(section, dict):
+            continue
+        for field_name in field_names:
+            if field_name in section and _blank_string(section[field_name]):
+                section[field_name] = []
+
+    for collection_name, field_names in PROJECT_CONTRACT_COLLECTION_LIST_FIELDS.items():
+        collection = contract.get(collection_name)
+        if not isinstance(collection, list):
+            continue
+        for item in collection:
+            if not isinstance(item, dict):
+                continue
+            for field_name in field_names:
+                if field_name in item and _blank_string(item[field_name]):
+                    item[field_name] = []
+
+
 def salvage_project_contract(contract: dict[str, object]) -> tuple[ResearchContract | None, list[str]]:
     errors: list[str] = []
     scalar_sanitized = _sanitize_contract_scalars(contract, errors=errors)
@@ -340,6 +370,7 @@ def salvage_project_contract(contract: dict[str, object]) -> tuple[ResearchContr
 
     working = _strip_unknown_model_keys(scalar_sanitized, path_prefix="", model=ResearchContract, errors=errors)
     normalized_contract = copy.deepcopy(working)
+    _normalize_blank_list_fields(normalized_contract)
 
     collection_models: dict[str, type[BaseModel]] = {
         "observables": ContractObservable,
@@ -453,9 +484,10 @@ def _collect_list_shape_drift_errors(contract: dict[str, object]) -> list[str]:
             raw_value = mapping.get(field_name)
             if isinstance(raw_value, list):
                 continue
-            if isinstance(raw_value, str) and not raw_value.strip():
-                continue
             location = f"{path_prefix}.{field_name}" if path_prefix else field_name
+            if isinstance(raw_value, str) and not raw_value.strip():
+                errors.append(f"{location} must not be blank")
+                continue
             errors.append(f"{location} must be a list, not {type(raw_value).__name__}")
 
     def _check_collection_item_lists(collection_name: str, field_names: tuple[str, ...]) -> None:
@@ -477,6 +509,7 @@ def _collect_list_shape_drift_errors(contract: dict[str, object]) -> list[str]:
             if isinstance(raw_value, list):
                 continue
             if isinstance(raw_value, str) and not raw_value.strip():
+                errors.append(f"{field_name} must not be blank")
                 continue
             errors.append(f"{field_name} must be a list, not {type(raw_value).__name__}")
 
@@ -613,6 +646,17 @@ def _is_concrete_external_http_locator(
     )
 
 
+def _is_citation_like_locator(value: str) -> bool:
+    """Return whether *value* looks like an explicit citation rather than a vague anchor."""
+
+    lowered = value.casefold().strip()
+    if not lowered:
+        return False
+    if not all(pattern.search(lowered) for pattern in _CITATION_LOCATOR_CONCRETE_PATTERNS):
+        return False
+    return True
+
+
 def _is_project_artifact_path(value: str, *, project_root: Path | None = None) -> bool:
     """Return whether *value* names a concrete prior-output artifact path."""
 
@@ -647,6 +691,8 @@ def _is_concrete_text_grounding(
         return False
     if any(pattern.search(lowered) for pattern in _REFERENCE_LOCATOR_CONCRETE_PATTERNS):
         return True
+    if _is_citation_like_locator(value):
+        return True
     if any(
         _is_concrete_external_http_locator(value, reference_kind=reference_kind)
         for reference_kind in ("paper", "dataset", "prior_artifact", "spec")
@@ -654,7 +700,7 @@ def _is_concrete_text_grounding(
         return True
     if _is_project_artifact_path(value, project_root=project_root):
         return True
-    return any(pattern.search(lowered) for pattern in _STRUCTURED_TEXT_LOCATOR_PATTERNS)
+    return False
 
 
 def _is_concrete_reference_locator(
@@ -672,9 +718,7 @@ def _is_concrete_reference_locator(
         return False
     if any(pattern.search(lowered) for pattern in _REFERENCE_LOCATOR_CONCRETE_PATTERNS):
         return True
-    if re.search(r"\b(?:et al\.|journal|proceedings?|conference|chapter|sec\.?|section|table|fig(?:ure)?|eq(?:uation)?)\b", lowered) and re.search(
-        r"\b\d+\b", lowered
-    ):
+    if reference_kind == "paper" and _is_citation_like_locator(value):
         return True
     if _is_concrete_external_http_locator(value, reference_kind=reference_kind):
         return True
