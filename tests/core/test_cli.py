@@ -1915,21 +1915,6 @@ def test_resume_plain_output_surfaces_missing_handoff_status(tmp_path: Path, mon
 def test_resume_raw_adds_canonical_recovery_projection_fields(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     resume_file = "GPD/phases/01/.continue-here.md"
-    segment_candidates = [
-        {
-            "source": "session_resume_file",
-            "status": "handoff",
-            "resume_file": resume_file,
-            "resumable": False,
-        }
-    ]
-    compat_resume_surface = {
-        "execution_resume_file": resume_file,
-        "execution_resume_file_source": "session_resume_file",
-        "session_resume_file": resume_file,
-        "segment_candidates": segment_candidates,
-        "resume_mode": "continuity_handoff",
-    }
     monkeypatch.setattr(
         "gpd.core.context.init_resume",
         lambda _cwd: {
@@ -1948,14 +1933,10 @@ def test_resume_raw_adds_canonical_recovery_projection_fields(tmp_path: Path, mo
                     "resume_pointer": resume_file,
                 }
             ],
-            "compat_resume_surface": compat_resume_surface,
             "has_live_execution": False,
             "active_resume_kind": "continuity_handoff",
             "active_resume_origin": "canonical_continuation",
             "active_resume_pointer": resume_file,
-            "resume_mode": "continuity_handoff",
-            "execution_resume_file": resume_file,
-            "execution_resume_file_source": "session_resume_file",
             "execution_paused_at": None,
             "autonomy": None,
             "research_mode": None,
@@ -2008,7 +1989,7 @@ def test_resume_raw_keeps_derived_execution_head_origin_when_only_live_snapshot_
                     "resume_file": resume_file,
                     "resumable": True,
                     "kind": "bounded_segment",
-                    "origin": "compat.current_execution",
+                    "origin": "current_execution",
                     "resume_pointer": resume_file,
                 }
             ],
@@ -2022,7 +2003,7 @@ def test_resume_raw_keeps_derived_execution_head_origin_when_only_live_snapshot_
             "has_live_execution": True,
             "execution_resumable": True,
             "active_resume_kind": "bounded_segment",
-            "active_resume_origin": "compat.current_execution",
+            "active_resume_origin": "current_execution",
             "active_resume_pointer": resume_file,
             "execution_paused_at": None,
             "autonomy": None,
@@ -2043,7 +2024,7 @@ def test_resume_raw_keeps_derived_execution_head_origin_when_only_live_snapshot_
     assert "compat_resume_surface" not in payload
 
 
-def test_resume_raw_keeps_compat_current_execution_origin_when_active_bounded_segment_is_projected(
+def test_resume_raw_keeps_derived_execution_head_origin_when_active_bounded_segment_is_projected(
     tmp_path: Path, monkeypatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -2062,7 +2043,7 @@ def test_resume_raw_keeps_compat_current_execution_origin_when_active_bounded_se
                     "resume_file": resume_file,
                     "resumable": True,
                     "kind": "bounded_segment",
-                    "origin": "compat.current_execution",
+                    "origin": "current_execution",
                     "resume_pointer": resume_file,
                 }
             ],
@@ -2083,7 +2064,7 @@ def test_resume_raw_keeps_compat_current_execution_origin_when_active_bounded_se
             "has_live_execution": True,
             "execution_resumable": True,
             "active_resume_kind": "bounded_segment",
-            "active_resume_origin": "compat.current_execution",
+            "active_resume_origin": "current_execution",
             "active_resume_pointer": resume_file,
             "execution_paused_at": None,
             "autonomy": None,
@@ -2100,6 +2081,70 @@ def test_resume_raw_keeps_compat_current_execution_origin_when_active_bounded_se
     assert payload["resume_candidates"][0]["origin"] == "derived_execution_head"
     assert payload["recovery_candidates"][0]["origin"] == "derived_execution_head"
     assert payload["primary_recovery_target"]["origin"] == "derived_execution_head"
+
+
+def test_resume_raw_drops_malformed_resume_candidates_from_public_output(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    resume_file = "GPD/phases/01/.continue-here.md"
+    monkeypatch.setattr(
+        "gpd.core.context.init_resume",
+        lambda _cwd: {
+            "planning_exists": True,
+            "state_exists": True,
+            "roadmap_exists": True,
+            "project_exists": True,
+            "resume_candidates": [
+                {
+                    "source": "session_resume_file",
+                    "status": "handoff",
+                    "resume_file": resume_file,
+                    "resumable": False,
+                    "kind": "continuity_handoff",
+                    "origin": "canonical_continuation",
+                    "resume_pointer": resume_file,
+                },
+                "not-a-candidate",
+                None,
+                ["still-not-a-candidate"],
+            ],
+            "has_live_execution": False,
+            "active_resume_kind": "continuity_handoff",
+            "active_resume_origin": "canonical_continuation",
+            "active_resume_pointer": resume_file,
+            "execution_paused_at": None,
+            "autonomy": None,
+            "research_mode": None,
+            "active_execution_segment": None,
+        },
+    )
+
+    result = runner.invoke(app, ["--raw", "resume"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    _assert_no_top_level_resume_aliases(payload)
+    assert payload["resume_candidates"] == [
+        {
+            "source": "session_resume_file",
+            "status": "handoff",
+            "resume_file": resume_file,
+            "resumable": False,
+            "kind": "continuity_handoff",
+            "origin": "canonical_continuation",
+            "resume_pointer": resume_file,
+        }
+    ]
+    assert len(payload["recovery_candidates"]) == 1
+    assert payload["recovery_candidates"][0]["kind"] == "continuity_handoff"
+    assert payload["recovery_candidates"][0]["kind_label"] == "Continuity handoff"
+    assert payload["recovery_candidates"][0]["origin"] == "canonical_continuation"
+    assert payload["recovery_candidates"][0]["origin_label"] == "canonical continuation"
+    assert payload["recovery_candidates"][0]["target"] == "./GPD/phases/01/.continue-here.md"
+    assert payload["recovery_candidates"][0]["notes"] == "Recorded in canonical continuation state."
+    assert payload["recovery_candidates"][0]["advisory"] is None
+    assert payload["primary_recovery_target"] == payload["recovery_candidates"][0]
 
 
 def test_command_supports_project_reentry_prefers_explicit_metadata() -> None:
