@@ -355,53 +355,29 @@ class _ContractRequestBase(BaseModel):
 
 
 class ContractBindingRequest(_ContractRequestBase):
-    observable_id: str | list[str] | None = Field(
+    observable_ids: list[str] | None = Field(
         default=None,
-        description="Binding to one observable id or a list of observable ids.",
+        description="Binding to one or more observable ids.",
     )
-    observable_ids: str | list[str] | None = Field(
+    claim_ids: list[str] | None = Field(
         default=None,
-        description="Plural alias accepted for observable bindings.",
+        description="Binding to one or more claim ids.",
     )
-    claim_id: str | list[str] | None = Field(
+    deliverable_ids: list[str] | None = Field(
         default=None,
-        description="Binding to one claim id or a list of claim ids.",
+        description="Binding to one or more deliverable ids.",
     )
-    claim_ids: str | list[str] | None = Field(
+    acceptance_test_ids: list[str] | None = Field(
         default=None,
-        description="Plural alias accepted for claim bindings.",
+        description="Binding to one or more acceptance-test ids.",
     )
-    deliverable_id: str | list[str] | None = Field(
+    reference_ids: list[str] | None = Field(
         default=None,
-        description="Binding to one deliverable id or a list of deliverable ids.",
+        description="Binding to one or more reference ids.",
     )
-    deliverable_ids: str | list[str] | None = Field(
+    forbidden_proxy_ids: list[str] | None = Field(
         default=None,
-        description="Plural alias accepted for deliverable bindings.",
-    )
-    acceptance_test_id: str | list[str] | None = Field(
-        default=None,
-        description="Binding to one acceptance-test id or a list of acceptance-test ids.",
-    )
-    acceptance_test_ids: str | list[str] | None = Field(
-        default=None,
-        description="Plural alias accepted for acceptance-test bindings.",
-    )
-    reference_id: str | list[str] | None = Field(
-        default=None,
-        description="Binding to one reference id or a list of reference ids.",
-    )
-    reference_ids: str | list[str] | None = Field(
-        default=None,
-        description="Plural alias accepted for reference bindings.",
-    )
-    forbidden_proxy_id: str | list[str] | None = Field(
-        default=None,
-        description="Binding to one forbidden-proxy id or a list of forbidden-proxy ids.",
-    )
-    forbidden_proxy_ids: str | list[str] | None = Field(
-        default=None,
-        description="Plural alias accepted for forbidden-proxy bindings.",
+        description="Binding to one or more forbidden-proxy ids.",
     )
 
 
@@ -448,13 +424,6 @@ class RunContractCheckRequest(_ContractRequestBase):
         default=None,
         description=(
             "Canonical contract-aware check key, or a stable numeric id that resolves to the same check. "
-            "Must be a non-empty string without leading or trailing whitespace when present."
-        ),
-    )
-    check_id: str | None = Field(
-        default=None,
-        description=(
-            "Compatibility alias for check_key; may use either the canonical key or numeric id. "
             "Must be a non-empty string without leading or trailing whitespace when present."
         ),
     )
@@ -593,8 +562,7 @@ def _enum_string_schema(values: Iterable[str]) -> dict[str, object]:
 def _binding_input_schema_for_targets(targets: Iterable[str]) -> dict[str, object]:
     properties: dict[str, object] = {}
     for target in targets:
-        properties[f"{target}_id"] = _string_or_string_list_schema(min_items=1)
-        properties[f"{target}_ids"] = _string_or_string_list_schema(min_items=1)
+        properties[f"{target}_ids"] = _string_list_schema(min_items=1)
     return _object_schema(properties, additional_properties=False)
 
 
@@ -1033,10 +1001,8 @@ def _run_contract_binding_condition_schema() -> list[dict[str, object]]:
         conditions.append(
             {
                 "if": {
-                    "anyOf": [
-                        {"required": ["check_key"], "properties": {"check_key": {"enum": list(identifiers)}}},
-                        {"required": ["check_id"], "properties": {"check_id": {"enum": list(identifiers)}}},
-                    ]
+                    "required": ["check_key"],
+                    "properties": {"check_key": {"enum": list(identifiers)}},
                 },
                 "then": {
                     "properties": {
@@ -1051,36 +1017,6 @@ def _run_contract_binding_condition_schema() -> list[dict[str, object]]:
             }
         )
     return conditions
-
-
-def _run_contract_identifier_pairing_condition_schema() -> dict[str, object] | None:
-    options: list[dict[str, object]] = []
-    for entry in _CONTRACT_AWARE_CHECK_ENTRIES:
-        identifiers = _check_identifier_values(entry)
-        if not identifiers:
-            continue
-        identifier_schema = {"enum": list(identifiers)}
-        options.append(
-            {
-                "properties": {
-                    "check_key": dict(identifier_schema),
-                    "check_id": dict(identifier_schema),
-                },
-                "required": ["check_key", "check_id"],
-            }
-        )
-    if not options:
-        return None
-    return {
-        "if": {
-            "required": ["check_key", "check_id"],
-            "properties": {
-                "check_key": {"type": "string"},
-                "check_id": {"type": "string"},
-            },
-        },
-        "then": {"anyOf": options},
-    }
 
 
 def _request_section_required_schema(section_schema: dict[str, object], required_fields: Iterable[str]) -> dict[str, object]:
@@ -1169,23 +1105,14 @@ def _run_contract_request_requirement_condition_schema(check_key: str, hint: dic
 
     return {
         "if": {
-            "anyOf": [
-                {
-                    "required": ["check_key"],
-                    "properties": {"check_key": {"type": "string", "enum": list(identifiers)}},
-                },
-                {
-                    "required": ["check_id"],
-                    "properties": {"check_id": {"type": "string", "enum": list(identifiers)}},
-                },
-            ]
+            "required": ["check_key"],
+            "properties": {"check_key": {"type": "string", "enum": list(identifiers)}},
         },
         "then": then_schema,
     }
 
 
 _RUN_CONTRACT_CHECK_BINDING_CONDITIONS = _run_contract_binding_condition_schema()
-_RUN_CONTRACT_CHECK_IDENTIFIER_PAIRING_CONDITION = _run_contract_identifier_pairing_condition_schema()
 _RUN_CONTRACT_CHECK_REQUIRED_FIELD_CONDITIONS = [
     condition
     for check_key, hint in _CONTRACT_CHECK_REQUEST_HINTS.items()
@@ -1206,14 +1133,9 @@ _RUN_CONTRACT_CHECK_REQUEST_SCHEMA: dict[str, object] = {
             "required": ["check_key"],
             "properties": {"check_key": dict(_RUN_CONTRACT_CHECK_IDENTIFIER_SCHEMA)},
         },
-        {
-            "required": ["check_id"],
-            "properties": {"check_id": dict(_RUN_CONTRACT_CHECK_IDENTIFIER_SCHEMA)},
-        },
     ],
     "properties": {
         "check_key": dict(_RUN_CONTRACT_CHECK_IDENTIFIER_OR_NULL_SCHEMA),
-        "check_id": dict(_RUN_CONTRACT_CHECK_IDENTIFIER_OR_NULL_SCHEMA),
         "contract": {"anyOf": [dict(_CONTRACT_PAYLOAD_INPUT_SCHEMA), {"type": "null"}]},
         "binding": {"anyOf": [dict(_CONTRACT_BINDING_INPUT_SCHEMA), {"type": "null"}]},
         "metadata": {"anyOf": [dict(_CONTRACT_METADATA_INPUT_SCHEMA), {"type": "null"}]},
@@ -1224,8 +1146,6 @@ _RUN_CONTRACT_CHECK_REQUEST_SCHEMA: dict[str, object] = {
 all_of_conditions: list[dict[str, object]] = []
 if _RUN_CONTRACT_CHECK_BINDING_CONDITIONS:
     all_of_conditions.extend(_RUN_CONTRACT_CHECK_BINDING_CONDITIONS)
-if _RUN_CONTRACT_CHECK_IDENTIFIER_PAIRING_CONDITION is not None:
-    all_of_conditions.append(_RUN_CONTRACT_CHECK_IDENTIFIER_PAIRING_CONDITION)
 all_of_conditions.extend(_RUN_CONTRACT_CHECK_REQUIRED_FIELD_CONDITIONS)
 if all_of_conditions:
     _RUN_CONTRACT_CHECK_REQUEST_SCHEMA["allOf"] = all_of_conditions
@@ -1594,15 +1514,22 @@ def _normalize_string_list(value: object) -> object:
 def _validate_string_list_members(value: object, *, field_name: str) -> str | None:
     if not isinstance(value, list):
         return None
+    seen: set[str] = set()
     for index, item in enumerate(value):
         if not isinstance(item, str) or not item.strip():
             return f"{field_name}[{index}] must be a non-empty string"
+        stripped = item.strip()
+        if stripped in seen:
+            return f"{field_name} must not contain duplicate values"
+        seen.add(stripped)
     return None
 
 
-def _validate_string_list_field(value: object, *, field_name: str) -> str | None:
+def _validate_string_list_field(value: object, *, field_name: str, min_items: int | None = None) -> str | None:
     if not isinstance(value, list):
         return f"{field_name} must be a list of strings"
+    if min_items is not None and len(value) < min_items:
+        return f"{field_name} must include at least one non-empty string"
     return _validate_string_list_members(value, field_name=field_name)
 
 
@@ -1610,10 +1537,11 @@ def _validate_optional_string_list(
     value: object,
     *,
     field_name: str,
+    min_items: int | None = None,
 ) -> tuple[list[str] | None, str | None]:
     if value is None:
         return None, None
-    error = _validate_string_list_field(value, field_name=field_name)
+    error = _validate_string_list_field(value, field_name=field_name, min_items=min_items)
     if error is not None:
         return None, error
     normalized = _normalize_string_list(value)
@@ -1621,62 +1549,22 @@ def _validate_optional_string_list(
 
 
 def _validate_binding_field_value(value: object, *, field_name: str) -> str | None:
-    if isinstance(value, str):
-        if not value.strip():
-            return f"{field_name} must be a non-empty string"
-        return None
-    if isinstance(value, list):
-        error = _validate_string_list_members(value, field_name=field_name)
-        if error is not None:
-            return error
-        if not value:
-            return f"{field_name} must include at least one non-empty string"
-        return None
-    return f"{field_name} must be a string or list of strings"
-
-
-def _normalize_binding_alias_values(value: object) -> list[str]:
-    values: list[str] = []
-    if isinstance(value, str):
-        stripped = value.strip()
-        if stripped:
-            values.append(stripped)
-    elif isinstance(value, list):
-        for item in value:
-            if isinstance(item, str):
-                stripped = item.strip()
-                if stripped:
-                    values.append(stripped)
-    return _unique_strings(values)
+    if not isinstance(value, list):
+        return f"{field_name} must be a list of strings"
+    error = _validate_string_list_field(value, field_name=field_name, min_items=1)
+    if error is not None:
+        return error
+    return None
 
 
 def _validate_binding_payload(binding: dict[str, object], *, allowed_targets: Iterable[str]) -> str | None:
     allowed_targets = tuple(allowed_targets)
-    allowed_keys = {
-        key
-        for target in allowed_targets
-        for key in (f"{target}_id", f"{target}_ids")
-    }
+    allowed_keys = {f"{target}_ids" for target in allowed_targets}
     unknown_keys = sorted(str(key) for key in binding if key not in allowed_keys)
     if unknown_keys:
         supported = ", ".join(_supported_binding_fields_for_targets(allowed_targets))
         joined = ", ".join(unknown_keys)
         return f"binding contains unsupported keys: {joined}; supported keys are {supported}"
-
-    for target in allowed_targets:
-        singular_key = f"{target}_id"
-        plural_key = f"{target}_ids"
-        if singular_key in binding and plural_key in binding:
-            singular_error = _validate_binding_field_value(binding[singular_key], field_name=f"binding.{singular_key}")
-            if singular_error is not None:
-                return singular_error
-            plural_error = _validate_binding_field_value(binding[plural_key], field_name=f"binding.{plural_key}")
-            if plural_error is not None:
-                return plural_error
-            singular_values = _normalize_binding_alias_values(binding[singular_key])
-            plural_values = _normalize_binding_alias_values(binding[plural_key])
-            if set(singular_values) != set(plural_values):
-                return f"binding.{singular_key} and binding.{plural_key} must match when both are provided"
 
     for key in sorted(binding):
         raw = binding[key]
@@ -2146,19 +2034,13 @@ _BINDING_TARGETS: tuple[str, ...] = (
     "reference",
     "forbidden_proxy",
 )
-_SUPPORTED_BINDING_KEY_LABELS: tuple[str, ...] = tuple(f"{target}_id(s)" for target in _BINDING_TARGETS)
-_SUPPORTED_BINDING_KEYS: dict[str, str] = {
-    key: target
-    for target in _BINDING_TARGETS
-    for key in (f"{target}_id", f"{target}_ids")
-}
 
 
 def _binding_key_labels_for_targets(targets: Iterable[str]) -> list[str]:
     seen: set[str] = set()
     labels: list[str] = []
     for target in targets:
-        label = f"{target}_id(s)"
+        label = f"{target}_ids"
         if label in seen:
             continue
         seen.add(label)
@@ -2170,57 +2052,42 @@ def _supported_binding_fields_for_targets(targets: Iterable[str]) -> list[str]:
     seen: set[str] = set()
     fields: list[str] = []
     for target in targets:
-        for suffix in ("id", "ids"):
-            field = f"binding.{target}_{suffix}"
-            if field in seen:
-                continue
-            seen.add(field)
-            fields.append(field)
+        field = f"binding.{target}_ids"
+        if field in seen:
+            continue
+        seen.add(field)
+        fields.append(field)
     return fields
 
 
 def _binding_values_for_target(binding: dict[str, object], target: str) -> list[str]:
+    raw = binding.get(f"{target}_ids")
+    if not isinstance(raw, list):
+        return []
     values: list[str] = []
-    for key in (f"{target}_id", f"{target}_ids"):
-        raw = binding.get(key)
-        if isinstance(raw, str):
-            stripped = raw.strip()
+    for item in raw:
+        if isinstance(item, str):
+            stripped = item.strip()
             if stripped:
                 values.append(stripped)
-        elif isinstance(raw, list):
-            for item in raw:
-                if isinstance(item, str):
-                    stripped = item.strip()
-                    if stripped:
-                        values.append(stripped)
-    seen: set[str] = set()
-    unique: list[str] = []
-    for value in values:
-        if value in seen:
-            continue
-        seen.add(value)
-        unique.append(value)
-    return unique
+    return _unique_strings(values)
 
 
 def _binding_values_by_field_for_target(binding: dict[str, object], target: str) -> dict[str, list[str]]:
     values_by_field: dict[str, list[str]] = {}
-    for key in (f"{target}_id", f"{target}_ids"):
-        raw = binding.get(key)
-        values: list[str] = []
-        if isinstance(raw, str):
-            stripped = raw.strip()
+    key = f"{target}_ids"
+    raw = binding.get(key)
+    if not isinstance(raw, list):
+        return values_by_field
+    values: list[str] = []
+    for item in raw:
+        if isinstance(item, str):
+            stripped = item.strip()
             if stripped:
                 values.append(stripped)
-        elif isinstance(raw, list):
-            for item in raw:
-                if isinstance(item, str):
-                    stripped = item.strip()
-                    if stripped:
-                        values.append(stripped)
-        unique = _unique_strings(values)
-        if unique:
-            values_by_field[key] = unique
+    unique = _unique_strings(values)
+    if unique:
+        values_by_field[key] = unique
     return values_by_field
 
 
@@ -3764,9 +3631,9 @@ def _validate_limit_expected_behavior_binding(
 def run_contract_check(request: RunContractCheckPayload) -> dict:
     """Run a contract-aware verification check from a single structured ``request`` object.
 
-    At least one of ``request.check_key`` or ``request.check_id`` is required.
-    When present, each must be a non-empty string without leading or trailing
-    whitespace and must name a contract-aware verification check such as
+    ``request.check_key`` is required. When present, it must be a non-empty
+    string without leading or trailing whitespace and must name a
+    contract-aware verification check such as
     ``contract.limit_recovery`` or ``contract.benchmark_reproduction``.
 
     ``request.contract`` is optional, but when supplied it must be a project or
@@ -3795,12 +3662,10 @@ def run_contract_check(request: RunContractCheckPayload) -> dict:
     fields inside those objects. When ``request.binding`` is present, its keys
     must come from the per-check ``supported_binding_fields`` surfaced by
     ``suggest_contract_checks(...)``; unsupported or irrelevant binding fields
-    are request errors, not soft verification issues. Singular/plural binding
-    aliases (for example ``claim_id`` / ``claim_ids``) must match when both are
-    provided. If both ``request.check_key`` and ``request.check_id`` are sent,
-    they may use either the canonical key or the numeric id, but they must still
-    identify the same verification check. ``request.artifact_content`` is
-    optional and must be a string when present.
+    are request errors, not soft verification issues. Canonical binding fields
+    are plural ``*_ids`` arrays. ``request.check_key`` may be the canonical key
+    or the stable numeric id that resolves to the same check. ``request.artifact_content``
+    is optional and must be a string when present.
 
     Use ``suggest_contract_checks(contract, active_checks=...)`` first when you
     need the exact ``required_request_fields``, ``schema_required_request_fields``,
@@ -3820,24 +3685,11 @@ def run_contract_check(request: RunContractCheckPayload) -> dict:
             check_key_value, error = _validate_check_identifier(request.get("check_key"), field_name="check_key")
             if error is not None:
                 return error
-            check_id_value, error = _validate_check_identifier(request.get("check_id"), field_name="check_id")
-            if error is not None:
-                return error
-            has_check_key = isinstance(check_key_value, str) and bool(check_key_value)
-            has_check_id = isinstance(check_id_value, str) and bool(check_id_value)
-            check_key_meta = get_verification_check(check_key_value) if has_check_key else None
-            check_id_meta = get_verification_check(check_id_value) if has_check_id else None
-            if has_check_key and has_check_id:
-                if check_key_meta is None or check_id_meta is None or check_key_meta.check_id != check_id_meta.check_id:
-                    return _error_result("check_key and check_id must identify the same contract check when both are provided")
-                check_meta = check_key_meta
-            else:
-                check_meta = check_key_meta or check_id_meta
+            if not isinstance(check_key_value, str) or not check_key_value:
+                return _error_result("Missing check_key")
+            check_meta = get_verification_check(check_key_value)
             if check_meta is None:
-                check_id = str(check_key_value or check_id_value or "")
-                if not check_id:
-                    return _error_result("Missing check_key or check_id")
-                return _error_result(f"Unknown contract check: {check_id}")
+                return _error_result(f"Unknown contract check: {check_key_value}")
 
             check_id = check_meta.check_id
             if not check_meta.contract_aware:
@@ -4197,12 +4049,14 @@ def run_contract_check(request: RunContractCheckPayload) -> dict:
                 declared_hypothesis_ids, error_message = _validate_optional_string_list(
                     metadata.get("hypothesis_ids"),
                     field_name="metadata.hypothesis_ids",
+                    min_items=1,
                 )
                 if error_message is not None:
                     return _error_result(error_message)
                 covered_hypothesis_ids, error_message = _validate_optional_string_list(
                     observed.get("covered_hypothesis_ids"),
                     field_name="observed.covered_hypothesis_ids",
+                    min_items=1,
                 )
                 if error_message is not None:
                     return _error_result(error_message)
@@ -4244,12 +4098,14 @@ def run_contract_check(request: RunContractCheckPayload) -> dict:
                 declared_parameter_symbols, error_message = _validate_optional_string_list(
                     metadata.get("theorem_parameter_symbols"),
                     field_name="metadata.theorem_parameter_symbols",
+                    min_items=1,
                 )
                 if error_message is not None:
                     return _error_result(error_message)
                 covered_parameter_symbols, error_message = _validate_optional_string_list(
                     observed.get("covered_parameter_symbols"),
                     field_name="observed.covered_parameter_symbols",
+                    min_items=1,
                 )
                 if error_message is not None:
                     return _error_result(error_message)
@@ -4375,12 +4231,14 @@ def run_contract_check(request: RunContractCheckPayload) -> dict:
                 conclusion_clause_ids, error_message = _validate_optional_string_list(
                     metadata.get("conclusion_clause_ids"),
                     field_name="metadata.conclusion_clause_ids",
+                    min_items=1,
                 )
                 if error_message is not None:
                     return _error_result(error_message)
                 uncovered_conclusion_clause_ids, error_message = _validate_optional_string_list(
                     observed.get("uncovered_conclusion_clause_ids"),
                     field_name="observed.uncovered_conclusion_clause_ids",
+                    min_items=1,
                 )
                 if error_message is not None:
                     return _error_result(error_message)

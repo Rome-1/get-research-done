@@ -69,18 +69,20 @@ def _request_requirement_for_check(run_request_schema: dict[str, object], check_
         if_branch = clause.get("if")
         if not isinstance(if_branch, dict):
             continue
-        for branch in if_branch.get("anyOf", []):
+        candidate_branches = if_branch.get("anyOf", [])
+        if not candidate_branches:
+            candidate_branches = [if_branch]
+        for branch in candidate_branches:
             if not isinstance(branch, dict):
                 continue
-            for field_name in ("check_key", "check_id"):
-                field_schema = branch.get("properties", {}).get(field_name)
-                if not isinstance(field_schema, dict):
-                    continue
-                enum_values = field_schema.get("enum")
-                if isinstance(enum_values, list) and check_identifier in enum_values:
-                    then_schema = clause.get("then")
-                    if isinstance(then_schema, dict) and "required" in then_schema:
-                        return then_schema
+            field_schema = branch.get("properties", {}).get("check_key")
+            if not isinstance(field_schema, dict):
+                continue
+            enum_values = field_schema.get("enum")
+            if isinstance(enum_values, list) and check_identifier in enum_values:
+                then_schema = clause.get("then")
+                if isinstance(then_schema, dict) and "required" in then_schema:
+                    return then_schema
     return None
 
 
@@ -101,12 +103,11 @@ def test_run_contract_check_treats_empty_binding_like_omitted_binding() -> None:
     assert omitted_binding_result["status"] == "pass"
 
 
-def test_run_contract_check_accepts_semantically_equivalent_check_key_and_check_id_pairs() -> None:
+def test_run_contract_check_accepts_numeric_check_key_identifiers() -> None:
     from gpd.mcp.servers.verification_server import run_contract_check
 
     request_payload = {
         "check_key": "5.16",
-        "check_id": "contract.benchmark_reproduction",
         "contract": copy.deepcopy(_load_project_contract_fixture()),
         "metadata": {"source_reference_id": "ref-benchmark"},
         "observed": {"metric_value": 0.01, "threshold_value": 0.02},
@@ -118,7 +119,6 @@ def test_run_contract_check_accepts_semantically_equivalent_check_key_and_check_
     assert result == expected
     assert result["status"] == "pass"
     assert result["check_key"] == "contract.benchmark_reproduction"
-    assert result["check_id"] == "5.16"
     assert _call_verification_tool("run_contract_check", {"request": request_payload}) == expected
 
 
@@ -127,6 +127,24 @@ def test_run_contract_check_published_schema_keeps_schema_required_fields_strict
 
     run_schema = _tool_input_schema(mcp, "run_contract_check")
     request_schema = _schema_object(run_schema, run_schema["properties"]["request"])
+    assert "check_id" not in request_schema["properties"]
+    binding_schema = _schema_anyof_object(request_schema["properties"]["binding"])
+    assert set(binding_schema["properties"]) == {
+        "observable_ids",
+        "claim_ids",
+        "deliverable_ids",
+        "acceptance_test_ids",
+        "reference_ids",
+        "forbidden_proxy_ids",
+    }
+    for field_name in binding_schema["properties"]:
+        field_schema = binding_schema["properties"][field_name]
+        assert field_schema["type"] == "array"
+        assert field_schema["minItems"] == 1
+        assert field_schema["items"]["type"] == "string"
+        assert field_schema["items"]["minLength"] == 1
+        assert field_schema["items"]["pattern"] == r"\S"
+        assert field_schema["uniqueItems"] is True
     benchmark_requirement = _request_requirement_for_check(request_schema, "contract.benchmark_reproduction")
     assert benchmark_requirement is not None
     metadata_schema = _schema_anyof_object(benchmark_requirement["properties"]["metadata"])
@@ -190,6 +208,7 @@ def test_run_contract_check_published_schema_keeps_schema_required_fields_strict
     assert alignment_observed_branch["properties"]["uncovered_conclusion_clause_ids"]["minItems"] == 1
     assert alignment_observed_branch["properties"]["uncovered_conclusion_clause_ids"]["items"]["type"] == "string"
     assert alignment_observed_branch["properties"]["uncovered_conclusion_clause_ids"]["items"]["minLength"] == 1
+    assert "check_id" not in json.dumps(run_schema)
 
 
 @pytest.mark.parametrize(
@@ -200,16 +219,18 @@ def test_run_contract_check_published_schema_keeps_schema_required_fields_strict
             {"error": "check_key must be a non-empty string", "schema_version": 1},
         ),
         (
-            {"check_id": ""},
-            {"error": "check_id must be a non-empty string", "schema_version": 1},
-        ),
-        (
             {"check_key": " contract.benchmark_reproduction "},
             {"error": "check_key must not include leading or trailing whitespace", "schema_version": 1},
         ),
         (
-            {"check_id": " 5.16 "},
-            {"error": "check_id must not include leading or trailing whitespace", "schema_version": 1},
+            {"check_id": "contract.benchmark_reproduction"},
+            {
+                "error": (
+                    "request contains unsupported keys: check_id; supported keys are "
+                    "check_key, contract, binding, metadata, observed, artifact_content"
+                ),
+                "schema_version": 1,
+            },
         ),
     ],
 )
@@ -248,7 +269,7 @@ def test_run_contract_check_accepts_typed_nested_request_objects() -> None:
     assert result["metrics"]["source_reference_id"] == "ref-benchmark"
 
 
-def test_run_contract_check_accepts_nested_base_model_binding_aliases_in_any_order() -> None:
+def test_run_contract_check_accepts_nested_base_model_canonical_binding_lists() -> None:
     from gpd.mcp.servers.verification_server import (
         ContractBindingRequest,
         ContractMetadataRequest,
@@ -260,8 +281,8 @@ def test_run_contract_check_accepts_nested_base_model_binding_aliases_in_any_ord
     request = RunContractCheckRequest(
         check_key="contract.benchmark_reproduction",
         binding=ContractBindingRequest(
-            claim_id=["claim-a", "claim-b"],
-            claim_ids=["claim-b", "claim-a"],
+            claim_ids=["claim-a", "claim-b"],
+            reference_ids=["ref-benchmark"],
         ),
         metadata=ContractMetadataRequest(source_reference_id="ref-benchmark"),
         observed=ContractObservedRequest(metric_value=0.01, threshold_value=0.02),
@@ -270,8 +291,47 @@ def test_run_contract_check_accepts_nested_base_model_binding_aliases_in_any_ord
     result = run_contract_check(request)
 
     assert result["status"] == "pass"
-    assert result["binding"]["claim_id"] == ["claim-a", "claim-b"]
-    assert result["binding"]["claim_ids"] == ["claim-b", "claim-a"]
+    assert result["binding"]["claim_ids"] == ["claim-a", "claim-b"]
+    assert result["binding"]["reference_ids"] == ["ref-benchmark"]
+
+
+@pytest.mark.parametrize(
+    ("request_payload", "expected_error"),
+    [
+        (
+            {
+                "check_key": "contract.benchmark_reproduction",
+                "binding": {"claim_ids": []},
+                "observed": {"metric_value": 0.01, "threshold_value": 0.02},
+            },
+            {"error": "binding.claim_ids must include at least one non-empty string", "schema_version": 1},
+        ),
+        (
+            {
+                "check_key": "contract.benchmark_reproduction",
+                "binding": {"claim_ids": ["claim-benchmark", "claim-benchmark"]},
+                "observed": {"metric_value": 0.01, "threshold_value": 0.02},
+            },
+            {"error": "binding.claim_ids must not contain duplicate values", "schema_version": 1},
+        ),
+        (
+            {
+                "check_key": "contract.fit_family_mismatch",
+                "metadata": {"allowed_families": ["power_law", "power_law"]},
+                "observed": {"selected_family": "power_law", "competing_family_checked": True},
+            },
+            {"error": "metadata.allowed_families must not contain duplicate values", "schema_version": 1},
+        ),
+    ],
+)
+def test_run_contract_check_rejects_empty_and_duplicate_string_lists(
+    request_payload: dict[str, object],
+    expected_error: dict[str, object],
+) -> None:
+    from gpd.mcp.servers.verification_server import run_contract_check
+
+    assert run_contract_check(request_payload) == expected_error
+    assert _call_verification_tool("run_contract_check", {"request": request_payload}) == expected_error
 
 
 def test_suggest_contract_checks_normalizes_whitespace_padded_active_checks() -> None:
@@ -290,39 +350,22 @@ def test_suggest_contract_checks_normalizes_whitespace_padded_active_checks() ->
     assert result_via_mcp == result
 
 
-@pytest.mark.parametrize(
-    ("request_payload", "expected_error"),
-    [
-        (
-            {
-                "check_key": "contract.benchmark_reproduction",
-                "binding": {
-                    "claim_id": "claim-benchmark",
-                    "claim_ids": ["claim-other"],
-                },
-            },
-            {
-                "error": "binding.claim_id and binding.claim_ids must match when both are provided",
-                "schema_version": 1,
-            },
-        ),
-        (
-            {
-                "check_key": "contract.benchmark_reproduction",
-                "check_id": "contract.limit_recovery",
-            },
-            {
-                "error": "check_key and check_id must identify the same contract check when both are provided",
-                "schema_version": 1,
-            },
-        ),
-    ],
-)
-def test_run_contract_check_surfaces_cross_field_request_consistency_errors(
-    request_payload: dict[str, object],
-    expected_error: dict[str, object],
-) -> None:
+def test_run_contract_check_rejects_legacy_binding_alias_keys() -> None:
     from gpd.mcp.servers.verification_server import run_contract_check
+
+    request_payload = {
+        "check_key": "contract.benchmark_reproduction",
+        "binding": {"claim_id": ["claim-benchmark"]},
+        "observed": {"metric_value": 0.01, "threshold_value": 0.02},
+    }
+
+    expected_error = {
+        "error": (
+            "binding contains unsupported keys: claim_id; supported keys are "
+            "binding.claim_ids, binding.deliverable_ids, binding.acceptance_test_ids, binding.reference_ids"
+        ),
+        "schema_version": 1,
+    }
 
     assert run_contract_check(request_payload) == expected_error
     assert _call_verification_tool("run_contract_check", {"request": request_payload}) == expected_error
@@ -360,7 +403,7 @@ def test_contract_tools_reject_blank_scalar_to_list_drift() -> None:
             {
                 "error": (
                     "request contains unsupported keys: unexpected; supported keys are "
-                    "check_key, check_id, contract, binding, metadata, observed, artifact_content"
+                    "check_key, contract, binding, metadata, observed, artifact_content"
                 ),
                 "schema_version": 1,
             },

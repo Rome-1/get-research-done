@@ -262,18 +262,20 @@ def _binding_condition_for_check(run_request_schema: dict[str, object], check_id
         if_branch = clause.get("if")
         if not isinstance(if_branch, dict):
             continue
-        for branch in if_branch.get("anyOf", []):
+        candidate_branches = if_branch.get("anyOf", [])
+        if not candidate_branches:
+            candidate_branches = [if_branch]
+        for branch in candidate_branches:
             if not isinstance(branch, dict):
                 continue
-            for field_name in ("check_key", "check_id"):
-                field_schema = branch.get("properties", {}).get(field_name)
-                if not isinstance(field_schema, dict):
-                    continue
-                enum_values = field_schema.get("enum")
-                if isinstance(enum_values, list) and check_identifier in enum_values:
-                    binding_schema = clause.get("then", {}).get("properties", {}).get("binding")
-                    if isinstance(binding_schema, dict):
-                        return _schema_anyof_object(binding_schema)
+            field_schema = branch.get("properties", {}).get("check_key")
+            if not isinstance(field_schema, dict):
+                continue
+            enum_values = field_schema.get("enum")
+            if isinstance(enum_values, list) and check_identifier in enum_values:
+                binding_schema = clause.get("then", {}).get("properties", {}).get("binding")
+                if isinstance(binding_schema, dict):
+                    return _schema_anyof_object(binding_schema)
     raise AssertionError(f"No binding condition found for {check_identifier!r}")
 
 
@@ -282,18 +284,20 @@ def _request_requirement_for_check(run_request_schema: dict[str, object], check_
         if_branch = clause.get("if")
         if not isinstance(if_branch, dict):
             continue
-        for branch in if_branch.get("anyOf", []):
+        candidate_branches = if_branch.get("anyOf", [])
+        if not candidate_branches:
+            candidate_branches = [if_branch]
+        for branch in candidate_branches:
             if not isinstance(branch, dict):
                 continue
-            for field_name in ("check_key", "check_id"):
-                field_schema = branch.get("properties", {}).get(field_name)
-                if not isinstance(field_schema, dict):
-                    continue
-                enum_values = field_schema.get("enum")
-                if isinstance(enum_values, list) and check_identifier in enum_values:
-                    then_schema = clause.get("then")
-                    if isinstance(then_schema, dict) and "required" in then_schema:
-                        return then_schema
+            field_schema = branch.get("properties", {}).get("check_key")
+            if not isinstance(field_schema, dict):
+                continue
+            enum_values = field_schema.get("enum")
+            if isinstance(enum_values, list) and check_identifier in enum_values:
+                then_schema = clause.get("then")
+                if isinstance(then_schema, dict) and "required" in then_schema:
+                    return then_schema
     return None
 
 
@@ -568,16 +572,18 @@ def _identity_condition_for_check(run_request_schema: dict[str, object], check_i
         if not isinstance(if_branch, dict):
             continue
         matches: list[tuple[str, list[str]]] = []
-        for branch in if_branch.get("anyOf", []):
+        candidate_branches = if_branch.get("anyOf", [])
+        if not candidate_branches:
+            candidate_branches = [if_branch]
+        for branch in candidate_branches:
             if not isinstance(branch, dict):
                 continue
-            for field_name in ("check_key", "check_id"):
-                field_schema = branch.get("properties", {}).get(field_name)
-                if not isinstance(field_schema, dict):
-                    continue
-                enum_values = field_schema.get("enum")
-                if isinstance(enum_values, list) and check_identifier in enum_values:
-                    matches.append((field_name, [str(value) for value in enum_values]))
+            field_schema = branch.get("properties", {}).get("check_key")
+            if not isinstance(field_schema, dict):
+                continue
+            enum_values = field_schema.get("enum")
+            if isinstance(enum_values, list) and check_identifier in enum_values:
+                matches.append(("check_key", [str(value) for value in enum_values]))
         if matches:
             return matches
     raise AssertionError(f"No identity condition found for {check_identifier!r}")
@@ -592,14 +598,17 @@ def _identity_requirement_branches_for_check(
         if not isinstance(if_branch, dict):
             continue
         matches: list[tuple[str, list[str], list[str]]] = []
-        for branch in if_branch.get("anyOf", []):
+        candidate_branches = if_branch.get("anyOf", [])
+        if not candidate_branches:
+            candidate_branches = [if_branch]
+        for branch in candidate_branches:
             if not isinstance(branch, dict):
                 continue
             required = branch.get("required")
             if not isinstance(required, list) or len(required) != 1:
                 continue
             field_name = required[0]
-            if field_name not in {"check_key", "check_id"}:
+            if field_name != "check_key":
                 continue
             field_schema = branch.get("properties", {}).get(field_name)
             if not isinstance(field_schema, dict):
@@ -617,7 +626,7 @@ def test_run_contract_check_tool_description_surfaces_request_requirements() -> 
 
     description = _tool_description(mcp, "run_contract_check")
 
-    assert "``request.check_key`` or ``request.check_id`` is required" in description
+    assert "``request.check_key`` is required" in description
     assert "without leading or trailing" in description
     assert "whitespace" in description
     assert "``request.contract`` is optional" in description
@@ -633,9 +642,8 @@ def test_run_contract_check_tool_description_surfaces_request_requirements() -> 
     assert "metadata.theorem_parameter_symbols" in description
     assert "metadata.conclusion_clause_ids" in description
     assert "``request.binding``, ``request.metadata``, and ``request.observed`` are each" in description
-    assert "Singular/plural binding" in description
-    assert "aliases (for example ``claim_id`` / ``claim_ids``) must match when both are" in description
-    assert "may use either the canonical key or the numeric id" in description
+    assert "canonical key" in description
+    assert "stable numeric id" in description
     assert "``request.artifact_content``" in description
     assert "must be a string when present" in description
     assert "``required_request_fields``" in description
@@ -705,18 +713,10 @@ def test_contract_tools_list_tools_expose_structured_request_schemas() -> None:
     assert check_key_requirement["properties"]["check_key"]["pattern"] == r"^\S(?:[\s\S]*\S)?$"
     assert set(check_key_requirement["properties"]["check_key"]["enum"]) == expected_identifiers
 
-    check_id_requirement = next(
-        branch
-        for branch in run_request["anyOf"]
-        if isinstance(branch, dict) and branch.get("required") == ["check_id"]
-    )
-    assert check_id_requirement["properties"]["check_id"]["type"] == "string"
-    assert check_id_requirement["properties"]["check_id"]["pattern"] == r"^\S(?:[\s\S]*\S)?$"
-    assert set(check_id_requirement["properties"]["check_id"]["enum"]) == expected_identifiers
-
-    assert {"check_key", "check_id", "contract", "binding", "metadata", "observed", "artifact_content"} <= set(
+    assert {"check_key", "contract", "binding", "metadata", "observed", "artifact_content"} <= set(
         run_request["properties"]
     )
+    assert "check_id" not in run_request["properties"]
     check_key = _schema_anyof_string(run_request["properties"]["check_key"])
     assert check_key["minLength"] == 1
     assert check_key["pattern"] == r"^\S(?:[\s\S]*\S)?$"
@@ -726,34 +726,27 @@ def test_contract_tools_list_tools_expose_structured_request_schemas() -> None:
         for branch in run_request["properties"]["check_key"]["anyOf"]
     )
 
-    check_id = _schema_anyof_string(run_request["properties"]["check_id"])
-    assert check_id["minLength"] == 1
-    assert check_id["pattern"] == r"^\S(?:[\s\S]*\S)?$"
-    assert set(check_id["enum"]) == expected_identifiers
-    assert any(
-        isinstance(branch, dict) and branch.get("type") == "null"
-        for branch in run_request["properties"]["check_id"]["anyOf"]
-    )
-
     binding = _schema_anyof_object(run_request["properties"]["binding"])
     assert binding["additionalProperties"] is False
-    assert {"claim_ids", "reference_ids", "forbidden_proxy_ids"} <= set(binding["properties"])
-    assert len(binding["properties"]["claim_ids"]["anyOf"]) == 2
-    assert binding["properties"]["claim_ids"]["anyOf"][0]["pattern"] == r"\S"
-    assert binding["properties"]["claim_ids"]["anyOf"][1]["type"] == "array"
-    assert binding["properties"]["claim_ids"]["anyOf"][1]["minItems"] == 1
-    assert binding["properties"]["claim_ids"]["anyOf"][1]["items"]["type"] == "string"
-    assert binding["properties"]["claim_ids"]["anyOf"][1]["items"]["minLength"] == 1
-    assert binding["properties"]["claim_ids"]["anyOf"][1]["items"]["pattern"] == r"\S"
+    assert {"observable_ids", "claim_ids", "deliverable_ids", "acceptance_test_ids", "reference_ids", "forbidden_proxy_ids"} == set(
+        binding["properties"]
+    )
+    for field_name, field_schema in binding["properties"].items():
+        assert field_schema["type"] == "array", field_name
+        assert field_schema["minItems"] == 1, field_name
+        assert field_schema["items"]["type"] == "string", field_name
+        assert field_schema["items"]["minLength"] == 1, field_name
+        assert field_schema["items"]["pattern"] == r"\S", field_name
+        assert field_schema["uniqueItems"] is True, field_name
 
     direct_proxy_binding = _binding_condition_for_check(run_request, "contract.direct_proxy_consistency")
-    assert {"claim_ids", "deliverable_ids", "acceptance_test_ids", "forbidden_proxy_ids"} <= set(
+    assert {"claim_ids", "deliverable_ids", "acceptance_test_ids", "forbidden_proxy_ids"} == set(
         direct_proxy_binding["properties"]
     )
     assert "reference_ids" not in direct_proxy_binding["properties"]
 
     benchmark_binding = _binding_condition_for_check(run_request, "contract.benchmark_reproduction")
-    assert {"claim_ids", "deliverable_ids", "acceptance_test_ids", "reference_ids"} <= set(
+    assert {"claim_ids", "deliverable_ids", "acceptance_test_ids", "reference_ids"} == set(
         benchmark_binding["properties"]
     )
     assert "forbidden_proxy_ids" not in benchmark_binding["properties"]
@@ -956,19 +949,16 @@ def test_contract_tools_list_tools_expose_structured_request_schemas() -> None:
     benchmark_identity = _identity_condition_for_check(run_request, "contract.benchmark_reproduction")
     assert benchmark_identity == [
         ("check_key", ["contract.benchmark_reproduction", "5.16"]),
-        ("check_id", ["contract.benchmark_reproduction", "5.16"]),
     ]
 
     limit_identity = _identity_condition_for_check(run_request, "contract.limit_recovery")
     assert limit_identity == [
         ("check_key", ["contract.limit_recovery", "5.15"]),
-        ("check_id", ["contract.limit_recovery", "5.15"]),
     ]
 
     proof_identity = _identity_condition_for_check(run_request, "contract.proof_parameter_coverage")
     assert proof_identity == [
         ("check_key", ["contract.proof_parameter_coverage", "5.21"]),
-        ("check_id", ["contract.proof_parameter_coverage", "5.21"]),
     ]
 
     for check_identifier in (
@@ -1059,12 +1049,12 @@ def test_public_descriptors_surface_contract_and_optional_dependency_visibility(
     assert "supported binding fields" in verification["description"]
     assert "Proof-oriented checks require an authoritative contract payload." in verification["description"]
     for field in (
-        "binding.observable_id(s)",
-        "binding.claim_id(s)",
-        "binding.deliverable_id(s)",
-        "binding.acceptance_test_id(s)",
-        "binding.reference_id(s)",
-        "binding.forbidden_proxy_id(s)",
+        "binding.observable_ids",
+        "binding.claim_ids",
+        "binding.deliverable_ids",
+        "binding.acceptance_test_ids",
+        "binding.reference_ids",
+        "binding.forbidden_proxy_ids",
     ):
         assert field in verification["description"]
     assert "live semantic integrity rules" in verification["description"]
@@ -1263,12 +1253,12 @@ def test_public_verification_infra_descriptor_surfaces_semantic_contract_rules()
     assert "metadata.theorem_parameter_symbols" in description
     assert "metadata.conclusion_clause_ids" in description
     for field in (
-        "binding.observable_id(s)",
-        "binding.claim_id(s)",
-        "binding.deliverable_id(s)",
-        "binding.acceptance_test_id(s)",
-        "binding.reference_id(s)",
-        "binding.forbidden_proxy_id(s)",
+        "binding.observable_ids",
+        "binding.claim_ids",
+        "binding.deliverable_ids",
+        "binding.acceptance_test_ids",
+        "binding.reference_ids",
+        "binding.forbidden_proxy_ids",
     ):
         assert field in description
     assert "live semantic integrity rules" in description

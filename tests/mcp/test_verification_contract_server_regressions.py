@@ -48,15 +48,6 @@ def _schema_error_messages(schema: dict[str, object], payload: dict[str, object]
     from jsonschema import Draft202012Validator
 
     return [error.message for error in Draft202012Validator(schema).iter_errors(payload)]
-
-
-def _verification_check_id(check_key: str) -> str:
-    from gpd.mcp.servers.verification_server import get_verification_check
-
-    check = get_verification_check(check_key)
-    return check.check_id
-
-
 def test_contract_server_singleton_drift_classifier_matches_core_contract_policy() -> None:
     from gpd.mcp.servers.verification_server import _is_defaultable_singleton_contract_error
 
@@ -1207,13 +1198,9 @@ def test_suggest_contract_checks_derives_request_templates_from_contract() -> No
     assert estimator["observed"]["calibration_checked"] is None
     assert estimator["artifact_content"] is None
     assert checks["contract.benchmark_reproduction"]["supported_binding_fields"] == [
-        "binding.claim_id",
         "binding.claim_ids",
-        "binding.deliverable_id",
         "binding.deliverable_ids",
-        "binding.acceptance_test_id",
         "binding.acceptance_test_ids",
-        "binding.reference_id",
         "binding.reference_ids",
     ]
 
@@ -1836,7 +1823,6 @@ def test_run_contract_check_schema_rejects_contract_derived_limit_and_family_met
         assert any("metadata" in message for message in messages)
 
 
-@pytest.mark.parametrize("identifier_field", ["check_key", "check_id"])
 @pytest.mark.parametrize(
     ("check_key", "expected_required_fragments"),
     [
@@ -1850,13 +1836,11 @@ def test_run_contract_check_schema_rejects_contract_derived_limit_and_family_met
     ],
 )
 def test_run_contract_check_schema_rejects_identifier_only_requests_for_mandatory_sections(
-    identifier_field: str,
     check_key: str,
     expected_required_fragments: tuple[str, ...],
 ) -> None:
     schema = _run_contract_check_input_schema()
-    identifier = check_key if identifier_field == "check_key" else _verification_check_id(check_key)
-    request = {"request": {identifier_field: identifier}}
+    request = {"request": {"check_key": check_key}}
 
     messages = _schema_error_messages(schema, request)
     combined_messages = "\n".join(messages)
@@ -2058,22 +2042,13 @@ def test_run_contract_check_schema_requires_one_trimmed_identifier() -> None:
     invalid_requests = (
         {},
         {"check_key": None},
-        {"check_id": None},
         {"check_key": " contract.limit_recovery"},
-        {"check_id": "contract.limit_recovery "},
     )
 
     for request in invalid_requests:
         assert list(validator.iter_errors({"request": request})) != []
 
-    assert (
-        list(
-            validator.iter_errors(
-                {"request": {"check_key": None, "check_id": "contract.direct_proxy_consistency"}}
-            )
-        )
-        == []
-    )
+    assert list(validator.iter_errors({"request": {"check_key": "contract.direct_proxy_consistency"}})) == []
 
 
 def test_suggest_contract_checks_unique_context_drops_redundant_selector_metadata_without_policy_defaults() -> None:
@@ -2516,7 +2491,7 @@ def test_suggest_contract_checks_rejects_non_list_active_checks(active_checks: o
         (
             "run_contract_check",
             {"request": {}},
-            {"error": "Missing check_key or check_id", "schema_version": 1},
+            {"error": "Missing check_key", "schema_version": 1},
         ),
         (
             "run_contract_check",
@@ -2688,7 +2663,7 @@ def test_run_contract_check_rejects_non_mapping_payloads(payload: object) -> Non
                 "binding": {"claim_ids": {"primary": "claim-benchmark"}},
                 "observed": {"metric_value": 0.01, "threshold_value": 0.02},
             },
-            "binding.claim_ids must be a string or list of strings",
+            "binding.claim_ids must be a list of strings",
         ),
         (
             {

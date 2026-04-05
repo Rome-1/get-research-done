@@ -1127,6 +1127,7 @@ class TestSkillsServer:
             "---\n"
             "name: gpd:plan-phase\n"
             "description: Create detailed execution plan.\n"
+            "agent: gpd-planner\n"
             "---\n"
             "\n"
             "Canonical plan command.\n"
@@ -1250,6 +1251,15 @@ class TestSkillsServer:
         assert "treat `content` as authoritative" in result["loading_hint"]
         assert result["file_count"] == 1
         assert result["allowed_tools_surface"] == "command.allowed-tools"
+
+    def test_get_skill_surfaces_command_agent_metadata(self):
+        from gpd.mcp.servers.skills_server import get_skill
+
+        result = get_skill("gpd-plan-phase")
+
+        assert result["agent"] == "gpd-planner"
+        assert result["structured_metadata_authority"]["agent"] == "mirrored"
+        assert "agent: gpd-planner" in result["content"]
 
     def test_get_skill_surfaces_referenced_files(self):
         from gpd.mcp.servers.skills_server import get_skill
@@ -2198,25 +2208,28 @@ class TestVerificationServer:
 
         result = run_contract_check({})
 
-        assert result == {"error": "Missing check_key or check_id", "schema_version": 1}
+        assert result == {"error": "Missing check_key", "schema_version": 1}
 
-    def test_run_contract_check_rejects_padded_identifier(self):
+    def test_run_contract_check_rejects_legacy_check_id_alias(self):
         from gpd.mcp.servers.verification_server import run_contract_check
 
         result = run_contract_check({"check_id": "contract.limit_recovery "})
 
         assert result == {
-            "error": "check_id must not include leading or trailing whitespace",
+            "error": (
+                "request contains unsupported keys: check_id; supported keys are "
+                "check_key, contract, binding, metadata, observed, artifact_content"
+            ),
             "schema_version": 1,
         }
 
-    def test_run_contract_check_preserves_scalar_binding_ids(self):
+    def test_run_contract_check_preserves_plural_binding_lists(self):
         from gpd.mcp.servers.verification_server import run_contract_check
 
         result = run_contract_check(
             {
                 "check_key": "contract.limit_recovery",
-                "binding": {"claim_id": "claim-main", "reference_id": "ref-main"},
+                "binding": {"claim_ids": ["claim-main"], "reference_ids": ["ref-main"]},
                 "metadata": {"regime_label": "large-k", "expected_behavior": "approaches the asymptotic limit"},
                 "observed": {"limit_passed": True, "observed_limit": "large-k"},
             }
@@ -2240,9 +2253,7 @@ class TestVerificationServer:
         assert result == {
             "error": (
                 "binding contains unsupported keys: cliam_ids; supported keys are "
-                "binding.claim_id, binding.claim_ids, binding.deliverable_id, binding.deliverable_ids, "
-                "binding.acceptance_test_id, binding.acceptance_test_ids, binding.reference_id, "
-                "binding.reference_ids"
+                "binding.claim_ids, binding.deliverable_ids, binding.acceptance_test_ids, binding.reference_ids"
             ),
             "schema_version": 1,
         }
@@ -2336,8 +2347,7 @@ class TestVerificationServer:
         assert result == {
             "error": (
                 "binding contains unsupported keys: reference_ids; supported keys are "
-                "binding.claim_id, binding.claim_ids, binding.deliverable_id, binding.deliverable_ids, "
-                "binding.acceptance_test_id, binding.acceptance_test_ids, binding.forbidden_proxy_id, "
+                "binding.claim_ids, binding.deliverable_ids, binding.acceptance_test_ids, "
                 "binding.forbidden_proxy_ids"
             ),
             "schema_version": 1,
