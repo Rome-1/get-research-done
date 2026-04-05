@@ -7,7 +7,6 @@ import re
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
-from gpd._python_compat import load_optional_module
 from gpd.adapters.base import RuntimeAdapter
 from gpd.adapters.install_utils import (
     HOOK_SCRIPTS,
@@ -32,14 +31,10 @@ from gpd.adapters.install_utils import (
 from gpd.adapters.install_utils import (
     finish_install as _finish_install,
 )
+from gpd.mcp import managed_integrations as _managed_integrations
 
-_managed_integrations = load_optional_module("gpd.mcp.managed_integrations")
-if _managed_integrations is None:  # pragma: no cover - partial checkout fallback
-    WOLFRAM_MANAGED_INTEGRATION = None
-    WOLFRAM_MANAGED_SERVER_KEY = "gpd-wolfram"
-else:
-    WOLFRAM_MANAGED_INTEGRATION = _managed_integrations.WOLFRAM_MANAGED_INTEGRATION
-    WOLFRAM_MANAGED_SERVER_KEY = _managed_integrations.WOLFRAM_MANAGED_SERVER_KEY
+WOLFRAM_MANAGED_INTEGRATION = _managed_integrations.WOLFRAM_MANAGED_INTEGRATION
+WOLFRAM_MANAGED_SERVER_KEY = _managed_integrations.WOLFRAM_MANAGED_SERVER_KEY
 
 logger = logging.getLogger(__name__)
 

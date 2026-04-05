@@ -817,16 +817,6 @@ def _merge_unique_strings(existing: object, additions: list[str]) -> tuple[list[
     return merged, added
 
 
-def _remove_strings(existing: object, removals: list[str]) -> tuple[list[str], bool]:
-    """Remove matching strings while preserving order."""
-    current = _normalize_string_list(existing)
-    if not current or not removals:
-        return current, False
-    removal_set = set(removals)
-    updated = [item for item in current if item not in removal_set]
-    return updated, updated != current
-
-
 def _managed_gemini_policy_path(target_dir: Path) -> Path:
     """Return the GPD-managed Gemini policy file path."""
     return target_dir / _GEMINI_POLICY_DIR_NAME / _GEMINI_POLICY_FILE_NAME

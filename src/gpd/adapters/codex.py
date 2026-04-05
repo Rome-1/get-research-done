@@ -26,7 +26,7 @@ import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 
-from gpd._python_compat import load_optional_module, load_tomllib
+from gpd._python_compat import load_tomllib
 from gpd.adapters.base import RuntimeAdapter
 from gpd.adapters.install_utils import (
     CACHE_DIR_NAME,
@@ -54,16 +54,12 @@ from gpd.adapters.install_utils import (
 )
 from gpd.adapters.runtime_catalog import get_runtime_descriptor
 from gpd.adapters.tool_names import build_runtime_alias_map, reference_translation_map, translate_for_runtime
+from gpd.mcp import managed_integrations as _managed_integrations
 from gpd.core.observability import gpd_span
 from gpd.registry import AgentDef, load_agents_from_dir
 
-_managed_integrations = load_optional_module("gpd.mcp.managed_integrations")
-if _managed_integrations is None:  # pragma: no cover - partial checkout fallback
-    WOLFRAM_MANAGED_INTEGRATION = None
-    WOLFRAM_MANAGED_SERVER_KEY = "gpd-wolfram"
-else:
-    WOLFRAM_MANAGED_INTEGRATION = _managed_integrations.WOLFRAM_MANAGED_INTEGRATION
-    WOLFRAM_MANAGED_SERVER_KEY = _managed_integrations.WOLFRAM_MANAGED_SERVER_KEY
+WOLFRAM_MANAGED_INTEGRATION = _managed_integrations.WOLFRAM_MANAGED_INTEGRATION
+WOLFRAM_MANAGED_SERVER_KEY = _managed_integrations.WOLFRAM_MANAGED_SERVER_KEY
 
 logger = logging.getLogger(__name__)
 tomllib = load_tomllib()
@@ -1647,10 +1643,6 @@ def _codex_agent_role_config_rel_path(agent_name: str) -> str:
     return f"agents/{agent_name}.toml"
 
 
-def _codex_agent_role_config_path(target_dir: Path, agent_name: str) -> Path:
-    return target_dir / "agents" / f"{agent_name}.toml"
-
-
 def _build_codex_agent_role_instructions(agent_name: str, agent_markdown_path: Path) -> str:
     agent_path = agent_markdown_path.resolve(strict=False).as_posix()
     return (
@@ -2281,11 +2273,6 @@ def _configure_config_toml(
         _install_gpd_multi_agent_config(configured),
         encoding="utf-8",
     )
-
-
-def _line_contains_gpd_notify(line: str) -> bool:
-    parsed = _parse_notify_assignment(line)
-    return _notify_assignment_is_gpd_managed(parsed)
 
 
 def _parse_notify_assignment(line: str) -> list[str] | None:

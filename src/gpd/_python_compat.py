@@ -44,19 +44,3 @@ def load_tomllib() -> ModuleType:
             f"but it was unavailable under Python {version}. "
             "Use `uv run ...` or repair the interpreter."
         ) from exc
-
-
-def load_optional_module(module_name: str) -> ModuleType | None:
-    """Import *module_name* when present, but re-raise nested import failures.
-
-    This keeps partial-checkout fallbacks for genuinely absent modules while
-    surfacing breakage inside an imported module's dependency graph.
-    """
-
-    try:
-        return importlib.import_module(module_name)
-    except ModuleNotFoundError as exc:
-        missing_name = exc.name
-        if missing_name and (missing_name == module_name or module_name.startswith(f"{missing_name}.")):
-            return None
-        raise

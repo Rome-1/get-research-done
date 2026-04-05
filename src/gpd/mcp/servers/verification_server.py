@@ -479,10 +479,6 @@ def _string_schema() -> dict[str, object]:
     return {"type": "string"}
 
 
-def _string_or_null_schema() -> dict[str, object]:
-    return {"anyOf": [dict(_string_schema()), {"type": "null"}]}
-
-
 def _non_empty_string_or_null_schema() -> dict[str, object]:
     return {"anyOf": [dict(_non_empty_string_schema()), {"type": "null"}]}
 

@@ -634,14 +634,6 @@ class PhaseWaveValidationResult(BaseModel):
 # ─── Internal Helpers ──────────────────────────────────────────────────────────
 
 
-def _strip_suffix(name: str, suffix: str) -> str:
-    """Strip a suffix from a string if present; return unchanged otherwise."""
-    if name.endswith(suffix):
-        return name[: -len(suffix)]
-    return name
-
-
-
 def _sorted_phases(dirs: list[str]) -> list[str]:
     """Sort phase directory names by numeric segments."""
     return sorted(dirs, key=_phase_sort_key)
@@ -708,10 +700,6 @@ def _phases_dir(cwd: Path) -> Path:
 
 def _roadmap_path(cwd: Path) -> Path:
     return ProjectLayout(cwd).roadmap
-
-
-def _state_path(cwd: Path) -> Path:
-    return ProjectLayout(cwd).state_md
 
 
 def _list_phase_dirs(cwd: Path) -> list[str]:
@@ -1467,21 +1455,6 @@ def _get_roadmap_phase_by_number(cwd: Path, phase_num: str | None) -> RoadmapPha
         if compare_phase_numbers(phase_normalize(phase.number), normalized) == 0:
             return phase
     return None
-
-
-def _decrement_phase_reference(phase_ref: str, removed_int: int) -> str:
-    """Shift the top-level integer of a phase reference down after integer removal."""
-    match = re.match(r"^(\d+)(\.\d+)*$", phase_ref)
-    if not match:
-        return phase_ref
-    parts = phase_ref.split(".")
-    top_level = int(parts[0])
-    if top_level <= removed_int:
-        return phase_ref
-    parts[0] = str(top_level - 1)
-    return ".".join(parts)
-
-
 def _remap_phase_after_removal(current_phase: str | None, removed_phase: str, remaining: list[str]) -> str | None:
     """Map a stored current phase to the post-removal numbering scheme."""
     current_norm = _normalize_phase_label(current_phase)

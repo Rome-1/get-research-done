@@ -12,7 +12,6 @@ from collections.abc import Callable, Mapping, Sequence
 
 __all__ = [
     "RESUME_COMPATIBILITY_ALIAS_FIELDS",
-    "RESUME_COMPATIBILITY_WRAPPER_ALIASES",
     "RESUME_COMPATIBILITY_ALIAS_KEYS",
     "RESUME_CANDIDATE_KIND_BOUNDED_SEGMENT",
     "RESUME_CANDIDATE_KIND_CONTINUITY_HANDOFF",
@@ -51,8 +50,6 @@ RESUME_COMPATIBILITY_ALIAS_FIELDS: tuple[str, ...] = (
     "segment_candidates",
     "session_resume_file",
 )
-
-RESUME_COMPATIBILITY_WRAPPER_ALIASES: tuple[str, ...] = ("compat_resume_surface",)
 
 RESUME_COMPATIBILITY_ALIAS_KEYS: tuple[str, ...] = RESUME_COMPATIBILITY_ALIAS_FIELDS
 
@@ -212,9 +209,9 @@ def _canonical_resume_origin(origin: str | None) -> str | None:
     normalized = (origin or "").strip()
     if not normalized:
         return None
-    if normalized in {"compat.current_execution", "current_execution"}:
+    if normalized == "current_execution":
         return RESUME_CANDIDATE_ORIGIN_CONTINUATION_BOUNDED_SEGMENT
-    if normalized in {"compat.session_resume_file", "session_resume_file"}:
+    if normalized == "session_resume_file":
         return RESUME_CANDIDATE_ORIGIN_CONTINUATION_HANDOFF
     return normalized
 
@@ -378,8 +375,6 @@ def canonicalize_resume_public_payload(
     canonical = dict(payload)
 
     for key in compat_fields:
-        canonical.pop(key, None)
-    for key in RESUME_COMPATIBILITY_WRAPPER_ALIASES:
         canonical.pop(key, None)
 
     return canonical

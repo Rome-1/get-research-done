@@ -811,19 +811,17 @@ def test_build_recovery_advice_ignores_nested_resume_surface_compat_wrapper(
         project,
         recent_rows=[],
         resume_payload={
-            "compat_resume_surface": {
-                "resume_surface": {
-                    "execution_resume_file": "GPD/phases/11/.continue-here.md",
-                    "execution_resume_file_source": "session_resume_file",
-                    "segment_candidates": [
-                        {
-                            "kind": "continuity_handoff",
-                            "origin": "compat.session_resume_file",
-                            "status": "handoff",
-                            "resume_file": "GPD/phases/11/.continue-here.md",
-                        }
-                    ],
-                }
+            "resume_surface": {
+                "execution_resume_file": "GPD/phases/11/.continue-here.md",
+                "execution_resume_file_source": "session_resume_file",
+                "segment_candidates": [
+                    {
+                        "kind": "continuity_handoff",
+                        "origin": "session_resume_file",
+                        "status": "handoff",
+                        "resume_file": "GPD/phases/11/.continue-here.md",
+                    }
+                ],
             },
             "has_live_execution": False,
         },
@@ -874,7 +872,7 @@ def test_build_recovery_advice_ignores_arbitrary_nested_resume_surface_wrapper(
     assert advice.current_workspace_has_resume_file is False
 
 
-def test_build_recovery_advice_ignores_compat_boolean_flags_without_canonical_support(
+def test_build_recovery_advice_ignores_compat_resume_surface_wrapper_boolean_flags_without_canonical_support(
     tmp_path: Path,
 ) -> None:
     project = _project(tmp_path)
@@ -887,7 +885,7 @@ def test_build_recovery_advice_ignores_compat_boolean_flags_without_canonical_su
                 "execution_resumable": True,
                 "has_interrupted_agent": True,
                 "has_live_execution": True,
-            }
+            },
         },
     )
 
@@ -957,14 +955,14 @@ def test_build_recovery_advice_recovers_continuity_handoff_from_candidate_only_p
     assert advice.current_workspace_has_resume_file is True
 
 
-def test_build_recovery_advice_ignores_compat_resume_surface_wrapper_without_canonical_support(tmp_path: Path) -> None:
+def test_build_recovery_advice_ignores_nested_resume_surface_wrapper_without_canonical_support(tmp_path: Path) -> None:
     project = _project(tmp_path)
 
     advice = build_recovery_advice(
         project,
         recent_rows=[],
         resume_payload={
-            "compat_resume_surface": {
+            "resume_surface": {
                 "segment_candidates": [
                     {
                         "source": "session_resume_file",

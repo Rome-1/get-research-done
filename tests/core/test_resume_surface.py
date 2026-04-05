@@ -247,7 +247,6 @@ def test_canonicalize_resume_public_payload_keeps_canonical_fields_and_strips_le
             }
         ],
         "session_resume_file": "GPD/phases/04/.continue-here.md",
-        "compat_resume_surface": {"resume_mode": "continuity_handoff"},
         "resume_candidates": [continuity_candidate],
     }
 
@@ -257,7 +256,6 @@ def test_canonicalize_resume_public_payload_keeps_canonical_fields_and_strips_le
     assert canonical["active_resume_origin"] == "continuation.handoff"
     assert canonical["active_resume_pointer"] == "GPD/phases/04/.continue-here.md"
     assert canonical["resume_candidates"] == [continuity_candidate]
-    assert "compat_resume_surface" not in canonical
     assert "segment_candidates" not in canonical
     assert "resume_mode" not in canonical
     assert "session_resume_file" not in canonical
@@ -292,4 +290,3 @@ def test_canonicalize_resume_public_payload_is_idempotent() -> None:
     assert "resume_mode" not in once
     assert "execution_resume_file" not in once
     assert "execution_resume_file_source" not in once
-    assert "compat_resume_surface" not in once

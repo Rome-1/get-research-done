@@ -15,20 +15,13 @@ from mcp.server.lowlevel import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 
+from gpd.mcp import managed_integrations as _managed_integrations
 from gpd.version import __version__ as GPD_VERSION
 
-try:
-    from gpd.mcp.managed_integrations import (
-        WOLFRAM_MANAGED_INTEGRATION,
-        WOLFRAM_MCP_API_KEY_ENV_VAR,
-        WOLFRAM_MCP_DEFAULT_ENDPOINT,
-        WOLFRAM_MCP_ENDPOINT_ENV_VAR,
-    )
-except ImportError:  # pragma: no cover - partial checkout fallback
-    WOLFRAM_MANAGED_INTEGRATION = None
-    WOLFRAM_MCP_API_KEY_ENV_VAR = "GPD_WOLFRAM_MCP_API_KEY"
-    WOLFRAM_MCP_DEFAULT_ENDPOINT = "https://services.wolfram.com/api/mcp"
-    WOLFRAM_MCP_ENDPOINT_ENV_VAR = "GPD_WOLFRAM_MCP_ENDPOINT"
+WOLFRAM_MANAGED_INTEGRATION = _managed_integrations.WOLFRAM_MANAGED_INTEGRATION
+WOLFRAM_MCP_API_KEY_ENV_VAR = _managed_integrations.WOLFRAM_MCP_API_KEY_ENV_VAR
+WOLFRAM_MCP_DEFAULT_ENDPOINT = _managed_integrations.WOLFRAM_MCP_DEFAULT_ENDPOINT
+WOLFRAM_MCP_ENDPOINT_ENV_VAR = _managed_integrations.WOLFRAM_MCP_ENDPOINT_ENV_VAR
 
 DEFAULT_WOLFRAM_MCP_ENDPOINT = WOLFRAM_MCP_DEFAULT_ENDPOINT
 GPD_WOLFRAM_MCP_API_KEY_ENV = WOLFRAM_MCP_API_KEY_ENV_VAR

@@ -6,6 +6,9 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from gpd.hooks.payload_roots import (
+    _coerce_root_pair,
+    _resolve_with_shared_service,
+    payload_uses_alias_only_workspace_mapping,
     normalize_workspace_text,
     project_root_from_payload,
     resolve_payload_roots,
@@ -106,6 +109,89 @@ def test_workspace_dir_from_payload_falls_back_to_cwd_then_os_getcwd(tmp_path) -
 
     assert from_cwd == str(cwd.resolve(strict=False))
     assert from_os_getcwd == str(os_cwd.resolve(strict=False))
+
+
+def test_payload_uses_alias_only_workspace_mapping_detects_alias_only_mapping(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    project = tmp_path / "project"
+    workspace.mkdir()
+    project.mkdir()
+
+    assert payload_uses_alias_only_workspace_mapping(
+        {
+            "workspace": {"current_dir": str(workspace)},
+            "project_root": str(project),
+        },
+        hook_payload=_policy(workspace_keys=("workspace", "current_dir"), project_dir_keys=("project_root",)),
+    )
+
+
+def test_coerce_root_pair_accepts_tuple_and_list_payloads(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    project = tmp_path / "project"
+
+    tuple_roots = _coerce_root_pair((str(workspace), str(project)), fallback_workspace_dir=str(tmp_path / "fallback"))
+    list_roots = _coerce_root_pair([str(workspace), str(project)], fallback_workspace_dir=str(tmp_path / "fallback"))
+
+    assert tuple_roots is not None
+    assert list_roots is not None
+    assert tuple_roots.workspace_dir == str(workspace.resolve(strict=False))
+    assert tuple_roots.project_root == str(project.resolve(strict=False))
+    assert tuple_roots.project_dir_present is False
+    assert tuple_roots.project_dir_trusted is False
+    assert list_roots.workspace_dir == tuple_roots.workspace_dir
+    assert list_roots.project_root == tuple_roots.project_root
+
+
+def test_coerce_root_pair_preserves_trust_flags_from_mapping_payload(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    project = tmp_path / "project"
+
+    roots = _coerce_root_pair(
+        {
+            "workspace_dir": str(workspace),
+            "project_root": str(project),
+            "explicit_project_dir": True,
+            "trusted_project_dir": False,
+        },
+        fallback_workspace_dir=str(tmp_path / "fallback"),
+    )
+
+    assert roots is not None
+    assert roots.workspace_dir == str(workspace.resolve(strict=False))
+    assert roots.project_root == str(project.resolve(strict=False))
+    assert roots.project_dir_present is True
+    assert roots.project_dir_trusted is False
+
+
+def test_resolve_with_shared_service_uses_later_signature_after_type_error(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    project = tmp_path / "project"
+    workspace.mkdir()
+    project.mkdir()
+
+    calls: list[tuple[str, ...]] = []
+
+    def _service(**kwargs):
+        calls.append(tuple(sorted(kwargs)))
+        if "payload" in kwargs or "data" in kwargs:
+            raise TypeError("unsupported signature")
+        if "workspace_dir" in kwargs and "project_dir" in kwargs and "cwd" in kwargs:
+            return (kwargs["workspace_dir"], kwargs["project_dir"])
+        raise TypeError("unsupported signature")
+
+    roots = _resolve_with_shared_service(
+        {"workspace": str(workspace)},
+        workspace_dir=str(workspace),
+        project_dir=str(project),
+        hook_payload=_policy(root_resolution_service=_service),
+        cwd=str(tmp_path),
+    )
+
+    assert roots is not None
+    assert roots.workspace_dir == str(workspace.resolve(strict=False))
+    assert roots.project_root == str(project.resolve(strict=False))
+    assert len(calls) >= 3
 
 
 def test_project_root_from_payload_prefers_explicit_project_dir_alias(tmp_path) -> None:

@@ -1319,9 +1319,9 @@ def _public_resume_origin_family(
     if normalized_source == "interrupted_agent":
         return "interrupted_agent"
 
-    if origin_text in {"compat.current_execution", "current_execution"}:
+    if origin_text == "current_execution":
         return "canonical_continuation" if isinstance(active_execution, dict) else "derived_execution_head"
-    if origin_text in {"compat.session_resume_file", "session_resume_file"}:
+    if origin_text == "session_resume_file":
         return "canonical_continuation"
     if origin_text in {"continuation.bounded_segment", "continuation.handoff"}:
         return "canonical_continuation"
@@ -2015,7 +2015,6 @@ def _resume_augmented_payload(payload: dict[str, object], *, cwd: Path | None = 
     ]
     active_resume_result = _resume_active_result(public_payload, segment_candidates)
     augmented = dict(public_payload)
-    augmented.pop("compat_resume_surface", None)
     active_resume_origin = augmented.get("active_resume_origin")
     if isinstance(active_resume_origin, str) and active_resume_origin.strip():
         public_active_origin = _public_resume_origin_family(
