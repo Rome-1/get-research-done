@@ -32,12 +32,13 @@ def test_validate_project_contract_command_accepts_valid_fixture(tmp_path: Path)
 def test_validate_project_contract_command_accepts_valid_fixture_via_stdin() -> None:
     contract_text = (FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8")
 
-    result = runner.invoke(
-        app,
-        ["--raw", "validate", "project-contract", "-"],
-        input=contract_text,
-        catch_exceptions=False,
-    )
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            app,
+            ["--raw", "validate", "project-contract", "-"],
+            input=contract_text,
+            catch_exceptions=False,
+        )
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
@@ -71,6 +72,26 @@ def test_validate_project_contract_command_stdin_matches_file_mode_outside_proje
     assert json.loads(stdin_result.output) == json.loads(file_result.output)
 
 
+def test_validate_project_contract_command_stdin_prefers_project_root_warnings_inside_project() -> None:
+    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+    contract["context_intake"]["must_include_prior_outputs"] = ["missing/path.md"]
+
+    with runner.isolated_filesystem():
+        Path("GPD").mkdir()
+        result = runner.invoke(
+            app,
+            ["--raw", "validate", "project-contract", "-"],
+            input=json.dumps(contract),
+            catch_exceptions=False,
+        )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["valid"] is True
+    assert any("project-local artifact" in warning for warning in payload["warnings"])
+    assert all("not an explicit project artifact path" not in warning for warning in payload["warnings"])
+
+
 def test_validate_project_contract_command_fails_closed_on_recoverable_schema_drift(tmp_path: Path) -> None:
     contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
     contract["context_intake"]["must_read_refs"] = "ref-benchmark"
@@ -82,6 +103,24 @@ def test_validate_project_contract_command_fails_closed_on_recoverable_schema_dr
     assert result.exit_code == 1, result.output
     payload = json.loads(result.output)
     assert payload["valid"] is False
+    assert "context_intake.must_read_refs must be a list, not str" in payload["errors"]
+
+
+def test_validate_project_contract_command_raw_stdin_failure_surfaces_schema_reference() -> None:
+    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+    contract["context_intake"]["must_read_refs"] = "ref-benchmark"
+
+    result = runner.invoke(
+        app,
+        ["--raw", "validate", "project-contract", "-"],
+        input=json.dumps(contract),
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.output)
+    assert payload["valid"] is False
+    assert payload["schema_reference"].endswith("state-json-schema.md")
     assert "context_intake.must_read_refs must be a list, not str" in payload["errors"]
 
 

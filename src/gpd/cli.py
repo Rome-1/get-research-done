@@ -581,6 +581,24 @@ def _model_dump_with_schema_reference(result: object, *, schema_reference: str) 
     return payload
 
 
+def _prefer_anchored_project_contract_validation(anchored_result: object, unanchored_result: object) -> bool:
+    """Return whether the anchored validation is more specific than the generic fallback."""
+
+    anchored_valid = getattr(anchored_result, "valid", None)
+    unanchored_valid = getattr(unanchored_result, "valid", None)
+    if anchored_valid != unanchored_valid:
+        return True
+
+    anchored_errors = getattr(anchored_result, "errors", None)
+    unanchored_errors = getattr(unanchored_result, "errors", None)
+    if anchored_errors != unanchored_errors:
+        return True
+
+    anchored_warnings = getattr(anchored_result, "warnings", None)
+    unanchored_warnings = getattr(unanchored_result, "warnings", None)
+    return anchored_warnings != unanchored_warnings
+
+
 def _collect_file_option_args(ctx: typer.Context, files: list[str] | None) -> list[str]:
     """Return normalized file args, allowing multiple paths after one ``--files``."""
 
@@ -7255,9 +7273,11 @@ def validate_project_contract_cmd(
     payload = _load_json_document(input_path)
     if input_path == "-":
         anchored_project_root = _state_command_cwd()
+        stdin_inside_project = (anchored_project_root / "GPD").is_dir()
         prefer_filesystem_anchor = False
     else:
         anchored_project_root = _project_root_for_json_input(input_path)
+        stdin_inside_project = False
         prefer_filesystem_anchor = (anchored_project_root / "GPD").is_dir()
     strict_result = parse_project_contract_data_strict(payload)
     if strict_result.contract is None or strict_result.errors:
@@ -7273,6 +7293,18 @@ def validate_project_contract_cmd(
                 strict_result.contract,
                 mode=normalized_mode,
                 project_root=anchored_project_root,
+            )
+        elif stdin_inside_project:
+            unanchored_result = validate_project_contract(strict_result.contract, mode=normalized_mode, project_root=None)
+            anchored_result = validate_project_contract(
+                strict_result.contract,
+                mode=normalized_mode,
+                project_root=anchored_project_root,
+            )
+            result = (
+                anchored_result
+                if _prefer_anchored_project_contract_validation(anchored_result, unanchored_result)
+                else unanchored_result
             )
         else:
             unanchored_result = validate_project_contract(strict_result.contract, mode=normalized_mode, project_root=None)
