@@ -23,6 +23,7 @@ from gpd.adapters.runtime_catalog import (
 )
 from gpd.adapters.tool_names import CONTEXTUAL_TOOL_REFERENCE_NAMES
 from gpd.core.constants import HOME_DATA_DIR_NAME
+from gpd.core.public_surface_contract import local_cli_bridge_commands
 from gpd.registry import render_command_visibility_sections_from_frontmatter
 
 # ---------------------------------------------------------------------------
@@ -240,6 +241,29 @@ def build_runtime_install_repair_command(
     if explicit_target:
         command = f"{command} --target-dir {shlex.quote(str(target_dir))}"
     return command
+
+
+def should_preserve_public_local_cli_command(command: str) -> bool:
+    """Return whether *command* is part of the public local-CLI contract.
+
+    Installed model-facing content should keep these canonical `gpd ...`
+    commands visible exactly as documented instead of rewriting them to the
+    runtime bridge.
+    """
+
+    normalized = command.strip()
+    if not normalized.startswith("gpd "):
+        return False
+
+    for public_command in local_cli_bridge_commands():
+        if not normalized.startswith(public_command):
+            continue
+        if len(normalized) == len(public_command):
+            return True
+        next_char = normalized[len(public_command)]
+        if next_char.isspace() or next_char in "|&;()<>":
+            return True
+    return False
 
 
 def _replace_runtime_placeholders(

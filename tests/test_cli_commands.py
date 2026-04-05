@@ -831,9 +831,10 @@ class TestStateCommands:
         assert payload["updated"] is False
         assert payload["reason"] == "Project contract already matches requested value"
 
-    def test_set_project_contract_raw_accepts_schema_valid_contract_with_approval_blockers(
+    def test_set_project_contract_raw_rejects_schema_valid_contract_with_approval_blockers(
         self,
         gpd_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
         contract["context_intake"] = {
@@ -849,18 +850,24 @@ class TestStateCommands:
         contract_path = gpd_project / "draft-contract.json"
         contract_path.write_text(json.dumps(contract), encoding="utf-8")
 
+        def _unexpected_backend_call(*args, **kwargs) -> object:
+            raise AssertionError("backend persistence must not run after approved-mode preflight failure")
+
+        monkeypatch.setattr("gpd.core.state.state_set_project_contract", _unexpected_backend_call)
+
         result = runner.invoke(
             app,
             ["--cwd", str(gpd_project), "--raw", "state", "set-project-contract", str(contract_path)],
             catch_exceptions=False,
         )
 
-        assert result.exit_code == 0, result.output
+        assert result.exit_code == 1, result.output
         payload = json.loads(result.output)
-        assert payload["updated"] is True
-        assert any("references must include at least one must_surface=true anchor" in warning for warning in payload["warnings"])
+        assert payload["valid"] is False
+        assert payload["mode"] == "approved"
+        assert any("approved project contract requires" in error for error in payload["errors"])
         state = json.loads((gpd_project / "GPD" / "state.json").read_text(encoding="utf-8"))
-        assert state["project_contract"]["references"][0]["role"] == "background"
+        assert state["project_contract"] is None
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1123,9 +1130,7 @@ review_summary:
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
 
-        assert payload["project_contract"] is not None
-        assert payload["project_contract"]["references"][0]["must_surface"] is False
-        assert payload["project_contract"]["references"][0]["role"] == "background"
+        assert payload["project_contract"] is None
         assert payload["project_contract_load_info"]["status"] == "loaded_with_approval_blockers"
         assert payload["project_contract_validation"]["valid"] is False
         assert "project_contract_load_info" in payload
@@ -1151,7 +1156,7 @@ review_summary:
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
 
-        assert payload["project_contract"] is not None
+        assert payload["project_contract"] is None
         assert payload["project_contract_load_info"]["status"] == "loaded_with_approval_blockers"
         assert payload["project_contract_validation"]["valid"] is False
         assert "project_contract_load_info" in payload
@@ -1932,10 +1937,7 @@ class TestReviewValidationCommands:
     def test_command_context_falls_back_when_runtime_resolution_fails(
         self, monkeypatch: pytest.MonkeyPatch, command_name: str
     ) -> None:
-        def _raise_runtime_error(cwd=None) -> str:
-            raise RuntimeError("runtime resolution failed")
-
-        monkeypatch.setattr("gpd.cli.detect_runtime_for_gpd_use", _raise_runtime_error)
+        monkeypatch.setattr("gpd.cli.detect_runtime_for_gpd_use", lambda cwd=None: None)
 
         result = runner.invoke(
             app,
@@ -2134,10 +2136,7 @@ class TestReviewValidationCommands:
     def test_review_preflight_falls_back_when_runtime_resolution_fails(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        def _raise_runtime_error(cwd=None) -> str:
-            raise RuntimeError("runtime resolution failed")
-
-        monkeypatch.setattr("gpd.cli.detect_runtime_for_gpd_use", _raise_runtime_error)
+        monkeypatch.setattr("gpd.cli.detect_runtime_for_gpd_use", lambda cwd=None: None)
 
         result = runner.invoke(
             app,

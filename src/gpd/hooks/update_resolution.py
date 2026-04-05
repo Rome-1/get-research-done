@@ -169,6 +169,7 @@ def update_command_for_candidate(
     cwd: str | Path | None,
 ) -> str | None:
     """Return the repair/update command for one resolved update-cache candidate."""
+    from gpd.hooks.install_metadata import installed_update_command
     from gpd.hooks.runtime_detect import (
         RUNTIME_UNKNOWN,
         _runtime_dir_has_gpd_install,
@@ -182,7 +183,7 @@ def update_command_for_candidate(
     self_install = hook_layout.detect_self_owned_install(hook_file)
     candidate_path = getattr(candidate, "path", None)
     if self_install is not None and candidate_path == self_install.cache_file:
-        return self_install.update_command
+        return installed_update_command(self_install.config_dir, home=lookup.resolved_home)
 
     runtime = getattr(candidate, "runtime", None) or RUNTIME_UNKNOWN
     scope = getattr(candidate, "scope", None)

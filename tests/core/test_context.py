@@ -1228,9 +1228,10 @@ class TestInitPlanPhase:
 
         ctx = init_progress(tmp_path)
 
-        assert ctx["project_contract"] is not None
+        assert ctx["project_contract"] is None
         assert ctx["project_contract_gate"]["authoritative"] is False
         assert ctx["project_contract_gate"]["repair_required"] is True
+        assert ctx["project_contract_gate"]["visible"] is True
         assert ctx["contract_intake"] is None
         assert ctx["selected_protocol_bundle_ids"] == []
         assert ctx["active_reference_count"] == 0
@@ -1417,6 +1418,19 @@ class TestInitNewProject:
         assert ctx["has_research_files"] is True
         assert ctx["has_existing_project"] is True
 
+    @pytest.mark.parametrize("directory_name", ("agents", "hooks", "command"))
+    def test_detects_user_owned_research_files_in_generic_tool_named_directories(
+        self, tmp_path: Path, directory_name: str
+    ) -> None:
+        owned_dir = tmp_path / directory_name
+        owned_dir.mkdir()
+        (owned_dir / "notes.py").write_text("print('research notes')", encoding="utf-8")
+
+        ctx = init_new_project(tmp_path)
+
+        assert ctx["has_research_files"] is True
+        assert ctx["has_existing_project"] is True
+
     def test_detects_xdg_config_subdir_research_files_inside_a_project(self, tmp_path: Path) -> None:
         opencode_descriptor = next(
             descriptor
@@ -1558,11 +1572,11 @@ class TestInitNewMilestone:
 
         ctx = init_new_milestone(tmp_path)
 
-        assert ctx["project_contract"] is not None
-        assert ctx["project_contract"]["references"][0]["role"] == "background"
-        assert ctx["project_contract"]["references"][0]["must_surface"] is False
+        assert ctx["project_contract"] is None
         assert ctx["project_contract_load_info"]["status"] == "blocked_integrity"
         assert ctx["project_contract_validation"]["valid"] is False
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert ctx["project_contract_gate"]["authoritative"] is False
         assert "project_contract_load_info" in ctx
         assert "project_contract_validation" in ctx
 
@@ -2422,11 +2436,11 @@ class TestInitProgress:
 
         ctx = init_progress(tmp_path)
 
-        assert ctx["project_contract"] is not None
-        assert ctx["project_contract"]["claims"][0]["id"] == "claim-benchmark"
-        assert "notes" not in ctx["project_contract"]["claims"][0]
+        assert ctx["project_contract"] is None
+        assert ctx["project_contract_load_info"]["status"] == "loaded_with_schema_normalization"
         assert ctx["project_contract_gate"]["authoritative"] is False
         assert ctx["project_contract_gate"]["repair_required"] is True
+        assert ctx["project_contract_gate"]["visible"] is True
         assert ctx["contract_intake"] is None
         assert "Recover known limiting behavior" not in ctx["active_reference_context"]
         assert "ref-benchmark" not in ctx["effective_reference_intake"]["must_read_refs"]
@@ -2443,9 +2457,11 @@ class TestInitProgress:
         loaded = state_load(tmp_path)
         ctx = init_progress(tmp_path)
 
-        assert loaded.state["project_contract"] == ctx["project_contract"]
+        assert ctx["project_contract"] is None
         assert loaded.state["project_contract"]["claims"][0]["id"] == "claim-benchmark"
         assert "notes" not in loaded.state["project_contract"]["claims"][0]
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert ctx["project_contract_gate"]["authoritative"] is False
 
     def test_load_project_contract_keeps_primary_contract_when_unrelated_root_section_is_schema_corrupt(
         self, tmp_path: Path
@@ -2579,7 +2595,7 @@ class TestInitProgress:
         assert loaded is not None
         assert load_info["status"] == "blocked_integrity"
         assert any("duplicate" in error for error in load_info["errors"])
-        assert ctx["project_contract"] is not None
+        assert ctx["project_contract"] is None
         assert ctx["project_contract_load_info"]["status"] == "blocked_integrity"
         assert ctx["project_contract_gate"]["visible"] is True
         assert ctx["project_contract_gate"]["blocked"] is True

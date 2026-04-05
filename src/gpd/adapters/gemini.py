@@ -37,6 +37,7 @@ from gpd.adapters.install_utils import (
     remove_empty_json_object_file,
     remove_stale_agents,
     render_markdown_frontmatter,
+    should_preserve_public_local_cli_command,
     split_markdown_frontmatter,
     strip_sub_tags,
     verify_installed,
@@ -107,7 +108,6 @@ _GEMINI_STATIC_POLICY_COMMAND_PREFIXES: tuple[str, ...] = (
     "printf '%s\\n' \"$PROJECT_CONTRACT_JSON\"",
 )
 _SHELL_FENCE_LANGUAGES = frozenset({"bash", "sh", "shell", "zsh"})
-_INLINE_GPD_COMMAND_RE = re.compile(r"`(?P<command>gpd(?=\s)[^`]*?)`")
 _GEMINI_COMMAND_RUNTIME_NOTE = (
     "<gemini_runtime_notes>\n"
     "Gemini shell compatibility:\n"
@@ -310,9 +310,9 @@ def _managed_mcp_server_keys() -> frozenset[str]:
 def _rewrite_gpd_cli_invocations(content: str, bridge_command: str) -> str:
     """Rewrite shell-command ``gpd`` calls to the shared runtime CLI bridge.
 
-    Restrict rewrites to fenced shell code blocks and inline code spans that
-    actually contain runnable commands. This keeps prose and quoted strings
-    intact while still rewriting command positions.
+    Restrict rewrites to fenced shell code blocks and command positions only.
+    This keeps prose and inline code spans canonical while still rewriting
+    runnable shell steps.
     """
     rewritten: list[str] = []
     in_shell_fence = False
@@ -332,14 +332,9 @@ def _rewrite_gpd_cli_invocations(content: str, bridge_command: str) -> str:
             rewritten.append(_rewrite_gemini_shell_line(line, bridge_command))
             continue
 
-        rewritten.append(_rewrite_inline_gpd_command_spans(line, bridge_command))
+        rewritten.append(line)
 
     return "".join(rewritten)
-
-
-def _rewrite_inline_gpd_command_spans(content: str, bridge_command: str) -> str:
-    """Rewrite inline markdown code spans that execute ``gpd`` commands."""
-    return _INLINE_GPD_COMMAND_RE.sub(lambda match: f"`{bridge_command}{match.group('command')[3:]}`", content)
 
 
 def _rewrite_gemini_shell_line(line: str, bridge_command: str) -> str:
@@ -372,6 +367,10 @@ def _rewrite_gemini_shell_line(line: str, bridge_command: str) -> str:
             and _is_gpd_command_start(line, index)
             and _is_gpd_token_end(line, index + 3)
         ):
+            if should_preserve_public_local_cli_command(line[index:]):
+                pieces.append("gpd")
+                index += 3
+                continue
             pieces.append(bridge_command)
             index += 3
             continue

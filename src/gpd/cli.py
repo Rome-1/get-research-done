@@ -799,7 +799,7 @@ def state_set_project_contract_cmd(
     contract_data = _load_json_document(source)
     project_root = _state_command_cwd()
 
-    validation = validate_project_contract(contract_data, mode="draft", project_root=project_root)
+    validation = validate_project_contract(contract_data, mode="approved", project_root=project_root)
     if not validation.valid:
         _output(validation)
         raise typer.Exit(code=1)
@@ -1298,7 +1298,9 @@ def _resume_origin_label(origin: object) -> str:
         "interrupted_agent": "interrupted agent",
     }
     origin_text = str(origin).strip() if origin is not None else ""
-    return labels.get(origin_text, origin_text.replace("_", " ") if origin_text else "Unknown")
+    if not origin_text:
+        return "Unknown"
+    return labels.get(origin_text, "Unknown")
 
 
 def _public_resume_origin_family(
@@ -5850,33 +5852,42 @@ def _build_recoverable_workspace_guidance(*, init_command: str) -> str:
 def _active_runtime_command_prefix(*, cwd: Path | None = None) -> str | None:
     """Return the public command prefix for the active runtime, if available."""
     from gpd.adapters import get_adapter
+    from gpd.hooks.runtime_detect import RUNTIME_UNKNOWN
 
+    runtime_name = detect_runtime_for_gpd_use(cwd=cwd or _get_cwd())
+    if runtime_name in (None, RUNTIME_UNKNOWN):
+        return None
     try:
-        runtime_name = detect_runtime_for_gpd_use(cwd=cwd or _get_cwd())
         return get_adapter(runtime_name).runtime_descriptor.public_command_surface_prefix
-    except Exception:
+    except KeyError:
         return None
 
 
 def _active_runtime_validated_surface(*, cwd: Path | None = None) -> str | None:
     """Return the machine-readable public command surface for the active runtime."""
     from gpd.adapters import get_adapter
+    from gpd.hooks.runtime_detect import RUNTIME_UNKNOWN
 
+    runtime_name = detect_runtime_for_gpd_use(cwd=cwd or _get_cwd())
+    if runtime_name in (None, RUNTIME_UNKNOWN):
+        return None
     try:
-        runtime_name = detect_runtime_for_gpd_use(cwd=cwd or _get_cwd())
         return get_adapter(runtime_name).runtime_descriptor.validated_command_surface
-    except Exception:
+    except KeyError:
         return None
 
 
 def _active_runtime_formatted_command(action: str, *, cwd: Path | None = None) -> str | None:
     """Return one adapter-formatted public command for the active runtime."""
     from gpd.adapters import get_adapter
+    from gpd.hooks.runtime_detect import RUNTIME_UNKNOWN
 
+    runtime_name = detect_runtime_for_gpd_use(cwd=cwd or _get_cwd())
+    if runtime_name in (None, RUNTIME_UNKNOWN):
+        return None
     try:
-        runtime_name = detect_runtime_for_gpd_use(cwd=cwd or _get_cwd())
         return get_adapter(runtime_name).format_command(action)
-    except Exception:
+    except KeyError:
         return None
 
 

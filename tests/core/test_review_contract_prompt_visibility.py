@@ -466,7 +466,7 @@ def test_review_contract_renderer_normalizes_blank_required_state() -> None:
         }
     )
 
-    assert "required_state: ''" in section
+    assert "required_state: ''" not in section
 
 
 def test_review_contract_renderer_rejects_non_list_and_non_mapping_conditional_shapes() -> None:
@@ -498,7 +498,7 @@ def test_review_contract_renderer_fills_canonical_defaults_for_minimal_payload()
     assert "preflight_checks: []" in section
     assert "stage_artifacts: []" in section
     assert "conditional_requirements: []" in section
-    assert "required_state: ''" in section
+    assert "required_state: ''" not in section
     assert "stage_ids" not in section
     assert "final_decision_output" not in section
     assert "requires_fresh_context_per_stage" not in section

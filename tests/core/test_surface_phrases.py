@@ -141,6 +141,19 @@ def test_recovery_next_actions_respect_local_target_gating_and_resume_dedup() ->
     ]
 
 
+def test_recovery_next_actions_keep_recent_projects_follow_ups() -> None:
+    assert recovery_next_actions(
+        primary_command="gpd resume --recent",
+        mode="recent-projects",
+        continue_command="runtime `resume-work`",
+        fast_next_command="runtime `suggest-next`",
+    ) == [
+        recovery_recent_action(),
+        recovery_continue_action(mode="recent-projects", continue_command="runtime `resume-work`"),
+        recovery_fast_next_action(fast_next_command="runtime `suggest-next`"),
+    ]
+
+
 def test_recovery_action_lines_render_structured_actions_with_availability_filter() -> None:
     actions = [
         {"kind": "primary", "command": "gpd resume --recent", "availability": "now"},

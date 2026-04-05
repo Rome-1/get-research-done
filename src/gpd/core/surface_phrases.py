@@ -244,7 +244,7 @@ def recovery_next_actions(
         actions=structured_actions,
         mode=mode,
         existing_actions=existing_actions,
-        allowed_availability={"now"},
+        allowed_availability={"now", "after_selection"} if mode == "recent-projects" else {"now"},
         include_primary=True,
     )
 

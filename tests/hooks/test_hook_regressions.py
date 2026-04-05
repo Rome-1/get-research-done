@@ -5,11 +5,17 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from gpd.adapters.runtime_catalog import list_runtime_names
+from gpd.hooks.install_context import (
+    SelfOwnedInstallContext,
+    ordered_todo_lookup_candidates,
+    should_prefer_self_owned_install,
+)
 
 
 @pytest.mark.parametrize(
@@ -95,6 +101,97 @@ def test_check_update_uses_shared_update_resolution_candidates() -> None:
     mock_candidates.assert_called_once()
     mock_primary.assert_called_once_with([candidate], home=Path("/tmp/home"))
     mock_popen.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "active_install_target",
+    [
+        SimpleNamespace(config_dir=Path("/tmp/global-runtime-dir"), install_scope="global"),
+        None,
+    ],
+    ids=["global", "missing"],
+)
+def test_should_prefer_self_owned_install_rejects_mismatched_runtime_when_active_target_is_global_or_missing(
+    tmp_path: Path,
+    active_install_target: object,
+) -> None:
+    self_install = SelfOwnedInstallContext(
+        config_dir=tmp_path / ".claude",
+        runtime="claude-code",
+        install_scope="local",
+    )
+
+    assert (
+        should_prefer_self_owned_install(
+            self_install,
+            active_install_target=active_install_target,
+            active_runtime="codex",
+            workspace_path=tmp_path,
+        )
+        is False
+    )
+
+
+def test_should_prefer_self_owned_install_still_allows_the_same_config_dir_even_when_runtime_differs(
+    tmp_path: Path,
+) -> None:
+    self_install = SelfOwnedInstallContext(
+        config_dir=tmp_path / ".claude",
+        runtime="claude-code",
+        install_scope="global",
+    )
+    active_install_target = SimpleNamespace(config_dir=self_install.config_dir, install_scope="global")
+
+    assert (
+        should_prefer_self_owned_install(
+            self_install,
+            active_install_target=active_install_target,
+            active_runtime="codex",
+            workspace_path=None,
+        )
+        is True
+    )
+
+
+@pytest.mark.parametrize(
+    "active_install_target",
+    [
+        SimpleNamespace(config_dir=Path("/tmp/global-runtime-dir"), install_scope="global"),
+        None,
+    ],
+    ids=["global", "missing"],
+)
+def test_ordered_todo_lookup_candidates_rejects_mismatched_self_owned_install_when_active_target_is_global_or_missing(
+    tmp_path: Path,
+    active_install_target: object,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    workspace_candidate = SimpleNamespace(path=workspace / ".codex" / "todos")
+    self_install = SelfOwnedInstallContext(
+        config_dir=tmp_path / ".claude",
+        runtime="claude-code",
+        install_scope="global",
+    )
+
+    with (
+        patch(
+            "gpd.hooks.install_context.resolve_hook_lookup_context",
+            return_value=SimpleNamespace(
+                lookup_cwd=workspace,
+                resolved_home=tmp_path / "home",
+                active_runtime="codex",
+                preferred_runtime="codex",
+            ),
+        ),
+        patch("gpd.hooks.install_context.detect_self_owned_install", return_value=self_install),
+        patch("gpd.hooks.runtime_detect.detect_runtime_install_target", return_value=active_install_target),
+        patch("gpd.hooks.runtime_detect.get_todo_candidates", return_value=[workspace_candidate]),
+        patch("gpd.hooks.runtime_detect.should_consider_todo_candidate", return_value=True),
+    ):
+        candidates = ordered_todo_lookup_candidates(hook_file=__file__, cwd=str(workspace))
+
+    assert [candidate.path for candidate in candidates] == [workspace_candidate.path]
 
 
 def test_statusline_current_task_uses_shared_todo_resolution_candidates(tmp_path: Path) -> None:
@@ -405,6 +502,38 @@ def test_installed_update_command_keeps_implicit_local_scope_when_manifest_omits
 
     command = installed_update_command(explicit_target)
     assert command == "npx -y get-physics-done --codex --local"
+    assert "--target-dir" not in command
+
+
+@pytest.mark.parametrize("runtime", list_runtime_names())
+def test_installed_update_command_uses_supplied_home_for_legacy_global_manifest(
+    tmp_path: Path,
+    runtime: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from gpd.adapters import get_adapter
+    from gpd.hooks.install_metadata import installed_update_command
+
+    adapter = get_adapter(runtime)
+    canonical_home = tmp_path / "relocated-home"
+    canonical_home.mkdir(parents=True)
+    global_target = adapter.resolve_global_config_dir(home=canonical_home)
+    global_target.mkdir(parents=True)
+    (global_target / "gpd-file-manifest.json").write_text(
+        json.dumps(
+            {
+                "install_scope": "global",
+                "runtime": runtime,
+                "install_target_dir": str(global_target),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("gpd.hooks.install_metadata.Path.home", lambda: tmp_path / "ambient-home")
+    command = installed_update_command(global_target, home=canonical_home)
+
+    assert command == f"{adapter.update_command} --global"
     assert "--target-dir" not in command
 
 

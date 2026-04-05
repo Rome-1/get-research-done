@@ -42,7 +42,7 @@ def _write_draft_project_contract_state(tmp_path: Path) -> dict[str, object]:
     return contract
 
 
-def test_runtime_context_surfaces_structurally_valid_draft_project_contract_with_validation_metadata(
+def test_runtime_context_suppresses_approval_blocked_project_contract_payload_but_keeps_validation_metadata(
     tmp_path: Path,
 ) -> None:
     _setup_project(tmp_path)
@@ -54,13 +54,12 @@ def test_runtime_context_surfaces_structurally_valid_draft_project_contract_with
 
     ctx = init_progress(tmp_path)
 
-    assert ctx["project_contract"] is not None
-    assert ctx["project_contract"]["scope"]["question"] == contract["scope"]["question"]
-    assert ctx["project_contract"]["references"][0]["role"] == "background"
-    assert ctx["project_contract"]["references"][0]["must_surface"] is False
+    assert ctx["project_contract"] is None
     assert ctx["project_contract_load_info"]["status"] == "loaded_with_approval_blockers"
     assert ctx["project_contract_validation"]["valid"] is False
     assert ctx["project_contract_validation"]["mode"] == "approved"
+    assert ctx["project_contract_gate"]["approval_blocked"] is True
+    assert ctx["project_contract_gate"]["authoritative"] is False
     assert any(
         "references must include at least one must_surface=true anchor" in error
         for error in ctx["project_contract_validation"]["errors"]

@@ -48,6 +48,7 @@ from gpd.adapters.install_utils import (
     remove_empty_text_file,
     remove_stale_agents,
     render_markdown_frontmatter,
+    should_preserve_public_local_cli_command,
     split_markdown_frontmatter,
     verify_installed,
     write_manifest,
@@ -661,6 +662,10 @@ def _rewrite_codex_shell_line(line: str, launcher: str) -> str:
             and _is_gpd_command_start(line, index)
             and _is_gpd_token_end(line, index + 3)
         ):
+            if should_preserve_public_local_cli_command(line[index:]):
+                pieces.append("gpd")
+                index += 3
+                continue
             pieces.append(launcher)
             index += 3
             continue

@@ -45,6 +45,7 @@ from gpd.adapters.install_utils import (
     remove_stale_agents,
     render_markdown_frontmatter,
     replace_placeholders,
+    should_preserve_public_local_cli_command,
     split_markdown_frontmatter,
     strip_sub_tags,
 )
@@ -95,7 +96,6 @@ _COLOR_NAME_TO_HEX: dict[str, str] = {
 
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{3}$|^#[0-9a-fA-F]{6}$")
 _SHELL_FENCE_LANGUAGES = frozenset({"bash", "sh", "shell", "zsh"})
-_INLINE_GPD_COMMAND_RE = re.compile(r"`(?P<command>gpd(?=\s)[^`]*?)`")
 _OPENCODE_PERMISSION_DECISIONS = frozenset({"allow", "ask", "deny"})
 _OPENCODE_YOLO_PERMISSION = "allow"
 _MANIFEST_OPENCODE_GENERATED_COMMAND_FILES_KEY = "opencode_generated_command_files"
@@ -261,7 +261,7 @@ def convert_claude_to_opencode_frontmatter(content: str, path_prefix: str | None
 
 
 def _rewrite_gpd_cli_invocations(content: str, bridge_command: str) -> str:
-    """Rewrite shell-command ``gpd`` calls to the shared runtime CLI bridge."""
+    """Rewrite fenced-shell command-position ``gpd`` calls to the runtime bridge."""
     rewritten: list[str] = []
     in_shell_fence = False
 
@@ -280,14 +280,9 @@ def _rewrite_gpd_cli_invocations(content: str, bridge_command: str) -> str:
             rewritten.append(_rewrite_gpd_shell_line(line, bridge_command))
             continue
 
-        rewritten.append(_rewrite_inline_gpd_command_spans(line, bridge_command))
+        rewritten.append(line)
 
     return "".join(rewritten)
-
-
-def _rewrite_inline_gpd_command_spans(content: str, bridge_command: str) -> str:
-    """Rewrite inline markdown code spans that execute ``gpd`` commands."""
-    return _INLINE_GPD_COMMAND_RE.sub(lambda match: f"`{bridge_command}{match.group('command')[3:]}`", content)
 
 
 def _rewrite_gpd_shell_line(line: str, bridge_command: str) -> str:
@@ -320,6 +315,10 @@ def _rewrite_gpd_shell_line(line: str, bridge_command: str) -> str:
             and _is_gpd_command_start(line, index)
             and _is_gpd_token_end(line, index + 3)
         ):
+            if should_preserve_public_local_cli_command(line[index:]):
+                pieces.append("gpd")
+                index += 3
+                continue
             pieces.append(bridge_command)
             index += 3
             continue

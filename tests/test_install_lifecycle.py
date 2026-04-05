@@ -245,8 +245,9 @@ class TestClaudeCodeLifecycle:
         bridge_command = _expected_bridge_for_install(adapter, target, is_global=True)
         content = (target / "commands" / "gpd" / "suggest-next.md").read_text(encoding="utf-8")
         assert bridge_command in content
-        assert "Uses `gpd --raw suggest`" not in content
-        assert "`gpd --raw suggest`" not in content
+        assert "Uses `gpd --raw suggest`" in content
+        assert "`gpd --raw suggest`" in content
+        assert f"`{bridge_command} --raw suggest`" not in content
 
 
 # ---------------------------------------------------------------------------
@@ -737,8 +738,9 @@ class TestOpenCodeLifecycle:
         bridge_command = adapter.runtime_cli_bridge_command(target)
         content = (target / "command" / "gpd-suggest-next.md").read_text(encoding="utf-8")
         assert bridge_command in content
-        assert "Uses `gpd --raw suggest`" not in content
-        assert "`gpd --raw suggest`" not in content
+        assert "Uses `gpd --raw suggest`" in content
+        assert "`gpd --raw suggest`" in content
+        assert f"`{bridge_command} --raw suggest`" not in content
 
     def test_uninstall_removes_gpd_artifacts(self, tmp_path: Path, gpd_root: Path) -> None:
         adapter = get_adapter("opencode")

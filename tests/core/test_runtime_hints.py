@@ -447,8 +447,8 @@ def test_build_runtime_hint_payload_handles_absent_execution_snapshot(tmp_path: 
     assert "workspace_root" not in payload.cost
     assert payload.workflow_presets["blocked"] == 5
     assert any("resume --recent" in action for action in payload.next_actions)
-    assert not any("resume-work" in action for action in payload.next_actions)
-    assert not any("suggest-next" in action for action in payload.next_actions)
+    assert any("resume-work" in action for action in payload.next_actions)
+    assert any("suggest-next" in action for action in payload.next_actions)
     assert any("base runtime-readiness" in action for action in payload.next_actions)
 
 
@@ -1683,8 +1683,8 @@ def test_build_runtime_hint_payload_rediscovery_branch_handles_non_resumable_cur
     assert payload.orientation["active_resume_kind"] is None
     assert payload.orientation["has_local_recovery_target"] is False
     assert any("resume --recent" in action for action in payload.next_actions)
-    assert not any("After selecting a workspace" in action for action in payload.next_actions)
-    assert not any("suggest-next" in action for action in payload.next_actions)
+    assert any("After selecting a workspace" in action for action in payload.next_actions)
+    assert any("suggest-next" in action for action in payload.next_actions)
 
 
 def test_build_runtime_hint_payload_formats_generic_runtime_follow_up_when_runtime_detection_fails(

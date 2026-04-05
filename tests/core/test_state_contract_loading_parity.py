@@ -290,8 +290,9 @@ def test_state_and_context_keep_fallback_project_contract_visible_but_non_author
     assert loaded.project_contract_gate["raw_project_contract_classified"] is False
     assert loaded.project_contract_gate["authoritative"] is False
     assert loaded.project_contract_gate["repair_required"] is True
-    assert ctx["project_contract"] is not None
+    assert ctx["project_contract"] is None
     assert ctx["project_contract_load_info"]["provenance"] == "fallback"
+    assert ctx["project_contract_gate"]["visible"] is True
     assert ctx["project_contract_gate"]["raw_project_contract_classified"] is False
     assert ctx["project_contract_gate"]["authoritative"] is False
     assert ctx["project_contract_gate"]["repair_required"] is True
@@ -361,8 +362,7 @@ def test_state_and_context_surface_visible_blocked_integrity_backup_project_cont
     ctx = init_progress(tmp_path)
     loaded = state_load(tmp_path)
 
-    assert ctx["project_contract"] is not None
-    assert ctx["project_contract"]["claims"][1]["id"] == "claim-benchmark"
+    assert ctx["project_contract"] is None
     assert ctx["project_contract_load_info"]["status"] == "blocked_integrity"
     assert loaded.project_contract_gate is not None
     assert ctx["project_contract_gate"] is not None
@@ -395,8 +395,7 @@ def test_state_and_context_surface_draft_invalid_primary_project_contract_after_
     assert loaded.state["project_contract"] is not None
     assert loaded.state["project_contract"]["claims"][0]["references"] == ["missing-ref"]
     assert any("unknown reference missing-ref" in issue for issue in loaded.integrity_issues)
-    assert ctx["project_contract"] is not None
-    assert ctx["project_contract"]["claims"][0]["references"] == ["missing-ref"]
+    assert ctx["project_contract"] is None
     assert ctx["project_contract_load_info"]["status"] == "blocked_integrity"
     assert loaded.project_contract_gate == ctx["project_contract_gate"]
     assert any(
@@ -454,8 +453,7 @@ def test_state_contract_remains_visible_in_runtime_context_with_approval_blocker
 
     assert loaded.state["project_contract"] is not None
     assert loaded.state["project_contract"]["references"][0]["role"] == "background"
-    assert ctx["project_contract"] is not None
-    assert ctx["project_contract"]["references"][0]["role"] == "background"
+    assert ctx["project_contract"] is None
     assert ctx["project_contract_load_info"]["status"] == "loaded_with_approval_blockers"
     assert ctx["project_contract_validation"]["valid"] is False
     assert loaded.project_contract_gate == ctx["project_contract_gate"]
@@ -488,10 +486,7 @@ def test_state_and_context_keep_salvaged_project_contract_visible_but_non_author
     assert loaded.state["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
     assert loaded.state["project_contract"]["references"][0]["role"] == "benchmark"
     assert loaded.state["project_contract"]["references"][0]["required_actions"] == ["read", "compare", "cite"]
-    assert ctx["project_contract"] is not None
-    assert ctx["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
-    assert ctx["project_contract"]["references"][0]["role"] == "benchmark"
-    assert ctx["project_contract"]["references"][0]["required_actions"] == ["read", "compare", "cite"]
+    assert ctx["project_contract"] is None
     assert ctx["project_contract_load_info"]["status"] == "loaded_with_schema_normalization"
     assert any(
         "references.0.role must use exact canonical value: benchmark" in warning
@@ -549,9 +544,7 @@ def test_state_and_context_surface_duplicate_and_blank_project_contract_list_mem
     assert loaded.state["project_contract"] is not None
     assert loaded.state["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
     assert loaded.state["project_contract"]["references"][0]["required_actions"] == ["read"]
-    assert ctx["project_contract"] is not None
-    assert ctx["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
-    assert ctx["project_contract"]["references"][0]["required_actions"] == ["read"]
+    assert ctx["project_contract"] is None
     assert ctx["project_contract_load_info"]["status"] == "loaded_with_schema_normalization"
     assert loaded.project_contract_gate["status"] == "loaded_with_schema_normalization"
     assert loaded.project_contract_gate["visible"] is True

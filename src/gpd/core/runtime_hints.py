@@ -377,7 +377,13 @@ def _recovery_next_actions(
         actions=actions,
         mode=advice.mode,
         existing_actions=existing,
-        allowed_availability={"now", "after_selection"} if allow_after_selection else {"now"},
+        allowed_availability={"now", "after_selection"}
+        if allow_after_selection
+        or (
+            advice.mode == "recent-projects"
+            and not bool(getattr(advice, "project_reentry_requires_selection", False))
+        )
+        else {"now"},
         include_primary=True,
     )
 

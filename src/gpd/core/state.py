@@ -1155,6 +1155,8 @@ def _continuation_from_session_payload(
             "last_result_id": _optional_state_text(session.get("last_result_id")),
         }
         for key, value in updates.items():
+            if value is None:
+                continue
             if only_missing and handoff.get(key) is not None:
                 continue
             handoff[key] = value
@@ -1165,6 +1167,8 @@ def _continuation_from_session_payload(
             "platform": _optional_state_text(session.get("platform")),
         }
         for key, value in updates.items():
+            if value is None:
+                continue
             if only_missing and machine.get(key) is not None:
                 continue
             machine[key] = value
@@ -3713,12 +3717,15 @@ def state_set_project_contract(cwd: Path, contract_data: dict[str, object] | Res
             warning_messages.append(warning)
 
     approval_validation = validate_project_contract(parsed, mode="approved", project_root=cwd)
+    if not approval_validation.valid:
+        return StateUpdateResult(
+            updated=False,
+            reason="Project contract failed approval validation: " + "; ".join(approval_validation.errors),
+            warnings=[*warning_messages, *[warning for warning in approval_validation.warnings if warning not in warning_messages]],
+        )
     for warning in approval_validation.warnings:
         if warning not in warning_messages:
             warning_messages.append(warning)
-    for error in approval_validation.errors:
-        if error not in warning_messages:
-            warning_messages.append(error)
 
     contract_payload = parsed.model_dump()
     if _raw_persisted_project_contract(cwd) == contract_payload:

@@ -806,16 +806,15 @@ def test_state_set_project_contract_rejects_recoverable_schema_normalization(tmp
 
 def test_state_set_project_contract_surfaces_approved_mode_warnings_on_success(tmp_path: Path):
     contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
-    contract["references"][0]["must_surface"] = False
     save_state_json(tmp_path, default_state_dict())
 
     result = state_set_project_contract(tmp_path, contract)
 
     assert result.updated is True
-    assert any("references must include at least one must_surface=true anchor" in warning for warning in result.warnings)
+    assert result.warnings
 
 
-def test_state_set_project_contract_accepts_schema_valid_draft_with_approval_blockers(tmp_path: Path):
+def test_state_set_project_contract_rejects_schema_valid_draft_with_approval_blockers(tmp_path: Path):
     contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
     contract["context_intake"] = {
         "must_read_refs": [],
@@ -831,12 +830,35 @@ def test_state_set_project_contract_accepts_schema_valid_draft_with_approval_blo
 
     result = state_set_project_contract(tmp_path, contract)
 
-    assert result.updated is True
-    assert any("references must include at least one must_surface=true anchor" in warning for warning in result.warnings)
+    assert result.updated is False
+    assert result.reason is not None
+    assert "Project contract failed approval validation:" in result.reason
+    assert "references must include at least one must_surface=true anchor" in result.reason
     saved = load_state_json(tmp_path)
     assert saved is not None
-    assert saved["project_contract"] is not None
-    assert saved["project_contract"]["references"][0]["role"] == "background"
+    assert saved["project_contract"] is None
+
+
+def test_save_state_markdown_preserves_canonical_continuation_recorded_at_when_session_date_is_missing(
+    tmp_path: Path, state_project_factory, monkeypatch
+) -> None:
+    monkeypatch.setenv("GPD_DATA_DIR", str(tmp_path / "gpd-data"))
+    cwd = state_project_factory(tmp_path)
+    state = json.loads((cwd / "GPD" / "state.json").read_text(encoding="utf-8"))
+    state["continuation"]["handoff"]["recorded_at"] = "2026-03-30T09:15:00+00:00"
+    state["continuation"]["machine"]["recorded_at"] = "2026-03-30T09:15:00+00:00"
+    state["session"]["last_date"] = "2026-03-30T09:15:00+00:00"
+    save_state_json(cwd, state)
+
+    markdown = (cwd / "GPD" / "STATE.md").read_text(encoding="utf-8")
+    edited_markdown = markdown.replace("**Last active:** 2026-03-30T09:15:00+00:00", "**Last active:** ", 1)
+
+    save_state_markdown(cwd, edited_markdown)
+
+    stored = load_state_json(cwd)
+    assert stored is not None
+    assert stored["continuation"]["handoff"]["recorded_at"] == "2026-03-30T09:15:00+00:00"
+    assert stored["continuation"]["machine"]["recorded_at"] == "2026-03-30T09:15:00+00:00"
 
 
 def test_state_set_project_contract_rejects_whole_singleton_defaulting(tmp_path: Path):
@@ -1394,11 +1416,12 @@ def test_state_load_matches_context_progress_for_recoverably_normalized_project_
     loaded = state_load(tmp_path)
     ctx = init_progress(tmp_path)
 
-    assert loaded.state["project_contract"] == ctx["project_contract"]
+    assert ctx["project_contract"] is None
     assert loaded.project_contract_gate == ctx["project_contract_gate"]
     assert loaded.project_contract_load_info["status"] == "loaded_with_schema_normalization"
     assert loaded.project_contract_gate["authoritative"] is False
     assert loaded.project_contract_gate["repair_required"] is True
+    assert loaded.project_contract_gate["visible"] is True
     assert ctx["project_contract_load_info"]["status"] == "loaded_with_schema_normalization"
     assert loaded.project_contract_load_info["source_path"] == ctx["project_contract_load_info"]["source_path"]
     assert {
@@ -1407,6 +1430,44 @@ def test_state_load_matches_context_progress_for_recoverably_normalized_project_
     } == {"claims.0.notes: Extra inputs are not permitted"}
     assert loaded.project_contract_validation == ctx["project_contract_validation"]
     assert "notes" not in loaded.state["project_contract"]["claims"][0]
+
+
+def test_state_load_classifies_approval_blocked_project_contract_without_granting_authority(
+    tmp_path: Path,
+) -> None:
+    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+    contract["context_intake"] = {
+        "must_read_refs": [],
+        "must_include_prior_outputs": [],
+        "user_asserted_anchors": [],
+        "known_good_baselines": [],
+        "context_gaps": ["Need a concrete must-surface anchor before approval."],
+        "crucial_inputs": [],
+    }
+    contract["references"][0]["role"] = "background"
+    contract["references"][0]["must_surface"] = False
+
+    planning = tmp_path / "GPD"
+    planning.mkdir(parents=True, exist_ok=True)
+    (planning / "phases").mkdir(exist_ok=True)
+    (planning / "PROJECT.md").write_text("# Project\nTest.\n", encoding="utf-8")
+    (planning / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+
+    state = default_state_dict()
+    state["project_contract"] = contract
+    save_state_json(tmp_path, state)
+
+    loaded = state_load(tmp_path)
+
+    assert loaded.project_contract_load_info["status"] == "loaded_with_approval_blockers"
+    assert loaded.project_contract_validation is not None
+    assert loaded.project_contract_validation["valid"] is False
+    assert loaded.project_contract_validation["mode"] == "approved"
+    assert loaded.project_contract_gate is not None
+    assert loaded.project_contract_gate["approval_blocked"] is True
+    assert loaded.project_contract_gate["authoritative"] is False
+    assert loaded.project_contract_gate["visible"] is True
+    assert loaded.state["project_contract"] is not None
 
 
 def test_state_load_blocks_raw_project_contract_missing_required_schema_fields(

@@ -9,6 +9,8 @@ from unittest.mock import patch
 
 import pytest
 
+from gpd.core.public_surface_contract import local_cli_bridge_commands
+
 
 def test_write_settings_errors_reference_the_directory(tmp_path: Path) -> None:
     from gpd.adapters.install_utils import write_settings
@@ -176,3 +178,35 @@ def test_runtime_shell_rewriters_handle_metacharacter_terminated_gpd_commands(
     result = rewrite(f"```bash\n{shell_line}```\n", "/runtime/gpd")
 
     assert expected_fragment in result
+
+
+@pytest.mark.parametrize(
+    ("module_name", "function_name"),
+    [
+        ("gpd.adapters.claude_code", "_rewrite_gpd_cli_invocations"),
+        ("gpd.adapters.codex", "_rewrite_codex_gpd_cli_invocations"),
+        ("gpd.adapters.gemini", "_rewrite_gpd_cli_invocations"),
+        ("gpd.adapters.opencode", "_rewrite_gpd_cli_invocations"),
+    ],
+)
+def test_runtime_rewriters_preserve_public_local_cli_contract(module_name: str, function_name: str) -> None:
+    module = importlib.import_module(module_name)
+    rewrite = getattr(module, function_name)
+
+    public_commands = local_cli_bridge_commands()
+    content = (
+        "Use `gpd --help` before anything else.\n"
+        "Keep `gpd config ensure-section` bridged because it is an executable shell step.\n"
+        "```bash\n"
+        + "\n".join([*public_commands, "gpd config ensure-section"])
+        + "\n```\n"
+    )
+
+    result = rewrite(content, "/runtime/gpd")
+
+    assert "`gpd --help`" in result
+    assert "`gpd config ensure-section`" in result
+    for command in public_commands:
+        assert command in result
+        assert f"/runtime/gpd{command[3:]}" not in result
+    assert "/runtime/gpd config ensure-section" in result

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from pydantic import ValidationError as PydanticValidationError
 
-from gpd.adapters.install_utils import AGENTS_DIR_NAME, FLAT_COMMANDS_DIR_NAME, GPD_INSTALL_DIR_NAME, HOOKS_DIR_NAME
+from gpd.adapters.install_utils import GPD_INSTALL_DIR_NAME
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.contracts import ConventionLock, ResearchContract, parse_project_contract_data_salvage
 from gpd.core import state as _state_module
@@ -131,9 +131,6 @@ _IGNORE_DIRS = frozenset(
         "node_modules",
         "__pycache__",
         GPD_INSTALL_DIR_NAME,
-        AGENTS_DIR_NAME,
-        FLAT_COMMANDS_DIR_NAME,
-        HOOKS_DIR_NAME,
     }
 )
 
@@ -893,7 +890,7 @@ def _build_reference_runtime_context(
             )
 
     return {
-        "project_contract": visible_contract.model_dump(mode="json") if visible_contract is not None else None,
+        "project_contract": authoritative_contract.model_dump(mode="json") if authoritative_contract is not None else None,
         "project_contract_validation": project_contract_validation,
         "project_contract_load_info": project_contract_load_info,
         "project_contract_gate": project_contract_gate,

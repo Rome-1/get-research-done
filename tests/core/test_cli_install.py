@@ -25,6 +25,7 @@ from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.cli import _format_install_header_lines, _render_install_option_line, app
 from gpd.core.health import CheckStatus, DoctorReport, HealthCheck, HealthSummary
 from gpd.core.onboarding_surfaces import beginner_startup_ladder_text
+from gpd.core.public_surface_contract import beginner_onboarding_hub_url
 from gpd.core.surface_phrases import (
     local_cli_bridge_note,
     post_start_settings_note,
@@ -190,7 +191,7 @@ def _assert_single_runtime_next_steps(
     pause_work_command = adapter.format_command("pause-work")
     ordered_patterns = (
         re.escape("Startup checklist"),
-        re.escape("Beginner Onboarding Hub: https://github.com/psi-oss/get-physics-done/blob/main/docs/README.md"),
+        re.escape(f"Beginner Onboarding Hub: {beginner_onboarding_hub_url()}"),
         re.escape("First-run order: `help -> start -> tour -> new-project / map-research -> resume-work`"),
         re.escape(
             f"1. Open {descriptor.display_name} from your system terminal ({adapter.launch_command})."

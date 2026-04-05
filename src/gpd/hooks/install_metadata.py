@@ -35,6 +35,7 @@ def _infer_missing_explicit_target(
     install_scope: str,
     config_dir: Path,
     recorded_target_dir: Path | None = None,
+    home: Path | None = None,
 ) -> bool:
     """Best-effort fallback for legacy manifests that omit ``explicit_target``.
 
@@ -57,7 +58,7 @@ def _infer_missing_explicit_target(
     runtime_catalog = import_module("gpd.adapters.runtime_catalog")
     global_config_dirs = runtime_catalog.resolve_global_config_dir_candidates(
         adapter.runtime_descriptor,
-        home=Path.home(),
+        home=home,
     )
     if any(_paths_equal(config_dir, global_dir) for global_dir in global_config_dirs):
         return False
@@ -353,7 +354,7 @@ def config_dir_has_complete_install(config_dir: Path) -> bool:
     return assess_install_target(config_dir).state == "owned_complete"
 
 
-def installed_update_command(config_dir: Path) -> str | None:
+def installed_update_command(config_dir: Path, *, home: Path | None = None) -> str | None:
     """Return the bootstrap update command for the install in *config_dir*."""
 
     manifest_state, manifest, runtime = load_install_manifest_runtime_status(config_dir)
@@ -385,6 +386,7 @@ def installed_update_command(config_dir: Path) -> str | None:
             install_scope=scope,
             config_dir=config_dir,
             recorded_target_dir=manifest_target_dir,
+            home=home,
         )
 
     return build_runtime_install_repair_command(

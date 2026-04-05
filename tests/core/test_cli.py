@@ -779,7 +779,7 @@ def test_permissions_sync_help_surfaces_guided_runtime_changes() -> None:
 
 
 def test_active_runtime_settings_command_falls_back_to_runtime_neutral_reference(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(cli_module, "detect_runtime_for_gpd_use", lambda cwd=None: (_ for _ in ()).throw(RuntimeError("no runtime")))
+    monkeypatch.setattr(cli_module, "detect_runtime_for_gpd_use", lambda cwd=None: None)
 
     assert cli_module._active_runtime_settings_command(cwd=Path("/tmp")) == "the active runtime's `settings` command"
 
@@ -1118,7 +1118,7 @@ def test_resume_recovery_advice_keeps_recent_projects_fallbacks_distinct(monkeyp
 
 
 def test_resume_origin_label_no_longer_exposes_legacy_session_alias() -> None:
-    assert cli_module._resume_origin_label("legacy_session") == "legacy session"
+    assert cli_module._resume_origin_label("legacy_session") == "Unknown"
 
 
 def test_resume_recent_raw_surfaces_machine_local_recent_projects(
@@ -2571,7 +2571,7 @@ def test_state_set_project_contract_uses_ancestor_project_root_from_nested_cwd(
     mock_validate_contract.assert_called_once()
     _, validate_kwargs = mock_validate_contract.call_args
     assert validate_kwargs["project_root"] == project_root.resolve()
-    assert validate_kwargs["mode"] == "draft"
+    assert validate_kwargs["mode"] == "approved"
     mock_set_project_contract.assert_called_once_with(project_root.resolve(), {})
 
 
@@ -4682,11 +4682,7 @@ def test_runtime_surface_helpers_track_the_active_runtime_prefix(monkeypatch: py
 
 def test_runtime_surface_helpers_fall_back_when_runtime_resolution_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     workspace = Path("/tmp/runtime-surface-fallback")
-
-    def _raise_runtime_error(cwd=None) -> str:
-        raise RuntimeError("runtime resolution failed")
-
-    monkeypatch.setattr(cli_module, "detect_runtime_for_gpd_use", _raise_runtime_error)
+    monkeypatch.setattr(cli_module, "detect_runtime_for_gpd_use", lambda cwd=None: None)
 
     assert cli_module._active_runtime_command_prefix(cwd=workspace) is None
     assert cli_module._active_runtime_command_family(cwd=workspace) == "the active runtime command surface"
@@ -4696,6 +4692,20 @@ def test_runtime_surface_helpers_fall_back_when_runtime_resolution_fails(monkeyp
         "It does not guarantee a same-name local `gpd` subcommand exists."
     )
     assert cli_module._validated_runtime_surface(cwd=workspace) == "public_runtime_command_surface"
+
+
+def test_runtime_surface_helpers_propagate_unexpected_detection_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = Path("/tmp/runtime-surface-failure")
+
+    def _raise_runtime_error(cwd=None) -> str:
+        raise RuntimeError("runtime resolution failed")
+
+    monkeypatch.setattr(cli_module, "detect_runtime_for_gpd_use", _raise_runtime_error)
+
+    with pytest.raises(RuntimeError, match="runtime resolution failed"):
+        cli_module._active_runtime_command_prefix(cwd=workspace)
 
 
 # ─── trace subcommands ──────────────────────────────────────────────────────

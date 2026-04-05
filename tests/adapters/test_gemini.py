@@ -1399,7 +1399,7 @@ class TestRewriteWindowsPathEscape:
         result = _rewrite_gpd_cli_invocations(content, bridge_command)
 
         assert 'Prose mentions gpd and "gpd status" without changing.' in result
-        assert f"`{bridge_command} status`" in result
+        assert "`gpd status`" in result
         assert 'echo "gpd status"' in result
         assert "echo 'gpd commit'" in result
         assert f"{bridge_command} status" in result
@@ -1413,10 +1413,10 @@ class TestRewriteWindowsPathEscape:
         ],
     )
     def test_rewrite_gpd_cli_invocations_windows_path(self, bridge_command: str) -> None:
-        content = "Run `gpd status` to check progress."
+        content = "```bash\ngpd status\n```\n"
         result = _rewrite_gpd_cli_invocations(content, bridge_command)
         assert bridge_command in result
-        assert "gpd status" not in result
+        assert "```bash\n" in result
 
 
 class TestPolicyTomlWindowsPath:

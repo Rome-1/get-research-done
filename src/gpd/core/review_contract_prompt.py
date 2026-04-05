@@ -380,6 +380,9 @@ def render_review_contract_prompt(review_contract: object) -> str:
     payload = normalize_review_contract_payload(review_contract)
     if not payload:
         return ""
+    rendered_payload = dict(payload)
+    if not rendered_payload.get("required_state"):
+        rendered_payload.pop("required_state", None)
     guidance_lines = [
         "The model sees the following review contract, and command preflight/validation use the same structure. "
         "Satisfy it directly in the generated artifacts."
@@ -393,7 +396,7 @@ def render_review_contract_prompt(review_contract: object) -> str:
             "Each `conditional_requirements[].blocking_preflight_checks` entry must also appear in `preflight_checks`."
         )
     rendered = yaml.safe_dump(
-        {REVIEW_CONTRACT_PROMPT_WRAPPER_KEY: payload},
+        {REVIEW_CONTRACT_PROMPT_WRAPPER_KEY: rendered_payload},
         sort_keys=False,
         allow_unicode=False,
     ).rstrip()

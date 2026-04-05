@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from gpd.adapters import iter_adapters
+from gpd.adapters import get_adapter, iter_adapters
 from gpd.adapters.claude_code import ClaudeCodeAdapter
 from gpd.adapters.codex import CodexAdapter
 from gpd.adapters.gemini import GeminiAdapter
@@ -27,6 +27,7 @@ from gpd.adapters.install_utils import (
 from gpd.adapters.opencode import OpenCodeAdapter
 from gpd.adapters.runtime_catalog import get_shared_install_metadata, resolve_global_config_dir
 from gpd.adapters.tool_names import build_canonical_alias_map
+from gpd.core.public_surface_contract import local_cli_bridge_commands
 from gpd.registry import load_agents_from_dir
 
 REPO_GPD_ROOT = Path(__file__).resolve().parents[2] / "src" / "gpd"
@@ -125,6 +126,17 @@ def _install_gemini_for_tests(gpd_root: Path, target: Path) -> GeminiAdapter:
     result = adapter.install(gpd_root, target)
     adapter.finalize_install(result)
     return adapter
+
+
+def _expected_local_bridge_for_runtime(runtime: str, target: Path) -> str:
+    adapter = get_adapter(runtime)
+    return build_runtime_cli_bridge_command(
+        runtime,
+        target_dir=target,
+        config_dir_name=adapter.config_dir_name,
+        is_global=False,
+        explicit_target=False,
+    )
 
 
 def _canonicalize_runtime_markdown(content: str, *, runtime: str) -> str:
@@ -733,47 +745,6 @@ class TestCodexRoundtrip:
         assert 'if ! gpd verify plan "$plan"; then' not in execute_phase
         assert 'INIT=$(gpd init plan-phase "${PHASE}")' not in agent
 
-
-@pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
-def test_real_installed_set_tier_models_prompt_keeps_direct_tier_override_contract(
-    tmp_path: Path, runtime: str
-) -> None:
-    target = _install_real_repo_for_runtime(tmp_path, runtime)
-    content = _canonicalize_runtime_markdown(
-        _read_runtime_command_prompt(tmp_path, target, runtime, "set-tier-models"),
-        runtime=runtime,
-    )
-
-    assert "/gpd:set-tier-models" in content
-    assert "tier-1" in content
-    assert "tier-2" in content
-    assert "tier-3" in content
-    assert "/gpd:set-profile" in content
-    assert "/gpd:settings" in content
-    assert "model_overrides.<runtime>" in content
-    assert "strongest reasoning" in content
-    assert "balanced default" in content
-    assert "fastest / most economical" in content
-
-    def test_help_like_skills_keep_canonical_local_cli_language(self, tmp_path: Path) -> None:
-        """Codex skills keep canonical local CLI names in prose even when shell steps bridge."""
-        _install_real_repo_for_runtime(tmp_path, "codex")
-        skills = tmp_path / "skills"
-        help_skill = (skills / "gpd-help" / "SKILL.md").read_text(encoding="utf-8")
-        tour_skill = (skills / "gpd-tour" / "SKILL.md").read_text(encoding="utf-8")
-        settings_skill = (skills / "gpd-settings" / "SKILL.md").read_text(encoding="utf-8")
-
-        assert "Use `gpd --help` to inspect the executable local install/readiness/permissions/diagnostics surface directly." in help_skill
-        assert "For a normal-terminal, current-workspace read-only recovery snapshot without launching the runtime, use `gpd resume`." in help_skill
-        assert "For a normal-terminal, read-only machine-local usage / cost summary, use `gpd cost`." in help_skill
-        assert "The normal terminal is where you install GPD, run `gpd --help`, and run" in tour_skill
-        assert "`gpd resume` is the normal-terminal recovery step for reopening the right" in tour_skill
-        assert "use `gpd --help` when you need the broader local CLI entrypoint" in settings_skill
-        assert "use `gpd cost` after runs for advisory local usage / cost, optional USD budget guardrails, and the current profile tier mix" in settings_skill
-        assert re.search(r"`[^`\n]*gpd\.runtime_cli[^`\n]*(?:--help|resume|cost)[^`\n]*`", help_skill) is None
-        assert re.search(r"`[^`\n]*gpd\.runtime_cli[^`\n]*(?:--help|resume|cost)[^`\n]*`", tour_skill) is None
-        assert re.search(r"`[^`\n]*gpd\.runtime_cli[^`\n]*(?:--help|resume|cost)[^`\n]*`", settings_skill) is None
-
     def test_slash_commands_converted(self, installed: tuple[Path, Path]) -> None:
         """Content replaces /gpd: with $gpd- for Codex invocation syntax."""
         target, _ = installed
@@ -799,6 +770,58 @@ def test_real_installed_set_tier_models_prompt_keeps_direct_tier_override_contra
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert "version" in manifest
         assert "files" in manifest
+
+
+@pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
+def test_real_installed_set_tier_models_prompt_keeps_direct_tier_override_contract(
+    tmp_path: Path, runtime: str
+) -> None:
+    target = _install_real_repo_for_runtime(tmp_path, runtime)
+    content = _canonicalize_runtime_markdown(
+        _read_runtime_command_prompt(tmp_path, target, runtime, "set-tier-models"),
+        runtime=runtime,
+    )
+
+    assert "/gpd:set-tier-models" in content
+    assert "tier-1" in content
+    assert "tier-2" in content
+    assert "tier-3" in content
+    assert "/gpd:set-profile" in content
+    assert "/gpd:settings" in content
+    assert "model_overrides.<runtime>" in content
+    assert "strongest reasoning" in content
+    assert "balanced default" in content
+    assert "fastest / most economical" in content
+
+@pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
+def test_real_installed_public_local_cli_commands_stay_canonical(tmp_path: Path, runtime: str) -> None:
+    target = _install_real_repo_for_runtime(tmp_path, runtime)
+    bridge_command = _expected_local_bridge_for_runtime(runtime, target)
+    installed_text = _collect_textual_artifacts(tmp_path)
+
+    for public_command in local_cli_bridge_commands():
+        assert public_command in installed_text
+        assert f"{bridge_command}{public_command[3:]}" not in installed_text
+
+
+def test_help_like_skills_keep_canonical_local_cli_language(tmp_path: Path) -> None:
+    """Codex skills keep canonical local CLI names in prose even when shell steps bridge."""
+    _install_real_repo_for_runtime(tmp_path, "codex")
+    skills = tmp_path / "skills"
+    help_skill = (skills / "gpd-help" / "SKILL.md").read_text(encoding="utf-8")
+    tour_skill = (skills / "gpd-tour" / "SKILL.md").read_text(encoding="utf-8")
+    settings_skill = (skills / "gpd-settings" / "SKILL.md").read_text(encoding="utf-8")
+
+    assert "Use `gpd --help` to inspect the executable local install/readiness/permissions/diagnostics surface directly." in help_skill
+    assert "For a normal-terminal, current-workspace read-only recovery snapshot without launching the runtime, use `gpd resume`." in help_skill
+    assert "For a normal-terminal, read-only machine-local usage / cost summary, use `gpd cost`." in help_skill
+    assert "The normal terminal is where you install GPD, run `gpd --help`, and run" in tour_skill
+    assert "`gpd resume` is the normal-terminal recovery step for reopening the right" in tour_skill
+    assert "use `gpd --help` when you need the broader local CLI entrypoint" in settings_skill
+    assert "use `gpd cost` after runs for advisory local usage / cost, optional USD budget guardrails, and the current profile tier mix" in settings_skill
+    assert re.search(r"`[^`\n]*gpd\.runtime_cli[^`\n]*(?:--help|resume|cost)[^`\n]*`", help_skill) is None
+    assert re.search(r"`[^`\n]*gpd\.runtime_cli[^`\n]*(?:--help|resume|cost)[^`\n]*`", tour_skill) is None
+    assert re.search(r"`[^`\n]*gpd\.runtime_cli[^`\n]*(?:--help|resume|cost)[^`\n]*`", settings_skill) is None
 
 
 # ---------------------------------------------------------------------------

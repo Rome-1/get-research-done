@@ -2235,6 +2235,19 @@ class TestInitIncludeParsing:
         assert payload["state_content"] is not None
         assert payload["roadmap_content"] is not None
 
+    @pytest.mark.parametrize("directory_name", ["agents", "hooks", "command"])
+    def test_init_new_project_scans_user_owned_generic_tool_directories(self, tmp_path: Path, directory_name: str) -> None:
+        research_dir = tmp_path / directory_name
+        research_dir.mkdir(parents=True, exist_ok=True)
+        (research_dir / "notes.tex").write_text("\\section{Recovered context}\n", encoding="utf-8")
+
+        result = _invoke("--raw", "--cwd", str(tmp_path), "init", "new-project")
+        payload = json.loads(result.output)
+
+        assert payload["has_research_files"] is True
+        assert payload["has_existing_project"] is True
+        assert payload["needs_research_map"] is True
+
     def test_init_progress_include_rejects_unknown_values(self) -> None:
         result = _invoke("--raw", "init", "progress", "--include", "state, bogus", expect_ok=False)
 
@@ -2403,14 +2416,8 @@ class TestCommandContextSurface:
 
         monkeypatch.setattr("gpd.cli.detect_runtime_for_gpd_use", _raise_runtime_error)
 
-        result = _invoke("--raw", "validate", "command-context", command_name)
-        payload = json.loads(result.output)
-
-        assert payload["command"] == command_name
-        assert payload["validated_surface"] == "public_runtime_command_surface"
-        assert payload["public_runtime_command_prefix"] == ""
-        assert payload["local_cli_equivalence_guaranteed"] is False
-        assert "the active runtime command surface" in payload["dispatch_note"]
+        with pytest.raises(RuntimeError, match="runtime resolution failed"):
+            _invoke("--raw", "validate", "command-context", command_name)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

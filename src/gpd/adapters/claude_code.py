@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
@@ -24,6 +23,7 @@ from gpd.adapters.install_utils import (
     read_settings,
     remove_empty_json_object_file,
     remove_stale_agents,
+    should_preserve_public_local_cli_command,
     translate_frontmatter_tool_names,
     verify_installed,
     write_settings,
@@ -39,7 +39,6 @@ WOLFRAM_MANAGED_SERVER_KEY = _managed_integrations.WOLFRAM_MANAGED_SERVER_KEY
 logger = logging.getLogger(__name__)
 
 _SHELL_FENCE_LANGUAGES = frozenset({"bash", "sh", "shell", "zsh"})
-_INLINE_GPD_COMMAND_RE = re.compile(r"`(?P<command>gpd(?=\s)[^`]*?)`")
 
 
 def _claude_settings_shape_is_valid(settings: dict[str, object]) -> bool:
@@ -677,8 +676,8 @@ def _rewrite_gpd_cli_invocations(content: str, command: str) -> str:
     """Rewrite shell-command ``gpd`` invocations to the shared CLI bridge.
 
     Restrict rewrites to fenced shell code blocks and only when ``gpd`` appears
-    in a command position. This keeps user-facing prose and quoted shell
-    strings like ``echo "ERROR: gpd initialization failed"`` intact.
+    in a command position. This keeps model-visible prose and inline code spans
+    canonical while still pinning runnable shell steps to the runtime bridge.
     """
     rewritten: list[str] = []
     in_shell_fence = False
@@ -698,14 +697,9 @@ def _rewrite_gpd_cli_invocations(content: str, command: str) -> str:
             rewritten.append(_rewrite_gpd_shell_line(line, command))
             continue
 
-        rewritten.append(_rewrite_inline_gpd_command_spans(line, command))
+        rewritten.append(line)
 
     return "".join(rewritten)
-
-
-def _rewrite_inline_gpd_command_spans(content: str, command: str) -> str:
-    """Rewrite inline markdown code spans that execute ``gpd`` commands."""
-    return _INLINE_GPD_COMMAND_RE.sub(lambda match: f"`{command}{match.group('command')[3:]}`", content)
 
 
 def _rewrite_gpd_shell_line(line: str, command: str) -> str:
@@ -738,6 +732,10 @@ def _rewrite_gpd_shell_line(line: str, command: str) -> str:
             and _is_gpd_command_start(line, index)
             and _is_gpd_token_end(line, index + 3)
         ):
+            if should_preserve_public_local_cli_command(line[index:]):
+                pieces.append("gpd")
+                index += 3
+                continue
             pieces.append(command)
             index += 3
             continue
