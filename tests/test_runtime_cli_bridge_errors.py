@@ -60,6 +60,55 @@ def test_runtime_cli_allows_help_passthrough_as_root_flag(
     assert observed["argv"] == ["gpd", "--help"]
 
 
+@pytest.mark.parametrize("root_flag", ["--version", "-v"])
+def test_runtime_cli_allows_version_passthrough_as_root_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    root_flag: str,
+) -> None:
+    runtime_name = _BRIDGE_RUNTIME_DESCRIPTOR.runtime_name
+    adapter = runtime_cli.get_adapter(runtime_name)
+    config_dir = tmp_path / _BRIDGE_RUNTIME_DESCRIPTOR.config_dir_name
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / runtime_cli.get_shared_install_metadata().manifest_name).write_text(
+        json.dumps(
+            {
+                "runtime": runtime_name,
+                "install_scope": "local",
+                "install_target_dir": str(config_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    observed: dict[str, object] = {}
+
+    def fake_entrypoint() -> int:
+        observed["argv"] = list(runtime_cli.sys.argv)
+        return 0
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("gpd.runtime_cli._maybe_reexec_from_checkout", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(adapter, "missing_install_artifacts", lambda target_dir: ())
+    monkeypatch.setattr("gpd.runtime_cli.get_adapter", lambda runtime_name: adapter)
+    monkeypatch.setattr("gpd.cli.entrypoint", fake_entrypoint)
+
+    exit_code = runtime_cli.main(
+        [
+            "--runtime",
+            runtime_name,
+            "--config-dir",
+            str(config_dir),
+            "--install-scope",
+            "local",
+            root_flag,
+        ]
+    )
+
+    assert exit_code == 0
+    assert observed["argv"] == ["gpd", root_flag]
+
+
 def test_runtime_cli_rejects_missing_bridge_arguments_without_argparse_abort(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

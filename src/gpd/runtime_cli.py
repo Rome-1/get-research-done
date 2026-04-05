@@ -57,7 +57,7 @@ def _validate_passthrough_root_flags(gpd_args: list[str]) -> None:
             return
         if not arg.startswith("-"):
             return
-        if arg in {"--help", "--raw", "--version"}:
+        if arg in {"--help", "--raw", "--version", "-v"}:
             index += 1
             continue
         if arg == "--cwd":
@@ -170,7 +170,6 @@ def _resolve_local_config_dir(raw_value: str, *, runtime: str, cli_cwd: Path) ->
     relative = Path(raw_value).expanduser()
     resolved_cwd = cli_cwd.resolve(strict=False)
     manifest_backed_fallback: Path | None = None
-    marker_only_fallback: Path | None = None
     adapter = get_adapter(runtime)
     for base in (resolved_cwd, *resolved_cwd.parents):
         candidate = (base / relative).resolve(strict=False)
@@ -181,13 +180,8 @@ def _resolve_local_config_dir(raw_value: str, *, runtime: str, cli_cwd: Path) ->
             return candidate
         if manifest_status == "ok" and manifest_backed_fallback is None:
             manifest_backed_fallback = candidate
-            continue
-        if marker_only_fallback is None:
-            marker_only_fallback = candidate
     if manifest_backed_fallback is not None:
         return manifest_backed_fallback
-    if marker_only_fallback is not None:
-        return marker_only_fallback
     return (resolved_cwd / relative).resolve(strict=False)
 
 
