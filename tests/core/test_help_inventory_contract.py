@@ -19,7 +19,7 @@ def _read(relative_path: str) -> str:
 
 def _help_command_inventory(*contents: str) -> set[str]:
     surfaces: set[str] = set()
-    pattern = re.compile(r"(?m)(?<![A-Za-z0-9-])(?:/gpd:|gpd\s+)([a-z0-9-]+)\b")
+    pattern = re.compile(r"(?m)(?<![A-Za-z0-9-])(?:gpd:|/gpd:|gpd\s+)([a-z0-9-]+)\b")
     for content in contents:
         surfaces.update(pattern.findall(content))
     return surfaces

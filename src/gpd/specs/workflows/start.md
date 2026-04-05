@@ -91,57 +91,57 @@ Before listing choices, add one short line in plain English such as:
 
 Recommended next steps:
 
-1. Resume this project (recommended) - use `/gpd:resume-work`. This is the in-runtime continue command for an existing GPD project. Example: `I already worked on this GPD project and want to keep going.`
-2. Review the project status first - use `/gpd:progress`. Example: `I want a broader snapshot before I continue.`
-3. Take a guided tour first - use `/gpd:tour`. Example: `I want a read-only overview before I continue.`
+1. Resume this project (recommended) - use `gpd:resume-work`. This is the in-runtime continue command for an existing GPD project. Example: `I already worked on this GPD project and want to keep going.`
+2. Review the project status first - use `gpd:progress`. Example: `I want a broader snapshot before I continue.`
+3. Take a guided tour first - use `gpd:tour`. Example: `I want a read-only overview before I continue.`
 
 Other useful options, only if one of these is what you need:
 
-- Suggest the next best step - use `/gpd:suggest-next`. Example: `I resumed the project and only want the next action.`
-- Do one small bounded task - use `/gpd:quick`. Example: `I only want one contained job, not a full session.`
-- Explain one concept - use `/gpd:explain`. Example: `Explain a method or equation before I continue.`
-- Show all commands - use `/gpd:help --all`.
+- Suggest the next best step - use `gpd:suggest-next`. Example: `I resumed the project and only want the next action.`
+- Do one small bounded task - use `gpd:quick`. Example: `I only want one contained job, not a full session.`
+- Explain one concept - use `gpd:explain`. Example: `Explain a method or equation before I continue.`
+- Show all commands - use `gpd:help --all`.
 
 **This folder already has GPD's folder summary (`research map`)**
 
 Recommended next steps:
 
-1. Turn this into a full GPD project (recommended) - use `/gpd:new-project`. A research map is GPD's summary of an existing folder before full setup. Example: `The folder was already mapped and now I want the full project.`
-2. Refresh the research map - use `/gpd:map-research`. Example: `The folder changed and I want GPD to inspect it again.`
-3. Take a guided tour first - use `/gpd:tour`. Example: `I want the commands explained before I choose.`
+1. Turn this into a full GPD project (recommended) - use `gpd:new-project`. A research map is GPD's summary of an existing folder before full setup. Example: `The folder was already mapped and now I want the full project.`
+2. Refresh the research map - use `gpd:map-research`. Example: `The folder changed and I want GPD to inspect it again.`
+3. Take a guided tour first - use `gpd:tour`. Example: `I want the commands explained before I choose.`
 
 Other useful options, only if one of these is what you need:
 
-- Explain one concept - use `/gpd:explain`.
-- Show all commands - use `/gpd:help --all`.
+- Explain one concept - use `gpd:explain`.
+- Show all commands - use `gpd:help --all`.
 
 **This folder already has research files, but GPD is not set up here yet**
 
 Recommended next steps:
 
-1. Map this folder first (recommended) - use `/gpd:map-research`. Example: `This folder already has papers, notes, code, or notebooks.`
-2. Take a guided tour first - use `/gpd:tour`.
-3. Start a brand-new GPD project anyway - use `/gpd:new-project --minimal`. Example: `I want to ignore the old files and begin fresh.`
+1. Map this folder first (recommended) - use `gpd:map-research`. Example: `This folder already has papers, notes, code, or notebooks.`
+2. Take a guided tour first - use `gpd:tour`.
+3. Start a brand-new GPD project anyway - use `gpd:new-project --minimal`. Example: `I want to ignore the old files and begin fresh.`
 
 Other useful options, only if one of these is what you need:
 
-- Explain one concept - use `/gpd:explain`.
-- Show all commands - use `/gpd:help --all`.
+- Explain one concept - use `gpd:explain`.
+- Show all commands - use `gpd:help --all`.
 
 **This folder looks new or mostly empty**
 
 Recommended next steps:
 
-1. Fast start (recommended) - use `/gpd:new-project --minimal`. Example: `I have a new project idea and want the shortest setup path.`
-2. Full guided setup - use `/gpd:new-project`. Example: `I want the fuller guided questioning path.`
-3. Take a guided tour first - use `/gpd:tour`.
+1. Fast start (recommended) - use `gpd:new-project --minimal`. Example: `I have a new project idea and want the shortest setup path.`
+2. Full guided setup - use `gpd:new-project`. Example: `I want the fuller guided questioning path.`
+3. Take a guided tour first - use `gpd:tour`.
 
 Other useful options, only if one of these is what you need:
 
-- Explain one concept - use `/gpd:explain`.
-- Show all commands - use `/gpd:help --all`.
+- Explain one concept - use `gpd:explain`.
+- Show all commands - use `gpd:help --all`.
 
-If you need to reopen a different GPD project, use `gpd resume --recent` in your normal terminal first. That is the explicit multi-project picker in the recovery ladder; the rows are advisory, and once you open the selected workspace `/gpd:resume-work` reloads its canonical state. If it finds exactly one recoverable project it may auto-select it, otherwise choose from the list. Then open the workspace and continue with `/gpd:resume-work`.
+If you need to reopen a different GPD project, use `gpd resume --recent` in your normal terminal first. That is the explicit multi-project picker in the recovery ladder; the rows are advisory, and once you open the selected workspace `gpd:resume-work` reloads its canonical state. If it finds exactly one recoverable project it may auto-select it, otherwise choose from the list. Then open the workspace and continue with `gpd:resume-work`.
 
 Add one final sentence before asking for the choice:
 
@@ -156,59 +156,59 @@ Route immediately into the real existing workflow for the chosen path.
 **If the researcher chooses `Resume this project (recommended)` or `Continue where I left off`:**
 
 - Read `{GPD_INSTALL_DIR}/workflows/resume-work.md` with the file-read tool.
-- Follow that workflow as if the researcher had run `/gpd:resume-work`.
+- Follow that workflow as if the researcher had run `gpd:resume-work`.
 
 **If the researcher chooses `Review project status first`:**
 
 - Read `{GPD_INSTALL_DIR}/workflows/progress.md` with the file-read tool.
-- Follow that workflow as if the researcher had run `/gpd:progress`.
+- Follow that workflow as if the researcher had run `gpd:progress`.
 
 **If the researcher chooses `Suggest the next best step`:**
 
 - `suggest-next` is a workflow-exempt command, not a shared workflow include.
-- Follow the installed `/gpd:suggest-next` command contract directly, as if the researcher had run it.
+- Follow the installed `gpd:suggest-next` command contract directly, as if the researcher had run it.
 
 **If the researcher chooses `Map this folder first (recommended)` or `Refresh the research map`:**
 
 - Read `{GPD_INSTALL_DIR}/workflows/map-research.md` with the file-read tool.
-- Follow that workflow as if the researcher had run `/gpd:map-research`.
+- Follow that workflow as if the researcher had run `gpd:map-research`.
 
 **If the researcher chooses `Fast start`:**
 
-- Follow the installed `/gpd:new-project --minimal` command contract directly, as if the researcher had run it.
+- Follow the installed `gpd:new-project --minimal` command contract directly, as if the researcher had run it.
 
 **If the researcher chooses `Full guided setup` or `Turn this into a full GPD project`:**
 
-- Follow the installed `/gpd:new-project` command contract directly, as if the researcher had run it.
+- Follow the installed `gpd:new-project` command contract directly, as if the researcher had run it.
 
 **If the researcher chooses `Take a guided tour first`:**
 
-- Follow the installed `/gpd:tour` command contract directly, as if the researcher had run it.
+- Follow the installed `gpd:tour` command contract directly, as if the researcher had run it.
 
 **If the researcher chooses `Do a small bounded task`:**
 
 - Read `{GPD_INSTALL_DIR}/workflows/quick.md` with the file-read tool.
-- Follow that workflow as if the researcher had run `/gpd:quick`.
+- Follow that workflow as if the researcher had run `gpd:quick`.
 
 **If the researcher chooses `Explain one concept`:**
 
 - If `$ARGUMENTS` contains a usable concept or question, reuse it.
 - Otherwise ask for one short concept or question before continuing.
 - Read `{GPD_INSTALL_DIR}/workflows/explain.md` with the file-read tool.
-- Follow that workflow as if the researcher had run `/gpd:explain <topic>`.
+- Follow that workflow as if the researcher had run `gpd:explain <topic>`.
 
 **If the researcher chooses `Show all commands`:**
 
-- Follow the installed `/gpd:help --all` command contract directly, as if the researcher had run it.
+- Follow the installed `gpd:help --all` command contract directly, as if the researcher had run it.
 
 **If the researcher chooses `Reopen a different GPD project`:**
 
 - Do not silently switch projects from inside the runtime.
 - Explain exactly:
   - `Use \`gpd resume --recent\` in your normal terminal to find the project first.`
-  - `The recent-project picker is advisory; choose the workspace there, then \`/gpd:resume-work\` reloads canonical state for that project.`
+  - `The recent-project picker is advisory; choose the workspace there, then \`gpd:resume-work\` reloads canonical state for that project.`
   - `If there is exactly one recoverable project, GPD may auto-select it; otherwise choose the project explicitly from the recent-project picker.`
-  - `Then open that project folder in the runtime and run \`/gpd:resume-work\`.`
+  - `Then open that project folder in the runtime and run \`gpd:resume-work\`.`
   - `In GPD terms, \`resume-work\` is the in-runtime continuation step once the recovery ladder has identified the right project and reopened its workspace.`
 - STOP after giving those instructions.
 </step>
@@ -216,8 +216,8 @@ Route immediately into the real existing workflow for the chosen path.
 <step name="guardrails">
 Keep the routing strict:
 
-- `/gpd:start` is the chooser, not a second implementation of `/gpd:new-project`, `/gpd:resume-work`, `/gpd:map-research`, `/gpd:quick`, `/gpd:explain`, or `/gpd:help`.
-- Do not silently create project files from `/gpd:start` itself.
+- `gpd:start` is the chooser, not a second implementation of `gpd:new-project`, `gpd:resume-work`, `gpd:map-research`, `gpd:quick`, `gpd:explain`, or `gpd:help`.
+- Do not silently create project files from `gpd:start` itself.
 - Do not silently switch the user into a different project folder.
 - When in doubt between a fresh folder and an existing research folder, prefer `map-research` as the safer recommendation.
 - Keep the wording beginner-friendly, but keep the official GPD terms visible in plain-English form so the researcher learns them.
@@ -230,5 +230,5 @@ Keep the routing strict:
 - [ ] The researcher sees only the choices that fit that state
 - [ ] The chosen path routes into the real existing workflow instead of duplicating it
 - [ ] Cross-project recovery stays explicit through `gpd resume --recent` from the normal terminal
-- [ ] `/gpd:start` stays a beginner-friendly chooser, not a parallel onboarding state machine
+- [ ] `gpd:start` stays a beginner-friendly chooser, not a parallel onboarding state machine
 </success_criteria>

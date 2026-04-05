@@ -29,10 +29,10 @@ Routes to the set-profile workflow which handles:
 - Config file creation if missing
 - Profile update in config.json
 - Confirmation with profile description display
-- Reminder that `/gpd:set-tier-models` handles concrete runtime model IDs per tier
-- Reminder that `/gpd:settings` is the broader unattended/configuration flow
+- Reminder that `gpd:set-tier-models` handles concrete runtime model IDs per tier
+- Reminder that `gpd:settings` is the broader unattended/configuration flow
 
-This command only changes `model_profile`. If you want to pin concrete runtime model IDs, use `/gpd:set-tier-models`. If you want a workflow preset bundle or broader unattended/configuration changes, use `/gpd:settings` so the existing knobs are resolved together instead of inventing a separate preset block.
+This command only changes `model_profile`. If you want to pin concrete runtime model IDs, use `gpd:set-tier-models`. If you want a workflow preset bundle or broader unattended/configuration changes, use `gpd:settings` so the existing knobs are resolved together instead of inventing a separate preset block.
   </objective>
 
 <execution_context>

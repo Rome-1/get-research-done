@@ -418,6 +418,15 @@ class TestParseCommandFile:
                 command_name="gpd:test",
             )
 
+    def test_render_command_visibility_sections_include_agent_metadata(self) -> None:
+        rendered = render_command_visibility_sections_from_frontmatter(
+            "name: gpd:plan-phase\nagent: gpd-planner\n",
+            command_name="gpd:plan-phase",
+        )
+
+        assert "agent: gpd-planner" in rendered
+        assert "context_mode: project-required" in rendered
+
     def test_command_agent_frontmatter_key_is_explicitly_allowed(self, tmp_path: Path) -> None:
         f = tmp_path / "plan-phase.md"
         f.write_text("---\nname: gpd:plan-phase\nagent: gpd-planner\n---\nBody.", encoding="utf-8")
@@ -425,6 +434,8 @@ class TestParseCommandFile:
         cmd = _parse_command_file(f, source="commands")
 
         assert cmd.name == "gpd:plan-phase"
+        assert cmd.agent == "gpd-planner"
+        assert "agent: gpd-planner" in cmd.content
         assert cmd.content.endswith("Body.")
 
     def test_command_parses_explicit_context_mode(self, tmp_path: Path) -> None:

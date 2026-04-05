@@ -74,7 +74,7 @@ Parse JSON output containing:
 If there are failures and `--fix` was not used:
 
 ```
-Run `/gpd:health --fix` to auto-repair {fixable_count} issue(s).
+Run `gpd:health --fix` to auto-repair {fixable_count} issue(s).
 ```
 
 If all checks pass:

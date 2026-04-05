@@ -58,7 +58,7 @@ fi
 
 Follow the dimensional-analysis workflow: @{GPD_INSTALL_DIR}/workflows/dimensional-analysis.md
 
-**For comprehensive verification** (dimensional analysis + limiting cases + symmetries + convergence), use `/gpd:verify-work`.
+**For comprehensive verification** (dimensional analysis + limiting cases + symmetries + convergence), use `gpd:verify-work`.
 </process>
 
 <success_criteria>

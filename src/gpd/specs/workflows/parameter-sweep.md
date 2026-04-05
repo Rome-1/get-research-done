@@ -1,7 +1,7 @@
 <purpose>
 Execute a systematic parameter sweep over one or two parameters, computing a specified quantity at each point (or grid point) in the parameter space. Leverages wave-based parallel execution from execute-phase.md to evaluate independent parameter values concurrently, then aggregates results into structured data and a summary report.
 
-Called from /gpd:parameter-sweep command. References wave-based execution patterns from execute-phase.md.
+Called from gpd:parameter-sweep command. References wave-based execution patterns from execute-phase.md.
 </purpose>
 
 <core_principle>
@@ -656,9 +656,9 @@ Completed: {M}/{N}
 ## Next Steps
 
 - **Visualize:** Plot the sweep data to inspect features
-- **Refine:** `/gpd:parameter-sweep {phase} --adaptive` -- add points near interesting features
-- **Converge:** `/gpd:numerical-convergence {phase}` -- verify convergence at key points
-- **Branch:** `/gpd:branch-hypothesis` -- investigate features with different methods
+- **Refine:** `gpd:parameter-sweep {phase} --adaptive` -- add points near interesting features
+- **Converge:** `gpd:numerical-convergence {phase}` -- verify convergence at key points
+- **Branch:** `gpd:branch-hypothesis` -- investigate features with different methods
 
 ---
 ```

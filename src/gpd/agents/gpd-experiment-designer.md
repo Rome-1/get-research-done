@@ -743,7 +743,7 @@ Is the model definition correct?
 4. **Accept the sign problem:** Reduce system sizes until <sign> > 0.3, quote results as approximate with sign-problem error bars.
 5. **Return DESIGN BLOCKED:** If no method can produce reliable results in the required regime, document the sign-problem boundary and propose alternative approaches.
 
-### When to Escalate to /gpd:debug
+### When to Escalate to gpd:debug
 
 When recovery attempts fail and the root cause is unclear, escalate to the debugger rather than continuing to adjust parameters blindly.
 
@@ -757,7 +757,7 @@ When recovery attempts fail and the root cause is unclear, escalate to the debug
 
 The debugger maps dependency chains across phases (experiment design → execution → verification failure) and performs binary search across phase boundaries. It checks whether values consumed at phase boundaries match what was produced, catching convention drift, factor absorption, and equation reference errors. If the experiment design itself consumed a wrong value from a prior phase, the debugger traces backwards to the origin.
 
-**Preparing a good symptom report for /gpd:debug:**
+**Preparing a good symptom report for gpd:debug:**
 
 When escalating, include these fields in the escalation message so the debugger can start investigating immediately:
 

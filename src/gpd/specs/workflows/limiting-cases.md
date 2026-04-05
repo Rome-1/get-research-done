@@ -1,7 +1,7 @@
 <purpose>
 Systematically identify all relevant limiting cases for a physics result and verify that each limit is correctly recovered. This is the single most powerful verification tool in theoretical physics.
 
-Called from /gpd:limiting-cases command. Produces LIMITING-CASES.md report.
+Called from gpd:limiting-cases command. Produces LIMITING-CASES.md report.
 
 Every new result must reduce to known results in appropriate limits. If it doesn't, the new result is wrong (or the known result is wrong, which is rare but possible). There are no exceptions to this principle.
 </purpose>
@@ -374,8 +374,8 @@ If failures found:
 {List failures with discrepancy character}
 
 Suggested next steps:
-- `/gpd:debug` -- investigate the failing limit(s)
-- `/gpd:dimensional-analysis` -- check for dimensional errors near the failure
+- `gpd:debug` -- investigate the failing limit(s)
+- `gpd:dimensional-analysis` -- check for dimensional errors near the failure
 - Review derivation at {location} where the limit first diverges from expectation
 ```
 

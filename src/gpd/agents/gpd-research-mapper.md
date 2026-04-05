@@ -60,7 +60,7 @@ Convention loading: see agent-infrastructure.md Convention Loading Protocol.
 <why_this_matters>
 **These documents are consumed by other GPD commands:**
 
-**`/gpd:plan-phase`** loads relevant research-map docs when creating research plans:
+**`gpd:plan-phase`** loads relevant research-map docs when creating research plans:
 | Phase Type | Documents Loaded |
 |------------|------------------|
 | Derivation, calculation, analytic | CONVENTIONS.md, FORMALISM.md |
@@ -71,7 +71,7 @@ Convention loading: see agent-infrastructure.md Convention Loading Protocol.
 | Extension, generalization | CONCERNS.md, ARCHITECTURE.md |
 | Cleanup, reorganization, documentation | CONCERNS.md, STRUCTURE.md |
 
-**`/gpd:execute-phase`** references research-map docs to:
+**`gpd:execute-phase`** references research-map docs to:
 
 - Follow existing notational conventions when writing new derivations
 - Know where to place new calculations or scripts (STRUCTURE.md)
@@ -99,13 +99,13 @@ Convention loading: see agent-infrastructure.md Convention Loading Protocol.
 
 Documents written to `GPD/research-map/` are consumed by:
 
-**gpd-planner (`/gpd:plan-phase`):**
+**gpd-planner (`gpd:plan-phase`):**
 
 - Reads research-map docs to understand existing code, derivations, and conventions in continuation projects
 - Uses FORMALISM.md and ARCHITECTURE.md to inform task decomposition and convention inheritance
 - Uses CONCERNS.md to identify what needs to be addressed in upcoming phases
 
-**gpd-project-researcher (`/gpd:research-phase`):**
+**gpd-project-researcher (`gpd:research-phase`):**
 
 - Reads research-map docs to understand the project's current theoretical landscape for continuation projects
 - Uses REFERENCES.md and FORMALISM.md to identify what is already known vs. what needs investigation
@@ -171,7 +171,7 @@ For the "status" focus, web_search is available to compare the project's coverag
 
 If a template section cannot be filled due to missing project files:
 1. List specifically what files/information is needed
-2. Suggest which agent or workflow could provide it (e.g., "Run /gpd:research-phase to generate METHODS.md")
+2. Suggest which agent or workflow could provide it (e.g., "Run gpd:research-phase to generate METHODS.md")
 3. Mark the section as "INCOMPLETE — requires: [specific input]"
 4. Do NOT fill with generic placeholder text
   </step>
@@ -437,7 +437,7 @@ Every equation cataloged in FORMALISM.md MUST use this standardized format. This
 
 ## Incremental Update Protocol
 
-When re-running `/gpd:map-research` on a project that already has research-map documents, do NOT regenerate from scratch. Update incrementally.
+When re-running `gpd:map-research` on a project that already has research-map documents, do NOT regenerate from scratch. Update incrementally.
 
 ### Detecting Existing Maps
 
@@ -629,7 +629,7 @@ If a document fails any criterion, flag it in the confirmation:
 - `GPD/research-map/CONVENTIONS.md` (180 lines) — Quality: COMPLETE/HIGH/VERIFIED/ACTIONABLE
 - `GPD/research-map/VALIDATION.md` (95 lines) — Quality: PARTIAL/MEDIUM/PLAUSIBLE/PARTIALLY ACTIONABLE
   ⚠️ VALIDATION.md has limited coverage: no test scripts found in project, numerical
-  validation section based on code comments only. Recommend running /gpd:verify-work
+  validation section based on code comments only. Recommend running gpd:verify-work
   after Phase 1 execution to fill gaps.
 
 Ready for orchestrator summary.

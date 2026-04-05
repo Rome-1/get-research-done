@@ -28,12 +28,12 @@ Check if `--auto` flag is present in $ARGUMENTS.
   - Roadmap approval: Auto-approve only for `balanced` / `yolo`; if `autonomy=supervised`, present the draft roadmap before commit
 
 **Document requirement:**
-Auto mode requires a research document via @ reference (e.g., `/gpd:new-project --auto @proposal.md`). If no document provided, error:
+Auto mode requires a research document via @ reference (e.g., `gpd:new-project --auto @proposal.md`). If no document provided, error:
 
 ```
 Error: --auto requires a research document via @ reference.
 
-Usage: /gpd:new-project --auto @your-proposal.md
+Usage: gpd:new-project --auto @your-proposal.md
 
 The document should describe the physics problem you want to investigate.
 ```
@@ -48,7 +48,7 @@ Check if `--minimal` flag is present in $ARGUMENTS.
 
 **If minimal mode:** After Step 1 (Setup), skip the entire standard flow (Steps 2-9) and execute the **Minimal Initialization Path** below instead.
 
-Minimal mode creates the SAME directory structure and file set as the full path -- just with less conversational overhead. It still must produce a scoping contract with decisive outputs, anchors, and explicit approval so downstream workflows (`/gpd:plan-phase`, `/gpd:execute-phase`, etc.) work identically.
+Minimal mode creates the SAME directory structure and file set as the full path -- just with less conversational overhead. It still must produce a scoping contract with decisive outputs, anchors, and explicit approval so downstream workflows (`gpd:plan-phase`, `gpd:execute-phase`, etc.) work identically.
 
 **Two variants:**
 
@@ -63,7 +63,7 @@ Minimal mode creates the SAME directory structure and file set as the full path 
 
 #### M1. Gather Research Context
 
-**If `--minimal` with file** (`/gpd:new-project --minimal @plan.md`):
+**If `--minimal` with file** (`gpd:new-project --minimal @plan.md`):
 
 Parse the input markdown for:
 
@@ -99,7 +99,7 @@ Example structure:
   Set up the Monte Carlo simulation and finite-size scaling workflow.
 ```
 
-**If `--minimal` without file** (`/gpd:new-project --minimal`):
+**If `--minimal` without file** (`gpd:new-project --minimal`):
 
 Ask ONE question inline (freeform, NOT ask_user):
 
@@ -353,7 +353,7 @@ For each phase, create one or more requirements using the standard format:
 
 ## Out of Scope
 
-(To be refined — use /gpd:settings or edit REQUIREMENTS.md directly)
+(To be refined — use gpd:settings or edit REQUIREMENTS.md directly)
 
 ## Traceability
 
@@ -400,7 +400,7 @@ Use the standard roadmap template structure:
 
 Plans:
 
-- [ ] 01-01: [TBD — created during /gpd:plan-phase]
+- [ ] 01-01: [TBD — created during gpd:plan-phase]
 
 [... repeat for each phase ...]
 
@@ -485,7 +485,7 @@ None yet.
 **Platform:** [current platform]
 ```
 
-Initialize the canonical continuity fields under `GPD/state.json.continuation` so `/gpd:resume-work` sees the same durable state when JSON is healthy:
+Initialize the canonical continuity fields under `GPD/state.json.continuation` so `gpd:resume-work` sees the same durable state when JSON is healthy:
 
 - `continuation.handoff.recorded_at`: current ISO timestamp
 - `continuation.handoff.stopped_at`: `Project initialized (minimal)`
@@ -549,7 +549,7 @@ gpd commit "docs: initialize research project (minimal)" --files GPD/PROJECT.md 
 **[N] phases** | **[N] requirements** | Ready to investigate
 
 Note: Initialized with --minimal. Literature survey and deep scoping
-were skipped. Use /gpd:settings to adjust workflow preferences.
+were skipped. Use gpd:settings to adjust workflow preferences.
 
 ---------------------------------------------------------------
 
@@ -563,15 +563,15 @@ Use ask_user:
 - header: "Next Step"
 - question: "Discuss phase 1 now?"
 - options:
-  - "Discuss phase 1" — Run /gpd:discuss-phase 1
+  - "Discuss phase 1" — Run gpd:discuss-phase 1
   - "Review artifacts first" — I want to check the generated files
   - "Done for now" — I'll continue later
 
-**If "Discuss phase 1":** Tell the user to run `/gpd:discuss-phase 1` (and suggest `/clear` first for a fresh context window).
+**If "Discuss phase 1":** Tell the user to run `gpd:discuss-phase 1` (and suggest `/clear` first for a fresh context window).
 
 **If "Review artifacts first":** List the files and let the user inspect them. Suggest edits if needed, then re-offer planning.
 
-**If "Done for now":** Exit. Remind them to use `/gpd:resume-work` or `/gpd:discuss-phase 1` when ready.
+**If "Done for now":** Exit. Remind them to use `gpd:resume-work` or `gpd:discuss-phase 1` when ready.
 
 ---
 
@@ -606,7 +606,7 @@ Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `co
 - Before `GPD/config.json` exists, the `autonomy` and `research_mode` values from `gpd init new-project` are temporary defaults, not a durable user choice. Let those defaults govern the initial questioning and scoping pass, then run Step 5 immediately after scope approval and before the first project-artifact commit so the durable config takes over before research and roadmap execution.
 - Treat `project_contract` as approved scope only when `project_contract_gate.authoritative` is true. If the gate is false, keep the contract visible for scoping diagnostics and repair, not as authoritative downstream scope.
 
-**If `project_exists` is true:** Error — project already initialized. Use `/gpd:progress`.
+**If `project_exists` is true:** Error — project already initialized. Use `gpd:progress`.
 
 **If `has_git` is false:** Initialize git:
 
@@ -675,13 +675,13 @@ Use ask_user:
 - header: "Existing Research"
 - question: "I detected existing research artifacts in this directory. Would you like to map the existing work first?"
 - options:
-  - "Map existing work first" — Run /gpd:map-research to understand current research state (Recommended)
+  - "Map existing work first" — Run gpd:map-research to understand current research state (Recommended)
   - "Skip mapping" — Proceed with fresh project initialization
 
 **If "Map existing work first":**
 
 ```
-Run `/gpd:map-research` first, then return to `/gpd:new-project`
+Run `gpd:map-research` first, then return to `gpd:new-project`
 ```
 
 Exit command.
@@ -1109,7 +1109,7 @@ Display confirmation:
 
 ```
 Config: Balanced autonomy | Adaptive review cadence | Balanced research mode | Parallel | All agents | Review profile
-(Change anytime with /gpd:settings)
+(Change anytime with gpd:settings)
 ```
 
 Skip to "Commit config.json" below.
@@ -1281,7 +1281,7 @@ cat > GPD/init-progress.json << CHECKPOINT
 CHECKPOINT
 ```
 
-**Note:** Run `/gpd:settings` anytime to update these preferences and re-sync runtime permissions.
+**Note:** Run `gpd:settings` anytime to update these preferences and re-sync runtime permissions.
 
 ## 5.5. Resolve Model Profile
 
@@ -1883,7 +1883,7 @@ Use ask_user:
   **If the revision roadmapper agent fails to spawn or returns an error:** Check if ROADMAP.md was updated (compare with pre-revision content). If changes were made, proceed to present the revised roadmap. If no changes, offer: 1) Retry the revision agent, 2) Apply the user's adjustment notes manually in the main context by editing ROADMAP.md directly.
 
 - Present revised roadmap
-- Loop until user approves (**maximum 3 revision iterations** — after 3, commit the current version with user's notes recorded as open questions in ROADMAP.md, and note: "Roadmap committed after 3 revision rounds. Further adjustments via `/gpd:add-phase` or `/gpd:remove-phase`.")
+- Loop until user approves (**maximum 3 revision iterations** — after 3, commit the current version with user's notes recorded as open questions in ROADMAP.md, and note: "Roadmap committed after 3 revision rounds. Further adjustments via `gpd:add-phase` or `gpd:remove-phase`.")
 
 **If "Review full file":** Display raw `cat GPD/ROADMAP.md`, then re-ask.
 
@@ -1976,7 +1976,7 @@ Interactive mode: Present suggested conventions, wait for user confirmation/over
 
    Adjust values based on what PROJECT.md specifies. If PROJECT.md doesn't specify conventions, use the subfield defaults from `{GPD_INSTALL_DIR}/references/conventions/subfield-convention-defaults.md`.
 
-3. Note that full convention establishment was skipped. The user can run `gpd convention set ...` or `/gpd:validate-conventions` later to complete convention setup.
+3. Note that full convention establishment was skipped. The user can run `gpd convention set ...` or `gpd:validate-conventions` later to complete convention setup.
 
 - **`CONVENTIONS ESTABLISHED`:** Display confirmation with convention summary. Commit CONVENTIONS.md:
 
@@ -2031,14 +2031,14 @@ Present completion with next steps:
 
 **Phase 1: [Phase Name]** — [Goal from ROADMAP.md]
 
-/gpd:discuss-phase 1 — gather context and clarify approach
+gpd:discuss-phase 1 — gather context and clarify approach
 
 <sub>/clear first -> fresh context window</sub>
 
 ---
 
 **Also available:**
-- /gpd:plan-phase 1 — skip discussion, plan directly
+- gpd:plan-phase 1 — skip discussion, plan directly
 
 ---------------------------------------------------------------
 ```
@@ -2086,7 +2086,7 @@ Present completion with next steps:
 - [ ] gpd-notation-coordinator spawned to establish conventions
 - [ ] CONVENTIONS.md created with subfield-appropriate conventions — **committed**
 - [ ] Convention lock populated via `gpd convention set`
-- [ ] User knows next step is `/gpd:discuss-phase 1`
+- [ ] User knows next step is `gpd:discuss-phase 1`
 
 **Atomic commits:** Each phase commits its artifacts immediately. If context is lost, artifacts persist.
 

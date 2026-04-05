@@ -39,7 +39,7 @@ Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_
 - `research_mode=explore`: Always run research step even if research exists. Expand research and comparison coverage, but do not auto-create git-backed branches or branch-like plans just because alternatives appear.
 - `research_mode=exploit`: Reuse existing research only when it already covers the exact method family, anchors, and decisive evidence path for this phase. Otherwise run targeted research. Suppress optional tangents unless the user explicitly asks for them.
 - `research_mode=adaptive`: Start broad until prior decisive evidence or an explicit approach lock justifies narrowing. Do not infer “safe to narrow” from phase number alone.
-- Tangent policy: when multiple viable approaches or optional side questions appear, do NOT silently branch or widen the plan. Surface the 4-way tangent decision model instead: (1) branch as an alternative hypothesis via `/gpd:tangent` or `/gpd:branch-hypothesis`, (2) run a bounded side investigation now via `/gpd:quick`, (3) capture and defer via `/gpd:add-todo`, or (4) stay on the main line and plan only the selected primary approach. `git.branching_strategy` does not override this rule.
+- Tangent policy: when multiple viable approaches or optional side questions appear, do NOT silently branch or widen the plan. Surface the 4-way tangent decision model instead: (1) branch as an alternative hypothesis via `gpd:tangent` or `gpd:branch-hypothesis`, (2) run a bounded side investigation now via `gpd:quick`, (3) capture and defer via `gpd:add-todo`, or (4) stay on the main line and plan only the selected primary approach. `git.branching_strategy` does not override this rule.
 - All modes still require contract completeness, decisive outputs, required anchors, forbidden-proxy handling, and disconfirming paths before execution starts.
 
 **Set shell variables from init JSON:**
@@ -52,7 +52,7 @@ AUTONOMY=$(echo "$INIT" | gpd json get .autonomy --default balanced)
 RESEARCH_MODE=$(echo "$INIT" | gpd json get .research_mode --default balanced)
 ```
 
-**If `planning_exists` is false:** Error -- run `/gpd:new-project` first.
+**If `planning_exists` is false:** Error -- run `gpd:new-project` first.
 
 **If `project_contract_load_info.status` starts with `blocked`:** STOP and checkpoint with the user. Show the specific `project_contract_load_info.errors` / `warnings`; do not silently continue from `ROADMAP.md`, `REQUIREMENTS.md`, or `active_reference_context` alone when the stored contract could not even be loaded cleanly.
 
@@ -98,15 +98,15 @@ When `--inline-discuss` is present, combine discuss-phase and plan-phase into a 
    - "Are there any constraints or conventions from prior phases that should carry through?" (if phase has dependencies)
    - "What precision level is acceptable?" (for numerical/computational phases)
 3. If those questions reveal multiple viable approaches or optional side questions, stop and present the tangent decision model explicitly instead of assuming extra plans or branches:
-   - `Branch as alternative hypothesis` -> route through `/gpd:tangent` or `/gpd:branch-hypothesis`
-   - `Run a bounded side investigation now` -> route through `/gpd:quick`
-   - `Capture and defer` -> route through `/gpd:add-todo`
+   - `Branch as alternative hypothesis` -> route through `gpd:tangent` or `gpd:branch-hypothesis`
+   - `Run a bounded side investigation now` -> route through `gpd:quick`
+   - `Capture and defer` -> route through `gpd:add-todo`
    - `Stay on the main line` -> continue planning around the chosen primary approach only
 4. Record any explicit tangent decision in the lightweight CONTEXT.md so downstream agents see whether the user chose to stay on the main line, branch, quick-check, or defer.
 5. Record responses as a lightweight CONTEXT.md in the phase directory (same format as discuss-phase output, but with only the critical decisions — skip the full Socratic dialogue)
 6. Proceed to step 5 with the context populated
 
-This is NOT the full discuss-phase flow — just the 2-3 most impactful questions. If the phase is complex enough to need full discussion, the researcher should run `/gpd:discuss-phase` separately.
+This is NOT the full discuss-phase flow — just the 2-3 most impactful questions. If the phase is complex enough to need full discussion, the researcher should run `gpd:discuss-phase` separately.
 
 **If no phase number:** Detect next unplanned phase from roadmap.
 
@@ -208,16 +208,16 @@ When planning reveals multiple viable approaches or optional side questions, tre
 
 **Required 4-way tangent decision model:**
 
-1. `Branch as alternative hypothesis` -> route through `/gpd:tangent` or `/gpd:branch-hypothesis`
-2. `Run a bounded side investigation now` -> route through `/gpd:quick`
-3. `Capture and defer` -> route through `/gpd:add-todo`
+1. `Branch as alternative hypothesis` -> route through `gpd:tangent` or `gpd:branch-hypothesis`
+2. `Run a bounded side investigation now` -> route through `gpd:quick`
+3. `Capture and defer` -> route through `gpd:add-todo`
 4. `Stay on the main line` -> continue planning only the selected primary approach
 
 **Workflow rule:** Do NOT silently create branch-like alternative plans, speculative side tasks, or comparison-only detours unless the user has already chosen one of the tangent paths above.
 
 Explore mode may surface this choice more often, but it still does not auto-approve a branch or side investigation.
 
-**Exploit-mode rule:** If `research_mode=exploit`, suppress optional tangents entirely unless the user explicitly requests them or the current approach is blocked by contract, anchor, or physics-validity failure. Do not volunteer `/gpd:branch-hypothesis` as the default response in exploit mode.
+**Exploit-mode rule:** If `research_mode=exploit`, suppress optional tangents entirely unless the user explicitly requests them or the current approach is blocked by contract, anchor, or physics-validity failure. Do not volunteer `gpd:branch-hypothesis` as the default response in exploit mode.
 
 ## 5. Handle Research
 
@@ -312,7 +312,7 @@ Answer: "What mathematical methods, physical principles, and computational tools
 </objective>
 
 <phase_context>
-IMPORTANT: If CONTEXT.md exists below, it contains user decisions from /gpd:discuss-phase.
+IMPORTANT: If CONTEXT.md exists below, it contains user decisions from gpd:discuss-phase.
 
 - **Decisions** = Locked -- research THESE deeply, no alternatives
 - **Agent's Discretion** = Freedom areas -- research options, recommend
@@ -586,7 +586,7 @@ Use `templates/plan-contract-schema.md` as the canonical contract schema referen
 - If the contract is scoping-only, preserve at least one target, open question, or carry-forward input instead of emitting a hollow scaffold.
 
 **Phase Context:**
-IMPORTANT: If context exists below, it contains USER DECISIONS from /gpd:discuss-phase.
+IMPORTANT: If context exists below, it contains USER DECISIONS from gpd:discuss-phase.
 
 - **Decisions** = LOCKED -- honor exactly, do not revisit
 - **Agent's Discretion** = Freedom -- make methodological choices
@@ -601,12 +601,12 @@ IMPORTANT: If context exists below, it contains USER DECISIONS from /gpd:discuss
 **Tangent Control:**
 - When multiple viable approaches or optional side questions appear, do NOT silently branch, emit branch-like alternative plans, or widen scope.
 - Use this 4-way decision model:
-  1. `Branch as alternative hypothesis` -> route through `/gpd:tangent` or `/gpd:branch-hypothesis`
-  2. `Run a bounded side investigation now` -> route through `/gpd:quick`
-  3. `Capture and defer` -> route through `/gpd:add-todo`
+  1. `Branch as alternative hypothesis` -> route through `gpd:tangent` or `gpd:branch-hypothesis`
+  2. `Run a bounded side investigation now` -> route through `gpd:quick`
+  3. `Capture and defer` -> route through `gpd:add-todo`
   4. `Stay on the main line` -> plan only the selected primary approach
 - If no explicit tangent decision already exists in context and more than one viable path remains live, return `## CHECKPOINT REACHED` with the four options above instead of silently branching.
-- If `research_mode=exploit`, suppress optional tangents unless the user explicitly requested them or the current approach is blocked by physics, contract, or anchor failure. Do not surface `/gpd:branch-hypothesis` as a default exploit-mode move.
+- If `research_mode=exploit`, suppress optional tangents unless the user explicitly requested them or the current approach is blocked by physics, contract, or anchor failure. Do not surface `gpd:branch-hypothesis` as a default exploit-mode move.
 </planning_context>
 
 <physics_planning_requirements>
@@ -660,7 +660,7 @@ See `{GPD_INSTALL_DIR}/references/orchestration/context-budget.md` for detailed 
 </context_budget_guidance>
 
 <downstream_consumer>
-Output consumed by /gpd:execute-phase. Plans need:
+Output consumed by gpd:execute-phase. Plans need:
 
 - Frontmatter (wave, depends_on, files_modified, interactive, contract)
 - Tasks in XML format
@@ -935,7 +935,7 @@ Verification: {Passed | Partial (N approved, M revised) | Passed with override |
 
 **Execute Phase {X}** -- run all {N} plans
 
-/gpd:execute-phase {X}
+gpd:execute-phase {X}
 
 <sub>/clear first -> fresh context window</sub>
 
@@ -944,7 +944,7 @@ Verification: {Passed | Partial (N approved, M revised) | Passed with override |
 **Also available:**
 
 - cat GPD/phases/{phase-dir}/\*-PLAN.md -- review plans
-- /gpd:plan-phase {X} --research -- re-research first
+- gpd:plan-phase {X} --research -- re-research first
 
 ---
 

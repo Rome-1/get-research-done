@@ -148,7 +148,7 @@ ask_user: "Survey the research landscape for new investigations before defining 
 - "Survey first (Recommended)" — Discover new results, methods, and open problems for NEW directions
 - "Skip survey" — Go straight to objectives
 
-**Persist choice to config** (so future `/gpd:plan-phase` honors it):
+**Persist choice to config** (so future `gpd:plan-phase` honors it):
 
 ```bash
 # If "Survey first": persist true
@@ -523,11 +523,11 @@ gpd commit "docs: create milestone v[X.Y] roadmap ([N] phases)" --files GPD/ROAD
 
 **Phase [N]: [Phase Name]** — [Goal]
 
-`/gpd:discuss-phase [N]` — gather context and clarify approach
+`gpd:discuss-phase [N]` — gather context and clarify approach
 
 <sub>`/clear` first -> fresh context window</sub>
 
-Also: `/gpd:plan-phase [N]` — skip discussion, plan directly
+Also: `gpd:plan-phase [N]` — skip discussion, plan directly
 ```
 
 </process>
@@ -545,7 +545,7 @@ Also: `/gpd:plan-phase [N]` — skip discussion, plan directly
 - [ ] User feedback incorporated (if any)
 - [ ] ROADMAP.md phases continue from previous milestone
 - [ ] All commits made (if planning docs committed)
-- [ ] User knows next step: `/gpd:discuss-phase [N]`
+- [ ] User knows next step: `gpd:discuss-phase [N]`
 
 **Atomic commits:** Each phase commits its artifacts immediately.
 </success_criteria>

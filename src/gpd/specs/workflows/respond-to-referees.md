@@ -1,7 +1,7 @@
 <purpose>
 Structure a point-by-point response to referee reports and revise the manuscript accordingly. Handles the full revision pipeline: parsing referee comments, drafting responses, spawning revision agents for manuscript changes, tracking new calculations, and producing a response letter. Integrates with the GPD research workflow for any new calculations requested by referees.
 
-Called from /gpd:respond-to-referees command. Section revisions are performed by gpd-paper-writer agents.
+Called from gpd:respond-to-referees command. Section revisions are performed by gpd-paper-writer agents.
 </purpose>
 
 <core_principle>
@@ -79,7 +79,7 @@ Use the strict preflight resolution as the manuscript-root authority. Prefer the
 ```
 No paper directory found. Searched the canonical manuscript roots `paper/`, `manuscript/`, and `draft/` via the manuscript resolver
 
-Run /gpd:write-paper first to generate a manuscript from research results.
+Run gpd:write-paper first to generate a manuscript from research results.
 ```
 
 Exit.
@@ -286,7 +286,7 @@ Present triage:
 |-------|-------|--------|
 | A: Response-only | {N} | Draft responses (no manuscript change) |
 | B: Manuscript revision | {N} | Spawn paper-writer agents for section edits |
-| C: New calculations | {N} | Create research phases via /gpd:add-phase |
+| C: New calculations | {N} | Create research phases via gpd:add-phase |
 
 Group C items require research work before the response can be completed.
 Address these first? (Y/n)
@@ -309,8 +309,8 @@ For each new calculation:
 
 | ID | Requested By | Description | Suggested Phase |
 |----|-------------|-------------|-----------------|
-| NC-1 | Referee 1, Comment 3 | Extend to next-to-leading order | /gpd:insert-phase {N}.1 |
-| NC-2 | Referee 2, Comment 5 | Compare with Monte Carlo results | /gpd:add-phase |
+| NC-1 | Referee 1, Comment 3 | Extend to next-to-leading order | gpd:insert-phase {N}.1 |
+| NC-2 | Referee 2, Comment 5 | Compare with Monte Carlo results | gpd:add-phase |
 
 Create these phases now? The referee response will be incomplete until
 new calculations are done.
@@ -328,7 +328,7 @@ If user chooses option 1:
 gpd phase add "Referee revision: {description}"
 ```
 
-The user should run `/gpd:plan-phase` and `/gpd:execute-phase` for each new phase, then return to `/gpd:respond-to-referees` to continue.
+The user should run `gpd:plan-phase` and `gpd:execute-phase` for each new phase, then return to `gpd:respond-to-referees` to continue.
 
 If the staged decision artifacts indicate that the main problem is overclaiming rather than missing computation, prefer narrowing the claim set or venue framing before creating new research phases.
 If selected protocol bundles already identify a decisive comparison, benchmark anchor, or estimator caveat that the manuscript failed to surface, prefer fulfilling that existing obligation or narrowing the claim before creating broader new-computation work.
@@ -445,7 +445,7 @@ Read the completed `GPD/AUTHOR-RESPONSE{round_suffix}.md` and `GPD/review/REFERE
 
 ```
 {N} new calculations are still pending. The response letter will note these as
-"work in progress." Complete them with /gpd:execute-phase before resubmission.
+"work in progress." Complete them with gpd:execute-phase before resubmission.
 ```
 
 Write `${PAPER_DIR}/response-letter.tex` (or `.md` depending on journal requirements):
@@ -553,18 +553,18 @@ gpd commit \
 {If all complete:}
 1. Review response letter: `cat ${PAPER_DIR}/response-letter.tex`
 2. Build revised manuscript: `cd ${PAPER_DIR} && make`
-3. `/gpd:arxiv-submission` — repackage for resubmission
-4. `/gpd:peer-review` — optional re-review before final packaging if the revision was substantial
+3. `gpd:arxiv-submission` — repackage for resubmission
+4. `gpd:peer-review` — optional re-review before final packaging if the revision was substantial
 5. Submit revised manuscript + response letter to journal
 
 {If new calculations pending:}
 1. Execute pending calculations:
-   /gpd:plan-phase {N}
-   /gpd:execute-phase {N}
+   gpd:plan-phase {N}
+   gpd:execute-phase {N}
 2. Return here to incorporate results:
-   /gpd:respond-to-referees (will detect existing `GPD/review/REFEREE_RESPONSE{round_suffix}.md` / `GPD/AUTHOR-RESPONSE{round_suffix}.md`)
+   gpd:respond-to-referees (will detect existing `GPD/review/REFEREE_RESPONSE{round_suffix}.md` / `GPD/AUTHOR-RESPONSE{round_suffix}.md`)
 
-Recommend `/gpd:peer-review` as the standalone re-review command once the revised manuscript compiles cleanly. This keeps revision rounds aligned with the referee agent's `REFEREE-REPORT-R{N}.md` protocol.
+Recommend `gpd:peer-review` as the standalone re-review command once the revised manuscript compiles cleanly. This keeps revision rounds aligned with the referee agent's `REFEREE-REPORT-R{N}.md` protocol.
 
 ---
 ```

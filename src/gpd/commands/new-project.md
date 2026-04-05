@@ -36,7 +36,7 @@ If no project config exists yet, the workflow opens with the physics-questioning
 - `GPD/STATE.md` — project memory
 - `GPD/state.json` `project_contract` — authoritative machine-readable scoping contract
 
-**After this command:** Run `/gpd:discuss-phase 1` to clarify the first phase before planning.
+**After this command:** Run `gpd:discuss-phase 1` to clarify the first phase before planning.
 </objective>
 
 <execution_context>
@@ -107,7 +107,7 @@ Check `$ARGUMENTS` for flags:
 - [ ] STATE.md initialized
 - [ ] CONVENTIONS.md created via gpd-notation-coordinator -- committed
 - [ ] Convention lock populated via gpd convention set
-- [ ] User informed next step is /gpd:discuss-phase 1
+- [ ] User informed next step is gpd:discuss-phase 1
 
 **Minimal mode success criteria (if `--minimal`):**
 

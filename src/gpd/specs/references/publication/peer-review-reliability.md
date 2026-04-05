@@ -19,9 +19,9 @@ This is the canonical reliability reference for the peer-review skill surface. F
 
 The peer review phase activates **after a complete manuscript draft exists** and **before final PDF packaging and submission**. Specifically:
 
-1. **After draft completion.** The `/gpd:write-paper` workflow produces a manuscript with all sections, equations, figures, and bibliography in place. Peer review does not run on incomplete drafts or outlines.
-2. **Before final PDF.** Peer review must complete and its findings must be addressed before the manuscript is packaged for submission (e.g., via `/gpd:arxiv-submission`).
-3. **Explicit invocation.** Peer review runs when the user invokes `/gpd:peer-review` or when the write-paper workflow reaches its internal review gate. It is not triggered automatically by file saves or partial edits.
+1. **After draft completion.** The `gpd:write-paper` workflow produces a manuscript with all sections, equations, figures, and bibliography in place. Peer review does not run on incomplete drafts or outlines.
+2. **Before final PDF.** Peer review must complete and its findings must be addressed before the manuscript is packaged for submission (e.g., via `gpd:arxiv-submission`).
+3. **Explicit invocation.** Peer review runs when the user invokes `gpd:peer-review` or when the write-paper workflow reaches its internal review gate. It is not triggered automatically by file saves or partial edits.
 
 ### Precondition Checklist
 
@@ -140,7 +140,7 @@ Findings are classified by severity:
 2. **Address blocking issues.** Every finding with `"blocking": true` must be resolved or the claims must be narrowed to match the available evidence.
 3. **Treat uncovered theorem assumptions or parameters as blocking until resolved.** If a theorem statement quantifies over a parameter or names a hypothesis that the proof never uses, the manuscript must be corrected, narrowed, or explicitly re-proved before the next round.
 4. **Write author response.** Document how each finding was addressed in `GPD/AUTHOR-RESPONSE{round_suffix}.md` (or `-R2.md` / `-R3.md` for subsequent rounds).
-5. **Re-enter review.** After revisions, re-run `/gpd:peer-review` for the next round. The pipeline detects prior reports and author responses to increment the round number automatically.
+5. **Re-enter review.** After revisions, re-run `gpd:peer-review` for the next round. The pipeline detects prior reports and author responses to increment the round number automatically.
 6. **Converge.** The pipeline supports up to 3 review rounds. If the manuscript has not converged to `accept` or `minor_revision` after 3 rounds, consider restructuring the central contribution.
 
 ### Mapping Findings to Manuscript Changes

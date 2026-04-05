@@ -209,7 +209,7 @@ When a tangent appears, do not silently pursue it. Resolve it with exactly one o
 
 1. `ignore` — not materially useful; continue the mainline plan.
 2. `defer` — useful but not for now; record it in the research log / SUMMARY and continue the mainline plan.
-3. `branch_later` — strong enough to recommend an explicit follow-up such as `/gpd:tangent ...` or `/gpd:branch-hypothesis ...`, but do not create that branch or any side subagent yourself.
+3. `branch_later` — strong enough to recommend an explicit follow-up such as `gpd:tangent ...` or `gpd:branch-hypothesis ...`, but do not create that branch or any side subagent yourself.
 4. `pursue_now` — only when the user explicitly requested tangent exploration or the approved contract already covers this alternative path.
 
 Operational rules:
@@ -1112,7 +1112,7 @@ Use only status names: `completed` | `checkpoint` | `blocked` | `failed`.
 If a tangent proposal was encountered, keep it inside the existing return structure:
 
 - Put the classification and rationale in `issues`
-- Put any suggested follow-up such as `/gpd:tangent ...`, `/gpd:branch-hypothesis ...`, or "revisit after Wave N" in `next_actions`
+- Put any suggested follow-up such as `gpd:tangent ...`, `gpd:branch-hypothesis ...`, or "revisit after Wave N" in `next_actions`
 - Do not add new top-level return keys or shared-state fields for tangent handling
 
 </structured_returns>

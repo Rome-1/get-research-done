@@ -187,7 +187,7 @@ if [ "$CONV_STATUS" != "locked" ] && [ "$CONV_STATUS" != "complete" ]; then
   echo ""
   echo "Fix with one of:"
   echo "  gpd convention set"
-  echo "  /gpd:validate-conventions"
+  echo "  gpd:validate-conventions"
   echo ""
   echo "HALTING — convention errors in derivation/formalism phases compound across every step."
   exit 1
@@ -434,7 +434,7 @@ When a wave is not risky:
 
 - `ignore` — not a real tangent; continue the approved mainline plan
 - `defer` — record it briefly in the wave report / SUMMARY as future follow-up, then continue the mainline plan
-- `branch_later` — recommend `/gpd:tangent ...` or `/gpd:branch-hypothesis ...` for explicit follow-up, but do not create new side work during this execution pass
+- `branch_later` — recommend `gpd:tangent ...` or `gpd:branch-hypothesis ...` for explicit follow-up, but do not create new side work during this execution pass
 - `pursue_now` — only when the user explicitly requested tangent exploration or the approved contract already includes that alternative path
 
 This is proposal-first, not a new execution state machine. Tangent proposals ride on the existing first-result / skeptical / pre-fanout review stops.
@@ -722,7 +722,7 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
 
    - `ignore` — continue mainline execution unchanged
    - `defer` — note it in outputs as future work and continue
-   - `branch_later` — recommend an explicit `/gpd:tangent ...` or `/gpd:branch-hypothesis ...` follow-up after the bounded stop
+   - `branch_later` — recommend an explicit `gpd:tangent ...` or `gpd:branch-hypothesis ...` follow-up after the bounded stop
    - `pursue_now` — only if the user explicitly asked for tangent exploration or the approved contract already covers it
 
    **Machine-state bridge for tangent proposals:** when a tangent proposal is relevant at this stop, keep it inside the same live execution payload instead of inventing a new tangent state machine. Emit:
@@ -1288,10 +1288,10 @@ checkpoint_tags: [{ list of all remaining gpd-checkpoint tags for this phase }]
 
 ## Recovery Options
 
-1. Fix failing plans and re-execute: `/gpd:execute-phase {X}` (auto-detects partial completion)
-2. Re-plan failed tasks: `/gpd:plan-phase {X} --gaps` (creates new plans for unfinished work)
-3. Revise phase goal: `/gpd:discuss-phase {X}` (rethink approach based on what failed)
-4. Continue to next phase: `/gpd:plan-phase {X+1}` (if remaining work is non-critical)
+1. Fix failing plans and re-execute: `gpd:execute-phase {X}` (auto-detects partial completion)
+2. Re-plan failed tasks: `gpd:plan-phase {X} --gaps` (creates new plans for unfinished work)
+3. Revise phase goal: `gpd:discuss-phase {X}` (rethink approach based on what failed)
+4. Continue to next phase: `gpd:plan-phase {X+1}` (if remaining work is non-critical)
 ```
 
 Commit recovery document:
@@ -1313,12 +1313,12 @@ gpd commit \
 
 {If single plan failed, rest passed:}
   The failure is isolated. Fix and re-execute:
-  `/gpd:execute-phase {X}` -- will resume from the failed plan
+  `gpd:execute-phase {X}` -- will resume from the failed plan
 
 {If multiple plans failed in same wave:}
   Multiple failures in Wave {N} suggest a systemic issue.
   Review the phase approach before retrying:
-  `/gpd:discuss-phase {X}` -- reassess methodology
+  `gpd:discuss-phase {X}` -- reassess methodology
 
 {If failures cascaded through dependencies:}
   The root failure in {ROOT_PLAN} cascaded to {N} dependent plans.
@@ -1327,7 +1327,7 @@ gpd commit \
 
 {If all plans failed:}
   Complete phase failure. The phase goal or approach may need revision:
-  `/gpd:plan-phase {X}` -- re-plan from scratch
+  `gpd:plan-phase {X}` -- re-plan from scratch
 ──────────────────────────────────────────────────────
 ```
 
@@ -1360,7 +1360,7 @@ grep "^status:" "$phase_dir"/*-VERIFICATION.md 2>/dev/null | head -1 | cut -d: -
 | `passed`       | -> update_roadmap                                           |
 | `human_needed`  | Present items for human review, get approval or feedback    |
 | `expert_needed` | Domain expert review required; present items, escalate      |
-| `gaps_found`    | Present gap summary, offer `/gpd:plan-phase {phase} --gaps` |
+| `gaps_found`    | Present gap summary, offer `gpd:plan-phase {phase} --gaps` |
 
 If the same report also carries `session_status: validating|completed|diagnosed`, treat that as conversational progress only. It does not replace the canonical verification `status` read above. A diagnosed verification session will normally still report `status: gaps_found` until the fixes are re-verified.
 
@@ -1393,15 +1393,15 @@ All automated checks passed. {N} items need human review:
 ---
 ## >> Next Up
 
-`/gpd:plan-phase {X} --gaps`
+`gpd:plan-phase {X} --gaps`
 
 <sub>`/clear` first -> fresh context window</sub>
 
 Also: `cat {phase_dir}/{phase}-VERIFICATION.md` -- full report
-Also: `/gpd:verify-work {X}` -- manual review first
+Also: `gpd:verify-work {X}` -- manual review first
 ```
 
-Gap closure cycle: `/gpd:plan-phase {X} --gaps` reads VERIFICATION.md -> creates gap plans with `gap_closure: true` -> user runs `/gpd:execute-phase {X} --gaps-only` -> automatic re-verification (below).
+Gap closure cycle: `gpd:plan-phase {X} --gaps` reads VERIFICATION.md -> creates gap plans with `gap_closure: true` -> user runs `gpd:execute-phase {X} --gaps-only` -> automatic re-verification (below).
 
 **Smart failure recovery (replaces blunt circuit breaker):**
 
@@ -1497,8 +1497,8 @@ Phase {X} has failed verification twice after gap closure attempts.
 {System's best hypothesis for why gap closure is not resolving the issue}
 
 ### Suggested Actions
-1. `/gpd:debug` — Systematic investigation of the persistent failure
-2. `/gpd:discuss-phase {X}` — Reassess the approach with fresh perspective
+1. `gpd:debug` — Systematic investigation of the persistent failure
+2. `gpd:discuss-phase {X}` — Reassess the approach with fresh perspective
 3. Manual intervention — The issue may require researcher insight
 
 Do NOT attempt a third automated cycle.
@@ -1542,7 +1542,7 @@ Re-verify Phase {PHASE_NUMBER} after gap closure.
 )
 ```
 
-**If the verifier agent fails to spawn or returns an error:** Proceed without automated re-verification. Note in the phase status that post-gap-closure verification was skipped. The user should run `/gpd:verify-work` separately to confirm gaps are closed. If the phase is proof-bearing, do NOT mark it complete on this path; proof-obligation work remains blocked until re-verification and proof-redteam audits actually clear.
+**If the verifier agent fails to spawn or returns an error:** Proceed without automated re-verification. Note in the phase status that post-gap-closure verification was skipped. The user should run `gpd:verify-work` separately to confirm gaps are closed. If the phase is proof-bearing, do NOT mark it complete on this path; proof-obligation work remains blocked until re-verification and proof-redteam audits actually clear.
 
 | Re-verification Result | Action |
 | ---------------------- | ------ |
@@ -1577,7 +1577,7 @@ file_read: All SUMMARY.md files from phase {PHASE_NUMBER}
 Return consistency_status with any issues found.
 ", subagent_type="gpd-consistency-checker", model="{consistency_model}", readonly=false, description="Rapid consistency check")
 
-**If the consistency checker agent fails to spawn or returns an error:** Proceed without cross-phase consistency checking for this wave. Note in the phase status that consistency verification was skipped. The user should run `/gpd:validate-conventions` after execution completes to catch any convention drift.
+**If the consistency checker agent fails to spawn or returns an error:** Proceed without cross-phase consistency checking for this wave. Note in the phase status that consistency verification was skipped. The user should run `gpd:validate-conventions` after execution completes to catch any convention drift.
 
 **If INCONSISTENT:** STOP execution. Present issues to user with resolution options:
 
@@ -1714,7 +1714,7 @@ After phase completion, check the project's autonomy mode. If yolo or balanced w
 
 **Phase {X+1}: {Name}** -- {Goal}
 
-`/gpd:plan-phase {X+1}`
+`gpd:plan-phase {X+1}`
 
 <sub>`/clear` first for fresh context</sub>
 ```
@@ -1726,7 +1726,7 @@ MILESTONE COMPLETE!
 
 All {N} phases executed.
 
-`/gpd:complete-milestone`
+`gpd:complete-milestone`
 ```
 
 </step>
@@ -1748,7 +1748,7 @@ Orchestrator: ~10-15% context. Subagents: fresh 200k each. No polling (Task bloc
   </failure_handling>
 
 <resumption>
-Re-run `/gpd:execute-phase {phase}` -> discover_plans finds completed SUMMARYs -> skips them -> resumes from first incomplete plan -> continues wave execution.
+Re-run `gpd:execute-phase {phase}` -> discover_plans finds completed SUMMARYs -> skips them -> resumes from first incomplete plan -> continues wave execution.
 
 STATE.md tracks: last completed plan, current wave, pending checkpoints.
 

@@ -373,7 +373,7 @@ class TestInstall:
         content = (target / "command" / "gpd-help.md").read_text(encoding="utf-8")
         assert "slash-command" not in content
         assert "Show available GPD commands and usage guide" in content
-        assert "/gpd-" in content
+        assert "gpd:" in content
 
     def test_local_install_uses_relative_gpd_paths(
         self,
@@ -518,7 +518,7 @@ class TestInstall:
         assert "Check for a newer GPD release" in content
         assert "<!-- [included: update.md] -->" in content
         assert re.search(r"^\s*@.*?/workflows/update\.md\s*$", content, flags=re.MULTILINE) is None
-        assert "/gpd-reapply-patches" in content
+        assert "gpd:reapply-patches" in content
 
     def test_complete_milestone_command_inlines_bullet_list_includes(
         self,

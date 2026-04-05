@@ -1,7 +1,7 @@
 <purpose>
 Perform a systematic dimensional analysis audit on every equation in a derivation, computation, or phase. Track dimensions through all algebraic steps, verify consistency, and flag any dimensional anomalies.
 
-Called from /gpd:dimensional-analysis command. Produces DIMENSIONAL-ANALYSIS.md report.
+Called from gpd:dimensional-analysis command. Produces DIMENSIONAL-ANALYSIS.md report.
 
 Dimensional analysis is the cheapest and most powerful diagnostic in physics. It catches ~30% of errors at near-zero cost. This workflow applies it systematically rather than ad hoc.
 </purpose>
@@ -261,7 +261,7 @@ If anomalies found:
 {List anomalies with severity}
 
 Suggested next steps:
-- `/gpd:debug` -- investigate anomalies
+- `gpd:debug` -- investigate anomalies
 - Fix directly -- if cause is obvious (missing factor, wrong measure)
 ```
 

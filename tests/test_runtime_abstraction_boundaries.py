@@ -82,8 +82,14 @@ def _runtime_capability_surface_patterns() -> list[str]:
     return sorted(patterns)
 
 
-def _runtime_command_prefix_patterns() -> list[str]:
-    return sorted({re.escape(descriptor.command_prefix) for descriptor in _RUNTIME_DESCRIPTORS if descriptor.command_prefix})
+def _runtime_native_command_prefix_patterns() -> list[str]:
+    return sorted(
+        {
+            re.escape(descriptor.command_prefix)
+            for descriptor in _RUNTIME_DESCRIPTORS
+            if descriptor.command_prefix in {"/gpd:", "$gpd-"}
+        }
+    )
 
 
 def _runtime_tool_alias_patterns() -> list[str]:
@@ -172,7 +178,7 @@ _RUNTIME_INSTALL_ARTIFACT_PATTERN = re.compile(
 )
 _SHARED_COMMAND_SURFACE_PATTERN = re.compile(
     r"(?<![A-Za-z0-9_.-])(?:"
-    + "|".join(_runtime_command_prefix_patterns())
+    + "|".join(_runtime_native_command_prefix_patterns())
     + ")"
 )
 _SHARED_BOOTSTRAP_COMMAND_PATTERN = re.compile(
@@ -448,6 +454,22 @@ def test_shared_mcp_python_surfaces_do_not_hardcode_runtime_command_prefixes() -
 
     assert leaks == [], (
         "Shared MCP Python surfaces should stay canonical instead of hardcoding runtime command prefixes:\n"
+        f"{_format_failures(leaks)}"
+    )
+
+
+def test_shared_markdown_surfaces_do_not_hardcode_runtime_command_prefixes() -> None:
+    leaks = _scan_paths_for_pattern(
+        (
+            REPO_ROOT / "src/gpd/commands",
+            REPO_ROOT / "src/gpd/agents",
+            REPO_ROOT / "src/gpd/specs",
+        ),
+        _SHARED_COMMAND_SURFACE_PATTERN,
+    )
+
+    assert leaks == [], (
+        "Shared markdown surfaces should stay canonical instead of hardcoding runtime command prefixes:\n"
         f"{_format_failures(leaks)}"
     )
 

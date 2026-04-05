@@ -83,13 +83,13 @@ Extract from init JSON: `project_exists`, `roadmap_exists`, `state_exists`, `pha
 
 **File contents (from --include):** `state_content`, `roadmap_content`, `project_content`, `config_content`. These are null if files don't exist.
 
-If missing STATE.md: suggest `/gpd:new-project`.
+If missing STATE.md: suggest `gpd:new-project`.
 
 **If ROADMAP.md missing but PROJECT.md exists:**
 
 This means a milestone was completed and archived. Go to **Route F** (between milestones).
 
-If missing both ROADMAP.md and PROJECT.md: suggest `/gpd:new-project`.
+If missing both ROADMAP.md and PROJECT.md: suggest `gpd:new-project`.
 </step>
 
 <step name="load">
@@ -197,10 +197,10 @@ CONTEXT: [present if has_context | - if not]
 - [any blockers or concerns from STATE.md — e.g., "Series diverges for g > 2, need resummation"]
 
 ## Pending Items
-- [count] pending — /gpd:check-todos to review
+- [count] pending — gpd:check-todos to review
 
 ## Active Derivation Sessions
-- [count] active — /gpd:debug to continue
+- [count] active — gpd:debug to continue
 (Only show this section if count > 0)
 
 ## What's Next
@@ -210,7 +210,7 @@ CONTEXT: [present if has_context | - if not]
 If STATE.md exceeds 1500 lines, append after the report:
 
 ```
-STATE.md is large (N lines). Consider running `/gpd:compact-state` to archive historical entries.
+STATE.md is large (N lines). Consider running `gpd:compact-state` to archive historical entries.
 ```
 
 If the compaction health check reported `"warn": true`, append:
@@ -308,9 +308,9 @@ Read its `<objective>` section.
 
 **{phase}-{plan}: [Plan Name]** — [objective summary from PLAN.md]
 
-`/gpd:execute-phase {phase}`
+`gpd:execute-phase {phase}`
 
-<sub>`/clear` first, then run `/gpd:execute-phase {phase}`</sub>
+<sub>`/clear` first, then run `gpd:execute-phase {phase}`</sub>
 
 ---
 ```
@@ -331,9 +331,9 @@ Check if `{phase}-CONTEXT.md` exists in phase directory.
 **Phase {N}: {Name}** — {Goal from ROADMAP.md}
 <sub>Context gathered, ready to plan</sub>
 
-`/gpd:plan-phase {phase-number}`
+`gpd:plan-phase {phase-number}`
 
-<sub>`/clear` first, then run `/gpd:plan-phase {phase-number}`</sub>
+<sub>`/clear` first, then run `gpd:plan-phase {phase-number}`</sub>
 
 ---
 ```
@@ -347,15 +347,15 @@ Check if `{phase}-CONTEXT.md` exists in phase directory.
 
 **Phase {N}: {Name}** — {Goal from ROADMAP.md}
 
-`/gpd:discuss-phase {phase}` — gather context and clarify approach
+`gpd:discuss-phase {phase}` — gather context and clarify approach
 
-<sub>`/clear` first, then run `/gpd:discuss-phase {phase}`</sub>
+<sub>`/clear` first, then run `gpd:discuss-phase {phase}`</sub>
 
 ---
 
 **Also available:**
-- `/gpd:plan-phase {phase}` — skip discussion, plan directly
-- `/gpd:list-phase-assumptions {phase}` — see what the agent assumes about the approach
+- `gpd:plan-phase {phase}` — skip discussion, plan directly
+- `gpd:list-phase-assumptions {phase}` — see what the agent assumes about the approach
 
 ---
 ```
@@ -375,15 +375,15 @@ VERIFICATION.md exists with gaps (diagnosed issues like failing limiting cases o
 
 Examples: [e.g., "Dimension mismatch in eq. 14", "Wrong sign in g -> 0 limit"]
 
-`/gpd:plan-phase {phase} --gaps`
+`gpd:plan-phase {phase} --gaps`
 
-<sub>`/clear` first, then run `/gpd:plan-phase {phase} --gaps`</sub>
+<sub>`/clear` first, then run `gpd:plan-phase {phase} --gaps`</sub>
 
 ---
 
 **Also available:**
-- `/gpd:execute-phase {phase}` — execute phase plans
-- `/gpd:verify-work {phase}` — run more validation checks
+- `gpd:execute-phase {phase}` — execute phase plans
+- `gpd:verify-work {phase}` — run more validation checks
 
 ---
 ```
@@ -392,7 +392,7 @@ Examples: [e.g., "Dimension mismatch in eq. 14", "Wrong sign in g -> 0 limit"]
 
 **Route E2: Gap-closure plans exist but are unexecuted**
 
-Gap-closure plans were created by `/gpd:plan-phase --gaps` but have not been executed yet. Suggest executing them instead of re-planning.
+Gap-closure plans were created by `gpd:plan-phase --gaps` but have not been executed yet. Suggest executing them instead of re-planning.
 
 ```
 ---
@@ -401,15 +401,15 @@ Gap-closure plans were created by `/gpd:plan-phase --gaps` but have not been exe
 
 **{GAP_PLANS_UNEXECUTED} gap-closure plan(s)** exist but have not been executed.
 
-`/gpd:execute-phase {phase} --gaps-only`
+`gpd:execute-phase {phase} --gaps-only`
 
-<sub>`/clear` first, then run `/gpd:execute-phase {phase} --gaps-only`</sub>
+<sub>`/clear` first, then run `gpd:execute-phase {phase} --gaps-only`</sub>
 
 ---
 
 **Also available:**
-- `/gpd:plan-phase {phase} --gaps` — re-plan gap fixes (if current plans are stale)
-- `/gpd:verify-work {phase}` — re-run validation checks
+- `gpd:plan-phase {phase} --gaps` — re-plan gap fixes (if current plans are stale)
+- `gpd:verify-work {phase}` — re-run validation checks
 
 ---
 ```
@@ -449,15 +449,15 @@ Read ROADMAP.md to get the next phase's name and goal.
 
 **Phase {Z+1}: {Name}** — {Goal from ROADMAP.md}
 
-`/gpd:discuss-phase {Z+1}` — gather context and clarify approach
+`gpd:discuss-phase {Z+1}` — gather context and clarify approach
 
-<sub>`/clear` first, then run `/gpd:discuss-phase {Z+1}`</sub>
+<sub>`/clear` first, then run `gpd:discuss-phase {Z+1}`</sub>
 
 ---
 
 **Also available:**
-- `/gpd:plan-phase {Z+1}` — skip discussion, plan directly
-- `/gpd:verify-work {Z}` — validate results before continuing
+- `gpd:plan-phase {Z+1}` — skip discussion, plan directly
+- `gpd:verify-work {Z}` — validate results before continuing
 
 ---
 ```
@@ -477,14 +477,14 @@ All {N} phases finished!
 
 **Complete Milestone** — archive results and prepare for next
 
-`/gpd:complete-milestone`
+`gpd:complete-milestone`
 
-<sub>`/clear` first, then run `/gpd:complete-milestone`</sub>
+<sub>`/clear` first, then run `gpd:complete-milestone`</sub>
 
 ---
 
 **Also available:**
-- `/gpd:verify-work` — validate all results before completing milestone
+- `gpd:verify-work` — validate all results before completing milestone
 
 ---
 ```
@@ -508,9 +508,9 @@ Ready to plan the next research direction.
 
 **Start Next Milestone** — questioning -> literature survey -> objectives -> roadmap
 
-`/gpd:new-milestone`
+`gpd:new-milestone`
 
-<sub>`/clear` first, then run `/gpd:new-milestone`</sub>
+<sub>`/clear` first, then run `gpd:new-milestone`</sub>
 
 ---
 ```
@@ -520,11 +520,11 @@ Ready to plan the next research direction.
 <step name="edge_cases">
 **Handle edge cases:**
 
-- Phase complete but next phase not planned -> offer `/gpd:plan-phase [next]`
+- Phase complete but next phase not planned -> offer `gpd:plan-phase [next]`
 - All work complete -> offer milestone completion
 - Blockers present -> highlight before offering to continue
-- Handoff file exists -> mention it, offer `/gpd:resume-work`
-- Derivation session active -> mention it, offer `/gpd:debug` to continue
+- Handoff file exists -> mention it, offer `gpd:resume-work`
+- Derivation session active -> mention it, offer `gpd:debug` to continue
   </step>
 
 </process>
@@ -534,7 +534,7 @@ Ready to plan the next research direction.
 - [ ] Rich context provided (recent work, key results, decisions, issues)
 - [ ] Current position clear with visual progress
 - [ ] What's next clearly explained
-- [ ] Smart routing: /gpd:execute-phase if plans exist, /gpd:plan-phase if not
+- [ ] Smart routing: gpd:execute-phase if plans exist, gpd:plan-phase if not
 - [ ] User confirms before any action
 - [ ] Seamless handoff to appropriate gpd command
 

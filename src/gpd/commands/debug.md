@@ -166,7 +166,7 @@ task(
 - Classify the error type (sign error, missing factor, wrong convention, numerical issue, conceptual error)
 - Offer options:
   - "Fix now" — spawn fix subagent
-  - "Plan fix" — suggest /gpd:plan-phase --gaps
+  - "Plan fix" — suggest gpd:plan-phase --gaps
   - "Manual fix" — done (provide the identified error location and correction)
 
 **If `## CHECKPOINT REACHED`:**

@@ -117,7 +117,7 @@ phase_suggestions:
     goal: "[1-sentence physics outcome]"
     methods: ["method1", "method2"]
     depends_on: []  # or list of prior phase names
-    needs_research: true | false  # whether /gpd:research-phase should run first
+    needs_research: true | false  # whether gpd:research-phase should run first
     risk: LOW | MEDIUM | HIGH
     pitfalls: ["pitfall-id-1", "pitfall-id-2"]
   # ... repeat for each suggested phase
@@ -867,7 +867,7 @@ This is the most important section. Based on combined research:
 
 **Add research flags:**
 
-- Which phases likely need deeper literature review or preliminary test calculations via `/gpd:research-phase`?
+- Which phases likely need deeper literature review or preliminary test calculations via `gpd:research-phase`?
 - Which phases follow well-established procedures (skip additional research)?
 - Which phases involve genuinely open questions where the outcome is uncertain?
 

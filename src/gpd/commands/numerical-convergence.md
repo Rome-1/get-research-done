@@ -298,7 +298,7 @@ Save to:
 - Phase target: `GPD/phases/XX-name/CONVERGENCE.md`
 - File target: `GPD/analysis/convergence-{slug}.md`
 
-**For comprehensive verification** (dimensional analysis + limiting cases + symmetries + convergence), use `/gpd:verify-work`.
+**For comprehensive verification** (dimensional analysis + limiting cases + symmetries + convergence), use `gpd:verify-work`.
 
 </process>
 

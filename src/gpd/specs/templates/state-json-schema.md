@@ -28,7 +28,7 @@ Source of truth: `default_state_dict()` in `gpd.core.state`.
 | `approximations` | `ApproximationObject[]` | `[]` | Active approximations with validity | **Authoritative** (JSON-only, from `approximation add`) |
 | `convention_lock` | `ConventionLock` | see below | Locked physics conventions | **Authoritative** (JSON-only, from `convention set`) |
 | `propagated_uncertainties` | `UncertaintyObject[]` | `[]` | Uncertainty propagation tracking | **Authoritative** (JSON-only, from `uncertainty add`) |
-| `pending_todos` | `string[]` | `[]` | Ideas captured via /gpd:add-todo | Synced from todos/ |
+| `pending_todos` | `string[]` | `[]` | Ideas captured via gpd:add-todo | Synced from todos/ |
 | `blockers` | `string[]` | `[]` | Active blockers/concerns | Synced from STATE.md |
 | `continuation` | `ContinuationObject` | see below | Durable canonical continuation authority; compatibility mirrors derive from it | **Authoritative** (JSON-only) |
 | `session` | `SessionObject` | see below | Markdown-compatible compatibility mirror of canonical continuation for STATE.md rendering; not part of the public top-level resume vocabulary | Synced from canonical continuation / STATE.md |
@@ -54,7 +54,7 @@ Fields marked **Authoritative** exist only in state.json (not representable in S
 | Field | Type | Written By |
 |-------|------|-----------|
 | `project_md_updated` | `string \| null` | Workflows (after updating PROJECT.md) |
-| `core_research_question` | `string \| null` | `/gpd:new-project` |
+| `core_research_question` | `string \| null` | `gpd:new-project` |
 | `current_focus` | `string \| null` | Phase transitions, `gpd state update` |
 
 ### `project_contract`
@@ -299,7 +299,7 @@ These phrases are valid for preserving uncertainty when they point to a genuinel
 | `last_activity` | `string \| null` | Most state-modifying commands | Session display |
 | `last_activity_desc` | `string \| null` | Executor, workflows | Session display |
 | `progress_percent` | `integer` | `gpd state update-progress` | Progress display |
-| `paused_at` | `string \| null` | `/gpd:pause-work`, `/gpd:resume-work` | Resume workflow |
+| `paused_at` | `string \| null` | `gpd:pause-work`, `gpd:resume-work` | Resume workflow |
 
 **Valid `status` values:**
 
@@ -483,7 +483,7 @@ Verifying, Complete, Blocked, Ready to plan, Milestone complete
 }
 ```
 
-**Written by:** `gpd state record-session`, `/gpd:pause-work`
+**Written by:** `gpd state record-session`, `gpd:pause-work`
 
 `session` stores the markdown-compatible session timestamp, advisory machine identity, stop location, and handoff resume file as a compatibility mirror of canonical continuation. Keep `resume_file` project-relative when it points inside the repository; `gpd state record-session` normalizes project-local absolute paths back to that form before persisting them. Omitting `--resume-file` preserves the current handoff pointer, while explicit placeholders such as `—`, `None`, or `null` clear it. `gpd resume` is the public local read-only recovery surface, while `gpd init resume` remains the machine-readable backend. That backend treats `continuation` as primary and only consults nested compatibility projections when canonical bounded-segment or handoff data is missing or incomplete. It also compares `hostname`/`platform` with the current machine to emit a non-blocking `machine_change_notice` that recommends rerunning the installer when runtime-local config may be stale.
 

@@ -1,6 +1,6 @@
 # Paper Quality Scoring System
 
-Quantitative readiness score (0-100) for physics manuscripts. Used by `/gpd:write-paper` to determine if the paper is ready for submission packaging. Each category is scored independently; the total is a weighted sum.
+Quantitative readiness score (0-100) for physics manuscripts. Used by `gpd:write-paper` to determine if the paper is ready for submission packaging. Each category is scored independently; the total is a weighted sum.
 
 This is **not** the final referee-decision policy. A manuscript can score well on packaging/readiness and still deserve `major_revision` or `reject` if its novelty, significance, venue fit, or claim-evidence proportionality are weak. Those publication-judgment gates belong to the staged peer-review policy and `validate referee-decision`.
 
@@ -82,7 +82,7 @@ This is **not** the final referee-decision policy. A manuscript can score well o
 
 ## Automated Scoring Protocol
 
-When invoked during `/gpd:write-paper` (step: quality_assessment), prefer the artifact-driven path:
+When invoked during `gpd:write-paper` (step: quality_assessment), prefer the artifact-driven path:
 
 ```bash
 gpd --raw validate paper-quality --from-project .
@@ -100,9 +100,9 @@ The artifact-driven path is intentionally conservative: it can infer many figure
 
 ## Integration Points
 
-- **`/gpd:write-paper`**: Runs quality scoring after all sections drafted, before generating submission package
-- **`/gpd:arxiv-submission`**: Requires the resolved journal profile's `minimum_submission_score` to proceed (override with `--force`)
-- **`/gpd:respond-to-referees`**: Re-scores after revision to track improvement
+- **`gpd:write-paper`**: Runs quality scoring after all sections drafted, before generating submission package
+- **`gpd:arxiv-submission`**: Requires the resolved journal profile's `minimum_submission_score` to proceed (override with `--force`)
+- **`gpd:respond-to-referees`**: Re-scores after revision to track improvement
 - **VERIFICATION.md**: Quality score recorded in paper section of verification report
 
 ## Confidence-to-Score Mapping
@@ -163,7 +163,7 @@ Different journals emphasize different quality dimensions. Apply these multiplie
 ### Generic Fallback Profiles
 
 - `mnras` and `jfm` currently use the generic weighting profile unless a dedicated journal-specific scorer is added.
-- The scorer still emits a per-journal `minimum_submission_score`, and `/gpd:arxiv-submission` uses that surfaced minimum instead of a universal 80-point threshold.
+- The scorer still emits a per-journal `minimum_submission_score`, and `gpd:arxiv-submission` uses that surfaced minimum instead of a universal 80-point threshold.
 
 ## Scoring Summary Report Template
 

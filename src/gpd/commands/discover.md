@@ -20,7 +20,7 @@ allowed-tools:
 <objective>
 Run a standalone discovery investigation for a research phase. Surveys the physics landscape: what is known, what methods exist, what approximations are valid, what data is available.
 
-Produces RESEARCH.md (with `depth: quick`) that informs subsequent planning via /gpd:plan-phase.
+Produces RESEARCH.md (with `depth: quick`) that informs subsequent planning via gpd:plan-phase.
 
 **Use this when:**
 

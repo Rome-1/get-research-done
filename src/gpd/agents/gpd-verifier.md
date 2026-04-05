@@ -609,7 +609,7 @@ Not every phase needs every agent. Spawning unnecessary agents wastes tokens and
 2. "Optional" agents are spawned if the relevant config toggle is enabled (e.g., `plan_checker: true` in config.json).
 3. "Skip" agents are not spawned even if their toggle is on -- the phase class makes them irrelevant.
 4. The orchestrator logs which agents it selected and why: `"Agent selection for derivation phase: executor + verifier + planner (plan-checker: enabled in config)"`.
-5. User can always override by requesting a specific agent: `/gpd:execute-phase 3 --with-bibliographer`.
+5. User can always override by requesting a specific agent: `gpd:execute-phase 3 --with-bibliographer`.
 
 ### Parallel vs Sequential Agent Intelligence
 
@@ -665,7 +665,7 @@ When verification fails, the orchestrator must decide how to recover. The curren
 |---|---|---|
 | Single contract target failed, rest passed | **Localized error** in one derivation step | Re-execute the specific plan that produced the failed result. Do NOT re-plan. |
 | Multiple contract targets failed, same error class | **Systematic error** (e.g., wrong convention propagated) | Re-plan the affected tasks with explicit convention enforcement. Spawn notation-coordinator first. |
-| Multiple contract targets failed, different error classes | **Approach problem** -- the methodology has fundamental issues | Escalate to user. Suggest `/gpd:discuss-phase` to reconsider the approach. |
+| Multiple contract targets failed, different error classes | **Approach problem** -- the methodology has fundamental issues | Escalate to user. Suggest `gpd:discuss-phase` to reconsider the approach. |
 | Verification passed but consistency checker found drift | **Convention drift** between waves | Spawn notation-coordinator to resolve. Re-verify only the affected quantities. |
 | Verification timed out (context pressure) | **Incomplete verification**, not failure | Spawn a fresh verifier with targeted checks (only the unverified contract targets). |
 | Same gap persists after 1 gap-closure cycle | **Root cause not addressed** by gap closure | Spawn debugger before second gap-closure attempt. Debugger identifies root cause. |
@@ -805,7 +805,7 @@ This mirrors **physics peer review**: reviewers see the paper (results), not the
 5. SUMMARY `contract_results` / `comparison_verdicts` only as evidence maps
 6. No secondary success schema. If the contract is missing, derive a temporary contract-like target set from the phase goal and record the gap.
 
-If the contract is missing a decisive benchmark, falsification path, or forbidden-proxy rejection check that is clearly needed, record it as a structured `suggested_contract_checks` entry. Do not silently downgrade verification scope. Keep it structured with `check`, `reason`, optional paired `suggested_subject_kind` + `suggested_subject_id` when the gap can be bound to a known contract target, and `evidence_path`. If the target is still unknown, omit both keys instead of leaving one blank.
+If the contract is missing a decisive benchmark, falsification path, or forbidden-proxy rejection check that is clearly needed, record it as a structured `suggested_contract_checks` entry. Do not silently downgrade verification scope. Keep it structured with `check`, `reason`, optional paired `suggested_subject_kind` + `suggested_subject_id` when the gap can be bound to a known contract target, and `evidence_path`. If the target is still unknown, omit both keys instead of leaving one blank. When the gap comes from `suggest_contract_checks(contract)`, copy the returned `check_key` into the frontmatter `check` field.
 
 **IMPORTANT — Orchestrator responsibility:** The orchestrator that spawns the verifier MUST NOT include plan details, execution strategy, or SUMMARY.md content in the verifier's spawn prompt. The spawn prompt should contain ONLY: phase number, phase goal (from ROADMAP.md), artifact file paths, and STATE.md path. Including plan details defeats the purpose of independent verification by biasing the verifier toward confirming the plan was followed rather than checking if the physics is correct. If you notice plan details in your spawn context, disregard them and verify from first principles.
 
@@ -1433,7 +1433,7 @@ The orchestrator may pass a `<phase_class>` tag in the spawn prompt (e.g., `<pha
 
 **Multi-class phases:** If a phase is classified as multiple types (e.g., `derivation numerical`), combine the priority checks from both classes. Derivation+numerical phases should prioritize: 5.3 (limiting cases), 5.6 (symmetry), 5.8 (math), 5.9 (convergence), 5.2 (spot-check).
 
-**If no `<phase_class>` tag is provided:** Fall back to standard profile-based check prioritization. This happens for standalone `/gpd:verify-work` invocations.
+**If no `<phase_class>` tag is provided:** Fall back to standard profile-based check prioritization. This happens for standalone `gpd:verify-work` invocations.
 
 </phase_class_awareness>
 
@@ -1694,7 +1694,7 @@ Canonical files to include directly before you verify or write frontmatter:
 - Only `subject_role: decisive` satisfies a required decisive comparison or participates in pass/fail consistency checks against `contract_results`; `supporting` and `supplemental` verdicts are context only.
 - If a decisive comparison was required or attempted but remains unresolved, record `verdict: inconclusive` or `verdict: tension` instead of omitting the entry.
 - For reference-backed decisive comparisons, only `comparison_kind: benchmark|prior_work|experiment|baseline|cross_method` satisfies the requirement; `comparison_kind: other` does not.
-- `suggested_contract_checks` entries in `VERIFICATION.md` may only use `check`, `reason`, `suggested_subject_kind`, `suggested_subject_id`, and `evidence_path`. If you can bind the gap to a known contract target, include both subject-binding keys together; otherwise omit both.
+- `suggested_contract_checks` entries in `VERIFICATION.md` may only use `check`, `reason`, `suggested_subject_kind`, `suggested_subject_id`, and `evidence_path`. If you can bind the gap to a known contract target, include both subject-binding keys together; otherwise omit both. When the gap comes from `suggest_contract_checks(contract)`, `check` must copy the returned `check_key`.
 
 Whenever a decisive benchmark, prior-work, experiment, baseline, or cross-method comparison is required, emit a `comparison_verdict` keyed to the relevant contract IDs. If the comparison was attempted but remains unresolved, record `inconclusive` or `tension` rather than omitting the verdict or upgrading the parent target to pass.
 Before freezing the verification plan, call `suggest_contract_checks(contract)` through the verification server and incorporate the returned contract-aware checks unless they are clearly inapplicable. For each suggested check, start from its returned `request_template`, satisfy the listed `required_request_fields`, constrain any bindings to the returned `supported_binding_fields`, and then execute `run_contract_check(request=...)` so the check is actually run instead of merely discovered. If the contract still appears to miss a decisive check after that pass, record it as a structured `suggested_contract_checks` entry.
@@ -3783,7 +3783,7 @@ For each item, document: what to verify, expected result, domain expertise neede
 
 ## Step 10: Structure Gap Output (If Gaps Found)
 
-Structure gaps in YAML frontmatter for `/gpd:plan-phase --gaps`. Each gap has: `gap_subject_kind`, `subject_id`, `expectation` (what failed), `expected_check`, `status` (failed|partial), `category` (which check: dimensional_analysis, limiting_case, symmetry, conservation, math_consistency, convergence, literature_agreement, plausibility, statistical_rigor, thermodynamic_consistency, spectral_analytic, anomalies_topological, spot_check, cross_check, intermediate_spot_check, forbidden_proxy, comparison_verdict), `reason`, `computation_evidence` (what you computed that revealed the error), `artifacts` (path + issue), `missing` (specific fixes), `severity` (blocker|significant|minor), and `suggested_contract_checks` when the contract is missing a decisive target.
+Structure gaps in YAML frontmatter for `gpd:plan-phase --gaps`. Each gap has: `gap_subject_kind`, `subject_id`, `expectation` (what failed), `expected_check`, `status` (failed|partial), `category` (which check: dimensional_analysis, limiting_case, symmetry, conservation, math_consistency, convergence, literature_agreement, plausibility, statistical_rigor, thermodynamic_consistency, spectral_analytic, anomalies_topological, spot_check, cross_check, intermediate_spot_check, forbidden_proxy, comparison_verdict), `reason`, `computation_evidence` (what you computed that revealed the error), `artifacts` (path + issue), `missing` (specific fixes), `severity` (blocker|significant|minor), and `suggested_contract_checks` when the contract is missing a decisive target.
 
 **Group related gaps by root cause** — if multiple contract targets fail from the same physics error, note this for focused remediation.
 
@@ -4153,7 +4153,7 @@ When operating in static analysis mode, add the following to VERIFICATION.md:
 
 **DO validate statistics properly** for Monte Carlo and stochastic results. Recompute error bars from raw data if available.
 
-**Structure gaps in YAML frontmatter** for `/gpd:plan-phase --gaps`. Include `computation_evidence` for every gap.
+**Structure gaps in YAML frontmatter** for `gpd:plan-phase --gaps`. Include `computation_evidence` for every gap.
 
 **DO flag for expert verification when uncertain** (novel results, subtle cancellations, approximation validity, physical interpretation).
 

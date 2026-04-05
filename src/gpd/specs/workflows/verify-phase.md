@@ -3,7 +3,7 @@ Verify research phase goal achievement through decisive verification. Check that
 
 Executed by a verification subagent spawned from execute-phase.md.
 
-The standalone `/gpd:verify-work` workflow reuses the same verification criteria through `verify-work.md`; this file itself is executed by the execute-phase orchestrator.
+The standalone `gpd:verify-work` workflow reuses the same verification criteria through `verify-work.md`; this file itself is executed by the execute-phase orchestrator.
 </purpose>
 
 <core_principle>
@@ -137,7 +137,7 @@ If no `contract` is available in frontmatter:
 **Important: every derived claim must be testable by substituting values, taking limits, or performing an independent computation. Outcomes that can only be checked by grepping are process claims, not verification targets.**
 
 If the plan contract is materially incomplete but the verifier can see an obvious decisive check that should exist, record it as a structured `suggested_contract_checks` entry in the report rather than silently ignoring the gap.
-Record `suggested_contract_checks` only for clearly decisive, user-visible gaps. Do not use them for administrative preferences, nicer formatting, or generic paperwork. Every such entry must stay structured with `check`, `reason`, `suggested_subject_kind`, `suggested_subject_id` when known, and `evidence_path`.
+Record `suggested_contract_checks` only for clearly decisive, user-visible gaps. Do not use them for administrative preferences, nicer formatting, or generic paperwork. Every such entry must stay structured with `check`, `reason`, `suggested_subject_kind`, `suggested_subject_id` when known, and `evidence_path`. When the gap comes from `suggest_contract_checks(contract)`, copy the returned `check_key` into the frontmatter `check` field.
 
 If the phase includes a theorem-style claim or `proof_obligation` and no structured theorem inventory exists yet, derive one before continuing: enumerate the theorem statement, named parameters, hypotheses, quantifier/domain obligations, and conclusion clauses. Verification must stay keyed to that inventory rather than to vague prose.
 </step>

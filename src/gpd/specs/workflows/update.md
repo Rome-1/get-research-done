@@ -149,7 +149,7 @@ Display the confirmation prompt in this shape:
 - `gpd-*` agent files will be replaced
 
 Custom files outside the managed GPD install are preserved.
-If you've modified managed GPD files directly, they will be backed up to `{GPD_PATCHES_DIR_NAME}/` and can be reapplied with `/gpd:reapply-patches` after the update.
+If you've modified managed GPD files directly, they will be backed up to `{GPD_PATCHES_DIR_NAME}/` and can be reapplied with `gpd:reapply-patches` after the update.
 ```
 
 > **Platform note:** If `ask_user` is not available, present the choices in plain text and wait for the user's freeform response.
@@ -204,7 +204,7 @@ If patches were backed up, show:
 
 ```text
 Local patches were backed up before the update.
-Run /gpd:reapply-patches to merge your modifications into the new version.
+Run gpd:reapply-patches to merge your modifications into the new version.
 ```
 
 Otherwise continue normally.

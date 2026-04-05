@@ -161,9 +161,9 @@ When multiple viable approaches or optional side questions appear, do NOT silent
 
 Use this 4-way decision model:
 
-1. `Branch as alternative hypothesis` -> route through `/gpd:tangent` or `/gpd:branch-hypothesis`
-2. `Run a bounded side investigation now` -> route through `/gpd:quick`
-3. `Capture and defer` -> route through `/gpd:add-todo`
+1. `Branch as alternative hypothesis` -> route through `gpd:tangent` or `gpd:branch-hypothesis`
+2. `Run a bounded side investigation now` -> route through `gpd:quick`
+3. `Capture and defer` -> route through `gpd:add-todo`
 4. `Stay on the main line` -> create plans only for the selected primary approach
 
 If the context does not already contain an explicit tangent choice and more than one viable path remains live, return `## CHECKPOINT REACHED` with the four options above instead of silently branching.
@@ -181,7 +181,7 @@ If the user is already on an active hypothesis branch, continue serving that bra
 - **Researcher depth:** Request COMPREHENSIVE research — explore multiple methods, compare tradeoffs, identify which approaches have worked for similar problems.
 - **Literature:** Broad search — survey 10+ papers across multiple methods. Include "failed approaches" from literature to avoid repeating them.
 - **Scope:** Wider — include validation-intensive tasks, but keep optional tangents out of the main-line plan until the user explicitly chooses how to handle them.
-- **Branching:** For truly independent alternatives, route explicit branch choices through `/gpd:tangent` or `/gpd:branch-hypothesis`. Do not silently fork by setting `branch: true` on unapproved alternative plans.
+- **Branching:** For truly independent alternatives, route explicit branch choices through `gpd:tangent` or `gpd:branch-hypothesis`. Do not silently fork by setting `branch: true` on unapproved alternative plans.
 - **Success criteria:** If the user explicitly chooses a side investigation or comparison path, include COMPARISON criteria. Otherwise optimize the main-line plan around the recommended approach and record the other alternatives as tangent candidates.
 - **Phase structure:** Add an explicit comparison task only when the user has already chosen to compare approaches inside this phase or through a quick side investigation.
 
@@ -190,9 +190,9 @@ If the user is already on an active hypothesis branch, continue serving that bra
 ## CHECKPOINT REACHED
 
 Multiple viable approaches remain:
-1. Branch as alternative hypothesis -> /gpd:tangent or /gpd:branch-hypothesis
-2. Run a bounded side investigation now -> /gpd:quick
-3. Capture and defer -> /gpd:add-todo
+1. Branch as alternative hypothesis -> gpd:tangent or gpd:branch-hypothesis
+2. Run a bounded side investigation now -> gpd:quick
+3. Capture and defer -> gpd:add-todo
 4. Stay on the main line -> plan the recommended perturbative approach only
 ```
 
@@ -265,7 +265,7 @@ If not set in config.json, default to `balanced`.
 
 ## CRITICAL: User Decision Fidelity
 
-The orchestrator provides user decisions in `<user_decisions>` tags from `/gpd:discuss-phase`.
+The orchestrator provides user decisions in `<user_decisions>` tags from `gpd:discuss-phase`.
 
 **Before creating ANY task, verify:**
 
@@ -379,7 +379,7 @@ Discovery is MANDATORY unless you can prove current methods/results exist in con
 - Level 2+: New computational library, unfamiliar gauge/coordinate choice, "choose/compare/evaluate" in description
 - Level 3: "formalism/framework/quantization", multi-scale physics, renormalization group design, lattice construction
 
-For specialized domains (quantum gravity, string phenomenology, heavy-ion physics, condensed matter topology), suggest `/gpd:research-phase` before plan-phase.
+For specialized domains (quantum gravity, string phenomenology, heavy-ion physics, condensed matter topology), suggest `gpd:research-phase` before plan-phase.
 
 ### Context7 Tool (`mcp__context7__*`)
 
@@ -1854,8 +1854,8 @@ Gap closure is fundamentally different from initial planning. The physics is alr
 | Situation | Action | Why |
 |-----------|--------|-----|
 | Verifier found 1-3 specific failures | Gap closure (1-2 task plan per gap) | Targeted fix, minimal disruption |
-| Verifier found >5 failures spanning multiple areas | Phase revision (`/gpd:revise-phase`) | Too many gaps suggest systematic error — re-plan the phase |
-| Referee found issues with the paper | `/gpd:respond-to-referees` (not gap closure) | Different workflow — referee responses, not verification fixes |
+| Verifier found >5 failures spanning multiple areas | Phase revision (`gpd:revise-phase`) | Too many gaps suggest systematic error — re-plan the phase |
+| Referee found issues with the paper | `gpd:respond-to-referees` (not gap closure) | Different workflow — referee responses, not verification fixes |
 | Cross-phase consistency check failed | Convention fix (notation-coordinator) + gap closure for affected results | Convention is the root cause, gaps are symptoms |
 
 </gap_closure_strategy>
@@ -1906,7 +1906,7 @@ estimated_execution:
 
 **Plan structure:**
 - **Tasks:** 2-3 (diagnose → fix → re-verify)
-- **Agents:** Debugger first (`/gpd:debug` with `goal: find_root_cause_only`), then executor for the fix
+- **Agents:** Debugger first (`gpd:debug` with `goal: find_root_cause_only`), then executor for the fix
 - **Wave:** Sequential — diagnose MUST complete before fix
 - **Scope limit:** Diagnose the root cause for ALL related gaps, then create ONE fix plan. Do not fix gaps one-by-one if they share a cause — that's treating symptoms.
 - **Escalation:** If debugger cannot find root cause after 2 hypothesis cycles, escalate to user with structured diagnostic report.
@@ -1940,7 +1940,7 @@ estimated_execution:
 - Typically involves: wrong approximation scheme, missing physics, incorrect starting point
 
 **Plan structure:**
-- **Tasks:** NOT a gap closure plan. This is a `/gpd:revise-phase` operation.
+- **Tasks:** NOT a gap closure plan. This is a `gpd:revise-phase` operation.
 - **Agents:** Planner (full re-plan from last good checkpoint), then executor
 - **Scope limit:** Re-derive from the last verified checkpoint, not from scratch. If Phase 1 passed verification and Phase 2 failed structurally, re-plan Phase 2 only. Preserve Phase 1 results.
 - **Escalation:** ALWAYS escalate to user before executing. Structural revision changes the research direction — that's a researcher decision, not an AI decision.
@@ -1980,7 +1980,7 @@ estimated_execution:
 **Plan structure:**
 - **Tasks:** 1-3 (depends on scope of new calculation)
 - **Agents:** Planner for scoping → executor for computation
-- **Implementation:** `/gpd:insert-phase` (decimal phase like 3.1) to avoid renumbering
+- **Implementation:** `gpd:insert-phase` (decimal phase like 3.1) to avoid renumbering
 - **Scope limit:** STRICT scope boundary. "Extend to NLO" means NLO only — do not also add NNLO, do not reorganize existing results, do not rewrite the paper structure. The supplementary calculation produces ONE new result that feeds into the existing framework.
 - **Escalation:** If the supplementary calculation would take >2 phases, it's not supplementary — it's a new milestone. Escalate to user for scoping.
 
@@ -2420,8 +2420,8 @@ patterns_consulted:
 Use `phase_dir` from init context (already loaded in load_project_state).
 
 ```bash
-cat "$phase_dir"/*-CONTEXT.md 2>/dev/null   # From /gpd:discuss-phase
-cat "$phase_dir"/*-RESEARCH.md 2>/dev/null   # From /gpd:research-phase
+cat "$phase_dir"/*-CONTEXT.md 2>/dev/null   # From gpd:discuss-phase
+cat "$phase_dir"/*-RESEARCH.md 2>/dev/null   # From gpd:research-phase
 cat "$phase_dir"/*-DISCOVERY.md 2>/dev/null  # From mandatory discovery
 ```
 
@@ -2888,7 +2888,7 @@ Agent-specific: "current unit of work" = current plan file. Each plan produced ~
 
 ### Next Steps
 
-Execute: `/gpd:execute-phase {phase}`
+Execute: `gpd:execute-phase {phase}`
 
 <sub>`/clear` first -- fresh context window</sub>
 
@@ -2948,7 +2948,7 @@ Append this YAML block after the markdown planning output. It enables machine-re
 
 ### Next Steps
 
-Execute: `/gpd:execute-phase {phase} --gaps-only`
+Execute: `gpd:execute-phase {phase} --gaps-only`
 ```
 
 ## Checkpoint Reached / Revision Complete
@@ -2999,6 +2999,6 @@ Planning complete when:
 - [ ] Each plan: tasks derived from gap.missing items with physics-specific fixes
 - [ ] Each plan: verification includes the specific physics check that previously failed
 - [ ] PLAN file(s) committed to git
-- [ ] Researcher knows to run `/gpd:execute-phase {X}` next
+- [ ] Researcher knows to run `gpd:execute-phase {X}` next
 
 </success_criteria>

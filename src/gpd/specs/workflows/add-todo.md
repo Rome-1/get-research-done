@@ -34,7 +34,7 @@ Note existing areas from the todos array for consistency in infer_area step.
 
 <step name="extract_content">
 **With arguments:** Use as the title/focus.
-- `/gpd:add-todo Check unitarity of S-matrix at two loops` -> title = "Check unitarity of S-matrix at two loops"
+- `gpd:add-todo Check unitarity of S-matrix at two loops` -> title = "Check unitarity of S-matrix at two loops"
 
 **Without arguments:** Analyze recent conversation to extract:
 
@@ -162,7 +162,7 @@ Would you like to:
 
 1. Continue with current work
 2. Add another todo
-3. View all todos (/gpd:check-todos)
+3. View all todos (gpd:check-todos)
 
 ```
 </step>

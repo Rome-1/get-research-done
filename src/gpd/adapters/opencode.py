@@ -145,16 +145,11 @@ def _project_managed_mcp_servers(
     for integration in list_managed_integrations().values():
         if not integration.is_configured(env, cwd=cwd, strict=True):
             continue
-
-        entry: dict[str, object] = {
-            "command": integration.bridge_command,
-            "args": [],
-        }
-        endpoint = integration.resolved_endpoint(env, cwd=cwd, strict=True)
-        if endpoint and endpoint != integration.default_endpoint:
-            entry["env"] = {integration.endpoint_env_var: endpoint}
-
-        managed_servers[integration.managed_server_key] = entry
+        managed_servers[integration.managed_server_key] = integration.projected_server_entry(
+            env,
+            cwd=cwd,
+            strict=True,
+        )
 
     return managed_servers
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -96,6 +97,34 @@ def test_wolfram_descriptor_strict_parsing_rejects_unknown_keys(tmp_path, payloa
 
     with pytest.raises(RuntimeError, match="unsupported keys"):
         descriptor.project_record(tmp_path, strict=True)
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_error"),
+    [
+        ({"wolfram": {"enabled": "false"}}, r"integrations\.wolfram\.enabled must be a boolean"),
+        ({"wolfram": {"endpoint": "   "}}, r"integrations\.wolfram\.endpoint must be a non-empty string"),
+        ({"wolfram": []}, r"integrations\.wolfram must be a JSON object"),
+        (
+            {"wolfram": {"enabled": True}, "legacy_notes": "unexpected"},
+            r"integrations config contains unsupported keys: legacy_notes; supported keys are wolfram",
+        ),
+    ],
+)
+def test_wolfram_descriptor_default_parsing_fails_closed_for_malformed_config(
+    tmp_path: Path,
+    payload: dict[str, object],
+    expected_error: str,
+) -> None:
+    descriptor = get_managed_integration("wolfram")
+    assert descriptor is not None
+
+    config_path = tmp_path / "GPD" / "integrations.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match=expected_error):
+        descriptor.project_record(tmp_path)
 
 
 def test_wolfram_descriptor_strict_parsing_rejects_legacy_api_key_env_field(tmp_path) -> None:

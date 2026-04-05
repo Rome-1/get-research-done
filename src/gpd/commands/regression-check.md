@@ -22,7 +22,7 @@ This command does **not** re-run physics, numerical, dimensional, or contract ve
 2. Missing, invalid, or non-canonical `*-VERIFICATION.md` statuses
 3. Completed phases whose `*-VERIFICATION.md` still reports unresolved gaps
 
-Use `/gpd:verify-work <phase>` when a flagged phase needs actual re-verification.
+Use `gpd:verify-work <phase>` when a flagged phase needs actual re-verification.
 
 Output: structured CLI/JSON result with `passed`, `phases_checked`, and `issues`.
 </objective>

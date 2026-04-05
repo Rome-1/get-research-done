@@ -31,7 +31,7 @@ ls GPD/observability/sessions/*.jsonl 2>/dev/null | head -5
 No observability sessions found in GPD/observability/sessions/.
 
 Session logs are recorded automatically during GPD command execution.
-Run any GPD command first, then retry /gpd:export-logs.
+Run any GPD command first, then retry gpd:export-logs.
 ```
 
 Exit.
@@ -114,8 +114,8 @@ Parse the JSON result for `exported`, `output_dir`, `sessions_exported`, `events
 ───────────────────────────────────────────────────────────────
 
 **Also available:**
-- `/gpd:export-logs --format markdown` — human-readable report
-- `/gpd:export-logs --last 5` — export only recent sessions
+- `gpd:export-logs --format markdown` — human-readable report
+- `gpd:export-logs --last 5` — export only recent sessions
 - `gpd observe show` — inspect events interactively
 - `gpd observe sessions` — list available sessions
 

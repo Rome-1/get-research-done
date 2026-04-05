@@ -40,9 +40,9 @@ If `model_overrides.<runtime>` already exists, surface the current `tier-1` / `t
 <step name="explain_scope_and_tradeoff">
 Explain the command in one compact block before asking for choices:
 
-- `/gpd:set-profile` changes the abstract research profile and agent tier assignments.
-- `/gpd:set-tier-models` changes only the concrete runtime-native model IDs behind `tier-1`, `tier-2`, and `tier-3`.
-- `/gpd:settings` is the broader unattended/configuration flow when the user also wants autonomy, review cadence, workflow toggles, budgets, or git settings.
+- `gpd:set-profile` changes the abstract research profile and agent tier assignments.
+- `gpd:set-tier-models` changes only the concrete runtime-native model IDs behind `tier-1`, `tier-2`, and `tier-3`.
+- `gpd:settings` is the broader unattended/configuration flow when the user also wants autonomy, review cadence, workflow toggles, budgets, or git settings.
 
 Explain the tier tradeoff plainly:
 
@@ -148,8 +148,8 @@ Meaning:
 - tier-2 = balanced default
 - tier-3 = fastest / most economical
 
-Use `/gpd:set-profile <profile>` to change abstract tier assignments.
-Use `/gpd:settings` when you want broader unattended/configuration changes too.
+Use `gpd:set-profile <profile>` to change abstract tier assignments.
+Use `gpd:settings` when you want broader unattended/configuration changes too.
 
 Useful checks from your normal terminal:
 - `gpd resolve-tier gpd-planner`
@@ -169,5 +169,5 @@ State clearly that future agent spawns in this project will use the updated runt
 - [ ] Config updated only through `model_overrides.<runtime>`
 - [ ] Other config sections left unchanged
 - [ ] Runtime-native model strings preserved exactly except for surrounding whitespace trimming
-- [ ] Confirmation distinguishes `/gpd:set-profile`, `/gpd:set-tier-models`, and `/gpd:settings`
+- [ ] Confirmation distinguishes `gpd:set-profile`, `gpd:set-tier-models`, and `gpd:settings`
 </success_criteria>

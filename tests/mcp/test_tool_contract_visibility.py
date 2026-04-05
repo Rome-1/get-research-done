@@ -1057,6 +1057,8 @@ def test_public_descriptors_surface_contract_and_optional_dependency_visibility(
         "binding.forbidden_proxy_ids",
     ):
         assert field in verification["description"]
+    assert "`run_contract_check` uses `request.check_key` as its sole top-level identifier" in verification["description"]
+    assert "rejects `check_id` there" in verification["description"]
     assert "live semantic integrity rules" in verification["description"]
     assert "target resolution ambiguous" in verification["description"]
     assert "`references[].carry_forward_to` entries as workflow scope labels only" in verification["description"]
@@ -1261,6 +1263,8 @@ def test_public_verification_infra_descriptor_surfaces_semantic_contract_rules()
         "binding.forbidden_proxy_ids",
     ):
         assert field in description
+    assert "`run_contract_check` uses `request.check_key` as its sole top-level identifier" in description
+    assert "rejects `check_id` there" in description
     assert "live semantic integrity rules" in description
     assert "target resolution ambiguous" in description
     assert "`references[].carry_forward_to` entries as workflow scope labels only" in description

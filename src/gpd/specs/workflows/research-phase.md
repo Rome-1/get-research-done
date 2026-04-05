@@ -1,7 +1,7 @@
 <purpose>
 Research mathematical methods, physical principles, and computational tools needed to approach a phase. Spawns gpd-phase-researcher with phase context.
 
-Standalone research command. For most workflows, use `/gpd:plan-phase` which integrates research automatically.
+Standalone research command. For most workflows, use `gpd:plan-phase` which integrates research automatically.
 </purpose>
 
 <process>
@@ -146,7 +146,7 @@ Accept the researcher handoff automatically only once `expected_artifacts` exist
 
 ## Step 5: Handle Return
 
-**If the researcher agent fails to spawn or returns an error:** Report the failure. Offer: 1) Retry with the same context, 2) Execute the research in the main context (slower but reliable), 3) Skip research and proceed to `/gpd:plan-phase` directly (planner will work with less context). Do not silently continue without research output.
+**If the researcher agent fails to spawn or returns an error:** Report the failure. Offer: 1) Retry with the same context, 2) Execute the research in the main context (slower but reliable), 3) Skip research and proceed to `gpd:plan-phase` directly (planner will work with less context). Do not silently continue without research output.
 
 - **Artifact gate:** If the researcher reports `## RESEARCH COMPLETE` but the `expected_artifacts` entry (`RESEARCH.md`) is missing from the phase directory, treat the handoff as incomplete. Offer: 1) Retry researcher, 2) Execute research in the main context, 3) Abort.
 - `## RESEARCH COMPLETE` -- Display summary, offer: Plan/Dig deeper/Review/Done

@@ -20,7 +20,7 @@ allowed-tools:
 <objective>
 Perform a rigorous physics derivation with systematic verification at each step.
 
-Provide the equation or topic to derive as an argument (e.g., `/gpd:derive-equation "effective mass from self-energy"`). If no argument is given, you will be asked what to derive.
+Provide the equation or topic to derive as an argument (e.g., `gpd:derive-equation "effective mass from self-energy"`). If no argument is given, you will be asked what to derive.
 
 - States assumptions explicitly, establishes notation and conventions
 - Performs step-by-step derivation with dimensional analysis at each stage

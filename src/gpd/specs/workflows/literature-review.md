@@ -3,7 +3,7 @@ Conduct a systematic literature review for a physics research topic. Map the int
 
 Also emit a machine-readable `GPD/literature/{slug}-CITATION-SOURCES.json` sidecar containing strict `CitationSource` records keyed by stable `reference_id` values so paper-writing can reuse the discovered references without manual transcription.
 
-Called from /gpd:literature-review command.
+Called from gpd:literature-review command.
 </purpose>
 
 <core_principle>

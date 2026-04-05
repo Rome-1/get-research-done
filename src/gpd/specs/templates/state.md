@@ -259,11 +259,11 @@ Updated after each plan completion.
 
 **Active Approximations:** Tracks all approximations currently in use, their validity ranges, and the controlling parameters. Convention lock is an 18-field snapshot of active conventions — full convention catalog lives in `GPD/CONVENTIONS.md`.
 
-**Pending Todos:** Ideas captured via /gpd:add-todo
+**Pending Todos:** Ideas captured via gpd:add-todo
 
 - Count of pending todos
 - Reference to GPD/todos/pending/
-- Brief list if few, count if many (e.g., "5 pending todos — see /gpd:check-todos")
+- Brief list if few, count if many (e.g., "5 pending todos — see gpd:check-todos")
 
 **Blockers/Concerns:** From "Next Phase Readiness" sections
 

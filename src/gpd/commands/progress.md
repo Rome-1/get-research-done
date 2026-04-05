@@ -60,20 +60,20 @@ If `project_exists` is false (no `GPD/` directory):
 ```
 No planning structure found.
 
-If you are trying to reopen existing work, use `gpd resume --recent` first so you can rediscover the project explicitly. The recent-project picker is advisory: choose the workspace there, then continue in that workspace with `/gpd:resume-work`, which reloads canonical state for that project.
+If you are trying to reopen existing work, use `gpd resume --recent` first so you can rediscover the project explicitly. The recent-project picker is advisory: choose the workspace there, then continue in that workspace with `gpd:resume-work`, which reloads canonical state for that project.
 
-Run /gpd:new-project to start a new research project.
+Run gpd:new-project to start a new research project.
 ```
 
 Exit.
 
-If missing STATE.md: suggest `/gpd:new-project`.
+If missing STATE.md: suggest `gpd:new-project`.
 
 **If ROADMAP.md missing but PROJECT.md exists:**
 
 This means a milestone was completed and archived. Go to **Route F** (between milestones).
 
-If missing both ROADMAP.md and PROJECT.md: suggest `/gpd:new-project`.
+If missing both ROADMAP.md and PROJECT.md: suggest `gpd:new-project`.
 
 ## Step 2: Load Context
 
@@ -179,10 +179,10 @@ CONTEXT: [done if has_context | - if not]
   (e.g., "Awaiting experimental data from collaborator")
 
 ## Pending Tasks
-- [count] pending -- /gpd:check-todos to review
+- [count] pending -- gpd:check-todos to review
 
 ## Active Debug Sessions
-- [count] active -- /gpd:debug to continue
+- [count] active -- gpd:debug to continue
 (Only show this section if count > 0)
 
 ## What's Next
@@ -264,7 +264,7 @@ Read its `<objective>` section.
 
 **{phase}-{plan}: [Plan Name]** -- [objective summary from PLAN.md]
 
-`/gpd:execute-phase {phase}`
+`gpd:execute-phase {phase}`
 
 <sub>`/clear` first -> fresh context window</sub>
 
@@ -287,7 +287,7 @@ Check if `{phase}-CONTEXT.md` exists in phase directory.
 **Phase {N}: {Name}** -- {Goal from ROADMAP.md}
 <sub>Context gathered, ready to plan</sub>
 
-`/gpd:plan-phase {phase-number}`
+`gpd:plan-phase {phase-number}`
 
 <sub>`/clear` first -> fresh context window</sub>
 
@@ -303,15 +303,15 @@ Check if `{phase}-CONTEXT.md` exists in phase directory.
 
 **Phase {N}: {Name}** -- {Goal from ROADMAP.md}
 
-`/gpd:discuss-phase {phase}` -- gather context and clarify approach
+`gpd:discuss-phase {phase}` -- gather context and clarify approach
 
 <sub>`/clear` first -> fresh context window</sub>
 
 ---
 
 **Also available:**
-- `/gpd:plan-phase {phase}` -- skip discussion, plan directly
-- `/gpd:list-phase-assumptions {phase}` -- see assumptions before planning
+- `gpd:plan-phase {phase}` -- skip discussion, plan directly
+- `gpd:list-phase-assumptions {phase}` -- see assumptions before planning
 
 ---
 ```
@@ -329,15 +329,15 @@ Validation checks found gaps (e.g., failed consistency checks, non-convergent nu
 
 **{phase}-VERIFICATION.md** has {N} gaps requiring fixes.
 
-`/gpd:plan-phase {phase} --gaps`
+`gpd:plan-phase {phase} --gaps`
 
 <sub>`/clear` first -> fresh context window</sub>
 
 ---
 
 **Also available:**
-- `/gpd:execute-phase {phase}` -- execute phase plans
-- `/gpd:verify-work {phase}` -- run more validation checks
+- `gpd:execute-phase {phase}` -- execute phase plans
+- `gpd:verify-work {phase}` -- run more validation checks
 
 ---
 ```
@@ -346,7 +346,7 @@ Validation checks found gaps (e.g., failed consistency checks, non-convergent nu
 
 **Route E2: Gap-closure plans exist but are unexecuted**
 
-Gap-closure plans were created by `/gpd:plan-phase --gaps` but have not been executed yet. Suggest executing them instead of re-planning.
+Gap-closure plans were created by `gpd:plan-phase --gaps` but have not been executed yet. Suggest executing them instead of re-planning.
 
 ```
 ---
@@ -355,15 +355,15 @@ Gap-closure plans were created by `/gpd:plan-phase --gaps` but have not been exe
 
 **{GAP_PLANS_UNEXECUTED} gap-closure plan(s)** exist but have not been executed.
 
-`/gpd:execute-phase {phase} --gaps-only`
+`gpd:execute-phase {phase} --gaps-only`
 
 <sub>`/clear` first -> fresh context window</sub>
 
 ---
 
 **Also available:**
-- `/gpd:plan-phase {phase} --gaps` -- re-plan gap fixes (if current plans are stale)
-- `/gpd:verify-work {phase}` -- re-run validation checks
+- `gpd:plan-phase {phase} --gaps` -- re-plan gap fixes (if current plans are stale)
+- `gpd:verify-work {phase}` -- re-run validation checks
 
 ---
 ```
@@ -403,15 +403,15 @@ Read ROADMAP.md to get the next phase's name and goal.
 
 **Phase {Z+1}: {Name}** -- {Goal from ROADMAP.md}
 
-`/gpd:discuss-phase {Z+1}` -- gather context and clarify approach
+`gpd:discuss-phase {Z+1}` -- gather context and clarify approach
 
 <sub>`/clear` first -> fresh context window</sub>
 
 ---
 
 **Also available:**
-- `/gpd:plan-phase {Z+1}` -- skip discussion, plan directly
-- `/gpd:verify-work {Z}` -- validation check before continuing
+- `gpd:plan-phase {Z+1}` -- skip discussion, plan directly
+- `gpd:verify-work {Z}` -- validation check before continuing
 
 ---
 ```
@@ -431,14 +431,14 @@ All {N} phases finished!
 
 **Complete Milestone** -- archive results and prepare for next investigation
 
-`/gpd:complete-milestone`
+`gpd:complete-milestone`
 
 <sub>`/clear` first -> fresh context window</sub>
 
 ---
 
 **Also available:**
-- `/gpd:verify-work` -- validation check before completing milestone
+- `gpd:verify-work` -- validation check before completing milestone
 
 ---
 ```
@@ -462,7 +462,7 @@ Ready to plan the next phase of investigation.
 
 **Start Next Milestone** -- questioning -> literature research -> requirements -> roadmap
 
-`/gpd:new-milestone`
+`gpd:new-milestone`
 
 <sub>`/clear` first -> fresh context window</sub>
 
@@ -473,11 +473,11 @@ Ready to plan the next phase of investigation.
 
 **Handle edge cases:**
 
-- Phase complete but next phase not planned → offer `/gpd:plan-phase [next]`
+- Phase complete but next phase not planned → offer `gpd:plan-phase [next]`
 - All work complete → offer milestone completion
 - Blockers present → highlight before offering to continue
-- Projected handoff file exists → mention it as a recovery pointer, offer `/gpd:resume-work`
-- If the user may be outside the project entirely → mention `gpd resume --recent` as the explicit rediscovery step before `/gpd:resume-work`
+- Projected handoff file exists → mention it as a recovery pointer, offer `gpd:resume-work`
+- If the user may be outside the project entirely → mention `gpd resume --recent` as the explicit rediscovery step before `gpd:resume-work`
 
 </process>
 
@@ -486,7 +486,7 @@ Ready to plan the next phase of investigation.
 - [ ] Rich context provided (recent work, decisions, physics insights, issues)
 - [ ] Current position clear with visual progress
 - [ ] What's next clearly explained
-- [ ] Smart routing: /gpd:execute-phase if plans exist, /gpd:plan-phase if not
+- [ ] Smart routing: gpd:execute-phase if plans exist, gpd:plan-phase if not
 - [ ] User confirms before any action
 - [ ] Seamless transition to appropriate gpd command
       </success_criteria>

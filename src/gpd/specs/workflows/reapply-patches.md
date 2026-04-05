@@ -1,7 +1,7 @@
 <purpose>
 After a GPD update wipes and reinstalls files, merge user's previously saved local modifications back into the new version. Uses intelligent comparison to handle cases where the upstream file also changed.
 
-Called from /gpd:reapply-patches command. In the physics research context, "patches" include corrections to calculation templates, custom notation conventions, modified validation checks, and personalized workflow adjustments.
+Called from gpd:reapply-patches command. In the physics research context, "patches" include corrections to calculation templates, custom notation conventions, modified validation checks, and personalized workflow adjustments.
 </purpose>
 
 <process>
@@ -26,7 +26,7 @@ Read `backup-meta.json` from the patches directory.
 ```
 No local patches found. Nothing to reapply.
 
-Local patches are automatically saved when you run /gpd:update
+Local patches are automatically saved when you run gpd:update
 after modifying any GPD workflow, command, or agent files.
 ```
 
@@ -75,7 +75,7 @@ For each file in `backup-meta.json`:
 ## Step 4: Record modified files
 
 After reapplying, do not invent a manual manifest-regeneration step.
-The managed file manifest is rebuilt by the next `/gpd:update`; for now, just record which installed files were modified so the user can review what was re-applied.
+The managed file manifest is rebuilt by the next `gpd:update`; for now, just record which installed files were modified so the user can review what was re-applied.
 
 ## Step 5: Cleanup option
 

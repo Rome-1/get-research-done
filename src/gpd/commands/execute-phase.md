@@ -82,7 +82,7 @@ Cost: ~2-5k tokens per gate. Catches sign errors and convention drift before the
 
 - If execution is interrupted (context limit, user stop, crash), the completed task SUMMARY.md files are already written.
 - On resumption, the orchestrator detects which plans already have SUMMARY.md files and skips them.
-- To force re-execution of a completed plan, delete or rename its SUMMARY.md before re-running `/gpd:execute-phase`.
+- To force re-execution of a completed plan, delete or rename its SUMMARY.md before re-running `gpd:execute-phase`.
 - The orchestrator applies returned shared-state updates after each successfully completed plan, so by the time a wave completes `STATE.md` already reflects that plan-level progress.
 
 </inline_guidance>

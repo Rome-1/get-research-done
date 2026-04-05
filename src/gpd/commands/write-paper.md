@@ -135,11 +135,11 @@ The workflow handles all logic including:
 10. **Consistency check** — Notation audit, cross-reference audit, placeholder resolution (RESULT PENDING markers), physics consistency, narrative flow
 11. **Notation audit** — Cross-reference all symbols against NOTATION_GLOSSARY.md (if exists)
 12. **Verify references** — Spawn gpd-bibliographer to verify all citations against INSPIRE/ADS/arXiv, detect orphans, check formatting
-13. **Pre-submission review** — Run the same staged peer-review panel used by `/gpd:peer-review`
+13. **Pre-submission review** — Run the same staged peer-review panel used by `gpd:peer-review`
 14. **Final review** — Abstract standalone check, equation proofread, figure references, word/page count
 15. **Paper revision** — Bounded revision loop (max 3 iterations) for addressing referee issues; spawns paper-writer agents for targeted section fixes
 
-For a standalone rerun of the referee stage after the manuscript already exists, use `/gpd:peer-review`.
+For a standalone rerun of the referee stage after the manuscript already exists, use `gpd:peer-review`.
 </process>
 
 <success_criteria>

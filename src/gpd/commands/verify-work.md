@@ -46,7 +46,7 @@ Verify research results through systematic physics checks with persistent state.
 
 Purpose: Confirm that derivations are correct, numerical results are trustworthy, and physical conclusions are sound. One check at a time, plain text responses, no interrogation. When issues are found, automatically diagnose, classify severity, and prepare for resolution.
 
-Output: `GPD/phases/XX-name/XX-VERIFICATION.md` tracking all check results. This workflow is only valid once the phase has reached the `phase_executed` state. If issues are found, return diagnosed gaps with severity classification and verified fix plans ready for `/gpd:execute-phase`.
+Output: `GPD/phases/XX-name/XX-VERIFICATION.md` tracking all check results. This workflow is only valid once the phase has reached the `phase_executed` state. If issues are found, return diagnosed gaps with severity classification and verified fix plans ready for `gpd:execute-phase`.
 
 Physics verification is fundamentally different from software testing. A software test has a binary pass/fail; a physics check has degrees of agreement, expected approximation errors, and regime-dependent validity. The verification framework accounts for this.
 </objective>
@@ -123,5 +123,5 @@ The verification applies the following physics checks, selected based on the pha
 - **MINOR** — Result is probably correct but incompletely validated (missing one limiting case, no error bars on a qualitative plot). Should be resolved before publication.
 - **NOTE** — Observation for the record (e.g., "convergence is slow but adequate", "agrees with Smith et al. to 3 significant figures").
 
-**For deeper focused analysis**, use the dedicated commands: `/gpd:dimensional-analysis` (unit consistency), `/gpd:limiting-cases` (known limit recovery), or `/gpd:numerical-convergence` (convergence testing).
+**For deeper focused analysis**, use the dedicated commands: `gpd:dimensional-analysis` (unit consistency), `gpd:limiting-cases` (known limit recovery), or `gpd:numerical-convergence` (convergence testing).
   </process>

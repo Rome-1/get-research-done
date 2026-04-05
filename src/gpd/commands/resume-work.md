@@ -18,7 +18,7 @@ allowed-tools:
 <objective>
 Restore complete research context and resume work seamlessly from the latest canonical continuation state and its projected handoff surfaces.
 
-This is the runtime recovery command for the selected project. Use `gpd resume` for the current-workspace read-only recovery snapshot, `gpd resume --recent` when you need the explicit multi-project picker, then run `/gpd:resume-work` in the reopened project. The recent-project list is advisory and machine-local; once you choose a workspace, `/gpd:resume-work` reloads that project's canonical state. If `gpd resume --recent` finds exactly one recoverable project, that can become the fast re-entry path; otherwise the project choice stays explicit. After resuming, `/gpd:suggest-next` is the fastest next command when you only need the next action.
+This is the runtime recovery command for the selected project. Use `gpd resume` for the current-workspace read-only recovery snapshot, `gpd resume --recent` when you need the explicit multi-project picker, then run `gpd:resume-work` in the reopened project. The recent-project list is advisory and machine-local; once you choose a workspace, `gpd:resume-work` reloads that project's canonical state. If `gpd resume --recent` finds exactly one recoverable project, that can become the fast re-entry path; otherwise the project choice stays explicit. After resuming, `gpd:suggest-next` is the fastest next command when you only need the next action.
 
 `state.json.continuation` is the durable continuation authority. Public resume vocabulary centers on canonical continuation fields, while compatibility-only intake fields stay internal and are not part of the public top-level resume vocabulary.
 

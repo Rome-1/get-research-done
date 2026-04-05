@@ -377,10 +377,10 @@ def test_continuation_format_scopes_clear_to_resolved_runtime_followups() -> Non
 def test_executor_completion_examples_use_command_based_next_actions() -> None:
     completion = (REFERENCES_DIR / "execution" / "executor-completion.md").read_text(encoding="utf-8")
 
-    assert '"/gpd:execute-phase {phase}"' in completion
-    assert '"/gpd:show-phase {phase}"' in completion
+    assert '"gpd:execute-phase {phase}"' in completion
+    assert '"gpd:show-phase {phase}"' in completion
     assert "gpd state validate" in completion
-    assert "/gpd:sync-state" in completion
+    assert "gpd:sync-state" in completion
     assert "file_edit tool" not in completion
 
 
@@ -1409,6 +1409,7 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
     assert "uncertainty_markers:" in verify_workflow
     assert "Mirror decisive verdicts into frontmatter `comparison_verdicts`." in verify_workflow
     assert "structured `suggested_contract_checks` entry before final validation" in verify_workflow
+    assert "copy the returned `check_key` into the frontmatter `check` field" in verify_workflow
     assert "request_template" in verify_workflow
     assert "required_request_fields" in verify_workflow
     assert "supported_binding_fields" in verify_workflow
@@ -1455,6 +1456,7 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
     assert "required_request_fields" in verify_phase
     assert "supported_binding_fields" in verify_phase
     assert "run_contract_check(request=...)" in verify_phase
+    assert "copy the returned `check_key` into the frontmatter `check` field" in verify_phase
     assert "comparison_verdicts" in compare_workflow
     assert "project_contract_load_info" in compare_workflow
     assert "project_contract_validation" in compare_workflow
@@ -2165,7 +2167,7 @@ def test_verification_and_agent_reference_prompts_expand_required_reference_bodi
     assert "@ include not resolved:" not in verify_phase.lower()
     assert "@ include not resolved:" not in phase_researcher.lower()
     assert "@ include not resolved:" not in planner.lower()
-    assert "The standalone `/gpd:verify-work` workflow reuses the same verification criteria through `verify-work.md`; this file itself is executed by the execute-phase orchestrator." in verify_phase
+    assert "The standalone `gpd:verify-work` workflow reuses the same verification criteria through `verify-work.md`; this file itself is executed by the execute-phase orchestrator." in verify_phase
     assert "VERIFICATION_FILE=\"${phase_dir}/${phase_number}-VERIFICATION.md\"" in verify_phase
     assert "Return status (`passed` | `gaps_found` | `expert_needed` | `human_needed`)" in verify_phase
 
@@ -2502,7 +2504,7 @@ def test_pause_resume_and_help_wiring_keep_runtime_handoff_and_local_snapshot_bo
     resume_work = (WORKFLOWS_DIR / "resume-work.md").read_text(encoding="utf-8")
     help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
 
-    assert "/gpd:resume-work" in resume_work
+    assert "gpd:resume-work" in resume_work
     assert "gpd resume" in resume_work
     assert "gpd resume --recent" in resume_work
     assert "gpd init resume" not in resume_work
@@ -2516,7 +2518,7 @@ def test_pause_resume_and_help_wiring_keep_runtime_handoff_and_local_snapshot_bo
     assert "compat_resume_surface" not in resume_work
     assert "Public resume vocabulary centers on canonical continuation fields" in resume_work
     assert "Do NOT invent additional candidates from plan files without summaries, auto-checkpoints, or other ad hoc checkpoints." in resume_work
-    assert "/gpd:resume-work" in pause_work
+    assert "gpd:resume-work" in pause_work
     assert "gpd resume" in pause_work
     assert "gpd resume --recent" in pause_work
     assert "This is the canonical recorded handoff artifact for the current phase." in pause_work
@@ -2526,9 +2528,9 @@ def test_pause_resume_and_help_wiring_keep_runtime_handoff_and_local_snapshot_bo
     assert "Compatibility-only intake fields stay internal" in help_workflow
     assert_recovery_ladder_contract(
         help_workflow,
-        resume_work_fragments=("/gpd:resume-work",),
-        suggest_next_fragments=("/gpd:suggest-next",),
-        pause_work_fragments=("/gpd:pause-work",),
+        resume_work_fragments=("gpd:resume-work",),
+        suggest_next_fragments=("gpd:suggest-next",),
+        pause_work_fragments=("gpd:pause-work",),
     )
     assert "gpd observe execution" in help_workflow
     assert "suggested read-only checks rather than runtime hotkeys" in help_workflow
@@ -2803,12 +2805,12 @@ def test_help_workflow_state_aware_variant_surfaces_paused_resume_branch() -> No
     )
     assert "## Contextual Help (State-Aware Variant)" in help_workflow
     assert "Returning to work:" in help_workflow
-    assert "/gpd:resume-work" in help_workflow
-    assert "/gpd:resume-work       # Continue in-runtime from the selected project state after reopening that workspace" in help_workflow
-    assert help_workflow.index("gpd resume --recent") < help_workflow.index("/gpd:resume-work")
-    assert "/gpd:progress" in help_workflow
-    assert "/gpd:suggest-next" in help_workflow
-    assert "/gpd:tangent" in help_workflow
+    assert "gpd:resume-work" in help_workflow
+    assert "gpd:resume-work       # Continue in-runtime from the selected project state after reopening that workspace" in help_workflow
+    assert help_workflow.index("gpd resume --recent") < help_workflow.index("gpd:resume-work")
+    assert "gpd:progress" in help_workflow
+    assert "gpd:suggest-next" in help_workflow
+    assert "gpd:tangent" in help_workflow
 
 
 def test_help_and_execution_surfaces_wire_tangent_control_path() -> None:
@@ -2818,12 +2820,12 @@ def test_help_and_execution_surfaces_wire_tangent_control_path() -> None:
     execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
     tangent_workflow = (WORKFLOWS_DIR / "tangent.md").read_text(encoding="utf-8")
 
-    assert "/gpd:tangent" in help_workflow
-    assert re.search(r"/gpd:tangent[^\n]*?(?:tangent|side investigation|alternative direction|parallel)", help_workflow, re.I)
-    assert "/gpd:tangent" in plan_phase
-    assert re.search(r"/gpd:tangent.*?(?:side|alternative|parallel|branch)", plan_phase, re.I | re.S)
-    assert "/gpd:tangent" in execute_phase
-    assert re.search(r"/gpd:tangent.*?(?:branch|follow-up|alternative)", execute_phase, re.I | re.S)
+    assert "gpd:tangent" in help_workflow
+    assert re.search(r"gpd:tangent[^\n]*?(?:tangent|side investigation|alternative direction|parallel)", help_workflow, re.I)
+    assert "gpd:tangent" in plan_phase
+    assert re.search(r"gpd:tangent.*?(?:side|alternative|parallel|branch)", plan_phase, re.I | re.S)
+    assert "gpd:tangent" in execute_phase
+    assert re.search(r"gpd:tangent.*?(?:branch|follow-up|alternative)", execute_phase, re.I | re.S)
     assert "tangent_summary" in execute_phase
     assert "tangent_decision" in execute_phase
     assert "optional `tangent_summary` and `tangent_decision`" in execute_phase
@@ -2847,8 +2849,8 @@ def test_planner_and_plan_phase_keep_no_silent_branching_and_exploit_tangent_sup
 
     for content in (planner, plan_phase):
         assert "do NOT silently" in content
-        assert "/gpd:tangent" in content
-        assert "/gpd:branch-hypothesis" in content
+        assert "gpd:tangent" in content
+        assert "gpd:branch-hypothesis" in content
 
     assert "Explore mode widens analysis and comparison, not branch creation." in planner
     assert "Explore mode alone does not authorize git-backed branches" in planner
@@ -2859,7 +2861,7 @@ def test_planner_and_plan_phase_keep_no_silent_branching_and_exploit_tangent_sup
     assert "do not auto-create git-backed branches or branch-like plans" in plan_phase
     assert "`git.branching_strategy` does not override this rule." in plan_phase
     assert "suppress optional tangents entirely unless the user explicitly requests them" in plan_phase
-    assert "Do not volunteer `/gpd:branch-hypothesis` as the default response in exploit mode." in plan_phase
+    assert "Do not volunteer `gpd:branch-hypothesis` as the default response in exploit mode." in plan_phase
 
 
 def test_help_surfaces_describe_regression_check_as_metadata_scan_not_full_reverification() -> None:
@@ -2878,12 +2880,12 @@ def test_help_surfaces_describe_regression_check_as_metadata_scan_not_full_rever
 def test_help_surfaces_use_projectless_examples_that_satisfy_command_context_predicates() -> None:
     help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
 
-    assert 'Usage: `/gpd:derive-equation "derive the one-loop beta function"`' in help_workflow
-    assert "Usage: `/gpd:dimensional-analysis 3`" in help_workflow
-    assert "Usage: `/gpd:limiting-cases 3`" in help_workflow
-    assert "Usage: `/gpd:numerical-convergence 3`" in help_workflow
-    assert "Usage: `/gpd:compare-experiment predictions.csv experiment.csv`" in help_workflow
-    assert "Usage: `/gpd:sensitivity-analysis --target cross_section --params g,m,Lambda --method numerical`" in help_workflow
+    assert 'Usage: `gpd:derive-equation "derive the one-loop beta function"`' in help_workflow
+    assert "Usage: `gpd:dimensional-analysis 3`" in help_workflow
+    assert "Usage: `gpd:limiting-cases 3`" in help_workflow
+    assert "Usage: `gpd:numerical-convergence 3`" in help_workflow
+    assert "Usage: `gpd:compare-experiment predictions.csv experiment.csv`" in help_workflow
+    assert "Usage: `gpd:sensitivity-analysis --target cross_section --params g,m,Lambda --method numerical`" in help_workflow
 
 
 def test_verification_and_publication_prompts_keep_decisive_contract_targets_reader_visible() -> None:

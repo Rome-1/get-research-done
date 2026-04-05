@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import importlib.metadata
 import importlib.util
 import json
@@ -102,17 +101,3 @@ def test_resolve_checkout_python_returns_none_when_no_checkout_exists(tmp_path: 
 def test_require_supported_python_rejects_older_interpreters() -> None:
     with pytest.raises(RuntimeError, match=r"requires Python 3\.11\+; current interpreter is Python 3\.10"):
         python_compat.require_supported_python(version_info=(3, 10, 14))
-
-
-def test_load_tomllib_surfaces_misconfigured_supported_interpreter(monkeypatch: pytest.MonkeyPatch) -> None:
-    original_import_module = importlib.import_module
-
-    def _fake_import_module(name: str, package: str | None = None):
-        if name == "tomllib":
-            raise ModuleNotFoundError("No module named 'tomllib'")
-        return original_import_module(name, package)
-
-    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
-
-    with pytest.raises(RuntimeError, match=r"expected the Python 3\.11\+ standard-library `tomllib` module"):
-        python_compat.load_tomllib()

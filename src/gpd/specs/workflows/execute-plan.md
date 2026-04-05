@@ -391,11 +391,11 @@ Context is finite (~200k tokens, ~80% usable). After completing each task:
 
 1. Check statusline context percentage
 2. If >60% with heavy work remaining: consider proactive pause
-3. If >80%: save intermediate results and trigger `/gpd:pause-work` before quality degrades
+3. If >80%: save intermediate results and trigger `gpd:pause-work` before quality degrades
 
 Signs of context pressure: re-reading files you already read, losing track of parameter values or sign conventions, derivation steps getting sloppy. A fresh context with saved state outperforms a saturated one.
 
-If pausing mid-plan: commit current work, create `.continue-here.md` with full derivation state, and persist the matching `execution_segment` as `continuation.bounded_segment` if the stop is meant to be resumable. Record the same pause in execution lineage so the execution head can be rebuilt later. Recommend `/clear` + `/gpd:resume-work`. See `{GPD_INSTALL_DIR}/references/orchestration/context-budget.md` for budget guidelines. The markdown handoff file and legacy `session` record are discovery surfaces that mirror canonical continuation; `continuation.bounded_segment` is the bounded authority for the pause.
+If pausing mid-plan: commit current work, create `.continue-here.md` with full derivation state, and persist the matching `execution_segment` as `continuation.bounded_segment` if the stop is meant to be resumable. Record the same pause in execution lineage so the execution head can be rebuilt later. Recommend `/clear` + `gpd:resume-work`. See `{GPD_INSTALL_DIR}/references/orchestration/context-budget.md` for budget guidelines. The markdown handoff file and legacy `session` record are discovery surfaces that mirror canonical continuation; `continuation.bounded_segment` is the bounded authority for the pause.
 
 **Auto-checkpoint protocol (autonomy-aware):**
 
@@ -423,8 +423,8 @@ CHECKPOINT
    - Commit all current work
    - Create `.continue-here.md` with full derivation state and a bounded execution segment summary
    - Update STATE.md as a projected continuation pointer
-  - **supervised/balanced:** Suggest `/clear` + `/gpd:resume-work`
-   - **yolo:** Prepare the bounded resume handoff automatically and continue only if the runtime can spawn the continuation with explicit segment state; otherwise suggest `/clear` + `/gpd:resume-work`
+  - **supervised/balanced:** Suggest `/clear` + `gpd:resume-work`
+   - **yolo:** Prepare the bounded resume handoff automatically and continue only if the runtime can spawn the continuation with explicit segment state; otherwise suggest `/clear` + `gpd:resume-work`
 
 Also stop when either bound is hit, even if context looks healthy:
 
@@ -550,7 +550,7 @@ fi
 <step name="create_summary">
 Create `${phase}-${plan}-SUMMARY.md` at `${phase_dir}/`. Use `{GPD_INSTALL_DIR}/templates/summary.md`.
 
-Note: DERIVATION-STATE.md is updated by /gpd:pause-work as the projected pause handoff record. On natural completion (no pause), key equations and results are captured in SUMMARY.md instead. If you want cumulative derivation state across sessions, run /gpd:pause-work before ending.
+Note: DERIVATION-STATE.md is updated by gpd:pause-work as the projected pause handoff record. On natural completion (no pause), key equations and results are captured in SUMMARY.md instead. If you want cumulative derivation state across sessions, run gpd:pause-work before ending.
 
 If the selected plan artifact is the standalone `PLAN.md`, write the canonical standalone summary as `SUMMARY.md`. Where this workflow shows numbered examples like `${phase}-${plan}-SUMMARY.md`, substitute the standalone `SUMMARY.md` filename instead.
 
@@ -731,8 +731,8 @@ ls -1 "${phase_dir}"/SUMMARY.md "${phase_dir}"/*-SUMMARY.md 2>/dev/null | wc -l
 | Condition                                  | Route                 | Action                                                                                                                                                  |
 | ------------------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | summaries < plans                          | **A: More plans**     | Find next PLAN without SUMMARY. **balanced/yolo:** auto-continue to next plan when no blockers remain. **supervised:** show next plan + completion summary, wait for explicit "proceed" before continuing. STOP here. |
-| summaries = plans, current < highest phase | **B: Phase done**     | Show completion, suggest `/gpd:plan-phase {Z+1}` + `/gpd:verify-work {Z}` + `/gpd:discuss-phase {Z+1}`                                                  |
-| summaries = plans, current = highest phase | **C: Milestone done** | Show banner, suggest `/gpd:complete-milestone` + `/gpd:verify-work` + `/gpd:add-phase`                                                                  |
+| summaries = plans, current < highest phase | **B: Phase done**     | Show completion, suggest `gpd:plan-phase {Z+1}` + `gpd:verify-work {Z}` + `gpd:discuss-phase {Z+1}`                                                  |
+| summaries = plans, current = highest phase | **C: Milestone done** | Show banner, suggest `gpd:complete-milestone` + `gpd:verify-work` + `gpd:add-phase`                                                                  |
 
 All routes: `/clear` first for fresh context.
 </step>

@@ -41,10 +41,10 @@ Available outcomes:
 
 ## Tangent Taxonomy
 
-- `/gpd:tangent` is the chooser
-- `/gpd:quick` is the bounded side-investigation path
-- `/gpd:add-todo` is the defer-and-continue path
-- `/gpd:branch-hypothesis` is the explicit git-backed alternative path
+- `gpd:tangent` is the chooser
+- `gpd:quick` is the bounded side-investigation path
+- `gpd:add-todo` is the defer-and-continue path
+- `gpd:branch-hypothesis` is the explicit git-backed alternative path
 
 Use `branch-hypothesis` only after you have explicitly decided the tangent deserves isolated branch state.
 

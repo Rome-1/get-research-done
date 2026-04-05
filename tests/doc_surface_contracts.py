@@ -57,6 +57,8 @@ __all__ = [
 
 HELP_ENTRY_FRAGMENTS = (
     "`help`",
+    "gpd:help",
+    "`gpd:help`",
     "/gpd:help",
     "$gpd-help",
     "/gpd-help",
@@ -65,6 +67,8 @@ HELP_ENTRY_FRAGMENTS = (
 )
 START_ENTRY_FRAGMENTS = (
     "`start`",
+    "gpd:start",
+    "`gpd:start`",
     "/gpd:start",
     "$gpd-start",
     "/gpd-start",
@@ -72,6 +76,8 @@ START_ENTRY_FRAGMENTS = (
 )
 TOUR_ENTRY_FRAGMENTS = (
     "`tour`",
+    "gpd:tour",
+    "`gpd:tour`",
     "/gpd:tour",
     "$gpd-tour",
     "/gpd-tour",
@@ -358,6 +364,9 @@ def assert_help_command_quick_start_extract_contract(content: str) -> None:
     _assert_contains_any(
         content,
         (
+            "Run \\`gpd:help --all\\` for the full command reference.",
+            "`gpd:help --all` for the full command reference",
+            "`gpd:help --all`",
             "Run \\`/gpd:help --all\\` for the full command reference.",
             "`/gpd:help --all` for the full command reference",
             "`/gpd:help --all`",
@@ -379,12 +388,12 @@ def assert_help_workflow_quick_start_taxonomy_contract(content: str) -> None:
         _assert_contains_any(content, options, label=label)
 
     for label, options in (
-        ("quick-start start command", ("/gpd:start", "`/gpd:start`")),
-        ("quick-start tour command", ("/gpd:tour", "`/gpd:tour`")),
-        ("quick-start new-project command", ("/gpd:new-project", "`/gpd:new-project`")),
-        ("quick-start map-research command", ("/gpd:map-research", "`/gpd:map-research`")),
-        ("quick-start resume-work command", ("/gpd:resume-work", "`/gpd:resume-work`")),
-        ("quick-start settings command", ("/gpd:settings", "`/gpd:settings`")),
+        ("quick-start start command", ("gpd:start", "`gpd:start`", "/gpd:start", "`/gpd:start`")),
+        ("quick-start tour command", ("gpd:tour", "`gpd:tour`", "/gpd:tour", "`/gpd:tour`")),
+        ("quick-start new-project command", ("gpd:new-project", "`gpd:new-project`", "/gpd:new-project", "`/gpd:new-project`")),
+        ("quick-start map-research command", ("gpd:map-research", "`gpd:map-research`", "/gpd:map-research", "`/gpd:map-research`")),
+        ("quick-start resume-work command", ("gpd:resume-work", "`gpd:resume-work`", "/gpd:resume-work", "`/gpd:resume-work`")),
+        ("quick-start settings command", ("gpd:settings", "`gpd:settings`", "/gpd:settings", "`/gpd:settings`")),
     ):
         _assert_contains_any(content, options, label=label)
 
@@ -444,25 +453,29 @@ def assert_tour_read_only_teaching_contract(content: str) -> None:
 
 def assert_tour_command_surface_contract(content: str) -> None:
     assert_tour_read_only_teaching_contract(content)
-    for token in (
-        "/gpd:start",
-        "/gpd:new-project --minimal",
-        "/gpd:new-project",
-        "/gpd:map-research",
-        "gpd resume",
-        "/gpd:resume-work",
-        "/gpd:suggest-next",
-        "/gpd:progress",
-        "/gpd:explain",
-        "/gpd:quick",
-        "/gpd:settings",
-        "/gpd:help",
+    for label, options in (
+        ("tour start surface", ("gpd:start", "/gpd:start")),
+        ("tour new-project --minimal surface", ("gpd:new-project --minimal", "/gpd:new-project --minimal")),
+        ("tour new-project surface", ("gpd:new-project", "/gpd:new-project")),
+        ("tour map-research surface", ("gpd:map-research", "/gpd:map-research")),
+        ("tour local resume surface", ("gpd resume",)),
+        ("tour resume-work surface", ("gpd:resume-work", "/gpd:resume-work")),
+        ("tour suggest-next surface", ("gpd:suggest-next", "/gpd:suggest-next")),
+        ("tour progress surface", ("gpd:progress", "/gpd:progress")),
+        ("tour explain surface", ("gpd:explain", "/gpd:explain")),
+        ("tour quick surface", ("gpd:quick", "/gpd:quick")),
+        ("tour settings surface", ("gpd:settings", "/gpd:settings")),
+        ("tour help surface", ("gpd:help", "/gpd:help")),
     ):
-        assert token in content
+        _assert_contains_any(content, options, label=label)
 
     assert "What comes later after startup" in content
-    for token in ("/gpd:discuss-phase", "/gpd:write-paper", "/gpd:tangent"):
-        assert token in content
+    for label, options in (
+        ("tour discuss-phase surface", ("gpd:discuss-phase", "/gpd:discuss-phase")),
+        ("tour write-paper surface", ("gpd:write-paper", "/gpd:write-paper")),
+        ("tour tangent surface", ("gpd:tangent", "/gpd:tangent")),
+    ):
+        _assert_contains_any(content, options, label=label)
 
     _assert_contains_any(
         content,
@@ -504,20 +517,28 @@ def assert_beginner_startup_routing_contract(content: str) -> None:
     )
     new_project_fragments = (
         "`new-project --minimal`",
+        "gpd:new-project --minimal",
+        "`gpd:new-project --minimal`",
         "/gpd:new-project --minimal",
         "$gpd-new-project --minimal",
         "/gpd-new-project --minimal",
         "`new-project`",
+        "gpd:new-project",
+        "`gpd:new-project`",
         "/gpd:new-project",
     )
     map_research_fragments = (
         "`map-research`",
+        "gpd:map-research",
+        "`gpd:map-research`",
         "/gpd:map-research",
         "$gpd-map-research",
         "/gpd-map-research",
     )
     resume_work_fragments = (
         "`resume-work`",
+        "gpd:resume-work",
+        "`gpd:resume-work`",
         "/gpd:resume-work",
         "$gpd-resume-work",
         "/gpd-resume-work",
@@ -578,24 +599,42 @@ def assert_start_workflow_router_contract(content: str) -> None:
         label="start single-choice prompt",
     )
 
-    for token in (
-        "Recommended next steps:",
-        "Other useful options",
-        "/gpd:resume-work",
-        "/gpd:progress",
-        "/gpd:suggest-next",
-        "/gpd:quick",
-        "/gpd:tour",
-        "/gpd:map-research",
-        "/gpd:new-project --minimal",
-        "/gpd:new-project",
-        "/gpd:explain",
-        "/gpd:help --all",
-        "Follow the installed `/gpd:new-project --minimal` command contract directly",
-        "Follow the installed `/gpd:new-project` command contract directly",
-        "Follow the installed `/gpd:help --all` command contract directly",
+    for label, options in (
+        ("start recommended-next-steps heading", ("Recommended next steps:",)),
+        ("start other-useful-options heading", ("Other useful options",)),
+        ("start resume-work surface", ("gpd:resume-work", "/gpd:resume-work")),
+        ("start progress surface", ("gpd:progress", "/gpd:progress")),
+        ("start suggest-next surface", ("gpd:suggest-next", "/gpd:suggest-next")),
+        ("start quick surface", ("gpd:quick", "/gpd:quick")),
+        ("start tour surface", ("gpd:tour", "/gpd:tour")),
+        ("start map-research surface", ("gpd:map-research", "/gpd:map-research")),
+        ("start new-project --minimal surface", ("gpd:new-project --minimal", "/gpd:new-project --minimal")),
+        ("start new-project surface", ("gpd:new-project", "/gpd:new-project")),
+        ("start explain surface", ("gpd:explain", "/gpd:explain")),
+        ("start help --all surface", ("gpd:help --all", "/gpd:help --all")),
+        (
+            "start minimal-command-contract handoff",
+            (
+                "Follow the installed `gpd:new-project --minimal` command contract directly",
+                "Follow the installed `/gpd:new-project --minimal` command contract directly",
+            ),
+        ),
+        (
+            "start new-project-command-contract handoff",
+            (
+                "Follow the installed `gpd:new-project` command contract directly",
+                "Follow the installed `/gpd:new-project` command contract directly",
+            ),
+        ),
+        (
+            "start help-command-contract handoff",
+            (
+                "Follow the installed `gpd:help --all` command contract directly",
+                "Follow the installed `/gpd:help --all` command contract directly",
+            ),
+        ),
     ):
-        assert token in content
+        _assert_contains_any(content, options, label=label)
 
     assert "gpd resume --recent" in content
     _assert_contains_any(
@@ -643,6 +682,7 @@ def assert_beginner_router_bridge_contract(content: str) -> None:
     _assert_contains_any(
         content,
         (
+            "gpd:help",
             "/gpd:help",
             "$gpd-help",
             "/gpd-help",
@@ -653,6 +693,7 @@ def assert_beginner_router_bridge_contract(content: str) -> None:
     _assert_contains_any(
         content,
         (
+            "gpd:start",
             "`start`",
             "/gpd:start",
             "$gpd-start",
@@ -665,6 +706,7 @@ def assert_beginner_router_bridge_contract(content: str) -> None:
     _assert_contains_any(
         content,
         (
+            "gpd:tour",
             "`tour`",
             "/gpd:tour",
             "$gpd-tour",
@@ -679,6 +721,7 @@ def assert_beginner_router_bridge_contract(content: str) -> None:
         (
             "`new-project --minimal`",
             "`new-project`",
+            "gpd:new-project",
             "/gpd:new-project",
             "$gpd-new-project",
             "/gpd-new-project",
@@ -689,6 +732,7 @@ def assert_beginner_router_bridge_contract(content: str) -> None:
         content,
         (
             "`map-research`",
+            "gpd:map-research",
             "/gpd:map-research",
             "$gpd-map-research",
             "/gpd-map-research",
@@ -699,6 +743,7 @@ def assert_beginner_router_bridge_contract(content: str) -> None:
         content,
         (
             "`resume-work`",
+            "gpd:resume-work",
             "/gpd:resume-work",
             "$gpd-resume-work",
             "/gpd-resume-work",
@@ -742,6 +787,7 @@ def assert_beginner_help_bridge_contract(content: str) -> None:
     _assert_contains_any(
         content,
         (
+            "gpd:help",
             "/gpd:help",
             "$gpd-help",
             "/gpd-help",
@@ -1030,9 +1076,9 @@ def assert_runtime_readiness_handoff_contract(content: str) -> None:
 def assert_help_workflow_runtime_reference_contract(
     content: str,
     *,
-    resume_work_fragments: Iterable[str] = ("/gpd:resume-work",),
-    suggest_next_fragments: Iterable[str] = ("/gpd:suggest-next",),
-    pause_work_fragments: Iterable[str] = ("/gpd:pause-work",),
+    resume_work_fragments: Iterable[str] = ("gpd:resume-work", "/gpd:resume-work"),
+    suggest_next_fragments: Iterable[str] = ("gpd:suggest-next", "/gpd:suggest-next"),
+    pause_work_fragments: Iterable[str] = ("gpd:pause-work", "/gpd:pause-work"),
 ) -> None:
     _assert_contains_any(
         content,

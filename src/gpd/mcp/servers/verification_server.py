@@ -4439,6 +4439,7 @@ def suggest_contract_checks(contract: SuggestContractPayload, active_checks: Str
                 request_hint = _contract_check_request_hint(meta.check_key, contract=parsed)
                 suggestions.append(
                     {
+                        "check": meta.check_key,
                         "check_id": meta.check_id,
                         "check_key": meta.check_key,
                         "name": meta.name,

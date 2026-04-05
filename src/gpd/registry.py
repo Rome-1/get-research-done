@@ -116,6 +116,7 @@ class CommandDef:
     context_mode: str = "project-required"
     project_reentry_capable: bool = False
     review_contract: ReviewCommandContract | None = None
+    agent: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -386,8 +387,20 @@ def _parse_project_reentry_capable(raw: object, *, command_name: str, context_mo
     if value and context_mode != "project-required":
         raise ValueError(
             f"project_reentry_capable for {command_name} requires context_mode 'project-required'"
-        )
+    )
     return value
+
+
+def _parse_command_agent(raw: object, *, command_name: str) -> str | None:
+    """Normalize optional command agent metadata to a canonical skill name."""
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise ValueError(f"agent for {command_name} must be a string")
+    value = raw.strip().lower()
+    if not value:
+        raise ValueError(f"agent for {command_name} must be a non-empty string")
+    return canonical_skill_label(value)
 
 
 VALID_CONTEXT_MODES: tuple[str, ...] = ("global", "projectless", "project-aware", "project-required")
@@ -503,6 +516,7 @@ def _command_visibility_payload(
     *,
     context_mode: str,
     project_reentry_capable: bool,
+    agent: str | None = None,
     allowed_tools: list[str],
     requires: dict[str, object],
 ) -> dict[str, object]:
@@ -510,6 +524,8 @@ def _command_visibility_payload(
         "context_mode": context_mode,
         "project_reentry_capable": project_reentry_capable,
     }
+    if agent is not None:
+        payload["agent"] = agent
     if allowed_tools:
         payload["allowed_tools"] = list(allowed_tools)
     if requires:
@@ -521,6 +537,7 @@ def render_command_requires_section(
     *,
     context_mode: str,
     project_reentry_capable: bool,
+    agent: str | None = None,
     allowed_tools: list[str],
     requires: dict[str, object],
 ) -> str:
@@ -530,6 +547,7 @@ def render_command_requires_section(
         _command_visibility_payload(
             context_mode=context_mode,
             project_reentry_capable=project_reentry_capable,
+            agent=agent,
             allowed_tools=allowed_tools,
             requires=requires,
         ),
@@ -538,7 +556,7 @@ def render_command_requires_section(
     ).rstrip()
     return (
         "## Command Requirements\n\n"
-        "The following execution envelope and launch requirements are enforced before this command runs. "
+        "The following execution envelope, orchestration hints, and launch requirements are enforced before this command runs. "
         "Plan around them directly in the work you produce.\n\n"
         f"```yaml\n{rendered}\n```"
     )
@@ -548,6 +566,7 @@ def render_command_visibility_sections(
     *,
     context_mode: str,
     project_reentry_capable: bool,
+    agent: str | None = None,
     allowed_tools: list[str],
     requires: dict[str, object],
     review_contract: ReviewCommandContract | None,
@@ -559,6 +578,7 @@ def render_command_visibility_sections(
         render_command_requires_section(
             context_mode=context_mode,
             project_reentry_capable=project_reentry_capable,
+            agent=agent,
             allowed_tools=allowed_tools,
             requires=requires,
         )
@@ -588,6 +608,7 @@ def render_command_visibility_sections_from_frontmatter(frontmatter: str, *, com
 
     requires = _parse_requires(meta.get("requires"), command_name=command_name)
     allowed_tools = _parse_allowed_tools(meta.get("allowed-tools"), command_name=command_name)
+    agent = _parse_command_agent(meta.get("agent"), command_name=command_name)
     context_mode = _parse_context_mode(meta.get("context_mode"), command_name=command_name)
     project_reentry_capable = _parse_project_reentry_capable(
         meta.get("project_reentry_capable"),
@@ -601,6 +622,7 @@ def render_command_visibility_sections_from_frontmatter(frontmatter: str, *, com
     return render_command_visibility_sections(
         context_mode=context_mode,
         project_reentry_capable=project_reentry_capable,
+        agent=agent,
         allowed_tools=allowed_tools,
         requires=requires,
         review_contract=review_contract,
@@ -613,6 +635,7 @@ def _command_model_content(
     *,
     context_mode: str,
     project_reentry_capable: bool,
+    agent: str | None = None,
     allowed_tools: list[str],
     requires: dict[str, object],
 ) -> str:
@@ -622,6 +645,7 @@ def _command_model_content(
     visibility_sections = render_command_visibility_sections(
         context_mode=context_mode,
         project_reentry_capable=project_reentry_capable,
+        agent=agent,
         allowed_tools=allowed_tools,
         requires=requires,
         review_contract=review_contract,
@@ -761,6 +785,7 @@ def _parse_command_file(path: Path, source: str) -> CommandDef:
     _validate_command_frontmatter_keys(meta, command_name=command_name)
     requires = _parse_requires(meta.get("requires"), command_name=command_name)
     allowed_tools = _parse_allowed_tools(meta.get("allowed-tools"), command_name=command_name)
+    agent = _parse_command_agent(meta.get("agent"), command_name=command_name)
 
     body = body.strip()
     context_mode = _parse_context_mode(meta.get("context_mode"), command_name=command_name)
@@ -782,6 +807,7 @@ def _parse_command_file(path: Path, source: str) -> CommandDef:
             field_name="argument-hint",
             owner_name=command_name,
         ),
+        agent=agent,
         context_mode=context_mode,
         project_reentry_capable=project_reentry_capable,
         requires=requires,
@@ -792,6 +818,7 @@ def _parse_command_file(path: Path, source: str) -> CommandDef:
             review_contract,
             context_mode=context_mode,
             project_reentry_capable=project_reentry_capable,
+            agent=agent,
             allowed_tools=allowed_tools,
             requires=requires,
         ),

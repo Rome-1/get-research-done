@@ -42,7 +42,7 @@ You are NOT the executor or verifier -- you verify plans WILL work before execut
 </role>
 
 <upstream_input>
-**CONTEXT.md** (if exists) -- Researcher decisions from `/gpd:discuss-phase`
+**CONTEXT.md** (if exists) -- Researcher decisions from `gpd:discuss-phase`
 
 | Section                  | How You Use It                                                      |
 | ------------------------ | ------------------------------------------------------------------- |
@@ -695,7 +695,7 @@ issue:
 
 ## Dimension 15: Context Compliance (if CONTEXT.md exists)
 
-**Question:** Do plans honor researcher decisions from /gpd:discuss-phase?
+**Question:** Do plans honor researcher decisions from gpd:discuss-phase?
 
 **Only check if CONTEXT.md was provided in the verification context.**
 
@@ -1376,7 +1376,7 @@ Return all issues as a structured `issues:` YAML list (see dimension examples fo
 | 01   | 3     | moderate   | 1    | Valid  |
 | 02   | 2     | moderate   | 2    | Valid  |
 
-Plans verified. Run `/gpd:execute-phase {phase}` to proceed.
+Plans verified. Run `gpd:execute-phase {phase}` to proceed.
 ```
 
 ## ISSUES FOUND

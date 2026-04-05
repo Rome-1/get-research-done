@@ -70,9 +70,9 @@ Possible tangent: {description}
 Then explain the 4-way decision model:
 
 1. `Stay on the main path` — do not widen scope right now.
-2. `Run a bounded quick check now` — use `/gpd:quick` for a small, self-contained side investigation.
-3. `Capture and defer` — use `/gpd:add-todo` so the tangent is not lost.
-4. `Open a hypothesis branch` — use `/gpd:branch-hypothesis` for an explicit git-backed alternative path.
+2. `Run a bounded quick check now` — use `gpd:quick` for a small, self-contained side investigation.
+3. `Capture and defer` — use `gpd:add-todo` so the tangent is not lost.
+4. `Open a hypothesis branch` — use `gpd:branch-hypothesis` for an explicit git-backed alternative path.
 
 If `RESEARCH_MODE=exploit`, say explicitly that optional tangents are suppressed by default and the recommended choices are usually `Stay on the main path` or `Capture and defer` unless the researcher intentionally wants to explore.
 </step>
@@ -88,9 +88,9 @@ Use ask_user:
 - question: `How should GPD handle this tangent right now?`
 - options:
   - `Stay on main path` -- Continue the approved mainline without extra side work. Recommended in exploit mode.
-  - `Quick check now` -- Run a bounded side investigation through `/gpd:quick`.
-  - `Capture and defer` -- Record it via `/gpd:add-todo` and keep moving.
-  - `Open hypothesis branch` -- Route to `/gpd:branch-hypothesis` for an explicit git-backed alternative path.
+  - `Quick check now` -- Run a bounded side investigation through `gpd:quick`.
+  - `Capture and defer` -- Record it via `gpd:add-todo` and keep moving.
+  - `Open hypothesis branch` -- Route to `gpd:branch-hypothesis` for an explicit git-backed alternative path.
 
 Store the choice as `$TANGENT_DECISION`.
 </step>
@@ -102,29 +102,29 @@ Route immediately into the corresponding existing workflow.
 
 - Confirm the decision briefly.
 - Do not mutate state.
-- Suggest `/gpd:add-todo {description}` only as an optional follow-up if the researcher wants a durable reminder.
+- Suggest `gpd:add-todo {description}` only as an optional follow-up if the researcher wants a durable reminder.
 - STOP.
 
 **If `Quick check now`:**
 
 - Read `{GPD_INSTALL_DIR}/workflows/quick.md` using the file_read tool.
-- Follow that workflow using `{description}` as if the researcher had run `/gpd:quick {description}`.
+- Follow that workflow using `{description}` as if the researcher had run `gpd:quick {description}`.
 - Do not re-ask for the description unless it is too vague for a bounded quick task.
 
 **If `Capture and defer`:**
 
 - Read `{GPD_INSTALL_DIR}/workflows/add-todo.md` using the file_read tool.
-- Follow that workflow using `{description}` as if the researcher had run `/gpd:add-todo {description}`.
+- Follow that workflow using `{description}` as if the researcher had run `gpd:add-todo {description}`.
 
 **If `Open hypothesis branch`:**
 
 - If `GIT_AVAILABLE` is false, STOP and explain that hypothesis branches require a git worktree. Offer the researcher the chance to fall back to `Capture and defer` instead.
 - If `GIT_AVAILABLE` is true, read `{GPD_INSTALL_DIR}/workflows/branch-hypothesis.md` using the file_read tool.
-- Follow that workflow using `{description}` as if the researcher had run `/gpd:branch-hypothesis {description}`.
+- Follow that workflow using `{description}` as if the researcher had run `gpd:branch-hypothesis {description}`.
 
 This workflow must not invent a new tangent state machine or auto-spawn parallel work without the explicit choice above.
 
-It may be the explicit follow-up when a live execution review stop surfaces a tangent proposal or when `gpd observe execution` surfaces a tangent proposal or `branch later` recommendation, but it remains the chooser rather than a persistent execution-state workflow. Do not skip straight from that suggestion to `/gpd:branch-hypothesis`; branching stays optional until this chooser explicitly selects it.
+It may be the explicit follow-up when a live execution review stop surfaces a tangent proposal or when `gpd observe execution` surfaces a tangent proposal or `branch later` recommendation, but it remains the chooser rather than a persistent execution-state workflow. Do not skip straight from that suggestion to `gpd:branch-hypothesis`; branching stays optional until this chooser explicitly selects it.
 </step>
 
 <step name="guardrails">

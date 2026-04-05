@@ -1,6 +1,6 @@
 ---
 name: gpd:research-phase
-description: Research how to tackle a phase (standalone - usually use /gpd:plan-phase instead)
+description: Research how to tackle a phase (standalone - usually use gpd:plan-phase instead)
 argument-hint: "[phase]"
 context_mode: project-required
 allowed-tools:
@@ -15,7 +15,7 @@ allowed-tools:
 <objective>
 Research how to tackle a phase. Spawns gpd-phase-researcher agent with phase context.
 
-**Note:** This is a standalone research command. For most workflows, use `/gpd:plan-phase` which integrates research automatically.
+**Note:** This is a standalone research command. For most workflows, use `gpd:plan-phase` which integrates research automatically.
 
 **Use this command when:**
 
@@ -127,7 +127,7 @@ Mode: literature
 </context>
 
 <downstream_consumer>
-Your RESEARCH.md will be loaded by `/gpd:plan-phase` which uses specific sections:
+Your RESEARCH.md will be loaded by `gpd:plan-phase` which uses specific sections:
 
 - `## User Constraints` -- Plans must honor locked decisions and scope boundaries
 - `## Active Anchor References` -- Plans must keep mandated references, benchmarks, and prior artifacts visible

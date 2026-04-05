@@ -22,11 +22,11 @@ def test_start_command_references_workflow() -> None:
     assert "@{GPD_INSTALL_DIR}/workflows/start.md" in command_prompt
     assert "gpd resume" in command_prompt
     assert "gpd resume --recent" in command_prompt
-    assert "/gpd:resume-work" in command_prompt
-    assert "/gpd:suggest-next" in command_prompt
+    assert "gpd:resume-work" in command_prompt
+    assert "gpd:suggest-next" in command_prompt
     assert "advisory recent-project picker" in command_prompt
     assert "reloads canonical state in the reopened project" in command_prompt
-    assert command_prompt.index("gpd resume") < command_prompt.index("gpd resume --recent") < command_prompt.index("/gpd:resume-work") < command_prompt.index("/gpd:suggest-next")
+    assert command_prompt.index("gpd resume") < command_prompt.index("gpd resume --recent") < command_prompt.index("gpd:resume-work") < command_prompt.index("gpd:suggest-next")
 
 
 def test_start_workflow_routes_to_existing_entrypoints() -> None:
@@ -78,12 +78,12 @@ def test_start_workflow_routes_to_existing_entrypoints() -> None:
             "Use \\`gpd resume --recent\\` in your normal terminal to pick the project first.",
         ),
         (
-            "The recent-project picker is advisory; choose the workspace there, then \\`/gpd:resume-work\\` reloads canonical state for that project.",
+            "The recent-project picker is advisory; choose the workspace there, then \\`gpd:resume-work\\` reloads canonical state for that project.",
             "The recent-project picker is advisory",
         ),
         (
-            "Then open that project folder in the runtime and run \\`/gpd:resume-work\\`.",
-            "Then open the project folder in the runtime and run \\`/gpd:resume-work\\`.",
+            "Then open that project folder in the runtime and run \\`gpd:resume-work\\`.",
+            "Then open the project folder in the runtime and run \\`gpd:resume-work\\`.",
         ),
         (
             "In GPD terms, \\`resume-work\\` is the in-runtime continuation step once the recovery ladder has identified the right project.",
@@ -91,7 +91,7 @@ def test_start_workflow_routes_to_existing_entrypoints() -> None:
             "In GPD terms, \\`resume-work\\` is the in-runtime command that continues a selected project.",
             "In GPD terms, \\`resume-work\\` is the in-runtime continuation step once the recovery ladder has identified the right project and reopened its workspace.",
         ),
-        ("Do not silently create project files from `/gpd:start` itself.",),
+        ("Do not silently create project files from `gpd:start` itself.",),
         (
             "Do not silently switch the user into a different project folder.",
             "Do not silently switch to a different project folder.",

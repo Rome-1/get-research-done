@@ -420,14 +420,14 @@ Created GPD/research-map/:
 
 **Initialize project** -- use research map context for planning
 
-`/gpd:new-project`
+`gpd:new-project`
 
 <sub>`/clear` first -> fresh context window</sub>
 
 ---
 
 **Also available:**
-- Re-run mapping: `/gpd:map-research`
+- Re-run mapping: `gpd:map-research`
 - Review specific file: `cat GPD/research-map/FORMALISM.md`
 - Edit any document before proceeding
 

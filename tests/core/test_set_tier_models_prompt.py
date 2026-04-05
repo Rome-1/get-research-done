@@ -20,8 +20,8 @@ def test_set_tier_models_command_references_workflow() -> None:
     command_prompt = (COMMANDS_DIR / "set-tier-models.md").read_text(encoding="utf-8")
     assert "@{GPD_INSTALL_DIR}/workflows/set-tier-models.md" in command_prompt
     assert "changes only `model_overrides.<runtime>`" in command_prompt
-    assert "/gpd:set-profile" in command_prompt
-    assert "/gpd:settings" in command_prompt
+    assert "gpd:set-profile" in command_prompt
+    assert "gpd:settings" in command_prompt
 
 
 def test_set_tier_models_workflow_keeps_scope_and_tradeoffs_explicit() -> None:

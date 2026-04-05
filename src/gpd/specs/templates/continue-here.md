@@ -7,7 +7,7 @@ template_version: 1
 # Canonical Temporary Continue-Here Handoff Template
 
 Copy and fill this structure for `GPD/phases/XX-name/.continue-here.md`.
-This is the canonical temporary phase handoff artifact written by `/gpd:pause-work` and consumed by `/gpd:resume-work` plus the local `gpd resume` recovery surface. The machine-readable backend remains `gpd init resume`, and this file is only a one-way projection of canonical continuation.
+This is the canonical temporary phase handoff artifact written by `gpd:pause-work` and consumed by `gpd:resume-work` plus the local `gpd resume` recovery surface. The machine-readable backend remains `gpd init resume`, and this file is only a one-way projection of canonical continuation.
 
 This file is **not** the authoritative store for project position, session continuity, or resume ranking. Current public behavior keeps those responsibilities split across `GPD/state.json` (authoritative storage), `GPD/state.json.bak` (recovery backup), `GPD/STATE.md` (editable mirror), append-only execution lineage, and the derived execution head / `GPD/observability/current-execution.json` compatibility mirror. `gpd init resume` resolves the current canonical continuation view across those surfaces and may reach this file through session continuity or the derived execution head. The body below is a readable projection for humans and recovery tooling, not a second state source:
 
@@ -161,7 +161,7 @@ Required YAML frontmatter:
 - Convention snapshot in intermediate_results must be consistent with state.json convention_lock
 - The `<next_action>` should be actionable without reading anything else
 - The `<intermediate_results>` section is critical for physics - unlike software, you can't just "run the code" to recover state
-- This file is the canonical temporary handoff artifact. `/gpd:resume-work`, `gpd resume`, and the `gpd init resume` backend reach it through session continuity or live execution pointers, and it may be deleted once the handoff is consumed
+- This file is the canonical temporary handoff artifact. `gpd:resume-work`, `gpd resume`, and the `gpd init resume` backend reach it through session continuity or live execution pointers, and it may be deleted once the handoff is consumed
 - Deleting or missing this file does not erase project state by itself; it only removes one temporary handoff input to the canonical continuation view
 - This template must not be treated as the storage authority for project status, session continuity, or bounded resume ranking
 - The canonical continuation hierarchy and append-only lineage remain the authoritative sources; this file is a projection used to make pause/resume readable

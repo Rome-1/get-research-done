@@ -241,9 +241,9 @@ To reverse this undo:
 ───────────────────────────────────────────────────────────────
 
 **Also available:**
-- `/gpd:progress` -- check current research state
-- `/gpd:undo` -- undo another commit
-- `/gpd:verify-work` -- re-verify after rollback
+- `gpd:progress` -- check current research state
+- `gpd:undo` -- undo another commit
+- `gpd:verify-work` -- re-verify after rollback
 
 ───────────────────────────────────────────────────────────────
 ```

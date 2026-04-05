@@ -40,7 +40,7 @@ Categories:
 **Pre-flight check:**
 ```bash
 if [ ! -d "GPD" ]; then
-  echo "Error: No GPD project found. Run /gpd:new-project first."
+  echo "Error: No GPD project found. Run gpd:new-project first."
   exit 1
 fi
 ```
@@ -55,12 +55,12 @@ test -f GPD/ERROR-PATTERNS.md && echo "EXISTS" || echo "MISSING"
 ```
 No error patterns recorded yet.
 
-Error patterns are captured by /gpd:debug when root causes are confirmed.
+Error patterns are captured by gpd:debug when root causes are confirmed.
 They help the verifier and planner proactively check for recurring issues.
 
 ---
 
-Start a debugging session with /gpd:debug to begin building the pattern database.
+Start a debugging session with gpd:debug to begin building the pattern database.
 ```
 
 Exit.
@@ -80,7 +80,7 @@ Filter the patterns table to show only rows matching the category. Display:
 
 ---
 
-Showing {N} of {total} patterns. Run `/gpd:error-patterns` to see all.
+Showing {N} of {total} patterns. Run `gpd:error-patterns` to see all.
 ```
 
 **If no arguments (show all):**
@@ -94,7 +94,7 @@ Display the full contents formatted as:
 
 ---
 
-{total} patterns recorded. Filter by category: `/gpd:error-patterns sign`
+{total} patterns recorded. Filter by category: `gpd:error-patterns sign`
 ```
 
 </step>

@@ -177,7 +177,7 @@ suggested_contract_checks:
 Use contract IDs consistently throughout the report. The PLAN contract defines what must be verified. `SUMMARY.md` `contract_results` and `comparison_verdicts` tell you what evidence was produced, not what success means.
 Record only user-visible contract targets here: things a researcher could point to in the promised outcome or artifact set. Internal workflow steps, tool invocations, and generic "validation happened" statements do not belong in this table.
 
-If the verifier identifies a decisive check that the contract omitted, record it under `suggested_contract_checks` instead of silently treating the missing check as acceptable.
+If the verifier identifies a decisive check that the contract omitted, record it under `suggested_contract_checks` instead of silently treating the missing check as acceptable. When you derive that suggestion from `suggest_contract_checks(contract)`, copy the returned `check_key` into the frontmatter `check` field.
 When a decisive comparison was attempted but remains unresolved, keep the affected target at `partial` and emit a `comparison_verdict` with `inconclusive` or `tension`; do not convert promising trends or proxy evidence into a pass.
 
 ## Forbidden Proxy Audit

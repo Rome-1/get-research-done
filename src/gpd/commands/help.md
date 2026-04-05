@@ -37,7 +37,7 @@ that workflow-owned reference and then STOP:
 - Include the workflow-owned `## Invocation Surfaces` section.
 - Include the workflow-owned `## Quick Start` section.
 - Stop before `## Core Workflow`.
-- Append this one wrapper-owned line: `Run \`/gpd:help --all\` for the full command reference.`
+- Append this one wrapper-owned line: `Run \`gpd:help --all\` for the full command reference.`
 
 Do not rewrite, summarize, or invent alternate wording for any extracted section.
 

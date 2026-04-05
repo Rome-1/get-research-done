@@ -28,5 +28,5 @@ user-facing explanations, and confirmation copy.
 2. Do not invent a parallel settings flow or duplicate the workflow's option-by-option guidance here.
 3. Do not create separate `preset` or `physics` blocks in `GPD/config.json`; the workflow owns those rules.
 4. Let the workflow own preset, model-posture, tier-model, budget, permission-sync, and local CLI bridge wording.
-5. Convention work stays outside settings; use `gpd convention set <key> <value>` or `/gpd:validate-conventions` for project convention updates.
+5. Convention work stays outside settings; use `gpd convention set <key> <value>` or `gpd:validate-conventions` for project convention updates.
 </process>

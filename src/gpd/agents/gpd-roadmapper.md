@@ -67,7 +67,7 @@ The research mode (from `GPD/config.json` field `research_mode`, default: `"bala
 </research_mode_awareness>
 
 <downstream_consumer>
-Your ROADMAP.md is consumed by `/gpd:plan-phase` which uses it to:
+Your ROADMAP.md is consumed by `gpd:plan-phase` which uses it to:
 
 | Output             | How Plan-Phase Uses It                    |
 | ------------------ | ----------------------------------------- |
@@ -290,7 +290,7 @@ Track coverage as you go.
 
 **Decimal phases (2.1, 2.2):** Urgent insertions after planning.
 
-- Created via `/gpd:insert-phase`
+- Created via `gpd:insert-phase`
 - Execute between integers: 1 -> 1.1 -> 1.2 -> 2
 
 **Starting number:**
@@ -607,7 +607,7 @@ Phase 4 → Phase 2, Phase 3  (needs both analytical and numerical)
 
 **Step 2: Identify parallel opportunities**
 
-Any phases without mutual dependencies can execute concurrently. This matters for `/gpd:execute-phase` wave scheduling:
+Any phases without mutual dependencies can execute concurrently. This matters for `gpd:execute-phase` wave scheduling:
 
 ```
 Wave 1: Phase 1 (sole entry point)
@@ -642,7 +642,7 @@ Include a dependency section in the roadmap:
 **Parallelizable:** Phase 3 runs concurrently with Phase 2
 ```
 
-**Why this matters:** The executor's wave scheduler uses dependency information to run independent phases in parallel. Without explicit dependencies, phases execute sequentially, wasting time. With explicit dependencies, `/gpd:execute-phase` can overlap independent work.
+**Why this matters:** The executor's wave scheduler uses dependency information to run independent phases in parallel. Without explicit dependencies, phases execute sequentially, wasting time. With explicit dependencies, `gpd:execute-phase` can overlap independent work.
 
 ## Phase Risk Mitigation
 
@@ -994,7 +994,7 @@ The roadmap is a living document. Re-invoke the roadmapper when:
 - A computation proves infeasible (detected by DESIGN BLOCKED returns)
 
 **Manual triggers (user-initiated):**
-- `/gpd:add-phase`, `/gpd:insert-phase`, `/gpd:remove-phase`
+- `gpd:add-phase`, `gpd:insert-phase`, `gpd:remove-phase`
 - Research results contradict roadmap assumptions
 
 **Revision process:**
@@ -1098,7 +1098,7 @@ After incorporating user feedback and updating files:
 
 ### Ready for Planning
 
-Next: `/gpd:plan-phase 1`
+Next: `gpd:plan-phase 1`
 ```
 
 ## Roadmap Blocked

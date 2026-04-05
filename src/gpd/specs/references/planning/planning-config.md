@@ -107,7 +107,7 @@ The CLI checks `planning.commit_docs` config and gitignore status internally -- 
 | `"adaptive"` | Default. Insert first-result and risky-fanout gates automatically when results become load-bearing or decisive evidence remains unresolved |
 | `"sparse"`   | Fewest review stops, but required correctness gates still run when a result becomes load-bearing, decisive evidence is still missing, or a wall-clock/task budget trips |
 
-This knob is surfaced directly in `/gpd:settings` as `execution.review_cadence`.
+This knob is surfaced directly in `gpd:settings` as `execution.review_cadence`.
 
 `autonomy` and `execution.review_cadence` are separate axes:
 
@@ -142,7 +142,7 @@ Notation, unit systems, metric signatures, Fourier conventions, and similar phys
 Manage those values with:
 
 - `gpd convention set <key> <value>`
-- `/gpd:validate-conventions`
+- `gpd:validate-conventions`
 - the notation-coordinator / convention-establishment workflow during project setup
 
 Keep `config.json` focused on workflow orchestration: autonomy, research mode, review cadence, runtime/model overrides, branching, and agent toggles. Do **not** introduce a `physics` block there.

@@ -171,9 +171,9 @@ Behavioral highlights: Plans organized by paper sections with tasks mapped to fi
 - `adaptive` (default): inject first-result and risky-fanout gates while letting clean segments continue
 - `sparse`: fewest bounded review stops beyond the required correctness gates
 
-Change cadence with `/gpd:settings` or by editing `GPD/config.json` (`execution.review_cadence`: `"dense"` / `"adaptive"` / `"sparse"`).
+Change cadence with `gpd:settings` or by editing `GPD/config.json` (`execution.review_cadence`: `"dense"` / `"adaptive"` / `"sparse"`).
 
-If you also want to pin concrete runtime model strings for `tier-1`, `tier-2`, or `tier-3`, use `/gpd:set-tier-models` for the direct path or `/gpd:settings` for the broader unattended/configuration flow. `set-profile` changes the abstract tier assignments, not the runtime-native model IDs.
+If you also want to pin concrete runtime model strings for `tier-1`, `tier-2`, or `tier-3`, use `gpd:set-tier-models` for the direct path or `gpd:settings` for the broader unattended/configuration flow. `set-profile` changes the abstract tier assignments, not the runtime-native model IDs.
 
 For full agent tier assignments across all 24 agents, see `references/orchestration/model-profiles.md`.
 For detailed behavioral effect descriptions per agent per profile, see the "Behavioral Effects" section in `references/orchestration/model-profiles.md`.

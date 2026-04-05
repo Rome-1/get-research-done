@@ -74,7 +74,10 @@ def test_review_grade_commands_prepend_model_visible_review_contract_to_registry
         assert "## Command Requirements" in command.content
         assert "context_mode:" in command.content
         assert "project_reentry_capable:" in command.content
-        assert "The following execution envelope and launch requirements are enforced before this command runs." in command.content
+        assert (
+            "The following execution envelope, orchestration hints, and launch requirements are enforced before this command runs."
+            in command.content
+        )
         if command.requires:
             assert "requires:" in command.content
         assert "## Review Contract" in command.content
@@ -122,7 +125,10 @@ def test_non_review_commands_with_requires_still_prepend_model_visible_command_r
 
         assert command.content.startswith("## Command Requirements\n")
         assert "requires:" in command.content
-        assert "The following execution envelope and launch requirements are enforced before this command runs." in command.content
+        assert (
+            "The following execution envelope, orchestration hints, and launch requirements are enforced before this command runs."
+            in command.content
+        )
         for require_key, require_value in command.requires.items():
             assert str(require_key) in command.content
             if isinstance(require_value, list):
@@ -784,6 +790,7 @@ def test_contract_ledgers_surface_decisive_only_verdict_rules_and_strict_suggest
     assert "weakest_anchors: [anchor-1]" in contract_results
     assert "disconfirming_observations: [observation-1]" in contract_results
     assert "Invented keys such as `check_id` fail validation." in contract_results
+    assert "Copy the `check_key` returned by `suggest_contract_checks(contract)` into the frontmatter `check` field" in contract_results
     assert "Allowed keys are exactly `check`, `reason`, `suggested_subject_kind`, `suggested_subject_id`, and `evidence_path`." in verification_template
 
 

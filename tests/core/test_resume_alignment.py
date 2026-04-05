@@ -41,7 +41,7 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
         assert re.search(r"/gpd:resume(?!-work)\b", doc) is None
         assert "auto_checkpoint" not in doc
 
-    assert "/gpd:resume-work" in portability_doc
+    assert "gpd:resume-work" in portability_doc
     assert_resume_authority_contract(
         resume_doc,
         allow_explicit_alias_examples=False,
@@ -103,7 +103,7 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "Canonical state in `state.json.continuation` wins first" in portability_doc
     assert "Storage authority for machine-readable project state and canonical continuation hierarchy" in portability_doc
     assert "Editable human-readable mirror of state" in portability_doc
-    assert "Temporary continuation handoff artifact written by `/gpd:pause-work`" in portability_doc
+    assert "Temporary continuation handoff artifact written by `gpd:pause-work`" in portability_doc
     assert "derived execution head and `GPD/observability/current-execution.json` are compatibility projections" in portability_doc
     assert "temporary handoff artifact" in resume_doc
     assert "supporting continuity surfaces only" in resume_doc
@@ -122,7 +122,7 @@ def test_resume_docs_use_canonical_paths_and_no_legacy_resume_command() -> None:
     assert "reconstructs the full project context from the recovery ladder in `GPD/state.json`, `GPD/state.json.bak`, or `GPD/STATE.md`" in portability_doc
     assert "state.json > state.json.bak > STATE.md" in schema_doc
     assert "state saves fail closed if the backup cannot be refreshed" in schema_doc
-    assert "/gpd:sync-state" in portability_doc
+    assert "gpd:sync-state" in portability_doc
     assert "gpd state sync" not in portability_doc
     assert "hostname" in schema_doc
     assert "platform" in schema_doc
@@ -215,12 +215,12 @@ def test_recovery_docs_keep_runtime_resume_work_distinct_from_local_resume_surfa
     schema_doc = (ROOT / "src/gpd/specs/templates/state-json-schema.md").read_text(encoding="utf-8")
 
     assert (
-        "If you already know the repo, run `/gpd:resume-work` in the coding assistant when you are ready to "
+        "If you already know the repo, run `gpd:resume-work` in the coding assistant when you are ready to "
         "continue work there, or `gpd resume` from your normal system terminal for a read-only local recovery "
         "summary."
     ) in portability_doc
     assert "gpd resume --recent" in portability_doc
-    assert "`/gpd:pause-work`, `/gpd:resume-work`" in schema_doc
+    assert "`gpd:pause-work`, `gpd:resume-work`" in schema_doc
     assert "`gpd resume` is the public local read-only recovery surface" in schema_doc
     assert "`gpd init resume` remains the machine-readable backend" in schema_doc
     assert "gpd resume" in portability_doc

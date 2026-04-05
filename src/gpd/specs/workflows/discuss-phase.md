@@ -146,7 +146,7 @@ ROADMAP_INFO=$(gpd --raw roadmap get-phase "${PHASE}")
 if [ "$(echo "$ROADMAP_INFO" | gpd json get .found --default false)" != "true" ]; then
   echo "Phase ${PHASE} not found in ROADMAP.md."
   echo ""
-  echo "Use /gpd:progress to see available phases."
+  echo "Use gpd:progress to see available phases."
   exit 1
 fi
 
@@ -314,7 +314,7 @@ Ask 4 questions per area before offering to continue or move on. Each answer oft
    If "More questions" -> ask 4 more, then check again
    If "Next area" -> proceed to next selected area
 
-   **Hard bound: Maximum 8 question rounds per area.** If 8 rounds are reached without the user selecting "Next area", summarize progress so far and move to the next area. If context usage exceeds 50% before reaching 8 rounds, summarize progress so far and suggest the user run `/clear` followed by `/gpd:resume-work` to continue with fresh context.
+   **Hard bound: Maximum 8 question rounds per area.** If 8 rounds are reached without the user selecting "Next area", summarize progress so far and move to the next area. If context usage exceeds 50% before reaching 8 rounds, summarize progress so far and suggest the user run `/clear` followed by `gpd:resume-work` to continue with fresh context.
 
 4. **After all areas complete:**
    - header: "Done"
@@ -501,15 +501,15 @@ Created: GPD/phases/${PADDED_PHASE}-${SLUG}/${PADDED_PHASE}-CONTEXT.md
 
 **Phase ${PHASE}: [Name]** -- [Goal from ROADMAP.md]
 
-`/gpd:plan-phase ${PHASE}`
+`gpd:plan-phase ${PHASE}`
 
 <sub>`/clear` first -> fresh context window</sub>
 
 ---
 
 **Also available:**
-- `/gpd:plan-phase ${PHASE} --skip-research` -- plan without literature review
-- `/gpd:list-phase-assumptions ${PHASE}` -- see what the AI assumes before planning
+- `gpd:plan-phase ${PHASE} --skip-research` -- plan without literature review
+- `gpd:list-phase-assumptions ${PHASE}` -- see what the AI assumes before planning
 - Review/edit CONTEXT.md before continuing
 
 ---

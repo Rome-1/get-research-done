@@ -1,7 +1,7 @@
 <purpose>
 Systematically compare theoretical predictions with experimental or observational data. Handles unit conversion, uncertainty propagation, statistical testing, and discrepancy analysis.
 
-Called from /gpd:compare-experiment command. Produces COMPARISON.md with quantified agreement metrics.
+Called from gpd:compare-experiment command. Produces COMPARISON.md with quantified agreement metrics.
 
 Agreement between theory and experiment must be quantified. "Looks about right" is not physics. The comparison must state: (1) what decisive output or contract target was predicted, (2) what was measured, (3) what the uncertainties are on both sides, (4) whether the agreement is statistically significant, and (5) if not, what the discrepancy tells us.
 </purpose>
@@ -334,7 +334,7 @@ chi2/ndof = {value}, p-value = {value}
 Maximum tension: {N} sigma at {parameter value}
 
 Theory predictions are consistent with experimental data.
-Ready for: `/gpd:write-paper` (Results section)
+Ready for: `gpd:write-paper` (Results section)
 ```
 
 If discrepancy:
@@ -348,8 +348,8 @@ chi2/ndof = {value}, p-value = {value}
 {Classification and magnitude}
 
 ### Suggested Investigation
-- `/gpd:debug` -- investigate the discrepancy
-- `/gpd:limiting-cases` -- check if the prediction is valid in this regime
+- `gpd:debug` -- investigate the discrepancy
+- `gpd:limiting-cases` -- check if the prediction is valid in this regime
 - Check experimental systematic uncertainties
 - Compute next-order theoretical corrections
 ```

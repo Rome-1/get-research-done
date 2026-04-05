@@ -159,7 +159,7 @@ When a phase consumes results from a prior phase, uncertainties must be tracked 
 2. **Propagate uncertainties.** Use standard error propagation (quadrature for independent errors, linear for correlated errors) through every calculation step that uses imported quantities.
 3. **Document propagation.** In the phase SUMMARY, include a section listing: (a) imported quantities with their uncertainties, (b) how uncertainties entered the current calculation, (c) the resulting uncertainty on this phase's outputs.
 4. **Flag amplification.** If uncertainty is amplified (e.g., exponentiation, division by small numbers, chaotic sensitivity), flag this explicitly as a potential validity concern.
-5. **Use `/gpd:error-propagation`** for systematic tracking across multi-phase calculations.
+5. **Use `gpd:error-propagation`** for systematic tracking across multi-phase calculations.
 
 **Why this matters:** Without explicit tracking, error bars on final results are underestimated. A 5% uncertainty in Phase 2 can become 50% by Phase 6 through amplification, but if never tracked, the final result appears precise.
 
@@ -416,7 +416,7 @@ Both researcher agents follow the same methodology, differing only in scope (pro
 | Aspect | gpd-project-researcher | gpd-phase-researcher |
 |--------|----------------------|---------------------|
 | Scope | Entire project domain | Single phase domain |
-| Trigger | /gpd:new-project | /gpd:plan-phase or /gpd:research-phase |
+| Trigger | gpd:new-project | gpd:plan-phase or gpd:research-phase |
 | Output | GPD/research/ (5 files) | ${phase_dir}/{phase}-RESEARCH.md |
 | Consumer | gpd-roadmapper | gpd-planner |
 | Commits | No (orchestrator commits) | No (orchestrator commits) |

@@ -69,7 +69,7 @@ Strict preflight also requires the latest round-specific `GPD/review/REVIEW-LEDG
 ```
 No paper directory found. Searched: paper/, manuscript/, draft/
 
-Run /gpd:write-paper first to generate a manuscript from research results.
+Run gpd:write-paper first to generate a manuscript from research results.
 ```
 
 Exit.
@@ -375,8 +375,8 @@ $(grep -rn --include='*.tex' "\\cite{MISSING:" "${PAPER_DIR}" 2>/dev/null)
 A paper with [PENDING] values or \cite{MISSING:...} markers is not submission-ready.
 
 Options:
-  1. Run /gpd:write-paper to resolve remaining placeholders
-  2. Manually fix the markers and re-run /gpd:arxiv-submission
+  1. Run gpd:write-paper to resolve remaining placeholders
+  2. Manually fix the markers and re-run gpd:arxiv-submission
   3. Abort submission
 
 HALTING — do NOT proceed to flatten_inputs.
@@ -553,7 +553,7 @@ Write `${SUBMISSION_DIR}/SUBMISSION-MANIFEST.md`:
 To regenerate the tarball from source:
 
 \`\`\`bash
-/gpd:arxiv-submission {resolved_manuscript_target}
+gpd:arxiv-submission {resolved_manuscript_target}
 \`\`\`
 ```
 
@@ -599,7 +599,7 @@ Upload this file directly to https://arxiv.org/submit
 <failure_handling>
 
 - **LaTeX won't compile:** Present errors clearly, suggest fixes. Do not package a broken submission.
-- **Missing .bbl file:** Re-run bibtex. If bibliography database missing, suggest running `/gpd:write-paper` first.
+- **Missing .bbl file:** Re-run bibtex. If bibliography database missing, suggest running `gpd:write-paper` first.
 - **Figures missing:** List missing figures with their `\includegraphics` paths. Check if they exist elsewhere in the project.
 - **Package too large (> 50MB):** Suggest reducing figure resolution, compressing images, or moving large data to ancillary files.
 - **pdflatex not available:** Skip the local smoke check and keep packaging aligned with the `paper-build` contract. Offer installation guidance if the user wants local verification, but do not imply the submission is blocked solely by the missing compiler.

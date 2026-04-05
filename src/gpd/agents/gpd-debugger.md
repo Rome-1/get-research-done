@@ -1570,7 +1570,7 @@ Gather symptoms through questioning. Update file after EACH answer.
   - Otherwise -> proceed to correct_and_verify
 - **ELIMINATED:** Append to Eliminated section, form new hypothesis, return to Phase 2
 
-**Context management:** After 5+ evidence entries, ensure Current Focus is updated. Suggest "/clear - run /gpd:debug to resume" if context filling up.
+**Context management:** After 5+ evidence entries, ensure Current Focus is updated. Suggest "/clear - run gpd:debug to resume" if context filling up.
 </step>
 
 <step name="resume_from_file">

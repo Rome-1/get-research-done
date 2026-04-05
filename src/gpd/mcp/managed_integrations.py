@@ -55,17 +55,14 @@ def _load_project_integrations_payload(cwd: Path, *, strict: bool) -> dict[str, 
             raise RuntimeError(f"Malformed integrations config: {exc}. Fix or delete {config_path.name}") from exc
         return {}
     if not isinstance(payload, dict):
-        if strict:
-            raise RuntimeError("integrations config must be a JSON object")
-        return {}
-    if strict:
-        unknown_keys = sorted(str(key) for key in payload if str(key) not in MANAGED_INTEGRATIONS)
-        if unknown_keys:
-            raise _strict_unknown_keys_error(
-                section="integrations config",
-                unknown_keys=unknown_keys,
-                supported_keys=sorted(MANAGED_INTEGRATIONS),
-            )
+        raise RuntimeError("integrations config must be a JSON object")
+    unknown_keys = sorted(str(key) for key in payload if str(key) not in MANAGED_INTEGRATIONS)
+    if unknown_keys:
+        raise _strict_unknown_keys_error(
+            section="integrations config",
+            unknown_keys=unknown_keys,
+            supported_keys=sorted(MANAGED_INTEGRATIONS),
+        )
     return payload
 
 
@@ -104,33 +101,26 @@ class ManagedIntegrationDescriptor:
         if raw is None:
             return None
         if not isinstance(raw, dict):
-            if strict:
-                raise RuntimeError(f"integrations.{self.integration_id} must be a JSON object")
-            return None
-        if strict:
-            unknown_keys = sorted(str(key) for key in raw if str(key) not in {"enabled", "endpoint"})
-            if unknown_keys:
-                raise _strict_unknown_keys_error(
-                    section=f"integrations.{self.integration_id}",
-                    unknown_keys=unknown_keys,
-                    supported_keys=["enabled", "endpoint"],
-                )
+            raise RuntimeError(f"integrations.{self.integration_id} must be a JSON object")
+        unknown_keys = sorted(str(key) for key in raw if str(key) not in {"enabled", "endpoint"})
+        if unknown_keys:
+            raise _strict_unknown_keys_error(
+                section=f"integrations.{self.integration_id}",
+                unknown_keys=unknown_keys,
+                supported_keys=["enabled", "endpoint"],
+            )
 
         record: dict[str, object] = {}
         if "enabled" in raw:
             enabled = raw.get("enabled")
             if not isinstance(enabled, bool):
-                if strict:
-                    raise RuntimeError(f"integrations.{self.integration_id}.enabled must be a boolean")
-            else:
-                record["enabled"] = enabled
+                raise RuntimeError(f"integrations.{self.integration_id}.enabled must be a boolean")
+            record["enabled"] = enabled
         if "endpoint" in raw:
             endpoint = raw.get("endpoint")
             if not isinstance(endpoint, str) or not endpoint.strip():
-                if strict:
-                    raise RuntimeError(f"integrations.{self.integration_id}.endpoint must be a non-empty string")
-            else:
-                record["endpoint"] = endpoint.strip()
+                raise RuntimeError(f"integrations.{self.integration_id}.endpoint must be a non-empty string")
+            record["endpoint"] = endpoint.strip()
         return record
 
     def project_enabled(self, cwd: Path | None = None, *, strict: bool = False) -> bool:

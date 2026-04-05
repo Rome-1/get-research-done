@@ -53,7 +53,7 @@ Typical quick tasks in physics research:
 
 ## When to Use Quick vs Full Workflow
 
-**Use `/gpd:quick` for:**
+**Use `gpd:quick` for:**
 
 - Single calculation (evaluate an integral, compute a coefficient, check an identity)
 - Formula or factor verification (is the prefactor 1/2 or 1/4?)
@@ -62,7 +62,7 @@ Typical quick tasks in physics research:
 - Quick numerical spot-check at known parameter values
 - Small self-contained tasks with a clear one-step answer
 
-**Use full workflow (`/gpd:plan-phase` + `/gpd:execute-phase`) for:**
+**Use full workflow (`gpd:plan-phase` + `gpd:execute-phase`) for:**
 
 - Multi-step derivations where intermediate results feed into later steps
 - Numerical pipelines requiring convergence testing and parameter sweeps
@@ -75,7 +75,7 @@ Quick mode skips research and verification agents, but the physics must still be
 
 - State assumptions and approximations even for quick tasks
 - Include dimensional analysis for any new expression produced
-- If a quick task reveals unexpected complexity, stop and promote it to a full phase with `/gpd:add-phase` or `/gpd:insert-phase`
+- If a quick task reveals unexpected complexity, stop and promote it to a full phase with `gpd:add-phase` or `gpd:insert-phase`
 
 </inline_guidance>
 

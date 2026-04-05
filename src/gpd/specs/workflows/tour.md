@@ -48,19 +48,19 @@ Use a compact table with four columns:
 
 Include these entries:
 
-- `/gpd:start`
-- `/gpd:new-project --minimal`
-- `/gpd:new-project`
-- `/gpd:map-research`
+- `gpd:start`
+- `gpd:new-project --minimal`
+- `gpd:new-project`
+- `gpd:map-research`
 - `gpd resume`
-- `/gpd:resume-work`
-- `/gpd:progress`
-- `/gpd:suggest-next`
-- `/gpd:explain <topic>`
-- `/gpd:quick`
-- `/gpd:set-tier-models`
-- `/gpd:settings`
-- `/gpd:help`
+- `gpd:resume-work`
+- `gpd:progress`
+- `gpd:suggest-next`
+- `gpd:explain <topic>`
+- `gpd:quick`
+- `gpd:set-tier-models`
+- `gpd:settings`
+- `gpd:help`
 
 Keep the examples short and concrete, such as `I just opened a folder and do not know what belongs here yet.`
 
@@ -73,9 +73,9 @@ Add one short section titled `What comes later after startup`.
 Explain that these are not the first commands most beginners need, but they are
 the main capability groups GPD supports once a project is underway:
 
-- project work: `/gpd:discuss-phase`, `/gpd:plan-phase`, `/gpd:execute-phase`, `/gpd:verify-work`
-- writing and review: `/gpd:write-paper`, `/gpd:peer-review`, `/gpd:respond-to-referees`, `/gpd:arxiv-submission`
-- side investigations and preferences: `/gpd:tangent`, `/gpd:branch-hypothesis`, `/gpd:set-profile`, `/gpd:set-tier-models`, `/gpd:settings`
+- project work: `gpd:discuss-phase`, `gpd:plan-phase`, `gpd:execute-phase`, `gpd:verify-work`
+- writing and review: `gpd:write-paper`, `gpd:peer-review`, `gpd:respond-to-referees`, `gpd:arxiv-submission`
+- side investigations and preferences: `gpd:tangent`, `gpd:branch-hypothesis`, `gpd:set-profile`, `gpd:set-tier-models`, `gpd:settings`
 
 Keep this section high-level. Do not turn it into a second full command
 reference. Keep `settings` visibly in the post-startup group, not in the
@@ -103,7 +103,7 @@ Explain in plain language:
   settings bundle.
 - `tour` only explains; it does not run `start`, `new-project`, `map-research`,
   `resume-work`, `set-tier-models`, or `settings` for you.
-- `Use \`gpd resume\` first if you need to reopen the project before using \`/gpd:resume-work\`.`
+- `Use \`gpd resume\` first if you need to reopen the project before using \`gpd:resume-work\`.`
 </step>
 
 <step name="highlight_common_mistakes">
@@ -143,10 +143,10 @@ Keep each definition to one sentence.
 <step name="close_with_next_steps">
 End with a short wrap-up that says:
 
-- `If you are still unsure, run /gpd:start.`
-- `If you want the reference list again later, run /gpd:help.`
-- `If you want to pin concrete tier-1, tier-2, and tier-3 model ids, run \`/gpd:set-tier-models\`.`
-- `If you want to change permissions, autonomy, or runtime preferences after your first successful start or later, run \`/gpd:settings\`.`
+- `If you are still unsure, run gpd:start.`
+- `If you want the reference list again later, run gpd:help.`
+- `If you want to pin concrete tier-1, tier-2, and tier-3 model ids, run \`gpd:set-tier-models\`.`
+- `If you want to change permissions, autonomy, or runtime preferences after your first successful start or later, run \`gpd:settings\`.`
 - `If you already know your path, use the matching command from the table
   above.`
 

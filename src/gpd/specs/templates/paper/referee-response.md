@@ -231,7 +231,7 @@ Sincerely,
 **Integration with GPD workflow:**
 
 - New calculations requested by referees become new phases in ROADMAP.md
-- Use /gpd:add-phase or /gpd:insert-phase to add referee-requested work
+- Use gpd:add-phase or gpd:insert-phase to add referee-requested work
 - Verification of new calculations follows standard GPD verification workflow
 - Track new calculations in the "New Calculations Summary" table
 - Use `GPD/review/REVIEW-LEDGER{round_suffix}.json` and `GPD/review/REFEREE-DECISION{round_suffix}.json` to identify recommendation floors and blocking items, but do not invent new `REF-*` IDs from those JSON files

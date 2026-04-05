@@ -1,5 +1,5 @@
 <purpose>
-Validate research results through conversational research validation with persistent state. Creates the canonical `XX-VERIFICATION.md` artifact that tracks verification progress, survives /clear, and feeds gaps into /gpd:plan-phase --gaps.
+Validate research results through conversational research validation with persistent state. Creates the canonical `XX-VERIFICATION.md` artifact that tracks verification progress, survives /clear, and feeds gaps into gpd:plan-phase --gaps.
 
 Researcher validates, the AI records. One check at a time. Plain text responses.
 
@@ -78,7 +78,7 @@ ERROR: Phase not found: ${PHASE_ARG}
 Available phases:
 $(gpd phase list)
 
-Usage: /gpd:verify-work <phase-number>
+Usage: gpd:verify-work <phase-number>
 ```
 
 Exit.
@@ -214,7 +214,7 @@ If no, continue to `create_verification_file`.
 ```
 No active verification sessions.
 
-Provide a phase number to start validation (e.g., /gpd:verify-work 4)
+Provide a phase number to start validation (e.g., gpd:verify-work 4)
 ```
 
 **If no active sessions AND $ARGUMENTS provided:**
@@ -275,7 +275,7 @@ Rules:
 - If a forbidden proxy exists, create an explicit rejection check rather than assuming silence means success.
 - If the contract lacks an obvious decisive check, create a structured `suggested_contract_checks` entry with a short rationale instead of silently dropping the concern.
 - Only create `suggested_contract_checks` entries for obvious decisive gaps on user-visible targets, not for paperwork preferences or generic workflow niceties.
-- Each `suggested_contract_checks` entry must stay structured: `check`, `reason`, optional paired `suggested_subject_kind` + `suggested_subject_id` when the gap can be bound to a known contract target, and `evidence_path`. If no target is known yet, omit both keys instead of leaving one blank.
+- Each `suggested_contract_checks` entry must stay structured: `check`, `reason`, optional paired `suggested_subject_kind` + `suggested_subject_id` when the gap can be bound to a known contract target, and `evidence_path`. If no target is known yet, omit both keys instead of leaving one blank. When the gap comes from `suggest_contract_checks(contract)`, copy the returned `check_key` into the frontmatter `check` field.
 - For proof-bearing checks, create explicit validation records for theorem statement coverage, parameter coverage, hypothesis coverage, quantifier/domain coverage, conclusion-clause coverage, and special-case / counterexample probes. A theorem parameter that never appears in the proof is a failure, not a style issue.
 
 **Examples with computational verification:**
@@ -353,13 +353,13 @@ import numpy as np
 mkdir -p "$phase_dir"
 ```
 
-**Check for existing verification artifact** (e.g., from a prior `/gpd:execute-phase` → `verify-phase` run):
+**Check for existing verification artifact** (e.g., from a prior `gpd:execute-phase` → `verify-phase` run):
 
 ```bash
 EXISTING_VERIFICATION=$(ls "$phase_dir"/*-VERIFICATION.md 2>/dev/null | head -1)
 ```
 
-If an existing verification artifact is found (e.g., from a prior `/gpd:execute-phase` → `verify-phase` automated run):
+If an existing verification artifact is found (e.g., from a prior `gpd:execute-phase` → `verify-phase` automated run):
 1. Read it to preserve any prior automated verification results
 2. Do NOT overwrite — instead, append a `## Researcher Validation` section after the existing content
 3. The new researcher checks go under this section, keeping the automated checks intact
@@ -897,8 +897,8 @@ Present summary:
 ```
 All checks passed. Research validated. Ready to continue.
 
-- `/gpd:plan-phase {next}` -- Plan next research phase
-- `/gpd:execute-phase {next}` -- Execute next research phase
+- `gpd:plan-phase {next}` -- Plan next research phase
+- `gpd:execute-phase {next}` -- Execute next research phase
 ```
 
 </step>
@@ -983,7 +983,7 @@ Use ask_user:
   - "Accept as-is" — The issues are minor, results are acceptable
 
 **If "Auto-plan fixes":** Continue to plan_gap_closure step.
-**If "Investigate manually":** Present the detailed diagnosis and pause. Offer `/gpd:debug` for structured investigation.
+**If "Investigate manually":** Present the detailed diagnosis and pause. Offer `gpd:debug` for structured investigation.
 **If "Accept as-is":** Skip gap closure, mark phase verified with noted caveats.
 </step>
 
@@ -1034,7 +1034,7 @@ Read these files using the file_read tool:
 </planning_context>
 
 <downstream_consumer>
-Output consumed by /gpd:execute-phase
+Output consumed by gpd:execute-phase
 Plans must be executable prompts.
 </downstream_consumer>
 """,
@@ -1102,7 +1102,7 @@ Return one of:
 
 On return:
 
-**If the plan-checker agent fails to spawn or returns an error:** Proceed without plan verification — the plans will still be executable. Note that plans were not verified and recommend running `/gpd:plan-phase --gaps` to re-verify if needed.
+**If the plan-checker agent fails to spawn or returns an error:** Proceed without plan verification — the plans will still be executable. Note that plans were not verified and recommend running `gpd:plan-phase --gaps` to re-verify if needed.
 
 - **VERIFICATION PASSED:** Proceed to `present_ready`
 - **ISSUES FOUND:** Proceed to `revision_loop`
@@ -1174,7 +1174,7 @@ Offer options:
 
 1. Force proceed (execute despite issues)
 2. Provide guidance (researcher gives direction, retry)
-3. Abandon (exit, researcher runs /gpd:plan-phase manually)
+3. Abandon (exit, researcher runs gpd:plan-phase manually)
 
 Wait for researcher response.
 </step>
@@ -1202,7 +1202,7 @@ Plans verified and ready for execution.
 
 **Execute fixes** -- run fix plans
 
-`/clear` then `/gpd:execute-phase {phase_number} --gaps-only`
+`/clear` then `gpd:execute-phase {phase_number} --gaps-only`
 
 ---------------------------------------------------------------
 ```
@@ -1273,7 +1273,7 @@ Default to **major** if unclear. Researcher can correct if needed.
 - [ ] If issues: gpd-planner creates fix plans (gap_closure mode)
 - [ ] If issues: gpd-plan-checker verifies fix plans
 - [ ] If issues: revision loop until plans pass (max 3 iterations)
-- [ ] Ready for `/gpd:execute-phase --gaps-only` when complete
+- [ ] Ready for `gpd:execute-phase --gaps-only` when complete
 - [ ] REQUIREMENTS.md updated for any passed checks matching REQ-IDs (if REQUIREMENTS.md exists)
 
 </success_criteria>

@@ -19,7 +19,7 @@ Instantly restore full research project context so "Where were we?" has an immed
 <process>
 
 <step name="initialize">
-Load the shared resume context in one call. `/gpd:resume-work` is the guided runtime path for the selected project, `gpd resume` is the public local read-only summary, `gpd resume --recent` is the explicit cross-project discovery surface when you need to choose a different workspace first, and the shared machine-readable backend keeps the canonical view aligned with the intake data. `gpd --raw resume` exposes the canonicalized public view derived from that backend rather than the raw intake. The recent-project list is advisory and machine-local; once you choose a workspace, `/gpd:resume-work` reloads that project's canonical state:
+Load the shared resume context in one call. `gpd:resume-work` is the guided runtime path for the selected project, `gpd resume` is the public local read-only summary, `gpd resume --recent` is the explicit cross-project discovery surface when you need to choose a different workspace first, and the shared machine-readable backend keeps the canonical view aligned with the intake data. `gpd --raw resume` exposes the canonicalized public view derived from that backend rather than the raw intake. The recent-project list is advisory and machine-local; once you choose a workspace, `gpd:resume-work` reloads that project's canonical state:
 
 ```bash
 INIT=$(gpd --raw resume)
@@ -54,13 +54,13 @@ The shared resume resolver is canonical-first: `state.json.continuation` wins, t
 
 **If `state_exists` is true:** Proceed to load_state
 **If `state_exists` is false but `roadmap_exists` or `project_exists` is true:** Offer to reconstruct STATE.md
-**If `planning_exists` is false:** This is a new project - route to /gpd:new-project
+**If `planning_exists` is false:** This is a new project - route to gpd:new-project
 
 If `active_resume_kind="bounded_segment"` and `active_bounded_segment` exists, treat that as the primary bounded resume target. On newer projects this usually comes from `state.json.continuation.bounded_segment`, but the derived execution head may still project the bounded segment whenever canonical continuation is missing or incomplete. Do not infer a second resume system from ad hoc handoff files or stale notes outside the canonical handoff path.
 
 `active_resume_kind` is narrower than the overall recovery status. A recorded handoff, a missing recorded handoff artifact, or advisory live execution can still exist when `active_resume_kind` is `None`. In the current machine-readable intake those compatibility cues still surface through `continuity_handoff_file` and `missing_continuity_handoff_file`, but the canonicalized `gpd --raw resume` surface keeps only the top-level public fields.
 
-If `active_resume_result` exists, surface it alongside the primary resume target so `/gpd:resume-work` can recover the last canonical result context immediately. If a resume candidate carries a hydrated `last_result`, prefer that structured payload over `last_result_id`-only notes, while still preserving the ID as the rerun anchor.
+If `active_resume_result` exists, surface it alongside the primary resume target so `gpd:resume-work` can recover the last canonical result context immediately. If a resume candidate carries a hydrated `last_result`, prefer that structured payload over `last_result_id`-only notes, while still preserving the ID as the rerun anchor.
 
 If `derived_execution_head` exists but `execution_resumable` is false, treat that live snapshot as advisory context only. If `active_resume_pointer` is empty, non-project, or missing on disk, call that out explicitly; in all such cases it is not a ranked bounded-segment resume candidate and does not justify `active_resume_kind="bounded_segment"`.
 
@@ -73,7 +73,7 @@ If `active_bounded_segment.first_result_gate_pending` is true, do not treat late
 
 **machine_change_detection:** Compare the current hostname/platform with `state.json.continuation.machine.hostname` and `state.json.continuation.machine.platform`. If they differ, display the non-blocking machine-change notice from INIT and recommend rerunning the installer so runtime-local config stays current. The project state itself remains portable and does not require repair.
 
-**canonical handoff path:** `/gpd:pause-work` records a canonical phase handoff by writing `GPD/phases/.../.continue-here.md` and storing the durable pointer in `state.json.continuation.handoff`. That handoff file is a temporary artifact, not the authoritative store for project position or resume ranking. `state.json.continuation` is the durable canonical resume payload, and `active_resume_pointer` is surfaced from the canonical continuation view for display and logging. Runtime-facing resume surfaces stay canonical-only even when the recorded handoff differs from a live execution resume file. Treat that distinction as continuity context for backend intake and resume ranking, not as proof that a resumable bounded segment still exists. If a handoff file is missing but state authority is intact, the project state still exists and resume should report the missing artifact rather than treating the whole project as lost. Backend compatibility mirrors may still exist for repair paths, but they are internal implementation details rather than model-facing contract surfaces. The same machine-readable intake powers the local `gpd resume` summary after canonicalization. If you need to rediscover the project first, use `gpd resume --recent` before dropping into the per-project resume flow. The picker is advisory; the selected workspace becomes the authoritative project context again when `/gpd:resume-work` reloads its state.
+**canonical handoff path:** `gpd:pause-work` records a canonical phase handoff by writing `GPD/phases/.../.continue-here.md` and storing the durable pointer in `state.json.continuation.handoff`. That handoff file is a temporary artifact, not the authoritative store for project position or resume ranking. `state.json.continuation` is the durable canonical resume payload, and `active_resume_pointer` is surfaced from the canonical continuation view for display and logging. Runtime-facing resume surfaces stay canonical-only even when the recorded handoff differs from a live execution resume file. Treat that distinction as continuity context for backend intake and resume ranking, not as proof that a resumable bounded segment still exists. If a handoff file is missing but state authority is intact, the project state still exists and resume should report the missing artifact rather than treating the whole project as lost. Backend compatibility mirrors may still exist for repair paths, but they are internal implementation details rather than model-facing contract surfaces. The same machine-readable intake powers the local `gpd resume` summary after canonicalization. If you need to rediscover the project first, use `gpd resume --recent` before dropping into the per-project resume flow. The picker is advisory; the selected workspace becomes the authoritative project context again when `gpd:resume-work` reloads its state.
 
 Read and parse STATE.md, then PROJECT.md:
 
@@ -343,7 +343,7 @@ Present complete research project status to user:
     Resume with: task tool (resume parameter with agent ID)
 
 [If pending todos exist:]
-[N] pending todos -- /gpd:check-todos to review
+[N] pending todos -- gpd:check-todos to review
 
 [If blockers exist:]
 >> Carried concerns:
@@ -417,11 +417,11 @@ What would you like to do?
 [Primary action based on state - e.g.:]
 1. Resume interrupted agent [if interrupted agent found]
    OR
-1. Execute phase (/gpd:execute-phase {phase})
+1. Execute phase (gpd:execute-phase {phase})
    OR
-1. Discuss Phase 3 context (/gpd:discuss-phase 3) [if CONTEXT.md missing]
+1. Discuss Phase 3 context (gpd:discuss-phase 3) [if CONTEXT.md missing]
    OR
-1. Plan Phase 3 (/gpd:plan-phase 3) [if CONTEXT.md exists or discuss option declined]
+1. Plan Phase 3 (gpd:plan-phase 3) [if CONTEXT.md exists or discuss option declined]
 
 [Secondary options:]
 2. Review current phase status
@@ -453,9 +453,9 @@ Based on user selection, route to appropriate workflow:
 
   **{phase}-{plan}: [Plan Name]** -- [objective from PLAN.md]
 
-  `/gpd:execute-phase {phase}`
+  `gpd:execute-phase {phase}`
 
-  <sub>`/clear` first, then run `/gpd:execute-phase {phase}`</sub>
+  <sub>`/clear` first, then run `gpd:execute-phase {phase}`</sub>
 
   ---
   ```
@@ -469,15 +469,15 @@ Based on user selection, route to appropriate workflow:
 
   **Phase [N]: [Name]** -- [Goal from ROADMAP.md]
 
-  `/gpd:plan-phase [phase-number]`
+  `gpd:plan-phase [phase-number]`
 
-  <sub>`/clear` first, then run `/gpd:plan-phase [phase-number]`</sub>
+  <sub>`/clear` first, then run `gpd:plan-phase [phase-number]`</sub>
 
   ---
 
   **Also available:**
-  - `/gpd:discuss-phase [N]` -- gather context first
-  - `/gpd:research-phase [N]` -- investigate unknowns
+  - `gpd:discuss-phase [N]` -- gather context first
+  - `gpd:research-phase [N]` -- investigate unknowns
 
   ---
   ```

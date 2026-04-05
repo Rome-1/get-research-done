@@ -293,7 +293,7 @@ and `forbidden_proxy_id` fields instead of leaving blank placeholder strings. --
 - Use `forbidden_proxy_id` for explicit proxy-rejection checks
 - Use `comparison_kind` / `comparison_reference_id` when the check should later emit a comparison verdict
 - Use `suggested_contract_checks` only when the verifier believes the contract omitted a decisive check, or when a decisive benchmark / cross-method check remains partial, not attempted, or still lacks a decisive verdict
-- Keep `suggested_contract_checks` schema-tight: only `check`, `reason`, `suggested_subject_kind`, `suggested_subject_id`, and `evidence_path` are valid keys
+- Keep `suggested_contract_checks` schema-tight: only `check`, `reason`, `suggested_subject_kind`, `suggested_subject_id`, and `evidence_path` are valid keys, and when the entry comes from `suggest_contract_checks(contract)` the `check` value must copy the returned `check_key`
 - `suggested_subject_kind` and `suggested_subject_id` travel together; if the missing check is not bound to a known contract target yet, omit both keys instead of leaving one blank
 
 **Summary:**
@@ -318,10 +318,10 @@ and `forbidden_proxy_id` fields instead of leaving blank placeholder strings. --
 **Gaps:**
 
 - APPEND only when issue found (YAML format)
-- Use `gap_subject_kind` for the body scaffold that feeds `/gpd:plan-phase --gaps`; reserve bare `subject_kind` for canonical frontmatter ledgers such as `comparison_verdicts`
+- Use `gap_subject_kind` for the body scaffold that feeds `gpd:plan-phase --gaps`; reserve bare `subject_kind` for canonical frontmatter ledgers such as `comparison_verdicts`
 - Keep `gap_subject_kind` to `claim | deliverable | acceptance_test | reference`; use `forbidden_proxy_id` for explicit proxy-rejection gaps and `suggested_contract_checks` for missing decisive work
 - After diagnosis: fill `root_cause`, `artifacts`, `missing`, `debug_session`
-- This section feeds directly into /gpd:plan-phase --gaps
+- This section feeds directly into gpd:plan-phase --gaps
 
 </section_rules>
 
@@ -391,7 +391,7 @@ Probe how sensitive results are to assumptions and approximations.
 4. VERIFICATION.md Gaps section updated with diagnosis:
    - Each gap gets `root_cause`, `artifacts`, `missing`, `debug_session` filled
 5. `session_status` -> "diagnosed" while final `status` stays in verification-report vocabulary (typically `gaps_found` until every gap is explicitly closed)
-6. Ready for /gpd:plan-phase --gaps with root causes
+6. Ready for gpd:plan-phase --gaps with root causes
 
 **After diagnosis:**
 
@@ -419,7 +419,7 @@ Probe how sensitive results are to assumptions and approximations.
 
 <lifecycle>
 
-**Creation:** When /gpd:verify-work starts new verification session
+**Creation:** When gpd:verify-work starts new verification session
 
 - Extract checks from the PLAN `contract` first, then use SUMMARY.md files and verification report as evidence maps
 - Use PLAN `contract` IDs as canonical check names. SUMMARY `contract_results` tells you where evidence lives, not what counts as success.

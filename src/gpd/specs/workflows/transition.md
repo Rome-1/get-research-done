@@ -540,7 +540,7 @@ The following regressions were detected after completing Phase {X}:
 Options:
 1. Acknowledge and proceed (issues may be intentional updates)
 2. Investigate and repair the artifact or frontmatter before continuing
-3. Run `/gpd:verify-work <phase>` for any phase that now needs real re-verification
+3. Run `gpd:verify-work <phase>` for any phase that now needs real re-verification
 ```
 
 Wait for user response before proceeding.
@@ -555,7 +555,7 @@ Proceed silently to next step.
 
 **Extract key equations and conventions from phase SUMMARYs into DERIVATION-STATE.md.**
 
-This ensures derivation state is captured even without explicit `/gpd:pause-work`. After phase completion, scan the phase's SUMMARY.md files for equations, conventions, and key results, then append them to `GPD/DERIVATION-STATE.md`.
+This ensures derivation state is captured even without explicit `gpd:pause-work`. After phase completion, scan the phase's SUMMARY.md files for equations, conventions, and key results, then append them to `GPD/DERIVATION-STATE.md`.
 
 **1. Read phase summaries:**
 
@@ -750,7 +750,7 @@ step with the lowest-numbered ready phase (sequential fallback).
   Launching parallel execution...
   ```
 
-  Launch parallel `/gpd:execute-phase` for each ready phase simultaneously.
+  Launch parallel `gpd:execute-phase` for each ready phase simultaneously.
 
   </if>
 
@@ -771,13 +771,13 @@ step with the lowest-numbered ready phase (sequential fallback).
   | Z     | [Phase Z name]     | [list or "none"]        |
 
   Options:
-  1. Execute all in parallel (launch simultaneous /gpd:execute-phase for each)
+  1. Execute all in parallel (launch simultaneous gpd:execute-phase for each)
   2. Execute sequentially starting with Phase [lowest] (standard path)
   ```
 
   Wait for user decision.
 
-  - **If parallel (option 1):** Launch parallel `/gpd:execute-phase` for each
+  - **If parallel (option 1):** Launch parallel `gpd:execute-phase` for each
     ready phase.
   - **If sequential (option 2):** Fall through to `offer_next_phase` with the
     lowest-numbered ready phase.
@@ -795,7 +795,7 @@ step with the lowest-numbered ready phase (sequential fallback).
 
 **Post-parallel consistency reconciliation.**
 
-After parallel `/gpd:execute-phase` invocations all complete, run the
+After parallel `gpd:execute-phase` invocations all complete, run the
 following reconciliation before advancing to the next batch of phases.
 
 **1. Rapid cross-phase consistency check:**
@@ -945,7 +945,7 @@ Next: Phase [X+1] — [Name]
 >>> Auto-continuing: Plan Phase [X+1] in detail
 ```
 
-Exit skill and invoke slash_command("/gpd:plan-phase [X+1]")
+Exit skill and invoke slash_command("gpd:plan-phase [X+1]")
 
 </if>
 
@@ -964,15 +964,15 @@ Key results to benchmark against: [list from SUMMARY.md]"]
 
 **Phase [X+1]: [Name]** — [Goal from ROADMAP.md]
 
-`/gpd:plan-phase [X+1]`
+`gpd:plan-phase [X+1]`
 
 <sub>`/clear` first -> fresh context window</sub>
 
 ---
 
 **Also available:**
-- `/gpd:discuss-phase [X+1]` — gather context first
-- `/gpd:research-phase [X+1]` — investigate unknowns in literature
+- `gpd:discuss-phase [X+1]` — gather context first
+- `gpd:research-phase [X+1]` — investigate unknowns in literature
 - Review roadmap
 
 ---
@@ -994,7 +994,7 @@ Milestone {version} is 100% complete — all {N} phases finished!
 >>> Auto-continuing: Complete milestone and archive
 ```
 
-Exit skill and invoke slash_command("/gpd:complete-milestone {version}")
+Exit skill and invoke slash_command("gpd:complete-milestone {version}")
 
 </if>
 
@@ -1011,7 +1011,7 @@ Milestone {version} is 100% complete — all {N} phases finished!
 
 **Complete Milestone {version}** — archive results and prepare for next direction
 
-`/gpd:complete-milestone {version}`
+`gpd:complete-milestone {version}`
 
 <sub>`/clear` first -> fresh context window</sub>
 
@@ -1019,7 +1019,7 @@ Milestone {version} is 100% complete — all {N} phases finished!
 
 **Also available:**
 - Review all results before archiving
-- `/gpd:verify-work` — systematic validation before completing milestone
+- `gpd:verify-work` — systematic validation before completing milestone
 
 ---
 ```

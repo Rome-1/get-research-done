@@ -163,7 +163,7 @@ If any of those fail, fix them before troubleshooting GPD itself. These are boot
 
 Typical new-project workflow:
 
-`/gpd:new-project -> /gpd:discuss-phase 1 -> /gpd:plan-phase 1 -> /gpd:execute-phase 1 -> /gpd:verify-work 1`
+`gpd:new-project -> gpd:discuss-phase 1 -> gpd:plan-phase 1 -> gpd:execute-phase 1 -> gpd:verify-work 1`
 
 <details>
 <summary><strong>Install options</strong></summary>
@@ -277,7 +277,7 @@ The example below uses Claude Code / Gemini CLI syntax.
 Suppose you want to use crossing symmetry and the numerical conformal bootstrap to bound low-lying operator dimensions in the 3D Ising CFT.
 
 ```text
-/gpd:new-project
+gpd:new-project
 > Use crossing symmetry and the numerical conformal bootstrap to bound low-lying operator dimensions in the 3D Ising CFT.
 ```
 
@@ -289,18 +289,18 @@ GPD will:
 Then continue with:
 
 ```text
-/gpd:plan-phase 1
-/gpd:execute-phase 1
-/gpd:verify-work 1
+gpd:plan-phase 1
+gpd:execute-phase 1
+gpd:verify-work 1
 ```
 
 Once the relevant phases are complete and verified, continue toward write-up with:
 
 ```text
-/gpd:write-paper "3D Ising bootstrap bounds"
-/gpd:arxiv-submission
-/gpd:peer-review
-/gpd:respond-to-referees
+gpd:write-paper "3D Ising bootstrap bounds"
+gpd:arxiv-submission
+gpd:peer-review
+gpd:respond-to-referees
 ```
 
 Typical artifacts include derivation notes, numerical scripts, convergence studies, and phase-level planning and verification documents under `GPD/`.
@@ -322,11 +322,11 @@ Most research actions run inside your installed AI runtime after GPD has been in
 | Write and review | `write-paper`, `peer-review`, `respond-to-referees`, `arxiv-submission` |
 | Configure or branch | `settings`, `set-profile`, `set-tier-models`, `tangent`, `branch-hypothesis` |
 
-Typical research loop: `/gpd:new-project -> /gpd:discuss-phase 1 -> /gpd:plan-phase 1 -> /gpd:execute-phase 1 -> /gpd:verify-work -> repeat -> /gpd:complete-milestone`
+Typical research loop: `gpd:new-project -> gpd:discuss-phase 1 -> gpd:plan-phase 1 -> gpd:execute-phase 1 -> gpd:verify-work -> repeat -> gpd:complete-milestone`
 
-Typical publication loop: `/gpd:write-paper -> /gpd:peer-review -> /gpd:respond-to-referees -> /gpd:arxiv-submission`
+Typical publication loop: `gpd:write-paper -> gpd:peer-review -> gpd:respond-to-referees -> gpd:arxiv-submission`
 
-Leave / return path: `/gpd:pause-work` before leaving mid-phase, `/gpd:resume-work` when you return in-runtime, `/gpd:suggest-next` when you only need the next action, and `gpd resume` from your normal system terminal for a current-workspace read-only recovery snapshot. Use `gpd resume --recent` first if you need to find the workspace before resuming it, then continue inside that workspace with the runtime `resume-work` command.
+Leave / return path: `gpd:pause-work` before leaving mid-phase, `gpd:resume-work` when you return in-runtime, `gpd:suggest-next` when you only need the next action, and `gpd resume` from your normal system terminal for a current-workspace read-only recovery snapshot. Use `gpd resume --recent` first if you need to find the workspace before resuming it, then continue inside that workspace with the runtime `resume-work` command.
 
 ### Command Context
 
@@ -334,11 +334,11 @@ Not every GPD command needs the same amount of project state.
 
 | Command type | Meaning | Examples |
 |--------------|---------|----------|
-| `Projectless` | Can run before `GPD/PROJECT.md` exists | `/gpd:start`, `/gpd:tour`, `/gpd:new-project`, `/gpd:map-research`, `/gpd:add-todo` |
-| `Project-aware` | Uses project context when present, but can also run from explicit standalone inputs | `/gpd:discover "finite-temperature RG flow"`, `/gpd:explain "Ward identity"`, `/gpd:literature-review "axion monodromy"` |
-| `Project-required` | Requires initialized GPD project state | `/gpd:progress`, `/gpd:plan-phase`, `/gpd:write-paper`, `/gpd:peer-review` |
+| `Projectless` | Can run before `GPD/PROJECT.md` exists | `gpd:start`, `gpd:tour`, `gpd:new-project`, `gpd:map-research`, `gpd:add-todo` |
+| `Project-aware` | Uses project context when present, but can also run from explicit standalone inputs | `gpd:discover "finite-temperature RG flow"`, `gpd:explain "Ward identity"`, `gpd:literature-review "axion monodromy"` |
+| `Project-required` | Requires initialized GPD project state | `gpd:progress`, `gpd:plan-phase`, `gpd:write-paper`, `gpd:peer-review` |
 
-Passing a manuscript path to a project-required command such as `/gpd:peer-review paper/` selects the manuscript target, but does not bypass project initialization.
+Passing a manuscript path to a project-required command such as `gpd:peer-review paper/` selects the manuscript target, but does not bypass project initialization.
 
 The full in-runtime reference uses Claude Code / Gemini CLI syntax. Codex uses `$gpd-...` and OpenCode uses `/gpd-...`.
 
@@ -353,13 +353,13 @@ Use the runtime-specific `pause-work` command when you want an explicit context 
 
 #### Tangents & Hypothesis Branches
 
-Tangents and alternative paths live primarily in `/gpd:tangent`, `/gpd:branch-hypothesis`, and `/gpd:compare-branches`.
+Tangents and alternative paths live primarily in `gpd:tangent`, `gpd:branch-hypothesis`, and `gpd:compare-branches`.
 
 | Command | What it does |
 |---------|--------------|
-| `/gpd:tangent [description]` | Choose whether to stay on the main line, run a quick tangent, defer it, or escalate to a git-backed hypothesis branch |
-| `/gpd:branch-hypothesis <description>` | Create a hypothesis branch for parallel investigation of an alternative approach |
-| `/gpd:compare-branches` | Compare results across hypothesis branches side-by-side |
+| `gpd:tangent [description]` | Choose whether to stay on the main line, run a quick tangent, defer it, or escalate to a git-backed hypothesis branch |
+| `gpd:branch-hypothesis <description>` | Create a hypothesis branch for parallel investigation of an alternative approach |
+| `gpd:compare-branches` | Compare results across hypothesis branches side-by-side |
 
 - Use the matching `branch-hypothesis` command only when you want the explicit git-backed alternative path.
 - If `gpd observe execution` surfaces an alternative-path follow-up or `branch later` recommendation, route it through the runtime `tangent` command first.

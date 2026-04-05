@@ -212,7 +212,7 @@ A 10-point grid in each of 5 dimensions is 10⁵ = 100,000 evaluations. Use Lati
 First-order phase transitions show hysteresis: sweeping up gives a different result from sweeping down. Run the sweep in both directions near suspected first-order transitions to detect metastability.
 
 ### Not checking convergence at each point
-A sweep that varies a physical parameter should also verify that the numerical computation at each point is converged. A phase diagram computed on an unconverged grid is meaningless. Run `/gpd:numerical-convergence` on representative points.
+A sweep that varies a physical parameter should also verify that the numerical computation at each point is converged. A phase diagram computed on an unconverged grid is meaningless. Run `gpd:numerical-convergence` on representative points.
 
 </process>
 

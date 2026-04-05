@@ -55,7 +55,7 @@ fi
 ERROR: No active milestone found.
 
 A milestone audit requires a project with phases.
-Run /gpd:new-project first, then complete phases before auditing.
+Run gpd:new-project first, then complete phases before auditing.
 ```
 
 Exit.
@@ -128,7 +128,7 @@ Verify:
 )
 ```
 
-**If the consistency checker agent fails to spawn or returns an error:** Proceed without cross-phase consistency checks. Note in the audit report that consistency verification was skipped. The phase-level checks (step 2) still provide individual phase validation. The user should run `/gpd:validate-conventions` separately after the audit.
+**If the consistency checker agent fails to spawn or returns an error:** Proceed without cross-phase consistency checks. Note in the audit report that consistency verification was skipped. The phase-level checks (step 2) still provide individual phase validation. The user should run `gpd:validate-conventions` separately after the audit.
 
 ## 4. Collect Results
 
@@ -253,7 +253,7 @@ Return REVIEW COMPLETE with recommendation and issue counts."
 )
 ```
 
-**If the referee agent fails to spawn or returns an error:** Proceed without mock peer review — note in the audit report that peer review was skipped. The audit is still valid based on consistency checks and phase-level verification. The user should run `/gpd:verify-work` separately after the audit.
+**If the referee agent fails to spawn or returns an error:** Proceed without mock peer review — note in the audit report that peer review was skipped. The audit is still valid based on consistency checks and phase-level verification. The user should run `gpd:verify-work` separately after the audit.
 
 **After referee report:**
 
@@ -304,7 +304,7 @@ All requirements covered. Cross-phase consistency verified. Research is complete
 
 **Complete milestone** -- archive and tag
 
-/gpd:complete-milestone {version}
+gpd:complete-milestone {version}
 
 <sub>/clear first -> fresh context window</sub>
 
@@ -344,7 +344,7 @@ All requirements covered. Cross-phase consistency verified. Research is complete
 
 **Plan gap closure** -- create phases to complete research
 
-/gpd:plan-milestone-gaps
+gpd:plan-milestone-gaps
 
 <sub>/clear first -> fresh context window</sub>
 
@@ -353,7 +353,7 @@ All requirements covered. Cross-phase consistency verified. Research is complete
 **Also available:**
 
 - cat GPD/v{version}-MILESTONE-AUDIT.md -- see full report
-- /gpd:complete-milestone {version} -- proceed anyway (accept open questions)
+- gpd:complete-milestone {version} -- proceed anyway (accept open questions)
 
 ---
 
@@ -384,11 +384,11 @@ All requirements met. No critical blockers. Accumulated open questions need revi
 
 **A. Complete milestone** -- accept open questions, track in research log
 
-/gpd:complete-milestone {version}
+gpd:complete-milestone {version}
 
 **B. Plan additional analysis** -- address open questions before completing
 
-/gpd:plan-milestone-gaps
+gpd:plan-milestone-gaps
 
 <sub>/clear first -> fresh context window</sub>
 

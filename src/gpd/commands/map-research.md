@@ -37,8 +37,8 @@ Check for GPD/STATE.md - loads context if project already initialized
 
 **This command can run:**
 
-- Before /gpd:new-project (existing research with prior work) - creates research map first
-- After /gpd:new-project (fresh research direction) - updates research map as work evolves
+- Before gpd:new-project (existing research with prior work) - creates research map first
+- After gpd:new-project (fresh research direction) - updates research map as work evolves
 - Anytime to refresh understanding of the research landscape
   </context>
 
@@ -75,7 +75,7 @@ Check for GPD/STATE.md - loads context if project already initialized
 4. Wait for agents to complete, collect confirmations (NOT document contents)
 5. Verify all 7 documents exist with line counts
 6. Commit research map
-7. Offer next steps (typically: /gpd:new-project or /gpd:plan-phase)
+7. Offer next steps (typically: gpd:new-project or gpd:plan-phase)
 </process>
 
 <success_criteria>

@@ -167,8 +167,9 @@ def _canonicalize_runtime_markdown(content: str, *, runtime: str) -> str:
     )
     content = translate_frontmatter_tool_names(content, lambda name: RUNTIME_ALIAS_MAP.get(name, name))
     content = convert_tool_references_in_body(content, RUNTIME_ALIAS_MAP)
-    content = content.replace("$gpd-", "/gpd:")
-    content = content.replace("/gpd-", "/gpd:")
+    content = content.replace("$gpd-", "gpd:")
+    content = content.replace("/gpd:", "gpd:")
+    content = content.replace("/gpd-", "gpd:")
     return content
 
 
@@ -782,12 +783,12 @@ def test_real_installed_set_tier_models_prompt_keeps_direct_tier_override_contra
         runtime=runtime,
     )
 
-    assert "/gpd:set-tier-models" in content
+    assert "gpd:set-tier-models" in content
     assert "tier-1" in content
     assert "tier-2" in content
     assert "tier-3" in content
-    assert "/gpd:set-profile" in content
-    assert "/gpd:settings" in content
+    assert "gpd:set-profile" in content
+    assert "gpd:settings" in content
     assert "model_overrides.<runtime>" in content
     assert "strongest reasoning" in content
     assert "balanced default" in content

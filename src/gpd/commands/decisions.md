@@ -21,8 +21,8 @@ Display the cumulative decision log from GPD/DECISIONS.md with optional filterin
 Routes to the decisions workflow which handles:
 
 - Loading and parsing the decision log table
-- Filtering by phase number (e.g., `/gpd:decisions 3`)
-- Keyword search across all fields (e.g., `/gpd:decisions regularization`)
+- Filtering by phase number (e.g., `gpd:decisions 3`)
+- Keyword search across all fields (e.g., `gpd:decisions regularization`)
 - Formatted display with summary statistics
   </objective>
 

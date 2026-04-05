@@ -1,5 +1,5 @@
 <purpose>
-Create the canonical `.continue-here.md` continuation handoff artifact to preserve complete research state across sessions. This phase-level handoff artifact pairs with `/gpd:resume-work`, the local `gpd resume` recovery surface, and `gpd resume --recent` when the user needs to rediscover the project first. It is a recovery artifact, not the bounded authority store.
+Create the canonical `.continue-here.md` continuation handoff artifact to preserve complete research state across sessions. This phase-level handoff artifact pairs with `gpd:resume-work`, the local `gpd resume` recovery surface, and `gpd resume --recent` when the user needs to rediscover the project first. It is a recovery artifact, not the bounded authority store.
 </purpose>
 
 <required_reading>
@@ -203,7 +203,7 @@ timestamp=$(gpd --raw timestamp full)
 **Update STATE.md with pause context:**
 
 ```bash
-# Record session continuity so /gpd:resume-work, local gpd resume,
+# Record session continuity so gpd:resume-work, local gpd resume,
 # and gpd resume --recent
 # see the same recorded continuation pointer
 gpd state record-session \
@@ -236,7 +236,7 @@ gpd commit "wip: [phase-name] paused at task [X]/[Y]" --files GPD/phases/*/.cont
 ```
 Handoff created: GPD/phases/[{phase_slug}]/.continue-here.md
 
-This is the canonical recorded handoff artifact for the current phase. `/gpd:resume-work`
+This is the canonical recorded handoff artifact for the current phase. `gpd:resume-work`
 and the local `gpd resume` recovery surface should now point to the same continuation file.
 If the user is not sure which repo to reopen, `gpd resume --recent` should be
 the first discovery step before the per-project resume flow.
@@ -249,7 +249,7 @@ Current state:
 - Derivation state: [brief summary of where the calculation stands]
 - Committed as WIP
 
-To return in the runtime: /gpd:resume-work
+To return in the runtime: gpd:resume-work
 To inspect local recovery summary: gpd resume
 To rediscover the project first: gpd resume --recent
 
@@ -269,5 +269,5 @@ To rediscover the project first: gpd resume --recent
 - [ ] STATE.md session continuity updated as a handoff pointer to the pause point and resume file path
 - [ ] STATE.md status set to "Paused"
 - [ ] Committed as WIP (including STATE.md and state.json)
-- [ ] User knows the handoff location and the return path via `/gpd:resume-work` / `gpd resume` / `gpd resume --recent`
+- [ ] User knows the handoff location and the return path via `gpd:resume-work` / `gpd resume` / `gpd resume --recent`
 </success_criteria>

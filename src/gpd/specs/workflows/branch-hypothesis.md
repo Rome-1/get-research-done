@@ -1,5 +1,5 @@
 <purpose>
-Create a git branch for parallel investigation of an alternative hypothesis or approach. Sets up isolated research state with hypothesis documentation, enabling side-by-side comparison later via /gpd:compare-branches. Common in physics when multiple approximation schemes, gauge choices, or derivation pathways need to be compared systematically.
+Create a git branch for parallel investigation of an alternative hypothesis or approach. Sets up isolated research state with hypothesis documentation, enabling side-by-side comparison later via gpd:compare-branches. Common in physics when multiple approximation schemes, gauge choices, or derivation pathways need to be compared systematically.
 </purpose>
 
 <required_reading>
@@ -26,15 +26,15 @@ This command requires project context because it forks hypothesis state from the
 <step name="parse_arguments">
 Parse the hypothesis description from command arguments.
 
-Example: `/gpd:branch-hypothesis Use dimensional regularization instead of hard cutoff`
+Example: `gpd:branch-hypothesis Use dimensional regularization instead of hard cutoff`
 -> description = "Use dimensional regularization instead of hard cutoff"
 
 If no arguments provided:
 
 ```
 ERROR: Hypothesis description required
-Usage: /gpd:branch-hypothesis <description>
-Example: /gpd:branch-hypothesis Use dimensional regularization instead of hard cutoff
+Usage: gpd:branch-hypothesis <description>
+Example: gpd:branch-hypothesis Use dimensional regularization instead of hard cutoff
 ```
 
 Exit.
@@ -262,7 +262,7 @@ gpd state add-decision --phase "${CURRENT_PHASE_NUM}" --summary "Created hypothe
 **Parent:** {parent_branch}
 
 This is a hypothesis branch investigating an alternative approach.
-Compare results with parent branch via `/gpd:compare-branches`.
+Compare results with parent branch via `gpd:compare-branches`.
 ```
 
 3. Treat that note as markdown-only context. It is not part of the structured state schema, so it will not be mirrored into `state.json`, and future JSON-driven state rewrites may replace it. The durable record for the hypothesis is the `gpd state add-decision` entry plus `GPD/hypotheses/${SLUG}/HYPOTHESIS.md`.
@@ -301,13 +301,13 @@ Present completion summary:
 1. **Fill in HYPOTHESIS.md** — document motivation, expected outcome, and success criteria
 2. **Plan the phase** using the alternative approach:
 
-   /gpd:plan-phase {current_phase}
+   gpd:plan-phase {current_phase}
 
    <sub>/clear first -> fresh context window</sub>
 
 3. **Execute and compare** when ready:
 
-   /gpd:compare-branches
+   gpd:compare-branches
 
 ---
 

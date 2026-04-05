@@ -567,10 +567,17 @@ def get_skill(name: Annotated[str, Field(min_length=1, pattern=r"\S")]) -> dict:
             if skill.source_kind == "command":
                 command = content_registry.get_command(skill.registry_name)
                 allowed_tools = _normalize_allowed_tools(command.allowed_tools)
+                command_fields_phrase = (
+                    "`context_mode`, `project_reentry_capable`, `allowed_tools`, and any launch `requires`"
+                )
+                if command.agent is not None:
+                    command_fields_phrase = (
+                        "`context_mode`, `project_reentry_capable`, `agent`, `allowed_tools`, and any launch `requires`"
+                    )
                 command_loading_hint = (
                     loading_hint
                     + " The content field already includes a model-visible `Command Requirements` section for "
-                    + "`context_mode`, `project_reentry_capable`, `allowed_tools`, and any launch `requires`; "
+                    + f"{command_fields_phrase}; "
                     + "treat `content` as authoritative rather than injecting mirrored command metadata separately."
                 )
                 if command.review_contract is not None:
@@ -600,6 +607,9 @@ def get_skill(name: Annotated[str, Field(min_length=1, pattern=r"\S")]) -> dict:
                         },
                     }
                 )
+                if command.agent is not None:
+                    payload["agent"] = command.agent
+                    payload["structured_metadata_authority"]["agent"] = "mirrored"
                 payload["allowed_tools"] = allowed_tools
             elif skill.source_kind == "agent":
                 agent = content_registry.get_agent(skill.registry_name)

@@ -7,7 +7,7 @@ This workflow does **not** re-run physics, numerical, dimensional, or contract v
 - missing, invalid, or non-canonical `*-VERIFICATION.md` statuses
 - completed phases whose `*-VERIFICATION.md` still reports unresolved gaps
 
-Use `/gpd:verify-work <phase>` when a flagged phase needs actual re-verification.
+Use `gpd:verify-work <phase>` when a flagged phase needs actual re-verification.
 </purpose>
 
 <process>
@@ -104,8 +104,8 @@ Issue types emitted by this workflow are limited to:
 If issues are present, recommend the narrow next action:
 
 1. Fix the frontmatter or convention drift directly if the issue is clerical
-2. Run `/gpd:verify-work <phase>` if an affected phase now needs real re-verification
-3. Re-run `/gpd:regression-check [phase]` to confirm the artifact-level audit is clean
+2. Run `gpd:verify-work <phase>` if an affected phase now needs real re-verification
+3. Re-run `gpd:regression-check [phase]` to confirm the artifact-level audit is clean
 </step>
 
 </process>

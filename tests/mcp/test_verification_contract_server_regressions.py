@@ -1724,6 +1724,7 @@ def test_suggest_contract_checks_request_templates_validate_against_advertised_r
     estimator = checks["contract.estimator_family_mismatch"]["request_template"]
 
     assert benchmark["check_key"] == "contract.benchmark_reproduction"
+    assert checks["contract.benchmark_reproduction"]["check"] == "contract.benchmark_reproduction"
     assert benchmark["metadata"]["source_reference_id"] == "ref-benchmark"
     assert benchmark["observed"]["metric_value"] is None
     assert benchmark["observed"]["threshold_value"] is None
@@ -1749,6 +1750,9 @@ def test_suggest_contract_checks_proof_request_templates_validate_against_advert
     parameter = checks["contract.proof_parameter_coverage"]["request_template"]
     alignment = checks["contract.claim_to_proof_alignment"]["request_template"]
 
+    assert checks["contract.proof_hypothesis_coverage"]["check"] == "contract.proof_hypothesis_coverage"
+    assert checks["contract.proof_parameter_coverage"]["check"] == "contract.proof_parameter_coverage"
+    assert checks["contract.claim_to_proof_alignment"]["check"] == "contract.claim_to_proof_alignment"
     assert hypothesis["check_key"] == "contract.proof_hypothesis_coverage"
     assert hypothesis["contract"] is None
     assert hypothesis["metadata"]["hypothesis_ids"] == ["hyp-positive", "hyp-decay"]

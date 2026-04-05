@@ -23,10 +23,10 @@ import os
 import re
 import shutil
 import tempfile
+import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 
-from gpd._python_compat import load_tomllib
 from gpd.adapters.base import RuntimeAdapter
 from gpd.adapters.install_utils import (
     CACHE_DIR_NAME,
@@ -63,7 +63,6 @@ WOLFRAM_MANAGED_INTEGRATION = _managed_integrations.WOLFRAM_MANAGED_INTEGRATION
 WOLFRAM_MANAGED_SERVER_KEY = _managed_integrations.WOLFRAM_MANAGED_SERVER_KEY
 
 logger = logging.getLogger(__name__)
-tomllib = load_tomllib()
 
 _TOOL_NAME_MAP: dict[str, str] = {
     "file_read": "read_file",
@@ -434,8 +433,9 @@ def _convert_to_codex_skill(content: str, skill_name: str) -> str:
     - allowed-tools: optional tool restrictions
     - color: removed (not supported by Codex CLI)
     """
-    # Replace /gpd: with $gpd- for Codex skill invocation syntax
+    # Replace legacy /gpd: and canonical gpd: references with the Codex skill syntax.
     converted = content.replace("/gpd:", "$gpd-")
+    converted = re.sub(r"(?<![A-Za-z0-9_./$-])gpd:([a-z0-9-]+)\b", r"$gpd-\1", converted)
 
     preamble, frontmatter, separator, body = split_markdown_frontmatter(converted)
     if not frontmatter:

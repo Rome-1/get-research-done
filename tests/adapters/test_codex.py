@@ -153,9 +153,14 @@ class TestConvertToCodexSkill:
         result = _convert_to_codex_skill(content, "gpd-test")
         assert "$gpd-execute-phase" in result
 
+    def test_canonical_command_conversion(self) -> None:
+        content = "---\nname: test\ndescription: D\n---\nRun gpd:reapply-patches after the update."
+        result = _convert_to_codex_skill(content, "gpd-test")
+        assert "$gpd-reapply-patches" in result
+
     def test_path_conversion(self) -> None:
         """Path conversion is handled by replace_placeholders in the install pipeline.
-        _convert_to_codex_skill only handles /gpd: -> $gpd- and frontmatter conversion."""
+        _convert_to_codex_skill handles shared command reference conversion and frontmatter conversion."""
         content = "---\nname: test\ndescription: D\n---\nSee /gpd:execute-phase"
         result = _convert_to_codex_skill(content, "gpd-test")
         assert "$gpd-execute-phase" in result

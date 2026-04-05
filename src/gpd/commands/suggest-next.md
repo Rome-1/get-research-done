@@ -18,7 +18,7 @@ Analyze current project state and suggest the most impactful next action. Uses `
 Local CLI fallback: `gpd --raw suggest` when the installed runtime surface is unavailable.
 
 This is the fastest way to answer "what should I do next?" without reading through progress reports.
-Use it after `/gpd:resume-work` when you want the next recommended command without reading the broader project snapshot. If you still need to rediscover the project first, do that in your normal terminal with `gpd resume` for the current workspace or `gpd resume --recent` for the explicit multi-project picker before reopening the runtime. Keep `/clear` as a fresh-context reset, not as a recovery step.
+Use it after `gpd:resume-work` when you want the next recommended command without reading the broader project snapshot. If you still need to rediscover the project first, do that in your normal terminal with `gpd resume` for the current workspace or `gpd resume --recent` for the explicit multi-project picker before reopening the runtime. Keep `/clear` as a fresh-context reset, not as a recovery step.
 </objective>
 
 <context>
@@ -35,7 +35,7 @@ SUGGESTIONS=$(gpd --raw suggest)
 if [ $? -ne 0 ]; then
   echo "ERROR: suggest-next failed: $SUGGESTIONS"
   echo ""
-  echo "Try /gpd:progress for manual project status."
+  echo "Try gpd:progress for manual project status."
   exit 1
 fi
 ```

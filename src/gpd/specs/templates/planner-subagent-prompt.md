@@ -33,7 +33,7 @@ Treat `approach_policy` as execution policy only; it does not substitute for gro
 **Reference Artifacts:** {reference_artifacts_content}
 
 **Phase Context:**
-IMPORTANT: If context exists below, it contains USER DECISIONS from /gpd:discuss-phase.
+IMPORTANT: If context exists below, it contains USER DECISIONS from gpd:discuss-phase.
 
 - **Decisions** = LOCKED -- honor exactly, do not revisit
 - **Agent's Discretion** = Freedom -- make methodological choices
@@ -102,7 +102,7 @@ See `{GPD_INSTALL_DIR}/references/orchestration/context-budget.md` for detailed 
 </context_budget_guidance>
 
 <downstream_consumer>
-Output consumed by /gpd:execute-phase. Plans need:
+Output consumed by gpd:execute-phase. Plans need:
 
 - Frontmatter (`wave`, `depends_on`, `files_modified`, `interactive`, `conventions`, `contract`)
 - Tasks in XML format

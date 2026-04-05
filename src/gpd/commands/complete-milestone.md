@@ -49,20 +49,20 @@ If `--dry-run` flag is present, show what would be archived and deleted (milesto
 0. **Check for audit:**
 
    - Look for `GPD/v{{version}}-MILESTONE-AUDIT.md`
-   - If missing or stale: recommend `/gpd:audit-milestone` first
-   - If audit status is `gaps_found`: recommend `/gpd:plan-milestone-gaps` first
+   - If missing or stale: recommend `gpd:audit-milestone` first
+   - If audit status is `gaps_found`: recommend `gpd:plan-milestone-gaps` first
    - If audit status is `passed`: proceed to step 1
 
    ```markdown
    ## Pre-flight Check
 
    {If no v{{version}}-MILESTONE-AUDIT.md:}
-   No milestone audit found. Run `/gpd:audit-milestone` first to verify
+   No milestone audit found. Run `gpd:audit-milestone` first to verify
    research question coverage, derivation completeness, and cross-phase consistency.
 
    {If audit has gaps:}
    Milestone audit found gaps (e.g., unchecked limits, missing error bars,
-   unsupported claims). Run `/gpd:plan-milestone-gaps` to create phases that
+   unsupported claims). Run `gpd:plan-milestone-gaps` to create phases that
    close the gaps, or proceed anyway to defer to the next milestone.
 
    {If audit passed:}
@@ -125,7 +125,7 @@ If `--dry-run` flag is present, show what would be archived and deleted (milesto
    - Ask about pushing tag
 
 8. **Offer next steps:**
-   - `/gpd:new-milestone` — start next research milestone (questioning -> literature review -> requirements -> roadmap)
+   - `gpd:new-milestone` — start next research milestone (questioning -> literature review -> requirements -> roadmap)
 
 </process>
 
@@ -150,6 +150,6 @@ If `--dry-run` flag is present, show what would be archived and deleted (milesto
 - **Archive before deleting:** Always create archive files before updating/deleting originals
 - **One-line summary:** Collapsed milestone in ROADMAP.md should be single line with link
 - **Context efficiency:** Archive keeps ROADMAP.md and REQUIREMENTS.md constant size per milestone
-- **Fresh requirements:** Next milestone starts with `/gpd:new-milestone` which includes requirements definition
+- **Fresh requirements:** Next milestone starts with `gpd:new-milestone` which includes requirements definition
 - **Research continuity:** PROJECT.md must capture what was learned, not just what was done, so the next milestone builds on established results
   </critical_rules>

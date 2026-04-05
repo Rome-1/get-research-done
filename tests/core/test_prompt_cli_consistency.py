@@ -177,10 +177,10 @@ def test_help_prompt_default_quick_start_extracts_workflow_owned_sections() -> N
     assert_beginner_startup_routing_contract(quick_start_reference)
     assert "Usage: `/gpd:start`" not in quick_start_reference
     assert "## Core Workflow" in help_workflow
-    assert "/gpd:new-project -> /gpd:discuss-phase -> /gpd:plan-phase -> /gpd:execute-phase -> /gpd:verify-work -> repeat" in help_workflow
+    assert "gpd:new-project -> gpd:discuss-phase -> gpd:plan-phase -> gpd:execute-phase -> gpd:verify-work -> repeat" in help_workflow
     assert "gpd init new-project" not in help_workflow
     later_capabilities = help_workflow.split("## What comes later after startup", 1)[1]
-    for token in ("/gpd:discuss-phase", "/gpd:write-paper", "/gpd:tangent", "/gpd:set-tier-models", "/gpd:settings"):
+    for token in ("gpd:discuss-phase", "gpd:write-paper", "gpd:tangent", "gpd:set-tier-models", "gpd:settings"):
         assert token in later_capabilities
 
 
@@ -214,7 +214,7 @@ def test_start_prompt_delegates_routing_to_workflow_only() -> None:
     assert "first-stop chooser" in start_command
     assert "read-only walkthrough when the user wants orientation before choosing a path" in start_command
     assert "explain them the first time they appear" in start_command
-    assert "/gpd:tour" in start_command
+    assert "gpd:tour" in start_command
     assert_start_workflow_router_contract(start_workflow)
     assert "gpd resume --recent" in start_workflow
     assert "in your normal terminal to find the project first" in start_workflow
@@ -223,7 +223,7 @@ def test_start_prompt_delegates_routing_to_workflow_only() -> None:
     assert "GPD may auto-select it" in start_workflow
     assert "recent-project picker" in start_workflow
     assert "Then open that project folder in the runtime and run" in start_workflow
-    assert "`/gpd:resume-work`." in start_workflow
+    assert "`gpd:resume-work`." in start_workflow
     assert "the in-runtime continuation step once the recovery ladder has identified the right project" in start_workflow
     assert "reopened its workspace" in start_workflow
     assert "Read `{GPD_INSTALL_DIR}/workflows/new-project.md` with the file-read tool." not in start_workflow
@@ -239,8 +239,8 @@ def test_tour_prompt_delegates_routing_to_workflow_only() -> None:
     assert "@{GPD_INSTALL_DIR}/workflows/tour.md" in tour_command
     assert "teaching surface, not a chooser" in tour_command
     assert "safe beginner walkthrough of the core GPD command paths" in tour_command
-    assert "/gpd:set-tier-models" in tour_command
-    assert "/gpd:settings" in tour_command
+    assert "gpd:set-tier-models" in tour_command
+    assert "gpd:settings" in tour_command
     assert_tour_command_surface_contract(tour_workflow)
     assert "$ARGUMENTS" in tour_workflow
     assert "Do not narrow the command list, select a path, or route based on it." in tour_workflow
@@ -252,9 +252,9 @@ def test_help_workflow_surfaces_start_as_first_run_router() -> None:
     help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
     quick_start_reference = _extract_between(help_workflow, "## Quick Start", "## Core Workflow")
 
-    assert "/gpd:start" in help_workflow
+    assert "gpd:start" in help_workflow
     assert "Guided first-run router" in help_workflow
-    assert "/gpd:tour" in help_workflow
+    assert "gpd:tour" in help_workflow
     assert "guided tour" in help_workflow.lower()
     assert_beginner_startup_routing_contract(quick_start_reference)
 
@@ -317,9 +317,9 @@ def test_tangent_prompt_routes_into_existing_workflows() -> None:
 
     assert "name: gpd:tangent" in tangent_command
     assert "@{GPD_INSTALL_DIR}/workflows/tangent.md" in tangent_command
-    assert "/gpd:quick" in tangent_command
-    assert "/gpd:add-todo" in tangent_command
-    assert "/gpd:branch-hypothesis" in tangent_command
+    assert "gpd:quick" in tangent_command
+    assert "gpd:add-todo" in tangent_command
+    assert "gpd:branch-hypothesis" in tangent_command
 
     for token in (
         "Stay on the main path",
@@ -366,7 +366,7 @@ def test_new_milestone_prompt_mentions_planning_commit_docs() -> None:
 
     for content in (command, workflow):
         assert "planning.commit_docs" in content
-        assert "/gpd:discuss-phase [N]" in content or "/gpd:discuss-phase 1" in content
+        assert "gpd:discuss-phase [N]" in content or "gpd:discuss-phase 1" in content
 
 
 def test_doc_sources_place_global_raw_before_subcommands() -> None:
@@ -450,8 +450,8 @@ def test_compare_branches_prompt_keeps_branch_summary_extraction_in_memory() -> 
 def test_help_prompts_surface_tangent_command_for_side_investigations() -> None:
     help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
 
-    assert "/gpd:tangent" in help_workflow
-    assert re.search(r"/gpd:tangent[^\n]*?(?:tangent|side investigation|alternative direction|parallel)", help_workflow, re.I)
+    assert "gpd:tangent" in help_workflow
+    assert re.search(r"gpd:tangent[^\n]*?(?:tangent|side investigation|alternative direction|parallel)", help_workflow, re.I)
 
 
 def test_settings_and_research_mode_docs_keep_tangent_branch_taxonomy_strict() -> None:
@@ -515,9 +515,9 @@ def test_help_prompt_workflow_modes_match_current_settings_vocabulary() -> None:
     assert "tier-2" in help_workflow
     assert "tier-3" in help_workflow
     assert "YOLO" in help_workflow
-    assert "/gpd:set-tier-models" in help_workflow
-    assert "/gpd:settings" in help_workflow
-    assert "/gpd:discuss-phase" in help_workflow
+    assert "gpd:set-tier-models" in help_workflow
+    assert "gpd:settings" in help_workflow
+    assert "gpd:discuss-phase" in help_workflow
     assert "execution.review_cadence" in help_workflow
     assert "planning.commit_docs" in help_workflow
     assert "git.branching_strategy" in help_workflow
@@ -537,9 +537,9 @@ def test_help_prompt_surfaces_workflow_presets_on_the_local_cli_surface() -> Non
     assert "degrade `write-paper`" in help_workflow
     assert "`paper-build` remains the build contract" in help_workflow
     assert "`arxiv-submission` requires the built manuscript" in help_workflow
-    assert "/gpd:set-tier-models" in help_workflow
-    assert "/gpd:settings" in help_workflow
-    assert "/gpd:set-profile" in help_workflow
+    assert "gpd:set-tier-models" in help_workflow
+    assert "gpd:settings" in help_workflow
+    assert "gpd:set-profile" in help_workflow
 
 
 def test_help_prompt_keeps_cost_surface_on_local_cli_not_runtime_slash_command() -> None:
@@ -558,8 +558,8 @@ def test_help_prompt_session_management_keeps_pause_before_leave_and_resume_on_r
         extra_reset_fragments=("then run gpd resume in your normal terminal",),
         extra_reset_not_recovery_fragments=("then run gpd resume in your normal terminal",),
     )
-    assert "**`/gpd:resume-work`**" in help_workflow
-    assert "**`/gpd:pause-work`**" in help_workflow
+    assert "**`gpd:resume-work`**" in help_workflow
+    assert "**`gpd:pause-work`**" in help_workflow
     assert_resume_authority_contract(
         help_workflow,
         allow_explicit_alias_examples=False,
@@ -584,9 +584,9 @@ def test_help_prompt_session_management_keeps_pause_before_leave_and_resume_on_r
     assert not any(alias in resume_authority_fields() for alias in resume_compat_alias_fields())
     assert_recovery_ladder_contract(
         help_workflow,
-        resume_work_fragments=("/gpd:resume-work",),
-        suggest_next_fragments=("/gpd:suggest-next",),
-        pause_work_fragments=("/gpd:pause-work",),
+        resume_work_fragments=("gpd:resume-work", "/gpd:resume-work"),
+        suggest_next_fragments=("gpd:suggest-next", "/gpd:suggest-next"),
+        pause_work_fragments=("gpd:pause-work", "/gpd:pause-work"),
     )
 
 
@@ -595,7 +595,7 @@ def test_new_project_prompt_surfaces_discuss_phase_before_planning_in_command_an
     workflow = (REPO_ROOT / "src/gpd/specs/workflows/new-project.md").read_text(encoding="utf-8")
 
     for content in (command, workflow):
-        assert "/gpd:discuss-phase 1" in content
+        assert "gpd:discuss-phase 1" in content
 
     assert "Discuss phase 1 now?" in command
     assert "Discuss phase 1 now?" in workflow

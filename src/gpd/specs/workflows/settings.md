@@ -1,5 +1,5 @@
 <purpose>
-Interactive configuration of autonomy, unattended execution budgets, GPD workflow agents (research, plan_checker, verifier), research profile selection, qualitative model-cost posture, runtime-specific tier model overrides, `execution.review_cadence`, git branching, and runtime-permission sync guidance. `/gpd:settings` is the primary guided entrypoint for unattended-use setup. Recommend `Balanced` unless the user explicitly wants tighter supervision or YOLO-style speed. Use `/gpd:set-tier-models` when the user only wants the narrow direct path for `tier-1` / `tier-2` / `tier-3` model ids. Updates `GPD/config.json` with user preferences including model profile, optional `model_overrides`, workflow toggles, execution cadence, and branching strategy.
+Interactive configuration of autonomy, unattended execution budgets, GPD workflow agents (research, plan_checker, verifier), research profile selection, qualitative model-cost posture, runtime-specific tier model overrides, `execution.review_cadence`, git branching, and runtime-permission sync guidance. `gpd:settings` is the primary guided entrypoint for unattended-use setup. Recommend `Balanced` unless the user explicitly wants tighter supervision or YOLO-style speed. Use `gpd:set-tier-models` when the user only wants the narrow direct path for `tier-1` / `tier-2` / `tier-3` model ids. Updates `GPD/config.json` with user preferences including model profile, optional `model_overrides`, workflow toggles, execution cadence, and branching strategy.
 </purpose>
 
 <preset_guidance>
@@ -398,7 +398,7 @@ Terminal follow-ups for these settings:
 
 Broader local references still stay outside this settings-owned follow-up list: use `gpd doctor` for install and runtime-local readiness, `gpd integrations status wolfram` for the shared optional Wolfram integration config rather than local Mathematica readiness, and `gpd validate plan-preflight <PLAN.md>` when you need a plan gate instead of a settings change.
 
-These settings apply to future /gpd:plan-phase and /gpd:execute-phase runs.
+These settings apply to future gpd:plan-phase and gpd:execute-phase runs.
 
 Model-cost posture is qualitative guidance only. It maps onto the existing `model_profile` and `model_overrides` decisions, not a new persisted config key, pricing system, or billing promise.
 
@@ -417,14 +417,14 @@ Runtime sync:
 Project conventions still live in `GPD/CONVENTIONS.md` and `GPD/state.json` (`convention_lock`), not in `GPD/config.json`.
 
 Quick commands:
-- /gpd:set-profile <profile> -- switch research profile
-- /gpd:set-tier-models -- direct concrete `tier-1` / `tier-2` / `tier-3` model-id setup
-- /gpd:settings -- revisit interactive model/tier setup
-- /gpd:validate-conventions -- verify convention consistency across the project
+- gpd:set-profile <profile> -- switch research profile
+- gpd:set-tier-models -- direct concrete `tier-1` / `tier-2` / `tier-3` model-id setup
+- gpd:settings -- revisit interactive model/tier setup
+- gpd:validate-conventions -- verify convention consistency across the project
 - gpd convention set <key> <value> -- update the locked project conventions directly
-- /gpd:plan-phase --research -- force research
-- /gpd:plan-phase --skip-research -- skip research
-- /gpd:plan-phase --skip-verify -- skip plan check
+- gpd:plan-phase --research -- force research
+- gpd:plan-phase --skip-research -- skip research
+- gpd:plan-phase --skip-verify -- skip plan check
 ```
 
 </step>

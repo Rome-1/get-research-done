@@ -86,7 +86,7 @@ MODE=$(gpd --raw config get research_mode 2>/dev/null | gpd json get .value --de
 </research_mode_awareness>
 
 <upstream_input>
-**CONTEXT.md** (if exists) — User decisions from `/gpd:discuss-phase`
+**CONTEXT.md** (if exists) — User decisions from `gpd:discuss-phase`
 
 | Section                  | How You Use It                                    |
 | ------------------------ | ------------------------------------------------- |

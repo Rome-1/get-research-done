@@ -66,7 +66,7 @@ After resolution, keep all manuscript-local support artifacts rooted at the same
 ```
 No manuscript found. Searched: paper/, manuscript/, draft/
 
-Run /gpd:write-paper first, or provide a manuscript path to /gpd:peer-review.
+Run gpd:write-paper first, or provide a manuscript path to gpd:peer-review.
 ```
 
 Exit.
@@ -801,9 +801,9 @@ Present:
 <step name="route_next_action">
 **Route the outcome based on the recommendation:**
 
-- `accept`: recommend `/gpd:arxiv-submission`
-- `minor_revision`: recommend targeted manuscript edits or `/gpd:respond-to-referees`
-- `major_revision`: recommend `/gpd:respond-to-referees` and highlight the blocking findings
+- `accept`: recommend `gpd:arxiv-submission`
+- `minor_revision`: recommend targeted manuscript edits or `gpd:respond-to-referees`
+- `major_revision`: recommend `gpd:respond-to-referees` and highlight the blocking findings
 - `reject`: present the highest-severity issues and recommend returning to research or restructuring the manuscript before another review
 
 If this was a revision round, state the round number and whether the referee considers previous issues resolved, partially resolved, or unresolved.

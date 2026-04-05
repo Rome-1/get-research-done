@@ -189,7 +189,7 @@ def _expected_wheel_dependency_names() -> set[str]:
     return _expected_runtime_dependency_names() | {"arxiv-mcp-server"}
 
 
-HELP_COMMAND_HEADING_RE = re.compile(r"^\*\*`/gpd:([a-z0-9-]+)(?:[^`]*)`\*\*$", re.MULTILINE)
+HELP_COMMAND_HEADING_RE = re.compile(r"^\*\*`(?:gpd:|/gpd:)([a-z0-9-]+)(?:[^`]*)`\*\*$", re.MULTILINE)
 BEGINNER_ONBOARDING_HUB_URL = beginner_onboarding_hub_url()
 
 
@@ -693,8 +693,8 @@ def test_public_help_surfaces_keep_publication_workflows_visible_for_optional_ad
 
     assert "@{GPD_INSTALL_DIR}/workflows/help.md" in help_command
     assert "## Core Workflow" in help_workflow
-    assert "**`/gpd:write-paper [title or topic] [--from-phases 1,2,3]`**" in help_workflow
-    assert "**`/gpd:arxiv-submission`**" in help_workflow
+    assert "**`gpd:write-paper [title or topic] [--from-phases 1,2,3]`**" in help_workflow
+    assert "**`gpd:arxiv-submission`**" in help_workflow
     assert_optional_paper_workflow_guidance_contract(help_workflow)
     assert_publication_toolchain_boundary_contract(help_workflow)
 
@@ -854,14 +854,14 @@ def test_public_readme_recovery_surfaces_keep_runtime_pause_and_resume_roles_dis
     assert "Current-workspace recovery snapshot" in quick_start
     assert_recovery_ladder_contract(
         key_commands,
-        resume_work_fragments=("runtime `resume-work` command", "`/gpd:resume-work`"),
+        resume_work_fragments=("runtime `resume-work` command", "`gpd:resume-work`", "`/gpd:resume-work`"),
         suggest_next_fragments=("runtime `suggest-next` command", "`suggest-next`"),
-        pause_work_fragments=("runtime-specific `pause-work` command", "`/gpd:pause-work`"),
+        pause_work_fragments=("runtime-specific `pause-work` command", "`gpd:pause-work`", "`/gpd:pause-work`"),
     )
     assert "Leave / return path:" in key_commands
-    assert "`/gpd:pause-work`" in key_commands
-    assert "`/gpd:resume-work`" in key_commands
-    assert "`/gpd:suggest-next`" in key_commands
+    assert "`gpd:pause-work`" in key_commands
+    assert "`gpd:resume-work`" in key_commands
+    assert "`gpd:suggest-next`" in key_commands
 
 
 def test_public_readme_and_help_surfaces_keep_tangent_discoverable() -> None:
@@ -870,8 +870,8 @@ def test_public_readme_and_help_surfaces_keep_tangent_discoverable() -> None:
     help_workflow = (repo_root / "src/gpd/specs/workflows/help.md").read_text(encoding="utf-8")
 
     assert "#### Tangents & Hypothesis Branches" in readme
-    assert re.search(r"\| `/gpd:tangent(?: [^`]*)?` \| .*?(?:tangent|side investigation|alternative direction|parallel)", readme, re.I)
-    assert re.search(r"\*\*`/gpd:tangent(?: [^`]*)?`\*\*", help_workflow)
+    assert re.search(r"\| `gpd:tangent(?: [^`]*)?` \| .*?(?:tangent|side investigation|alternative direction|parallel)", readme, re.I)
+    assert re.search(r"\*\*`gpd:tangent(?: [^`]*)?`\*\*", help_workflow)
     assert "Chooser for stay / quick / defer / branch" in help_workflow
 
 
@@ -912,7 +912,7 @@ def test_public_settings_workflow_keeps_balanced_recommendation_and_relaunch_gui
     assert "This sync only updates runtime-owned permission settings; it does not validate install health or workflow/tool readiness." in settings_workflow
     assert_settings_local_terminal_follow_up_contract(settings_workflow)
     assert "What model-cost posture should GPD optimize for?" in settings_workflow
-    assert "/gpd:set-tier-models" in settings_workflow
+    assert "gpd:set-tier-models" in settings_workflow
     assert "Use runtime defaults" in settings_workflow
     assert_cost_advisory_contract(settings_workflow)
 
@@ -924,7 +924,7 @@ def test_public_readme_and_help_surfaces_expose_direct_tier_model_command() -> N
 
     assert "If you want the simplest direct path for concrete tier ids" in readme
     assert "Set tier models" in readme
-    assert "/gpd:set-tier-models" in help_workflow
+    assert "gpd:set-tier-models" in help_workflow
     assert "Direct concrete model-id setup for `tier-1`, `tier-2`, and `tier-3` on the active runtime." in help_workflow
 
 
@@ -1049,7 +1049,7 @@ def test_public_cli_docs_cover_project_contract_comparison_and_paper_build() -> 
 
     assert "`gpd validate project-contract <file.json or -> [--mode approved|draft]`" in readme
     assert "`gpd paper-build [PAPER-CONFIG.json] [--output-dir <dir>]`" in readme
-    assert "**`/gpd:compare-results [phase, artifact, or comparison target]`**" in help_workflow
+    assert "**`gpd:compare-results [phase, artifact, or comparison target]`**" in help_workflow
 
 
 def test_public_readme_points_to_runtime_and_local_cli_help_for_full_command_surfaces() -> None:
@@ -1068,8 +1068,8 @@ def test_public_readme_points_to_runtime_and_local_cli_help_for_full_command_sur
 def test_public_readme_typical_new_project_loop_includes_discuss_phase_before_planning() -> None:
     readme = (_repo_root() / "README.md").read_text(encoding="utf-8")
 
-    assert "/gpd:new-project -> /gpd:discuss-phase 1 -> /gpd:plan-phase 1 -> /gpd:execute-phase 1 -> /gpd:verify-work 1" in readme
-    assert "/gpd:new-project -> /gpd:plan-phase 1 -> /gpd:execute-phase 1 -> /gpd:verify-work 1" not in readme
+    assert "gpd:new-project -> gpd:discuss-phase 1 -> gpd:plan-phase 1 -> gpd:execute-phase 1 -> gpd:verify-work 1" in readme
+    assert "gpd:new-project -> gpd:plan-phase 1 -> gpd:execute-phase 1 -> gpd:verify-work 1" not in readme
 
 
 def test_help_reference_surfaces_clarify_runtime_slash_commands_vs_local_cli() -> None:
@@ -1128,7 +1128,7 @@ def test_regression_check_canonical_surfaces_match_scan_only_implementation() ->
 
     assert "frontmatter" in transition
     assert "invalid verification statuses" in transition
-    assert "/gpd:verify-work <phase>" in transition
+    assert "gpd:verify-work <phase>" in transition
     assert "| Result conflict |" not in transition
 
     assert "re-verify previously validated contract-backed outcomes" not in verify_work

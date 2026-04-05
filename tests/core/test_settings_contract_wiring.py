@@ -45,7 +45,7 @@ def test_settings_and_planning_config_keep_conventions_outside_config_json() -> 
     assert '"physics": {' not in planning_config
     assert "Project conventions are not part of `config.json`." in planning_config
     assert "Do **not** introduce a `physics` block there." in planning_config
-    assert "The user can run `gpd convention set ...` or `/gpd:validate-conventions` later to complete convention setup." in new_project
+    assert "The user can run `gpd convention set ...` or `gpd:validate-conventions` later to complete convention setup." in new_project
 
 
 def test_settings_model_cost_onboarding_stays_qualitative_and_runtime_default_first() -> None:
@@ -58,7 +58,7 @@ def test_settings_model_cost_onboarding_stays_qualitative_and_runtime_default_fi
 
     assert "Balanced (Recommended)" in settings_workflow
     assert "runtime defaults" in settings_workflow
-    assert "/gpd:set-tier-models" in settings_workflow
+    assert "gpd:set-tier-models" in settings_workflow
     assert "Use runtime defaults" in settings_workflow
     assert "Configure explicit tier models" in settings_workflow
     assert "tier-1" in settings_workflow
@@ -80,7 +80,7 @@ def test_settings_workflow_surfaces_optional_usd_budget_guardrails_as_advisory_o
 def test_settings_workflow_preset_contract_keeps_runtime_default_tier_model_path_explicit() -> None:
     settings_workflow = (WORKFLOWS_DIR / "settings.md").read_text(encoding="utf-8")
 
-    assert "/gpd:set-tier-models" in settings_workflow
+    assert "gpd:set-tier-models" in settings_workflow
     assert "How should GPD handle concrete tier models for the active runtime?" in settings_workflow
     assert "Leave current setting unchanged" in settings_workflow
     assert "Use runtime defaults" in settings_workflow

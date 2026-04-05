@@ -49,7 +49,7 @@ Parse JSON for: `planner_model`, `executor_model`, `commit_docs`, `autonomy`, `n
 - `autonomy=balanced` (default): Execute without pausing unless the quick task reveals a real decision point.
 - `autonomy=yolo`: Execute and commit without pausing.
 
-**If `planning_exists` is false:** Error -- Quick mode requires an initialized project with `GPD/`. Run `/gpd:new-project` first.
+**If `planning_exists` is false:** Error -- Quick mode requires an initialized project with `GPD/`. Run `gpd:new-project` first.
 
 Quick tasks can run mid-phase and do NOT require ROADMAP.md. They only need `GPD/` to exist for directory structure.
 Quick mode still inherits the approved `project_contract` only when `project_contract_gate.authoritative` is true, and it still inherits the active reference ledger. Do not bypass required anchors, baselines, or forbidden-proxy constraints just because the task is small.
@@ -57,9 +57,9 @@ Before planning, also load `{GPD_INSTALL_DIR}/templates/planner-subagent-prompt.
 
 **Proof-obligation command block:** If the description or inherited contract indicates theorem-style work (`proof_obligation`, `theorem`, `lemma`, `corollary`, `proposition`, `claim`, `proof`, `prove`, `show that`, `existence`, `uniqueness`), STOP instead of using quick mode. Do not bypass this by asking for a "quick sketch", "light proof", or "just the main idea". Route explicitly to:
 
-- `/gpd:plan-phase <phase>` when this belongs in planned phase work
-- `/gpd:derive-equation "<goal>"` when you need a derivation/proof draft
-- `/gpd:verify-work <phase>` only after a canonical proof-redteam artifact exists
+- `gpd:plan-phase <phase>` when this belongs in planned phase work
+- `gpd:derive-equation "<goal>"` when you need a derivation/proof draft
+- `gpd:verify-work <phase>` only after a canonical proof-redteam artifact exists
 
 ---
 
@@ -254,7 +254,7 @@ Commit: ${commit_hash}
 
 ---
 
-Ready for next task: /gpd:quick
+Ready for next task: gpd:quick
 ```
 
 </process>

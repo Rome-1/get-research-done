@@ -42,7 +42,7 @@ Treat these labels as phase-level review categories layered on top of the lower-
 
 ### `plan-review`
 
-**Fires after:** Plan generation for a new phase (`/gpd:plan-phase` completion).
+**Fires after:** Plan generation for a new phase (`gpd:plan-phase` completion).
 
 **Why required:** The plan determines the entire research direction for the phase. Approving a flawed plan wastes all downstream computation.
 
@@ -102,7 +102,7 @@ The status block always includes:
 1. **Current phase completed** -- which phase just finished and its pass/fail status
 2. **Why execution paused** -- the specific checkpoint type and a human-readable reason
 3. **Key artifacts to review** -- file paths the reviewer should inspect before approving
-4. **Next command** -- the exact runtime or terminal command to continue, such as `/gpd:plan-phase {N+1}`, `/gpd:complete-milestone`, or `gpd resume` for read-only recovery before re-entering the runtime
+4. **Next command** -- the exact runtime or terminal command to continue, such as `gpd:plan-phase {N+1}`, `gpd:complete-milestone`, or `gpd resume` for read-only recovery before re-entering the runtime
 
 ## Continuation Protocol
 

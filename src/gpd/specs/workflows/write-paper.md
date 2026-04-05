@@ -1,7 +1,7 @@
 <purpose>
 Structure and write a physics paper from completed research results. Handles the full pipeline from outline through polished draft: section planning, equation presentation, figure integration, narrative flow, and internal consistency verification.
 
-Called from /gpd:write-paper command. Sections are drafted by gpd-paper-writer agents.
+Called from gpd:write-paper command. Sections are drafted by gpd-paper-writer agents.
 </purpose>
 
 <core_principle>
@@ -224,16 +224,16 @@ Display a clear warning explaining why and offering alternatives:
 ```
 ⚠ No RESEARCH-DIGEST.md found in GPD/milestones/.
 
-Research digests are generated during /gpd:complete-milestone. Without a digest,
+Research digests are generated during gpd:complete-milestone. Without a digest,
 the paper will be built from raw phase data when needed, but the structured init payload should be used first for conventions, results, and approximations.
 This works but produces a less structured starting point — the digest provides
 a curated narrative arc, convention timeline, and figure registry.
 
 Options:
   1. Continue anyway — build paper from raw phase data (proceed below)
-  2. Run /gpd:complete-milestone first — generates the digest, then return here
+  2. Run gpd:complete-milestone first — generates the digest, then return here
   3. Use --from-phases to explicitly select which phases to include:
-     /gpd:write-paper --from-phases 1,2,3,5
+     gpd:write-paper --from-phases 1,2,3,5
 ```
 
 **If `--from-phases` flag is present:** Read summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`) and research artifacts only from the specified phase directories. Skip milestone digest lookup entirely. This is useful for writing papers that cover a subset of phases or when milestones haven't been completed yet.
@@ -873,7 +873,7 @@ Return BIBLIOGRAPHY UPDATED or CITATION ISSUES FOUND."
 )
 ```
 
-**If the bibliographer agent fails to spawn or returns an error:** Proceed without bibliography verification — note in the paper status that citations are unverified. The user should run `/gpd:literature-review` to verify citations after the paper is written.
+**If the bibliographer agent fails to spawn or returns an error:** Proceed without bibliography verification — note in the paper status that citations are unverified. The user should run `gpd:literature-review` to verify citations after the paper is written.
 
 **If CITATION ISSUES FOUND:**
 
@@ -938,11 +938,11 @@ If validation fails, stop and fix the manifest now. Do not enter `pre_submission
 </step>
 
 <step name="pre_submission_review">
-Before finalizing, run the same staged peer-review panel used by `/gpd:peer-review`. Do not fall back to a single generalist referee pass here, because that is precisely the failure mode this workflow is meant to avoid.
+Before finalizing, run the same staged peer-review panel used by `gpd:peer-review`. Do not fall back to a single generalist referee pass here, because that is precisely the failure mode this workflow is meant to avoid.
 
 For theorem-style or `proof_obligation` claims, this stage also carries the mandatory auxiliary proof-redteam gate from `peer-review.md`. Missing or open proof-redteam artifacts are fail-closed blockers even if the rest of the manuscript review looks clean.
 
-**Standalone entrypoint:** `/gpd:peer-review` is the first-class command for re-running this stage outside the write-paper pipeline. This embedded step must stay behaviorally aligned with that command and use the same six-agent panel:
+**Standalone entrypoint:** `gpd:peer-review` is the first-class command for re-running this stage outside the write-paper pipeline. This embedded step must stay behaviorally aligned with that command and use the same six-agent panel:
 
 1. `gpd-review-reader`
 2. `gpd-review-literature`
@@ -953,7 +953,7 @@ For theorem-style or `proof_obligation` claims, this stage also carries the mand
 
 For the detailed staging, artifact naming, round handling, `CLAIMS{round_suffix}.json` / `STAGE-*{round_suffix}.json` outputs, `REVIEW-LEDGER{round_suffix}.json`, `REFEREE-DECISION{round_suffix}.json`, and recommendation guardrails, follow `@{GPD_INSTALL_DIR}/workflows/peer-review.md` exactly, using the resolved `${PAPER_DIR}/{topic_specific_stem}.tex` target recorded in `ARTIFACT-MANIFEST.json` and the manuscript-root `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and `reproducibility-manifest.json` as the strict-review dependencies. Keep the current `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, and `active_reference_context` visible throughout that staged review; the contract remains authoritative only when `project_contract_gate.authoritative` is true.
 
-**If the staged panel fails:** Do not silently waive the review. Note the failure and recommend running `/gpd:peer-review` directly after resolving the blocking issue.
+**If the staged panel fails:** Do not silently waive the review. Note the failure and recommend running `gpd:peer-review` directly after resolving the blocking issue.
 
 **After final adjudication:**
 
@@ -993,7 +993,7 @@ The score should be artifact-driven, not manually estimated. Use:
 
 Treat paper-support artifacts as scaffolding, not as proof that a claim is established. Missing decisive comparison evidence still blocks a strong submission recommendation even if manifests and audits are complete.
 
-Present the quality score report. If score < journal minimum, list specific items to fix before submission. If score >= minimum but no submission-clearing staged review exists yet, recommend `/gpd:peer-review`. Recommend `/gpd:arxiv-submission` only when the latest staged review already clears submission packaging.
+Present the quality score report. If score < journal minimum, list specific items to fix before submission. If score >= minimum but no submission-clearing staged review exists yet, recommend `gpd:peer-review`. Recommend `gpd:arxiv-submission` only when the latest staged review already clears submission packaging.
 
 Present summary to user with build instructions, quality score, and next steps.
 </step>
@@ -1001,7 +1001,7 @@ Present summary to user with build instructions, quality score, and next steps.
 <step name="paper_revision">
 ## Revision Mode (Handling Referee Reports)
 
-**Note:** For a dedicated referee response workflow, use `/gpd:respond-to-referees`. This step handles revision when invoked from within the write-paper pipeline.
+**Note:** For a dedicated referee response workflow, use `gpd:respond-to-referees`. This step handles revision when invoked from within the write-paper pipeline.
 
 When revising a paper in response to referee reports:
 

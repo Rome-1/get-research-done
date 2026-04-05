@@ -12,12 +12,9 @@ from __future__ import annotations
 import os
 import re
 import sys
+import tomllib
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-
-from gpd._python_compat import load_tomllib
-
-tomllib = load_tomllib()
 
 
 def _read_pyproject_version(pyproject_path: Path) -> str | None:

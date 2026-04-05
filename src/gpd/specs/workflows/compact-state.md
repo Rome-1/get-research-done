@@ -1,7 +1,7 @@
 <purpose>
 Archive historical entries from STATE.md to reduce its size. As research projects grow, STATE.md accumulates decisions, session records, metrics, and resolved blockers from many phases. This workflow archives old entries to STATE-ARCHIVE.md, keeping STATE.md lean and under the target line budget.
 
-Triggered automatically when progress.md detects STATE.md exceeds 1500 lines, or manually via `/gpd:compact-state`.
+Triggered automatically when progress.md detects STATE.md exceeds 1500 lines, or manually via `gpd:compact-state`.
 </purpose>
 
 <required_reading>
@@ -127,7 +127,7 @@ echo "Recovery method: ${RECOVERY_METHOD}"
 
 Report error and recovery method used, then exit.
 
-**If state.json sync failed:** Do not delete it blindly. Keep `GPD/state.json` (and `GPD/state.json.bak` if present), inspect `gpd state validate`, and use `/gpd:sync-state` or the recovery step above so JSON-only fields are preserved.
+**If state.json sync failed:** Do not delete it blindly. Keep `GPD/state.json` (and `GPD/state.json.bak` if present), inspect `gpd state validate`, and use `gpd:sync-state` or the recovery step above so JSON-only fields are preserved.
 </step>
 
 <step name="verify_archive">

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import importlib
 import sys
-from types import ModuleType
 
 MIN_SUPPORTED_PYTHON = (3, 11)
 
@@ -29,18 +27,3 @@ def require_supported_python(*, version_info: tuple[int, ...] | None = None) -> 
     version = version_info if version_info is not None else sys.version_info
     if tuple(version[:2]) < MIN_SUPPORTED_PYTHON:
         raise RuntimeError(unsupported_python_message(version_info=tuple(version)))
-
-
-def load_tomllib() -> ModuleType:
-    """Import ``tomllib`` or raise a user-facing runtime-compatibility error."""
-
-    require_supported_python()
-    try:
-        return importlib.import_module("tomllib")
-    except ModuleNotFoundError as exc:  # pragma: no cover - guarded above on supported interpreters
-        version = f"{sys.version_info.major}.{sys.version_info.minor}"
-        raise RuntimeError(
-            "get-physics-done expected the Python 3.11+ standard-library `tomllib` module, "
-            f"but it was unavailable under Python {version}. "
-            "Use `uv run ...` or repair the interpreter."
-        ) from exc

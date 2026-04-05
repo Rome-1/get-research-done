@@ -70,7 +70,7 @@ Create: GPD/debug/{slug}.md
 
 ## Usage
 
-**From /gpd:debug:**
+**From gpd:debug:**
 
 ```python
 task(

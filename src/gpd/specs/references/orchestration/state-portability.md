@@ -4,7 +4,7 @@ How GPD project state travels between machines, survives session interruptions, 
 
 ## Continuation Surface Contract
 
-The current continuation architecture separates execution provenance from bounded-resume authority. The portable execution story now has an append-only lineage record plus a derived execution head, and `gpd init resume` is the shared resolver that reads `state.json.continuation` first before projecting the canonical continuation view from the storage, lineage, and recovery ladder. The shared resume-surface resolver owns the canonical candidate kind/origin semantics, so raw source labels remain intake-only compatibility cues. The canonical public resume surface centers on `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `active_bounded_segment`, `derived_execution_head`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, and `resume_candidates`. Legacy compatibility cues stay inside backend-only intake paths; `/gpd:resume-work` and `gpd resume` expose the canonicalized public fields only. `.continue-here.md` and `DERIVATION-STATE.md` are supporting projections only; they may mirror canonical continuation or provenance, but they do not compete with it:
+The current continuation architecture separates execution provenance from bounded-resume authority. The portable execution story now has an append-only lineage record plus a derived execution head, and `gpd init resume` is the shared resolver that reads `state.json.continuation` first before projecting the canonical continuation view from the storage, lineage, and recovery ladder. The shared resume-surface resolver owns the canonical candidate kind/origin semantics, so raw source labels remain intake-only compatibility cues. The canonical public resume surface centers on `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `active_bounded_segment`, `derived_execution_head`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, and `resume_candidates`. Legacy compatibility cues stay inside backend-only intake paths; `gpd:resume-work` and `gpd resume` expose the canonicalized public fields only. `.continue-here.md` and `DERIVATION-STATE.md` are supporting projections only; they may mirror canonical continuation or provenance, but they do not compete with it:
 
 `state.json.continuation` is the durable authority.
 
@@ -19,7 +19,7 @@ Compatibility-only intake fields stay internal and are not part of the public to
 | `GPD/state.json` | Storage authority for machine-readable project state and canonical continuation hierarchy | Authoritative |
 | `GPD/state.json.bak` | Recovery backup for `state.json` | Recovery fallback |
 | `GPD/STATE.md` | Editable human-readable mirror of state; reconstruction input when the recovery ladder falls back to text | Mirror / reconstruction surface |
-| `GPD/phases/.../.continue-here.md` | Temporary continuation handoff artifact written by `/gpd:pause-work`; only meaningful through the canonical continuation hierarchy and written as a projection of it | Non-authoritative continuity artifact |
+| `GPD/phases/.../.continue-here.md` | Temporary continuation handoff artifact written by `gpd:pause-work`; only meaningful through the canonical continuation hierarchy and written as a projection of it | Non-authoritative continuity artifact |
 | Execution lineage | Append-only execution provenance | Authoritative for history only |
 | Derived execution head / `GPD/observability/current-execution.json` | Compatibility mirror showing the latest execution snapshot | Advisory unless canonical `continuation.bounded_segment` is absent |
 
@@ -61,7 +61,7 @@ The following are **primarily machine-local** across machines and should be rege
 1. **On the source machine**: Commit all work including `GPD/` state. Push to the remote.
 2. **On the target machine**: Clone the repository.
 3. **Run the installer**: `{GPD_BOOTSTRAP_COMMAND}` (or the equivalent install pathway). This creates a fresh managed venv, installs the GPD package, writes runtime-local configuration, and registers MCP servers.
-4. **Resume**: If you already know the repo, run `/gpd:resume-work` in the coding assistant when you are ready to continue work there, or `gpd resume` from your normal system terminal for a read-only local recovery summary. If you are not sure which repo to reopen, run `gpd resume --recent` first to discover the project, then open that workspace and use the per-project resume surface there. The shared resume machinery reconstructs the full project context from the recovery ladder in `GPD/state.json`, `GPD/state.json.bak`, or `GPD/STATE.md`, with canonical `state.json.continuation` taking precedence whenever it is present and complete.
+4. **Resume**: If you already know the repo, run `gpd:resume-work` in the coding assistant when you are ready to continue work there, or `gpd resume` from your normal system terminal for a read-only local recovery summary. If you are not sure which repo to reopen, run `gpd resume --recent` first to discover the project, then open that workspace and use the per-project resume surface there. The shared resume machinery reconstructs the full project context from the recovery ladder in `GPD/state.json`, `GPD/state.json.bak`, or `GPD/STATE.md`, with canonical `state.json.continuation` taking precedence whenever it is present and complete.
 
 No manual patching of state files is needed. The `GPD/` directory is self-contained.
 
@@ -92,16 +92,16 @@ If `GPD/state.json` says the project is in Phase 3 but the `phases/` directory t
 | Symptom | Likely Cause | Repair |
 |---------|-------------|--------|
 | `state.json` references a phase directory that does not exist | Phase directory deleted outside GPD | Re-create the directory or roll back `state.json` to match |
-| Plan files exist beyond what `state.json` tracks | State was not updated after manual plan creation | Run `/gpd:sync-state` to reconcile |
-| `STATE.md` and `state.json` disagree on position | Interrupted dual-write | Run `/gpd:sync-state` - the intent-marker protocol detects and recovers |
-| `state.json.bak` is newer than `state.json` | Write may have been interrupted mid-save | Inspect `.state-write-intent` or run `/gpd:sync-state`; `load_state_json()` does not choose a newer backup by timestamp alone |
+| Plan files exist beyond what `state.json` tracks | State was not updated after manual plan creation | Run `gpd:sync-state` to reconcile |
+| `STATE.md` and `state.json` disagree on position | Interrupted dual-write | Run `gpd:sync-state` - the intent-marker protocol detects and recovers |
+| `state.json.bak` is newer than `state.json` | Write may have been interrupted mid-save | Inspect `.state-write-intent` or run `gpd:sync-state`; `load_state_json()` does not choose a newer backup by timestamp alone |
 | `DERIVATION-STATE.md` has results not in `state.json` | Session paused without full sync | Resume workflow flags the gap and offers to reconcile |
 
-For most disagreements, `/gpd:sync-state` or `gpd state validate` will detect and report the issue. The dual-write engine's intent-marker protocol (`.state-write-intent`) handles crash recovery automatically.
+For most disagreements, `gpd:sync-state` or `gpd state validate` will detect and report the issue. The dual-write engine's intent-marker protocol (`.state-write-intent`) handles crash recovery automatically.
 
 ## Resume Semantics
 
-`/gpd:resume-work` does not blindly reload the last session. It **infers** the current project state from the full artifact tree.
+`gpd:resume-work` does not blindly reload the last session. It **infers** the current project state from the full artifact tree.
 
 The shared resume resolver turns the storage authority chain into one canonical continuation view, while keeping compatibility cues nested and out of the public top-level resume vocabulary:
 
@@ -110,7 +110,7 @@ The shared resume resolver turns the storage authority chain into one canonical 
 - temporary handoff artifact: `GPD/phases/.../.continue-here.md`
 - derived execution head / compatibility mirror: `GPD/observability/current-execution.json`
 
-The canonical continuation view shown by `/gpd:resume-work` and `gpd resume` is derived once from those layers by `gpd init resume`:
+The canonical continuation view shown by `gpd:resume-work` and `gpd resume` is derived once from those layers by `gpd init resume`:
 
 1. Reads `state.json` for the authoritative machine-readable position, including canonical `continuation` when present.
 2. Cross-references against the filesystem (phase directories, plan/summary pairs, resume artifacts).

@@ -168,7 +168,7 @@ When the orchestrator detects transition criteria are met:
 2. Keep `research_mode` set to `adaptive`; adaptive is the persisted policy, while the current narrow/broad posture is inferred from project evidence rather than stored as a second config flag
 3. Announce to user: "Adaptive mode is narrowing around the validated [approach] methodology while keeping contract-critical checks active."
 
-The user can override at any time: `/gpd:settings` or `gpd config set research_mode explore`
+The user can override at any time: `gpd:settings` or `gpd config set research_mode explore`
 
 ## Interaction with Model Profiles
 

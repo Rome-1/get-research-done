@@ -61,7 +61,7 @@ Agents may extend this with additional fields specific to their role (e.g., `pha
 
 `next_actions` is for concrete follow-up commands or explicit review actions, not abstract labels.
 
-- Prefer copy-pasteable GPD commands when one exists, e.g. `/gpd:execute-phase 3`, `/gpd:verify-work 3`, `/gpd:plan-phase 4 --gaps`
+- Prefer copy-pasteable GPD commands when one exists, e.g. `gpd:execute-phase 3`, `gpd:verify-work 3`, `gpd:plan-phase 4 --gaps`
 - If no command fits, name the exact action and artifact, e.g. `Review GPD/phases/03-example/03-VERIFICATION.md`
 - Avoid vague entries such as `continue`, `proceed`, `follow up`, or `structural revision needed`
 
@@ -515,7 +515,7 @@ Not every phase needs every agent. Spawning unnecessary agents wastes tokens and
 2. "Optional" agents are spawned if the relevant config toggle is enabled (e.g., `plan_checker: true` in config.json).
 3. "Skip" agents are not spawned even if their toggle is on -- the phase class makes them irrelevant.
 4. The orchestrator logs which agents it selected and why: `"Agent selection for derivation phase: executor + verifier + planner (plan-checker: enabled in config)"`.
-5. User can always override by requesting a specific agent: `/gpd:execute-phase 3 --with-bibliographer`.
+5. User can always override by requesting a specific agent: `gpd:execute-phase 3 --with-bibliographer`.
 
 ### Parallel vs Sequential Agent Intelligence
 
@@ -571,7 +571,7 @@ When verification fails, the orchestrator must decide how to recover. The curren
 |---|---|---|
 | Single contract target failed, rest passed | **Localized error** in one derivation step | Re-execute the specific plan that produced the failed result. Do NOT re-plan. |
 | Multiple contract targets failed, same error class | **Systematic error** (e.g., wrong convention propagated) | Re-plan the affected tasks with explicit convention enforcement. Spawn notation-coordinator first. |
-| Multiple contract targets failed, different error classes | **Approach problem** -- the methodology has fundamental issues | Escalate to user. Suggest `/gpd:discuss-phase` to reconsider the approach. |
+| Multiple contract targets failed, different error classes | **Approach problem** -- the methodology has fundamental issues | Escalate to user. Suggest `gpd:discuss-phase` to reconsider the approach. |
 | Verification passed but consistency checker found drift | **Convention drift** between waves | Spawn notation-coordinator to resolve. Re-verify only the affected quantities. |
 | Verification timed out (context pressure) | **Incomplete verification**, not failure | Spawn a fresh verifier with targeted checks (only the unverified contract targets). |
 | Same gap persists after 1 gap-closure cycle | **Root cause not addressed** by gap closure | Spawn debugger before second gap-closure attempt. Debugger identifies root cause. |

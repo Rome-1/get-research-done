@@ -2710,6 +2710,7 @@ class TestVerificationServer:
         assert "contract.benchmark_reproduction" in suggested
         assert "contract.direct_proxy_consistency" in suggested
         benchmark = next(entry for entry in result["suggested_checks"] if entry["check_key"] == "contract.benchmark_reproduction")
+        assert benchmark["check"] == benchmark["check_key"]
         assert benchmark["binding_targets"] == ["claim", "deliverable", "acceptance_test", "reference"]
         assert benchmark["required_request_fields"] == [
             "observed.metric_value",
@@ -2730,6 +2731,7 @@ class TestVerificationServer:
         assert "contract.claim_to_proof_alignment" in suggested
         assert "contract.counterexample_search" in suggested
         parameter = next(entry for entry in result["suggested_checks"] if entry["check_key"] == "contract.proof_parameter_coverage")
+        assert parameter["check"] == parameter["check_key"]
         assert parameter["binding_targets"] == ["observable", "claim", "deliverable", "acceptance_test"]
         assert parameter["request_template"]["binding"]["claim_ids"] == ["claim-theorem"]
         assert parameter["request_template"]["metadata"]["theorem_parameter_symbols"] == ["r_0", "n"]

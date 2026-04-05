@@ -6,7 +6,7 @@ Can be invoked before plan-phase for deeper literature/method investigation, or 
 
 This workflow discovers the physics landscape: what is known, what is open, what tools exist, what methods are standard, what data is available, what approximations are valid.
 
-NOTE: For comprehensive literature survey ("what do experts know about this"), use /gpd:research-phase instead, which produces a full-depth RESEARCH.md. This workflow produces a quick-depth RESEARCH.md (depth: quick) suitable for method selection and landscape scanning.
+NOTE: For comprehensive literature survey ("what do experts know about this"), use gpd:research-phase instead, which produces a full-depth RESEARCH.md. This workflow produces a quick-depth RESEARCH.md (depth: quick) suitable for method selection and landscape scanning.
 </purpose>
 
 <depth_levels>
@@ -306,8 +306,8 @@ Confidence: [level]
 
 What's next?
 
-1. Discuss phase context (/gpd:discuss-phase [current-phase])
-2. Create phase plan (/gpd:plan-phase [current-phase])
+1. Discuss phase context (gpd:discuss-phase [current-phase])
+2. Create phase plan (gpd:plan-phase [current-phase])
 3. Refine discovery (dig deeper)
 4. Review discovery
 

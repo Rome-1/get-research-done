@@ -45,7 +45,7 @@ fi
 **If `state_exists` is false:**
 
 ```
-No project state found. Run /gpd:new-project first.
+No project state found. Run gpd:new-project first.
 ```
 
 Exit.
@@ -209,7 +209,7 @@ task(
 )
 ```
 
-**If the consistency checker agent fails to spawn or returns an error:** Proceed without automated consistency checking. Note in the validation report that cross-phase consistency verification was skipped. The convention lock fields and CONVENTIONS.md can still be inspected manually. The user should run `/gpd:validate-conventions` again or inspect conventions manually.
+**If the consistency checker agent fails to spawn or returns an error:** Proceed without automated consistency checking. Note in the validation report that cross-phase consistency verification was skipped. The convention lock fields and CONVENTIONS.md can still be inspected manually. The user should run `gpd:validate-conventions` again or inspect conventions manually.
 
 Parse return for `consistency_status`: CONSISTENT, WARNING, or INCONSISTENT.
 </step>
@@ -315,8 +315,8 @@ file_read affected phase summary artifacts.
 
 ```
 Recommended actions:
-1. /gpd:regression-check {affected_phases} -- re-scan affected phases
-2. /gpd:debug -- investigate specific discrepancies
+1. gpd:regression-check {affected_phases} -- re-scan affected phases
+2. gpd:debug -- investigate specific discrepancies
 3. Re-execute affected plans with corrected conventions
 ```
 
@@ -340,7 +340,7 @@ All conventions consistent across {count} phases. No issues found.
 
 <failure_handling>
 
-- **No convention lock:** Report that no conventions are locked. Suggest running `/gpd:execute-phase` which locks conventions before parallel execution.
+- **No convention lock:** Report that no conventions are locked. Suggest running `gpd:execute-phase` which locks conventions before parallel execution.
 - **No summary artifacts:** Cannot validate — no phase data to check. Report and exit.
 - **Consistency checker agent fails:** Fall back to the static analysis from steps 2-4 (convention lock drift + phase scan + cross-reference). Report that deep consistency check was skipped.
 - **CONVENTIONS.md missing:** Skip the drift check (step 2). Rely on the convention lock surfaced in init / state.json as sole authority.

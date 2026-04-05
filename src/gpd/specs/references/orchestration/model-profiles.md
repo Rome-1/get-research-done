@@ -2,7 +2,7 @@
 
 Model profiles control which model tier each GPD agent uses. This allows balancing quality vs token spend.
 
-For first-touch setup, treat `review` plus runtime defaults as the recommended starting point. If a user wants to think in plain language instead of tiers, frame the choice as `Max quality`, `Balanced`, or `Budget-aware`, then let `/gpd:settings` map that posture onto the existing profile and runtime-specific tier override machinery. Use `/gpd:set-tier-models` when the user wants the direct concrete path for `tier-1`, `tier-2`, and `tier-3` ids without the broader settings flow. Keep explicit tier IDs as an intentional override path.
+For first-touch setup, treat `review` plus runtime defaults as the recommended starting point. If a user wants to think in plain language instead of tiers, frame the choice as `Max quality`, `Balanced`, or `Budget-aware`, then let `gpd:settings` map that posture onto the existing profile and runtime-specific tier override machinery. Use `gpd:set-tier-models` when the user wants the direct concrete path for `tier-1`, `tier-2`, and `tier-3` ids without the broader settings flow. Keep explicit tier IDs as an intentional override path.
 
 ## Tier System
 
@@ -251,7 +251,7 @@ Orchestrators resolve tier and optional concrete model before spawning:
 
 ## Switching Profiles
 
-Runtime: `/gpd:set-profile <profile>`
+Runtime: `gpd:set-profile <profile>`
 
 Per-project default: Set in `GPD/config.json`:
 
