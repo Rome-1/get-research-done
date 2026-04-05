@@ -3013,7 +3013,13 @@ def _load_state_json_with_integrity_issues(
                 allow_project_contract_salvage=allow_project_contract_salvage,
             )
             if surface_blocked_project_contract:
-                normalized = _restore_visible_project_contract(normalized, parsed.get("project_contract"))
+                normalized, restored_contract_findings = _restore_visible_project_contract(
+                    normalized,
+                    parsed.get("project_contract"),
+                )
+                for finding in restored_contract_findings:
+                    if finding not in integrity_issues:
+                        integrity_issues.append(finding)
             state_source = "state.json.bak" if recovered_root_from_backup else "state.json"
             if recovered_root_from_backup:
                 integrity_issues.append(
@@ -3164,23 +3170,19 @@ def peek_state_json(
     )
 
 
-def _restore_visible_project_contract(state_obj: dict, raw_project_contract: object) -> dict:
+def _restore_visible_project_contract(state_obj: dict, raw_project_contract: object) -> tuple[dict, list[str]]:
     """Restore a load-time contract that should remain visible despite load blockers."""
 
     if state_obj.get("project_contract") is not None or not isinstance(raw_project_contract, dict):
-        return state_obj
+        return state_obj, []
 
-    normalized_contract, schema_findings = salvage_project_contract(raw_project_contract)
-    _schema_warnings, schema_errors = split_project_contract_schema_findings(
-        schema_findings,
-        allow_singleton_defaults=True,
-    )
-    if normalized_contract is None or schema_errors:
-        return state_obj
+    parsed = parse_project_contract_data_salvage(raw_project_contract)
+    if parsed.contract is None or parsed.blocking_errors:
+        return state_obj, []
 
     restored_state = dict(state_obj)
-    restored_state["project_contract"] = normalized_contract.model_dump(mode="python")
-    return restored_state
+    restored_state["project_contract"] = parsed.contract.model_dump(mode="python")
+    return restored_state, list(parsed.recoverable_errors)
 
 
 def _load_state_json_from_backup(
@@ -3208,7 +3210,13 @@ def _load_state_json_from_backup(
             allow_project_contract_salvage=allow_project_contract_salvage,
         )
         if surface_blocked_project_contract:
-            restored = _restore_visible_project_contract(restored, bak_parsed.get("project_contract"))
+            restored, restored_contract_findings = _restore_visible_project_contract(
+                restored,
+                bak_parsed.get("project_contract"),
+            )
+            for finding in restored_contract_findings:
+                if finding not in integrity_issues:
+                    integrity_issues.append(finding)
         if integrity_mode == "review" and integrity_issues:
             logger.warning("state.json backup failed review-mode integrity checks: %s", "; ".join(integrity_issues))
             return None, integrity_issues

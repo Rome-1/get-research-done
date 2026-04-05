@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from gpd.contracts import (
     ContractClaim,
+    ContractProofParameter,
     ContractResults,
     ProjectContractParseResult,
     ResearchContract,
@@ -324,6 +325,20 @@ def test_parse_project_contract_data_strict_rejects_literal_case_drift() -> None
     assert "references.0.required_actions.0 must use exact canonical value: read" in result.errors
 
 
+def test_parse_project_contract_data_strict_rejects_nested_proof_list_member_drift() -> None:
+    contract = _load_contract_fixture()
+    contract["claims"][0]["parameters"] = [
+        {"symbol": "r_0", "domain_or_type": "nonnegative real", "aliases": ["r0", " "]}
+    ]
+    contract["claims"][0]["hypotheses"] = [{"id": "hyp-r0", "text": "r_0 >= 0", "symbols": ["r_0", "r_0"]}]
+
+    result: ProjectContractParseResult = parse_project_contract_data_strict(contract)
+
+    assert result.contract is None
+    assert "claims.0.parameters.0.aliases.1 must not be blank" in result.errors
+    assert "claims.0.hypotheses.0.symbols.1 is a duplicate" in result.errors
+
+
 def test_parse_project_contract_data_strict_rejects_recoverable_nested_extra_keys() -> None:
     contract = _load_contract_fixture()
     contract["scope"]["legacy_notes"] = "nested extra field"
@@ -349,6 +364,13 @@ def test_contract_from_data_rejects_literal_case_drift_by_default() -> None:
     contract["references"][0]["role"] = "Benchmark"
 
     assert contract_from_data(contract) is None
+
+
+def test_contract_proof_parameter_round_trips_without_domain_or_type() -> None:
+    parameter = ContractProofParameter.model_validate({"symbol": "r_0"})
+
+    assert parameter.domain_or_type is None
+    assert ContractProofParameter.model_validate(parameter.model_dump()) == parameter
 
 
 def test_validate_project_contract_rejects_missing_decisive_targets_and_skepticism() -> None:
@@ -1365,6 +1387,32 @@ def test_parse_project_contract_data_salvage_normalizes_blank_string_list_corrup
         assert result.contract.scope.in_scope == []
 
 
+def test_parse_project_contract_data_salvage_preserves_valid_sibling_when_list_member_is_invalid() -> None:
+    contract = _load_contract_fixture()
+    contract["context_intake"]["must_read_refs"] = ["ref-benchmark", 7]
+
+    result = parse_project_contract_data_salvage(contract)
+
+    assert result.contract is not None
+    assert result.contract.context_intake.must_read_refs == ["ref-benchmark"]
+    assert any("context_intake.must_read_refs.1" in error for error in result.recoverable_errors)
+
+
+def test_parse_project_contract_data_salvage_preserves_nested_proof_list_siblings() -> None:
+    contract = _load_contract_fixture()
+    contract["claims"][0]["parameters"] = [
+        {"symbol": "alpha", "domain_or_type": "nonnegative real", "aliases": ["alpha", 7]},
+        {"symbol": "beta", "domain_or_type": "nonnegative real", "aliases": ["beta"]},
+    ]
+
+    result = parse_project_contract_data_salvage(contract)
+
+    assert result.contract is not None
+    assert [parameter.symbol for parameter in result.contract.claims[0].parameters] == ["alpha", "beta"]
+    assert result.contract.claims[0].parameters[0].aliases == ["alpha"]
+    assert any("claims.0.parameters.0.aliases.1" in error for error in result.recoverable_errors)
+
+
 def test_validate_project_contract_rejects_coercive_reference_must_surface_scalar() -> None:
     contract = _load_contract_fixture()
     contract["references"][0]["must_surface"] = "yes"
@@ -1819,6 +1867,60 @@ def test_contract_results_strict_mode_rejects_scalar_proof_audit_string_lists() 
         match=re.escape("claims.claim-main.proof_audit.covered_parameter_symbols must be a list, not str"),
     ):
         ContractResults.model_validate(normalize_contract_results_input(payload, strict=True))
+
+
+def test_contract_results_strict_mode_rejects_duplicate_linked_ids_and_actions() -> None:
+    payload = {
+        "claims": {
+            "claim-main": {
+                "status": "passed",
+                "linked_ids": ["deliv-main", "deliv-main"],
+            }
+        },
+        "references": {
+            "ref-main": {
+                "status": "completed",
+                "completed_actions": ["Read", "read"],
+                "missing_actions": [],
+            }
+        },
+        "uncertainty_markers": {
+            "weakest_anchors": ["anchor-main"],
+            "disconfirming_observations": ["observation-main"],
+        },
+    }
+
+    with pytest.raises(ValidationError) as excinfo:
+        parse_contract_results_data_strict(payload)
+
+    message = str(excinfo.value)
+    assert "claims.claim-main.linked_ids" in message
+    assert "duplicate entry not allowed: read" in message
+
+
+def test_contract_results_strict_mode_rejects_proof_audit_blank_and_duplicate_list_members() -> None:
+    payload = {
+        "claims": {
+            "claim-main": {
+                "status": "passed",
+                "proof_audit": {
+                    "completeness": "incomplete",
+                    "covered_parameter_symbols": ["r_0", " ", "r_0"],
+                },
+            }
+        },
+        "uncertainty_markers": {
+            "weakest_anchors": ["anchor-main"],
+            "disconfirming_observations": ["observation-main"],
+        },
+    }
+
+    with pytest.raises(ValidationError) as excinfo:
+        parse_contract_results_data_strict(payload)
+
+    message = str(excinfo.value)
+    assert "claims.claim-main.proof_audit.covered_parameter_symbols" in message
+    assert "must not contain blank entries" in message
 
 
 def test_research_contract_rejects_string_required_in_proof_booleans() -> None:

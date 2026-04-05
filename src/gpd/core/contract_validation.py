@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import re
 from pathlib import Path
-from typing import Literal
+from typing import Literal, get_args, get_origin
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
@@ -123,6 +123,7 @@ _PROJECT_ARTIFACT_PATH_PATTERNS = (
 )
 _RECOVERABLE_SCHEMA_WARNING_PATTERNS = (
     re.compile(r"^.+: Extra inputs are not permitted$"),
+    re.compile(r"^.+\.\d+ must be a valid list member$"),
 )
 _CASE_DRIFT_SCHEMA_WARNING_PATTERNS = (
     re.compile(r"^.+ must use exact canonical value: .+$"),
@@ -276,6 +277,24 @@ def _strip_unknown_model_keys(
     return cleaned
 
 
+def _list_item_model(field: object) -> type[BaseModel] | None:
+    """Return the BaseModel item type for a typed list field when available."""
+
+    annotation = getattr(field, "annotation", None)
+    if annotation is None:
+        return None
+    origin = get_origin(annotation)
+    if origin is not list:
+        return None
+    item_types = get_args(annotation)
+    if len(item_types) != 1:
+        return None
+    item_type = item_types[0]
+    if isinstance(item_type, type) and issubclass(item_type, BaseModel):
+        return item_type
+    return None
+
+
 def _salvage_model_mapping(
     value: object,
     *,
@@ -324,6 +343,40 @@ def _salvage_model_mapping(
                         "input": error.get("input"),
                     }
                 )
+                field_value = cleaned.get(key)
+                if isinstance(field_value, list) and len(loc) > 1 and isinstance(loc[1], int):
+                    item_model = _list_item_model(field)
+                    item_indexes: set[int] = set()
+                    for item_error in exc.errors():
+                        item_loc = tuple(item_error.get("loc", ()))
+                        if (
+                            len(item_loc) > 1
+                            and str(item_loc[0]) == key
+                            and isinstance(item_loc[1], int)
+                        ):
+                            item_index = int(item_loc[1])
+                            item_indexes.add(item_index)
+                    salvaged_items = copy.deepcopy(field_value)
+                    for index in sorted(item_indexes, reverse=True):
+                        if not (0 <= index < len(salvaged_items)):
+                            continue
+                        item_value = salvaged_items[index]
+                        if item_model is not None and isinstance(item_value, dict):
+                            salvaged_item = _salvage_model_mapping(
+                                item_value,
+                                path_prefix=f"{path_prefix}.{key}.{index}",
+                                model=item_model,
+                                errors=errors,
+                            )
+                            if salvaged_item is not None:
+                                salvaged_items[index] = salvaged_item
+                                progress = True
+                                continue
+                        errors.append(f"{path_prefix}.{key}.{index} must be a valid list member")
+                        del salvaged_items[index]
+                        progress = True
+                    cleaned[key] = salvaged_items
+                    continue
                 if field.is_required():
                     errors.append(formatted)
                     return copy.deepcopy(default_value) if default_value is not None else None

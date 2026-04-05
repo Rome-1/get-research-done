@@ -1184,8 +1184,24 @@ def test_load_state_json_backup_restore_preserves_project_contract_when_backup_r
     assert loaded["position"]["current_phase"] == "9"
     assert loaded["open_questions"] == ["Recovered from backup"]
 
-    restored = json.loads(layout.state_json.read_text(encoding="utf-8"))
-    assert restored["project_contract"] is not None
+
+def test_state_load_backup_restore_surfaces_project_contract_salvage_diagnostics(
+    tmp_path: Path,
+) -> None:
+    primary_state = default_state_dict()
+    primary_state["position"]["status"] = "Executing"
+
+    backup_state = json.loads(json.dumps(primary_state))
+    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+    contract["context_intake"]["must_read_refs"] = ["ref-benchmark", 7]
+    backup_state["project_contract"] = contract
+
+    _write_backup_only_state(tmp_path, primary_state, backup_state=backup_state)
+
+    loaded = state_load(tmp_path)
+
+    assert loaded.state["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
+    assert any("context_intake.must_read_refs.1" in issue for issue in loaded.integrity_issues)
 
 
 def test_load_state_json_recovers_backup_only_state_when_primary_json_is_missing(tmp_path: Path) -> None:
