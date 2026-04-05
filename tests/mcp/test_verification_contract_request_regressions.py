@@ -143,6 +143,54 @@ def test_run_contract_check_published_schema_keeps_schema_required_fields_strict
     assert "null" not in json.dumps(observed_schema["properties"]["metric_value"])
     assert "null" not in json.dumps(observed_schema["properties"]["threshold_value"])
 
+    proof_hypothesis_requirement = _request_requirement_for_check(request_schema, "contract.proof_hypothesis_coverage")
+    assert proof_hypothesis_requirement is not None
+    assert proof_hypothesis_requirement["required"] == ["contract", "metadata", "observed"]
+    proof_hypothesis_metadata = _schema_anyof_object(proof_hypothesis_requirement["properties"]["metadata"])
+    proof_hypothesis_observed = _schema_anyof_object(proof_hypothesis_requirement["properties"]["observed"])
+    assert proof_hypothesis_metadata["required"] == ["hypothesis_ids"]
+    assert proof_hypothesis_metadata["properties"]["hypothesis_ids"]["minItems"] == 1
+    assert proof_hypothesis_metadata["properties"]["hypothesis_ids"]["items"]["type"] == "string"
+    assert proof_hypothesis_metadata["properties"]["hypothesis_ids"]["items"]["minLength"] == 1
+    assert proof_hypothesis_observed["required"] == ["covered_hypothesis_ids"]
+    assert proof_hypothesis_observed["properties"]["covered_hypothesis_ids"]["minItems"] == 1
+    assert proof_hypothesis_observed["properties"]["covered_hypothesis_ids"]["items"]["type"] == "string"
+    assert proof_hypothesis_observed["properties"]["covered_hypothesis_ids"]["items"]["minLength"] == 1
+
+    proof_parameter_requirement = _request_requirement_for_check(request_schema, "contract.proof_parameter_coverage")
+    assert proof_parameter_requirement is not None
+    assert proof_parameter_requirement["required"] == ["contract", "metadata", "observed"]
+    proof_parameter_metadata = _schema_anyof_object(proof_parameter_requirement["properties"]["metadata"])
+    proof_parameter_observed = _schema_anyof_object(proof_parameter_requirement["properties"]["observed"])
+    assert proof_parameter_metadata["required"] == ["theorem_parameter_symbols"]
+    assert proof_parameter_metadata["properties"]["theorem_parameter_symbols"]["minItems"] == 1
+    assert proof_parameter_metadata["properties"]["theorem_parameter_symbols"]["items"]["type"] == "string"
+    assert proof_parameter_metadata["properties"]["theorem_parameter_symbols"]["items"]["minLength"] == 1
+    assert proof_parameter_observed["required"] == ["covered_parameter_symbols"]
+    assert proof_parameter_observed["properties"]["covered_parameter_symbols"]["minItems"] == 1
+    assert proof_parameter_observed["properties"]["covered_parameter_symbols"]["items"]["type"] == "string"
+    assert proof_parameter_observed["properties"]["covered_parameter_symbols"]["items"]["minLength"] == 1
+
+    alignment_requirement = _request_requirement_for_check(request_schema, "contract.claim_to_proof_alignment")
+    assert alignment_requirement is not None
+    assert alignment_requirement["required"] == ["contract", "observed"]
+    assert alignment_requirement["anyOf"][0]["required"] == ["metadata"]
+    assert alignment_requirement["anyOf"][1]["required"] == ["metadata", "observed"]
+    alignment_metadata = _schema_anyof_object(alignment_requirement["anyOf"][0]["properties"]["metadata"])
+    alignment_metadata_branch = _schema_anyof_object(alignment_requirement["anyOf"][1]["properties"]["metadata"])
+    alignment_observed_branch = _schema_anyof_object(alignment_requirement["anyOf"][1]["properties"]["observed"])
+    assert alignment_metadata["required"] == ["claim_statement"]
+    assert alignment_metadata["properties"]["claim_statement"]["minLength"] == 1
+    assert alignment_metadata["properties"]["claim_statement"]["pattern"] == r"\S"
+    assert alignment_metadata_branch["required"] == ["conclusion_clause_ids"]
+    assert alignment_metadata_branch["properties"]["conclusion_clause_ids"]["minItems"] == 1
+    assert alignment_metadata_branch["properties"]["conclusion_clause_ids"]["items"]["type"] == "string"
+    assert alignment_metadata_branch["properties"]["conclusion_clause_ids"]["items"]["minLength"] == 1
+    assert alignment_observed_branch["required"] == ["uncovered_conclusion_clause_ids"]
+    assert alignment_observed_branch["properties"]["uncovered_conclusion_clause_ids"]["minItems"] == 1
+    assert alignment_observed_branch["properties"]["uncovered_conclusion_clause_ids"]["items"]["type"] == "string"
+    assert alignment_observed_branch["properties"]["uncovered_conclusion_clause_ids"]["items"]["minLength"] == 1
+
 
 @pytest.mark.parametrize(
     ("request_payload", "expected_error"),

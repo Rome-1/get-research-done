@@ -51,6 +51,7 @@ from gpd.contracts import (
 from gpd.core.contract_validation import (
     is_authoritative_project_contract_schema_finding,
     is_defaultable_singleton_project_contract_schema_finding,
+    is_repair_relevant_project_contract_schema_finding,
 )
 from gpd.core.observability import gpd_span
 from gpd.core.protocol_bundles import ResolvedProtocolBundle, get_protocol_bundle, render_protocol_bundle_context
@@ -3462,6 +3463,12 @@ def _parse_contract_payload(contract_raw: dict[str, object]) -> tuple[ResearchCo
     return contract, recoverable_errors, None
 
 
+def _contract_salvage_requires_repair(contract_salvage_errors: list[str]) -> bool:
+    """Return whether salvage findings still require repair before proof checks can run."""
+
+    return any(is_repair_relevant_project_contract_schema_finding(error) for error in contract_salvage_errors)
+
+
 def _validate_benchmark_reference_binding(
     *,
     contract: ResearchContract | None,
@@ -3776,7 +3783,12 @@ def run_contract_check(request: RunContractCheckPayload) -> dict:
     present and non-empty, and the contract must satisfy the same plan semantic
     requirements GPD enforces in plan frontmatter. Limited recoverable
     structural drift may still be salvaged, and any such recovery is surfaced
-    back as structured salvage findings.
+    back as structured salvage findings. For proof-oriented checks, any
+    contract-derived metadata you provide must either be omitted or match the
+    resolved contract defaults exactly, including
+    ``metadata.expected_behavior``, ``metadata.claim_statement``,
+    ``metadata.hypothesis_ids``, ``metadata.theorem_parameter_symbols``, and
+    ``metadata.conclusion_clause_ids``.
 
     ``request.binding``, ``request.metadata``, and ``request.observed`` are each
     optional objects. Decisive pass/fail verdicts still require the check-specific
@@ -3902,6 +3914,8 @@ def run_contract_check(request: RunContractCheckPayload) -> dict:
                 if proof_claim_issue is None and len(proof_claim_candidates) == 1:
                     proof_claim_id = proof_claim_candidates[0]
             if check_meta.check_key in _PROOF_CHECK_KEYS and contract is None:
+                return _error_result("Proof checks require an authoritative contract payload")
+            if check_meta.check_key in _PROOF_CHECK_KEYS and _contract_salvage_requires_repair(contract_salvage_errors):
                 return _error_result("Proof checks require an authoritative contract payload")
             if check_meta.check_key in _PROOF_CHECK_KEYS:
                 proof_metadata_errors = _proof_metadata_contract_mismatch_errors(
@@ -4514,6 +4528,11 @@ def suggest_contract_checks(contract: SuggestContractPayload, active_checks: Str
     claim/deliverable/acceptance-test/reference kinds when that would make
     resolution ambiguous; ``references[].carry_forward_to`` uses workflow
     scope labels, never contract IDs; ``references[].must_surface`` requires non-empty ``applies_to`` and ``required_actions`` lists; and contract context must stay consistent with metadata defaults and explicit metadata fields, so benchmark anchors, regime labels, and family selections cannot contradict the resolved binding.
+    For proof-oriented suggestions, contract-derived metadata fields must be
+    omitted or match the resolved defaults exactly; this includes
+    ``metadata.expected_behavior``, ``metadata.claim_statement``,
+    ``metadata.hypothesis_ids``, ``metadata.theorem_parameter_symbols``, and
+    ``metadata.conclusion_clause_ids``.
 
     For plan-style contract payloads, ``context_intake`` must be present and
     non-empty, and the contract must satisfy the same plan semantic

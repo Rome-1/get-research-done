@@ -211,7 +211,11 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "scope labels only, never contract IDs, require `references[].must_surface` anchors "
             "to carry non-empty `applies_to` and `required_actions` lists, and keep contract "
             "context consistent with metadata defaults and explicit metadata fields so benchmark "
-            "anchors, regime labels, and family selections cannot contradict the resolved binding."
+            "anchors, regime labels, and family selections cannot contradict the resolved binding. "
+            "For proof-oriented checks, contract-derived metadata fields must be omitted or match "
+            "the resolved defaults exactly, including `metadata.expected_behavior`, "
+            "`metadata.claim_statement`, `metadata.hypothesis_ids`, "
+            "`metadata.theorem_parameter_symbols`, and `metadata.conclusion_clause_ids`."
         ),
         "capabilities": [
             "run_check",

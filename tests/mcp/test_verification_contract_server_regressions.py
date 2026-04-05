@@ -1726,38 +1726,57 @@ def test_suggest_contract_checks_leaves_ambiguous_subject_bindings_unresolved() 
 
 
 def test_suggest_contract_checks_request_templates_validate_against_advertised_run_contract_schema() -> None:
-    from jsonschema import Draft202012Validator
-
     from gpd.mcp.servers.verification_server import suggest_contract_checks
 
-    schema = _run_contract_check_input_schema()
-    validator = Draft202012Validator(schema)
-
     result = suggest_contract_checks(_derived_template_contract())
+    checks = {entry["check_key"]: entry for entry in result["suggested_checks"]}
 
-    for entry in result["suggested_checks"]:
-        request = {"request": entry["request_template"]}
-        assert list(validator.iter_errors(request)) == []
+    benchmark = checks["contract.benchmark_reproduction"]["request_template"]
+    limit = checks["contract.limit_recovery"]["request_template"]
+    fit = checks["contract.fit_family_mismatch"]["request_template"]
+    estimator = checks["contract.estimator_family_mismatch"]["request_template"]
 
-    nullable_alias_request = copy.deepcopy(result["suggested_checks"][0]["request_template"])
-    nullable_alias_request["check_key"] = None
-    nullable_alias_request["check_id"] = result["suggested_checks"][0]["check_key"]
-    assert list(validator.iter_errors({"request": nullable_alias_request})) == []
+    assert benchmark["check_key"] == "contract.benchmark_reproduction"
+    assert benchmark["metadata"]["source_reference_id"] == "ref-benchmark"
+    assert benchmark["observed"]["metric_value"] is None
+    assert benchmark["observed"]["threshold_value"] is None
+
+    assert limit["metadata"]["regime_label"] == "large-k"
+    assert limit["metadata"]["expected_behavior"] == "Recovers the contracted large-k scaling"
+    assert limit["observed"]["limit_passed"] is None
+    assert limit["observed"]["observed_limit"] is None
+
+    assert fit["metadata"]["declared_family"] == "power_law"
+    assert fit["metadata"]["allowed_families"] == ["power_law"]
+    assert estimator["metadata"]["declared_family"] == "bootstrap"
+    assert estimator["metadata"]["allowed_families"] == ["bootstrap"]
 
 
 def test_suggest_contract_checks_proof_request_templates_validate_against_advertised_run_contract_schema() -> None:
-    from jsonschema import Draft202012Validator
-
     from gpd.mcp.servers.verification_server import suggest_contract_checks
 
-    schema = _run_contract_check_input_schema()
-    validator = Draft202012Validator(schema)
-
     result = suggest_contract_checks(_proof_contract())
+    checks = {entry["check_key"]: entry for entry in result["suggested_checks"]}
 
-    for entry in result["suggested_checks"]:
-        request = {"request": entry["request_template"]}
-        assert list(validator.iter_errors(request)) == []
+    hypothesis = checks["contract.proof_hypothesis_coverage"]["request_template"]
+    parameter = checks["contract.proof_parameter_coverage"]["request_template"]
+    alignment = checks["contract.claim_to_proof_alignment"]["request_template"]
+
+    assert hypothesis["check_key"] == "contract.proof_hypothesis_coverage"
+    assert hypothesis["contract"] is None
+    assert hypothesis["metadata"]["hypothesis_ids"] == ["hyp-positive", "hyp-decay"]
+    assert hypothesis["observed"]["covered_hypothesis_ids"] is None
+
+    assert parameter["check_key"] == "contract.proof_parameter_coverage"
+    assert parameter["contract"] is None
+    assert parameter["metadata"]["theorem_parameter_symbols"] == ["r_0", "n"]
+    assert parameter["observed"]["covered_parameter_symbols"] is None
+
+    assert alignment["check_key"] == "contract.claim_to_proof_alignment"
+    assert alignment["contract"] is None
+    assert alignment["metadata"]["claim_statement"].startswith("For all r_0 > 0")
+    assert alignment["metadata"]["conclusion_clause_ids"] is None
+    assert alignment["observed"]["uncovered_conclusion_clause_ids"] is None
 
 
 def test_run_contract_check_schema_rejects_benchmark_requests_without_source_reference_id() -> None:
@@ -1935,6 +1954,43 @@ def test_run_contract_check_schema_and_runtime_stay_in_lockstep_for_proof_bearin
 
     assert (not schema_messages) is expected_valid
     assert (runtime_result.get("status") == "pass") is expected_valid
+
+
+def test_run_contract_check_blocks_proof_checks_for_repair_relevant_salvaged_contracts() -> None:
+    from gpd.mcp.servers.verification_server import run_contract_check
+
+    contract = _proof_contract()
+    contract["context_intake"]["must_read_refs"] = "ref-proof"
+
+    result = run_contract_check(
+        {
+            "check_key": "contract.proof_parameter_coverage",
+            "contract": contract,
+            "metadata": {"theorem_parameter_symbols": ["r_0", "n"]},
+            "observed": {"covered_parameter_symbols": ["r0", "n"]},
+        }
+    )
+
+    assert result == {"error": "Proof checks require an authoritative contract payload", "schema_version": 1}
+
+
+def test_run_contract_check_allows_case_only_salvage_for_proof_checks() -> None:
+    from gpd.mcp.servers.verification_server import run_contract_check
+
+    contract = _proof_contract()
+    contract["acceptance_tests"][0]["kind"] = "Proof_Parameter_Coverage"
+
+    result = run_contract_check(
+        {
+            "check_key": "contract.proof_parameter_coverage",
+            "contract": contract,
+            "metadata": {"theorem_parameter_symbols": ["r_0", "n"]},
+            "observed": {"covered_parameter_symbols": ["r0", "n"]},
+        }
+    )
+
+    assert result["status"] == "pass"
+    assert result["contract_salvaged"] is True
 
 
 def test_run_contract_check_schema_rejects_explicit_empty_optional_contract_collections_when_metadata_is_missing() -> None:

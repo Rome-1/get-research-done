@@ -103,20 +103,20 @@ def _assert_strict_required_schema_fragment(schema_fragment: dict[str, object], 
         for branch in any_of:
             if not isinstance(branch, dict):
                 continue
-                if branch.get("type") == "array":
-                    assert branch["minItems"] == 1, f"{label} must not allow empty arrays when schema-required"
-                    assert branch["items"]["type"] == "string"
-                    assert branch["items"]["minLength"] == 1
-                    assert branch["items"]["pattern"] == r"\S"
-                if branch.get("type") == "string":
-                    if "enum" in branch:
-                        continue
-                    assert branch["minLength"] == 1
-                    assert branch["pattern"] == r"\S"
-            return
+            if branch.get("type") == "array":
+                assert branch.get("minItems") == 1, f"{label} must not allow empty arrays when schema-required"
+                assert branch["items"]["type"] == "string"
+                assert branch["items"]["minLength"] == 1
+                assert branch["items"]["pattern"] == r"\S"
+            if branch.get("type") == "string":
+                if "enum" in branch:
+                    continue
+                assert branch["minLength"] == 1
+                assert branch["pattern"] == r"\S"
+        return
 
     if schema_fragment.get("type") == "array":
-        assert schema_fragment["minItems"] == 1, f"{label} must not allow empty arrays when schema-required"
+        assert schema_fragment.get("minItems") == 1, f"{label} must not allow empty arrays when schema-required"
         assert schema_fragment["items"]["type"] == "string"
         assert schema_fragment["items"]["minLength"] == 1
         assert schema_fragment["items"]["pattern"] == r"\S"
@@ -127,6 +127,21 @@ def _assert_strict_required_schema_fragment(schema_fragment: dict[str, object], 
             return
         assert schema_fragment["minLength"] == 1
         assert schema_fragment["pattern"] == r"\S"
+
+
+def test_strict_required_schema_fragment_rejects_permissive_anyof_array_branch() -> None:
+    with pytest.raises(AssertionError, match="must not allow empty arrays when schema-required"):
+        _assert_strict_required_schema_fragment(
+            {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {"type": "string", "minLength": 1, "pattern": r"\S"},
+                    }
+                ]
+            },
+            label="proof metadata branch",
+        )
 
 
 def _proof_contract_fixture() -> dict[str, object]:
@@ -612,6 +627,11 @@ def test_run_contract_check_tool_description_surfaces_request_requirements() -> 
     assert "contract context must stay consistent with metadata defaults" in description
     assert "metadata defaults and explicit" in description
     assert "metadata fields, so benchmark anchors" in description
+    assert "metadata.expected_behavior" in description
+    assert "metadata.claim_statement" in description
+    assert "metadata.hypothesis_ids" in description
+    assert "metadata.theorem_parameter_symbols" in description
+    assert "metadata.conclusion_clause_ids" in description
     assert "``request.binding``, ``request.metadata``, and ``request.observed`` are each" in description
     assert "Singular/plural binding" in description
     assert "aliases (for example ``claim_id`` / ``claim_ids``) must match when both are" in description
@@ -641,6 +661,11 @@ def test_suggest_contract_checks_tool_description_surfaces_contract_requirements
     assert "metadata defaults and explicit" in description
     assert "metadata fields, so" in description
     assert "benchmark anchors, regime labels, and family selections" in description
+    assert "metadata.expected_behavior" in description
+    assert "metadata.claim_statement" in description
+    assert "metadata.hypothesis_ids" in description
+    assert "metadata.theorem_parameter_symbols" in description
+    assert "metadata.conclusion_clause_ids" in description
     assert "``active_checks`` is optional and must be ``list[str]``" in description
     assert "``already_active``" in description
     assert "``supported_binding_fields``" in description
@@ -1232,6 +1257,11 @@ def test_public_verification_infra_descriptor_surfaces_semantic_contract_rules()
     assert "optional_request_fields" in description
     assert "request_template" in description
     assert "supported binding fields" in description
+    assert "metadata.expected_behavior" in description
+    assert "metadata.claim_statement" in description
+    assert "metadata.hypothesis_ids" in description
+    assert "metadata.theorem_parameter_symbols" in description
+    assert "metadata.conclusion_clause_ids" in description
     for field in (
         "binding.observable_id(s)",
         "binding.claim_id(s)",
