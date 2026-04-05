@@ -652,6 +652,68 @@ class TestValidateFrontmatter:
         result = validate_frontmatter(content, "summary")
         assert result.valid is True
 
+    @pytest.mark.parametrize(
+        ("schema_name", "content", "expected_error"),
+        [
+            (
+                "plan",
+                _valid_plan_contract_frontmatter().replace("interactive: false\n", "interactive: null\n", 1) + "Body.\n",
+                "interactive: expected a boolean",
+            ),
+            (
+                "summary",
+                "---\nphase: 01\nplan: 01\ndepth: standard\nprovides: []\ncompleted: null\n---\n\nBody.",
+                "completed: expected a non-null scalar",
+            ),
+            (
+                "verification",
+                "---\nphase: 01\nverified: null\nstatus: passed\nscore: 0/0 contract targets verified\n---\n\nBody.",
+                "verified: expected a non-null scalar",
+            ),
+        ],
+    )
+    def test_required_frontmatter_fields_reject_null_values(
+        self,
+        schema_name: str,
+        content: str,
+        expected_error: str,
+    ) -> None:
+        result = validate_frontmatter(content, schema_name)
+
+        assert result.valid is False
+        assert expected_error in result.errors
+
+    @pytest.mark.parametrize(
+        ("schema_name", "content", "expected_error"),
+        [
+            (
+                "plan",
+                _valid_plan_contract_frontmatter().replace("wave: 1\n", 'wave: "one"\n', 1) + "Body.\n",
+                "wave: expected an integer",
+            ),
+            (
+                "summary",
+                "---\nphase: 01\nplan: 01\ndepth: []\nprovides: []\ncompleted: 2025-01-01\n---\n\nBody.",
+                "depth: expected a non-empty string",
+            ),
+            (
+                "verification",
+                "---\nphase: 01\nverified: 2025-01-01T00:00:00Z\nstatus: []\nscore: 0/0 contract targets verified\n---\n\nBody.",
+                "status: expected a non-empty string",
+            ),
+        ],
+    )
+    def test_required_frontmatter_fields_reject_wrong_types(
+        self,
+        schema_name: str,
+        content: str,
+        expected_error: str,
+    ) -> None:
+        result = validate_frontmatter(content, schema_name)
+
+        assert result.valid is False
+        assert expected_error in result.errors
+
     def test_summary_rejects_non_list_comparison_verdicts(self):
         content = (
             "---\n"
@@ -1866,7 +1928,7 @@ class TestVerifyPlanStructure:
         f.write_text(content)
         result = verify_plan_structure(tmp_path, f)
         assert result.valid is False
-        assert any("Invalid contract: missing acceptance_tests" in error for error in result.errors)
+        assert any("contract: missing acceptance_tests" in error for error in result.errors)
 
     def test_invalid_reference_targets_are_reported(self, tmp_path):
         from gpd.core.frontmatter import verify_plan_structure
@@ -1955,7 +2017,63 @@ class TestVerifyPlanStructure:
         f.write_text(content)
         result = verify_plan_structure(tmp_path, f)
         assert result.valid is False
-        assert any("Unsupported frontmatter field: must_haves" in error for error in result.errors)
+        assert any(error.startswith("must_haves:") for error in result.errors)
+
+    @pytest.mark.parametrize(
+        ("field_block", "expected_error"),
+        [
+            ("verification_inputs:\n  truths: []\n", "verification_inputs:"),
+            ("contract_results:\n  claims: []\n", "contract_results:"),
+            ("comparison_verdicts: []\n", "comparison_verdicts:"),
+            ("suggested_contract_checks: []\n", "suggested_contract_checks:"),
+        ],
+    )
+    def test_rejects_summary_or_verification_only_frontmatter_fields(
+        self,
+        tmp_path: Path,
+        field_block: str,
+        expected_error: str,
+    ) -> None:
+        from gpd.core.frontmatter import verify_plan_structure
+
+        content = (
+            _valid_plan_contract_frontmatter().replace("---\n\n", f"{field_block}---\n\n", 1)
+            + '<task type="code">\n'
+            + "  <name>Implement feature</name>\n"
+            + "  <files>src/main.py</files>\n"
+            + "  <action>Write the code</action>\n"
+            + "  <verify>Run tests</verify>\n"
+            + "  <done>Tests pass</done>\n"
+            + "</task>\n"
+        )
+        f = tmp_path / "plan.md"
+        f.write_text(content)
+
+        result = verify_plan_structure(tmp_path, f)
+
+        assert result.valid is False
+        assert any(error.startswith(expected_error) for error in result.errors)
+
+    def test_rejects_invalid_required_plan_scalar_types(self, tmp_path: Path) -> None:
+        from gpd.core.frontmatter import verify_plan_structure
+
+        content = (
+            _valid_plan_contract_frontmatter().replace("wave: 1\n", 'wave: "one"\n', 1)
+            + '<task type="code">\n'
+            + "  <name>Implement feature</name>\n"
+            + "  <files>src/main.py</files>\n"
+            + "  <action>Write the code</action>\n"
+            + "  <verify>Run tests</verify>\n"
+            + "  <done>Tests pass</done>\n"
+            + "</task>\n"
+        )
+        f = tmp_path / "plan.md"
+        f.write_text(content)
+
+        result = verify_plan_structure(tmp_path, f)
+
+        assert result.valid is False
+        assert "wave: expected an integer" in result.errors
 
 
 

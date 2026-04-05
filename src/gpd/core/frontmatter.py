@@ -409,6 +409,48 @@ def _resolve_field(meta: dict, name: str) -> str | None:
     return name if name in meta else None
 
 
+def _validate_required_string_field(meta: dict[str, object], field_name: str, errors: list[str]) -> None:
+    """Append an error when a required field is not a non-empty string."""
+    if field_name not in meta:
+        return
+    value = meta.get(field_name)
+    if not isinstance(value, str) or not value.strip():
+        errors.append(f"{field_name}: expected a non-empty string")
+
+
+def _validate_required_scalar_field(meta: dict[str, object], field_name: str, errors: list[str]) -> None:
+    """Append an error when a required field is not a non-null scalar."""
+    if field_name not in meta:
+        return
+    value = meta.get(field_name)
+    if value is None or isinstance(value, (list, dict, bool)):
+        errors.append(f"{field_name}: expected a non-null scalar")
+
+
+def _validate_required_int_field(meta: dict[str, object], field_name: str, errors: list[str]) -> None:
+    """Append an error when a required field is not a strict integer."""
+    if field_name not in meta:
+        return
+    if type(meta.get(field_name)) is not int:
+        errors.append(f"{field_name}: expected an integer")
+
+
+def _validate_required_bool_field(meta: dict[str, object], field_name: str, errors: list[str]) -> None:
+    """Append an error when a required field is not a strict boolean."""
+    if field_name not in meta:
+        return
+    if type(meta.get(field_name)) is not bool:
+        errors.append(f"{field_name}: expected a boolean")
+
+
+def _validate_required_object_field(meta: dict[str, object], field_name: str, errors: list[str]) -> None:
+    """Append an error when a required field is not an object."""
+    if field_name not in meta:
+        return
+    if not isinstance(meta.get(field_name), dict):
+        errors.append(f"{field_name}: expected an object")
+
+
 def _collect_plan_contract_explicit_field_errors(contract_data: dict[str, object]) -> list[str]:
     """Return missing semantic fields that lack safe schema defaults.
 
@@ -1233,6 +1275,26 @@ def validate_frontmatter(content: str, schema_name: str, source_path: Path | Non
 
     errors.extend(_unsupported_frontmatter_errors(schema_name, meta))
 
+    if schema_name == "plan":
+        for field_name in ("phase", "plan"):
+            _validate_required_scalar_field(meta, field_name, errors)
+        _validate_required_string_field(meta, "type", errors)
+        _validate_required_int_field(meta, "wave", errors)
+        for field_name in ("depends_on", "files_modified"):
+            _validate_non_empty_string_list_field(meta, field_name, errors)
+        _validate_required_bool_field(meta, "interactive", errors)
+        _validate_required_object_field(meta, "conventions", errors)
+    elif schema_name == "summary":
+        for field_name in ("phase", "plan", "completed"):
+            _validate_required_scalar_field(meta, field_name, errors)
+        _validate_required_string_field(meta, "depth", errors)
+        _validate_non_empty_string_list_field(meta, "provides", errors)
+    elif schema_name == "verification":
+        _validate_required_scalar_field(meta, "phase", errors)
+        _validate_required_scalar_field(meta, "verified", errors)
+        _validate_required_string_field(meta, "status", errors)
+        _validate_required_string_field(meta, "score", errors)
+
     if schema_name == "verification" and "status" in meta:
         raw_status = meta.get("status")
         if not isinstance(raw_status, str):
@@ -1255,8 +1317,6 @@ def validate_frontmatter(content: str, schema_name: str, source_path: Path | Non
             errors.append(f"tool_requirements: {exc}")
 
     if schema_name in {"summary", "verification"}:
-        if schema_name == "summary":
-            _validate_non_empty_string_list_field(meta, "provides", errors)
         plan_contract_ref = meta.get("plan_contract_ref")
         plan_contract_ref_fragment_error: str | None = None
         plan_contract_ref_path_error: str | None = None
@@ -1623,29 +1683,9 @@ def verify_plan_structure(cwd: Path, file_path: Path) -> PlanValidation:
 
     errors: list[str] = []
     warnings: list[str] = []
-
-    if "must_haves" in meta:
-        errors.append(
-            "Unsupported frontmatter field: must_haves. Encode execution and verification targets in the contract block."
-        )
-
-    # Required frontmatter fields use the canonical underscore schema.
-    for fname in FRONTMATTER_SCHEMAS["plan"]["required"]:
-        if _resolve_field(meta, fname) is None:
-            errors.append(f"Missing required frontmatter field: {fname}")
-
-    # Contract-backed validation
-    if isinstance(meta.get("contract"), dict):
-        resolution = _validate_contract_mapping(meta["contract"], enforce_plan_semantics=True)
-        errors.extend(f"Invalid contract: {issue}" for issue in resolution.errors)
-    elif "contract" in meta:
-        errors.append("Invalid contract: expected an object")
-
-    if "tool_requirements" in meta:
-        try:
-            parse_plan_tool_requirements(meta.get("tool_requirements"))
-        except PlanToolPreflightError as exc:
-            errors.append(f"Invalid tool_requirements: {exc}")
+    schema_validation = validate_frontmatter(content, "plan", source_path=full_path)
+    errors.extend(list(schema_validation.errors))
+    errors.extend(f"Missing required frontmatter field: {field_name}" for field_name in schema_validation.missing)
 
     # Parse task elements
     tasks: list[TaskInfo] = []
