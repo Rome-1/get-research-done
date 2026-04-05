@@ -139,6 +139,16 @@ const PUBLIC_SURFACE_CONTRACT_SECTION_KEYS = {
     "pause_phrase",
   ],
 };
+const PUBLIC_SURFACE_CONTRACT_ALLOWED_KEYS = new Set(PUBLIC_SURFACE_CONTRACT_KEYS);
+const PUBLIC_SURFACE_CONTRACT_SECTION_ALLOWED_KEYS = Object.fromEntries(
+  Object.entries(PUBLIC_SURFACE_CONTRACT_SECTION_KEYS).map(([section, keys]) => [section, new Set(keys)])
+);
+const PUBLIC_SURFACE_LOCAL_CLI_HELP_COMMAND = "gpd --help";
+const PUBLIC_SURFACE_LOCAL_CLI_DOCTOR_COMMAND = "gpd doctor";
+const PUBLIC_SURFACE_LOCAL_CLI_UNATTENDED_READINESS_COMMAND =
+  "gpd validate unattended-readiness --runtime <runtime> --autonomy balanced";
+const PUBLIC_SURFACE_LOCAL_CLI_PERMISSIONS_SYNC_COMMAND =
+  "gpd permissions sync --runtime <runtime> --autonomy balanced";
 const RUNTIME_CATALOG_ENTRY_KEYS = {
   required: [
     "runtime_name",
@@ -274,6 +284,13 @@ function requireNonEmptyStringList(payload, key, label) {
     items.push(normalized);
   }
   return items;
+}
+
+function requireListedCommand(commands, label, command) {
+  if (!commands.includes(command)) {
+    throw new Error(`${label}.commands must include ${JSON.stringify(command)}`);
+  }
+  return command;
 }
 
 function requireStrictString(value, label) {
@@ -696,20 +713,46 @@ RUNTIME_BY_NAME = Object.fromEntries(RUNTIME_CATALOG.map((runtime) => [runtime.r
 
 function validateSharedPublicSurfaceContract(contractPayload) {
   const contract = requireJsonObject(contractPayload, "public surface contract");
+  requireKnownKeys(contract, PUBLIC_SURFACE_CONTRACT_ALLOWED_KEYS, "public surface contract");
   requirePresentKeys(contract, PUBLIC_SURFACE_CONTRACT_KEYS, "public surface contract");
   if (contract.schema_version !== 1) {
     throw new Error(`Unsupported public surface contract schema_version: ${JSON.stringify(contract.schema_version)}`);
   }
 
   const beginnerPayload = requireJsonObject(contract.beginner_onboarding, "beginner_onboarding");
+  requireKnownKeys(
+    beginnerPayload,
+    PUBLIC_SURFACE_CONTRACT_SECTION_ALLOWED_KEYS.beginner_onboarding,
+    "beginner_onboarding"
+  );
   requirePresentKeys(beginnerPayload, PUBLIC_SURFACE_CONTRACT_SECTION_KEYS.beginner_onboarding, "beginner_onboarding");
   const localCliBridge = requireJsonObject(contract.local_cli_bridge, "local_cli_bridge");
+  requireKnownKeys(
+    localCliBridge,
+    PUBLIC_SURFACE_CONTRACT_SECTION_ALLOWED_KEYS.local_cli_bridge,
+    "local_cli_bridge"
+  );
   requirePresentKeys(localCliBridge, PUBLIC_SURFACE_CONTRACT_SECTION_KEYS.local_cli_bridge, "local_cli_bridge");
   const postStartSettings = requireJsonObject(contract.post_start_settings, "post_start_settings");
+  requireKnownKeys(
+    postStartSettings,
+    PUBLIC_SURFACE_CONTRACT_SECTION_ALLOWED_KEYS.post_start_settings,
+    "post_start_settings"
+  );
   requirePresentKeys(postStartSettings, PUBLIC_SURFACE_CONTRACT_SECTION_KEYS.post_start_settings, "post_start_settings");
   const resumeAuthority = requireJsonObject(contract.resume_authority, "resume_authority");
+  requireKnownKeys(
+    resumeAuthority,
+    PUBLIC_SURFACE_CONTRACT_SECTION_ALLOWED_KEYS.resume_authority,
+    "resume_authority"
+  );
   requirePresentKeys(resumeAuthority, PUBLIC_SURFACE_CONTRACT_SECTION_KEYS.resume_authority, "resume_authority");
   const recoveryLadder = requireJsonObject(contract.recovery_ladder, "recovery_ladder");
+  requireKnownKeys(
+    recoveryLadder,
+    PUBLIC_SURFACE_CONTRACT_SECTION_ALLOWED_KEYS.recovery_ladder,
+    "recovery_ladder"
+  );
   requirePresentKeys(recoveryLadder, PUBLIC_SURFACE_CONTRACT_SECTION_KEYS.recovery_ladder, "recovery_ladder");
 
   const beginnerHubUrl = requireNonEmptyString(beginnerPayload, "hub_url", "beginner_onboarding");
@@ -721,6 +764,26 @@ function validateSharedPublicSurfaceContract(contractPayload) {
   const beginnerCaveats = requireNonEmptyStringList(beginnerPayload, "caveats", "beginner_onboarding");
   const beginnerStartupLadder = requireNonEmptyStringList(beginnerPayload, "startup_ladder", "beginner_onboarding");
   const localCliBridgeCommands = requireNonEmptyStringList(localCliBridge, "commands", "local_cli_bridge");
+  const helpCommand = requireListedCommand(
+    localCliBridgeCommands,
+    "local_cli_bridge",
+    PUBLIC_SURFACE_LOCAL_CLI_HELP_COMMAND
+  );
+  const doctorCommand = requireListedCommand(
+    localCliBridgeCommands,
+    "local_cli_bridge",
+    PUBLIC_SURFACE_LOCAL_CLI_DOCTOR_COMMAND
+  );
+  const unattendedReadinessCommand = requireListedCommand(
+    localCliBridgeCommands,
+    "local_cli_bridge",
+    PUBLIC_SURFACE_LOCAL_CLI_UNATTENDED_READINESS_COMMAND
+  );
+  const permissionsSyncCommand = requireListedCommand(
+    localCliBridgeCommands,
+    "local_cli_bridge",
+    PUBLIC_SURFACE_LOCAL_CLI_PERMISSIONS_SYNC_COMMAND
+  );
   const terminalPhrase = requireNonEmptyString(localCliBridge, "terminal_phrase", "local_cli_bridge");
   const purposePhrase = requireNonEmptyString(localCliBridge, "purpose_phrase", "local_cli_bridge");
   const settingsCommandSentence = requireNonEmptyString(postStartSettings, "primary_sentence", "post_start_settings");
@@ -742,20 +805,28 @@ function validateSharedPublicSurfaceContract(contractPayload) {
     "resume_authority"
   );
   const recoveryTitle = requireNonEmptyString(recoveryLadder, "title", "recovery_ladder");
-  const recoveryLocalSnapshotCommand = requireNonEmptyString(
-    recoveryLadder,
-    "local_snapshot_command",
-    "recovery_ladder"
+  const recoveryLocalSnapshotCommand = requireListedCommand(
+    localCliBridgeCommands,
+    "local_cli_bridge",
+    requireNonEmptyString(
+      recoveryLadder,
+      "local_snapshot_command",
+      "recovery_ladder"
+    )
   );
   const recoveryLocalSnapshotPhrase = requireNonEmptyString(
     recoveryLadder,
     "local_snapshot_phrase",
     "recovery_ladder"
   );
-  const recoveryCrossWorkspaceCommand = requireNonEmptyString(
-    recoveryLadder,
-    "cross_workspace_command",
-    "recovery_ladder"
+  const recoveryCrossWorkspaceCommand = requireListedCommand(
+    localCliBridgeCommands,
+    "local_cli_bridge",
+    requireNonEmptyString(
+      recoveryLadder,
+      "cross_workspace_command",
+      "recovery_ladder"
+    )
   );
   const recoveryCrossWorkspacePhrase = requireNonEmptyString(
     recoveryLadder,
@@ -773,8 +844,12 @@ function validateSharedPublicSurfaceContract(contractPayload) {
     beginnerStartupLadder,
     localCliBridgeCommands,
     localCliBridge: {
+      doctorCommand,
+      helpCommand,
+      permissionsSyncCommand,
       terminalPhrase,
       purposePhrase,
+      unattendedReadinessCommand,
     },
     schemaVersion: 1,
     resumeAuthority: {
@@ -807,6 +882,7 @@ function loadSharedPublicSurfaceText() {
     beginnerCaveats: contract.beginnerCaveats,
     beginnerStartupLadder: contract.beginnerStartupLadder,
     localCliBridgeCommands: contract.localCliBridgeCommands,
+    localCliBridge: contract.localCliBridge,
     resumeAuthority: contract.resumeAuthority,
     recoveryLadder: contract.recoveryLadder,
     settingsCommandSentence: contract.settingsCommandSentence,
@@ -828,27 +904,28 @@ function settingsCommandFollowUp(runtime = null) {
   return `${sentence} For ${runtimeDisplayName(runtime)}, that command is \`${runtimeSurfaceCommand(runtime, "settings")}\`.`;
 }
 
-function sharedLocalCliCommand(prefix, fallback) {
-  const match = SHARED_PUBLIC_SURFACE_TEXT.localCliBridgeCommands.find((command) => command.startsWith(prefix));
-  return match || fallback;
+function sharedLocalCliHelpCommand() {
+  return SHARED_PUBLIC_SURFACE_TEXT.localCliBridge.helpCommand;
 }
 
-function sharedLocalCliHelpCommand() {
-  return sharedLocalCliCommand("gpd --help", "gpd --help");
+function sharedDoctorCommand() {
+  return SHARED_PUBLIC_SURFACE_TEXT.localCliBridge.doctorCommand;
 }
 
 function sharedUnattendedReadinessCommand() {
-  return sharedLocalCliCommand(
-    "gpd validate unattended-readiness",
-    "gpd validate unattended-readiness --runtime <runtime> --autonomy balanced"
-  );
+  return SHARED_PUBLIC_SURFACE_TEXT.localCliBridge.unattendedReadinessCommand;
 }
 
 function sharedPermissionsSyncCommand() {
-  return sharedLocalCliCommand(
-    "gpd permissions sync",
-    "gpd permissions sync --runtime <runtime> --autonomy balanced"
-  );
+  return SHARED_PUBLIC_SURFACE_TEXT.localCliBridge.permissionsSyncCommand;
+}
+
+function sharedResumeCommand() {
+  return SHARED_PUBLIC_SURFACE_TEXT.recoveryLadder.localSnapshotCommand;
+}
+
+function sharedRecentRecoveryCommand() {
+  return SHARED_PUBLIC_SURFACE_TEXT.recoveryLadder.crossWorkspaceCommand;
 }
 
 function localCliDiagnosticsFollowUpLine() {
@@ -1775,7 +1852,7 @@ function runInstallReadinessPreflight(managedPython, runtimes, scope, targetDir 
   const doctorHints = runtimes.map((runtime) => `\`${runtimeDoctorHint(runtime, scope, targetDir)}\``).join(", ");
   log(`For the full runtime-target doctor report after install, use ${doctorHints}.`);
   log(
-    `Use \`gpd doctor\` for install and runtime-local readiness, `
+    `Use \`${sharedDoctorCommand()}\` for install and runtime-local readiness, `
     + `\`${sharedUnattendedReadinessCommand().replace(/\s+--runtime\b[\s\S]*$/u, "")}\` `
     + "for the unattended or overnight verdict, and `gpd permissions ...` for runtime-owned permission alignment and sync."
   );
@@ -1871,7 +1948,7 @@ function printUnattendedConfigurationReminder(runtimes, targetDir = null) {
         + `\`${runtimeUnattendedReadinessHint(runtime)}\`.`
       );
     }
-    log("If any runtime reports `not-ready`, rerun the matching `gpd permissions sync --runtime <runtime> --autonomy balanced` command.");
+    log(`If any runtime reports \`not-ready\`, rerun the matching \`${sharedPermissionsSyncCommand()}\` command.`);
     warn("If any runtime reports `relaunch-required`, treat its unattended readiness as not ready until that runtime is relaunched.");
   }
   console.log("");
@@ -1977,7 +2054,11 @@ function printHelp() {
   console.log(` Beginner Onboarding Hub: ${SHARED_PUBLIC_SURFACE_TEXT.beginnerHubUrl}`);
   console.log(` First-run order: ${beginnerStartupLadderText()}`);
   console.log(" Open your runtime, run its help command first, use `start` if you are not sure what fits this folder, and use `tour` if you want a read-only overview of the broader command surface before choosing.");
-  console.log(" Then use your runtime's `new-project` command for new work or `map-research` for existing work. When you come back later, use `gpd resume` for the current-workspace read-only recovery snapshot or `gpd resume --recent` to find a different workspace first, then continue in the runtime with `resume-work`.");
+  console.log(
+    " Then use your runtime's `new-project` command for new work or `map-research` for existing work. When you come back later, use "
+    + `\`${sharedResumeCommand()}\` for the current-workspace read-only recovery snapshot or \`${sharedRecentRecoveryCommand()}\` `
+    + "to find a different workspace first, then continue in the runtime with `resume-work`."
+  );
   console.log(` ${SHARED_PUBLIC_SURFACE_TEXT.settingsCommandSentence}`);
   console.log(` Recommended unattended default: Balanced autonomy (\`balanced\`). ${SHARED_PUBLIC_SURFACE_TEXT.settingsRecommendationSentence}`);
   console.log(
@@ -1989,7 +2070,7 @@ function printHelp() {
   );
   console.log(` ${localCliDiagnosticsFollowUpLine()}`);
   console.log(
-    " Workflow presets: if you plan paper/manuscript workflows, rerun `gpd doctor --runtime <runtime> --local|--global` "
+    ` Workflow presets: if you plan paper/manuscript workflows, rerun \`${sharedDoctorCommand()} --runtime <runtime> --local|--global\` `
     + "and check whether `Workflow Presets` is `ready` or `degraded`. Without LaTeX, the paper/manuscript and full research presets remain usable for `write-paper` and `peer-review`, "
     + "but `paper-build` and `arxiv-submission` require the `LaTeX Toolchain`."
   );

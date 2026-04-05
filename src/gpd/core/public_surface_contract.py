@@ -23,11 +23,17 @@ __all__ = [
     "load_public_surface_contract",
     "local_cli_bridge_commands",
     "local_cli_bridge_contract",
+    "local_cli_doctor_command",
+    "local_cli_help_command",
     "local_cli_bridge_note",
+    "local_cli_permissions_sync_command",
+    "local_cli_unattended_readiness_command",
     "post_start_settings_contract",
     "post_start_settings_note",
     "post_start_settings_recommendation",
+    "recovery_cross_workspace_command",
     "recovery_ladder_contract",
+    "recovery_local_snapshot_command",
     "recovery_ladder_note",
     "resume_authority_contract",
     "resume_authority_fields",
@@ -114,6 +120,47 @@ class PublicSurfaceContract:
     recovery_ladder: RecoveryLadderContract
 
 
+_PUBLIC_SURFACE_CONTRACT_KEYS = (
+    "schema_version",
+    "beginner_onboarding",
+    "local_cli_bridge",
+    "post_start_settings",
+    "resume_authority",
+    "recovery_ladder",
+)
+_PUBLIC_SURFACE_SECTION_KEYS = {
+    "beginner_onboarding": ("hub_url", "preflight_requirements", "caveats", "startup_ladder"),
+    "local_cli_bridge": ("commands", "terminal_phrase", "purpose_phrase"),
+    "post_start_settings": ("primary_sentence", "default_sentence"),
+    "resume_authority": (
+        "durable_authority_phrase",
+        "public_vocabulary_intro",
+        "public_fields",
+        "top_level_boundary_phrase",
+    ),
+    "recovery_ladder": (
+        "title",
+        "local_snapshot_command",
+        "local_snapshot_phrase",
+        "cross_workspace_command",
+        "cross_workspace_phrase",
+        "resume_phrase",
+        "next_phrase",
+        "pause_phrase",
+    ),
+}
+_LOCAL_CLI_HELP_COMMAND = "gpd --help"
+_LOCAL_CLI_DOCTOR_COMMAND = "gpd doctor"
+_LOCAL_CLI_UNATTENDED_READINESS_COMMAND = "gpd validate unattended-readiness --runtime <runtime> --autonomy balanced"
+_LOCAL_CLI_PERMISSIONS_SYNC_COMMAND = "gpd permissions sync --runtime <runtime> --autonomy balanced"
+_REQUIRED_LOCAL_CLI_BRIDGE_COMMANDS = (
+    _LOCAL_CLI_HELP_COMMAND,
+    _LOCAL_CLI_DOCTOR_COMMAND,
+    _LOCAL_CLI_UNATTENDED_READINESS_COMMAND,
+    _LOCAL_CLI_PERMISSIONS_SYNC_COMMAND,
+)
+
+
 def _join_backticked_commands(commands: tuple[str, ...]) -> str:
     rendered = tuple(f"`{command}`" for command in commands)
     if not rendered:
@@ -136,6 +183,13 @@ def _require_present_keys(payload: dict[str, object], *, label: str, keys: tuple
     if not missing:
         return
     raise ValueError(f"{label} is missing required key(s): {', '.join(missing)}")
+
+
+def _require_allowed_keys(payload: dict[str, object], *, label: str, keys: tuple[str, ...]) -> None:
+    unknown = sorted(key for key in payload if key not in keys)
+    if not unknown:
+        return
+    raise ValueError(f"{label} contains unknown key(s): {', '.join(unknown)}")
 
 
 def _require_string(payload: dict[str, object], key: str, *, label: str) -> str:
@@ -162,6 +216,16 @@ def _require_string_list(payload: dict[str, object], key: str, *, label: str) ->
     return tuple(items)
 
 
+def _require_exact_command(commands: tuple[str, ...], *, label: str, command: str) -> str:
+    if command not in commands:
+        raise ValueError(f"{label}.commands must include {command!r}")
+    return command
+
+
+def _local_cli_bridge_command(command: str) -> str:
+    return _require_exact_command(local_cli_bridge_commands(), label="local_cli_bridge", command=command)
+
+
 @lru_cache(maxsize=1)
 def load_public_surface_contract() -> PublicSurfaceContract:
     contract_path = files("gpd.core").joinpath("public_surface_contract.json")
@@ -170,15 +234,9 @@ def load_public_surface_contract() -> PublicSurfaceContract:
     _require_present_keys(
         payload,
         label="public_surface_contract",
-        keys=(
-            "schema_version",
-            "beginner_onboarding",
-            "local_cli_bridge",
-            "post_start_settings",
-            "resume_authority",
-            "recovery_ladder",
-        ),
+        keys=_PUBLIC_SURFACE_CONTRACT_KEYS,
     )
+    _require_allowed_keys(payload, label="public_surface_contract", keys=_PUBLIC_SURFACE_CONTRACT_KEYS)
 
     schema_version = payload.get("schema_version")
     if not isinstance(schema_version, int) or isinstance(schema_version, bool) or schema_version != 1:
@@ -188,46 +246,72 @@ def load_public_surface_contract() -> PublicSurfaceContract:
     _require_present_keys(
         beginner_payload,
         label="beginner_onboarding",
-        keys=("hub_url", "preflight_requirements", "caveats", "startup_ladder"),
+        keys=_PUBLIC_SURFACE_SECTION_KEYS["beginner_onboarding"],
+    )
+    _require_allowed_keys(
+        beginner_payload,
+        label="beginner_onboarding",
+        keys=_PUBLIC_SURFACE_SECTION_KEYS["beginner_onboarding"],
     )
     bridge_payload = _require_object(payload.get("local_cli_bridge"), label="local_cli_bridge")
     _require_present_keys(
         bridge_payload,
         label="local_cli_bridge",
-        keys=("commands", "terminal_phrase", "purpose_phrase"),
+        keys=_PUBLIC_SURFACE_SECTION_KEYS["local_cli_bridge"],
+    )
+    _require_allowed_keys(
+        bridge_payload,
+        label="local_cli_bridge",
+        keys=_PUBLIC_SURFACE_SECTION_KEYS["local_cli_bridge"],
     )
     settings_payload = _require_object(payload.get("post_start_settings"), label="post_start_settings")
     _require_present_keys(
         settings_payload,
         label="post_start_settings",
-        keys=("primary_sentence", "default_sentence"),
+        keys=_PUBLIC_SURFACE_SECTION_KEYS["post_start_settings"],
+    )
+    _require_allowed_keys(
+        settings_payload,
+        label="post_start_settings",
+        keys=_PUBLIC_SURFACE_SECTION_KEYS["post_start_settings"],
     )
     resume_authority_payload = _require_object(payload.get("resume_authority"), label="resume_authority")
     _require_present_keys(
         resume_authority_payload,
         label="resume_authority",
-        keys=(
-            "durable_authority_phrase",
-            "public_vocabulary_intro",
-            "public_fields",
-            "top_level_boundary_phrase",
-        ),
+        keys=_PUBLIC_SURFACE_SECTION_KEYS["resume_authority"],
+    )
+    _require_allowed_keys(
+        resume_authority_payload,
+        label="resume_authority",
+        keys=_PUBLIC_SURFACE_SECTION_KEYS["resume_authority"],
     )
     recovery_payload = _require_object(payload.get("recovery_ladder"), label="recovery_ladder")
     _require_present_keys(
         recovery_payload,
         label="recovery_ladder",
-        keys=(
-            "title",
-            "local_snapshot_command",
-            "local_snapshot_phrase",
-            "cross_workspace_command",
-            "cross_workspace_phrase",
-            "resume_phrase",
-            "next_phrase",
-            "pause_phrase",
-        ),
+        keys=_PUBLIC_SURFACE_SECTION_KEYS["recovery_ladder"],
     )
+    _require_allowed_keys(
+        recovery_payload,
+        label="recovery_ladder",
+        keys=_PUBLIC_SURFACE_SECTION_KEYS["recovery_ladder"],
+    )
+    bridge_commands = _require_string_list(bridge_payload, "commands", label="local_cli_bridge")
+    for command in _REQUIRED_LOCAL_CLI_BRIDGE_COMMANDS:
+        _require_exact_command(bridge_commands, label="local_cli_bridge", command=command)
+    recovery_local_snapshot_command = _require_string(
+        recovery_payload,
+        "local_snapshot_command",
+        label="recovery_ladder",
+    )
+    recovery_cross_workspace_command = _require_string(
+        recovery_payload,
+        "cross_workspace_command",
+        label="recovery_ladder",
+    )
+    _require_exact_command(bridge_commands, label="local_cli_bridge", command=recovery_local_snapshot_command)
+    _require_exact_command(bridge_commands, label="local_cli_bridge", command=recovery_cross_workspace_command)
     resume_authority_public_fields = _require_string_list(
         resume_authority_payload,
         "public_fields",
@@ -251,7 +335,7 @@ def load_public_surface_contract() -> PublicSurfaceContract:
             startup_ladder=_require_string_list(beginner_payload, "startup_ladder", label="beginner_onboarding"),
         ),
         local_cli_bridge=LocalCliBridgeContract(
-            commands=_require_string_list(bridge_payload, "commands", label="local_cli_bridge"),
+            commands=bridge_commands,
             terminal_phrase=_require_string(bridge_payload, "terminal_phrase", label="local_cli_bridge"),
             purpose_phrase=_require_string(bridge_payload, "purpose_phrase", label="local_cli_bridge"),
         ),
@@ -283,21 +367,13 @@ def load_public_surface_contract() -> PublicSurfaceContract:
         ),
         recovery_ladder=RecoveryLadderContract(
             title=_require_string(recovery_payload, "title", label="recovery_ladder"),
-            local_snapshot_command=_require_string(
-                recovery_payload,
-                "local_snapshot_command",
-                label="recovery_ladder",
-            ),
+            local_snapshot_command=recovery_local_snapshot_command,
             local_snapshot_phrase=_require_string(
                 recovery_payload,
                 "local_snapshot_phrase",
                 label="recovery_ladder",
             ),
-            cross_workspace_command=_require_string(
-                recovery_payload,
-                "cross_workspace_command",
-                label="recovery_ladder",
-            ),
+            cross_workspace_command=recovery_cross_workspace_command,
             cross_workspace_phrase=_require_string(
                 recovery_payload,
                 "cross_workspace_phrase",
@@ -354,6 +430,22 @@ def local_cli_bridge_commands() -> tuple[str, ...]:
     return local_cli_bridge_contract().commands
 
 
+def local_cli_help_command() -> str:
+    return _local_cli_bridge_command(_LOCAL_CLI_HELP_COMMAND)
+
+
+def local_cli_doctor_command() -> str:
+    return _local_cli_bridge_command(_LOCAL_CLI_DOCTOR_COMMAND)
+
+
+def local_cli_unattended_readiness_command() -> str:
+    return _local_cli_bridge_command(_LOCAL_CLI_UNATTENDED_READINESS_COMMAND)
+
+
+def local_cli_permissions_sync_command() -> str:
+    return _local_cli_bridge_command(_LOCAL_CLI_PERMISSIONS_SYNC_COMMAND)
+
+
 def local_cli_bridge_note() -> str:
     return local_cli_bridge_contract().render_note()
 
@@ -380,6 +472,14 @@ def resume_authority_fields() -> tuple[str, ...]:
 
 def recovery_ladder_contract() -> RecoveryLadderContract:
     return load_public_surface_contract().recovery_ladder
+
+
+def recovery_local_snapshot_command() -> str:
+    return recovery_ladder_contract().local_snapshot_command
+
+
+def recovery_cross_workspace_command() -> str:
+    return recovery_ladder_contract().cross_workspace_command
 
 
 def recovery_ladder_note(

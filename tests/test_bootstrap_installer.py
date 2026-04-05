@@ -708,7 +708,7 @@ def _run_node_contract_validation(script: str) -> subprocess.CompletedProcess[st
     )
 
 
-def test_bootstrap_public_surface_contract_validator_tolerates_additive_keys_and_rejects_missing_required_fields() -> None:
+def test_bootstrap_public_surface_contract_validator_rejects_additive_keys_and_missing_required_fields() -> None:
     result = _run_node_contract_validation(
         r"""
 const assert = require("node:assert/strict");
@@ -717,14 +717,38 @@ const payload = require("./src/gpd/core/public_surface_contract.json");
 
 assert.doesNotThrow(() => validateSharedPublicSurfaceContract(payload));
 const sharedText = loadSharedPublicSurfaceText();
+assert.equal(sharedText.localCliBridge.helpCommand, "gpd --help");
+assert.equal(sharedText.localCliBridge.doctorCommand, "gpd doctor");
+assert.equal(sharedText.localCliBridge.unattendedReadinessCommand, payload.local_cli_bridge.commands[2]);
+assert.equal(sharedText.localCliBridge.permissionsSyncCommand, payload.local_cli_bridge.commands[4]);
 assert.equal(sharedText.resumeAuthority.publicVocabularyIntro, payload.resume_authority.public_vocabulary_intro);
 assert.deepEqual(sharedText.resumeAuthority.publicFields, payload.resume_authority.public_fields);
 assert.equal(sharedText.resumeAuthority.topLevelBoundaryPhrase, payload.resume_authority.top_level_boundary_phrase);
+assert.equal(sharedText.recoveryLadder.localSnapshotCommand, payload.recovery_ladder.local_snapshot_command);
+assert.equal(sharedText.recoveryLadder.crossWorkspaceCommand, payload.recovery_ladder.cross_workspace_command);
 
 const additivePayload = JSON.parse(JSON.stringify(payload));
 additivePayload.legacy_note = "unexpected";
 additivePayload.resume_authority.legacy_note = "unexpected";
-assert.doesNotThrow(() => validateSharedPublicSurfaceContract(additivePayload));
+assert.throws(
+  () => validateSharedPublicSurfaceContract(additivePayload),
+  /public surface contract contains unknown key\(s\): legacy_note/
+);
+
+for (const sectionName of [
+  "beginner_onboarding",
+  "local_cli_bridge",
+  "post_start_settings",
+  "resume_authority",
+  "recovery_ladder",
+]) {
+  const sectionPayload = JSON.parse(JSON.stringify(payload));
+  sectionPayload[sectionName].legacy_note = "unexpected";
+  assert.throws(
+    () => validateSharedPublicSurfaceContract(sectionPayload),
+    new RegExp(`${sectionName} contains unknown key\\(s\\): legacy_note`)
+  );
+}
 
 const missingRequiredPayload = JSON.parse(JSON.stringify(payload));
 delete missingRequiredPayload.resume_authority.public_vocabulary_intro;
@@ -738,6 +762,27 @@ invalidRequiredPayload.resume_authority.public_fields = "unexpected";
 assert.throws(
   () => validateSharedPublicSurfaceContract(invalidRequiredPayload),
   /resume_authority\.public_fields must be a non-empty list/
+);
+"""
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+
+
+def test_bootstrap_public_surface_contract_validator_requires_authoritative_bridge_commands() -> None:
+    result = _run_node_contract_validation(
+        r"""
+const assert = require("node:assert/strict");
+const { validateSharedPublicSurfaceContract } = require("./bin/install.js");
+const payload = require("./src/gpd/core/public_surface_contract.json");
+
+const missingDoctorPayload = JSON.parse(JSON.stringify(payload));
+missingDoctorPayload.local_cli_bridge.commands = missingDoctorPayload.local_cli_bridge.commands.filter(
+  (command) => command !== "gpd doctor"
+);
+assert.throws(
+  () => validateSharedPublicSurfaceContract(missingDoctorPayload),
+  /local_cli_bridge\.commands must include "gpd doctor"/
 );
 """
     )

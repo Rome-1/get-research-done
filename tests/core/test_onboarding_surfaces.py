@@ -19,6 +19,12 @@ from gpd.core.public_surface_contract import (
     beginner_onboarding_caveats,
     beginner_preflight_requirements,
     load_public_surface_contract,
+    local_cli_doctor_command,
+    local_cli_help_command,
+    local_cli_permissions_sync_command,
+    local_cli_unattended_readiness_command,
+    recovery_cross_workspace_command,
+    recovery_local_snapshot_command,
     resume_authority_contract,
     resume_authority_fields,
 )
@@ -129,21 +135,82 @@ def test_resume_authority_contract_exposes_full_validated_surface() -> None:
     assert not hasattr(contract, "compatibility_phrase")
 
 
-def test_public_surface_contract_loader_tolerates_additive_keys(monkeypatch, tmp_path: Path) -> None:
+def test_public_surface_contract_loader_rejects_additive_keys(monkeypatch, tmp_path: Path) -> None:
     canonical_path = Path(__file__).resolve().parents[2] / "src" / "gpd" / "core" / "public_surface_contract.json"
     canonical_payload = json.loads(canonical_path.read_text(encoding="utf-8"))
     additive_payload = copy.deepcopy(canonical_payload)
     additive_payload["legacy_note"] = "unexpected"
-    additive_payload["beginner_onboarding"]["legacy_note"] = "unexpected"
-    additive_payload["resume_authority"]["legacy_note"] = "unexpected"
-    additive_payload["recovery_ladder"]["legacy_note"] = "unexpected"
 
     _load_public_surface_contract_with_payload(monkeypatch, tmp_path, additive_payload)
-    contract = load_public_surface_contract()
+    with pytest.raises(ValueError, match=r"public_surface_contract contains unknown key\(s\): legacy_note"):
+        load_public_surface_contract()
+    load_public_surface_contract.cache_clear()
 
-    assert contract.beginner_onboarding.hub_url == canonical_payload["beginner_onboarding"]["hub_url"]
-    assert contract.resume_authority.public_fields == tuple(canonical_payload["resume_authority"]["public_fields"])
-    assert contract.recovery_ladder.title == canonical_payload["recovery_ladder"]["title"]
+
+@pytest.mark.parametrize(
+    ("section_name", "expected_message"),
+    [
+        ("beginner_onboarding", r"beginner_onboarding contains unknown key\(s\): legacy_note"),
+        ("local_cli_bridge", r"local_cli_bridge contains unknown key\(s\): legacy_note"),
+        ("post_start_settings", r"post_start_settings contains unknown key\(s\): legacy_note"),
+        ("resume_authority", r"resume_authority contains unknown key\(s\): legacy_note"),
+        ("recovery_ladder", r"recovery_ladder contains unknown key\(s\): legacy_note"),
+    ],
+)
+def test_public_surface_contract_loader_rejects_section_additive_keys(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    section_name: str,
+    expected_message: str,
+) -> None:
+    canonical_path = Path(__file__).resolve().parents[2] / "src" / "gpd" / "core" / "public_surface_contract.json"
+    canonical_payload = json.loads(canonical_path.read_text(encoding="utf-8"))
+    additive_payload = copy.deepcopy(canonical_payload)
+    additive_payload[section_name]["legacy_note"] = "unexpected"
+
+    _load_public_surface_contract_with_payload(monkeypatch, tmp_path, additive_payload)
+    with pytest.raises(ValueError, match=expected_message):
+        load_public_surface_contract()
+    load_public_surface_contract.cache_clear()
+
+
+def test_public_surface_contract_loader_requires_authoritative_local_cli_bridge_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    canonical_path = Path(__file__).resolve().parents[2] / "src" / "gpd" / "core" / "public_surface_contract.json"
+    canonical_payload = json.loads(canonical_path.read_text(encoding="utf-8"))
+    invalid_payload = copy.deepcopy(canonical_payload)
+    invalid_payload["local_cli_bridge"]["commands"] = [
+        command
+        for command in invalid_payload["local_cli_bridge"]["commands"]
+        if command != "gpd doctor"
+    ]
+
+    _load_public_surface_contract_with_payload(monkeypatch, tmp_path, invalid_payload)
+    with pytest.raises(ValueError, match=r"local_cli_bridge\.commands must include 'gpd doctor'"):
+        load_public_surface_contract()
+
+    load_public_surface_contract.cache_clear()
+
+
+def test_public_surface_contract_loader_requires_recovery_ladder_commands_to_stay_public(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    canonical_path = Path(__file__).resolve().parents[2] / "src" / "gpd" / "core" / "public_surface_contract.json"
+    canonical_payload = json.loads(canonical_path.read_text(encoding="utf-8"))
+    invalid_payload = copy.deepcopy(canonical_payload)
+    invalid_payload["local_cli_bridge"]["commands"] = [
+        command
+        for command in invalid_payload["local_cli_bridge"]["commands"]
+        if command != "gpd resume --recent"
+    ]
+
+    _load_public_surface_contract_with_payload(monkeypatch, tmp_path, invalid_payload)
+    with pytest.raises(ValueError, match=r"local_cli_bridge\.commands must include 'gpd resume --recent'"):
+        load_public_surface_contract()
+
     load_public_surface_contract.cache_clear()
 
 
@@ -239,7 +306,14 @@ def test_doc_surface_contract_helpers_read_runtime_normalized_contract(
             startup_ladder=("help", "start"),
         ),
         local_cli_bridge=public_surface_contract_module.LocalCliBridgeContract(
-            commands=("gpd --help",),
+            commands=(
+                "gpd --help",
+                "gpd doctor",
+                "gpd validate unattended-readiness --runtime <runtime> --autonomy balanced",
+                "gpd permissions sync --runtime <runtime> --autonomy balanced",
+                "gpd resume",
+                "gpd resume --recent",
+            ),
             terminal_phrase="in your normal terminal",
             purpose_phrase="workspace diagnostics",
         ),
@@ -255,7 +329,7 @@ def test_doc_surface_contract_helpers_read_runtime_normalized_contract(
         ),
         recovery_ladder=public_surface_contract_module.RecoveryLadderContract(
             title="Recovery ladder title",
-            local_snapshot_command="status",
+            local_snapshot_command="gpd resume",
             local_snapshot_phrase="local snapshot",
             cross_workspace_command="resume --recent",
             cross_workspace_phrase="pick another workspace",
@@ -265,11 +339,18 @@ def test_doc_surface_contract_helpers_read_runtime_normalized_contract(
         ),
     )
     monkeypatch.setattr(doc_surface_contracts_module, "load_public_surface_contract", lambda: contract)
+    monkeypatch.setattr(public_surface_contract_module, "load_public_surface_contract", lambda: contract)
     doc_surface_contracts_module._public_surface_contract_payload.cache_clear()
 
     assert doc_surface_contracts_module.beginner_preflight_requirements() == ("Preflight A",)
     assert doc_surface_contracts_module.beginner_onboarding_caveats() == ("Caveat A",)
     assert doc_surface_contracts_module.beginner_startup_ladder_text() == "`help -> start`"
     assert doc_surface_contracts_module.resume_authority_public_vocabulary_intro() == "Public vocabulary intro"
+    assert local_cli_help_command() == "gpd --help"
+    assert local_cli_doctor_command() == "gpd doctor"
+    assert local_cli_unattended_readiness_command() == "gpd validate unattended-readiness --runtime <runtime> --autonomy balanced"
+    assert local_cli_permissions_sync_command() == "gpd permissions sync --runtime <runtime> --autonomy balanced"
+    assert recovery_local_snapshot_command() == "gpd resume"
+    assert recovery_cross_workspace_command() == "resume --recent"
 
     doc_surface_contracts_module._public_surface_contract_payload.cache_clear()
