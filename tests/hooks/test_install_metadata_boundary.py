@@ -128,6 +128,7 @@ def test_assess_install_target_classifies_owned_complete_and_incomplete_install(
     class _FakeAdapter:
         def __init__(self, missing_install_artifacts: tuple[str, ...]) -> None:
             self._missing_install_artifacts = missing_install_artifacts
+            self.local_config_dir_name = ".codex"
 
         def missing_install_artifacts(self, target_dir: Path) -> tuple[str, ...]:
             return self._missing_install_artifacts
@@ -145,6 +146,53 @@ def test_assess_install_target_classifies_owned_complete_and_incomplete_install(
     assert complete.has_managed_markers is True
     assert incomplete.state == "owned_incomplete"
     assert incomplete.missing_install_artifacts == ("agents/gpd-help/SKILL.md",)
+
+
+@pytest.mark.parametrize(
+    ("hook_filename",),
+    [
+        ("check_update.py",),
+        ("statusline.py",),
+        ("notify.py",),
+    ],
+)
+def test_hook_self_detection_accepts_manifest_backed_owned_incomplete_install(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    hook_filename: str,
+) -> None:
+    config_dir = tmp_path / ".codex"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "gpd-file-manifest.json").write_text(
+        json.dumps({"install_scope": "local", "runtime": "codex"}),
+        encoding="utf-8",
+    )
+
+    class _FakeAdapter:
+        def __init__(self, missing_install_artifacts: tuple[str, ...]) -> None:
+            self._missing_install_artifacts = missing_install_artifacts
+            self.local_config_dir_name = ".codex"
+
+        def missing_install_artifacts(self, target_dir: Path) -> tuple[str, ...]:
+            return self._missing_install_artifacts
+
+    monkeypatch.setattr(
+        "gpd.hooks.install_metadata.get_adapter",
+        lambda runtime: _FakeAdapter(("agents/gpd-help/SKILL.md",)),
+    )
+    hook_path = config_dir / "hooks" / hook_filename
+    hook_path.parent.mkdir(parents=True, exist_ok=True)
+    hook_path.write_text("# hook\n", encoding="utf-8")
+
+    incomplete = assess_install_target(config_dir)
+    detected = detect_self_owned_install(hook_path)
+
+    assert incomplete.state == "owned_incomplete"
+    assert detected is not None
+    assert detected.runtime == "codex"
+    assert detected.install_scope == "local"
+    assert detected.update_command == installed_update_command(config_dir)
+    assert detected.update_command is not None
 
 
 def test_assess_install_target_classifies_foreign_and_untrusted_manifests(

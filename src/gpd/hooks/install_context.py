@@ -9,7 +9,7 @@ from gpd.adapters.install_utils import CACHE_DIR_NAME, UPDATE_CACHE_FILENAME
 from gpd.core.constants import TODOS_DIR_NAME
 from gpd.core.root_resolution import resolve_project_root
 from gpd.hooks.install_metadata import (
-    config_dir_has_complete_install,
+    assess_install_target,
     install_scope_from_manifest,
     installed_runtime,
     installed_update_command,
@@ -77,7 +77,8 @@ def detect_self_owned_install(hook_file: str | Path) -> SelfOwnedInstallContext 
     """Return the installed config-dir context for a hook file when it is self-owned."""
     hook_path = Path(hook_file).resolve(strict=False)
     candidate = hook_path.parent.parent
-    if not config_dir_has_complete_install(candidate):
+    assessment = assess_install_target(candidate)
+    if assessment.state not in {"owned_complete", "owned_incomplete"}:
         return None
     return SelfOwnedInstallContext(
         config_dir=candidate,
