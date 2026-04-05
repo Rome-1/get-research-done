@@ -225,6 +225,7 @@ def _sanitize_contract_scalars(
             if re.fullmatch(r"references\.\d+\.must_surface", location):
                 if type(raw_item) is not bool:
                     sink.append(f"{location} must be a boolean")
+                    cleaned[raw_key] = raw_item
                     continue
                 cleaned[raw_key] = raw_item
                 continue
@@ -297,30 +298,31 @@ def _salvage_model_mapping(
     default_value: dict[str, object] | None = None,
     required_fields: tuple[str, ...] = (),
     missing_is_default: bool = False,
-) -> dict[str, object] | None:
+) -> tuple[dict[str, object] | None, bool]:
     if value is None:
         if missing_is_default and default_value is not None:
-            return copy.deepcopy(default_value)
+            return copy.deepcopy(default_value), False
         actual_type = type(value).__name__
         errors.append(f"{path_prefix} must be an object, not {actual_type}")
-        return copy.deepcopy(default_value) if default_value is not None else None
+        return (copy.deepcopy(default_value), True) if default_value is not None else (None, True)
     if not isinstance(value, dict):
         actual_type = type(value).__name__
         errors.append(f"{path_prefix} must be an object, not {actual_type}")
-        return copy.deepcopy(default_value) if default_value is not None else None
+        return (copy.deepcopy(default_value), True) if default_value is not None else (None, True)
 
     cleaned = _strip_unknown_model_keys(value, path_prefix=path_prefix, model=model, errors=errors)
     missing_required_fields = [field_name for field_name in required_fields if field_name not in cleaned]
     if missing_required_fields:
         for field_name in missing_required_fields:
             errors.append(f"{path_prefix}.{field_name} is required")
-        return None
+        return None, True
 
     while True:
         try:
-            return model.model_validate(cleaned).model_dump()
+            return model.model_validate(cleaned).model_dump(), False
         except PydanticValidationError as exc:
             progress = False
+            blocked = False
             for error in exc.errors():
                 loc = tuple(error.get("loc", ()))
                 if not loc:
@@ -365,12 +367,15 @@ def _salvage_model_mapping(
                             continue
                         item_value = salvaged_items[index]
                         if item_model is not None and isinstance(item_value, dict):
-                            salvaged_item = _salvage_model_mapping(
+                            salvaged_item, item_blocking = _salvage_model_mapping(
                                 item_value,
                                 path_prefix=f"{path_prefix}.{key}.{index}",
                                 model=item_model,
                                 errors=errors,
                             )
+                            if item_blocking:
+                                blocked = True
+                                continue
                             if salvaged_item is not None:
                                 salvaged_items[index] = salvaged_item
                                 progress = True
@@ -385,13 +390,15 @@ def _salvage_model_mapping(
                     continue
                 if field.is_required():
                     errors.append(formatted)
-                    return copy.deepcopy(default_value) if default_value is not None else None
+                    blocked = True
+                    continue
                 if key in cleaned:
                     errors.append(formatted)
-                    cleaned.pop(key, None)
-                    progress = True
+                    blocked = True
+            if blocked:
+                return None, True
             if not progress:
-                return copy.deepcopy(default_value) if default_value is not None else None
+                return (copy.deepcopy(default_value), True) if default_value is not None else (None, True)
 
 
 def _salvage_contract_collection(
@@ -400,27 +407,31 @@ def _salvage_contract_collection(
     field_name: str,
     item_model: type[BaseModel],
     errors: list[str],
-) -> list[dict[str, object]]:
+) -> tuple[list[dict[str, object]], bool]:
     path_prefix = field_name
     if not isinstance(value, list):
         errors.append(f"{path_prefix} must be a list, not {type(value).__name__}")
-        return []
+        return [], False
 
     normalized_items: list[dict[str, object]] = []
+    blocked = False
     for index, item in enumerate(value):
         item_prefix = f"{path_prefix}.{index}"
         if not isinstance(item, dict):
             errors.append(f"{item_prefix} must be an object, not {type(item).__name__}")
             continue
-        normalized = _salvage_model_mapping(
+        normalized, item_blocked = _salvage_model_mapping(
             item,
             path_prefix=item_prefix,
             model=item_model,
             errors=errors,
         )
+        if item_blocked:
+            blocked = True
+            continue
         if normalized is not None:
             normalized_items.append(normalized)
-    return normalized_items
+    return normalized_items, blocked
 
 
 def _normalize_blank_list_fields(contract: dict[str, object]) -> None:
@@ -474,6 +485,7 @@ def salvage_project_contract(contract: dict[str, object]) -> tuple[ResearchContr
     if missing_required_section_errors:
         return None, [*errors, *missing_required_section_errors]
 
+    blocked_semantic_errors = False
     collection_models: dict[str, type[BaseModel]] = {
         "observables": ContractObservable,
         "claims": ContractClaim,
@@ -486,52 +498,54 @@ def salvage_project_contract(contract: dict[str, object]) -> tuple[ResearchContr
     for field_name, item_model in collection_models.items():
         if field_name not in normalized_contract:
             continue
-        normalized_contract[field_name] = _salvage_contract_collection(
+        normalized_items, collection_blocked = _salvage_contract_collection(
             normalized_contract.get(field_name),
             field_name=field_name,
             item_model=item_model,
             errors=errors,
         )
+        normalized_contract[field_name] = normalized_items
+        blocked_semantic_errors = blocked_semantic_errors or collection_blocked
 
-    scope = _salvage_model_mapping(
+    scope, scope_blocked = _salvage_model_mapping(
         normalized_contract.get("scope"),
         path_prefix="scope",
         model=ContractScope,
         errors=errors,
     )
-    if scope is None:
+    if scope_blocked or scope is None:
         return None, errors
     normalized_contract["scope"] = scope
 
-    context_intake = _salvage_model_mapping(
+    context_intake, context_intake_blocked = _salvage_model_mapping(
         normalized_contract.get("context_intake"),
         path_prefix="context_intake",
         model=ContractContextIntake,
         errors=errors,
     )
-    if context_intake is None:
+    if context_intake_blocked or context_intake is None:
         return None, errors
     normalized_contract["context_intake"] = context_intake
 
     if "approach_policy" in normalized_contract:
-        approach_policy = _salvage_model_mapping(
+        approach_policy, approach_policy_blocked = _salvage_model_mapping(
             normalized_contract.get("approach_policy"),
             path_prefix="approach_policy",
             model=ContractApproachPolicy,
             errors=errors,
         )
-        if approach_policy is None:
+        if approach_policy_blocked or approach_policy is None:
             return None, errors
         normalized_contract["approach_policy"] = approach_policy
 
-    uncertainty_markers = _salvage_model_mapping(
+    uncertainty_markers, uncertainty_markers_blocked = _salvage_model_mapping(
         normalized_contract.get("uncertainty_markers"),
         path_prefix="uncertainty_markers",
         model=ContractUncertaintyMarkers,
         errors=errors,
         required_fields=("weakest_anchors", "disconfirming_observations"),
     )
-    if uncertainty_markers is None:
+    if uncertainty_markers_blocked or uncertainty_markers is None:
         return None, errors
     normalized_contract["uncertainty_markers"] = uncertainty_markers
 
@@ -543,6 +557,9 @@ def salvage_project_contract(contract: dict[str, object]) -> tuple[ResearchContr
         except PydanticValidationError:
             errors.append("schema_version: Input should be 1")
             normalized_contract.pop("schema_version", None)
+
+    if blocked_semantic_errors:
+        return None, errors
 
     try:
         return ResearchContract.model_validate(normalized_contract), errors

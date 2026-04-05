@@ -388,8 +388,39 @@ def test_parse_project_contract_data_salvage_preserves_blocking_errors_for_missi
 
     result: ProjectContractParseResult = parse_project_contract_data_salvage(contract)
 
-    assert result.contract is not None
+    assert result.contract is None
     assert "claims.0.statement is required" in result.blocking_errors
+    assert contract_from_data_salvage(contract) is None
+
+
+@pytest.mark.parametrize(
+    ("mutator", "expected_error"),
+    [
+        (
+            lambda contract: contract["claims"][0].__setitem__("statement", None),
+            "claims.0.statement",
+        ),
+        (
+            lambda contract: contract["references"][0].__setitem__("must_surface", "yes"),
+            "references.0.must_surface",
+        ),
+        (
+            lambda contract: contract["acceptance_tests"][0].__setitem__("kind", "Robot"),
+            "acceptance_tests.0.kind",
+        ),
+    ],
+)
+def test_parse_project_contract_data_salvage_blocks_semantically_invalid_collection_members(
+    mutator,
+    expected_error: str,
+) -> None:
+    contract = _load_contract_fixture()
+    mutator(contract)
+
+    result: ProjectContractParseResult = parse_project_contract_data_salvage(contract)
+
+    assert result.contract is None
+    assert any(expected_error in error for error in result.blocking_errors)
     assert contract_from_data_salvage(contract) is None
 
 
