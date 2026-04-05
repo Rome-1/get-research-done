@@ -96,6 +96,42 @@ def test_doctor_active_runtime_settings_command_falls_back_to_runtime_neutral_re
         "the active runtime's `settings` command"
     )
 
+
+def test_permissions_capability_payload_surfaces_unexpected_catalog_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _boom(runtime: str) -> object:
+        raise RuntimeError("catalog exploded")
+
+    monkeypatch.setattr("gpd.adapters.runtime_catalog.get_runtime_capabilities", _boom)
+
+    payload = health_module._permissions_capability_payload(PRIMARY_RUNTIME)
+
+    assert payload["contract_source"] == "runtime-catalog-error"
+    assert payload["contract_error"] == "RuntimeError: catalog exploded"
+    assert payload["permissions_surface"] == "adapter-defined"
+    assert payload["permission_surface_kind"] == "unknown"
+    assert payload["supports_runtime_permission_sync"] is False
+    assert payload["supports_prompt_free_mode"] is False
+    assert payload["prompt_free_requires_relaunch"] is False
+    assert payload["telemetry_source"] == "unknown"
+    assert payload["telemetry_completeness"] == "unknown"
+    assert payload["contract_source"] != "generic-fallback"
+
+
+def test_permissions_capability_payload_keeps_generic_fallback_for_unknown_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _missing(runtime: str) -> object:
+        raise KeyError(runtime)
+
+    monkeypatch.setattr("gpd.adapters.runtime_catalog.get_runtime_capabilities", _missing)
+
+    payload = health_module._permissions_capability_payload(PRIMARY_RUNTIME)
+
+    assert payload["contract_source"] == "generic-fallback"
+    assert "contract_error" not in payload
+
 # ─── Model Tests ─────────────────────────────────────────────────────────────
 
 

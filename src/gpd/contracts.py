@@ -18,6 +18,7 @@ __all__ = [
     "ContractProofHypothesis",
     "ContractProofConclusionClause",
     "ContractProofAudit",
+    "THEOREM_STYLE_STATEMENT_REGEX_PATTERNS",
     "CONTRACT_OBSERVABLE_KIND_VALUES",
     "CONTRACT_CLAIM_KIND_VALUES",
     "THEOREM_CLAIM_KIND_VALUES",
@@ -32,6 +33,10 @@ __all__ = [
     "CONTRACT_APPROACH_POLICY_FIELD_NAMES",
     "CONTRACT_UNCERTAINTY_MARKER_FIELD_NAMES",
     "PROOF_ACCEPTANCE_TEST_KINDS",
+    "PROOF_HYPOTHESIS_CATEGORY_VALUES",
+    "PROOF_AUDIT_QUANTIFIER_STATUS_VALUES",
+    "PROOF_AUDIT_SCOPE_STATUS_VALUES",
+    "PROOF_AUDIT_COUNTEREXAMPLE_STATUS_VALUES",
     "ContractEvidenceStatus",
     "ContractEvidenceEntry",
     "ContractResultEntry",
@@ -74,14 +79,17 @@ __all__ = [
 ]
 
 
-_THEOREM_STYLE_STATEMENT_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"^\s*(?:prove|show)\s+that\b"),
-    re.compile(r"\bfor\s+all\b"),
-    re.compile(r"\bfor\s+every\b"),
-    re.compile(r"\b(?:there\s+)?exists\b"),
-    re.compile(r"\bexistence\b"),
-    re.compile(r"\bunique\b"),
-    re.compile(r"\buniqueness\b"),
+THEOREM_STYLE_STATEMENT_REGEX_PATTERNS: tuple[str, ...] = (
+    r"^\s*(?:prove|show)\s+that\b",
+    r"\bfor\s+all\b",
+    r"\bfor\s+every\b",
+    r"\b(?:there\s+)?exists\b",
+    r"\bexistence\b",
+    r"\bunique\b",
+    r"\buniqueness\b",
+)
+_THEOREM_STYLE_STATEMENT_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(pattern) for pattern in THEOREM_STYLE_STATEMENT_REGEX_PATTERNS
 )
 
 CONTRACT_OBSERVABLE_KIND_VALUES: tuple[str, ...] = (
@@ -179,6 +187,32 @@ CONTRACT_UNCERTAINTY_MARKER_FIELD_NAMES: tuple[str, ...] = (
     "unvalidated_assumptions",
     "competing_explanations",
     "disconfirming_observations",
+)
+PROOF_HYPOTHESIS_CATEGORY_VALUES: tuple[str, ...] = (
+    "assumption",
+    "precondition",
+    "regime",
+    "definition",
+    "lemma",
+    "other",
+)
+PROOF_AUDIT_QUANTIFIER_STATUS_VALUES: tuple[str, ...] = (
+    "matched",
+    "narrowed",
+    "mismatched",
+    "unclear",
+)
+PROOF_AUDIT_SCOPE_STATUS_VALUES: tuple[str, ...] = (
+    "matched",
+    "narrower_than_claim",
+    "mismatched",
+    "unclear",
+)
+PROOF_AUDIT_COUNTEREXAMPLE_STATUS_VALUES: tuple[str, ...] = (
+    "none_found",
+    "counterexample_found",
+    "not_attempted",
+    "narrowed_claim",
 )
 
 def _normalize_optional_str(value: object) -> object:
@@ -448,6 +482,20 @@ def _normalize_literal_choice(value: object, choices: tuple[str, ...]) -> object
     return value
 
 
+def _normalize_exact_literal_choice(value: object, choices: tuple[str, ...]) -> object:
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return stripped
+        for choice in choices:
+            if stripped.casefold() == choice.casefold():
+                if stripped != choice:
+                    raise ValueError(f"must use exact literal {choice!r}")
+                return choice
+        return stripped
+    return value
+
+
 def _normalize_literal_choice_list(value: object, choices: tuple[str, ...]) -> object:
     normalized = _normalize_string_list(value)
     if not isinstance(normalized, list):
@@ -564,12 +612,12 @@ def _collect_strict_contract_results_errors(value: _StrictContractResultsInput) 
             _require_exact_literal(
                 item.get("quantifier_status"),
                 path=f"{path_prefix}.{index}.quantifier_status",
-                choices=("matched", "narrowed", "mismatched", "unclear"),
+                choices=PROOF_AUDIT_QUANTIFIER_STATUS_VALUES,
             )
             _require_exact_literal(
                 item.get("counterexample_status"),
                 path=f"{path_prefix}.{index}.counterexample_status",
-                choices=("none_found", "counterexample_found", "not_attempted", "narrowed_claim"),
+                choices=PROOF_AUDIT_COUNTEREXAMPLE_STATUS_VALUES,
             )
 
     for section_name in ("claims", "deliverables", "acceptance_tests", "references", "forbidden_proxies"):
@@ -711,8 +759,8 @@ class VerificationEvidence(BaseModel):
     covered_parameter_symbols: list[str] = Field(default_factory=list)
     missing_parameter_symbols: list[str] = Field(default_factory=list)
     uncovered_conclusion_clause_ids: list[str] = Field(default_factory=list)
-    quantifier_status: Literal["matched", "narrowed", "mismatched", "unclear"] | None = None
-    counterexample_status: Literal["none_found", "counterexample_found", "not_attempted", "narrowed_claim"] | None = None
+    quantifier_status: Literal[*PROOF_AUDIT_QUANTIFIER_STATUS_VALUES] | None = None
+    counterexample_status: Literal[*PROOF_AUDIT_COUNTEREXAMPLE_STATUS_VALUES] | None = None
     proof_artifact_path: str | None = None
     proof_artifact_sha256: str | None = None
     claim_statement_sha256: str | None = None
@@ -750,14 +798,17 @@ class VerificationEvidence(BaseModel):
     @field_validator("quantifier_status", mode="before")
     @classmethod
     def _normalize_quantifier_status(cls, value: object) -> object:
-        return _normalize_literal_choice(_normalize_optional_str(value), ("matched", "narrowed", "mismatched", "unclear"))
+        return _normalize_literal_choice(
+            _normalize_optional_str(value),
+            PROOF_AUDIT_QUANTIFIER_STATUS_VALUES,
+        )
 
     @field_validator("counterexample_status", mode="before")
     @classmethod
     def _normalize_counterexample_status(cls, value: object) -> object:
         return _normalize_literal_choice(
             _normalize_optional_str(value),
-            ("none_found", "counterexample_found", "not_attempted", "narrowed_claim"),
+            PROOF_AUDIT_COUNTEREXAMPLE_STATUS_VALUES,
         )
 
     @field_validator("proof_artifact_path", "proof_artifact_sha256", "claim_statement_sha256", mode="before")
@@ -811,7 +862,7 @@ class ContractProofHypothesis(BaseModel):
     id: str
     text: str
     symbols: list[str] = Field(default_factory=list)
-    category: Literal["assumption", "precondition", "regime", "definition", "lemma", "other"] = "assumption"
+    category: Literal[*PROOF_HYPOTHESIS_CATEGORY_VALUES] = "assumption"
     required_in_proof: bool = True
 
     @field_validator("id", "text", mode="before")
@@ -829,7 +880,7 @@ class ContractProofHypothesis(BaseModel):
     def _normalize_category(cls, value: object) -> object:
         return _normalize_literal_choice(
             _normalize_required_str(value),
-            ("assumption", "precondition", "regime", "definition", "lemma", "other"),
+            PROOF_HYPOTHESIS_CATEGORY_VALUES,
         )
 
     @field_validator("required_in_proof", mode="before")
@@ -872,9 +923,9 @@ class ContractProofAudit(BaseModel):
     missing_parameter_symbols: list[str] = Field(default_factory=list)
     uncovered_quantifiers: list[str] = Field(default_factory=list)
     uncovered_conclusion_clause_ids: list[str] = Field(default_factory=list)
-    quantifier_status: Literal["matched", "narrowed", "mismatched", "unclear"] = "unclear"
-    scope_status: Literal["matched", "narrower_than_claim", "mismatched", "unclear"] = "unclear"
-    counterexample_status: Literal["none_found", "counterexample_found", "not_attempted", "narrowed_claim"] = "not_attempted"
+    quantifier_status: Literal[*PROOF_AUDIT_QUANTIFIER_STATUS_VALUES] = "unclear"
+    scope_status: Literal[*PROOF_AUDIT_SCOPE_STATUS_VALUES] = "unclear"
+    counterexample_status: Literal[*PROOF_AUDIT_COUNTEREXAMPLE_STATUS_VALUES] = "not_attempted"
     stale: bool = False
 
     @field_validator(
@@ -920,14 +971,17 @@ class ContractProofAudit(BaseModel):
     @field_validator("quantifier_status", mode="before")
     @classmethod
     def _normalize_quantifier_status(cls, value: object) -> object:
-        return _normalize_literal_choice(_normalize_required_str(value), ("matched", "narrowed", "mismatched", "unclear"))
+        return _normalize_literal_choice(
+            _normalize_required_str(value),
+            PROOF_AUDIT_QUANTIFIER_STATUS_VALUES,
+        )
 
     @field_validator("scope_status", mode="before")
     @classmethod
     def _normalize_scope_status(cls, value: object) -> object:
         return _normalize_literal_choice(
             _normalize_required_str(value),
-            ("matched", "narrower_than_claim", "mismatched", "unclear"),
+            PROOF_AUDIT_SCOPE_STATUS_VALUES,
         )
 
     @field_validator("counterexample_status", mode="before")
@@ -935,7 +989,7 @@ class ContractProofAudit(BaseModel):
     def _normalize_counterexample_status(cls, value: object) -> object:
         return _normalize_literal_choice(
             _normalize_required_str(value),
-            ("none_found", "counterexample_found", "not_attempted", "narrowed_claim"),
+            PROOF_AUDIT_COUNTEREXAMPLE_STATUS_VALUES,
         )
 
     @field_validator("stale", mode="before")
@@ -1252,7 +1306,7 @@ class ComparisonVerdict(BaseModel):
             "comparison_kind": ("benchmark", "prior_work", "experiment", "cross_method", "baseline", "other"),
             "verdict": ("pass", "tension", "fail", "inconclusive"),
         }
-        return _normalize_literal_choice(normalized, field_choices[info.field_name])
+        return _normalize_exact_literal_choice(normalized, field_choices[info.field_name])
 
     @field_validator("reference_id", "metric", "threshold", "recommended_action", "notes", mode="before")
     @classmethod

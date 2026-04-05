@@ -1043,8 +1043,23 @@ def _permissions_capability_payload(runtime_name: object) -> dict[str, object]:
             from gpd.adapters.runtime_catalog import get_runtime_capabilities
 
             capabilities = get_runtime_capabilities(runtime_name)
-        except Exception:
+        except KeyError:
             pass
+        except Exception as exc:
+            return {
+                "contract_source": "runtime-catalog-error",
+                "contract_error": f"{type(exc).__name__}: {exc}",
+                "permissions_surface": "adapter-defined",
+                "permission_surface_kind": "unknown",
+                "prompt_free_mode_value": None,
+                "supports_runtime_permission_sync": False,
+                "supports_prompt_free_mode": False,
+                "prompt_free_requires_relaunch": False,
+                "statusline_surface": "unknown",
+                "notify_surface": "unknown",
+                "telemetry_source": "unknown",
+                "telemetry_completeness": "unknown",
+            }
         else:
             return {
                 "contract_source": "runtime-catalog",

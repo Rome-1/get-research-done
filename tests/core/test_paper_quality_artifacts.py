@@ -1482,7 +1482,7 @@ def test_build_paper_quality_input_marks_invalid_verification_ledger_alignment_f
         plan_dir / "01-VERIFICATION.md",
         """---
 phase: 01-benchmark
-verified: 2026-03-13
+verified: 2026-03-13T00:00:00Z
 status: passed
 score: 0.9
 plan_contract_ref: GPD/phases/01-benchmark/01-01-PLAN.md#/contract

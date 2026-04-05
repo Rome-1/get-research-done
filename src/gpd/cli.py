@@ -18,6 +18,7 @@ import asyncio
 import dataclasses
 import glob
 import json
+import logging
 import os
 import re
 import shlex
@@ -118,6 +119,7 @@ if TYPE_CHECKING:
 
 console = Console()
 err_console = Console(stderr=True)
+logger = logging.getLogger(__name__)
 
 # Global state threaded through typer context
 _raw: bool = False
@@ -1221,7 +1223,13 @@ def _resume_runtime_commands(*, cwd: Path | None = None) -> tuple[str | None, st
         resume_work_command = str(adapter.format_command("resume-work")).strip()
         suggest_next_command = str(adapter.format_command("suggest-next")).strip()
         return resume_work_command or None, suggest_next_command or None
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Failed to resolve runtime-specific resume commands for %s: %s",
+            cwd or _get_cwd(),
+            exc,
+            exc_info=True,
+        )
         return None, None
 
 
@@ -2520,8 +2528,8 @@ def _sync_execution_visibility_projection(cwd: Path, *, state_obj: dict[str, obj
 
     try:
         helper(cwd, state_obj=state_obj)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to sync execution visibility projection for %s: %s", cwd, exc, exc_info=True)
 
 
 @result_app.command("add")

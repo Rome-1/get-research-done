@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import builtins
 import json
+import logging
 import os
 import re
 from pathlib import Path
@@ -1115,6 +1116,22 @@ def test_resume_recovery_advice_keeps_recent_projects_fallbacks_distinct(monkeyp
     assert advice.fast_next_command == "runtime `suggest-next`"
     assert advice.mode == "recent-projects"
     assert advice.primary_command == "gpd resume --recent"
+
+
+def test_resume_runtime_commands_logs_runtime_resolution_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def _boom(*args, **kwargs):
+        raise RuntimeError("runtime detection exploded")
+
+    monkeypatch.setattr("gpd.hooks.runtime_detect.detect_runtime_for_gpd_use", _boom)
+
+    with caplog.at_level(logging.WARNING, logger="gpd.cli"):
+        commands = cli_module._resume_runtime_commands(cwd=Path("/tmp/runtime-advice"))
+
+    assert commands == (None, None)
+    assert any("Failed to resolve runtime-specific resume commands" in record.message for record in caplog.records)
 
 
 def test_resume_origin_label_no_longer_exposes_legacy_session_alias() -> None:
@@ -3367,6 +3384,7 @@ def test_result_upsert_continues_when_visibility_projection_fails(
     mock_upsert,
     _mock_sync_visibility,
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
 ):
     mock_result = MagicMock()
     mock_result.model_dump.return_value = {
@@ -3386,27 +3404,29 @@ def test_result_upsert_continues_when_visibility_projection_fails(
     planning.mkdir()
     (planning / "state.json").write_text("{}", encoding="utf-8")
 
-    result = runner.invoke(
-        app,
-        [
-            "--raw",
-            "--cwd",
-            str(tmp_path),
-            "result",
-            "upsert",
-            "--id",
-            "R-02",
-            "--description",
-            "Canonical quantity",
-        ],
-        catch_exceptions=False,
-    )
+    with caplog.at_level(logging.WARNING, logger="gpd.cli"):
+        result = runner.invoke(
+            app,
+            [
+                "--raw",
+                "--cwd",
+                str(tmp_path),
+                "result",
+                "upsert",
+                "--id",
+                "R-02",
+                "--description",
+                "Canonical quantity",
+            ],
+            catch_exceptions=False,
+        )
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert payload["action"] == "updated"
     assert payload["result"]["id"] == "R-02"
     assert payload["result"]["description"] == "Canonical quantity"
+    assert any("Failed to sync execution visibility projection" in record.message for record in caplog.records)
 
 
 @patch("gpd.core.results.result_verify", create=True)

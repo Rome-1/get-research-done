@@ -1139,7 +1139,7 @@ class TestValidateFrontmatter:
             "---\n"
             "phase: 01-setup\n"
             "plan: 01\n"
-            "type: discuss\n"
+            "type: execute\n"
             "wave: 1\n"
             "depends_on: []\n"
             "files_modified: []\n"
@@ -1374,9 +1374,73 @@ class TestValidateFrontmatter:
         )
 
     def test_valid_verification(self):
-        content = "---\nphase: 01\nverified: 2025-01-01\nstatus: passed\nscore: 5/5\n---\n\nBody."
+        content = "---\nphase: 01\nverified: 2025-01-01T00:00:00Z\nstatus: passed\nscore: 5/5\n---\n\nBody."
         result = validate_frontmatter(content, "verification")
         assert result.valid is True
+
+    @pytest.mark.parametrize(
+        ("schema_name", "content", "expected_error"),
+        [
+            (
+                "plan",
+                _valid_plan_contract_frontmatter().replace("type: execute\n", "type: legacy\n", 1) + "Body.\n",
+                "type: must be one of execute, tdd",
+            ),
+            (
+                "summary",
+                "---\nphase: 01\nplan: 01\ndepth: ultra\nprovides: []\ncompleted: 2025-01-01\n---\n\nBody.",
+                "depth: must be one of minimal, standard, full, complex",
+            ),
+        ],
+    )
+    def test_frontmatter_rejects_invalid_semantic_enum_literals(
+        self,
+        schema_name: str,
+        content: str,
+        expected_error: str,
+    ) -> None:
+        result = validate_frontmatter(content, schema_name)
+
+        assert result.valid is False
+        assert expected_error in result.errors
+
+    @pytest.mark.parametrize(
+        "verified_value",
+        [
+            "2025-01-01",
+            "123",
+        ],
+    )
+    def test_verification_rejects_non_timestamp_verified_field(self, verified_value: str) -> None:
+        content = f"---\nphase: 01\nverified: {verified_value}\nstatus: passed\nscore: 5/5\n---\n\nBody."
+
+        result = validate_frontmatter(content, "verification")
+
+        assert result.valid is False
+        assert "verified: expected an ISO 8601 timestamp" in result.errors
+
+    def test_summary_rejects_case_drifted_comparison_verdict_literals(self):
+        content = (
+            "---\n"
+            "phase: 01\n"
+            "plan: 01\n"
+            "depth: standard\n"
+            "provides: []\n"
+            "completed: 2025-01-01\n"
+            "plan_contract_ref: GPD/phases/01-benchmark/01-01-PLAN.md#/contract\n"
+            "comparison_verdicts:\n"
+            "  - subject_id: claim-main\n"
+            "    subject_kind: Claim\n"
+            "    subject_role: Decisive\n"
+            "    comparison_kind: Benchmark\n"
+            "    verdict: Pass\n"
+            "---\n\nBody."
+        )
+
+        result = validate_frontmatter(content, "summary")
+
+        assert result.valid is False
+        assert any("comparison_verdicts:" in error and "must use exact literal 'claim'" in error for error in result.errors)
 
     def test_verification_status_passed_rejects_blocked_contract_results(self, tmp_path: Path):
         phase_dir = tmp_path / "GPD" / "phases" / "01-benchmark"

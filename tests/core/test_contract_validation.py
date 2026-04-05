@@ -20,6 +20,7 @@ from gpd.contracts import (
     contract_from_data,
     contract_from_data_salvage,
     normalize_contract_results_input,
+    parse_comparison_verdicts_data_strict,
     parse_contract_results_data_artifact,
     parse_contract_results_data_strict,
     parse_project_contract_data_salvage,
@@ -380,6 +381,21 @@ def test_parse_project_contract_data_salvage_reports_literal_case_drift_as_recov
     assert result.contract.references[0].required_actions == ["read", "compare", "cite"]
     assert "references.0.role must use exact canonical value: benchmark" in result.recoverable_errors
     assert "references.0.required_actions.0 must use exact canonical value: read" in result.recoverable_errors
+
+
+def test_parse_comparison_verdicts_data_strict_rejects_case_drift() -> None:
+    with pytest.raises(ValueError, match=r"\[0\] subject_kind: Value error, must use exact literal 'claim'"):
+        parse_comparison_verdicts_data_strict(
+            [
+                {
+                    "subject_id": "claim-main",
+                    "subject_kind": "Claim",
+                    "subject_role": "Decisive",
+                    "comparison_kind": "Benchmark",
+                    "verdict": "Pass",
+                }
+            ]
+        )
 
 
 def test_parse_project_contract_data_salvage_preserves_blocking_errors_for_missing_required_collection_item_field() -> None:

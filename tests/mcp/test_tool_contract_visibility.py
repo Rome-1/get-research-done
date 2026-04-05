@@ -65,36 +65,23 @@ def _schema_anyof_string(schema_fragment: dict[str, object]) -> dict[str, object
     raise AssertionError(f"No string branch found in {schema_fragment!r}")
 
 
-def _assert_string_or_string_list_schema(schema_fragment: dict[str, object], *, label: str) -> None:
-    assert len(schema_fragment["anyOf"]) == 2, f"{label} must publish string-or-list recovery boundary"
-    string_branch = _schema_anyof_string(schema_fragment)
-    assert string_branch["minLength"] == 1
-    assert string_branch["pattern"] == r"\S"
-
-    array_branch = next(
-        branch for branch in schema_fragment["anyOf"] if isinstance(branch, dict) and branch.get("type") == "array"
-    )
+def _assert_string_list_schema(schema_fragment: dict[str, object], *, label: str) -> None:
+    assert schema_fragment["type"] == "array", f"{label} must publish array-only contract list semantics"
+    array_branch = schema_fragment
     assert array_branch["items"]["type"] == "string"
     assert array_branch["items"]["minLength"] == 1
     assert array_branch["items"]["pattern"] == r"\S"
     assert array_branch["uniqueItems"] is True
 
 
-def _assert_enum_string_or_string_list_schema(
+def _assert_enum_string_list_schema(
     schema_fragment: dict[str, object],
     *,
     label: str,
     enum_values: list[str],
 ) -> None:
-    assert len(schema_fragment["anyOf"]) == 2, f"{label} must publish enum-string-or-list recovery boundary"
-    enum_branch = next(
-        branch for branch in schema_fragment["anyOf"] if isinstance(branch, dict) and branch.get("type") == "string"
-    )
-    assert enum_branch["enum"] == enum_values
-
-    array_branch = next(
-        branch for branch in schema_fragment["anyOf"] if isinstance(branch, dict) and branch.get("type") == "array"
-    )
+    assert schema_fragment["type"] == "array", f"{label} must publish array-only contract enum-list semantics"
+    array_branch = schema_fragment
     assert array_branch["items"]["type"] == "string"
     assert array_branch["items"]["enum"] == enum_values
     assert array_branch["uniqueItems"] is True
@@ -295,7 +282,7 @@ def _assert_contract_schema_sections_closed(contract_schema: dict[str, object]) 
     assert scope["properties"]["question"]["minLength"] == 1
     assert scope["properties"]["question"]["pattern"] == r"\S"
     for field_name in ("in_scope", "out_of_scope", "unresolved_questions"):
-        _assert_string_or_string_list_schema(scope["properties"][field_name], label=f"contract.scope.{field_name}")
+        _assert_string_list_schema(scope["properties"][field_name], label=f"contract.scope.{field_name}")
 
     context_intake = _schema_object(contract_schema, contract_schema["properties"]["context_intake"])
     _assert_closed_object(context_intake, label="contract.context_intake")
@@ -308,7 +295,7 @@ def _assert_contract_schema_sections_closed(contract_schema: dict[str, object]) 
         "context_gaps",
         "crucial_inputs",
     ):
-        _assert_string_or_string_list_schema(
+        _assert_string_list_schema(
             context_intake["properties"][field_name],
             label=f"contract.context_intake.{field_name}",
         )
@@ -323,7 +310,7 @@ def _assert_contract_schema_sections_closed(contract_schema: dict[str, object]) 
         "forbidden_fit_families",
         "stop_and_rethink_conditions",
     ):
-        _assert_string_or_string_list_schema(
+        _assert_string_list_schema(
             approach_policy["properties"][field_name],
             label=f"contract.approach_policy.{field_name}",
         )
@@ -349,13 +336,13 @@ def _assert_contract_schema_sections_closed(contract_schema: dict[str, object]) 
     assert "when proof-specific fields are already populated" in claims["description"]
     assert "when `observables` references a `proof_obligation` target" in claims["description"]
     for field_name in ("observables", "deliverables", "acceptance_tests", "references", "quantifiers", "proof_deliverables"):
-        _assert_string_or_string_list_schema(claims["properties"][field_name], label=f"contract.claims[].{field_name}")
+        _assert_string_list_schema(claims["properties"][field_name], label=f"contract.claims[].{field_name}")
     parameters = claims["properties"]["parameters"]["items"]
     _assert_closed_object(parameters, label="contract.claims[].parameters[]")
-    _assert_string_or_string_list_schema(parameters["properties"]["aliases"], label="contract.claims[].parameters[].aliases")
+    _assert_string_list_schema(parameters["properties"]["aliases"], label="contract.claims[].parameters[].aliases")
     hypotheses = claims["properties"]["hypotheses"]["items"]
     _assert_closed_object(hypotheses, label="contract.claims[].hypotheses[]")
-    _assert_string_or_string_list_schema(hypotheses["properties"]["symbols"], label="contract.claims[].hypotheses[].symbols")
+    _assert_string_list_schema(hypotheses["properties"]["symbols"], label="contract.claims[].hypotheses[].symbols")
     conclusion_clauses = claims["properties"]["conclusion_clauses"]["items"]
     _assert_closed_object(conclusion_clauses, label="contract.claims[].conclusion_clauses[]")
     proof_claim_condition = claims["allOf"][0]
@@ -410,7 +397,7 @@ def _assert_contract_schema_sections_closed(contract_schema: dict[str, object]) 
         "report",
         "other",
     ]
-    _assert_string_or_string_list_schema(
+    _assert_string_list_schema(
         deliverables["properties"]["must_contain"],
         label="contract.deliverables[].must_contain",
     )
@@ -440,7 +427,7 @@ def _assert_contract_schema_sections_closed(contract_schema: dict[str, object]) 
         "other",
     ]
     assert acceptance_tests["properties"]["automation"]["enum"] == ["automated", "hybrid", "human"]
-    _assert_string_or_string_list_schema(
+    _assert_string_list_schema(
         acceptance_tests["properties"]["evidence_required"],
         label="contract.acceptance_tests[].evidence_required",
     )
@@ -465,11 +452,11 @@ def _assert_contract_schema_sections_closed(contract_schema: dict[str, object]) 
         "other",
     ]
     for field_name in ("aliases", "applies_to", "carry_forward_to"):
-        _assert_string_or_string_list_schema(
+        _assert_string_list_schema(
             references["properties"][field_name],
             label=f"contract.references[].{field_name}",
         )
-    _assert_enum_string_or_string_list_schema(
+    _assert_enum_string_list_schema(
         references["properties"]["required_actions"],
         label="contract.references[].required_actions",
         enum_values=["read", "use", "compare", "cite", "avoid"],
@@ -489,7 +476,7 @@ def _assert_contract_schema_sections_closed(contract_schema: dict[str, object]) 
         "depends_on_lemma",
         "other",
     ]
-    _assert_string_or_string_list_schema(links["properties"]["verified_by"], label="contract.links[].verified_by")
+    _assert_string_list_schema(links["properties"]["verified_by"], label="contract.links[].verified_by")
 
     forbidden_proxies = contract_schema["properties"]["forbidden_proxies"]["items"]
     _assert_closed_object(forbidden_proxies, label="contract.forbidden_proxies[]")
@@ -503,7 +490,7 @@ def _assert_contract_schema_sections_closed(contract_schema: dict[str, object]) 
         "competing_explanations",
         "disconfirming_observations",
     ):
-        _assert_string_or_string_list_schema(
+        _assert_string_list_schema(
             uncertainty_markers["properties"][field_name],
             label=f"contract.uncertainty_markers.{field_name}",
         )

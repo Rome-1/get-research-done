@@ -35,7 +35,12 @@ from gpd.contracts import (
     PROJECT_CONTRACT_COLLECTION_LIST_FIELDS,
     PROJECT_CONTRACT_MAPPING_LIST_FIELDS,
     PROOF_ACCEPTANCE_TEST_KINDS,
+    PROOF_AUDIT_COUNTEREXAMPLE_STATUS_VALUES,
+    PROOF_AUDIT_QUANTIFIER_STATUS_VALUES,
+    PROOF_AUDIT_SCOPE_STATUS_VALUES,
+    PROOF_HYPOTHESIS_CATEGORY_VALUES,
     THEOREM_CLAIM_KIND_VALUES,
+    THEOREM_STYLE_STATEMENT_REGEX_PATTERNS,
     ResearchContract,
     collect_plan_contract_integrity_errors,
     contract_has_explicit_context_intake,
@@ -590,9 +595,9 @@ _PROOF_CHECK_TO_ACCEPTANCE_KIND = {
     "contract.counterexample_search": "counterexample_search",
 }
 _PROOF_CHECK_KEYS = frozenset(_PROOF_CHECK_TO_ACCEPTANCE_KIND)
-_QUANTIFIER_STATUS_VALUES = ("matched", "narrowed", "mismatched", "unclear")
-_SCOPE_STATUS_VALUES = ("matched", "narrower_than_claim", "mismatched", "unclear")
-_COUNTEREXAMPLE_STATUS_VALUES = ("none_found", "counterexample_found", "not_attempted", "narrowed_claim")
+_QUANTIFIER_STATUS_VALUES = PROOF_AUDIT_QUANTIFIER_STATUS_VALUES
+_SCOPE_STATUS_VALUES = PROOF_AUDIT_SCOPE_STATUS_VALUES
+_COUNTEREXAMPLE_STATUS_VALUES = PROOF_AUDIT_COUNTEREXAMPLE_STATUS_VALUES
 _CONTRACT_AWARE_CHECK_ENTRIES: tuple[dict[str, object], ...] = tuple(
     entry for entry in list_verification_checks() if bool(entry.get("contract_aware"))
 )
@@ -670,9 +675,9 @@ _CONTRACT_OBSERVED_INPUT_SCHEMA: dict[str, object] = _object_schema(
 _CONTRACT_SCOPE_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
         "question": _non_empty_string_schema(),
-        "in_scope": _string_or_string_list_schema(),
-        "out_of_scope": _string_or_string_list_schema(),
-        "unresolved_questions": _string_or_string_list_schema(),
+        "in_scope": _string_list_schema(),
+        "out_of_scope": _string_list_schema(),
+        "unresolved_questions": _string_list_schema(),
     },
     required=("question",),
     additional_properties=False,
@@ -683,7 +688,7 @@ _CONTRACT_SCOPE_INPUT_SCHEMA["description"] = (
     "infer it."
 )
 _CONTRACT_CONTEXT_INTAKE_INPUT_SCHEMA: dict[str, object] = _object_schema(
-    {field_name: _string_or_string_list_schema(min_items=1) for field_name in CONTRACT_CONTEXT_INTAKE_FIELD_NAMES},
+    {field_name: _string_list_schema(min_items=1) for field_name in CONTRACT_CONTEXT_INTAKE_FIELD_NAMES},
     additional_properties=False,
 )
 _CONTRACT_CONTEXT_INTAKE_INPUT_SCHEMA["minProperties"] = 1
@@ -696,7 +701,7 @@ _CONTRACT_CONTEXT_INTAKE_INPUT_SCHEMA["description"] = (
     "gaps, or other user-stated inputs the model must still see when later contract-aware tools validate the work."
 )
 _CONTRACT_APPROACH_POLICY_INPUT_SCHEMA: dict[str, object] = _object_schema(
-    {field_name: _string_or_string_list_schema() for field_name in CONTRACT_APPROACH_POLICY_FIELD_NAMES},
+    {field_name: _string_list_schema() for field_name in CONTRACT_APPROACH_POLICY_FIELD_NAMES},
     additional_properties=False,
 )
 _CONTRACT_OBSERVABLE_INPUT_SCHEMA: dict[str, object] = _object_schema(
@@ -715,7 +720,7 @@ _CONTRACT_PROOF_PARAMETER_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
         "symbol": _non_empty_string_schema(),
         "domain_or_type": _string_schema(),
-        "aliases": _string_or_string_list_schema(),
+        "aliases": _string_list_schema(),
         "required_in_proof": {"type": "boolean"},
         "notes": _non_empty_string_or_null_schema(),
     },
@@ -726,8 +731,8 @@ _CONTRACT_PROOF_HYPOTHESIS_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
         "id": _non_empty_string_schema(),
         "text": _non_empty_string_schema(),
-        "symbols": _string_or_string_list_schema(),
-        "category": _enum_string_schema(("assumption", "precondition", "regime", "definition", "lemma", "other")),
+        "symbols": _string_list_schema(),
+        "category": _enum_string_schema(PROOF_HYPOTHESIS_CATEGORY_VALUES),
         "required_in_proof": {"type": "boolean"},
     },
     required=("id", "text"),
@@ -746,15 +751,15 @@ _CONTRACT_CLAIM_INPUT_SCHEMA: dict[str, object] = _object_schema(
         "id": _non_empty_string_schema(),
         "statement": _non_empty_string_schema(),
         "claim_kind": _enum_string_schema(CONTRACT_CLAIM_KIND_VALUES),
-        "observables": _string_or_string_list_schema(),
-        "deliverables": _string_or_string_list_schema(min_items=1),
-        "acceptance_tests": _string_or_string_list_schema(min_items=1),
-        "references": _string_or_string_list_schema(),
+        "observables": _string_list_schema(),
+        "deliverables": _string_list_schema(min_items=1),
+        "acceptance_tests": _string_list_schema(min_items=1),
+        "references": _string_list_schema(),
         "parameters": {"type": "array", "items": dict(_CONTRACT_PROOF_PARAMETER_INPUT_SCHEMA)},
         "hypotheses": {"type": "array", "items": dict(_CONTRACT_PROOF_HYPOTHESIS_INPUT_SCHEMA)},
-        "quantifiers": _string_or_string_list_schema(),
+        "quantifiers": _string_list_schema(),
         "conclusion_clauses": {"type": "array", "items": dict(_CONTRACT_PROOF_CONCLUSION_INPUT_SCHEMA)},
-        "proof_deliverables": _string_or_string_list_schema(),
+        "proof_deliverables": _string_list_schema(),
     },
     required=("id", "statement", "deliverables", "acceptance_tests"),
     additional_properties=False,
@@ -768,15 +773,7 @@ _CONTRACT_CLAIM_INPUT_SCHEMA["description"] = (
     "`proof_deliverables`, `parameters`, `hypotheses`, and `conclusion_clauses`, and reference at least one "
     "proof-specific acceptance test id."
 )
-_THEOREM_STYLE_STATEMENT_SCHEMA_PATTERNS = (
-    r"^\s*(?:[Pp]rove|[Ss]how)\s+that\b",
-    r"\b[Ff]or\s+[Aa]ll\b",
-    r"\b[Ff]or\s+[Ee]very\b",
-    r"\b(?:[Tt]here\s+)?[Ee]xists\b",
-    r"\b[Ee]xistence\b",
-    r"\b[Uu]nique\b",
-    r"\b[Uu]niqueness\b",
-)
+_THEOREM_STYLE_STATEMENT_SCHEMA_PATTERNS = THEOREM_STYLE_STATEMENT_REGEX_PATTERNS
 _CONTRACT_CLAIM_INPUT_SCHEMA["allOf"] = [
     {
         "if": {
@@ -786,7 +783,7 @@ _CONTRACT_CLAIM_INPUT_SCHEMA["allOf"] = [
         "then": {
             "required": ["proof_deliverables", "parameters", "hypotheses", "conclusion_clauses"],
             "properties": {
-                "proof_deliverables": _string_or_string_list_schema(min_items=1),
+                "proof_deliverables": _string_list_schema(min_items=1),
                 "parameters": {
                     "type": "array",
                     "minItems": 1,
@@ -819,7 +816,7 @@ _CONTRACT_CLAIM_INPUT_SCHEMA["allOf"] = [
         "then": {
             "required": ["proof_deliverables", "parameters", "hypotheses", "conclusion_clauses"],
             "properties": {
-                "proof_deliverables": _string_or_string_list_schema(min_items=1),
+                "proof_deliverables": _string_list_schema(min_items=1),
                 "parameters": {
                     "type": "array",
                     "minItems": 1,
@@ -851,7 +848,7 @@ _CONTRACT_CLAIM_INPUT_SCHEMA["allOf"] = [
             "required": ["claim_kind", "proof_deliverables", "parameters", "hypotheses", "conclusion_clauses"],
             "properties": {
                 "claim_kind": {"enum": list(THEOREM_CLAIM_KIND_VALUES)},
-                "proof_deliverables": _string_or_string_list_schema(min_items=1),
+                "proof_deliverables": _string_list_schema(min_items=1),
                 "parameters": {
                     "type": "array",
                     "minItems": 1,
@@ -877,7 +874,7 @@ _CONTRACT_DELIVERABLE_INPUT_SCHEMA: dict[str, object] = _object_schema(
         "kind": _enum_string_schema(CONTRACT_DELIVERABLE_KIND_VALUES),
         "path": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "description": _non_empty_string_schema(),
-        "must_contain": _string_or_string_list_schema(),
+        "must_contain": _string_list_schema(),
     },
     required=("id", "description"),
     additional_properties=False,
@@ -889,7 +886,7 @@ _CONTRACT_ACCEPTANCE_TEST_INPUT_SCHEMA: dict[str, object] = _object_schema(
         "kind": _enum_string_schema(CONTRACT_ACCEPTANCE_TEST_KIND_VALUES),
         "procedure": _non_empty_string_schema(),
         "pass_condition": _non_empty_string_schema(),
-        "evidence_required": _string_or_string_list_schema(),
+        "evidence_required": _string_list_schema(),
         "automation": _enum_string_schema(CONTRACT_ACCEPTANCE_AUTOMATION_VALUES),
     },
     required=("id", "subject", "procedure", "pass_condition"),
@@ -900,13 +897,13 @@ _CONTRACT_REFERENCE_INPUT_SCHEMA: dict[str, object] = _object_schema(
         "id": _non_empty_string_schema(),
         "kind": _enum_string_schema(CONTRACT_REFERENCE_KIND_VALUES),
         "locator": _non_empty_string_schema(),
-        "aliases": _string_or_string_list_schema(),
+        "aliases": _string_list_schema(),
         "role": _enum_string_schema(CONTRACT_REFERENCE_ROLE_VALUES),
         "why_it_matters": _non_empty_string_schema(),
-        "applies_to": _string_or_string_list_schema(),
-        "carry_forward_to": _string_or_string_list_schema(),
+        "applies_to": _string_list_schema(),
+        "carry_forward_to": _string_list_schema(),
         "must_surface": {"type": "boolean"},
-        "required_actions": _enum_string_or_string_list_schema(CONTRACT_REFERENCE_ACTION_VALUES),
+        "required_actions": _enum_string_list_schema(CONTRACT_REFERENCE_ACTION_VALUES),
     },
     required=("id", "locator", "why_it_matters"),
     additional_properties=False,
@@ -927,14 +924,14 @@ _CONTRACT_LINK_INPUT_SCHEMA: dict[str, object] = _object_schema(
         "source": _non_empty_string_schema(),
         "target": _non_empty_string_schema(),
         "relation": _enum_string_schema(CONTRACT_LINK_RELATION_VALUES),
-        "verified_by": _string_or_string_list_schema(),
+        "verified_by": _string_list_schema(),
     },
     required=("id", "source", "target"),
     additional_properties=False,
 )
 _CONTRACT_UNCERTAINTY_MARKERS_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
-        field_name: _string_or_string_list_schema(
+        field_name: _string_list_schema(
             min_items=1 if field_name in {"weakest_anchors", "disconfirming_observations"} else None
         )
         for field_name in CONTRACT_UNCERTAINTY_MARKER_FIELD_NAMES

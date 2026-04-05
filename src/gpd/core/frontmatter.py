@@ -12,6 +12,7 @@ import hashlib
 import re
 import subprocess
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -84,6 +85,8 @@ __all__ = [
     "verify_artifacts",
 ]
 
+PLAN_FRONTMATTER_TYPES = ("execute", "tdd")
+SUMMARY_DEPTH_VALUES = ("minimal", "standard", "full", "complex")
 VERIFICATION_REPORT_STATUSES = ("passed", "gaps_found", "expert_needed", "human_needed")
 
 # ---------------------------------------------------------------------------
@@ -449,6 +452,47 @@ def _validate_required_object_field(meta: dict[str, object], field_name: str, er
         return
     if not isinstance(meta.get(field_name), dict):
         errors.append(f"{field_name}: expected an object")
+
+
+def _validate_string_enum_field(
+    meta: dict[str, object],
+    field_name: str,
+    errors: list[str],
+    *,
+    allowed_values: tuple[str, ...],
+) -> None:
+    """Append an error when a required string field uses an undocumented literal."""
+
+    if field_name not in meta:
+        return
+    value = meta.get(field_name)
+    if not isinstance(value, str) or not value.strip():
+        return
+    if value.strip() not in allowed_values:
+        errors.append(f"{field_name}: must be one of {', '.join(allowed_values)}")
+
+
+def _validate_timestamp_scalar_field(meta: dict[str, object], field_name: str, errors: list[str]) -> None:
+    """Append an error when a scalar field is not an ISO 8601 timestamp."""
+
+    if field_name not in meta:
+        return
+    value = meta.get(field_name)
+    if value is None or isinstance(value, (list, dict, bool)):
+        return
+    if isinstance(value, datetime):
+        return
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped or "T" not in stripped.upper():
+            errors.append(f"{field_name}: expected an ISO 8601 timestamp")
+            return
+        try:
+            datetime.fromisoformat(stripped.replace("Z", "+00:00"))
+        except ValueError:
+            errors.append(f"{field_name}: expected an ISO 8601 timestamp")
+        return
+    errors.append(f"{field_name}: expected an ISO 8601 timestamp")
 
 
 def _collect_plan_contract_explicit_field_errors(contract_data: dict[str, object]) -> list[str]:
@@ -1279,6 +1323,7 @@ def validate_frontmatter(content: str, schema_name: str, source_path: Path | Non
         for field_name in ("phase", "plan"):
             _validate_required_scalar_field(meta, field_name, errors)
         _validate_required_string_field(meta, "type", errors)
+        _validate_string_enum_field(meta, "type", errors, allowed_values=PLAN_FRONTMATTER_TYPES)
         _validate_required_int_field(meta, "wave", errors)
         for field_name in ("depends_on", "files_modified"):
             _validate_non_empty_string_list_field(meta, field_name, errors)
@@ -1288,10 +1333,12 @@ def validate_frontmatter(content: str, schema_name: str, source_path: Path | Non
         for field_name in ("phase", "plan", "completed"):
             _validate_required_scalar_field(meta, field_name, errors)
         _validate_required_string_field(meta, "depth", errors)
+        _validate_string_enum_field(meta, "depth", errors, allowed_values=SUMMARY_DEPTH_VALUES)
         _validate_non_empty_string_list_field(meta, "provides", errors)
     elif schema_name == "verification":
         _validate_required_scalar_field(meta, "phase", errors)
         _validate_required_scalar_field(meta, "verified", errors)
+        _validate_timestamp_scalar_field(meta, "verified", errors)
         _validate_required_string_field(meta, "status", errors)
         _validate_required_string_field(meta, "score", errors)
 

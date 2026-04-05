@@ -134,6 +134,7 @@ _WOLFRAM_CAVEAT = "Availability is config-level only; live execution and license
 _ENV_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.*$")
 _ENV_FLAG_WITH_VALUE = {"-u", "-S", "-C"}
 _ENV_FLAG_WITHOUT_VALUE = {"-i", "-0", "-v"}
+_SHELL_LAUNCHERS = frozenset({"sh", "bash", "zsh", "dash", "ksh", "mksh", "ash"})
 
 
 def _format_validation_error(exc: PydanticValidationError) -> str:
@@ -160,27 +161,14 @@ def parse_plan_tool_requirements(raw: object) -> list[PlanToolRequirement]:
         raise PlanToolPreflightError(str(exc)) from exc
 
 
-def _command_executable(command: str) -> tuple[str | None, str | None]:
-    """Return the executable token from a shell command requirement.
-
-    The probe only needs the launched binary. This helper keeps the parsing
-    stable for quoted executables, Windows paths with spaces, and shell-style
-    leading env assignments such as ``FOO=bar mycmd --version``.
-    """
-
+def _split_command_argv(command: str) -> tuple[list[str] | None, str | None]:
     try:
-        argv = shlex.split(command, posix=True) if command else []
+        return shlex.split(command, posix=True) if command else [], None
     except ValueError as exc:
         return None, f"could not parse command requirement: {exc}"
 
-    while argv and _ENV_ASSIGNMENT_RE.fullmatch(argv[0]):
-        argv.pop(0)
 
-    if not argv:
-        return None, "command requirement must include an executable"
-    if Path(argv[0]).name != "env":
-        return argv[0], None
-
+def _env_wrapped_argv(argv: list[str]) -> tuple[list[str] | None, str | None]:
     index = 1
     while index < len(argv):
         token = argv[index]
@@ -197,20 +185,81 @@ def _command_executable(command: str) -> tuple[str | None, str | None]:
             if index + 1 >= len(argv):
                 return None, f"env option {token} requires a value"
             if token == "-S":
-                executable, parse_error = _command_executable(argv[index + 1])
-                if parse_error is not None:
-                    return None, parse_error
-                return executable, None
+                return _split_command_argv(argv[index + 1])
             index += 2
             continue
         if token.startswith("-"):
             index += 1
             continue
-        return token, None
+        return argv[index:], None
 
     if index < len(argv):
-        return argv[index], None
-    return argv[0], None
+        return argv[index:], None
+    return [argv[0]], None
+
+
+def _shell_wrapped_command(argv: list[str]) -> str | None:
+    if not argv:
+        return None
+    launcher = Path(argv[0]).name.casefold()
+    if launcher not in _SHELL_LAUNCHERS:
+        return None
+
+    for index, token in enumerate(argv[1:], start=1):
+        if token == "--":
+            break
+        if token in {"-c", "--command"}:
+            if index + 1 < len(argv):
+                return argv[index + 1]
+            return None
+        if token.startswith("-") and "c" in token[1:]:
+            if index + 1 < len(argv):
+                return argv[index + 1]
+            return None
+        break
+    return None
+
+
+def _command_executable_from_argv(argv: list[str]) -> tuple[str | None, str | None]:
+    working = list(argv)
+
+    while working and _ENV_ASSIGNMENT_RE.fullmatch(working[0]):
+        working.pop(0)
+
+    if not working:
+        return None, "command requirement must include an executable"
+
+    if Path(working[0]).name == "env":
+        env_argv, parse_error = _env_wrapped_argv(working)
+        if parse_error is not None:
+            return None, parse_error
+        if env_argv == [working[0]]:
+            return working[0], None
+        return _command_executable_from_argv(env_argv or [])
+
+    shell_command = _shell_wrapped_command(working)
+    if shell_command is not None:
+        nested_argv, parse_error = _split_command_argv(shell_command)
+        if parse_error is not None:
+            return None, parse_error
+        return _command_executable_from_argv(nested_argv or [])
+
+    return working[0], None
+
+
+def _command_executable(command: str) -> tuple[str | None, str | None]:
+    """Return the executable token from a shell command requirement.
+
+    The probe must track the real dependency even when the command is wrapped
+    in ``env`` assignments or a shell launcher such as ``bash -lc 'solver'``.
+    This keeps preflight aligned with the model-visible `tool_requirements`
+    contract instead of reporting the outer wrapper as sufficient.
+    """
+
+    argv, parse_error = _split_command_argv(command)
+    if parse_error is not None:
+        return None, parse_error
+    return _command_executable_from_argv(argv or [])
 
 
 def _probe_tool(requirement: PlanToolRequirement, *, cwd: Path | None = None) -> tuple[bool, str, str, list[str]]:
