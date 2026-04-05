@@ -22,6 +22,9 @@ from pathlib import Path
 
 import pytest
 
+from gpd.core.constants import ProjectLayout
+from gpd.core.state import default_state_dict, generate_state_markdown
+
 # ---------------------------------------------------------------------------
 # Shared realistic-project fixture
 # ---------------------------------------------------------------------------
@@ -127,6 +130,46 @@ None yet.
 """
 
 
+def _write_state_with_project_contract(
+    tmp_path: Path,
+    contract: dict[str, object],
+    *,
+    current_phase: str = "01",
+    status: str = "Executing",
+) -> Path:
+    project_root = tmp_path / "project"
+    gpd_dir = project_root / "GPD"
+    gpd_dir.mkdir(parents=True, exist_ok=True)
+    state = default_state_dict()
+    state["position"]["current_phase"] = current_phase
+    state["position"]["status"] = status
+    state["project_contract"] = contract
+    (gpd_dir / "state.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    (gpd_dir / "STATE.md").write_text(generate_state_markdown(state), encoding="utf-8")
+    return project_root
+
+
+def _write_intent_recovery_project(
+    tmp_path: Path,
+    *,
+    stale_state: dict[str, object],
+    recovered_state: dict[str, object],
+) -> Path:
+    project_root = tmp_path / "project"
+    gpd_dir = project_root / "GPD"
+    gpd_dir.mkdir(parents=True, exist_ok=True)
+    (gpd_dir / "state.json").write_text(json.dumps(stale_state, indent=2) + "\n", encoding="utf-8")
+    (gpd_dir / "STATE.md").write_text(generate_state_markdown(stale_state), encoding="utf-8")
+
+    layout = ProjectLayout(project_root)
+    json_tmp = gpd_dir / ".recovered-state-json-tmp"
+    md_tmp = gpd_dir / ".recovered-state-md-tmp"
+    json_tmp.write_text(json.dumps(recovered_state, indent=2) + "\n", encoding="utf-8")
+    md_tmp.write_text(generate_state_markdown(recovered_state), encoding="utf-8")
+    layout.state_intent.write_text(f"{json_tmp}\n{md_tmp}\n", encoding="utf-8")
+    return project_root
+
+
 @pytest.fixture()
 def gpd_project(tmp_path: Path) -> Path:
     """Create a realistic GPD project directory tree.
@@ -224,6 +267,64 @@ class TestStateServerIntegration:
         assert "position" in result
         assert "decisions" in result or "blockers" in result
 
+    def test_get_state_surfaces_canonical_project_contract_metadata(self, tmp_path: Path) -> None:
+        from gpd.mcp.servers.state_server import get_state
+
+        contract = json.loads((Path(__file__).resolve().parents[1] / "fixtures" / "stage0" / "project_contract.json").read_text(encoding="utf-8"))
+        project_root = _write_state_with_project_contract(tmp_path, contract)
+
+        result = get_state(str(project_root))
+
+        assert result["position"]["current_phase"] == "01"
+        assert result["project_contract"]["scope"]["question"] == contract["scope"]["question"]
+        assert result["project_contract_load_info"]["status"] == "loaded"
+        assert result["project_contract_validation"]["valid"] is True
+        assert result["project_contract_gate"]["authoritative"] is True
+        assert result["project_contract_gate"]["visible"] is True
+        assert result["project_contract_gate"]["repair_required"] is False
+
+    def test_get_state_surfaces_blocked_project_contract_metadata(self, tmp_path: Path) -> None:
+        from gpd.mcp.servers.state_server import get_state
+
+        contract = json.loads((Path(__file__).resolve().parents[1] / "fixtures" / "stage0" / "project_contract.json").read_text(encoding="utf-8"))
+        contract["context_intake"] = "not-a-dict"
+        project_root = _write_state_with_project_contract(tmp_path, contract, current_phase="03", status="Planning")
+
+        result = get_state(str(project_root))
+
+        assert result["position"]["current_phase"] == "03"
+        assert result["project_contract"] is None
+        assert result["project_contract_load_info"]["status"] == "blocked_schema"
+        assert result["project_contract_validation"] is None
+        assert result["project_contract_gate"]["visible"] is False
+        assert result["project_contract_gate"]["authoritative"] is False
+        assert result["project_contract_gate"]["blocked"] is True
+
+    def test_get_state_surfaces_salvaged_project_contract_metadata(self, tmp_path: Path) -> None:
+        from gpd.mcp.servers.state_server import get_state
+
+        contract = json.loads(
+            (Path(__file__).resolve().parents[1] / "fixtures" / "stage0" / "project_contract.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        contract["context_intake"]["must_read_refs"] = "ref-benchmark"
+        contract["references"][0]["role"] = "Benchmark"
+        contract["references"][0]["required_actions"] = ["Read", "Compare", "Cite"]
+        project_root = _write_state_with_project_contract(tmp_path, contract)
+
+        result = get_state(str(project_root))
+
+        assert result["position"]["current_phase"] == "01"
+        assert result["project_contract"] is not None
+        assert result["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
+        assert result["project_contract"]["references"][0]["role"] == "benchmark"
+        assert result["project_contract"]["references"][0]["required_actions"] == ["read", "compare", "cite"]
+        assert result["project_contract_load_info"]["status"] == "loaded_with_schema_normalization"
+        assert result["project_contract_gate"]["visible"] is True
+        assert result["project_contract_gate"]["authoritative"] is False
+        assert result["project_contract_gate"]["repair_required"] is True
+
     def test_get_state_does_not_persist_recovery_artifacts(self, tmp_path: Path):
         from gpd.core.state import default_state_dict, generate_state_markdown
         from gpd.mcp.servers.state_server import get_state
@@ -240,6 +341,40 @@ class TestStateServerIntegration:
         assert isinstance(result, dict)
         assert "position" in result
         assert not (gpd_dir / "state.json").exists()
+
+    def test_get_state_recovers_intent_marker_and_surfaces_recovered_contract(
+        self, tmp_path: Path
+    ) -> None:
+        from gpd.mcp.servers.state_server import get_state
+
+        stale_state = default_state_dict()
+        stale_state["position"]["current_phase"] = "01"
+        stale_state["position"]["status"] = "Planning"
+        recovered_state = default_state_dict()
+        recovered_state["position"]["current_phase"] = "09"
+        recovered_state["position"]["status"] = "Executing"
+        recovered_contract = json.loads(
+            (Path(__file__).resolve().parents[1] / "fixtures" / "stage0" / "project_contract.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        recovered_state["project_contract"] = recovered_contract
+
+        project_root = _write_intent_recovery_project(
+            tmp_path,
+            stale_state=stale_state,
+            recovered_state=recovered_state,
+        )
+        layout = ProjectLayout(project_root)
+
+        result = get_state(str(project_root))
+
+        assert result["position"]["current_phase"] == "09"
+        assert result["project_contract_load_info"]["status"] == "loaded"
+        assert result["project_contract_validation"]["valid"] is True
+        assert result["project_contract_gate"]["authoritative"] is True
+        assert not layout.state_intent.exists()
+        assert json.loads(layout.state_json.read_text(encoding="utf-8"))["position"]["current_phase"] == "09"
 
     def test_advance_plan_increments(self, gpd_project: Path):
         from gpd.mcp.servers.state_server import advance_plan

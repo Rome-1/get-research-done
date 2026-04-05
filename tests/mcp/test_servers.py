@@ -1586,7 +1586,7 @@ class TestStateServer:
     def test_get_state_rejects_relative_project_dir(self):
         from gpd.mcp.servers.state_server import get_state
 
-        with patch("gpd.mcp.servers.state_server.peek_state_json", side_effect=AssertionError("should not run")):
+        with patch("gpd.mcp.servers.state_server.load_state_json", side_effect=AssertionError("should not run")):
             result = get_state("relative/project")
 
         assert result["error"] == "project_dir must be an absolute path"
@@ -1595,17 +1595,27 @@ class TestStateServer:
     def test_get_state(self):
         from gpd.mcp.servers.state_server import get_state
 
-        mock_state = {"position": {"current_phase": "01"}, "decisions": [], "blockers": []}
+        mock_state = {
+            "position": {"current_phase": "01"},
+            "decisions": [],
+            "blockers": [],
+            "project_contract_load_info": {"status": "loaded"},
+            "project_contract_validation": {"valid": True},
+            "project_contract_gate": {"authoritative": True},
+        }
 
-        with patch("gpd.mcp.servers.state_server.peek_state_json", return_value=(mock_state, [], "STATE.md")):
+        with patch("gpd.mcp.servers.state_server.load_state_json", return_value=mock_state):
             result = get_state("/fake/project")
         assert "position" in result
         assert result["position"]["current_phase"] == "01"
+        assert result["project_contract_load_info"]["status"] == "loaded"
+        assert result["project_contract_validation"]["valid"] is True
+        assert result["project_contract_gate"]["authoritative"] is True
 
     def test_get_state_no_state(self):
         from gpd.mcp.servers.state_server import get_state
 
-        with patch("gpd.mcp.servers.state_server.peek_state_json", return_value=(None, [], None)):
+        with patch("gpd.mcp.servers.state_server.load_state_json", return_value=None):
             result = get_state("/fake/project")
         assert "error" in result
 
@@ -1613,21 +1623,21 @@ class TestStateServer:
         from gpd.core.errors import GPDError
         from gpd.mcp.servers.state_server import get_state
 
-        with patch("gpd.mcp.servers.state_server.peek_state_json", side_effect=GPDError("boom")):
+        with patch("gpd.mcp.servers.state_server.load_state_json", side_effect=GPDError("boom")):
             result = get_state("/fake/project")
         assert result == {"error": "boom", "schema_version": 1}
 
     def test_get_state_os_error(self):
         from gpd.mcp.servers.state_server import get_state
 
-        with patch("gpd.mcp.servers.state_server.peek_state_json", side_effect=OSError("permission denied")):
+        with patch("gpd.mcp.servers.state_server.load_state_json", side_effect=OSError("permission denied")):
             result = get_state("/fake/project")
         assert result == {"error": "permission denied", "schema_version": 1}
 
     def test_get_state_value_error(self):
         from gpd.mcp.servers.state_server import get_state
 
-        with patch("gpd.mcp.servers.state_server.peek_state_json", side_effect=ValueError("bad json")):
+        with patch("gpd.mcp.servers.state_server.load_state_json", side_effect=ValueError("bad json")):
             result = get_state("/fake/project")
         assert result == {"error": "bad json", "schema_version": 1}
 

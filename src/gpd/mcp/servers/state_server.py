@@ -22,6 +22,7 @@ from gpd.core.health import run_health
 from gpd.core.observability import gpd_span
 from gpd.core.phases import progress_render
 from gpd.core.state import (
+    _project_contract_runtime_payload_for_state,
     peek_state_json,
     state_advance_plan,
     state_validate,
@@ -50,12 +51,24 @@ def load_state_json(cwd: Path) -> dict | None:
     stable even when the underlying state read path evolves.
     """
 
-    state_obj, _issues, _source = peek_state_json(
+    state_obj, _issues, state_source = peek_state_json(
         cwd,
-        recover_intent=False,
+        recover_intent=True,
         surface_blocked_project_contract=True,
     )
-    return state_obj
+    if state_obj is None:
+        return None
+
+    project_contract_load_info, project_contract_validation, project_contract_gate = _project_contract_runtime_payload_for_state(
+        cwd,
+        state_obj=state_obj,
+        state_source=state_source,
+    )
+    merged_state = dict(state_obj)
+    merged_state["project_contract_load_info"] = project_contract_load_info
+    merged_state["project_contract_validation"] = project_contract_validation
+    merged_state["project_contract_gate"] = project_contract_gate
+    return merged_state
 
 
 @mcp.tool()
