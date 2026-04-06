@@ -22,6 +22,10 @@ from gpd.contracts import (
     ContractReferenceUsage,
     ContractResultEntry,
     ContractResults,
+    ContractProofAudit,
+    ContractProofConclusionClause,
+    ContractProofHypothesis,
+    ContractProofParameter,
     ContractScope,
     ContractUncertaintyMarkers,
     ResearchContract,
@@ -46,6 +50,9 @@ PLAN_MODELS = (
     ContractForbiddenProxy,
     ContractLink,
     ContractUncertaintyMarkers,
+    ContractProofParameter,
+    ContractProofHypothesis,
+    ContractProofConclusionClause,
 )
 
 RESULT_MODELS = (
@@ -57,7 +64,13 @@ RESULT_MODELS = (
     ComparisonVerdict,
     SuggestedContractCheck,
     ContractUncertaintyMarkers,
+    ContractProofAudit,
 )
+
+_LITERAL_TOKEN_EXCLUSIONS: dict[type[object], set[str]] = {
+    ContractProofHypothesis: {"category"},
+    ContractProofAudit: {"quantifier_status", "scope_status", "counterexample_status"},
+}
 
 
 def _read(path: Path) -> str:
@@ -97,6 +110,8 @@ def _field_tokens(*models: type[object]) -> set[str]:
             tokens.add(field_name)
             if model is ContractReferenceUsage and field_name in {"completed_actions", "missing_actions"}:
                 continue
+            if field_name in _LITERAL_TOKEN_EXCLUSIONS.get(model, set()):
+                continue
             tokens.update(_literal_tokens(field.annotation))
     return tokens
 
@@ -106,6 +121,10 @@ def _choice_phrases(*models: type[object]) -> set[str]:
     for model in models:
         for field_name, field in model.model_fields.items():
             if model is ContractReferenceUsage and field_name in {"completed_actions", "missing_actions"}:
+                continue
+            if model is ContractProofAudit:
+                continue
+            if field_name in _LITERAL_TOKEN_EXCLUSIONS.get(model, set()):
                 continue
             values = _ordered_literal_tokens(field.annotation)
             if len(values) > 1:

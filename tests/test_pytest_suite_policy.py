@@ -57,6 +57,7 @@ def test_fast_suite_policy_keeps_boundary_regressions_in_default_path() -> None:
         "test_project_contract_boundary_regressions.py",
         "test_runtime_abstraction_boundaries.py",
         "core/test_contract_schema_prompt_parity.py",
+        "core/test_verification_contract_evidence.py",
         "mcp/test_tool_contract_visibility.py",
         "core/test_verifier_prompt_contract_visibility.py",
         "core/test_verification_surface_alignment_regressions.py",
