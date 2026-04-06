@@ -208,6 +208,30 @@ def _uses_effective_explicit_target(
     return not _paths_equal(config_dir, default_local_config_dir)
 
 
+def _build_repair_command(
+    *,
+    runtime: str,
+    config_dir: Path,
+    install_scope: str,
+    explicit_target: bool,
+    cli_cwd: Path,
+) -> str:
+    """Return the reinstall command with the effective target-dir projection."""
+
+    return build_runtime_install_repair_command(
+        runtime,
+        install_scope=install_scope,
+        target_dir=config_dir,
+        explicit_target=_uses_effective_explicit_target(
+            runtime=runtime,
+            config_dir=config_dir,
+            install_scope=install_scope,
+            explicit_target=explicit_target,
+            cli_cwd=cli_cwd,
+        ),
+    )
+
+
 def _maybe_reexec_from_checkout(raw_argv: list[str], *, cli_cwd: Path) -> None:
     """Re-exec through a checkout when the active package does not match it."""
     from gpd.version import checkout_root, current_python_executable, resolve_checkout_python
@@ -249,17 +273,12 @@ def _install_error_message(
     """Return a deterministic repair message for an incomplete runtime install."""
     adapter = get_adapter(runtime)
     missing_list = ", ".join(f"`{relpath}`" for relpath in missing)
-    repair_command = build_runtime_install_repair_command(
-        runtime,
+    repair_command = _build_repair_command(
+        runtime=runtime,
+        config_dir=config_dir,
         install_scope=install_scope,
-        target_dir=config_dir,
-        explicit_target=_uses_effective_explicit_target(
-            runtime=runtime,
-            config_dir=config_dir,
-            install_scope=install_scope,
-            explicit_target=explicit_target,
-            cli_cwd=cli_cwd,
-        ),
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
     )
     return (
         f"GPD runtime install incomplete for {adapter.display_name} at `{config_dir}`.\n"
@@ -280,17 +299,12 @@ def _runtime_mismatch_error_message(
 ) -> str:
     """Return repair guidance when the resolved config dir belongs to another runtime."""
     owning_install_scope = manifest_install_scope if manifest_install_scope in {"local", "global"} else install_scope
-    repair_command = build_runtime_install_repair_command(
-        manifest_runtime,
+    repair_command = _build_repair_command(
+        runtime=manifest_runtime,
+        config_dir=config_dir,
         install_scope=owning_install_scope,
-        target_dir=config_dir,
-        explicit_target=_uses_effective_explicit_target(
-            runtime=manifest_runtime,
-            config_dir=config_dir,
-            install_scope=owning_install_scope,
-            explicit_target=explicit_target,
-            cli_cwd=cli_cwd,
-        ),
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
     )
     return (
         f"GPD runtime bridge mismatch for {_runtime_display_name(runtime)} at `{config_dir}`.\n"
@@ -310,17 +324,12 @@ def _install_scope_mismatch_error_message(
     cli_cwd: Path,
 ) -> str:
     """Return repair guidance when the manifest scope disagrees with the bridge scope."""
-    repair_command = build_runtime_install_repair_command(
-        runtime,
+    repair_command = _build_repair_command(
+        runtime=runtime,
+        config_dir=config_dir,
         install_scope=manifest_install_scope,
-        target_dir=config_dir,
-        explicit_target=_uses_effective_explicit_target(
-            runtime=runtime,
-            config_dir=config_dir,
-            install_scope=manifest_install_scope,
-            explicit_target=explicit_target,
-            cli_cwd=cli_cwd,
-        ),
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
     )
     return (
         f"GPD runtime bridge scope mismatch for {_runtime_display_name(runtime)} at `{config_dir}`.\n"
@@ -338,17 +347,12 @@ def _malformed_manifest_runtime_error_message(
     cli_cwd: Path,
 ) -> str:
     """Return repair guidance when the install manifest runtime field is malformed."""
-    repair_command = build_runtime_install_repair_command(
-        runtime,
+    repair_command = _build_repair_command(
+        runtime=runtime,
+        config_dir=config_dir,
         install_scope=install_scope,
-        target_dir=config_dir,
-        explicit_target=_uses_effective_explicit_target(
-            runtime=runtime,
-            config_dir=config_dir,
-            install_scope=install_scope,
-            explicit_target=explicit_target,
-            cli_cwd=cli_cwd,
-        ),
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
     )
     return (
         f"GPD runtime bridge rejected malformed install manifest at `{config_dir}`.\n"
@@ -366,17 +370,12 @@ def _missing_manifest_runtime_error_message(
     cli_cwd: Path,
 ) -> str:
     """Return repair guidance when the install manifest omits ``runtime``."""
-    repair_command = build_runtime_install_repair_command(
-        runtime,
+    repair_command = _build_repair_command(
+        runtime=runtime,
+        config_dir=config_dir,
         install_scope=install_scope,
-        target_dir=config_dir,
-        explicit_target=_uses_effective_explicit_target(
-            runtime=runtime,
-            config_dir=config_dir,
-            install_scope=install_scope,
-            explicit_target=explicit_target,
-            cli_cwd=cli_cwd,
-        ),
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
     )
     return (
         f"GPD runtime bridge rejected incomplete install manifest at `{config_dir}`.\n"
@@ -394,17 +393,12 @@ def _missing_manifest_error_message(
     cli_cwd: Path,
 ) -> str:
     """Return repair guidance when a managed install surface has no manifest."""
-    repair_command = build_runtime_install_repair_command(
-        runtime,
+    repair_command = _build_repair_command(
+        runtime=runtime,
+        config_dir=config_dir,
         install_scope=install_scope,
-        target_dir=config_dir,
-        explicit_target=_uses_effective_explicit_target(
-            runtime=runtime,
-            config_dir=config_dir,
-            install_scope=install_scope,
-            explicit_target=explicit_target,
-            cli_cwd=cli_cwd,
-        ),
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
     )
     shared_install = get_shared_install_metadata()
     return (
@@ -423,17 +417,12 @@ def _untrusted_manifest_error_message(
     cli_cwd: Path,
 ) -> str:
     """Return repair guidance when the install manifest cannot be trusted."""
-    repair_command = build_runtime_install_repair_command(
-        runtime,
+    repair_command = _build_repair_command(
+        runtime=runtime,
+        config_dir=config_dir,
         install_scope=install_scope,
-        target_dir=config_dir,
-        explicit_target=_uses_effective_explicit_target(
-            runtime=runtime,
-            config_dir=config_dir,
-            install_scope=install_scope,
-            explicit_target=explicit_target,
-            cli_cwd=cli_cwd,
-        ),
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
     )
     return (
         f"GPD runtime bridge rejected unreadable install manifest at `{config_dir}`.\n"

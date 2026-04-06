@@ -111,6 +111,92 @@ def test_runtime_cli_allows_version_passthrough_as_root_flag(
 
 
 @pytest.mark.parametrize(
+    ("install_scope", "config_dir_factory", "expected_target_dir_flag"),
+    [
+        ("local", lambda tmp_path, descriptor: tmp_path / descriptor.config_dir_name, False),
+        (
+            "global",
+            lambda tmp_path, descriptor: tmp_path / "custom-global" / descriptor.config_dir_name,
+            True,
+        ),
+    ],
+)
+def test_runtime_cli_repair_command_projection_respects_local_and_custom_global_targets(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    install_scope: str,
+    config_dir_factory,
+    expected_target_dir_flag: bool,
+) -> None:
+    runtime_name = _BRIDGE_RUNTIME_DESCRIPTOR.runtime_name
+    adapter = runtime_cli.get_adapter(runtime_name)
+    config_dir = config_dir_factory(tmp_path, _BRIDGE_RUNTIME_DESCRIPTOR)
+    home_dir = tmp_path / "home"
+    home_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr("gpd.runtime_cli.Path.home", lambda: home_dir)
+
+    repair_command = runtime_cli._build_repair_command(
+        runtime=runtime_name,
+        config_dir=config_dir,
+        install_scope=install_scope,
+        explicit_target=False,
+        cli_cwd=tmp_path,
+    )
+
+    expected = build_runtime_install_repair_command(
+        runtime_name,
+        install_scope=install_scope,
+        target_dir=config_dir,
+        explicit_target=expected_target_dir_flag,
+    )
+    assert repair_command == expected
+    assert ("--target-dir" in repair_command) is expected_target_dir_flag
+    if install_scope == "local":
+        assert f"{adapter.install_flag} --local" in repair_command
+    else:
+        assert "--global" in repair_command
+
+
+def test_runtime_cli_repair_command_projection_respects_env_overridden_global_targets(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    descriptor = next(
+        item
+        for item in iter_runtime_descriptors()
+        if item.global_config.env_var or item.global_config.env_dir_var or item.global_config.env_file_var
+    )
+    runtime_name = descriptor.runtime_name
+    override_dir = tmp_path / "override-global"
+    override_dir.mkdir(parents=True, exist_ok=True)
+    home_dir = tmp_path / "home"
+    home_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr("gpd.runtime_cli.Path.home", lambda: home_dir)
+    env_var = descriptor.global_config.env_var or descriptor.global_config.env_dir_var or descriptor.global_config.env_file_var
+    assert env_var is not None
+    monkeypatch.setenv(env_var, str(override_dir))
+
+    config_dir = runtime_cli.get_adapter(runtime_name).resolve_global_config_dir(home=home_dir)
+    repair_command = runtime_cli._build_repair_command(
+        runtime=runtime_name,
+        config_dir=config_dir,
+        install_scope="global",
+        explicit_target=False,
+        cli_cwd=tmp_path,
+    )
+
+    expected = build_runtime_install_repair_command(
+        runtime_name,
+        install_scope="global",
+        target_dir=config_dir,
+        explicit_target=False,
+    )
+    assert repair_command == expected
+    assert "--global" in repair_command
+    assert "--target-dir" not in repair_command
+
+
+@pytest.mark.parametrize(
     ("manifest_scope", "bridge_scope"),
     [("local", "global"), ("global", "local")],
 )
