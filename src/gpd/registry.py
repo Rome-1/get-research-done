@@ -15,7 +15,12 @@ from pathlib import Path
 import yaml
 
 from gpd.command_labels import canonical_command_label, canonical_skill_label, command_slug_from_label
-from gpd.core.model_visible_text import agent_visibility_note, command_visibility_note
+from gpd.core.model_visible_text import (
+    REVIEW_CONTRACT_FRONTMATTER_KEY,
+    REVIEW_CONTRACT_PROMPT_WRAPPER_KEY,
+    agent_visibility_note,
+    command_visibility_note,
+)
 from gpd.core.review_contract_prompt import (
     normalize_review_contract_frontmatter_payload,
     render_review_contract_prompt,
@@ -42,7 +47,7 @@ _COMMAND_FRONTMATTER_KEYS = frozenset(
         "color",
         "requires",
         "allowed-tools",
-        "review-contract",
+        REVIEW_CONTRACT_FRONTMATTER_KEY,
         "context_mode",
         "project_reentry_capable",
         # plan-phase carries this metadata in canonical frontmatter even though
@@ -416,13 +421,13 @@ VALID_AGENT_SHARED_STATE_AUTHORITIES: tuple[str, ...] = ("return_only", "direct"
 def _review_contract_frontmatter_value(meta: dict[str, object], *, command_name: str) -> object:
     """Return the canonical review-contract frontmatter payload."""
 
-    if "review_contract" in meta:
+    if REVIEW_CONTRACT_PROMPT_WRAPPER_KEY in meta:
         raise ValueError(
-            f"review-contract for {command_name} must use the canonical frontmatter key 'review-contract'"
+            f"review-contract for {command_name} must use the canonical frontmatter key '{REVIEW_CONTRACT_FRONTMATTER_KEY}'"
         )
-    if "review-contract" not in meta:
+    if REVIEW_CONTRACT_FRONTMATTER_KEY not in meta:
         return None
-    return {"review-contract": meta.get("review-contract")}
+    return {REVIEW_CONTRACT_FRONTMATTER_KEY: meta.get(REVIEW_CONTRACT_FRONTMATTER_KEY)}
 
 
 def _parse_context_mode(raw: object, *, command_name: str) -> str:

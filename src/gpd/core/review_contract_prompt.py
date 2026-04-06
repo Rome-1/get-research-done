@@ -7,41 +7,21 @@ from collections.abc import Mapping
 
 import yaml
 
-from gpd.core.model_visible_text import review_contract_visibility_note
+from gpd.core.model_visible_text import (
+    REVIEW_CONTRACT_CONDITIONAL_WHENS,
+    REVIEW_CONTRACT_FRONTMATTER_KEY,
+    REVIEW_CONTRACT_MODES,
+    REVIEW_CONTRACT_PREFLIGHT_CHECKS,
+    REVIEW_CONTRACT_PROMPT_WRAPPER_KEY,
+    REVIEW_CONTRACT_REQUIRED_STATES,
+    REVIEW_CONTRACT_WRAPPER_KEYS,
+    review_contract_visibility_note,
+)
 
-VALID_REVIEW_MODES = ("publication", "review")
-VALID_REVIEW_PREFLIGHT_CHECKS = (
-    "command_context",
-    "project_state",
-    "roadmap",
-    "conventions",
-    "research_artifacts",
-    "verification_reports",
-    "manuscript",
-    "artifact_manifest",
-    "bibliography_audit",
-    "bibliography_audit_clean",
-    "compiled_manuscript",
-    "publication_blockers",
-    "review_ledger",
-    "review_ledger_valid",
-    "referee_decision",
-    "referee_decision_valid",
-    "publication_review_outcome",
-    "reproducibility_manifest",
-    "reproducibility_ready",
-    "manuscript_proof_review",
-    "referee_report_source",
-    "phase_lookup",
-    "phase_artifacts",
-    "phase_summaries",
-    "phase_proof_review",
-)
-VALID_REVIEW_REQUIRED_STATES = ("phase_executed",)
-VALID_REVIEW_CONDITIONAL_WHENS = (
-    "theorem-bearing claims are present",
-    "theorem-bearing manuscripts are present",
-)
+VALID_REVIEW_MODES = REVIEW_CONTRACT_MODES
+VALID_REVIEW_PREFLIGHT_CHECKS = REVIEW_CONTRACT_PREFLIGHT_CHECKS
+VALID_REVIEW_REQUIRED_STATES = REVIEW_CONTRACT_REQUIRED_STATES
+VALID_REVIEW_CONDITIONAL_WHENS = REVIEW_CONTRACT_CONDITIONAL_WHENS
 
 REVIEW_CONTRACT_FIELD_ORDER = (
     "schema_version",
@@ -62,29 +42,15 @@ REVIEW_CONTRACT_CONDITIONAL_FIELD_ORDER = (
     "blocking_preflight_checks",
     "stage_artifacts",
 )
-REVIEW_CONTRACT_FRONTMATTER_KEY = "review-contract"
-REVIEW_CONTRACT_PROMPT_WRAPPER_KEY = "review_contract"
-REVIEW_CONTRACT_WRAPPER_KEYS = (REVIEW_CONTRACT_PROMPT_WRAPPER_KEY, REVIEW_CONTRACT_FRONTMATTER_KEY)
 REVIEW_CONTRACT_KEYS = frozenset(REVIEW_CONTRACT_FIELD_ORDER)
 REVIEW_CONTRACT_CONDITIONAL_KEYS = frozenset(REVIEW_CONTRACT_CONDITIONAL_FIELD_ORDER)
 
 
 def _review_contract_guidance() -> str:
-    review_modes = "|".join(VALID_REVIEW_MODES)
-    when_values = "|".join(VALID_REVIEW_CONDITIONAL_WHENS)
-    required_states = "|".join(VALID_REVIEW_REQUIRED_STATES)
-    preflight_checks = "|".join(VALID_REVIEW_PREFLIGHT_CHECKS)
     return (
         f"{review_contract_visibility_note()} "
-        "Wrapper key: `review_contract`; "
         "List fields reject blank entries and duplicates. "
         "Each conditional requirement must declare at least one field. "
-        "`schema_version` must be `1`; "
-        f"`review_mode`={review_modes}; "
-        f"`required_state`={required_states} when present; "
-        f"`preflight_checks`=`{preflight_checks}`; "
-        f"`conditional_requirements[].when`={when_values}; "
-        "`conditional_requirements[].blocking_preflight_checks` must reuse declared `preflight_checks` values."
     )
 
 

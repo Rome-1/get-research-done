@@ -7,9 +7,16 @@ from pathlib import Path
 import pytest
 
 from gpd import registry
-from gpd.core.model_visible_text import agent_visibility_note, command_visibility_note, review_contract_visibility_note
+from gpd.core.model_visible_text import (
+    REVIEW_CONTRACT_CONDITIONAL_WHENS,
+    REVIEW_CONTRACT_FRONTMATTER_KEY,
+    REVIEW_CONTRACT_MODES,
+    REVIEW_CONTRACT_PROMPT_WRAPPER_KEY,
+    agent_visibility_note,
+    command_visibility_note,
+    review_contract_visibility_note,
+)
 from gpd.core.review_contract_prompt import (
-    VALID_REVIEW_CONDITIONAL_WHENS,
     normalize_review_contract_frontmatter_payload,
     normalize_review_contract_payload,
     render_review_contract_prompt,
@@ -38,7 +45,7 @@ def test_review_grade_commands_surface_registry_contract_requirements_in_source(
         contract = command.review_contract
 
         assert contract is not None
-        assert "review-contract:" in source
+        assert f"{REVIEW_CONTRACT_FRONTMATTER_KEY}:" in source
         assert f"review_mode: {contract.review_mode}" in source
 
         for output in contract.required_outputs:
@@ -66,6 +73,12 @@ def test_review_grade_commands_surface_registry_contract_requirements_in_source(
             assert f"required_state: {contract.required_state}" in source
 
 
+def test_review_contract_registry_uses_the_shared_frontmatter_key_constants() -> None:
+    assert REVIEW_CONTRACT_FRONTMATTER_KEY in registry._COMMAND_FRONTMATTER_KEYS
+    assert REVIEW_CONTRACT_FRONTMATTER_KEY == "review-contract"
+    assert REVIEW_CONTRACT_PROMPT_WRAPPER_KEY == "review_contract"
+
+
 def test_peer_review_workflow_keeps_contract_gate_prose_concise() -> None:
     workflow = _read_workflow("peer-review")
     assert "project_contract_gate.authoritative" in workflow
@@ -89,8 +102,8 @@ def test_review_grade_commands_prepend_model_visible_review_contract_to_registry
             assert "requires:" in command.content
         assert "## Review Contract" in command.content
         assert expected_section in command.content
-        assert "review_contract:" in command.content
-        assert "Wrapper key: `review_contract`;" in expected_section
+        assert f"{REVIEW_CONTRACT_PROMPT_WRAPPER_KEY}:" in command.content
+        assert f"`{REVIEW_CONTRACT_PROMPT_WRAPPER_KEY}` is the wrapper key;" in expected_section
         assert "Closed schema; no extra keys." in expected_section
         assert "List fields reject blank entries and duplicates." in expected_section
         assert "Each conditional requirement must declare at least one field." in expected_section
@@ -126,8 +139,14 @@ def test_model_visible_wrapper_notes_surface_their_closed_schema_rules() -> None
     assert "Closed schema; no extra keys." in command_visibility_note()
     assert "Strict booleans only." in command_visibility_note()
     assert "Closed schema; no extra keys." in review_contract_visibility_note()
-    assert "`schema_version` must be `1`" in review_contract_visibility_note()
-    assert "blocking_preflight_checks" in review_contract_visibility_note()
+    note = review_contract_visibility_note()
+    review_modes = " or ".join(f"`{value}`" for value in REVIEW_CONTRACT_MODES)
+    conditional_whens = " or ".join(f"`{value}`" for value in REVIEW_CONTRACT_CONDITIONAL_WHENS)
+    assert f"`{REVIEW_CONTRACT_PROMPT_WRAPPER_KEY}` is the wrapper key;" in note
+    assert f"`review_mode` must be {review_modes}" in note
+    assert f"`conditional_requirements[].when` must be one of {conditional_whens}" in note
+    assert "`schema_version` must be `1`" in note
+    assert "blocking_preflight_checks" in note
 
 
 def test_review_contract_renderer_rejects_unknown_keys() -> None:
@@ -241,11 +260,13 @@ def test_review_contract_renderer_rejects_conflicting_wrapper_aliases_when_secon
 
 def test_review_contract_visibility_note_surfaces_the_hard_constraints() -> None:
     note = review_contract_visibility_note()
+    review_modes = " or ".join(f"`{value}`" for value in REVIEW_CONTRACT_MODES)
+    conditional_whens = " or ".join(f"`{value}`" for value in REVIEW_CONTRACT_CONDITIONAL_WHENS)
 
     assert "Closed schema; no extra keys." in note
     assert "`schema_version` must be `1`;" in note
-    assert "`review_mode` must be `publication` or `review`;" in note
-    assert "`conditional_requirements[].when` must be one of the declared triggers;" in note
+    assert f"`review_mode` must be {review_modes};" in note
+    assert f"`conditional_requirements[].when` must be one of {conditional_whens};" in note
     assert "`conditional_requirements[].blocking_preflight_checks` must reuse declared `preflight_checks`." in note
 
 
@@ -530,12 +551,9 @@ def test_review_contract_renderer_rejects_unknown_preflight_checks() -> None:
 def test_review_contract_renderer_always_surfaces_blocking_preflight_dependency_rule() -> None:
     section = render_review_contract_prompt({"schema_version": 1, "review_mode": "review"})
 
-    assert "`preflight_checks`=`" in section
-    assert f"`conditional_requirements[].when`={'|'.join(VALID_REVIEW_CONDITIONAL_WHENS)}" in section
-    assert (
-        "`conditional_requirements[].blocking_preflight_checks` must reuse declared `preflight_checks` values."
-        in section
-    )
+    assert review_contract_visibility_note() in section
+    assert "preflight_checks: []" in section
+    assert "`conditional_requirements[].blocking_preflight_checks`" in section
 
 
 def test_review_contract_renderer_rejects_conditional_blocking_preflight_checks_not_declared_top_level() -> None:
