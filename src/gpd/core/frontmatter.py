@@ -255,10 +255,19 @@ def _prefixed_validation_errors(field_name: str, exc: Exception) -> list[str]:
     return [f"{field_name}: {exc}"]
 
 
+def _source_path_project_root(source_path: Path | None) -> Path | None:
+    """Return the project root inferred from a file source path, when available."""
+
+    if source_path is None:
+        return None
+    return resolve_project_root(source_path.parent, require_layout=False)
+
+
 def _validate_contract_mapping(
     contract_data: object,
     *,
     enforce_plan_semantics: bool,
+    project_root: Path | None = None,
 ) -> _PlanContractResolution:
     """Return validated contract data plus explicit strict/semantic errors."""
 
@@ -284,7 +293,7 @@ def _validate_contract_mapping(
     for error in _collect_plan_contract_explicit_field_errors(contract_data):
         if error not in semantic_errors:
             semantic_errors.append(error)
-    for error in collect_plan_contract_integrity_errors(contract):
+    for error in collect_plan_contract_integrity_errors(contract, project_root=project_root):
         if error not in semantic_errors:
             semantic_errors.append(error)
     if semantic_errors:
@@ -292,13 +301,17 @@ def _validate_contract_mapping(
     return _PlanContractResolution(contract=contract)
 
 
-def parse_contract_block(content: str) -> ResearchContract | None:
+def parse_contract_block(content: str, *, source_path: Path | None = None) -> ResearchContract | None:
     """Extract and validate the optional ``contract`` block from frontmatter."""
 
     meta, _ = extract_frontmatter(content)
     if "contract" not in meta:
         return None
-    resolution = _validate_contract_mapping(meta.get("contract"), enforce_plan_semantics=True)
+    resolution = _validate_contract_mapping(
+        meta.get("contract"),
+        enforce_plan_semantics=True,
+        project_root=_source_path_project_root(source_path),
+    )
     if resolution.errors:
         raise FrontmatterValidationError(
             "Invalid contract frontmatter: " + "; ".join(resolution.errors)
@@ -1213,6 +1226,8 @@ def _frontmatter_identity_matches(candidate_meta: dict[str, object], artifact_me
 def _resolve_plan_contract_candidate(
     candidate: Path,
     artifact_meta: dict[str, object],
+    *,
+    project_root: Path | None = None,
 ) -> tuple[bool, _PlanContractResolution]:
     """Inspect one PLAN candidate and return whether its identity matches."""
 
@@ -1233,7 +1248,11 @@ def _resolve_plan_contract_candidate(
     if "contract" not in meta:
         return True, _PlanContractResolution(errors=["referenced PLAN is missing contract frontmatter"])
 
-    resolution = _validate_contract_mapping(meta.get("contract"), enforce_plan_semantics=True)
+    resolution = _validate_contract_mapping(
+        meta.get("contract"),
+        enforce_plan_semantics=True,
+        project_root=project_root,
+    )
     if resolution.errors:
         return True, _PlanContractResolution(
             errors=[f"referenced PLAN contract: {error}" for error in resolution.errors]
@@ -1241,8 +1260,16 @@ def _resolve_plan_contract_candidate(
     return True, resolution
 
 
-def _find_matching_plan_contract(summary_dir: Path, summary_meta: dict) -> _PlanContractResolution:
+def _find_matching_plan_contract(
+    summary_dir: Path,
+    summary_meta: dict,
+    *,
+    project_root: Path | None = None,
+) -> _PlanContractResolution:
     """Return the sibling plan contract for a summary when one can be resolved."""
+
+    if project_root is None:
+        project_root = resolve_project_root(summary_dir)
 
     plan_contract_ref = summary_meta.get("plan_contract_ref")
     if isinstance(plan_contract_ref, str):
@@ -1253,7 +1280,6 @@ def _find_matching_plan_contract(summary_dir: Path, summary_meta: dict) -> _Plan
             return _PlanContractResolution()
         plan_ref_path = plan_contract_ref.split("#", 1)[0].strip()
         relative_plan_path = Path(plan_ref_path[2:] if plan_ref_path.startswith("./") else plan_ref_path)
-        project_root = resolve_project_root(summary_dir)
         if project_root is None:
             return _PlanContractResolution()
         candidate, path_error = _resolve_contract_artifact_path(
@@ -1266,7 +1292,11 @@ def _find_matching_plan_contract(summary_dir: Path, summary_meta: dict) -> _Plan
         assert candidate is not None
         if not candidate.exists():
             return _PlanContractResolution()
-        matched, resolution = _resolve_plan_contract_candidate(candidate, summary_meta)
+        matched, resolution = _resolve_plan_contract_candidate(
+            candidate,
+            summary_meta,
+            project_root=project_root,
+        )
         if matched:
             return resolution
         return _PlanContractResolution()
@@ -1286,7 +1316,11 @@ def _find_matching_plan_contract(summary_dir: Path, summary_meta: dict) -> _Plan
             continue
         if "contract" not in meta:
             continue
-        resolution = _validate_contract_mapping(meta.get("contract"), enforce_plan_semantics=True)
+        resolution = _validate_contract_mapping(
+            meta.get("contract"),
+            enforce_plan_semantics=True,
+            project_root=project_root,
+        )
         if resolution.errors:
             matching_candidates.append(
                 _PlanContractResolution(
@@ -1316,6 +1350,7 @@ def validate_frontmatter(content: str, schema_name: str, source_path: Path | Non
         FrontmatterParseError: On malformed YAML.
         FrontmatterValidationError: If *schema_name* is unknown.
     """
+    project_root = _source_path_project_root(source_path)
     schema = FRONTMATTER_SCHEMAS.get(schema_name)
     if schema is None:
         available = ", ".join(FRONTMATTER_SCHEMAS)
@@ -1363,7 +1398,11 @@ def validate_frontmatter(content: str, schema_name: str, source_path: Path | Non
             )
 
     if isinstance(meta.get("contract"), dict):
-        resolution = _validate_contract_mapping(meta["contract"], enforce_plan_semantics=(schema_name == "plan"))
+        resolution = _validate_contract_mapping(
+            meta["contract"],
+            enforce_plan_semantics=(schema_name == "plan"),
+            project_root=project_root,
+        )
         errors.extend(f"contract: {issue}" for issue in resolution.errors)
     elif "contract" in meta:
         errors.append("contract: expected an object")
@@ -1412,9 +1451,12 @@ def validate_frontmatter(content: str, schema_name: str, source_path: Path | Non
                 errors.extend(_prefixed_validation_errors("suggested_contract_checks", exc))
 
         if source_path is not None:
-            artifact_dir = Path(source_path).parent
-            project_root = resolve_project_root(artifact_dir, require_layout=False)
-            plan_contract_resolution = _find_matching_plan_contract(artifact_dir, meta)
+            artifact_dir = source_path.parent
+            plan_contract_resolution = _find_matching_plan_contract(
+                artifact_dir,
+                meta,
+                project_root=project_root,
+            )
             plan_contract = plan_contract_resolution.contract
             errors.extend(f"plan_contract_ref: {issue}" for issue in plan_contract_resolution.errors)
             if (

@@ -144,6 +144,70 @@ def _summary_frontmatter_with_contract_ref(plan_contract_ref: str) -> str:
     )
 
 
+def _project_local_plan_contract_frontmatter() -> str:
+    return dedent(
+        """\
+        ---
+        phase: 01-benchmark
+        plan: 01
+        type: execute
+        wave: 1
+        depends_on: []
+        files_modified: []
+        interactive: false
+        conventions:
+          units: natural
+          metric: (+,-,-,-)
+          coordinates: Cartesian
+        contract:
+          schema_version: 1
+          scope:
+            question: What benchmark must this plan recover?
+          context_intake:
+            must_read_refs: [ref-benchmark]
+            must_include_prior_outputs: [GPD/phases/00-baseline/00-01-SUMMARY.md]
+          claims:
+            - id: claim-benchmark
+              statement: Recover the benchmark comparison
+              deliverables: [deliv-figure]
+              acceptance_tests: [test-benchmark]
+              references: [ref-benchmark]
+          deliverables:
+            - id: deliv-figure
+              kind: figure
+              path: figures/benchmark.png
+              description: Benchmark figure
+          references:
+            - id: ref-benchmark
+              kind: prior_artifact
+              locator: artifacts/benchmark/report.json
+              role: benchmark
+              why_it_matters: Project-local benchmark artifact
+              applies_to: [claim-benchmark]
+              must_surface: true
+              required_actions: [read, compare, cite]
+          acceptance_tests:
+            - id: test-benchmark
+              subject: claim-benchmark
+              kind: benchmark
+              procedure: Compare against the benchmark artifact
+              pass_condition: Matches reference within tolerance
+              evidence_required: [deliv-figure, ref-benchmark]
+          forbidden_proxies:
+            - id: fp-benchmark
+              subject: claim-benchmark
+              proxy: qualitative trend agreement without the benchmark artifact
+              reason: Would miss the decisive local anchor
+          uncertainty_markers:
+            weakest_anchors: [Reference tolerance interpretation]
+            disconfirming_observations: [Benchmark agreement disappears after normalization fix]
+        ---
+
+        Body.
+        """
+    )
+
+
 def _proof_claim_statement() -> str:
     return "For all x > 0 and r_0 >= 0, F(x, r_0) >= 0."
 
@@ -672,6 +736,30 @@ class TestParseContractBlock:
         ):
             parse_contract_block(content)
 
+    def test_project_root_relative_contract_anchor_uses_source_path_context(self, tmp_path: Path) -> None:
+        project_root = tmp_path
+        phase_dir = project_root / "GPD" / "phases" / "01-benchmark"
+        phase_dir.mkdir(parents=True)
+        artifact = project_root / "artifacts" / "benchmark" / "report.json"
+        artifact.parent.mkdir(parents=True)
+        artifact.write_text("{}", encoding="utf-8")
+        baseline_dir = project_root / "GPD" / "phases" / "00-baseline"
+        baseline_dir.mkdir(parents=True)
+        (baseline_dir / "00-01-SUMMARY.md").write_text("baseline summary", encoding="utf-8")
+
+        plan_path = phase_dir / "01-01-PLAN.md"
+        content = _project_local_plan_contract_frontmatter()
+
+        without_source = validate_frontmatter(content, "plan")
+        with_source = validate_frontmatter(content, "plan", source_path=plan_path)
+        contract = parse_contract_block(content, source_path=plan_path)
+
+        assert without_source.valid is False
+        assert any("must include at least one must_surface=true anchor" in error for error in without_source.errors)
+        assert with_source.valid is True
+        assert contract is not None
+        assert contract.references[0].locator == "artifacts/benchmark/report.json"
+
 
 # ---------------------------------------------------------------------------
 # validate_frontmatter
@@ -700,6 +788,33 @@ class TestValidateFrontmatter:
         ) + "Body.\n"
 
         result = validate_frontmatter(content, "plan")
+
+        assert result.valid is True
+        assert result.errors == []
+
+    def test_summary_with_source_path_resolves_project_root_relative_sibling_plan_contract(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        project_root = tmp_path
+        phase_dir = project_root / "GPD" / "phases" / "01-benchmark"
+        phase_dir.mkdir(parents=True)
+        artifact = project_root / "artifacts" / "benchmark" / "report.json"
+        artifact.parent.mkdir(parents=True)
+        artifact.write_text("{}", encoding="utf-8")
+        baseline_dir = project_root / "GPD" / "phases" / "00-baseline"
+        baseline_dir.mkdir(parents=True)
+        (baseline_dir / "00-01-SUMMARY.md").write_text("baseline summary", encoding="utf-8")
+
+        plan_path = phase_dir / "01-01-PLAN.md"
+        plan_path.write_text(_project_local_plan_contract_frontmatter(), encoding="utf-8")
+        summary_path = phase_dir / "01-01-SUMMARY.md"
+        summary_path.write_text(
+            (STAGE4_FIXTURES_DIR / "summary_with_contract_results.md").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+
+        result = validate_frontmatter(summary_path.read_text(encoding="utf-8"), "summary", source_path=summary_path)
 
         assert result.valid is True
         assert result.errors == []
