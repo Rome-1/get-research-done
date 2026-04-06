@@ -25,6 +25,10 @@ def _read_command(name: str) -> str:
     return (COMMANDS_DIR / f"{name}.md").read_text(encoding="utf-8")
 
 
+def _read_workflow(name: str) -> str:
+    return (WORKFLOWS_DIR / f"{name}.md").read_text(encoding="utf-8")
+
+
 def test_review_grade_commands_surface_registry_contract_requirements_in_source() -> None:
     command_names = ("write-paper", "respond-to-referees", "verify-work", "arxiv-submission", "peer-review")
 
@@ -61,6 +65,19 @@ def test_review_grade_commands_surface_registry_contract_requirements_in_source(
             assert f"required_state: {contract.required_state}" in source
 
 
+def test_peer_review_workflow_keeps_contract_gate_prose_concise() -> None:
+    workflow = _read_workflow("peer-review")
+    long_gate_rule = (
+        "Treat `project_contract_gate` as authoritative. Use `project_contract` and `contract_intake` only when "
+        "`project_contract_gate.authoritative` is true; otherwise keep them as diagnostics/context and rely on "
+        "`effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as "
+        "carry-forward evidence."
+    )
+
+    assert workflow.count(long_gate_rule) == 1
+    assert "Apply the gate rule above." in workflow
+
+
 def test_review_grade_commands_prepend_model_visible_review_contract_to_registry_content() -> None:
     command_names = ("write-paper", "respond-to-referees", "verify-work", "arxiv-submission", "peer-review")
 
@@ -74,16 +91,17 @@ def test_review_grade_commands_prepend_model_visible_review_contract_to_registry
         assert "## Command Requirements" in command.content
         assert "context_mode:" in command.content
         assert "project_reentry_capable:" in command.content
-        assert (
-            "The following execution envelope, orchestration hints, and launch requirements are enforced before this command runs."
-            in command.content
-        )
+        assert "Model-visible execution constraints. Follow this YAML directly." in command.content
         if command.requires:
             assert "requires:" in command.content
         assert "## Review Contract" in command.content
         assert expected_section in command.content
         assert "review_contract:" in command.content
-        assert "The model sees the following review contract" in expected_section
+        assert "Model-visible review contract." in expected_section
+        assert "Closed schema: no extra keys." in expected_section
+        assert "`review_mode`=publication|review" in expected_section
+        assert "`preflight_checks` must use declared values" in expected_section
+        assert "`required_state`=phase_executed when present." in expected_section
         assert f"review_mode: {contract.review_mode}" in expected_section
         for output in contract.required_outputs:
             assert output in expected_section
@@ -125,10 +143,7 @@ def test_non_review_commands_with_requires_still_prepend_model_visible_command_r
 
         assert command.content.startswith("## Command Requirements\n")
         assert "requires:" in command.content
-        assert (
-            "The following execution envelope, orchestration hints, and launch requirements are enforced before this command runs."
-            in command.content
-        )
+        assert "Model-visible execution constraints. Follow this YAML directly." in command.content
         for require_key, require_value in command.requires.items():
             assert str(require_key) in command.content
             if isinstance(require_value, list):
@@ -741,10 +756,13 @@ def test_research_verification_template_surfaces_non_empty_uncertainty_markers()
 
     assert "Use `@{GPD_INSTALL_DIR}/templates/verification-report.md` for the canonical verification frontmatter contract." in research_verification
     assert "verification-side `suggested_contract_checks` entries are part of the same canonical schema surface" in research_verification
-    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]" in research_verification
+    assert "comparison_kind: benchmark" in research_verification
+    assert "Allowed body enum values:" in research_verification
+    assert "`comparison_kind`: benchmark|prior_work|experiment|cross_method|baseline|other" in research_verification
+    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]" not in research_verification
     assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other | \"\"]" not in research_verification
-    assert "comparison_kind: benchmark | prior_work | experiment | cross_method | baseline | other" in research_verification
-    assert 'comparison_kind: "benchmark | prior_work | experiment | cross_method | baseline | other"' in research_verification
+    assert 'comparison_kind: "benchmark"' in research_verification
+    assert 'comparison_kind: "benchmark | prior_work | experiment | cross_method | baseline | other"' not in research_verification
     assert "omit both `comparison_kind` and `comparison_reference_id` instead of leaving blank placeholders" in research_verification
     assert "uncertainty_markers:" in research_verification
     assert "weakest_anchors: [anchor-1]" in research_verification

@@ -24,7 +24,6 @@ from gpd.adapters.runtime_catalog import (
 from gpd.adapters.tool_names import CONTEXTUAL_TOOL_REFERENCE_NAMES
 from gpd.core.constants import HOME_DATA_DIR_NAME
 from gpd.core.public_surface_contract import local_cli_bridge_commands
-from gpd.registry import render_command_visibility_sections_from_frontmatter
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -549,6 +548,8 @@ def _strip_top_level_markdown_section(body: str, *, heading: str) -> str:
 
 def _inject_command_visibility_sections_from_frontmatter(content: str) -> str:
     """Front-load model-visible command constraints into installed markdown once."""
+
+    from gpd.registry import render_command_visibility_sections_from_frontmatter
 
     preamble, frontmatter, separator, body = split_markdown_frontmatter(content)
     if not frontmatter:

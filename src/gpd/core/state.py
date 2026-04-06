@@ -2990,14 +2990,13 @@ def sync_state_json_core(cwd: Path, md_content: str) -> dict:
     json_path = _state_json_path(cwd)
     backup_path = json_path.parent / STATE_JSON_BACKUP_FILENAME
     _recover_intent_locked(cwd)
-    preserved_contract = _preserved_project_contract_for_markdown_save(
-        cwd,
-        allow_backup_fallback_on_primary_failure=False,
-    )
+    preserved_contract = _preserved_project_contract_for_markdown_save(cwd)
     merged = _build_state_from_markdown(
         cwd,
         md_content,
-        import_session_continuation_from_markdown=True,
+        # Session Continuity is a compatibility mirror; markdown edits must
+        # not mint canonical continuation authority on their own.
+        import_session_continuation_from_markdown=False,
     )
     if merged.get("project_contract") is None and isinstance(preserved_contract, dict):
         merged = copy.deepcopy(merged)
@@ -3263,8 +3262,13 @@ def peek_state_json(
     *,
     recover_intent: bool = True,
     surface_blocked_project_contract: bool = False,
+    acquire_lock: bool = True,
 ) -> tuple[dict | None, list[str], str | None]:
-    """Load state without persisting recovery writes."""
+    """Load state without persisting recovery writes.
+
+    Callers that are only probing recoverability may set ``acquire_lock=False``
+    to avoid creating lockfiles on sandboxed or read-only recent-project roots.
+    """
     return _load_state_json_with_integrity_issues(
         cwd,
         integrity_mode=integrity_mode,
@@ -3272,6 +3276,7 @@ def peek_state_json(
         recover_intent=recover_intent,
         import_session_continuation_from_markdown=False,
         surface_blocked_project_contract=surface_blocked_project_contract,
+        acquire_lock=acquire_lock,
     )
 
 
@@ -3592,7 +3597,9 @@ def save_state_markdown_locked(cwd: Path, md_content: str) -> dict:
     merged = _build_state_from_markdown(
         cwd,
         md_content,
-        import_session_continuation_from_markdown=True,
+        # Session Continuity is a compatibility mirror; markdown edits must
+        # not mint canonical continuation authority on their own.
+        import_session_continuation_from_markdown=False,
     )
     normalized_md_content = _canonicalize_session_continuity_section(md_content, merged)
     return _write_state_pair_locked(

@@ -18,5 +18,10 @@ tmp/
 .claude/
 .codex/
 GPD/
+!GPD/
+GPD/*
+!GPD/CHECKPOINTS.md
+!GPD/phase-checkpoints/
+!GPD/phase-checkpoints/*.md
 .gemini/
 .opencode/

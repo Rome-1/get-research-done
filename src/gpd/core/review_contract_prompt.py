@@ -6,6 +6,8 @@ from collections.abc import Mapping
 
 import yaml
 
+from gpd.core.model_visible_text import review_contract_visibility_note
+
 VALID_REVIEW_MODES = ("publication", "review")
 VALID_REVIEW_PREFLIGHT_CHECKS = (
     "command_context",
@@ -395,9 +397,14 @@ def render_review_contract_prompt(review_contract: object) -> str:
     if not rendered_payload.get("required_state"):
         rendered_payload.pop("required_state", None)
     guidance_lines = [
-        "The model sees the following review contract, and command preflight/validation use the same structure. "
-        "Satisfy it directly in the generated artifacts."
+        review_contract_visibility_note()
     ]
+    guidance_lines.append(
+        "Closed schema: no extra keys. "
+        f"`review_mode`={ '|'.join(VALID_REVIEW_MODES) }; "
+        f"`preflight_checks` must use declared values; "
+        f"`required_state`={ '|'.join(VALID_REVIEW_REQUIRED_STATES) } when present."
+    )
     if any(
         isinstance(requirement, dict) and requirement.get("blocking_preflight_checks")
         for requirement in payload.get("conditional_requirements", [])

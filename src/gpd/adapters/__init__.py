@@ -7,15 +7,18 @@ hook configs, and tool name translations across runtimes.
 from __future__ import annotations
 
 from importlib import import_module
+from typing import TYPE_CHECKING
 
-from gpd.adapters.base import RuntimeAdapter
 from gpd.adapters.runtime_catalog import (
     get_runtime_descriptor,
     iter_runtime_descriptors,
     list_runtime_names,
 )
 
-_REGISTRY: dict[str, type[RuntimeAdapter]] = {}
+if TYPE_CHECKING:
+    from gpd.adapters.base import RuntimeAdapter
+
+_REGISTRY: dict[str, type["RuntimeAdapter"]] = {}
 _LOADED = False
 
 
@@ -24,8 +27,10 @@ def _module_name_for_runtime(runtime_name: str) -> str:
     return runtime_name.replace("-", "_")
 
 
-def _load_adapter_class(runtime_name: str) -> type[RuntimeAdapter]:
+def _load_adapter_class(runtime_name: str) -> type["RuntimeAdapter"]:
     """Import and return the adapter class that owns *runtime_name*."""
+    from gpd.adapters.base import RuntimeAdapter
+
     module = import_module(f"gpd.adapters.{_module_name_for_runtime(runtime_name)}")
 
     matches: list[type[RuntimeAdapter]] = []
@@ -81,6 +86,14 @@ def list_runtimes() -> list[str]:
     """Return all supported runtime names."""
     _ensure_loaded()
     return [descriptor.runtime_name for descriptor in iter_runtime_descriptors() if descriptor.runtime_name in _REGISTRY]
+
+
+def __getattr__(name: str):
+    if name == "RuntimeAdapter":
+        from gpd.adapters.base import RuntimeAdapter
+
+        return RuntimeAdapter
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [

@@ -59,5 +59,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
-      - name: Run test suite
-        run: uv run pytest tests/ -q -n auto
+      - name: Run fast test suite
+        run: uv run pytest tests/ -q -n auto --dist=loadscope
+
+      - name: Run full test suite
+        run: uv run pytest tests/ -q --full-suite -n auto --dist=loadscope

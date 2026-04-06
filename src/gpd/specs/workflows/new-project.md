@@ -822,39 +822,7 @@ Do not approve a scoping contract that strips decisive outputs, anchors, prior o
 If the only checks captured so far are limiting cases, sanity checks, or qualitative expectations, treat the contract as still underspecified unless the user explicitly states that these are the decisive standard.
 Missing-anchor notes preserve uncertainty, but they do not satisfy approval on their own. Do not offer approval until at least one concrete anchor, reference, prior-output constraint, or baseline is present.
 
-Before you ask for approval, build the raw contract as a literal JSON object for the `project_contract` subsection of `templates/state-json-schema.md`:
-
-- author only the JSON object that will be stored in `project_contract`, not the surrounding `state.json` envelope
-- follow the `project_contract` object rules in `templates/state-json-schema.md` exactly
-
-- `project_contract` is a JSON object, not prose
-- `observables`, `claims`, `deliverables`, `acceptance_tests`, `references`, `forbidden_proxies`, and `links` are arrays of objects, not strings
-- every object in those arrays must declare a stable `id`
-- same-kind IDs must be unique within each section; do not repeat an `id` inside `observables[]`, `claims[]`, `deliverables[]`, `acceptance_tests[]`, `references[]`, `forbidden_proxies[]`, or `links[]`
-- `context_intake`, `approach_policy`, and `uncertainty_markers` are objects, not strings or lists
-- `schema_version` must be the integer `1`
-- `references[].must_surface` must be a boolean `true` or `false`, not a quoted synonym
-- `context_intake.must_read_refs` must contain only `references[].id` values
-- `claims[].observables`, `claims[].deliverables`, `claims[].acceptance_tests`, and `claims[].references` must point only to declared IDs
-- `claims[].proof_deliverables` must point only to declared `deliverables[].id` values
-- `acceptance_tests[].subject`, `references[].applies_to`, and `forbidden_proxies[].subject` must point to a claim ID or deliverable ID, never an observable label or free text
-- `acceptance_tests[].evidence_required`, `links[].source`, and `links[].target` may only point to declared claim, deliverable, acceptance-test, or reference IDs
-- for enum fields, use only the exact schema vocabulary:
-  - `observables[].kind`: `scalar | curve | map | classification | proof_obligation | other`
-  - `deliverables[].kind`: `figure | table | dataset | data | derivation | code | note | report | other`
-  - `acceptance_tests[].kind`: `existence | schema | benchmark | consistency | cross_method | limiting_case | symmetry | dimensional_analysis | convergence | oracle | proxy | reproducibility | proof_hypothesis_coverage | proof_parameter_coverage | proof_quantifier_domain | claim_to_proof_alignment | lemma_dependency_closure | counterexample_search | human_review | other`
-  - `acceptance_tests[].automation`: `automated | hybrid | human`
-  - `references[].kind`: `paper | dataset | prior_artifact | spec | user_anchor | other`
-  - `references[].role`: `definition | benchmark | method | must_consider | background | other`
-  - `links[].relation`: `supports | computes | visualizes | benchmarks | depends_on | evaluated_by | proves | uses_hypothesis | depends_on_lemma | other`
-- proof-bearing claims (theorem-like claim kinds, or claims linked to `proof_obligation` observables) must include non-empty `proof_deliverables[]`, `parameters[]`, `hypotheses[]`, and `conclusion_clauses[]`
-- proof-bearing claims must include at least one proof-specific acceptance test kind in `claims[].acceptance_tests[]` (`proof_hypothesis_coverage`, `proof_parameter_coverage`, `proof_quantifier_domain`, `claim_to_proof_alignment`, `lemma_dependency_closure`, or `counterexample_search`)
-- if `references[].must_surface` is `true`, both `references[].applies_to[]` and `references[].required_actions[]` must be non-empty; do not leave must-surface anchors implicit
-- `references[].carry_forward_to[]` is free-text workflow scope such as `planning`, `execution`, `verification`, or `writing`; it is not an enum and must not match any declared contract ID from `observables[]`, `claims[]`, `deliverables[]`, `acceptance_tests[]`, `references[]`, `forbidden_proxies[]`, or `links[]`
-- do **not** invent near-miss enum values such as `anchor`, `manual`, `content-check`, `benchmark-record`, or `anchors`; rewrite them to the exact schema term before approval
-- the contract schema is closed: do not add invented top-level or nested keys, and do not use scalar shortcuts for list fields
-- list fields must stay lists even for single-item values, and blank or duplicate list entries are invalid after trimming whitespace
-- if the user chooses "Review raw contract", show the exact JSON object that will be validated and persisted
+Before you ask for approval, reuse the raw-contract rules above for the second approval step. Keep the contract as a literal JSON object for the `project_contract` subsection of `templates/state-json-schema.md`; do not relax any schema, ID, enum, or closed-schema rules.
 
 Present a concise scoping summary and require explicit approval before downstream artifact generation:
 

@@ -23,7 +23,7 @@ from gpd.hooks.install_metadata import GPD_INSTALL_DIR_NAME
 from gpd.runtime_cli import _parse_args, _resolve_cli_cwd_from_argv, main
 from tests.runtime_install_helpers import seed_complete_runtime_install
 
-_RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
+_RUNTIME_DESCRIPTORS = tuple(iter_runtime_descriptors())
 _RUNTIME_NAMES = tuple(descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS)
 _SHARED_INSTALL = get_shared_install_metadata()
 MANIFEST_NAME = _SHARED_INSTALL.manifest_name

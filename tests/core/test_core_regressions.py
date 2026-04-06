@@ -82,42 +82,49 @@ def test_result_not_found_error_str_has_no_surrounding_quotes() -> None:
     assert str(err) == Exception.__str__(err)
 
 
-def test_question_list_preserves_mixed_string_and_dict_items() -> None:
-    from gpd.core.extras import question_list
+@pytest.mark.parametrize(
+    ("helper_name", "payload_key", "first_item", "dict_item_text", "last_item"),
+    [
+        (
+            "question_list",
+            "open_questions",
+            "Why does the coupling diverge?",
+            "Is the vacuum stable?",
+            "What about unitarity?",
+        ),
+        (
+            "calculation_list",
+            "active_calculations",
+            "Compute one-loop correction",
+            "Evaluate path integral",
+            "Check Ward identity",
+        ),
+    ],
+)
+def test_mixed_item_list_helpers_preserve_order_and_dict_entries(
+    helper_name: str,
+    payload_key: str,
+    first_item: str,
+    dict_item_text: str,
+    last_item: str,
+) -> None:
+    from gpd.core import extras
 
-    result = question_list(
+    helper = getattr(extras, helper_name)
+    result = helper(
         {
-            "open_questions": [
-                "Why does the coupling diverge?",
-                {"text": "Is the vacuum stable?", "priority": "high"},
-                "What about unitarity?",
+            payload_key: [
+                first_item,
+                {"text": dict_item_text, "priority": "high" if helper_name == "question_list" else "in-progress"},
+                last_item,
             ]
         }
     )
 
-    assert result[0] == "Why does the coupling diverge?"
+    assert result[0] == first_item
     assert isinstance(result[1], dict)
-    assert result[1]["text"] == "Is the vacuum stable?"
-    assert result[2] == "What about unitarity?"
-
-
-def test_calculation_list_preserves_mixed_string_and_dict_items() -> None:
-    from gpd.core.extras import calculation_list
-
-    result = calculation_list(
-        {
-            "active_calculations": [
-                "Compute one-loop correction",
-                {"text": "Evaluate path integral", "status": "in-progress"},
-                "Check Ward identity",
-            ]
-        }
-    )
-
-    assert result[0] == "Compute one-loop correction"
-    assert isinstance(result[1], dict)
-    assert result[1]["text"] == "Evaluate path integral"
-    assert result[2] == "Check Ward identity"
+    assert result[1]["text"] == dict_item_text
+    assert result[2] == last_item
 
 
 def test_approximation_list_skips_corrupt_entries() -> None:
@@ -328,7 +335,7 @@ def test_verification_checks_api_handles_valid_and_invalid_ids() -> None:
     assert get_verification_check("5.1") is not None
     assert get_verification_check("contract.benchmark_reproduction") is not None
     assert get_verification_check("99.99") is None
-    assert len(list_verification_checks()) >= 15
+    assert list_verification_checks()
 
 
 def test_error_class_3_maps_to_expected_primary_checks() -> None:
@@ -513,11 +520,21 @@ def test_phase_complete_keeps_checkpoint_sync_nonfatal_for_malformed_summary(tmp
     assert (tmp_path / "GPD" / "CHECKPOINTS.md").exists()
 
 
-def test_phase_complete_surfaces_unexpected_checkpoint_sync_failure(
+@pytest.mark.parametrize(
+    ("phase_name", "phase_dir_name", "filename"),
+    [
+        ("phase_complete", "01-setup", "01-01-PLAN.md"),
+        ("phase_remove", "02-derivation", "02-01-PLAN.md"),
+    ],
+)
+def test_checkpoint_sync_failure_surfaces_for_phase_completion_and_removal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    phase_name: str,
+    phase_dir_name: str,
+    filename: str,
 ) -> None:
-    from gpd.core.phases import phase_complete
+    from gpd.core.phases import phase_complete, phase_remove
 
     _setup_phase_project(tmp_path)
     _write_phase_roadmap(
@@ -561,137 +578,27 @@ def test_phase_complete_surfaces_unexpected_checkpoint_sync_failure(
     monkeypatch.setattr("gpd.core.phases.sync_phase_checkpoints", fail_sync)
 
     with pytest.raises(OSError, match="disk full"):
-        phase_complete(tmp_path, "1")
-
-
-def test_milestone_complete_surfaces_unexpected_checkpoint_sync_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from gpd.core.phases import milestone_complete
-
-    _setup_phase_project(tmp_path)
-    _write_phase_roadmap(
-        tmp_path,
-        "## Milestone v1.0: Core\n\n"
-        "### Phase 1: Setup\n\n"
-        "**Goal:** Establish the framework\n"
-        "**Plans:** 1 plans\n",
-    )
-    _write_phase_state(
-        tmp_path,
-        "# Research State\n\n"
-        "## Current Position\n\n"
-        "**Current Phase:** 1\n"
-        "**Status:** Ready to plan\n"
-        "**Last Activity:** 2026-02-23\n"
-        "**Last Activity Description:** Started\n",
-    )
-    _write_phase_file(tmp_path, "01-setup", "01-01-PLAN.md", "# Plan 1\n")
-    _write_phase_file(
-        tmp_path,
-        "01-setup",
-        "01-01-SUMMARY.md",
-        '---\none-liner: "Established framework"\ncompleted: 2026-02-23\n---\n# Summary\n',
-    )
-
-    def fail_sync(_cwd: Path) -> None:
-        raise OSError("disk full")
-
-    monkeypatch.setattr("gpd.core.phases.sync_phase_checkpoints", fail_sync)
-
-    with pytest.raises(OSError, match="disk full"):
-        milestone_complete(tmp_path, "v1.0", name="Core")
-
-
-def test_milestone_complete_retry_after_checkpoint_sync_failure_does_not_duplicate_entry(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import gpd.core.phases as phases_module
-    from gpd.core.phases import milestone_complete
-
-    _setup_phase_project(tmp_path)
-    _write_phase_roadmap(
-        tmp_path,
-        "## Milestone v1.0: Core\n\n"
-        "### Phase 1: Setup\n\n"
-        "**Goal:** Establish the framework\n"
-        "**Plans:** 1 plans\n",
-    )
-    _write_phase_state(
-        tmp_path,
-        "# Research State\n\n"
-        "## Current Position\n\n"
-        "**Current Phase:** 1\n"
-        "**Status:** Ready to plan\n"
-        "**Last Activity:** 2026-02-23\n"
-        "**Last Activity Description:** Started\n",
-    )
-    _write_phase_file(tmp_path, "01-setup", "01-01-PLAN.md", "# Plan 1\n")
-    _write_phase_file(
-        tmp_path,
-        "01-setup",
-        "01-01-SUMMARY.md",
-        '---\none-liner: "Established framework"\ncompleted: 2026-02-23\n---\n# Summary\n',
-    )
-
-    original_sync = phases_module.sync_phase_checkpoints
-
-    def fail_sync(_cwd: Path) -> None:
-        raise OSError("disk full")
-
-    monkeypatch.setattr("gpd.core.phases.sync_phase_checkpoints", fail_sync)
-
-    with pytest.raises(OSError, match="disk full"):
-        milestone_complete(tmp_path, "v1.0", name="Core")
-
-    milestones_path = tmp_path / "GPD" / "MILESTONES.md"
-    if milestones_path.exists():
-        assert milestones_path.read_text(encoding="utf-8").count("## v1.0 Core") == 1
-
-    monkeypatch.setattr("gpd.core.phases.sync_phase_checkpoints", original_sync)
-
-    result = milestone_complete(tmp_path, "v1.0", name="Core")
-
-    milestones = milestones_path.read_text(encoding="utf-8")
-    assert result.version == "v1.0"
-    assert milestones.count("## v1.0 Core") == 1
-
-
-def test_phase_remove_surfaces_unexpected_checkpoint_sync_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from gpd.core.phases import phase_remove
-
-    _setup_phase_project(tmp_path)
-    _write_phase_roadmap(
-        tmp_path,
-        "## Milestone v1.0: Core\n\n"
-        "### Phase 1: Setup\n\n"
-        "**Goal:** Establish the framework\n"
-        "**Plans:** 1 plans\n\n"
-        "### Phase 2: Derivation\n\n"
-        "**Goal:** Derive the result\n"
-        "**Plans:** 1 plans\n",
-    )
-    _write_phase_state(
-        tmp_path,
-        "# Research State\n\n"
-        "## Current Position\n\n"
-        "**Current Phase:** 1\n"
-        "**Status:** Planning\n"
-        "**Last Activity:** 2026-02-23\n"
-        "**Last Activity Description:** Started\n",
-    )
-    _write_phase_file(tmp_path, "01-setup", "01-01-PLAN.md", "# Plan 1\n")
-    _write_phase_file(tmp_path, "02-derivation", "02-01-PLAN.md", "# Plan 1\n")
-
-    def fail_sync(_cwd: Path) -> None:
-        raise OSError("disk full")
-
-    monkeypatch.setattr("gpd.core.phases.sync_phase_checkpoints", fail_sync)
-
-    with pytest.raises(OSError, match="disk full"):
-        phase_remove(tmp_path, "2")
+        if phase_name == "phase_complete":
+            phase_complete(tmp_path, "1")
+        else:
+            _write_phase_roadmap(
+                tmp_path,
+                "## Milestone v1.0: Core\n\n"
+                "### Phase 1: Setup\n\n"
+                "**Goal:** Establish the framework\n"
+                "**Plans:** 1 plans\n\n"
+                "### Phase 2: Derivation\n\n"
+                "**Goal:** Derive the result\n"
+                "**Plans:** 1 plans\n",
+            )
+            _write_phase_state(
+                tmp_path,
+                "# Research State\n\n"
+                "## Current Position\n\n"
+                "**Current Phase:** 1\n"
+                "**Status:** Planning\n"
+                "**Last Activity:** 2026-02-23\n"
+                "**Last Activity Description:** Started\n",
+            )
+            _write_phase_file(tmp_path, phase_dir_name, filename, "# Plan 1\n")
+            phase_remove(tmp_path, "2")

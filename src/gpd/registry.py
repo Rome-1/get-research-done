@@ -15,6 +15,7 @@ from pathlib import Path
 import yaml
 
 from gpd.command_labels import canonical_command_label, canonical_skill_label, command_slug_from_label
+from gpd.core.model_visible_text import command_visibility_note
 from gpd.core.review_contract_prompt import (
     normalize_review_contract_frontmatter_payload,
     render_review_contract_prompt,
@@ -556,8 +557,7 @@ def render_command_requires_section(
     ).rstrip()
     return (
         "## Command Requirements\n\n"
-        "The following execution envelope, orchestration hints, and launch requirements are enforced before this command runs. "
-        "Plan around them directly in the work you produce.\n\n"
+        f"{command_visibility_note()}\n\n"
         f"```yaml\n{rendered}\n```"
     )
 

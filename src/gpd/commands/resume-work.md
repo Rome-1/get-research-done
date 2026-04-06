@@ -16,18 +16,18 @@ allowed-tools:
 <!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
-Restore complete research context and resume work seamlessly from the latest canonical continuation state and its projected handoff surfaces.
+Restore complete research context and resume from the canonical continuation state and its projected handoff surfaces.
 
-This is the runtime recovery command for the selected project. Use `gpd resume` for the current-workspace read-only recovery snapshot, `gpd resume --recent` when you need the explicit multi-project picker, then run `gpd:resume-work` in the reopened project. The recent-project list is advisory and machine-local; once you choose a workspace, `gpd:resume-work` reloads that project's canonical state. If `gpd resume --recent` finds exactly one recoverable project, that can become the fast re-entry path; otherwise the project choice stays explicit. After resuming, `gpd:suggest-next` is the fastest next command when you only need the next action.
+This is the runtime recovery command for the selected project. Use `gpd resume` for the current-workspace read-only recovery snapshot, `gpd resume --recent` when you need the explicit multi-project picker, then run `gpd:resume-work` in the reopened project. The recent-project list is advisory and machine-local; once you choose a workspace, `gpd:resume-work` reloads that project's canonical state. After resuming, `gpd:suggest-next` is the fastest next command when you only need the next action.
 
-`state.json.continuation` is the durable continuation authority. Public resume vocabulary centers on canonical continuation fields, while compatibility-only intake fields stay internal and are not part of the public top-level resume vocabulary.
+`state.json.continuation` is the durable continuation authority. Public resume vocabulary centers on canonical continuation fields: `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `active_bounded_segment`, `derived_execution_head`, `active_resume_result`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, and `resume_candidates`. Those fields are the public top-level resume vocabulary only; compatibility-only intake fields stay internal.
 
 Routes to the resume-work workflow which handles:
 
 - STATE.md loading (or reconstruction if missing)
 - Active execution checkpoint detection
 - Canonical `.continue-here.md` handoff detection from canonical continuation state
-- Explicit recent-project re-entry when the selected project has to be rediscovered first, then reload canonical state from the selected workspace
+- Explicit recent-project re-entry when the selected workspace has to be rediscovered first
 - Incomplete work detection (PLAN without SUMMARY)
 - Full awareness of where the calculation or derivation left off
 - Restoration of parameter values, intermediate results, and assumptions

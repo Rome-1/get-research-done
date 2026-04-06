@@ -37,6 +37,11 @@ def _assert_no_resume_compat_aliases(payload: dict[str, object]) -> None:
         assert key not in payload
 
 
+@pytest.fixture(autouse=True)
+def _isolate_recent_project_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GPD_DATA_DIR", str(tmp_path / "data"))
+
+
 def _update_state_session(
     cwd: Path,
     *,
@@ -523,8 +528,14 @@ def test_init_resume_auto_selects_unique_recoverable_recent_project(tmp_path: Pa
     assert ctx["project_reentry_selected_candidate"]["source"] == "recent_project"
     assert ctx["project_reentry_selected_candidate"]["project_root"] == project_root.resolve(strict=False).as_posix()
     assert ctx["project_reentry_selected_candidate"]["resume_target_kind"] == "handoff"
-    assert ctx["planning_exists"] is True
+    assert ctx["workspace_state_exists"] is False
+    assert ctx["workspace_roadmap_exists"] is False
+    assert ctx["workspace_project_exists"] is False
+    assert ctx["workspace_planning_exists"] is False
+    assert ctx["state_exists"] is True
+    assert ctx["roadmap_exists"] is True
     assert ctx["project_exists"] is True
+    assert ctx["planning_exists"] is True
 
 
 def test_init_resume_promotes_auto_selected_recent_bounded_segment_over_same_pointer_handoff(
@@ -1375,4 +1386,23 @@ def test_init_resume_state_exists_false_when_only_unrecoverable_state_file_is_pr
 
     ctx = init_resume(tmp_path)
 
+    assert ctx["workspace_state_exists"] is False
     assert ctx["state_exists"] is False
+
+
+def test_init_resume_nested_workspace_probe_does_not_create_fake_gpd_dir(
+    tmp_path: Path,
+    state_project_factory,
+) -> None:
+    project_root = state_project_factory(tmp_path)
+    nested = project_root / "workspace" / "nested"
+    nested.mkdir(parents=True)
+
+    ctx = init_resume(nested)
+
+    assert ctx["project_root"] == project_root.resolve(strict=False).as_posix()
+    assert ctx["project_root_source"] == "current_workspace"
+    assert ctx["project_reentry_mode"] == "current-workspace"
+    assert ctx["state_exists"] is True
+    assert ctx["workspace_state_exists"] is False
+    assert not (nested / "GPD").exists()

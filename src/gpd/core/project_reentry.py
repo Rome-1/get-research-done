@@ -122,11 +122,15 @@ def recoverable_project_context(project_root: Path) -> tuple[bool, bool, bool]:
     if state_files_exist:
         from gpd.core.state import peek_state_json
 
-        state_obj, _integrity_issues, _state_source = peek_state_json(
-            project_root,
-            recover_intent=False,
-            surface_blocked_project_contract=True,
-        )
+        try:
+            state_obj, _integrity_issues, _state_source = peek_state_json(
+                project_root,
+                recover_intent=False,
+                surface_blocked_project_contract=True,
+                acquire_lock=False,
+            )
+        except OSError:
+            state_obj = None
         state_exists = isinstance(state_obj, dict)
     roadmap_exists = layout.roadmap.exists()
     project_exists = layout.project_md.exists()
@@ -296,43 +300,6 @@ def _candidate_from_recent_row(row: Mapping[str, object]) -> ProjectReentryCandi
     )
 
 
-def _enrich_candidate_from_recent_row(
-    candidate: ProjectReentryCandidate,
-    row: Mapping[str, object],
-) -> ProjectReentryCandidate:
-    """Overlay advisory recent-project metadata onto an already-selected candidate."""
-    resume_file_available = _strict_bool_value(row.get("resume_file_available"))
-    resumable = _strict_bool_value(row.get("resumable"))
-    if resumable is None:
-        resumable = candidate.resumable
-    if resume_file_available is True:
-        resumable = True
-    recovery = classify_recent_project_recovery(row)
-    return candidate.model_copy(
-        update={
-            "resumable": resumable,
-            "resume_file": _normalize_recent_text(row, "resume_file"),
-            "last_result_id": _normalize_recent_text(row, "last_result_id"),
-            "resume_target_kind": recovery.resume_target_kind,
-            "resume_target_recorded_at": recovery.resume_target_recorded_at,
-            "resume_file_available": resume_file_available,
-            "resume_file_reason": _normalize_recent_text(row, "resume_file_reason"),
-            "hostname": _normalize_recent_text(row, "hostname"),
-            "platform": _normalize_recent_text(row, "platform"),
-            "availability_reason": _normalize_recent_text(row, "availability_reason"),
-            "last_session_at": _normalize_recent_text(row, "last_session_at", "last_seen_at"),
-            "stopped_at": _normalize_recent_text(row, "stopped_at"),
-            "source_kind": _normalize_recent_text(row, "source_kind"),
-            "source_session_id": _normalize_recent_text(row, "source_session_id"),
-            "source_segment_id": _normalize_recent_text(row, "source_segment_id"),
-            "source_transition_id": _normalize_recent_text(row, "source_transition_id"),
-            "source_recorded_at": _normalize_recent_text(row, "source_recorded_at"),
-            "recovery_phase": _normalize_recent_text(row, "recovery_phase"),
-            "recovery_plan": _normalize_recent_text(row, "recovery_plan"),
-        }
-    )
-
-
 def _current_workspace_candidate(workspace: Path | None) -> ProjectReentryCandidate | None:
     resolution = resolve_project_roots(workspace)
     if resolution is None:
@@ -395,10 +362,6 @@ def resolve_project_reentry(
             continue
         candidate = _candidate_from_recent_row(row_payload)
         if candidate is None:
-            continue
-        if current_candidate is not None and candidate.project_root == current_candidate.project_root:
-            current_candidate = _enrich_candidate_from_recent_row(current_candidate, row_payload)
-            candidates[0] = current_candidate
             continue
         if candidate.project_root in seen_roots:
             continue

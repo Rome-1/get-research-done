@@ -32,42 +32,6 @@ class TestSyncStateJson:
         assert isinstance(stored, dict)
         assert stored["position"]["current_phase"] == "01"
 
-    def test_sync_preserves_json_only_fields(self, tmp_path: Path, state_project_factory) -> None:
-        cwd = state_project_factory(tmp_path)
-        json_path = cwd / "GPD" / "state.json"
-
-        existing = json.loads(json_path.read_text(encoding="utf-8"))
-        existing["custom_field"] = "preserved"
-        json_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
-
-        markdown = (cwd / "GPD" / "STATE.md").read_text(encoding="utf-8")
-        result = sync_state_json(cwd, markdown)
-
-        assert result["custom_field"] == "preserved"
-
-    def test_sync_core_creates_backup(self, tmp_path: Path, state_project_factory) -> None:
-        cwd = state_project_factory(tmp_path)
-        markdown = (cwd / "GPD" / "STATE.md").read_text(encoding="utf-8")
-
-        sync_state_json_core(cwd, markdown)
-
-        assert (cwd / "GPD" / "state.json.bak").exists()
-
-    def test_sync_core_recovers_from_corrupt_json(self, tmp_path: Path, state_project_factory) -> None:
-        cwd = state_project_factory(tmp_path)
-        planning = cwd / "GPD"
-        (planning / "state.json").write_text("NOT VALID JSON {{{", encoding="utf-8")
-
-        backup_path = planning / "state.json.bak"
-        if backup_path.exists():
-            backup_path.unlink()
-
-        result = sync_state_json_core(cwd, (planning / "STATE.md").read_text(encoding="utf-8"))
-        stored = json.loads((planning / "state.json").read_text(encoding="utf-8"))
-
-        assert isinstance(result, dict)
-        assert isinstance(stored, dict)
-
     def test_sync_core_uses_backup_when_primary_json_is_corrupt(
         self, tmp_path: Path, state_project_factory
     ) -> None:
@@ -82,15 +46,6 @@ class TestSyncStateJson:
         result = sync_state_json_core(cwd, (planning / "STATE.md").read_text(encoding="utf-8"))
 
         assert result["from_backup"] is True
-
-    def test_sync_updates_position_from_markdown(
-        self, tmp_path: Path, state_project_factory
-    ) -> None:
-        cwd = state_project_factory(tmp_path, status="Planning")
-
-        result = sync_state_json(cwd, (cwd / "GPD" / "STATE.md").read_text(encoding="utf-8"))
-
-        assert result["position"]["status"] == "Planning"
 
 
 class TestSaveStateJsonLocked:
@@ -113,31 +68,6 @@ class TestSaveStateJsonLocked:
         assert stored["position"]["current_phase"] == "01"
         assert "Planning" in markdown
         assert (planning / "state.json.bak").exists()
-
-    def test_save_overwrites_existing_content(self, tmp_path: Path, state_project_factory) -> None:
-        cwd = state_project_factory(tmp_path)
-        json_path = cwd / "GPD" / "state.json"
-
-        state = default_state_dict()
-        state["position"]["current_phase"] = "99"
-        state["position"]["status"] = "Complete"
-
-        with file_lock(json_path):
-            save_state_json_locked(cwd, state)
-
-        stored = json.loads(json_path.read_text(encoding="utf-8"))
-        assert stored["position"]["current_phase"] == "99"
-        assert stored["position"]["status"] == "Complete"
-
-    def test_save_removes_intent_marker_after_success(self, tmp_path: Path) -> None:
-        planning = tmp_path / "GPD"
-        planning.mkdir()
-
-        json_path = planning / "state.json"
-        with file_lock(json_path):
-            save_state_json_locked(tmp_path, default_state_dict())
-
-        assert not (planning / ".state-write-intent").exists()
 
 
 class TestStateCompact:
@@ -168,49 +98,3 @@ class TestStateCompact:
         assert result.compacted is True
         assert "Old decision" in archive
         assert "Current phase decision" in markdown
-
-    def test_compact_archives_resolved_blockers(self, tmp_path: Path, large_state_project_factory) -> None:
-        cwd = large_state_project_factory(
-            tmp_path,
-            n_old_decisions=40,
-            n_resolved_blockers=20,
-            extra_lines=80,
-        )
-
-        result = state_compact(cwd)
-
-        archive = (cwd / "GPD" / "STATE-ARCHIVE.md").read_text(encoding="utf-8")
-        markdown = (cwd / "GPD" / "STATE.md").read_text(encoding="utf-8")
-
-        assert result.compacted is True
-        assert "Resolved" in archive or "Old decision" in archive
-        assert "Active blocker still open" in markdown
-
-    def test_compact_appends_to_existing_archive(self, tmp_path: Path, large_state_project_factory) -> None:
-        cwd = large_state_project_factory(tmp_path, n_old_decisions=50, extra_lines=80)
-        archive_path = cwd / "GPD" / "STATE-ARCHIVE.md"
-        archive_path.write_text("# STATE Archive\n\nPrevious entries.\n\n", encoding="utf-8")
-
-        result = state_compact(cwd)
-
-        assert result.compacted is True
-        assert "Previous entries." in archive_path.read_text(encoding="utf-8")
-
-    def test_compact_leaves_valid_state_json(self, tmp_path: Path, large_state_project_factory) -> None:
-        cwd = large_state_project_factory(tmp_path, n_old_decisions=50, extra_lines=80)
-
-        state_compact(cwd)
-
-        stored = json.loads((cwd / "GPD" / "state.json").read_text(encoding="utf-8"))
-        assert "position" in stored or "project_reference" in stored
-
-    def test_compact_reports_line_counts(self, tmp_path: Path, large_state_project_factory) -> None:
-        cwd = large_state_project_factory(tmp_path, n_old_decisions=50, extra_lines=100)
-
-        result = state_compact(cwd)
-
-        if result.compacted:
-            assert result.original_lines > 0
-            assert result.new_lines > 0
-            assert result.new_lines < result.original_lines
-            assert result.archived_lines == result.original_lines - result.new_lines

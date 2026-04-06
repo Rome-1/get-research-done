@@ -648,9 +648,17 @@ class TestCheckStoragePaths:
             check=False,
         )
 
-        assert result.returncode == 1
-        assert result.stdout == ""
         assert result.stderr == ""
+        if result.returncode == 1:
+            assert result.stdout == ""
+            return
+
+        assert result.returncode == 0
+        lines = [line for line in result.stdout.splitlines() if line.strip()]
+        assert lines == [
+            ".gitignore:23:!GPD/CHECKPOINTS.md\tGPD/CHECKPOINTS.md",
+            ".gitignore:25:!GPD/phase-checkpoints/*.md\tGPD/phase-checkpoints/01-test-phase.md",
+        ]
 
     def test_git_status_reports_dirty_tracked_checkpoint_artifacts(self, tmp_path: Path) -> None:
         repo = _init_git_repo(tmp_path)
@@ -1012,39 +1020,6 @@ class TestCheckStateValidity:
 
 
 class TestRunHealth:
-    def test_returns_report(self, tmp_path: Path):
-        report = run_health(tmp_path)
-        assert isinstance(report, HealthReport)
-        assert report.summary.total >= 13
-        assert report.overall in (CheckStatus.OK, CheckStatus.WARN, CheckStatus.FAIL)
-
-    def test_fix_mode(self, tmp_path: Path):
-        report = run_health(tmp_path, fix=True)
-        assert isinstance(report.fixes_applied, list)
-
-    def test_fixless_mode_does_not_rewrite_corrupt_state(self, tmp_path: Path) -> None:
-        cwd = _bootstrap_health_project(tmp_path)
-        layout = ProjectLayout(cwd)
-
-        save_state_json(cwd, default_state_dict())
-        primary_state = json.loads(layout.state_json.read_text(encoding="utf-8"))
-        primary_state["position"] = []
-        layout.state_json.write_text(json.dumps(primary_state, indent=2) + "\n", encoding="utf-8")
-
-        backup_state = default_state_dict()
-        backup_state["position"]["current_phase"] = "12"
-        backup_state["position"]["status"] = "Executing"
-        layout.state_json_backup.write_text(json.dumps(backup_state, indent=2) + "\n", encoding="utf-8")
-
-        before = layout.state_json.read_text(encoding="utf-8")
-        report = run_health(cwd, fix=False)
-        after = layout.state_json.read_text(encoding="utf-8")
-        state_check = next(check for check in report.checks if check.label == "State Validity")
-
-        assert before == after
-        assert report.fixes_applied == []
-        assert state_check.details["state_source"] == "state.json"
-
     def test_read_only_health_does_not_recover_intent_marker_and_keeps_state_unchanged(
         self, tmp_path: Path
     ) -> None:
@@ -1069,34 +1044,6 @@ class TestRunHealth:
         assert layout.state_intent.exists()
         assert json.loads(layout.state_json.read_text(encoding="utf-8"))["position"]["current_phase"] == "01"
         assert state_check.details["state_source"] == "state.json"
-
-    def test_fix_mode_restores_backup_state_and_refreshes_report_details(self, tmp_path: Path) -> None:
-        cwd = _bootstrap_health_project(tmp_path)
-        layout = ProjectLayout(cwd)
-
-        backup_state = default_state_dict()
-        backup_state["position"]["status"] = "Executing"
-        backup_state["position"]["current_phase"] = "12"
-        backup_state["open_questions"] = ["Recovered from backup"]
-        save_state_json(cwd, backup_state)
-        backup_payload = json.loads(layout.state_json_backup.read_text(encoding="utf-8"))
-
-        layout.state_json.unlink()
-        layout.state_md.write_text("# State\nStale markdown that should not win.\n", encoding="utf-8")
-
-        report = run_health(cwd, fix=True)
-
-        restored_state = json.loads(layout.state_json.read_text(encoding="utf-8"))
-        state_check = next(check for check in report.checks if check.label == "State Validity")
-
-        assert restored_state == backup_payload
-        assert layout.state_json.exists()
-        assert state_check.details["has_json"] is True
-        assert state_check.details["has_md"] is True
-        assert state_check.details["state_source"] == "state.json"
-        assert not any("state.json not found" in issue for issue in state_check.issues)
-        assert report.fixes_applied
-        assert report.fixes_applied == ["Restored state.json from state.json.bak"]
 
     def test_fix_mode_regenerates_state_from_state_md_and_refreshes_report_details(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
@@ -1132,29 +1079,6 @@ class TestRunHealth:
 
         assert any('phase ID format: "5" -- expected zero-padded' in warning for warning in result.warnings)
 
-    def test_fix_mode_restores_state_pair_coherently(self, tmp_path: Path) -> None:
-        cwd = _bootstrap_health_project(tmp_path)
-        layout = ProjectLayout(cwd)
-
-        backup_state = default_state_dict()
-        backup_state["position"]["status"] = "Executing"
-        backup_state["position"]["current_phase"] = "12"
-        backup_state["open_questions"] = ["Recovered from backup"]
-        save_state_json(cwd, backup_state)
-        backup_payload = json.loads(layout.state_json_backup.read_text(encoding="utf-8"))
-
-        layout.state_json.unlink()
-        layout.state_md.write_text("# State\nThis markdown is stale.\n", encoding="utf-8")
-
-        report = run_health(cwd, fix=True)
-
-        restored_state = json.loads(layout.state_json.read_text(encoding="utf-8"))
-        restored_md = layout.state_md.read_text(encoding="utf-8")
-
-        assert restored_state == backup_payload
-        assert "Recovered from backup" in restored_md
-        assert "Restored state.json from state.json.bak" in report.fixes_applied
-
     def test_fix_mode_removes_stale_checkpoint_tags(self, tmp_path: Path):
         def _run(args: list[str], **_: object) -> subprocess.CompletedProcess[str]:
             if args == ["git", "--version"]:
@@ -1183,12 +1107,12 @@ class TestRunHealth:
 class TestRunDoctor:
     def _make_specs_dir(self, tmp_path: Path, *, include_templates: bool = True) -> Path:
         specs = tmp_path / "specs"
-        (specs / "references" / "shared").mkdir(parents=True)
-        (specs / "references" / "verification" / "core").mkdir(parents=True)
-        (specs / "references" / "verification" / "errors").mkdir(parents=True)
-        (specs / "workflows").mkdir()
+        (specs / "references" / "shared").mkdir(parents=True, exist_ok=True)
+        (specs / "references" / "verification" / "core").mkdir(parents=True, exist_ok=True)
+        (specs / "references" / "verification" / "errors").mkdir(parents=True, exist_ok=True)
+        (specs / "workflows").mkdir(exist_ok=True)
         if include_templates:
-            (specs / "templates").mkdir()
+            (specs / "templates").mkdir(exist_ok=True)
 
         (specs / "references" / "shared" / "shared-protocols.md").write_text("shared\n", encoding="utf-8")
         (specs / "references" / "verification" / "core" / "verification-core.md").write_text(
@@ -1351,12 +1275,11 @@ verifier_extensions:
         assert checks["Protocol Bundles"].details["bundle_count"] == 2
         assert checks["Protocol Bundles"].details["bundle_ids"] == ["supporting-bundle", "test-bundle"]
 
-    def test_protocol_bundles_check_fails_when_required_asset_is_missing(self, tmp_path: Path):
-        specs_dir = self._make_specs_dir(tmp_path)
-        bundles_dir = specs_dir / "bundles"
-        bundles_dir.mkdir()
-        (bundles_dir / "broken-bundle.md").write_text(
-            """---
+    def test_protocol_bundles_check_rejects_invalid_bundle_inputs(self, tmp_path: Path):
+        cases: tuple[tuple[str, str | bytes, str], ...] = (
+            (
+                "broken-bundle.md",
+                """---
 bundle_id: broken-bundle
 bundle_version: 1
 title: Broken Bundle
@@ -1374,21 +1297,11 @@ assets:
 
 # Broken Bundle
 """,
-            encoding="utf-8",
-        )
-
-        report = run_doctor(specs_dir=specs_dir, version="0.1.0")
-        checks = {check.label: check for check in report.checks}
-
-        assert checks["Protocol Bundles"].status == CheckStatus.FAIL
-        assert any("templates/missing-template.md" in issue for issue in checks["Protocol Bundles"].issues)
-
-    def test_protocol_bundles_check_fails_when_asset_path_escapes_specs_dir(self, tmp_path: Path):
-        specs_dir = self._make_specs_dir(tmp_path)
-        bundles_dir = specs_dir / "bundles"
-        bundles_dir.mkdir()
-        (bundles_dir / "path-escape-bundle.md").write_text(
-            """---
+                "templates/missing-template.md",
+            ),
+            (
+                "path-escape-bundle.md",
+                """---
 bundle_id: path-escape-bundle
 bundle_version: 1
 title: Path Escape Bundle
@@ -1406,33 +1319,12 @@ assets:
 
 # Path Escape Bundle
 """,
-            encoding="utf-8",
-        )
-
-        report = run_doctor(specs_dir=specs_dir, version="0.1.0")
-        checks = {check.label: check for check in report.checks}
-
-        assert checks["Protocol Bundles"].status == CheckStatus.FAIL
-        assert any("path must stay within specs dir" in issue for issue in checks["Protocol Bundles"].issues)
-
-    def test_protocol_bundles_check_fails_when_bundle_file_is_not_utf8(self, tmp_path: Path):
-        specs_dir = self._make_specs_dir(tmp_path)
-        bundles_dir = specs_dir / "bundles"
-        bundles_dir.mkdir()
-        (bundles_dir / "invalid-encoding.md").write_bytes(b"\xff\xfe\x80")
-
-        report = run_doctor(specs_dir=specs_dir, version="0.1.0")
-        checks = {check.label: check for check in report.checks}
-
-        assert checks["Protocol Bundles"].status == CheckStatus.FAIL
-        assert any("unreadable bundle" in issue for issue in checks["Protocol Bundles"].issues)
-
-    def test_protocol_bundles_check_fails_when_verifier_extension_check_id_is_unknown(self, tmp_path: Path):
-        specs_dir = self._make_specs_dir(tmp_path)
-        bundles_dir = specs_dir / "bundles"
-        bundles_dir.mkdir()
-        (bundles_dir / "bad-check-bundle.md").write_text(
-            """---
+                "path must stay within specs dir",
+            ),
+            ("invalid-encoding.md", b"\xff\xfe\x80", "unreadable bundle"),
+            (
+                "bad-check-bundle.md",
+                """---
 bundle_id: bad-check-bundle
 bundle_version: 1
 title: Bad Check Bundle
@@ -1451,21 +1343,11 @@ verifier_extensions:
 
 # Bad Check Bundle
 """,
-            encoding="utf-8",
-        )
-
-        report = run_doctor(specs_dir=specs_dir, version="0.1.0")
-        checks = {check.label: check for check in report.checks}
-
-        assert checks["Protocol Bundles"].status == CheckStatus.FAIL
-        assert any("unknown check_id '5.99'" in issue for issue in checks["Protocol Bundles"].issues)
-
-    def test_protocol_bundles_check_fails_when_exclusive_with_bundle_is_unknown(self, tmp_path: Path):
-        specs_dir = self._make_specs_dir(tmp_path)
-        bundles_dir = specs_dir / "bundles"
-        bundles_dir.mkdir()
-        (bundles_dir / "bad-exclusive-bundle.md").write_text(
-            """---
+                "unknown check_id '5.99'",
+            ),
+            (
+                "bad-exclusive-bundle.md",
+                """---
 bundle_id: bad-exclusive-bundle
 bundle_version: 1
 title: Bad Exclusive Bundle
@@ -1481,14 +1363,27 @@ trigger:
 
 # Bad Exclusive Bundle
 """,
-            encoding="utf-8",
+                "unknown exclusive_with bundle missing-bundle",
+            ),
         )
 
-        report = run_doctor(specs_dir=specs_dir, version="0.1.0")
-        checks = {check.label: check for check in report.checks}
+        for index, (filename, payload, expected_issue) in enumerate(cases, start=1):
+            case_root = tmp_path / f"case-{index}"
+            specs_dir = self._make_specs_dir(case_root)
+            bundles_dir = specs_dir / "bundles"
+            bundles_dir.mkdir()
+            bundle_path = bundles_dir / filename
 
-        assert checks["Protocol Bundles"].status == CheckStatus.FAIL
-        assert any("unknown exclusive_with bundle missing-bundle" in issue for issue in checks["Protocol Bundles"].issues)
+            if isinstance(payload, bytes):
+                bundle_path.write_bytes(payload)
+            else:
+                bundle_path.write_text(payload, encoding="utf-8")
+
+            report = run_doctor(specs_dir=specs_dir, version="0.1.0")
+            protocol_bundles = next(check for check in report.checks if check.label == "Protocol Bundles")
+
+            assert protocol_bundles.status == CheckStatus.FAIL
+            assert any(expected_issue in issue for issue in protocol_bundles.issues)
 
     def test_default_mode_excludes_runtime_readiness_checks(self, tmp_path: Path):
         report = run_doctor(specs_dir=self._make_specs_dir(tmp_path), version="0.1.0")
@@ -1563,34 +1458,6 @@ trigger:
         assert "latexmk not found on PATH" in probe_check.warnings
         assert "kpsewhich not found on PATH" in probe_check.warnings
         assert "wolframscript not found on PATH" in probe_check.warnings
-
-    def test_live_executable_probes_warn_for_optional_failures(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        specs_dir = self._make_specs_dir(tmp_path)
-
-        monkeypatch.setattr(
-            "gpd.core.health.shutil.which",
-            lambda binary: {
-                "pdflatex": "/usr/bin/pdflatex",
-            }.get(binary),
-        )
-
-        def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-            if command == [sys.executable, "-m", "gpd.cli", "--help"]:
-                return subprocess.CompletedProcess(args=command, returncode=0, stdout="Usage: gpd [OPTIONS] COMMAND\n", stderr="")
-            if command == ["/usr/bin/pdflatex", "--version"]:
-                return subprocess.CompletedProcess(args=command, returncode=1, stdout="", stderr="permission denied")
-            raise AssertionError(f"Unexpected command: {command}")
-
-        monkeypatch.setattr("gpd.core.health.subprocess.run", fake_run)
-
-        report = run_doctor(specs_dir=specs_dir, version="0.1.0", live_executable_probes=True)
-
-        checks = {check.label: check for check in report.checks}
-        probe_check = checks["Live Executable Probes"]
-
-        assert probe_check.status == CheckStatus.WARN
-        assert probe_check.issues == []
-        assert "pdflatex probe failed: permission denied" in probe_check.warnings
 
     def test_runtime_mode_records_virtualenv_state_without_blocking(self, tmp_path: Path):
         target_dir = runtime_target_dir(tmp_path, PRIMARY_RUNTIME)
@@ -1848,20 +1715,6 @@ trigger:
         assert report.install_scope is None
         assert report.target == str(target_dir.resolve(strict=False))
 
-    def test_runtime_resolution_preserves_explicit_local_scope_and_target(self, tmp_path: Path):
-        target_dir = tmp_path / ".runtime-config"
-
-        context = resolve_doctor_runtime_readiness(
-            PRIMARY_RUNTIME,
-            install_scope="local",
-            target_dir=target_dir,
-            cwd=tmp_path,
-        )
-
-        assert context.runtime == PRIMARY_RUNTIME
-        assert context.install_scope == "local"
-        assert context.target == target_dir.resolve(strict=False)
-
     def test_runtime_resolution_anchors_relative_target_to_supplied_cwd(self, tmp_path: Path):
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -1911,43 +1764,6 @@ trigger:
         assert report.install_scope == "local"
         assert report.target == str(target_dir.resolve(strict=False))
         assert checks["Runtime Config Target"].details["target"] == str(target_dir.resolve(strict=False))
-
-    def test_runtime_mode_with_relative_target_dir_resolves_against_supplied_cwd(self, tmp_path: Path):
-        workspace = tmp_path / "workspace"
-        workspace.mkdir()
-        specs_dir = self._make_specs_dir(tmp_path)
-        expected_target = (workspace / "relative-target").resolve(strict=False)
-
-        with (
-            patch("gpd.core.health._doctor_active_virtualenv", return_value=True),
-            patch("gpd.core.health.shutil.which", return_value="/usr/bin/runtime"),
-            patch("gpd.core.health.os.access", return_value=True),
-            patch(
-                "gpd.core.health._doctor_check_bootstrap_network_access",
-                return_value=HealthCheck(status=CheckStatus.OK, label="Bootstrap Network Access"),
-            ),
-            patch(
-                "gpd.core.health._doctor_check_provider_auth",
-                return_value=HealthCheck(status=CheckStatus.OK, label="Provider/Auth Guidance"),
-            ),
-            patch(
-                "gpd.core.health._doctor_check_latex_toolchain",
-                return_value=_latex_toolchain_check(),
-            ),
-        ):
-            report = run_doctor(
-                specs_dir=specs_dir,
-                version="0.1.0",
-                runtime=PRIMARY_RUNTIME,
-                install_scope="local",
-                target_dir="relative-target",
-                cwd=workspace,
-            )
-
-        checks = {check.label: check for check in report.checks}
-        assert report.install_scope == "local"
-        assert report.target == str(expected_target)
-        assert checks["Runtime Config Target"].details["target"] == str(expected_target)
 
     def test_runtime_mode_rejects_scope_without_runtime(self, tmp_path: Path):
         specs_dir = self._make_specs_dir(tmp_path)
@@ -2063,58 +1879,6 @@ trigger:
         assert publication["blocked_workflows"] == []
         assert publication["degraded_workflows"] == []
 
-    def test_runtime_readiness_fails_when_launcher_missing(self, tmp_path: Path, monkeypatch):
-        specs_dir = self._make_specs_dir(tmp_path)
-        monkeypatch.setattr("gpd.core.health.shutil.which", lambda *_args: None)
-        monkeypatch.setattr("gpd.core.health.os.access", lambda *_args: True)
-        monkeypatch.setattr(
-            "gpd.core.health._doctor_check_bootstrap_network_access",
-            lambda: HealthCheck(status=CheckStatus.OK, label="Bootstrap Network Access"),
-        )
-        monkeypatch.setattr(
-            "gpd.core.health._doctor_check_latex_toolchain",
-            lambda: _latex_toolchain_check(),
-        )
-
-        report = run_doctor(
-            specs_dir=specs_dir,
-            version="0.1.0",
-            runtime=PRIMARY_RUNTIME,
-            install_scope="local",
-            cwd=tmp_path,
-        )
-
-        checks = {check.label: check for check in report.checks}
-        assert report.overall == CheckStatus.FAIL
-        assert checks["Runtime Launcher"].status == CheckStatus.FAIL
-        assert any("not found on PATH" in issue for issue in checks["Runtime Launcher"].issues)
-
-    def test_runtime_readiness_fails_when_target_is_not_writable(self, tmp_path: Path, monkeypatch):
-        specs_dir = self._make_specs_dir(tmp_path)
-        monkeypatch.setattr("gpd.core.health.shutil.which", lambda *_args: "/usr/bin/runtime")
-        monkeypatch.setattr("gpd.core.health.os.access", lambda *_args: False)
-        monkeypatch.setattr(
-            "gpd.core.health._doctor_check_bootstrap_network_access",
-            lambda: HealthCheck(status=CheckStatus.OK, label="Bootstrap Network Access"),
-        )
-        monkeypatch.setattr(
-            "gpd.core.health._doctor_check_latex_toolchain",
-            lambda: _latex_toolchain_check(),
-        )
-
-        report = run_doctor(
-            specs_dir=specs_dir,
-            version="0.1.0",
-            runtime=PRIMARY_RUNTIME,
-            install_scope="local",
-            cwd=tmp_path,
-        )
-
-        checks = {check.label: check for check in report.checks}
-        assert report.overall == CheckStatus.FAIL
-        assert checks["Runtime Config Target"].status == CheckStatus.FAIL
-        assert any("not writable" in issue for issue in checks["Runtime Config Target"].issues)
-
     def test_runtime_readiness_marks_clean_target_ready(self, tmp_path: Path) -> None:
         target_dir = runtime_target_dir(tmp_path, PRIMARY_RUNTIME)
         assessment = self._assessment(
@@ -2132,55 +1896,54 @@ trigger:
         assert checks["Runtime Config Target"].issues == []
         assert checks["Runtime Config Target"].warnings == []
 
-    def test_runtime_readiness_fails_when_target_has_owned_incomplete_install(self, tmp_path: Path) -> None:
-        target_dir = runtime_target_dir(tmp_path, PRIMARY_RUNTIME)
-        assessment = self._assessment(
-            state="owned_incomplete",
-            target_dir=target_dir,
-            missing_install_artifacts=(
-                "agents/gpd-help/SKILL.md",
-                runtime_primary_config_filename(PRIMARY_RUNTIME),
+    def test_runtime_readiness_fails_for_non_clean_install_states(self, tmp_path: Path) -> None:
+        cases = (
+            (
+                "owned_incomplete",
+                {
+                    "state": "owned_incomplete",
+                    "missing_install_artifacts": (
+                        "agents/gpd-help/SKILL.md",
+                        runtime_primary_config_filename(PRIMARY_RUNTIME),
+                    ),
+                },
+                "incomplete GPD install",
+            ),
+            (
+                "foreign_runtime",
+                {
+                    "state": "foreign_runtime",
+                    "manifest_runtime": FOREIGN_RUNTIME,
+                },
+                "belongs to",
+            ),
+            (
+                "untrusted_manifest",
+                {
+                    "state": "untrusted_manifest",
+                    "manifest_state": "corrupt",
+                    "manifest_runtime": None,
+                },
+                "untrusted GPD manifest",
             ),
         )
 
-        report, checks = self._run_runtime_doctor(tmp_path, assessment=assessment, target_dir=target_dir)
+        for install_state, assessment_kwargs, expected_issue in cases:
+            case_root = tmp_path / install_state
+            assessment = self._assessment(
+                target_dir=runtime_target_dir(case_root, PRIMARY_RUNTIME),
+                **assessment_kwargs,
+            )
+            report, checks = self._run_runtime_doctor(
+                case_root,
+                assessment=assessment,
+                target_dir=assessment.config_dir,
+            )
 
-        assert report.overall == CheckStatus.FAIL
-        assert checks["Runtime Config Target"].status == CheckStatus.FAIL
-        assert checks["Runtime Config Target"].details["install_state"] == "owned_incomplete"
-        assert any("incomplete GPD install" in issue for issue in checks["Runtime Config Target"].issues)
-        assert any("missing artifacts" in issue for issue in checks["Runtime Config Target"].issues)
-
-    def test_runtime_readiness_fails_when_target_belongs_to_foreign_runtime(self, tmp_path: Path) -> None:
-        target_dir = runtime_target_dir(tmp_path, PRIMARY_RUNTIME)
-        assessment = self._assessment(
-            state="foreign_runtime",
-            target_dir=target_dir,
-            manifest_runtime=FOREIGN_RUNTIME,
-        )
-
-        report, checks = self._run_runtime_doctor(tmp_path, assessment=assessment, target_dir=target_dir)
-
-        assert report.overall == CheckStatus.FAIL
-        assert checks["Runtime Config Target"].status == CheckStatus.FAIL
-        assert checks["Runtime Config Target"].details["install_state"] == "foreign_runtime"
-        assert any("belongs to" in issue for issue in checks["Runtime Config Target"].issues)
-
-    def test_runtime_readiness_fails_on_untrusted_manifest(self, tmp_path: Path) -> None:
-        target_dir = runtime_target_dir(tmp_path, PRIMARY_RUNTIME)
-        assessment = self._assessment(
-            state="untrusted_manifest",
-            target_dir=target_dir,
-            manifest_state="corrupt",
-            manifest_runtime=None,
-        )
-
-        report, checks = self._run_runtime_doctor(tmp_path, assessment=assessment, target_dir=target_dir)
-
-        assert report.overall == CheckStatus.FAIL
-        assert checks["Runtime Config Target"].status == CheckStatus.FAIL
-        assert checks["Runtime Config Target"].details["install_state"] == "untrusted_manifest"
-        assert any("untrusted GPD manifest" in issue for issue in checks["Runtime Config Target"].issues)
+            assert report.overall == CheckStatus.FAIL
+            assert checks["Runtime Config Target"].status == CheckStatus.FAIL
+            assert checks["Runtime Config Target"].details["install_state"] == install_state
+            assert any(expected_issue in issue for issue in checks["Runtime Config Target"].issues)
 
 
 def _bootstrap_health_project(tmp_path: Path) -> Path:

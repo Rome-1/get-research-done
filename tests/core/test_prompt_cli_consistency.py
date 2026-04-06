@@ -42,7 +42,6 @@ PROMPT_ROOTS = (
     REPO_ROOT / "src/gpd/specs/references",
     REPO_ROOT / "src/gpd/specs/templates",
 )
-GRAPH_PATH = REPO_ROOT / "tests" / "README.md"
 ROOT_COMMAND_RE = re.compile(r"@app\.command\(\s*\"([a-z0-9-]+)\"(?:,|\))", re.MULTILINE)
 TYPER_GROUP_RE = re.compile(r"app\.add_typer\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*name=\"([a-z0-9-]+)\"", re.MULTILINE)
 GROUP_COMMAND_RE = re.compile(r"@{group}\.command\(\s*\"([a-z0-9-]+)\"(?:,|\))", re.MULTILINE)
@@ -130,31 +129,38 @@ def _extract_gpd_command_surfaces(
     return surfaces
 
 
-def test_prompt_sources_use_only_real_gpd_command_surfaces() -> None:
+def test_prompt_sources_keep_command_surface_rules_canonical_and_consistent() -> None:
     allowed = _declared_command_surfaces()
-    content = CLI_PATH.read_text(encoding="utf-8")
-    root_commands = _declared_root_commands(content)
-    group_commands = _declared_groups(content)
-    invalid: list[str] = []
+    cli_content = CLI_PATH.read_text(encoding="utf-8")
+    root_commands = _declared_root_commands(cli_content)
+    group_commands = _declared_groups(cli_content)
+
+    invalid_surfaces: list[str] = []
+    noncanonical_surfaces: list[str] = []
+    raw_after_subcommand: list[str] = []
+    summary_extract_fields: list[str] = []
 
     for path in _iter_prompt_sources():
         content = path.read_text(encoding="utf-8")
+        relpath = str(path.relative_to(REPO_ROOT))
+
         for surface in _extract_gpd_command_surfaces(content, root_commands=root_commands, group_commands=group_commands):
             if surface not in allowed:
-                invalid.append(f"{path.relative_to(REPO_ROOT)} -> {surface}")
+                invalid_surfaces.append(f"{relpath} -> {surface}")
 
-    assert invalid == []
-
-
-def test_prompt_sources_use_canonical_gpd_command_syntax() -> None:
-    invalid: list[str] = []
-
-    for path in _iter_prompt_sources():
-        content = path.read_text(encoding="utf-8")
         for match in NON_CANONICAL_GPD_COMMAND_RE.finditer(content):
-            invalid.append(f"{path.relative_to(REPO_ROOT)} -> {match.group(0)}")
+            noncanonical_surfaces.append(f"{relpath} -> {match.group(0)}")
 
-    assert invalid == []
+        for match in RAW_AFTER_SUBCOMMAND_RE.finditer(content):
+            raw_after_subcommand.append(f"{relpath} -> {match.group(0)}")
+
+        for match in SUMMARY_EXTRACT_FIELDS_RE.finditer(content):
+            summary_extract_fields.append(f"{relpath} -> {match.group(0)}")
+
+    assert invalid_surfaces == []
+    assert noncanonical_surfaces == []
+    assert raw_after_subcommand == []
+    assert summary_extract_fields == []
 
 
 def test_help_prompt_delegates_full_reference_to_workflow() -> None:
@@ -376,18 +382,6 @@ def test_new_milestone_prompt_mentions_planning_commit_docs() -> None:
         assert "gpd:discuss-phase [N]" in content or "gpd:discuss-phase 1" in content
 
 
-def test_doc_sources_place_global_raw_before_subcommands() -> None:
-    invalid: list[str] = []
-    doc_paths = [*(_iter_prompt_sources()), GRAPH_PATH]
-
-    for path in doc_paths:
-        content = path.read_text(encoding="utf-8")
-        for match in RAW_AFTER_SUBCOMMAND_RE.finditer(content):
-            invalid.append(f"{path.relative_to(REPO_ROOT)} -> {match.group(0)}")
-
-    assert invalid == []
-
-
 def test_command_prompts_declare_valid_context_modes() -> None:
     missing: list[str] = []
     invalid: list[str] = []
@@ -402,18 +396,6 @@ def test_command_prompts_declare_valid_context_modes() -> None:
             invalid.append(f"{path.relative_to(REPO_ROOT)} -> {mode}")
 
     assert missing == []
-    assert invalid == []
-
-
-def test_prompt_sources_use_summary_extract_field_flag_not_fields() -> None:
-    invalid: list[str] = []
-    doc_paths = [*(_iter_prompt_sources()), GRAPH_PATH]
-
-    for path in doc_paths:
-        content = path.read_text(encoding="utf-8")
-        for match in SUMMARY_EXTRACT_FIELDS_RE.finditer(content):
-            invalid.append(f"{path.relative_to(REPO_ROOT)} -> {match.group(0)}")
-
     assert invalid == []
 
 
@@ -592,7 +574,7 @@ def test_help_prompt_session_management_keeps_pause_before_leave_and_resume_on_r
         require_generic_compatibility_note=True,
     )
     assert resume_authority_public_vocabulary_intro() in help_workflow
-    assert "Compatibility-only intake fields stay internal" in help_workflow
+    assert "compatibility-only intake fields stay internal" in help_workflow
     assert "state.json.continuation.handoff.resume_file" not in help_workflow
     assert "compat_resume_surface" not in help_workflow
     assert resume_authority_fields() == (

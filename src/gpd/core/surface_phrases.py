@@ -36,7 +36,6 @@ from gpd.core.public_surface_contract import (
 from gpd.core.public_surface_contract import (
     recovery_local_snapshot_command as _public_recovery_local_snapshot_command,
 )
-from gpd.core.workflow_presets import list_workflow_presets
 
 __all__ = [
     "command_follow_up_action",
@@ -360,6 +359,8 @@ def workflow_preset_storage_note() -> str:
 
 
 def workflow_preset_surface_note() -> str:
+    from gpd.core.workflow_presets import list_workflow_presets
+
     preset_labels = ", ".join(preset.id for preset in list_workflow_presets())
     return (
         f"Use `{_public_local_cli_presets_list_command()}` to inspect the workflow preset catalog "

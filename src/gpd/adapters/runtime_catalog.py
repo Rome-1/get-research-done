@@ -251,21 +251,31 @@ def _require_string(value: object, *, label: str) -> str:
     return value
 
 
+def _format_quoted_disjunction(values: Iterable[str]) -> str:
+    normalized = tuple(sorted({value for value in values if value}))
+    if not normalized:
+        return "a bundled launch-wrapper surface literal"
+    if len(normalized) == 1:
+        return f'"{normalized[0]}"'
+    quoted = ", ".join(f'"{value}"' for value in normalized)
+    return f"one of {quoted}"
+
+
 def _require_runtime_surface_label(
     value: object,
     *,
     label: str,
-    allow_managed_wrapper: bool = False,
+    special_values: frozenset[str] = frozenset(),
 ) -> str:
     normalized = _require_string(value, label=label)
     if normalized == "none":
         return normalized
-    if allow_managed_wrapper and normalized == "managed-launcher-wrapper":
+    if normalized in special_values:
         return normalized
     if _RUNTIME_CONFIG_SURFACE_LABEL_RE.fullmatch(normalized) is None:
-        if allow_managed_wrapper:
+        if special_values:
             raise ValueError(
-                f'{label} must be "none", "managed-launcher-wrapper", or a config surface label like file:key'
+                f'{label} must be "none", {_format_quoted_disjunction(special_values)}, or a config surface label like file:key'
             )
         raise ValueError(f'{label} must be "none" or a config surface label like file:key')
     return normalized
@@ -332,7 +342,12 @@ def _parse_global_config(entry: dict[str, object], *, label: str) -> GlobalConfi
     )
 
 
-def _parse_capabilities(entry: object, *, label: str) -> RuntimeCapabilityPolicy:
+def _parse_capabilities(
+    entry: object,
+    *,
+    label: str,
+    launch_wrapper_permission_surface_kinds: frozenset[str],
+) -> RuntimeCapabilityPolicy:
     payload = _require_mapping(entry, label=label)
     _require_allowed_keys(payload, label=label, allowed_keys=_RUNTIME_CAPABILITY_KEYS)
     _require_keys(payload, label=label, required_keys=_RUNTIME_CAPABILITY_KEYS)
@@ -349,7 +364,7 @@ def _parse_capabilities(entry: object, *, label: str) -> RuntimeCapabilityPolicy
         permission_surface_kind=_require_runtime_surface_label(
             payload.get("permission_surface_kind"),
             label=f"{label}.permission_surface_kind",
-            allow_managed_wrapper=True,
+            special_values=launch_wrapper_permission_surface_kinds,
         ),
         prompt_free_mode_value=prompt_free_mode_value,
         supports_runtime_permission_sync=_require_bool(
@@ -385,14 +400,15 @@ def _parse_capabilities(entry: object, *, label: str) -> RuntimeCapabilityPolicy
         ),
     )
     if policy.permissions_surface == "config-file":
-        if policy.permission_surface_kind in {"none", "managed-launcher-wrapper"}:
+        if policy.permission_surface_kind == "none" or policy.permission_surface_kind in launch_wrapper_permission_surface_kinds:
             raise ValueError(f"{label}.permission_surface_kind must be a config surface label when permissions_surface=config-file")
         if not policy.supports_runtime_permission_sync:
             raise ValueError(f"{label}.supports_runtime_permission_sync must be true when permissions_surface=config-file")
     elif policy.permissions_surface == "launch-wrapper":
-        if policy.permission_surface_kind != "managed-launcher-wrapper":
+        if policy.permission_surface_kind not in launch_wrapper_permission_surface_kinds:
             raise ValueError(
-                f'{label}.permission_surface_kind must be "managed-launcher-wrapper" when permissions_surface=launch-wrapper'
+                f"{label}.permission_surface_kind must be {_format_quoted_disjunction(launch_wrapper_permission_surface_kinds)} "
+                "when permissions_surface=launch-wrapper"
             )
         if not policy.supports_runtime_permission_sync:
             raise ValueError(f"{label}.supports_runtime_permission_sync must be true when permissions_surface=launch-wrapper")
@@ -408,6 +424,24 @@ def _parse_capabilities(entry: object, *, label: str) -> RuntimeCapabilityPolicy
     if not policy.supports_prompt_free_mode and policy.prompt_free_requires_relaunch:
         raise ValueError(f"{label}.prompt_free_requires_relaunch requires supports_prompt_free_mode=true")
     return policy
+
+
+def _derive_launch_wrapper_permission_surface_kinds(raw_entries: list[object]) -> frozenset[str]:
+    values: set[str] = set()
+    for entry in raw_entries:
+        if not isinstance(entry, dict):
+            continue
+        capabilities = entry.get("capabilities")
+        if not isinstance(capabilities, dict):
+            continue
+        if capabilities.get("permissions_surface") != "launch-wrapper":
+            continue
+        surface_kind = capabilities.get("permission_surface_kind")
+        if isinstance(surface_kind, str):
+            stripped = surface_kind.strip()
+            if stripped:
+                values.add(stripped)
+    return frozenset(values)
 
 
 def _validate_runtime_catalog_uniqueness(descriptors: list[RuntimeDescriptor]) -> None:
@@ -531,6 +565,7 @@ def _load_catalog() -> tuple[RuntimeDescriptor, ...]:
     raw_entries = json.loads(_catalog_path().read_text(encoding="utf-8"))
     if not isinstance(raw_entries, list):
         raise ValueError("runtime catalog must be a JSON array")
+    launch_wrapper_permission_surface_kinds = _derive_launch_wrapper_permission_surface_kinds(raw_entries)
     descriptors: list[RuntimeDescriptor] = []
     for index, entry in enumerate(raw_entries):
         label = f"runtime catalog entry {index}"
@@ -562,7 +597,11 @@ def _load_catalog() -> tuple[RuntimeDescriptor, ...]:
                     allow_empty=False,
                 ),
                 global_config=_parse_global_config(payload["global_config"], label=f"{label}.global_config"),
-                capabilities=_parse_capabilities(payload["capabilities"], label=f"{label}.capabilities"),
+                capabilities=_parse_capabilities(
+                    payload["capabilities"],
+                    label=f"{label}.capabilities",
+                    launch_wrapper_permission_surface_kinds=launch_wrapper_permission_surface_kinds,
+                ),
                 hook_payload=_parse_hook_payload(payload["hook_payload"], label=f"{label}.hook_payload"),
                 manifest_file_prefixes=_require_string_tuple(
                     payload["manifest_file_prefixes"]

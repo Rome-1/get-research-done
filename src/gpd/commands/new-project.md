@@ -50,7 +50,7 @@ If no project config exists yet, the workflow opens with the physics-questioning
 
 <process>
 **CRITICAL: First, read the full workflow file using the file_read tool:**
-Read the file at {GPD_INSTALL_DIR}/workflows/new-project.md — this contains the complete step-by-step instructions (1693 lines) for initializing a research project. Do NOT improvise. Follow the workflow file exactly.
+Read {GPD_INSTALL_DIR}/workflows/new-project.md first and follow it exactly.
 
 Also read these reference files:
 - {GPD_INSTALL_DIR}/references/research/questioning.md (questioning protocol)

@@ -189,7 +189,7 @@ def test_entrypoint_reexecs_from_checkout_when_running_outside_checkout(tmp_path
     assert env["PYTHONPATH"].split(os.pathsep)[0] == str(checkout / "src")
 
 
-def test_help():
+def test_help_surfaces_core_and_auxiliary_commands() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     assert "observe" in result.output
@@ -197,11 +197,6 @@ def test_help():
     assert "phase" in result.output
     assert "health" in result.output
     assert "paper-build" in result.output
-
-
-def test_help_surfaces_local_setup_and_preflight_commands() -> None:
-    result = runner.invoke(app, ["--help"])
-    assert result.exit_code == 0
     assert "doctor" in result.output
     assert "Check GPD installation and environment health" in result.output
     assert "inspect runtime readiness" in result.output
@@ -213,11 +208,6 @@ def test_help_surfaces_local_setup_and_preflight_commands() -> None:
     assert "validate" in result.output
     assert "readiness" in result.output
     assert "observability" in result.output
-
-
-def test_help_surfaces_permissions_readiness_commands() -> None:
-    result = runner.invoke(app, ["--help"])
-    assert result.exit_code == 0
     normalized_output = _normalize_cli_output(result.output)
     assert "permissions" in normalized_output
     assert "Runtime permission readiness and sync" in normalized_output
@@ -226,32 +216,13 @@ def test_help_surfaces_permissions_readiness_commands() -> None:
     assert "gpd permissions status --runtime <runtime> --autonomy balanced" in normalized_output
     assert "gpd observe execution" in normalized_output
     assert "gpd resume --recent" in normalized_output
-
-
-def test_help_surfaces_authoritative_local_cli_bridge_inventory() -> None:
     from gpd.core.public_surface_contract import local_cli_bridge_commands
 
-    result = runner.invoke(app, ["--help"])
-
-    assert result.exit_code == 0
-    normalized_output = _normalize_cli_output(result.output)
     for command in local_cli_bridge_commands():
         assert command in normalized_output
-
-
-def test_help_surfaces_workflow_presets_surface() -> None:
-    result = runner.invoke(app, ["--help"])
-    assert result.exit_code == 0
-    normalized_output = " ".join(result.output.split())
     assert "presets" in normalized_output
     assert "Workflow presets for local CLI preview" in normalized_output
     assert "application" in normalized_output
-
-
-def test_help_surfaces_integrations_surface() -> None:
-    result = runner.invoke(app, ["--help"])
-    assert result.exit_code == 0
-    normalized_output = " ".join(result.output.split())
     assert "integrations" in normalized_output
     assert "Optional shared capability integrations" in normalized_output
 

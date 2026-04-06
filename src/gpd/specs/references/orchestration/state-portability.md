@@ -9,10 +9,7 @@ The current continuation architecture separates execution provenance from bounde
 `state.json.continuation` is the durable authority.
 
 Public resume vocabulary centers on canonical continuation fields: `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `active_bounded_segment`, `derived_execution_head`, `active_resume_result`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, and `resume_candidates`.
-Those fields are the public top-level resume vocabulary only.
-Legacy raw-intake aliases stay inside backend-only compatibility inputs only.
-Those legacy raw-intake aliases are not part of the public top-level resume vocabulary.
-Compatibility-only intake fields stay internal and are not part of the public top-level resume vocabulary.
+Those fields are the public top-level resume vocabulary only; compatibility-only intake fields stay internal.
 
 | Surface | Current Role | Authority |
 |---------|--------------|-----------|

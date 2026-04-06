@@ -100,7 +100,7 @@ def test_reapply_patches_keeps_manifest_regeneration_contract_honest() -> None:
     workflow = _workflow_text("reapply-patches.md")
 
     assert "do not invent a manual manifest-regeneration step" in workflow
-    assert "The managed file manifest is rebuilt by the next `/gpd:update`" in workflow
+    assert "The managed file manifest is rebuilt by the next `gpd:update`" in workflow
     assert "regenerate the file manifest" not in workflow
 
 
@@ -126,7 +126,7 @@ def test_new_milestone_roadmapper_prompt_surfaces_contract_gate_inputs() -> None
 def test_help_resume_surface_stays_user_facing() -> None:
     workflow = _workflow_text("help.md")
 
-    assert "Compatibility-only intake fields stay internal" in workflow
+    assert "compatibility-only intake fields stay internal" in workflow.lower()
     assert "compat_resume_surface" not in workflow
     assert "session.resume_file" not in workflow
     assert "shared resume-surface resolver owns canonical candidate kind/origin semantics" not in workflow

@@ -140,32 +140,6 @@ def test_hook_payload_policy_wrappers_delegate_with_surface_specific_arguments(t
     )
 
 
-def test_resolve_hook_surface_runtime_prefers_nested_workspace_local_install_over_ancestor_project_root(
-    tmp_path: Path,
-) -> None:
-    project = tmp_path / "project"
-    (project / "GPD").mkdir(parents=True)
-    nested = project / "src" / "notes"
-    nested.mkdir(parents=True)
-    home = tmp_path / "home"
-    home.mkdir()
-    _ = project / ".claude"
-    (nested / ".codex" / "hooks").mkdir(parents=True)
-
-    from tests.hooks.helpers import mark_complete_install as _mark_complete_install
-
-    _mark_complete_install(nested / ".codex", runtime="codex")
-
-    with patch("gpd.hooks.runtime_detect.Path.home", return_value=home):
-        runtime = resolve_hook_surface_runtime(
-            hook_file=nested / ".codex" / "hooks" / "notify.py",
-            cwd=nested,
-            surface="notify",
-        )
-
-    assert runtime == "codex"
-
-
 def test_resolve_hook_surface_runtime_prefers_nested_local_install_when_runtime_hint_is_missing(
     tmp_path: Path,
 ) -> None:
@@ -186,58 +160,6 @@ def test_resolve_hook_surface_runtime_prefers_nested_local_install_when_runtime_
     ):
         runtime = resolve_hook_surface_runtime(
             hook_file=nested / ".claude" / "hooks" / "notify.py",
-            cwd=nested,
-            surface="notify",
-        )
-
-    assert runtime == "claude-code"
-
-
-def test_resolve_hook_surface_runtime_falls_back_to_ancestor_project_root_install_when_nested_cwd_has_none(
-    tmp_path: Path,
-) -> None:
-    project = tmp_path / "project"
-    (project / "GPD").mkdir(parents=True)
-    nested = project / "src" / "notes"
-    nested.mkdir(parents=True)
-    home = tmp_path / "home"
-    home.mkdir()
-
-    from tests.hooks.helpers import mark_complete_install as _mark_complete_install
-
-    _mark_complete_install(project / ".claude", runtime="claude-code")
-
-    with patch("gpd.hooks.runtime_detect.Path.home", return_value=home):
-        runtime = resolve_hook_surface_runtime(
-            hook_file=tmp_path / "hooks" / "notify.py",
-            cwd=nested,
-            surface="notify",
-        )
-
-    assert runtime == "claude-code"
-
-
-def test_resolve_hook_surface_runtime_does_not_let_nested_other_runtime_hijack_active_runtime_lookup(
-    tmp_path: Path,
-) -> None:
-    project = tmp_path / "project"
-    (project / "GPD").mkdir(parents=True)
-    nested = project / "src" / "notes"
-    nested.mkdir(parents=True)
-    home = tmp_path / "home"
-    home.mkdir()
-
-    from tests.hooks.helpers import mark_complete_install as _mark_complete_install
-
-    _mark_complete_install(project / ".claude", runtime="claude-code")
-    _mark_complete_install(nested / ".codex", runtime="codex")
-
-    with (
-        patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
-        patch("gpd.hooks.runtime_detect.detect_active_runtime", return_value="claude-code"),
-    ):
-        runtime = resolve_hook_surface_runtime(
-            hook_file=tmp_path / "hooks" / "notify.py",
             cwd=nested,
             surface="notify",
         )

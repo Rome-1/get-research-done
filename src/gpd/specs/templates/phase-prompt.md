@@ -12,8 +12,22 @@ Before authoring or revising the `contract:` block, use the canonical schema bel
 
 Surface machine-checkable prerequisites up front with `tool_requirements`; keep human-only setup in `researcher_setup`.
 Gap-closure plans still use `type: execute`. Mark verification-repair plans with `gap_closure: true` instead of inventing a third plan type.
-Use the schema include for contract semantics rather than repeating them here.
 Keep proofs auditable in the body when a plan is proof-bearing, and rerun stale proof audits before `status: passed`.
+
+Surface any hard validation requirements up front so they are visible on the plan surface before the body is written.
+When a plan genuinely depends on specialized tooling outside the guaranteed Python/SymPy baseline, declare it in frontmatter `tool_requirements` before drafting task prose.
+Use the included schema for contract shape, cardinality, and enum defaults.
+The defaultable semantic fields still exist in the contract surface: `observables[].kind`, `deliverables[].kind`, `acceptance_tests[].kind`, `references[].kind`, `references[].role`, and `links[].relation`.
+They default to `other`, but the more specific value remains mandatory when the plan already knows it.
+For non-scoping plans, keep the contract concretely grounded rather than placeholder-only.
+Treat `approach_policy` as execution policy only; it does not satisfy grounding on its own.
+Grounding still needs explicit anchors from the contract schema; do not omit required references.
+`must_surface` uses YAML booleans.
+When `must_surface` is `true`, keep `required_actions[]` and `applies_to[]` non-empty.
+`carry_forward_to[]` is free-text workflow scope only and must not be overloaded with contract IDs.
+`uncertainty_markers` must stay a YAML object, not a string or list.
+For `observables[].kind: proof_obligation`, name the theorem or claim plus the hypotheses/parameter regime explicitly so audits can catch silently specialized parameters.
+If a proof or theorem statement changes after a proof audit, treat that audit as stale before `status: passed` is possible for the affected target.
 
 ---
 

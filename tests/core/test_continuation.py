@@ -203,7 +203,7 @@ def test_resolve_continuation_keeps_canonical_handoff_when_live_bounded_segment_
     assert projection.resumable is False
 
 
-def test_resolve_continuation_surfaces_invalid_canonical_resume_pointer_without_falling_back_to_legacy(
+def test_resolve_continuation_projects_live_execution_when_canonical_pointer_is_invalid(
     tmp_path: Path,
 ) -> None:
     external_root = tmp_path.parent / f"{tmp_path.name}-external"
@@ -211,6 +211,7 @@ def test_resolve_continuation_surfaces_invalid_canonical_resume_pointer_without_
     external_resume.parent.mkdir(parents=True, exist_ok=True)
     external_resume.write_text("resume\n", encoding="utf-8")
     _write_resume(tmp_path, "GPD/phases/03-analysis/legacy.md")
+    _write_resume(tmp_path, "GPD/phases/03-analysis/live.md")
 
     raw_continuation = {
         "schema_version": 1,
@@ -234,19 +235,21 @@ def test_resolve_continuation_surfaces_invalid_canonical_resume_pointer_without_
             },
         },
         current_execution={
-            "resume_file": "GPD/phases/03-analysis/legacy.md",
+            "resume_file": "GPD/phases/03-analysis/live.md",
             "segment_status": "paused",
-            "segment_id": "legacy-seg",
+            "segment_id": "live-seg",
         },
     )
 
-    assert projection.source == ContinuationSource.CANONICAL
-    assert projection.continuation.is_empty is True
+    assert projection.source == ContinuationSource.DERIVED_EXECUTION
+    assert projection.continuation.is_empty is False
+    assert projection.continuation.bounded_segment is not None
+    assert projection.continuation.bounded_segment.resume_file == "GPD/phases/03-analysis/live.md"
     assert projection.recorded_handoff_resume_file is None
     assert projection.handoff_resume_file is None
-    assert projection.active_resume_file is None
-    assert projection.active_resume_source is None
-    assert projection.resumable is False
+    assert projection.active_resume_file == "GPD/phases/03-analysis/live.md"
+    assert projection.active_resume_source == ContinuationResumeSource.BOUNDED_SEGMENT
+    assert projection.resumable is True
 
 
 def test_resolve_continuation_falls_back_to_handoff_when_canonical_bounded_segment_pointer_is_missing(
@@ -308,24 +311,6 @@ def test_resolve_continuation_projects_portable_current_execution_when_canonical
     assert projection.resumable is True
 
 
-def test_resolve_continuation_does_not_use_session_last_result_id_without_canonical_continuation(
-    tmp_path: Path,
-) -> None:
-    projection = resolve_continuation(
-        tmp_path,
-        state={
-            "session": {
-                "last_date": "2026-03-29T12:00:00+00:00",
-                "last_result_id": "result-03",
-            }
-        },
-    )
-
-    assert projection.source == ContinuationSource.EMPTY
-    assert projection.continuation.is_empty is True
-    assert projection.active_resume_file is None
-
-
 def test_resolve_continuation_ignores_nonportable_or_missing_live_snapshot_without_promoting_session_handoff(
     tmp_path: Path,
 ) -> None:
@@ -349,74 +334,6 @@ def test_resolve_continuation_ignores_nonportable_or_missing_live_snapshot_witho
     assert projection.active_resume_source is None
     assert projection.active_resume_file is None
     assert projection.resumable is False
-
-
-def test_resolve_continuation_does_not_promote_session_handoff_without_canonical_continuation(
-    tmp_path: Path,
-) -> None:
-    projection = resolve_continuation(
-        tmp_path,
-        state={
-            "session": {
-                "last_date": "2026-03-29T12:00:00+00:00",
-                "resume_file": "GPD/phases/03-analysis/handoff.md",
-                "stopped_at": "Paused after Task 4",
-            }
-        },
-    )
-
-    assert projection.source == ContinuationSource.EMPTY
-    assert projection.recorded_handoff_resume_file is None
-    assert projection.handoff_resume_file is None
-    assert projection.missing_handoff_resume_file is None
-    assert projection.active_resume_file is None
-    assert projection.active_resume_source is None
-    assert projection.resumable is False
-
-
-def test_resolve_continuation_returns_empty_projection_without_canonical_or_live_execution(
-    tmp_path: Path,
-) -> None:
-    projection = resolve_continuation(tmp_path)
-
-    assert projection.source == ContinuationSource.EMPTY
-    assert projection.continuation.is_empty is True
-    assert projection.active_resume_file is None
-    assert projection.active_resume_source is None
-    assert projection.resumable is False
-
-
-def test_resolve_continuation_ignores_empty_canonical_state_and_projects_live_execution_only(
-    tmp_path: Path,
-) -> None:
-    _write_resume(tmp_path, "GPD/phases/03-analysis/.continue-here.md")
-
-    projection = resolve_continuation(
-        tmp_path,
-        state={
-            "continuation": {"schema_version": 1},
-            "session": {
-                "last_date": "2026-03-29T12:00:00+00:00",
-                "hostname": "builder-01",
-                "platform": "Linux 6.1 x86_64",
-                "stopped_at": "Paused after Task 4",
-                "resume_file": "GPD/phases/03-analysis/handoff.md",
-            },
-        },
-        current_execution={
-            "session_id": "sess-1",
-            "phase": "3",
-            "plan": "2",
-            "segment_id": "seg-4",
-            "segment_status": "paused",
-            "resume_file": "GPD/phases/03-analysis/.continue-here.md",
-        },
-    )
-
-    assert projection.source == ContinuationSource.DERIVED_EXECUTION
-    assert projection.active_resume_source == ContinuationResumeSource.BOUNDED_SEGMENT
-    assert projection.active_resume_file == "GPD/phases/03-analysis/.continue-here.md"
-    assert projection.handoff_resume_file is None
 
 
 def test_resolve_continuation_preserves_partial_canonical_state_without_falling_back_to_session(

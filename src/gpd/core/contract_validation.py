@@ -114,9 +114,6 @@ _LOSSY_LIST_NORMALIZATION_WARNING_PATTERNS = (
 _CASE_DRIFT_SCHEMA_WARNING_PATTERNS = (
     re.compile(r"^.+ must use exact canonical value: .+$"),
 )
-_DEFAULTABLE_SINGLETON_SCHEMA_WARNING_PATTERNS = (
-    re.compile(r"^(?:context_intake|uncertainty_markers) must be an object, not .+$"),
-)
 _AUTHORITATIVE_SCALAR_FINDING_PATTERNS = (
     re.compile(r"^schema_version must be the integer 1$"),
     re.compile(r"^schema_version: Input should be 1$"),
@@ -570,7 +567,7 @@ def split_project_contract_schema_findings(
     blocking: list[str] = []
     recoverable_patterns = _RECOVERABLE_SCHEMA_WARNING_PATTERNS
     if allow_singleton_defaults:
-        recoverable_patterns += _DEFAULTABLE_SINGLETON_SCHEMA_WARNING_PATTERNS + _CASE_DRIFT_SCHEMA_WARNING_PATTERNS
+        recoverable_patterns += _CASE_DRIFT_SCHEMA_WARNING_PATTERNS
     for error in errors:
         if any(pattern.fullmatch(error) for pattern in recoverable_patterns):
             recoverable.append(error)
@@ -585,9 +582,14 @@ def is_authoritative_project_contract_schema_finding(error: str) -> bool:
 
 
 def is_defaultable_singleton_project_contract_schema_finding(error: str) -> bool:
-    """Return whether one schema finding is the defaultable-singleton drift class."""
+    """Return whether one schema finding is treated as recoverable singleton drift.
 
-    return any(pattern.fullmatch(error) for pattern in _DEFAULTABLE_SINGLETON_SCHEMA_WARNING_PATTERNS)
+    Singleton shape drift is not actually defaulted by salvage, so this remains
+    a compatibility hook that intentionally stays false.
+    """
+
+    del error
+    return False
 
 
 def is_repair_relevant_project_contract_schema_finding(error: str) -> bool:
@@ -600,7 +602,6 @@ def is_repair_relevant_project_contract_schema_finding(error: str) -> bool:
         for pattern in (
             *_RECOVERABLE_SCHEMA_WARNING_PATTERNS,
             *_LOSSY_LIST_NORMALIZATION_WARNING_PATTERNS,
-            *_DEFAULTABLE_SINGLETON_SCHEMA_WARNING_PATTERNS,
         )
     )
 
@@ -1090,6 +1091,7 @@ def validate_project_contract(
         return ProjectContractValidationResult(
             valid=False,
             errors=schema_errors or ["project contract could not be normalized"],
+            warnings=schema_warnings,
             mode=mode,
         )
     errors: list[str] = list(schema_errors)

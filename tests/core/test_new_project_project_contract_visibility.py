@@ -29,7 +29,13 @@ def test_new_project_prompt_surfaces_the_canonical_state_schema_for_project_cont
     )
 
     assert "templates/state-json-schema.md" in new_project_text
-    assert "Before you ask for approval, build the raw contract as a literal JSON object for the `project_contract` subsection of `templates/state-json-schema.md`:" in new_project_text
+    assert (
+        "Before you ask for approval, reuse the raw-contract rules above for the second approval step. "
+        "Keep the contract as a literal JSON object for the `project_contract` subsection of "
+        "`templates/state-json-schema.md`; do not relax any schema, ID, enum, or closed-schema "
+        "rules."
+        in new_project_text
+    )
     assert "Do not approve a scoping contract that strips decisive outputs, anchors, prior outputs, or review/stop triggers down to generic placeholders." in new_project_text
     assert "the contract schema is closed: do not add invented top-level or nested keys" in new_project_text
     assert "list fields must stay lists even for single-item values" in new_project_text
@@ -72,18 +78,17 @@ def test_new_project_prompt_surfaces_the_canonical_state_schema_for_project_cont
     assert "If the init JSON already contains `project_contract`, `project_contract_load_info`, or `project_contract_validation`, preserve that state in the approval gate and continuation decision." in new_project_text
 
 
-def test_new_project_duplicate_contract_rule_blocks_stay_in_sync() -> None:
+def test_new_project_contract_rule_block_is_not_duplicated() -> None:
     new_project_text = NEW_PROJECT.read_text(encoding="utf-8")
     show_block = _extract_contract_rule_block_lines(
         new_project_text,
         "Before you show the approval gate, build the raw contract as a literal JSON object for the `project_contract` subsection of `templates/state-json-schema.md`:",
     )
-    ask_block = _extract_contract_rule_block_lines(
-        new_project_text,
-        "Before you ask for approval, build the raw contract as a literal JSON object for the `project_contract` subsection of `templates/state-json-schema.md`:",
-    )
 
-    assert show_block == ask_block
+    assert len(show_block) > 10
+    assert new_project_text.count("Before you show the approval gate, build the raw contract as a literal JSON object") == 1
+    assert "Before you ask for approval, reuse the raw-contract rules above for the second approval step." in new_project_text
+    assert "Before you ask for approval, build the raw contract as a literal JSON object" not in new_project_text
 
 
 def test_state_schema_surfaces_the_exact_approved_mode_grounding_rule() -> None:
@@ -115,7 +120,6 @@ def test_state_schema_surfaces_the_exact_approved_mode_grounding_rule() -> None:
     assert "claims[].proof_deliverables[]" in state_schema_text
     assert "`claims[].parameters[]`, `claims[].hypotheses[]`, and `claims[].conclusion_clauses[]` must each be non-empty." in state_schema_text
     assert "`claims[].acceptance_tests[]` must include at least one proof-specific test kind" in state_schema_text
-    assert "already exists inside the current project root" in state_schema_text
     assert "already exists inside the current project root" in state_schema_text
     assert "Placeholder or `TBD` text does not count as concrete grounding." in state_schema_text
     assert "they do not satisfy approved-mode grounding on their own" in state_schema_text

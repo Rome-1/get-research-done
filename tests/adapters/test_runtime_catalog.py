@@ -28,6 +28,22 @@ _RUNTIME_CATALOG_PATH = Path(__file__).resolve().parents[2] / "src" / "gpd" / "a
 _RUNTIME_CONFIG_SURFACE_LABEL_RE = re.compile(r"^[A-Za-z0-9._-]+:[A-Za-z0-9+._-]+$")
 
 
+def _special_permission_surface_kinds() -> frozenset[str]:
+    return frozenset(
+        descriptor.capabilities.permission_surface_kind
+        for descriptor in iter_runtime_descriptors()
+        if descriptor.capabilities.permissions_surface != "config-file"
+        and descriptor.capabilities.permission_surface_kind != "none"
+    )
+
+
+def _catalog_entry_by_runtime_name(payload: list[dict[str, object]], runtime_name: str) -> dict[str, object]:
+    for entry in payload:
+        if entry.get("runtime_name") == runtime_name:
+            return entry
+    raise AssertionError(f"No runtime catalog entry found for {runtime_name}")
+
+
 def _iter_runtime_descriptors_from_payload(
     payload: list[dict[str, object]],
     *,
@@ -288,13 +304,6 @@ def test_runtime_catalog_rejects_duplicate_install_flag(tmp_path: Path, monkeypa
         ),
         (
             lambda capabilities: capabilities.update(
-                permissions_surface="launch-wrapper",
-                permission_surface_kind="future.json:permissions.mode",
-            ),
-            r'runtime catalog entry 0\.capabilities\.permission_surface_kind must be "managed-launcher-wrapper" when permissions_surface=launch-wrapper',
-        ),
-        (
-            lambda capabilities: capabilities.update(
                 permissions_surface="unsupported",
                 permission_surface_kind="future.json:permissions.mode",
                 supports_runtime_permission_sync=True,
@@ -315,6 +324,34 @@ def test_runtime_catalog_rejects_incoherent_permission_surface_contract(
     mutator(payload[0]["capabilities"])
 
     with pytest.raises(ValueError, match=match):
+        _iter_runtime_descriptors_from_payload(payload, tmp_path=tmp_path, monkeypatch=monkeypatch)
+
+
+def test_runtime_catalog_accepts_catalog_declared_launch_wrapper_special_values(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = deepcopy(json.loads(_RUNTIME_CATALOG_PATH.read_text(encoding="utf-8")))
+    _catalog_entry_by_runtime_name(payload, "gemini")["capabilities"]["permission_surface_kind"] = "future.json:launchWrapper"
+
+    descriptors = _iter_runtime_descriptors_from_payload(payload, tmp_path=tmp_path, monkeypatch=monkeypatch)
+
+    gemini = next(descriptor for descriptor in descriptors if descriptor.runtime_name == "gemini")
+    assert gemini.capabilities.permission_surface_kind == "future.json:launchWrapper"
+
+
+def test_runtime_catalog_rejects_config_file_use_of_catalog_declared_launch_wrapper_special_value(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = deepcopy(json.loads(_RUNTIME_CATALOG_PATH.read_text(encoding="utf-8")))
+    _catalog_entry_by_runtime_name(payload, "gemini")["capabilities"]["permission_surface_kind"] = "future.json:launchWrapper"
+    _catalog_entry_by_runtime_name(payload, "codex")["capabilities"]["permission_surface_kind"] = "future.json:launchWrapper"
+
+    with pytest.raises(
+        ValueError,
+        match=r"runtime catalog entry \d+\.capabilities\.permission_surface_kind must be a config surface label when permissions_surface=config-file",
+    ):
         _iter_runtime_descriptors_from_payload(payload, tmp_path=tmp_path, monkeypatch=monkeypatch)
 
 
@@ -401,7 +438,7 @@ def test_runtime_capabilities_are_explicit_per_runtime() -> None:
     assert get_hook_payload_policy("claude-code").supports_agent_payload_attribution is False
 
     assert gemini.permissions_surface == "launch-wrapper"
-    assert gemini.permission_surface_kind == "managed-launcher-wrapper"
+    assert gemini.permission_surface_kind in _special_permission_surface_kinds()
     assert gemini.supports_runtime_permission_sync is True
     assert gemini.supports_prompt_free_mode is True
     assert gemini.prompt_free_requires_relaunch is True
@@ -455,6 +492,7 @@ def test_runtime_capabilities_and_hook_payload_contract_stay_coherent() -> None:
     allowed_hook_surfaces = {"explicit", "none"}
     allowed_telemetry_sources = {"notify-hook", "none"}
     allowed_telemetry_completeness = {"best-effort", "none"}
+    special_permission_surface_kinds = _special_permission_surface_kinds()
 
     for runtime_name in list_runtime_names():
         capabilities = get_runtime_capabilities(runtime_name)
@@ -462,7 +500,7 @@ def test_runtime_capabilities_and_hook_payload_contract_stay_coherent() -> None:
 
         assert capabilities.permissions_surface in allowed_permissions_surfaces
         assert (
-            capabilities.permission_surface_kind == "managed-launcher-wrapper"
+            capabilities.permission_surface_kind in special_permission_surface_kinds
             or capabilities.permission_surface_kind == "none"
             or _RUNTIME_CONFIG_SURFACE_LABEL_RE.fullmatch(capabilities.permission_surface_kind) is not None
         )

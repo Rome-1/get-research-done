@@ -609,10 +609,26 @@ def resolve_continuation(
             isinstance(issue, str) and "continuation" in issue and issue.startswith("schema normalization:")
             for issue in (state_issues or [])
         )
-        if not continuation.is_empty:
-            return _project_continuation(project_root, source=ContinuationSource.CANONICAL, continuation=continuation)
-        if has_continuation_drift:
-            return _project_continuation(project_root, source=ContinuationSource.CANONICAL, continuation=continuation)
+        canonical_projection = _project_continuation(
+            project_root,
+            source=ContinuationSource.CANONICAL,
+            continuation=continuation,
+        )
+        if (
+            canonical_projection.active_resume_source is not None
+            or canonical_projection.recorded_handoff_resume_file is not None
+        ):
+            return canonical_projection
+
+        derived = _continuation_from_execution_snapshot(project_root, current_execution)
+        if not derived.is_empty:
+            return _project_continuation(
+                project_root,
+                source=ContinuationSource.DERIVED_EXECUTION,
+                continuation=derived,
+            )
+        if not continuation.is_empty or has_continuation_drift:
+            return canonical_projection
 
     derived = _continuation_from_execution_snapshot(project_root, current_execution)
     source = ContinuationSource.DERIVED_EXECUTION if not derived.is_empty else ContinuationSource.EMPTY

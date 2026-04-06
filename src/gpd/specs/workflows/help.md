@@ -27,7 +27,7 @@ Getting started:
 Returning to work:
   gpd resume             — Current-workspace read-only recovery snapshot from your normal terminal
   gpd resume --recent    — Find the workspace first when you need to reopen a different one
-  gpd:resume-work         — Continue in-runtime from the selected project state
+  gpd:resume-work         — Continue in-runtime from the selected project's canonical state
   gpd:progress            — Review the broader project snapshot
   gpd:suggest-next        — Fastest post-resume next command when you only need the next action
   gpd observe execution    — Read-only live status from your normal terminal; use this for progress / waiting state, then follow its suggested read-only checks rather than runtime hotkeys
@@ -125,7 +125,7 @@ For the exact beginner-first startup order, use the shared onboarding surfaces i
 2. `gpd:start` - Let GPD choose the safest first step for the current folder.
 3. `gpd:tour` - Get a read-only walkthrough before you choose.
 4. `gpd:new-project` or `gpd:map-research` - Begin the actual work path once you know the folder state.
-5. `gpd:resume-work` - Continue later after you have an existing GPD project.
+5. `gpd:resume-work` - Continue later from the selected project's canonical state.
 6. `gpd:settings` - Change autonomy, permissions, or runtime preferences after your first successful start or later.
 7. `gpd:set-tier-models` - Directly pin concrete `tier-1`, `tier-2`, and `tier-3` model ids for the active runtime.
 
@@ -168,7 +168,7 @@ Use the path that matches your current situation:
 **Returning work**
 1. `gpd resume` - Reopen the current-workspace recovery snapshot from your normal terminal
 2. `gpd resume --recent` - Find a different workspace first from your normal terminal
-3. `gpd:resume-work` - Continue inside the reopened project
+3. `gpd:resume-work` - Continue inside the reopened project's canonical state
 4. `gpd:progress` - See the broader project snapshot
 5. `gpd:suggest-next` - Get the fastest next action
 6. `gpd observe execution` - Watch progress / waiting state, conservative `possibly stalled` wording, and the next read-only checks from your normal terminal
@@ -192,7 +192,7 @@ This is the compact grouped list of runtime commands. For normal-terminal instal
 - `gpd:new-project` - Create a full GPD project
 - `gpd:new-project --minimal` - Create a GPD project through the shortest setup path
 - `gpd:map-research` - Map an existing research folder before planning
-- `gpd:resume-work` - Resume an existing GPD project inside the runtime
+- `gpd:resume-work` - Resume the selected project's canonical state inside the runtime
 - `gpd:progress` - Review project status and likely next steps
 - `gpd:suggest-next` - Ask only for the next best action
 - `gpd:explain [concept]` - Explain a concept, method, result, or paper
@@ -562,10 +562,9 @@ Usage: `gpd:progress --reconcile` (fix diverged STATE.md and state.json)
 Resume research from previous session with full context restoration.
 
 - `state.json.continuation` is the durable authority for resume state; the shared resume resolver projects the public recovery view from it first
-- Restores canonical continuation state, recent progress, and recorded handoff context through the shared resume resolver
-  - Public resume vocabulary centers on canonical continuation fields: `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `active_bounded_segment`, `derived_execution_head`, `active_resume_result`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, and `resume_candidates`
-  - Those fields are the public top-level resume vocabulary only.
-  - Compatibility-only intake fields stay internal and are not part of the public top-level resume vocabulary
+- Restores canonical continuation state and recorded handoff context through the shared resume resolver
+- Public resume vocabulary centers on canonical continuation fields: `active_resume_kind`, `active_resume_origin`, `active_resume_pointer`, `active_bounded_segment`, `derived_execution_head`, `active_resume_result`, `continuity_handoff_file`, `recorded_continuity_handoff_file`, `missing_continuity_handoff_file`, and `resume_candidates`
+- Those fields are the public top-level resume vocabulary only; compatibility-only intake fields stay internal
 - Uses the recovery ladder (`gpd resume` -> `gpd resume --recent` when needed -> `gpd:resume-work`) to pick up where you left off
 - Best first in-runtime command when returning to paused or interrupted work
 - This is the in-runtime continue path; for a current-workspace read-only recovery snapshot, use `gpd resume`
@@ -1216,7 +1215,7 @@ gpd:pause-work        # Before leaving mid-phase, capture a continuation handoff
 /clear                 # then run gpd resume in your normal terminal for the current workspace
 gpd resume             # Current-workspace read-only recovery snapshot from your normal terminal
 gpd resume --recent    # Find the workspace first in your normal terminal when you need to reopen a different one
-gpd:resume-work       # Continue in-runtime from the selected project state after reopening that workspace
+gpd:resume-work       # Continue in-runtime from the reopened project's canonical state after reopening that workspace
 gpd:suggest-next      # Fastest post-resume next command when you only need the next action
 gpd:progress --brief  # Short orientation snapshot if you need more context
 ```

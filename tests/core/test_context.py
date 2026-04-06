@@ -18,6 +18,7 @@ from gpd.core.context import (
     _merge_reference_intake,
     _normalize_phase_name,
     _read_todo_frontmatter,
+    _render_active_reference_context,
     _should_skip_research_scan_entry,
     _state_exists,
     init_execute_phase,
@@ -942,6 +943,45 @@ class TestInitExecutePhase:
 
         assert ctx["project_contract"]["references"][0]["id"] == "ref-benchmark"
         assert "Published comparison target" in ctx["active_reference_context"]
+
+    def test_active_reference_context_collapses_non_durable_contract_warnings(self) -> None:
+        rendered = _render_active_reference_context(
+            active_references=[],
+            effective_intake={
+                "must_read_refs": [],
+                "must_include_prior_outputs": [],
+                "user_asserted_anchors": [],
+                "known_good_baselines": [],
+                "context_gaps": [],
+                "crucial_inputs": [],
+            },
+            literature_review_files=[],
+            research_map_reference_files=[],
+            contract_validation={
+                "valid": False,
+                "errors": ["scope.question is required"],
+                "warnings": [
+                    "context_intake.user_asserted_anchors entry is not concrete enough to preserve as durable guidance: placeholder anchor",
+                    "context_intake.context_gaps entry is only a placeholder and does not preserve actionable guidance: TBD",
+                    "references.0.must_surface must be a boolean",
+                ],
+            },
+            contract_load_info={
+                "status": "loaded_with_schema_normalization",
+                "errors": ["context_intake is required"],
+                "warnings": [
+                    "context_intake.must_include_prior_outputs entry does not resolve to a project-local artifact: missing/path.md",
+                ],
+            },
+        )
+
+        assert rendered.count("non-durable contract-intake warning") == 2
+        assert "context_intake.user_asserted_anchors entry is not concrete enough to preserve as durable guidance" not in rendered
+        assert "context_intake.context_gaps entry is only a placeholder and does not preserve actionable guidance" not in rendered
+        assert "context_intake.must_include_prior_outputs entry does not resolve to a project-local artifact" not in rendered
+        assert "references.0.must_surface must be a boolean" in rendered
+        assert "context_intake is required" in rendered
+        assert "scope.question is required" in rendered
 
     def test_ingests_reference_artifacts_without_project_contract(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)

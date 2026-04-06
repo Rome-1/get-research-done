@@ -177,7 +177,11 @@ def _path_exists(cwd: Path, target: str) -> bool:
 
 def _state_exists(cwd: Path) -> bool:
     """Return whether the project has recoverable state from JSON or STATE.md."""
-    state, _state_issues, _state_source = _peek_state_json(cwd, recover_intent=False)
+    state, _state_issues, _state_source = _peek_state_json(
+        cwd,
+        recover_intent=False,
+        acquire_lock=False,
+    )
     return isinstance(state, dict)
 
 
@@ -774,18 +778,7 @@ def _render_active_reference_context(
                 lines.append(f"- Source: {source_path}")
             for error in load_errors:
                 lines.append(f"- Blocker: {error}")
-            suppressed_nondurable_warnings = 0
-            for warning in load_warnings:
-                if "entry is not concrete enough to preserve as durable guidance:" in warning:
-                    suppressed_nondurable_warnings += 1
-                    continue
-                lines.append(f"- Warning: {warning}")
-            if suppressed_nondurable_warnings:
-                noun = "entry" if suppressed_nondurable_warnings == 1 else "entries"
-                verb = "was" if suppressed_nondurable_warnings == 1 else "were"
-                lines.append(
-                    f"- Warning: {suppressed_nondurable_warnings} non-durable contract intake {noun} {verb} dropped during normalization."
-                )
+            _append_contract_warnings(lines, load_warnings)
 
     if contract_validation is not None:
         lines.extend(["", "## Project Contract Validation"])
@@ -798,18 +791,7 @@ def _render_active_reference_context(
             )
         for error in list(contract_validation.get("errors") or []):
             lines.append(f"- Blocker: {error}")
-        suppressed_nondurable_validation_warnings = 0
-        for warning in list(contract_validation.get("warnings") or []):
-            if "entry is not concrete enough to preserve as durable guidance:" in warning:
-                suppressed_nondurable_validation_warnings += 1
-                continue
-            lines.append(f"- Warning: {warning}")
-        if suppressed_nondurable_validation_warnings:
-            noun = "entry" if suppressed_nondurable_validation_warnings == 1 else "entries"
-            verb = "was" if suppressed_nondurable_validation_warnings == 1 else "were"
-            lines.append(
-                f"- Warning: {suppressed_nondurable_validation_warnings} non-durable contract intake {noun} {verb} dropped during normalization."
-            )
+        _append_contract_warnings(lines, list(contract_validation.get("warnings") or []))
 
     lines.extend(
         [
@@ -859,6 +841,30 @@ def _render_active_reference_context(
         lines.append("- No literature-review or research-map anchor artifacts found yet.")
 
     return "\n".join(lines)
+
+
+_NON_DURABLE_CONTRACT_WARNING_FRAGMENTS = (
+    "entry does not resolve to a project-local artifact:",
+    "entry is not an explicit project artifact path:",
+    "entry is not concrete enough to preserve as durable guidance:",
+    "entry is only a placeholder and does not preserve actionable guidance:",
+)
+
+
+def _append_contract_warnings(lines: list[str], warnings: list[str]) -> None:
+    suppressed_nondurable_warnings = 0
+    for warning in warnings:
+        if any(fragment in warning for fragment in _NON_DURABLE_CONTRACT_WARNING_FRAGMENTS):
+            suppressed_nondurable_warnings += 1
+            continue
+        lines.append(f"- Warning: {warning}")
+    if not suppressed_nondurable_warnings:
+        return
+    noun = "warning" if suppressed_nondurable_warnings == 1 else "warnings"
+    verb = "was" if suppressed_nondurable_warnings == 1 else "were"
+    lines.append(
+        f"- Warning: {suppressed_nondurable_warnings} non-durable contract-intake {noun} {verb} collapsed during normalization."
+    )
 
 
 def _reference_artifact_payload(cwd: Path) -> dict[str, object]:
@@ -2094,6 +2100,10 @@ def init_quick(cwd: Path, description: str | None = None) -> dict:
 def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
     """Assemble context for resuming work."""
     requested_cwd = cwd.expanduser().resolve(strict=False)
+    workspace_planning_exists = _path_exists(requested_cwd, PLANNING_DIR_NAME)
+    workspace_roadmap_exists = _path_exists(requested_cwd, f"{PLANNING_DIR_NAME}/{ROADMAP_FILENAME}")
+    workspace_project_exists = _path_exists(requested_cwd, f"{PLANNING_DIR_NAME}/{PROJECT_FILENAME}")
+    workspace_state_exists = _state_exists(requested_cwd)
     effective_cwd, reentry_metadata = _resolve_reentry_context(requested_cwd, data_root=data_root)
     config = load_config(effective_cwd)
     execution_context = _build_execution_runtime_context(effective_cwd)
@@ -2161,7 +2171,12 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
         "project_reentry_requires_selection": reentry_metadata["project_reentry_requires_selection"],
         "project_reentry_selected_candidate": reentry_metadata.get("project_reentry_selected_candidate"),
         "project_reentry_candidates": reentry_metadata["project_reentry_candidates"],
-        # File existence
+        # Requested workspace availability.
+        "workspace_state_exists": workspace_state_exists,
+        "workspace_roadmap_exists": workspace_roadmap_exists,
+        "workspace_project_exists": workspace_project_exists,
+        "workspace_planning_exists": workspace_planning_exists,
+        # Selected project availability.
         "state_exists": _state_exists(effective_cwd),
         "roadmap_exists": _path_exists(effective_cwd, f"{PLANNING_DIR_NAME}/{ROADMAP_FILENAME}"),
         "project_exists": _path_exists(effective_cwd, f"{PLANNING_DIR_NAME}/{PROJECT_FILENAME}"),

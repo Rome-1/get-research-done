@@ -235,8 +235,43 @@ const RUNTIME_CATALOG_HOOK_PAYLOAD_KEYS = new Set([
   "context_remaining_keys",
 ]);
 const RUNTIME_CONFIG_SURFACE_LABEL_RE = /^[A-Za-z0-9._-]+:[A-Za-z0-9+._-]+$/;
-const MANAGED_LAUNCHER_WRAPPER_PERMISSION_SURFACE = "managed-launcher-wrapper";
-const BUNDLED_PERMISSION_SURFACE_SPECIAL_VALUES = new Set([MANAGED_LAUNCHER_WRAPPER_PERMISSION_SURFACE]);
+
+function deriveLaunchWrapperPermissionSurfaceKinds(catalogPayload) {
+  if (!Array.isArray(catalogPayload)) {
+    return new Set();
+  }
+
+  const values = new Set();
+  for (const entry of catalogPayload) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      continue;
+    }
+    const capabilities = entry.capabilities;
+    if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities)) {
+      continue;
+    }
+    if (capabilities.permissions_surface !== "launch-wrapper") {
+      continue;
+    }
+    const surfaceKind = capabilities.permission_surface_kind;
+    if (typeof surfaceKind === "string" && surfaceKind.trim()) {
+      values.add(surfaceKind.trim());
+    }
+  }
+
+  return values;
+}
+
+function formatQuotedDisjunction(values) {
+  const normalized = [...values].sort();
+  if (normalized.length === 0) {
+    return "a bundled launch-wrapper surface literal";
+  }
+  if (normalized.length === 1) {
+    return JSON.stringify(normalized[0]);
+  }
+  return `one of ${normalized.map((value) => JSON.stringify(value)).join(", ")}`;
+}
 
 function requireJsonObject(payload, label) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -404,7 +439,11 @@ function validateRuntimeCatalogGlobalConfig(globalConfig, label) {
   };
 }
 
-function validateRuntimeCatalogCapabilities(capabilities, label) {
+function validateRuntimeCatalogCapabilities(capabilities, label, options = {}) {
+  const launchWrapperPermissionSurfaceKinds =
+    options.launchWrapperPermissionSurfaceKinds instanceof Set
+      ? options.launchWrapperPermissionSurfaceKinds
+      : new Set();
   const payload = requireJsonObject(capabilities, label);
   requireKnownKeys(payload, RUNTIME_CATALOG_CAPABILITY_KEYS, label);
   requirePresentKeys(payload, RUNTIME_CATALOG_CAPABILITY_KEYS, label);
@@ -418,7 +457,7 @@ function validateRuntimeCatalogCapabilities(capabilities, label) {
     permission_surface_kind: requireRuntimeSurfaceLabel(
       payload.permission_surface_kind,
       `${label}.permission_surface_kind`,
-      { allowSpecialValues: BUNDLED_PERMISSION_SURFACE_SPECIAL_VALUES }
+      { allowSpecialValues: launchWrapperPermissionSurfaceKinds }
     ),
     prompt_free_mode_value: requireStrictString(payload.prompt_free_mode_value, `${label}.prompt_free_mode_value`),
     supports_runtime_permission_sync: requireStrictBoolean(
@@ -468,7 +507,7 @@ function validateRuntimeCatalogCapabilities(capabilities, label) {
   if (validated.permissions_surface === "config-file") {
     if (
       validated.permission_surface_kind === "none" ||
-      BUNDLED_PERMISSION_SURFACE_SPECIAL_VALUES.has(validated.permission_surface_kind)
+      launchWrapperPermissionSurfaceKinds.has(validated.permission_surface_kind)
     ) {
       throw new Error(
         `${label}.permission_surface_kind must be a config surface label when permissions_surface=config-file`
@@ -478,9 +517,9 @@ function validateRuntimeCatalogCapabilities(capabilities, label) {
       throw new Error(`${label}.supports_runtime_permission_sync must be true when permissions_surface=config-file`);
     }
   } else if (validated.permissions_surface === "launch-wrapper") {
-    if (validated.permission_surface_kind !== MANAGED_LAUNCHER_WRAPPER_PERMISSION_SURFACE) {
+    if (!launchWrapperPermissionSurfaceKinds.has(validated.permission_surface_kind)) {
       throw new Error(
-        `${label}.permission_surface_kind must be ${JSON.stringify(MANAGED_LAUNCHER_WRAPPER_PERMISSION_SURFACE)} `
+        `${label}.permission_surface_kind must be ${formatQuotedDisjunction(launchWrapperPermissionSurfaceKinds)} `
         + "when permissions_surface=launch-wrapper"
       );
     }
@@ -577,14 +616,14 @@ function parsePublicCommandSurfacePrefix(value, label, commandPrefix) {
   return prefix;
 }
 
-function validateRuntimeCatalogEntry(entry, index) {
+function validateRuntimeCatalogEntry(entry, index, options = {}) {
   const label = `runtime catalog entry ${index}`;
   const payload = requireJsonObject(entry, label);
   requireKnownKeys(payload, RUNTIME_CATALOG_ALLOWED_KEYS, label);
   requirePresentKeys(payload, RUNTIME_CATALOG_ENTRY_KEYS.required, label);
 
   const globalConfig = validateRuntimeCatalogGlobalConfig(payload.global_config, `${label}.global_config`);
-  const capabilities = validateRuntimeCatalogCapabilities(payload.capabilities, `${label}.capabilities`);
+  const capabilities = validateRuntimeCatalogCapabilities(payload.capabilities, `${label}.capabilities`, options);
   const hookPayload = validateRuntimeCatalogHookPayload(payload.hook_payload, `${label}.hook_payload`);
 
   return {
@@ -650,7 +689,10 @@ function validateRuntimeCatalogEntry(entry, index) {
 
 function validateRuntimeCatalog(catalogPayload) {
   const payload = requireJsonArray(catalogPayload, "runtime catalog");
-  const entries = payload.map((entry, index) => validateRuntimeCatalogEntry(entry, index));
+  const launchWrapperPermissionSurfaceKinds = deriveLaunchWrapperPermissionSurfaceKinds(payload);
+  const entries = payload.map((entry, index) =>
+    validateRuntimeCatalogEntry(entry, index, { launchWrapperPermissionSurfaceKinds })
+  );
   entries.sort((left, right) => {
     if (left.priority !== right.priority) {
       return left.priority - right.priority;

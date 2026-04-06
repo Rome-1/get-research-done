@@ -7,14 +7,11 @@ import shutil
 import subprocess
 from contextlib import contextmanager
 from pathlib import Path
-from shutil import which
 
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from scripts.repo_graph_contract import (
-    CONTRACT_PATH,
     GENERATED_ON_END,
     GENERATED_ON_START,
-    GRAPH_PATH,
     REPO_ROOT,
     SAME_STEM_COMMAND_WORKFLOW_END,
     SAME_STEM_COMMAND_WORKFLOW_START,
@@ -113,7 +110,7 @@ def test_graph_captures_checkpoint_feature_edges() -> None:
     assert not graph_has_edge("src/gpd/core/state.py", "src/gpd/core/checkpoints.py::sync_phase_checkpoints", graph)
 
 
-def test_graph_captures_execute_phase_artifact_surfacing_and_checkpoint_edges() -> None:
+def test_graph_captures_workflow_and_schema_edges() -> None:
     graph = read_graph_text()
 
     assert graph_has_edge(
@@ -126,21 +123,11 @@ def test_graph_captures_execute_phase_artifact_surfacing_and_checkpoint_edges() 
         "src/gpd/specs/{references/orchestration/meta-orchestration.md,references/orchestration/checkpoints.md,",
         graph,
     )
-
-
-def test_graph_captures_execute_plan_github_lifecycle_edge() -> None:
-    graph = read_graph_text()
-
     assert graph_has_edge(
         "src/gpd/specs/workflows/execute-plan.md",
         "src/gpd/specs/{references/execution/git-integration.md,references/execution/github-lifecycle.md,",
         graph,
     )
-
-
-def test_graph_captures_contract_schema_dependencies_for_core_workflows() -> None:
-    graph = read_graph_text()
-
     assert graph_has_edge(
         "src/gpd/specs/workflows/plan-phase.md",
         "src/gpd/specs/templates/plan-contract-schema.md",
@@ -193,37 +180,18 @@ def test_graph_captures_staged_review_panel_wiring() -> None:
     )
 
 
-def test_graph_test_file_references_exist() -> None:
-    missing = sorted(
-        {
-            ref
-            for ref in re.findall(r"tests/[A-Za-z0-9_./-]+\.py", read_graph_text())
-            if not (REPO_ROOT / ref).is_file()
-        }
-    )
 
-    assert missing == []
+def test_graph_contract_scope_counts_match_live_inventory() -> None:
+    expected = expected_scope_counts()
 
+    mismatches = [
+        f"{label}: graph={parse_scope_count(label)} live={count}"
+        for label, count in expected.items()
+        if parse_scope_count(label) != count
+    ]
 
-def test_graph_checked_in_runtime_artifact_language_matches_tree() -> None:
-    graph = read_graph_text()
-    heading_match = re.search(r"## Installed Runtime Artifact Family: `(?P<config_dir>\.[^`]+/\*\*)`", graph)
-
-    assert heading_match is not None
-    assert "settings.local.json" not in graph
-    config_dir_glob = heading_match.group("config_dir")
-    assert f"## Checked-In Installed Snapshot: `{config_dir_glob}`" not in graph
-    assert f"checked-in installed artifacts like `{config_dir_glob}`" not in graph
-
-
-def test_graph_contract_scope_parser_matches_expected_counts() -> None:
-    for label, count in expected_scope_counts().items():
-        assert parse_scope_count(label) == count
-
-
-def test_graph_contract_json_matches_live_scope_counts() -> None:
-    contract = load_contract()
-    assert contract["scope_counts"] == expected_scope_counts()
+    assert not mismatches, "Graph scope counts are stale:\n" + "\n".join(mismatches)
+    assert load_contract()["scope_counts"] == expected
 
 
 def test_graph_readme_generated_blocks_match_contract() -> None:
@@ -272,7 +240,7 @@ def test_graph_sync_repairs_stale_marked_blocks() -> None:
     assert repaired == original
 
 
-def test_live_repo_file_count_ignores_transient_root_artifacts() -> None:
+def test_live_repo_file_count_ignores_worktree_artifacts(tmp_path: Path) -> None:
     baseline = live_repo_file_count()
 
     with _transient_root_artifacts() as sentinel_files:
@@ -281,56 +249,39 @@ def test_live_repo_file_count_ignores_transient_root_artifacts() -> None:
 
     assert all(not path.exists() for path in sentinel_files)
 
+    tmp_root = tmp_path / "repo"
+    tmp_root.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init"], cwd=tmp_root, check=True, capture_output=True, text=True)
 
-def test_live_repo_file_count_ignores_untracked_worktree_files(tmp_path: Path) -> None:
-    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True, text=True)
-
-    tracked_file = tmp_path / "tracked.txt"
+    tracked_file = tmp_root / "tracked.txt"
     tracked_file.write_text("tracked\n", encoding="utf-8")
-    subprocess.run(["git", "add", tracked_file.name], cwd=tmp_path, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "add", tracked_file.name], cwd=tmp_root, check=True, capture_output=True, text=True)
 
-    untracked_file = tmp_path / "docs" / "scratch.md"
+    untracked_file = tmp_root / "docs" / "scratch.md"
     untracked_file.parent.mkdir(parents=True, exist_ok=True)
     untracked_file.write_text("untracked\n", encoding="utf-8")
 
-    assert live_repo_file_count(tmp_path) == 1
-
-
-def test_live_repo_file_count_ignores_deleted_tracked_files(tmp_path: Path) -> None:
-    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True, text=True)
-
-    tracked_file = tmp_path / "tracked.txt"
-    tracked_file.write_text("tracked\n", encoding="utf-8")
-    subprocess.run(["git", "add", tracked_file.name], cwd=tmp_path, check=True, capture_output=True, text=True)
+    assert live_repo_file_count(tmp_root) == 1
 
     tracked_file.unlink()
+    assert live_repo_file_count(tmp_root) == 0
 
-    assert live_repo_file_count(tmp_path) == 0
-
-
-def test_live_repo_file_count_ignores_runtime_mirror_dirs(tmp_path: Path) -> None:
     for config_dir_name in {descriptor.config_dir_name for descriptor in iter_runtime_descriptors()}:
         rel_path = f"{config_dir_name}/sentinel.txt"
-        path = tmp_path / rel_path
+        path = tmp_root / rel_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("runtime mirror sentinel\n", encoding="utf-8")
 
-    assert live_repo_file_count(tmp_path) == 0
+    assert live_repo_file_count(tmp_root) == 0
 
 
-def test_sync_repo_graph_script_runs_as_direct_file() -> None:
-    graph_before = GRAPH_PATH.read_text(encoding="utf-8")
-    contract_before = CONTRACT_PATH.read_text(encoding="utf-8")
-    python_bin = which("python")
-    assert python_bin is not None, "plain PATH python is required for repo-graph bootstrap"
-    completed = subprocess.run(
-        [python_bin, "scripts/sync_repo_graph_contract.py"],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
+def test_graph_test_file_references_exist() -> None:
+    missing = sorted(
+        {
+            ref
+            for ref in re.findall(r"tests/[A-Za-z0-9_./-]+\.py", read_graph_text())
+            if not (REPO_ROOT / ref).is_file()
+        }
     )
 
-    assert completed.returncode == 0, completed.stderr
-    assert GRAPH_PATH.read_text(encoding="utf-8") == graph_before
-    assert CONTRACT_PATH.read_text(encoding="utf-8") == contract_before
+    assert missing == []

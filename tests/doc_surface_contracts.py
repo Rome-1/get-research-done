@@ -8,7 +8,7 @@ from functools import lru_cache
 
 from gpd.core.public_surface_contract import load_public_surface_contract
 from gpd.core.resume_surface import RESUME_COMPATIBILITY_ALIAS_FIELDS
-from gpd.core.surface_phrases import post_start_settings_note, post_start_settings_recommendation
+from gpd.core.surface_phrases import post_start_settings_note
 
 DOCTOR_RUNTIME_SCOPE_RE = re.compile(r"gpd doctor --runtime <runtime> --local\|--global")
 UNATTENDED_READINESS_SURFACE = "gpd validate unattended-readiness"

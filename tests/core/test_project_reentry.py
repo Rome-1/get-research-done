@@ -10,6 +10,11 @@ from gpd.core.project_reentry import resolve_project_reentry
 from gpd.core.state import default_state_dict
 
 
+@pytest.fixture(autouse=True)
+def _isolate_recent_project_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GPD_DATA_DIR", str(tmp_path / "data"))
+
+
 def _make_gpd_workspace(
     root: Path,
     *,
@@ -371,7 +376,7 @@ def test_resolve_project_reentry_leaves_selected_candidate_empty_for_missing_han
     assert resolution.candidates[0].auto_selectable is False
 
 
-def test_resolve_project_reentry_enriches_current_workspace_selected_candidate_from_matching_recent_row(
+def test_resolve_project_reentry_ignores_matching_recent_row_for_current_workspace_candidate(
     tmp_path: Path,
 ) -> None:
     workspace = _make_gpd_workspace(tmp_path / "workspace", project=True)
@@ -393,12 +398,12 @@ def test_resolve_project_reentry_enriches_current_workspace_selected_candidate_f
     assert resolution.selected_candidate is not None
     assert resolution.selected_candidate.source == "current_workspace"
     assert resolution.selected_candidate.project_root == workspace.resolve(strict=False).as_posix()
-    assert resolution.selected_candidate.resume_file == "GPD/phases/02/.continue-here.md"
-    assert resolution.selected_candidate.resume_target_kind == "handoff"
-    assert resolution.selected_candidate.resume_file_available is True
-    assert resolution.selected_candidate.resumable is True
-    assert resolution.selected_candidate.hostname == "builder-01"
-    assert resolution.selected_candidate.platform == "Linux 6.1 x86_64"
+    assert resolution.selected_candidate.resume_file is None
+    assert resolution.selected_candidate.resume_target_kind is None
+    assert resolution.selected_candidate.resume_file_available is None
+    assert resolution.selected_candidate.resumable is False
+    assert resolution.selected_candidate.hostname is None
+    assert resolution.selected_candidate.platform is None
 
 
 def test_resolve_project_reentry_prefers_unique_strong_recent_candidate_over_weak_recent_candidate(

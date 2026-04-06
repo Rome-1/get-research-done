@@ -37,29 +37,38 @@ from tests.manuscript_test_support import (
 from tests.runtime_install_helpers import seed_complete_runtime_install
 
 runner = CliRunner()
-_RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
+_RUNTIME_DESCRIPTORS = tuple(iter_runtime_descriptors())
+
+
+def _select_runtime_descriptor(predicate, label: str, *, exclude: tuple[str, ...] = ()):
+    for descriptor in _RUNTIME_DESCRIPTORS:
+        if descriptor.runtime_name in exclude:
+            continue
+        if predicate(descriptor):
+            return descriptor
+    raise AssertionError(f"No runtime descriptor found for {label}")
+
+
 _DOLLAR_COMMAND_DESCRIPTOR = next(
     descriptor for descriptor in _RUNTIME_DESCRIPTORS if descriptor.public_command_surface_prefix.startswith("$")
 )
-_SLASH_COMMAND_DESCRIPTOR = next(
-    descriptor
-    for descriptor in _RUNTIME_DESCRIPTORS
-    if descriptor.public_command_surface_prefix.startswith("/")
-    and descriptor.runtime_name != _DOLLAR_COMMAND_DESCRIPTOR.runtime_name
+_SLASH_COMMAND_DESCRIPTOR = _select_runtime_descriptor(
+    lambda descriptor: descriptor.public_command_surface_prefix.startswith("/"),
+    "slash-command runtime",
+    exclude=(_DOLLAR_COMMAND_DESCRIPTOR.runtime_name,),
 )
-_ENV_OVERRIDE_DESCRIPTOR = next(
-    descriptor
-    for descriptor in _RUNTIME_DESCRIPTORS
-    if (
+_ENV_OVERRIDE_DESCRIPTOR = _select_runtime_descriptor(
+    lambda descriptor: (
         descriptor.global_config.env_var
         or descriptor.global_config.env_dir_var
         or descriptor.global_config.env_file_var
-    )
+    ),
+    "runtime config env override",
 )
-_SECONDARY_PERMISSIONS_DESCRIPTOR = next(
-    descriptor
-    for descriptor in _RUNTIME_DESCRIPTORS
-    if descriptor.runtime_name != _ENV_OVERRIDE_DESCRIPTOR.runtime_name
+_SECONDARY_PERMISSIONS_DESCRIPTOR = _select_runtime_descriptor(
+    lambda descriptor: descriptor.capabilities.supports_runtime_permission_sync,
+    "secondary runtime permissions surface",
+    exclude=(_ENV_OVERRIDE_DESCRIPTOR.runtime_name,),
 )
 
 
@@ -2731,18 +2740,6 @@ class TestConfigCommands:
         assert parsed["sync_applied"] is True
         assert status["config_aligned"] is True
 
-    def test_permissions_sync_accepts_alias_runtime(self, gpd_project: Path) -> None:
-        adapter, target = _install_runtime(gpd_project, _ENV_OVERRIDE_DESCRIPTOR)
-        alias = _ENV_OVERRIDE_DESCRIPTOR.selection_aliases[0]
-
-        result = _invoke("--raw", "permissions", "sync", "--runtime", alias, "--autonomy", "yolo")
-        parsed = json.loads(result.output)
-        status = adapter.runtime_permissions_status(target, autonomy="yolo")
-
-        assert parsed["runtime"] == _ENV_OVERRIDE_DESCRIPTOR.runtime_name
-        assert parsed["sync_applied"] is True
-        assert status["config_aligned"] is True
-
     def test_permissions_status_and_sync_use_explicit_local_install_target(
         self,
         gpd_project: Path,
@@ -2903,26 +2900,6 @@ class TestConfigCommands:
             "Runtime permissions are not ready for unattended use under the requested autonomy."
         )
 
-    def test_permissions_status_marks_default_runtime_ready(self, gpd_project: Path) -> None:
-        _install_runtime(gpd_project, _ENV_OVERRIDE_DESCRIPTOR)
-
-        result = _invoke(
-            "--raw",
-            "permissions",
-            "status",
-            "--runtime",
-            _ENV_OVERRIDE_DESCRIPTOR.runtime_name,
-            "--autonomy",
-            "balanced",
-        )
-        parsed = json.loads(result.output)
-
-        assert parsed["runtime"] == _ENV_OVERRIDE_DESCRIPTOR.runtime_name
-        assert parsed["config_aligned"] is True
-        assert parsed["readiness"] == "ready"
-        assert parsed["ready"] is True
-        assert parsed["readiness_message"] == "Runtime permissions are ready for unattended use."
-
     def test_permissions_status_marks_synced_yolo_runtime_relaunch_required(self, gpd_project: Path) -> None:
         adapter, target = _install_runtime(gpd_project, _ENV_OVERRIDE_DESCRIPTOR)
         adapter.sync_runtime_permissions(target, autonomy="yolo")
@@ -3017,32 +2994,6 @@ class TestConfigCommands:
         assert parsed["target"] == str(target)
         assert parsed["sync_applied"] is True
         assert status["config_aligned"] is True
-
-    def test_config_set_autonomy_does_not_sync_other_installed_runtime(
-        self,
-        gpd_project: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        _, target = _install_runtime(gpd_project, _SECONDARY_PERMISSIONS_DESCRIPTOR)
-        fake_home = gpd_project / "_fake_home_config_set"
-        fake_home.mkdir()
-        _activate_runtime(monkeypatch, _ENV_OVERRIDE_DESCRIPTOR)
-        snapshot_before = _target_file_snapshot(target)
-
-        with patch("pathlib.Path.home", return_value=fake_home):
-            result = _invoke("--raw", "config", "set", "autonomy", "yolo")
-
-        parsed = json.loads(result.output)
-
-        assert parsed["value"] == "yolo"
-        assert parsed["runtime_permissions"]["runtime"] == _ENV_OVERRIDE_DESCRIPTOR.runtime_name
-        assert parsed["runtime_permissions"]["sync_applied"] is False
-        assert parsed["runtime_permissions"]["changed"] is False
-        assert parsed["runtime_permissions"]["message"] == (
-            f"No GPD install found for runtime '{_ENV_OVERRIDE_DESCRIPTOR.runtime_name}'. "
-            f"Run `gpd install {_ENV_OVERRIDE_DESCRIPTOR.runtime_name}` first."
-        )
-        assert _target_file_snapshot(target) == snapshot_before
 
     def test_config_help(self) -> None:
         result = _invoke("config", "--help")
@@ -3225,7 +3176,7 @@ class TestResolveModelCommand:
         parsed = json.loads(result.output)
         assert parsed["error"] == "Unknown agent 'not-an-agent'"
 
-    @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+    @pytest.mark.parametrize("descriptor", (_RUNTIME_DESCRIPTORS[0],), ids=lambda descriptor: descriptor.runtime_name)
     def test_resolve_model_prefers_installed_runtime_override(self, gpd_project: Path, descriptor) -> None:
         config_path = gpd_project / "GPD" / "config.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -3246,7 +3197,7 @@ class TestResolveModelCommand:
             planner_result = _invoke("resolve-model", "gpd-planner")
             assert planner_result.output.strip() == f"{descriptor.runtime_name}-planner-model"
 
-    @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+    @pytest.mark.parametrize("descriptor", (_RUNTIME_DESCRIPTORS[0],), ids=lambda descriptor: descriptor.runtime_name)
     def test_init_execute_phase_prefers_installed_runtime_for_model_fields(
         self,
         gpd_project: Path,

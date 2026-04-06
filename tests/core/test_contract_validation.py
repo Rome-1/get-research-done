@@ -70,15 +70,15 @@ def test_validate_project_contract_accepts_stage0_fixture() -> None:
     assert result.reference_count > 0
 
 
-def test_project_contract_schema_finding_helpers_keep_authoritative_and_defaultable_classes_distinct() -> None:
+def test_project_contract_schema_finding_helpers_keep_authoritative_and_blocking_classes_distinct() -> None:
     assert is_authoritative_project_contract_schema_finding("schema_version must be the integer 1") is True
     assert is_authoritative_project_contract_schema_finding("references.0.must_surface must be a boolean") is True
     assert is_defaultable_singleton_project_contract_schema_finding(
         "context_intake must be an object, not str"
-    ) is True
+    ) is False
     assert is_defaultable_singleton_project_contract_schema_finding(
         "uncertainty_markers must be an object, not str"
-    ) is True
+    ) is False
     assert is_defaultable_singleton_project_contract_schema_finding(
         "approach_policy must be an object, not str"
     ) is False
@@ -87,13 +87,17 @@ def test_project_contract_schema_finding_helpers_keep_authoritative_and_defaulta
 def test_split_project_contract_schema_findings_uses_public_helper_contract() -> None:
     recoverable, blocking = split_project_contract_schema_findings(
         [
+            "legacy_notes: Extra inputs are not permitted",
             "context_intake must be an object, not str",
             "schema_version must be the integer 1",
         ]
     )
 
-    assert recoverable == ["context_intake must be an object, not str"]
-    assert blocking == ["schema_version must be the integer 1"]
+    assert recoverable == ["legacy_notes: Extra inputs are not permitted"]
+    assert blocking == [
+        "context_intake must be an object, not str",
+        "schema_version must be the integer 1",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -408,6 +412,17 @@ def test_parse_project_contract_data_salvage_preserves_blocking_errors_for_missi
     assert result.contract is not None
     assert "claims.0.statement is required" in result.blocking_errors
     assert contract_from_data_salvage(contract) is None
+
+
+def test_parse_project_contract_data_salvage_treats_singleton_shape_drift_as_blocking() -> None:
+    contract = _load_contract_fixture()
+    contract["context_intake"] = "not-a-dict"
+
+    result = parse_project_contract_data_salvage(contract)
+
+    assert result.contract is None
+    assert result.blocking_errors == ["context_intake must be an object, not str"]
+    assert result.recoverable_errors == []
 
 
 @pytest.mark.parametrize(
@@ -1937,6 +1952,19 @@ def test_validate_project_contract_revalidates_typed_research_contract_instances
     assert result.mode == "approved"
     assert result.warnings == []
     assert result.errors == ["context_intake must be an object, not str"]
+
+
+def test_validate_project_contract_preserves_recoverable_warnings_when_normalization_fails() -> None:
+    contract = _load_contract_fixture()
+    contract.pop("context_intake")
+    contract["legacy_notes"] = "forwarded from a prior schema revision"
+
+    result = validate_project_contract(contract, mode="approved")
+
+    assert result.valid is False
+    assert result.mode == "approved"
+    assert "context_intake is required" in result.errors
+    assert "legacy_notes: Extra inputs are not permitted" in result.warnings
 
 
 @pytest.mark.parametrize(

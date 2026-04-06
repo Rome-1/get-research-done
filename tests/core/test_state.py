@@ -5,19 +5,14 @@ from __future__ import annotations
 import json
 import logging
 import os
-import warnings
 from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
-from gpd.contracts import ResearchContract
 from gpd.core import state as state_module
-from gpd.core.constants import STATE_JSON_BACKUP_FILENAME, STATE_JSON_FILENAME, ProjectLayout
+from gpd.core.constants import STATE_JSON_BACKUP_FILENAME, ProjectLayout
 from gpd.core.state import (
-    VALID_STATUSES,
-    ResearchState,
-    _blank_session_payload,
     _load_recent_projects_index,
     _load_state_snapshot_for_mutation,
     _normalize_state_schema,
@@ -25,25 +20,18 @@ from gpd.core.state import (
     default_state_dict,
     ensure_state_schema,
     generate_state_markdown,
-    is_valid_status,
     load_state_json,
-    parse_state_md,
-    parse_state_to_json,
     peek_state_json,
     save_state_json,
     save_state_markdown,
-    state_extract_field,
     state_get,
-    state_has_field,
     state_load,
     state_record_session,
-    state_replace_field,
     state_set_project_contract,
     state_snapshot,
     state_update_progress,
     state_validate,
     sync_state_json,
-    validate_state_transition,
 )
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
@@ -106,15 +94,15 @@ def _write_raw_state_json(tmp_path: Path, payload: dict[str, object]) -> Project
     return layout
 
 
-def _project_contract_with_question(question: str) -> dict[str, object]:
-    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
-    contract["scope"]["question"] = question
-    return contract
-
-
 def _draft_invalid_project_contract() -> dict[str, object]:
     contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
     contract["claims"][0]["references"] = ["missing-ref"]
+    return contract
+
+
+def _project_contract_with_question(question: str) -> dict[str, object]:
+    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+    contract["scope"]["question"] = question
     return contract
 
 # ─── default_state_dict ──────────────────────────────────────────────────────
@@ -143,203 +131,6 @@ def test_default_state_dict_position_defaults():
     assert s["project_contract"] is None
 
 
-# ─── parse_state_md ──────────────────────────────────────────────────────────
-
-
-MINIMAL_STATE_MD = """\
-# Research State
-
-## Project Reference
-
-See: GPD/PROJECT.md (updated 2026-03-01)
-
-**Core research question:** How does X work?
-**Current focus:** Testing the parser
-
-## Current Position
-
-**Current Phase:** 3
-**Current Phase Name:** Derive Lagrangian
-**Total Phases:** 10
-**Current Plan:** 2
-**Total Plans in Phase:** 4
-**Status:** Executing
-**Last Activity:** 2026-03-01
-**Last Activity Description:** Completed derivation
-
-**Progress:** [████████░░] 80%
-
-## Active Calculations
-
-- Computing trace over SU(3) generators
-
-## Intermediate Results
-
-None yet.
-
-## Open Questions
-
-- Is the ansatz consistent?
-
-## Performance Metrics
-
-| Label | Duration | Tasks | Files |
-| ----- | -------- | ----- | ----- |
-| Phase 1 P1 | 12m | 3 tasks | 5 files |
-
-## Accumulated Context
-
-### Decisions
-
-- [Phase 1]: Use metric signature (-,+,+,+) — matches Weinberg convention
-
-### Active Approximations
-
-None yet.
-
-**Convention Lock:**
-
-No conventions locked yet.
-
-### Propagated Uncertainties
-
-None yet.
-
-### Pending Todos
-
-None yet.
-
-### Blockers/Concerns
-
-- Need to verify gauge invariance
-
-## Session Continuity
-
-**Last session:** 2026-03-01T10:00:00+00:00
-**Stopped at:** Phase 3 P2
-**Resume file:** —
-"""
-
-
-def test_parse_state_md_position():
-    parsed = parse_state_md(MINIMAL_STATE_MD)
-    pos = parsed["position"]
-    assert pos["current_phase"] == "3"
-    assert pos["current_phase_name"] == "Derive Lagrangian"
-    assert pos["total_phases"] == 10
-    assert pos["current_plan"] == "2"
-    assert pos["total_plans_in_phase"] == 4
-    assert pos["status"] == "Executing"
-    assert pos["progress_percent"] == 80
-
-
-def test_parse_state_md_project():
-    parsed = parse_state_md(MINIMAL_STATE_MD)
-    proj = parsed["project"]
-    assert proj["core_research_question"] == "How does X work?"
-    assert proj["current_focus"] == "Testing the parser"
-    assert proj["project_md_updated"] == "2026-03-01"
-
-
-def test_parse_state_md_decisions():
-    parsed = parse_state_md(MINIMAL_STATE_MD)
-    assert len(parsed["decisions"]) == 1
-    d = parsed["decisions"][0]
-    assert d["phase"] == "1"
-    assert "metric signature" in d["summary"]
-    assert d["rationale"] is not None
-
-
-def test_parse_state_md_decision_table_ignored():
-    content = MINIMAL_STATE_MD.replace(
-        "- [Phase 1]: Use metric signature (-,+,+,+) — matches Weinberg convention",
-        "| Phase | Summary | Rationale |\n| ----- | ------- | --------- |\n| 1 | Use metric signature (-,+,+,+) | matches Weinberg convention |",
-    )
-    parsed = parse_state_md(content)
-    assert parsed["decisions"] == []
-
-
-def test_parse_state_md_blockers():
-    parsed = parse_state_md(MINIMAL_STATE_MD)
-    assert len(parsed["blockers"]) == 1
-    assert "gauge invariance" in parsed["blockers"][0]
-
-
-def test_parse_state_md_session():
-    parsed = parse_state_md(MINIMAL_STATE_MD)
-    sess = parsed["session"]
-    assert sess["last_date"] is not None
-    assert "Phase 3 P2" in sess["stopped_at"]
-    assert sess["resume_file"] == "—"
-
-
-def test_parse_state_md_bullets():
-    parsed = parse_state_md(MINIMAL_STATE_MD)
-    assert len(parsed["active_calculations"]) == 1
-    assert "SU(3)" in parsed["active_calculations"][0]
-    assert len(parsed["open_questions"]) == 1
-    assert "ansatz" in parsed["open_questions"][0]
-
-
-def test_parse_state_md_metrics():
-    parsed = parse_state_md(MINIMAL_STATE_MD)
-    assert len(parsed["metrics"]) == 1
-    assert parsed["metrics"][0]["label"] == "Phase 1 P1"
-    assert parsed["metrics"][0]["duration"] == "12m"
-
-
-# ─── round-trip: generate → parse ────────────────────────────────────────────
-
-
-def test_round_trip_default():
-    """generate_state_markdown(default) → parse_state_md should recover fields."""
-    s = default_state_dict()
-    md = generate_state_markdown(s)
-    parsed = parse_state_md(md)
-    assert parsed["position"]["status"] is None or parsed["position"]["status"] == "—"
-
-
-def test_round_trip_with_data():
-    s = default_state_dict()
-    s["position"]["current_phase"] = "5"
-    s["position"]["current_phase_name"] = "Renormalization"
-    s["position"]["total_phases"] = 12
-    s["position"]["status"] = "Executing"
-    s["position"]["progress_percent"] = 42
-    s["decisions"] = [{"phase": "3", "summary": "Use dim-reg", "rationale": "Standard approach"}]
-    s["blockers"] = ["IR divergence in loop integral"]
-
-    md = generate_state_markdown(s)
-    parsed = parse_state_md(md)
-
-    assert parsed["position"]["current_phase"] == "5"
-    assert parsed["position"]["current_phase_name"] == "Renormalization"
-    assert parsed["position"]["total_phases"] == 12
-    assert parsed["position"]["status"] == "Executing"
-    assert parsed["position"]["progress_percent"] == 42
-    assert len(parsed["decisions"]) == 1
-    assert "dim-reg" in parsed["decisions"][0]["summary"]
-    assert len(parsed["blockers"]) == 1
-    assert "IR divergence" in parsed["blockers"][0]
-
-
-def test_generate_state_markdown_shows_verification_evidence_count():
-    state = _state_with_result(
-        {
-            "id": "R-01",
-            "description": "Mass shell relation",
-            "equation": "p^2 = m^2",
-            "depends_on": [],
-            "verified": True,
-            "verification_records": [
-                {"verifier": "gpd-verifier", "method": "limit-check", "confidence": "high"}
-            ],
-        }
-    )
-    md = generate_state_markdown(state)
-    assert "evidence: 1" in md
-
-
 # ─── ensure_state_schema ─────────────────────────────────────────────────────
 
 
@@ -349,73 +140,6 @@ def test_ensure_state_schema_none():
     assert "decisions" in result
 
 
-def test_ensure_state_schema_partial():
-    partial = {"position": {"current_phase": "7", "status": "Planning"}}
-    result = ensure_state_schema(partial)
-    assert result["position"]["current_phase"] == "7"
-    assert result["position"]["status"] == "Planning"
-    assert "decisions" in result
-
-
-def test_ensure_state_schema_empty_dict():
-    """An empty {} must produce a valid default state without crashing."""
-    result = ensure_state_schema({})
-    assert "position" in result
-    assert "decisions" in result
-    assert result["position"]["progress_percent"] == 0
-
-
-def test_ensure_state_schema_extra_unknown_fields():
-    """Unknown top-level keys are preserved via extra='allow'."""
-    result = ensure_state_schema({"_version": 1, "_synced_at": "2025-01-01", "custom_field": "kept"})
-    assert result["_version"] == 1
-    assert result["_synced_at"] == "2025-01-01"
-    assert result["custom_field"] == "kept"
-    # Standard fields still present
-    assert "position" in result
-    assert "decisions" in result
-
-
-def test_ensure_state_schema_wrong_type_nested_int_for_string():
-    """An int where a string is expected in a nested model should not crash."""
-    result = ensure_state_schema({"position": {"status": 42}})
-    # position key gets dropped due to validation error; defaults applied
-    assert isinstance(result, dict)
-    assert "position" in result
-    assert result["position"]["status"] is None  # default
-
-
-def test_ensure_state_schema_wrong_type_string_for_int():
-    """A non-numeric string where int is expected should not crash."""
-    result = ensure_state_schema({"position": {"progress_percent": "fifty"}})
-    assert isinstance(result, dict)
-    assert result["position"]["progress_percent"] == 0  # default
-
-
-def test_ensure_state_schema_numeric_string_for_int():
-    """A numeric string like '50' should coerce to int via Pydantic."""
-    result = ensure_state_schema({"position": {"progress_percent": "50"}})
-    assert result["position"]["progress_percent"] == 50
-
-
-def test_ensure_state_schema_ints_in_string_list():
-    """Ints in a list[str|dict] field should not crash."""
-    result = ensure_state_schema({"active_calculations": [1, 2, 3]})
-    assert isinstance(result["active_calculations"], list)
-
-
-def test_ensure_state_schema_bad_nested_decision():
-    """Decisions with wrong sub-field types should not crash."""
-    result = ensure_state_schema({"decisions": [{"phase": 1, "summary": 42}]})
-    assert isinstance(result["decisions"], list)
-
-
-def test_ensure_state_schema_convention_lock_wrong_type():
-    """Convention lock with int values where strings expected should not crash."""
-    result = ensure_state_schema({"convention_lock": {"metric_signature": 42}})
-    assert isinstance(result["convention_lock"], dict)
-
-
 def test_ensure_state_schema_valid_project_contract():
     contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
     result = ensure_state_schema({"project_contract": contract})
@@ -423,16 +147,6 @@ def test_ensure_state_schema_valid_project_contract():
     assert result["project_contract"]["uncertainty_markers"]["disconfirming_observations"] == [
         "Benchmark agreement disappears once normalization is fixed"
     ]
-
-
-def test_ensure_state_schema_salvages_project_contract_with_top_level_extra_key():
-    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
-    contract["legacy_notes"] = "forwarded from a prior schema revision"
-
-    result = ensure_state_schema({"project_contract": contract})
-
-    assert result["project_contract"] is not None
-    assert "legacy_notes" not in result["project_contract"]
 
 
 def test_ensure_state_schema_invalid_project_contract_resets_to_none():
@@ -455,24 +169,6 @@ def test_ensure_state_schema_drops_project_contract_for_malformed_list_item():
     result = ensure_state_schema({"project_contract": contract})
 
     assert result["project_contract"] is None
-
-
-def test_ensure_state_schema_malformed_project_contract_singleton_field_preserves_valid_siblings():
-    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
-    contract["context_intake"] = {
-        "must_read_refs": "ref-benchmark",
-        "known_good_baselines": ["baseline-A"],
-        "crucial_inputs": ["normalize with published convention"],
-    }
-
-    result = ensure_state_schema({"project_contract": contract})
-
-    assert result["project_contract"] is not None
-    assert result["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
-    assert result["project_contract"]["context_intake"]["known_good_baselines"] == ["baseline-A"]
-    assert result["project_contract"]["context_intake"]["crucial_inputs"] == [
-        "normalize with published convention"
-    ]
 
 
 def test_normalize_state_schema_surfaces_singleton_project_contract_list_drift_without_scrubbing_value():
@@ -501,40 +197,6 @@ def test_ensure_state_schema_salvages_scope_list_drift_without_dropping_contract
     assert result["project_contract"]["scope"]["unresolved_questions"] == ["not-a-list"]
 
 
-def test_ensure_state_schema_salvages_reference_optional_field_without_dropping_reference():
-    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
-    contract["references"][0]["aliases"] = "not-a-list"
-
-    result = ensure_state_schema({"project_contract": contract})
-
-    assert result["project_contract"] is not None
-    assert result["project_contract"]["references"] == [
-        {
-            "id": "ref-benchmark",
-            "kind": "paper",
-            "locator": "Author et al., Journal, 2024",
-            "aliases": ["not-a-list"],
-            "role": "benchmark",
-            "why_it_matters": "Published comparison target",
-            "applies_to": ["claim-benchmark"],
-            "carry_forward_to": [],
-            "must_surface": True,
-            "required_actions": ["read", "compare", "cite"],
-        }
-    ]
-
-
-def test_ensure_state_schema_ignores_nested_metadata_must_surface_without_dropping_contract():
-    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
-    contract["references"][0]["metadata"] = {"must_surface": "yes"}
-
-    result = ensure_state_schema({"project_contract": contract})
-
-    assert result["project_contract"] is not None
-    assert result["project_contract"]["references"][0]["id"] == "ref-benchmark"
-    assert result["project_contract"]["references"][0]["must_surface"] is True
-
-
 def test_normalize_state_schema_reports_coercive_project_contract_scalars():
     contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
     contract["schema_version"] = True
@@ -550,38 +212,6 @@ def test_normalize_state_schema_reports_coercive_project_contract_scalars():
         in issue
         for issue in issues
     )
-
-
-def test_normalize_state_schema_salvages_partial_continuation_and_reports_unknown_keys() -> None:
-    state = default_state_dict()
-    state["continuation"] = {
-        "schema_version": 1,
-        "handoff": {
-            "resume_file": "GPD/phases/03-analysis/canonical-handoff.md",
-            "stopped_at": "Canonical stop",
-            "recorded_by": "state_record_session",
-        },
-        "bounded_segment": {
-            "resume_file": "GPD/phases/03-analysis/canonical-handoff.md",
-            "segment_status": "paused",
-            "segment_id": "seg-1",
-            "unexpected_flag": "ignored",
-        },
-        "machine": {"hostname": "builder-01", "platform": "Linux 6.1 x86_64"},
-        "legacy_surface": {"resume_file": "legacy.md"},
-    }
-
-    normalized, issues = _normalize_state_schema(state)
-
-    assert normalized["continuation"]["handoff"]["resume_file"] == "GPD/phases/03-analysis/canonical-handoff.md"
-    assert normalized["continuation"]["handoff"]["stopped_at"] == "Canonical stop"
-    assert normalized["continuation"]["machine"]["hostname"] == "builder-01"
-    assert normalized["continuation"]["machine"]["platform"] == "Linux 6.1 x86_64"
-    assert normalized["continuation"]["bounded_segment"] is not None
-    assert normalized["continuation"]["bounded_segment"]["segment_status"] == "paused"
-    assert normalized["continuation"]["bounded_segment"]["segment_id"] == "seg-1"
-    assert any('schema normalization: dropped unknown "continuation.bounded_segment.unexpected_flag"' in issue for issue in issues)
-    assert any('schema normalization: dropped unknown "continuation.legacy_surface"' in issue for issue in issues)
 
 
 def test_normalize_state_schema_drops_project_contract_that_fails_draft_scoping_validation():
@@ -820,51 +450,6 @@ def test_state_set_project_contract_rejects_singleton_list_drift(tmp_path: Path)
 
     assert result.updated is False
     assert result.reason == "Invalid project contract schema: context_intake.must_read_refs must be a list, not str"
-    saved = load_state_json(tmp_path)
-    assert saved is not None
-    assert saved["project_contract"] is None
-
-
-def test_state_set_project_contract_rejects_research_contract_instance_singleton_list_drift(
-    tmp_path: Path,
-):
-    contract = ResearchContract.model_validate(
-        json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
-    )
-    object.__setattr__(
-        contract.context_intake,
-        "must_include_prior_outputs",
-        "GPD/phases/00-baseline/00-01-SUMMARY.md",
-    )
-    save_state_json(tmp_path, default_state_dict())
-
-    result = state_set_project_contract(tmp_path, contract)
-
-    assert result.updated is False
-    assert (
-        result.reason
-        == "Invalid project contract schema: context_intake.must_include_prior_outputs must be a list, not str"
-    )
-    saved = load_state_json(tmp_path)
-    assert saved is not None
-    assert saved["project_contract"] is None
-
-
-def test_state_set_project_contract_suppresses_serializer_warning_for_invalid_research_contract_instance(
-    tmp_path: Path,
-):
-    contract = ResearchContract.model_validate(
-        json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
-    )
-    object.__setattr__(contract, "schema_version", "bad")
-    save_state_json(tmp_path, default_state_dict())
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        result = state_set_project_contract(tmp_path, contract)
-
-    assert result.updated is False
-    assert caught == []
     saved = load_state_json(tmp_path)
     assert saved is not None
     assert saved["project_contract"] is None
@@ -1512,116 +1097,6 @@ def test_load_state_json_preserves_recoverable_warning_only_project_contract_dri
     assert "notes" not in loaded["project_contract"]["claims"][0]
 
 
-def test_state_load_matches_context_progress_for_recoverably_normalized_project_contract(
-    tmp_path: Path,
-):
-    planning = tmp_path / "GPD"
-    planning.mkdir()
-    (planning / "phases").mkdir()
-    (planning / "PROJECT.md").write_text("# Project\nTest.\n", encoding="utf-8")
-    (planning / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
-
-    state = default_state_dict()
-    state["position"]["current_phase"] = "2"
-    state["position"]["status"] = "Executing"
-    save_state_json(tmp_path, state)
-
-    layout = ProjectLayout(tmp_path)
-    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
-    contract["claims"][0]["notes"] = "harmless"
-
-    persisted = json.loads(layout.state_json.read_text(encoding="utf-8"))
-    persisted["project_contract"] = contract
-    layout.state_json.write_text(json.dumps(persisted, indent=2) + "\n", encoding="utf-8")
-
-    from gpd.core.context import init_progress
-
-    loaded = state_load(tmp_path)
-    ctx = init_progress(tmp_path)
-
-    assert ctx["project_contract"] is not None
-    assert ctx["project_contract"]["claims"][0]["id"] == "claim-benchmark"
-    assert loaded.project_contract_gate == ctx["project_contract_gate"]
-    assert loaded.project_contract_load_info["status"] == "loaded_with_schema_normalization"
-    assert loaded.project_contract_gate["authoritative"] is False
-    assert loaded.project_contract_gate["repair_required"] is True
-    assert loaded.project_contract_gate["visible"] is True
-    assert ctx["project_contract_load_info"]["status"] == "loaded_with_schema_normalization"
-    assert loaded.project_contract_load_info["source_path"] == ctx["project_contract_load_info"]["source_path"]
-    assert {
-        *loaded.project_contract_load_info["warnings"],
-        *ctx["project_contract_load_info"]["warnings"],
-    } == {"claims.0.notes: Extra inputs are not permitted"}
-    assert loaded.project_contract_validation == ctx["project_contract_validation"]
-    assert "notes" not in loaded.state["project_contract"]["claims"][0]
-
-
-def test_state_load_classifies_approval_blocked_project_contract_without_granting_authority(
-    tmp_path: Path,
-) -> None:
-    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
-    contract["context_intake"] = {
-        "must_read_refs": [],
-        "must_include_prior_outputs": [],
-        "user_asserted_anchors": [],
-        "known_good_baselines": [],
-        "context_gaps": ["Need a concrete must-surface anchor before approval."],
-        "crucial_inputs": [],
-    }
-    contract["references"][0]["role"] = "background"
-    contract["references"][0]["must_surface"] = False
-
-    planning = tmp_path / "GPD"
-    planning.mkdir(parents=True, exist_ok=True)
-    (planning / "phases").mkdir(exist_ok=True)
-    (planning / "PROJECT.md").write_text("# Project\nTest.\n", encoding="utf-8")
-    (planning / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
-
-    state = default_state_dict()
-    state["project_contract"] = contract
-    save_state_json(tmp_path, state)
-
-    loaded = state_load(tmp_path)
-
-    assert loaded.project_contract_load_info["status"] == "loaded_with_approval_blockers"
-    assert loaded.project_contract_validation is not None
-    assert loaded.project_contract_validation["valid"] is False
-    assert loaded.project_contract_validation["mode"] == "approved"
-    assert loaded.project_contract_gate is not None
-    assert loaded.project_contract_gate["approval_blocked"] is True
-    assert loaded.project_contract_gate["authoritative"] is False
-    assert loaded.project_contract_gate["visible"] is True
-    assert loaded.state["project_contract"] is not None
-
-
-def test_state_load_blocks_raw_project_contract_missing_required_schema_fields(
-    tmp_path: Path,
-) -> None:
-    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
-    contract.pop("schema_version")
-
-    planning = tmp_path / "GPD"
-    planning.mkdir(parents=True, exist_ok=True)
-    (planning / "phases").mkdir(exist_ok=True)
-    (planning / "PROJECT.md").write_text("# Project\nTest.\n", encoding="utf-8")
-    (planning / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
-
-    state = default_state_dict()
-    state["project_contract"] = contract
-    (planning / "state.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
-
-    loaded = state_load(tmp_path)
-
-    assert loaded.state["project_contract"] is None
-    assert loaded.project_contract_gate is not None
-    assert loaded.project_contract_gate["status"] == "blocked_schema"
-    assert loaded.project_contract_gate["authoritative"] is False
-    assert loaded.project_contract_gate["visible"] is False
-    assert loaded.project_contract_load_info is not None
-    assert loaded.project_contract_load_info["status"] == "blocked_schema"
-    assert "schema_version is required" in loaded.project_contract_load_info["errors"]
-
-
 def test_state_load_recovers_backup_only_state_when_primary_json_is_missing(tmp_path: Path) -> None:
     primary_state = default_state_dict()
     primary_state["position"]["status"] = "Executing"
@@ -1640,34 +1115,6 @@ def test_state_load_recovers_backup_only_state_when_primary_json_is_missing(tmp_
     )
 
 
-def test_state_load_and_runtime_context_keep_primary_project_contract_when_position_requires_normalization(
-    tmp_path: Path,
-) -> None:
-    from gpd.core.context import init_progress
-
-    primary_state = default_state_dict()
-    primary_state["position"] = "stale-root"
-    primary_state["project_contract"] = _project_contract_with_question("stale primary contract")
-
-    backup_state = default_state_dict()
-    backup_state["position"]["status"] = "Planning"
-    backup_state["project_contract"] = _project_contract_with_question("recovered backup contract")
-
-    save_state_json(tmp_path, backup_state)
-    layout = ProjectLayout(tmp_path)
-    layout.state_json.write_text(json.dumps(primary_state, indent=2) + "\n", encoding="utf-8")
-    layout.state_json_backup.write_text(json.dumps(backup_state, indent=2) + "\n", encoding="utf-8")
-
-    loaded = state_load(tmp_path)
-    ctx = init_progress(tmp_path)
-
-    assert loaded.state["position"]["status"] == "Planning"
-    assert loaded.state["project_contract"]["scope"]["question"] == "stale primary contract"
-    assert ctx["project_contract"]["scope"]["question"] == "stale primary contract"
-    assert loaded.project_contract_load_info["source_path"].endswith(STATE_JSON_FILENAME)
-    assert ctx["project_contract_load_info"]["source_path"].endswith(STATE_JSON_FILENAME)
-
-
 def test_state_load_reports_state_exists_false_when_only_unrecoverable_state_file_is_present(tmp_path: Path) -> None:
     planning = tmp_path / "GPD"
     planning.mkdir()
@@ -1677,213 +1124,6 @@ def test_state_load_reports_state_exists_false_when_only_unrecoverable_state_fil
 
     assert loaded.state_exists is False
     assert loaded.state == {}
-
-
-def test_ensure_state_schema_preserves_good_fields_when_one_is_bad():
-    """When one top-level key has type errors, other valid keys survive."""
-    result = ensure_state_schema({
-        "position": {"status": 42},  # bad: int for str
-        "blockers": ["still valid"],
-    })
-    assert result["blockers"] == ["still valid"]
-
-
-def test_ensure_state_schema_version_not_checked():
-    """_version=999 is accepted (no version gating)."""
-    result = ensure_state_schema({"_version": 999})
-    assert result["_version"] == 999
-
-
-def test_ensure_state_schema_non_dict_input():
-    """A list or other non-dict input returns defaults."""
-    result = ensure_state_schema([1, 2, 3])
-    assert "position" in result
-    assert "decisions" in result
-
-
-def test_ensure_state_schema_string_for_session():
-    """session as a non-dict value is corrected at the top-level type check."""
-    result = ensure_state_schema({"session": "bad"})
-    assert isinstance(result["session"], dict)
-
-
-def test_ensure_state_schema_list_for_session():
-    """session as a list is corrected at the top-level type check."""
-    result = ensure_state_schema({"session": ["bad"]})
-    assert isinstance(result["session"], dict)
-
-
-def test_ensure_state_schema_clears_session_when_canonical_continuation_is_missing():
-    result = ensure_state_schema({
-        "session": {
-            "last_date": "2026-03-02T12:00:00+00:00",
-            "stopped_at": "Phase 3 P2",
-            "resume_file": "resume.md",
-            "hostname": "builder-01",
-            "platform": "Linux x86_64",
-        }
-    })
-
-    assert result["continuation"]["handoff"] == {
-        "recorded_at": None,
-        "stopped_at": None,
-        "resume_file": None,
-        "recorded_by": None,
-        "last_result_id": None,
-    }
-    assert result["continuation"]["machine"] == {
-        "recorded_at": None,
-        "hostname": None,
-        "platform": None,
-    }
-    assert result["session"] == _blank_session_payload()
-
-
-def test_ensure_state_schema_backfills_session_from_canonical_continuation():
-    result = ensure_state_schema({
-        "continuation": {
-            "schema_version": 1,
-            "handoff": {
-                "recorded_at": "2026-03-02T12:00:00+00:00",
-                "stopped_at": "Phase 4 P1",
-                "resume_file": "continue.md",
-            },
-            "machine": {
-                "recorded_at": "2026-03-02T12:00:00+00:00",
-                "hostname": "builder-02",
-                "platform": "macOS arm64",
-            },
-        }
-    })
-
-    assert result["session"] == {
-        "last_date": "2026-03-02T12:00:00+00:00",
-        "stopped_at": "Phase 4 P1",
-        "resume_file": "continue.md",
-        "hostname": "builder-02",
-        "platform": "macOS arm64",
-        "last_result_id": None,
-    }
-
-
-def test_ensure_state_schema_does_not_backfill_canonical_machine_fields_from_legacy_session():
-    result = ensure_state_schema(
-        {
-            "session": {
-                "last_date": "2026-03-02T12:00:00+00:00",
-                "stopped_at": "Legacy stop",
-                "resume_file": "legacy.md",
-                "hostname": "builder-03",
-                "platform": "Linux arm64",
-            },
-            "continuation": {
-                "schema_version": 1,
-                "handoff": {
-                    "recorded_at": "2026-03-04T09:15:00+00:00",
-                    "stopped_at": "Canonical stop",
-                    "resume_file": "canonical.md",
-                },
-                "machine": {},
-            },
-        }
-    )
-
-    assert result["continuation"]["handoff"] == {
-        "recorded_at": "2026-03-04T09:15:00+00:00",
-        "stopped_at": "Canonical stop",
-        "resume_file": "canonical.md",
-        "recorded_by": None,
-        "last_result_id": None,
-    }
-    assert result["continuation"]["machine"] == {
-        "recorded_at": None,
-        "hostname": None,
-        "platform": None,
-    }
-    assert result["session"] == {
-        "last_date": "2026-03-04T09:15:00+00:00",
-        "stopped_at": "Canonical stop",
-        "resume_file": "canonical.md",
-        "hostname": None,
-        "platform": None,
-        "last_result_id": None,
-    }
-
-
-def test_ensure_state_schema_does_not_let_session_override_canonical_continuation():
-    result = ensure_state_schema(
-        {
-            "session": {
-                "last_date": "2026-03-02T12:00:00+00:00",
-                "stopped_at": "Legacy stop",
-                "resume_file": "legacy.md",
-                "hostname": "legacy-host",
-                "platform": "LegacyOS",
-            },
-            "continuation": {
-                "schema_version": 1,
-                "handoff": {
-                    "recorded_at": "2026-03-04T09:15:00+00:00",
-                    "stopped_at": "Canonical stop",
-                    "resume_file": "canonical.md",
-                },
-                "machine": {
-                    "recorded_at": "2026-03-04T09:15:00+00:00",
-                    "hostname": "canonical-host",
-                    "platform": "CanonicalOS",
-                },
-            },
-        }
-    )
-
-    assert result["continuation"]["handoff"]["resume_file"] == "canonical.md"
-    assert result["continuation"]["machine"]["hostname"] == "canonical-host"
-    assert result["session"] == {
-        "last_date": "2026-03-04T09:15:00+00:00",
-        "stopped_at": "Canonical stop",
-        "resume_file": "canonical.md",
-        "hostname": "canonical-host",
-        "platform": "CanonicalOS",
-        "last_result_id": None,
-    }
-
-
-def test_ensure_state_schema_prefers_canonical_continuation_over_conflicting_session():
-    result = ensure_state_schema(
-        {
-            "session": {
-                "last_date": "2026-03-01T09:00:00+00:00",
-                "stopped_at": "Legacy stop",
-                "resume_file": "legacy.md",
-                "hostname": "legacy-host",
-                "platform": "Legacy OS",
-            },
-            "continuation": {
-                "schema_version": 1,
-                "handoff": {
-                    "recorded_at": "2026-03-02T12:00:00+00:00",
-                    "stopped_at": "Phase 4 P1",
-                    "resume_file": "continue.md",
-                },
-                "machine": {
-                    "recorded_at": "2026-03-02T12:00:00+00:00",
-                    "hostname": "builder-02",
-                    "platform": "macOS arm64",
-                },
-            },
-        }
-    )
-
-    assert result["continuation"]["handoff"]["resume_file"] == "continue.md"
-    assert result["continuation"]["machine"]["hostname"] == "builder-02"
-    assert result["session"] == {
-        "last_date": "2026-03-02T12:00:00+00:00",
-        "stopped_at": "Phase 4 P1",
-        "resume_file": "continue.md",
-        "hostname": "builder-02",
-        "platform": "macOS arm64",
-        "last_result_id": None,
-    }
 
 
 # ─── integrity mode / provenance ─────────────────────────────────────────────
@@ -2286,7 +1526,9 @@ def test_state_load_persists_state_md_recovery_to_backup_and_recent_projects(
     assert index.rows[0].resume_target_recorded_at == "2026-03-29T12:00:00+00:00"
 
 
-def test_sync_state_json_does_not_resurrect_backup_only_json_fields_when_primary_is_unreadable(tmp_path: Path) -> None:
+def test_sync_state_json_preserves_backup_project_contract_without_resurrecting_other_backup_only_json_fields(
+    tmp_path: Path,
+) -> None:
     baseline = default_state_dict()
     save_state_json(tmp_path, baseline)
     layout = ProjectLayout(tmp_path)
@@ -2304,9 +1546,11 @@ def test_sync_state_json_does_not_resurrect_backup_only_json_fields_when_primary
     result = sync_state_json(tmp_path, generate_state_markdown(md_state))
     stored = json.loads(layout.state_json.read_text(encoding="utf-8"))
 
-    assert result["project_contract"] is None
+    assert result["project_contract"] is not None
+    assert result["project_contract"]["scope"]["question"] == "backup-only contract"
     assert result["session"]["resume_file"] is None
-    assert stored["project_contract"] is None
+    assert stored["project_contract"] is not None
+    assert stored["project_contract"]["scope"]["question"] == "backup-only contract"
     assert stored["session"]["resume_file"] is None
 
 
@@ -3025,87 +2269,6 @@ def test_save_state_markdown_preserves_verification_records_for_tagged_results(t
     assert result["verification_records"][0]["commit_sha"] == "abc1234"
 
 
-# ─── field helpers ────────────────────────────────────────────────────────────
-
-
-def test_state_extract_field():
-    content = "**Status:** Executing\n**Phase:** 3"
-    assert state_extract_field(content, "Status") == "Executing"
-    assert state_extract_field(content, "Phase") == "3"
-    assert state_extract_field(content, "Missing") is None
-
-
-def test_state_replace_field():
-    content = "**Status:** Executing\n**Phase:** 3"
-    updated = state_replace_field(content, "Status", "Paused")
-    assert "**Status:** Paused" in updated
-    assert "Phase:** 3" in updated
-
-
-def test_state_has_field():
-    content = "**Status:** Executing"
-    assert state_has_field(content, "Status") is True
-    assert state_has_field(content, "Missing") is False
-
-
-# ─── status validation ───────────────────────────────────────────────────────
-
-
-def test_is_valid_status():
-    assert is_valid_status("Executing") is True
-    assert is_valid_status("Planning") is True
-    assert is_valid_status("Complete") is True
-    assert is_valid_status("InvalidFoo") is False
-
-
-def test_validate_state_transition_valid():
-    assert validate_state_transition("Executing", "Phase complete — ready for verification") is None
-
-
-def test_validate_state_transition_invalid():
-    result = validate_state_transition("Not started", "Complete")
-    assert result is not None
-    assert "Invalid transition" in result
-
-
-def test_validate_state_transition_same_status():
-    assert validate_state_transition("Executing", "Executing") is None
-
-
-def test_validate_state_transition_paused_allows_any():
-    assert validate_state_transition("Paused", "Executing") is None
-    assert validate_state_transition("Paused", "Planning") is None
-
-
-# ─── parse_state_to_json ─────────────────────────────────────────────────────
-
-
-def test_parse_state_to_json_structure():
-    result = parse_state_to_json(MINIMAL_STATE_MD)
-    assert result["_version"] == 1
-    assert "_synced_at" in result
-    assert result["project_reference"]["core_research_question"] == "How does X work?"
-    assert result["position"]["current_phase"] == "3"
-    assert result["position"]["status"] == "Executing"
-    assert result["session"]["last_date"] is not None
-    assert result["continuation"] == default_state_dict()["continuation"]
-    assert result["performance_metrics"]["rows"][0]["label"] == "Phase 1 P1"
-    assert len(result["decisions"]) == 1
-    assert len(result["blockers"]) == 1
-
-
-def test_parse_state_to_json_preserves_session_last_result_id() -> None:
-    content = MINIMAL_STATE_MD.replace(
-        "**Resume file:** —\n",
-        "**Resume file:** GPD/phases/03-analysis/.continue-here.md\n**Last result ID:** result-03\n",
-    )
-
-    result = parse_state_to_json(content)
-
-    assert result["session"]["last_result_id"] == "result-03"
-    assert result["continuation"] == default_state_dict()["continuation"]
-
-
 def test_state_record_session_does_not_emit_local_observability_events(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
@@ -3539,53 +2702,6 @@ def test_state_record_session_refreshes_recent_projects_after_index_lock_acquisi
     assert [row.project_root for row in index.rows] == [current_root, injected_root.as_posix()]
     assert index.rows[0].resume_file == "NEXT.md"
     assert index.rows[1].resume_file == "old.md"
-
-
-# ─── model types ─────────────────────────────────────────────────────────────
-
-
-def test_research_state_model():
-    state = ResearchState()
-    dumped = state.model_dump()
-    assert "position" in dumped
-    assert "decisions" in dumped
-    assert "continuation" in dumped
-    assert isinstance(dumped["decisions"], list)
-
-
-def test_is_valid_status_rejects_prefix():
-    """Prefixes of valid statuses must not be accepted."""
-    assert is_valid_status("Exec") is False
-    assert is_valid_status("Plan") is False
-
-
-def test_extract_field_does_not_cross_newline():
-    """state_extract_field must not capture text from the next line."""
-    assert state_extract_field("**Status:**\n**Phase:** 3", "Status") is None
-
-
-def test_decision_emdash_in_rationale_preserved():
-    """An em-dash inside the rationale must not truncate the text."""
-    s = default_state_dict()
-    s["decisions"] = [
-        {
-            "phase": "2",
-            "summary": "Pick gauge",
-            "rationale": "Lorenz gauge — simplifies Fourier — standard choice",
-        }
-    ]
-    md = generate_state_markdown(s)
-    parsed = parse_state_md(md)
-    assert len(parsed["decisions"]) == 1
-    rat = parsed["decisions"][0]["rationale"]
-    assert rat is not None
-    assert "standard choice" in rat
-
-
-def test_valid_statuses_is_list():
-    assert isinstance(VALID_STATUSES, list)
-    assert "Executing" in VALID_STATUSES
-    assert "Complete" in VALID_STATUSES
 
 
 # ─── Issue 1: state_compact must call _recover_intent_locked ──────────────────

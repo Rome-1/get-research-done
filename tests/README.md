@@ -4,6 +4,8 @@ This directory contains the automated test suite for GPD: core CLI and state reg
 
 The final section of this README keeps the full checked-in repository interdependency graph that the graph guardrail tests read directly.
 
+Default `uv run pytest tests/ -q` uses the fast daily suite declared in [tests/conftest.py](/Users/sergio/GitHub/get-physics-done/tests/conftest.py). Use `uv run pytest tests/ -q -n auto --dist=loadscope` for the preferred parallel fast path. Use `uv run pytest tests/ -q --full-suite -n auto --dist=loadscope` or `GPD_TEST_FULL=1 uv run pytest tests/ -q` when you need every heavyweight install/runtime regression collected as well. Plain `pytest tests/ -q` also works when `pytest-xdist` is not installed because parallel flags now live at the call site instead of repo config. The GitHub Actions workflow runs both fast and full suites explicitly.
+
 ## Repository Interdependency Graph
 
 <!-- repo-graph-generated-on:start -->
@@ -203,7 +205,7 @@ flowchart TD
 
 - `.github/workflows/test.yml -> tests/**`
   `authority`
-  Runs `uv run pytest tests/ -q -n auto` across the whole test tree.
+  Runs fast and full pytest coverage explicitly in CI.
 
 - `.github/workflows/test.yml -> pyproject.toml`
   `authority`
@@ -1624,7 +1626,7 @@ They explicitly preserve:
 - `tests/core/test_frontmatter.py + tests/core/test_frontmatter_edge.py + tests/core/test_properties.py -> src/gpd/core/frontmatter.py`
   `typed-roundtrip`
 
-- `tests/core/test_state.py + tests/core/test_state_stress.py + tests/core/test_state_coverage_gaps.py + tests/core/test_state_mutations.py + tests/core/test_state_storage.py -> src/gpd/core/state.py`
+- `tests/core/test_state.py + tests/core/test_state_stress.py + tests/core/test_state_mutations.py + tests/core/test_state_storage.py -> src/gpd/core/state.py`
   `typed-roundtrip`
   Markdown/json persistence, normalization, sync, backup, and tagged verification-record preservation are all exercised.
 

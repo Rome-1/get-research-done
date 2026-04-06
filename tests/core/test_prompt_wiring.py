@@ -936,16 +936,44 @@ def test_new_project_requires_scoping_contract_across_setup_modes() -> None:
     assert "scoping contract with decisive outputs, anchors, and explicit approval" in command_text
 
 
+def _assert_parse_line_includes_tokens(parse_line: str, fields: tuple[str, ...]) -> None:
+    for field in fields:
+        assert f"`{field}`" in parse_line
+
+
 def test_new_project_wiring_mentions_contract_persistence_and_contract_first_downstream_generation() -> None:
     workflow_text = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     command_text = (COMMANDS_DIR / "new-project.md").read_text(encoding="utf-8")
+    parse_line = next(line for line in workflow_text.splitlines() if line.startswith("Parse JSON for:"))
 
     assert "gpd state set-project-contract" in workflow_text
     assert "gpd --raw validate project-contract - --mode approved" in workflow_text
     assert "gpd state set-project-contract -" in workflow_text
     assert "/tmp/gpd-project-contract.json" not in workflow_text
     assert "temporary JSON file if needed" not in workflow_text
-    assert "Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `project_exists`, `has_research_map`, `planning_exists`, `has_research_files`, `has_project_manifest`, `has_existing_project`, `needs_research_map`, `has_git`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`." in workflow_text
+    _assert_parse_line_includes_tokens(
+        parse_line,
+        (
+            "researcher_model",
+            "synthesizer_model",
+            "roadmapper_model",
+            "commit_docs",
+            "autonomy",
+            "research_mode",
+            "project_exists",
+            "has_research_map",
+            "planning_exists",
+            "has_research_files",
+            "has_project_manifest",
+            "has_existing_project",
+            "needs_research_map",
+            "has_git",
+            "project_contract",
+            "project_contract_gate",
+            "project_contract_load_info",
+            "project_contract_validation",
+        ),
+    )
     assert "Treat `project_contract` as approved scope only when `project_contract_gate.authoritative` is true." in workflow_text
     assert "Read PROJECT.md and `GPD/state.json` and extract" in workflow_text
     assert "Derive phases from requirements AND the approved project contract" in workflow_text
@@ -966,6 +994,14 @@ def test_new_project_defers_workflow_setup_until_after_scope_approval() -> None:
     assert "workflow opens with the physics-questioning pass" in command_text
     assert "surfaces a preset choice before writing workflow preferences" in command_text
     assert "only asks the detailed config questions after scope approval" in command_text
+
+
+def test_new_project_command_avoids_stale_workflow_line_counts() -> None:
+    command_text = (COMMANDS_DIR / "new-project.md").read_text(encoding="utf-8")
+
+    assert "Read {GPD_INSTALL_DIR}/workflows/new-project.md first and follow it exactly." in command_text
+    assert "step-by-step instructions" not in command_text
+    assert "lines)" not in command_text
 
 
 def test_questioning_guide_requires_anchors_and_disconfirming_questions() -> None:
@@ -1058,7 +1094,7 @@ def test_planning_and_phase_templates_surface_active_reference_context() -> None
     phase_prompt = (TEMPLATES_DIR / "phase-prompt.md").read_text(encoding="utf-8")
     workflow_text = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
 
-    assert "Planning requires an approved scoping contract." in planner_prompt
+    assert "Planning requires `project_contract`:" in planner_prompt
     assert "**Project Contract:** {project_contract}" in planner_prompt
     assert "**Active References:** {active_reference_context}" in planner_prompt
     assert "@path/to/reference-or-benchmark-anchor.md" in phase_prompt
@@ -1490,7 +1526,9 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
     assert "verification-side `suggested_contract_checks`" in verification_template
     assert "uncertainty_markers:" in verification_template
     assert "Use `@{GPD_INSTALL_DIR}/templates/verification-report.md` for the canonical verification frontmatter contract." in research_verification
-    assert "status: passed | gaps_found | expert_needed | human_needed" in research_verification
+    assert "status: gaps_found" in research_verification
+    assert "# Allowed status values: passed|gaps_found|expert_needed|human_needed" in research_verification
+    assert "status: passed | gaps_found | expert_needed | human_needed" not in research_verification
     assert "deliverables: {}" not in research_verification
     assert "acceptance_tests: {}" not in research_verification
     assert "references: {}" not in research_verification
@@ -1503,14 +1541,20 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
     assert "forbidden-proxy-main" in research_verification
     assert "comparison_verdicts:" in research_verification
     assert "subject_role: decisive" in research_verification
-    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]" in research_verification
+    assert "comparison_kind: benchmark" in research_verification
+    assert "Allowed body enum values:" in research_verification
+    assert "`comparison_kind`: benchmark|prior_work|experiment|cross_method|baseline|other" in research_verification
+    assert "Allowed `comparison_kind` values: `benchmark|prior_work|experiment|cross_method|baseline|other`." in research_verification
+    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]" not in research_verification
     assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other | \"\"]" not in research_verification
     assert "suggested_contract_checks:" in research_verification
     assert "uncertainty_markers:" in research_verification
     assert "claim_id" in research_verification
     assert "acceptance_test_id" in research_verification
     assert "frontmatter contract compatible with `@{GPD_INSTALL_DIR}/templates/verification-report.md`" in verify_workflow
-    assert "status: passed | gaps_found | expert_needed | human_needed" in verify_workflow
+    assert "status: gaps_found" in verify_workflow
+    assert "# Allowed status values: passed|gaps_found|expert_needed|human_needed" in verify_workflow
+    assert "status: passed | gaps_found | expert_needed | human_needed" not in verify_workflow
     assert "uncertainty_markers:" in verify_workflow
     assert "Mirror decisive verdicts into frontmatter `comparison_verdicts`." in verify_workflow
     assert "structured `suggested_contract_checks` entry before final validation" in verify_workflow
@@ -1529,7 +1573,10 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
     assert "forbidden-proxy-id" in verify_workflow
     assert "comparison_verdicts:" in verify_workflow
     assert "subject_role: decisive" in verify_workflow
-    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]" in verify_workflow
+    assert "comparison_kind: benchmark" in verify_workflow
+    assert "Allowed body enum values:" in verify_workflow
+    assert "`comparison_kind`: benchmark|prior_work|experiment|cross_method|baseline|other" in verify_workflow
+    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]" not in verify_workflow
     assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | \"\"]" not in verify_workflow
     assert "suggested_contract_checks:" in verify_workflow
     assert "`suggested_contract_check`" not in verify_workflow
@@ -1975,16 +2022,13 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     assert "Reference Artifacts Content:\n{reference_artifacts_content}" in peer_review
     assert "project_contract_validation" in peer_review
     assert "project_contract_load_info" in peer_review
-    assert "Treat `project_contract_gate` as the authoritative contract gate state." in peer_review
+    contract_gate_note = (
+        "Treat `project_contract_gate` as authoritative. Use `project_contract` and `contract_intake` only when "
+        "`project_contract_gate.authoritative` is true; otherwise keep them as diagnostics/context and rely on "
+        "`effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as carry-forward evidence."
+    )
+    assert contract_gate_note in peer_review
     assert "project_contract_gate.authoritative" in peer_review
-    assert (
-        "Treat `project_contract` and `contract_intake` as approved evidence only when `project_contract_gate.authoritative` is true."
-        in peer_review
-    )
-    assert (
-        "Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence even when the contract gate is blocked."
-        in peer_review
-    )
     assert "project_contract_gate" in write_paper
     assert "project_contract_load_info" in write_paper
     assert "project_contract_validation" in write_paper
@@ -2008,27 +2052,7 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
         "and `active_reference_context` visible throughout the staged review"
         in write_paper
     )
-    assert peer_review.count("Project Contract:\n{project_contract}") >= 5
-    assert peer_review.count("Project Contract Gate:\n{project_contract_gate}") >= 5
-    assert peer_review.count("Project Contract Load Info:\n{project_contract_load_info}") >= 5
-    assert peer_review.count("Project Contract Validation:\n{project_contract_validation}") >= 5
-    assert peer_review.count("Active References:\n{active_reference_context}") >= 5
-    assert peer_review.count("Contract Intake:\n{contract_intake}") >= 5
-    assert peer_review.count("Effective Reference Intake:\n{effective_reference_intake}") >= 5
-    assert peer_review.count("Reference Artifacts Content:\n{reference_artifacts_content}") >= 5
-    assert peer_review.count("Treat `project_contract_gate` as the authoritative contract gate state.") >= 5
-    assert (
-        peer_review.count(
-            "Treat `project_contract` and `contract_intake` as approved evidence only when `project_contract_gate.authoritative` is true."
-        )
-        >= 5
-    )
-    assert (
-        peer_review.count(
-            "Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence even when the contract gate is blocked."
-        )
-        >= 5
-    )
+    assert peer_review.count(contract_gate_note) >= 1
     assert "repair the blocked contract before retrying" in peer_review
     assert "peer-review-panel.md` directly" in review_reader
     assert "peer-review-panel.md` directly" in review_literature
@@ -2160,25 +2184,34 @@ def test_publication_command_contexts_surface_schema_docs_before_generation() ->
 def test_research_verification_body_scaffold_keeps_body_only_subject_labels_distinct() -> None:
     research_verification = (TEMPLATES_DIR / "research-verification.md").read_text(encoding="utf-8")
 
-    assert "check_subject_kind: [claim | deliverable | acceptance_test | reference]" in research_verification
-    assert 'gap_subject_kind: "claim | deliverable | acceptance_test | reference"' in research_verification
+    assert "Allowed body enum values:" in research_verification
+    assert "check_subject_kind: claim" in research_verification
+    assert "`check_subject_kind`: claim|deliverable|acceptance_test|reference" in research_verification
+    assert 'gap_subject_kind: "claim"' in research_verification
     assert "Use `check_subject_kind` for body-only verification checkpoints" in research_verification
     assert "Use `gap_subject_kind` for the body scaffold" in research_verification
     assert "Keep `check_subject_kind` and `gap_subject_kind` aligned with the canonical frontmatter-safe subject vocabulary" in research_verification
     assert "use `forbidden_proxy_id` for explicit proxy-rejection gaps" in research_verification
     assert "\nsubject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in research_verification
+    assert "# Allowed check_subject_kind values: claim|deliverable|acceptance_test|reference" not in research_verification
+    assert "check_subject_kind: [claim | deliverable | acceptance_test | reference]" not in research_verification
     assert "check_subject_kind: [claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check]" not in research_verification
+    assert 'gap_subject_kind: "claim | deliverable | acceptance_test | reference"' not in research_verification
     assert 'gap_subject_kind: "claim | deliverable | acceptance_test | reference | forbidden_proxy | suggested_contract_check"' not in research_verification
 
 
 def test_verify_work_workflow_uses_body_only_subject_kind_fields() -> None:
     verify_work = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
 
-    assert "check_subject_kind: `claim | deliverable | acceptance_test | reference`" in verify_work
-    assert "check_subject_kind: [claim | deliverable | acceptance_test | reference]" in verify_work
+    assert "check_subject_kind: `claim|deliverable|acceptance_test|reference`" in verify_work
+    assert "Allowed body enum values:" in verify_work
+    assert "check_subject_kind: claim" in verify_work
+    assert "`check_subject_kind`: claim|deliverable|acceptance_test|reference" in verify_work
     assert 'gap_subject_kind: "{check_subject_kind}"' in verify_work
     assert "Use `forbidden_proxy_id` for explicit proxy-rejection checks" in verify_work
     assert "instead of inventing extra body subject kinds" in verify_work
+    assert "# Allowed check_subject_kind values: claim|deliverable|acceptance_test|reference" not in verify_work
+    assert "check_subject_kind: [claim | deliverable | acceptance_test | reference]" not in verify_work
     assert "{phase}" not in verify_work
     assert "GPD/phases/{phase_dir}" not in verify_work
     assert 'Write to `${phase_dir}/${phase_number}-VERIFICATION.md`' in verify_work
@@ -2322,7 +2355,7 @@ def test_planner_and_summary_prompt_surfaces_expand_contract_schema_bodies() -> 
     assert "in_scope:" in phase_prompt
     assert "context_intake:" in phase_prompt
     assert "Surface machine-checkable prerequisites up front with `tool_requirements`; keep human-only setup in `researcher_setup`." in phase_prompt
-    assert "Use the schema include for contract semantics rather than repeating them here." in phase_prompt
+    assert "Use the included schema for contract shape, cardinality, and enum defaults." in phase_prompt
     assert "Keep proofs auditable in the body when a plan is proof-bearing, and rerun stale proof audits before `status: passed`." in phase_prompt
     assert "must_include_prior_outputs: [\"GPD/phases/00-baseline/00-01-SUMMARY.md\"]" in phase_prompt
     assert "user_asserted_anchors: [\"Use the lattice normalization from the user notes\"]" in phase_prompt
@@ -2485,7 +2518,7 @@ def test_phase_prompt_surfaces_validation_critical_plan_contract_rules() -> None
     phase_prompt = (TEMPLATES_DIR / "phase-prompt.md").read_text(encoding="utf-8")
 
     assert "Surface machine-checkable prerequisites up front with `tool_requirements`; keep human-only setup in `researcher_setup`." in phase_prompt
-    assert "Use the schema include for contract semantics rather than repeating them here." in phase_prompt
+    assert "Use the included schema for contract shape, cardinality, and enum defaults." in phase_prompt
     assert "Keep proofs auditable in the body when a plan is proof-bearing, and rerun stale proof audits before `status: passed`." in phase_prompt
     assert "If the plan is intentionally scoping-only, keep that limited shape explicit and preserve at least one target, open question, or carry-forward input." in phase_prompt
     assert "the contract must carry non-empty claims, deliverables, acceptance tests, forbidden proxies" not in phase_prompt
@@ -2586,6 +2619,10 @@ def test_resume_workflow_surfaces_contract_load_and_validation_state() -> None:
     assert "@{GPD_INSTALL_DIR}/templates/state-json-schema.md" in resume_work
     assert "project_contract_validation" in resume_work
     assert "project_contract_load_info" in resume_work
+    assert "workspace_state_exists" in resume_work
+    assert "workspace_roadmap_exists" in resume_work
+    assert "workspace_project_exists" in resume_work
+    assert "workspace_planning_exists" in resume_work
     assert_resume_authority_contract(
         resume_work,
         allow_explicit_alias_examples=False,
@@ -2593,11 +2630,14 @@ def test_resume_workflow_surfaces_contract_load_and_validation_state() -> None:
     )
     assert "Canonical continuation and recovery authority:" in resume_work
     assert "Public resume vocabulary centers on canonical continuation fields" in resume_work
-    assert "The public resume vocabulary stays canonical and top-level." in resume_work
+    _assert_resume_compatibility_note(resume_work)
+    assert resume_work.count("Public resume vocabulary centers on canonical continuation fields") == 1
+    assert "The public resume vocabulary stays canonical and top-level." not in resume_work
     assert "continuity_handoff_file" in resume_work
     assert "recorded_continuity_handoff_file" in resume_work
     assert "missing_continuity_handoff_file" in resume_work
     assert "machine_change_detected" in resume_work
+    assert "Use `workspace_*` to judge the user-requested workspace before auto-selection" in resume_work
     assert "machine_change_notice" in resume_work
     assert "current_hostname" in resume_work
     assert "current_platform" in resume_work
@@ -2607,16 +2647,20 @@ def test_resume_workflow_surfaces_contract_load_and_validation_state() -> None:
     assert "reloads that project's canonical state" in resume_work
     assert "only when `project_contract_gate.authoritative` is true" in resume_work
     assert "remain visible gate inputs and diagnostics" in resume_work
-    assert "the structured contract stays visible for context, but it is not approved execution scope" in resume_work
+    assert "If `project_contract_gate.authoritative` is false, present that contract as visible-but-blocked" in resume_work
     assert "Contract repair required:" in resume_work
     assert "Repair the blocked contract or state-integrity issue before planning or execution" in resume_work
+
+
+def _assert_resume_compatibility_note(text: str) -> None:
+    assert "compatibility-only intake fields stay internal" in text.lower()
 
 
 def test_resume_command_keeps_internal_resume_backend_details_out_of_public_prompt_surface() -> None:
     resume_command = (COMMANDS_DIR / "resume-work.md").read_text(encoding="utf-8")
 
     assert "Public resume vocabulary centers on canonical continuation fields" in resume_command
-    assert "compatibility-only intake fields stay internal" in resume_command
+    _assert_resume_compatibility_note(resume_command)
     assert "compat_resume_surface" not in resume_command
     assert "gpd init resume" not in resume_command
 
@@ -2655,6 +2699,7 @@ def test_pause_resume_and_help_wiring_keep_runtime_handoff_and_local_snapshot_bo
     assert "resume_candidates" in resume_work
     assert "compat_resume_surface" not in resume_work
     assert "Public resume vocabulary centers on canonical continuation fields" in resume_work
+    assert help_workflow.count("Public resume vocabulary centers on canonical continuation fields") == 1
     assert "Do NOT invent additional candidates from plan files without summaries, auto-checkpoints, or other ad hoc checkpoints." in resume_work
     assert "gpd:resume-work" in pause_work
     assert "gpd resume" in pause_work
@@ -2663,13 +2708,22 @@ def test_pause_resume_and_help_wiring_keep_runtime_handoff_and_local_snapshot_bo
     assert "continuation handoff artifact" in pause_work or "session continuity" in pause_work
     assert "session.resume_file" not in pause_work
     assert "Public resume vocabulary centers on" in help_workflow
-    assert "Compatibility-only intake fields stay internal" in help_workflow
+    _assert_resume_compatibility_note(help_workflow)
     assert_recovery_ladder_contract(
         help_workflow,
         resume_work_fragments=("gpd:resume-work",),
         suggest_next_fragments=("gpd:suggest-next",),
         pause_work_fragments=("gpd:pause-work",),
     )
+
+
+def test_state_portability_reference_keeps_resume_public_vocabulary_note_compact() -> None:
+    state_portability = (REFERENCES_DIR / "orchestration" / "state-portability.md").read_text(encoding="utf-8")
+    help_workflow = (WORKFLOWS_DIR / "help.md").read_text(encoding="utf-8")
+
+    assert state_portability.count("Public resume vocabulary centers on canonical continuation fields") == 1
+    _assert_resume_compatibility_note(state_portability)
+    assert "Those legacy raw-intake aliases are not part of the public top-level resume vocabulary." not in state_portability
     assert "gpd observe execution" in help_workflow
     assert "suggested read-only checks rather than runtime hotkeys" in help_workflow
 
@@ -2947,7 +3001,7 @@ def test_help_workflow_state_aware_variant_surfaces_paused_resume_branch() -> No
     assert "## Contextual Help (State-Aware Variant)" in help_workflow
     assert "Returning to work:" in help_workflow
     assert "gpd:resume-work" in help_workflow
-    assert "gpd:resume-work       # Continue in-runtime from the selected project state after reopening that workspace" in help_workflow
+    assert "gpd:resume-work       # Continue in-runtime from the reopened project's canonical state after reopening that workspace" in help_workflow
     assert help_workflow.index("gpd resume --recent") < help_workflow.index("gpd:resume-work")
     assert "gpd:progress" in help_workflow
     assert "gpd:suggest-next" in help_workflow

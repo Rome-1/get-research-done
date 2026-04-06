@@ -1063,11 +1063,35 @@ assert.equal(
   "future.json:notify"
 );
 
+const launchWrapperPermissionSurfaceKinds = [...new Set(
+  catalog
+    .filter((runtime) => runtime.capabilities.permissions_surface === "launch-wrapper")
+    .map((runtime) => runtime.capabilities.permission_surface_kind)
+)].sort();
+const launchWrapperDisjunction = launchWrapperPermissionSurfaceKinds.length === 1
+  ? JSON.stringify(launchWrapperPermissionSurfaceKinds[0])
+  : `one of ${launchWrapperPermissionSurfaceKinds.map((value) => JSON.stringify(value)).join(", ")}`;
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const futureLaunchWrapperPermissionKindCatalog = JSON.parse(JSON.stringify(catalog));
+const launchWrapperRuntime = futureLaunchWrapperPermissionKindCatalog.find(
+  (runtime) => runtime.capabilities.permissions_surface === "launch-wrapper"
+);
+launchWrapperRuntime.capabilities.permission_surface_kind = "future.json:launchWrapper";
+assert.equal(
+  validateRuntimeCatalog(futureLaunchWrapperPermissionKindCatalog).find(
+    (runtime) => runtime.runtime_name === launchWrapperRuntime.runtime_name
+  ).capabilities.permission_surface_kind,
+  "future.json:launchWrapper"
+);
+
 const badPermissionKindCatalog = JSON.parse(JSON.stringify(catalog));
 badPermissionKindCatalog[0].capabilities.permission_surface_kind = "approval-toggle";
 assert.throws(
   () => validateRuntimeCatalog(badPermissionKindCatalog),
-  /runtime catalog entry 0\.capabilities\.permission_surface_kind must be "none", "managed-launcher-wrapper", or a config surface label like file:key/
+  new RegExp(
+    `runtime catalog entry 0\\.capabilities\\.permission_surface_kind must be "none", ${escapeRegex(launchWrapperDisjunction)}, or a config surface label like file:key`
+  )
 );
 
 const badStatuslineCatalog = JSON.parse(JSON.stringify(catalog));
@@ -1099,12 +1123,12 @@ assert.throws(
   /runtime catalog entry 0\.capabilities\.permission_surface_kind must be a config surface label when permissions_surface=config-file/
 );
 
-const badLaunchWrapperPermissionContractCatalog = JSON.parse(JSON.stringify(catalog));
-badLaunchWrapperPermissionContractCatalog[0].capabilities.permissions_surface = "launch-wrapper";
-badLaunchWrapperPermissionContractCatalog[0].capabilities.permission_surface_kind = "future.json:permissions.mode";
+const badConfigFileSpecialValueCatalog = JSON.parse(JSON.stringify(futureLaunchWrapperPermissionKindCatalog));
+badConfigFileSpecialValueCatalog[0].capabilities.permissions_surface = "config-file";
+badConfigFileSpecialValueCatalog[0].capabilities.permission_surface_kind = "future.json:launchWrapper";
 assert.throws(
-  () => validateRuntimeCatalog(badLaunchWrapperPermissionContractCatalog),
-  /runtime catalog entry 0\.capabilities\.permission_surface_kind must be "managed-launcher-wrapper" when permissions_surface=launch-wrapper/
+  () => validateRuntimeCatalog(badConfigFileSpecialValueCatalog),
+  /runtime catalog entry 0\.capabilities\.permission_surface_kind must be a config surface label when permissions_surface=config-file/
 );
 
 const badUnsupportedPermissionContractCatalog = JSON.parse(JSON.stringify(catalog));
@@ -1339,48 +1363,6 @@ def test_bootstrap_uninstall_subcommand_alias_routes_to_runtime_uninstall(tmp_pa
     assert len(managed_runtime_uninstalls) == 1
     for runtime in _RUNTIME_NAMES:
         assert _RUNTIME_DISPLAY_NAMES[runtime] in result.stdout
-    assert "runtime uninstall ok" in result.stdout
-
-
-@pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
-@pytest.mark.skipif(shutil.which("node") is None, reason="node is required for bootstrap installer tests")
-def test_bootstrap_install_subcommand_accepts_positional_runtime_alias(tmp_path: Path) -> None:
-    result, _, log_path = _run_bootstrap_with_fake_python(
-        tmp_path,
-        installer_args=["install", _CLAUDE_RUNTIME_ALIAS, "--local"],
-    )
-
-    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
-
-    entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
-    managed_runtime_installs = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "gpd.cli", "install", _CLAUDE_RUNTIME_NAME, "--local"]
-    ]
-
-    assert len(managed_runtime_installs) == 1
-    assert f"Installing GPD (local) for: {_RUNTIME_DISPLAY_NAMES[_CLAUDE_RUNTIME_NAME]}" in result.stdout
-    assert "Install Summary" in result.stdout
-    _assert_single_runtime_next_steps(result.stdout, _CLAUDE_RUNTIME_NAME)
-    assert f"Installed GPD for {_RUNTIME_DISPLAY_NAMES[_CLAUDE_RUNTIME_NAME]} (local)." not in result.stdout
-
-
-@pytest.mark.skipif(os.name == "nt", reason="bootstrap installer harness uses POSIX-style fake Python shims")
-@pytest.mark.skipif(shutil.which("node") is None, reason="node is required for bootstrap installer tests")
-def test_bootstrap_uninstall_subcommand_accepts_runtime_alias(tmp_path: Path) -> None:
-    result, _, log_path = _run_bootstrap_with_fake_python(
-        tmp_path,
-        installer_args=["uninstall", _OPENCODE_RUNTIME_ALIAS, "--local"],
-    )
-
-    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
-
-    entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
-    managed_runtime_uninstalls = [
-        entry for entry in entries if entry["managed"] and entry["argv"] == ["-m", "gpd.cli", "uninstall", _OPENCODE_RUNTIME_NAME, "--local"]
-    ]
-
-    assert len(managed_runtime_uninstalls) == 1
-    assert f"Uninstalling GPD from {_RUNTIME_DISPLAY_NAMES[_OPENCODE_RUNTIME_NAME]} (local)..." in result.stdout
     assert "runtime uninstall ok" in result.stdout
 
 

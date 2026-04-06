@@ -68,6 +68,12 @@ def _runtime_literal_patterns() -> list[str]:
 
 def _runtime_capability_surface_patterns() -> list[str]:
     patterns: set[str] = set()
+    special_permission_surface_kinds = frozenset(
+        descriptor.capabilities.permission_surface_kind
+        for descriptor in _RUNTIME_DESCRIPTORS
+        if descriptor.capabilities.permissions_surface != "config-file"
+        and descriptor.capabilities.permission_surface_kind != "none"
+    )
     for descriptor in _RUNTIME_DESCRIPTORS:
         capabilities = descriptor.capabilities
         for value in (
@@ -75,9 +81,9 @@ def _runtime_capability_surface_patterns() -> list[str]:
             capabilities.statusline_config_surface,
             capabilities.notify_config_surface,
         ):
-            if value and value not in {"none", "managed-launcher-wrapper"}:
+            if value and value not in {"none", *special_permission_surface_kinds}:
                 patterns.add(re.escape(value))
-        if capabilities.permission_surface_kind == "managed-launcher-wrapper":
+        if capabilities.permission_surface_kind in special_permission_surface_kinds:
             patterns.add(re.escape(capabilities.permission_surface_kind))
     return sorted(patterns)
 

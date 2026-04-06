@@ -8,6 +8,7 @@ import logging
 import os
 from collections.abc import Mapping
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from gpd.adapters.install_utils import (
     AGENTS_DIR_NAME,
@@ -42,7 +43,9 @@ from gpd.adapters.tool_names import (
     reference_translation_map,
     translate_for_runtime,
 )
-from gpd.registry import AgentDef, load_agents_from_dir
+
+if TYPE_CHECKING:
+    from gpd.registry import AgentDef
 
 logger = logging.getLogger(__name__)
 
@@ -636,6 +639,8 @@ class RuntimeAdapter(abc.ABC):
 
     def load_runtime_agents(self, gpd_root: Path) -> tuple[AgentDef, ...]:
         """Load runtime-projected agent metadata from an install source root."""
+        from gpd.registry import load_agents_from_dir
+
         agents = load_agents_from_dir(gpd_root / "agents")
         projected = (self.project_agent_metadata(agent) for _, agent in sorted(agents.items()))
         return tuple(projected)

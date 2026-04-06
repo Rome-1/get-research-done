@@ -16,11 +16,17 @@ def test_verification_scaffolds_surface_closed_comparison_kind_enum_without_blan
     research_verification = _read("src/gpd/specs/templates/research-verification.md")
     verify_workflow = _read("src/gpd/specs/workflows/verify-work.md")
 
-    expected_enum = "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]"
+    expected_enum = "`comparison_kind`: benchmark|prior_work|experiment|cross_method|baseline|other"
     omit_instruction = "omit both `comparison_kind` and `comparison_reference_id` instead of leaving blank placeholders"
 
+    assert "Allowed body enum values:" in research_verification
+    assert "Allowed body enum values:" in verify_workflow
     assert expected_enum in research_verification
     assert expected_enum in verify_workflow
+    assert "comparison_kind: benchmark" in research_verification
+    assert "comparison_kind: benchmark" in verify_workflow
+    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]" not in research_verification
+    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]" not in verify_workflow
     assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other | \"\"]" not in research_verification
     assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other | \"\"]" not in verify_workflow
     assert omit_instruction in research_verification
