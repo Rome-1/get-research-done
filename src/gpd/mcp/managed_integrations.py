@@ -89,7 +89,7 @@ class ManagedIntegrationDescriptor:
             return {}
         return _load_project_integrations_payload(cwd)
 
-    def project_record(self, cwd: Path | None = None, *, strict: bool = False) -> dict[str, object] | None:
+    def project_record(self, cwd: Path | None = None) -> dict[str, object] | None:
         if cwd is None:
             return None
         payload = self.project_payload(cwd)
@@ -119,8 +119,8 @@ class ManagedIntegrationDescriptor:
             record["endpoint"] = endpoint.strip()
         return record
 
-    def project_enabled(self, cwd: Path | None = None, *, strict: bool = False) -> bool:
-        record = self.project_record(cwd, strict=strict)
+    def project_enabled(self, cwd: Path | None = None) -> bool:
+        record = self.project_record(cwd)
         if record is None:
             return True
         enabled = record.get("enabled")
@@ -130,10 +130,8 @@ class ManagedIntegrationDescriptor:
         self,
         env: Mapping[str, str] | None = None,
         cwd: Path | None = None,
-        *,
-        strict: bool = False,
     ) -> str:
-        record = self.project_record(cwd, strict=strict)
+        record = self.project_record(cwd)
         if record is not None:
             endpoint = record.get("endpoint")
             if isinstance(endpoint, str) and endpoint:
@@ -171,10 +169,8 @@ class ManagedIntegrationDescriptor:
         self,
         env: Mapping[str, str] | None = None,
         cwd: Path | None = None,
-        *,
-        strict: bool = False,
     ) -> bool:
-        if not self.project_enabled(cwd, strict=strict):
+        if not self.project_enabled(cwd):
             return False
         return self.api_key_present(env)
 
@@ -182,10 +178,8 @@ class ManagedIntegrationDescriptor:
         self,
         env: Mapping[str, str] | None = None,
         cwd: Path | None = None,
-        *,
-        strict: bool = False,
     ) -> dict[str, str]:
-        endpoint = self.resolved_endpoint(env, cwd=cwd, strict=strict)
+        endpoint = self.resolved_endpoint(env, cwd=cwd)
         if endpoint == self.default_endpoint:
             return {}
         return {self.endpoint_env_var: endpoint}
@@ -194,14 +188,12 @@ class ManagedIntegrationDescriptor:
         self,
         env: Mapping[str, str] | None = None,
         cwd: Path | None = None,
-        *,
-        strict: bool = False,
     ) -> dict[str, object]:
         entry: dict[str, object] = {
             "command": self.bridge_command,
             "args": [],
         }
-        projected_env = self.projected_environment(env, cwd=cwd, strict=strict)
+        projected_env = self.projected_environment(env, cwd=cwd)
         if projected_env:
             entry["env"] = projected_env
         return entry
@@ -210,10 +202,8 @@ class ManagedIntegrationDescriptor:
         self,
         env: Mapping[str, str] | None = None,
         cwd: Path | None = None,
-        *,
-        strict: bool = False,
     ) -> dict[str, object]:
-        record = self.project_record(cwd, strict=strict)
+        record = self.project_record(cwd)
         return {
             "integration_id": self.integration_id,
             "managed_server_key": self.managed_server_key,
@@ -221,11 +211,11 @@ class ManagedIntegrationDescriptor:
             "api_key_env_var": self.api_key_env_var,
             "api_key_env_vars": list(self.api_key_env_vars),
             "endpoint_env_var": self.endpoint_env_var,
-            "endpoint": self.resolved_endpoint(env, cwd=cwd, strict=strict),
-            "projected_environment": self.projected_environment(env, cwd=cwd, strict=strict),
+            "endpoint": self.resolved_endpoint(env, cwd=cwd),
+            "projected_environment": self.projected_environment(env, cwd=cwd),
             "project_configured": record is not None,
-            "enabled": self.project_enabled(cwd, strict=strict),
-            "configured": self.is_configured(env, cwd=cwd, strict=strict),
+            "enabled": self.project_enabled(cwd),
+            "configured": self.is_configured(env, cwd=cwd),
         }
 
 
@@ -268,18 +258,16 @@ def projected_managed_optional_mcp_servers(
     env: Mapping[str, str] | None = None,
     *,
     cwd: Path | None = None,
-    strict: bool = False,
 ) -> dict[str, dict[str, object]]:
     """Project all configured optional managed integrations into MCP server entries."""
 
     managed_servers: dict[str, dict[str, object]] = {}
     for integration in MANAGED_INTEGRATIONS.values():
-        if not integration.is_configured(env, cwd=cwd, strict=strict):
+        if not integration.is_configured(env, cwd=cwd):
             continue
         managed_servers[integration.managed_server_key] = integration.projected_server_entry(
             env,
             cwd=cwd,
-            strict=strict,
         )
     return managed_servers
 

@@ -279,7 +279,7 @@ def _project_managed_mcp_servers(
     cwd: Path | None = None,
 ) -> dict[str, dict[str, object]]:
     """Project shared optional integrations into Gemini's ``mcpServers`` shape."""
-    return _managed_integrations.projected_managed_optional_mcp_servers(env, cwd=cwd, strict=True)
+    return _managed_integrations.projected_managed_optional_mcp_servers(env, cwd=cwd)
 
 
 def _managed_mcp_server_keys() -> frozenset[str]:

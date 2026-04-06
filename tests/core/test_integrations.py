@@ -25,14 +25,14 @@ class _FakeManagedIntegration:
         self.managed_server_key = managed_server_key
         self._configured = configured
         self._server_entry = server_entry
-        self.calls: list[tuple[str, object, object, bool]] = []
+        self.calls: list[tuple[str, object, object]] = []
 
-    def is_configured(self, env=None, cwd=None, strict: bool = False) -> bool:  # type: ignore[no-untyped-def]
-        self.calls.append(("is_configured", env, cwd, strict))
+    def is_configured(self, env=None, cwd=None) -> bool:  # type: ignore[no-untyped-def]
+        self.calls.append(("is_configured", env, cwd))
         return self._configured
 
-    def projected_server_entry(self, env=None, cwd=None, strict: bool = False) -> dict[str, object]:  # type: ignore[no-untyped-def]
-        self.calls.append(("projected_server_entry", env, cwd, strict))
+    def projected_server_entry(self, env=None, cwd=None) -> dict[str, object]:  # type: ignore[no-untyped-def]
+        self.calls.append(("projected_server_entry", env, cwd))
         return self._server_entry
 
 
@@ -101,16 +101,16 @@ def test_managed_optional_mcp_helpers_project_from_registry(monkeypatch: pytest.
     )
 
     env = {"ALPHA_TOKEN": "secret"}
-    servers = managed_integrations.projected_managed_optional_mcp_servers(env, cwd=tmp_path, strict=True)
+    servers = managed_integrations.projected_managed_optional_mcp_servers(env, cwd=tmp_path)
 
     assert servers == {"gpd-alpha": {"command": "alpha-bridge", "args": []}}
     assert managed_integrations.managed_optional_mcp_server_keys() == frozenset({"gpd-alpha", "gpd-beta"})
     assert alpha.calls == [
-        ("is_configured", env, tmp_path, True),
-        ("projected_server_entry", env, tmp_path, True),
+        ("is_configured", env, tmp_path),
+        ("projected_server_entry", env, tmp_path),
     ]
     assert beta.calls == [
-        ("is_configured", env, tmp_path, True),
+        ("is_configured", env, tmp_path),
     ]
 
 
@@ -150,7 +150,7 @@ def test_wolfram_descriptor_strict_parsing_rejects_unknown_keys(tmp_path, payloa
     config_path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(RuntimeError, match="unsupported keys"):
-        descriptor.project_record(tmp_path, strict=True)
+        descriptor.project_record(tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -234,7 +234,7 @@ def test_wolfram_descriptor_strict_parsing_rejects_legacy_api_key_env_field(tmp_
     )
 
     with pytest.raises(RuntimeError, match=r"integrations\.wolfram contains unsupported keys: api_key_env"):
-        descriptor.project_record(tmp_path, strict=True)
+        descriptor.project_record(tmp_path)
 
 
 def test_wolfram_descriptor_resolves_project_local_config_from_nested_workspace(tmp_path) -> None:
@@ -257,7 +257,7 @@ def test_wolfram_descriptor_rejects_empty_endpoint_env_override() -> None:
     assert descriptor is not None
 
     with pytest.raises(RuntimeError, match="GPD_WOLFRAM_MCP_ENDPOINT is set but empty"):
-        descriptor.resolved_endpoint({WOLFRAM_MCP_ENDPOINT_ENV_VAR: "   "}, strict=True)
+        descriptor.resolved_endpoint({WOLFRAM_MCP_ENDPOINT_ENV_VAR: "   "})
 
 
 def test_get_managed_integration_rejects_malformed_ids() -> None:

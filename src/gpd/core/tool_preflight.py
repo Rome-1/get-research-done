@@ -497,8 +497,8 @@ def _probe_tool(requirement: PlanToolRequirement, *, cwd: Path | None = None) ->
             )
 
         integration = get_managed_integration("wolfram")
-        if integration is not None and integration.is_configured(cwd=cwd, strict=True):
-            endpoint = integration.resolved_endpoint(cwd=cwd, strict=True)
+        if integration is not None and integration.is_configured(cwd=cwd):
+            endpoint = integration.resolved_endpoint(cwd=cwd)
             return (
                 True,
                 (

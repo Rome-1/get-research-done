@@ -33,7 +33,7 @@ _READ_TIMEOUT_SECONDS = 300.0
 def resolve_endpoint(env: Mapping[str, str] | None = None) -> str:
     """Return the Wolfram MCP endpoint URL, defaulting to the official service."""
     source = os.environ if env is None else env
-    return WOLFRAM_MANAGED_INTEGRATION.resolved_endpoint(source, strict=True)
+    return WOLFRAM_MANAGED_INTEGRATION.resolved_endpoint(source)
 
 
 def resolve_api_key(env: Mapping[str, str] | None = None) -> str:

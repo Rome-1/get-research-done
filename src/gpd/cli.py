@@ -4571,7 +4571,7 @@ def _update_wolfram_integration_state(cwd: Path, *, enabled: bool) -> dict[str, 
     with file_lock(config_path):
         try:
             payload = WOLFRAM_MANAGED_INTEGRATION.project_payload(project_root)
-            current = WOLFRAM_MANAGED_INTEGRATION.project_record(project_root, strict=True) or {}
+            current = WOLFRAM_MANAGED_INTEGRATION.project_record(project_root) or {}
         except RuntimeError as exc:
             _error(str(exc))
         updated: dict[str, object] = {"enabled": enabled}
@@ -4583,8 +4583,8 @@ def _update_wolfram_integration_state(cwd: Path, *, enabled: bool) -> dict[str, 
         atomic_write(config_path, json.dumps(payload, indent=2) + "\n")
 
     try:
-        ready = WOLFRAM_MANAGED_INTEGRATION.is_configured(cwd=project_root, strict=True)
-        endpoint = WOLFRAM_MANAGED_INTEGRATION.resolved_endpoint(cwd=project_root, strict=True)
+        ready = WOLFRAM_MANAGED_INTEGRATION.is_configured(cwd=project_root)
+        endpoint = WOLFRAM_MANAGED_INTEGRATION.resolved_endpoint(cwd=project_root)
     except RuntimeError as exc:
         _error(str(exc))
 
@@ -4606,10 +4606,10 @@ def _wolfram_integration_status_payload(cwd: Path) -> dict[str, object]:
     project_root = _require_project_root_for_integrations(cwd)
     config_path = _integrations_config_path(project_root)
     try:
-        record = WOLFRAM_MANAGED_INTEGRATION.project_record(project_root, strict=True)
-        enabled = WOLFRAM_MANAGED_INTEGRATION.project_enabled(project_root, strict=True)
-        ready = WOLFRAM_MANAGED_INTEGRATION.is_configured(cwd=project_root, strict=True)
-        endpoint = WOLFRAM_MANAGED_INTEGRATION.resolved_endpoint(cwd=project_root, strict=True)
+        record = WOLFRAM_MANAGED_INTEGRATION.project_record(project_root)
+        enabled = WOLFRAM_MANAGED_INTEGRATION.project_enabled(project_root)
+        ready = WOLFRAM_MANAGED_INTEGRATION.is_configured(cwd=project_root)
+        endpoint = WOLFRAM_MANAGED_INTEGRATION.resolved_endpoint(cwd=project_root)
     except RuntimeError as exc:
         _error(str(exc))
 

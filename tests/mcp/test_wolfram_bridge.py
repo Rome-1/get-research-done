@@ -32,9 +32,8 @@ def test_resolve_endpoint_and_api_key_use_the_managed_descriptor_path(monkeypatc
     observed: dict[str, object] = {}
 
     class FakeManagedIntegration:
-        def resolved_endpoint(self, source, strict: bool):
+        def resolved_endpoint(self, source):
             observed["endpoint_source"] = dict(source)
-            observed["endpoint_strict"] = strict
             return "https://managed.example.invalid/mcp"
 
         def resolve_api_key(self, source):
@@ -45,7 +44,6 @@ def test_resolve_endpoint_and_api_key_use_the_managed_descriptor_path(monkeypatc
 
     assert module.resolve_endpoint({"GPD_WOLFRAM_MCP_ENDPOINT": "ignored"}) == "https://managed.example.invalid/mcp"
     assert module.resolve_api_key({"GPD_WOLFRAM_MCP_API_KEY": "ignored"}) == "managed-token"
-    assert observed["endpoint_strict"] is True
     assert observed["endpoint_source"] == {"GPD_WOLFRAM_MCP_ENDPOINT": "ignored"}
     assert observed["api_key_source"] == {"GPD_WOLFRAM_MCP_API_KEY": "ignored"}
 

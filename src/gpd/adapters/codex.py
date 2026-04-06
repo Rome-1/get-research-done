@@ -1888,7 +1888,7 @@ def _build_managed_optional_mcp_servers(
     env: Mapping[str, str] | None = None,
 ) -> dict[str, dict[str, object]]:
     """Return optional managed MCP servers that are currently configured."""
-    return _managed_integrations.projected_managed_optional_mcp_servers(env, cwd=cwd, strict=True)
+    return _managed_integrations.projected_managed_optional_mcp_servers(env, cwd=cwd)
 
 
 def _managed_optional_mcp_server_keys() -> frozenset[str]:
