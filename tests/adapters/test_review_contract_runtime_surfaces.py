@@ -5,12 +5,16 @@ import pytest
 from gpd.adapters.codex import _convert_to_codex_skill
 from gpd.adapters.gemini import _convert_to_gemini_toml
 from gpd.adapters.opencode import convert_claude_to_opencode_frontmatter
-from gpd.registry import get_command
+from gpd.adapters.runtime_catalog import iter_runtime_descriptors
+from gpd import registry
 from tests.adapters.review_contract_test_utils import extract_review_contract_section
+
+RUNTIMES = tuple(descriptor.runtime_name for descriptor in iter_runtime_descriptors())
+REVIEW_COMMANDS = tuple(command_name.removeprefix("gpd:") for command_name in registry.list_review_commands())
 
 
 def _transform_registry_command_content(command_name: str, runtime: str) -> str:
-    content = get_command(command_name).content
+    content = registry.get_command(command_name).content
     if runtime == "claude-code":
         return content
     if runtime == "codex":
@@ -24,14 +28,14 @@ def _transform_registry_command_content(command_name: str, runtime: str) -> str:
 
 @pytest.mark.parametrize(
     "command_name",
-    ("write-paper", "respond-to-referees", "verify-work", "arxiv-submission", "peer-review"),
+    REVIEW_COMMANDS,
 )
-@pytest.mark.parametrize("runtime", ("claude-code", "codex", "gemini", "opencode"))
+@pytest.mark.parametrize("runtime", RUNTIMES)
 def test_review_contract_section_matches_registry_across_runtime_wrappers(
     command_name: str,
     runtime: str,
 ) -> None:
-    expected_section = extract_review_contract_section(get_command(command_name).content)
+    expected_section = extract_review_contract_section(registry.get_command(command_name).content)
     transformed_content = _transform_registry_command_content(command_name, runtime)
 
     assert extract_review_contract_section(transformed_content) == expected_section

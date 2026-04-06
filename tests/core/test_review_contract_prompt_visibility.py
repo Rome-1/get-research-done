@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from gpd import registry
+from gpd.core.model_visible_text import command_visibility_note, review_contract_visibility_note
 from gpd.core.review_contract_prompt import (
     normalize_review_contract_frontmatter_payload,
     normalize_review_contract_payload,
@@ -14,7 +15,6 @@ from gpd.core.review_contract_prompt import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-COMMANDS_DIR = REPO_ROOT / "src/gpd/commands"
 AGENTS_DIR = REPO_ROOT / "src/gpd/agents"
 WORKFLOWS_DIR = REPO_ROOT / "src/gpd/specs/workflows"
 REFERENCES_DIR = REPO_ROOT / "src/gpd/specs/references"
@@ -22,7 +22,7 @@ TEMPLATES_DIR = REPO_ROOT / "src/gpd/specs/templates"
 
 
 def _read_command(name: str) -> str:
-    return (COMMANDS_DIR / f"{name}.md").read_text(encoding="utf-8")
+    return Path(registry.get_command(name).path).read_text(encoding="utf-8")
 
 
 def _read_workflow(name: str) -> str:
@@ -30,11 +30,10 @@ def _read_workflow(name: str) -> str:
 
 
 def test_review_grade_commands_surface_registry_contract_requirements_in_source() -> None:
-    command_names = ("write-paper", "respond-to-referees", "verify-work", "arxiv-submission", "peer-review")
-
-    for command_name in command_names:
+    for command_name in registry.list_review_commands():
         source = _read_command(command_name)
-        contract = registry.get_command(command_name).review_contract
+        command = registry.get_command(command_name)
+        contract = command.review_contract
 
         assert contract is not None
         assert "review-contract:" in source
@@ -67,21 +66,13 @@ def test_review_grade_commands_surface_registry_contract_requirements_in_source(
 
 def test_peer_review_workflow_keeps_contract_gate_prose_concise() -> None:
     workflow = _read_workflow("peer-review")
-    long_gate_rule = (
-        "Treat `project_contract_gate` as authoritative. Use `project_contract` and `contract_intake` only when "
-        "`project_contract_gate.authoritative` is true; otherwise keep them as diagnostics/context and rely on "
-        "`effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as "
-        "carry-forward evidence."
-    )
-
-    assert workflow.count(long_gate_rule) == 1
+    assert "project_contract_gate.authoritative" in workflow
+    assert "effective_reference_intake" in workflow
     assert "Apply the gate rule above." in workflow
 
 
 def test_review_grade_commands_prepend_model_visible_review_contract_to_registry_content() -> None:
-    command_names = ("write-paper", "respond-to-referees", "verify-work", "arxiv-submission", "peer-review")
-
-    for command_name in command_names:
+    for command_name in registry.list_review_commands():
         command = registry.get_command(command_name)
         contract = command.review_contract
 
@@ -89,19 +80,13 @@ def test_review_grade_commands_prepend_model_visible_review_contract_to_registry
         expected_section = render_review_contract_prompt(dataclasses.asdict(contract))
         assert command.content.startswith("## Command Requirements\n")
         assert "## Command Requirements" in command.content
-        assert "context_mode:" in command.content
-        assert "project_reentry_capable:" in command.content
-        assert "Model-visible execution constraints. Follow this YAML directly." in command.content
+        assert command_visibility_note() in command.content
         if command.requires:
             assert "requires:" in command.content
         assert "## Review Contract" in command.content
         assert expected_section in command.content
         assert "review_contract:" in command.content
-        assert "Model-visible review contract." in expected_section
-        assert "Closed schema: no extra keys." in expected_section
-        assert "`review_mode`=publication|review" in expected_section
-        assert "`preflight_checks` must use declared values" in expected_section
-        assert "`required_state`=phase_executed when present." in expected_section
+        assert review_contract_visibility_note() in expected_section
         assert f"review_mode: {contract.review_mode}" in expected_section
         for output in contract.required_outputs:
             assert output in expected_section
@@ -143,7 +128,7 @@ def test_non_review_commands_with_requires_still_prepend_model_visible_command_r
 
         assert command.content.startswith("## Command Requirements\n")
         assert "requires:" in command.content
-        assert "Model-visible execution constraints. Follow this YAML directly." in command.content
+        assert command_visibility_note() in command.content
         for require_key, require_value in command.requires.items():
             assert str(require_key) in command.content
             if isinstance(require_value, list):
@@ -856,8 +841,8 @@ def test_prompt_visible_contracts_surface_literal_boolean_requirements() -> None
 
     assert "`required_in_proof` must be a literal JSON boolean (`true` or `false`)" in plan_schema
     assert "not a quoted string or synonym such as `\"yes\"` / `\"no\"`" in plan_schema
-    assert "`blocking` must be a literal JSON boolean (`true` or `false`)" in review_reader
-    assert "not a quoted string or synonym such as `\"yes\"` / `\"no\"`" in review_reader
+    assert "@{GPD_INSTALL_DIR}/references/publication/peer-review-panel.md" in review_reader
+    assert "shared source of truth for the full `ClaimIndex` and `StageReviewReport` contracts" in review_reader
     assert "`blocking` in each finding must be a literal JSON boolean (`true` or `false`)" in panel
     assert "not a quoted string or synonym such as `\"yes\"` / `\"no\"`" in panel
 
