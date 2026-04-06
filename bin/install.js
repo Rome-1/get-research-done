@@ -2080,7 +2080,10 @@ function printHelp() {
     " Then use your runtime's `new-project` command for new work or `map-research` for existing work. When you come back later, use `gpd resume` for the current-workspace read-only recovery snapshot or `gpd resume --recent` to find a different workspace first, then continue in the runtime with `resume-work`."
   );
   console.log(` ${SHARED_PUBLIC_SURFACE_TEXT.settingsCommandSentence}`);
-  console.log(` Recommended unattended default: Balanced autonomy (\`balanced\`). ${SHARED_PUBLIC_SURFACE_TEXT.settingsRecommendationSentence}`);
+  console.log(
+    " Recommended unattended default: Balanced autonomy (`balanced`). "
+    + SHARED_PUBLIC_SURFACE_TEXT.settingsRecommendationSentence
+  );
   console.log(
     ` ${recoveryLadderNote({
       resumeWorkPhrase: "your runtime-specific `resume-work` command",

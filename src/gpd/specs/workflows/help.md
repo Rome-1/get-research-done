@@ -184,14 +184,6 @@ When a side investigation appears later, use `gpd:tangent` first. It is the choo
 
 This is the compact grouped list of runtime commands. For normal-terminal install, readiness, and diagnostics commands, use `gpd --help`.
 
-**Workflow presets**
-1. `Paper/manuscript workflows` - First supported workflow preset for `write-paper`, `paper-build`, `peer-review`, and `arxiv-submission`; inspect it with `gpd presets list`, preview it with `gpd presets show <preset>`, and apply it from your normal terminal with `gpd presets apply <preset>` or through your runtime-specific `settings` command
-2. `gpd doctor --runtime <runtime> --local|--global` - Check runtime-local paper-toolchain readiness from your normal terminal before using that preset. Add `--live-executable-probes` if you also want cheap local executable probes such as `pdflatex --version` or `wolframscript -version`. Failed preset rows degrade `write-paper`, but `paper-build` remains the build contract and `arxiv-submission` requires the built manuscript
-3. `gpd presets list` - Inspect the local preset catalog; presets resolve to the existing config keys and do not add a separate persisted preset block
-4. `gpd presets show <preset>` - Preview one preset's bundle before applying it
-5. `gpd presets apply <preset> [--dry-run]` - Apply or preview one preset from your normal terminal without inventing a separate preset schema
-6. `gpd validate plan-preflight <PLAN.md>` - Check machine-readable plan tool requirements before execution when a plan depends on specialized tools
-
 ### Starter commands
 
 - `gpd:help` - Show the quick start or command index

@@ -42,12 +42,12 @@ bootstrap package, prefer `uv` so the environment is resolved from
 ```bash
 uv sync --dev
 uv run gpd --help
-uv run gpd install <runtime> --local
 ```
 
-Use `codex`, `claude`, `gemini`, or `opencode` for `<runtime>`. After
-`uv sync --dev`, you can also `source .venv/bin/activate` and run `gpd ...`
-directly if you prefer an activated shell.
+After `uv sync --dev`, you can also `source .venv/bin/activate` and run
+`gpd ...` directly if you prefer an activated shell. To exercise the public
+installer flow from a source checkout, still use the matching `npx -y
+get-physics-done` bootstrap command from [Start Here](#start-here).
 
 </details>
 

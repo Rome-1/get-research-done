@@ -1247,7 +1247,6 @@ def test_source_checkout_cli_docs_use_uv() -> None:
     assert "Working from a source checkout?" in readme
     assert "uv sync --dev" in readme
     assert "uv run gpd --help" in readme
-    assert "uv run gpd install <runtime> --local" in readme
     assert "pyproject.toml" in readme
 
     assert "## Local CLI From This Checkout" in contributing

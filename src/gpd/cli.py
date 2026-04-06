@@ -746,6 +746,7 @@ app = _GPDTyper(
         "Use the local CLI for install, readiness checks, permissions, observability, validation, and diagnostics.\n"
         "Examples:\n"
         "  gpd install <runtime> --local\n"
+        "  gpd doctor --runtime <runtime> --local\n"
         + "".join(f"  {command}\n" for command in local_cli_bridge_commands())
         + "  gpd validate command-context gpd:new-project"
     ),
@@ -8480,7 +8481,11 @@ def _resolve_detected_runtime_target(runtime_name: str) -> tuple[Path | None, st
 
 
 def _install_summary_local_cli_bridge_line() -> str:
-    """Return the concise local-CLI bridge follow-up for install summaries."""
+    """Return the concise local-CLI bridge follow-up for install summaries.
+
+    The richer settings guidance stays in bootstrap/help surfaces that render
+    post_start_settings_note() and post_start_settings_recommendation().
+    """
     return f"Use [bold]{local_cli_help_command()}[/] for local diagnostics and later setup."
 
 
