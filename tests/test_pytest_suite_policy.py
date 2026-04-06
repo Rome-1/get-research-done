@@ -8,9 +8,9 @@ import yaml
 from tests.conftest import (
     _FAST_SUITE_ENV_VAR,
     FAST_SUITE_EXCLUDES,
-    complementary_heavy_suite_ignore_args,
     _explicit_collection_requested,
     _full_suite_requested,
+    complementary_heavy_suite_ignore_args,
 )
 
 
