@@ -397,6 +397,34 @@ def test_verification_run_contract_check_returns_error_envelope_on_backend_failu
     assert result == {"error": "catalog offline", "schema_version": 1}
 
 
+def test_limiting_case_check_rejects_duplicate_whitespace_normalized_limit_keys() -> None:
+    from gpd.mcp.servers.verification_server import limiting_case_check
+
+    result = limiting_case_check("E = mc^2", {" x ": "classical", "x": "quantum"})
+
+    assert result == {
+        "error": "limits must not contain duplicate keys after trimming whitespace",
+        "schema_version": 1,
+    }
+
+
+def test_run_contract_check_canonicalizes_returned_binding_payload() -> None:
+    from gpd.mcp.servers.verification_server import run_contract_check
+    from tests.mcp.test_servers import _load_project_contract_fixture
+
+    result = run_contract_check(
+        {
+            "check_key": "contract.benchmark_reproduction",
+            "contract": _load_project_contract_fixture(),
+            "binding": {"claim_ids": [" claim-benchmark "]},
+            "observed": {"metric_value": 0.01, "threshold_value": 0.02},
+        }
+    )
+
+    assert result["status"] == "pass"
+    assert result["binding"] == {"claim_ids": ["claim-benchmark"]}
+
+
 def test_verification_suggest_contract_checks_returns_error_envelope_on_backend_failure() -> None:
     from gpd.mcp.servers.verification_server import suggest_contract_checks
 

@@ -166,6 +166,11 @@ class TestParseAgentFile:
         assert agent.color == "blue"
         assert agent.system_prompt.startswith("## Agent Requirements\n")
         assert "Model-visible agent requirements. Follow this YAML." in agent.system_prompt
+        assert "Closed schema; no extra keys." in agent.system_prompt
+        assert (
+            "Use only the declared enum values for `commit_authority`, `surface`, `role_family`, "
+            "`artifact_write_authority`, and `shared_state_authority`."
+        ) in agent.system_prompt
         assert "commit_authority: orchestrator" in agent.system_prompt
         assert "surface: public" in agent.system_prompt
         assert "role_family: worker" in agent.system_prompt
@@ -183,6 +188,7 @@ class TestParseAgentFile:
         assert agent.description == ""
         assert agent.tools == []
         assert agent.system_prompt.startswith("## Agent Requirements\n")
+        assert "Closed schema; no extra keys." in agent.system_prompt
         assert agent.system_prompt.endswith("Just a body, no frontmatter.")
 
     def test_agent_file_missing_optional_fields(self, tmp_path: Path) -> None:
@@ -334,6 +340,9 @@ class TestParseCommandFile:
         assert cmd.requires == {"files": ["GPD/ROADMAP.md"]}
         assert cmd.allowed_tools == ["file_read", "shell"]
         assert cmd.content.startswith("## Command Requirements\n\n")
+        assert "Closed schema; no extra keys." in cmd.content
+        assert "Strict booleans only." in cmd.content
+        assert "Use only declared values for `context_mode`, `agent`, and `project_reentry_capable`." in cmd.content
         assert "GPD/ROADMAP.md" in cmd.content
         assert cmd.content.endswith("Command body.")
 
@@ -366,6 +375,8 @@ class TestParseCommandFile:
         cmd = _parse_command_file(f, source="commands")
 
         assert cmd.content.startswith("## Command Requirements\n\n")
+        assert "Closed schema; no extra keys." in cmd.content
+        assert "Strict booleans only." in cmd.content
         assert cmd.content.index("## Review Contract") > cmd.content.index("## Command Requirements")
         assert cmd.content.endswith("Body.")
 

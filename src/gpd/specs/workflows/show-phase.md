@@ -45,8 +45,7 @@ Categorize files into:
 - **Plans:** `PLAN.md` and `*-PLAN.md`
 - **Summaries:** `SUMMARY.md` and `*-SUMMARY.md`
 - **Context:** `*-CONTEXT.md`
-- **Research:** `*-RESEARCH.md`
-- **Discovery:** `DISCOVERY.md`
+- **Research:** `RESEARCH.md` and `*-RESEARCH.md`
 - **Verification:** `*-VERIFICATION.md`
 - **Validation:** `*-VALIDATION.md`
 - **Scripts:** `*.py`, `*.jl`, `*.m`, `*.nb`

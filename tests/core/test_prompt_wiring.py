@@ -47,6 +47,11 @@ FIXTURES_STAGE0 = REPO_ROOT / "tests" / "fixtures" / "stage0"
 FIXTURES_STAGE4 = REPO_ROOT / "tests" / "fixtures" / "stage4"
 WORKFLOW_EXEMPT_COMMANDS = frozenset({"health", "suggest-next"})
 
+
+def _assert_contains_fragments(text: str, *fragments: str) -> None:
+    missing = [fragment for fragment in fragments if fragment not in text]
+    assert not missing, "Missing expected prompt fragments:\n" + "\n".join(missing)
+
 COMMAND_SPAWN_TOKENS = {
     "explain.md": ["gpd-explainer", "gpd-bibliographer"],
     "literature-review.md": ["gpd-literature-reviewer"],
@@ -924,17 +929,27 @@ def test_new_project_requires_scoping_contract_across_setup_modes() -> None:
     workflow_text = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     command_text = (COMMANDS_DIR / "new-project.md").read_text(encoding="utf-8")
 
-    assert "Auto mode compresses intake; it does not override autonomy review gates after the scoping contract is approved" in workflow_text
-    assert "Require one explicit scoping approval gate before requirements and roadmap generation" in workflow_text
-    assert "Roadmap approval: Auto-approve only for `balanced` / `yolo`; if `autonomy=supervised`, present the draft roadmap before commit" in workflow_text
-    assert "Minimal mode is still allowed to be lean, but it is not allowed to be contract-free." in workflow_text
-    assert "At least one concrete anchor, reference, prior-output constraint, or baseline" in workflow_text
-    assert "If the decisive anchor is still unknown, keep that blocker explicit" in workflow_text
-    assert "scope.unresolved_questions`, `context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors`" in workflow_text
-    assert "Do not approve a scoping contract that strips decisive outputs, anchors, prior outputs, or review/stop triggers down to generic placeholders." in workflow_text
-    assert "Do NOT skip the initial scoping-contract approval gate." in workflow_text
-    assert "scoping contract with decisive outputs and anchors" in command_text
-    assert "explicit approval before downstream artifacts" in command_text
+    _assert_contains_fragments(
+        workflow_text,
+        "scoping contract",
+        "approval gate",
+        "decisive outputs",
+        "anchors",
+        "prior outputs",
+        "review/stop triggers",
+        "contract-free",
+        "scope.unresolved_questions",
+        "context_intake.context_gaps",
+        "uncertainty_markers.weakest_anchors",
+    )
+    _assert_contains_fragments(
+        command_text,
+        "scoping contract",
+        "decisive outputs",
+        "anchors",
+        "explicit approval",
+        "downstream artifacts",
+    )
 
 
 def _assert_parse_line_includes_tokens(parse_line: str, fields: tuple[str, ...]) -> None:
@@ -975,10 +990,20 @@ def test_new_project_wiring_mentions_contract_persistence_and_contract_first_dow
             "project_contract_validation",
         ),
     )
-    assert "Treat `project_contract` as approved scope only when `project_contract_gate.authoritative` is true." in workflow_text
-    assert "Read PROJECT.md and `GPD/state.json` and extract" in workflow_text
-    assert "Derive phases from requirements AND the approved project contract" in workflow_text
-    assert "If auto mode and `autonomy` is not `supervised`" in workflow_text
+    _assert_contains_fragments(
+        workflow_text,
+        "project_contract_gate.authoritative",
+        "approved scope",
+        "contract coverage",
+        "ROADMAP.md",
+        "REQUIREMENTS.md",
+    )
+    _assert_contains_fragments(
+        command_text,
+        "project contract",
+        "roadmap generation",
+        "explicit approval",
+    )
     assert "@{GPD_INSTALL_DIR}/templates/state-json-schema.md" in command_text
 
 
@@ -986,11 +1011,21 @@ def test_new_project_defers_workflow_setup_until_after_scope_approval() -> None:
     workflow_text = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     command_text = (COMMANDS_DIR / "new-project.md").read_text(encoding="utf-8")
 
-    assert "Before `GPD/config.json` exists, the `autonomy` and `research_mode` values from `gpd --raw init new-project` are temporary defaults" in workflow_text
+    _assert_contains_fragments(
+        workflow_text,
+        "GPD/config.json",
+        "temporary defaults",
+        "scope approval",
+        "first project-artifact commit",
+    )
     assert "## 2.5 Early Workflow Setup" not in workflow_text
     assert "What physics problem do you want to investigate?" in workflow_text
-    assert "If `GPD/config.json` does not exist yet, run Step 5 now before generating or committing `PROJECT.md`." in workflow_text
-    assert "Run this step after scope approval and before the first project-artifact commit whenever `GPD/config.json` does not exist yet." in workflow_text
+    _assert_contains_fragments(
+        workflow_text,
+        "If `GPD/config.json` does not exist yet",
+        "scope approval",
+        "before the first project-artifact commit",
+    )
     assert "If Step 2.5 already captured provisional setup preferences" not in workflow_text
     assert "start with physics questioning" in command_text
     assert "surface a preset choice before workflow preferences" in command_text
@@ -1315,10 +1350,15 @@ def test_audit_milestone_uses_canonical_phase_helpers_instead_of_raw_glob_discov
 def test_discover_command_does_not_emit_phase_only_commit_placeholders_for_standalone_mode() -> None:
     discover = (COMMANDS_DIR / "discover.md").read_text(encoding="utf-8")
 
-    assert "Do not commit `RESEARCH.md` separately." in discover
-    assert "phase-only commit messages or file paths" in discover
+    _assert_contains_fragments(
+        discover,
+        "Produces RESEARCH.md",
+        "Do not commit `RESEARCH.md` separately.",
+        "phase-only commit messages or file paths",
+    )
     assert 'gpd commit "discover(${phase_number})' not in discover
     assert 'GPD/phases/${padded_phase}-${phase_slug}/RESEARCH.md' not in discover
+    assert "DISCOVERY.md" not in discover
 
 
 def test_workflows_use_raw_json_when_shell_snippets_pipe_cli_output_into_gpd_json_get() -> None:

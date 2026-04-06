@@ -229,6 +229,93 @@ Done.
     assert result.results.physical_interpretation_present.not_applicable is True
 
 
+def test_build_paper_quality_input_counts_project_local_plan_contract_targets(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "paper" / "minimal.tex",
+        r"""
+\documentclass{article}
+\begin{document}
+\begin{abstract}
+Minimal abstract.
+\end{abstract}
+\section{Introduction}
+Intro.
+\section{Conclusion}
+Done.
+\end{document}
+""".strip()
+        + "\n",
+    )
+    _write(
+        tmp_path / "paper" / "PAPER-CONFIG.json",
+        json.dumps(_paper_config_payload("Minimal Paper", "jhep")),
+    )
+    _write(tmp_path / "artifacts" / "benchmark" / "report.json", "{}\n")
+    _write(tmp_path / "GPD" / "phases" / "00-baseline" / "00-01-SUMMARY.md", "baseline summary\n")
+    _write(
+        tmp_path / "GPD" / "phases" / "01-benchmark" / "01-01-PLAN.md",
+        """---
+phase: 01-benchmark
+plan: 01
+type: execute
+wave: 1
+depends_on: []
+files_modified: []
+interactive: false
+contract:
+  schema_version: 1
+  scope:
+    question: What benchmark must this plan recover?
+  context_intake:
+    must_read_refs: [ref-benchmark]
+    must_include_prior_outputs: [GPD/phases/00-baseline/00-01-SUMMARY.md]
+  claims:
+    - id: claim-benchmark
+      statement: Recover the benchmark comparison
+      deliverables: [deliv-figure]
+      acceptance_tests: [test-benchmark]
+      references: [ref-benchmark]
+  deliverables:
+    - id: deliv-figure
+      kind: figure
+      path: figures/benchmark.png
+      description: Benchmark figure
+  references:
+    - id: ref-benchmark
+      kind: prior_artifact
+      locator: artifacts/benchmark/report.json
+      role: benchmark
+      why_it_matters: Project-local benchmark artifact
+      applies_to: [claim-benchmark]
+      must_surface: true
+      required_actions: [read, compare, cite]
+  acceptance_tests:
+    - id: test-benchmark
+      subject: claim-benchmark
+      kind: benchmark
+      procedure: Compare against the benchmark artifact
+      pass_condition: Matches reference within tolerance
+      evidence_required: [deliv-figure, ref-benchmark]
+  forbidden_proxies:
+    - id: fp-benchmark
+      subject: claim-benchmark
+      proxy: qualitative trend agreement without the benchmark artifact
+      reason: Would miss the decisive local anchor
+  uncertainty_markers:
+    weakest_anchors: [Reference tolerance interpretation]
+    disconfirming_observations: [Benchmark agreement disappears after normalization fix]
+---
+
+Body.
+""",
+    )
+
+    result = build_paper_quality_input(tmp_path)
+
+    assert result.verification.contract_targets_verified.total == 3
+    assert result.verification.contract_targets_verified.satisfied == 0
+
+
 def test_build_paper_quality_input_recurses_into_nested_manuscript_files(tmp_path: Path) -> None:
     _write(
         tmp_path / "paper" / "topic_specific_stem.tex",

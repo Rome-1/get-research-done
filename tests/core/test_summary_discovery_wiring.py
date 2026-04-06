@@ -5,6 +5,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMANDS_DIR = REPO_ROOT / "src/gpd/commands"
 WORKFLOWS_DIR = REPO_ROOT / "src/gpd/specs/workflows"
+TEMPLATES_DIR = REPO_ROOT / "src/gpd/specs/templates"
+
+
+def _assert_contains_fragments(text: str, *fragments: str) -> None:
+    missing = [fragment for fragment in fragments if fragment not in text]
+    assert not missing, "Missing expected prompt fragments:\n" + "\n".join(missing)
 
 
 def test_peer_review_surfaces_canonical_phase_summary_artifacts() -> None:
@@ -46,10 +52,23 @@ def test_show_phase_and_verify_phase_surface_standalone_summary_semantics() -> N
     verify_phase = (WORKFLOWS_DIR / "verify-phase.md").read_text(encoding="utf-8")
 
     assert "`PLAN.md` and `*-PLAN.md`" in show_phase
-    assert "`SUMMARY.md` and `*-SUMMARY.md`" in show_phase
+    _assert_contains_fragments(show_phase, "Research:", "`*-RESEARCH.md`")
+    assert "Discovery:" not in show_phase
+    assert "DISCOVERY.md" not in show_phase
     assert 'for plan in "$phase_dir"/PLAN.md "$phase_dir"/*-PLAN.md; do' in verify_phase
     assert 'PREV_SUMMARY=$(ls "$PREV_PHASE_DIR"/SUMMARY.md "$PREV_PHASE_DIR"/*-SUMMARY.md 2>/dev/null | tail -1)' in verify_phase
     assert 'CURR_SUMMARY=$(ls "$phase_dir"/SUMMARY.md "$phase_dir"/*-SUMMARY.md 2>/dev/null | tail -1)' in verify_phase
+
+
+def test_discovery_and_research_surfaces_prefer_research_artifacts_over_legacy_discovery_labels() -> None:
+    discover_command = (COMMANDS_DIR / "discover.md").read_text(encoding="utf-8")
+    research_template = (TEMPLATES_DIR / "research.md").read_text(encoding="utf-8")
+
+    _assert_contains_fragments(discover_command, "Produces RESEARCH.md", "depth: quick", "RESEARCH.md")
+    assert "DISCOVERY.md" not in discover_command
+    _assert_contains_fragments(research_template, "Template for `GPD/phases/XX-name/{phase}-RESEARCH.md`", "RESEARCH.md")
+    assert "discovery.md" not in research_template
+    assert "DISCOVERY.md" not in research_template
 
 
 def test_summary_driven_workflows_search_canonical_summary_artifacts() -> None:
@@ -104,6 +123,8 @@ def test_command_surfaces_list_standalone_and_numbered_phase_artifacts() -> None
     assert "GPD/phases/[current-phase-dir]/*-SUMMARY.md" in progress
     assert "standalone `PLAN.md` and numbered `*-PLAN.md`" in show_phase
     assert "`SUMMARY.md` / `*-SUMMARY.md` artifact" in show_phase
+    assert "DISCOVERY" not in show_phase
+    assert "Discovery:" not in show_phase
     assert "find_files: GPD/phases/*/*SUMMARY.md" in audit
     assert "completed summary frontmatter (`SUMMARY.md` and `*-SUMMARY.md`)" in regression_check
     assert "ls GPD/phases/*/*SUMMARY.md 2>/dev/null" in write_paper

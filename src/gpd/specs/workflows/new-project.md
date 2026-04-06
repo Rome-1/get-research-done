@@ -1345,6 +1345,15 @@ Your PRIOR-WORK.md feeds into research planning. Be precise:
 Write to: GPD/research/PRIOR-WORK.md
 Use template: {GPD_INSTALL_DIR}/templates/research-project/PRIOR-WORK.md
 </output>
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - GPD/research/PRIOR-WORK.md
+expected_artifacts:
+  - GPD/research/PRIOR-WORK.md
+shared_state_policy: return_only
+</spawn_contract>
 ", subagent_type="gpd-project-researcher", model="{researcher_model}", readonly=false, description="Prior work research")
 
 > **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
@@ -1388,6 +1397,15 @@ Your METHODS.md feeds into approach selection. Categorize clearly:
 Write to: GPD/research/METHODS.md
 Use template: {GPD_INSTALL_DIR}/templates/research-project/METHODS.md
 </output>
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - GPD/research/METHODS.md
+expected_artifacts:
+  - GPD/research/METHODS.md
+shared_state_policy: return_only
+</spawn_contract>
 ", subagent_type="gpd-project-researcher", model="{researcher_model}", readonly=false, description="Methods research")
 
 > **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
@@ -1432,6 +1450,15 @@ Your COMPUTATIONAL.md informs the computational strategy. Include:
 Write to: GPD/research/COMPUTATIONAL.md
 Use template: {GPD_INSTALL_DIR}/templates/research-project/COMPUTATIONAL.md
 </output>
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - GPD/research/COMPUTATIONAL.md
+expected_artifacts:
+  - GPD/research/COMPUTATIONAL.md
+shared_state_policy: return_only
+</spawn_contract>
 ", subagent_type="gpd-project-researcher", model="{researcher_model}", readonly=false, description="Computational approaches research")
 
 > **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
@@ -1476,6 +1503,15 @@ Your PITFALLS.md prevents wasted effort. For each pitfall:
 Write to: GPD/research/PITFALLS.md
 Use template: {GPD_INSTALL_DIR}/templates/research-project/PITFALLS.md
 </output>
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - GPD/research/PITFALLS.md
+expected_artifacts:
+  - GPD/research/PITFALLS.md
+shared_state_policy: return_only
+</spawn_contract>
 ", subagent_type="gpd-project-researcher", model="{researcher_model}", readonly=false, description="Pitfalls research")
 ```
 
@@ -1505,8 +1541,19 @@ Write to: GPD/research/SUMMARY.md
 Use template: {GPD_INSTALL_DIR}/templates/research-project/SUMMARY.md
 Do NOT commit — the orchestrator handles commits.
 </output>
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - GPD/research/SUMMARY.md
+expected_artifacts:
+  - GPD/research/SUMMARY.md
+shared_state_policy: return_only
+</spawn_contract>
 ", subagent_type="gpd-research-synthesizer", model="{synthesizer_model}", readonly=false, description="Synthesize research")
 ```
+
+**Artifact gate:** If a scout reports success but its `expected_artifacts` entry (`GPD/research/{FILE}`) is missing, treat that scout as incomplete. If the synthesizer reports success but `GPD/research/SUMMARY.md` is missing, treat that handoff as incomplete. Do not trust the runtime handoff status by itself.
 
 **If the synthesizer agent fails to spawn or returns an error:** Check if individual research files exist. If they do, create a minimal SUMMARY.md in the main context by reading each file's key findings. The individual research files are more important than the synthesis — proceed with what exists.
 
@@ -1756,12 +1803,26 @@ Create research roadmap:
 
 Write files first, then return. This ensures artifacts persist even if context is lost.
 </instructions>
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - GPD/ROADMAP.md
+    - GPD/STATE.md
+    - GPD/REQUIREMENTS.md
+expected_artifacts:
+  - GPD/ROADMAP.md
+  - GPD/STATE.md
+shared_state_policy: return_only
+</spawn_contract>
 ", subagent_type="gpd-roadmapper", model="{roadmapper_model}", readonly=false, description="Create research roadmap")
 ```
 
 **Handle roadmapper return:**
 
 **If the roadmapper agent fails to spawn or returns an error:** Check if ROADMAP.md was partially written (the agent writes files first). If ROADMAP.md exists, verify it has phases and offer to proceed with it. If no ROADMAP.md exists, offer: 1) Retry the roadmapper, 2) Create ROADMAP.md in the main context using PROJECT.md and REQUIREMENTS.md. Do not leave the project in a state with REQUIREMENTS.md but no ROADMAP.md. **Also check if STATE.md exists** — the roadmapper creates both. If STATE.md is missing, create a minimal STATE.md (using the template from Step M5 in the minimal mode section above) so that downstream commands (`convention set`, `state validate`, etc.) can function.
+
+**Artifact gate:** If the roadmapper reports `## ROADMAP CREATED` but `GPD/ROADMAP.md` or `GPD/STATE.md` is missing, treat the handoff as incomplete. Do not trust the runtime handoff status by itself.
 
 **If `## ROADMAP BLOCKED`:**
 

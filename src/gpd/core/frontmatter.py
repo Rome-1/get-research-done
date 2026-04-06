@@ -1986,7 +1986,7 @@ def verify_artifacts(cwd: Path, plan_file_path: Path) -> ArtifactVerification:
         )
 
     try:
-        contract = parse_contract_block(content)
+        contract = parse_contract_block(content, source_path=full_path)
     except FrontmatterValidationError as exc:
         return ArtifactVerification(
             all_passed=False,
@@ -2022,9 +2022,12 @@ def verify_artifacts(cwd: Path, plan_file_path: Path) -> ArtifactVerification:
         )
 
     results: list[ArtifactCheck] = []
+    artifact_root = full_path.parent
     for deliverable in deliverables:
         art_path = str(deliverable.path)
-        art_full = cwd / art_path
+        art_full = Path(art_path)
+        if not art_full.is_absolute():
+            art_full = artifact_root / art_full
         exists = art_full.exists()
         check = ArtifactCheck(path=art_path, exists=exists)
 

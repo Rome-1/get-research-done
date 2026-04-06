@@ -1628,21 +1628,27 @@ def _validate_binding_field_value(value: object, *, field_name: str) -> str | No
     return None
 
 
-def _validate_binding_payload(binding: dict[str, object], *, allowed_targets: Iterable[str]) -> str | None:
+def _validate_binding_payload(
+    binding: dict[str, object],
+    *,
+    allowed_targets: Iterable[str],
+) -> tuple[dict[str, list[str]] | None, str | None]:
     allowed_targets = tuple(allowed_targets)
     allowed_keys = {f"{target}_ids" for target in allowed_targets}
     unknown_keys = sorted(str(key) for key in binding if key not in allowed_keys)
     if unknown_keys:
         supported = ", ".join(_supported_binding_fields_for_targets(allowed_targets))
         joined = ", ".join(unknown_keys)
-        return f"binding contains unsupported keys: {joined}; supported keys are {supported}"
+        return None, f"binding contains unsupported keys: {joined}; supported keys are {supported}"
 
+    validated: dict[str, list[str]] = {}
     for key in sorted(binding):
         raw = binding[key]
         error = _validate_binding_field_value(raw, field_name=f"binding.{key}")
         if error is not None:
-            return error
-    return None
+            return None, error
+        validated[key] = list(_normalize_string_list(raw))
+    return validated, None
 
 
 def _normalize_contract_metadata(metadata: dict[str, object]) -> tuple[dict[str, object], str | None]:
@@ -1681,6 +1687,54 @@ def _serialize_verification_check_entry(check_entry: dict[str, object]) -> dict[
     if bool(serialized.get("contract_aware")):
         serialized.update(_contract_check_request_hint(str(serialized.get("check_key") or "")))
     return serialized
+
+
+def _run_contract_check_description() -> str:
+    return (
+        "Run a contract-aware verification check from a single structured ``request`` object. "
+        "``request.check_key`` is required and must be a non-empty string without leading or trailing "
+        "whitespace. It must name a contract-aware verification check such as "
+        "``contract.limit_recovery`` or ``contract.benchmark_reproduction``. "
+        "``request.contract`` is optional, but proof-oriented checks still require an authoritative "
+        "contract payload. ``request.binding``, ``request.metadata``, and ``request.observed`` are each "
+        "optional objects. Decisive pass/fail verdicts still require the check-specific fields inside "
+        "those objects. When ``request.binding`` is present, its keys must come from the per-check "
+        "``supported_binding_fields`` surfaced by ``suggest_contract_checks(...)``; unsupported or "
+        "irrelevant binding fields are request errors, not soft verification issues. Canonical binding "
+        "fields are plural ``*_ids`` arrays. ``request.check_key`` may be the canonical key or the "
+        "stable numeric id that resolves to the same check. ``request.artifact_content`` is optional "
+        "and must be a string when present. "
+        f"{verification_contract_policy_text()} "
+        "Use ``suggest_contract_checks(contract, active_checks=...)`` first when you need the exact "
+        "``required_request_fields``, ``schema_required_request_fields``, "
+        "``schema_required_request_anyof_fields``, ``optional_request_fields``, "
+        "``supported_binding_fields``, and ``request_template`` for a given contract-aware check before "
+        "calling this tool."
+    )
+
+
+def _suggest_contract_checks_description() -> str:
+    return (
+        "Suggest contract-aware checks from a schema-validated project or phase ``contract``. "
+        "``contract`` must be an object with the normal GPD contract structure. "
+        f"{verification_contract_policy_text()} "
+        "For plan-style contract payloads, ``context_intake`` must be present and non-empty, and the "
+        "contract must satisfy the same plan semantic requirements GPD enforces in plan frontmatter. "
+        "Non-scoping plans require claims, deliverables, and ``acceptance_tests``. Scoping-only "
+        "contracts may omit claims only when they still preserve at least one target, unresolved "
+        "question, or grounding input. ``uncertainty_markers.weakest_anchors`` and "
+        "``uncertainty_markers.disconfirming_observations`` must stay explicit and non-empty so "
+        "unresolved risk remains visible to later tools. Recoverable singleton-list and case-only enum "
+        "normalization is carried through the suggestion metadata; unknown keys and non-object sections "
+        "still fail hard. ``active_checks`` is optional and must be ``list[str]`` with non-empty entries "
+        "when provided. Supply already-enabled check ids or check keys so each suggestion can mark "
+        "``already_active`` precisely. Each ``suggested_checks[]`` entry includes "
+        "``required_request_fields``, ``schema_required_request_fields``, "
+        "``schema_required_request_anyof_fields``, ``optional_request_fields``, "
+        "``supported_binding_fields``, and a ``request_template`` that is safe to use as the starting "
+        "point for ``run_contract_check(request=...)``. Proof-check templates surface an explicit "
+        "``contract`` placeholder because runtime execution requires an authoritative contract payload."
+    )
 
 # ─── Domain Checklists ────────────────────────────────────────────────────────
 
@@ -1904,12 +1958,18 @@ def _validate_string_mapping(
         return None, _error_result(f"{field_name} must be an object with string keys and string values")
 
     validated: dict[str, str] = {}
+    seen_keys: set[str] = set()
     for key, item in value.items():
         if not isinstance(key, str):
             return None, _error_result(f"{field_name} keys must be strings")
         stripped_key = key.strip()
         if not stripped_key:
             return None, _error_result(f"{field_name} keys must be non-empty strings")
+        if stripped_key in seen_keys:
+            return None, _error_result(
+                f"{field_name} must not contain duplicate keys after trimming whitespace"
+            )
+        seen_keys.add(stripped_key)
         if not isinstance(item, str):
             return None, _error_result(f"{field_name}[{key}] must be a string")
         stripped_item = item.strip()
@@ -3722,59 +3782,9 @@ def _validate_limit_expected_behavior_binding(
     return expected_behavior, None
 
 
-@mcp.tool(description=(
-    "Run a contract-aware verification check from a single structured ``request`` object. "
-    "``request.check_key`` is required. When present, it must be a non-empty "
-    "string without leading or trailing whitespace and must name a "
-    "contract-aware verification check such as "
-    "``contract.limit_recovery`` or ``contract.benchmark_reproduction``. "
-    "``request.contract`` is optional, but when supplied it must be a project or "
-    "phase contract object. Proof-oriented checks still require an authoritative "
-    "contract payload even when other checks can rely on metadata-only evidence. "
-    f"{verification_contract_policy_text()} "
-    "``request.binding``, ``request.metadata``, and ``request.observed`` are each "
-    "optional objects. Decisive pass/fail verdicts still require the check-specific "
-    "fields inside those objects. When ``request.binding`` is present, its keys "
-    "must come from the per-check ``supported_binding_fields`` surfaced by "
-    "``suggest_contract_checks(...)``; unsupported or irrelevant binding fields "
-    "are request errors, not soft verification issues. Canonical binding fields "
-    "are plural ``*_ids`` arrays. ``request.check_key`` may be the canonical key "
-    "or the stable numeric id that resolves to the same check. ``request.artifact_content`` "
-    "is optional and must be a string when present. "
-    "Use ``suggest_contract_checks(contract, active_checks=...)`` first when you "
-    "need the exact ``required_request_fields``, ``schema_required_request_fields``, "
-    "``schema_required_request_anyof_fields``, ``optional_request_fields``, "
-    "``supported_binding_fields``, and ``request_template`` for a given "
-    "contract-aware check before calling this tool."
-))
+@mcp.tool(description=_run_contract_check_description())
 def run_contract_check(request: RunContractCheckPayload) -> dict:
-    """Run a contract-aware verification check from a single structured ``request`` object.
-
-    ``request.check_key`` is required. When present, it must be a non-empty
-    string without leading or trailing whitespace and must name a
-    contract-aware verification check such as
-    ``contract.limit_recovery`` or ``contract.benchmark_reproduction``.
-
-    ``request.contract`` is optional, but when supplied it must be a project or
-    phase contract object. Proof-oriented checks still require an authoritative
-    contract payload even when other checks can rely on metadata-only evidence.
-
-    ``request.binding``, ``request.metadata``, and ``request.observed`` are each
-    optional objects. Decisive pass/fail verdicts still require the check-specific
-    fields inside those objects. When ``request.binding`` is present, its keys
-    must come from the per-check ``supported_binding_fields`` surfaced by
-    ``suggest_contract_checks(...)``; unsupported or irrelevant binding fields
-    are request errors, not soft verification issues. Canonical binding fields
-    are plural ``*_ids`` arrays. ``request.check_key`` may be the canonical key
-    or the stable numeric id that resolves to the same check. ``request.artifact_content``
-    is optional and must be a string when present.
-
-    Use ``suggest_contract_checks(contract, active_checks=...)`` first when you
-    need the exact ``required_request_fields``, ``schema_required_request_fields``,
-    ``schema_required_request_anyof_fields``, ``optional_request_fields``,
-    ``supported_binding_fields``, and ``request_template`` for a given
-    contract-aware check before calling this tool.
-    """
+    """Run a contract-aware verification check."""
 
     with gpd_span("mcp.verification.run_contract_check"):
         try:
@@ -3821,9 +3831,10 @@ def run_contract_check(request: RunContractCheckPayload) -> dict:
                     return error
 
             binding = binding_raw or {}
-            binding_error = _validate_binding_payload(binding, allowed_targets=check_meta.binding_targets)
+            binding, binding_error = _validate_binding_payload(binding, allowed_targets=check_meta.binding_targets)
             if binding_error is not None:
                 return _error_result(binding_error)
+            binding = binding or {}
             binding_supplied = bool(binding_raw)
             metadata, metadata_error = _normalize_contract_metadata(metadata_raw or {})
             if metadata_error is not None:
@@ -4476,47 +4487,9 @@ def run_contract_check(request: RunContractCheckPayload) -> dict:
             return _error_result(exc)
 
 
-@mcp.tool(description=(
-    "Suggest contract-aware checks from a schema-validated project or phase ``contract``. "
-    "``contract`` must be an object with the normal GPD contract structure. "
-    f"{verification_contract_policy_text()} "
-    "For plan-style contract payloads, ``context_intake`` must be present and "
-    "non-empty, and the contract must satisfy the same plan semantic "
-    "requirements GPD enforces in plan frontmatter. Non-scoping plans require "
-    "claims, deliverables, and ``acceptance_tests``. Scoping-only contracts may "
-    "omit claims only when they still preserve at least one target, unresolved "
-    "question, or grounding input. ``uncertainty_markers.weakest_anchors`` and "
-    "``uncertainty_markers.disconfirming_observations`` must stay explicit and "
-    "non-empty so unresolved risk remains visible to later tools. Recoverable "
-    "singleton-list and case-only enum normalization is carried through the "
-    "suggestion metadata; unknown keys and non-object sections still fail hard. "
-    "``active_checks`` is optional and must be ``list[str]`` with non-empty entries "
-    "when provided. Supply already-enabled check ids or check keys so each "
-    "suggestion can mark ``already_active`` precisely. Each ``suggested_checks[]`` "
-    "entry includes ``required_request_fields``, ``schema_required_request_fields``, "
-    "``schema_required_request_anyof_fields``, ``optional_request_fields``, "
-    "``supported_binding_fields``, and a ``request_template`` that is safe to use as "
-    "the starting point for ``run_contract_check(request=...)``. Proof-check "
-    "templates surface an explicit ``contract`` placeholder because runtime "
-    "execution requires an authoritative contract payload."
-))
+@mcp.tool(description=_suggest_contract_checks_description())
 def suggest_contract_checks(contract: SuggestContractPayload, active_checks: StringListPayload = None) -> dict:
-    """Suggest contract-aware checks from a schema-validated project or phase ``contract``.
-
-    ``contract`` must be an object with the normal GPD contract structure.
-
-    ``active_checks`` is optional and must be ``list[str]`` with non-empty
-    entries when provided. Supply already-enabled check ids or check keys so
-    each suggestion can mark ``already_active`` precisely.
-
-    Each ``suggested_checks[]`` entry includes ``required_request_fields``,
-    ``schema_required_request_fields``, ``schema_required_request_anyof_fields``,
-    ``optional_request_fields``, ``supported_binding_fields``, and a
-    ``request_template`` that is safe to use as the starting point for
-    ``run_contract_check(request=...)``. Proof-check templates surface an
-    explicit ``contract`` placeholder because runtime execution requires an
-    authoritative contract payload.
-    """
+    """Suggest contract-aware checks from a schema-validated contract."""
 
     with gpd_span("mcp.verification.suggest_contract_checks"):
         try:

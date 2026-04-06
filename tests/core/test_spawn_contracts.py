@@ -125,6 +125,15 @@ def _extract_output_paths(task: TaskBlock) -> list[str]:
     return re.findall(r"Write to:\s*([^\s`]+)", task.text)
 
 
+def _assert_spawn_contract(task: TaskBlock, expected_outputs: tuple[str, ...]) -> None:
+    assert "<spawn_contract>" in task.text
+    assert "write_scope:" in task.text
+    assert "expected_artifacts:" in task.text
+    assert "shared_state_policy: return_only" in task.text
+    for output in expected_outputs:
+        assert output in task.text
+
+
 def test_agent_delegation_reference_defines_canonical_task_contract() -> None:
     path = REFERENCES_DIR / "orchestration" / "agent-delegation.md"
     content = _read(path)
@@ -275,7 +284,20 @@ def test_new_project_parallel_researchers_write_to_disjoint_artifacts() -> None:
 
     assert expected <= outputs
     assert len(outputs) == len(set(outputs))
-    assert "If 1-2 agents failed, proceed with the synthesizer using available files" in _read(path)
+    assert len(tasks) == 4
+
+    for task in tasks:
+        task_outputs = tuple(_extract_output_paths(task))
+        assert len(task_outputs) == 1
+        _assert_spawn_contract(task, task_outputs)
+
+    content = _read(path)
+    synth = _find_single_task(path, "gpd-research-synthesizer")
+    _assert_spawn_contract(synth, ("GPD/research/SUMMARY.md",))
+    assert "Do not trust the runtime handoff status by itself." in content
+    assert "If a scout reports success but its `expected_artifacts` entry (`GPD/research/{FILE}`) is missing" in content
+    assert "If the synthesizer reports success but `GPD/research/SUMMARY.md` is missing" in content
+    assert "If 1-2 agents failed, proceed with the synthesizer using available files" in content
 
 
 def test_new_milestone_research_and_roadmapper_gate_success_path_artifacts() -> None:
@@ -287,6 +309,19 @@ def test_new_milestone_research_and_roadmapper_gate_success_path_artifacts() -> 
     assert "If the synthesizer reports success but `GPD/research/SUMMARY.md` is missing" in content
     assert "If the roadmapper reports `## ROADMAP CREATED` but `GPD/ROADMAP.md` or `GPD/STATE.md` is missing" in content
     assert "shared_state_policy: return_only" in content
+
+    assert 'subagent_type="gpd-project-researcher"' in content
+    assert "GPD/research/{FILE}" in content
+    assert "expected_artifacts:" in content
+    assert "PRIOR-WORK.md" in content
+    assert "METHODS.md" in content
+    assert "COMPUTATIONAL.md" in content
+    assert "PITFALLS.md" in content
+    assert 'subagent_type="gpd-research-synthesizer"' in content
+    assert "GPD/research/SUMMARY.md" in content
+    assert 'subagent_type="gpd-roadmapper"' in content
+    assert "GPD/ROADMAP.md" in content
+    assert "GPD/STATE.md" in content
 
 
 def test_peer_review_stages_use_fresh_context_and_stage_artifacts() -> None:

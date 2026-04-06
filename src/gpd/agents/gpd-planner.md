@@ -52,7 +52,7 @@ Your system prompt (this agent definition + @-included references) consumes appr
 | Allocation | Context % | What It Covers |
 |---|---|---|
 | System prompt | ~15-20% | This agent definition, shared protocols, @-included references |
-| Reading project files | ~30% | STATE.md, ROADMAP.md, CONTEXT.md, RESEARCH.md, SUMMARYs, DISCOVERY.md, INSIGHTS.md, ERROR-PATTERNS.md |
+| Reading project files | ~30% | STATE.md, ROADMAP.md, CONTEXT.md, RESEARCH.md, SUMMARYs, INSIGHTS.md, ERROR-PATTERNS.md |
 | Plan creation output | ~40-50% | PLAN.md files, dependency graphs, contract coverage, return format |
 
 **Practical implications:**
@@ -359,19 +359,19 @@ Discovery is MANDATORY unless you can prove current methods/results exist in con
 **Level 1 - Quick Verification** (2-5 min)
 
 - Single known method/library, confirming syntax/conventions/normalization
-- Action: Context7 resolve-library-id + query-docs, or quick literature check; no DISCOVERY.md needed
+- Action: Context7 resolve-library-id + query-docs, or quick literature check; no RESEARCH.md needed
 - Examples: Verify Clebsch-Gordan coefficient convention, confirm library API for matrix exponentiation
 
 **Level 2 - Standard Research** (15-30 min)
 
 - Choosing between 2-3 approaches, new computational method, unfamiliar subfield conventions
-- Action: Route to discovery workflow, produces DISCOVERY.md
+- Action: Route to discovery workflow, produces RESEARCH.md
 - Examples: Select regularization scheme, choose between Monte Carlo algorithms, compare ODE solvers
 
 **Level 3 - Deep Dive** (1+ hour)
 
 - Foundational method selection with cascading consequences, novel theoretical approach
-- Action: Full research with DISCOVERY.md
+- Action: Full research with RESEARCH.md
 - Examples: Choose effective field theory framework, design simulation architecture, select quantization procedure
 
 **Depth indicators:**
@@ -1621,7 +1621,7 @@ ls GPD/phases/
 
 If multiple phases available, ask which to plan. If obvious (first incomplete), proceed.
 
-Read existing PLAN.md or DISCOVERY.md in phase directory.
+Read existing PLAN.md or RESEARCH.md in phase directory.
 
 **If `--gaps` flag:** Switch to gap_closure_mode.
 </step>
@@ -1762,7 +1762,7 @@ For phases not selected, retain from digest:
 # - RESEARCH.md (loaded in gather_phase_context if has_research=true)
 
 # Optional files — check existence and size BEFORE reading:
-for f in GPD/INSIGHTS.md GPD/ERROR-PATTERNS.md GPD/DISCOVERY.md; do
+for f in GPD/INSIGHTS.md GPD/ERROR-PATTERNS.md GPD/RESEARCH.md; do
   if [ -s "$f" ]; then
     echo "EXISTS: $f ($(wc -l < "$f") lines)"
   else
@@ -1784,7 +1784,7 @@ echo "TOTAL_PHASES: $(ls -d GPD/phases/*/ 2>/dev/null | wc -l)"
 | RESEARCH.md | has_research=true | Phase has no research | ~5-8% |
 | INSIGHTS.md | EXISTS + <200 lines | Missing, empty, or >200 lines (read first 100 only) | ~2-4% |
 | ERROR-PATTERNS.md | EXISTS + <100 lines | Missing or empty | ~1-2% |
-| DISCOVERY.md | EXISTS + current phase only | Missing or for different phase | ~3-5% |
+| RESEARCH.md | EXISTS + current phase only | Missing or for different phase | ~3-5% |
 | Prior SUMMARYs | Top 2-4 by relevance score | All others (use digest only) | ~3-5% each |
 | Theory map files | Phase keywords match (see load_project_context) | No keyword match | ~3-5% each |
 
@@ -1794,7 +1794,7 @@ echo "TOTAL_PHASES: $(ls -d GPD/phases/*/ 2>/dev/null | wc -l)"
 2. **INSIGHTS.md >200 lines:** Read only the last 100 lines (most recent patterns). Older patterns are less likely to be relevant.
 3. **RESEARCH.md >300 lines:** Read only the sections matching the current phase's physics domain. Skip unrelated subfield research.
 4. **Theory map files:** Skip DATASETS.md and TESTING.md unless the phase is explicitly about data analysis or testing.
-5. **Multiple DISCOVERY.md files:** Only read the one in the CURRENT phase directory. Prior discoveries are absorbed into SUMMARYs.
+5. **Multiple RESEARCH.md files:** Only read the one in the CURRENT phase directory. Prior research is absorbed into SUMMARYs.
 
 **Context budget tracking:**
 
@@ -1872,8 +1872,7 @@ Use `phase_dir` from init context (already loaded in load_project_state).
 
 ```bash
 cat "$phase_dir"/*-CONTEXT.md 2>/dev/null   # From gpd:discuss-phase
-cat "$phase_dir"/*-RESEARCH.md 2>/dev/null   # From gpd:research-phase
-cat "$phase_dir"/*-DISCOVERY.md 2>/dev/null  # From mandatory discovery
+cat "$phase_dir"/*-RESEARCH.md 2>/dev/null   # From gpd:research-phase or discover
 ```
 
 **If CONTEXT.md exists (has_context=true from init):** Honor researcher's physics vision, prioritize essential calculations, respect scope boundaries. Locked decisions -- do not revisit.

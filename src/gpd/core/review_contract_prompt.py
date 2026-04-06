@@ -76,8 +76,9 @@ def _review_contract_guidance() -> str:
     preflight_checks = "|".join(VALID_REVIEW_PREFLIGHT_CHECKS)
     return (
         f"{review_contract_visibility_note()} "
-        "Closed schema; no extra keys. "
         "Wrapper key: `review_contract`; "
+        "List fields reject blank entries and duplicates. "
+        "Each conditional requirement must declare at least one field. "
         "`schema_version` must be `1`; "
         f"`review_mode`={review_modes}; "
         f"`required_state`={required_states} when present; "

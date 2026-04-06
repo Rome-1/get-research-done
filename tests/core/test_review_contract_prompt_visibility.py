@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from gpd import registry
-from gpd.core.model_visible_text import command_visibility_note, review_contract_visibility_note
+from gpd.core.model_visible_text import agent_visibility_note, command_visibility_note, review_contract_visibility_note
 from gpd.core.review_contract_prompt import (
     VALID_REVIEW_CONDITIONAL_WHENS,
     normalize_review_contract_frontmatter_payload,
@@ -91,6 +91,9 @@ def test_review_grade_commands_prepend_model_visible_review_contract_to_registry
         assert expected_section in command.content
         assert "review_contract:" in command.content
         assert "Wrapper key: `review_contract`;" in expected_section
+        assert "Closed schema; no extra keys." in expected_section
+        assert "List fields reject blank entries and duplicates." in expected_section
+        assert "Each conditional requirement must declare at least one field." in expected_section
         assert "`schema_version` must be `1`;" in expected_section
         assert review_contract_visibility_note() in expected_section
         assert f"review_mode: {contract.review_mode}" in expected_section
@@ -116,6 +119,15 @@ def test_review_grade_commands_prepend_model_visible_review_contract_to_registry
                         assert str(item) in command.content
                 else:
                     assert str(require_value) in command.content
+
+
+def test_model_visible_wrapper_notes_surface_their_closed_schema_rules() -> None:
+    assert "Closed schema; no extra keys." in agent_visibility_note()
+    assert "Closed schema; no extra keys." in command_visibility_note()
+    assert "Strict booleans only." in command_visibility_note()
+    assert "Closed schema; no extra keys." in review_contract_visibility_note()
+    assert "`schema_version` must be `1`" in review_contract_visibility_note()
+    assert "blocking_preflight_checks" in review_contract_visibility_note()
 
 
 def test_review_contract_renderer_rejects_unknown_keys() -> None:
@@ -225,6 +237,16 @@ def test_review_contract_renderer_rejects_conflicting_wrapper_aliases_when_secon
                 "review-contract": "oops",
             }
         )
+
+
+def test_review_contract_visibility_note_surfaces_the_hard_constraints() -> None:
+    note = review_contract_visibility_note()
+
+    assert "Closed schema; no extra keys." in note
+    assert "`schema_version` must be `1`;" in note
+    assert "`review_mode` must be `publication` or `review`;" in note
+    assert "`conditional_requirements[].when` must be one of the declared triggers;" in note
+    assert "`conditional_requirements[].blocking_preflight_checks` must reuse declared `preflight_checks`." in note
 
 
 def test_review_contract_normalizer_accepts_singleton_string_list_fields() -> None:

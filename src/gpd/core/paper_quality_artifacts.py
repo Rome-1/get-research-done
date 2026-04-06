@@ -187,13 +187,22 @@ def _extract_meta(path: Path, *, parse_errors: list[str] | None = None) -> dict[
     return meta
 
 
-def _plan_contract_for_artifact(path: Path, meta: dict[str, object]) -> ResearchContract | None:
+def _plan_contract_for_artifact(
+    path: Path,
+    meta: dict[str, object],
+    *,
+    project_root: Path,
+) -> ResearchContract | None:
     """Return the canonical plan contract for one phase artifact when available."""
 
     contract_data = meta.get("contract")
     if isinstance(contract_data, dict):
-        return _validate_contract_mapping(contract_data, enforce_plan_semantics=True).contract
-    return _find_matching_plan_contract(path.parent, meta).contract
+        return _validate_contract_mapping(
+            contract_data,
+            enforce_plan_semantics=True,
+            project_root=project_root,
+        ).contract
+    return _find_matching_plan_contract(path.parent, meta, project_root=project_root).contract
 
 
 def _collect_manuscript_content(
@@ -532,7 +541,7 @@ def _collect_contract_coverage(project_root: Path) -> _ContractCoverage:
         meta = _extract_meta(path, parse_errors=parse_errors)
         if parse_errors:
             frontmatter_parse_errors = True
-        plan_contract = _plan_contract_for_artifact(path, meta)
+        plan_contract = _plan_contract_for_artifact(path, meta, project_root=project_root)
         if plan_contract is not None:
             total_claims.update(claim.id for claim in plan_contract.claims)
             total_deliverables.update(deliverable.id for deliverable in plan_contract.deliverables)

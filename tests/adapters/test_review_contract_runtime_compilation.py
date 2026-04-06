@@ -6,6 +6,7 @@ import pytest
 
 from gpd import registry
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
+from gpd.core.model_visible_text import review_contract_visibility_note
 from gpd.core.review_contract_prompt import render_review_contract_prompt, review_contract_payload
 from tests.adapters.review_contract_test_utils import (
     compile_review_contract_command_for_runtime,
@@ -26,6 +27,7 @@ def test_registry_rendered_review_contract_matches_the_canonical_dataclass_paylo
     expected_section = render_review_contract_prompt(review_contract_payload(contract))
 
     assert extract_review_contract_section(command.content) == expected_section
+    assert review_contract_visibility_note() in expected_section
     assert command.content.count("## Review Contract") == 1
 
 
@@ -43,4 +45,5 @@ def test_real_review_command_sources_compile_across_runtime_wrappers_without_los
     compiled = compile_review_contract_command_for_runtime(command_name, runtime)
 
     assert extract_review_contract_section(compiled) == expected_section
+    assert review_contract_visibility_note() in expected_section
     assert compiled.count("## Review Contract") == 1

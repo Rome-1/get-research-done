@@ -2224,6 +2224,27 @@ class TestVerifyArtifacts:
         assert result.all_passed is True
         assert result.passed_count == 1
 
+    def test_project_root_relative_contract_anchor_uses_plan_path_context(self, tmp_path: Path) -> None:
+        project_root = tmp_path
+        phase_dir = project_root / "GPD" / "phases" / "01-benchmark"
+        phase_dir.mkdir(parents=True)
+        artifact = project_root / "artifacts" / "benchmark" / "report.json"
+        artifact.parent.mkdir(parents=True)
+        artifact.write_text("{}", encoding="utf-8")
+        baseline_dir = project_root / "GPD" / "phases" / "00-baseline"
+        baseline_dir.mkdir(parents=True)
+        (baseline_dir / "00-01-SUMMARY.md").write_text("baseline summary", encoding="utf-8")
+        (phase_dir / "figures").mkdir()
+        (phase_dir / "figures" / "benchmark.png").write_text("figure-bytes", encoding="utf-8")
+
+        plan_path = phase_dir / "01-01-PLAN.md"
+        plan_path.write_text(_project_local_plan_contract_frontmatter(), encoding="utf-8")
+
+        result = verify_artifacts(project_root, plan_path)
+
+        assert result.all_passed is True
+        assert result.passed_count == 1
+
     def test_contract_deliverable_without_verifiable_path_fails_closed(self, tmp_path):
         f = tmp_path / "plan.md"
         content = _valid_plan_contract_frontmatter().replace("      path: figures/main.png\n", "", 1) + "Body.\n"
