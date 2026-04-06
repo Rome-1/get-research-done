@@ -224,7 +224,6 @@ AGENT_REFERENCE_TOKENS = {
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/physics-subfields.md",
-        "references/research/research-modes.md",
     ],
     "gpd-plan-checker.md": [
         "references/shared/shared-protocols.md",
@@ -256,7 +255,6 @@ AGENT_REFERENCE_TOKENS = {
     "gpd-project-researcher.md": [
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
-        "references/research/research-modes.md",
     ],
     "gpd-referee.md": [
         "references/shared/shared-protocols.md",
@@ -294,7 +292,6 @@ AGENT_REFERENCE_TOKENS = {
         "references/shared/shared-protocols.md",
         "references/physics-subfields.md",
         "references/verification/core/verification-core.md",
-        "references/research/research-modes.md",
         "references/verification/meta/verification-hierarchy-mapping.md",
         "references/verification/core/computational-verification-templates.md",
     ],
@@ -346,7 +343,8 @@ def test_referee_latex_template_exists() -> None:
 def test_shared_protocols_require_permission_before_dependency_installs() -> None:
     shared = (REFERENCES_DIR / "shared" / "shared-protocols.md").read_text(encoding="utf-8")
     checkpoints = (REFERENCES_DIR / "orchestration" / "checkpoints.md").read_text(encoding="utf-8")
-    verifier = (AGENTS_DIR / "gpd-verifier.md").read_text(encoding="utf-8")
+    verifier_raw = (AGENTS_DIR / "gpd-verifier.md").read_text(encoding="utf-8")
+    verifier = expand_at_includes(verifier_raw, REPO_ROOT / "src/gpd", "/runtime/")
     planner = (AGENTS_DIR / "gpd-planner.md").read_text(encoding="utf-8")
 
     assert "Agents must NEVER install dependencies silently." in shared
@@ -354,7 +352,9 @@ def test_shared_protocols_require_permission_before_dependency_installs() -> Non
     assert "BasicTeX yourself (small macOS option, about 100MB)" in shared
     assert "Never install TeX automatically." not in checkpoints
     assert "install silently" not in checkpoints
-    assert "ask the user before any install attempt" in checkpoints
+    assert "## Data Boundary" not in verifier_raw
+    assert "## GPD CLI Commit Protocol" not in verifier_raw
+    assert "@{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md" in verifier_raw
     assert "ask the user before any install attempt" in verifier
     assert "permission-gated" in planner
 
@@ -2081,6 +2081,7 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     assert "effective_reference_intake" in peer_review
     assert "project_contract_validation" in peer_review
     assert "project_contract_load_info" in peer_review
+    assert "Carry-forward context: project contract {project_contract}; project contract gate {project_contract_gate}; project contract load info {project_contract_load_info}; project contract validation {project_contract_validation};" in peer_review
     contract_gate_note = (
         "Treat `project_contract_gate` as authoritative. Use `project_contract` and `contract_intake` only when "
         "`project_contract_gate.authoritative` is true; otherwise keep them as diagnostics/context and rely on "
@@ -2948,7 +2949,7 @@ def test_stage8_surfaces_decisive_comparisons_paper_quality_artifacts_and_profil
     assert "required first-result, anchor, and pre-fanout checkpoints" in planner
     assert "Do NOT change conventions mid-project without an explicit checkpoint" in planner
     assert "Required first-result, anchor, and pre-fanout gates still apply even in yolo mode" in executor
-    assert "live machine source of truth is the verifier registry" in verifier_agent
+    assert "live verifier registry now has 19 checks" in verifier_agent
 
 
 def test_publication_workflows_refresh_bibliography_audit_after_bibliography_changes() -> None:

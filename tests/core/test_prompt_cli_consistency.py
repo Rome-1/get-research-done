@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from gpd.adapters.install_utils import expand_at_includes
 from gpd.core import public_surface_contract as public_surface_contract_module
 from gpd.core.public_surface_contract import (
     local_cli_bridge_note,
@@ -488,9 +489,11 @@ def test_settings_and_research_mode_docs_keep_tangent_branch_taxonomy_strict() -
 
 
 def test_regression_check_prompt_examples_include_optional_phase_before_quick_flag() -> None:
-    verifier = (REPO_ROOT / "src/gpd/agents/gpd-verifier.md").read_text(encoding="utf-8")
+    verifier_raw = (REPO_ROOT / "src/gpd/agents/gpd-verifier.md").read_text(encoding="utf-8")
+    verifier = expand_at_includes(verifier_raw, REPO_ROOT / "src/gpd", "/runtime/")
     infra = (REPO_ROOT / "src/gpd/specs/references/orchestration/agent-infrastructure.md").read_text(encoding="utf-8")
 
+    assert "@{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md" in verifier_raw
     for content in (verifier, infra):
         assert "gpd regression-check [phase] [--quick]" in content
         assert "gpd regression-check [--quick]" not in content

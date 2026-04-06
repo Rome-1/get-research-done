@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from gpd.adapters.install_utils import expand_at_includes
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AGENTS_DIR = REPO_ROOT / "src/gpd/agents"
 TEMPLATES_DIR = REPO_ROOT / "src/gpd/specs/templates"
@@ -15,12 +17,19 @@ def _read_verification_template() -> str:
     return (TEMPLATES_DIR / "verification-report.md").read_text(encoding="utf-8")
 
 
+def _read_expanded_verifier_prompt() -> str:
+    return expand_at_includes(_read_verifier_prompt(), REPO_ROOT / "src/gpd", "/runtime/")
+
+
 def test_verifier_prompt_points_to_canonical_verification_schema_sources() -> None:
     verifier = _read_verifier_prompt()
+    expanded_verifier = _read_expanded_verifier_prompt()
     verifier_lines = verifier.splitlines()
 
+    assert "@{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md" in verifier_lines
     assert "`@{GPD_INSTALL_DIR}/templates/verification-report.md` is the canonical `VERIFICATION.md` frontmatter/body surface." in verifier
     assert "`@{GPD_INSTALL_DIR}/templates/contract-results-schema.md` is the canonical source of truth for `plan_contract_ref`, `contract_results`, `comparison_verdicts`, and verification-side `suggested_contract_checks`." in verifier
+    assert "## Data Boundary" not in verifier
     assert "## Canonical LLM Error References" in verifier
     assert "`@{GPD_INSTALL_DIR}/references/verification/errors/llm-physics-errors.md` -- index and entry point" in verifier
     assert "`@{GPD_INSTALL_DIR}/references/verification/errors/llm-errors-traceability.md` -- compact detection matrix" in verifier
@@ -29,6 +38,9 @@ def test_verifier_prompt_points_to_canonical_verification_schema_sources() -> No
     assert "include a machine-readable `ASSERT_CONVENTION` comment immediately after the YAML frontmatter in `VERIFICATION.md`." in verifier
     assert "Changed phase verification artifacts now fail `gpd pre-commit-check` if the required header is missing or mismatched." in verifier
     assert "Legacy frontmatter aliases are forbidden in model-facing output" in verifier
+    assert "## Data Boundary" in expanded_verifier
+    assert "ask the user before any install attempt" in expanded_verifier
+    assert "Prefer copy-pasteable GPD commands" in expanded_verifier
     for legacy_alias in ("must_haves", "verification_inputs", "contract_evidence", "independently_confirmed"):
         assert legacy_alias not in verifier
     assert "@{GPD_INSTALL_DIR}/templates/verification-report.md" in verifier_lines
