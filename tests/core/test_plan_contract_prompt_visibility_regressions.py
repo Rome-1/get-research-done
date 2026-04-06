@@ -51,11 +51,11 @@ def test_planner_prompt_surfaces_default_salvage_and_specific_semantics() -> Non
 def test_phase_prompt_surfaces_default_salvage_and_hard_plan_requirements() -> None:
     phase_prompt = _read_template("phase-prompt.md")
 
-    assert "Surface any hard validation requirements up front" in phase_prompt
+    assert "Surface hard validation requirements before the body" in phase_prompt
     assert "declare it in frontmatter `tool_requirements` before drafting task prose" in phase_prompt
-    assert "visible on the plan surface before the body is written" in phase_prompt
-    assert "Gap-closure plans still use `type: execute`." in phase_prompt
-    assert "Mark verification-repair plans with `gap_closure: true`" in phase_prompt
+    assert "visible on the plan surface" in phase_prompt
+    assert "Gap-closure plans still use `type: execute`; mark verification-repair plans with `gap_closure: true`" in phase_prompt
+    assert "mark verification-repair plans with `gap_closure: true`" in phase_prompt
     assert "type: execute | tdd" in phase_prompt
     assert "# gap_closure: true # Optional. Use only for verification repair plans." in phase_prompt
     assert "The validator accepts a closed tool vocabulary today: `wolfram` and `command`" in phase_prompt
@@ -76,6 +76,18 @@ def test_phase_prompt_surfaces_default_salvage_and_hard_plan_requirements() -> N
     assert "When `must_surface` is `true`, keep `required_actions[]` and `applies_to[]` non-empty." in phase_prompt
     assert "`carry_forward_to[]` is free-text workflow scope only and must not be overloaded with contract IDs." in phase_prompt
     assert "`uncertainty_markers` must stay a YAML object, not a string or list." in phase_prompt
+
+
+def test_planner_prompt_stays_compact_while_preserving_canonical_contract_wiring() -> None:
+    planner_prompt = (REPO_ROOT / "src/gpd/agents/gpd-planner.md").read_text(encoding="utf-8")
+
+    assert planner_prompt.count("contract:\n  schema_version: 1") >= 2
+    assert "<worked_examples>" not in planner_prompt
+    assert "<goal_backward>" not in planner_prompt
+    assert "Worked Examples: Complete PLAN.md Files" not in planner_prompt
+    assert "Goal-Backward Methodology for Physics" not in planner_prompt
+    assert "tool_requirements[].id" in planner_prompt
+    assert "must be unique within the list" in planner_prompt
 
 
 def test_proof_obligation_planning_surfaces_require_claim_audit_and_stale_review_gate() -> None:

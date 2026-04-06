@@ -831,23 +831,23 @@ def test_publication_commands_accept_documented_manuscript_layouts() -> None:
 
 
 def test_proof_contract_prompts_surface_explicit_theorem_fields_and_review_bindings() -> None:
-    plan_phase = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
+    plan_schema = (TEMPLATES_DIR / "plan-contract-schema.md").read_text(encoding="utf-8")
     peer_review = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
     check_proof = (AGENTS_DIR / "gpd-check-proof.md").read_text(encoding="utf-8")
 
-    assert "claims[].claim_kind" in plan_phase
-    assert "claims[].parameters[]" in plan_phase
-    assert "claims[].hypotheses[]" in plan_phase
-    assert "claims[].quantifiers[]" in plan_phase
-    assert "claims[].conclusion_clauses[]" in plan_phase
-    assert "claims[].proof_deliverables[]" in plan_phase
-    assert "proof_hypothesis_coverage" in plan_phase
-    assert "proof_parameter_coverage" in plan_phase
-    assert "proof_quantifier_domain" in plan_phase
-    assert "claim_to_proof_alignment" in plan_phase
-    assert "lemma_dependency_closure" in plan_phase
-    assert "counterexample_search" in plan_phase
-    assert "schema lacks dedicated theorem fields" not in plan_phase
+    assert "claim_kind" in plan_schema
+    assert "parameters[]" in plan_schema
+    assert "hypotheses[]" in plan_schema
+    assert "quantifiers[]" in plan_schema
+    assert "conclusion_clauses[]" in plan_schema
+    assert "proof_deliverables[]" in plan_schema
+    assert "proof_hypothesis_coverage" in plan_schema
+    assert "proof_parameter_coverage" in plan_schema
+    assert "proof_quantifier_domain" in plan_schema
+    assert "claim_to_proof_alignment" in plan_schema
+    assert "lemma_dependency_closure" in plan_schema
+    assert "counterexample_search" in plan_schema
+    assert "schema lacks dedicated theorem fields" not in plan_schema
 
     assert "the `gpd-check-proof` task must carry the active `manuscript_path`, `manuscript_sha256`, `round`, theorem-bearing `claim_ids`, and `proof_artifact_paths`" in peer_review
     assert "copy exactly from `GPD/review/CLAIMS{round_suffix}.json`" in peer_review
@@ -1095,7 +1095,7 @@ def test_planning_and_phase_templates_surface_active_reference_context() -> None
     phase_prompt = (TEMPLATES_DIR / "phase-prompt.md").read_text(encoding="utf-8")
     workflow_text = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
 
-    assert "Planning requires `project_contract`:" in planner_prompt
+    assert "Planning requires `project_contract`." in planner_prompt
     assert "**Project Contract:** {project_contract}" in planner_prompt
     assert "**Active References:** {active_reference_context}" in planner_prompt
     assert "@path/to/reference-or-benchmark-anchor.md" in phase_prompt
@@ -1507,7 +1507,7 @@ def test_stage4_templates_and_workflows_surface_contract_results_and_verdict_led
     assert "plan_contract_ref (required" not in summary_template
     assert "contract_results (required" not in summary_template
     assert "comparison_verdicts (required" not in summary_template
-    assert "Reload `@{GPD_INSTALL_DIR}/templates/contract-results-schema.md` immediately before writing the YAML" in summary_template
+    assert "reload `@{GPD_INSTALL_DIR}/templates/contract-results-schema.md` immediately before writing" in summary_template
     assert "uncertainty_markers" in summary_template
 
 
@@ -1752,11 +1752,11 @@ def test_verification_prompts_keep_suggested_contract_check_bindings_schema_tigh
     assert 'suggested_subject_id: [contract id or ""]' not in verify_workflow
     assert 'suggested_subject_id: "matching contract id"' in research_verification
     assert 'suggested_subject_id: "matching contract id"' in verify_workflow
-    assert "acceptance-test-id" in verification_template
     assert "acceptance-test-main" in research_verification
     assert "acceptance-test-id" in verifier_agent
     assert "suggested_contract_checks" in verification_template
-    assert "Quantified proof claims must keep `proof_audit.quantifier_status` explicit" in verification_template
+    assert "Reload `@{GPD_INSTALL_DIR}/templates/contract-results-schema.md` immediately before writing" in verification_template
+    assert "proof-audit rules in the canonical schema" in verification_template
     assert "proof_artifact_path` matches a declared `proof_deliverables` path" in verifier_agent
     assert "gap_subject_kind" in verifier_agent
     assert "Each gap has: `gap_subject_kind`" in verifier_agent
@@ -1772,10 +1772,11 @@ def test_lane5_prompt_examples_keep_schema_valid_contract_fields_visible() -> No
     verify_work = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
     verifier = (AGENTS_DIR / "gpd-verifier.md").read_text(encoding="utf-8")
     executor_example = (REFERENCES_DIR / "execution" / "executor-worked-example.md").read_text(encoding="utf-8")
+    phase_prompt = _expand_prompt_surface(TEMPLATES_DIR / "phase-prompt.md")
 
     assert "context_intake:" in planner
     assert 'must_read_refs: ["ref-textbook"]' in planner
-    assert "references: [ref-uehling]" in planner
+    assert 'references: ["ref-main"]' in phase_prompt
     assert "context_intake:" in plan_checker
     assert "why_it_matters:" in plan_checker
     assert "required_actions: [read, compare, cite]" in plan_checker
@@ -2332,7 +2333,7 @@ def test_skill_surface_exposes_contract_references_for_paper_and_review_workflow
     assert any(path.endswith("paper-config-schema.md") for path in arxiv_submission["schema_references"])
     assert any(path.endswith("bibliography-audit-schema.md") for path in arxiv_submission["schema_references"])
     assert any(path.endswith("bibliography-audit-schema.md") for path in respond_to_referees["schema_references"])
-    assert any(path.endswith("reproducibility-manifest.md") for path in write_paper["contract_references"])
+    assert any(path.endswith("reproducibility-manifest.md") for path in write_paper["schema_references"])
     assert any(path.endswith("peer-review-panel.md") for path in write_paper["contract_references"])
     assert any(path.endswith("peer-review-panel.md") for path in peer_review["contract_references"])
     assert any(path.endswith("review-ledger-schema.md") for path in arxiv_submission["schema_references"])
@@ -2348,7 +2349,8 @@ def test_skill_surface_exposes_contract_references_for_paper_and_review_workflow
     assert "Peer Review Panel Protocol" in peer_review_contract_documents["peer-review-panel.md"]["body"]
     assert "Peer Review Phase Reliability" in arxiv_contract_documents["peer-review-reliability.md"]["body"]
     assert "Peer Review Phase Reliability" in respond_contract_documents["peer-review-reliability.md"]["body"]
-    assert "schema_documents and contract_documents mirror loaded schema and contract markdown bodies." in write_paper["loading_hint"]
+    assert "schema_documents mirror loaded schema markdown bodies" in write_paper["loading_hint"]
+    assert "contract_documents mirror the remaining contract markdown bodies" in write_paper["loading_hint"]
 
 
 def test_review_and_execution_prompts_expand_required_schema_sources() -> None:
@@ -2437,18 +2439,13 @@ def test_planner_and_summary_prompt_surfaces_expand_contract_schema_bodies() -> 
     assert "Use `@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md` as the canonical contract source." in planner_prompt
     assert "If `{project_contract}` is empty, stale, or too underspecified to identify the phase contract slice, return `## CHECKPOINT REACHED` rather than guessing." in planner_prompt
     assert "Treat `approach_policy` as execution policy only." in planner_prompt
-    assert "Keep `contract.context_intake` non-empty and specific, and surface explicit anchors when they matter." in planner_prompt
+    assert "Keep `contract.context_intake` specific" in planner_prompt
     assert "contract block complete per the schema include" in planner_prompt
-    assert "scope.unresolved_questions" in planner_prompt
-    assert "Every claim must declare a stable `id`." in planner_prompt
-    assert (
-        "Do not reuse the same ID across `claims[]`, `deliverables[]`, `acceptance_tests[]`, or `references[]`; "
-        "target resolution becomes ambiguous."
-        in planner_prompt
-    )
-    assert "# Contract Results Schema" in summary_template
-    assert "Missing contract-backed `contract_results` is invalid." in summary_template
-    assert "Do not invent `artifact` or `other` subject kinds" in summary_template
+    assert "scope.unresolved_questions" in phase_prompt
+    assert "Every claim must declare a stable `id`." in phase_prompt
+    assert "Do not reuse the same ID across `claims[]`, `deliverables[]`, `acceptance_tests[]`, or `references[]`" in phase_prompt
+    assert "contract-results-schema.md" in summary_template
+    assert "single detailed rule source" in summary_template
 
 
 def test_sync_state_and_write_paper_command_prompts_expand_required_schema_bodies() -> None:

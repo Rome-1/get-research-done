@@ -496,7 +496,8 @@ class TestSkillsServerIntegration:
         assert "## Review Contract" in result["content"]
         assert "review_contract:" in result["content"]
         assert "review-contract:" not in result["content"]
-        assert "schema_documents and contract_documents mirror loaded schema and contract markdown bodies." in result["loading_hint"]
+        assert "schema_documents mirror loaded schema markdown bodies" in result["loading_hint"]
+        assert "contract_documents mirror the remaining contract markdown bodies" in result["loading_hint"]
         assert "treat `content` as authoritative" in result["loading_hint"]
 
     def test_get_skill_surfaces_template_backed_schema_documents_for_writing_and_resume(self):

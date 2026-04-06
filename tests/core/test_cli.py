@@ -1237,7 +1237,7 @@ def test_resume_recent_human_output_surfaces_command_and_missing_projects(
     assert "Next here" in result.output
     assert "Resume:" in result.output
     assert "gpd --cwd" in result.output
-    assert "continue in the selected workspace" in normalized
+    assert "continue there with `resume-work`" in result.output
     assert "resume-work" in result.output
     assert "suggest-next" in result.output
     assert "Why shown: shown because it still has a usable handoff target" in result.output

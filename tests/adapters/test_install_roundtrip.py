@@ -299,8 +299,12 @@ def _assert_installed_contract_visibility(
     assert "proof-bearing claims must include at least one proof-specific acceptance test kind" in new_project
     assert "`references[].carry_forward_to[]` is free-text workflow scope such as `planning`, `execution`, `verification`, or `writing`" in new_project
 
-    assert "Use `templates/plan-contract-schema.md` as the canonical contract schema reference." in plan_phase
-    assert "If the phase is proof-bearing, the plan must expose the theorem inventory directly in the contract and task/verification surface" in plan_phase
+    assert "Canonical contract schema and hard validation rules" in plan_phase
+    assert (
+        "every proof-bearing plan must surface the theorem statement, named parameters, hypotheses, "
+        "quantifier/domain obligations, and intended conclusion clauses visibly enough that a later audit can "
+        "detect missing coverage"
+    ) in plan_phase
 
     assert "`contract.context_intake` is required and must be a non-empty object" in plan_schema
     assert "`must_surface` is a boolean scalar. Use the YAML literals `true` and `false`" in plan_schema

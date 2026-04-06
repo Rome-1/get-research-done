@@ -1286,8 +1286,9 @@ class TestSkillsServer:
         assert "Review Ledger Schema" in schema_documents["review-ledger-schema.md"]["body"]
         assert "referee-decision-schema.md" in schema_documents
         assert "Referee Decision Schema" in schema_documents["referee-decision-schema.md"]["body"]
-        assert "review-ledger-schema.md" in contract_documents
-        assert "schema_documents and contract_documents mirror loaded schema and contract markdown bodies." in result["loading_hint"]
+        assert "review-ledger-schema.md" not in contract_documents
+        assert "schema_documents mirror loaded schema markdown bodies" in result["loading_hint"]
+        assert "contract_documents mirror the remaining contract markdown bodies" in result["loading_hint"]
         assert result["content_authority"] == "canonical"
         assert result["structured_metadata_authority"] == {
             "content": "canonical",

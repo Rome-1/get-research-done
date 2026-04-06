@@ -106,7 +106,7 @@ Agents that write or verify equations must actively enforce conventions:
 - Apply the 5-point convention checklist (metric, Fourier, normalization, coupling, renormalization) when importing formulas from prior phases or references
 - Flag convention violations as DEVIATION Rule 5 (not just "suspected mismatch")
 
-Agents: executor, verifier, consistency-checker, debugger, paper-writer
+Agents: executor, verifier, consistency-checker, debugger, gpd-paper-writer
 
 **Tier 3 — Convention Authority (full protocol + establishment + evolution)**
 
@@ -504,7 +504,7 @@ Not every phase needs every agent. Spawning unnecessary agents wastes tokens and
 | **Derivation** | derive, prove, show that, analytical, closed-form, exact result | executor, verifier | planner, plan-checker | experiment-designer, research-mapper |
 | **Numerical** | simulate, compute, discretize, grid, convergence, benchmark, finite-element, Monte Carlo | executor, verifier, experiment-designer | planner, plan-checker | bibliographer, notation-coordinator |
 | **Literature** | survey, review, compare approaches, what is known, prior work | phase-researcher, research-synthesizer | bibliographer | executor, verifier, experiment-designer |
-| **Paper-writing** | write paper, draft, manuscript, submit, LaTeX | paper-writer, bibliographer, referee | notation-coordinator | executor, phase-researcher, experiment-designer |
+| **Paper-writing** | write paper, draft, manuscript, submit, LaTeX | gpd-paper-writer, bibliographer, referee | notation-coordinator | executor, phase-researcher, experiment-designer |
 | **Formalism** | define, set up framework, establish conventions, Lagrangian, Hamiltonian, action | executor, notation-coordinator, verifier | planner, consistency-checker | experiment-designer, bibliographer |
 | **Analysis** | analyze, compare, interpret, extract, fit, scaling | executor, verifier | consistency-checker | experiment-designer, bibliographer |
 | **Validation** | verify, cross-check, reproduce, validate, test against | verifier, executor | consistency-checker, debugger | phase-researcher, experiment-designer |
@@ -529,9 +529,9 @@ planner → plan-checker               (checker validates the plan)
 experiment-designer → planner        (experiment design constrains plan)
 executor → verifier                  (verifier checks executor results)
 verifier → debugger                  (debugger investigates verification failures)
-paper-writer → bibliographer         (bibliographer verifies paper's citations)
-bibliographer → paper-writer         (paper-writer incorporates verified refs)
-paper-writer → referee               (referee reviews draft)
+gpd-paper-writer → bibliographer     (bibliographer verifies paper's citations)
+bibliographer → gpd-paper-writer     (gpd-paper-writer incorporates verified refs)
+gpd-paper-writer → referee           (referee reviews draft)
 notation-coordinator → executor      (coordinator resolves conventions before execution)
 ```
 
@@ -541,7 +541,7 @@ notation-coordinator → executor      (coordinator resolves conventions before 
 phase-researcher ‖ experiment-designer     (both read phase goal independently)
 multiple executors in same wave             (if files_modified don't overlap)
 4x project-researcher in new-project       (foundations ‖ methods ‖ landscape ‖ pitfalls)
-paper-writer (section A) ‖ paper-writer (section B)   (independent sections)
+gpd-paper-writer (section A) ‖ gpd-paper-writer (section B)   (independent sections)
 verifier ‖ consistency-checker              (both read results, different checks)
 ```
 

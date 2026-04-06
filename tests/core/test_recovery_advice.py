@@ -1234,3 +1234,50 @@ def test_build_recovery_advice_force_recent_prefers_explicit_recent_rows_over_wo
     assert advice.recent_projects_count == 1
     assert advice.continue_command == "runtime `resume-work`"
     assert advice.fast_next_command == "runtime `suggest-next`"
+
+
+def test_build_recovery_advice_does_not_backfill_recent_candidate_for_explicit_current_workspace(
+    tmp_path: Path,
+) -> None:
+    workspace = _project(tmp_path)
+
+    advice = build_recovery_advice(
+        workspace,
+        recent_rows=[
+            {
+                "project_root": workspace.as_posix(),
+                "available": True,
+                "resumable": False,
+                "resume_file": "GPD/phases/04/.continue-here.md",
+                "resume_file_available": False,
+                "resume_target_kind": "handoff",
+                "source": "recent_project",
+            }
+        ],
+        resume_payload={
+            "workspace_root": workspace.as_posix(),
+            "project_root": workspace.as_posix(),
+            "project_root_source": "current_workspace",
+            "project_reentry_mode": "current-workspace",
+            "project_reentry_candidates": [
+                {
+                    "source": "recent_project",
+                    "project_root": workspace.as_posix(),
+                    "available": True,
+                    "recoverable": False,
+                    "resumable": False,
+                    "resume_file": "GPD/phases/04/.continue-here.md",
+                    "resume_file_available": False,
+                    "resume_target_kind": "handoff",
+                }
+            ],
+            "resume_candidates": [],
+            "has_live_execution": False,
+        },
+    )
+
+    assert advice.active_resume_kind is None
+    assert advice.active_resume_origin is None
+    assert advice.active_resume_pointer is None
+    assert advice.has_local_recovery_target is False
+    assert advice.decision_source == "recent-projects"

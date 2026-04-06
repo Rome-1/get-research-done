@@ -47,17 +47,11 @@ IMPORTANT: If context exists below, it contains USER DECISIONS from gpd:discuss-
 </planning_context>
 
 <physics_planning_requirements>
-Each plan still needs explicit checks for dimensions, limits, proof coverage, and cross-method consistency.
-Keep `contract.context_intake` non-empty and specific, and surface explicit anchors when they matter.
-If the plan is proof-bearing, make hypotheses, parameters, and conclusion clauses auditable in the body.
+Keep dimensions, limits, proof coverage, and cross-method consistency explicit. Keep `contract.context_intake` specific, and make proof-bearing hypotheses, parameters, and conclusions auditable in the body.
 </physics_planning_requirements>
 
 <contract_completion_requirements>
-Planning requires `project_contract`:
-
-- Keep the contract block complete per the schema include.
-- Use `effective_reference_intake` and `active_reference_context` for carry-forward grounding, not as substitutes for the contract.
-- Autonomy and model profile can change cadence, not contract completeness.
+Planning requires `project_contract`. Keep the contract block complete per the schema include. Use `effective_reference_intake` and `active_reference_context` for grounding, not as substitutes. Autonomy and model profile may change cadence, not contract completeness.
 </contract_completion_requirements>
 
 <contract_visibility_shortcuts>
@@ -69,55 +63,26 @@ Include `references[]` only when the contract does not already carry explicit gr
 </contract_visibility_shortcuts>
 
 <light_mode_instructions>
-**If plan depth is `light`:** Keep the full canonical frontmatter, including `wave`, `depends_on`, `files_modified`, `interactive`, `conventions`, `contract`, and `contract.context_intake`.
-
-Simplify only the body:
-
-- keep one high-level task block per plan
-- keep verification and success criteria concise
-- omit code snippets and unnecessary implementation detail
-
-Light mode changes verbosity, not contract completeness.
+**If plan depth is `light`:** Keep the full canonical frontmatter, including `wave`, `depends_on`, `files_modified`, `interactive`, `conventions`, `contract`, and `contract.context_intake`. Simplify only the body: one high-level task block per plan, concise verification, no extra code snippets. Light mode changes verbosity, not contract completeness.
 </light_mode_instructions>
 
 <context_budget_guidance>
-Context windows are finite (~200k tokens, ~80% usable). Plans must be sized accordingly:
-
-- **Target per plan:** ~50% context budget (40% for hypothesis-driven plans)
-- **Segment large phases** into multiple plans rather than one overloaded plan
-- **Flag context-heavy plans** in frontmatter: `context_note: "Heavy - consider splitting if >6 tasks"`
-- **Group related tasks** that share intermediate results in the same plan
-- **Use waves** for independent work -- each subagent gets a fresh context window
-
-See `{GPD_INSTALL_DIR}/references/orchestration/context-budget.md` for detailed budget allocation by workflow type.
+Context windows are finite (~200k tokens, ~80% usable). Target ~50% budget per plan, ~40% for hypothesis-driven plans, and split large phases into multiple plans instead of overloading one. Flag context-heavy plans in frontmatter and use waves so independent work gets fresh context. See `{GPD_INSTALL_DIR}/references/orchestration/context-budget.md` for budget details.
 </context_budget_guidance>
 
 <downstream_consumer>
-Output consumed by gpd:execute-phase. Plans need:
-
-- Frontmatter (`wave`, `depends_on`, `files_modified`, `interactive`, `conventions`, `contract`)
-- Tasks in XML format
-- Verification criteria with mathematical rigor requirements
-- Contract-complete claim, deliverable, reference, acceptance-test, forbidden-proxy, and uncertainty-marker coverage
-- Contract links or explicit task-level dependency wiring for results that feed later work
-- Contract-critical anchors and benchmarks surfaced wherever the plan depends on them
-- Selected protocol bundle guidance reflected in tasks, verification paths, and decisive artifact choices
+Output consumed by gpd:execute-phase. Plans need frontmatter, XML tasks, rigorous verification criteria, complete contract coverage, explicit dependency wiring, and surfaced anchors/benchmarks. Reflect selected protocol bundle guidance in tasks, verification paths, and decisive artifact choices.
 </downstream_consumer>
 
 <quality_gate>
-
 - [ ] PLAN.md files created in phase directory
-- [ ] Each plan has valid frontmatter
-- [ ] Each plan includes a complete contract block per `plan-contract-schema.md`
-- [ ] Tasks are specific and actionable with clear mathematical deliverables
-- [ ] Dependencies correctly identified
-- [ ] Waves assigned for parallel execution
-- [ ] Contract links or explicit task-level wiring cover critical handoffs
-- [ ] Required refs, prior outputs, and baselines are surfaced in `<context>` or verification paths
-- [ ] Selected protocol bundle guidance is reflected in the task structure when applicable
-- [ ] Forbidden proxies are rejected explicitly in `<done>` or `<success_criteria>`
-- [ ] Dimensional analysis check specified for each quantitative result
-- [ ] Validation checkpoints placed after each major derivation step
+- [ ] Frontmatter is valid
+- [ ] The contract block is complete per `plan-contract-schema.md`
+- [ ] Tasks are specific, actionable, and testable
+- [ ] Dependencies and waves are correct
+- [ ] Required refs, prior outputs, baselines, and protocol bundle guidance are surfaced where needed
+- [ ] Forbidden proxies are rejected explicitly
+- [ ] Dimensional analysis and validation checkpoints cover each quantitative result
 </quality_gate>
 ```
 

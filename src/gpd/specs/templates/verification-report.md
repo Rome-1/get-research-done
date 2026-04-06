@@ -1,5 +1,6 @@
 ---
 template_version: 1
+type: verification-report-template
 ---
 
 # Verification Report Template

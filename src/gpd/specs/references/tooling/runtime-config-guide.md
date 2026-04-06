@@ -36,7 +36,7 @@ GPD installs its commands and agents into the runtime's command/agent directorie
 
 - Built-in runtime tools (file read/write, shell, search, etc.) -- fully compatible
 - User-defined custom slash commands -- compatible if they do not use the `gpd:` prefix
-- Third-party MCP servers -- compatible; GPD's MCP servers use `gpd-state` and `gpd-paper` names
+- Third-party MCP servers -- compatible; GPD's MCP servers use reserved `gpd-*` names such as `gpd-state`, `gpd-skills`, and `gpd-verification`
 - Multiple project configuration files -- compatible; GPD does not modify project-level config files it did not create
 
 ### Potentially Problematic Combinations

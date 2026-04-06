@@ -46,24 +46,6 @@ from gpd.mcp.servers import (
 logger = configure_mcp_logging("gpd-skills")
 
 mcp = FastMCP("gpd-skills")
-
-_SCHEMA_REFERENCE_NAMES = frozenset(
-    {
-        "author-response.md",
-        "continue-here.md",
-        "contract-results-schema.md",
-        "figure-tracker.md",
-        "reproducibility-manifest.md",
-        "summary.md",
-        "verification-report.md",
-    }
-)
-_CONTRACT_REFERENCE_NAMES = _SCHEMA_REFERENCE_NAMES | frozenset(
-    {
-        "peer-review-reliability.md",
-        "peer-review-panel.md",
-    }
-)
 _GENERIC_ROUTE_TOKENS = frozenset(
     {
         "analysis",
@@ -166,7 +148,7 @@ def _public_skill(skill: content_registry.SkillDef) -> dict[str, str]:
 def _skill_loading_hint(*, source_kind: str, referenced_files: bool, reference_documents: bool) -> str:
     """Return a concise, content-first loading hint for a skill payload."""
     reference_hint = (
-        "schema_documents and contract_documents mirror loaded schema and contract markdown bodies."
+        "schema_documents mirror loaded schema markdown bodies, while contract_documents mirror the remaining contract markdown bodies."
         if reference_documents
         else (
             "See `referenced_files` for external markdown dependencies."
@@ -488,13 +470,38 @@ def _extract_referenced_files(content: str, *, source_path: Path | None = None) 
 
 
 def _is_schema_reference(path: str) -> bool:
-    name = Path(path).name
-    return name.endswith("-schema.md") or name in _SCHEMA_REFERENCE_NAMES
+    if Path(path).name.endswith("-schema.md"):
+        return True
+    document_type = _reference_document_type(path)
+    if document_type is None:
+        return False
+    return any(token in document_type for token in ("schema", "template", "manifest", "tracker"))
+
+
+@lru_cache(maxsize=None)
+def _reference_document_type(path: str) -> str | None:
+    resolved = _portable_reference_path(path)
+    reference_path = resolved[1] if resolved is not None else None
+    if reference_path is None or not reference_path.is_file():
+        return None
+    try:
+        frontmatter, _body = parse_frontmatter_safe(reference_path.read_text(encoding="utf-8"))
+    except OSError:
+        return None
+    doc_type = frontmatter.get("type") if isinstance(frontmatter, dict) else None
+    if not isinstance(doc_type, str):
+        return None
+    stripped = doc_type.strip()
+    return stripped or None
 
 
 def _is_contract_reference(path: str) -> bool:
-    name = Path(path).name
-    return _is_schema_reference(path) or name in _CONTRACT_REFERENCE_NAMES
+    if _is_schema_reference(path):
+        return True
+    document_type = _reference_document_type(path)
+    if document_type is None:
+        return False
+    return any(token in document_type for token in ("contract", "protocol", "reliability"))
 
 
 def _load_reference_document(path: str, *, kind: str) -> dict[str, object]:
@@ -607,7 +614,7 @@ def get_skill(name: Annotated[str, Field(min_length=1, pattern=r"\S")]) -> dict:
             )
             contract_references, contract_documents = _expanded_reference_documents(
                 referenced_files,
-                predicate=_is_contract_reference,
+                predicate=lambda path: _is_contract_reference(path) and not _is_schema_reference(path),
             )
             loading_hint = _skill_loading_hint(
                 source_kind=skill.source_kind,

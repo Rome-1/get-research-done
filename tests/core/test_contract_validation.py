@@ -1165,7 +1165,7 @@ def test_validate_project_contract_approved_mode_accepts_concrete_must_surface_r
     assert result.mode == "approved"
 
 
-def test_validate_project_contract_warns_for_invalid_grounding_entries_with_concrete_anchor_present(
+def test_validate_project_contract_draft_mode_warns_for_invalid_grounding_entries_with_concrete_anchor_present(
     tmp_path: Path,
 ) -> None:
     contract = _load_contract_fixture()
@@ -1186,7 +1186,7 @@ def test_validate_project_contract_warns_for_invalid_grounding_entries_with_conc
         }
     )
 
-    result = validate_project_contract(contract, mode="approved", project_root=tmp_path)
+    result = validate_project_contract(contract, mode="draft", project_root=tmp_path)
 
     assert result.valid is True
     assert (
@@ -1196,6 +1196,40 @@ def test_validate_project_contract_warns_for_invalid_grounding_entries_with_conc
     assert (
         "context_intake.user_asserted_anchors entry is not concrete enough to preserve as durable guidance: TBD"
         in result.warnings
+    )
+    assert (
+        "reference ref-placeholder is must_surface but locator is not concrete enough to ground validation"
+        in result.warnings
+    )
+
+
+def test_validate_project_contract_approved_mode_blocks_invalid_must_surface_locator_even_with_other_grounding(
+    tmp_path: Path,
+) -> None:
+    contract = _load_contract_fixture()
+    contract["context_intake"]["must_include_prior_outputs"] = ["fake/path"]
+    contract["context_intake"]["user_asserted_anchors"] = ["TBD"]
+    contract["references"].append(
+        {
+            "id": "ref-placeholder",
+            "kind": "paper",
+            "locator": "TBD",
+            "aliases": [],
+            "role": "benchmark",
+            "why_it_matters": "Placeholder must-surface anchor should be blocked in approved mode.",
+            "applies_to": ["claim-benchmark"],
+            "carry_forward_to": [],
+            "must_surface": True,
+            "required_actions": ["read"],
+        }
+    )
+
+    result = validate_project_contract(contract, mode="approved", project_root=tmp_path)
+
+    assert result.valid is False
+    assert (
+        "reference ref-placeholder is must_surface but locator is not concrete enough to ground validation"
+        in result.errors
     )
     assert (
         "reference ref-placeholder is must_surface but locator is not concrete enough to ground validation"
@@ -1285,6 +1319,32 @@ def test_validate_project_contract_approved_mode_accepts_short_concrete_locator_
 
     assert result.valid is True
     assert result.mode == "approved"
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [
+        ("user_asserted_anchors", ["../tmp/off-repo-anchor.md"]),
+        ("known_good_baselines", ["/tmp/off-repo-anchor.md"]),
+    ],
+)
+def test_validate_project_contract_approved_mode_rejects_out_of_tree_path_like_grounding_without_project_root(
+    field_name: str, value: list[str]
+) -> None:
+    contract = _load_contract_fixture()
+    contract["references"] = []
+    _remove_incidental_grounding(contract)
+    contract["context_intake"]["must_include_prior_outputs"] = []
+    contract["context_intake"]["user_asserted_anchors"] = []
+    contract["context_intake"]["known_good_baselines"] = []
+    contract["context_intake"][field_name] = value
+    contract["scope"]["unresolved_questions"] = []
+
+    result = validate_project_contract(contract, mode="approved")
+
+    assert result.valid is False
+    assert result.mode == "approved"
+    assert any("approved project contract requires at least one concrete anchor" in error for error in result.errors)
 
 
 @pytest.mark.parametrize(

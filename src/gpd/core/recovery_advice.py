@@ -181,6 +181,8 @@ def _selected_project_reentry_candidate(
         for candidate in candidates:
             if _candidate_text(candidate, "project_root") == project_root and _candidate_text(candidate, "source") == project_root_source:
                 return candidate
+        if project_root_source == "current_workspace":
+            return None
     return next((candidate for candidate in candidates if _candidate_text(candidate, "project_root") == project_root), None)
 
 

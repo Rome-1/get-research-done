@@ -58,7 +58,11 @@ from gpd.core.errors import ValidationError
 from gpd.core.extras import approximation_list
 from gpd.core.manuscript_artifacts import resolve_current_manuscript_entrypoint
 from gpd.core.phases import _milestone_completion_snapshot
-from gpd.core.project_reentry import resolve_project_reentry
+from gpd.core.project_reentry import (
+    ProjectReentryCandidate,
+    recoverable_project_context,
+    resolve_project_reentry,
+)
 from gpd.core.proof_review import (
     resolve_manuscript_proof_review_status,
     resolve_phase_proof_review_status,
@@ -75,7 +79,7 @@ from gpd.core.resume_surface import (
     resume_origin_for_handoff,
     resume_origin_for_interrupted_agent,
 )
-from gpd.core.root_resolution import resolve_project_root
+from gpd.core.root_resolution import resolve_project_root, resolve_project_roots
 from gpd.core.state import _current_machine_identity, _finalize_project_contract_gate
 from gpd.core.state import peek_state_json as _peek_state_json
 from gpd.core.utils import (
@@ -232,8 +236,61 @@ def _build_structured_state_runtime_context(cwd: Path) -> dict[str, object]:
     }
 
 
-def _resolve_reentry_context(cwd: Path, *, data_root: Path | None = None) -> tuple[Path, dict[str, object]]:
+def _explicit_workspace_layout_context(cwd: Path) -> tuple[Path, dict[str, object]] | None:
+    """Return local current-workspace metadata when the caller already targets a GPD layout."""
+
+    resolution = resolve_project_roots(cwd)
+    if resolution is None or not resolution.has_project_layout:
+        return None
+
+    project_root = resolution.project_root
+    state_exists, roadmap_exists, project_exists = recoverable_project_context(project_root)
+    recoverable = state_exists or roadmap_exists or project_exists
+    if resolution.walk_up_steps > 0:
+        reason = "workspace resolved to ancestor project root"
+    elif not project_exists and recoverable:
+        reason = "workspace carries partial recoverable GPD state"
+    else:
+        reason = "workspace already points at a GPD project"
+
+    current_candidate = ProjectReentryCandidate(
+        source="current_workspace",
+        project_root=project_root.as_posix(),
+        available=project_root.is_dir(),
+        recoverable=recoverable,
+        resumable=False,
+        confidence=resolution.confidence.value,
+        reason=reason,
+        summary=reason,
+        state_exists=state_exists,
+        roadmap_exists=roadmap_exists,
+        project_exists=project_exists,
+    )
+    metadata: dict[str, object] = {
+        "workspace_root": resolution.workspace_root.as_posix() if resolution.workspace_root is not None else None,
+        "project_root": project_root.as_posix(),
+        "project_root_source": "current_workspace",
+        "project_root_auto_selected": False,
+        "project_reentry_mode": "current-workspace",
+        "project_reentry_requires_selection": False,
+        "project_reentry_selected_candidate": current_candidate.model_dump(mode="json"),
+        "project_reentry_candidates": [current_candidate.model_dump(mode="json")],
+    }
+    return project_root, metadata
+
+
+def _resolve_reentry_context(
+    cwd: Path,
+    *,
+    data_root: Path | None = None,
+    prefer_workspace_layout: bool = False,
+) -> tuple[Path, dict[str, object]]:
     """Return the effective project root plus shared re-entry metadata."""
+
+    if prefer_workspace_layout:
+        local_context = _explicit_workspace_layout_context(cwd)
+        if local_context is not None:
+            return local_context
 
     resolution = resolve_project_reentry(cwd, data_root=data_root)
     selected_project_root = resolution.resolved_project_root
@@ -2103,7 +2160,11 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
     workspace_roadmap_exists = _path_exists(requested_cwd, f"{PLANNING_DIR_NAME}/{ROADMAP_FILENAME}")
     workspace_project_exists = _path_exists(requested_cwd, f"{PLANNING_DIR_NAME}/{PROJECT_FILENAME}")
     workspace_state_exists = _state_exists(requested_cwd)
-    effective_cwd, reentry_metadata = _resolve_reentry_context(requested_cwd, data_root=data_root)
+    effective_cwd, reentry_metadata = _resolve_reentry_context(
+        requested_cwd,
+        data_root=data_root,
+        prefer_workspace_layout=True,
+    )
     config = load_config(effective_cwd)
     execution_context = _build_execution_runtime_context(effective_cwd)
     result_lookup_by_id = _build_resume_result_lookup(effective_cwd)
@@ -2487,7 +2548,11 @@ def init_progress(
     includes = includes or set()
     requested_cwd = cwd.expanduser().resolve(strict=False)
     if include_project_reentry:
-        effective_cwd, reentry_metadata = _resolve_reentry_context(requested_cwd, data_root=data_root)
+        effective_cwd, reentry_metadata = _resolve_reentry_context(
+            requested_cwd,
+            data_root=data_root,
+            prefer_workspace_layout=True,
+        )
     else:
         effective_cwd = resolve_project_root(requested_cwd, require_layout=True) or requested_cwd
         reentry_metadata = {

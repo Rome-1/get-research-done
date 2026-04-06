@@ -1,5 +1,6 @@
 ---
 template_version: 1
+type: summary-template
 ---
 
 # Summary Template

@@ -801,6 +801,10 @@ def _is_concrete_text_grounding(
     lowered = value.casefold().strip()
     if not lowered:
         return False
+    if project_root is None and _shared_is_project_artifact_path(value, project_root=None):
+        candidate_path = Path(value.strip()).expanduser()
+        if candidate_path.is_absolute() or ".." in candidate_path.parts:
+            return False
     if any(pattern.search(lowered) for pattern in _ANCHOR_UNKNOWN_DIRECT_PATTERNS):
         return False
     if any(
@@ -809,6 +813,10 @@ def _is_concrete_text_grounding(
     ):
         return True
     if _shared_is_project_artifact_path(value, project_root=project_root):
+        if project_root is None:
+            candidate_path = Path(value.strip()).expanduser()
+            if candidate_path.is_absolute() or ".." in candidate_path.parts:
+                return False
         return True
     if any(pattern.search(lowered) for pattern in _USER_ASSERTED_ANCHOR_PLACEHOLDER_PATTERNS):
         return False
@@ -851,6 +859,10 @@ def _has_concrete_must_surface_reference(
     for reference in contract.references:
         if not reference.must_surface:
             continue
+        if project_root is None and _shared_is_project_artifact_path(reference.locator, project_root=None):
+            locator_path = Path(reference.locator.strip()).expanduser()
+            if locator_path.is_absolute() or ".." in locator_path.parts:
+                continue
         if not _shared_is_concrete_reference_locator(
             reference.locator,
             reference_kind=reference.kind,
@@ -1144,7 +1156,10 @@ def validate_project_contract(
                 errors.append(f"claim {claim.id} references unknown proof deliverable {proof_deliverable_id}")
 
     warnings.extend(_context_intake_guidance_warnings(parsed, project_root=project_root))
-    warnings.extend(_must_surface_locator_warnings(parsed, project_root=project_root))
+    must_surface_locator_warnings = _must_surface_locator_warnings(parsed, project_root=project_root)
+    warnings.extend(must_surface_locator_warnings)
+    if mode == "approved":
+        errors.extend(must_surface_locator_warnings)
 
     has_non_reference_grounding = _has_non_reference_grounding_signal(parsed, project_root=project_root)
 

@@ -168,9 +168,11 @@ def test_contract_results_schema_and_verification_template_surface_canonical_res
 
     tokens = _field_tokens(*RESULT_MODELS)
     _assert_tokens_visible(contract_results_schema, tokens, label="contract-results-schema.md")
-    _assert_tokens_visible(verification_report, tokens, label="verification-report.md")
     _assert_phrases_visible(contract_results_schema, _choice_phrases(*RESULT_MODELS), label="contract-results-schema.md")
-    _assert_phrases_visible(verification_report, _choice_phrases(*RESULT_MODELS), label="verification-report.md")
+    assert "contract-results-schema.md" in verification_report
+    for token in ("contract_results", "comparison_verdicts", "suggested_contract_checks", "subject_role"):
+        assert token in verification_report
+    assert "proof-audit rules in the canonical schema" in verification_report
 
 
 def test_expanded_verifier_and_executor_prompts_keep_canonical_result_ledger_fields_visible() -> None:

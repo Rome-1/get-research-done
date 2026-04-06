@@ -111,6 +111,25 @@ def test_parse_plan_tool_requirements_treats_empty_list_as_no_requirements() -> 
     assert parse_plan_tool_requirements([]) == []
 
 
+def test_parse_plan_tool_requirements_rejects_duplicate_ids() -> None:
+    with pytest.raises(PlanToolPreflightError, match=r"tool_requirements\[\]\.id values must be unique"):
+        parse_plan_tool_requirements(
+            [
+                {
+                    "id": "shared-check",
+                    "tool": "wolfram",
+                    "purpose": "Symbolic tensor reduction",
+                },
+                {
+                    "id": "shared-check",
+                    "tool": "command",
+                    "command": "python --version",
+                    "purpose": "Run a local command",
+                },
+            ]
+        )
+
+
 def test_build_plan_tool_preflight_without_requirements_passes(tmp_path: Path) -> None:
     plan_path = tmp_path / "01-01-PLAN.md"
     plan_path.write_text(
@@ -178,6 +197,82 @@ def test_build_plan_tool_preflight_without_requirements_passes(tmp_path: Path) -
     assert result.passed is True
     assert result.requirements == []
     assert result.guidance == "No machine-checkable specialized tool requirements declared."
+
+
+def test_build_plan_tool_preflight_rejects_duplicate_requirement_ids(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "01-01-PLAN.md"
+    plan_path.write_text(
+        "---\n"
+        "phase: 01-test\n"
+        "plan: 01\n"
+        "type: execute\n"
+        "wave: 1\n"
+        "depends_on: []\n"
+        "files_modified: []\n"
+        "interactive: false\n"
+        "tool_requirements:\n"
+        "  - tool: wolfram\n"
+        "    purpose: Symbolic tensor reduction\n"
+        "  - tool: wolfram\n"
+        "    purpose: Secondary symbolic reduction\n"
+        "conventions:\n"
+        "  units: natural\n"
+        "  metric: (+,-,-,-)\n"
+        "  coordinates: Cartesian\n"
+        "contract:\n"
+        "  schema_version: 1\n"
+        "  scope:\n"
+        "    question: What benchmark must this plan recover?\n"
+        "  context_intake:\n"
+        "    must_read_refs: [ref-main]\n"
+        "    must_include_prior_outputs: [GPD/phases/00-baseline/00-01-SUMMARY.md]\n"
+        "  claims:\n"
+        "    - id: claim-main\n"
+        "      statement: Recover the benchmark value within tolerance\n"
+        "      deliverables: [deliv-main]\n"
+        "      acceptance_tests: [test-main]\n"
+        "      references: [ref-main]\n"
+        "  deliverables:\n"
+        "    - id: deliv-main\n"
+        "      kind: figure\n"
+        "      path: figures/main.png\n"
+        "      description: Main benchmark figure\n"
+        "  references:\n"
+        "    - id: ref-main\n"
+        "      kind: paper\n"
+        "      locator: Author et al., Journal, 2024\n"
+        "      role: benchmark\n"
+        "      why_it_matters: Published comparison target\n"
+        "      applies_to: [claim-main]\n"
+        "      must_surface: true\n"
+        "      required_actions: [read, compare, cite]\n"
+        "  acceptance_tests:\n"
+        "    - id: test-main\n"
+        "      subject: claim-main\n"
+        "      kind: benchmark\n"
+        "      procedure: Compare against the benchmark reference\n"
+        "      pass_condition: Matches reference within tolerance\n"
+        "      evidence_required: [deliv-main, ref-main]\n"
+        "  forbidden_proxies:\n"
+        "    - id: fp-main\n"
+        "      subject: claim-main\n"
+        "      proxy: Qualitative trend match without numerical comparison\n"
+        "      reason: Would allow false progress without the decisive benchmark\n"
+        "  uncertainty_markers:\n"
+        "    weakest_anchors: [Reference tolerance interpretation]\n"
+        "    disconfirming_observations: [Benchmark agreement disappears after normalization fix]\n"
+        "---\n\n"
+        "Body.\n",
+        encoding="utf-8",
+    )
+
+    result = build_plan_tool_preflight(plan_path)
+
+    assert result.passed is False
+    assert result.validation_passed is False
+    assert any("tool_requirements[].id values must be unique" in error for error in result.errors)
 
 
 def test_build_plan_tool_preflight_missing_plan_fails(tmp_path: Path) -> None:
@@ -285,6 +380,30 @@ def test_build_plan_tool_preflight_blocks_missing_repo_local_script_target(
     assert result.checks[0].available is False
     assert result.checks[0].blocking is True
     assert "repo-local script target not found" in result.checks[0].detail
+
+
+def test_build_plan_tool_preflight_blocks_python_script_targets_outside_project_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        "gpd.core.tool_preflight.shutil.which",
+        lambda name: "/usr/bin/python3" if name == "python3" else None,
+    )
+    project_root = tmp_path / "project"
+    plan_path = project_root / "GPD" / "phases" / "01" / "01-10a-PLAN.md"
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    external_script = tmp_path / "outside.py"
+    external_script.write_text("print('outside')\n", encoding="utf-8")
+    _write_tool_requirement_plan(plan_path, f"python3 {external_script}", plan_id="10a")
+
+    result = build_plan_tool_preflight(plan_path)
+
+    assert result.passed is False
+    assert result.checks[0].available is False
+    assert result.checks[0].blocking is True
+    assert "repo-local script target must stay within the project roots" in result.checks[0].detail
+    assert str(external_script) in result.checks[0].detail
 
 
 @pytest.mark.parametrize(

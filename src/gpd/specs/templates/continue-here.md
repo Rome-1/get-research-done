@@ -1,5 +1,6 @@
 ---
 template_version: 1
+type: continue-here-template
 ---
 
 <!-- Used by: pause-work workflow as the canonical temporary pause/resume handoff artifact. -->

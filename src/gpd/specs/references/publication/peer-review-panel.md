@@ -5,6 +5,7 @@ load_when:
   - "referee adjudication"
   - "review stage artifact"
   - "journal fit"
+type: peer-review-panel-protocol
 tier: 2
 context_cost: medium
 ---

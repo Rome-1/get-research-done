@@ -1,5 +1,6 @@
 ---
 template_version: 1
+type: figure-tracker-template
 ---
 
 <!-- Used by: write-paper workflow for tracking figure generation status. -->

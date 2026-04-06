@@ -5,6 +5,7 @@ load_when:
   - "review recovery"
   - "stage failure"
   - "review phase entry"
+type: peer-review-reliability
 tier: 2
 context_cost: low
 ---

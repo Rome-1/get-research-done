@@ -8,6 +8,7 @@ one normalized payload instead of stitching together multiple summaries.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -61,6 +62,9 @@ __all__ = [
 ]
 
 
+logger = logging.getLogger(__name__)
+
+
 class RuntimeHintPayload(BaseModel):
     """Shallow normalized runtime hint payload."""
 
@@ -89,7 +93,8 @@ def _model_dump(value: object) -> dict[str, object] | None:
     if hasattr(value, "model_dump"):
         try:
             dumped = value.model_dump(mode="json")  # type: ignore[assignment]
-        except Exception:
+        except Exception as exc:
+            logger.warning("Runtime hint serialization skipped %s: %s", type(value).__name__, exc)
             return None
         return dumped if isinstance(dumped, dict) else None
     return value if isinstance(value, dict) else None
@@ -526,12 +531,8 @@ def build_runtime_hint_payload(
             for candidate in (getattr(reentry, "candidates", []) or [])
             if isinstance((candidate_payload := _model_dump(candidate)), dict)
         ]
-        has_recent_project_candidate = any(
-            _suggestion_text(candidate_payload, "source") == "recent_project"
-            for candidate_payload in candidate_payloads
-        )
         if isinstance(resume_context, dict):
-            if candidate_payloads and (has_recent_project_candidate or not recent_rows):
+            if candidate_payloads:
                 resume_context["project_reentry_candidates"] = candidate_payloads
                 selected_payload = _model_dump(getattr(reentry, "selected_candidate", None))
                 if isinstance(selected_payload, dict):

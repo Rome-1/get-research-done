@@ -1,6 +1,6 @@
 ---
 template_version: 1
-type: author-response
+type: author-response-template
 ---
 
 <!-- Used by: respond-to-referees workflow and gpd-paper-writer for the canonical internal author-response contract. -->
