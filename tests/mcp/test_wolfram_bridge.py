@@ -145,7 +145,7 @@ async def test_bridge_open_uses_bearer_token_and_initializes_session(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_bridge_proxies_remote_results_without_rewriting(monkeypatch) -> None:
+async def test_bridge_proxies_remote_results_without_rewriting() -> None:
     from mcp.types import (
         CallToolResult,
         GetPromptResult,
@@ -199,13 +199,16 @@ async def test_bridge_proxies_remote_results_without_rewriting(monkeypatch) -> N
     bridge = WolframBridge(WolframBridgeConfig(api_key="bridge-token", endpoint="https://example.invalid/mcp"))
     bridge._session = FakeSession()  # type: ignore[assignment]
 
-    tools_result = await bridge.list_tools()
-    call_result = await bridge.call_tool("wolf-tool", {"x": 3})
-    resources_result = await bridge.list_resources()
-    read_result = await bridge.read_resource("https://example.invalid/resource")
-    prompts_result = await bridge.list_prompts()
-    prompt_result = await bridge.get_prompt("wolf-prompt", {"x": "1"})
-    templates_result = await bridge.list_resource_templates("cursor-1")
+    try:
+        tools_result = await bridge.list_tools()
+        call_result = await bridge.call_tool("wolf-tool", {"x": 3})
+        resources_result = await bridge.list_resources()
+        read_result = await bridge.read_resource("https://example.invalid/resource")
+        prompts_result = await bridge.list_prompts()
+        prompt_result = await bridge.get_prompt("wolf-prompt", {"x": "1"})
+        templates_result = await bridge.list_resource_templates("cursor-1")
+    finally:
+        bridge._session = None
 
     assert tools_result.tools == [tool]
     assert call_result.structuredContent == {"name": "wolf-tool", "arguments": {"x": 3}}
@@ -235,7 +238,10 @@ async def test_bridge_list_resource_templates_preserves_cursor_and_next_cursor()
     bridge = WolframBridge(WolframBridgeConfig(api_key="bridge-token", endpoint="https://example.invalid/mcp"))
     bridge._session = FakeSession()  # type: ignore[assignment]
 
-    result = await bridge.list_resource_templates("cursor-1")
+    try:
+        result = await bridge.list_resource_templates("cursor-1")
+    finally:
+        bridge._session = None
 
     assert observed["cursor"] == "cursor-1"
     assert result.resourceTemplates == [template]

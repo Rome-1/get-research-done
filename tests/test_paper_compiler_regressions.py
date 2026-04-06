@@ -65,7 +65,7 @@ async def test_manual_multipass_succeeds_when_early_pass_fails_but_last_pass_ok(
         return None
 
     monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("gpd.mcp.paper.compiler.find_latex_compiler", fake_which)
 
     result = await _compile_manual_multipass(tex_path, tmp_path, "pdflatex")
 
@@ -100,7 +100,7 @@ async def test_manual_multipass_rejects_bibtex_failure_even_when_final_pass_succ
         return None
 
     monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("gpd.mcp.paper.compiler.find_latex_compiler", fake_which)
     monkeypatch.setattr("gpd.utils.latex.try_autofix", lambda tex, log: AutoFixResult())
 
     result = await _compile_manual_multipass(tex_path, tmp_path, "pdflatex")
@@ -131,13 +131,13 @@ async def test_manual_multipass_rejects_missing_bibtex_when_citations_require_it
             pdf_path.write_bytes(b"%PDF-fresh")
         return _FakeProcess(returncode=next(returncodes), stdout=b"compile output", stderr=b"")
 
-    def fake_which(binary: str) -> str | None:
+    def fake_find(binary: str) -> str | None:
         if binary == "pdflatex":
             return "/usr/bin/pdflatex"
         return None
 
     monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("gpd.mcp.paper.compiler.find_latex_compiler", fake_find)
     monkeypatch.setattr("gpd.utils.latex.try_autofix", lambda tex, log: AutoFixResult())
 
     result = await _compile_manual_multipass(tex_path, tmp_path, "pdflatex")
@@ -167,13 +167,13 @@ async def test_manual_multipass_rejects_missing_bibtex_even_after_autofix(
             pdf_path.write_bytes(b"%PDF-fresh")
         return _FakeProcess(returncode=next(returncodes), stdout=b"compile output", stderr=b"")
 
-    def fake_which(binary: str) -> str | None:
+    def fake_find(binary: str) -> str | None:
         if binary == "pdflatex":
             return "/usr/bin/pdflatex"
         return None
 
     monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("gpd.mcp.paper.compiler.find_latex_compiler", fake_find)
     monkeypatch.setattr(
         "gpd.utils.latex.try_autofix",
         lambda tex, log: AutoFixResult(
@@ -210,7 +210,7 @@ async def test_manual_multipass_rejects_stale_preexisting_pdf(
         return None
 
     monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("gpd.mcp.paper.compiler.find_latex_compiler", fake_which)
     monkeypatch.setattr("gpd.utils.latex.try_autofix", lambda tex, log: AutoFixResult())
 
     result = await _compile_manual_multipass(tex_path, tmp_path, "pdflatex")
@@ -239,7 +239,7 @@ async def test_manual_multipass_fails_when_last_pass_nonzero_and_no_pdf(
         return None
 
     monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("gpd.mcp.paper.compiler.find_latex_compiler", fake_which)
 
     result = await _compile_manual_multipass(tex_path, tmp_path, "pdflatex")
 
@@ -273,7 +273,7 @@ async def test_manual_multipass_applies_autofix_even_after_compile_errors(
         return None
 
     monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("gpd.mcp.paper.compiler.find_latex_compiler", fake_which)
     monkeypatch.setattr(
         "gpd.utils.latex.try_autofix",
         lambda tex, log: AutoFixResult(
@@ -315,7 +315,7 @@ async def test_manual_multipass_autofix_requires_fresh_pdf_after_fix(
         return None
 
     monkeypatch.setattr("gpd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr("gpd.mcp.paper.compiler.shutil.which", fake_which)
+    monkeypatch.setattr("gpd.mcp.paper.compiler.find_latex_compiler", fake_which)
     monkeypatch.setattr(
         "gpd.utils.latex.try_autofix",
         lambda tex, log: AutoFixResult(
