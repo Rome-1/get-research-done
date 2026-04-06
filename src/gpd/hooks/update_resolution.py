@@ -133,6 +133,7 @@ def latest_update_cache(
         if active_installed_runtime not in (None, "", RUNTIME_UNKNOWN)
         else None
     )
+    self_candidate = None
     if hook_layout.should_prefer_self_owned_install(
         self_install,
         active_install_target=active_install_target,
@@ -140,11 +141,10 @@ def latest_update_cache(
         workspace_path=workspace_path,
     ):
         if self_install is not None:
-            cache = _read_update_cache(self_install.cache_file, debug=debug)
-            candidate = hook_layout.self_owned_update_cache_candidate(self_install)
+            self_candidate = hook_layout.self_owned_update_cache_candidate(self_install)
+            cache = _read_update_cache(self_candidate.path, debug=debug)
             if cache is not None:
-                return cache, candidate
-            return None, candidate
+                return cache, self_candidate
 
     fallback_hit: tuple[dict[str, object], object] | None = None
     for candidate in ordered_update_cache_candidates(
@@ -160,7 +160,11 @@ def latest_update_cache(
         if fallback_hit is None:
             fallback_hit = (cache, candidate)
 
-    return fallback_hit if fallback_hit is not None else (None, None)
+    if fallback_hit is not None:
+        return fallback_hit
+    if self_candidate is not None:
+        return None, self_candidate
+    return None, None
 
 
 def update_command_for_candidate(

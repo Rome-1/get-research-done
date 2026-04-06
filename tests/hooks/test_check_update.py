@@ -717,8 +717,10 @@ class TestMainThrottle:
         mock_popen.assert_called_once()
         assert marker.exists()
 
-    def test_explicit_target_hook_uses_own_cache_instead_of_workspace_candidates(self, tmp_path: Path) -> None:
-        """Explicit-target hook refresh should always target its own cache path."""
+    def test_explicit_target_hook_falls_back_to_fresh_workspace_candidate_when_self_cache_is_missing(
+        self, tmp_path: Path
+    ) -> None:
+        """Explicit-target hooks should still respect fresh fallback caches when self cache is missing."""
         workspace = tmp_path / "workspace"
         workspace.mkdir()
         home = tmp_path / "home"
@@ -738,10 +740,56 @@ class TestMainThrottle:
 
         with (
             patch("gpd.hooks.check_update.__file__", str(hook_path)),
-            patch("gpd.hooks.runtime_detect.Path.cwd", return_value=workspace),
-            patch("gpd.hooks.runtime_detect.Path.home", return_value=home),
             patch("gpd.hooks.check_update.Path.cwd", return_value=workspace),
             patch("gpd.hooks.check_update.Path.home", return_value=home),
+            patch("gpd.hooks.check_update._self_config_dir", return_value=explicit_target),
+            patch(
+                "gpd.hooks.update_resolution.resolve_update_cache_inputs",
+                return_value=(workspace, home, None, "codex"),
+            ),
+            patch(
+                "gpd.hooks.update_resolution.ordered_update_cache_candidates",
+                return_value=[UpdateCacheCandidate(path=fresh_workspace_cache / "gpd-update-check.json", runtime="codex", scope="local")],
+            ),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            main()
+
+        mock_popen.assert_not_called()
+
+    def test_explicit_target_hook_spawns_to_own_cache_when_fallback_is_stale(self, tmp_path: Path) -> None:
+        """Explicit-target hooks should spawn a self-owned worker when the fallback cache is stale."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        home = tmp_path / "home"
+        home.mkdir()
+        explicit_target = tmp_path / "custom-runtime-dir"
+        hook_path = explicit_target / "hooks" / "check_update.py"
+        hook_path.parent.mkdir(parents=True)
+        hook_path.write_text("# hook\n", encoding="utf-8")
+        _mark_complete_install(explicit_target, runtime="codex")
+
+        stale_workspace_cache = workspace / ".claude" / "cache"
+        stale_workspace_cache.mkdir(parents=True)
+        (stale_workspace_cache / "gpd-update-check.json").write_text(
+            json.dumps({"checked": int(time.time()) - UPDATE_CHECK_TTL_SECONDS - 100, "update_available": False}),
+            encoding="utf-8",
+        )
+
+        with (
+            patch("gpd.hooks.check_update.__file__", str(hook_path)),
+            patch("gpd.hooks.check_update.Path.cwd", return_value=workspace),
+            patch("gpd.hooks.check_update.Path.home", return_value=home),
+            patch("gpd.hooks.check_update._self_config_dir", return_value=explicit_target),
+            patch(
+                "gpd.hooks.update_resolution.resolve_update_cache_inputs",
+                return_value=(workspace, home, None, "codex"),
+            ),
+            patch(
+                "gpd.hooks.update_resolution.ordered_update_cache_candidates",
+                return_value=[UpdateCacheCandidate(path=stale_workspace_cache / "gpd-update-check.json", runtime="codex", scope="local")],
+            ),
+            patch("gpd.hooks.check_update._claim_inflight_marker", return_value=True),
             patch("subprocess.Popen") as mock_popen,
         ):
             main()

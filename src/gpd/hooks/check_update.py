@@ -248,6 +248,56 @@ def _clear_inflight_marker(cache_file: Path) -> None:
         return
 
 
+def _relevant_update_cache_candidates(
+    *,
+    self_config_dir: Path | None,
+    resolved_cwd: Path,
+    resolved_home: Path,
+) -> tuple[list[object], Path]:
+    from gpd.hooks.install_context import detect_self_owned_install
+    from gpd.hooks.runtime_detect import UpdateCacheCandidate
+    from gpd.hooks.update_resolution import (
+        ordered_update_cache_candidates,
+        primary_update_cache_file,
+        resolve_update_cache_inputs,
+    )
+
+    workspace_path, resolved_home, active_installed_runtime, preferred_runtime = resolve_update_cache_inputs(
+        cwd=resolved_cwd,
+        home=resolved_home,
+    )
+    shared_candidates = ordered_update_cache_candidates(
+        cwd=workspace_path,
+        home=resolved_home,
+        active_installed_runtime=active_installed_runtime,
+        preferred_runtime=preferred_runtime,
+    )
+
+    if self_config_dir is not None:
+        self_install = detect_self_owned_install(__file__)
+        self_candidate = (
+            UpdateCacheCandidate(path=self_config_dir / CACHE_DIR_NAME / UPDATE_CACHE_FILENAME)
+            if self_install is None
+            else UpdateCacheCandidate(
+                path=self_install.cache_file,
+                runtime=self_install.runtime,
+                scope=self_install.install_scope,
+            )
+        )
+        relevant_candidates = [self_candidate]
+        seen_paths = {self_candidate.path}
+        for candidate in shared_candidates:
+            candidate_path = getattr(candidate, "path", None)
+            if candidate_path in seen_paths:
+                continue
+            seen_paths.add(candidate_path)
+            relevant_candidates.append(candidate)
+    else:
+        relevant_candidates = shared_candidates
+
+    return relevant_candidates, primary_update_cache_file(relevant_candidates, home=resolved_home)
+
+
 def main(argv: list[str] | None = None) -> None:
     """Entry point: throttle-check for updates, spawn background worker if needed."""
     raw_argv = list(sys.argv[1:] if argv is None else argv)
@@ -257,33 +307,17 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     from gpd.hooks.runtime_detect import (
-        UpdateCacheCandidate,
         supported_runtime_names,
-    )
-    from gpd.hooks.update_resolution import (
-        ordered_update_cache_candidates,
-        primary_update_cache_file,
-        resolve_update_cache_inputs,
     )
 
     resolved_cwd = Path.cwd()
     resolved_home = Path.home()
     self_config_dir = _self_config_dir()
-    if self_config_dir is not None:
-        cache_file = self_config_dir / CACHE_DIR_NAME / UPDATE_CACHE_FILENAME
-        relevant_candidates = [UpdateCacheCandidate(path=cache_file)]
-    else:
-        workspace_path, resolved_home, active_installed_runtime, preferred_runtime = resolve_update_cache_inputs(
-            cwd=resolved_cwd,
-            home=resolved_home,
-        )
-        relevant_candidates = ordered_update_cache_candidates(
-            cwd=workspace_path,
-            home=resolved_home,
-            active_installed_runtime=active_installed_runtime,
-            preferred_runtime=preferred_runtime,
-        )
-        cache_file = primary_update_cache_file(relevant_candidates, home=resolved_home)
+    relevant_candidates, cache_file = _relevant_update_cache_candidates(
+        self_config_dir=self_config_dir,
+        resolved_cwd=resolved_cwd,
+        resolved_home=resolved_home,
+    )
 
     # Throttle: skip only when the preferred runtime/home cache set is still fresh.
     runtime_names = supported_runtime_names()

@@ -206,6 +206,33 @@ def test_latest_update_cache_uses_shared_cache_constants_for_self_owned_install_
         assert candidate.path == expected_cache_path
 
 
+def test_latest_update_cache_falls_back_when_self_owned_cache_is_missing(tmp_path: Path) -> None:
+    self_cache_dir = tmp_path / "self-owned"
+    self_cache_dir.mkdir(parents=True)
+    self_install = SimpleNamespace(
+        cache_file=self_cache_dir / "cache" / "gpd-update-check.json",
+        config_dir=self_cache_dir,
+        runtime="codex",
+        install_scope="local",
+    )
+    fallback_candidate = SimpleNamespace(path=tmp_path / "fallback.json", runtime="codex", scope="local")
+    fallback_candidate.path.write_text(json.dumps({"update_available": True, "checked": 42}), encoding="utf-8")
+
+    with (
+        patch("gpd.hooks.install_context.detect_self_owned_install", return_value=self_install),
+        patch("gpd.hooks.install_context.should_prefer_self_owned_install", return_value=True),
+        patch(
+            "gpd.hooks.update_resolution.resolve_update_cache_inputs",
+            return_value=(tmp_path, tmp_path / "home", "codex", "codex"),
+        ),
+        patch("gpd.hooks.update_resolution.ordered_update_cache_candidates", return_value=[fallback_candidate]),
+    ):
+        cache, candidate = latest_update_cache(hook_file=__file__, cwd=str(tmp_path), debug=_noop_debug)
+
+    assert cache == {"update_available": True, "checked": 42}
+    assert candidate is fallback_candidate
+
+
 def test_update_command_for_candidate_prefers_expected_resolution_modes(tmp_path: Path) -> None:
     from gpd.hooks.install_context import SelfOwnedInstallContext
 
