@@ -1690,6 +1690,18 @@ def test_validate_project_contract_rejects_coercive_schema_version_scalar() -> N
     assert "schema_version must be the integer 1" in result.errors
 
 
+def test_validate_project_contract_stops_after_blocking_salvage_errors() -> None:
+    contract = _load_contract_fixture()
+    contract["claims"][0].pop("statement")
+    contract["references"] = []
+
+    result = validate_project_contract(contract)
+
+    assert result.valid is False
+    assert result.errors == ["claims.0.statement is required"]
+    assert result.warnings == []
+
+
 def test_validate_project_contract_rejects_missing_schema_version() -> None:
     contract = _load_contract_fixture()
     contract.pop("schema_version")

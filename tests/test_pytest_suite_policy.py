@@ -4,8 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from tests.conftest import (
-    FAST_SUITE_EXCLUDES,
     _FAST_SUITE_ENV_VAR,
+    FAST_SUITE_EXCLUDES,
     _explicit_collection_requested,
     _full_suite_requested,
 )
@@ -52,12 +52,16 @@ def test_fast_suite_policy_keeps_heavyweight_skips_explicit() -> None:
     assert expected <= FAST_SUITE_EXCLUDES
 
 
-def test_fast_suite_policy_keeps_contract_visibility_tests_in_default_path() -> None:
-    assert "core/test_help_inventory_contract.py" not in FAST_SUITE_EXCLUDES
-    assert "core/test_prompt_cli_consistency.py" not in FAST_SUITE_EXCLUDES
-    assert "core/test_prompt_wiring.py" not in FAST_SUITE_EXCLUDES
-    assert "core/test_review_contract_prompt_visibility.py" not in FAST_SUITE_EXCLUDES
-    assert "core/test_workflow_contract_visibility_regressions.py" not in FAST_SUITE_EXCLUDES
+def test_fast_suite_policy_keeps_boundary_regressions_in_default_path() -> None:
+    required = {
+        "test_runtime_abstraction_boundaries.py",
+        "core/test_contract_schema_prompt_parity.py",
+        "mcp/test_tool_contract_visibility.py",
+        "core/test_verifier_prompt_contract_visibility.py",
+        "core/test_verification_surface_alignment_regressions.py",
+    }
+
+    assert required.isdisjoint(FAST_SUITE_EXCLUDES)
 
 
 def test_ci_and_test_readme_document_explicit_fast_and_full_suite_commands() -> None:

@@ -1095,12 +1095,26 @@ def validate_project_contract(
             warnings=schema_warnings,
             mode=mode,
         )
-    errors: list[str] = list(schema_errors)
-    warnings: list[str] = list(schema_warnings)
 
     question = parsed.scope.question.strip()
     decisive_target_count = len(parsed.observables) + len(parsed.claims) + len(parsed.deliverables)
     guidance_signal_count = sum(_guidance_signal_flags(parsed, project_root=project_root).values())
+    reference_count = len(parsed.references)
+
+    if schema_errors:
+        return ProjectContractValidationResult(
+            valid=False,
+            errors=schema_errors,
+            warnings=schema_warnings,
+            question=question or None,
+            decisive_target_count=decisive_target_count,
+            guidance_signal_count=guidance_signal_count,
+            reference_count=reference_count,
+            mode=mode,
+        )
+
+    errors: list[str] = []
+    warnings: list[str] = list(schema_warnings)
 
     if not question:
         errors.append("scope.question is required")
@@ -1150,6 +1164,6 @@ def validate_project_contract(
         question=question or None,
         decisive_target_count=decisive_target_count,
         guidance_signal_count=guidance_signal_count,
-        reference_count=len(parsed.references),
+        reference_count=reference_count,
         mode=mode,
     )

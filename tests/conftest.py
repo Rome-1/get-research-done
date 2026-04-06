@@ -53,8 +53,6 @@ FAST_SUITE_EXCLUDES = frozenset(
         "core/test_state_stress.py",
         "core/test_suggest.py",
         "core/test_verification_contract_evidence.py",
-        "core/test_verification_surface_alignment_regressions.py",
-        "core/test_verifier_prompt_contract_visibility.py",
         "core/test_workflow_presets.py",
         "hooks/test_check_update.py",
         "hooks/test_notify.py",
