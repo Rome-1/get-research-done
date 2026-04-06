@@ -334,7 +334,7 @@ This returns per-phase summaries with one-liners, provides/requires, and depende
 cat GPD/phases/*/*SUMMARY.md
 
 # Structured research state from init payloads
-INIT=$(gpd init milestone-op)
+INIT=$(gpd --raw init milestone-op)
 
 # Convention catalog (full reference)
 cat GPD/CONVENTIONS.md
@@ -621,7 +621,7 @@ Check branching strategy and offer merge options.
 Use `init milestone-op` for context, or load config directly:
 
 ```bash
-INIT=$(gpd init milestone-op)
+INIT=$(gpd --raw init milestone-op)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

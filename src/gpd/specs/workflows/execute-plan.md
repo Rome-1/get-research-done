@@ -27,7 +27,7 @@ When following GitHub lifecycle examples, substitute the repository's actual def
 Load execution context (uses `init execute-phase` for full context, including file contents):
 
 ```bash
-INIT=$(gpd init execute-phase "${phase}" --include state,config)
+INIT=$(gpd --raw init execute-phase "${phase}" --include state,config)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   exit 1

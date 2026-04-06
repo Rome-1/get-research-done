@@ -362,17 +362,17 @@ def test_progress_prompt_runs_preflight_after_init_context() -> None:
     command = (REPO_ROOT / "src/gpd/commands/progress.md").read_text(encoding="utf-8")
     workflow = (REPO_ROOT / "src/gpd/specs/workflows/progress.md").read_text(encoding="utf-8")
 
-    assert "INIT=$(gpd init progress --include state,roadmap,project,config)" in command
+    assert "INIT=$(gpd --raw init progress --include state,roadmap,project,config)" in command
     assert "CONTEXT=$(gpd --raw validate command-context progress \"$ARGUMENTS\")" in command
-    assert command.index("INIT=$(gpd init progress --include state,roadmap,project,config)") < command.index(
+    assert command.index("INIT=$(gpd --raw init progress --include state,roadmap,project,config)") < command.index(
         "CONTEXT=$(gpd --raw validate command-context progress \"$ARGUMENTS\")"
     )
     assert "The recent-project picker is advisory" in command
     assert "reloads canonical state for that project" in command
 
-    assert "INIT=$(gpd init progress --include state,roadmap,project,config)" in workflow
+    assert "INIT=$(gpd --raw init progress --include state,roadmap,project,config)" in workflow
     assert "CONTEXT=$(gpd --raw validate command-context progress \"$ARGUMENTS\")" in workflow
-    assert workflow.index("INIT=$(gpd init progress --include state,roadmap,project,config)") < workflow.index(
+    assert workflow.index("INIT=$(gpd --raw init progress --include state,roadmap,project,config)") < workflow.index(
         "CONTEXT=$(gpd --raw validate command-context progress \"$ARGUMENTS\")"
     )
 

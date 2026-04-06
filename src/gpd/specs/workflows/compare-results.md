@@ -12,7 +12,7 @@ Read these files using the file_read tool:
 ## 0. Load Project Context
 
 ```bash
-INIT=$(gpd init progress --include state)
+INIT=$(gpd --raw init progress --include state)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

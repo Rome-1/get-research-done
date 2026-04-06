@@ -11,7 +11,7 @@ Standalone research command. For most workflows, use `gpd:plan-phase` which inte
 **Load phase context and resolve model:**
 
 ```bash
-INIT=$(gpd init phase-op --include state,config "${PHASE}")
+INIT=$(gpd --raw init phase-op --include state,config "${PHASE}")
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

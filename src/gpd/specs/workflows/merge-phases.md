@@ -12,7 +12,7 @@ Read all files referenced by the invoking prompt's execution_context before star
 **Parse arguments and load context:**
 
 ```bash
-INIT=$(gpd init phase-op --include state,roadmap)
+INIT=$(gpd --raw init phase-op --include state,roadmap)
 ```
 
 Extract from $ARGUMENTS: `source_phase` (to be absorbed) and `target_phase` (to absorb into).
@@ -200,8 +200,8 @@ Copy any scripts, data files, or other artifacts from source to target.
 Read convention declarations from SUMMARY.md frontmatter in both phases:
 
 ```bash
-gpd summary-extract "${SOURCE_DIR}"/*-SUMMARY.md --field conventions
-gpd summary-extract "${TARGET_DIR}"/*-SUMMARY.md --field conventions
+gpd --raw summary-extract "${SOURCE_DIR}"/*-SUMMARY.md --field conventions
+gpd --raw summary-extract "${TARGET_DIR}"/*-SUMMARY.md --field conventions
 ```
 
 **If conventions conflict** (same field, different value):

@@ -12,7 +12,7 @@ Read all files referenced by the invoking prompt's execution_context before star
 Load project context:
 
 ```bash
-INIT=$(gpd init phase-op --include state,config "${PHASE_ARG:-}")
+INIT=$(gpd --raw init phase-op --include state,config "${PHASE_ARG:-}")
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.
@@ -169,7 +169,7 @@ Help the researcher populate the HYPOTHESIS.md placeholders by inferring content
 
 ```bash
 # Get current phase and project state via gpd CLI
-INIT=$(gpd init progress --include roadmap,state)
+INIT=$(gpd --raw init progress --include roadmap,state)
 ```
 
 Parse from INIT JSON: `project_exists`, `state_exists`, `current_phase` (object with `number`, `name`, `directory`), `state_content`, `roadmap_content`.

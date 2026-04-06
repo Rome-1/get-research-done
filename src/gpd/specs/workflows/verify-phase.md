@@ -50,7 +50,7 @@ For most research targets that means actual computation. For proof-bearing or `p
 Load phase operation context:
 
 ```bash
-INIT=$(gpd init phase-op "${PHASE_ARG}")
+INIT=$(gpd --raw init phase-op "${PHASE_ARG}")
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

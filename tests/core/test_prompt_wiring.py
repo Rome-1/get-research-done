@@ -986,7 +986,7 @@ def test_new_project_defers_workflow_setup_until_after_scope_approval() -> None:
     workflow_text = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     command_text = (COMMANDS_DIR / "new-project.md").read_text(encoding="utf-8")
 
-    assert "Before `GPD/config.json` exists, the `autonomy` and `research_mode` values from `gpd init new-project` are temporary defaults" in workflow_text
+    assert "Before `GPD/config.json` exists, the `autonomy` and `research_mode` values from `gpd --raw init new-project` are temporary defaults" in workflow_text
     assert "## 2.5 Early Workflow Setup" not in workflow_text
     assert "What physics problem do you want to investigate?" in workflow_text
     assert "If `GPD/config.json` does not exist yet, run Step 5 now before generating or committing `PROJECT.md`." in workflow_text
@@ -1359,11 +1359,27 @@ def test_workflows_use_raw_json_when_shell_snippets_pipe_cli_output_into_gpd_jso
     assert 'gpd --raw roadmap get-phase "${phase_number}"' in verify_work
 
 
+def test_workflow_and_command_docs_use_raw_output_for_machine_parsed_cli_json() -> None:
+    offenders: list[str] = []
+
+    for directory in (WORKFLOWS_DIR, COMMANDS_DIR):
+        for path in sorted(directory.glob("*.md")):
+            for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                if re.search(r"\bgpd init\b", line) and "gpd --raw init" not in line:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}:{line_number}: {line.strip()}")
+                if re.search(r"\bgpd summary-extract\b", line) and "gpd --raw summary-extract" not in line:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}:{line_number}: {line.strip()}")
+                if re.search(r"\bgpd state compact\b", line) and "gpd --raw state compact" not in line:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}:{line_number}: {line.strip()}")
+
+    assert not offenders, "Found machine-parsed CLI snippets missing --raw:\n" + "\n".join(offenders)
+
+
 def test_research_phase_uses_resolved_phase_dir_for_artifact_paths_and_context_lookups() -> None:
     research_workflow = (WORKFLOWS_DIR / "research-phase.md").read_text(encoding="utf-8")
     research_command = (COMMANDS_DIR / "research-phase.md").read_text(encoding="utf-8")
 
-    assert 'INIT=$(gpd init phase-op --include state,config "$ARGUMENTS")' in research_command
+    assert 'INIT=$(gpd --raw init phase-op --include state,config "$ARGUMENTS")' in research_command
     assert 'ls "${phase_dir}/"*-RESEARCH.md 2>/dev/null' in research_command
     assert 'cat "${phase_dir}/"*-CONTEXT.md 2>/dev/null' in research_command
     assert "Write to: {phase_dir}/{phase_number}-RESEARCH.md" in research_workflow
@@ -1385,8 +1401,8 @@ def test_audit_milestone_command_does_not_preload_raw_verification_globs() -> No
 def test_sensitivity_analysis_workflow_uses_canonical_cli_commands() -> None:
     workflow = (WORKFLOWS_DIR / "sensitivity-analysis.md").read_text(encoding="utf-8")
 
-    assert "gpd init progress --include state,config" in workflow
-    assert "gpd init phase-op" in workflow
+    assert "gpd --raw init progress --include state,config" in workflow
+    assert "gpd --raw init phase-op" in workflow
     assert "gpd uncertainty add" in workflow
     assert "gpd commit" in workflow
     assert "gpd CLI init progress" not in workflow
@@ -1449,7 +1465,7 @@ def test_verify_phase_and_gap_reverify_prompts_surface_contract_context_before_c
     assert "{GPD_INSTALL_DIR}/workflows/verify-phase.md" in execute_phase
     assert "{GPD_INSTALL_DIR}/templates/verification-report.md" in execute_phase
     assert "{GPD_INSTALL_DIR}/templates/contract-results-schema.md" in execute_phase
-    assert "gpd init phase-op {PHASE_NUMBER}" in execute_phase
+    assert "gpd --raw init phase-op {PHASE_NUMBER}" in execute_phase
     assert "active_reference_context" in execute_phase
     assert "protocol_bundle_context" in execute_phase
 

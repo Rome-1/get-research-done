@@ -46,7 +46,7 @@ Execute the workflow end-to-end and preserve all routing logic (Routes A through
 **Load progress context (with file contents to avoid redundant reads):**
 
 ```bash
-INIT=$(gpd init progress --include state,roadmap,project,config)
+INIT=$(gpd --raw init progress --include state,roadmap,project,config)
 ```
 
 Extract from init JSON: `project_exists`, `roadmap_exists`, `state_exists`, `phases`, `current_phase`, `next_phase`, `milestone_version`, `completed_count`, `phase_count`, `paused_at`.
@@ -121,7 +121,7 @@ Use this instead of manually reading/parsing ROADMAP.md.
 - Find the 2-3 most recent SUMMARY.md files
 - Use `summary-extract` for efficient parsing:
   ```bash
-  gpd summary-extract <path> --field one_liner
+  gpd --raw summary-extract <path> --field one_liner
   ```
 - This shows "what we've been working on" (e.g., derivations completed, numerical results obtained, validations passed)
 
@@ -132,7 +132,7 @@ Use this instead of manually reading/parsing ROADMAP.md.
 - Use `current_phase` and `next_phase` from roadmap analyze
 - Use phase-level `has_context` and `has_research` flags from analyze
 - Note `paused_at` if work was paused (from init context)
-- Count pending tasks: use `gpd init todos`
+- Count pending tasks: use `gpd --raw init todos`
 - Check for active debug sessions: `ls GPD/debug/*.md 2>/dev/null | grep -v resolved | wc -l`
 
 ## Step 6: Report

@@ -21,7 +21,7 @@ Each stage runs in a fresh subagent context and writes a compact artifact. The f
 **Initialize context and locate the review target:**
 
 ```bash
-INIT=$(gpd init phase-op)
+INIT=$(gpd --raw init phase-op)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

@@ -178,7 +178,7 @@ def test_progress_docs_do_not_reference_nonexistent_list_todos_command() -> None
     for relative_path in ("src/gpd/commands/progress.md", "src/gpd/specs/workflows/progress.md"):
         content = _read(relative_path)
         assert "list-todos" not in content
-        assert "gpd init todos" in content
+        assert "gpd --raw init todos" in content
 
 
 def test_progress_workflow_reconcile_mode_uses_supported_state_snapshot_fields() -> None:

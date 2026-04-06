@@ -485,7 +485,7 @@ If commit fails with "nothing to commit", the changes were already committed —
 After committing the transition, check whether STATE.md has grown past the warning threshold and compact it if needed. This prevents STATE.md from bloating across many phase transitions.
 
 ```bash
-AUTO_COMPACT=$(gpd state compact 2>&1)
+AUTO_COMPACT=$(gpd --raw state compact 2>&1)
 ```
 
 **If compaction occurred** (output contains `"compacted": true`):
@@ -566,7 +566,7 @@ cat ${PHASE_DIR}/SUMMARY.md ${PHASE_DIR}/*-SUMMARY.md 2>/dev/null
 **2. Extract from SUMMARYs:**
 
 - `conventions` frontmatter field -> convention definitions
-- `## Key Results` body section -> key equations and results (use `gpd summary-extract --field key_results` to extract)
+- `## Key Results` body section -> key equations and results (use `gpd --raw summary-extract --field key_results` to extract)
 - `provides` frontmatter field -> artifacts provided by this phase
 
 **3. Create DERIVATION-STATE.md if it doesn't exist:**

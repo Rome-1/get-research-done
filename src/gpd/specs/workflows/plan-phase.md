@@ -19,7 +19,7 @@ Read these files using the file_read tool:
 Load all context in one call (include file contents to avoid redundant reads):
 
 ```bash
-INIT=$(gpd init plan-phase "$PHASE" --include state,roadmap,requirements,context,research,verification,validation)
+INIT=$(gpd --raw init plan-phase "$PHASE" --include state,roadmap,requirements,context,research,verification,validation)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   exit 1

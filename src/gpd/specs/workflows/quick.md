@@ -35,7 +35,7 @@ If empty, re-prompt: "Please provide a task description."
 **Step 2: Initialize**
 
 ```bash
-INIT=$(gpd init quick "$DESCRIPTION")
+INIT=$(gpd --raw init quick "$DESCRIPTION")
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

@@ -141,7 +141,7 @@ If the workflow is resuming an existing manuscript, keep the active manuscript r
 
 The workflow handles all logic including:
 
-1. **Init** — Load project context via `gpd init phase-op`, check optional local compiler availability for smoke tests (cross-platform, including Windows MiKTeX/TeX Live), verify conventions
+1. **Init** — Load project context via `gpd --raw init phase-op`, check optional local compiler availability for smoke tests (cross-platform, including Windows MiKTeX/TeX Live), verify conventions
 2. **Load research digest** — Check for RESEARCH-DIGEST.md from milestone completion; map digest sections to paper structure; fall back to raw phase data if no digest found. Supports `--from-phases` flag to select specific phases.
 3. **Establish scope** — Target journal, paper type, key result (ONE sentence), audience, available artifacts
 4. **Catalog artifacts** — Gather derivations, numerical results, figures, literature, verification results from phases

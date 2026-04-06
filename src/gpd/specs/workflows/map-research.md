@@ -40,7 +40,7 @@ Load research mapping context:
 
 ```bash
 # Research-mapping initialization.
-INIT=$(gpd init map-research)
+INIT=$(gpd --raw init map-research)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

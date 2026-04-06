@@ -15,7 +15,7 @@ Read all files referenced by the invoking prompt's execution_context before star
 ## 1. Initialize and Load Context
 
 ```bash
-INIT=$(gpd init new-milestone)
+INIT=$(gpd --raw init new-milestone)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   exit 1

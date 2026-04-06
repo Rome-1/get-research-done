@@ -40,7 +40,7 @@ Preserve all report sections and formatting.
 ## Step 1: Init Context
 
 ```bash
-INIT=$(gpd init phase-op "$ARGUMENTS")
+INIT=$(gpd --raw init phase-op "$ARGUMENTS")
 ```
 
 Extract from init JSON: `phase_dir`, `phase_number`, `phase_name`, `phase_found`, `phase_slug`, `padded_phase`.
@@ -64,7 +64,7 @@ For standalone `PLAN.md` and numbered `*-PLAN.md`, check whether the matching `S
 Extract key results from standalone `SUMMARY.md` and numbered `*-SUMMARY.md` files using `summary-extract`:
 
 ```bash
-gpd summary-extract <path> --field one_liner --field key_results --field equations
+gpd --raw summary-extract <path> --field one_liner --field key_results --field equations
 ```
 
 ## Step 6: Verification Status

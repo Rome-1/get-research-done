@@ -47,7 +47,7 @@ A physics literature review is not a bibliography. It is a structured map of who
 **Load project context (if available):**
 
 ```bash
-INIT=$(gpd init progress --include state,config)
+INIT=$(gpd --raw init progress --include state,config)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

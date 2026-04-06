@@ -44,7 +44,7 @@ When `gpd --raw validate paper-quality --from-project .` runs, the journal is re
 **Load project context and resolve models:**
 
 ```bash
-INIT=$(gpd init phase-op)
+INIT=$(gpd --raw init phase-op)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

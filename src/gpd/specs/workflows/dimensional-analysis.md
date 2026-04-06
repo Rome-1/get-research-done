@@ -15,7 +15,7 @@ Load project state and conventions to determine the unit system:
 - Run:
 
 ```bash
-INIT=$(gpd init phase-op --include state,config)
+INIT=$(gpd --raw init phase-op --include state,config)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

@@ -17,7 +17,7 @@ Read these files using the file_read tool:
 **Load state and check line count:**
 
 ```bash
-INIT=$(gpd init progress --include state)
+INIT=$(gpd --raw init progress --include state)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.
@@ -52,12 +52,12 @@ If under 1500 and not forced (`--force` flag absent): offer to compact anyway or
 </step>
 
 <step name="run_compact">
-**Delegate to gpd state compact:**
+**Delegate to state compaction:**
 
 The gpd CLI handles the detailed archival logic:
 
 ```bash
-RESULT=$(gpd state compact)
+RESULT=$(gpd --raw state compact)
 if [ $? -ne 0 ]; then
   echo "ERROR: state compact failed: $RESULT"
   # STOP — STATE.md may be in an inconsistent state.
@@ -194,7 +194,7 @@ Remaining entries are all current-phase content. To further reduce:
 <failure_handling>
 
 - **STATE.md not found:** Nothing to compact. Exit with message.
-- **gpd state compact fails:** Check error output. Common causes: file lock held by another process, corrupt STATE.md parsing. Suggest: `cat GPD/STATE.md | head -5` to verify file is readable.
+- **Compaction fails:** Check error output. Common causes: file lock held by another process, corrupt STATE.md parsing. Suggest: `cat GPD/STATE.md | head -5` to verify file is readable.
 - **Required sections missing after compaction:** Restore from git immediately. Report the bug.
 - **STATE-ARCHIVE.md write fails:** Check disk space and permissions. STATE.md changes are preserved regardless.
 
@@ -203,7 +203,7 @@ Remaining entries are all current-phase content. To further reduce:
 <success_criteria>
 
 - [ ] STATE.md line count checked against thresholds
-- [ ] gpd state compact executed
+- [ ] Compaction executed
 - [ ] Archived entries moved to STATE-ARCHIVE.md
 - [ ] Compacted STATE.md retains all required sections
 - [ ] state.json synced after compaction

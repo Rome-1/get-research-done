@@ -12,7 +12,7 @@ Read all files referenced by the invoking prompt's execution_context before star
 **Initialize phase context:**
 
 ```bash
-INIT=$(gpd init phase-op "$PHASE")
+INIT=$(gpd --raw init phase-op "$PHASE")
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.
@@ -101,7 +101,7 @@ Present as table:
 For each summary artifact (`SUMMARY.md` or `*-SUMMARY.md`):
 
 ```bash
-gpd summary-extract <path> --field one_liner --field key_results --field equations
+gpd --raw summary-extract <path> --field one_liner --field key_results --field equations
 ```
 
 Collect:

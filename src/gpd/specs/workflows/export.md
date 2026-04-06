@@ -51,7 +51,7 @@ For each completed phase:
 1. Read all SUMMARY.md files:
 
 ```bash
-gpd summary-extract {path} --field one_liner --field key_results --field equations --field key_files
+gpd --raw summary-extract {path} --field one_liner --field key_results --field equations --field key_files
 ```
 
 2. Collect:

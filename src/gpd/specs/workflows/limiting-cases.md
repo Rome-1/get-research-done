@@ -15,7 +15,7 @@ Load project state and conventions to identify applicable limits:
 - Run:
 
 ```bash
-INIT=$(gpd init phase-op --include state,config)
+INIT=$(gpd --raw init phase-op --include state,config)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

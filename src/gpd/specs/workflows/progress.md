@@ -72,7 +72,7 @@ If user chooses sync: update STATE.md position, progress bar, and plan counters 
 **Load progress context (with file contents to avoid redundant reads):**
 
 ```bash
-INIT=$(gpd init progress --include state,roadmap,project,config)
+INIT=$(gpd --raw init progress --include state,roadmap,project,config)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.
@@ -155,9 +155,9 @@ Use this instead of manually reading/parsing ROADMAP.md.
 - Use `current_phase` and `next_phase` from roadmap analyze
 - Use phase-level `has_context` and `has_research` flags from analyze
 - Note `paused_at` if work was paused (from init context)
-- Count pending items: use `gpd init todos`
+- Count pending items: use `gpd --raw init todos`
 - Check for active debug sessions: `ls GPD/debug/*.md 2>/dev/null | grep -v resolved | wc -l`
-- Check state compaction health: `gpd state compact 2>&1` — if output contains `"warn": true`, STATE.md is growing large. Note this for the report.
+- Check state compaction health: `gpd --raw state compact 2>&1` — if output contains `"warn": true`, STATE.md is growing large. Note this for the report.
   </step>
 
 <step name="report">

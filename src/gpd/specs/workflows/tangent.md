@@ -12,7 +12,7 @@ Read all files referenced by the invoking prompt's execution_context before star
 Load enough project context to frame the tangent:
 
 ```bash
-INIT=$(gpd init progress --include roadmap,state)
+INIT=$(gpd --raw init progress --include roadmap,state)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

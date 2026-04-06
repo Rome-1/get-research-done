@@ -45,7 +45,7 @@ Determine what kind of explanation is needed.
 If project context exists, gather the minimum useful context packet before spawning the explainer.
 
 ```bash
-INIT=$(gpd init progress --include project,state,roadmap,config)
+INIT=$(gpd --raw init progress --include project,state,roadmap,config)
 ```
 
 Use the init payload to extract:

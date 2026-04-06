@@ -40,7 +40,7 @@ See {GPD_INSTALL_DIR}/templates/research.md for the RESEARCH.md template structu
 **Load project context and conventions:**
 
 ```bash
-INIT=$(gpd init phase-op --include state,config "${PHASE_ARG:-}")
+INIT=$(gpd --raw init phase-op --include state,config "${PHASE_ARG:-}")
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

@@ -12,7 +12,7 @@ Read all files referenced by the invoking prompt's execution_context before star
 **Load project conventions and state:**
 
 ```bash
-INIT=$(gpd init progress --include state,roadmap,config)
+INIT=$(gpd --raw init progress --include state,roadmap,config)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.
@@ -108,7 +108,7 @@ For each phase with `disk_status: "complete"` or `disk_status: "partial"`:
 ```bash
 # Extract conventions from summary-artifact frontmatter
 for SUMMARY in GPD/phases/${PHASE_DIR}/*SUMMARY.md; do
-  gpd summary-extract "$SUMMARY" --field conventions --field affects
+  gpd --raw summary-extract "$SUMMARY" --field conventions --field affects
 done
 ```
 

@@ -53,7 +53,7 @@ Targeted flags narrow the optional check mix only. They do NOT waive mandatory p
 If $ARGUMENTS contains a phase number, load context:
 
 ```bash
-INIT=$(gpd init verify-work "${PHASE_ARG}")
+INIT=$(gpd --raw init verify-work "${PHASE_ARG}")
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

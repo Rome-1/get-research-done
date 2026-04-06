@@ -36,7 +36,7 @@ Exit.
 Load project context and verify the target phase:
 
 ```bash
-INIT=$(gpd init phase-op "${target_phase}")
+INIT=$(gpd --raw init phase-op "${target_phase}")
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   # STOP — display the error to the user and do not proceed.

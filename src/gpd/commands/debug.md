@@ -43,7 +43,7 @@ ls GPD/debug/*.md 2>/dev/null | grep -v resolved | head -5
 ## 0. Initialize Context
 
 ```bash
-INIT=$(gpd init progress --include state,roadmap,config)
+INIT=$(gpd --raw init progress --include state,roadmap,config)
 ```
 
 Extract `commit_docs` from init JSON. Resolve debugger model:
