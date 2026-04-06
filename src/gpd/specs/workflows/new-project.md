@@ -822,7 +822,7 @@ Do not approve a scoping contract that strips decisive outputs, anchors, prior o
 If the only checks captured so far are limiting cases, sanity checks, or qualitative expectations, treat the contract as still underspecified unless the user explicitly states that these are the decisive standard.
 Missing-anchor notes preserve uncertainty, but they do not satisfy approval on their own. Do not offer approval until at least one concrete anchor, reference, prior-output constraint, or baseline is present.
 
-Before you ask for approval, reuse the raw-contract rules above for the second approval step. Keep the contract as a literal JSON object for the `project_contract` subsection of `templates/state-json-schema.md`; do not relax any schema, ID, enum, or closed-schema rules.
+Before you ask for approval, keep the contract as a literal JSON object for the `project_contract` subsection of `templates/state-json-schema.md`. Do not relax any schema, ID, enum, or closed-schema rules.
 
 Present a concise scoping summary and require explicit approval before downstream artifact generation:
 

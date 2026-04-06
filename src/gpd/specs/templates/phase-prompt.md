@@ -10,13 +10,9 @@ Before authoring or revising the `contract:` block, use the canonical schema bel
 
 @{GPD_INSTALL_DIR}/templates/plan-contract-schema.md
 
-Surface machine-checkable prerequisites up front with `tool_requirements`; keep human-only setup in `researcher_setup`. `tool_requirements[].id` values must be unique within the list. Gap-closure plans still use `type: execute`; mark verification-repair plans with `gap_closure: true` instead of inventing a third plan type. Keep proofs auditable in the body when a plan is proof-bearing, and rerun stale proof audits before `status: passed`.
-
-Surface hard validation requirements before the body so they are visible on the plan surface. When a plan genuinely depends on specialized tooling outside the guaranteed Python/SymPy baseline, declare it in frontmatter `tool_requirements` before drafting task prose. Use the included schema for contract shape, cardinality, and enum defaults.
-The defaultable semantic fields still exist in the contract surface: `observables[].kind`, `deliverables[].kind`, `acceptance_tests[].kind`, `references[].kind`, `references[].role`, and `links[].relation`. They default to `other`, but the more specific value remains mandatory when the plan already knows it. For non-scoping plans, keep the contract concretely grounded rather than placeholder-only.
-Treat `approach_policy` as execution policy only; it does not satisfy grounding on its own. Grounding still needs explicit anchors from the contract schema; do not omit required references.
-`must_surface` uses YAML booleans. When `must_surface` is `true`, keep `required_actions[]` and `applies_to[]` non-empty. `carry_forward_to[]` is free-text workflow scope only and must not be overloaded with contract IDs. `uncertainty_markers` must stay a YAML object, not a string or list.
-For `observables[].kind: proof_obligation`, name the theorem or claim plus the hypotheses/parameter regime explicitly so audits can catch silently specialized parameters. If a proof or theorem statement changes after a proof audit, treat that audit as stale before `status: passed` is possible for the affected target.
+Surface machine-checkable prerequisites up front with `tool_requirements`; keep human-only setup in `researcher_setup`. When a plan genuinely depends on specialized tooling outside the guaranteed Python/SymPy baseline, declare it in frontmatter `tool_requirements` before drafting task prose. Use the included schema for contract shape, cardinality, and enum defaults. `tool_requirements[].id` values must be unique within the list. Gap-closure plans still use `type: execute`; mark verification-repair plans with `gap_closure: true` instead of inventing a third plan type. Keep proofs auditable in the body when a plan is proof-bearing, and rerun stale proof audits before `status: passed`.
+The defaultable semantic fields still exist in the contract surface: `observables[].kind`, `deliverables[].kind`, `acceptance_tests[].kind`, `references[].kind`, `references[].role`, and `links[].relation`. They default to `other`, but the more specific value remains mandatory when the plan already knows it. For non-scoping plans, keep the contract concretely grounded rather than placeholder-only. `approach_policy` stays execution policy only; grounding still needs explicit anchors from the contract schema.
+`must_surface` uses YAML booleans. When `must_surface` is `true`, keep `required_actions[]` and `applies_to[]` non-empty. `carry_forward_to[]` is free-text workflow scope only and must not be overloaded with contract IDs. `uncertainty_markers` must stay a YAML object, not a string or list. For `observables[].kind: proof_obligation`, name the theorem or claim plus the hypotheses/parameter regime explicitly so audits can catch silently specialized parameters. If a proof or theorem statement changes after a proof audit, treat that audit as stale before `status: passed` is possible for the affected target.
 
 ---
 
@@ -217,8 +213,6 @@ If the plan is intentionally scoping-only, keep that limited shape explicit and 
 - Full contract: required when the plan will execute, verify, or publish a concrete result.
 - A reduced contract still needs `scope`, `contract.context_intake`, and `uncertainty_markers` explicit, plus at least one target, open question, or carry-forward input.
 - Light mode changes the body only; it does not change the contract classifier above.
-
-When a plan genuinely depends on specialized tooling outside the guaranteed Python/SymPy baseline, declare it in frontmatter `tool_requirements` before the body is authored instead of hiding it in task prose. The validator accepts a closed tool vocabulary today: `wolfram` and `command` (plus documented Wolfram aliases that normalize back to `wolfram`). `tool_requirements[].id` values must be unique within the list. For `tool: command`, a non-empty `command` field is mandatory; for non-`command` tools, `command` must be omitted. `required` defaults to `true` when omitted, and a declared `fallback` does not turn a missing required tool into a non-blocking preflight check.
 
 ---
 

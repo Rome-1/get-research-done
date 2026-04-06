@@ -30,10 +30,9 @@ def test_new_project_prompt_surfaces_the_canonical_state_schema_for_project_cont
 
     assert "templates/state-json-schema.md" in new_project_text
     assert (
-        "Before you ask for approval, reuse the raw-contract rules above for the second approval step. "
-        "Keep the contract as a literal JSON object for the `project_contract` subsection of "
-        "`templates/state-json-schema.md`; do not relax any schema, ID, enum, or closed-schema "
-        "rules."
+        "Before you ask for approval, keep the contract as a literal JSON object for the "
+        "`project_contract` subsection of `templates/state-json-schema.md`. Do not relax any "
+        "schema, ID, enum, or closed-schema rules."
         in new_project_text
     )
     assert "Do not approve a scoping contract that strips decisive outputs, anchors, prior outputs, or review/stop triggers down to generic placeholders." in new_project_text
@@ -91,8 +90,8 @@ def test_new_project_contract_rule_block_is_not_duplicated() -> None:
 
     assert len(show_block) > 10
     assert new_project_text.count("Before you show the approval gate, build the raw contract as a literal JSON object") == 1
-    assert "Before you ask for approval, reuse the raw-contract rules above for the second approval step." in new_project_text
-    assert "Before you ask for approval, build the raw contract as a literal JSON object" not in new_project_text
+    assert new_project_text.count("Before you ask for approval, keep the contract as a literal JSON object") == 1
+    assert "reuse the raw-contract rules above for the second approval step" not in new_project_text
 
 
 def test_state_schema_surfaces_the_exact_approved_mode_grounding_rule() -> None:
