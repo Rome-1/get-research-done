@@ -1234,6 +1234,23 @@ def test_contributing_docs_cover_release_validation_flow() -> None:
     assert "`Publish release`" not in content
 
 
+def test_source_checkout_cli_docs_use_uv() -> None:
+    repo_root = _repo_root()
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    contributing = (repo_root / "CONTRIBUTING.md").read_text(encoding="utf-8")
+
+    assert "Working from a source checkout?" in readme
+    assert "uv sync --dev" in readme
+    assert "uv run gpd --help" in readme
+    assert "uv run gpd install <runtime> --local" in readme
+    assert "pyproject.toml" in readme
+
+    assert "## Local CLI From This Checkout" in contributing
+    assert "uv run gpd --help" in contributing
+    assert "uv run gpd install <runtime> --local" in contributing
+    assert "python -m pip install -e ." not in contributing
+
+
 def test_gitignore_covers_repo_local_npm_cache() -> None:
     repo_root = _repo_root()
     assert ".npm-cache/" in (repo_root / ".gitignore").read_text(encoding="utf-8")
