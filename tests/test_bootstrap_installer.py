@@ -54,6 +54,9 @@ _RUNTIME_MAP_RESEARCH_COMMANDS = {name: adapter.map_research_command for name, a
 _RUNTIME_RESUME_WORK_COMMANDS = {name: adapter.format_command("resume-work") for name, adapter in _RUNTIME_ADAPTERS.items()}
 _RUNTIME_SUGGEST_NEXT_COMMANDS = {name: adapter.format_command("suggest-next") for name, adapter in _RUNTIME_ADAPTERS.items()}
 _RUNTIME_PAUSE_WORK_COMMANDS = {name: adapter.format_command("pause-work") for name, adapter in _RUNTIME_ADAPTERS.items()}
+_RUNTIME_HELP_EXAMPLE_DESCRIPTORS = tuple(
+    descriptor for descriptor in _RUNTIME_DESCRIPTORS if descriptor.installer_help_example_scope is not None
+)
 _CODEX_RUNTIME_NAME = PRIMARY_RUNTIME
 _CLAUDE_RUNTIME_NAME, _CLAUDE_RUNTIME_ALIAS = runtime_with_multiword_alias(exclude=(_CODEX_RUNTIME_NAME,))
 _OPENCODE_RUNTIME_NAME, _OPENCODE_RUNTIME_ALIAS = runtime_with_multiword_alias(
@@ -1011,10 +1014,20 @@ const { validateRuntimeCatalog } = require("./bin/install.js");
 const catalog = require("./src/gpd/adapters/runtime_catalog.json");
 
 assert.doesNotThrow(() => validateRuntimeCatalog(catalog));
-assert.equal(catalog.find((runtime) => runtime.runtime_name === "claude-code").installer_help_example_scope, "global");
-assert.equal(catalog.find((runtime) => runtime.runtime_name === "codex").installer_help_example_scope, "local");
-assert.equal(catalog.find((runtime) => runtime.runtime_name === "claude-code").validated_command_surface, "public_runtime_slash_command");
-assert.equal(catalog.find((runtime) => runtime.runtime_name === "codex").validated_command_surface, "public_runtime_dollar_command");
+
+const helpExampleRuntimes = catalog.filter((runtime) => runtime.installer_help_example_scope);
+assert.equal(helpExampleRuntimes.length, 2);
+for (const runtime of helpExampleRuntimes) {
+  if (runtime.installer_help_example_scope === "global") {
+    assert.equal(runtime.validated_command_surface, "public_runtime_slash_command");
+    continue;
+  }
+  if (runtime.installer_help_example_scope === "local") {
+    assert.equal(runtime.validated_command_surface, "public_runtime_dollar_command");
+    continue;
+  }
+  assert.fail(`unexpected installer_help_example_scope: ${runtime.installer_help_example_scope}`);
+}
 
 const explicitSurfaceCatalog = JSON.parse(JSON.stringify(catalog));
 explicitSurfaceCatalog[0].public_command_surface_prefix = explicitSurfaceCatalog[0].command_prefix;
@@ -1288,8 +1301,10 @@ def test_bootstrap_help_uses_catalog_driven_example_runtimes() -> None:
     )
 
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
-    assert "# Install for Claude Code globally" in result.stdout
-    assert "# Install for Codex locally" in result.stdout
+    for descriptor in _RUNTIME_HELP_EXAMPLE_DESCRIPTORS:
+        assert (
+            f"# Install for {descriptor.display_name} {descriptor.installer_help_example_scope}" in result.stdout
+        )
     assert "startsWith(\"$\")" not in result.stdout
 
 

@@ -216,6 +216,7 @@ _STRICT_SHARED_CORE_RUNTIME_SURFACE_PATHS = tuple(
     for path in _SHARED_TEST_RUNTIME_SURFACE_PATHS
     if path.relative_to(REPO_ROOT).parts[:2] in {("tests", "core"), ("tests", "mcp")}
 )
+_STRICT_SHARED_CORE_RUNTIME_SURFACE_PATHS = (*_STRICT_SHARED_CORE_RUNTIME_SURFACE_PATHS, REPO_ROOT / "tests/test_bootstrap_installer.py")
 _TEXT_SURFACE_SUFFIXES = {".json", ".md", ".py"}
 _SHARED_GENERIC_PROVIDER_MODEL_TEST_PATHS = (
     REPO_ROOT / "tests/core/test_health.py",
@@ -587,6 +588,36 @@ def test_shared_core_runtime_surface_tests_do_not_hardcode_single_runtime_catalo
 
     assert leaks == [], (
         "Shared core runtime-surface tests should derive runtime literals from the runtime catalog:\n"
+        f"{_format_failures(leaks)}"
+    )
+
+
+def test_bootstrap_installer_does_not_hardcode_runtime_name_or_display_name_literals() -> None:
+    bootstrap_path = REPO_ROOT / "tests/test_bootstrap_installer.py"
+    runtime_literals = tuple(
+        sorted(
+            {
+                value
+                for descriptor in _RUNTIME_DESCRIPTORS
+                for value in (descriptor.runtime_name, descriptor.display_name)
+                if value
+            }
+        )
+    )
+    runtime_literal_pattern = re.compile(
+        r'(?<![A-Za-z0-9_.-])(?:'
+        + "|".join(re.escape(value) for value in runtime_literals)
+        + r')(?![A-Za-z0-9_.-])'
+    )
+
+    leaks = [
+        (bootstrap_path, line_no, line)
+        for line_no, line in enumerate(bootstrap_path.read_text(encoding="utf-8").splitlines(), start=1)
+        if runtime_literal_pattern.search(line)
+    ]
+
+    assert leaks == [], (
+        "Bootstrap installer tests should derive runtime examples from the runtime catalog instead of hardcoding names:\n"
         f"{_format_failures(leaks)}"
     )
 
