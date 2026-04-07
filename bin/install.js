@@ -53,7 +53,7 @@ const brandDisplayName = "Get Physics Done";
 const brandOwner = "Physical Superintelligence PBC";
 const brandOwnerShort = "PSI";
 const brandCopyrightYear = 2026;
-const productPositioning = "Open-source AI copilot for physics research";
+const productPositioning = "Open-source agentic AI system for physics research";
 
 let bootstrapProbeOverridesCache = undefined;
 

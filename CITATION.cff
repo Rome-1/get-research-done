@@ -5,7 +5,7 @@ type: software
 version: 1.1.0
 date-released: '2026-03-15'
 license: Apache-2.0
-abstract: "An open-source AI copilot for physics research that structures, executes, verifies, and documents research workflows across multiple AI runtimes."
+abstract: "An open-source agentic AI system for physics research that structures, executes, verifies, and documents research workflows across multiple AI runtimes."
 authors:
   - name: "Physical Superintelligence PBC"
     affiliation: "Physical Superintelligence PBC"

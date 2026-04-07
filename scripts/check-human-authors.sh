@@ -13,7 +13,7 @@ set -e
 RED='\033[0;31m'
 NC='\033[0m'
 
-NON_HUMAN_COAUTHOR_PATTERN='Co-Authored-By:.*\(Claude\|Anthropic\|OpenAI\|GPT\|Gemini\|Copilot\|noreply@anthropic\.com\|noreply@openai\.com\|github-actions\)'
+NON_HUMAN_COAUTHOR_PATTERN='Co-Authored-By:.*\(Claude\|Anthropic\|OpenAI\|GPT\|Gemini\|C[oO][pP][iI][lL][oO][tT]\|noreply@anthropic\.com\|noreply@openai\.com\|github-actions\)'
 
 # --- Mode 1: commit-msg hook (single file argument) ---
 if [ -f "${1:-}" ]; then
