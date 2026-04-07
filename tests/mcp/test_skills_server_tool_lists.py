@@ -147,6 +147,63 @@ def test_get_skill_command_surfaces_staged_loading_sidecar() -> None:
     assert result["structured_metadata_authority"]["staged_loading"] == "mirrored"
 
 
+def test_get_skill_plan_phase_surfaces_staged_loading_sidecar() -> None:
+    from gpd.mcp.servers.skills_server import get_skill
+
+    staged_loading = WorkflowStageManifest(
+        schema_version=1,
+        workflow_id="plan-phase",
+        stages=(
+            WorkflowStage(
+                id="phase_bootstrap",
+                order=1,
+                purpose="phase lookup",
+                mode_paths=("workflows/plan-phase.md",),
+                required_init_fields=("researcher_model",),
+                loaded_authorities=("workflows/plan-phase.md",),
+                conditional_authorities=(),
+                must_not_eager_load=("references/ui/ui-brand.md",),
+                allowed_tools=("file_read",),
+                writes_allowed=(),
+                produced_state=(),
+                next_stages=("research_routing",),
+                checkpoints=(),
+            ),
+        ),
+    )
+    command = CommandDef(
+        name="gpd:plan-phase",
+        description="Plan.",
+        argument_hint="",
+        agent="gpd-planner",
+        requires={},
+        allowed_tools=["file_read"],
+        content="Command body.",
+        path="/tmp/gpd-plan-phase.md",
+        source="commands",
+        staged_loading=staged_loading,
+    )
+    skill = SkillDef(
+        name="gpd-plan-phase",
+        description="Plan.",
+        content="Command body.",
+        category="planning",
+        path="/tmp/gpd-plan-phase.md",
+        source_kind="command",
+        registry_name="plan-phase",
+    )
+
+    with (
+        patch("gpd.mcp.servers.skills_server._resolve_skill", return_value=skill),
+        patch("gpd.mcp.servers.skills_server.content_registry.get_command", return_value=command),
+    ):
+        result = get_skill("gpd-plan-phase")
+
+    assert result["staged_loading"]["workflow_id"] == "plan-phase"
+    assert result["staged_loading"]["stages"][0]["id"] == "phase_bootstrap"
+    assert result["structured_metadata_authority"]["staged_loading"] == "mirrored"
+
+
 def test_get_skill_verify_work_surfaces_staged_loading_sidecar() -> None:
     from gpd.mcp.servers.skills_server import get_skill
 

@@ -34,7 +34,6 @@ def test_planner_workflows_expand_the_shared_planner_template_once_per_route() -
     verify_work_raw = _read("verify-work.md")
     planner_agent_raw = (AGENTS_DIR / "gpd-planner.md").read_text(encoding="utf-8")
 
-    plan_phase = _expand("plan-phase.md")
     quick = _expand("quick.md")
     verify_work = _expand("verify-work.md")
     planner_template = (TEMPLATES_DIR / "planner-subagent-prompt.md").read_text(encoding="utf-8")
@@ -43,7 +42,7 @@ def test_planner_workflows_expand_the_shared_planner_template_once_per_route() -
         assert "templates/planner-subagent-prompt.md" in raw_text
         assert "# Planner Subagent Prompt Template" not in raw_text
 
-    assert plan_phase_raw.count("templates/planner-subagent-prompt.md") == 3
+    assert plan_phase_raw.count("templates/planner-subagent-prompt.md") == 2
     assert verify_work_raw.count("templates/planner-subagent-prompt.md") == 2
     assert "templates/planner-subagent-prompt.md" not in quick_raw
     assert planner_agent_raw.count("@{GPD_INSTALL_DIR}/templates/phase-prompt.md") == 1
@@ -53,11 +52,6 @@ def test_planner_workflows_expand_the_shared_planner_template_once_per_route() -
     assert planner_template.count("## Standard Planning Template") == 1
     assert planner_template.count("## Revision Template") == 1
     assert planner_template.count("@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md") == 1
-
-    assert "# Planner Subagent Prompt Template" in plan_phase
-    assert plan_phase.count("# Planner Subagent Prompt Template") == 2
-    assert "## Standard Planning Template" in plan_phase
-    assert "## Revision Template" in plan_phase
     assert "project_contract_gate.authoritative" in quick
     assert verify_work.count("# Planner Subagent Prompt Template") == 2
     assert "## Standard Planning Template" in verify_work

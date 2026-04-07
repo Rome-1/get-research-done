@@ -4169,6 +4169,11 @@ def init_execute_phase(
 def init_plan_phase(
     phase: str | None = typer.Argument(None, help="Phase number"),
     include: str | None = typer.Option(None, "--include", help="Additional context includes"),
+    stage: str | None = typer.Option(
+        None,
+        "--stage",
+        help="Load the staged plan-phase context for a specific stage id.",
+    ),
 ) -> None:
     """Assemble context for planning a phase."""
     from gpd.core.context import init_plan_phase
@@ -4178,7 +4183,10 @@ def init_plan_phase(
         command_name="gpd init plan-phase",
         allowed=_INIT_PLAN_PHASE_INCLUDES,
     )
-    _output(init_plan_phase(_get_cwd(), phase, includes=includes))
+    try:
+        _output(init_plan_phase(_get_cwd(), phase, includes=includes, stage=stage))
+    except ValueError as exc:
+        _error(str(exc))
 
 
 @init_app.command("new-project")

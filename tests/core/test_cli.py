@@ -5562,6 +5562,93 @@ def test_init_verify_work_forwards_stage_option(monkeypatch: pytest.MonkeyPatch)
     assert stage == "session_router"
 
 
+def test_init_plan_phase_preserves_plain_call_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[Path, str | None, set[str] | None, str | None]] = []
+
+    def fake_init(
+        cwd: Path,
+        phase: str | None,
+        includes: set[str] | None = None,
+        stage: str | None = None,
+    ):
+        calls.append((cwd, phase, includes, stage))
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"context": "..."}
+        return mock_result
+
+    monkeypatch.setattr("gpd.core.context.init_plan_phase", fake_init)
+    result = runner.invoke(app, ["init", "plan-phase", "02", "--include", "state,research"])
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    cwd, phase, includes, stage = calls[0]
+    assert cwd == cli_module._get_cwd()
+    assert phase == "02"
+    assert includes == {"state", "research"}
+    assert stage is None
+
+
+def test_init_plan_phase_forwards_stage_option(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[Path, str | None, set[str] | None, str | None]] = []
+
+    def fake_init(
+        cwd: Path,
+        phase: str | None,
+        includes: set[str] | None = None,
+        stage: str | None = None,
+    ):
+        calls.append((cwd, phase, includes, stage))
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"context": "..."}
+        return mock_result
+
+    monkeypatch.setattr("gpd.core.context.init_plan_phase", fake_init)
+    result = runner.invoke(app, ["init", "plan-phase", "02", "--stage", "phase_bootstrap"])
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    cwd, phase, includes, stage = calls[0]
+    assert cwd == cli_module._get_cwd()
+    assert phase == "02"
+    assert includes == set()
+    assert stage == "phase_bootstrap"
+
+
+def test_init_plan_phase_rejects_stage_and_include_mix(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_init(
+        cwd: Path,
+        phase: str | None,
+        includes: set[str] | None = None,
+        stage: str | None = None,
+    ):
+        raise ValueError(
+            "gpd init plan-phase does not allow --include together with --stage; "
+            "stage payloads already declare their required context."
+        )
+
+    monkeypatch.setattr("gpd.core.context.init_plan_phase", fake_init)
+    result = runner.invoke(app, ["init", "plan-phase", "02", "--include", "state", "--stage", "phase_bootstrap"])
+
+    assert result.exit_code == 1
+    assert "does not allow --include together with --stage" in result.output
+
+
+def test_init_plan_phase_rejects_invalid_stage(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_init(
+        cwd: Path,
+        phase: str | None,
+        includes: set[str] | None = None,
+        stage: str | None = None,
+    ):
+        raise ValueError("Unknown plan-phase stage 'bogus'. Allowed values: phase_bootstrap.")
+
+    monkeypatch.setattr("gpd.core.context.init_plan_phase", fake_init)
+    result = runner.invoke(app, ["init", "plan-phase", "02", "--stage", "bogus"])
+
+    assert result.exit_code == 1
+    assert "Unknown plan-phase stage 'bogus'" in result.output
+
+
 def test_init_resume_help_surfaces_recovery_snapshot_entrypoint() -> None:
     result = runner.invoke(app, ["init", "resume", "--help"])
 

@@ -73,6 +73,101 @@ def _create_config(tmp_path: Path, config: dict) -> Path:
     return config_path
 
 
+_PLAN_PHASE_STAGE_BOOTSTRAP_FIELDS = [
+    "researcher_model",
+    "planner_model",
+    "checker_model",
+    "research_enabled",
+    "plan_checker_enabled",
+    "commit_docs",
+    "autonomy",
+    "research_mode",
+    "phase_found",
+    "phase_dir",
+    "phase_number",
+    "phase_name",
+    "phase_slug",
+    "padded_phase",
+    "has_research",
+    "has_context",
+    "has_plans",
+    "plan_count",
+    "planning_exists",
+    "roadmap_exists",
+    "project_contract",
+    "project_contract_gate",
+    "project_contract_load_info",
+    "project_contract_validation",
+    "platform",
+]
+
+_PLAN_PHASE_STAGE_AUTHORING_FIELDS = _PLAN_PHASE_STAGE_BOOTSTRAP_FIELDS + [
+    "contract_intake",
+    "effective_reference_intake",
+    "selected_protocol_bundle_ids",
+    "protocol_bundle_count",
+    "protocol_bundle_context",
+    "protocol_bundle_verifier_extensions",
+    "active_reference_context",
+    "reference_artifact_files",
+    "reference_artifacts_content",
+    "literature_review_files",
+    "literature_review_count",
+    "research_map_reference_files",
+    "research_map_reference_count",
+    "derived_manuscript_proof_review_status",
+    "state_content",
+    "roadmap_content",
+    "requirements_content",
+    "context_content",
+    "research_content",
+    "experiment_design_content",
+    "verification_content",
+    "validation_content",
+]
+
+
+class _FakePlanPhaseStage:
+    def __init__(self, stage_id: str, required_init_fields: list[str]) -> None:
+        self.id = stage_id
+        self.required_init_fields = required_init_fields
+
+
+class _FakePlanPhaseManifest:
+    def __init__(self) -> None:
+        self.workflow_id = "plan-phase"
+        self._stages = {
+            "phase_bootstrap": _FakePlanPhaseStage("phase_bootstrap", _PLAN_PHASE_STAGE_BOOTSTRAP_FIELDS),
+            "research_routing": _FakePlanPhaseStage("research_routing", _PLAN_PHASE_STAGE_BOOTSTRAP_FIELDS),
+            "planner_authoring": _FakePlanPhaseStage("planner_authoring", _PLAN_PHASE_STAGE_AUTHORING_FIELDS),
+            "checker_revision": _FakePlanPhaseStage("checker_revision", _PLAN_PHASE_STAGE_AUTHORING_FIELDS),
+        }
+
+    def stage_by_id(self, stage_id: str) -> _FakePlanPhaseStage:
+        return self._stages[stage_id]
+
+    def stage_ids(self) -> list[str]:
+        return list(self._stages)
+
+    def staged_loading_payload(self, stage_id: str) -> dict[str, object]:
+        return {"workflow_id": self.workflow_id, "stage_id": stage_id}
+
+
+def _install_fake_plan_phase_manifest(monkeypatch: pytest.MonkeyPatch) -> _FakePlanPhaseManifest:
+    manifest = _FakePlanPhaseManifest()
+
+    def fake_load_workflow_stage_manifest(
+        workflow_id: str,
+        allowed_tools: set[str] | None = None,
+        known_init_fields: set[str] | None = None,
+    ) -> _FakePlanPhaseManifest:
+        assert workflow_id == "plan-phase"
+        return manifest
+
+    monkeypatch.setattr("gpd.core.workflow_staging.load_workflow_stage_manifest", fake_load_workflow_stage_manifest)
+    return manifest
+
+
 def _write_state_intent_recovery_files(project_root: Path) -> ProjectLayout:
     from gpd.core.state import default_state_dict
 
@@ -1123,6 +1218,93 @@ class TestInitPlanPhase:
         assert ctx["has_research"] is True
         assert ctx["has_plans"] is False
         assert ctx["padded_phase"] == "02"
+        assert "staged_loading" not in ctx
+
+    def test_stage_phase_bootstrap_returns_only_bootstrap_payload(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "02-analysis")
+        _write_project_contract_state(tmp_path)
+        _install_fake_plan_phase_manifest(monkeypatch)
+
+        ctx = init_plan_phase(tmp_path, "2", stage="phase_bootstrap")
+
+        assert ctx["phase_found"] is True
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert ctx["staged_loading"]["stage_id"] == "phase_bootstrap"
+        assert "contract_intake" not in ctx
+        assert "active_reference_context" not in ctx
+        assert "reference_artifacts_content" not in ctx
+        assert "state_content" not in ctx
+
+    def test_stage_planner_authoring_surfaces_reference_runtime_and_file_context(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _setup_project(tmp_path)
+        phase_dir = _create_phase_dir(tmp_path, "02-analysis")
+        _write_project_contract_state(tmp_path)
+        _write_literature_review_anchor_file(tmp_path)
+        _write_research_map_anchor_files(tmp_path)
+        (phase_dir / "02-CONTEXT.md").write_text("# Context\nLocked scope.\n", encoding="utf-8")
+        (phase_dir / "02-RESEARCH.md").write_text("# Research\nMethod comparison.\n", encoding="utf-8")
+        (phase_dir / "02-VERIFICATION.md").write_text("# Verification\nGap notes.\n", encoding="utf-8")
+        (phase_dir / "02-VALIDATION.md").write_text("# Validation\nChecks.\n", encoding="utf-8")
+        manifest = _install_fake_plan_phase_manifest(monkeypatch)
+
+        ctx = init_plan_phase(tmp_path, "2", stage="planner_authoring")
+        stage = manifest.stage_by_id("planner_authoring")
+
+        assert ctx["staged_loading"]["stage_id"] == "planner_authoring"
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["contract_intake"]["must_read_refs"] == ["ref-benchmark"]
+        assert "[ref-benchmark]" in ctx["active_reference_context"]
+        assert "Reference and Anchor Map" in ctx["reference_artifacts_content"]
+        assert "Universal crossing window" in ctx["reference_artifacts_content"]
+        assert "Locked scope." in ctx["context_content"]
+        assert "Method comparison." in ctx["research_content"]
+        assert "Gap notes." in ctx["verification_content"]
+        assert "Checks." in ctx["validation_content"]
+
+    def test_stage_checker_revision_uses_fresh_stage_payload(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _setup_project(tmp_path)
+        phase_dir = _create_phase_dir(tmp_path, "02-analysis")
+        _write_project_contract_state(tmp_path)
+        _write_literature_review_anchor_file(tmp_path)
+        _write_research_map_anchor_files(tmp_path)
+        (phase_dir / "02-CONTEXT.md").write_text("# Context\nLocked scope.\n", encoding="utf-8")
+        (phase_dir / "02-RESEARCH.md").write_text("# Research\nMethod comparison.\n", encoding="utf-8")
+        (phase_dir / "02-VERIFICATION.md").write_text("# Verification\nGap notes.\n", encoding="utf-8")
+        (phase_dir / "02-VALIDATION.md").write_text("# Validation\nChecks.\n", encoding="utf-8")
+        manifest = _install_fake_plan_phase_manifest(monkeypatch)
+
+        ctx = init_plan_phase(tmp_path, "2", stage="checker_revision")
+        stage = manifest.stage_by_id("checker_revision")
+
+        assert ctx["staged_loading"]["stage_id"] == "checker_revision"
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert "[ref-benchmark]" in ctx["active_reference_context"]
+        assert "Reference and Anchor Map" in ctx["reference_artifacts_content"]
+        assert "Universal crossing window" in ctx["reference_artifacts_content"]
+        assert "Locked scope." in ctx["context_content"]
+        assert "Method comparison." in ctx["research_content"]
+        assert "Gap notes." in ctx["verification_content"]
+        assert "Checks." in ctx["validation_content"]
+
+    def test_plan_phase_stage_rejects_include_mix(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "02-analysis")
+        _install_fake_plan_phase_manifest(monkeypatch)
+
+        with pytest.raises(ValueError, match="does not allow --include together with --stage"):
+            init_plan_phase(tmp_path, "2", includes={"state"}, stage="phase_bootstrap")
+
+    def test_plan_phase_stage_rejects_unknown_stage(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "02-analysis")
+        _install_fake_plan_phase_manifest(monkeypatch)
+
+        with pytest.raises(ValueError, match="Unknown plan-phase stage 'bogus'"):
+            init_plan_phase(tmp_path, "2", stage="bogus")
 
     def test_includes_research(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)

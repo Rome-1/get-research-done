@@ -414,8 +414,8 @@ def test_plan_phase_prompt_is_a_thin_dispatch_shell() -> None:
     command = (REPO_ROOT / "src/gpd/commands/plan-phase.md").read_text(encoding="utf-8")
 
     assert "@{GPD_INSTALL_DIR}/workflows/plan-phase.md" in command
-    assert "@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md" in command
-    assert "@{GPD_INSTALL_DIR}/references/ui/ui-brand.md" in command
+    assert "@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md" not in command
+    assert "@{GPD_INSTALL_DIR}/references/ui/ui-brand.md" not in command
     assert "Follow the included workflow file exactly." in command
     assert "agent: gpd-planner" in command
     assert "What Makes a Good Physics Plan" not in command

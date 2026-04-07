@@ -36,9 +36,9 @@ from gpd.core.review_contract_prompt import (
 )
 from gpd.core.strict_yaml import load_strict_yaml
 from gpd.core.workflow_staging import (
-    NEW_PROJECT_INIT_FIELDS,
     WorkflowStageManifest,
     invalidate_workflow_stage_manifest_cache,
+    known_init_fields_for_workflow,
     load_workflow_stage_manifest_from_path,
     resolve_workflow_stage_manifest_path,
 )
@@ -982,12 +982,15 @@ def _load_command_staged_loading(path: Path, *, allowed_tools: list[str]) -> Wor
     manifest_path = resolve_workflow_stage_manifest_path(path.stem)
     if not manifest_path.is_file():
         return None
-    known_init_fields = NEW_PROJECT_INIT_FIELDS if path.stem == "new-project" else None
+    canonical_manifest_path = (SPECS_DIR / "workflows" / f"{path.stem}-stage-manifest.json").resolve(strict=False)
+    canonical_command_path = (_PKG_ROOT / "commands" / path.name).resolve(strict=False)
+    if path.resolve(strict=False) != canonical_command_path and manifest_path.resolve(strict=False) == canonical_manifest_path:
+        return None
     return load_workflow_stage_manifest_from_path(
         manifest_path,
         expected_workflow_id=path.stem,
         allowed_tools=allowed_tools,
-        known_init_fields=known_init_fields,
+        known_init_fields=known_init_fields_for_workflow(path.stem),
     )
 
 

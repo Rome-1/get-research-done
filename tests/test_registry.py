@@ -1815,6 +1815,90 @@ class TestPublicAPI:
         assert cmd.staged_loading.stage_ids() == ("scope_intake", "scope_approval", "post_scope")
         assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/new-project.md",)
 
+    def test_get_command_plan_phase_surfaces_staged_loading_manifest(self) -> None:
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as tmp:
+            commands_dir = Path(tmp) / "commands"
+            commands_dir.mkdir()
+            (commands_dir / "plan-phase.md").write_text(
+                "---\n"
+                "name: gpd:plan-phase\n"
+                "description: Plan phase\n"
+                "allowed-tools:\n"
+                "  - file_read\n"
+                "---\n"
+                "Body.",
+                encoding="utf-8",
+            )
+
+            manifest_path = Path(tmp) / "plan-phase-stage-manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "workflow_id": "plan-phase",
+                        "stages": [
+                            {
+                                "id": "phase_bootstrap",
+                                "order": 1,
+                                "purpose": "phase lookup and routing",
+                                "mode_paths": ["workflows/plan-phase.md"],
+                                "required_init_fields": [],
+                                "loaded_authorities": ["workflows/plan-phase.md"],
+                                "conditional_authorities": [],
+                                "must_not_eager_load": ["references/ui/ui-brand.md"],
+                                "allowed_tools": ["file_read"],
+                                "writes_allowed": [],
+                                "produced_state": [],
+                                "next_stages": ["research_routing"],
+                                "checkpoints": [],
+                            },
+                            {
+                                "id": "planner_authoring",
+                                "order": 2,
+                                "purpose": "planner handoff",
+                                "mode_paths": ["workflows/plan-phase.md"],
+                                "required_init_fields": ["researcher_model"],
+                                "loaded_authorities": [
+                                    "workflows/plan-phase.md",
+                                    "templates/planner-subagent-prompt.md",
+                                ],
+                                "conditional_authorities": [],
+                                "must_not_eager_load": ["references/ui/ui-brand.md"],
+                                "allowed_tools": ["file_read"],
+                                "writes_allowed": ["GPD/phases"],
+                                "produced_state": [],
+                                "next_stages": [],
+                                "checkpoints": [],
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            original_resolve_manifest_path = registry.resolve_workflow_stage_manifest_path
+            monkeypatch = pytest.MonkeyPatch()
+            monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
+            monkeypatch.setattr(
+                registry,
+                "resolve_workflow_stage_manifest_path",
+                lambda workflow_id: manifest_path if workflow_id == "plan-phase" else original_resolve_manifest_path(workflow_id),
+            )
+            try:
+                registry.invalidate_cache()
+                cmd = registry.get_command("plan-phase")
+            finally:
+                monkeypatch.undo()
+                registry.invalidate_cache()
+
+            assert cmd.staged_loading is not None
+            assert cmd.staged_loading.workflow_id == "plan-phase"
+            assert cmd.staged_loading.stage_ids() == ("phase_bootstrap", "planner_authoring")
+            assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/plan-phase.md",)
+            assert "templates/planner-subagent-prompt.md" in cmd.staged_loading.stages[1].loaded_authorities
+
     def test_get_command_verify_work_surfaces_staged_loading_manifest(
         self,
         tmp_path: Path,

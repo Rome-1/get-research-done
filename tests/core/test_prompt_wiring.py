@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Literal
@@ -13,6 +14,7 @@ from gpd.adapters.install_utils import expand_at_includes
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.contracts import ResearchContract, VerificationEvidence
 from gpd.core.frontmatter import validate_frontmatter
+from gpd.core.workflow_staging import validate_workflow_stage_manifest_payload
 from gpd.registry import _parse_frontmatter, _parse_tools
 from tests.doc_surface_contracts import (
     assert_cost_surface_discoverability,
@@ -1681,7 +1683,6 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
     executor_agent = (AGENTS_DIR / "gpd-executor.md").read_text(encoding="utf-8")
     execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
     execute_phase = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
-    plan_phase = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
     tooling_ref = (REFERENCES_DIR / "tooling" / "tool-integration.md").read_text(encoding="utf-8")
     summary_template = (TEMPLATES_DIR / "summary.md").read_text(encoding="utf-8")
     verification_template = (TEMPLATES_DIR / "verification-report.md").read_text(encoding="utf-8")
@@ -1713,11 +1714,23 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
     )
     assert "gpd validate plan-preflight <PLAN.md>" not in execute_plan
     assert "require that the selected `PLAN.md` passes `gpd validate plan-preflight <PLAN.md>`" in execute_phase
-    assert "templates/planner-subagent-prompt.md" in plan_phase
     assert (
         "`tool_requirements` pass `gpd validate plan-preflight <PLAN.md>` before the plan is treated as execution-ready"
         in planner_prompt_template
     )
+    plan_phase_manifest = validate_workflow_stage_manifest_payload(
+        json.loads((REPO_ROOT / "src/gpd/specs/workflows/plan-phase-stage-manifest.json").read_text(encoding="utf-8")),
+        expected_workflow_id="plan-phase",
+    )
+    assert plan_phase_manifest.stage_ids() == (
+        "phase_bootstrap",
+        "research_routing",
+        "planner_authoring",
+        "checker_revision",
+    )
+    assert plan_phase_manifest.stages[0].loaded_authorities == ("workflows/plan-phase.md",)
+    assert "templates/planner-subagent-prompt.md" in plan_phase_manifest.stages[2].loaded_authorities
+    assert "templates/planner-subagent-prompt.md" in plan_phase_manifest.stages[3].loaded_authorities
     assert (
         "Treat `VERIFICATION.md` as contract-backed only through the schema-owned ledgers `plan_contract_ref`, `contract_results`, `comparison_verdicts`, and `suggested_contract_checks`; do not expect verifier-local aliases or ad hoc machine-readable artifact fields."
         in execute_phase

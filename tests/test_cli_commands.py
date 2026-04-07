@@ -5365,6 +5365,15 @@ def test_init_verify_work_help_surfaces_stage_option() -> None:
     assert "stage id." in result.output
 
 
+def test_init_plan_phase_help_surfaces_stage_option() -> None:
+    result = runner.invoke(app, ["init", "plan-phase", "--help"])
+
+    assert result.exit_code == 0
+    assert "--stage" in result.output
+    assert "Load the staged plan-phase context for a specific" in result.output
+    assert "stage id." in result.output
+
+
 class TestNoDuplicateTestMethods:
     """Regression: duplicate method names hide tests in Python."""
 

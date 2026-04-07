@@ -26,6 +26,7 @@ def _workflow_payload(workflow_id: str) -> dict[str, object]:
     ("workflow_id", "expected_path"),
     [
         ("new-project", NEW_PROJECT_STAGE_MANIFEST_PATH),
+        ("plan-phase", NEW_PROJECT_STAGE_MANIFEST_PATH.parent / "plan-phase-stage-manifest.json"),
         ("verify-work", NEW_PROJECT_STAGE_MANIFEST_PATH.parent / "verify-work-stage-manifest.json"),
     ],
 )
@@ -45,8 +46,11 @@ def test_load_workflow_stage_manifest_is_cached() -> None:
     assert "references/shared/canonical-schema-discipline.md" in first.stages[0].must_not_eager_load
 
 
-def test_load_workflow_stage_manifest_loads_verify_work_manifest() -> None:
-    manifest = load_workflow_stage_manifest("verify-work")
+def test_validate_workflow_stage_manifest_payload_loads_verify_work_manifest() -> None:
+    manifest = validate_workflow_stage_manifest_payload(
+        _workflow_payload("verify-work"),
+        expected_workflow_id="verify-work",
+    )
 
     assert manifest.workflow_id == "verify-work"
     assert manifest.stage_ids() == (
@@ -62,6 +66,37 @@ def test_load_workflow_stage_manifest_loads_verify_work_manifest() -> None:
     assert "references/verification/core/verification-core.md" in manifest.stages[2].loaded_authorities
     assert "templates/verification-report.md" in manifest.stages[3].loaded_authorities
     assert "references/protocols/error-propagation-protocol.md" in manifest.stages[4].loaded_authorities
+
+
+def test_validate_workflow_stage_manifest_payload_loads_plan_phase_manifest() -> None:
+    manifest = validate_workflow_stage_manifest_payload(
+        _workflow_payload("plan-phase"),
+        expected_workflow_id="plan-phase",
+    )
+
+    assert manifest.workflow_id == "plan-phase"
+    assert manifest.stage_ids() == (
+        "phase_bootstrap",
+        "research_routing",
+        "planner_authoring",
+        "checker_revision",
+    )
+    assert manifest.stages[0].loaded_authorities == ("workflows/plan-phase.md",)
+    assert "templates/plan-contract-schema.md" in manifest.stages[0].must_not_eager_load
+    assert "templates/planner-subagent-prompt.md" in manifest.stages[0].must_not_eager_load
+    assert manifest.stages[2].loaded_authorities == (
+        "workflows/plan-phase.md",
+        "templates/planner-subagent-prompt.md",
+    )
+    assert manifest.stages[3].loaded_authorities == (
+        "workflows/plan-phase.md",
+        "templates/planner-subagent-prompt.md",
+    )
+    assert "reference_artifacts_content" in manifest.stages[2].required_init_fields
+    assert "reference_artifacts_content" in manifest.stages[3].required_init_fields
+    assert "experiment_design_content" in manifest.stages[2].required_init_fields
+    assert "experiment_design_content" in manifest.stages[3].required_init_fields
+    assert "GPD/phases" in manifest.stages[2].writes_allowed
 
 
 @pytest.mark.parametrize(
@@ -100,7 +135,7 @@ def test_validate_workflow_stage_manifest_payload_rejects_bad_entries(
         validate_workflow_stage_manifest_payload(payload)
 
 
-@pytest.mark.parametrize("workflow_id", ["new-project", "verify-work"])
+@pytest.mark.parametrize("workflow_id", ["new-project"])
 def test_load_workflow_stage_manifest_from_path_respects_cache_invalidation(
     workflow_id: str,
     tmp_path: Path,

@@ -33,7 +33,8 @@ Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_
 
 ```bash
 REQUESTED_PHASE="${PHASE}"
-PHASE=$(echo "$BOOTSTRAP_INIT" | gpd json get .phase_number --default "${REQUESTED_PHASE}")
+INIT="${BOOTSTRAP_INIT}"
+PHASE=$(echo "$INIT" | gpd json get .phase_number --default "${REQUESTED_PHASE}")
 PHASE_DIR=$(echo "$BOOTSTRAP_INIT" | gpd json get .phase_dir --default "")
 AUTONOMY=$(echo "$BOOTSTRAP_INIT" | gpd json get .autonomy --default balanced)
 RESEARCH_MODE=$(echo "$BOOTSTRAP_INIT" | gpd json get .research_mode --default balanced)
@@ -287,7 +288,8 @@ Display banner:
 
 ### Spawn gpd-phase-researcher
 
-Load `references/orchestration/runtime-delegation-note.md` only when spawning the researcher.
+Apply the shared runtime delegation note at task-construction time:
+@{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
 ```bash
 PHASE_DESC=$(gpd --raw roadmap get-phase "${PHASE}" | gpd json get .section --default "")
@@ -409,7 +411,7 @@ Wait for user decision before proceeding to step 6.
 ```bash
 PHASE_GOAL=$(echo "$INIT" | gpd json get .phase_name --default "")
 
-# Re-read RESEARCH.md from disk — the value from INIT (step 1) is stale
+# Re-read RESEARCH.md from disk — `research_content` from INIT (step 1) is **stale**
 # because the researcher in step 5 may have just created/updated it.
 RESEARCH_FILE=$(ls "${PHASE_DIR}"/*-RESEARCH.md 2>/dev/null | head -1)
 if [ -n "$RESEARCH_FILE" ]; then
@@ -583,6 +585,15 @@ task(
 - **`## PLANNING COMPLETE`:** Display plan count. If `AUTONOMY=supervised`, show the written draft plans and get user confirmation before advancing to checker or next-step output. If `--skip-verify` or `plan_checker_enabled` is false (from init): skip to step 13 only when no proof-bearing plans were written. Proof-bearing plans still require checker review or an equivalent main-context audit before planning is considered complete. Otherwise: step 10.
 - **`## CHECKPOINT REACHED`:** Present to user, get response, spawn continuation (step 12)
 - **`## PLANNING INCONCLUSIVE`:** Show attempts, offer: Add context / Retry / Manual
+
+Before the checker loop, validate every generated plan contract explicitly:
+
+```bash
+for plan_file in "${PHASE_DIR}"/*-PLAN.md; do
+  [ -f "$plan_file" ] || continue
+  gpd validate plan-contract "$plan_file" || exit 1
+done
+```
 
 ## 10. Spawn gpd-plan-checker Agent
 

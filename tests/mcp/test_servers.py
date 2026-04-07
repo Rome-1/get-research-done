@@ -1259,17 +1259,182 @@ class TestSkillsServer:
         assert result["file_count"] == 1
         assert result["allowed_tools_surface"] == "command.allowed-tools"
 
-    def test_get_skill_surfaces_command_agent_metadata(self):
+    def test_get_skill_surfaces_command_agent_metadata(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from gpd import registry as content_registry
         from gpd.mcp.servers.skills_server import get_skill
+
+        commands_dir = tmp_path / "commands"
+        commands_dir.mkdir(exist_ok=True)
+        (commands_dir / "plan-phase.md").write_text(
+            "---\n"
+            "name: gpd:plan-phase\n"
+            "description: Plan.\n"
+            "agent: gpd-planner\n"
+            "allowed-tools:\n"
+            "  - file_read\n"
+            "---\n"
+            "Read @{GPD_INSTALL_DIR}/workflows/plan-phase.md and {GPD_AGENTS_DIR}/gpd-planner.md.\n",
+            encoding="utf-8",
+        )
+        manifest_path = tmp_path / "plan-phase-stage-manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "workflow_id": "plan-phase",
+                    "stages": [
+                        {
+                            "id": "phase_bootstrap",
+                            "order": 1,
+                            "purpose": "phase lookup and routing",
+                            "mode_paths": ["workflows/plan-phase.md"],
+                            "required_init_fields": [],
+                            "loaded_authorities": ["workflows/plan-phase.md"],
+                            "conditional_authorities": [],
+                            "must_not_eager_load": ["references/ui/ui-brand.md"],
+                            "allowed_tools": ["file_read"],
+                            "writes_allowed": [],
+                            "produced_state": [],
+                            "next_stages": [],
+                            "checkpoints": [],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        original_resolve_manifest_path = content_registry.resolve_workflow_stage_manifest_path
+        monkeypatch.setattr(content_registry, "COMMANDS_DIR", commands_dir)
+        monkeypatch.setattr(
+            content_registry,
+            "resolve_workflow_stage_manifest_path",
+            lambda workflow_id: manifest_path if workflow_id == "plan-phase" else original_resolve_manifest_path(workflow_id),
+        )
+        content_registry.invalidate_cache()
 
         result = get_skill("gpd-plan-phase")
 
         assert result["agent"] == "gpd-planner"
         assert result["structured_metadata_authority"]["agent"] == "mirrored"
         assert "agent: gpd-planner" in result["content"]
+        assert result["staged_loading"]["workflow_id"] == "plan-phase"
+        assert result["staged_loading"]["stages"][0]["id"] == "phase_bootstrap"
 
-    def test_get_skill_surfaces_referenced_files(self):
+    def test_get_skill_surfaces_plan_phase_staged_loading_sidecar(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from gpd import registry as content_registry
         from gpd.mcp.servers.skills_server import get_skill
+
+        commands_dir = tmp_path / "commands"
+        commands_dir.mkdir(exist_ok=True)
+        (commands_dir / "plan-phase.md").write_text(
+            "---\n"
+            "name: gpd:plan-phase\n"
+            "description: Plan.\n"
+            "agent: gpd-planner\n"
+            "allowed-tools:\n"
+            "  - file_read\n"
+            "---\n"
+            "Read @{GPD_INSTALL_DIR}/workflows/plan-phase.md and {GPD_AGENTS_DIR}/gpd-planner.md.\n",
+            encoding="utf-8",
+        )
+        manifest_path = tmp_path / "plan-phase-stage-manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "workflow_id": "plan-phase",
+                    "stages": [
+                        {
+                            "id": "phase_bootstrap",
+                            "order": 1,
+                            "purpose": "phase lookup and routing",
+                            "mode_paths": ["workflows/plan-phase.md"],
+                            "required_init_fields": [],
+                            "loaded_authorities": ["workflows/plan-phase.md"],
+                            "conditional_authorities": [],
+                            "must_not_eager_load": ["references/ui/ui-brand.md"],
+                            "allowed_tools": ["file_read"],
+                            "writes_allowed": [],
+                            "produced_state": [],
+                            "next_stages": [],
+                            "checkpoints": [],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        original_resolve_manifest_path = content_registry.resolve_workflow_stage_manifest_path
+        monkeypatch.setattr(content_registry, "COMMANDS_DIR", commands_dir)
+        monkeypatch.setattr(
+            content_registry,
+            "resolve_workflow_stage_manifest_path",
+            lambda workflow_id: manifest_path if workflow_id == "plan-phase" else original_resolve_manifest_path(workflow_id),
+        )
+        content_registry.invalidate_cache()
+
+        result = get_skill("gpd-plan-phase")
+
+        assert result["staged_loading"]["workflow_id"] == "plan-phase"
+        assert result["staged_loading"]["stages"][0]["id"] == "phase_bootstrap"
+        assert result["staged_loading"]["stages"][0]["loaded_authorities"] == ["workflows/plan-phase.md"]
+        assert result["structured_metadata_authority"]["staged_loading"] == "mirrored"
+
+    def test_get_skill_surfaces_referenced_files(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from gpd import registry as content_registry
+        from gpd.mcp.servers.skills_server import get_skill
+
+        commands_dir = tmp_path / "commands"
+        commands_dir.mkdir(exist_ok=True)
+        (commands_dir / "plan-phase.md").write_text(
+            "---\n"
+            "name: gpd:plan-phase\n"
+            "description: Plan.\n"
+            "agent: gpd-planner\n"
+            "allowed-tools:\n"
+            "  - file_read\n"
+            "---\n"
+            "Read @{GPD_INSTALL_DIR}/workflows/plan-phase.md and {GPD_AGENTS_DIR}/gpd-planner.md.\n",
+            encoding="utf-8",
+        )
+        manifest_path = tmp_path / "plan-phase-stage-manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "workflow_id": "plan-phase",
+                    "stages": [
+                        {
+                            "id": "phase_bootstrap",
+                            "order": 1,
+                            "purpose": "phase lookup and routing",
+                            "mode_paths": ["workflows/plan-phase.md"],
+                            "required_init_fields": [],
+                            "loaded_authorities": ["workflows/plan-phase.md"],
+                            "conditional_authorities": [],
+                            "must_not_eager_load": ["references/ui/ui-brand.md"],
+                            "allowed_tools": ["file_read"],
+                            "writes_allowed": [],
+                            "produced_state": [],
+                            "next_stages": [],
+                            "checkpoints": [],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        original_resolve_manifest_path = content_registry.resolve_workflow_stage_manifest_path
+        monkeypatch.setattr(content_registry, "COMMANDS_DIR", commands_dir)
+        monkeypatch.setattr(
+            content_registry,
+            "resolve_workflow_stage_manifest_path",
+            lambda workflow_id: manifest_path if workflow_id == "plan-phase" else original_resolve_manifest_path(workflow_id),
+        )
+        content_registry.invalidate_cache()
 
         result = get_skill("gpd-plan-phase")
 
