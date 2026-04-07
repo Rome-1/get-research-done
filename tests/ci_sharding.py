@@ -7,22 +7,33 @@ from dataclasses import dataclass
 from pathlib import Path
 
 CI_CATEGORY_SHARD_COUNTS = {
-    "root": 4,
-    "adapters": 1,
-    "hooks": 1,
+    "root": 6,
+    "adapters": 2,
+    "hooks": 2,
     "mcp": 1,
     "core": 6,
 }
 
 # Observed GitHub Actions timings on 2026-04-07 showed that these files are the
-# real bottlenecks inside their category. Split them inside the file and bias
-# their weight upward so category-local planners isolate them.
+# real bottlenecks inside their category. Split them inside the file so the
+# category-local planners can spread the slow work rather than pinning one
+# thematic shard to a single expensive module.
 CI_HOT_TEST_FILE_SPLITS = {
-    "test_runtime_cli.py": 4,
-    "test_cli_integration.py": 2,
+    "test_runtime_cli.py": 6,
+    "test_cli_integration.py": 3,
+    "test_registry.py": 2,
+    "test_cli_commands.py": 2,
+    "test_install_utils_edge.py": 2,
+    "test_install_edge_cases.py": 2,
     "test_update_workflow.py": 2,
+    "adapters/test_codex.py": 2,
+    "adapters/test_gemini.py": 2,
+    "adapters/test_opencode.py": 2,
+    "hooks/test_runtime_detect.py": 2,
+    "hooks/test_statusline.py": 2,
     "core/test_cli.py": 2,
     "core/test_contract_validation.py": 2,
+    "core/test_frontmatter.py": 2,
 }
 
 CI_HOT_TEST_FILE_WEIGHT_MULTIPLIERS = {

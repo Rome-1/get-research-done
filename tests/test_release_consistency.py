@@ -312,9 +312,12 @@ def test_merge_gate_workflow_uses_main_branch_pytest_on_python_311() -> None:
     assert "workflow_dispatch:" in workflow
     assert "name: pytest ${{ matrix.display_name }} (3.11)" in workflow
     assert "fail-fast: false" in workflow
-    assert "display_name: root 1/4" in workflow
-    assert "display_name: adapters" in workflow
-    assert "display_name: hooks" in workflow
+    assert "display_name: root 1/6" in workflow
+    assert "display_name: root 6/6" in workflow
+    assert "display_name: adapters 1/2" in workflow
+    assert "display_name: adapters 2/2" in workflow
+    assert "display_name: hooks 1/2" in workflow
+    assert "display_name: hooks 2/2" in workflow
     assert "display_name: mcp" in workflow
     assert "display_name: core 6/6" in workflow
     assert "actions/checkout@v6" in workflow

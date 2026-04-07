@@ -107,6 +107,6 @@ def test_tests_readme_documents_default_full_suite_and_category_named_runtime_in
     assert "Both inherit `-n auto --dist=worksteal` from `pyproject.toml`" in tests_readme
     assert "override that default explicitly with `uv run pytest -n 0`" in tests_readme
     assert "GitHub Actions workflow runs that same full suite as category-named runtime-informed shards" in tests_readme
-    assert "`root 1/4` through `root 4/4`, `adapters`, `hooks`, `mcp`, and `core 1/6` through `core 6/6`" in tests_readme
-    assert "splits known hotspot modules such as `tests/test_runtime_cli.py`" in tests_readme
+    assert "`root 1/6` through `root 6/6`, `adapters 1/2` through `adapters 2/2`, `hooks 1/2` through `hooks 2/2`, `mcp`, and `core 1/6` through `core 6/6`" in tests_readme
+    assert "splits known hotspot modules such as `tests/test_runtime_cli.py`, `tests/test_registry.py`, and `tests/hooks/test_runtime_detect.py`" in tests_readme
     assert "greedily rebalances those work units inside each category" in tests_readme
