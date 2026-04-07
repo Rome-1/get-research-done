@@ -68,10 +68,14 @@ def test_planner_and_checker_examples_surface_concrete_contract_anchors() -> Non
 
     assert "in_scope: [\"Recover the benchmark curve within tolerance\"]" in planner_prompt
     assert "claim_kind: theorem" in planner_prompt
+    assert 'proof_deliverables: ["deliv-proof-vac-pol"]' in planner_prompt
     assert "GPD/phases/01-vacuum-polarization/01-01-SUMMARY.md" in planner_prompt
     assert "GPD/phases/00-baseline/00-01-SUMMARY.md#gauge-and-tensor-convention" in planner_prompt
+    assert "schema_version: 1" in checker_prompt
     assert "in_scope: [\"Recover the benchmark value within tolerance\"]" in checker_prompt
     assert "claim_kind: theorem" in checker_prompt
+    assert "proof_deliverables: [deliv-proof-main]" in checker_prompt
+    assert "Treat `effective_reference_intake` and `active_reference_context` only as readable projections" in checker_prompt
     assert "GPD/phases/00-baseline/00-01-SUMMARY.md" in checker_prompt
     assert "GPD/phases/00-baseline/00-01-SUMMARY.md#gauge-unit-and-notation-conventions" in checker_prompt
 
@@ -90,7 +94,7 @@ def test_phase_prompt_surfaces_default_salvage_and_hard_plan_requirements() -> N
     assert "For `tool: command`, a non-empty `command` field is mandatory" in phase_prompt
     assert "`required` defaults to `true` when omitted" in phase_prompt
     assert "The defaultable semantic fields still exist in the contract surface" in phase_prompt
-    assert "`scope.in_scope` must be populated for project-scoping plans." in phase_prompt
+    assert "`scope.in_scope` must be populated in the executor-facing contract examples, and project-scoping plans must keep it non-empty." in phase_prompt
     assert "Proof-bearing claims must use an explicit non-`other` `claim_kind`, and the body must keep hypotheses, parameters, and conclusions auditable." in phase_prompt
     assert "observables[].kind" in phase_prompt
     assert "deliverables[].kind" in phase_prompt
@@ -127,6 +131,7 @@ def test_planner_prompt_stays_compact_while_preserving_canonical_contract_wiring
     assert "must be unique within the list" in planner_prompt
     assert "in_scope: [\"Recover the benchmark curve within tolerance\"]" in planner_prompt
     assert "claim_kind: theorem" in planner_prompt
+    assert 'proof_deliverables: ["deliv-proof-vac-pol"]' in planner_prompt
     assert "GPD/phases/00-baseline/00-01-SUMMARY.md#gauge-and-tensor-convention" in planner_prompt
     assert "GPD/phases/01-vacuum-polarization/01-01-SUMMARY.md" in planner_prompt
 

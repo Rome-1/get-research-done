@@ -142,7 +142,7 @@ Read autonomy mode from config. Higher autonomy = plan checker is more critical 
 
 **Question:** Do these plans carry the approved contract into execution without allowing false progress?
 
-**Authority order:** `plan frontmatter contract` -> `verification_context project_contract` -> `active_reference_context`.
+**Authority order:** `plan frontmatter contract` -> `verification_context project_contract`. Treat `effective_reference_intake` and `active_reference_context` only as readable projections of those anchors, never as substitute authority.
 
 Reject with `blocker` if any of the following is true:
 
@@ -885,6 +885,7 @@ If present, treat it as the canonical planning surface.
 
 ```yaml
 contract:
+  schema_version: 1
   scope:
     question: "What decisive question does this plan advance?"
     in_scope: ["Recover the benchmark value within tolerance"]
@@ -896,15 +897,24 @@ contract:
     - id: claim-main
       statement: "Recover the benchmark value within tolerance"
       claim_kind: theorem
-      deliverables: [deliv-main]
-      acceptance_tests: [test-main]
+      deliverables: [deliv-main, deliv-proof-main]
+      acceptance_tests: [test-main, test-proof-main]
       references: [ref-main]
+      parameters: [k]
+      hypotheses: ["Reference normalization and tolerance convention match Ref-01"]
+      conclusion_clauses: ["Benchmark agreement stays within tolerance at every approved sample"]
+      proof_deliverables: [deliv-proof-main]
   deliverables:
     - id: deliv-main
       kind: figure
       path: "figures/benchmark.png"
       description: "Benchmark comparison figure"
       must_contain: ["benchmark value", "tolerance"]
+    - id: deliv-proof-main
+      kind: derivation
+      path: "derivations/benchmark-proof.md"
+      description: "Proof inventory for the benchmark theorem claim"
+      must_contain: ["named hypotheses", "parameter coverage", "conclusion mapping"]
   references:
     - id: ref-main
       kind: paper
@@ -921,6 +931,12 @@ contract:
       procedure: "Compare the computed value against the benchmark anchor within tolerance."
       pass_condition: "Matches benchmark within tolerance"
       evidence_required: [deliv-main, ref-main]
+    - id: test-proof-main
+      subject: claim-main
+      kind: claim_to_proof_alignment
+      procedure: "Verify the proof inventory covers the named hypothesis, parameter, and conclusion."
+      pass_condition: "Every theorem field is covered explicitly."
+      evidence_required: [deliv-proof-main]
   forbidden_proxies:
     - id: fp-main
       subject: claim-main

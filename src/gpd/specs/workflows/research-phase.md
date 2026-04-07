@@ -25,9 +25,11 @@ Extract from init JSON: `phase_dir`, `phase_number`, `phase_name`, `phase_found`
 **Mode-aware behavior:**
 - `research_mode=explore`: Comprehensive research — survey all viable methods, include failed approaches from literature, 10+ papers.
 - `research_mode=exploit`: Focused research — direct methods only, 3-5 key papers, skip speculative approaches.
+- `research_mode=balanced` (default): Use the standard research depth for this workflow and keep the default contract and anchor coverage unless the topic calls for broader or narrower review.
 - `research_mode=adaptive`: Start broad enough to compare viable method families, then narrow only after prior decisive evidence or an explicit approach lock shows the method is stable.
 - `autonomy=supervised`: Present the `RESEARCH.md` draft for user review before treating the handoff as complete.
-- `autonomy=balanced/yolo`: Accept the researcher handoff automatically once `RESEARCH.md` exists and passes the artifact check.
+- `autonomy=balanced`: Accept the researcher handoff automatically once `RESEARCH.md` exists and passes the artifact check, then present the research summary before returning control.
+- `autonomy=yolo`: Accept the researcher handoff automatically once `RESEARCH.md` exists and passes the artifact check without any extra summary-review pause.
 
 @{GPD_INSTALL_DIR}/references/orchestration/model-profile-resolution.md
 
@@ -63,7 +65,7 @@ gpd --raw state snapshot | gpd json get .decisions --default "[]"
 ```
 
 ## Step 4: Spawn Researcher
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
 ```
 task(

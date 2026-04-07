@@ -3,6 +3,17 @@ from pathlib import Path
 WORKFLOWS_DIR = Path("src/gpd/specs/workflows")
 COMMANDS_DIR = Path("src/gpd/commands")
 REFERENCES_DIR = Path("src/gpd/specs/references")
+OWNED_COMMANDS = (
+    COMMANDS_DIR / "debug.md",
+    COMMANDS_DIR / "research-phase.md",
+    COMMANDS_DIR / "literature-review.md",
+    COMMANDS_DIR / "explain.md",
+    COMMANDS_DIR / "respond-to-referees.md",
+    COMMANDS_DIR / "write-paper.md",
+)
+FRESH_CONTEXT_PHRASE_EXEMPTIONS = {
+    COMMANDS_DIR / "write-paper.md",
+}
 
 
 def test_help_resume_boundary_note_is_concise_and_contract_aligned() -> None:
@@ -41,6 +52,33 @@ def test_shared_context_budget_guidance_stays_runtime_neutral() -> None:
     for path in owned_surfaces:
         text = path.read_text(encoding="utf-8").lower()
         assert "200k" not in text, path
+
+
+def test_owned_commands_keep_a_single_concise_subagent_rationale() -> None:
+    for path in OWNED_COMMANDS:
+        text = path.read_text(encoding="utf-8")
+        assert text.count("Why subagent:") == 1, path
+        if path in FRESH_CONTEXT_PHRASE_EXEMPTIONS:
+            assert "Fresh context" not in text, path
+        else:
+            assert text.count("Fresh context") == 1, path
+
+
+def test_research_phase_command_drops_dead_command_local_mode_labels() -> None:
+    research_phase = (COMMANDS_DIR / "research-phase.md").read_text(encoding="utf-8")
+
+    assert "Research modes: literature (default), feasibility, methodology, comparison." not in research_phase
+    assert "Mode: literature" not in research_phase
+    assert "Research depth follows the workflow-owned `research_mode`." in research_phase
+
+
+def test_write_paper_command_defers_the_route_list_to_the_workflow() -> None:
+    write_paper = (COMMANDS_DIR / "write-paper.md").read_text(encoding="utf-8")
+
+    assert "Routes to the write-paper workflow:" not in write_paper
+    assert "@{GPD_INSTALL_DIR}/workflows/write-paper.md" in write_paper
+    assert "bibliography_audit_clean" in write_paper
+    assert "reproducibility_ready" in write_paper
 
 
 def test_debug_workflow_path_note_is_not_self_contradictory() -> None:

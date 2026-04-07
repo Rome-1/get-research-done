@@ -19,7 +19,7 @@ Conduct a systematic literature review for a physics research topic. Identifies 
 
 **Orchestrator role:** Scope the review, spawn gpd-literature-reviewer agent, handle checkpoints, present results.
 
-**Why subagent:** Literature searches burn context fast (reading abstracts, following citation chains, cross-referencing results, tracking conventions across papers). Fresh context for the full survey keeps the main context lean for user interaction.
+**Why subagent:** Literature searches burn context fast. Fresh context keeps the survey lean.
 
 A physics literature review is not a bibliography. It is a map of the intellectual landscape: who computed what, using which methods, with what assumptions, getting what results, and where do they agree or disagree. The reviewer must think like a physicist surveying a field, not a librarian cataloging references.
 </objective>

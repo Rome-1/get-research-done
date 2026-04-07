@@ -15,7 +15,7 @@ Quick contract rules:
 - Use the included schema for contract shape, cardinality, and enum defaults.
 - `tool_requirements[].id` values must be unique within the list.
 - Gap-closure plans still use `type: execute`; mark verification-repair plans with `gap_closure: true` instead of inventing a third plan type.
-- `scope.in_scope` must be populated for project-scoping plans.
+- `scope.in_scope` must be populated in the executor-facing contract examples, and project-scoping plans must keep it non-empty.
 - Proof-bearing claims must use an explicit non-`other` `claim_kind`, and the body must keep hypotheses, parameters, and conclusions auditable.
 - `context_intake` anchors must be concrete enough to re-find later.
 - If grounding already exists elsewhere, a missing `must_surface: true` reference is a warning, not a blocker.
@@ -70,6 +70,7 @@ contract:
   schema_version: 1
   scope:
     question: "[The decisive question this plan advances]"
+    in_scope: ["[Concrete objective or boundary this plan owns]"]
   context_intake:
     must_read_refs: [ref-main]
     must_include_prior_outputs: ["GPD/phases/00-baseline/00-01-SUMMARY.md"]
@@ -249,6 +250,7 @@ contract:
   schema_version: 1
   scope:
     question: What benchmark must this plan recover?
+    in_scope: ["Recover the benchmark curve within tolerance"]
   context_intake:
     must_read_refs: [ref-textbook]
     must_include_prior_outputs: ["GPD/phases/00-baseline/00-01-SUMMARY.md"]

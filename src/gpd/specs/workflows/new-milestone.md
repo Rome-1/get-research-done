@@ -30,6 +30,7 @@ Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `co
 - `autonomy=yolo`: Execute full pipeline, skip optional research step, auto-approve roadmap, but do NOT skip phase-level contract coverage and anchor visibility.
 - `research_mode=explore`: Broader research survey for new milestone, consider alternative approaches, include speculative phases.
 - `research_mode=exploit`: Focused research on direct extensions of prior milestone, lean phase structure.
+- `research_mode=balanced` (default): Use the standard research depth for the milestone and keep the default anchor and contract coverage unless the milestone needs broader or narrower review.
 - `research_mode=adaptive`: Reuse a focused path only when prior milestones already provide decisive evidence or an explicit approach lock. Otherwise refresh broader gap analysis before narrowing the new milestone.
 
 Run centralized context preflight before continuing:
@@ -174,7 +175,7 @@ mkdir -p GPD/research
 ```
 
 Spawn 4 parallel gpd-project-researcher agents. Each uses this template with dimension-specific fields:
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
 **Common structure for all 4 scouts:**
 

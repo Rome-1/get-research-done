@@ -7,6 +7,7 @@ from gpd.adapters.install_utils import expand_at_includes
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AGENTS_DIR = REPO_ROOT / "src/gpd/agents"
 TEMPLATES_DIR = REPO_ROOT / "src/gpd/specs/templates"
+WORKFLOWS_DIR = REPO_ROOT / "src/gpd/specs/workflows"
 
 
 def _read_verifier_prompt() -> str:
@@ -15,6 +16,14 @@ def _read_verifier_prompt() -> str:
 
 def _read_verification_template() -> str:
     return (TEMPLATES_DIR / "verification-report.md").read_text(encoding="utf-8")
+
+
+def _read_research_verification_template() -> str:
+    return (TEMPLATES_DIR / "research-verification.md").read_text(encoding="utf-8")
+
+
+def _read_verify_work_template() -> str:
+    return (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
 
 
 def _read_expanded_verifier_prompt() -> str:
@@ -84,15 +93,28 @@ def test_verifier_prompt_frontmatter_example_includes_contract_ledgers() -> None
     assert "filler placeholders" not in verifier
 
 
+def test_verifier_prompt_uses_canonical_include_for_worked_examples() -> None:
+    verifier = _read_verifier_prompt()
+
+    assert "@{GPD_INSTALL_DIR}/references/verification/examples/verifier-worked-examples.md" in verifier
+    assert "<!-- [included: verifier-worked-examples.md] -->" not in verifier
+    assert "<!-- [end included] -->" not in verifier
+    assert "result = 0  # placeholder" not in verifier
+    assert '"energy": "TODO", "status": "not computed"' not in verifier
+    assert "phase: 01-benchmark" in verifier
+    assert "score: 3/5 contract targets verified" in verifier
+
+
 def test_verifier_prompt_surfaces_missing_parameter_proof_audit_and_stale_review_gate() -> None:
     verifier = _read_verifier_prompt()
     expanded_verifier = _read_expanded_verifier_prompt()
     contract_results_schema = (TEMPLATES_DIR / "contract-results-schema.md").read_text(encoding="utf-8")
-    research_verification = (TEMPLATES_DIR / "research-verification.md").read_text(encoding="utf-8")
+    research_verification = _read_research_verification_template()
     verification_template = _read_verification_template()
 
-    assert verifier.count("## Physics Stub Detection Patterns") == 1
-    assert verifier.count("## 5.15 Anomalies/Topological Properties — Executable Template") == 1
+    assert "## Physics Stub Detection Patterns" not in verifier
+    assert "## Physics Stub Detection Patterns" in expanded_verifier
+    assert "## 5.15 Anomalies/Topological Properties — Executable Template" in expanded_verifier
     assert "[] Proof structure" in expanded_verifier
     assert (
         "Every named theorem parameter or hypothesis is used or explicitly discharged; no theorem symbol may "
@@ -126,6 +148,33 @@ def test_verifier_prompt_surfaces_missing_parameter_proof_audit_and_stale_review
     assert "Proof-backed claims follow the proof-audit rules in the canonical schema" in verification_template
     assert "completed_actions: []" not in verification_template
     assert "missing_actions: [read]" not in verification_template
+    assert "phase: 01-benchmark" in research_verification
     assert 'summary: "[what the adversarial proof review concluded]"' in research_verification
+    assert 'recommended_action: "collect one more benchmark point before marking the claim as passed"' in research_verification
     assert "all artifacts pass levels 1-4" in verifier
     assert "all artifacts pass levels 1-3" not in verifier
+
+
+def test_research_verification_template_uses_concrete_example_values() -> None:
+    research_verification = _read_research_verification_template()
+
+    assert "phase: 01-benchmark" in research_verification
+    assert 'name: "benchmark comparison"' in research_verification
+    assert 'reference_ids: ["reference-main"]' in research_verification
+    assert 'comparison_reference_id: "reference-main"' in research_verification
+    assert 'expected: "The benchmark comparison should land within the 1% tolerance."' in research_verification
+    assert "The benchmark evidence is close but not yet decisive." in research_verification
+    assert "The contract still needs a named benchmark check for the main claim." in research_verification
+    assert 'source:' in research_verification
+
+
+def test_verify_work_template_sets_balanced_default_and_concrete_examples() -> None:
+    verify_work = _read_verify_work_template()
+
+    assert "- `research_mode=balanced` (default): Keep the full contract-critical floor and the balanced review cadence." in verify_work
+    assert "plan_contract_ref: GPD/phases/01-benchmark/01-plan-PLAN.md#/contract" in verify_work
+    assert 'name: "benchmark comparison"' in verify_work
+    assert 'reference_ids: ["reference-main"]' in verify_work
+    assert 'comparison_reference_id: "reference-main"' in verify_work
+    assert "Evaluated the benchmark at the configured test points." in verify_work
+    assert "Independent arithmetic gives a relative error of 0.006." in verify_work

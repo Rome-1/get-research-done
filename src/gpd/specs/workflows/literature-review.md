@@ -66,6 +66,7 @@ RESEARCH_MODE=$(gpd --raw config get research_mode 2>/dev/null | gpd json get .v
 **Mode-aware behavior:**
 - `research_mode=explore`: Comprehensive review (30+ papers), include tangential fields, map full citation network, identify open questions.
 - `research_mode=exploit`: Focused review (8-12 papers), direct relevance only, extract key results and methods.
+- `research_mode=balanced` (default): Use the standard review depth for this workflow and keep the default anchor and contract coverage unless the topic needs broader or narrower review.
 - `research_mode=adaptive`: Start with 15 papers, expand if citation network reveals critical gaps.
 - `autonomy=supervised`: Pause after each review round for user feedback on scope and direction.
 - `autonomy=balanced` (default): Complete the full review pipeline automatically. Pause only if the literature reveals scope ambiguity, contradictory evidence, or a change in recommendation.
@@ -411,7 +412,7 @@ Resolve bibliographer model:
 ```bash
 BIBLIO_MODEL=$(gpd resolve-model gpd-bibliographer)
 ```
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
 ```
 task(

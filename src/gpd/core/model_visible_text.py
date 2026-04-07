@@ -1,4 +1,4 @@
-"""Tiny dependency-free strings shared by model-visible prompt wrappers."""
+"""Shared strings for model-visible prompt wrappers."""
 
 from __future__ import annotations
 

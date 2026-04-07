@@ -5,11 +5,11 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 from gpd import registry
 from gpd.core.model_visible_sections import (
     MODEL_VISIBLE_CLOSED_SCHEMA_PHRASE,
-    render_model_visible_yaml_section,
 )
 from gpd.core.model_visible_text import (
     REVIEW_CONTRACT_CONDITIONAL_WHENS,
@@ -33,6 +33,11 @@ AGENTS_DIR = REPO_ROOT / "src/gpd/agents"
 WORKFLOWS_DIR = REPO_ROOT / "src/gpd/specs/workflows"
 REFERENCES_DIR = REPO_ROOT / "src/gpd/specs/references"
 TEMPLATES_DIR = REPO_ROOT / "src/gpd/specs/templates"
+
+
+def _manual_model_visible_yaml_section(*, heading: str, note: str, payload: dict[str, object]) -> str:
+    rendered = yaml.safe_dump(payload, sort_keys=False, allow_unicode=False).rstrip()
+    return f"## {heading}\n\n{note}\n\n```yaml\n{rendered}\n```"
 
 
 def _read_command(name: str) -> str:
@@ -164,7 +169,7 @@ def test_model_visible_section_renderers_share_one_canonical_wrapper_structure()
     rendered_review_contract_payload = review_contract_payload(review_contract_payload_data)
     review_section = render_review_contract_prompt(review_contract_payload_data)
 
-    assert agent_section == render_model_visible_yaml_section(
+    assert agent_section == _manual_model_visible_yaml_section(
         heading="Agent Requirements",
         note=agent_visibility_note(),
         payload={
@@ -176,7 +181,7 @@ def test_model_visible_section_renderers_share_one_canonical_wrapper_structure()
             "tools": ["git", "python"],
         },
     )
-    assert command_section == render_model_visible_yaml_section(
+    assert command_section == _manual_model_visible_yaml_section(
         heading="Command Requirements",
         note=command_visibility_note(),
         payload={
@@ -187,7 +192,7 @@ def test_model_visible_section_renderers_share_one_canonical_wrapper_structure()
             "requires": {"artifact_manifest": "required"},
         },
     )
-    assert review_section == render_model_visible_yaml_section(
+    assert review_section == _manual_model_visible_yaml_section(
         heading="Review Contract",
         note=(
             f"{review_contract_visibility_note()} "

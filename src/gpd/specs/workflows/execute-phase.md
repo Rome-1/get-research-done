@@ -48,6 +48,7 @@ When `parallelization` is false, plans within a wave execute sequentially.
 - `autonomy=yolo`: Execute all waves without user prompts on clean passes. Do NOT skip required correctness gates, first-result sanity checks, skeptical review stops, or anchor-gated fanout reviews. A clean pass may auto-continue only after the gate is explicitly cleared.
 - `research_mode=explore`: Favor thoroughness — always run verification, expand context budget.
 - `research_mode=exploit`: Favor speed — skip optional research steps, tighter context budget, suppress optional tangents unless the user explicitly requested them, but never skip required first-result, skeptical, or pre-fanout review gates.
+- `research_mode=balanced` (default): Use the standard execution depth and keep the default contract, anchor, and review coverage unless the wave needs broader or narrower review.
 - `research_mode=adaptive`: Start with explore-style coverage, then narrow only after prior decisive `contract_results`, decisive `comparison_verdicts`, or an explicit approach lock show that the method family is stable. Do NOT narrow just because a wave advanced or one proxy passed.
 - Model profile and research mode may change depth, task granularity, or prose volume. They do NOT waive first-result, skeptical, or pre-fanout review gates.
 - `review_cadence`: Controls when bounded review gates appear. `autonomy` controls who must approve or inspect those gates. These are separate axes.
@@ -501,7 +502,7 @@ Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true`
    Pass paths only -- executors read files themselves with fresh context.
    This keeps orchestrator context lean (~10-15%).
 
-   > **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+   @{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
    ```
    task(

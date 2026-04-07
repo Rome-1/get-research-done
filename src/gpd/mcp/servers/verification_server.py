@@ -756,9 +756,9 @@ _CONTRACT_SCOPE_INPUT_SCHEMA: dict[str, object] = _object_schema(
     additional_properties=False,
 )
 _CONTRACT_SCOPE_INPUT_SCHEMA["description"] = (
-    "Use `scope.question` for the core research question. For project-scoping contracts, `scope.in_scope` should "
-    "name at least one concrete objective or boundary so downstream project-contract validation does not have to "
-    "infer it."
+    "Use `scope.question` for the core research question. Project-scoping contracts must also provide non-empty "
+    "`scope.in_scope` naming at least one concrete objective or boundary; downstream project-contract validation "
+    "does not infer it."
 )
 _CONTRACT_CONTEXT_INTAKE_INPUT_SCHEMA: dict[str, object] = _object_schema(
     {
@@ -1743,7 +1743,9 @@ def _suggest_contract_checks_description() -> str:
         "the model is reasoning about. "
         f"{verification_contract_policy_text()} "
         "Use the canonical plan-contract schema for plan-style payloads; this tool returns the exact "
-        "request-shape metadata and a ``request_template`` safe to pass to ``run_contract_check(request=...)``. "
+        "request-shape metadata, including ``schema_required_request_fields``, "
+        "``schema_required_request_anyof_fields``, ``supported_binding_fields``, and a ``request_template`` safe "
+        "to pass to ``run_contract_check(request=...)``. "
         "``active_checks`` is optional and must be ``list[str]`` with non-empty entries when provided. "
         "Supply already-enabled check ids or check keys so each suggestion can mark ``already_active`` "
         "precisely. Proof-check templates still surface an explicit ``contract`` placeholder because "

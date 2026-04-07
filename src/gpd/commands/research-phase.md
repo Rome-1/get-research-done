@@ -22,7 +22,7 @@ Research how to tackle a phase. Spawns gpd-phase-researcher agent with phase con
 
 **Orchestrator role:** Parse phase, validate against roadmap, check existing research, gather context, spawn researcher agent, present results.
 
-**Why subagent:** Research burns context fast (literature searches, method surveys, source verification). Fresh context for investigation keeps the main context lean for user interaction.
+**Why subagent:** Research burns context fast. Fresh context keeps the main context lean.
 </objective>
 
 <execution_context>
@@ -84,7 +84,7 @@ Present summary with phase description, requirements, prior decisions.
 
 ## 4. Spawn gpd-phase-researcher Agent
 
-Research modes: literature (default), feasibility, methodology, comparison.
+Research depth follows the workflow-owned `research_mode`. Do not invent separate command-local mode labels here.
 
 ```markdown
 <research_type>
@@ -110,7 +110,7 @@ For this phase, discover:
 
 <objective>
 Research approach for Phase {phase_number}: {phase_name}
-Mode: literature
+Research depth: use the active workflow `research_mode` from init/config
 </objective>
 
 <context>

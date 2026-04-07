@@ -65,6 +65,7 @@ Parse JSON for: `planner_model`, `checker_model`, `verifier_model`, `commit_docs
 **Mode-aware behavior:**
 - `autonomy=supervised`: Pause after each verification round for user review. Present findings and wait for confirmation before writing the canonical `XX-VERIFICATION.md` artifact.
 - `autonomy=balanced` (default): Run the full verification pipeline. Pause only if verification reveals critical issues that require user judgment or claim-level decisions.
+- `research_mode=balanced` (default): Keep the full contract-critical floor and the balanced review cadence. Run the standard verification pipeline unless another `research_mode` is explicitly selected.
 - `autonomy=yolo`: Run verification but skip optional cross-checks and literature comparison. Do NOT skip contract-critical anchors, decisive benchmarks, or user-mandated references.
 - `research_mode=explore`: Thorough verification — run all check types, compare against literature, verify intermediate steps. More spawned verifier agents.
 - `research_mode=exploit`: Keep the full contract-critical floor, but narrow optional breadth around the already-validated method family. Favor decisive comparisons over extra exploratory audits.
@@ -130,7 +131,7 @@ When runtime delegation is available and a required proof-redteam artifact is mi
 CHECK_PROOF_MODEL=$(gpd resolve-model gpd-check-proof)
 ```
 
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
 ```
 task(
@@ -381,33 +382,33 @@ Create file (or extend existing):
 
 ```markdown
 ---
-phase: {phase_number}-{phase_name}
-verified: [ISO timestamp]
+phase: 01-benchmark
+verified: 2026-04-06T00:00:00Z
 status: gaps_found
 # Allowed status values: passed|gaps_found|expert_needed|human_needed
-score: 0/{total contract targets} contract targets verified
-plan_contract_ref: GPD/phases/{phase_number}-{phase_name}/{phase_number}-{plan}-PLAN.md#/contract
+score: 0/4 contract targets verified
+plan_contract_ref: GPD/phases/01-benchmark/01-plan-PLAN.md#/contract
 contract_results:
   claims:
-    claim-id:
+    claim-main:
       status: not_attempted
       summary: "verification not started yet"
   deliverables:
-    deliverable-id:
+    deliverable-main:
       status: not_attempted
       summary: "verification not started yet"
   acceptance_tests:
-    acceptance-test-id:
+    acceptance-test-main:
       status: not_attempted
       summary: "verification not started yet"
   references:
-    reference-id:
+    reference-main:
       status: missing
       completed_actions: []
       missing_actions: [read]
       summary: "verification not started yet"
   forbidden_proxies:
-    forbidden-proxy-id:
+    forbidden-proxy-main:
       status: unresolved
       notes: "verification not started yet"
   uncertainty_markers:
@@ -416,26 +417,26 @@ contract_results:
     competing_explanations: [alternative-1]
     disconfirming_observations: [observation-1]
 comparison_verdicts:
-  - subject_id: claim-id
+  - subject_id: claim-main
     subject_kind: claim
     subject_role: decisive
-    reference_id: reference-id
+    reference_id: reference-main
     comparison_kind: benchmark
     metric: relative_error
     threshold: "<= 0.01"
     verdict: inconclusive
     recommended_action: "close the decisive benchmark once the evidence is written"
-    notes: "template placeholder; replace with the first decisive verdict"
+    notes: "The benchmark evidence is close but not yet decisive."
 suggested_contract_checks:
   - check: "missing decisive benchmark comparison"
-    reason: "why the missing check matters"
+    reason: "The contract still needs a named benchmark check for the main claim."
     suggested_subject_kind: acceptance_test
-    suggested_subject_id: acceptance-test-id
+    suggested_subject_id: acceptance-test-main
     evidence_path: "artifact path or expected evidence path"
   - check: "missing decisive reference comparison"
-    reason: "why the missing compare-required reference matters"
+    reason: "The reference-backed comparison is still missing."
     suggested_subject_kind: reference
-    suggested_subject_id: reference-id
+    suggested_subject_id: reference-main
     evidence_path: "artifact path or expected evidence path"
 source: ["list of phase-summary files"]
 started: "ISO timestamp"
@@ -448,6 +449,7 @@ session_status: validating
 
 <!-- OVERWRITE each check - shows where we are -->
 <!-- Omit unused `subject_id`, `claim_id`, `deliverable_id`, `acceptance_test_id`, and `forbidden_proxy_id` fields instead of leaving blank placeholders. -->
+<!-- Copy-safe scalar examples: `expected: "verifiable physics outcome"` and `computation: "specific numerical test performed"`. -->
 <!-- Allowed body enum values:
 `check_subject_kind`: claim|deliverable|acceptance_test|reference
 `comparison_kind`: benchmark|prior_work|experiment|cross_method|baseline|other
@@ -455,90 +457,90 @@ session_status: validating
 -->
 
 number: 1
-name: "first check name"
+name: "benchmark comparison"
 check_subject_kind: claim
 subject_id: "claim-main"
 claim_id: "claim-main"
-reference_ids: ["reference-id", "..."]
+reference_ids: ["reference-main"]
 comparison_kind: benchmark
-comparison_reference_id: "reference-id"
+comparison_reference_id: "reference-main"
 # If this check is not comparison-backed yet, omit both `comparison_kind` and `comparison_reference_id` instead of leaving blank placeholders.
 expected: |
-  [what the physics should show]
+  The derived benchmark should match the reference within 1%.
 computation: |
-  [what computational test was performed]
+  Evaluated the benchmark at k = 0.5 and k = 1.0.
 precomputed_result: |
-  [result of AI's independent computation]
+  Independent arithmetic gives a relative error of 0.006.
 # Benchmark acceptance tests require `comparison_kind: benchmark`.
 # cross-method acceptance tests require `comparison_kind: cross_method`.
 suggested_contract_checks:
   # If you cannot bind the gap to a known contract target yet, omit both
   # `suggested_subject_kind` and `suggested_subject_id` instead of leaving one blank.
   - check: "missing decisive check"
-    reason: "why the missing check matters"
+    reason: "The decisive benchmark comparison still needs an explicit contract target."
     suggested_subject_kind: acceptance_test
-    suggested_subject_id: "matching contract id"
-    evidence_path: "artifact path or expected evidence path"
+    suggested_subject_id: "acceptance-test-main"
+    evidence_path: "GPD/phases/01-benchmark/benchmark-comparison.csv"
   # Add a reference-backed decisive gap here whenever a benchmark reference or
   # a reference with required_actions including `compare` is still incomplete.
 awaiting: researcher response
 
 ## Checks
 
-### 1. [Check Name]
+### 1. Benchmark Comparison
 
 <!-- Include only the ID keys that actually bind this check.
-Follow the omission rule from Current Check instead of leaving blank placeholder strings. -->
+Follow the omission rule from current check instead of leaving blank placeholder strings. -->
 
 check_subject_kind: claim
 subject_id: "claim-main"
 claim_id: "claim-main"
-reference_ids: ["reference-id", "..."]
+reference_ids: ["reference-main"]
 comparison_kind: benchmark
-comparison_reference_id: "reference-id"
-expected: "verifiable physics outcome"
-computation: "specific numerical test performed"
-precomputed_result: "AI's independent computation result"
+comparison_reference_id: "reference-main"
+expected: "The benchmark comparison should land within the 1% tolerance."
+computation: "Evaluated the benchmark at the configured test points."
+precomputed_result: "Independent arithmetic gives a relative error of 0.006."
 suggested_contract_checks:
   # If you cannot bind the gap to a known contract target yet, omit both
   # `suggested_subject_kind` and `suggested_subject_id` instead of leaving one blank.
   - check: "missing decisive check"
-    reason: "why the missing check matters"
+    reason: "The decisive benchmark comparison still needs an explicit contract target."
     suggested_subject_kind: acceptance_test
-    suggested_subject_id: "matching contract id"
-    evidence_path: "artifact path or expected evidence path"
+    suggested_subject_id: "acceptance-test-main"
+    evidence_path: "GPD/phases/01-benchmark/benchmark-comparison.csv"
 result: "pending"
 
-### 2. [Check Name]
+### 2. Benchmark Pass
 
-expected: "verifiable physics outcome"
-computation: "specific numerical test performed"
-precomputed_result: "AI's independent computation result"
+expected: "The benchmark comparison should land within the 1% tolerance."
+computation: "Evaluated the benchmark at the configured test points."
+precomputed_result: "Independent arithmetic gives a relative error of 0.006."
 result: "pending"
 
 ...
 
 ## Summary
 
-total: [N]
+total: 2
 passed: 0
 issues: 0
-pending: [N]
+pending: 2
 skipped: 0
 comparison_verdicts_recorded: 0
 forbidden_proxies_rejected: 0
 
 ## Comparison Verdicts
 
-[none yet]
+[]
 
 ## Suggested Contract Checks
 
-[none yet]
+[]
 
 ## Gaps
 
-[none yet]
+[]
 ```
 
 Write to `${phase_dir}/${phase_number}-VERIFICATION.md`
@@ -623,12 +625,12 @@ Wait for researcher response (plain text).
 Update Checks section:
 
 ```
-### {N}. {name}
-expected: {expected}
-computation: {computation performed}
-precomputed_result: {AI's result}
+### 1. Benchmark Comparison
+expected: The benchmark comparison should land within the 1% tolerance.
+computation: Evaluated the benchmark at the configured test points.
+precomputed_result: Independent arithmetic gives a relative error of 0.006.
 result: pass
-confidence: {independently confirmed | structurally present}
+confidence: independently confirmed
 ```
 
 **If response indicates skip:**
@@ -638,12 +640,12 @@ confidence: {independently confirmed | structurally present}
 Update Checks section:
 
 ```
-### {N}. {name}
-expected: {expected}
-computation: {computation performed}
-precomputed_result: {AI's result}
+### 2. Benchmark Comparison
+expected: The benchmark comparison is not needed for this check.
+computation: The check was not run because it is outside the current scope.
+precomputed_result: No computation performed.
 result: skipped
-reason: [researcher's reason if provided]
+reason: The researcher confirmed this check was outside the current scope.
 ```
 
 **If response is anything else:**
@@ -661,36 +663,33 @@ Infer severity from description:
 Update Checks section:
 
 ```
-### {N}. {name}
-expected: {expected}
-computation: {computation performed}
-precomputed_result: {AI's result}
+### 3. Benchmark Comparison
+expected: The benchmark comparison should land within the 1% tolerance.
+computation: Evaluated the benchmark at the configured test points.
+precomputed_result: Independent arithmetic gives a relative error of 0.006.
 result: issue
-reported: "{verbatim researcher response}"
-severity: {inferred}
+reported: "The benchmark comparison still needs one more reference point."
+severity: major
 ```
 
 Append to Gaps section (structured YAML for plan-phase --gaps).
 Use the same omission rule here: emit only the ID keys that actually bind the gap.
 
 ```yaml
-- gap_subject_kind: "{check_subject_kind}"
-  subject_id: "{subject_id}"
-  expectation: "{expected physics outcome from check}"
-  expected_check: "{expected physics outcome from check}"
-  claim_id: "{claim_id}"
-  deliverable_id: "{deliverable_id}"
-  acceptance_test_id: "{acceptance_test_id}"
-  reference_ids: ["{reference_id}"]
-  forbidden_proxy_id: "{forbidden_proxy_id}"
-  comparison_kind: "{comparison_kind}"
-  comparison_reference_id: "{comparison_reference_id}"
+- gap_subject_kind: "claim"
+  subject_id: "claim-main"
+  expectation: "The benchmark comparison should land within the 1% tolerance."
+  expected_check: "The independent calculation should reproduce the same sign and scale."
+  claim_id: "claim-main"
+  reference_ids: ["reference-main"]
+  comparison_kind: "benchmark"
+  comparison_reference_id: "reference-main"
   status: failed
-  reason: "Researcher reported: {verbatim researcher response}"
-  computation_evidence: "{what AI independently computed and found}"
+  reason: "Researcher reported: the benchmark comparison still needs one more reference point."
+  computation_evidence: "Independent arithmetic gave a relative error of 0.012."
   suggested_contract_checks: []
-  severity: { inferred }
-  check: { N }
+  severity: major
+  check: 1
   artifacts: [] # Filled by diagnosis
   missing: [] # Filled by diagnosis
 ```
@@ -728,7 +727,7 @@ If no more checks -> Go to `complete_session`
 
 Read the full verification file.
 
-Find first check with `result: [pending]`.
+Find first check with `result: pending`.
 
 Announce:
 

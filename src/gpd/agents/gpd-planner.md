@@ -866,14 +866,22 @@ contract:
     - id: "claim-polarization"
       statement: "Vacuum polarization tensor is transverse in the chosen gauge and scheme"
       claim_kind: theorem
-      deliverables: ["deliv-vac-pol"]
-      acceptance_tests: ["test-transversality"]
+      deliverables: ["deliv-vac-pol", "deliv-proof-vac-pol"]
+      acceptance_tests: ["test-transversality", "test-proof-alignment"]
       references: ["ref-textbook"]
+      parameters: ["q"]
+      hypotheses: ["Gauge-fixing and regularization conventions match the approved anchor"]
+      conclusion_clauses: ["q_mu Pi^{mu nu} = 0"]
+      proof_deliverables: ["deliv-proof-vac-pol"]
   deliverables:
     - id: "deliv-vac-pol"
       kind: "derivation"
       path: "derivations/vacuum-polarization.tex"
       description: "One-loop vacuum polarization derivation with explicit tensor contraction"
+    - id: "deliv-proof-vac-pol"
+      kind: "derivation"
+      path: "derivations/vacuum-polarization-proof-audit.md"
+      description: "Proof-oriented inventory for the transversality claim"
   references:
     - id: "ref-textbook"
       kind: "paper"
@@ -890,6 +898,12 @@ contract:
       procedure: "Contract Pi^{mu nu} with q_mu and verify the longitudinal part vanishes."
       pass_condition: "q_mu Pi^{mu nu} = 0"
       evidence_required: ["deliv-vac-pol", "ref-textbook"]
+    - id: "test-proof-alignment"
+      subject: "claim-polarization"
+      kind: "claim_to_proof_alignment"
+      procedure: "Verify the proof inventory covers the named hypothesis, parameter, and conclusion."
+      pass_condition: "Every theorem field is covered explicitly."
+      evidence_required: ["deliv-proof-vac-pol"]
   forbidden_proxies:
     - id: "fp-clean-algebra"
       subject: "claim-polarization"

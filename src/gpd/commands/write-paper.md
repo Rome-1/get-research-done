@@ -81,20 +81,11 @@ Structure and write a physics paper from completed research results. Drive the f
 
 **Orchestrator role:** Set scope and structure, spawn gpd-paper-writer agents for wave-parallelized section drafting, run gpd-bibliographer for citation verification, coordinate the staged peer-review panel (`gpd-review-reader`, `gpd-review-literature`, `gpd-review-math`, `gpd-review-physics`, `gpd-review-significance`, then `gpd-referee`), and keep the manuscript internally consistent.
 
-**Why subagent:** Paper writing needs the full research context while drafting coherent prose. Each section may need derivations, numerical results, and literature context, so fresh context per section keeps the main coordinator focused on structure.
+**Why subagent:** Paper writing needs full research context, and fresh context keeps each section draft isolated.
 
 Writing a physics paper is not writing a report. Keep the narrative arc tight, let every equation and figure earn its place, and keep the review gates semantic: bibliography must clear `bibliography_audit_clean`, and the reproducibility manifest must clear `reproducibility_ready`.
 
-Routes to the write-paper workflow:
-
-1. Load research digest and map sections.
-2. Run the paper-readiness audit and decide whether to proceed.
-3. Establish scope, catalog artifacts, and draft the outline.
-4. Generate figures before section drafting.
-5. Draft sections in waves, with `gpd paper-build` as the canonical manuscript scaffold contract and optional local compilation as smoke checks only.
-6. Check consistency, notation, placeholders, and citations.
-7. Run the staged peer-review panel and final adjudication.
-8. Apply a bounded revision loop for referee issues.
+Follow `@{GPD_INSTALL_DIR}/workflows/write-paper.md` for the full pipeline.
 </objective>
 
 <execution_context>

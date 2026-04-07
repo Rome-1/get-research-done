@@ -43,7 +43,7 @@ Handles the full revision pipeline: parsing referee comments, categorizing by pr
 
 **Orchestrator role:** Parse and triage referee comments, coordinate revision agents, track new calculation requests, and keep the internal and journal-facing response artifacts synchronized.
 
-**Why subagent:** Each section revision needs the full context of the referee comment, current section text, and planned response. Fresh context per section revision improves quality while the main context coordinates the overall response structure.
+**Why subagent:** Each revision needs the referee comment, current text, and response plan. Fresh context keeps the response coordinated.
 
 Responding to referees is collaborative improvement: every comment, even an incorrect one, reveals something about how the paper communicates its results. The goal is a stronger paper.
 </objective>

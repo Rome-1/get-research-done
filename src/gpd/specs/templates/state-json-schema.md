@@ -98,9 +98,14 @@ Fields marked **Authoritative** exist only in state.json (not representable in S
       "statement": "Recover the published benchmark curve within the stated tolerance",
       "claim_kind": "theorem",
       "observables": ["obs-main"],
-      "deliverables": ["deliv-main"],
-      "acceptance_tests": ["test-main"],
-      "references": ["Ref-01"]
+      "deliverables": ["deliv-main", "deliv-proof-main"],
+      "acceptance_tests": ["test-main", "test-proof-main"],
+      "references": ["Ref-01"],
+      "parameters": ["k"],
+      "hypotheses": ["Published normalization and tolerance convention are interpreted exactly as stated in Ref-01"],
+      "quantifiers": ["for every benchmark sample k in the approved comparison set"],
+      "conclusion_clauses": ["relative error stays within the stated 1% tolerance at every approved benchmark sample"],
+      "proof_deliverables": ["deliv-proof-main"]
     }
   ],
   "deliverables": [
@@ -110,6 +115,13 @@ Fields marked **Authoritative** exist only in state.json (not representable in S
       "path": "paper/figures/benchmark-curve.pdf",
       "description": "Figure comparing the reproduced curve against the benchmark",
       "must_contain": ["benchmark overlay"]
+    },
+    {
+      "id": "deliv-proof-main",
+      "kind": "derivation",
+      "path": "derivations/benchmark-proof.md",
+      "description": "Auditable proof sketch tying the tolerance claim to the benchmark construction",
+      "must_contain": ["named hypotheses", "parameter coverage", "conclusion mapping"]
     }
   ],
   "acceptance_tests": [
@@ -121,6 +133,15 @@ Fields marked **Authoritative** exist only in state.json (not representable in S
       "pass_condition": "Relative error <= 1%",
       "evidence_required": ["deliv-main", "Ref-01"],
       "automation": "hybrid"
+    },
+    {
+      "id": "test-proof-main",
+      "subject": "claim-main",
+      "kind": "claim_to_proof_alignment",
+      "procedure": "Check that every named hypothesis, parameter, and conclusion clause in the theorem claim is covered by the proof artifact",
+      "pass_condition": "Every theorem field is covered explicitly or auditable as intentionally omitted",
+      "evidence_required": ["deliv-proof-main"],
+      "automation": "manual"
     }
   ],
   "references": [

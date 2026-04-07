@@ -2628,6 +2628,8 @@ def test_state_json_schema_surfaces_stdin_contract_persistence_and_model_normali
     assert "`uncertainty_markers.weakest_anchors` and `uncertainty_markers.disconfirming_observations` must both be non-empty." in state_schema
     assert "`scope.in_scope` must name at least one project boundary or objective." in state_schema
     assert "claim_kind\": \"theorem\"" in state_schema
+    assert '"proof_deliverables": ["deliv-proof-main"]' in state_schema
+    assert '"kind": "claim_to_proof_alignment"' in state_schema
     assert "grounding fields must be concrete enough to re-find later" in state_schema
     assert (
         "If a project contract has any `references[]` and does not already carry concrete prior-output, "
@@ -2655,7 +2657,7 @@ def test_phase_prompt_surfaces_validation_critical_plan_contract_rules() -> None
     assert "Quick contract rules:" in phase_prompt
     assert "Put machine-checkable prerequisites in `tool_requirements`; keep human-only setup in `researcher_setup`." in phase_prompt
     assert "Use the included schema for contract shape, cardinality, and enum defaults." in phase_prompt
-    assert "`scope.in_scope` must be populated for project-scoping plans." in phase_prompt
+    assert "`scope.in_scope` must be populated in the executor-facing contract examples, and project-scoping plans must keep it non-empty." in phase_prompt
     assert "Proof-bearing claims must use an explicit non-`other` `claim_kind`, and the body must keep hypotheses, parameters, and conclusions auditable." in phase_prompt
     assert "If grounding already exists elsewhere, a missing `must_surface: true` reference is a warning, not a blocker." in phase_prompt
     assert "If the plan is intentionally scoping-only, keep that limited shape explicit and preserve at least one target, open question, or carry-forward input." in phase_prompt
