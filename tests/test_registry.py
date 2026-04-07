@@ -583,6 +583,16 @@ class TestParseCommandFile:
         assert cmd.context_mode == "project-required"
         assert cmd.project_reentry_capable is True
 
+
+    def test_new_project_registry_surface_uses_narrow_contract_schema_without_include_markers(self) -> None:
+        rendered = registry.get_command("gpd:new-project").content
+
+        assert "`schema_version` must be the integer `1`" in rendered
+        assert "### `position`" not in rendered
+        assert "### `active_calculations`" not in rendered
+        assert "<!-- [included:" not in rendered
+        assert "<!-- [end included] -->" not in rendered
+
     def test_command_project_reentry_capable_rejects_non_boolean_values(self, tmp_path: Path) -> None:
         f = tmp_path / "resume-work.md"
         f.write_text(

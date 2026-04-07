@@ -150,12 +150,12 @@ If the user named a prior output or review checkpoint that must ground approval 
 Do not approve a scoping contract that strips decisive outputs, anchors, prior outputs, or review/stop triggers down to generic placeholders. The approved contract must preserve the user guidance that downstream planning needs.
 If the only checks captured so far are limiting cases, sanity checks, or qualitative expectations, treat the contract as still underspecified unless the user explicitly states that these are the decisive standard.
 Missing-anchor notes preserve uncertainty, but they do not satisfy approval on their own. Do not offer approval until at least one concrete anchor, reference, prior-output constraint, or baseline is present.
-Before you ask for approval, keep the contract as a literal JSON object for the `project_contract` subsection of `templates/state-json-schema.md`, and use that schema as the canonical source of truth for the object rules. Do not restate the full contract rules here; keep only the approval-critical reminders below.
+Before you ask for approval, keep the contract as a literal JSON object for the `project_contract` subsection of `templates/project-contract-schema.md`, and use that schema as the canonical source of truth for the object rules. Do not restate the full contract rules here; keep only the approval-critical reminders below.
 
-Before you show the approval gate, build the raw contract as a literal JSON object for the `project_contract` subsection of `templates/state-json-schema.md`:
+Before you show the approval gate, build the raw contract as a literal JSON object for the `project_contract` subsection of `templates/project-contract-schema.md`:
 
 - author only the JSON object that will be stored in `project_contract`, not the surrounding `state.json` envelope
-- follow the `project_contract` object rules in `templates/state-json-schema.md` exactly
+- follow the `project_contract` object rules in `templates/project-contract-schema.md` exactly
 - do not paraphrase the schema here; reuse its exact keys, enum values, list/object shapes, ID-linkage rules, and proof-bearing claim requirements
 - do not invent near-miss enum values, extra keys, or scalar shortcuts for list fields; fix them to the schema before approval
 - `context_intake`, `approach_policy`, and `uncertainty_markers` must each stay as objects, not strings or lists.

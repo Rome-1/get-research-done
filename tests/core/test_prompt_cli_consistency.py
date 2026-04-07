@@ -390,7 +390,7 @@ def test_plan_phase_prompt_is_a_thin_dispatch_shell() -> None:
     assert "@{GPD_INSTALL_DIR}/workflows/plan-phase.md" in command
     assert "@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md" in command
     assert "@{GPD_INSTALL_DIR}/references/ui/ui-brand.md" in command
-    assert "Read `{GPD_INSTALL_DIR}/workflows/plan-phase.md` with the file-read tool and follow it exactly." in command
+    assert "Follow the included workflow file exactly." in command
     assert "agent: gpd-planner" in command
     assert "What Makes a Good Physics Plan" not in command
     assert "Common Failure Modes" not in command
@@ -508,6 +508,7 @@ def test_regression_check_prompt_examples_include_optional_phase_before_quick_fl
     infra = (REPO_ROOT / "src/gpd/specs/references/orchestration/agent-infrastructure.md").read_text(encoding="utf-8")
 
     assert "@{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md" in verifier_raw
+    assert "<!-- [included:" not in verifier_raw
     for content in (verifier, infra):
         assert "gpd regression-check [phase] [--quick]" in content
         assert "gpd regression-check [--quick]" not in content

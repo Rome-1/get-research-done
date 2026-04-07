@@ -71,7 +71,7 @@ Phase: $ARGUMENTS (optional)
 
 <process>
 **CRITICAL: First, read the full workflow file using the file_read tool:**
-Read {GPD_INSTALL_DIR}/workflows/verify-work.md first and follow it exactly.
+Follow the included workflow file exactly.
 
 Execute the workflow end-to-end and preserve its session, diagnosis, fix-planning, and routing gates.
 The workflow file owns the detailed check taxonomy; this wrapper only bootstraps the canonical verification surfaces and delegates the physics checks.

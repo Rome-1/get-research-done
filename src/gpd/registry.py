@@ -129,8 +129,10 @@ def _inline_model_visible_includes(content: str) -> str:
     """Inline shared include directives while preserving canonical placeholder tokens."""
 
     expanded = expand_at_includes(content, _PKG_ROOT, _MODEL_VISIBLE_INCLUDE_PATH_PREFIX)
+    cleaned = re.sub(r"(?m)^[ \t]*<!-- \[included:.*?\] -->\s*\n?", "", expanded)
+    cleaned = re.sub(r"(?m)^[ \t]*<!-- \[end included\] -->\s*\n?", "", cleaned)
     return (
-        expanded.replace(
+        cleaned.replace(
             f"{_MODEL_VISIBLE_INCLUDE_PATH_PREFIX}get-physics-done/",
             "{GPD_INSTALL_DIR}/",
         )

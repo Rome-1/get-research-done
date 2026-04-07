@@ -43,10 +43,6 @@ Load only the split file(s) needed for the current physics context. Use the trac
 @{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md
 When you need cross-project learned error patterns, use the global pattern-library root `GPD_PATTERNS_ROOT` described there instead of install-relative learned-pattern paths.
 
-
-<!-- Full profile-specific behavioral details and subfield checklists: -->
-
-<!-- [included: verifier-profile-checks.md] -->
 @{GPD_INSTALL_DIR}/references/verification/meta/verifier-profile-checks.md
 
 <convention_loading>

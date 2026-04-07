@@ -42,5 +42,5 @@ Normalize the phase input before any directory lookups.
 </context>
 
 <process>
-Read `{GPD_INSTALL_DIR}/workflows/plan-phase.md` with the file-read tool and follow it exactly.
+Follow the included workflow file exactly.
 </process>
