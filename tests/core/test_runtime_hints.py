@@ -13,6 +13,7 @@ from gpd.core.constants import ENV_GPD_ACTIVE_RUNTIME, ProjectLayout
 from gpd.core.costs import UsageRecord, _profile_tier_mix, usage_ledger_path
 from gpd.core.recent_projects import record_recent_project
 from gpd.core.resume_surface import RESUME_COMPATIBILITY_ALIAS_FIELDS
+from gpd.core.runtime_command_surfaces import format_active_runtime_command
 from gpd.core.runtime_hints import (
     _hydrate_resume_context_from_recent_project,
     build_runtime_hint_payload,
@@ -1815,6 +1816,29 @@ def test_build_runtime_hint_payload_formats_generic_runtime_follow_up_when_runti
     assert "runtime `resume-work` continues in-runtime from the selected project state." in payload.next_actions
     assert "runtime `suggest-next` is the fastest post-resume next command when you only need the next action." in payload.next_actions
     assert not any("`runtime `resume-work``" in action for action in payload.next_actions)
+
+
+def test_runtime_hints_runtime_command_delegates_to_shared_helper(tmp_path: Path) -> None:
+    from gpd.core import runtime_hints
+
+    with patch("gpd.core.runtime_hints.format_active_runtime_command", return_value="shared command") as mock_format:
+        result = runtime_hints._runtime_command("resume-work", cwd=tmp_path)
+
+    mock_format.assert_called_once_with("resume-work", cwd=tmp_path, fallback=None)
+    assert result == "shared command"
+
+
+def test_format_active_runtime_command_returns_none_when_no_runtime_is_detected() -> None:
+    assert format_active_runtime_command("resume-work", detect_runtime=lambda **kwargs: None) is None
+
+
+def test_format_active_runtime_command_formats_detected_runtime_command() -> None:
+    runtime = _RUNTIME_NAMES[0]
+    adapter = get_adapter(runtime)
+
+    result = format_active_runtime_command("resume-work", detect_runtime=lambda **kwargs: runtime)
+
+    assert result == adapter.format_command("resume-work")
 
 
 def test_build_runtime_hint_payload_uses_generic_runtime_commands_when_no_install_authoritative_runtime(

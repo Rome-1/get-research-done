@@ -39,6 +39,7 @@ from gpd.core.resume_surface import (
     resume_payload_has_local_recovery_target,
 )
 from gpd.core.root_resolution import normalize_workspace_hint, resolve_project_roots
+from gpd.core.runtime_command_surfaces import format_active_runtime_command
 from gpd.core.surface_phrases import (
     command_follow_up_action,
     cost_inspect_action,
@@ -239,14 +240,7 @@ def _project_reentry_summary(
 
 
 def _runtime_command(action: str, *, cwd: Path) -> str | None:
-    try:
-        from gpd.adapters import get_adapter
-        runtime_name = _installed_runtime_for_surface(cwd)
-        if runtime_name is None:
-            return None
-        return str(get_adapter(runtime_name).format_command(action)).strip()
-    except Exception:
-        return None
+    return format_active_runtime_command(action, cwd=cwd, fallback=None)
 
 
 def _installed_runtime_for_surface(cwd: Path) -> str | None:
