@@ -253,13 +253,15 @@ def test_help_prompt_keeps_workflow_preset_readiness_on_local_cli_surface() -> N
 
 def test_start_prompt_delegates_routing_to_workflow_only() -> None:
     start_command = (COMMANDS_DIR / "start.md").read_text(encoding="utf-8")
+    start_command_expanded = expand_at_includes(start_command, REPO_ROOT / "src/gpd", "/runtime/")
     start_workflow = (WORKFLOWS_DIR / "start.md").read_text(encoding="utf-8")
 
     assert "@{GPD_INSTALL_DIR}/workflows/start.md" in start_command
-    assert "first-stop chooser" in start_command
-    assert "read-only walkthrough when the user wants orientation before choosing a path" in start_command
-    assert "explain them the first time they appear" in start_command
-    assert "gpd:tour" in start_command
+    assert "@{GPD_INSTALL_DIR}/references/onboarding/beginner-command-taxonomy.md" in start_command
+    assert "actual first-run chooser when the user wants the right next action" in start_command_expanded
+    assert "read-only walkthrough when the user wants orientation before choosing a path" in start_command_expanded
+    assert "explain official terms the first time they appear" in start_command
+    assert "gpd:tour" in start_command_expanded
     assert_start_workflow_router_contract(start_workflow)
     assert local_cli_resume_recent_command() in start_workflow
     assert "in your normal terminal to find the project first" in start_workflow
@@ -279,13 +281,17 @@ def test_start_prompt_delegates_routing_to_workflow_only() -> None:
 
 def test_tour_prompt_delegates_routing_to_workflow_only() -> None:
     tour_command = (COMMANDS_DIR / "tour.md").read_text(encoding="utf-8")
+    tour_command_expanded = expand_at_includes(tour_command, REPO_ROOT / "src/gpd", "/runtime/")
     tour_workflow = (WORKFLOWS_DIR / "tour.md").read_text(encoding="utf-8")
 
     assert "@{GPD_INSTALL_DIR}/workflows/tour.md" in tour_command
+    assert "@{GPD_INSTALL_DIR}/references/onboarding/beginner-command-taxonomy.md" in tour_command
     assert "teaching surface, not a chooser" in tour_command
     assert "safe beginner walkthrough of the core GPD command paths" in tour_command
     assert "gpd:set-tier-models" in tour_command
     assert "gpd:settings" in tour_command
+    assert "gpd:start" in tour_command_expanded
+    assert "gpd:resume-work" in tour_command_expanded
     assert_tour_command_surface_contract(tour_workflow)
     assert "$ARGUMENTS" in tour_workflow
     assert "Do not narrow the command list, select a path, or route based on it." in tour_workflow

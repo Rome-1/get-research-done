@@ -279,7 +279,7 @@ NOTATION_MODEL=$(gpd resolve-model gpd-notation-coordinator)
 ```
 task(
   subagent_type="gpd-notation-coordinator",
-  model="{notation_model}",
+  model="{NOTATION_MODEL}",
   readonly=false,
   prompt="First, read {GPD_AGENTS_DIR}/gpd-notation-coordinator.md for your role and instructions.
 

@@ -94,8 +94,6 @@ Spawn gpd-planner with quick mode context:
 task(
   prompt="First, read {GPD_AGENTS_DIR}/gpd-planner.md for your role and instructions.
 
-Then read {GPD_INSTALL_DIR}/templates/planner-subagent-prompt.md, {GPD_INSTALL_DIR}/templates/phase-prompt.md, and {GPD_INSTALL_DIR}/templates/plan-contract-schema.md before drafting the plan.
-
 <planning_context>
 
 **Mode:** quick

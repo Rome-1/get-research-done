@@ -145,11 +145,16 @@ def _extract_output_paths(task: TaskBlock) -> list[str]:
     return re.findall(r"Write to:\s*([^\s`]+)", task.text)
 
 
-def _assert_spawn_contract(task: TaskBlock, expected_outputs: tuple[str, ...]) -> None:
+def _assert_spawn_contract(
+    task: TaskBlock,
+    expected_outputs: tuple[str, ...],
+    *,
+    shared_state_policy: str = "return_only",
+) -> None:
     assert "<spawn_contract>" in task.text
     assert "write_scope:" in task.text
     assert "expected_artifacts:" in task.text
-    assert "shared_state_policy: return_only" in task.text
+    assert f"shared_state_policy: {shared_state_policy}" in task.text
     for output in expected_outputs:
         assert output in task.text
 
@@ -201,6 +206,12 @@ def test_representative_workflows_keep_runtime_note_and_agent_prompt_bootstrap()
         "respond-to-referees.md": ["gpd-paper-writer"],
         "peer-review.md": ["gpd-review-reader", "gpd-referee"],
         "validate-conventions.md": ["gpd-consistency-checker", "gpd-notation-coordinator"],
+        "new-project.md": [
+            "gpd-project-researcher",
+            "gpd-research-synthesizer",
+            "gpd-roadmapper",
+            "gpd-notation-coordinator",
+        ],
         "derive-equation.md": ["gpd-check-proof"],
         "explain.md": ["gpd-explainer"],
         "audit-milestone.md": ["gpd-consistency-checker", "gpd-referee"],
@@ -311,11 +322,16 @@ def test_new_project_parallel_researchers_write_to_disjoint_artifacts() -> None:
     content = _read(path)
     synth = _find_single_task(path, "gpd-research-synthesizer")
     _assert_spawn_contract(synth, ("GPD/research/SUMMARY.md",))
+    assert "GPD/PROJECT.md" in synth.text
+    assert "GPD/config.json" in synth.text
+    assert "GPD/research/SUMMARY.md (if re-synthesizing an existing survey)" in synth.text
     assert "Do not trust the runtime handoff status by itself." in content
     assert "If a scout reports success but its `expected_artifacts` entry" in content
     assert "`GPD/research/{FILE}`" in content
     assert "If the synthesizer reports success but `GPD/research/SUMMARY.md` is missing" in content
-    assert "If 1-2 agents failed, proceed with the synthesizer using available files" in content
+    assert "Do not proceed with a partial literature survey" in content
+    assert "Do not synthesize from incomplete scout output" in content
+    assert "Do not fabricate a fallback summary in the main context" in content
 
 
 def test_new_project_roadmapper_uses_spawn_contract_and_artifact_gate() -> None:
@@ -323,13 +339,27 @@ def test_new_project_roadmapper_uses_spawn_contract_and_artifact_gate() -> None:
     content = _read(path)
     roadmapper = _find_single_task(path, "gpd-roadmapper")
 
-    _assert_spawn_contract(roadmapper, ("GPD/ROADMAP.md", "GPD/STATE.md"))
+    _assert_spawn_contract(roadmapper, ("GPD/ROADMAP.md", "GPD/STATE.md"), shared_state_policy="direct")
     assert "GPD/REQUIREMENTS.md" in roadmapper.text
     assert "GPD/research/SUMMARY.md" in roadmapper.text
     assert "allowed_paths:" in roadmapper.text
     assert "If the roadmapper reports `## ROADMAP CREATED`" in content
     assert "`GPD/ROADMAP.md` or `GPD/STATE.md` is missing" in content
     assert "Do not trust the runtime handoff status by itself." in content
+    assert "Do not create a second main-context roadmap implementation path" in content
+
+
+def test_new_project_notation_coordinator_uses_explicit_model_and_spawn_contract() -> None:
+    path = WORKFLOWS_DIR / "new-project.md"
+    content = _read(path)
+    notation = _find_single_task(path, "gpd-notation-coordinator")
+
+    _assert_spawn_contract(notation, ("GPD/CONVENTIONS.md",), shared_state_policy="direct")
+    assert 'model="{NOTATION_MODEL}"' in notation.text
+    assert "gpd convention set" in notation.text
+    assert "Do not hardcode `natural` or `mostly_minus`" in content
+    assert 'gpd convention set units "$RESOLVED_UNITS"' in content
+    assert 'gpd convention set metric_signature "$RESOLVED_METRIC"' in content
 
 
 def test_new_milestone_research_and_roadmapper_gate_success_path_artifacts() -> None:

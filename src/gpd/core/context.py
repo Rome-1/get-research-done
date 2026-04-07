@@ -1070,6 +1070,22 @@ def _build_reference_runtime_context(
     }
 
 
+def _build_new_project_contract_runtime_context(cwd: Path) -> dict[str, object]:
+    """Build only the contract/gate payload needed during new-project bootstrap."""
+    contract, project_contract_load_info = _load_project_contract(cwd)
+    project_contract_load_info, project_contract_validation, project_contract_gate = _finalize_project_contract_gate(
+        cwd,
+        contract,
+        project_contract_load_info,
+    )
+    return {
+        "project_contract": contract.model_dump(mode="json") if project_contract_gate.get("visible") else None,
+        "project_contract_validation": project_contract_validation,
+        "project_contract_load_info": project_contract_load_info,
+        "project_contract_gate": project_contract_gate,
+    }
+
+
 def _has_structured_state_value(value: object) -> bool:
     """Return whether a derived state value should be surfaced."""
     if value is None:
@@ -2036,8 +2052,8 @@ def init_new_project(cwd: Path) -> dict:
         and not _path_exists(cwd, f"{PLANNING_DIR_NAME}/{RESEARCH_MAP_DIR_NAME}"),
         # Git state
         "has_git": _path_exists(cwd, ".git"),
-        # Contract-backed context
-        **_build_reference_runtime_context(cwd),
+        # Bootstrap only needs the scoping contract gate, not the full reference ledger.
+        **_build_new_project_contract_runtime_context(cwd),
         # Platform
         "platform": _detect_platform(cwd),
     }

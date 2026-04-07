@@ -1657,6 +1657,46 @@ class TestInitNewProject:
         assert ctx["project_contract_validation"]["valid"] is True
         assert ctx["project_contract_gate"]["authoritative"] is True
 
+    def test_new_project_bootstrap_omits_reference_ledger_payload(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _write_project_contract_state(tmp_path)
+        _write_literature_review_anchor_file(tmp_path)
+        _write_research_map_anchor_files(tmp_path)
+
+        ctx = init_new_project(tmp_path)
+
+        for key in (
+            "contract_intake",
+            "effective_reference_intake",
+            "active_references",
+            "active_reference_context",
+            "reference_artifact_files",
+            "reference_artifacts_content",
+            "selected_protocol_bundle_ids",
+            "protocol_bundle_context",
+        ):
+            assert key not in ctx
+
+    def test_new_project_bootstrap_skips_reference_artifact_ingestion(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _setup_project(tmp_path)
+        _write_project_contract_state(tmp_path)
+        _write_literature_review_anchor_file(tmp_path)
+        _write_research_map_anchor_files(tmp_path)
+
+        def _boom(*args, **kwargs):  # type: ignore[no-untyped-def]
+            raise AssertionError("reference artifact ingestion should not run during new-project bootstrap")
+
+        monkeypatch.setattr("gpd.core.context.ingest_reference_artifacts", _boom)
+
+        ctx = init_new_project(tmp_path)
+
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert ctx["project_contract_validation"]["valid"] is True
+
 
 # ─── init_new_milestone ───────────────────────────────────────────────────────
 

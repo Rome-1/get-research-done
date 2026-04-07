@@ -646,7 +646,7 @@ def test_state_set_project_contract_rejects_invalid_contract(tmp_path: Path):
     assert result.updated is False
     assert result.reason is not None
     assert "Invalid project contract" in result.reason
-    assert result.schema_reference == "templates/state-json-schema.md"
+    assert result.schema_reference == "templates/project-contract-schema.md"
     saved = load_state_json(tmp_path)
     assert saved is not None
     assert saved["project_contract"] is None
@@ -798,7 +798,7 @@ def test_state_set_project_contract_rejects_non_object_input_without_crashing(tm
 
     assert result.updated is False
     assert result.reason == "Invalid project contract schema: project contract must be a JSON object"
-    assert result.schema_reference == "templates/state-json-schema.md"
+    assert result.schema_reference == "templates/project-contract-schema.md"
     saved = load_state_json(tmp_path)
     assert saved is not None
     assert saved["project_contract"] is None

@@ -40,24 +40,19 @@ If no project config exists yet, start with physics questioning, surface a prese
 
 <execution_context>
 @{GPD_INSTALL_DIR}/workflows/new-project.md
-@{GPD_INSTALL_DIR}/references/research/questioning.md
-@{GPD_INSTALL_DIR}/references/ui/ui-brand.md
-@{GPD_INSTALL_DIR}/templates/project.md
-@{GPD_INSTALL_DIR}/templates/requirements.md
-@{GPD_INSTALL_DIR}/templates/project-contract-schema.md
 </execution_context>
 
 <process>
 **CRITICAL: First, read the full workflow file using the file_read tool:**
 Read {GPD_INSTALL_DIR}/workflows/new-project.md first and follow it exactly.
 
-Also read these reference files:
-- {GPD_INSTALL_DIR}/references/research/questioning.md (questioning protocol)
-- {GPD_INSTALL_DIR}/templates/project.md (PROJECT.md template)
-- {GPD_INSTALL_DIR}/templates/requirements.md (REQUIREMENTS.md template)
-- {GPD_INSTALL_DIR}/templates/project-contract-schema.md (project contract object shape and ID linkage rules)
-
-@{GPD_INSTALL_DIR}/references/shared/canonical-schema-discipline.md
+After that, load late-stage authorities only when the workflow reaches the matching stage:
+- Read {GPD_INSTALL_DIR}/references/research/questioning.md only when entering the full questioning path.
+- Read {GPD_INSTALL_DIR}/templates/project-contract-schema.md and {GPD_INSTALL_DIR}/templates/project-contract-grounding-linkage.md only when preparing the approval gate and validating the raw scoping contract.
+- Read {GPD_INSTALL_DIR}/references/shared/canonical-schema-discipline.md only when authoring or repairing the scoping contract.
+- Read {GPD_INSTALL_DIR}/templates/project.md only when writing `GPD/PROJECT.md`.
+- Read {GPD_INSTALL_DIR}/templates/requirements.md only when writing `GPD/REQUIREMENTS.md`.
+- Read {GPD_INSTALL_DIR}/references/ui/ui-brand.md only when rendering branded completion or status blocks.
 
 Execute the workflow end-to-end. Preserve all workflow gates (validation, approvals, routing).
 

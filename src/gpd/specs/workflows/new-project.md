@@ -253,25 +253,41 @@ Fill in what was extracted. For sections without enough information, use sensibl
 
 - [Unresolved question or context gap]
 
-## Physics Subfield
+## Research Context
 
-[Inferred from input, e.g., "Condensed matter — phase transitions"]
+### Physical System
 
-## Mathematical Framework
+[Inferred from input]
+
+### Theoretical Framework
 
 [Inferred from input, or "To be determined during Phase 1"]
 
-## Notation Conventions
+### Key Parameters and Scales
 
-To be established during initial phases.
+| Parameter | Symbol | Regime | Notes |
+| --------- | ------ | ------ | ----- |
+| [param 1] | [sym]  | [range] | [notes] |
+
+### Known Results
+
+- [Known prior result, benchmark, or "To be filled after survey"]
+
+### What Is New
+
+[What this project is trying to establish]
+
+### Computational Environment
+
+[Extracted from input, or "To be determined"]
+
+## Notation and Conventions
+
+See `GPD/CONVENTIONS.md`. Add `GPD/NOTATION_GLOSSARY.md` later only if the project needs a dedicated symbol glossary.
 
 ## Unit System
 
-[Inferred from input, or "Natural units (hbar = c = 1)"]
-
-## Computational Tools
-
-[Extracted from input, or "To be determined"]
+[Inferred from input, or "To be determined from conventions setup"]
 
 If the project may rely on Wolfram capability, distinguish a local Mathematica / Wolfram Language install from the shared optional Wolfram integration config. Add `--live-executable-probes` to `gpd doctor` if you also want cheap local executable probes such as `pdflatex --version` or `wolframscript -version`, but that stays separate from the shared path enabled with `gpd integrations enable wolfram`, and it is still separate from `gpd validate plan-preflight <PLAN.md>` and from local install checks.
 
@@ -632,12 +648,12 @@ Completed through step {PREV_STEP}: {PREV_DESC}
 
 ──────────────────────────────────────────────────────
 Options:
-  1. "Resume from step {PREV_STEP + 1}" -- continue where you left off
+  1. "Resume from the next unfinished checkpoint" -- continue where you left off
   2. "Start fresh" -- re-run from the beginning
 ──────────────────────────────────────────────────────
 ```
 
-If resume: skip to the step after PREV_STEP (check which artifacts already exist on disk to confirm).
+If resume: continue from the next unfinished checkpoint after `PREV_STEP` (check which artifacts already exist on disk to confirm).
 If start fresh: delete `init-progress.json` and proceed normally.
 
 ## 2. Existing Work Offer
@@ -1289,7 +1305,7 @@ shared_state_policy: return_only
 </spawn_contract>
 ", subagent_type="gpd-project-researcher", model="{researcher_model}", readonly=false, description="Prior work research")
 
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
 task(prompt="First, read {GPD_AGENTS_DIR}/gpd-project-researcher.md for your role and instructions.
 
@@ -1341,7 +1357,7 @@ shared_state_policy: return_only
 </spawn_contract>
 ", subagent_type="gpd-project-researcher", model="{researcher_model}", readonly=false, description="Methods research")
 
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
 task(prompt="First, read {GPD_AGENTS_DIR}/gpd-project-researcher.md for your role and instructions.
 
@@ -1394,7 +1410,7 @@ shared_state_policy: return_only
 </spawn_contract>
 ", subagent_type="gpd-project-researcher", model="{researcher_model}", readonly=false, description="Computational approaches research")
 
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
 task(prompt="First, read {GPD_AGENTS_DIR}/gpd-project-researcher.md for your role and instructions.
 
@@ -1448,12 +1464,12 @@ shared_state_policy: return_only
 ", subagent_type="gpd-project-researcher", model="{researcher_model}", readonly=false, description="Pitfalls research")
 ```
 
-**If any research agent fails to spawn or returns an error:** Check which output files were created (PRIOR-WORK.md, METHODS.md, COMPUTATIONAL.md, PITFALLS.md). For each missing file, note the gap and continue with available outputs. If 3+ agents failed, offer: 1) Retry all agents, 2) Skip literature survey and proceed with manual research context, 3) Stop initialization. If 1-2 agents failed, proceed with the synthesizer using available files — the synthesis will be partial but usable.
+**If any research agent fails to spawn or returns an error:** Verify which required scout artifacts exist (`PRIOR-WORK.md`, `METHODS.md`, `COMPUTATIONAL.md`, `PITFALLS.md`). Retry only the missing scout tasks once. If any required research file is still missing after the retry, STOP this survey path and present the missing artifacts. Do not proceed with a partial literature survey. Do not synthesize from incomplete scout output. Do not silently downgrade to manual main-context research.
 
 After all 4 agents complete (or partial completion handled), spawn synthesizer to create SUMMARY.md:
 
 ```
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
 task(prompt="First, read {GPD_AGENTS_DIR}/gpd-research-synthesizer.md for your role and instructions.
 
@@ -1463,10 +1479,13 @@ Synthesize literature survey outputs into SUMMARY.md.
 
 <research_files>
 Read these files:
+- GPD/PROJECT.md
+- GPD/config.json
 - GPD/research/PRIOR-WORK.md
 - GPD/research/METHODS.md
 - GPD/research/COMPUTATIONAL.md
 - GPD/research/PITFALLS.md
+- GPD/research/SUMMARY.md (if re-synthesizing an existing survey)
 </research_files>
 
 <output>
@@ -1488,7 +1507,7 @@ shared_state_policy: return_only
 
 **Artifact gate:** If a scout reports success but its `expected_artifacts` entry (`GPD/research/{FILE}`) is missing, treat that scout as incomplete. If the synthesizer reports success but `GPD/research/SUMMARY.md` is missing, treat that handoff as incomplete. Do not trust the runtime handoff status by itself.
 
-**If the synthesizer agent fails to spawn or returns an error:** Check if individual research files exist. If they do, create a minimal SUMMARY.md in the main context by reading each file's key findings. The individual research files are more important than the synthesis — proceed with what exists.
+**If the synthesizer agent fails to spawn or returns an error:** Retry once if `GPD/research/SUMMARY.md` is missing. If the summary artifact is still missing after the retry, STOP and surface the blocker. Do not fabricate a fallback summary in the main context when the chosen survey path asked for a synthesized research brief.
 
 Display research complete banner and key findings:
 
@@ -1708,7 +1727,7 @@ Display stage banner:
 
 Spawn gpd-roadmapper agent with context:
 
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
 ```
 task(prompt="First, read {GPD_AGENTS_DIR}/gpd-roadmapper.md for your role and instructions.
@@ -1746,14 +1765,14 @@ write_scope:
 expected_artifacts:
   - GPD/ROADMAP.md
   - GPD/STATE.md
-shared_state_policy: return_only
+shared_state_policy: direct
 </spawn_contract>
 ", subagent_type="gpd-roadmapper", model="{roadmapper_model}", readonly=false, description="Create research roadmap")
 ```
 
 **Handle roadmapper return:**
 
-**If the roadmapper agent fails to spawn or returns an error:** Check if ROADMAP.md was partially written (the agent writes files first). If ROADMAP.md exists, verify it has phases and offer to proceed with it. If no ROADMAP.md exists, offer: 1) Retry the roadmapper, 2) Create ROADMAP.md in the main context using PROJECT.md and REQUIREMENTS.md. Do not leave the project in a state with REQUIREMENTS.md but no ROADMAP.md. **Also check if STATE.md exists** — the roadmapper creates both. If STATE.md is missing, create a minimal STATE.md (using the template from Step M5 in the minimal mode section above) so that downstream commands (`convention set`, `state validate`, etc.) can function.
+**If the roadmapper agent fails to spawn or returns an error:** Check whether both `GPD/ROADMAP.md` and `GPD/STATE.md` already exist and are non-trivial (the agent writes files first). If both artifacts exist, verify them and continue. Otherwise retry the roadmapper once. If either required artifact is still missing after the retry, STOP and surface the blocker. Do not create a second main-context roadmap implementation path, and do not continue with `REQUIREMENTS.md` but no canonical roadmap/state pair.
 
 **Artifact gate:** If the roadmapper reports `## ROADMAP CREATED` but `GPD/ROADMAP.md` or `GPD/STATE.md` is missing, treat the handoff as incomplete. Do not trust the runtime handoff status by itself.
 
@@ -1825,7 +1844,7 @@ Use ask_user:
 - Get user's adjustment notes
 - Re-spawn roadmapper with revision context:
 
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
   ```
   task(prompt="First, read {GPD_AGENTS_DIR}/gpd-roadmapper.md for your role and instructions.
@@ -1842,7 +1861,7 @@ Use ask_user:
   ", subagent_type="gpd-roadmapper", model="{roadmapper_model}", readonly=false, description="Revise roadmap")
   ```
 
-  **If the revision roadmapper agent fails to spawn or returns an error:** Check if ROADMAP.md was updated (compare with pre-revision content). If changes were made, proceed to present the revised roadmap. If no changes, offer: 1) Retry the revision agent, 2) Apply the user's adjustment notes manually in the main context by editing ROADMAP.md directly.
+  **If the revision roadmapper agent fails to spawn or returns an error:** Compare `GPD/ROADMAP.md` with the pre-revision content. If the artifact changed, proceed to present the revised roadmap. If it did not change, retry the revision agent once; if the roadmap still does not update, STOP and surface that the revision handoff failed. Do not fork a second manual roadmap-editing path in the main context.
 
 - Present revised roadmap
 - Loop until user approves (**maximum 3 revision iterations** — after 3, commit the current version with user's notes recorded as open questions in ROADMAP.md, and note: "Roadmap committed after 3 revision rounds. Further adjustments via `gpd:add-phase` or `gpd:remove-phase`.")
@@ -1892,7 +1911,7 @@ If `NOTATION_MODEL` is empty or null, omit `model=` entirely in the spawn call. 
 
 Spawn gpd-notation-coordinator:
 
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
 ```
   task(prompt="First, read {GPD_AGENTS_DIR}/gpd-notation-coordinator.md for your role and instructions.
@@ -1920,25 +1939,34 @@ Interactive mode: Present suggested conventions, wait for user confirmation/over
 2. Lock conventions via: gpd convention set
 3. Return CONVENTIONS ESTABLISHED with summary
 </output>
-", subagent_type="gpd-notation-coordinator", readonly=false, description="Establish project conventions")
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - GPD/CONVENTIONS.md
+expected_artifacts:
+  - GPD/CONVENTIONS.md
+shared_state_policy: direct
+</spawn_contract>
+", subagent_type="gpd-notation-coordinator", model="{NOTATION_MODEL}", readonly=false, description="Establish project conventions")
 ```
 
 **Handle notation-coordinator return:**
 
-**If the notation-coordinator agent fails to spawn or returns an error:** Conventions are not critical for project initialization to succeed, BUT the convention_lock in state.json must be populated for downstream defense layers (L1-L4) to function. Fallback:
+**If the notation-coordinator agent fails to spawn or returns an error:** Use a deterministic fallback instead of hardcoded defaults:
 
-1. Create a minimal CONVENTIONS.md with the project's unit system and metric signature from PROJECT.md (if specified)
-2. **Populate the convention_lock** with at minimum the unit system and metric signature:
+1. Read `GPD/PROJECT.md` and extract any explicit unit-system or metric-signature choices already recorded there.
+2. If either value is still missing, read `{GPD_INSTALL_DIR}/references/conventions/subfield-convention-defaults.md`, identify the project's physics subfield from `GPD/PROJECT.md`, and resolve the matching default convention pair from that table.
+3. If you still cannot resolve both the unit system and metric signature, STOP and ask the user. Do not hardcode `natural` or `mostly_minus`.
+4. Create a minimal `GPD/CONVENTIONS.md` that records the resolved values and states that richer convention coverage is still pending.
+5. Populate the convention lock with the same resolved values:
 
    ```bash
-   # Populate convention_lock so downstream L1-L4 defense layers are active
-   gpd convention set natural_units "natural" 2>/dev/null || true
-   gpd convention set metric_signature "mostly_minus" 2>/dev/null || true
+   gpd convention set units "$RESOLVED_UNITS"
+   gpd convention set metric_signature "$RESOLVED_METRIC"
    ```
 
-   Adjust values based on what PROJECT.md specifies. If PROJECT.md doesn't specify conventions, use the subfield defaults from `{GPD_INSTALL_DIR}/references/conventions/subfield-convention-defaults.md`.
-
-3. Note that full convention establishment was skipped. The user can run `gpd convention set ...` or `gpd:validate-conventions` later to complete convention setup.
+6. Note that full convention establishment was skipped. The user can run `gpd:validate-conventions` or rerun convention setup later, but the fallback lock must match the values written into `GPD/CONVENTIONS.md`.
 
 - **`CONVENTIONS ESTABLISHED`:** Display confirmation with convention summary. Commit CONVENTIONS.md:
 

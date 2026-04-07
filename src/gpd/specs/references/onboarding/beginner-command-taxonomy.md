@@ -1,0 +1,6 @@
+- `gpd:start` is the actual first-run chooser when the user wants the right next action
+- `gpd:tour` is the read-only walkthrough when the user wants orientation before choosing a path
+- `gpd:new-project` and `gpd:new-project --minimal` are the real project-creation workflows
+- `gpd:map-research` is for bringing an existing folder into GPD
+- `gpd:resume-work` is the in-runtime recovery command that reloads canonical state once the right project is open
+- When you mention advanced terms such as workflow, router, project artifacts, or recovery path, explain them the first time they appear

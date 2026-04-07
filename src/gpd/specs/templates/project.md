@@ -124,7 +124,7 @@ One sentence that drives prioritization when tradeoffs arise.]
 ## Notation and Conventions
 
 See `GPD/CONVENTIONS.md` for all notation and sign conventions.
-See `GPD/NOTATION_GLOSSARY.md` for symbol definitions.
+Add `GPD/NOTATION_GLOSSARY.md` later only if the project needs a dedicated symbol glossary.
 
 ## Unit System
 
@@ -214,7 +214,8 @@ _Last updated: [date] after [trigger]_
 
 **Notation and Conventions:**
 
-- Populated during project initialization into `GPD/CONVENTIONS.md` and `GPD/NOTATION_GLOSSARY.md`
+- Populated during project initialization into `GPD/CONVENTIONS.md`
+- Add `GPD/NOTATION_GLOSSARY.md` later only when the project benefits from a dedicated symbol glossary
 - PROJECT.md contains only a pointer, not inline convention definitions
 
 **Constraints:**

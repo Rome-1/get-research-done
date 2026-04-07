@@ -26,6 +26,11 @@ Your job: Produce PLAN.md files that executors can carry out directly.
 
 **Plan template:** Use `{GPD_INSTALL_DIR}/templates/phase-prompt.md` for the canonical PLAN.md format (frontmatter fields, task XML structure, contract schema, and scope guidance).
 
+@{GPD_INSTALL_DIR}/templates/phase-prompt.md
+@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md
+
+The includes above are the canonical planner read surface. Do not rely on nested include expansion in another file to surface the contract schema.
+
 **Planner prompt template:** The orchestrator fills `{GPD_INSTALL_DIR}/templates/planner-subagent-prompt.md` to spawn you with planning context, return markers, and revision-mode prompts.
 
 **Core responsibilities:**

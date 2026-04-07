@@ -32,7 +32,7 @@ This graph therefore includes:
 - `src/gpd/agents/*.md`: `24`
 - `src/gpd/specs/workflows/*.md`: `67`
 - `src/gpd/specs/templates/**/*.md`: `76`
-- `src/gpd/specs/references/**/*.md`: `167`
+- `src/gpd/specs/references/**/*.md`: `168`
 - `src/gpd/adapters/*.py`: `9`
 - `src/gpd/hooks/*.py`: `11`
 - `src/gpd/mcp/servers/*.py`: `8`
@@ -540,18 +540,6 @@ flowchart TD
   `spawn`
 
 - `src/gpd/commands/new-project.md -> src/gpd/specs/workflows/new-project.md`
-  `include`
-
-- `src/gpd/commands/new-project.md -> src/gpd/specs/references/research/questioning.md`
-  `include`
-
-- `src/gpd/commands/new-project.md -> src/gpd/specs/references/ui/ui-brand.md`
-  `include`
-
-- `src/gpd/commands/new-project.md -> src/gpd/specs/templates/project.md`
-  `include`
-
-- `src/gpd/commands/new-project.md -> src/gpd/specs/templates/requirements.md`
   `include`
 
 - `src/gpd/commands/new-milestone.md -> src/gpd/specs/workflows/new-milestone.md`

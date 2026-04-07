@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from gpd.adapters.install_utils import expand_at_includes
 from gpd.registry import get_command, list_commands
 from tests.doc_surface_contracts import assert_start_workflow_router_contract
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMANDS_DIR = REPO_ROOT / "src" / "gpd" / "commands"
 WORKFLOWS_DIR = REPO_ROOT / "src" / "gpd" / "specs" / "workflows"
+SOURCE_ROOT = REPO_ROOT / "src" / "gpd"
+PATH_PREFIX = "/runtime/"
 
 
 def test_start_command_is_registered_and_projectless() -> None:
@@ -18,15 +21,22 @@ def test_start_command_is_registered_and_projectless() -> None:
 
 
 def test_start_command_references_workflow() -> None:
-    command_prompt = (COMMANDS_DIR / "start.md").read_text(encoding="utf-8")
-    assert "@{GPD_INSTALL_DIR}/workflows/start.md" in command_prompt
+    raw_command_prompt = (COMMANDS_DIR / "start.md").read_text(encoding="utf-8")
+    command_prompt = expand_at_includes(raw_command_prompt, SOURCE_ROOT, PATH_PREFIX)
+
+    assert "@{GPD_INSTALL_DIR}/workflows/start.md" in raw_command_prompt
+    assert "@{GPD_INSTALL_DIR}/references/onboarding/beginner-command-taxonomy.md" in raw_command_prompt
     assert "gpd resume" in command_prompt
     assert "gpd resume --recent" in command_prompt
     assert "gpd:resume-work" in command_prompt
     assert "gpd:suggest-next" in command_prompt
     assert "advisory recent-project picker" in command_prompt
     assert "reloads canonical state in the reopened project" in command_prompt
-    assert command_prompt.index("gpd resume") < command_prompt.index("gpd resume --recent") < command_prompt.index("gpd:resume-work") < command_prompt.index("gpd:suggest-next")
+    assert (
+        command_prompt.index("`gpd resume` remains the local read-only current-workspace recovery snapshot")
+        < command_prompt.index("`gpd resume --recent` remains the normal-terminal advisory recent-project picker")
+        < command_prompt.index("`gpd:suggest-next` is the fastest post-resume next command")
+    )
 
 
 def test_start_workflow_routes_to_existing_entrypoints() -> None:

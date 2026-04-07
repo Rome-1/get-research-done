@@ -220,16 +220,24 @@ def test_shared_specs_use_canonical_tool_references() -> None:
     assert invalid == []
 
 
-def test_new_project_notation_delegate_omits_model_argument_when_model_is_empty() -> None:
+def test_new_project_notation_delegate_threads_resolved_model_through_the_spawn_call() -> None:
     content = (REPO_ROOT / "src/gpd/specs/workflows/new-project.md").read_text(encoding="utf-8")
     marker = 'NOTATION_MODEL=$(gpd resolve-model gpd-notation-coordinator)'
     start = content.index(marker)
     task_start = content.index('task(prompt="First, read {GPD_AGENTS_DIR}/gpd-notation-coordinator.md', start)
-    task_end = content.index('", subagent_type="gpd-notation-coordinator"', task_start)
+    task_end = content.index('description="Establish project conventions")', task_start)
     notation_block = content[task_start:task_end]
 
-    assert 'model="{notation_model}"' not in notation_block
+    assert 'model="{NOTATION_MODEL}"' in notation_block
     assert "If `NOTATION_MODEL` is empty or null, omit `model=` entirely in the spawn call." in content
+
+
+def test_new_project_resume_prompt_uses_checkpoint_language_for_fractional_steps() -> None:
+    content = (REPO_ROOT / "src/gpd/specs/workflows/new-project.md").read_text(encoding="utf-8")
+
+    assert 'Resume from the next unfinished checkpoint' in content
+    assert 'Resume from step {PREV_STEP + 1}' not in content
+    assert '**Checkpoint step 8.5:**' in content
 
 
 def test_prompt_sources_avoid_contextual_runtime_alias_spellings() -> None:
