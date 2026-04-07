@@ -26,7 +26,7 @@ from gpd.adapters.install_utils import (
     translate_frontmatter_tool_names,
 )
 from gpd.adapters.opencode import OpenCodeAdapter
-from gpd.adapters.runtime_catalog import get_shared_install_metadata, resolve_global_config_dir
+from gpd.adapters.runtime_catalog import get_runtime_descriptor, get_shared_install_metadata, resolve_global_config_dir
 from gpd.adapters.tool_names import build_canonical_alias_map
 from gpd.core.public_surface_contract import local_cli_bridge_commands
 from gpd.registry import load_agents_from_dir
@@ -641,4 +641,7 @@ def test_installed_prompt_contract_visibility_survives_adapter_projection(
         verify_work,
         runtime=runtime,
     )
-    assert verifier.count("## Physics Stub Detection Patterns") == 1
+    if get_runtime_descriptor(runtime).native_include_support:
+        assert "## Physics Stub Detection Patterns" not in verifier
+    else:
+        assert verifier.count("## Physics Stub Detection Patterns") == 1
