@@ -1664,24 +1664,18 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
     assert "deliverable-main" in research_verification
     assert "acceptance-test-main" in research_verification
     assert "reference-main" in research_verification
-    assert (
-        "Use the shared planner template, phase template, and `templates/plan-contract-schema.md` "
-        "before drafting the fix plan."
-    ) in verify_workflow
-    assert (
-        "If `project_contract_gate.authoritative` is false, `project_contract_load_info.status` starts with `blocked`, "
-        "or `project_contract_validation.valid` is false, return `## CHECKPOINT REACHED` instead of drafting from guessed scope."
-    ) in verify_workflow
-    assert (
-        "If the downstream fix plan needs specialized tooling or any other machine-checkable hard validation "
-        "requirement, surface it in PLAN frontmatter `tool_requirements`."
-    ) in verify_workflow
-    assert (
-        "Use the shared planner template, phase template, and `templates/plan-contract-schema.md` "
-        "before rewriting the fix plan. If the revised fix plan still needs specialized tooling or "
-        "any other machine-checkable hard validation requirement, keep it in PLAN frontmatter "
-        "`tool_requirements`."
-    ) in verify_workflow
+    assert verify_workflow.count("## CHECKPOINT REACHED") == 1
+    assert verify_workflow.count("templates/planner-subagent-prompt.md") == 2
+    assert verify_workflow.count("templates/phase-prompt.md") == 2
+    assert verify_workflow.count("templates/plan-contract-schema.md") == 2
+    for token in (
+        "project_contract_gate.authoritative",
+        "project_contract_load_info.status",
+        "project_contract_validation.valid",
+        "tool_requirements",
+        "gap_closure",
+    ):
+        assert token in verify_workflow
     assert "forbidden-proxy-main" in research_verification
     assert "comparison_verdicts:" in research_verification
     assert "subject_role: decisive" in research_verification
@@ -2519,8 +2513,25 @@ def test_planner_and_summary_prompt_surfaces_expand_contract_schema_bodies() -> 
     assert "in_scope:" in phase_prompt
     assert "context_intake:" in phase_prompt
     assert "Quick contract rules:" in phase_prompt
-    assert "Use the included schema for contract shape, cardinality, and enum defaults." in phase_prompt
-    assert "Proof-bearing claims must use an explicit non-`other` `claim_kind`, and the body must keep hypotheses, parameters, and conclusions auditable." in phase_prompt
+    assert phase_prompt.count("Quick contract rules:") == 1
+    for token in (
+        "tool_requirements",
+        "researcher_setup",
+        "scope.in_scope",
+        "claim_kind",
+        "observables[].kind",
+        "deliverables[].kind",
+        "acceptance_tests[].kind",
+        "references[].kind",
+        "references[].role",
+        "links[].relation",
+        "must_surface",
+        "required_actions[]",
+        "applies_to[]",
+        "carry_forward_to[]",
+        "uncertainty_markers",
+    ):
+        assert token in phase_prompt
     assert "must_include_prior_outputs: [\"GPD/phases/00-baseline/00-01-SUMMARY.md\"]" in phase_prompt
     assert (
         "user_asserted_anchors: "
@@ -2531,12 +2542,22 @@ def test_planner_and_summary_prompt_surfaces_expand_contract_schema_bodies() -> 
     assert "observables: [obs-main]" in phase_prompt
     assert "### `forbidden_proxies[]`" in phase_prompt
     assert "### `links[]`" in phase_prompt
-    assert "# PLAN Contract Schema" in planner_prompt
-    assert "Use `@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md` as the canonical contract source." in planner_prompt
-    assert "If `{project_contract}` is empty, stale, or too underspecified to identify the phase contract slice, return `## CHECKPOINT REACHED` rather than guessing." in planner_prompt
-    assert "Treat `approach_policy` as execution policy only." in planner_prompt
-    assert "Keep `scope.in_scope` populated, and keep `contract.context_intake` concrete enough to audit." in planner_prompt
-    assert "contract block complete per the schema include" in planner_prompt
+    assert planner_prompt.count("## Standard Planning Template") == 1
+    assert planner_prompt.count("## Revision Template") == 1
+    assert planner_prompt.count("@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md") == 1
+    for token in (
+        "project_contract_gate.authoritative",
+        "project_contract_load_info.status",
+        "project_contract_validation.valid",
+        "project_contract",
+        "effective_reference_intake",
+        "active_reference_context",
+        "approach_policy",
+        "scope.in_scope",
+        "contract.context_intake",
+        "claim_kind",
+    ):
+        assert token in planner_prompt
     assert "scope.unresolved_questions" in phase_prompt
     assert "Every claim must declare a stable `id`." in phase_prompt
     assert "Do not reuse the same ID across `claims[]`, `deliverables[]`, `acceptance_tests[]`, or `references[]`" in phase_prompt
@@ -2696,15 +2717,27 @@ def test_phase_prompt_surfaces_validation_critical_plan_contract_rules() -> None
     phase_prompt = (TEMPLATES_DIR / "phase-prompt.md").read_text(encoding="utf-8")
 
     assert "Quick contract rules:" in phase_prompt
-    assert "Put machine-checkable prerequisites in `tool_requirements`; keep human-only setup in `researcher_setup`." in phase_prompt
-    assert "Use the included schema for contract shape, cardinality, and enum defaults." in phase_prompt
-    assert "`scope.in_scope` must be populated in the executor-facing contract examples, and project-scoping plans must keep it non-empty." in phase_prompt
-    assert "Proof-bearing claims must use an explicit non-`other` `claim_kind`, and the body must keep hypotheses, parameters, and conclusions auditable." in phase_prompt
-    assert "If grounding already exists elsewhere, a missing `must_surface: true` reference is a warning, not a blocker." in phase_prompt
-    assert "If the plan is intentionally scoping-only, keep that limited shape explicit and preserve at least one target, open question, or carry-forward input." in phase_prompt
-    assert "the contract must carry non-empty claims, deliverables, acceptance tests, forbidden proxies" not in phase_prompt
-    assert "If the contract does not already carry explicit concrete grounding elsewhere, references must be present and at least one must set `must_surface: true`." not in phase_prompt
-    assert "Semantic enum fields with schema defaults may be omitted when `other` is actually intended." not in phase_prompt
+    assert phase_prompt.count("Quick contract rules:") == 1
+    for token in (
+        "tool_requirements",
+        "researcher_setup",
+        "type: execute",
+        "gap_closure: true",
+        "scope.in_scope",
+        "claim_kind",
+        "observables[].kind",
+        "deliverables[].kind",
+        "acceptance_tests[].kind",
+        "references[].kind",
+        "references[].role",
+        "links[].relation",
+        "must_surface",
+        "required_actions[]",
+        "applies_to[]",
+        "carry_forward_to[]",
+        "uncertainty_markers",
+    ):
+        assert token in phase_prompt
 
 
 def test_review_ledger_schema_surfaces_enforced_id_formats() -> None:

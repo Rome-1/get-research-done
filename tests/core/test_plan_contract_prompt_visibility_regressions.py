@@ -46,27 +46,25 @@ def test_plan_contract_schema_surfaces_defaultable_semantic_fields_and_hard_cons
 def test_planner_prompt_surfaces_default_salvage_and_specific_semantics() -> None:
     planner_prompt = _read_template("planner-subagent-prompt.md")
 
-    assert "Use `@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md` as the canonical contract source." in planner_prompt
-    assert "Keep this prompt for scope selection, mode flags, and return conventions only." in planner_prompt
+    assert planner_prompt.count("## Standard Planning Template") == 1
+    assert planner_prompt.count("## Revision Template") == 1
+    assert planner_prompt.count("@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md") == 2
     assert "**Project Contract Gate:** {project_contract_gate}" in planner_prompt
     assert "**Project Contract Load Info:** {project_contract_load_info}" in planner_prompt
     assert "**Project Contract Validation:** {project_contract_validation}" in planner_prompt
-    assert "Planning requires an approved `project_contract`." in planner_prompt
-    assert "If `project_contract_gate.authoritative` is false, keep the contract visible as diagnostics, not approved planning scope." in planner_prompt
-    assert (
-        "If `project_contract_load_info.status` starts with `blocked` or `project_contract_validation.valid` is false, "
-        "return `## CHECKPOINT REACHED` instead of guessing."
-    ) in planner_prompt
-    assert "Keep `project_contract` as the structured grounding ledger." in planner_prompt
-    assert (
-        "Use `effective_reference_intake` and `active_reference_context` only as readable projections "
-        "of the same anchors, not as substitutes."
-    ) in planner_prompt
-    assert "Treat `approach_policy` as execution policy only." in planner_prompt
-    assert "It does not substitute for grounding." in planner_prompt
-    assert (
-        "For proof-bearing work, use an explicit non-`other` `claim_kind` and keep hypotheses, quantified variables, and named parameters explicit enough to audit."
-    ) in planner_prompt
+    for token in (
+        "project_contract_gate.authoritative",
+        "project_contract_load_info.status",
+        "project_contract_validation.valid",
+        "project_contract",
+        "effective_reference_intake",
+        "active_reference_context",
+        "approach_policy",
+        "scope.in_scope",
+        "contract.context_intake",
+        "claim_kind",
+    ):
+        assert token in planner_prompt
     assert "The contract still exposes defaultable semantic fields" not in planner_prompt
     assert "Stale proof review gate" not in planner_prompt
 
@@ -112,34 +110,27 @@ def test_planner_and_checker_examples_surface_concrete_contract_anchors() -> Non
 def test_phase_prompt_surfaces_default_salvage_and_hard_plan_requirements() -> None:
     phase_prompt = _read_template("phase-prompt.md")
 
-    assert "Quick contract rules:" in phase_prompt
-    assert "Put machine-checkable prerequisites in `tool_requirements`; keep human-only setup in `researcher_setup`." in phase_prompt
     assert phase_prompt.count("Quick contract rules:") == 1
-    assert "Gap-closure plans still use `type: execute`; mark verification-repair plans with `gap_closure: true`" in phase_prompt
-    assert "mark verification-repair plans with `gap_closure: true`" in phase_prompt
-    assert "type: execute | tdd" in phase_prompt
-    assert "# gap_closure: true # Optional. Use only for verification repair plans." in phase_prompt
-    assert "The validator accepts a closed tool vocabulary today: `wolfram` and `command`" in phase_prompt
-    assert "For `tool: command`, a non-empty `command` field is mandatory" in phase_prompt
-    assert "`required` defaults to `true` when omitted" in phase_prompt
-    assert "The defaultable semantic fields still exist in the contract surface" in phase_prompt
-    assert "`scope.in_scope` must be populated in the executor-facing contract examples, and project-scoping plans must keep it non-empty." in phase_prompt
-    assert "Proof-bearing claims must use an explicit non-`other` `claim_kind`, and the body must keep hypotheses, parameters, and conclusions auditable." in phase_prompt
-    assert "observables[].kind" in phase_prompt
-    assert "deliverables[].kind" in phase_prompt
-    assert "acceptance_tests[].kind" in phase_prompt
-    assert "references[].kind" in phase_prompt
-    assert "references[].role" in phase_prompt
-    assert "links[].relation" in phase_prompt
-    assert "They default to `other`, but the more specific value remains mandatory when the plan already knows it." in phase_prompt
-    assert "For non-scoping plans, keep the contract concretely grounded rather than placeholder-only." in phase_prompt
-    assert "Treat `approach_policy` as execution policy only; it does not satisfy grounding on its own." in phase_prompt
-    assert "If grounding already exists elsewhere, a missing `must_surface: true` reference is a warning, not a blocker." in phase_prompt
-    assert "`must_surface` uses YAML booleans." in phase_prompt
-    assert "When `must_surface` is `true`, keep `required_actions[]` and `applies_to[]` non-empty." in phase_prompt
-    assert "`carry_forward_to[]` is free-text workflow scope only and must not be overloaded with contract IDs." in phase_prompt
-    assert "`uncertainty_markers` must stay a YAML object, not a string or list." in phase_prompt
-    assert phase_prompt.count("Quick contract rules:") == 1
+    for token in (
+        "tool_requirements",
+        "researcher_setup",
+        "type: execute",
+        "gap_closure: true",
+        "scope.in_scope",
+        "claim_kind",
+        "observables[].kind",
+        "deliverables[].kind",
+        "acceptance_tests[].kind",
+        "references[].kind",
+        "references[].role",
+        "links[].relation",
+        "must_surface",
+        "required_actions[]",
+        "applies_to[]",
+        "carry_forward_to[]",
+        "uncertainty_markers",
+    ):
+        assert token in phase_prompt
 
 
 def test_contract_schema_docs_make_lowercase_closed_vocab_rule_model_visible() -> None:

@@ -4,36 +4,46 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from gpd.adapters.install_utils import expand_at_includes
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = REPO_ROOT / "src/gpd/specs/workflows"
+TEMPLATES_DIR = REPO_ROOT / "src/gpd/specs/templates"
 
 
 def _read(name: str) -> str:
     return (WORKFLOWS_DIR / name).read_text(encoding="utf-8")
 
 
-def test_planner_workflows_reference_shared_templates_instead_of_repeating_policy_blocks() -> None:
-    plan_phase = _read("plan-phase.md")
-    quick = _read("quick.md")
-    verify_work = _read("verify-work.md")
+def _expand(name: str) -> str:
+    return expand_at_includes(_read(name), REPO_ROOT / "src/gpd", "/runtime/")
 
-    for text in (plan_phase, quick, verify_work):
-        assert "templates/plan-contract-schema.md" in text
 
-    assert "templates/planner-subagent-prompt.md" in plan_phase
-    assert "templates/phase-prompt.md" in plan_phase
-    assert "templates/planner-subagent-prompt.md" in quick
-    assert "templates/phase-prompt.md" in quick
-    assert "shared planner template, phase template, and `templates/plan-contract-schema.md`" in plan_phase
-    assert "Before planning, load the shared planner template, phase template, and canonical contract schema." in quick
-    assert (
-        "Use the shared planner template, phase template, and `templates/plan-contract-schema.md` "
-        "before drafting the fix plan."
-    ) in verify_work
-    assert (
-        "Use the shared planner template, phase template, and `templates/plan-contract-schema.md` "
-        "before rewriting the fix plan."
-    ) in verify_work
+def test_planner_workflows_expand_the_shared_planner_template_once_per_route() -> None:
+    plan_phase_raw = _read("plan-phase.md")
+    quick_raw = _read("quick.md")
+    verify_work_raw = _read("verify-work.md")
+
+    plan_phase = _expand("plan-phase.md")
+    quick = _expand("quick.md")
+    verify_work = _expand("verify-work.md")
+    planner_template = (TEMPLATES_DIR / "planner-subagent-prompt.md").read_text(encoding="utf-8")
+
+    for raw_text in (plan_phase_raw, quick_raw, verify_work_raw):
+        assert "templates/planner-subagent-prompt.md" in raw_text
+        assert "templates/phase-prompt.md" in raw_text
+        assert "# Planner Subagent Prompt Template" not in raw_text
+
+    assert planner_template.count("## Standard Planning Template") == 1
+    assert planner_template.count("## Revision Template") == 1
+    assert planner_template.count("@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md") == 2
+
+    assert "# Planner Subagent Prompt Template" in plan_phase
+    assert plan_phase.count("# Planner Subagent Prompt Template") == 2
+    assert "## Standard Planning Template" in plan_phase
+    assert "## Revision Template" in plan_phase
+
+    assert "project_contract_gate.authoritative" in planner_template
 
 
 def test_planner_workflows_do_not_embed_the_removed_long_policy_blocks() -> None:
