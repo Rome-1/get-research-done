@@ -542,18 +542,6 @@ flowchart TD
 - `src/gpd/commands/new-project.md -> src/gpd/specs/workflows/new-project.md`
   `include`
 
-- `src/gpd/commands/new-project.md -> src/gpd/specs/references/research/questioning.md`
-  `include`
-
-- `src/gpd/commands/new-project.md -> src/gpd/specs/references/ui/ui-brand.md`
-  `include`
-
-- `src/gpd/commands/new-project.md -> src/gpd/specs/templates/project.md`
-  `include`
-
-- `src/gpd/commands/new-project.md -> src/gpd/specs/templates/requirements.md`
-  `include`
-
 - `src/gpd/commands/new-milestone.md -> src/gpd/specs/workflows/new-milestone.md`
   `include`
 

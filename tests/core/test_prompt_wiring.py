@@ -983,13 +983,27 @@ def test_new_project_wiring_mentions_contract_persistence_and_contract_first_dow
     )
     _assert_contains_fragments(
         command_text,
-        "project contract",
+        "scoping contract",
         "roadmap generation",
         "explicit approval",
     )
-    assert "@{GPD_INSTALL_DIR}/templates/project-contract-schema.md" in command_text
+    assert "@{GPD_INSTALL_DIR}/workflows/new-project.md" in command_text
+    assert "@{GPD_INSTALL_DIR}/references/research/questioning.md" not in command_text
+    assert "@{GPD_INSTALL_DIR}/references/ui/ui-brand.md" not in command_text
+    assert "@{GPD_INSTALL_DIR}/templates/project.md" not in command_text
+    assert "@{GPD_INSTALL_DIR}/templates/requirements.md" not in command_text
+    assert "@{GPD_INSTALL_DIR}/templates/project-contract-schema.md" not in command_text
+    _assert_contains_fragments(
+        command_text,
+        "Read {GPD_INSTALL_DIR}/references/research/questioning.md only when entering the full questioning path.",
+        "Read {GPD_INSTALL_DIR}/templates/project-contract-schema.md only when preparing the approval gate and validating the raw scoping contract.",
+        "Read {GPD_INSTALL_DIR}/references/shared/canonical-schema-discipline.md only when authoring or repairing the scoping contract.",
+        "Read {GPD_INSTALL_DIR}/templates/project.md only when writing `GPD/PROJECT.md`.",
+        "Read {GPD_INSTALL_DIR}/templates/requirements.md only when writing `GPD/REQUIREMENTS.md`.",
+        "Read {GPD_INSTALL_DIR}/references/ui/ui-brand.md only when rendering branded completion or status blocks.",
+    )
     assert shared_include in workflow_text
-    assert shared_include in command_text
+    assert shared_include not in command_text
     assert (
         "For project-scoping work, keep `project_contract` literal and preserve gate state, approval blockers, "
         "and linked IDs exactly."
