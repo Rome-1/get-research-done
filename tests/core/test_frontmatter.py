@@ -243,12 +243,16 @@ def _write_proof_contract_phase(tmp_path: Path) -> tuple[Path, Path]:
             depends_on: []
             files_modified: []
             interactive: false
+            conventions:
+              units: natural
+              metric: (+,-,-,-)
+              coordinates: Cartesian
             contract:
               schema_version: 1
               scope:
                 question: Prove the full theorem without silently dropping r_0
               context_intake:
-                must_include_prior_outputs: [GPD/phases/00-baseline/00-01-SUMMARY.md]
+                must_read_refs: [ref-proof-anchor]
               observables:
                 - id: obs-proof
                   name: theorem proof obligation
@@ -1415,7 +1419,11 @@ class TestValidateFrontmatter:
         assert any("missing forbidden_proxies" in error for error in result.errors)
         assert any("context_intake must not be empty" in error for error in result.errors)
 
-    def test_exploratory_plan_contract_can_use_non_reference_grounding(self):
+    def test_exploratory_plan_contract_can_use_non_reference_grounding(self, tmp_path: Path):
+        phase_dir = tmp_path / "GPD" / "phases" / "00-setup"
+        phase_dir.mkdir(parents=True, exist_ok=True)
+        (phase_dir / "00-01-SUMMARY.md").write_text("setup summary\n", encoding="utf-8")
+        plan_path = phase_dir / "01-01-PLAN.md"
         content = (
             "---\n"
             "phase: 01-setup\n"
@@ -1436,7 +1444,6 @@ class TestValidateFrontmatter:
             "    unresolved_questions: [\"Which benchmark will be authoritative?\"]\n"
             "  context_intake:\n"
             "    must_include_prior_outputs: [GPD/phases/00-setup/00-01-SUMMARY.md]\n"
-            "    known_good_baselines: [Smoke-test CLI output]\n"
             "  claims:\n"
             "    - id: claim-setup\n"
             "      statement: Produce a reproducible setup note and runnable starter code\n"
@@ -1471,7 +1478,7 @@ class TestValidateFrontmatter:
             "    disconfirming_observations: [Bootstrap assumptions fail against the first real target]\n"
             "---\n\nBody."
         )
-        result = validate_frontmatter(content, "plan")
+        result = validate_frontmatter(content, "plan", source_path=plan_path)
         assert result.valid is True
         assert result.errors == []
 
@@ -1565,6 +1572,44 @@ class TestValidateFrontmatter:
         result = validate_frontmatter(content, "plan")
         assert result.valid is False
         assert any("must_surface=true" in error for error in result.errors)
+
+    def test_plan_rejects_placeholder_only_context_intake(self, tmp_path: Path) -> None:
+        content = _valid_plan_contract_frontmatter().replace(
+            "  context_intake:\n"
+            "    must_read_refs: [ref-main]\n"
+            "    must_include_prior_outputs: [GPD/phases/00-baseline/00-01-SUMMARY.md]\n",
+            "  context_intake:\n"
+            "    must_read_refs: []\n"
+            "    must_include_prior_outputs: []\n"
+            "    user_asserted_anchors: []\n"
+            "    known_good_baselines: []\n"
+            "    context_gaps: [TBD]\n"
+            "    crucial_inputs: [placeholder]\n",
+            1,
+        )
+        plan_path = tmp_path / "GPD" / "phases" / "01-test" / "01-01-PLAN.md"
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        baseline = tmp_path / "GPD" / "phases" / "00-baseline" / "00-01-SUMMARY.md"
+        baseline.parent.mkdir(parents=True, exist_ok=True)
+        baseline.write_text("summary\n", encoding="utf-8")
+
+        result = validate_frontmatter(content, "plan", source_path=plan_path)
+
+        assert result.valid is False
+        assert any("context_intake must not be empty" in error for error in result.errors)
+
+    def test_plan_accepts_non_must_surface_reference_with_project_root_grounding(self, tmp_path: Path) -> None:
+        content = _valid_plan_contract_frontmatter().replace("must_surface: true", "must_surface: false", 1)
+        plan_path = tmp_path / "GPD" / "phases" / "01-test" / "01-01-PLAN.md"
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        baseline = tmp_path / "GPD" / "phases" / "00-baseline" / "00-01-SUMMARY.md"
+        baseline.parent.mkdir(parents=True, exist_ok=True)
+        baseline.write_text("summary\n", encoding="utf-8")
+
+        result = validate_frontmatter(content, "plan", source_path=plan_path)
+
+        assert result.valid is True
+        assert result.errors == []
 
     def test_incomplete_plan_contract_requires_must_surface_anchor_metadata(self):
         content = (
@@ -1885,7 +1930,7 @@ class TestValidateFrontmatter:
 
         assert result.valid is False
         assert any(
-            "claim claim-proof proof_audit proof_artifact_path must resolve inside the project root" in error
+            "must resolve inside the project root" in error
             for error in result.errors
         )
 
@@ -1920,7 +1965,7 @@ class TestValidateFrontmatter:
 
         assert result.valid is False
         assert any(
-            "claim claim-proof proof_audit proof_artifact_path must resolve inside the project root" in error
+            "must resolve inside the project root" in error
             for error in result.errors
         )
 

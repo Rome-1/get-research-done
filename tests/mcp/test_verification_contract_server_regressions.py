@@ -20,6 +20,10 @@ def _project_local_contract_fixture(project_root: Path) -> dict[str, object]:
     assert isinstance(reference, dict)
     reference["kind"] = "prior_artifact"
     reference["locator"] = "artifacts/benchmark/report.json"
+    contract["context_intake"]["must_read_refs"] = []
+    contract["context_intake"]["must_include_prior_outputs"] = ["GPD/phases/01-setup/01-01-SUMMARY.md"]
+    contract["context_intake"]["user_asserted_anchors"] = []
+    contract["context_intake"]["known_good_baselines"] = []
 
     artifact = project_root / "artifacts" / "benchmark" / "report.json"
     artifact.parent.mkdir(parents=True, exist_ok=True)
@@ -126,6 +130,50 @@ def test_suggest_contract_checks_accepts_project_local_contract_when_project_dir
 
     assert "must_surface=true anchor" in missing_root["error"]
     assert "contract.benchmark_reproduction" in {entry["check_key"] for entry in rooted["suggested_checks"]}
+
+
+def test_suggest_contract_checks_rejects_placeholder_only_context_intake(tmp_path: Path) -> None:
+    from gpd.mcp.servers.verification_server import suggest_contract_checks
+
+    contract = _project_local_contract_fixture(tmp_path)
+    contract["context_intake"] = {
+        "must_read_refs": [],
+        "must_include_prior_outputs": [],
+        "user_asserted_anchors": [],
+        "known_good_baselines": [],
+        "context_gaps": ["TBD"],
+        "crucial_inputs": ["placeholder"],
+    }
+
+    result = suggest_contract_checks(contract, project_dir=tmp_path.resolve(strict=False).as_posix())
+
+    assert "context_intake must not be empty" in result["error"]
+
+
+def test_run_contract_check_accepts_non_must_surface_reference_when_project_dir_supplied(tmp_path: Path) -> None:
+    from gpd.mcp.servers.verification_server import run_contract_check
+
+    contract = _project_local_contract_fixture(tmp_path)
+    reference = contract["references"][0]
+    assert isinstance(reference, dict)
+    reference["must_surface"] = False
+    prior_output = contract["context_intake"]["must_include_prior_outputs"][0]
+    assert isinstance(prior_output, str)
+    grounded_output = tmp_path / prior_output
+    grounded_output.parent.mkdir(parents=True, exist_ok=True)
+    grounded_output.write_text("baseline summary\n", encoding="utf-8")
+
+    request = {
+        "check_key": "contract.benchmark_reproduction",
+        "contract": contract,
+        "binding": {"claim_ids": ["claim-benchmark"], "reference_ids": ["ref-benchmark"]},
+        "metadata": {"source_reference_id": "ref-benchmark"},
+        "observed": {"metric_value": 0.01, "threshold_value": 0.02},
+    }
+
+    rooted = run_contract_check(request, project_dir=tmp_path.resolve(strict=False).as_posix())
+
+    assert rooted["status"] == "pass"
 def test_contract_server_singleton_drift_classifier_matches_core_contract_policy() -> None:
     from gpd.mcp.servers.verification_server import _is_defaultable_singleton_contract_error
 

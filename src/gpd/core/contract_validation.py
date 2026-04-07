@@ -568,6 +568,18 @@ def _normalize_blank_list_fields(contract: dict[str, object]) -> None:
             for field_name in field_names:
                 if field_name in item and _blank_string(item[field_name]):
                     item[field_name] = []
+            if collection_name != "claims":
+                continue
+            parameters = item.get("parameters")
+            if isinstance(parameters, list):
+                for parameter in parameters:
+                    if isinstance(parameter, dict) and _blank_string(parameter.get("aliases")):
+                        parameter["aliases"] = []
+            hypotheses = item.get("hypotheses")
+            if isinstance(hypotheses, list):
+                for hypothesis in hypotheses:
+                    if isinstance(hypothesis, dict) and _blank_string(hypothesis.get("symbols")):
+                        hypothesis["symbols"] = []
 
 
 def salvage_project_contract(contract: dict[str, object]) -> tuple[ResearchContract | None, list[str]]:

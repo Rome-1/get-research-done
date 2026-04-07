@@ -2936,6 +2936,37 @@ def test_collect_plan_contract_integrity_errors_accepts_project_local_must_surfa
     assert errors == []
 
 
+def test_collect_plan_contract_integrity_errors_accepts_non_reference_grounding_without_must_surface_anchor(
+    tmp_path: Path,
+) -> None:
+    contract = _load_contract_fixture()
+    _remove_incidental_grounding(contract)
+    contract["references"] = [
+        {
+            "id": "ref-background",
+            "kind": "paper",
+            "locator": "Background review article",
+            "role": "background",
+            "why_it_matters": "General context only",
+            "applies_to": [],
+            "required_actions": ["read"],
+            "must_surface": False,
+        }
+    ]
+    contract["context_intake"]["must_include_prior_outputs"] = ["GPD/phases/01-setup/01-01-SUMMARY.md"]
+    prior_output = contract["context_intake"]["must_include_prior_outputs"][0]
+    grounded_output = tmp_path / prior_output
+    grounded_output.parent.mkdir(parents=True, exist_ok=True)
+    grounded_output.write_text("summary\n", encoding="utf-8")
+
+    result = validate_project_contract(contract, mode="approved", project_root=tmp_path)
+    errors = collect_plan_contract_integrity_errors(ResearchContract.model_validate(contract), project_root=tmp_path)
+
+    assert result.valid is True
+    assert any("must_surface=true anchor" in warning for warning in result.warnings)
+    assert errors == []
+
+
 @pytest.mark.parametrize(
     ("reference_kind", "locator"),
     [

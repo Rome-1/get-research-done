@@ -704,6 +704,9 @@ def _collect_project_contract_list_member_errors(data: object) -> list[str]:
 
     errors: list[str] = []
 
+    def _blank_string(value: object) -> bool:
+        return isinstance(value, str) and not value.strip()
+
     def _check_string_list(value: object, *, path: str) -> None:
         if not isinstance(value, list):
             return
@@ -739,9 +742,12 @@ def _collect_project_contract_list_member_errors(data: object) -> list[str]:
                     if isinstance(parameters, list):
                         for param_index, parameter in enumerate(parameters):
                             if isinstance(parameter, dict) and isinstance(parameter.get("aliases"), str):
-                                errors.append(
-                                    f"{collection_name}.{index}.parameters.{param_index}.aliases must be a list, not str"
-                                )
+                                if _blank_string(parameter["aliases"]):
+                                    parameter["aliases"] = []
+                                else:
+                                    errors.append(
+                                        f"{collection_name}.{index}.parameters.{param_index}.aliases must be a list, not str"
+                                    )
                             if isinstance(parameter, dict) and "aliases" in parameter:
                                 _check_string_list(
                                     parameter["aliases"],
@@ -751,9 +757,12 @@ def _collect_project_contract_list_member_errors(data: object) -> list[str]:
                     if isinstance(hypotheses, list):
                         for hypothesis_index, hypothesis in enumerate(hypotheses):
                             if isinstance(hypothesis, dict) and isinstance(hypothesis.get("symbols"), str):
-                                errors.append(
-                                    f"{collection_name}.{index}.hypotheses.{hypothesis_index}.symbols must be a list, not str"
-                                )
+                                if _blank_string(hypothesis["symbols"]):
+                                    hypothesis["symbols"] = []
+                                else:
+                                    errors.append(
+                                        f"{collection_name}.{index}.hypotheses.{hypothesis_index}.symbols must be a list, not str"
+                                    )
                             if isinstance(hypothesis, dict) and "symbols" in hypothesis:
                                 _check_string_list(
                                     hypothesis["symbols"],
@@ -2319,23 +2328,25 @@ def contract_has_explicit_context_intake(
         for reference in contract.references
         if reference.id in contract.context_intake.must_read_refs
     )
-    has_prior_output_guidance = _has_concrete_grounding_entries(
-        contract.context_intake.must_include_prior_outputs,
-        field_name="must_include_prior_outputs",
-        project_root=project_root,
-        require_existing_project_artifacts=True,
+    has_prior_output_guidance = any(
+        _looks_like_project_artifact_path(value)
+        for value in contract.context_intake.must_include_prior_outputs
     )
-    has_anchor_guidance = _has_concrete_grounding_entries(
-        contract.context_intake.user_asserted_anchors,
-        field_name="user_asserted_anchors",
-        project_root=project_root,
-        require_existing_project_artifacts=True,
+    has_anchor_guidance = any(
+        _is_context_intake_locator_grounding(
+            value,
+            project_root=project_root,
+            require_existing_project_artifacts=True,
+        )
+        for value in contract.context_intake.user_asserted_anchors
     )
-    has_baseline_guidance = _has_concrete_grounding_entries(
-        contract.context_intake.known_good_baselines,
-        field_name="known_good_baselines",
-        project_root=project_root,
-        require_existing_project_artifacts=True,
+    has_baseline_guidance = any(
+        _is_context_intake_locator_grounding(
+            value,
+            project_root=project_root,
+            require_existing_project_artifacts=True,
+        )
+        for value in contract.context_intake.known_good_baselines
     )
     has_text_guidance = any(
         not is_placeholder_only_guidance_text(value)

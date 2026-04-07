@@ -56,6 +56,20 @@ def test_fast_contract_validation_salvage_normalizes_blank_list_members_without_
     )
 
 
+def test_fast_contract_validation_salvage_normalizes_blank_nested_proof_lists() -> None:
+    contract = _load_contract_fixture()
+    contract["claims"][0]["parameters"] = [{"symbol": "alpha", "aliases": ""}]
+    contract["claims"][0]["hypotheses"] = [{"id": "hyp-alpha", "text": "alpha >= 0", "symbols": ""}]
+
+    result = parse_project_contract_data_salvage(contract)
+
+    assert result.contract is not None
+    assert result.contract.claims[0].parameters[0].aliases == []
+    assert result.contract.claims[0].hypotheses[0].symbols == []
+    assert result.recoverable_errors == []
+    assert result.blocking_errors == []
+
+
 def test_fast_contract_validation_salvage_preserves_nested_collection_siblings() -> None:
     contract = _load_contract_fixture()
     contract["claims"][0]["parameters"] = [

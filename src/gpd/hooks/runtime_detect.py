@@ -16,9 +16,13 @@ from gpd.adapters.install_utils import (
     GPD_INSTALL_DIR_NAME,
     UPDATE_CACHE_FILENAME,
 )
-from gpd.adapters.runtime_catalog import get_shared_install_metadata
-from gpd.adapters.runtime_catalog import normalize_runtime_name as _normalize_runtime_name
-from gpd.adapters.runtime_catalog import list_runtime_names
+from gpd.adapters.runtime_catalog import (
+    get_shared_install_metadata,
+    list_runtime_names,
+)
+from gpd.adapters.runtime_catalog import (
+    normalize_runtime_name as _normalize_runtime_name,
+)
 from gpd.core.constants import ENV_GPD_ACTIVE_RUNTIME, PLANNING_DIR_NAME, TODOS_DIR_NAME
 from gpd.hooks.install_metadata import install_scope_from_manifest, load_install_manifest_runtime_status
 

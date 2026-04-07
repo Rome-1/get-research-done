@@ -31,6 +31,15 @@ _TEST_RUNTIME = "runtime-under-test"
 _TEST_MODEL = "model-under-test"
 _RUNTIME_NAMES = tuple(list_runtimes())
 _SUPPORTED_RUNTIME_DESCRIPTORS = tuple(get_runtime_descriptor(runtime) for runtime in _RUNTIME_NAMES)
+_RUNTIME_WITH_ALIAS_AND_DISPLAY_NAME = next(
+    (
+        descriptor
+        for descriptor in _SUPPORTED_RUNTIME_DESCRIPTORS
+        if descriptor.display_name.casefold() != descriptor.runtime_name.casefold()
+        and any(alias.casefold() != descriptor.runtime_name.casefold() for alias in descriptor.selection_aliases)
+    ),
+    _SUPPORTED_RUNTIME_DESCRIPTORS[0],
+)
 _RUNTIME_ENV_VARS_TO_CLEAR = {
     ENV_GPD_ACTIVE_RUNTIME,
     *(
@@ -1844,18 +1853,18 @@ def test_format_active_runtime_command_formats_detected_runtime_command() -> Non
 @pytest.mark.parametrize(
     "detector_output",
     [
-        get_runtime_descriptor("claude-code").display_name,
+        _RUNTIME_WITH_ALIAS_AND_DISPLAY_NAME.display_name,
         next(
             alias
-            for alias in get_runtime_descriptor("claude-code").selection_aliases
-            if alias.casefold() != "claude-code"
+            for alias in _RUNTIME_WITH_ALIAS_AND_DISPLAY_NAME.selection_aliases
+            if alias.casefold() != _RUNTIME_WITH_ALIAS_AND_DISPLAY_NAME.runtime_name.casefold()
         ),
     ],
 )
 def test_format_active_runtime_command_normalizes_detector_aliases_and_display_names(
     detector_output: str,
 ) -> None:
-    descriptor = get_runtime_descriptor("claude-code")
+    descriptor = _RUNTIME_WITH_ALIAS_AND_DISPLAY_NAME
     adapter = get_adapter(descriptor.runtime_name)
 
     result = format_active_runtime_command("resume-work", detect_runtime=lambda **kwargs: detector_output)

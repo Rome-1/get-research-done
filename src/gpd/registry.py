@@ -103,7 +103,15 @@ def _inline_model_visible_includes(content: str) -> str:
     expanded = expand_at_includes(content, _PKG_ROOT, _MODEL_VISIBLE_INCLUDE_PATH_PREFIX)
     cleaned = re.sub(r"(?m)^[ \t]*<!-- \[included:.*?\] -->\s*\n?", "", expanded)
     cleaned = re.sub(r"(?m)^[ \t]*<!-- \[end included\] -->\s*\n?", "", cleaned)
-    cleaned = re.sub(r"(?s)<!--.*?-->", "", cleaned)
+
+    def _strip_generic_html_comment(match: re.Match[str]) -> str:
+        body = match.group("body").strip()
+        # Keep machine-visible ASSERT_CONVENTION examples in prompt surfaces.
+        if body.startswith("ASSERT_CONVENTION:"):
+            return match.group(0)
+        return ""
+
+    cleaned = re.sub(r"(?s)<!--(?P<body>.*?)-->", _strip_generic_html_comment, cleaned)
     return (
         cleaned.replace(
             f"{_MODEL_VISIBLE_INCLUDE_PATH_PREFIX}get-physics-done/",
