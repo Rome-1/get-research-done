@@ -6,7 +6,6 @@ from pathlib import Path
 
 from gpd.core.reproducibility import compute_sha256
 
-CANONICAL_TOPIC_TITLE = "Curvature Flow Bounds"
 CANONICAL_MANUSCRIPT_STEM = "curvature_flow_bounds"
 _CREATED_AT = "2026-03-10T00:00:00+00:00"
 
@@ -21,28 +20,6 @@ def manuscript_pdf_path(project_root: Path, *, stem: str = CANONICAL_MANUSCRIPT_
 
 def manuscript_relpath(*, stem: str = CANONICAL_MANUSCRIPT_STEM) -> str:
     return f"paper/{stem}.tex"
-
-
-def pdf_relpath(*, stem: str = CANONICAL_MANUSCRIPT_STEM) -> str:
-    return f"paper/{stem}.pdf"
-
-
-def write_topic_specific_manuscript(
-    project_root: Path,
-    *,
-    stem: str = CANONICAL_MANUSCRIPT_STEM,
-    body: str = "Proof.",
-) -> Path:
-    path = manuscript_path(project_root, stem=stem)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "\\documentclass{article}\n"
-        "\\begin{document}\n"
-        f"{body}\n"
-        "\\end{document}\n",
-        encoding="utf-8",
-    )
-    return path
 
 
 @dataclass(frozen=True)
@@ -191,10 +168,14 @@ def write_proof_review_package(
         if theorem_bearing
         else "Submission draft."
     )
-    manuscript = write_topic_specific_manuscript(
-        project_root,
-        stem=manuscript_stem,
-        body=manuscript_body,
+    manuscript = manuscript_path(project_root, stem=manuscript_stem)
+    manuscript.parent.mkdir(parents=True, exist_ok=True)
+    manuscript.write_text(
+        "\\documentclass{article}\n"
+        "\\begin{document}\n"
+        f"{manuscript_body}\n"
+        "\\end{document}\n",
+        encoding="utf-8",
     )
     manuscript_rel = manuscript_relpath(stem=manuscript_stem)
     manuscript_pdf = manuscript_pdf_path(project_root, stem=manuscript_stem)

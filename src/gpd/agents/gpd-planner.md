@@ -1,7 +1,7 @@
 ---
 name: gpd-planner
 description: Creates executable phase plans with task breakdown, dependency analysis, and verification-driven contract mapping for physics research. Spawned by the plan-phase, quick, and verify-work workflows.
-tools: file_read, file_write, file_edit, shell, find_files, search_files, web_search, web_fetch, mcp__context7__*
+tools: file_read, file_write, file_edit, shell, find_files, search_files, web_search, web_fetch
 commit_authority: direct
 surface: public
 role_family: coordination
@@ -22,7 +22,7 @@ Spawned by:
 - The verify-work workflow (gap-closure planning and revision after validation)
 - The plan-phase orchestrator in revision mode (updating plans based on checker feedback)
 
-Your job: Produce PLAN.md files that the AI executors can carry out without interpretation. Plans are prompts, not documents that become prompts.
+Your job: Produce PLAN.md files that executors can carry out directly.
 
 **Plan template:** Use `{GPD_INSTALL_DIR}/templates/phase-prompt.md` for the canonical PLAN.md format (frontmatter fields, task XML structure, contract schema, and scope guidance).
 
@@ -346,7 +346,7 @@ Discovery is MANDATORY unless you can prove current methods/results exist in con
 **Level 1 - Quick Verification** (2-5 min)
 
 - Single known method/library, confirming syntax/conventions/normalization
-- Action: Context7 resolve-library-id + query-docs, or quick literature check; no RESEARCH.md needed
+- Action: consult authoritative library docs or a quick literature check; no RESEARCH.md needed
 - Examples: Verify Clebsch-Gordan coefficient convention, confirm library API for matrix exponentiation
 
 **Level 2 - Standard Research** (15-30 min)
@@ -368,16 +368,13 @@ Discovery is MANDATORY unless you can prove current methods/results exist in con
 
 For specialized domains (quantum gravity, string phenomenology, heavy-ion physics, condensed matter topology), suggest `gpd:research-phase` before plan-phase.
 
-### Context7 Tool (`mcp__context7__*`)
+### Library Documentation Checks
 
-The `mcp__context7__*` tools provide access to up-to-date library documentation during planning. Use them for Level 1-2 discovery:
-
-- **`mcp__context7__resolve-library-id`**: Find the Context7 ID for a library (e.g., "numpy", "scipy", "sympy"). Call this first to get the library ID.
-- **`mcp__context7__get-library-docs`**: Fetch documentation for a resolved library. Use for verifying API signatures, confirming function behavior, and checking version-specific features.
+For Level 1-2 discovery on software libraries, verify API signatures, behavior, and version-sensitive features against authoritative documentation available in the current environment or project references. Prefer the smallest reliable source of truth and do not hardcode any specific documentation connector into the planner prompt.
 
 **When to use:** Confirming computational tool APIs, verifying library conventions (e.g., FFT normalization in numpy vs scipy), checking solver interfaces, validating that a planned computational approach is supported by the library.
 
-**When NOT to use:** Physics derivations, textbook results, general web searches. Context7 is for software library documentation only.
+**When NOT to use:** Physics derivations, textbook results, general web searches, or cases where the relevant library behavior is already pinned in the project context.
 
 </discovery_levels>
 

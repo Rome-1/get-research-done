@@ -1637,6 +1637,14 @@ class SuggestedContractCheck(BaseModel):
     def _normalize_optional_fields(cls, value: object) -> object:
         return _normalize_optional_str(value)
 
+    @model_validator(mode="after")
+    def _validate_subject_binding_pair(self) -> SuggestedContractCheck:
+        has_kind = self.suggested_subject_kind is not None
+        has_id = self.suggested_subject_id is not None
+        if has_kind != has_id:
+            raise ValueError("suggested_subject_kind and suggested_subject_id must appear together")
+        return self
+
 
 class ComparisonVerdict(BaseModel):
     """Machine-readable verdict for an internal or external comparison."""
@@ -1675,6 +1683,20 @@ class ComparisonVerdict(BaseModel):
     @classmethod
     def _normalize_optional_fields(cls, value: object) -> object:
         return _normalize_optional_str(value)
+
+    @model_validator(mode="after")
+    def _validate_decisive_reference_binding(self) -> ComparisonVerdict:
+        if (
+            self.subject_role == "decisive"
+            and self.comparison_kind in {"benchmark", "prior_work", "experiment", "baseline"}
+            and self.subject_kind != "reference"
+            and self.reference_id is None
+        ):
+            raise ValueError(
+                "must include reference_id or use subject_kind: reference "
+                f"for decisive {self.comparison_kind} comparisons"
+            )
+        return self
 
     def anchored_reference_ids(self, known_reference_ids: set[str] | None = None) -> set[str]:
         """Return contract reference anchors named by this verdict.

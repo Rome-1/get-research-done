@@ -554,7 +554,14 @@ def _parse_suggested_contract_checks(meta: dict) -> list[SuggestedContractCheck]
         try:
             suggestions.append(SuggestedContractCheck.model_validate(item))
         except PydanticValidationError as exc:
-            details = "; ".join(f"[{index}] {message}" for message in _format_pydantic_validation_errors(exc))
+            details = "; ".join(
+                (
+                    f"[{index}] must provide suggested_subject_kind and suggested_subject_id together"
+                    if "suggested_subject_kind and suggested_subject_id must appear together" in message
+                    else f"[{index}] {message}"
+                )
+                for message in _format_pydantic_validation_errors(exc)
+            )
             raise ValueError(details) from exc
     return suggestions
 

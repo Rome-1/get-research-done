@@ -110,6 +110,7 @@ Rules:
 - `references[]` may only reference declared `references[].id`.
 - `claim_kind` is optional and defaults to `other` only for non-proof work; proof-bearing claims must set it explicitly and must not leave it at `other`.
 - `claim_kind: theorem|lemma|corollary|proposition|result|claim|other`
+- Closed-vocabulary enum fields use the exact lowercase literals shown here. Case drift such as `Theorem`, `Benchmark`, or `Read` fails strict validation.
 - For theorem/proof work, enumerate `parameters[]`, `hypotheses[]`, `quantifiers[]`, `conclusion_clauses[]`, and `proof_deliverables[]` so proof audits can spot dropped assumptions, specialized parameters, and narrowed conclusions.
 - Keep nested proof lists as YAML arrays, even for one item: `parameters[].aliases`, `hypotheses[].symbols`, `quantifiers`, and `proof_deliverables` must not collapse to scalar strings.
 - `proof_deliverables[]` may only reference declared `deliverables[].id`.

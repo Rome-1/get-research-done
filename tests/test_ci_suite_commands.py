@@ -34,18 +34,23 @@ def test_ci_workflow_runs_fast_and_full_pytest_suites_with_default_parallelism_a
 
     assert "Set up Node.js" in step_names
     assert step_names.index("Set up Node.js") < step_names.index("Install dependencies")
-    assert run_steps["Run fast test suite"] == "uv run pytest tests/ -q --dist=loadscope"
+    fast_suite_command = run_steps["Run fast test suite"]
+    assert "uv run pytest tests/ -q" in fast_suite_command
+    assert "-n auto" in fast_suite_command
+    assert "--dist=loadscope" in fast_suite_command
     assert run_steps["Run complementary heavy suite"].startswith("HEAVY_SUITE_IGNORE_ARGS=")
     assert "from tests.conftest import complementary_heavy_suite_ignore_args" in run_steps[
         "Run complementary heavy suite"
     ]
-    assert "uv run pytest tests/ -q --full-suite --dist=loadscope $HEAVY_SUITE_IGNORE_ARGS" in run_steps[
-        "Run complementary heavy suite"
-    ]
-    assert "--full-suite" in run_steps["Run complementary heavy suite"]
+    heavy_suite_command = run_steps["Run complementary heavy suite"]
+    assert "uv run pytest tests/ -q" in heavy_suite_command
+    assert "-n auto" in heavy_suite_command
+    assert "--full-suite" in heavy_suite_command
+    assert "--dist=loadscope" in heavy_suite_command
+    assert "$HEAVY_SUITE_IGNORE_ARGS" in heavy_suite_command
     assert steps[-2]["name"] == "Run fast test suite"
     assert steps[-1]["name"] == "Run complementary heavy suite"
-    assert steps[-2]["run"] == "uv run pytest tests/ -q --dist=loadscope"
+    assert steps[-2]["run"] == fast_suite_command
     assert "complementary_heavy_suite_ignore_args" in steps[-1]["run"]
     assert steps[2]["uses"] == "actions/setup-node@v6"
     assert steps[2]["with"]["node-version"] == "20"
@@ -64,6 +69,7 @@ def test_ci_workflow_runs_fast_and_full_pytest_suites_with_default_parallelism_a
 def test_tests_readme_documents_fast_and_full_suite_entrypoints() -> None:
     tests_readme = (REPO_ROOT / "tests" / "README.md").read_text(encoding="utf-8")
 
-    assert "Default `uv run pytest tests/ -q` uses the fast daily suite declared in" in tests_readme
-    assert "`uv run pytest tests/ -q --dist=loadscope`" in tests_readme
-    assert "The GitHub Actions workflow runs the complementary heavy suite with `--full-suite` plus the shared ignore helper" in tests_readme
+    assert "Default `uv run pytest tests/ -q -n auto` uses the fast daily suite declared in" in tests_readme
+    assert "uv run pytest tests/ -q -n auto --dist=loadscope" in tests_readme
+    assert "parallelizes with `-n auto`" in tests_readme
+    assert "The GitHub Actions workflow runs the complementary heavy suite with `--full-suite`, `-n auto`, and the shared ignore helper" in tests_readme

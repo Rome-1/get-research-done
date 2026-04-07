@@ -21,10 +21,6 @@ PRIMARY_RUNTIME = _runtime_with_permissions_surface_or_first("config-file")
 FOREIGN_RUNTIME = next((runtime_name for runtime_name in RUNTIME_NAMES if runtime_name != PRIMARY_RUNTIME), PRIMARY_RUNTIME)
 
 
-def runtime_descriptor(runtime_name: str):
-    return next(descriptor for descriptor in _RUNTIME_DESCRIPTORS if descriptor.runtime_name == runtime_name)
-
-
 def runtime_config_dir_name(runtime_name: str) -> str:
     return get_adapter(runtime_name).config_dir_name
 
@@ -39,27 +35,9 @@ def runtime_display_name(runtime_name: str) -> str:
 
 
 def runtime_install_flag(runtime_name: str) -> str:
-    return runtime_descriptor(runtime_name).install_flag
-
-
-def runtime_help_command(runtime_name: str) -> str:
-    return get_adapter(runtime_name).help_command
-
-
-def runtime_start_command(runtime_name: str) -> str:
-    return get_adapter(runtime_name).format_command("start")
-
-
-def runtime_tour_command(runtime_name: str) -> str:
-    return get_adapter(runtime_name).format_command("tour")
-
-
-def runtime_new_project_command(runtime_name: str) -> str:
-    return get_adapter(runtime_name).new_project_command
-
-
-def runtime_map_research_command(runtime_name: str) -> str:
-    return get_adapter(runtime_name).map_research_command
+    return next(
+        descriptor.install_flag for descriptor in _RUNTIME_DESCRIPTORS if descriptor.runtime_name == runtime_name
+    )
 
 
 def runtime_resume_work_command(runtime_name: str) -> str:
@@ -72,32 +50,23 @@ def runtime_onboarding_doc_filename(runtime_name: str) -> str:
     return f"{slug}.md"
 
 
-def _runtime_primary_config_surface(runtime_name: str) -> str:
-    descriptor = runtime_descriptor(runtime_name)
-    for surface in (
-        descriptor.capabilities.permission_surface_kind,
-        descriptor.capabilities.statusline_config_surface,
-        descriptor.capabilities.notify_config_surface,
-    ):
-        if surface != "none" and ":" in surface:
-            return surface
-    raise LookupError(f"No config-file surface found for runtime {runtime_name!r}")
-
-
 def runtime_primary_config_filename(runtime_name: str) -> str:
-    return _runtime_primary_config_surface(runtime_name).split(":", 1)[0]
+    for descriptor in _RUNTIME_DESCRIPTORS:
+        if descriptor.runtime_name != runtime_name:
+            continue
+        for surface in (
+            descriptor.capabilities.permission_surface_kind,
+            descriptor.capabilities.statusline_config_surface,
+            descriptor.capabilities.notify_config_surface,
+        ):
+            if surface != "none" and ":" in surface:
+                return surface.split(":", 1)[0]
+        raise LookupError(f"No config-file surface found for runtime {runtime_name!r}")
+    raise LookupError(f"Unknown runtime {runtime_name!r}")
 
 
 def runtime_empty_config_content(runtime_name: str) -> str:
     return "{}" if runtime_primary_config_filename(runtime_name).endswith(".json") else ""
-
-
-def runtime_suggest_next_command(runtime_name: str) -> str:
-    return get_adapter(runtime_name).format_command("suggest-next")
-
-
-def runtime_pause_work_command(runtime_name: str) -> str:
-    return get_adapter(runtime_name).format_command("pause-work")
 
 
 def runtime_without_telemetry() -> str:

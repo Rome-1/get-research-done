@@ -18,7 +18,7 @@ allowed-tools:
 <objective>
 Run a standalone discovery investigation for a research phase. Surveys the physics landscape: what is known, what methods exist, what approximations are valid, what data is available.
 
-Produces RESEARCH.md (with `depth: quick`) that informs subsequent planning via gpd:plan-phase.
+`--depth quick` (`depth: quick`) is verification-only and returns without writing `RESEARCH.md`. Produces RESEARCH.md for `--depth medium` or `--depth deep`, which informs subsequent planning via gpd:plan-phase.
 
 **Use this when:**
 
@@ -87,8 +87,8 @@ Show discovery summary, confidence level, and offer next actions.
 - [ ] Depth level determined (default medium)
 - [ ] Discovery executed at appropriate depth
 - [ ] Standard references consulted before general search
-- [ ] RESEARCH.md created (Level 2-3) with recommendation
+- [ ] RESEARCH.md created (Level 2-3) with recommendation, or Level 1 returned verification-only confirmation
 - [ ] Confidence gate applied
-- [ ] Committed to git (Level 2-3)
+- [ ] No separate RESEARCH.md commit
 - [ ] Next steps offered (plan-phase, dig deeper, review)
       </success_criteria>

@@ -142,6 +142,18 @@ def test_phase_prompt_surfaces_default_salvage_and_hard_plan_requirements() -> N
     assert phase_prompt.count("Quick contract rules:") == 1
 
 
+def test_contract_schema_docs_make_lowercase_closed_vocab_rule_model_visible() -> None:
+    plan_schema = _read_template("plan-contract-schema.md")
+    project_schema = _read_template("project-contract-schema.md")
+    state_schema = _read_template("state-json-schema.md")
+
+    expected = "Case drift such as `Theorem`, `Benchmark`, or `Read` fails strict validation."
+
+    assert expected in plan_schema
+    assert expected in project_schema
+    assert expected in state_schema
+
+
 def test_planner_prompt_stays_compact_while_preserving_canonical_contract_wiring() -> None:
     planner_prompt = (REPO_ROOT / "src/gpd/agents/gpd-planner.md").read_text(encoding="utf-8")
 

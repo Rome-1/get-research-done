@@ -65,7 +65,7 @@ jobs:
         run: uv sync --dev
 
       - name: Run fast test suite
-        run: uv run pytest tests/ -q --dist=loadscope
+        run: uv run pytest tests/ -q -n auto --dist=loadscope
 
       - name: Run complementary heavy suite
         run: |
@@ -75,4 +75,4 @@ jobs:
           print(" ".join(complementary_heavy_suite_ignore_args()))
           PY
           )"
-          uv run pytest tests/ -q --full-suite --dist=loadscope $HEAVY_SUITE_IGNORE_ARGS
+          uv run pytest tests/ -q -n auto --full-suite --dist=loadscope $HEAVY_SUITE_IGNORE_ARGS

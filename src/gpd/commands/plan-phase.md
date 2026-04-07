@@ -14,7 +14,6 @@ allowed-tools:
   - search_files
   - task
   - web_fetch
-  - mcp__context7__*
 ---
 
 <objective>

@@ -66,7 +66,12 @@ def test_discovery_and_research_surfaces_prefer_research_artifacts_over_legacy_d
 
     _assert_contains_fragments(discover_command, "Produces RESEARCH.md", "depth: quick", "RESEARCH.md")
     assert "DISCOVERY.md" not in discover_command
-    _assert_contains_fragments(research_template, "Template for `GPD/phases/XX-name/{phase}-RESEARCH.md`", "RESEARCH.md")
+    _assert_contains_fragments(
+        research_template,
+        "Template for phase-scoped `GPD/phases/XX-name/{phase}-RESEARCH.md`",
+        "GPD/analysis/discovery-{slug}.md",
+        "RESEARCH.md",
+    )
     assert "discovery.md" not in research_template
     assert "DISCOVERY.md" not in research_template
     assert not (TEMPLATES_DIR / "discovery.md").exists()

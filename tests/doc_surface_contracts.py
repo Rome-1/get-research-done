@@ -25,7 +25,6 @@ from gpd.core.public_surface_contract import (
     recovery_local_snapshot_command,
 )
 from gpd.core.resume_surface import RESUME_COMPATIBILITY_ALIAS_FIELDS
-from gpd.core.surface_phrases import post_start_settings_note
 
 _RUNTIME_NAMES = tuple(descriptor.runtime_name for descriptor in iter_runtime_descriptors())
 
@@ -125,27 +124,18 @@ __all__ = [
     "assert_cost_surface_discoverability",
     "assert_execution_observability_surface_contract",
     "assert_help_command_quick_start_extract_contract",
-    "assert_help_start_tour_ordering_contract",
     "assert_help_workflow_quick_start_taxonomy_contract",
     "assert_help_workflow_runtime_reference_contract",
     "assert_install_summary_runtime_follow_up_contract",
-    "assert_optional_paper_workflow_guidance_contract",
-    "assert_post_start_settings_bridge_contract",
-    "assert_publication_toolchain_boundary_contract",
-    "assert_beginner_caveat_follow_up_contract",
-    "assert_beginner_help_bridge_contract",
     "assert_beginner_hub_preflight_contract",
-    "assert_beginner_preflight_notice_contract",
     "assert_beginner_router_bridge_contract",
     "assert_beginner_startup_routing_contract",
     "assert_recovery_ladder_contract",
     "assert_runtime_reset_rediscovery_contract",
     "assert_resume_authority_contract",
-    "assert_runtime_readiness_handoff_contract",
     "assert_settings_local_terminal_follow_up_contract",
     "assert_start_workflow_router_contract",
     "assert_tour_command_surface_contract",
-    "assert_tour_read_only_teaching_contract",
     "assert_unattended_readiness_contract",
     "assert_wolfram_plan_boundary_contract",
     "assert_workflow_preset_surface_contract",
@@ -892,82 +882,6 @@ def assert_beginner_router_bridge_contract(content: str) -> None:
         ),
         label="post-startup settings bridge",
     )
-
-
-def assert_post_start_settings_bridge_contract(content: str) -> None:
-    _assert_contains_any(
-        content,
-        (
-            post_start_settings_note(),
-            "After your first successful start or later, use your runtime's `settings` command",
-            "For post-startup configuration, use your runtime's `settings` command",
-        ),
-        label="post-start settings bridge",
-    )
-
-
-def assert_beginner_help_bridge_contract(content: str) -> None:
-    _assert_contains_any(
-        content,
-        (
-            "Run its help command first:",
-            "Open your runtime, run its help command first",
-            "help command",
-        ),
-        label="beginner help bridge framing",
-    )
-    _assert_contains_any(
-        content,
-        (
-            "gpd:help",
-            "/gpd:help",
-            "$gpd-help",
-            "/gpd-help",
-            "help command",
-        ),
-        label="runtime help bridge",
-    )
-    assert "gpd --help" in content
-    _assert_contains_any(
-        content,
-        (
-            "normal system terminal",
-            "normal terminal",
-        ),
-        label="local cli bridge",
-    )
-
-
-def assert_beginner_preflight_notice_contract(content: str) -> None:
-    _assert_contains_any(
-        content,
-        (
-            "Bootstrap preflight checks runtime launcher/target blockers only",
-            "runtime launcher/target blockers only",
-        ),
-        label="bootstrap preflight scope",
-    )
-    _assert_contains_any(
-        content,
-        (
-            "do the first successful startup before changing unattended behavior",
-            "first successful startup before changing unattended behavior",
-        ),
-        label="bootstrap preflight startup caveat",
-    )
-
-
-def assert_beginner_caveat_follow_up_contract(content: str) -> None:
-    _assert_contains_any(
-        content,
-        (
-            "Recommended unattended default: Balanced autonomy (`balanced`).",
-            "Balanced autonomy (`balanced`)",
-        ),
-        label="balanced unattended default",
-    )
-    assert_optional_paper_workflow_guidance_contract(content)
-    assert_publication_toolchain_boundary_contract(content)
 
 
 def assert_beginner_hub_preflight_contract(content: str) -> None:

@@ -11,12 +11,14 @@ import pytest
 from pydantic import ValidationError
 
 from gpd.contracts import (
+    ComparisonVerdict,
     ContractApproachPolicy,
     ContractClaim,
     ContractProofParameter,
     ContractResults,
     ProjectContractParseResult,
     ResearchContract,
+    SuggestedContractCheck,
     claim_requires_proof_audit,
     collect_plan_contract_integrity_errors,
     contract_from_data,
@@ -563,6 +565,54 @@ def test_parse_comparison_verdicts_data_strict_rejects_case_drift() -> None:
                 }
             ]
         )
+
+
+def test_suggested_contract_check_requires_kind_and_id_together_at_model_boundary() -> None:
+    with pytest.raises(ValidationError, match="suggested_subject_kind and suggested_subject_id must appear together"):
+        SuggestedContractCheck.model_validate(
+            {
+                "check": "Add decisive benchmark rerun",
+                "reason": "Need the tighter benchmark gate.",
+                "suggested_subject_kind": "acceptance_test",
+            }
+        )
+
+    with pytest.raises(ValidationError, match="suggested_subject_kind and suggested_subject_id must appear together"):
+        SuggestedContractCheck.model_validate(
+            {
+                "check": "Add decisive benchmark rerun",
+                "reason": "Need the tighter benchmark gate.",
+                "suggested_subject_id": "test-benchmark",
+            }
+        )
+
+
+def test_comparison_verdict_requires_reference_binding_for_decisive_external_comparisons_at_model_boundary() -> None:
+    with pytest.raises(
+        ValidationError,
+        match=r"must include reference_id or use subject_kind: reference for decisive benchmark comparisons",
+    ):
+        ComparisonVerdict.model_validate(
+            {
+                "subject_id": "claim-main",
+                "subject_kind": "claim",
+                "subject_role": "decisive",
+                "comparison_kind": "benchmark",
+                "verdict": "pass",
+            }
+        )
+
+    verdict = ComparisonVerdict.model_validate(
+        {
+            "subject_id": "ref-benchmark",
+            "subject_kind": "reference",
+            "subject_role": "decisive",
+            "comparison_kind": "benchmark",
+            "verdict": "pass",
+        }
+    )
+
+    assert verdict.reference_id is None
 
 
 def test_parse_project_contract_data_salvage_preserves_blocking_errors_for_missing_required_collection_item_field() -> None:

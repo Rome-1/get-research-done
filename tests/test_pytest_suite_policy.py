@@ -106,7 +106,8 @@ def test_ci_and_test_readme_document_explicit_fast_and_full_suite_commands() -> 
     assert "Set up Node.js" in step_names
     assert step_names.index("Set up Node.js") < step_names.index("Install dependencies")
     fast_suite_command = run_steps["Run fast test suite"]
-    assert fast_suite_command == "uv run pytest tests/ -q --dist=loadscope"
+    assert "uv run pytest tests/ -q" in fast_suite_command
+    assert "-n auto" in fast_suite_command
     assert "--dist=loadscope" in fast_suite_command
     assert 'addopts = "-n auto"' not in pyproject
     assert 'pytest-xdist>=3.8.0' in pyproject
@@ -114,11 +115,15 @@ def test_ci_and_test_readme_document_explicit_fast_and_full_suite_commands() -> 
     heavy_suite_command = run_steps["Run complementary heavy suite"]
     assert "from tests.conftest import complementary_heavy_suite_ignore_args" in heavy_suite_command
     assert 'HEAVY_SUITE_IGNORE_ARGS="$(' in heavy_suite_command
-    assert "uv run pytest tests/ -q --full-suite --dist=loadscope $HEAVY_SUITE_IGNORE_ARGS" in heavy_suite_command
+    assert "uv run pytest tests/ -q" in heavy_suite_command
+    assert "-n auto" in heavy_suite_command
     assert "--full-suite" in heavy_suite_command
-    assert "Default `uv run pytest tests/ -q` uses the fast daily suite declared in `tests/conftest.py`." in tests_readme
+    assert "--dist=loadscope" in heavy_suite_command
+    assert "$HEAVY_SUITE_IGNORE_ARGS" in heavy_suite_command
+    assert "Default `uv run pytest tests/ -q -n auto` uses the fast daily suite declared in `tests/conftest.py`." in tests_readme
     assert "explicit `loadscope` scheduling used by CI" in tests_readme
-    assert "GitHub Actions workflow runs the complementary heavy suite with `--full-suite` plus the shared ignore helper" in tests_readme
+    assert "parallelizes with `-n auto`" in tests_readme
+    assert "GitHub Actions workflow runs the complementary heavy suite with `--full-suite`, `-n auto`, and the shared ignore helper" in tests_readme
     assert "tests/core/test_review_contract_prompt_visibility.py" in tests_readme
     assert complementary_heavy_suite_ignore_args() == tuple(
         f"--ignore=tests/{rel_path}" for rel_path in _all_test_paths() if rel_path not in FAST_SUITE_EXCLUDES

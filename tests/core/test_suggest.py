@@ -14,12 +14,14 @@ from gpd.core import suggest as suggest_module
 from gpd.core.constants import ENV_GPD_ACTIVE_RUNTIME
 from gpd.core.proof_review import resolve_manuscript_proof_review_status
 from gpd.core.reproducibility import compute_sha256
+from gpd.core.runtime_command_surfaces import format_active_runtime_command
 from gpd.core.suggest import (
     Recommendation,
     SuggestContext,
     SuggestResult,
     suggest_next,
 )
+from gpd.hooks.runtime_detect import RUNTIME_UNKNOWN
 from tests.manuscript_test_support import (
     CANONICAL_MANUSCRIPT_STEM,
     manuscript_path,
@@ -314,6 +316,31 @@ def test_no_project_with_runtime_dir_but_no_install_uses_plain_gpd_command(tmp_p
 
     assert result.top_action is not None
     assert result.top_action.command == "gpd init new-project"
+
+
+def test_format_command_matches_shared_runtime_surface_helper_for_suggest_next(tmp_path: Path) -> None:
+    """Suggest formatting should match the shared active-runtime command helper."""
+    workspace_runtime, _ = _runtime_pair_with_distinct_commands("suggest-next")
+    adapter = get_adapter(workspace_runtime)
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    seed_complete_runtime_install(workspace / adapter.local_config_dir_name, runtime=workspace_runtime)
+
+    result = suggest_module._format_command("suggest-next", cwd=workspace)
+
+    assert result == adapter.format_command("suggest-next")
+    assert result == format_active_runtime_command("suggest-next", cwd=workspace, fallback=None)
+
+
+def test_format_command_falls_back_to_local_cli_for_unknown_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unknown runtime detection should preserve the local CLI fallback surface."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    monkeypatch.setattr("gpd.hooks.runtime_detect.detect_runtime_for_gpd_use", lambda cwd=None: RUNTIME_UNKNOWN)
+
+    assert suggest_module._format_command("new-project", cwd=workspace) == "gpd init new-project"
 
 
 @pytest.mark.parametrize("include_local_conflict", [False, True])
