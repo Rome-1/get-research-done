@@ -2820,21 +2820,36 @@ def test_contract_tools_reject_blank_or_malformed_contract_list_members_at_mcp_b
 
 
 @pytest.mark.parametrize(
-    ("mutator", "expected_error"),
+    ("mutator", "expected_error", "expected_details"),
     [
         (
             lambda contract: contract["claims"][0].__setitem__("references", "   "),
-            "claims.0.references must not be blank",
+            (
+                "claims.0.references must not be blank; "
+                "claims.0.references was normalized from blank string to empty list"
+            ),
+            [
+                "claims.0.references must not be blank",
+                "claims.0.references was normalized from blank string to empty list",
+            ],
         ),
         (
             lambda contract: contract["scope"].__setitem__("in_scope", "   "),
-            "scope.in_scope must not be blank",
+            (
+                "scope.in_scope must not be blank; "
+                "scope.in_scope was normalized from blank string to empty list"
+            ),
+            [
+                "scope.in_scope must not be blank",
+                "scope.in_scope was normalized from blank string to empty list",
+            ],
         ),
     ],
 )
 def test_contract_tools_reject_blank_scalar_to_list_contract_drift(
     mutator,
     expected_error: str,
+    expected_details: list[str],
 ) -> None:
     from gpd.mcp.servers.verification_server import run_contract_check, suggest_contract_checks
 
