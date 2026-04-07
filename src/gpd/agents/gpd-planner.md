@@ -869,9 +869,21 @@ contract:
       deliverables: ["deliv-vac-pol", "deliv-proof-vac-pol"]
       acceptance_tests: ["test-transversality", "test-proof-alignment"]
       references: ["ref-textbook"]
-      parameters: ["q"]
-      hypotheses: ["Gauge-fixing and regularization conventions match the approved anchor"]
-      conclusion_clauses: ["q_mu Pi^{mu nu} = 0"]
+      parameters:
+        - symbol: "q"
+          domain_or_type: "four-momentum transfer"
+          aliases: ["q"]
+          required_in_proof: true
+          notes: "Contraction variable whose longitudinal projection must vanish"
+      hypotheses:
+        - id: "hyp-gauge"
+          text: "Gauge-fixing and regularization conventions match the approved anchor"
+          symbols: ["q"]
+          category: "assumption"
+          required_in_proof: true
+      conclusion_clauses:
+        - id: "concl-transverse"
+          text: "q_mu Pi^{mu nu} = 0"
       proof_deliverables: ["deliv-proof-vac-pol"]
   deliverables:
     - id: "deliv-vac-pol"
@@ -1243,6 +1255,7 @@ contract:
   claims:
     - id: "claim-gap-fix"
       statement: "[What repaired result must now hold]"
+      claim_kind: other
       deliverables: ["deliv-gap-fix"]
       acceptance_tests: ["test-gap-fix"]
   deliverables:

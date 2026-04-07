@@ -77,13 +77,33 @@ def test_planner_and_checker_examples_surface_concrete_contract_anchors() -> Non
 
     assert "in_scope: [\"Recover the benchmark curve within tolerance\"]" in planner_prompt
     assert "claim_kind: theorem" in planner_prompt
-    assert 'proof_deliverables: ["deliv-proof-vac-pol"]' in planner_prompt
+    assert 'parameters:\n        - symbol: "q"' in planner_prompt
+    assert 'hypotheses:\n        - id: "hyp-gauge"' in planner_prompt
+    assert 'conclusion_clauses:\n        - id: "concl-transverse"' in planner_prompt
     assert "GPD/phases/01-vacuum-polarization/01-01-SUMMARY.md" in planner_prompt
     assert "GPD/phases/00-baseline/00-01-SUMMARY.md#gauge-and-tensor-convention" in planner_prompt
     assert "schema_version: 1" in checker_prompt
     assert "in_scope: [\"Recover the benchmark value within tolerance\"]" in checker_prompt
     assert "claim_kind: theorem" in checker_prompt
+    assert "parameters:" in checker_prompt
+    assert "- symbol: k" in checker_prompt
+    assert "domain_or_type: \"dimensionless\"" in checker_prompt
+    assert "aliases: [kappa]" in checker_prompt
+    assert "required_in_proof: true" in checker_prompt
+    assert "hypotheses:" in checker_prompt
+    assert "- id: hyp-normalization" in checker_prompt
+    assert "text: \"Reference normalization and tolerance convention match Ref-01\"" in checker_prompt
+    assert "symbols: [k]" in checker_prompt
+    assert "category: assumption" in checker_prompt
+    assert "conclusion_clauses:" in checker_prompt
+    assert "- id: concl-benchmark" in checker_prompt
+    assert "text: \"Benchmark agreement stays within tolerance at every approved sample\"" in checker_prompt
     assert "proof_deliverables: [deliv-proof-main]" in checker_prompt
+    assert "parameters: [k]" not in checker_prompt
+    assert "hypotheses: [\"Reference normalization and tolerance convention match Ref-01\"]" not in checker_prompt
+    assert (
+        "conclusion_clauses: [\"Benchmark agreement stays within tolerance at every approved sample\"]" not in checker_prompt
+    )
     assert "Treat `effective_reference_intake` and `active_reference_context` only as readable projections" in checker_prompt
     assert "GPD/phases/00-baseline/00-01-SUMMARY.md" in checker_prompt
     assert "GPD/phases/00-baseline/00-01-SUMMARY.md#gauge-unit-and-notation-conventions" in checker_prompt
@@ -125,7 +145,12 @@ def test_phase_prompt_surfaces_default_salvage_and_hard_plan_requirements() -> N
 def test_planner_prompt_stays_compact_while_preserving_canonical_contract_wiring() -> None:
     planner_prompt = (REPO_ROOT / "src/gpd/agents/gpd-planner.md").read_text(encoding="utf-8")
 
-    assert planner_prompt.count("contract:\n  schema_version: 1") >= 2
+    assert "parameters:\n        - symbol: \"q\"" in planner_prompt
+    assert "hypotheses:\n        - id: \"hyp-gauge\"" in planner_prompt
+    assert "conclusion_clauses:\n        - id: \"concl-transverse\"" in planner_prompt
+    assert 'parameters: ["q"]' not in planner_prompt
+    assert 'hypotheses: ["Gauge-fixing and regularization conventions match the approved anchor"]' not in planner_prompt
+    assert 'conclusion_clauses: ["q_mu Pi^{mu nu} = 0"]' not in planner_prompt
     assert "15-20%" not in planner_prompt
     assert "Context %" not in planner_prompt
     assert "No plan-checker" not in planner_prompt
