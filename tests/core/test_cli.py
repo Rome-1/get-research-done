@@ -1189,6 +1189,7 @@ def test_resume_recent_raw_surfaces_machine_local_recent_projects(
         encoding="utf-8",
     )
     monkeypatch.setattr(cli_module.Path, "home", lambda: home)
+    monkeypatch.delenv("GPD_DATA_DIR", raising=False)
 
     result = runner.invoke(app, ["--raw", "resume", "--recent"])
     parsed = json.loads(result.output)
@@ -1274,6 +1275,7 @@ def test_resume_recent_raw_downgrades_missing_handoff_rows_to_non_resumable(
         encoding="utf-8",
     )
     monkeypatch.setattr(cli_module.Path, "home", lambda: home)
+    monkeypatch.delenv("GPD_DATA_DIR", raising=False)
 
     result = runner.invoke(app, ["--raw", "resume", "--recent"])
     parsed = json.loads(result.output)

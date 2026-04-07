@@ -107,7 +107,7 @@ def test_ci_and_test_readme_document_explicit_fast_and_full_suite_commands() -> 
     assert step_names.index("Set up Node.js") < step_names.index("Install dependencies")
     fast_suite_command = run_steps["Run fast test suite"]
     assert fast_suite_command == "uv run pytest tests/ -q"
-    assert 'addopts = "-n auto --dist=loadscope"' in pyproject
+    assert 'addopts = "-n auto --dist=worksteal"' in pyproject
     assert 'pytest-xdist>=3.8.0' in pyproject
     assert "--full-suite" not in fast_suite_command
     heavy_suite_command = run_steps["Run complementary heavy suite"]
@@ -117,9 +117,9 @@ def test_ci_and_test_readme_document_explicit_fast_and_full_suite_commands() -> 
     assert "--full-suite" in heavy_suite_command
     assert "$HEAVY_SUITE_IGNORE_ARGS" in heavy_suite_command
     assert "-n auto" not in heavy_suite_command
-    assert "--dist=loadscope" not in heavy_suite_command
+    assert "--dist=worksteal" not in heavy_suite_command
     assert "Default `uv run pytest tests/ -q` uses the fast daily suite declared in `tests/conftest.py`" in tests_readme
-    assert "inherits `-n auto --dist=loadscope` from `pyproject.toml`" in tests_readme
+    assert "inherits `-n auto --dist=worksteal` from `pyproject.toml`" in tests_readme
     assert "override that default explicitly with `uv run pytest tests/ -q -n 0`" in tests_readme
     assert "GitHub Actions workflow runs the complementary heavy suite with `--full-suite` and the shared ignore helper" in tests_readme
     assert "tests/core/test_review_contract_prompt_visibility.py" in tests_readme

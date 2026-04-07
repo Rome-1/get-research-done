@@ -182,7 +182,9 @@ class TestConcurrentAccess:
         first.start()
         assert first_writer_entered.wait(timeout=2), "first writer never acquired the state lock"
         second.start()
-        time.sleep(6.0)
+        # We only need a short overlap window to prove the second writer blocks
+        # behind the lock instead of timing out.
+        time.sleep(0.25)
         release_first_writer.set()
         first.join(timeout=10)
         second.join(timeout=10)

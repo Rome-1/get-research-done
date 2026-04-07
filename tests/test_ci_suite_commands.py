@@ -24,7 +24,7 @@ def _job_steps(workflow: dict[str, object], job_name: str) -> list[dict[str, obj
     return steps
 
 
-def test_ci_workflow_runs_fast_and_full_pytest_suites_with_default_parallelism_and_ci_loadscope() -> None:
+def test_ci_workflow_runs_fast_and_full_pytest_suites_with_default_parallelism_and_ci_worksteal() -> None:
     workflow = _workflow_data()
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     steps = _job_steps(workflow, "pytest")
@@ -45,14 +45,14 @@ def test_ci_workflow_runs_fast_and_full_pytest_suites_with_default_parallelism_a
     assert "--full-suite" in heavy_suite_command
     assert "$HEAVY_SUITE_IGNORE_ARGS" in heavy_suite_command
     assert "-n auto" not in heavy_suite_command
-    assert "--dist=loadscope" not in heavy_suite_command
+    assert "--dist=worksteal" not in heavy_suite_command
     assert steps[-2]["name"] == "Run fast test suite"
     assert steps[-1]["name"] == "Run complementary heavy suite"
     assert steps[-2]["run"] == fast_suite_command
     assert "complementary_heavy_suite_ignore_args" in steps[-1]["run"]
     assert steps[2]["uses"] == "actions/setup-node@v6"
     assert steps[2]["with"]["node-version"] == "20"
-    assert 'addopts = "-n auto --dist=loadscope"' in pyproject
+    assert 'addopts = "-n auto --dist=worksteal"' in pyproject
     assert 'pytest-xdist>=3.8.0' in pyproject
     assert complementary_heavy_suite_ignore_args() == tuple(
         f"--ignore=tests/{rel_path}"
@@ -68,6 +68,6 @@ def test_tests_readme_documents_fast_and_full_suite_entrypoints() -> None:
     tests_readme = (REPO_ROOT / "tests" / "README.md").read_text(encoding="utf-8")
 
     assert "Default `uv run pytest tests/ -q` uses the fast daily suite declared in" in tests_readme
-    assert "inherits `-n auto --dist=loadscope` from `pyproject.toml`" in tests_readme
+    assert "inherits `-n auto --dist=worksteal` from `pyproject.toml`" in tests_readme
     assert "override that default explicitly with `uv run pytest tests/ -q -n 0`" in tests_readme
     assert "The GitHub Actions workflow runs the complementary heavy suite with `--full-suite` and the shared ignore helper" in tests_readme
