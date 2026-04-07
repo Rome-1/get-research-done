@@ -115,6 +115,7 @@ def resolve_hook_lookup_context(
     preferred_runtime: str | None = None,
 ) -> HookLookupContext:
     """Resolve the shared cwd/home/runtime preference context for hook lookups."""
+    from gpd.hooks import runtime_detect as runtime_detect_module
     from gpd.hooks.runtime_detect import (
         detect_active_runtime,
         detect_active_runtime_with_gpd_install,
@@ -123,8 +124,16 @@ def resolve_hook_lookup_context(
         detect_runtime_install_target,
     )
 
-    resolved_cwd = Path(cwd).expanduser().resolve(strict=False) if cwd is not None else None
-    resolved_home = Path.home() if home is None else Path(home).expanduser().resolve(strict=False)
+    resolved_cwd = (
+        Path(cwd).expanduser().resolve(strict=False)
+        if cwd is not None
+        else runtime_detect_module.Path.cwd().expanduser().resolve(strict=False)
+    )
+    resolved_home = (
+        Path(home).expanduser().resolve(strict=False)
+        if home is not None
+        else runtime_detect_module.Path.home().expanduser().resolve(strict=False)
+    )
     detected_runtime_hint = normalize_runtime_hint(detect_runtime_for_gpd_use(cwd=resolved_cwd, home=resolved_home))
     raw_active_runtime_hint = (
         active_installed_runtime
@@ -133,7 +142,21 @@ def resolve_hook_lookup_context(
     )
     active_runtime_hint = normalize_runtime_hint(raw_active_runtime_hint)
     normalized_preferred_runtime = normalize_runtime_hint(preferred_runtime)
-    runtime_hint = detected_runtime_hint or active_runtime_hint or normalized_preferred_runtime
+    project_root = resolve_project_root(resolved_cwd) if resolved_cwd is not None else None
+    active_runtime_target = None
+    if active_runtime_hint is not None:
+        active_runtime_target = detect_runtime_install_target(active_runtime_hint, cwd=resolved_cwd, home=resolved_home)
+        if active_runtime_target is None and project_root is not None and project_root != resolved_cwd:
+            active_runtime_target = detect_runtime_install_target(
+                active_runtime_hint,
+                cwd=project_root,
+                home=resolved_home,
+            )
+    runtime_hint = (
+        active_runtime_hint
+        if active_runtime_target is not None
+        else detected_runtime_hint or active_runtime_hint or normalized_preferred_runtime
+    )
     lookup_cwd = _prefer_runtime_lookup_cwd(
         resolved_cwd=resolved_cwd,
         runtime_hint=runtime_hint,

@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import re
 import subprocess
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -265,6 +266,41 @@ def _source_path_project_root(source_path: Path | None) -> Path | None:
     return resolve_project_root(source_path.parent, require_layout=False)
 
 
+def _normalize_frontmatter_contract_mapping(contract_data: object) -> object:
+    """Normalize frontmatter-authored blank nested proof-list scalars to empty lists."""
+
+    if not isinstance(contract_data, dict):
+        return contract_data
+
+    normalized = deepcopy(contract_data)
+    claims = normalized.get("claims")
+    if not isinstance(claims, list):
+        return normalized
+
+    for claim in claims:
+        if not isinstance(claim, dict):
+            continue
+        parameters = claim.get("parameters")
+        if isinstance(parameters, list):
+            for parameter in parameters:
+                if (
+                    isinstance(parameter, dict)
+                    and isinstance(parameter.get("aliases"), str)
+                    and not parameter["aliases"].strip()
+                ):
+                    parameter["aliases"] = []
+        hypotheses = claim.get("hypotheses")
+        if isinstance(hypotheses, list):
+            for hypothesis in hypotheses:
+                if (
+                    isinstance(hypothesis, dict)
+                    and isinstance(hypothesis.get("symbols"), str)
+                    and not hypothesis["symbols"].strip()
+                ):
+                    hypothesis["symbols"] = []
+    return normalized
+
+
 def _validate_contract_mapping(
     contract_data: object,
     *,
@@ -276,7 +312,8 @@ def _validate_contract_mapping(
     if not isinstance(contract_data, dict):
         return _PlanContractResolution(errors=["expected an object"])
 
-    strict_result: ProjectContractParseResult = parse_project_contract_data_strict(contract_data)
+    normalized_contract_data = _normalize_frontmatter_contract_mapping(contract_data)
+    strict_result: ProjectContractParseResult = parse_project_contract_data_strict(normalized_contract_data)
     if strict_result.errors:
         return _PlanContractResolution(errors=list(dict.fromkeys(strict_result.errors)))
 

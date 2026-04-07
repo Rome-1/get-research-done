@@ -75,7 +75,8 @@ packages = ["src/gpd"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-n auto"
+# Default to maximal local parallelism while keeping related tests co-located.
+addopts = "-n auto --dist=loadscope"
 markers = [
     "no_stable_hook_python: opt out of the autouse _stable_hook_python fixture",
 ]

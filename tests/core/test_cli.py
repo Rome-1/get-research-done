@@ -2407,7 +2407,21 @@ def test_validate_project_contract_accepts_proof_obligation_observable_fixture(t
         "regime": "all stated parameter regimes",
     }
     contract["claims"][0]["statement"] = "The theorem is proved for all stated hypotheses and named parameters, including nonzero r_0."
+    contract["claims"][0]["claim_kind"] = "theorem"
     contract["claims"][0]["observables"] = ["obs-proof"]
+    contract["claims"][0]["proof_deliverables"] = ["deliv-figure"]
+    contract["claims"][0]["parameters"] = [
+        {"symbol": "r_0", "domain_or_type": "nonnegative real"}
+    ]
+    contract["claims"][0]["hypotheses"] = [
+        {"id": "hyp-r0", "text": "r_0 >= 0", "symbols": ["r_0"]}
+    ]
+    contract["claims"][0]["conclusion_clauses"] = [
+        {
+            "id": "concl-proof",
+            "text": "The theorem holds for the full stated hypothesis set and every named parameter, including nonzero r_0.",
+        }
+    ]
     contract["deliverables"][0]["kind"] = "derivation"
     contract["deliverables"][0]["path"] = "proofs/full-theorem-proof.tex"
     contract["deliverables"][0]["description"] = "Formal proof artifact for the theorem claim audit"
@@ -2416,7 +2430,7 @@ def test_validate_project_contract_accepts_proof_obligation_observable_fixture(t
         "explicit use or discharge of r_0",
         "red-team proof audit notes",
     ]
-    contract["acceptance_tests"][0]["kind"] = "human_review"
+    contract["acceptance_tests"][0]["kind"] = "claim_to_proof_alignment"
     contract["acceptance_tests"][0]["procedure"] = (
         "Adversarially review the theorem proof against every named hypothesis and parameter, including r_0."
     )
