@@ -29,6 +29,7 @@ def test_new_project_stage_contract_loads_and_preserves_stage_order() -> None:
     assert contract.stages[0].conditional_authorities[0].when == "full_questioning_path"
     assert contract.stages[0].conditional_authorities[0].authorities == ("references/research/questioning.md",)
     assert "references/research/questioning.md" in contract.stages[0].must_not_eager_load
+    assert "references/shared/canonical-schema-discipline.md" in contract.stages[0].must_not_eager_load
     assert "templates/project-contract-schema.md" in contract.stages[0].must_not_eager_load
     assert "templates/project-contract-grounding-linkage.md" in contract.stages[0].must_not_eager_load
     assert contract.stages[0].writes_allowed == ()
@@ -123,3 +124,24 @@ def test_new_project_stage_contract_rejects_invalid_ordering(tmp_path: Path) -> 
 
     with pytest.raises(ValueError, match="stage order values"):
         stage_contract_module.load_new_project_stage_contract_from_path(path)
+
+
+@pytest.mark.parametrize(
+    ("mutator", "expected"),
+    [
+        (lambda payload: payload["stages"][0]["loaded_authorities"].__setitem__(0, "references/missing.md"), "markdown file"),
+        (lambda payload: payload["stages"][0]["allowed_tools"].__setitem__(0, "network"), "unknown tool name"),
+        (lambda payload: payload["stages"][1]["required_init_fields"].__setitem__(0, "bogus_field"), "unknown field name"),
+        (
+            lambda payload: payload["stages"][0]["must_not_eager_load"].append("workflows/new-project.md"),
+            "overlap with must_not_eager_load",
+        ),
+        (lambda payload: payload["stages"][0]["writes_allowed"].append("../state.json"), "normalized relative POSIX path"),
+    ],
+)
+def test_new_project_stage_contract_rejects_validation_drift(mutator, expected: str) -> None:
+    payload = json.loads(stage_contract_module.NEW_PROJECT_STAGE_MANIFEST_PATH.read_text(encoding="utf-8"))
+    mutator(payload)
+
+    with pytest.raises(ValueError, match=expected):
+        stage_contract_module.validate_new_project_stage_contract_payload(payload)

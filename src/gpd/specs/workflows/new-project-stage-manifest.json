@@ -43,6 +43,7 @@
       "must_not_eager_load": [
         "references/research/questioning.md",
         "references/ui/ui-brand.md",
+        "references/shared/canonical-schema-discipline.md",
         "templates/project.md",
         "templates/requirements.md",
         "templates/project-contract-grounding-linkage.md",

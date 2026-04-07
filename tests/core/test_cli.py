@@ -5499,6 +5499,27 @@ def test_init_new_project(mock_init):
     result = runner.invoke(app, ["init", "new-project"])
     assert result.exit_code == 0
     mock_init.assert_called_once()
+    assert len(mock_init.call_args.args) == 1
+    assert mock_init.call_args.kwargs == {}
+
+
+@patch("gpd.core.context.init_new_project")
+def test_init_new_project_stage(mock_init):
+    mock_result = MagicMock()
+    mock_result.model_dump.return_value = {"context": "..."}
+    mock_init.return_value = mock_result
+    result = runner.invoke(app, ["init", "new-project", "--stage", "scope_intake"])
+    assert result.exit_code == 0
+    mock_init.assert_called_once()
+    assert len(mock_init.call_args.args) == 1
+    assert mock_init.call_args.kwargs == {"stage": "scope_intake"}
+
+
+@patch("gpd.core.context.init_new_project", side_effect=ValueError("Unknown new-project stage 'bogus'."))
+def test_init_new_project_rejects_invalid_stage(mock_init):
+    result = runner.invoke(app, ["init", "new-project", "--stage", "bogus"])
+    assert result.exit_code == 1
+    assert "Unknown new-project stage 'bogus'." in result.output
 
 
 def test_init_resume_help_surfaces_recovery_snapshot_entrypoint() -> None:

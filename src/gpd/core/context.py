@@ -1996,7 +1996,7 @@ def init_plan_phase(cwd: Path, phase: str | None, includes: set[str] | None = No
     return result
 
 
-def init_new_project(cwd: Path) -> dict:
+def init_new_project(cwd: Path, stage: str | None = None) -> dict:
     """Assemble context for new project creation."""
     config = load_config(cwd)
 
@@ -2032,7 +2032,7 @@ def init_new_project(cwd: Path) -> dict:
         or resolve_current_manuscript_entrypoint(cwd) is not None
     )
 
-    return {
+    result = {
         # Models
         "researcher_model": _resolve_model(cwd, "gpd-project-researcher", config),
         "synthesizer_model": _resolve_model(cwd, "gpd-research-synthesizer", config),
@@ -2057,6 +2057,33 @@ def init_new_project(cwd: Path) -> dict:
         # Platform
         "platform": _detect_platform(cwd),
     }
+
+    if stage is None:
+        return result
+
+    from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+    manifest = load_workflow_stage_manifest(
+        "new-project",
+        allowed_tools={"ask_user", "file_read", "file_write", "shell", "task"},
+        known_init_fields=set(result),
+    )
+    try:
+        stage_def = manifest.stage_by_id(stage)
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown new-project stage {stage!r}. Allowed values: {', '.join(manifest.stage_ids())}."
+        ) from exc
+
+    missing_fields = [field for field in stage_def.required_init_fields if field not in result]
+    if missing_fields:
+        raise ValueError(
+            f"new-project stage {stage!r} requires unavailable init field(s): {', '.join(missing_fields)}"
+        )
+
+    staged_payload = {field: result[field] for field in stage_def.required_init_fields}
+    staged_payload["staged_loading"] = manifest.staged_loading_payload(stage_def.id)
+    return staged_payload
 
 
 def init_new_milestone(cwd: Path) -> dict:

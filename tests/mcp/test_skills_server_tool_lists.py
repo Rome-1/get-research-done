@@ -7,6 +7,7 @@ import sys
 from unittest.mock import patch
 
 import gpd.registry as registry_module
+from gpd.core.workflow_staging import WorkflowStage, WorkflowStageConditionalAuthority, WorkflowStageManifest
 from gpd.registry import AgentDef, CommandDef, SkillDef
 
 
@@ -82,6 +83,103 @@ def test_get_skill_command_surfaces_agent_metadata() -> None:
     assert result["allowed_tools_surface"] == "command.allowed-tools"
     assert result["structured_metadata_authority"]["agent"] == "mirrored"
     assert "agent: gpd-planner" in result["content"]
+
+
+def test_get_skill_command_surfaces_staged_loading_sidecar() -> None:
+    from gpd.mcp.servers.skills_server import get_skill
+
+    staged_loading = WorkflowStageManifest(
+        schema_version=1,
+        workflow_id="new-project",
+        stages=(
+            WorkflowStage(
+                id="scope_intake",
+                order=1,
+                purpose="intake",
+                mode_paths=("workflows/new-project.md",),
+                required_init_fields=("researcher_model",),
+                loaded_authorities=("workflows/new-project.md",),
+                conditional_authorities=(
+                    WorkflowStageConditionalAuthority(
+                        when="conditional",
+                        authorities=("references/research/questioning.md",),
+                    ),
+                ),
+                must_not_eager_load=("references/research/questioning.md",),
+                allowed_tools=("file_read",),
+                writes_allowed=(),
+                produced_state=(),
+                next_stages=(),
+                checkpoints=(),
+            ),
+        ),
+    )
+    command = CommandDef(
+        name="gpd:new-project",
+        description="New project.",
+        argument_hint="",
+        agent=None,
+        requires={},
+        allowed_tools=["file_read"],
+        content="Command body.",
+        path="/tmp/gpd-new-project.md",
+        source="commands",
+        staged_loading=staged_loading,
+    )
+    skill = SkillDef(
+        name="gpd-new-project",
+        description="New project.",
+        content="Command body.",
+        category="project",
+        path="/tmp/gpd-new-project.md",
+        source_kind="command",
+        registry_name="new-project",
+    )
+
+    with (
+        patch("gpd.mcp.servers.skills_server._resolve_skill", return_value=skill),
+        patch("gpd.mcp.servers.skills_server.content_registry.get_command", return_value=command),
+    ):
+        result = get_skill("gpd-new-project")
+
+    assert result["staged_loading"]["workflow_id"] == "new-project"
+    assert result["staged_loading"]["stages"][0]["id"] == "scope_intake"
+    assert result["structured_metadata_authority"]["staged_loading"] == "mirrored"
+
+
+def test_get_skill_unrelated_command_does_not_expose_stage_sidecars() -> None:
+    from gpd.mcp.servers.skills_server import get_skill
+
+    command = CommandDef(
+        name="gpd:help",
+        description="Help.",
+        argument_hint="",
+        agent=None,
+        requires={},
+        allowed_tools=["file_read"],
+        content="Command body.",
+        path="/tmp/gpd-help.md",
+        source="commands",
+    )
+    skill = SkillDef(
+        name="gpd-help",
+        description="Help.",
+        content="Command body.",
+        category="help",
+        path="/tmp/gpd-help.md",
+        source_kind="command",
+        registry_name="help",
+    )
+
+    with (
+        patch("gpd.mcp.servers.skills_server._resolve_skill", return_value=skill),
+        patch("gpd.mcp.servers.skills_server.content_registry.get_command", return_value=command),
+    ):
+        result = get_skill("gpd-help")
+
+    assert "staged_loading" not in result
+    assert "staged_loading" not in result["structured_metadata_authority"]
+    assert "new-project-stage-manifest.json" not in result["content"]
 
 
 def test_get_skill_agent_surfaces_allowed_tools() -> None:

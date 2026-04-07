@@ -4182,11 +4182,24 @@ def init_plan_phase(
 
 
 @init_app.command("new-project")
-def init_new_project() -> None:
+def init_new_project(
+    stage: str | None = typer.Option(
+        None,
+        "--stage",
+        help="Load the staged new-project context for a specific stage id.",
+    ),
+) -> None:
     """Assemble context for starting a new project."""
-    from gpd.core.context import init_new_project
+    from gpd.core.context import init_new_project as _init_new_project
 
-    _output(init_new_project(_get_cwd()))
+    try:
+        if stage is None:
+            payload = _init_new_project(_get_cwd())
+        else:
+            payload = _init_new_project(_get_cwd(), stage=stage)
+    except ValueError as exc:
+        _error(str(exc))
+    _output(payload)
 
 
 @init_app.command("new-milestone")

@@ -3254,6 +3254,27 @@ def _summarize_contract_salvage_errors(errors: list[str]) -> str:
     return summary
 
 
+def _suppress_redundant_contract_salvage_errors(errors: list[str]) -> list[str]:
+    """Drop lower-signal salvage findings that are implied by stronger errors."""
+
+    blank_error_paths = {
+        error.removesuffix(" must not be blank")
+        for error in errors
+        if error.endswith(" must not be blank")
+    }
+    if not blank_error_paths:
+        return list(errors)
+
+    filtered: list[str] = []
+    for error in errors:
+        if error.endswith(" was normalized from blank string to empty list"):
+            path = error.removesuffix(" was normalized from blank string to empty list")
+            if path in blank_error_paths:
+                continue
+        filtered.append(error)
+    return filtered
+
+
 def _contract_error_path(error: str) -> str | None:
     match = _CONTRACT_ERROR_PATH_RE.match(error)
     if match is None:
@@ -3328,7 +3349,10 @@ def _contract_error_sort_key(error: str) -> tuple[object, ...]:
 
 
 def _contract_payload_error(errors: list[str]) -> dict[str, object]:
-    details = sorted(dict.fromkeys(errors), key=_contract_error_sort_key)
+    details = sorted(
+        dict.fromkeys(_suppress_redundant_contract_salvage_errors(errors)),
+        key=_contract_error_sort_key,
+    )
     if not details:
         return _error_result("Invalid contract payload")
     message = f"Invalid contract payload: {_summarize_contract_salvage_errors(details)}"

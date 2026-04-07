@@ -8,6 +8,7 @@ import pytest
 
 from gpd import registry
 from gpd.core.model_visible_text import agent_visibility_note, command_visibility_note, review_contract_visibility_note
+from gpd.core.workflow_staging import WorkflowStageManifest
 from gpd.registry import (
     AgentDef,
     CommandDef,
@@ -21,6 +22,8 @@ from gpd.registry import (
     render_command_visibility_sections_from_frontmatter,
 )
 from gpd.specs import SPECS_DIR as CANONICAL_SPECS_DIR
+
+NEW_PROJECT_COMMAND_PATH = Path(__file__).resolve().parents[1] / "src" / "gpd" / "commands" / "new-project.md"
 
 
 def _write_review_contract_command(tmp_path: Path, file_name: str, review_contract_body: str) -> Path:
@@ -604,14 +607,22 @@ class TestParseCommandFile:
         assert cmd.project_reentry_capable is True
 
 
-    def test_new_project_registry_surface_uses_narrow_contract_schema_without_include_markers(self) -> None:
-        rendered = registry.get_command("gpd:new-project").content
+    def test_new_project_command_source_uses_narrow_contract_schema_without_include_markers(self) -> None:
+        command_text = NEW_PROJECT_COMMAND_PATH.read_text(encoding="utf-8")
 
-        assert "`schema_version` must be the integer `1`" in rendered
-        assert "### `position`" not in rendered
-        assert "### `active_calculations`" not in rendered
-        assert "<!-- [included:" not in rendered
-        assert "<!-- [end included] -->" not in rendered
+        assert "project-contract-schema.md" in command_text
+        assert "project-contract-grounding-linkage.md" in command_text
+        assert "staged_loading" not in command_text
+        assert "new-project-stage-manifest.json" not in command_text
+        assert "<!-- [included:" not in command_text
+        assert "<!-- [end included] -->" not in command_text
+
+    def test_new_project_command_source_stays_prompt_budget_thin(self) -> None:
+        command_text = NEW_PROJECT_COMMAND_PATH.read_text(encoding="utf-8")
+
+        assert "staged_loading" not in command_text
+        assert "new-project-stage-manifest.json" not in command_text
+        assert "conditional_authorities" not in command_text
 
     def test_command_project_reentry_capable_rejects_non_boolean_values(self, tmp_path: Path) -> None:
         f = tmp_path / "resume-work.md"
@@ -1596,6 +1607,18 @@ class TestRegistryCache:
         assert cache._commands is None
         assert cache._skills is None
 
+    def test_invalidate_cache_clears_workflow_stage_manifest_cache(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[str] = []
+
+        monkeypatch.setattr(registry, "invalidate_workflow_stage_manifest_cache", lambda: calls.append("called"))
+
+        registry.invalidate_cache()
+
+        assert calls == ["called"]
+
     def test_invalidate_forces_re_discovery(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
@@ -1781,6 +1804,27 @@ class TestPublicAPI:
         assert cmd.name == "gpd:test-cmd"
         assert cmd.description == "Tested"
 
+    def test_get_command_new_project_surfaces_staged_loading_manifest(self) -> None:
+        registry.invalidate_cache()
+
+        cmd = registry.get_command("gpd:new-project")
+
+        assert cmd.staged_loading is not None
+        assert cmd.staged_loading.workflow_id == "new-project"
+        assert cmd.staged_loading.stage_ids() == ("scope_intake", "scope_approval", "post_scope")
+        assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/new-project.md",)
+
+    def test_registry_cache_invalidation_clears_new_project_stage_manifest(self) -> None:
+        registry.invalidate_cache()
+        first = registry.get_command("gpd:new-project").staged_loading
+        assert first is not None
+
+        registry.invalidate_cache()
+        second = registry.get_command("gpd:new-project").staged_loading
+        assert second is not None
+
+        assert first is not second
+
     def test_get_command_accepts_public_command_label(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
@@ -1934,7 +1978,6 @@ class TestPublicAPI:
 
         assert registry.list_agents() == ["new"]
 
-
 class TestDataclasses:
     """Tests for AgentDef, CommandDef, and SkillDef dataclass properties."""
 
@@ -1995,6 +2038,45 @@ class TestDataclasses:
         )
         with pytest.raises((AttributeError, TypeError)):
             cmd.new_attr = "nope"  # type: ignore[misc]
+
+    def test_command_def_accepts_staged_loading_sidecar(self) -> None:
+        from gpd.core.workflow_staging import WorkflowStage
+
+        staged_loading = WorkflowStageManifest(
+            schema_version=1,
+            workflow_id="new-project",
+            stages=(
+                WorkflowStage(
+                    id="scope_intake",
+                    order=1,
+                    purpose="intake",
+                    mode_paths=("workflows/new-project.md",),
+                    required_init_fields=(),
+                    loaded_authorities=("workflows/new-project.md",),
+                    conditional_authorities=(),
+                    must_not_eager_load=(),
+                    allowed_tools=(),
+                    writes_allowed=(),
+                    produced_state=(),
+                    next_stages=(),
+                    checkpoints=(),
+                ),
+            ),
+        )
+        cmd = CommandDef(
+            name="c",
+            description="d",
+            argument_hint="",
+            context_mode="project-required",
+            requires={},
+            allowed_tools=[],
+            content="",
+            path="/p",
+            source="commands",
+            staged_loading=staged_loading,
+        )
+
+        assert cmd.staged_loading is staged_loading
 
     def test_skill_def_frozen(self) -> None:
         skill = SkillDef(

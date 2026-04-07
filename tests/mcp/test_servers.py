@@ -1361,6 +1361,27 @@ class TestSkillsServer:
         assert result["project_reentry_capable"] is True
         assert result["argument_hint"] == ""
 
+    def test_get_skill_new_project_surfaces_staged_loading_sidecar(self):
+        from gpd import registry
+        from gpd.mcp.servers.skills_server import get_skill
+
+        repo_root = Path(__file__).resolve().parents[2]
+        with (
+            patch("gpd.registry.COMMANDS_DIR", repo_root / "src" / "gpd" / "commands"),
+            patch("gpd.registry.AGENTS_DIR", repo_root / "src" / "gpd" / "agents"),
+        ):
+            registry.invalidate_cache()
+            result = get_skill("gpd-new-project")
+
+        assert result["staged_loading"]["workflow_id"] == "new-project"
+        assert result["staged_loading"]["stages"][0]["id"] == "scope_intake"
+        assert result["staged_loading"]["stages"][1]["loaded_authorities"] == [
+            "templates/project-contract-schema.md",
+            "templates/project-contract-grounding-linkage.md",
+            "references/shared/canonical-schema-discipline.md",
+        ]
+        assert result["structured_metadata_authority"]["staged_loading"] == "mirrored"
+
     def test_get_skill_agent_uses_primary_agent_content(self):
         from gpd import registry
         from gpd.mcp.servers.skills_server import get_skill

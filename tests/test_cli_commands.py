@@ -5347,6 +5347,15 @@ def test_cli_uninstall_and_resolution_paths(monkeypatch: pytest.MonkeyPatch, gpd
     assert cli_module._target_dir_matches_global(_PRIMARY_RAW_RUNTIME_DESCRIPTOR.runtime_name, str(tricky_target), action="install") is True
 
 
+def test_init_new_project_help_surfaces_stage_option() -> None:
+    result = runner.invoke(app, ["init", "new-project", "--help"])
+
+    assert result.exit_code == 0
+    assert "--stage" in result.output
+    assert "Load the staged new-project context for a specific" in result.output
+    assert "stage id." in result.output
+
+
 class TestNoDuplicateTestMethods:
     """Regression: duplicate method names hide tests in Python."""
 

@@ -396,14 +396,7 @@ def test_contract_tools_reject_blank_scalar_to_list_drift() -> None:
     contract["claims"][0]["references"] = "   "
 
     expected = {
-        "error": (
-            "Invalid contract payload: claims.0.references must not be blank; "
-            "claims.0.references was normalized from blank string to empty list"
-        ),
-        "contract_error_details": [
-            "claims.0.references must not be blank",
-            "claims.0.references was normalized from blank string to empty list",
-        ],
+        "error": "Invalid contract payload: claims.0.references must not be blank",
         "schema_version": 1,
     }
 

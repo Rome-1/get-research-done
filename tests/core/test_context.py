@@ -38,6 +38,7 @@ from gpd.core.errors import ConfigError, ValidationError
 from gpd.core.recent_projects import record_recent_project
 from gpd.core.reproducibility import compute_sha256
 from gpd.core.resume_surface import RESUME_COMPATIBILITY_ALIAS_FIELDS
+from gpd.core.workflow_staging import NEW_PROJECT_INIT_FIELDS
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
@@ -1545,6 +1546,7 @@ class TestInitNewProject:
         assert ctx["has_project_manifest"] is False
         assert "has_existing_project" not in ctx
         assert ctx["planning_exists"] is False
+        assert "staged_loading" not in ctx
 
     def test_detects_research_files(self, tmp_path: Path) -> None:
         (tmp_path / "calc.py").write_text("import numpy")
@@ -1657,6 +1659,50 @@ class TestInitNewProject:
         assert ctx["project_contract_validation"]["valid"] is True
         assert ctx["project_contract_gate"]["authoritative"] is True
 
+    def test_new_project_stage_scope_intake_filters_payload(self, tmp_path: Path) -> None:
+        from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+        _setup_project(tmp_path)
+        _write_project_contract_state(tmp_path)
+
+        manifest = load_workflow_stage_manifest("new-project")
+        stage = manifest.get_stage("scope_intake")
+
+        ctx = init_new_project(tmp_path, stage="scope_intake")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["staged_loading"]["workflow_id"] == "new-project"
+        assert ctx["staged_loading"]["stage_id"] == "scope_intake"
+        assert ctx["staged_loading"]["order"] == 1
+        assert ctx["staged_loading"]["loaded_authorities"] == ["workflows/new-project.md"]
+        assert ctx["staged_loading"]["next_stages"] == ["scope_approval"]
+
+    def test_new_project_stage_scope_approval_filters_payload(self, tmp_path: Path) -> None:
+        from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+        _setup_project(tmp_path)
+        _write_project_contract_state(tmp_path)
+
+        manifest = load_workflow_stage_manifest("new-project")
+        stage = manifest.get_stage("scope_approval")
+
+        ctx = init_new_project(tmp_path, stage="scope_approval")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["staged_loading"]["workflow_id"] == "new-project"
+        assert ctx["staged_loading"]["stage_id"] == "scope_approval"
+        assert ctx["staged_loading"]["loaded_authorities"] == [
+            "templates/project-contract-schema.md",
+            "templates/project-contract-grounding-linkage.md",
+            "references/shared/canonical-schema-discipline.md",
+        ]
+
+    def test_new_project_stage_rejects_unknown_stage(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+
+        with pytest.raises(ValueError, match="Unknown new-project stage"):
+            init_new_project(tmp_path, stage="bogus")
+
     def test_new_project_bootstrap_omits_reference_ledger_payload(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         _write_project_contract_state(tmp_path)
@@ -1696,6 +1742,40 @@ class TestInitNewProject:
 
         assert ctx["project_contract_gate"]["visible"] is True
         assert ctx["project_contract_validation"]["valid"] is True
+
+    def test_stage_scope_intake_returns_only_manifest_required_fields(self, tmp_path: Path) -> None:
+        ctx = init_new_project(tmp_path, stage="scope_intake")
+
+        assert set(ctx) == {*NEW_PROJECT_INIT_FIELDS, "staged_loading"}
+        assert ctx["staged_loading"]["workflow_id"] == "new-project"
+        assert ctx["staged_loading"]["stage_id"] == "scope_intake"
+        assert ctx["staged_loading"]["order"] == 1
+        assert ctx["staged_loading"]["loaded_authorities"] == ["workflows/new-project.md"]
+        assert "references/research/questioning.md" in ctx["staged_loading"]["must_not_eager_load"]
+        assert ctx["staged_loading"]["writes_allowed"] == []
+
+    def test_stage_scope_approval_returns_only_contract_fields(self, tmp_path: Path) -> None:
+        ctx = init_new_project(tmp_path, stage="scope_approval")
+
+        assert set(ctx) == {
+            "project_contract",
+            "project_contract_gate",
+            "project_contract_load_info",
+            "project_contract_validation",
+            "staged_loading",
+        }
+        assert ctx["staged_loading"]["stage_id"] == "scope_approval"
+        assert ctx["staged_loading"]["order"] == 2
+        assert ctx["staged_loading"]["loaded_authorities"] == [
+            "templates/project-contract-schema.md",
+            "templates/project-contract-grounding-linkage.md",
+            "references/shared/canonical-schema-discipline.md",
+        ]
+        assert ctx["staged_loading"]["writes_allowed"] == ["GPD/state.json"]
+
+    def test_stage_rejection_is_clean(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Unknown new-project stage"):
+            init_new_project(tmp_path, stage="does-not-exist")
 
 
 # ─── init_new_milestone ───────────────────────────────────────────────────────
