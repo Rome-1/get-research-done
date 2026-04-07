@@ -17,12 +17,23 @@ from gpd.core.workflow_staging import (
 )
 
 
-def _new_project_payload() -> dict[str, object]:
-    return json.loads(NEW_PROJECT_STAGE_MANIFEST_PATH.read_text(encoding="utf-8"))
+def _workflow_payload(workflow_id: str) -> dict[str, object]:
+    manifest_path = resolve_workflow_stage_manifest_path(workflow_id)
+    return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
-def test_resolve_workflow_stage_manifest_path_matches_canonical_manifest() -> None:
-    assert resolve_workflow_stage_manifest_path("new-project") == NEW_PROJECT_STAGE_MANIFEST_PATH
+@pytest.mark.parametrize(
+    ("workflow_id", "expected_path"),
+    [
+        ("new-project", NEW_PROJECT_STAGE_MANIFEST_PATH),
+        ("verify-work", NEW_PROJECT_STAGE_MANIFEST_PATH.parent / "verify-work-stage-manifest.json"),
+    ],
+)
+def test_resolve_workflow_stage_manifest_path_matches_canonical_manifest(
+    workflow_id: str,
+    expected_path: Path,
+) -> None:
+    assert resolve_workflow_stage_manifest_path(workflow_id) == expected_path
 
 
 def test_load_workflow_stage_manifest_is_cached() -> None:
@@ -32,6 +43,25 @@ def test_load_workflow_stage_manifest_is_cached() -> None:
     assert first is second
     assert first.stage_ids() == ("scope_intake", "scope_approval", "post_scope")
     assert "references/shared/canonical-schema-discipline.md" in first.stages[0].must_not_eager_load
+
+
+def test_load_workflow_stage_manifest_loads_verify_work_manifest() -> None:
+    manifest = load_workflow_stage_manifest("verify-work")
+
+    assert manifest.workflow_id == "verify-work"
+    assert manifest.stage_ids() == (
+        "session_router",
+        "phase_bootstrap",
+        "inventory_build",
+        "interactive_validation",
+        "gap_repair",
+    )
+    assert manifest.stages[0].loaded_authorities == ("workflows/verify-work.md",)
+    assert "references/verification/core/verification-core.md" in manifest.stages[0].must_not_eager_load
+    assert "templates/verification-report.md" in manifest.stages[0].must_not_eager_load
+    assert "references/verification/core/verification-core.md" in manifest.stages[2].loaded_authorities
+    assert "templates/verification-report.md" in manifest.stages[3].loaded_authorities
+    assert "references/protocols/error-propagation-protocol.md" in manifest.stages[4].loaded_authorities
 
 
 @pytest.mark.parametrize(
@@ -63,28 +93,32 @@ def test_validate_workflow_stage_manifest_payload_rejects_bad_entries(
     mutator,
     message: str,
 ) -> None:
-    payload = _new_project_payload()
+    payload = _workflow_payload("new-project")
     mutator(payload)
 
     with pytest.raises(ValueError, match=message):
         validate_workflow_stage_manifest_payload(payload)
 
 
-def test_load_workflow_stage_manifest_from_path_respects_cache_invalidation(tmp_path: Path) -> None:
-    payload = _new_project_payload()
-    manifest_path = tmp_path / "new-project-stage-manifest.json"
+@pytest.mark.parametrize("workflow_id", ["new-project", "verify-work"])
+def test_load_workflow_stage_manifest_from_path_respects_cache_invalidation(
+    workflow_id: str,
+    tmp_path: Path,
+) -> None:
+    payload = _workflow_payload(workflow_id)
+    manifest_path = tmp_path / f"{workflow_id}-stage-manifest.json"
     manifest_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    first = load_workflow_stage_manifest_from_path(manifest_path, expected_workflow_id="new-project")
+    first = load_workflow_stage_manifest_from_path(manifest_path, expected_workflow_id=workflow_id)
     payload["stages"][0]["purpose"] = "updated purpose"
     manifest_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    second = load_workflow_stage_manifest_from_path(manifest_path, expected_workflow_id="new-project")
+    second = load_workflow_stage_manifest_from_path(manifest_path, expected_workflow_id=workflow_id)
     assert second is first
     assert second.stages[0].purpose != "updated purpose"
 
     invalidate_workflow_stage_manifest_cache()
-    third = load_workflow_stage_manifest_from_path(manifest_path, expected_workflow_id="new-project")
+    third = load_workflow_stage_manifest_from_path(manifest_path, expected_workflow_id=workflow_id)
 
     assert third is not first
     assert third.stages[0].purpose == "updated purpose"

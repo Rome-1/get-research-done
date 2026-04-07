@@ -324,8 +324,13 @@ def _write_structured_state_payload(tmp_path: Path) -> None:
     """Persist a representative structured state payload into state.json."""
     from gpd.core.state import default_state_dict
 
-    state = default_state_dict()
-    state["convention_lock"].update(
+    state_path = tmp_path / "GPD" / "state.json"
+    if state_path.exists():
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    else:
+        state = default_state_dict()
+
+    state.setdefault("convention_lock", {}).update(
         {
             "metric_signature": "(-,+,+,+)",
             "fourier_convention": "physics",
@@ -362,7 +367,7 @@ def _write_structured_state_payload(tmp_path: Path) -> None:
             "method": "bootstrap",
         }
     ]
-    (tmp_path / "GPD" / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    state_path.write_text(json.dumps(state), encoding="utf-8")
 
 
 def _assert_structured_state_context(ctx: dict[str, object], tmp_path: Path) -> None:
@@ -409,6 +414,7 @@ def _write_bundle_ready_contract_state(tmp_path: Path) -> None:
 
     state = default_state_dict()
     state["project_contract"] = {
+        "schema_version": 1,
         "scope": {
             "question": "What finite-size scaling collapse and benchmark comparison does the simulation recover?",
             "in_scope": ["Recover the decisive finite-size scaling benchmark for the simulation regime"],
@@ -457,6 +463,9 @@ def _write_bundle_ready_contract_state(tmp_path: Path) -> None:
                 "required_actions": ["read", "compare", "cite"],
             }
         ],
+        "context_intake": {
+            "must_read_refs": ["ref-benchmark"],
+        },
         "forbidden_proxies": [
             {
                 "id": "fp-proxy",
@@ -2286,9 +2295,57 @@ class TestInitVerifyWork:
         assert ctx["phase_found"] is True
         assert ctx["has_verification"] is True
 
+    def test_stage_session_router_returns_bootstrap_only_payload(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-setup")
+        _write_project_contract_state(tmp_path)
+
+        ctx = init_verify_work(tmp_path, "1", stage="session_router")
+
+        assert ctx["phase_found"] is True
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert ctx["staged_loading"]["stage_id"] == "session_router"
+        assert "project_contract" not in ctx
+        assert "active_reference_context" not in ctx
+        assert "reference_artifacts_content" not in ctx
+        assert "convention_lock" not in ctx
+
     def test_missing_phase_raises(self, tmp_path: Path) -> None:
         with pytest.raises(ValidationError, match="phase is required"):
             init_verify_work(tmp_path, "")
+
+    def test_stage_inventory_build_surfaces_reference_and_convention_context(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-setup")
+        _write_stat_mech_project(tmp_path)
+        _write_bundle_ready_contract_state(tmp_path)
+        _write_structured_state_payload(tmp_path)
+
+        ctx = init_verify_work(tmp_path, "1", stage="inventory_build")
+
+        assert ctx["staged_loading"]["stage_id"] == "inventory_build"
+        assert ctx["project_contract"]["references"][0]["role"] == "benchmark"
+        assert "## Active Reference Registry" in ctx["active_reference_context"]
+        assert "stat-mech-simulation" in ctx["selected_protocol_bundle_ids"]
+        assert ctx["convention_lock"]["metric_signature"] == "(-,+,+,+)"
+        assert ctx["derived_convention_lock"]["metric_signature"] == "(-,+,+,+)"
+        assert "reference_artifacts_content" not in ctx
+
+    def test_stage_interactive_validation_surfaces_reference_artifact_content(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-setup")
+        _write_project_contract_state(tmp_path)
+
+        literature_dir = tmp_path / "GPD" / "literature"
+        literature_dir.mkdir(parents=True)
+        (literature_dir / "benchmark-notes.md").write_text("# Benchmark\nReference details.\n", encoding="utf-8")
+
+        ctx = init_verify_work(tmp_path, "1", stage="interactive_validation")
+
+        assert ctx["staged_loading"]["stage_id"] == "interactive_validation"
+        assert ctx["reference_artifact_files"]
+        assert isinstance(ctx["reference_artifacts_content"], str)
+        assert "Benchmark" in ctx["reference_artifacts_content"]
 
     def test_exposes_active_reference_context(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -2299,6 +2356,13 @@ class TestInitVerifyWork:
 
         assert ctx["project_contract"]["references"][0]["role"] == "benchmark"
         assert "## Active Reference Registry" in ctx["active_reference_context"]
+
+    def test_stage_rejects_unknown_verify_work_stage(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-setup")
+
+        with pytest.raises(ValueError, match="Unknown verify-work stage 'bogus'"):
+            init_verify_work(tmp_path, "1", stage="bogus")
 
     def test_exposes_selected_protocol_bundle_ids(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)

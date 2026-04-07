@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -1813,6 +1814,68 @@ class TestPublicAPI:
         assert cmd.staged_loading.workflow_id == "new-project"
         assert cmd.staged_loading.stage_ids() == ("scope_intake", "scope_approval", "post_scope")
         assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/new-project.md",)
+
+    def test_get_command_verify_work_surfaces_staged_loading_manifest(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        commands_dir = tmp_path / "commands"
+        commands_dir.mkdir()
+        (commands_dir / "verify-work.md").write_text(
+            "---\n"
+            "name: gpd:verify-work\n"
+            "description: Verify work\n"
+            "allowed-tools:\n"
+            "  - file_read\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        manifest_path = tmp_path / "verify-work-stage-manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "workflow_id": "verify-work",
+                    "stages": [
+                        {
+                            "id": "session_router",
+                            "order": 1,
+                            "purpose": "route verification sessions",
+                            "mode_paths": ["workflows/verify-work.md"],
+                            "required_init_fields": [],
+                            "loaded_authorities": ["workflows/verify-work.md"],
+                            "conditional_authorities": [],
+                            "must_not_eager_load": ["references/verification/meta/verification-independence.md"],
+                            "allowed_tools": ["file_read"],
+                            "writes_allowed": [],
+                            "produced_state": [],
+                            "next_stages": [],
+                            "checkpoints": [],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        original_resolve_manifest_path = registry.resolve_workflow_stage_manifest_path
+        monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
+        monkeypatch.setattr(
+            registry,
+            "resolve_workflow_stage_manifest_path",
+            lambda workflow_id: manifest_path if workflow_id == "verify-work" else original_resolve_manifest_path(workflow_id),
+        )
+        registry.invalidate_cache()
+
+        cmd = registry.get_command("verify-work")
+
+        assert cmd.staged_loading is not None
+        assert cmd.staged_loading.workflow_id == "verify-work"
+        assert cmd.staged_loading.stage_ids() == ("session_router",)
+        assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/verify-work.md",)
 
     def test_registry_cache_invalidation_clears_new_project_stage_manifest(self) -> None:
         registry.invalidate_cache()

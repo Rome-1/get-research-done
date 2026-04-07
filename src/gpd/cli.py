@@ -4232,11 +4232,19 @@ def init_resume() -> None:
 @init_app.command("verify-work")
 def init_verify_work(
     phase: str | None = typer.Argument(None, help="Phase to verify"),
+    stage: str | None = typer.Option(
+        None,
+        "--stage",
+        help="Load the staged verify-work context for a specific stage id.",
+    ),
 ) -> None:
     """Assemble context for verifying completed work."""
     from gpd.core.context import init_verify_work
 
-    _output(init_verify_work(_get_cwd(), phase))
+    if stage is None:
+        _output(init_verify_work(_get_cwd(), phase))
+    else:
+        _output(init_verify_work(_get_cwd(), phase, stage=stage))
 
 
 @init_app.command("progress")

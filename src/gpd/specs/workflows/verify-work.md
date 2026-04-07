@@ -19,19 +19,6 @@ Walk through derivation logic, perform numerical spot-checks, re-derive limiting
 **Verification independence:** Derive validation checks from the phase goal, the PLAN `contract`, and the actual research artifacts — not from phase-summary claims about what was accomplished. Summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`) `contract_results` and `comparison_verdicts` tell you where evidence lives; the expected physics comes from the phase goal, contract IDs, and domain knowledge. See @{GPD_INSTALL_DIR}/references/verification/meta/verification-independence.md.
 </philosophy>
 
-<template>
-@{GPD_INSTALL_DIR}/templates/research-verification.md
-</template>
-
-Use the researcher-session body scaffold from `research-verification.md`, but keep the frontmatter contract compatible with `@{GPD_INSTALL_DIR}/templates/verification-report.md` and `@{GPD_INSTALL_DIR}/templates/contract-results-schema.md`.
-
-<required_reading>
-@{GPD_INSTALL_DIR}/references/verification/meta/verification-independence.md
-@{GPD_INSTALL_DIR}/templates/verification-report.md
-@{GPD_INSTALL_DIR}/templates/contract-results-schema.md
-@{GPD_INSTALL_DIR}/references/protocols/error-propagation-protocol.md
-</required_reading>
-
 <process>
 
 <step name="check_type_selection">
@@ -354,6 +341,8 @@ import numpy as np
 
 <step name="create_verification_file">
 **Create or extend verification file with all checks:**
+
+Load the researcher-session body scaffold from `research-verification.md` here, but keep the frontmatter contract compatible with `@{GPD_INSTALL_DIR}/templates/verification-report.md` and `@{GPD_INSTALL_DIR}/templates/contract-results-schema.md`. When you are about to write the canonical verification frontmatter or append the contract-results ledger, load `verification-report.md`, `contract-results-schema.md`, and `canonical-schema-discipline.md` at this stage so the constrained output sees the schema before it is emitted.
 
 ```bash
 mkdir -p "$phase_dir"
@@ -774,6 +763,8 @@ Custom checks are numbered continuing from the last automated check (e.g., if 6 
 
 <step name="cross_phase_uncertainty_audit">
 **Audit uncertainty propagation across phases with researcher.**
+
+Load `error-propagation-protocol.md` here, and only here, before summarizing how prior-phase uncertainties propagate into the current phase.
 
 This step checks that uncertainties from prior phases propagate correctly into the current phase's results — the #1 gap found by physics verification audits.
 

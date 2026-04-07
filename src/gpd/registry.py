@@ -39,7 +39,7 @@ from gpd.core.workflow_staging import (
     NEW_PROJECT_INIT_FIELDS,
     WorkflowStageManifest,
     invalidate_workflow_stage_manifest_cache,
-    load_workflow_stage_manifest,
+    load_workflow_stage_manifest_from_path,
     resolve_workflow_stage_manifest_path,
 )
 from gpd.specs import SPECS_DIR
@@ -983,8 +983,9 @@ def _load_command_staged_loading(path: Path, *, allowed_tools: list[str]) -> Wor
     if not manifest_path.is_file():
         return None
     known_init_fields = NEW_PROJECT_INIT_FIELDS if path.stem == "new-project" else None
-    return load_workflow_stage_manifest(
-        path.stem,
+    return load_workflow_stage_manifest_from_path(
+        manifest_path,
+        expected_workflow_id=path.stem,
         allowed_tools=allowed_tools,
         known_init_fields=known_init_fields,
     )

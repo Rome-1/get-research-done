@@ -147,6 +147,64 @@ def test_get_skill_command_surfaces_staged_loading_sidecar() -> None:
     assert result["structured_metadata_authority"]["staged_loading"] == "mirrored"
 
 
+def test_get_skill_verify_work_surfaces_staged_loading_sidecar() -> None:
+    from gpd.mcp.servers.skills_server import get_skill
+
+    staged_loading = WorkflowStageManifest(
+        schema_version=1,
+        workflow_id="verify-work",
+        stages=(
+            WorkflowStage(
+                id="session_router",
+                order=1,
+                purpose="route verification sessions",
+                mode_paths=("workflows/verify-work.md",),
+                required_init_fields=(),
+                loaded_authorities=("workflows/verify-work.md",),
+                conditional_authorities=(),
+                must_not_eager_load=("references/verification/meta/verification-independence.md",),
+                allowed_tools=("file_read",),
+                writes_allowed=(),
+                produced_state=(),
+                next_stages=(),
+                checkpoints=(),
+            ),
+        ),
+    )
+    command = CommandDef(
+        name="gpd:verify-work",
+        description="Verify work.",
+        argument_hint="",
+        agent=None,
+        requires={},
+        allowed_tools=["file_read"],
+        content="Command body.",
+        path="/tmp/gpd-verify-work.md",
+        source="commands",
+        staged_loading=staged_loading,
+    )
+    skill = SkillDef(
+        name="gpd-verify-work",
+        description="Verify work.",
+        content="Command body.",
+        category="verification",
+        path="/tmp/gpd-verify-work.md",
+        source_kind="command",
+        registry_name="verify-work",
+    )
+
+    with (
+        patch("gpd.mcp.servers.skills_server._resolve_skill", return_value=skill),
+        patch("gpd.mcp.servers.skills_server.content_registry.get_command", return_value=command),
+    ):
+        result = get_skill("gpd-verify-work")
+
+    assert result["staged_loading"]["workflow_id"] == "verify-work"
+    assert result["staged_loading"]["stages"][0]["id"] == "session_router"
+    assert result["structured_metadata_authority"]["staged_loading"] == "mirrored"
+    assert result["allowed_tools_surface"] == "command.allowed-tools"
+
+
 def test_get_skill_unrelated_command_does_not_expose_stage_sidecars() -> None:
     from gpd.mcp.servers.skills_server import get_skill
 

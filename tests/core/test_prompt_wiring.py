@@ -2275,6 +2275,7 @@ def test_publication_workflows_describe_recursive_manuscript_tree_inputs() -> No
 def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_contract_context() -> None:
     peer_review = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
     verify_command = (COMMANDS_DIR / "verify-work.md").read_text(encoding="utf-8")
+    verify_workflow = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
     write_paper = (WORKFLOWS_DIR / "write-paper.md").read_text(encoding="utf-8")
     respond_to_referees = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
     sync_state = (WORKFLOWS_DIR / "sync-state.md").read_text(encoding="utf-8")
@@ -2284,6 +2285,10 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     review_physics = (AGENTS_DIR / "gpd-review-physics.md").read_text(encoding="utf-8")
     review_significance = (AGENTS_DIR / "gpd-review-significance.md").read_text(encoding="utf-8")
     referee = (AGENTS_DIR / "gpd-referee.md").read_text(encoding="utf-8")
+    verify_work_staging = registry.get_command("verify-work").staged_loading
+    assert verify_work_staging is not None
+    interactive_validation = next(stage for stage in verify_work_staging.stages if stage.id == "interactive_validation")
+    inventory_build = next(stage for stage in verify_work_staging.stages if stage.id == "inventory_build")
 
     assert "Reader-visible claims and surfaced evidence remain first-class" in peer_review
     assert "effective_reference_intake" in peer_review
@@ -2311,8 +2316,13 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     assert "templates/paper/review-ledger-schema.md" in peer_review
     assert "templates/paper/referee-decision-schema.md" in peer_review
     assert "references/publication/peer-review-panel.md" in peer_review
-    assert "templates/verification-report.md" in verify_command
-    assert "templates/contract-results-schema.md" in verify_command
+    assert "templates/verification-report.md" not in verify_command
+    assert "templates/contract-results-schema.md" not in verify_command
+    assert "Load the researcher-session body scaffold from `research-verification.md` here" in verify_workflow
+    assert "load `verification-report.md`, `contract-results-schema.md`, and `canonical-schema-discipline.md` at this stage" in verify_workflow
+    assert "templates/verification-report.md" in interactive_validation.loaded_authorities
+    assert "templates/contract-results-schema.md" in interactive_validation.loaded_authorities
+    assert "references/verification/meta/verification-independence.md" in inventory_build.loaded_authorities
     assert "Canonical schema for `${PAPER_DIR}/reproducibility-manifest.json`:" in write_paper
     assert "Canonical reconciliation contract:" in sync_state
     assert "state-json-schema.md` itself" in sync_state
@@ -2683,14 +2693,20 @@ def test_review_and_execution_prompts_expand_required_schema_sources() -> None:
     assert "Contract Results Schema" in executor
 
 
-def test_verification_and_agent_reference_prompts_expand_required_reference_bodies() -> None:
+def test_verification_and_agent_reference_prompts_expand_or_stage_required_reference_bodies() -> None:
     verify_work = _expand_prompt_surface(WORKFLOWS_DIR / "verify-work.md")
     verify_phase = _expand_prompt_surface(WORKFLOWS_DIR / "verify-phase.md")
     phase_researcher = _expand_prompt_surface(AGENTS_DIR / "gpd-phase-researcher.md")
     planner = _expand_prompt_surface(AGENTS_DIR / "gpd-planner.md")
+    verify_work_staging = registry.get_command("verify-work").staged_loading
+    assert verify_work_staging is not None
+    inventory_build = next(stage for stage in verify_work_staging.stages if stage.id == "inventory_build")
+    interactive_validation = next(stage for stage in verify_work_staging.stages if stage.id == "interactive_validation")
 
-    assert "Verification Independence" in verify_work
-    assert "# Contract Results Schema" in verify_work
+    assert "Verification Independence" not in verify_work
+    assert "# Contract Results Schema" not in verify_work
+    assert "references/verification/meta/verification-independence.md" in inventory_build.loaded_authorities
+    assert "templates/contract-results-schema.md" in interactive_validation.loaded_authorities
     assert "Verification Independence" in verify_phase
     assert "# Contract Results Schema" in verify_phase
     assert "Shared Research Philosophy and Protocols" in phase_researcher

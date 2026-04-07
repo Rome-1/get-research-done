@@ -5522,6 +5522,46 @@ def test_init_new_project_rejects_invalid_stage(mock_init):
     assert "Unknown new-project stage 'bogus'." in result.output
 
 
+def test_init_verify_work_preserves_plain_call_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[Path, str | None, str | None]] = []
+
+    def fake_init(cwd: Path, phase: str | None, stage: str | None = None):
+        calls.append((cwd, phase, stage))
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"context": "..."}
+        return mock_result
+
+    monkeypatch.setattr("gpd.core.context.init_verify_work", fake_init)
+    result = runner.invoke(app, ["init", "verify-work", "01"])
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    cwd, phase, stage = calls[0]
+    assert cwd == cli_module._get_cwd()
+    assert phase == "01"
+    assert stage is None
+
+
+def test_init_verify_work_forwards_stage_option(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[Path, str | None, str | None]] = []
+
+    def fake_init(cwd: Path, phase: str | None, stage: str | None = None):
+        calls.append((cwd, phase, stage))
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"context": "..."}
+        return mock_result
+
+    monkeypatch.setattr("gpd.core.context.init_verify_work", fake_init)
+    result = runner.invoke(app, ["init", "verify-work", "01", "--stage", "session_router"])
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    cwd, phase, stage = calls[0]
+    assert cwd == cli_module._get_cwd()
+    assert phase == "01"
+    assert stage == "session_router"
+
+
 def test_init_resume_help_surfaces_recovery_snapshot_entrypoint() -> None:
     result = runner.invoke(app, ["init", "resume", "--help"])
 

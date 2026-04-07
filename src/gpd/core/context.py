@@ -110,6 +110,106 @@ _REFERENCE_ROLE_PRIORITY = {
     "background": 4,
     "other": 5,
 }
+_VERIFY_WORK_STAGE_ALLOWED_TOOLS = frozenset(
+    {
+        "ask_user",
+        "file_read",
+        "file_edit",
+        "file_write",
+        "find_files",
+        "search_files",
+        "shell",
+        "task",
+    }
+)
+_VERIFY_WORK_BASE_INIT_FIELDS = frozenset(
+    {
+        "planner_model",
+        "checker_model",
+        "verifier_model",
+        "commit_docs",
+        "autonomy",
+        "research_mode",
+        "phase_found",
+        "phase_dir",
+        "phase_number",
+        "phase_name",
+        "has_verification",
+        "has_validation",
+        "phase_proof_review_status",
+        "platform",
+    }
+)
+_VERIFY_WORK_CONTRACT_GATE_FIELDS = frozenset(
+    {
+        "project_contract",
+        "project_contract_validation",
+        "project_contract_load_info",
+        "project_contract_gate",
+    }
+)
+_VERIFY_WORK_REFERENCE_RUNTIME_FIELDS = frozenset(
+    {
+        "contract_intake",
+        "effective_reference_intake",
+        "derived_active_references",
+        "derived_active_reference_count",
+        "citation_source_files",
+        "citation_source_count",
+        "citation_source_warnings",
+        "derived_citation_sources",
+        "derived_citation_source_count",
+        "derived_manuscript_reference_status",
+        "derived_manuscript_reference_status_count",
+        "derived_manuscript_proof_review_status",
+        "active_references",
+        "active_reference_count",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_count",
+        "protocol_bundle_verifier_extensions",
+        "protocol_bundle_context",
+        "active_reference_context",
+        "literature_review_files",
+        "literature_review_count",
+        "research_map_reference_files",
+        "research_map_reference_count",
+        "reference_artifact_files",
+        "reference_artifacts_content",
+    }
+)
+_VERIFY_WORK_STRUCTURED_STATE_FIELDS = frozenset(
+    {
+        "state_load_source",
+        "state_integrity_issues",
+        "convention_lock",
+        "convention_lock_count",
+        "intermediate_results",
+        "intermediate_result_count",
+        "approximations",
+        "approximation_count",
+        "propagated_uncertainties",
+        "propagated_uncertainty_count",
+    }
+)
+_VERIFY_WORK_STATE_MEMORY_FIELDS = frozenset(
+    {
+        "derived_convention_lock",
+        "derived_convention_lock_count",
+        "derived_intermediate_results",
+        "derived_intermediate_result_count",
+        "derived_approximations",
+        "derived_approximation_count",
+    }
+)
+_VERIFY_WORK_INIT_FIELDS = frozenset(
+    {
+        *_VERIFY_WORK_BASE_INIT_FIELDS,
+        *_VERIFY_WORK_CONTRACT_GATE_FIELDS,
+        *_VERIFY_WORK_REFERENCE_RUNTIME_FIELDS,
+        *_VERIFY_WORK_STRUCTURED_STATE_FIELDS,
+        *_VERIFY_WORK_STATE_MEMORY_FIELDS,
+    }
+)
 
 # Directories to skip when scanning for research files.
 _LEADING_BLANK_LINES_BEFORE_FRONTMATTER_RE = re.compile(r"^(?:[ \t]*\r?\n)+(?=---[ \t]*\r?\n)")
@@ -2301,7 +2401,7 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
     return canonicalize_resume_public_payload(result)
 
 
-def init_verify_work(cwd: Path, phase: str | None) -> dict:
+def init_verify_work(cwd: Path, phase: str | None, stage: str | None = None) -> dict:
     """Assemble context for work verification."""
     if not phase:
         raise ValidationError(
@@ -2317,7 +2417,7 @@ def init_verify_work(cwd: Path, phase: str | None) -> dict:
         persist_manifest=True,
     )
 
-    result = {
+    base_result = {
         # Models
         "planner_model": _resolve_model(cwd, "gpd-planner", config),
         "checker_model": _resolve_model(cwd, "gpd-plan-checker", config),
@@ -2338,10 +2438,52 @@ def init_verify_work(cwd: Path, phase: str | None) -> dict:
         # Platform
         "platform": _detect_platform(cwd),
     }
-    result.update(_build_reference_runtime_context(cwd, persist_manuscript_proof_review_manifest=True))
-    result.update(_build_structured_state_runtime_context(cwd))
-    result.update(_build_state_memory_runtime_context(cwd))
-    return result
+    if stage is None:
+        result = dict(base_result)
+        result.update(_build_reference_runtime_context(cwd, persist_manuscript_proof_review_manifest=True))
+        result.update(_build_structured_state_runtime_context(cwd))
+        result.update(_build_state_memory_runtime_context(cwd))
+        return result
+
+    from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+    manifest = load_workflow_stage_manifest(
+        "verify-work",
+        allowed_tools=_VERIFY_WORK_STAGE_ALLOWED_TOOLS,
+        known_init_fields=_VERIFY_WORK_INIT_FIELDS,
+    )
+    try:
+        stage_def = manifest.stage_by_id(stage)
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown verify-work stage {stage!r}. Allowed values: {', '.join(manifest.stage_ids())}."
+        ) from exc
+
+    required_fields = set(stage_def.required_init_fields)
+    staged_source = dict(base_result)
+    needs_full_reference_context = bool(required_fields & _VERIFY_WORK_REFERENCE_RUNTIME_FIELDS)
+    needs_contract_gate_context = bool(required_fields & _VERIFY_WORK_CONTRACT_GATE_FIELDS)
+
+    if needs_full_reference_context:
+        staged_source.update(_build_reference_runtime_context(cwd))
+    elif needs_contract_gate_context:
+        staged_source.update(_build_new_project_contract_runtime_context(cwd))
+
+    if required_fields & _VERIFY_WORK_STRUCTURED_STATE_FIELDS:
+        staged_source.update(_build_structured_state_runtime_context(cwd))
+
+    if required_fields & _VERIFY_WORK_STATE_MEMORY_FIELDS:
+        staged_source.update(_build_state_memory_runtime_context(cwd))
+
+    missing_fields = [field for field in stage_def.required_init_fields if field not in staged_source]
+    if missing_fields:
+        raise ValueError(
+            f"verify-work stage {stage!r} requires unavailable init field(s): {', '.join(missing_fields)}"
+        )
+
+    staged_payload = {field: staged_source[field] for field in stage_def.required_init_fields}
+    staged_payload["staged_loading"] = manifest.staged_loading_payload(stage_def.id)
+    return staged_payload
 
 
 def init_phase_op(cwd: Path, phase: str | None = None, includes: set[str] | None = None) -> dict:
