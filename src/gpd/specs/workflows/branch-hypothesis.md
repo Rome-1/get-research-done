@@ -252,20 +252,7 @@ Fork STATE.md to include hypothesis context:
 gpd state add-decision --phase "${CURRENT_PHASE_NUM}" --summary "Created hypothesis branch: ${description}" --rationale "Investigating alternative approach on branch hypothesis/${slug}"
 ```
 
-2. Optionally add a short hypothesis note to `STATE.md` via file_edit tool. After the `## Current Position` section, add:
-
-```markdown
-## Active Hypothesis
-
-**Branch:** hypothesis/{slug}
-**Description:** {description}
-**Parent:** {parent_branch}
-
-This is a hypothesis branch investigating an alternative approach.
-Compare results with parent branch via `gpd:compare-branches`.
-```
-
-3. Treat that note as markdown-only context. It is not part of the structured state schema, so it will not be mirrored into `state.json`, and future JSON-driven state rewrites may replace it. The durable record for the hypothesis is the `gpd state add-decision` entry plus `GPD/hypotheses/${SLUG}/HYPOTHESIS.md`.
+2. Treat the durable record for the hypothesis as the `gpd state add-decision` entry plus `GPD/hypotheses/${SLUG}/HYPOTHESIS.md`.
    </step>
 
 <step name="commit_setup">

@@ -1735,11 +1735,13 @@ class TestInitNewMilestone:
 class TestInitQuick:
     def test_first_quick_task(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
+        (tmp_path / "GPD" / "PROJECT.md").write_text("# Project\n", encoding="utf-8")
         ctx = init_quick(tmp_path, "Fix tensor product calculation")
         assert ctx["next_num"] == 1
         assert ctx["slug"] is not None
         assert "fix" in ctx["slug"]
         assert ctx["task_dir"] is not None
+        assert ctx["project_exists"] is True
 
     def test_increments_number(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)

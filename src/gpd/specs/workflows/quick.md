@@ -42,16 +42,18 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `planner_model`, `executor_model`, `commit_docs`, `autonomy`, `next_num`, `slug`, `date`, `timestamp`, `quick_dir`, `task_dir`, `roadmap_exists`, `planning_exists`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`.
+Parse JSON for: `planner_model`, `executor_model`, `commit_docs`, `autonomy`, `next_num`, `slug`, `date`, `timestamp`, `quick_dir`, `task_dir`, `roadmap_exists`, `project_exists`, `planning_exists`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`.
 
 **Mode-aware behavior:**
 - `autonomy=supervised`: Pause after the plan for user approval before execution.
 - `autonomy=balanced` (default): Execute without pausing unless the quick task reveals a real decision point.
 - `autonomy=yolo`: Execute and commit without pausing.
 
-**If `planning_exists` is false:** Error -- Quick mode requires an initialized project with `GPD/`. Run `gpd:new-project` first.
+**If `project_exists` is false:** Error -- Quick mode requires an initialized project with `GPD/PROJECT.md`. Run `gpd:new-project` first.
 
-Quick tasks can run mid-phase and do NOT require ROADMAP.md. They only need `GPD/` to exist for directory structure.
+**If `planning_exists` is false:** Error -- Quick mode requires the `GPD/` workspace directory. Run `gpd:new-project` first.
+
+Quick tasks can run mid-phase and do NOT require ROADMAP.md. They still require an initialized project workspace with `GPD/PROJECT.md` and the `GPD/` directory.
 Quick mode still inherits the approved `project_contract` only when `project_contract_gate.authoritative` is true, and it still inherits the active reference ledger. Do not bypass required anchors, baselines, or forbidden-proxy constraints just because the task is small.
 Before planning, load the shared planner template, phase template, and canonical contract schema.
 
@@ -103,6 +105,8 @@ Then read {GPD_INSTALL_DIR}/templates/planner-subagent-prompt.md, {GPD_INSTALL_D
 
 **Project State:**
 Read the file at GPD/STATE.md
+
+**Project Exists:** {project_exists}
 
 **Project Contract:** {project_contract}
 **Project Contract Load Info:** {project_contract_load_info}
@@ -215,15 +219,13 @@ gpd state add-decision --phase "quick-${next_num}" --summary "Quick task ${next_
 gpd state update "Last Activity" "${date}"
 ```
 
-**6c. Do not add a custom "Quick Tasks Completed" section to STATE.md.**
-
-The current state schema does not round-trip arbitrary markdown-only sections when JSON-driven state commands regenerate `STATE.md`. Treat the durable record for a quick task as:
+Treat the durable record for a quick task as:
 
 - the decision entry written above via `gpd state add-decision`
-- the updated `Last Activity` field
+- the updated `Last Activity` field via `gpd state update`
 - the artifacts in `${QUICK_DIR}` (`${next_num}-PLAN.md`, `${next_num}-SUMMARY.md`, and any committed outputs)
 
-If you want a human-facing index, put it in `GPD/quick/README.md` or in the quick-task summary, not in `STATE.md`.
+If you want a human-facing index, put it in `GPD/quick/README.md` or in the quick-task summary.
 
 ---
 

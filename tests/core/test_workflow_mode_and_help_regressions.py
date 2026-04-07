@@ -1,6 +1,5 @@
-from pathlib import Path
 import re
-
+from pathlib import Path
 
 WORKFLOWS_DIR = Path("src/gpd/specs/workflows")
 

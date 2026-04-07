@@ -347,27 +347,27 @@ If no decisions are present in the phase summaries or CONTEXT.md, skip this step
 
 **Note:** Basic position updates (Current Phase, Status, Current Plan, Last Activity) were already handled by `gpd phase complete` in the update_roadmap_and_state step.
 
-Verify the updates are correct by reading STATE.md. If the progress bar needs updating, use:
+Verify the updates are correct by reading the structured state surface. If the progress bar needs updating, use:
 
 ```bash
 PROGRESS=$(gpd --raw progress bar)
 ```
 
-Update the progress bar line in STATE.md with the result.
+Then use `gpd state update-progress` to sync the derived progress field and, if needed, `gpd state update` / `gpd state patch` for any remaining structured fields that feed the rendered state surface.
 
 **Step complete when:**
 
 - [ ] Phase number incremented to next phase (done by phase complete)
 - [ ] Plan status reset to "Not started" (done by phase complete)
 - [ ] Status shows "Ready to plan" (done by phase complete)
-- [ ] Progress bar reflects total completed plans
+- [ ] Progress bar reflects total completed plans after `gpd state update-progress`
 
 
 </step>
 
 <step name="update_project_reference">
 
-Update Project Reference section in STATE.md.
+Update the project reference fields through the structured state commands so the rendered Project Reference section stays in sync.
 
 ```markdown
 ## Project Reference
@@ -378,13 +378,13 @@ See: GPD/PROJECT.md (updated [today])
 **Current focus:** [Next phase name]
 ```
 
-Update the date and current focus to reflect the transition.
+Update the date and current focus to reflect the transition using `gpd state update` / `gpd state patch` so the rendered state surface stays in sync.
 
 </step>
 
 <step name="review_accumulated_context">
 
-Review and update Accumulated Context section in STATE.md.
+Review and update the accumulated context through the structured state commands and durable phase artifacts.
 
 **Key Results:**
 
@@ -430,22 +430,7 @@ After (if regularization was checked in Phase 3):
 - [ ] Resolved blockers removed from list
 - [ ] Unresolved blockers kept with phase prefix
 - [ ] New concerns from completed phase added
-- [ ] state.json synced from STATE.md
-
-**Sync state.json after all STATE.md updates are complete:**
-
-```bash
-uv run python - <<'PY'
-from pathlib import Path
-from gpd.core.state import save_state_markdown
-
-cwd = Path(".")
-state_md = cwd / "GPD" / "STATE.md"
-save_state_markdown(cwd, state_md.read_text(encoding="utf-8"))
-PY
-```
-
-This is the single markdown-to-json sync point for this workflow. `save_state_markdown()` is the authoritative write path for merging the schema-backed markdown edits from this workflow into `state.json` while preserving JSON-only fields and keeping the dual-write pair in sync. Earlier steps deliberately skip syncing to avoid multiple writes.
+- [ ] state.json stays synchronized through `gpd state` commands
 
 </step>
 

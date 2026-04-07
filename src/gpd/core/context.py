@@ -2141,6 +2141,7 @@ def init_quick(cwd: Path, description: str | None = None) -> dict:
         "task_dir": f"{PLANNING_DIR_NAME}/quick/{next_num}-{slug}" if slug else None,
         # File existence
         "roadmap_exists": _path_exists(cwd, f"{PLANNING_DIR_NAME}/{ROADMAP_FILENAME}"),
+        "project_exists": _path_exists(cwd, f"{PLANNING_DIR_NAME}/{PROJECT_FILENAME}"),
         "planning_exists": _path_exists(cwd, PLANNING_DIR_NAME),
         # Platform
         "platform": _detect_platform(cwd),

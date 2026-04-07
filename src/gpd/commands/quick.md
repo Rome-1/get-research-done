@@ -16,14 +16,14 @@ allowed-tools:
 
 
 <objective>
-Execute small, ad-hoc research tasks with GPD guarantees (atomic commits, STATE.md tracking) while skipping optional agents (research, plan-checker, verifier).
+Execute small, ad-hoc research tasks in an initialized GPD project with GPD guarantees (atomic commits and durable state tracking) while skipping optional agents (research, plan-checker, verifier).
 
 Quick mode is the same system with a shorter path:
 
 - Spawns gpd-planner (quick mode) + gpd-executor(s)
 - Skips gpd-phase-researcher, gpd-plan-checker, gpd-verifier
 - Quick tasks live in `GPD/quick/` separate from planned phases
-- Updates STATE.md "Quick Tasks Completed" table (NOT ROADMAP.md)
+- Records completion through structured `gpd state` commands and the quick-task summary files, not a custom STATE.md table.
 
 Use when: You know exactly what to do and the task is small enough to not need research or verification.
 
