@@ -210,6 +210,18 @@ def test_public_metadata_records_psi_affiliation() -> None:
     assert pyproject["project"]["authors"] == [{"name": "Physical Superintelligence PBC"}]
     assert pyproject["project"]["maintainers"] == [{"name": "Physical Superintelligence PBC"}]
 
+def test_public_release_surfaces_share_agentic_system_positioning() -> None:
+    repo_root = _repo_root()
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    package_json = json.loads((repo_root / "package.json").read_text(encoding="utf-8"))
+    pyproject = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
+    installer = (repo_root / "bin" / "install.js").read_text(encoding="utf-8")
+
+    expected = "open-source agentic ai system for physics research"
+    assert expected in readme.lower()
+    assert expected in package_json["description"].lower()
+    assert expected in pyproject["project"]["description"].lower()
+    assert "Open-source agentic AI system for physics research" in installer
 
 def test_public_bootstrap_package_exposes_npx_installer() -> None:
     repo_root = _repo_root()

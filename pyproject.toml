@@ -1,7 +1,7 @@
 [project]
 name = "get-physics-done"
 version = "1.1.0"
-description = "GPD — Get Physics Done: open-source AI copilot for physics research"
+description = "GPD — Get Physics Done: open-source agentic AI system for physics research"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }

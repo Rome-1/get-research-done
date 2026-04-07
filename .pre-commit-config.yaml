@@ -1,0 +1,11 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check-unsafe-fixes
+        name: ruff check --fix --unsafe-fixes
+        entry: uv run ruff check --fix --unsafe-fixes
+        language: system
+        require_serial: true
+        types_or:
+          - python
+          - pyi

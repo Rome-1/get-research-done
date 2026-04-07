@@ -15,6 +15,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  human-authors:
+    name: human authors
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check commit attribution uses human authors
+        run: |
+          bash scripts/check-human-authors.sh --range "origin/${{ github.base_ref }}..HEAD"
+
   ruff:
     name: ruff check
     runs-on: ubuntu-latest

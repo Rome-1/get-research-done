@@ -23,6 +23,8 @@ All contributors must sign a CLA before their pull requests can be merged.
 ```bash
 uv sync --dev
 source .venv/bin/activate
+uv tool install pre-commit
+pre-commit install
 ```
 
 ## Local CLI From This Checkout
@@ -38,6 +40,8 @@ uv run gpd install <runtime> --local
 Use `codex`, `claude`, `gemini`, or `opencode` for `<runtime>`. After
 `uv sync --dev`, an activated `.venv` can also run `gpd ...` directly.
 
+The tracked pre-commit hook runs `uv run ruff check --fix --unsafe-fixes` on staged Python files.
+
 ## Contributor License Agreements
 
 Before we can accept a contribution, you must complete the applicable CLA:
@@ -52,6 +56,7 @@ Useful checks:
 ```bash
 uv build
 npm_config_cache="$(mktemp -d)" npm pack --dry-run --json
+pre-commit run --all-files
 python scripts/sync_repo_graph_contract.py
 uv run pytest tests/test_metadata_consistency.py -v
 uv run pytest tests/test_release_consistency.py -v
