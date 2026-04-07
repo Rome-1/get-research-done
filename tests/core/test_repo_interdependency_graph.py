@@ -155,7 +155,7 @@ def test_graph_captures_workflow_and_schema_edges() -> None:
     )
     assert graph_has_edge(
         "src/gpd/specs/workflows/new-project.md",
-        "src/gpd/specs/templates/state-json-schema.md",
+        "src/gpd/specs/templates/project-contract-schema.md",
         graph,
     )
 

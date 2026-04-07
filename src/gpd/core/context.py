@@ -2056,7 +2056,6 @@ def init_new_project(cwd: Path) -> dict:
         # Existing project detection
         "has_research_files": has_research_files,
         "has_project_manifest": has_project_manifest,
-        "has_existing_project": has_research_files or has_project_manifest,
         "needs_research_map": (has_research_files or has_project_manifest)
         and not _path_exists(cwd, f"{PLANNING_DIR_NAME}/{RESEARCH_MAP_DIR_NAME}"),
         # Git state

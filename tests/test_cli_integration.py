@@ -2254,7 +2254,7 @@ class TestInitIncludeParsing:
         payload = json.loads(result.output)
 
         assert payload["has_research_files"] is True
-        assert payload["has_existing_project"] is True
+        assert "has_existing_project" not in payload.keys()
         assert payload["needs_research_map"] is True
 
     def test_init_progress_include_rejects_unknown_values(self) -> None:

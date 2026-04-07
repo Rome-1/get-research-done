@@ -1543,14 +1543,14 @@ class TestInitNewProject:
         ctx = init_new_project(tmp_path)
         assert ctx["has_research_files"] is False
         assert ctx["has_project_manifest"] is False
-        assert ctx["has_existing_project"] is False
+        assert "has_existing_project" not in ctx
         assert ctx["planning_exists"] is False
 
     def test_detects_research_files(self, tmp_path: Path) -> None:
         (tmp_path / "calc.py").write_text("import numpy")
         ctx = init_new_project(tmp_path)
         assert ctx["has_research_files"] is True
-        assert ctx["has_existing_project"] is True
+        assert "has_existing_project" not in ctx
 
     def test_ignores_runtime_owned_dirs_when_detecting_research_files(self, tmp_path: Path) -> None:
         for runtime_dir in _runtime_owned_local_install_dirs(tmp_path):
@@ -1560,7 +1560,7 @@ class TestInitNewProject:
         ctx = init_new_project(tmp_path)
 
         assert ctx["has_research_files"] is False
-        assert ctx["has_existing_project"] is False
+        assert "has_existing_project" not in ctx
 
     def test_detects_non_runtime_config_research_files(self, tmp_path: Path) -> None:
         (tmp_path / ".config").mkdir()
@@ -1569,7 +1569,7 @@ class TestInitNewProject:
         ctx = init_new_project(tmp_path)
 
         assert ctx["has_research_files"] is True
-        assert ctx["has_existing_project"] is True
+        assert "has_existing_project" not in ctx
 
     @pytest.mark.parametrize("directory_name", ("agents", "hooks", "command"))
     def test_detects_user_owned_research_files_in_generic_tool_named_directories(
@@ -1582,7 +1582,7 @@ class TestInitNewProject:
         ctx = init_new_project(tmp_path)
 
         assert ctx["has_research_files"] is True
-        assert ctx["has_existing_project"] is True
+        assert "has_existing_project" not in ctx
 
     def test_detects_xdg_config_subdir_research_files_inside_a_project(self, tmp_path: Path) -> None:
         opencode_descriptor = next(
@@ -1601,7 +1601,7 @@ class TestInitNewProject:
         ctx = init_new_project(tmp_path)
 
         assert ctx["has_research_files"] is True
-        assert ctx["has_existing_project"] is True
+        assert "has_existing_project" not in ctx
 
     def test_detects_manifest(self, tmp_path: Path) -> None:
         (tmp_path / "pyproject.toml").write_text("[project]")
@@ -1641,7 +1641,7 @@ class TestInitNewProject:
         ctx = init_new_project(tmp_path)
 
         assert ctx["has_project_manifest"] is True
-        assert ctx["has_existing_project"] is True
+        assert "has_existing_project" not in ctx
 
     def test_surfaces_project_contract_state_and_validation(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)

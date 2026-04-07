@@ -1016,7 +1016,7 @@ const catalog = require("./src/gpd/adapters/runtime_catalog.json");
 assert.doesNotThrow(() => validateRuntimeCatalog(catalog));
 
 const helpExampleRuntimes = catalog.filter((runtime) => runtime.installer_help_example_scope);
-assert.equal(helpExampleRuntimes.length, 2);
+assert.ok(helpExampleRuntimes.length >= 2);
 for (const runtime of helpExampleRuntimes) {
   if (runtime.installer_help_example_scope === "global") {
     assert.equal(runtime.validated_command_surface, "public_runtime_slash_command");
@@ -1028,6 +1028,8 @@ for (const runtime of helpExampleRuntimes) {
   }
   assert.fail(`unexpected installer_help_example_scope: ${runtime.installer_help_example_scope}`);
 }
+assert.ok(helpExampleRuntimes.some((runtime) => runtime.installer_help_example_scope === "global"));
+assert.ok(helpExampleRuntimes.some((runtime) => runtime.installer_help_example_scope === "local"));
 
 const explicitSurfaceCatalog = JSON.parse(JSON.stringify(catalog));
 explicitSurfaceCatalog[0].public_command_surface_prefix = explicitSurfaceCatalog[0].command_prefix;

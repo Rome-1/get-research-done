@@ -31,7 +31,7 @@ This graph therefore includes:
 - `src/gpd/commands/*.md`: `66`
 - `src/gpd/agents/*.md`: `24`
 - `src/gpd/specs/workflows/*.md`: `67`
-- `src/gpd/specs/templates/**/*.md`: `73`
+- `src/gpd/specs/templates/**/*.md`: `74`
 - `src/gpd/specs/references/**/*.md`: `164`
 - `src/gpd/adapters/*.py`: `9`
 - `src/gpd/hooks/*.py`: `11`
@@ -866,7 +866,7 @@ flowchart TD
 - `src/gpd/specs/workflows/new-project.md -> src/gpd/specs/{references/research/questioning.md,references/conventions/subfield-convention-defaults.md}`
   `include`
 
-- `src/gpd/specs/workflows/new-project.md -> src/gpd/specs/templates/state-json-schema.md`
+- `src/gpd/specs/workflows/new-project.md -> src/gpd/specs/templates/project-contract-schema.md`
   `include`
 
 - `src/gpd/specs/workflows/new-project.md -> src/gpd/specs/templates/research-project/PRIOR-WORK.md`

@@ -1411,6 +1411,7 @@ class TestRegistryPromptIncludeInlining:
         assert "**For every checklist item: perform the CHECK, do not search_files for the CONCEPT.**" in agent.system_prompt
         assert "# Verification Report Template" in agent.system_prompt
         assert "# Contract Results Schema" in agent.system_prompt
+        assert "<!-- [included:" not in agent.system_prompt
 
     def test_write_paper_command_content_inlines_contract_schema_dependencies(self) -> None:
         command = registry.get_command("gpd:write-paper")

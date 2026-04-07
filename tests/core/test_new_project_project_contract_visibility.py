@@ -6,6 +6,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NEW_PROJECT = REPO_ROOT / "src" / "gpd" / "specs" / "workflows" / "new-project.md"
+PROJECT_CONTRACT_SCHEMA = REPO_ROOT / "src" / "gpd" / "specs" / "templates" / "project-contract-schema.md"
 STATE_SCHEMA = REPO_ROOT / "src" / "gpd" / "specs" / "templates" / "state-json-schema.md"
 QUESTIONING = REPO_ROOT / "src" / "gpd" / "specs" / "references" / "research" / "questioning.md"
 
@@ -22,24 +23,24 @@ def _extract_contract_rule_block_lines(text: str, start_marker: str) -> tuple[st
     return tuple(line.strip() for line in lines[start:end] if line.lstrip().startswith("- "))
 
 
-def test_new_project_prompt_surfaces_the_canonical_state_schema_for_project_contract_grounding() -> None:
+def test_new_project_prompt_surfaces_the_canonical_contract_schema_for_project_contract_grounding() -> None:
     new_project_text = NEW_PROJECT.read_text(encoding="utf-8")
     parse_line = next(
         line for line in new_project_text.splitlines() if line.startswith("Parse JSON for:")
     )
 
-    assert "templates/state-json-schema.md" in new_project_text
+    assert "templates/project-contract-schema.md" in new_project_text
     assert (
         "Before you ask for approval, keep the contract as a literal JSON object for the "
-        "`project_contract` subsection of `templates/state-json-schema.md`, and use that "
+        "`project_contract` subsection of `templates/project-contract-schema.md`, and use that "
         "schema as the canonical source of truth for the object rules. Do not restate the full "
         "contract rules here; keep only the approval-critical reminders below."
         in new_project_text
     )
     assert "Do not approve a scoping contract that strips decisive outputs, anchors, prior outputs, or review/stop triggers down to generic placeholders." in new_project_text
-    assert "Before you show the approval gate, build the raw contract as a literal JSON object for the `project_contract` subsection of `templates/state-json-schema.md`:" in new_project_text
+    assert "Before you show the approval gate, build the raw contract as a literal JSON object for the `project_contract` subsection of `templates/project-contract-schema.md`:" in new_project_text
     assert "author only the JSON object that will be stored in `project_contract`, not the surrounding `state.json` envelope" in new_project_text
-    assert "follow the `project_contract` object rules in `templates/state-json-schema.md` exactly" in new_project_text
+    assert "follow the `project_contract` object rules in `templates/project-contract-schema.md` exactly" in new_project_text
     assert "do not paraphrase the schema here; reuse its exact keys, enum values, list/object shapes, ID-linkage rules, and proof-bearing claim requirements" in new_project_text
     assert "do not invent near-miss enum values, extra keys, or scalar shortcuts for list fields" in new_project_text
     assert "fix them to the schema before approval" in new_project_text
@@ -62,7 +63,6 @@ def test_new_project_prompt_surfaces_the_canonical_state_schema_for_project_cont
         "planning_exists",
         "has_research_files",
         "has_project_manifest",
-        "has_existing_project",
         "needs_research_map",
         "has_git",
         "project_contract",
@@ -71,15 +71,15 @@ def test_new_project_prompt_surfaces_the_canonical_state_schema_for_project_cont
         "project_contract_validation",
     ):
         assert f"`{field}`" in parse_line
-    assert "If `project_contract` is present in the init JSON, keep `project_contract`, `project_contract_load_info`, and `project_contract_validation` visible while deciding whether this is fresh work or a continuation." in new_project_text
     assert "If the init JSON already contains `project_contract`, `project_contract_load_info`, or `project_contract_validation`, preserve that state in the approval gate and continuation decision." in new_project_text
+    assert "preserve any init-surfaced `project_contract`, `project_contract_load_info`, and `project_contract_validation` state while deciding whether this is fresh work or a continuation" in new_project_text
 
 
 def test_new_project_contract_rule_block_is_not_duplicated() -> None:
     new_project_text = NEW_PROJECT.read_text(encoding="utf-8")
     show_block = _extract_contract_rule_block_lines(
         new_project_text,
-        "Before you show the approval gate, build the raw contract as a literal JSON object for the `project_contract` subsection of `templates/state-json-schema.md`:",
+        "Before you show the approval gate, build the raw contract as a literal JSON object for the `project_contract` subsection of `templates/project-contract-schema.md`:",
     )
     step4_block = new_project_text.split(
         "## 4. Synthesize The Approved Project Contract And Write PROJECT.md",
@@ -95,6 +95,16 @@ def test_new_project_contract_rule_block_is_not_duplicated() -> None:
     assert 'header: "Scope"' not in step4_block
     assert any("context_intake" in line and "uncertainty_markers" in line for line in show_block)
     assert any("schema_version" in line and "must_surface" in line for line in show_block)
+
+
+def test_project_contract_schema_slice_keeps_contract_critical_rules_visible() -> None:
+    contract_schema_text = PROJECT_CONTRACT_SCHEMA.read_text(encoding="utf-8")
+
+    assert "Canonical schema for the `project_contract` object inside `GPD/state.json`." in contract_schema_text
+    assert "model-facing contract setup should see only the `project_contract` shape and rules" in contract_schema_text
+    assert "`context_intake`, `approach_policy`, and `uncertainty_markers` are JSON objects when present; do not collapse them to strings or lists." in contract_schema_text
+    assert "`schema_version` must be the integer `1`." in contract_schema_text
+    assert "`must_surface` is a boolean scalar. Use the JSON literals `true` and `false`;" in contract_schema_text
 
 
 def test_state_schema_surfaces_the_exact_approved_mode_grounding_rule() -> None:

@@ -981,7 +981,6 @@ def test_new_project_wiring_mentions_contract_persistence_and_contract_first_dow
             "planning_exists",
             "has_research_files",
             "has_project_manifest",
-            "has_existing_project",
             "needs_research_map",
             "has_git",
             "project_contract",
@@ -1004,7 +1003,7 @@ def test_new_project_wiring_mentions_contract_persistence_and_contract_first_dow
         "roadmap generation",
         "explicit approval",
     )
-    assert "@{GPD_INSTALL_DIR}/templates/state-json-schema.md" in command_text
+    assert "@{GPD_INSTALL_DIR}/templates/project-contract-schema.md" in command_text
 
 
 def test_new_project_defers_workflow_setup_until_after_scope_approval() -> None:
