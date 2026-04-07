@@ -312,14 +312,14 @@ def test_merge_gate_workflow_uses_main_branch_pytest_on_python_311() -> None:
     assert "workflow_dispatch:" in workflow
     assert "name: pytest ${{ matrix.display_name }} (3.11)" in workflow
     assert "fail-fast: false" in workflow
-    assert "display_name: root 1/8" in workflow
-    assert "display_name: root 8/8" in workflow
+    assert "display_name: root 1/9" in workflow
+    assert "display_name: root 9/9" in workflow
     assert "display_name: adapters 1/2" in workflow
     assert "display_name: adapters 2/2" in workflow
     assert "display_name: hooks 1/2" in workflow
     assert "display_name: hooks 2/2" in workflow
     assert "display_name: mcp" in workflow
-    assert "display_name: core 6/6" in workflow
+    assert "display_name: core 5/5" in workflow
     assert "actions/checkout@v6" in workflow
     assert "actions/setup-python@v6" in workflow
     assert 'python-version: "3.11"' in workflow
