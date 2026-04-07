@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from gpd.core.errors import ResultNotFoundError
 from gpd.core.results import (
@@ -63,6 +64,21 @@ def test_result_downstream_diamond():
     assert [d.id for d in downstream.transitive_dependents] == ["D"]
 
 
+def test_result_downstream_dedupes_duplicate_direct_dependents():
+    state: dict = {
+        "intermediate_results": [
+            {"id": "R-01", "depends_on": []},
+            {"id": "R-02", "depends_on": ["R-01", "R-01"]},
+            {"id": "R-03", "depends_on": ["R-01"]},
+        ]
+    }
+
+    downstream = result_downstream(state, "R-01")
+
+    assert [d.id for d in downstream.direct_dependents] == ["R-02", "R-03"]
+    assert downstream.transitive_dependents == []
+
+
 def test_result_downstream_not_found():
     state: dict = {}
     with pytest.raises(ResultNotFoundError):
@@ -98,6 +114,34 @@ def test_result_downstream_ignores_string_entries():
     assert downstream.transitive_dependents == []
 
 
+def test_result_downstream_handles_missing_depends_on_field():
+    state: dict = {
+        "intermediate_results": [
+            {"id": "R-01"},
+            {"id": "R-02", "depends_on": ["R-01"]},
+        ]
+    }
+
+    downstream = result_downstream(state, "R-01")
+
+    assert [d.id for d in downstream.direct_dependents] == ["R-02"]
+    assert downstream.transitive_dependents == []
+
+
+def test_result_downstream_handles_raw_string_depends_on_field():
+    state: dict = {
+        "intermediate_results": [
+            {"id": "R-01", "depends_on": []},
+            {"id": "R-02", "depends_on": "R-01"},
+        ]
+    }
+
+    downstream = result_downstream(state, "R-01")
+
+    assert [d.id for d in downstream.direct_dependents] == ["R-02"]
+    assert downstream.transitive_dependents == []
+
+
 def test_result_downstream_deep_chain():
     """A -> B -> C -> D -> E: downstream of A returns B (direct), C/D/E (transitive)."""
     state: dict = {}
@@ -108,16 +152,14 @@ def test_result_downstream_deep_chain():
     result_add(state, result_id="E", depends_on=["D"])
     downstream = result_downstream(state, "A")
     assert [d.id for d in downstream.direct_dependents] == ["B"]
-    transitive_ids = [d.id for d in downstream.transitive_dependents]
-    assert "C" in transitive_ids
-    assert "D" in transitive_ids
-    assert "E" in transitive_ids
-    assert len(transitive_ids) == 3
+    assert [d.id for d in downstream.transitive_dependents] == ["C", "D", "E"]
 
 
-def test_result_downstream_returns_frozen_model():
+def test_result_downstream_model_is_frozen():
     state: dict = {}
     result_add(state, result_id="R-01")
     downstream = result_downstream(state, "R-01")
     assert isinstance(downstream, ResultDownstream)
     assert isinstance(downstream.result, IntermediateResult)
+    with pytest.raises(ValidationError, match="Instance is frozen"):
+        downstream.result = None
