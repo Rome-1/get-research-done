@@ -51,6 +51,12 @@ def test_public_worker_prompts_identify_writable_production_surface() -> None:
     assert "Agent surface: public writable production agent." in executor
     assert "Agent surface: public writable production agent specialized for discrepancy investigation" in debugger
     assert "Agent surface: public writable production agent for manuscript sections" in paper_writer
+    assert (
+        "On demand only: shared protocols, verification core, physics subfields, agent infrastructure, and cross-project patterns."
+        in debugger
+    )
+    assert "@{GPD_INSTALL_DIR}/references/shared/shared-protocols.md" not in debugger
+    assert "@{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md" not in debugger
 
 
 def test_internal_agents_explicitly_identify_internal_specialist_surface() -> None:

@@ -10,11 +10,16 @@ Template for `GPD/debug/[slug].md` - active debug session tracking for physics c
 
 ---
 
+## Canonical Debug Session Contract
+
+`GPD/debug/{slug}.md` is the session artifact. The lifecycle/status vocabulary is `gathering | investigating | fixing | verifying | resolved`, the goal vocabulary is `find_root_cause_only | find_and_fix`, and any fresh continuation must read this file first, then continue from next_action.
+
 ## File Template
 
 ```markdown
 ---
 status: gathering | investigating | fixing | verifying | resolved
+goal: find_root_cause_only | find_and_fix
 phase: [phase number or slug, e.g. "02-syk-sff"]
 trigger: "[verbatim user input]"
 created: [ISO timestamp]
@@ -85,6 +90,7 @@ files_changed: []
 **Frontmatter (status, trigger, timestamps):**
 
 - `status`: OVERWRITE - reflects current phase
+- `goal`: IMMUTABLE - `find_root_cause_only` for diagnosis-only sessions, `find_and_fix` when a bounded repair is allowed; keep it fixed across continuations
 - `phase`: IMMUTABLE - phase number or slug this debug session relates to (e.g., "02-syk-sff"); set from current phase context at creation time
 - `trigger`: IMMUTABLE - verbatim user input, never changes
 - `created`: IMMUTABLE - set once
@@ -142,6 +148,7 @@ files_changed: []
 
 - Create file with trigger from user input
 - Set status to "gathering"
+- Set goal once and keep it fixed for the life of the session
 - Current Focus: next_action = "gather symptoms"
 - Symptoms: empty, to be filled
 
@@ -170,6 +177,7 @@ files_changed: []
 **During fixing:**
 
 - status -> "fixing"
+- goal remains unchanged
 - Update Resolution.root_cause when confirmed
 - Update Resolution.fix when applied
 - Update Resolution.files_changed
@@ -177,6 +185,7 @@ files_changed: []
 **During verification:**
 
 - status -> "verifying"
+- goal remains unchanged
 - Update Resolution.verification with results
 - Check at least two independent validations:
   - Limiting case that should recover a known result
@@ -187,6 +196,7 @@ files_changed: []
 **On resolution:**
 
 - status -> "resolved"
+- goal remains unchanged
 - Update Resolution.lessons_learned
 - Move file to GPD/debug/resolved/
 
@@ -201,7 +211,8 @@ When GPD reads this file after /clear:
 3. Read Eliminated -> know what NOT to retry
 4. Read Evidence -> know what has been learned
 5. Read Diagnostic Tests -> know what has been tested
-6. Continue from next_action
+6. Read the file at GPD/debug/{slug}.md first, then continue from next_action.
+   Preserve the goal and prior state.
 
 The file IS the debugging brain. GPD should be able to resume perfectly from any interruption point.
 

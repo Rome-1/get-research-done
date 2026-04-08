@@ -21,13 +21,14 @@ def test_notation_coordinator_requires_checkpoint_and_fresh_continuation_for_wri
     assert "Return a checkpoint with the options and stop" in content
 
 
-def test_debugger_replaces_active_session_waiting_with_checkpoint_routing() -> None:
+def test_debugger_uses_one_shot_checkpoint_handoff_instead_of_in_run_waiting() -> None:
     content = _read_agent("gpd-debugger")
 
-    assert "fresh continuation" in content
-    assert "Wait for user to select" not in content
-    assert "Return a checkpoint that lists the active sessions" in content
+    assert "one-shot handoff" in content
+    assert "fresh continuation handoff" in content
     assert "### Fresh Continuation" in content
+    assert "You are not resumed in the same run." in content
+    assert "active sessions" not in content
 
 
 def test_roadmapper_makes_checkpoint_revision_flow_explicit() -> None:

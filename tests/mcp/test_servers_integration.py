@@ -453,6 +453,31 @@ class TestSkillsServerIntegration:
             assert "category" in skill
             assert skill["name"].startswith("gpd-")
 
+    def test_debug_command_and_debugger_agent_surfaces_remain_available(self):
+        from gpd.mcp.servers.skills_server import get_skill, list_skills
+
+        result = list_skills()
+        names = {s["name"] for s in result["skills"]}
+        assert {"gpd-debug", "gpd-debugger"}.issubset(names)
+
+        debug_skill = get_skill("gpd-debug")
+        debugger_skill = get_skill("gpd-debugger")
+
+        assert debug_skill["allowed_tools_surface"] == "command.allowed-tools"
+        assert debug_skill["schema_references"] == []
+        assert debug_skill["contract_references"] == []
+        assert debug_skill["schema_documents"] == []
+        assert debug_skill["contract_documents"] == []
+        assert "gpd-debugger" in debug_skill["content"]
+
+        assert debugger_skill["allowed_tools_surface"] == "agent.tools"
+        assert debugger_skill["schema_references"] == []
+        assert debugger_skill["contract_references"] == []
+        assert debugger_skill["schema_documents"] == []
+        assert debugger_skill["contract_documents"] == []
+        assert debugger_skill["transitive_schema_references"] == []
+        assert debugger_skill["transitive_schema_documents"] == []
+
     def test_get_skill_uses_canonical_command_content(self):
         from gpd.mcp.servers.skills_server import get_skill
 

@@ -1405,6 +1405,30 @@ class TestDiscovery:
         with pytest.raises(ValueError, match="does not match file stem"):
             registry._discover_agents()
 
+    def test_debug_command_and_debugger_agent_remain_registry_discoverable(self) -> None:
+        registry.invalidate_cache()
+
+        debug_command = registry.get_command("gpd:debug")
+        debug_skill = registry.get_skill("gpd-debug")
+        debugger_agent = registry.get_agent("gpd-debugger")
+        debugger_skill = registry.get_skill("gpd-debugger")
+
+        assert debug_command.name == "gpd:debug"
+        assert debug_command.agent is None
+        assert debug_command.context_mode == "project-required"
+        assert debug_command.project_reentry_capable is False
+        assert debug_command.allowed_tools == ["file_read", "shell", "task", "ask_user"]
+        assert "gpd-debugger" in debug_command.content
+
+        assert debug_skill.source_kind == "command"
+        assert debugger_skill.source_kind == "agent"
+        assert debug_skill.name == "gpd-debug"
+        assert debugger_skill.name == "gpd-debugger"
+        assert debugger_agent.surface == "public"
+        assert debugger_agent.role_family == "worker"
+        assert "public writable production agent specialized for discrepancy investigation" in debugger_agent.system_prompt
+        assert {"gpd-debug", "gpd-debugger"}.issubset(registry.list_skills())
+
 class TestSkillDiscovery:
     """Tests for canonical skills derived from primary commands and agents."""
 

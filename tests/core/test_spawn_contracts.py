@@ -10,6 +10,7 @@ from gpd.adapters.install_utils import expand_at_includes
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = REPO_ROOT / "src/gpd/specs/workflows"
+COMMANDS_DIR = REPO_ROOT / "src/gpd/commands"
 REFERENCES_DIR = REPO_ROOT / "src/gpd/specs/references"
 TEMPLATES_DIR = REPO_ROOT / "src/gpd/specs/templates"
 WORKFLOW_PATHS = (
@@ -237,6 +238,28 @@ def test_every_workflow_task_block_carries_runtime_delegation_note_and_bootstrap
     for path in WORKFLOW_PATHS:
         _assert_runtime_note_include(path)
         _assert_expanded_runtime_note(path)
+
+
+def test_debug_workflow_and_command_share_the_same_one_shot_debugger_contract() -> None:
+    workflow = _read(WORKFLOWS_DIR / "debug.md")
+    command = _read(COMMANDS_DIR / "debug.md")
+    expanded_workflow = expand_at_includes(workflow, REPO_ROOT / "src/gpd", "/runtime/")
+
+    assert workflow.count('subagent_type="gpd-debugger"') == 1
+    assert workflow.count("readonly=false") == 1
+    assert 'description="Investigate: {truth_short}"' in workflow
+    assert "Spawn a fresh subagent for the task below." in expanded_workflow
+    assert "one-shot handoff" in expanded_workflow
+    assert "Always pass `readonly=false` for file-producing agents." in expanded_workflow
+
+    assert command.count('subagent_type="gpd-debugger"') == 2
+    assert command.count("readonly=false") == 2
+    assert 'description="Debug {slug}"' in command
+    assert 'description="Continue debug {slug}"' in command
+    assert "Create: GPD/debug/{slug}.md" in command
+    assert "Debug file path: GPD/debug/{slug}.md" in command
+    assert "expected debug session artifact" in command
+    assert "artifact gate" in command
 
 
 def test_quick_and_write_paper_gate_handoffs_on_expected_artifacts() -> None:

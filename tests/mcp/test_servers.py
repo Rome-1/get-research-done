@@ -1737,6 +1737,38 @@ class TestSkillsServer:
         }
 
 
+    def test_get_skill_debug_command_surfaces_debugger_seam_and_has_no_direct_schema_dependencies(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        from gpd import registry as content_registry
+        from gpd.mcp.servers.skills_server import get_skill
+
+        repo_root = Path(__file__).resolve().parents[2]
+        monkeypatch.setattr(content_registry, "COMMANDS_DIR", repo_root / "src" / "gpd" / "commands")
+        monkeypatch.setattr(content_registry, "AGENTS_DIR", repo_root / "src" / "gpd" / "agents")
+        content_registry.invalidate_cache()
+
+        result = get_skill("gpd-debug")
+
+        assert result["name"] == "gpd-debug"
+        assert result["allowed_tools_surface"] == "command.allowed-tools"
+        assert result["allowed_tools"] == ["file_read", "shell", "task", "ask_user"]
+        assert result["structured_metadata_authority"] == {
+            "content": "canonical",
+            "context_mode": "mirrored",
+            "project_reentry_capable": "mirrored",
+            "allowed_tools": "mirrored",
+            "requires": "mirrored",
+            "review_contract": "mirrored",
+        }
+        assert result["schema_references"] == []
+        assert result["schema_documents"] == []
+        assert result["contract_references"] == []
+        assert result["contract_documents"] == []
+        assert "gpd-debugger" in result["content"]
+        assert 'subagent_type="gpd-debugger"' in result["content"]
+
+
     def test_get_skill_executor_agent_defers_completion_only_materials_until_summary_creation(
         self, monkeypatch: pytest.MonkeyPatch
     ):
@@ -1943,6 +1975,46 @@ class TestSkillsServer:
         result = route_skill("zzz yyy xxx")
         assert result["suggestion"] == "gpd-help"
         assert result["confidence"] <= 0.1
+
+    def test_route_skill_debug_intent_prefers_gpd_debug(self):
+        from gpd.mcp.servers.skills_server import route_skill
+        from gpd.registry import SkillDef
+
+        with patch(
+            "gpd.mcp.servers.skills_server._load_skill_index",
+            return_value=[
+                SkillDef(
+                    name="gpd-debug",
+                    description="Debug physics calculations.",
+                    content="Debug command.",
+                    category="execution",
+                    path="/tmp/gpd-debug.md",
+                    source_kind="command",
+                    registry_name="debug",
+                ),
+                SkillDef(
+                    name="gpd-debugger",
+                    description="Debugger.",
+                    content="Debugger agent.",
+                    category="debugging",
+                    path="/tmp/gpd-debugger.md",
+                    source_kind="agent",
+                    registry_name="gpd-debugger",
+                ),
+                SkillDef(
+                    name="gpd-help",
+                    description="Help.",
+                    content="Help.",
+                    category="help",
+                    path="/tmp/gpd-help.md",
+                    source_kind="command",
+                    registry_name="help",
+                ),
+            ],
+        ):
+            result = route_skill("debug this physics calculation")
+
+        assert result["suggestion"] == "gpd-debug"
 
     def test_route_skill_no_match_without_help_falls_back_to_first_skill(self):
         from gpd.mcp.servers.skills_server import route_skill

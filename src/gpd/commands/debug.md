@@ -105,42 +105,11 @@ already_tried: {already_tried}
 
 <mode>
 symptoms_prefilled: true
-goal: find_and_fix
+goal: find_root_cause_only
 </mode>
 
-<investigation_strategy>
-Physics debugging follows a hierarchy of checks, ordered from cheapest to most expensive:
-
-1. **Dimensional analysis** — Check dimensions of every intermediate expression. This catches ~30% of errors and costs almost nothing.
-2. **Special/limiting cases** — Evaluate the expression in limits where the answer is known. Catches ~20% of remaining errors.
-3. **Sign and symmetry audit** — Track signs through the derivation. Check that symmetries of the problem are preserved. Catches sign errors and parity mistakes.
-4. **Term-by-term comparison** — If an alternative derivation exists, compare term by term to isolate where they diverge.
-5. **Numerical spot-check** — Evaluate both sides of key equations numerically at random parameter values. Catches algebraic errors that are hard to see symbolically.
-6. **Bisection** — If the derivation is long, check the result at the midpoint. Is it already wrong there? Binary search for the first wrong step.
-7. **Simplification** — Strip the problem to its simplest version that still exhibits the bug. Remove all complications (interactions, finite size, finite temperature) until the error disappears, then add them back one at a time.
-   </investigation_strategy>
-
-<common_physics_errors>
-
-- Factor of 2 from double-counting (symmetry factors, identical particles, Wick contractions)
-- Factor of 2 from real vs complex conventions (Fourier transforms, field normalizations)
-- Factor of pi from Fourier transform conventions (2pi in measure vs in exponential)
-- Sign from metric signature convention (+--- vs -+++)
-- Sign from Wick rotation (Euclidean vs Minkowski)
-- Sign from fermion anti-commutation (ordering of Grassmann variables)
-- Missing Jacobian from coordinate transformation
-- Wrong measure in path integral or partition function
-- Forgetting that trace is cyclic but not symmetric under transposition for non-Hermitian operators
-- Regularization-scheme-dependent finite parts
-- Gauge artifact mistaken for physical effect
-- Infrared divergence from massless limit taken too early
-- Numerical precision loss from catastrophic cancellation
-- Stiff ODE requiring implicit integrator
-- Aliasing from insufficient spatial resolution
-  </common_physics_errors>
-
 <debug_file>
-Write to: GPD/debug/{slug}.md
+Create: GPD/debug/{slug}.md
 </debug_file>
 ```
 
@@ -156,9 +125,9 @@ task(
 
 ## 4. Handle Agent Return
 
-Handle the debugger return through the workflow-owned typed child-return contract. Do not branch on heading text here.
+Handle the debugger return once through the workflow-owned typed child-return contract. Do not branch on heading text here.
 
-- `gpd_return.status: completed` -- Verify `GPD/debug/{slug}.md` exists and passes the artifact gate before presenting the confirmed root cause, evidence summary, and error classification, then offer: Fix now, Plan fix, Manual fix.
+- `gpd_return.status: completed` -- Verify `GPD/debug/{slug}.md` exists and its frontmatter/body reconcile the expected debug session artifact before it passes the artifact gate, then present the confirmed root cause, evidence summary, and error classification, and offer: Fix now, Plan fix, Manual fix.
 - `gpd_return.status: checkpoint` -- Present the checkpoint details to the user, collect the response, and spawn a fresh continuation run.
 - `gpd_return.status: blocked` or `failed` -- Show what was checked, what was ruled out, and what remains unresolved, then offer: Continue investigating, Manual investigation, Add more context, Simplify the problem.
 
@@ -182,7 +151,7 @@ Read that file before continuing so you inherit the prior investigation state in
 </checkpoint_response>
 
 <mode>
-goal: find_and_fix
+goal: find_root_cause_only
 </mode>
 ```
 
@@ -202,7 +171,7 @@ task(
 
 - [ ] Active sessions checked
 - [ ] Symptoms gathered with physics-specific characterization (if new)
-- [ ] gpd-debugger spawned with context and investigation strategy
+- [ ] gpd-debugger spawned with context and diagnosis-only goal
 - [ ] Checkpoints handled correctly
 - [ ] Root cause confirmed and classified before fixing
 - [ ] Error type identified (algebraic, numerical, conceptual, conventional)

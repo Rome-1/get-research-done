@@ -508,6 +508,25 @@ def test_get_skill_agent_surfaces_allowed_tools() -> None:
     assert agent.tools == ["shell", "file_read", "shell"]
 
 
+def test_get_skill_debugger_agent_keeps_schema_dependencies_transitive_only() -> None:
+    from gpd.mcp.servers.skills_server import get_skill
+
+    result = get_skill("gpd-debugger")
+
+    assert result["allowed_tools_surface"] == "agent.tools"
+    assert result["schema_references"] == []
+    assert result["schema_documents"] == []
+    assert result["contract_references"] == []
+    assert result["contract_documents"] == []
+    assert result["transitive_schema_references"] == []
+    assert result["transitive_schema_documents"] == []
+    assert result["structured_metadata_authority"] == {
+        "content": "canonical",
+        "allowed_tools": "mirrored",
+        "agent_policy": "mirrored",
+    }
+
+
 def test_get_skill_executor_agent_does_not_expose_staged_loading_sidecar() -> None:
     from gpd.mcp.servers.skills_server import get_skill
 

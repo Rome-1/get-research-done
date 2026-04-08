@@ -19,7 +19,10 @@ def test_debug_workflow_routes_on_typed_status_and_file_backed_diagnosis() -> No
     assert "gpd_return.status: checkpoint" in workflow
     assert "gpd_return.status: blocked" in workflow
     assert "GPD/debug/{slug}.md" in workflow
+    assert "session_status: diagnosed" in workflow
+    assert "session file" in workflow
     assert "Do not route on heading markers in the returned text" in workflow
+    assert "spawn a fresh continuation run" in workflow
     assert "## ROOT CAUSE FOUND" not in workflow
     assert "## INVESTIGATION INCONCLUSIVE" not in workflow
 

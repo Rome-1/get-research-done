@@ -127,12 +127,13 @@ AGENT_REFERENCE_TOKENS = {
         "templates/conventions.md",
     ],
     "gpd-debugger.md": [
-        "references/shared/shared-protocols.md",
-        "references/orchestration/agent-infrastructure.md",
-        "references/physics-subfields.md",
-        "references/verification/core/verification-core.md",
-        "references/shared/cross-project-patterns.md",
-        "workflows/record-insight.md",
+        "Spawned by the debug orchestrator workflow.",
+        "Agent surface: public writable production agent specialized for discrepancy investigation and bounded repair work.",
+        "On demand only: shared protocols, verification core, physics subfields, agent infrastructure, and cross-project patterns.",
+        "Keep work in `gpd-debugger` while the task is root-cause isolation, validation, or a bounded repair tied to that investigation.",
+        "After root cause is confirmed, update `session_status` to \"diagnosed\".",
+        "goal: find_root_cause_only",
+        "goal: find_and_correct",
     ],
     "gpd-executor.md": [
         "references/shared/shared-protocols.md",
@@ -3295,6 +3296,18 @@ def test_debug_prompts_use_session_status_for_diagnosis_progress() -> None:
     assert 'Update status in frontmatter to "diagnosed"' not in debug_workflow
     assert 'update `session_status` to "diagnosed"' in debugger
     assert 'Update status to "diagnosed"' not in debugger
+
+
+def test_debug_command_and_workflow_wire_directly_to_gpd_debugger() -> None:
+    debug_command = (COMMANDS_DIR / "debug.md").read_text(encoding="utf-8")
+    debug_workflow = (WORKFLOWS_DIR / "debug.md").read_text(encoding="utf-8")
+    debugger = (AGENTS_DIR / "gpd-debugger.md").read_text(encoding="utf-8")
+
+    assert "gpd-debugger" in debug_command
+    assert 'DEBUGGER_MODEL=$(gpd resolve-model gpd-debugger)' in debug_command
+    assert 'subagent_type="gpd-debugger"' in debug_workflow
+    assert "First, read {GPD_AGENTS_DIR}/gpd-debugger.md" in debug_workflow
+    assert "public writable production agent specialized for discrepancy investigation" in debugger
 
 
 def test_resume_workflow_surfaces_contract_load_and_validation_state() -> None:

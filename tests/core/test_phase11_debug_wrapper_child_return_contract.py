@@ -15,11 +15,19 @@ def test_debug_wrapper_routes_on_typed_child_return_contract() -> None:
     assert "gpd_return.status: completed" in text
     assert "gpd_return.status: checkpoint" in text
     assert "gpd_return.status: blocked` or `failed" in text
+    assert "frontmatter/body reconcile the expected debug session artifact" in text
     assert "artifact gate" in text
-    assert "Write to: GPD/debug/{slug}.md" in text
+    assert "goal: find_root_cause_only" in text
+    assert "Create: GPD/debug/{slug}.md" in text
     assert "Do not branch on heading text here." in text
 
-    for marker in ("ROOT CAUSE FOUND", "CHECKPOINT REACHED", "INVESTIGATION INCONCLUSIVE"):
+    for marker in (
+        "ROOT CAUSE FOUND",
+        "CHECKPOINT REACHED",
+        "INVESTIGATION INCONCLUSIVE",
+        "goal: find_and_fix",
+        "Physics debugging follows a hierarchy of checks",
+    ):
         assert marker not in text
 
 
@@ -31,3 +39,4 @@ def test_debug_wrapper_checkpoint_continuation_stays_file_backed_and_fresh() -> 
     assert "Debug file path: GPD/debug/{slug}.md\nRead that file before continuing" in text
     assert "instead of relying on an inline `@...` attachment." in text
     assert "@GPD/debug/{slug}.md" not in text
+    assert "goal: find_root_cause_only" in text
