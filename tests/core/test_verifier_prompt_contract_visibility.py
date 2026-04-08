@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from gpd.adapters.install_utils import expand_at_includes
+from gpd.core.frontmatter import validate_frontmatter
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AGENTS_DIR = REPO_ROOT / "src/gpd/agents"
@@ -30,38 +32,35 @@ def _read_expanded_verifier_prompt() -> str:
     return expand_at_includes(_read_verifier_prompt(), REPO_ROOT / "src/gpd", "/runtime/")
 
 
+def _read_example_frontmatter(path: Path) -> str:
+    content = path.read_text(encoding="utf-8")
+    match = re.search(r"```markdown\n(.*?)\n```", content, re.S)
+    assert match is not None
+    return match.group(1)
+
+
 def test_verifier_prompt_points_to_canonical_verification_schema_sources() -> None:
     verifier = _read_verifier_prompt()
     expanded_verifier = _read_expanded_verifier_prompt()
-    verifier_lines = verifier.splitlines()
     expanded_lines = expanded_verifier.splitlines()
 
-    assert "@{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md" in verifier_lines
-    assert "@{GPD_INSTALL_DIR}/references/verification/meta/verifier-profile-checks.md" in verifier_lines
-    assert "@{GPD_INSTALL_DIR}/references/shared/canonical-schema-discipline.md" in verifier_lines
-    assert "Immediately before writing frontmatter, reload those canonical schema files and obey those ledger rules literally." in verifier
-    assert "## Data Boundary" not in verifier
+    assert "templates/verification-report.md" in verifier
+    assert "templates/contract-results-schema.md" in verifier
+    assert "references/shared/canonical-schema-discipline.md" in verifier
+    assert "Immediately before writing or validating `VERIFICATION.md`, load the canonical schema references on demand:" in verifier
     assert "## Canonical LLM Error References" in verifier
-    assert "`@{GPD_INSTALL_DIR}/references/verification/errors/llm-physics-errors.md` -- index and entry point" in verifier
-    assert "`@{GPD_INSTALL_DIR}/references/verification/errors/llm-errors-traceability.md` -- compact detection matrix" in verifier
     assert "Load only the split file(s) needed for the current physics context." in verifier
     assert "include a machine-readable `ASSERT_CONVENTION` comment immediately after the YAML frontmatter in `VERIFICATION.md`." in verifier
     assert "Changed phase verification artifacts now fail `gpd pre-commit-check` if the required header is missing or mismatched." in verifier
-    assert "## Data Boundary" in expanded_verifier
-    assert "ask the user before any install attempt" in expanded_verifier
-    assert "Prefer copy-pasteable GPD commands" in expanded_verifier
-    assert "# Verifier Profile-Specific Checks" in expanded_verifier
-    assert "[] Proof structure" in expanded_verifier
-    assert (
-        "Use the explicitly loaded schema, template, and contract/reference files that define an output shape or "
-        "validation gate as the authority."
-    ) in expanded_verifier
+    assert "Load only the split file(s) needed for the current physics context." in expanded_verifier
+    assert "Prefer copy-pasteable GPD commands" not in verifier
+    assert "## Data Boundary" not in verifier
     for legacy_alias in ("must_haves", "verification_inputs", "contract_evidence", "independently_confirmed"):
         assert legacy_alias not in verifier
-    assert "@{GPD_INSTALL_DIR}/templates/verification-report.md" in verifier_lines
-    assert "@{GPD_INSTALL_DIR}/templates/contract-results-schema.md" in verifier_lines
-    assert verifier_lines.count("@{GPD_INSTALL_DIR}/references/shared/canonical-schema-discipline.md") == 1
-    assert "@{GPD_INSTALL_DIR}/references/verification/meta/verifier-profile-checks.md" not in expanded_lines
+    assert verifier.count("templates/verification-report.md") == 1
+    assert verifier.count("templates/contract-results-schema.md") == 1
+    assert verifier.count("references/shared/canonical-schema-discipline.md") == 1
+    assert "verifier-profile-checks.md" not in expanded_lines
 
 
 def test_verifier_prompt_surfaces_validator_enforced_contract_ledger_rules() -> None:
@@ -109,11 +108,20 @@ def test_verifier_prompt_loads_conventions_from_state_json_with_degraded_state_m
 def test_verifier_prompt_reloads_the_canonical_schema_files_once() -> None:
     verifier = _read_verifier_prompt()
 
-    assert verifier.count("@{GPD_INSTALL_DIR}/templates/verification-report.md") == 1
-    assert verifier.count("@{GPD_INSTALL_DIR}/templates/contract-results-schema.md") == 1
-    assert verifier.count("@{GPD_INSTALL_DIR}/references/shared/canonical-schema-discipline.md") == 1
-    assert "reload those canonical schema files and obey those ledger rules literally." in verifier
+    assert verifier.count("templates/verification-report.md") == 1
+    assert verifier.count("templates/contract-results-schema.md") == 1
+    assert verifier.count("references/shared/canonical-schema-discipline.md") == 1
+    assert "load the canonical schema references on demand" in verifier
     assert "from Step 2" not in verifier
+
+
+def test_verifier_prompt_surfaces_schema_sources_before_the_verification_writer_section() -> None:
+    verifier = _read_verifier_prompt()
+    create_verification_section = verifier.index("## Create VERIFICATION.md")
+
+    assert verifier.index("templates/verification-report.md") < create_verification_section
+    assert verifier.index("templates/contract-results-schema.md") < create_verification_section
+    assert verifier.index("references/shared/canonical-schema-discipline.md") < create_verification_section
 
 
 def test_verifier_prompt_frontmatter_example_includes_contract_ledgers() -> None:
@@ -128,48 +136,45 @@ def test_verifier_prompt_frontmatter_example_includes_contract_ledgers() -> None
     assert "filler placeholders" not in verifier
 
 
+def test_shipped_verification_examples_roundtrip_through_the_verification_validator() -> None:
+    result = validate_frontmatter(_read_example_frontmatter(TEMPLATES_DIR / "research-verification.md"), "verification")
+
+    assert result.valid is True
+    assert result.errors == []
+
+
 def test_verifier_prompt_uses_canonical_include_for_worked_examples() -> None:
     verifier = _read_verifier_prompt()
 
-    assert "@{GPD_INSTALL_DIR}/references/verification/examples/verifier-worked-examples.md" in verifier
-    assert "<!-- [included: verifier-worked-examples.md] -->" not in verifier
-    assert "<!-- [end included] -->" not in verifier
-    assert "result = 0  # placeholder" not in verifier
-    assert '"energy": "TODO", "status": "not computed"' not in verifier
+    assert "<!-- Stub detection patterns extracted to reduce context. Load on demand from `references/verification/examples/verifier-worked-examples.md`. -->" in verifier
+    assert "## Physics Stub Detection Patterns" not in verifier
+    assert "Load on demand from `references/verification/examples/verifier-worked-examples.md`." in verifier
+    assert "all artifacts pass levels 1-4" in verifier
     assert "phase: 01-benchmark" in verifier
     assert "score: 3/5 contract targets verified" in verifier
 
 
 def test_verifier_prompt_surfaces_missing_parameter_proof_audit_and_stale_review_gate() -> None:
     verifier = _read_verifier_prompt()
-    expanded_verifier = _read_expanded_verifier_prompt()
     contract_results_schema = (TEMPLATES_DIR / "contract-results-schema.md").read_text(encoding="utf-8")
     research_verification = _read_research_verification_template()
     verification_template = _read_verification_template()
 
     assert "## Physics Stub Detection Patterns" not in verifier
-    assert "## Physics Stub Detection Patterns" in expanded_verifier
-    assert "## 5.15 Anomalies/Topological Properties — Executable Template" in expanded_verifier
-    assert "[] Proof structure" in expanded_verifier
+    assert "<!-- Stub detection patterns extracted to reduce context. Load on demand from `references/verification/examples/verifier-worked-examples.md`. -->" in verifier
     assert (
-        "Every named theorem parameter or hypothesis is used or explicitly discharged; no theorem symbol may "
-        "disappear without explanation"
-    ) in expanded_verifier
+        "Every named theorem parameter or hypothesis is used or explicitly discharged; no theorem symbol may disappear without explanation"
+    ) in verifier
     assert (
-        "If the proof only establishes a narrower subcase than the stated theorem, downgrade the claim and "
-        "name the missing hypothesis/parameter coverage"
-    ) in expanded_verifier
+        "If the proof only establishes a narrower subcase than the stated theorem, downgrade the claim and name the missing hypothesis/parameter coverage"
+    ) in verifier
     assert (
-        "If the theorem statement or proof artifact changed after the last proof audit, treat the prior proof "
-        "audit as stale and rerun before marking the target passed"
-    ) in expanded_verifier
+        "If the theorem statement or proof artifact changed after the last proof audit, treat the prior proof audit as stale and rerun before marking the target passed"
+    ) in verifier
+    assert "Quantified proof claims keep `proof_audit.quantifier_status` explicit; passed quantified claims require `matched`" in verifier
     assert (
-        "Quantified proof claims keep `proof_audit.quantifier_status` explicit; passed quantified claims require `matched`"
-    ) in expanded_verifier
-    assert (
-        "`proof_audit.proof_artifact_path` matches a declared `proof_deliverables` path and "
-        "`proof_audit.audit_artifact_path` points to the canonical proof-redteam artifact"
-    ) in expanded_verifier
+        "`proof_audit.proof_artifact_path` matches a declared `proof_deliverables` path and `proof_audit.audit_artifact_path` points to the canonical proof-redteam artifact"
+    ) in verifier
     assert "A quantified proof-bearing claim must keep `proof_audit.quantifier_status` explicit" in contract_results_schema
     assert "`claim_kind` is `theorem|lemma|corollary|proposition|claim`" in contract_results_schema
     assert "`proof_artifact_path`, `proof_artifact_sha256`, `audit_artifact_path`, `audit_artifact_sha256`, `claim_statement_sha256`" in contract_results_schema
@@ -205,13 +210,10 @@ def test_research_verification_template_uses_concrete_example_values() -> None:
     assert 'source:' in research_verification
 
 
-def test_verify_work_template_sets_balanced_default_and_concrete_examples() -> None:
+def test_verify_work_template_keeps_session_overlay_after_verifier_output() -> None:
     verify_work = _read_verify_work_template()
 
-    assert "- `research_mode=balanced` (default): Keep the full contract-critical floor and the balanced review cadence." in verify_work
-    assert "plan_contract_ref: GPD/phases/01-benchmark/01-plan-PLAN.md#/contract" in verify_work
-    assert 'name: "benchmark comparison"' in verify_work
-    assert 'reference_ids: ["reference-main"]' in verify_work
-    assert 'comparison_reference_id: "reference-main"' in verify_work
-    assert "Evaluated the benchmark at the configured test points." in verify_work
-    assert "Independent arithmetic gives a relative error of 0.006." in verify_work
+    assert "The verification overlay is written only after authoritative verifier output is available" in verify_work
+    assert "canonical verifier report content remains owned by `gpd-verifier`" in verify_work
+    assert "Every spawned agent is a one-shot delegation" in verify_work
+    assert "research_mode=balanced" not in verify_work

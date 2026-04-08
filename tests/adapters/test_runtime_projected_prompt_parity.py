@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from gpd.adapters.install_utils import project_markdown_for_runtime
-from gpd.adapters.runtime_catalog import iter_runtime_descriptors
+from gpd.adapters.runtime_catalog import get_runtime_descriptor, iter_runtime_descriptors
 from gpd.core.model_visible_text import (
     REVIEW_CONTRACT_REQUIRED_STATES,
     agent_visibility_note,
@@ -20,6 +20,10 @@ COMMANDS_DIR = REPO_ROOT / "src/gpd/commands"
 AGENTS_DIR = REPO_ROOT / "src/gpd/agents"
 
 RUNTIMES = tuple(descriptor.runtime_name for descriptor in iter_runtime_descriptors())
+VERIFIER_BUDGET_BY_NATIVE_INCLUDE_SUPPORT = {
+    True: (900, 60_000),
+    False: (6_500, 430_000),
+}
 COMMAND_SURFACES = {
     "plan-phase": (command_visibility_note(),),
     "new-project": (command_visibility_note(),),
@@ -109,3 +113,23 @@ def test_runtime_projected_agents_keep_contract_results_guidance_visible(
     projected = _project_markdown(AGENTS_DIR / f"{agent_name}.md", runtime, is_agent=True)
 
     _assert_fragments_visible(projected, expected_fragments, label=f"{runtime} {agent_name}")
+
+
+@pytest.mark.parametrize("runtime", RUNTIMES)
+def test_runtime_projected_verifier_surface_keeps_one_wrapper_and_stays_within_budget(runtime: str) -> None:
+    projected = _project_markdown(AGENTS_DIR / "gpd-verifier.md", runtime, is_agent=True)
+    descriptor = get_runtime_descriptor(runtime)
+    line_budget, char_budget = VERIFIER_BUDGET_BY_NATIVE_INCLUDE_SUPPORT[descriptor.native_include_support]
+
+    assert projected.count("## Agent Requirements") == 1
+    assert projected.index("## Agent Requirements") < projected.index("## Bootstrap Discipline")
+    if descriptor.native_include_support:
+        assert projected.count("verification-report.md") == 1
+        assert projected.count("contract-results-schema.md") == 1
+        assert projected.count("canonical-schema-discipline.md") == 1
+    else:
+        assert projected.count("# Verification Report Template") == 1
+        assert projected.count("# Contract Results Schema") == 1
+        assert projected.count("# Canonical Schema Discipline") == 1
+    assert len(projected.splitlines()) <= line_budget
+    assert len(projected) <= char_budget

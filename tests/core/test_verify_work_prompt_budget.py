@@ -29,15 +29,15 @@ def test_verify_work_command_only_eagerly_loads_the_workflow() -> None:
 
 def test_verify_work_workflow_defers_heavy_authorities_until_later_steps() -> None:
     workflow_text = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
-    bootstrap_text = workflow_text.split('<step name="create_verification_file">', 1)[0]
+    overlay_marker = "The verification overlay is written only after authoritative verifier output is available"
+    report_owner_marker = "Keep the current check display, summary, and session overlay in sync with the verifier output. The canonical verifier report content remains owned by `gpd-verifier`."
 
     assert "<template>" not in workflow_text
     assert "<required_reading>" not in workflow_text
-    assert "research-verification.md" not in bootstrap_text
-    assert "verification-report.md" not in bootstrap_text
-    assert "contract-results-schema.md" not in bootstrap_text
-    assert "error-propagation-protocol.md" not in bootstrap_text
-    assert "research-verification.md" in workflow_text
-    assert "verification-report.md" in workflow_text
-    assert "contract-results-schema.md" in workflow_text
-    assert "error-propagation-protocol.md" in workflow_text
+    assert "research-verification.md" not in workflow_text
+    assert "verification-report.md" not in workflow_text
+    assert "contract-results-schema.md" not in workflow_text
+    assert "error-propagation-protocol.md" not in workflow_text
+    assert report_owner_marker in workflow_text
+    assert overlay_marker in workflow_text
+    assert workflow_text.index(report_owner_marker) < workflow_text.index(overlay_marker)

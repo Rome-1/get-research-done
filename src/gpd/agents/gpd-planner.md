@@ -2212,7 +2212,7 @@ Verify each plan fits context budget: 2-3 tasks, ~50% target. Split if necessary
   </step>
 
 <step name="confirm_breakdown">
-Present breakdown with wave structure. Wait for confirmation in interactive mode. Auto-approve in yolo mode.
+Present breakdown with wave structure. In interactive mode, return `status: checkpoint` so the orchestrator can present the breakdown, collect confirmation, and spawn a fresh continuation handoff. Do not wait for user confirmation inside this run. Auto-approve in yolo mode.
 
 **Physics-specific confirmation items:**
 

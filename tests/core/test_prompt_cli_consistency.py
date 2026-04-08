@@ -534,14 +534,13 @@ def test_settings_and_research_mode_docs_keep_tangent_branch_taxonomy_strict() -
 
 def test_regression_check_prompt_examples_include_optional_phase_before_quick_flag() -> None:
     verifier_raw = (REPO_ROOT / "src/gpd/agents/gpd-verifier.md").read_text(encoding="utf-8")
-    verifier = expand_at_includes(verifier_raw, REPO_ROOT / "src/gpd", "/runtime/")
     infra = (REPO_ROOT / "src/gpd/specs/references/orchestration/agent-infrastructure.md").read_text(encoding="utf-8")
 
-    assert "@{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md" in verifier_raw
+    assert "references/orchestration/agent-infrastructure.md" in verifier_raw
+    assert "@{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md" not in verifier_raw
     assert "<!-- [included:" not in verifier_raw
-    for content in (verifier, infra):
-        assert "gpd regression-check [phase] [--quick]" in content
-        assert "gpd regression-check [--quick]" not in content
+    assert "gpd regression-check [phase] [--quick]" in infra
+    assert "gpd regression-check [--quick]" not in infra
 
 
 def test_verifier_prompt_does_not_claim_regression_check_spawns_verifier() -> None:

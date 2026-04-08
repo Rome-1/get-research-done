@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import gpd.registry as registry_module
@@ -264,57 +265,78 @@ def test_get_skill_execute_phase_surfaces_staged_loading_sidecar() -> None:
 def test_get_skill_verify_work_surfaces_staged_loading_sidecar() -> None:
     from gpd.mcp.servers.skills_server import get_skill
 
-    staged_loading = WorkflowStageManifest(
-        schema_version=1,
-        workflow_id="verify-work",
-        stages=(
-            WorkflowStage(
-                id="session_router",
-                order=1,
-                purpose="route verification sessions",
-                mode_paths=("workflows/verify-work.md",),
-                required_init_fields=(),
-                loaded_authorities=("workflows/verify-work.md",),
-                conditional_authorities=(),
-                must_not_eager_load=("references/verification/meta/verification-independence.md",),
-                allowed_tools=("file_read",),
-                writes_allowed=(),
-                produced_state=(),
-                next_stages=(),
-                checkpoints=(),
-            ),
-        ),
-    )
-    command = CommandDef(
-        name="gpd:verify-work",
-        description="Verify work.",
-        argument_hint="",
-        agent=None,
-        requires={},
-        allowed_tools=["file_read"],
-        content="Command body.",
-        path="/tmp/gpd-verify-work.md",
-        source="commands",
-        staged_loading=staged_loading,
-    )
-    skill = SkillDef(
-        name="gpd-verify-work",
-        description="Verify work.",
-        content="Command body.",
-        category="verification",
-        path="/tmp/gpd-verify-work.md",
-        source_kind="command",
-        registry_name="verify-work",
-    )
-
+    repo_root = Path(__file__).resolve().parents[2]
+    manifest_path = repo_root / "src" / "gpd" / "specs" / "workflows" / "verify-work-stage-manifest.json"
+    original_resolve_manifest_path = registry_module.resolve_workflow_stage_manifest_path
     with (
-        patch("gpd.mcp.servers.skills_server._resolve_skill", return_value=skill),
-        patch("gpd.mcp.servers.skills_server.content_registry.get_command", return_value=command),
+        patch(
+            "gpd.registry.resolve_workflow_stage_manifest_path",
+            lambda workflow_id: manifest_path
+            if workflow_id == "verify-work"
+            else original_resolve_manifest_path(workflow_id),
+        ),
     ):
+        registry_module.invalidate_cache()
         result = get_skill("gpd-verify-work")
 
+    assert [stage["id"] for stage in result["staged_loading"]["stages"]] == [
+        "session_router",
+        "phase_bootstrap",
+        "inventory_build",
+        "interactive_validation",
+        "gap_repair",
+    ]
     assert result["staged_loading"]["workflow_id"] == "verify-work"
-    assert result["staged_loading"]["stages"][0]["id"] == "session_router"
+    assert result["staged_loading"]["stages"][0]["loaded_authorities"] == ["workflows/verify-work.md"]
+    assert result["staged_loading"]["stages"][2]["loaded_authorities"] == [
+        "workflows/verify-work.md",
+        "references/verification/meta/verification-independence.md",
+    ]
+    assert result["staged_loading"]["stages"][2]["next_stages"] == ["interactive_validation"]
+    assert result["staged_loading"]["stages"][2]["checkpoints"] == [
+        "verifier delegation completed",
+        "handoff remains fail-closed",
+        "anchor obligations explicit",
+    ]
+    assert result["staged_loading"]["stages"][3]["allowed_tools"] == [
+        "ask_user",
+        "file_read",
+        "file_edit",
+        "file_write",
+        "find_files",
+        "search_files",
+        "shell",
+        "task",
+    ]
+    assert result["staged_loading"]["stages"][3]["loaded_authorities"] == [
+        "workflows/verify-work.md",
+        "templates/research-verification.md",
+        "templates/verification-report.md",
+        "templates/contract-results-schema.md",
+        "references/shared/canonical-schema-discipline.md",
+    ]
+    assert result["staged_loading"]["stages"][3]["writes_allowed"] == ["GPD/phases/XX-name/XX-VERIFICATION.md"]
+    assert result["staged_loading"]["stages"][3]["next_stages"] == ["gap_repair"]
+    assert result["staged_loading"]["stages"][3]["checkpoints"] == [
+        "verification file can be written",
+        "writer-stage schema is visible",
+        "check results remain contract-backed",
+    ]
+    assert result["staged_loading"]["stages"][4]["loaded_authorities"] == [
+        "workflows/verify-work.md",
+        "templates/research-verification.md",
+        "templates/verification-report.md",
+        "templates/contract-results-schema.md",
+        "references/shared/canonical-schema-discipline.md",
+        "references/protocols/error-propagation-protocol.md",
+    ]
+    assert result["staged_loading"]["stages"][4]["writes_allowed"] == ["GPD/phases/XX-name/XX-VERIFICATION.md"]
+    assert result["staged_loading"]["stages"][4]["next_stages"] == []
+    assert result["staged_loading"]["stages"][4]["checkpoints"] == [
+        "gaps are diagnosed",
+        "repair plans are verified",
+        "verification closeout is ready",
+    ]
     assert result["structured_metadata_authority"]["staged_loading"] == "mirrored"
     assert result["allowed_tools_surface"] == "command.allowed-tools"
 

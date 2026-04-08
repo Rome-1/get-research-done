@@ -2535,7 +2535,7 @@ class TestInitVerifyWork:
         assert ctx["derived_convention_lock"]["metric_signature"] == "(-,+,+,+)"
         assert "reference_artifacts_content" not in ctx
 
-    def test_stage_interactive_validation_surfaces_reference_artifact_content(self, tmp_path: Path) -> None:
+    def test_stage_interactive_validation_defers_reference_artifact_content(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         _create_phase_dir(tmp_path, "01-setup")
         _write_project_contract_state(tmp_path)
@@ -2547,6 +2547,21 @@ class TestInitVerifyWork:
         ctx = init_verify_work(tmp_path, "1", stage="interactive_validation")
 
         assert ctx["staged_loading"]["stage_id"] == "interactive_validation"
+        assert ctx["reference_artifact_files"]
+        assert "reference_artifacts_content" not in ctx
+
+    def test_stage_gap_repair_surfaces_reference_artifact_content(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-setup")
+        _write_project_contract_state(tmp_path)
+
+        literature_dir = tmp_path / "GPD" / "literature"
+        literature_dir.mkdir(parents=True)
+        (literature_dir / "benchmark-notes.md").write_text("# Benchmark\nReference details.\n", encoding="utf-8")
+
+        ctx = init_verify_work(tmp_path, "1", stage="gap_repair")
+
+        assert ctx["staged_loading"]["stage_id"] == "gap_repair"
         assert ctx["reference_artifact_files"]
         assert isinstance(ctx["reference_artifacts_content"], str)
         assert "Benchmark" in ctx["reference_artifacts_content"]

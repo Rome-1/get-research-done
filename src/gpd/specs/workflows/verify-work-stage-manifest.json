@@ -36,6 +36,7 @@
         "references/verification/core/verification-core.md",
         "references/verification/meta/verification-independence.md",
         "references/protocols/error-propagation-protocol.md",
+        "references/shared/canonical-schema-discipline.md",
         "templates/research-verification.md",
         "templates/verification-report.md",
         "templates/contract-results-schema.md"
@@ -96,6 +97,7 @@
         "references/verification/core/verification-core.md",
         "references/verification/meta/verification-independence.md",
         "references/protocols/error-propagation-protocol.md",
+        "references/shared/canonical-schema-discipline.md",
         "templates/research-verification.md",
         "templates/verification-report.md",
         "templates/contract-results-schema.md"
@@ -124,7 +126,7 @@
     {
       "id": "inventory_build",
       "order": 3,
-      "purpose": "verification inventory assembly, anchor loading, and check selection",
+      "purpose": "delegated verifier handoff, anchor context loading, and report sync",
       "mode_paths": [
         "workflows/verify-work.md"
       ],
@@ -165,20 +167,17 @@
         "protocol_bundle_count",
         "protocol_bundle_context",
         "protocol_bundle_verifier_extensions",
-        "active_reference_context",
-        "reference_artifact_files",
-        "literature_review_files",
-        "literature_review_count",
-        "research_map_reference_files",
-        "research_map_reference_count"
+        "active_reference_context"
       ],
       "loaded_authorities": [
         "workflows/verify-work.md",
-        "references/verification/core/verification-core.md",
         "references/verification/meta/verification-independence.md"
       ],
       "conditional_authorities": [],
       "must_not_eager_load": [
+        "references/verification/core/verification-core.md",
+        "references/verification/meta/verification-independence.md",
+        "references/shared/canonical-schema-discipline.md",
         "references/protocols/error-propagation-protocol.md",
         "templates/research-verification.md",
         "templates/verification-report.md",
@@ -194,23 +193,23 @@
       ],
       "writes_allowed": [],
       "produced_state": [
-        "verification inventory",
+        "delegated verification state",
         "anchor context",
-        "bundle selection state"
+        "handoff routing state"
       ],
       "next_stages": [
         "interactive_validation"
       ],
       "checkpoints": [
-        "inventory assembled",
-        "bundle checklist seeded",
+        "verifier delegation completed",
+        "handoff remains fail-closed",
         "anchor obligations explicit"
       ]
     },
     {
       "id": "interactive_validation",
       "order": 4,
-      "purpose": "verification file authoring, per-check validation, and reporter interaction",
+      "purpose": "writer-stage session overlay and researcher response capture",
       "mode_paths": [
         "workflows/verify-work.md"
       ],
@@ -238,18 +237,20 @@
         "protocol_bundle_context",
         "protocol_bundle_verifier_extensions",
         "active_reference_context",
-        "reference_artifact_files",
-        "reference_artifacts_content"
+        "reference_artifact_files"
       ],
       "loaded_authorities": [
         "workflows/verify-work.md",
         "templates/research-verification.md",
         "templates/verification-report.md",
-        "templates/contract-results-schema.md"
+        "templates/contract-results-schema.md",
+        "references/shared/canonical-schema-discipline.md"
       ],
       "conditional_authorities": [],
       "must_not_eager_load": [
-        "references/protocols/error-propagation-protocol.md"
+        "references/protocols/error-propagation-protocol.md",
+        "references/verification/core/verification-core.md",
+        "references/verification/meta/verification-independence.md"
       ],
       "allowed_tools": [
         "ask_user",
@@ -274,7 +275,7 @@
       ],
       "checkpoints": [
         "verification file can be written",
-        "constrained report schema is visible",
+        "writer-stage schema is visible",
         "check results remain contract-backed"
       ]
     },
@@ -309,8 +310,10 @@
       ],
       "loaded_authorities": [
         "workflows/verify-work.md",
+        "templates/research-verification.md",
         "templates/verification-report.md",
         "templates/contract-results-schema.md",
+        "references/shared/canonical-schema-discipline.md",
         "references/protocols/error-propagation-protocol.md"
       ],
       "conditional_authorities": [],

@@ -86,9 +86,58 @@ def test_validate_workflow_stage_manifest_payload_loads_verify_work_manifest() -
     assert manifest.stages[0].loaded_authorities == ("workflows/verify-work.md",)
     assert "references/verification/core/verification-core.md" in manifest.stages[0].must_not_eager_load
     assert "templates/verification-report.md" in manifest.stages[0].must_not_eager_load
-    assert "references/verification/core/verification-core.md" in manifest.stages[2].loaded_authorities
-    assert "templates/verification-report.md" in manifest.stages[3].loaded_authorities
-    assert "references/protocols/error-propagation-protocol.md" in manifest.stages[4].loaded_authorities
+    assert manifest.stages[2].loaded_authorities == (
+        "workflows/verify-work.md",
+        "references/verification/meta/verification-independence.md",
+    )
+    assert manifest.stages[3].allowed_tools == (
+        "ask_user",
+        "file_read",
+        "file_edit",
+        "file_write",
+        "find_files",
+        "search_files",
+        "shell",
+        "task",
+    )
+    assert manifest.stages[3].writes_allowed == ("GPD/phases/XX-name/XX-VERIFICATION.md",)
+    assert manifest.stages[3].checkpoints == (
+        "verification file can be written",
+        "writer-stage schema is visible",
+        "check results remain contract-backed",
+    )
+    assert manifest.stages[3].loaded_authorities == (
+        "workflows/verify-work.md",
+        "templates/research-verification.md",
+        "templates/verification-report.md",
+        "templates/contract-results-schema.md",
+        "references/shared/canonical-schema-discipline.md",
+    )
+    assert manifest.stages[4].allowed_tools == (
+        "ask_user",
+        "file_read",
+        "file_edit",
+        "file_write",
+        "find_files",
+        "search_files",
+        "shell",
+        "task",
+    )
+    assert manifest.stages[4].writes_allowed == ("GPD/phases/XX-name/XX-VERIFICATION.md",)
+    assert manifest.stages[4].checkpoints == (
+        "gaps are diagnosed",
+        "repair plans are verified",
+        "verification closeout is ready",
+    )
+    assert manifest.stages[4].loaded_authorities == (
+        "workflows/verify-work.md",
+        "templates/research-verification.md",
+        "templates/verification-report.md",
+        "templates/contract-results-schema.md",
+        "references/shared/canonical-schema-discipline.md",
+        "references/protocols/error-propagation-protocol.md",
+    )
+    assert manifest.stages[4].next_stages == ()
 
 
 def test_validate_workflow_stage_manifest_payload_loads_plan_phase_manifest() -> None:

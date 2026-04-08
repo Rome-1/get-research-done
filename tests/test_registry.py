@@ -1507,13 +1507,14 @@ class TestRegistryPromptIncludeInlining:
         finally:
             registry.invalidate_cache()
 
-    def test_verifier_system_prompt_inlines_included_verification_checklists(self) -> None:
+    def test_verifier_system_prompt_keeps_verifier_routing_stub_and_schema_references_visible(self) -> None:
         agent = registry.get_agent("gpd-verifier")
 
-        assert "Verifier Profile-Specific Checks" in agent.system_prompt
-        assert "**For every checklist item: perform the CHECK, do not search_files for the CONCEPT.**" in agent.system_prompt
+        assert "## Domain Routing Stub" in agent.system_prompt
+        assert "Load only the matching domain checklist pack(s);" in agent.system_prompt
         assert "# Verification Report Template" in agent.system_prompt
         assert "# Contract Results Schema" in agent.system_prompt
+        assert "# Canonical Schema Discipline" in agent.system_prompt
         assert "<!-- [included:" not in agent.system_prompt
 
     def test_write_paper_command_content_inlines_contract_schema_dependencies(self) -> None:
@@ -1910,56 +1911,17 @@ class TestPublicAPI:
 
     def test_get_command_verify_work_surfaces_staged_loading_manifest(
         self,
-        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        commands_dir = tmp_path / "commands"
-        commands_dir.mkdir()
-        (commands_dir / "verify-work.md").write_text(
-            "---\n"
-            "name: gpd:verify-work\n"
-            "description: Verify work\n"
-            "allowed-tools:\n"
-            "  - file_read\n"
-            "---\n"
-            "Body.",
-            encoding="utf-8",
-        )
-
-        manifest_path = tmp_path / "verify-work-stage-manifest.json"
-        manifest_path.write_text(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "workflow_id": "verify-work",
-                    "stages": [
-                        {
-                            "id": "session_router",
-                            "order": 1,
-                            "purpose": "route verification sessions",
-                            "mode_paths": ["workflows/verify-work.md"],
-                            "required_init_fields": [],
-                            "loaded_authorities": ["workflows/verify-work.md"],
-                            "conditional_authorities": [],
-                            "must_not_eager_load": ["references/verification/meta/verification-independence.md"],
-                            "allowed_tools": ["file_read"],
-                            "writes_allowed": [],
-                            "produced_state": [],
-                            "next_stages": [],
-                            "checkpoints": [],
-                        }
-                    ],
-                }
-            ),
-            encoding="utf-8",
-        )
-
+        repo_root = Path(__file__).resolve().parents[1]
+        manifest_path = repo_root / "src" / "gpd" / "specs" / "workflows" / "verify-work-stage-manifest.json"
         original_resolve_manifest_path = registry.resolve_workflow_stage_manifest_path
-        monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
         monkeypatch.setattr(
             registry,
             "resolve_workflow_stage_manifest_path",
-            lambda workflow_id: manifest_path if workflow_id == "verify-work" else original_resolve_manifest_path(workflow_id),
+            lambda workflow_id: manifest_path
+            if workflow_id == "verify-work"
+            else original_resolve_manifest_path(workflow_id),
         )
         registry.invalidate_cache()
 
@@ -1967,8 +1929,63 @@ class TestPublicAPI:
 
         assert cmd.staged_loading is not None
         assert cmd.staged_loading.workflow_id == "verify-work"
-        assert cmd.staged_loading.stage_ids() == ("session_router",)
+        assert cmd.staged_loading.stage_ids() == (
+            "session_router",
+            "phase_bootstrap",
+            "inventory_build",
+            "interactive_validation",
+            "gap_repair",
+        )
         assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/verify-work.md",)
+        assert cmd.staged_loading.stages[2].loaded_authorities == (
+            "workflows/verify-work.md",
+            "references/verification/meta/verification-independence.md",
+        )
+        assert cmd.staged_loading.stages[2].next_stages == ("interactive_validation",)
+        assert cmd.staged_loading.stages[2].checkpoints == (
+            "verifier delegation completed",
+            "handoff remains fail-closed",
+            "anchor obligations explicit",
+        )
+        assert cmd.staged_loading.stages[3].allowed_tools == (
+            "ask_user",
+            "file_read",
+            "file_edit",
+            "file_write",
+            "find_files",
+            "search_files",
+            "shell",
+            "task",
+        )
+        assert cmd.staged_loading.stages[3].loaded_authorities == (
+            "workflows/verify-work.md",
+            "templates/research-verification.md",
+            "templates/verification-report.md",
+            "templates/contract-results-schema.md",
+            "references/shared/canonical-schema-discipline.md",
+        )
+        assert cmd.staged_loading.stages[3].writes_allowed == ("GPD/phases/XX-name/XX-VERIFICATION.md",)
+        assert cmd.staged_loading.stages[3].next_stages == ("gap_repair",)
+        assert cmd.staged_loading.stages[3].checkpoints == (
+            "verification file can be written",
+            "writer-stage schema is visible",
+            "check results remain contract-backed",
+        )
+        assert cmd.staged_loading.stages[4].loaded_authorities == (
+            "workflows/verify-work.md",
+            "templates/research-verification.md",
+            "templates/verification-report.md",
+            "templates/contract-results-schema.md",
+            "references/shared/canonical-schema-discipline.md",
+            "references/protocols/error-propagation-protocol.md",
+        )
+        assert cmd.staged_loading.stages[4].writes_allowed == ("GPD/phases/XX-name/XX-VERIFICATION.md",)
+        assert cmd.staged_loading.stages[4].next_stages == ()
+        assert cmd.staged_loading.stages[4].checkpoints == (
+            "gaps are diagnosed",
+            "repair plans are verified",
+            "verification closeout is ready",
+        )
 
     def test_get_command_execute_phase_surfaces_staged_loading_manifest(
         self,

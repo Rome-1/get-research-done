@@ -333,7 +333,8 @@ def test_shared_protocols_require_permission_before_dependency_installs() -> Non
     assert "install silently" not in checkpoints
     assert "## Data Boundary" not in verifier_raw
     assert "## GPD CLI Commit Protocol" not in verifier_raw
-    assert "@{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md" in verifier_raw
+    assert "@{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md" not in verifier_raw
+    assert "Ask the user before any install attempt; keep dependency changes permission-gated." in verifier_raw
     assert "ask the user before any install attempt" in verifier
     assert "permission-gated" in planner
 
@@ -1576,7 +1577,7 @@ def test_phase_research_and_verification_surfaces_keep_anchor_checks_mandatory()
     )
     assert "suggest_contract_checks(contract)" in verify_workflow
     assert verify_workflow.count("**Project Contract Gate:** {project_contract_gate}") == 1
-    assert verify_workflow_expanded.count("**Project Contract Gate:** {project_contract_gate}") >= 3
+    assert verify_workflow_expanded.count("**Project Contract Gate:** {project_contract_gate}") >= 1
     assert (
         verify_workflow.count(
             "Treat `effective_reference_intake` as the structured source of carry-forward anchors; "
@@ -1781,44 +1782,12 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
     assert "uncertainty_markers:" in research_verification
     assert "claim_id" in research_verification
     assert "acceptance_test_id" in research_verification
-    assert (
-        "frontmatter contract compatible with `@{GPD_INSTALL_DIR}/templates/verification-report.md`" in verify_workflow
-    )
-    assert "status: gaps_found" in verify_workflow
-    assert "# Allowed status values: passed|gaps_found|expert_needed|human_needed" in verify_workflow
-    assert "status: passed | gaps_found | expert_needed | human_needed" not in verify_workflow
-    assert "uncertainty_markers:" in verify_workflow
-    assert "Mirror decisive verdicts into frontmatter `comparison_verdicts`." in verify_workflow
-    assert "structured `suggested_contract_checks` entry before final validation" in verify_workflow
-    assert "copy the returned `check_key` into the frontmatter `check` field" in verify_workflow
-    assert "request_template" in verify_workflow
-    assert "required_request_fields" in verify_workflow
-    assert "schema_required_request_fields" in verify_workflow
-    assert "schema_required_request_anyof_fields" in verify_workflow
-    assert "project_dir" in verify_workflow
-    assert "supported_binding_fields" in verify_workflow
-    assert "run_contract_check(request=..., project_dir=...)" in verify_workflow
-    assert "deliverables: {}" not in verify_workflow
-    assert "acceptance_tests: {}" not in verify_workflow
-    assert "references: {}" not in verify_workflow
-    assert "forbidden_proxies: {}" not in verify_workflow
-    assert "deliverable-main" in verify_workflow
-    assert "acceptance-test-main" in verify_workflow
-    assert "reference-main" in verify_workflow
-    assert "forbidden-proxy-main" in verify_workflow
-    assert "comparison_verdicts:" in verify_workflow
-    assert "subject_role: decisive" in verify_workflow
-    assert "comparison_kind: benchmark" in verify_workflow
-    assert "Allowed body enum values:" in verify_workflow
-    assert "`comparison_kind`: benchmark|prior_work|experiment|cross_method|baseline|other" in verify_workflow
-    assert (
-        "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]"
-        not in verify_workflow
-    )
-    assert (
-        'comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | ""]' not in verify_workflow
-    )
-    assert "suggested_contract_checks:" in verify_workflow
+    assert "Load the staged researcher-session scaffold and canonical schema pack at this stage." in verify_workflow
+    assert "Keep the session overlay frontmatter compatible with the authoritative verification report." in verify_workflow
+    assert "status: gaps_found" not in verify_workflow
+    assert "uncertainty_markers:" not in verify_workflow
+    assert "Allowed body enum values:" not in verify_workflow
+    assert "suggested_contract_checks:" not in verify_workflow
     assert "`suggested_contract_check`" not in verify_workflow
     assert "independently_confirmed" not in verify_workflow
     assert "Return status (`passed` | `gaps_found` | `expert_needed` | `human_needed`)" in verify_phase
@@ -1968,8 +1937,8 @@ def test_verification_prompts_keep_suggested_contract_check_bindings_schema_tigh
     assert 'suggested_subject_id: [contract id or ""]' not in verify_workflow
     assert "suggested_subject_id: acceptance-test-main" in research_verification
     assert "suggested_subject_id: reference-main" in research_verification
-    assert "suggested_subject_id: acceptance-test-main" in verify_workflow
-    assert "suggested_subject_id: reference-main" in verify_workflow
+    assert "suggested_subject_id: acceptance-test-main" not in verify_workflow
+    assert "suggested_subject_id: reference-main" not in verify_workflow
     assert "acceptance-test-main" in research_verification
     assert "acceptance-test-main" in verifier_agent
     assert "suggested_contract_checks" in verification_template
@@ -2012,8 +1981,8 @@ def test_lane5_prompt_examples_keep_schema_valid_contract_fields_visible() -> No
     assert "started:" in research_verification
     assert "updated:" in research_verification
     assert "test-benchmark" not in research_verification
-    assert "reference-main" in verify_work
-    assert "acceptance-test-main" in verify_work
+    assert "reference-main" not in verify_work
+    assert "acceptance-test-main" not in verify_work
     assert "test-benchmark" not in verify_work
     assert "reference-main" in verifier
     assert "acceptance-test-main" in verifier
@@ -2334,8 +2303,8 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     assert "references/publication/peer-review-panel.md" in peer_review
     assert "templates/verification-report.md" not in verify_command
     assert "templates/contract-results-schema.md" not in verify_command
-    assert "Load the researcher-session body scaffold from `research-verification.md` here" in verify_workflow
-    assert "load `verification-report.md`, `contract-results-schema.md`, and `canonical-schema-discipline.md` at this stage" in verify_workflow
+    assert "Load the staged researcher-session scaffold and canonical schema pack at this stage." in verify_workflow
+    assert "Keep the session overlay frontmatter compatible with the authoritative verification report." in verify_workflow
     assert "templates/verification-report.md" in interactive_validation.loaded_authorities
     assert "templates/contract-results-schema.md" in interactive_validation.loaded_authorities
     assert "references/verification/meta/verification-independence.md" in inventory_build.loaded_authorities
@@ -2578,11 +2547,13 @@ def test_research_verification_body_scaffold_keeps_body_only_subject_labels_dist
 def test_verify_work_workflow_uses_body_only_subject_kind_fields() -> None:
     verify_work = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
 
-    assert "check_subject_kind: `claim|deliverable|acceptance_test|reference`" in verify_work
-    assert "Allowed body enum values:" in verify_work
-    assert "check_subject_kind: claim" in verify_work
-    assert "`check_subject_kind`: claim|deliverable|acceptance_test|reference" in verify_work
-    assert 'gap_subject_kind: "claim"' in verify_work
+    assert "Load the staged researcher-session scaffold and canonical schema pack at this stage." in verify_work
+    assert "Keep body-only session-overlay fields aligned with the staged researcher-session scaffold." in verify_work
+    assert "check_subject_kind: `claim|deliverable|acceptance_test|reference`" not in verify_work
+    assert "Allowed body enum values:" not in verify_work
+    assert "check_subject_kind: claim" not in verify_work
+    assert "`check_subject_kind`: claim|deliverable|acceptance_test|reference" not in verify_work
+    assert 'gap_subject_kind: "claim"' not in verify_work
     assert "Use `forbidden_proxy_id` for explicit proxy-rejection checks" in verify_work
     assert "instead of inventing extra body subject kinds" in verify_work
     assert "# Allowed check_subject_kind values: claim|deliverable|acceptance_test|reference" not in verify_work

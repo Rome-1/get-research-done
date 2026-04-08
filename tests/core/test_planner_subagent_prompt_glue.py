@@ -6,6 +6,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLANNER_SUBAGENT_PROMPT = REPO_ROOT / "src" / "gpd" / "specs" / "templates" / "planner-subagent-prompt.md"
+PLANNER_AGENT_PROMPT = REPO_ROOT / "src" / "gpd" / "agents" / "gpd-planner.md"
 
 
 def test_planner_subagent_prompt_stays_thin_and_fail_closed() -> None:
@@ -32,3 +33,11 @@ def test_planner_subagent_prompt_keeps_scope_selection_and_revision_glue_only() 
     assert "## Revision Template" in prompt
     assert "If `{project_contract}` is empty, stale, or too underspecified to identify the phase contract slice, return `## CHECKPOINT REACHED` rather than guessing." in prompt
     assert "If the approved project contract is missing or no longer sufficient to identify the right phase slice, return `## CHECKPOINT REACHED` instead of patching around guessed scope." in prompt
+
+
+def test_planner_subagent_prompt_uses_checkpoint_then_orchestrator_then_fresh_continuation() -> None:
+    prompt = PLANNER_AGENT_PROMPT.read_text(encoding="utf-8")
+
+    assert "Wait for confirmation in interactive mode." not in prompt
+    assert "Do not wait for user confirmation inside this run." in prompt
+    assert "return `status: checkpoint` so the orchestrator can present the breakdown, collect confirmation, and spawn a fresh continuation handoff." in prompt

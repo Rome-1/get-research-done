@@ -19,30 +19,20 @@ def test_verification_scaffolds_surface_closed_comparison_kind_enum_without_blan
     expected_enum = "`comparison_kind`: benchmark|prior_work|experiment|cross_method|baseline|other"
     omit_instruction = "omit both `comparison_kind` and `comparison_reference_id` instead of leaving blank placeholders"
     paired_id_instruction = "omit both keys instead of leaving one blank"
-    subject_id_instruction = (
-        "omit unused `subject_id`, `claim_id`, `deliverable_id`, `acceptance_test_id`, "
-        "and `forbidden_proxy_id` fields instead of leaving blank placeholders."
-    )
-    verify_subject_id_instruction = "follow the omission rule from current check instead of leaving blank placeholder strings."
-    normalized_verify_workflow = " ".join(verify_workflow.lower().split())
 
     assert "Allowed body enum values:" in research_verification
-    assert "Allowed body enum values:" in verify_workflow
     assert expected_enum in research_verification
-    assert expected_enum in verify_workflow
+    assert "Allowed body enum values:" not in verify_workflow
+    assert expected_enum not in verify_workflow
     assert "comparison_kind: benchmark" in research_verification
-    assert "comparison_kind: benchmark" in verify_workflow
     assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]" not in research_verification
     assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]" not in verify_workflow
     assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other | \"\"]" not in research_verification
     assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other | \"\"]" not in verify_workflow
     assert research_verification.count(omit_instruction) == 1
-    assert verify_workflow.count(omit_instruction) == 1
     assert research_verification.count(paired_id_instruction) == 1
-    assert verify_workflow.count(paired_id_instruction) == 1
-    assert research_verification.count(subject_id_instruction) == 1
-    assert normalized_verify_workflow.count(subject_id_instruction) == 1
-    assert normalized_verify_workflow.count(verify_subject_id_instruction) == 1
+    assert "Update the session overlay only." in verify_workflow
+    assert "The wrapper should present verifier-produced evidence exactly once per check." in verify_workflow
     assert "Same rule as above: keep only the ID keys that actually bind this check." not in research_verification
 
 
@@ -65,38 +55,24 @@ def test_verification_guidance_surfaces_the_same_canonical_suggestion_contract()
     decisive_gap_text = "required_actions including `compare` is still incomplete"
 
     assert expected_suggestion in research_verification
-    assert expected_suggestion in verify_workflow
     assert decisive_gap_text in research_verification
-    assert decisive_gap_text in verify_workflow
     assert "same canonical schema surface" in research_verification
-    assert "frontmatter contract compatible with `@{GPD_INSTALL_DIR}/templates/verification-report.md`" in verify_workflow
+    assert expected_suggestion not in verify_workflow
+    assert "The verification overlay is written only after authoritative verifier output is available" in verify_workflow
+    assert "canonical verifier report content remains owned by `gpd-verifier`" in verify_workflow
 
 
-def test_verify_work_scaffold_uses_yaml_strings_for_scalar_examples_without_blank_id_placeholders() -> None:
+def test_verify_work_current_check_overlay_stays_separate_from_verifier_scaffold() -> None:
     verify_workflow = _read("src/gpd/specs/workflows/verify-work.md")
 
-    assert 'summary: "verification not started yet"' in verify_workflow
-    assert 'notes: "verification not started yet"' in verify_workflow
-    assert 'recommended_action: "close the decisive benchmark once the evidence is written"' in verify_workflow
-    assert 'evidence_path: "artifact path or expected evidence path"' in verify_workflow
-    assert 'source: ["list of phase-summary files"]' in verify_workflow
-    assert 'started: "ISO timestamp"' in verify_workflow
-    assert 'updated: "ISO timestamp"' in verify_workflow
-    assert "Omit unused `subject_id`, `claim_id`, `deliverable_id`, `acceptance_test_id`," in verify_workflow
-    assert 'subject_id: "claim-main"' in verify_workflow
-    assert 'expected: "verifiable physics outcome"' in verify_workflow
-    assert 'computation: "specific numerical test performed"' in verify_workflow
-    assert 'result: "pending"' in verify_workflow
-    assert 'summary: [verification not started yet]' not in verify_workflow
-    assert 'notes: [verification not started yet]' not in verify_workflow
-    assert 'check: [missing decisive check]' not in verify_workflow
-    assert 'reason: [why the missing check matters]' not in verify_workflow
-    assert 'evidence_path: [artifact path or expected evidence path]' not in verify_workflow
-    assert 'subject_id: "contract id or \\"\\""' not in verify_workflow
-    assert 'subject_id: [contract id or ""]' not in verify_workflow
-    assert 'expected: [verifiable physics outcome]' not in verify_workflow
-    assert 'computation: [specific numerical test performed]' not in verify_workflow
-    assert "independently_confirmed" not in verify_workflow
+    assert "Read the verifier-supplied current check from the verification file or report state." in verify_workflow
+    assert "Display using checkpoint box format:" in verify_workflow
+    assert "The wrapper should present verifier-produced evidence exactly once per check." in verify_workflow
+    assert "Update the session overlay only. The canonical verifier verdict remains verifier-owned." in verify_workflow
+    assert "If the researcher provides custom checks, spawn a fresh verifier continuation rather than extending the old run." in verify_workflow
+    assert "one-shot delegation" in verify_workflow
+    assert "summary: \"verification not started yet\"" not in verify_workflow
+    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]" not in verify_workflow
 
 
 def test_model_visible_worked_examples_keep_summary_and_verdict_shapes_copy_safe() -> None:

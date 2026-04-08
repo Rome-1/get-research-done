@@ -257,7 +257,7 @@ _VERIFY_WORK_CONTRACT_GATE_FIELDS = frozenset(
         "project_contract_gate",
     }
 )
-_VERIFY_WORK_REFERENCE_RUNTIME_FIELDS = frozenset(
+_VERIFY_WORK_REFERENCE_INVENTORY_FIELDS = frozenset(
     {
         "contract_intake",
         "effective_reference_intake",
@@ -270,20 +270,31 @@ _VERIFY_WORK_REFERENCE_RUNTIME_FIELDS = frozenset(
         "derived_citation_source_count",
         "derived_manuscript_reference_status",
         "derived_manuscript_reference_status_count",
-        "derived_manuscript_proof_review_status",
         "active_references",
         "active_reference_count",
-        "selected_protocol_bundle_ids",
-        "protocol_bundle_count",
-        "protocol_bundle_verifier_extensions",
-        "protocol_bundle_context",
         "active_reference_context",
         "literature_review_files",
         "literature_review_count",
         "research_map_reference_files",
         "research_map_reference_count",
         "reference_artifact_files",
-        "reference_artifacts_content",
+    }
+)
+_VERIFY_WORK_PROTOCOL_BUNDLE_FIELDS = frozenset(
+    {
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_count",
+        "protocol_bundle_verifier_extensions",
+        "protocol_bundle_context",
+    }
+)
+_VERIFY_WORK_REFERENCE_ARTIFACT_CONTENT_FIELDS = frozenset({"reference_artifacts_content"})
+_VERIFY_WORK_REFERENCE_RUNTIME_FIELDS = frozenset(
+    {
+        *_VERIFY_WORK_REFERENCE_INVENTORY_FIELDS,
+        *_VERIFY_WORK_PROTOCOL_BUNDLE_FIELDS,
+        *_VERIFY_WORK_REFERENCE_ARTIFACT_CONTENT_FIELDS,
+        "derived_manuscript_proof_review_status",
     }
 )
 _VERIFY_WORK_STRUCTURED_STATE_FIELDS = frozenset(
@@ -1234,7 +1245,7 @@ def _append_contract_warnings(lines: list[str], warnings: list[str]) -> None:
     )
 
 
-def _reference_artifact_payload(cwd: Path) -> dict[str, object]:
+def _reference_artifact_payload(cwd: Path, *, include_content: bool = True) -> dict[str, object]:
     """Collect durable reference artifacts for downstream planning and verification."""
     literature_dir = cwd / PLANNING_DIR_NAME / _LITERATURE_DIR_NAME
     literature_paths = _sorted_markdown_files(literature_dir)
@@ -1249,6 +1260,16 @@ def _reference_artifact_payload(cwd: Path) -> dict[str, object]:
     literature_review_files = [_relative_posix(cwd, path) for path in literature_paths]
     research_map_reference_files = [_relative_posix(cwd, path) for path in prioritized_research_map_paths]
 
+    result: dict[str, object] = {
+        "literature_review_files": literature_review_files,
+        "literature_review_count": len(literature_review_files),
+        "research_map_reference_files": research_map_reference_files,
+        "research_map_reference_count": len(research_map_reference_files),
+        "reference_artifact_files": [*research_map_reference_files, *literature_review_files],
+    }
+    if not include_content:
+        return result
+
     content_sections: list[str] = []
     selected_artifacts = [
         *prioritized_research_map_paths[:_RESEARCH_MAP_INCLUDE_LIMIT],
@@ -1260,24 +1281,20 @@ def _reference_artifact_payload(cwd: Path) -> dict[str, object]:
             continue
         content_sections.append(f"## {path.relative_to(cwd).as_posix()}\n{content}")
 
-    return {
-        "literature_review_files": literature_review_files,
-        "literature_review_count": len(literature_review_files),
-        "research_map_reference_files": research_map_reference_files,
-        "research_map_reference_count": len(research_map_reference_files),
-        "reference_artifact_files": [*research_map_reference_files, *literature_review_files],
-        "reference_artifacts_content": "\n\n".join(content_sections) if content_sections else None,
-    }
+    result["reference_artifacts_content"] = "\n\n".join(content_sections) if content_sections else None
+    return result
 
 
 def _build_reference_runtime_context(
     cwd: Path,
     *,
     persist_manuscript_proof_review_manifest: bool = False,
+    include_protocol_bundle_fields: bool = True,
+    include_reference_artifact_content: bool = True,
 ) -> dict[str, object]:
     """Build shared reference/anchor context for workflow init payloads."""
     contract, project_contract_load_info = _load_project_contract(cwd)
-    artifact_payload = _reference_artifact_payload(cwd)
+    artifact_payload = _reference_artifact_payload(cwd, include_content=include_reference_artifact_content)
     artifact_ingestion = ingest_reference_artifacts(
         cwd,
         literature_review_files=list(artifact_payload["literature_review_files"]),
@@ -1315,7 +1332,7 @@ def _build_reference_runtime_context(
         visible_contract,
         project_contract_load_info,
     )
-    project_text = _safe_read_file(cwd / PLANNING_DIR_NAME / PROJECT_FILENAME)
+    project_text = _safe_read_file(cwd / PLANNING_DIR_NAME / PROJECT_FILENAME) if include_protocol_bundle_fields else None
     visible_context_contract = None
     if project_contract_gate.get("visible"):
         visible_context_contract = visible_contract if project_contract_gate.get("authoritative") else contract
@@ -1337,20 +1354,7 @@ def _build_reference_runtime_context(
         artifact_ingestion.intake.to_dict(),
         surfaced_active_references,
     )
-    selected_protocol_bundles = select_protocol_bundles(project_text, authoritative_contract)
-
-    bundle_verifier_extensions: list[dict[str, object]] = []
-    for bundle in selected_protocol_bundles:
-        for extension in bundle.verifier_extensions:
-            bundle_verifier_extensions.append(
-                {
-                    "bundle_id": bundle.bundle_id,
-                    "bundle_title": bundle.title,
-                    **extension.model_dump(mode="json"),
-                }
-            )
-
-    return {
+    result: dict[str, object] = {
         "project_contract": visible_context_contract.model_dump(mode="json") if visible_context_contract is not None else None,
         "project_contract_validation": project_contract_validation,
         "project_contract_load_info": project_contract_load_info,
@@ -1369,10 +1373,6 @@ def _build_reference_runtime_context(
         "derived_manuscript_proof_review_status": manuscript_proof_review_status.to_context_dict(cwd),
         "active_references": surfaced_active_references,
         "active_reference_count": len(surfaced_active_references),
-        "selected_protocol_bundle_ids": [bundle.bundle_id for bundle in selected_protocol_bundles],
-        "protocol_bundle_count": len(selected_protocol_bundles),
-        "protocol_bundle_verifier_extensions": bundle_verifier_extensions,
-        "protocol_bundle_context": render_protocol_bundle_context(selected_protocol_bundles),
         "active_reference_context": _render_active_reference_context(
             surfaced_active_references,
             surfaced_effective_reference_intake,
@@ -1383,6 +1383,28 @@ def _build_reference_runtime_context(
         ),
         **artifact_payload,
     }
+    if include_protocol_bundle_fields:
+        selected_protocol_bundles = select_protocol_bundles(project_text, authoritative_contract)
+        bundle_verifier_extensions: list[dict[str, object]] = []
+        for bundle in selected_protocol_bundles:
+            for extension in bundle.verifier_extensions:
+                bundle_verifier_extensions.append(
+                    {
+                        "bundle_id": bundle.bundle_id,
+                        "bundle_title": bundle.title,
+                        **extension.model_dump(mode="json"),
+                    }
+                )
+        result.update(
+            {
+                "selected_protocol_bundle_ids": [bundle.bundle_id for bundle in selected_protocol_bundles],
+                "protocol_bundle_count": len(selected_protocol_bundles),
+                "protocol_bundle_verifier_extensions": bundle_verifier_extensions,
+                "protocol_bundle_context": render_protocol_bundle_context(selected_protocol_bundles),
+            }
+        )
+
+    return result
 
 
 def _build_new_project_contract_runtime_context(cwd: Path) -> dict[str, object]:
@@ -2827,11 +2849,19 @@ def init_verify_work(cwd: Path, phase: str | None, stage: str | None = None) -> 
 
     required_fields = set(stage_def.required_init_fields)
     staged_source = dict(base_result)
-    needs_full_reference_context = bool(required_fields & _VERIFY_WORK_REFERENCE_RUNTIME_FIELDS)
+    needs_reference_context = bool(required_fields & _VERIFY_WORK_REFERENCE_RUNTIME_FIELDS)
     needs_contract_gate_context = bool(required_fields & _VERIFY_WORK_CONTRACT_GATE_FIELDS)
 
-    if needs_full_reference_context:
-        staged_source.update(_build_reference_runtime_context(cwd))
+    if needs_reference_context:
+        staged_source.update(
+            _build_reference_runtime_context(
+                cwd,
+                include_protocol_bundle_fields=bool(required_fields & _VERIFY_WORK_PROTOCOL_BUNDLE_FIELDS),
+                include_reference_artifact_content=bool(
+                    required_fields & _VERIFY_WORK_REFERENCE_ARTIFACT_CONTENT_FIELDS
+                ),
+            )
+        )
     elif needs_contract_gate_context:
         staged_source.update(_build_new_project_contract_runtime_context(cwd))
 

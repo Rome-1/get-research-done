@@ -319,8 +319,32 @@ def _assert_installed_contract_visibility(
     assert "proof red-teaming" in execute_phase
     assert "{plan_id}-PROOF-REDTEAM.md" in execute_phase
     assert "Targeted flags narrow the optional check mix only." in verify_work
-    assert "proof red-teaming" in verify_work
-    assert "For proof-bearing or `proof_obligation` work, an additional mandatory floor applies" in verify_work
+    assert "Every spawned agent is a one-shot delegation" in verify_work
+    assert "If a required proof-redteam audit is missing, stale, malformed, or not `passed`, spawn `gpd-check-proof` once" in verify_work
+
+
+@pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
+def test_installed_verifier_prompt_surface_keeps_one_wrapper_and_stays_within_budget(
+    real_installed_repo_factory,
+    runtime: str,
+) -> None:
+    target = real_installed_repo_factory(runtime)
+    verifier = _read_runtime_agent_prompt(target, runtime, "gpd-verifier")
+    descriptor = get_runtime_descriptor(runtime)
+    line_budget, char_budget = (900, 60_000) if descriptor.native_include_support else (6_500, 430_000)
+
+    assert verifier.count("## Agent Requirements") == 1
+    assert verifier.index("## Agent Requirements") < verifier.index("## Bootstrap Discipline")
+    if descriptor.native_include_support:
+        assert verifier.count("verification-report.md") == 1
+        assert verifier.count("contract-results-schema.md") == 1
+        assert verifier.count("canonical-schema-discipline.md") == 1
+    else:
+        assert verifier.count("# Verification Report Template") == 1
+        assert verifier.count("# Contract Results Schema") == 1
+        assert verifier.count("# Canonical Schema Discipline") == 1
+    assert len(verifier.splitlines()) <= line_budget
+    assert len(verifier) <= char_budget
 
 
 @pytest.mark.no_stable_hook_python
@@ -646,10 +670,8 @@ def test_installed_prompt_contract_visibility_survives_adapter_projection(
         verify_work,
         runtime=runtime,
     )
-    if get_runtime_descriptor(runtime).native_include_support:
-        assert "## Physics Stub Detection Patterns" not in verifier
-    else:
-        assert verifier.count("## Physics Stub Detection Patterns") == 1
+    assert "## Physics Stub Detection Patterns" not in verifier
+    assert "Load on demand from `references/verification/examples/verifier-worked-examples.md`." in verifier
 
 
 @pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
