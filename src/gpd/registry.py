@@ -36,6 +36,13 @@ from gpd.core.review_contract_prompt import (
     render_review_contract_prompt,
 )
 from gpd.core.strict_yaml import load_strict_yaml
+from gpd.core.workflow_staging import (
+    WorkflowStageManifest,
+    invalidate_workflow_stage_manifest_cache,
+    known_init_fields_for_workflow,
+    load_workflow_stage_manifest_from_path,
+    resolve_workflow_stage_manifest_path,
+)
 from gpd.specs import SPECS_DIR
 
 # ─── Package layout ──────────────────────────────────────────────────────────
@@ -207,6 +214,7 @@ class CommandDef:
     project_reentry_capable: bool = False
     review_contract: ReviewCommandContract | None = None
     agent: str | None = None
+    staged_loading: WorkflowStageManifest | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1014,6 +1022,24 @@ def _parse_review_contract(raw: object, command_name: str) -> ReviewCommandContr
     )
 
 
+def _load_command_staged_loading(path: Path, *, allowed_tools: list[str]) -> WorkflowStageManifest | None:
+    """Load staged-loading metadata for a command from its workflow sidecar."""
+
+    manifest_path = resolve_workflow_stage_manifest_path(path.stem)
+    if not manifest_path.is_file():
+        return None
+    canonical_manifest_path = (SPECS_DIR / "workflows" / f"{path.stem}-stage-manifest.json").resolve(strict=False)
+    canonical_command_path = (_PKG_ROOT / "commands" / path.name).resolve(strict=False)
+    if path.resolve(strict=False) != canonical_command_path and manifest_path.resolve(strict=False) == canonical_manifest_path:
+        return None
+    return load_workflow_stage_manifest_from_path(
+        manifest_path,
+        expected_workflow_id=path.stem,
+        allowed_tools=allowed_tools,
+        known_init_fields=known_init_fields_for_workflow(path.stem),
+    )
+
+
 def _parse_agent_file(path: Path, source: str) -> AgentDef:
     """Parse a single agent .md file into an AgentDef."""
     text = path.read_text(encoding="utf-8")
@@ -1135,6 +1161,7 @@ def _parse_command_file(path: Path, source: str) -> CommandDef:
         command_name=command_name,
         context_mode=context_mode,
     )
+    staged_loading = _load_command_staged_loading(path, allowed_tools=allowed_tools)
 
     return CommandDef(
         name=command_name,
@@ -1154,6 +1181,7 @@ def _parse_command_file(path: Path, source: str) -> CommandDef:
         requires=requires,
         allowed_tools=allowed_tools,
         review_contract=review_contract,
+        staged_loading=staged_loading,
         content=_command_model_content(
             body,
             review_contract,
@@ -1483,6 +1511,7 @@ def invalidate_cache() -> None:
     _cache.invalidate()
     _canonical_agent_names.cache_clear()
     _builtin_agent_names.cache_clear()
+    invalidate_workflow_stage_manifest_cache()
 
 
 __all__ = [

@@ -7,7 +7,7 @@ Orchestrator coordinates, not executes. Each subagent loads the full execute-pla
 </core_principle>
 
 <required_reading>
-Load the structured init-state payload first; reopen STATE.md only if the payload is missing, stale, or flagged by `state_load_source` / `state_integrity_issues`.
+Load the structured init-state payload first; reopen STATE.md only if a later staged refresh is missing, stale, or flagged by `state_load_source` / `state_integrity_issues`.
 For agent selection strategy and verification failure routing, see `@{GPD_INSTALL_DIR}/references/orchestration/meta-orchestration.md`.
 For artifact class definitions and review priority rules, see `@{GPD_INSTALL_DIR}/references/orchestration/artifact-surfacing.md`.
 </required_reading>
@@ -15,17 +15,35 @@ For artifact class definitions and review priority rules, see `@{GPD_INSTALL_DIR
 <process>
 
 <step name="initialize" priority="first">
-Load all context in one call:
+Load the bootstrap stage first. Keep later wave and closeout context on demand.
 
 ```bash
-INIT=$(gpd --raw init execute-phase "${PHASE_ARG}")
+load_execute_phase_stage() {
+  local stage_name="$1"
+  local init_payload=""
+
+  if [ -n "$stage_name" ]; then
+    init_payload=$(gpd --raw init execute-phase "${PHASE_ARG}" --stage "${stage_name}" 2>/dev/null)
+    if [ $? -ne 0 ] || [ -z "$init_payload" ]; then
+      echo "ERROR: staged gpd initialization failed for stage '${stage_name}': ${init_payload}"
+      return 1
+    fi
+
+    printf '%s' "$init_payload"
+    return 0
+  fi
+
+  gpd --raw init execute-phase "${PHASE_ARG}"
+}
+
+BOOTSTRAP_INIT=$(load_execute_phase_stage phase_bootstrap)
 if [ $? -ne 0 ]; then
-  echo "ERROR: gpd initialization failed: $INIT"
+  echo "ERROR: gpd initialization failed: $BOOTSTRAP_INIT"
   exit 1
 fi
 ```
 
-Parse JSON for: `executor_model`, `verifier_model`, `commit_docs`, `autonomy`, `review_cadence`, `research_mode`, `parallelization`, `max_unattended_minutes_per_plan`, `max_unattended_minutes_per_wave`, `checkpoint_after_n_tasks`, `checkpoint_after_first_load_bearing_result`, `checkpoint_before_downstream_dependent_tasks`, `verifier_enabled`, `branching_strategy`, `branch_name`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `plans`, `incomplete_plans`, `plan_count`, `incomplete_count`, `state_exists`, `roadmap_exists`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`, `state_load_source`, `state_integrity_issues`, `convention_lock`, `convention_lock_count`, `intermediate_results`, `intermediate_result_count`, `approximations`, `approximation_count`, `propagated_uncertainties`, `propagated_uncertainty_count`, `derived_convention_lock`, `derived_convention_lock_count`, `derived_intermediate_results`, `derived_intermediate_result_count`, `derived_approximations`, `derived_approximation_count`, `selected_protocol_bundle_ids`, `protocol_bundle_context`.
+Parse JSON for: `executor_model`, `verifier_model`, `commit_docs`, `autonomy`, `review_cadence`, `research_mode`, `parallelization`, `max_unattended_minutes_per_plan`, `max_unattended_minutes_per_wave`, `checkpoint_after_n_tasks`, `checkpoint_after_first_load_bearing_result`, `checkpoint_before_downstream_dependent_tasks`, `verifier_enabled`, `branching_strategy`, `branch_name`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `plans`, `incomplete_plans`, `plan_count`, `incomplete_count`, `state_exists`, `roadmap_exists`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `platform`.
 
 **If `phase_found` is false:** Error -- phase directory not found.
 **If `plan_count` is 0:** Error -- no plans found in phase.
@@ -36,8 +54,7 @@ If `project_contract_load_info.status` starts with `blocked`, STOP and show the 
 If `project_contract_validation.valid` is false, STOP and show the explicit `project_contract_validation.errors` before execution. Do not treat a visible-but-blocked contract as an approved execution contract.
 
 Treat `project_contract` as the authoritative machine-readable execution contract only when `project_contract_gate.authoritative` is true.
-Treat `effective_reference_intake` as the carry-forward anchor ledger for refs, baselines, prior outputs, and unresolved context gaps.
-Use `active_reference_context` and `reference_artifacts_content` to interpret that ledger, not to replace it with markdown-only guesses.
+Later staged refreshes surface `effective_reference_intake`, `active_reference_context`, and `reference_artifacts_content` for anchor-aware routing and wave planning. Stable knowledge docs may appear only through those shared reference surfaces as reviewed background; they do not become a separate authority tier. Do not assume bootstrap already loaded that broader reference context.
 Before launching any plan, require that the selected `PLAN.md` passes `gpd validate plan-preflight <PLAN.md>` when specialized tool requirements are declared.
 
 When `parallelization` is false, plans within a wave execute sequentially.
@@ -277,6 +294,20 @@ Never treat a clean `SUMMARY.md`, correct algebra in a subset of cases, or "huma
 When runtime delegation is available, `gpd-check-proof` is the canonical owner of this sibling artifact. The executor may draft the proof and theorem inventory, but it must not self-certify theorem-proof alignment as its own independent redteam.
 </step>
 
+<step name="refresh_wave_planning_context">
+Refresh the wave-planning stage so the orchestrator does not keep late execution context pinned in bootstrap state:
+
+```bash
+WAVE_PLANNING_INIT=$(load_execute_phase_stage wave_planning)
+if [ $? -ne 0 ]; then
+  echo "ERROR: wave-planning stage refresh failed: $WAVE_PLANNING_INIT"
+  exit 1
+fi
+```
+
+Parse JSON for: `selected_protocol_bundle_ids`, `protocol_bundle_context`, `active_reference_context`, `reference_artifacts_content`, `intermediate_results`, `intermediate_result_count`, `approximations`, `approximation_count`, `propagated_uncertainties`, `propagated_uncertainty_count`, `derived_convention_lock`, `derived_convention_lock_count`, `derived_intermediate_results`, `derived_intermediate_result_count`, `derived_approximations`, `derived_approximation_count`.
+</step>
+
 <step name="structural_validation">
 Run structural validation on all plans before execution begins:
 
@@ -445,6 +476,18 @@ When `RESEARCH_MODE=exploit`, suppress optional tangents by default: classify th
 
 <step name="execute_waves">
 Execute each wave in sequence. Within a wave: parallel if `PARALLELIZATION=true` AND `FORCE_SEQUENTIAL=false`, sequential otherwise. (Literature phases force sequential execution — see `adapt_to_computation_type`.)
+
+Refresh the wave-dispatch stage immediately before spawning executors so plan execution sees only the late-loaded context it actually needs:
+
+```bash
+WAVE_DISPATCH_INIT=$(load_execute_phase_stage wave_dispatch)
+if [ $? -ne 0 ]; then
+  echo "ERROR: wave-dispatch stage refresh failed: $WAVE_DISPATCH_INIT"
+  exit 1
+fi
+```
+
+Parse JSON for: `selected_protocol_bundle_ids`, `protocol_bundle_context`, `current_execution`, `has_live_execution`, `execution_review_pending`, `execution_pre_fanout_review_pending`, `execution_skeptical_requestioning_required`, `execution_downstream_locked`, `execution_blocked`, `execution_resumable`, `execution_paused_at`, `current_execution_resume_file`, `session_resume_file`, `recorded_session_resume_file`, `missing_session_resume_file`, `execution_resume_file`, `execution_resume_file_source`, `resume_projection`, `current_hostname`, `current_platform`, `session_hostname`, `session_platform`, `session_last_date`, `session_stopped_at`, `machine_change_detected`, `machine_change_notice`, `state_load_source`, `state_integrity_issues`.
 
 **For each wave:**
 
@@ -1542,7 +1585,7 @@ Re-verify Phase {PHASE_NUMBER} after gap closure.
 	- Roadmap: GPD/ROADMAP.md
 	</files_to_read>
 
-	Rebuild the structured phase context with `gpd --raw init phase-op {PHASE_NUMBER}` and keep `project_contract`, `project_contract_gate`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, and `phase_proof_review_status` visible while re-checking the remaining gaps.
+	Rebuild the structured phase context with `gpd --raw init phase-op {PHASE_NUMBER}` and keep `project_contract`, `project_contract_gate`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, and `phase_proof_review_status` visible while re-checking the remaining gaps. Treat any stable knowledge docs surfaced in those fields as reviewed background only: they may inform interpretation, but they do not override the contract, proof audits, or decisive evidence.
 
 	Focus on the gaps that were previously marked failed, partial, blocked, or otherwise unresolved in the previous verification. If the prior report carries `session_status: diagnosed`, use the recorded root causes and missing actions as the starting point for re-verification. For proof-bearing work, re-check every required `*-PROOF-REDTEAM.md` artifact and keep the phase blocked until those audits report `status: passed`.
 	Check whether the gap closure plans have resolved each issue.

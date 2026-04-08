@@ -176,6 +176,15 @@ def _skill_review_contract_payload(review_contract: content_registry.ReviewComma
     return review_contract_payload(review_contract)
 
 
+def _skill_staged_loading_payload(
+    staged_loading: content_registry.WorkflowStageManifest | None,
+) -> dict[str, object] | None:
+    """Return the canonical MCP payload for a command staged-loading manifest."""
+    if staged_loading is None:
+        return None
+    return staged_loading.to_payload()
+
+
 def _normalize_skill_category(category: str) -> str:
     """Validate a skill category against the live published enum."""
     normalized = category.strip()
@@ -672,6 +681,9 @@ def get_skill(name: Annotated[str, Field(min_length=1, pattern=r"\S")]) -> dict:
                 if command.agent is not None:
                     payload["agent"] = command.agent
                     payload["structured_metadata_authority"]["agent"] = "mirrored"
+                if command.staged_loading is not None:
+                    payload["staged_loading"] = _skill_staged_loading_payload(command.staged_loading)
+                    payload["structured_metadata_authority"]["staged_loading"] = "mirrored"
                 payload["allowed_tools"] = allowed_tools
             elif skill.source_kind == "agent":
                 agent = content_registry.get_agent(skill.registry_name)

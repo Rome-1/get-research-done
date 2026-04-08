@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Literal
@@ -13,6 +14,7 @@ from gpd.adapters.install_utils import expand_at_includes
 from gpd.adapters.runtime_catalog import iter_runtime_descriptors
 from gpd.contracts import ResearchContract, VerificationEvidence
 from gpd.core.frontmatter import validate_frontmatter
+from gpd.core.workflow_staging import validate_workflow_stage_manifest_payload
 from gpd.registry import _parse_frontmatter, _parse_tools
 from tests.doc_surface_contracts import (
     assert_cost_surface_discoverability,
@@ -143,7 +145,6 @@ AGENT_REFERENCE_TOKENS = {
         "references/execution/executor-task-checkpoints.md",
         "references/execution/executor-completion.md",
         "references/execution/executor-worked-example.md",
-        "references/protocols/order-of-limits.md",
         "references/methods/approximation-selection.md",
         "references/verification/errors/llm-physics-errors.md",
         "references/verification/core/code-testing-physics.md",
@@ -227,17 +228,7 @@ AGENT_REFERENCE_TOKENS = {
         "templates/planner-subagent-prompt.md",
         "templates/phase-prompt.md",
         "templates/parameter-table.md",
-        "templates/summary.md",
-        "workflows/execute-plan.md",
-        "references/protocols/order-of-limits.md",
-        "references/methods/approximation-selection.md",
-        "references/verification/core/code-testing-physics.md",
-        "references/orchestration/checkpoints.md",
         "references/planning/planner-conventions.md",
-        "references/planning/planner-approximations.md",
-        "references/planning/planner-scope-examples.md",
-        "references/planning/planner-tdd.md",
-        "references/planning/planner-iterative.md",
         "references/protocols/hypothesis-driven-research.md",
     ],
     "gpd-project-researcher.md": [
@@ -1187,6 +1178,11 @@ def test_progress_workflow_surfaces_contract_load_and_validation_state() -> None
 
     assert "project_contract_validation" in workflow_text
     assert "project_contract_load_info" in workflow_text
+    assert "knowledge_doc_count" in workflow_text
+    assert "stable_knowledge_doc_count" in workflow_text
+    assert "knowledge_doc_status_counts" in workflow_text
+    assert "derived_knowledge_doc_count" in workflow_text
+    assert "knowledge_doc_warnings" in workflow_text
     assert "authoritative only when `project_contract_gate.authoritative` is true" in workflow_text
     assert "structured load status, warnings, and blockers for the contract" in workflow_text
     status_scan = 'grep -l -E "^(status: (gaps_found|human_needed|expert_needed)|session_status: diagnosed)$"'
@@ -1201,6 +1197,10 @@ def test_progress_workflow_surfaces_contract_load_and_validation_state() -> None
     assert "status: (gaps_found|diagnosed|human_needed|expert_needed)" not in command_text
     assert "`session_status: diagnosed`" in workflow_text
     assert "`session_status: diagnosed`" not in command_text
+    assert "HEALTH.summary.warn > 0" in workflow_text
+    assert "HEALTH.summary.fail > 0" in workflow_text
+    assert "non-empty `issues` array" not in workflow_text
+    assert "## Knowledge Status" in workflow_text
     assert "GPD/phases/[current-phase-dir]/*-VERIFICATION.md" in workflow_text
     assert "GPD/phases/[current-phase-dir]/*-VERIFICATION.md" not in command_text
 
@@ -1223,6 +1223,54 @@ def test_planning_prompts_keep_contract_gate_in_light_mode_and_all_modes() -> No
         in workflow_text
     )
     assert "Human review does not replace those requirements." in checker_agent
+
+
+def test_stable_knowledge_remains_background_only_across_planning_verification_and_execution() -> None:
+    planner_prompt = (TEMPLATES_DIR / "planner-subagent-prompt.md").read_text(encoding="utf-8")
+    plan_phase = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
+    verify_workflow = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
+    verify_phase = (WORKFLOWS_DIR / "verify-phase.md").read_text(encoding="utf-8")
+    execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
+    execute_phase = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
+
+    assert "Treat stable knowledge docs surfaced through `active_reference_context` and `reference_artifacts_content` as reviewed background syntheses." in planner_prompt
+    assert (
+        "Use explicit `knowledge_deps` when a plan materially depends on a reviewed knowledge doc and downstream gating should be enforced; keep implicit stable background advisory only."
+        in planner_prompt
+    )
+    assert (
+        "they do not override `convention_lock`, `project_contract`, the PLAN `contract`, `contract_results`, `comparison_verdicts`, proof-review artifacts, or direct benchmark/result evidence."
+        in planner_prompt
+    )
+    assert "Stable knowledge docs may appear inside `{active_reference_context}` and `{reference_artifacts_content}`." in plan_phase
+    assert (
+        "If a plan materially depends on a reviewed knowledge doc and that reliance must be gateable downstream, express it with explicit `knowledge_deps`; keep implicit stable background advisory only."
+        in plan_phase
+    )
+    assert (
+        "they do not override `convention_lock`, `project_contract`, the PLAN `contract`, or direct evidence."
+        in plan_phase
+    )
+    assert (
+        "Stable knowledge docs that appear there are reviewed background synthesis: use them to clarify definitions, assumptions, and caveats only when they agree with stronger sources, and never as decisive evidence on their own."
+        in verify_workflow
+    )
+    assert (
+        "Stable knowledge docs that surface through this context are reviewed background synthesis only: they may guide check selection and interpretation, but they do not override the contract, the gate, or decisive evidence."
+        in verify_phase
+    )
+    assert (
+        "Stable knowledge docs may be present in that content as reviewed background, but they do not override the contract, conventions, or decisive evidence requirements."
+        in execute_plan
+    )
+    assert (
+        "Stable knowledge docs may appear only through those shared reference surfaces as reviewed background; they do not become a separate authority tier."
+        in execute_phase
+    )
+    assert (
+        "Treat any stable knowledge docs surfaced in those fields as reviewed background only: they may inform interpretation, but they do not override the contract, proof audits, or decisive evidence."
+        in execute_phase
+    )
 
 
 def test_plan_checker_requires_contract_gate_and_reference_artifacts() -> None:
@@ -1265,6 +1313,8 @@ def test_roadmap_template_and_workflows_surface_phase_contract_coverage() -> Non
     assert "Paper Writing" not in roadmap_template
     assert "@{GPD_INSTALL_DIR}/templates/roadmap.md" in roadmapper_agent
     assert "@{GPD_INSTALL_DIR}/templates/state.md" in roadmapper_agent
+    assert "If literature/SUMMARY.md provided:" in roadmapper_agent
+    assert "literature/SUMMARY.md content" in roadmapper_agent
     assert "Contract coverage" in roadmapper_agent
     assert "Phase Details" in roadmapper_agent
     assert "Active Calculations" in roadmapper_agent
@@ -1282,6 +1332,21 @@ def test_roadmap_template_and_workflows_surface_phase_contract_coverage() -> Non
     assert "For each phase, include explicit contract coverage in ROADMAP.md" in new_milestone
     assert "Do NOT skip the initial scoping-contract approval gate." in new_project
     assert "Do NOT skip the requirement to show contract coverage in the roadmap." in new_project
+
+
+def test_research_prompt_surfaces_use_canonical_literature_outputs() -> None:
+    project_researcher = (AGENTS_DIR / "gpd-project-researcher.md").read_text(encoding="utf-8")
+    research_synthesizer = (AGENTS_DIR / "gpd-research-synthesizer.md").read_text(encoding="utf-8")
+    phase_researcher = (AGENTS_DIR / "gpd-phase-researcher.md").read_text(encoding="utf-8")
+    roadmapper_agent = (AGENTS_DIR / "gpd-roadmapper.md").read_text(encoding="utf-8")
+
+    for content in (project_researcher, research_synthesizer, phase_researcher, roadmapper_agent):
+        assert "GPD/research/" not in content
+
+    assert "GPD/literature/" in project_researcher
+    assert "GPD/literature/SUMMARY.md" in research_synthesizer
+    assert "GPD/literature/SUMMARY.md" in phase_researcher
+    assert "If literature/SUMMARY.md provided:" in roadmapper_agent
 
 
 def test_new_project_minimal_mode_and_planning_wiring_allow_coarse_scoped_decomposition() -> None:
@@ -1681,7 +1746,6 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
     executor_agent = (AGENTS_DIR / "gpd-executor.md").read_text(encoding="utf-8")
     execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
     execute_phase = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
-    plan_phase = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
     tooling_ref = (REFERENCES_DIR / "tooling" / "tool-integration.md").read_text(encoding="utf-8")
     summary_template = (TEMPLATES_DIR / "summary.md").read_text(encoding="utf-8")
     verification_template = (TEMPLATES_DIR / "verification-report.md").read_text(encoding="utf-8")
@@ -1713,11 +1777,23 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
     )
     assert "gpd validate plan-preflight <PLAN.md>" not in execute_plan
     assert "require that the selected `PLAN.md` passes `gpd validate plan-preflight <PLAN.md>`" in execute_phase
-    assert "templates/planner-subagent-prompt.md" in plan_phase
     assert (
         "`tool_requirements` pass `gpd validate plan-preflight <PLAN.md>` before the plan is treated as execution-ready"
         in planner_prompt_template
     )
+    plan_phase_manifest = validate_workflow_stage_manifest_payload(
+        json.loads((REPO_ROOT / "src/gpd/specs/workflows/plan-phase-stage-manifest.json").read_text(encoding="utf-8")),
+        expected_workflow_id="plan-phase",
+    )
+    assert plan_phase_manifest.stage_ids() == (
+        "phase_bootstrap",
+        "research_routing",
+        "planner_authoring",
+        "checker_revision",
+    )
+    assert plan_phase_manifest.stages[0].loaded_authorities == ("workflows/plan-phase.md",)
+    assert "templates/planner-subagent-prompt.md" in plan_phase_manifest.stages[2].loaded_authorities
+    assert "templates/planner-subagent-prompt.md" in plan_phase_manifest.stages[3].loaded_authorities
     assert (
         "Treat `VERIFICATION.md` as contract-backed only through the schema-owned ledgers `plan_contract_ref`, `contract_results`, `comparison_verdicts`, and `suggested_contract_checks`; do not expect verifier-local aliases or ad hoc machine-readable artifact fields."
         in execute_phase
@@ -1922,6 +1998,20 @@ def test_execute_phase_workflow_surfaces_project_contract_validation_gate() -> N
     assert "project_contract_validation" in execute_workflow
     assert "project_contract_load_info" in execute_workflow
     assert "visible-but-blocked contract as an approved execution contract" in execute_workflow
+
+
+def test_execute_phase_and_execute_plan_use_staged_execution_bootstrap_instead_of_monolithic_init() -> None:
+    execute_workflow = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
+    execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
+
+    assert "BOOTSTRAP_INIT=$(load_execute_phase_stage phase_bootstrap)" in execute_workflow
+    assert "WAVE_PLANNING_INIT=$(load_execute_phase_stage wave_planning)" in execute_workflow
+    assert "WAVE_DISPATCH_INIT=$(load_execute_phase_stage wave_dispatch)" in execute_workflow
+    assert "gpd --raw init execute-phase \"${phase}\" --include state,config" not in execute_plan
+    assert 'gpd --raw init execute-phase "${phase}" --stage phase_bootstrap' in execute_plan
+    assert 'gpd --raw init execute-phase "${phase}" --stage phase_classification' in execute_plan
+    assert 'gpd --raw init execute-phase "${phase}" --stage wave_planning' in execute_plan
+    assert 'gpd --raw init execute-phase "${phase}" --stage aggregate_and_verify' in execute_plan
 
 
 def test_execute_phase_and_execute_plan_surface_required_reference_and_state_ownership_guidance() -> None:
@@ -2275,6 +2365,7 @@ def test_publication_workflows_describe_recursive_manuscript_tree_inputs() -> No
 def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_contract_context() -> None:
     peer_review = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
     verify_command = (COMMANDS_DIR / "verify-work.md").read_text(encoding="utf-8")
+    verify_workflow = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
     write_paper = (WORKFLOWS_DIR / "write-paper.md").read_text(encoding="utf-8")
     respond_to_referees = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
     sync_state = (WORKFLOWS_DIR / "sync-state.md").read_text(encoding="utf-8")
@@ -2284,6 +2375,10 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     review_physics = (AGENTS_DIR / "gpd-review-physics.md").read_text(encoding="utf-8")
     review_significance = (AGENTS_DIR / "gpd-review-significance.md").read_text(encoding="utf-8")
     referee = (AGENTS_DIR / "gpd-referee.md").read_text(encoding="utf-8")
+    verify_work_staging = registry.get_command("verify-work").staged_loading
+    assert verify_work_staging is not None
+    interactive_validation = next(stage for stage in verify_work_staging.stages if stage.id == "interactive_validation")
+    inventory_build = next(stage for stage in verify_work_staging.stages if stage.id == "inventory_build")
 
     assert "Reader-visible claims and surfaced evidence remain first-class" in peer_review
     assert "effective_reference_intake" in peer_review
@@ -2311,8 +2406,13 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     assert "templates/paper/review-ledger-schema.md" in peer_review
     assert "templates/paper/referee-decision-schema.md" in peer_review
     assert "references/publication/peer-review-panel.md" in peer_review
-    assert "templates/verification-report.md" in verify_command
-    assert "templates/contract-results-schema.md" in verify_command
+    assert "templates/verification-report.md" not in verify_command
+    assert "templates/contract-results-schema.md" not in verify_command
+    assert "Load the researcher-session body scaffold from `research-verification.md` here" in verify_workflow
+    assert "load `verification-report.md`, `contract-results-schema.md`, and `canonical-schema-discipline.md` at this stage" in verify_workflow
+    assert "templates/verification-report.md" in interactive_validation.loaded_authorities
+    assert "templates/contract-results-schema.md" in interactive_validation.loaded_authorities
+    assert "references/verification/meta/verification-independence.md" in inventory_build.loaded_authorities
     assert "Canonical schema for `${PAPER_DIR}/reproducibility-manifest.json`:" in write_paper
     assert "Canonical reconciliation contract:" in sync_state
     assert "state-json-schema.md` itself" in sync_state
@@ -2669,28 +2769,27 @@ def test_review_and_execution_prompts_expand_required_schema_sources() -> None:
         src_root,
         "/runtime/",
     )
-    executor = expand_at_includes(
-        (AGENTS_DIR / "gpd-executor.md").read_text(encoding="utf-8"),
-        src_root,
-        "/runtime/",
-    )
 
     assert "Peer Review Panel Protocol" in review_reader
     assert "Peer Review Panel Protocol" in review_literature
     assert "Review Ledger Schema" in referee
     assert "Referee Decision Schema" in referee
-    assert "Summary Template" in executor
-    assert "Contract Results Schema" in executor
 
 
-def test_verification_and_agent_reference_prompts_expand_required_reference_bodies() -> None:
+def test_verification_and_agent_reference_prompts_expand_or_stage_required_reference_bodies() -> None:
     verify_work = _expand_prompt_surface(WORKFLOWS_DIR / "verify-work.md")
     verify_phase = _expand_prompt_surface(WORKFLOWS_DIR / "verify-phase.md")
     phase_researcher = _expand_prompt_surface(AGENTS_DIR / "gpd-phase-researcher.md")
     planner = _expand_prompt_surface(AGENTS_DIR / "gpd-planner.md")
+    verify_work_staging = registry.get_command("verify-work").staged_loading
+    assert verify_work_staging is not None
+    inventory_build = next(stage for stage in verify_work_staging.stages if stage.id == "inventory_build")
+    interactive_validation = next(stage for stage in verify_work_staging.stages if stage.id == "interactive_validation")
 
-    assert "Verification Independence" in verify_work
-    assert "# Contract Results Schema" in verify_work
+    assert "Verification Independence" not in verify_work
+    assert "# Contract Results Schema" not in verify_work
+    assert "references/verification/meta/verification-independence.md" in inventory_build.loaded_authorities
+    assert "templates/contract-results-schema.md" in interactive_validation.loaded_authorities
     assert "Verification Independence" in verify_phase
     assert "# Contract Results Schema" in verify_phase
     assert "Shared Research Philosophy and Protocols" in phase_researcher
@@ -3394,11 +3493,9 @@ def test_stage8_surfaces_decisive_comparisons_paper_quality_artifacts_and_profil
     assert "MANUSCRIPT_TEX" in (REFERENCES_DIR / "protocols" / "hypothesis-driven-research.md").read_text(
         encoding="utf-8"
     )
-    assert "MANUSCRIPT_TEX" in executor
     assert "main.tex" not in (REFERENCES_DIR / "protocols" / "hypothesis-driven-research.md").read_text(
         encoding="utf-8"
     )
-    assert "main.tex" not in executor
     assert "Review (Recommended)" in settings
     assert "all required contract-aware checks" in profiles
     assert "current registry: 5.1-5.19" in quick_reference

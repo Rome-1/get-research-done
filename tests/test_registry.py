@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from gpd.core.model_visible_text import (
     review_contract_visibility_note,
     skeptical_rigor_guardrails_section,
 )
+from gpd.core.workflow_staging import WorkflowStageManifest
 from gpd.registry import (
     AgentDef,
     CommandDef,
@@ -26,6 +28,8 @@ from gpd.registry import (
     render_command_visibility_sections_from_frontmatter,
 )
 from gpd.specs import SPECS_DIR as CANONICAL_SPECS_DIR
+
+NEW_PROJECT_COMMAND_PATH = Path(__file__).resolve().parents[1] / "src" / "gpd" / "commands" / "new-project.md"
 
 
 def _write_review_contract_command(tmp_path: Path, file_name: str, review_contract_body: str) -> Path:
@@ -613,14 +617,22 @@ class TestParseCommandFile:
         assert cmd.project_reentry_capable is True
 
 
-    def test_new_project_registry_surface_uses_narrow_contract_schema_without_include_markers(self) -> None:
-        rendered = registry.get_command("gpd:new-project").content
+    def test_new_project_command_source_uses_narrow_contract_schema_without_include_markers(self) -> None:
+        command_text = NEW_PROJECT_COMMAND_PATH.read_text(encoding="utf-8")
 
-        assert "`schema_version` must be the integer `1`" in rendered
-        assert "### `position`" not in rendered
-        assert "### `active_calculations`" not in rendered
-        assert "<!-- [included:" not in rendered
-        assert "<!-- [end included] -->" not in rendered
+        assert "project-contract-schema.md" in command_text
+        assert "project-contract-grounding-linkage.md" in command_text
+        assert "staged_loading" not in command_text
+        assert "new-project-stage-manifest.json" not in command_text
+        assert "<!-- [included:" not in command_text
+        assert "<!-- [end included] -->" not in command_text
+
+    def test_new_project_command_source_stays_prompt_budget_thin(self) -> None:
+        command_text = NEW_PROJECT_COMMAND_PATH.read_text(encoding="utf-8")
+
+        assert "staged_loading" not in command_text
+        assert "new-project-stage-manifest.json" not in command_text
+        assert "conditional_authorities" not in command_text
 
     def test_command_project_reentry_capable_rejects_non_boolean_values(self, tmp_path: Path) -> None:
         f = tmp_path / "resume-work.md"
@@ -1605,6 +1617,18 @@ class TestRegistryCache:
         assert cache._commands is None
         assert cache._skills is None
 
+    def test_invalidate_cache_clears_workflow_stage_manifest_cache(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[str] = []
+
+        monkeypatch.setattr(registry, "invalidate_workflow_stage_manifest_cache", lambda: calls.append("called"))
+
+        registry.invalidate_cache()
+
+        assert calls == ["called"]
+
     def test_invalidate_forces_re_discovery(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
@@ -1790,6 +1814,235 @@ class TestPublicAPI:
         assert cmd.name == "gpd:test-cmd"
         assert cmd.description == "Tested"
 
+    def test_get_command_new_project_surfaces_staged_loading_manifest(self) -> None:
+        registry.invalidate_cache()
+
+        cmd = registry.get_command("gpd:new-project")
+
+        assert cmd.staged_loading is not None
+        assert cmd.staged_loading.workflow_id == "new-project"
+        assert cmd.staged_loading.stage_ids() == ("scope_intake", "scope_approval", "post_scope")
+        assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/new-project.md",)
+
+    def test_get_command_plan_phase_surfaces_staged_loading_manifest(self) -> None:
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as tmp:
+            commands_dir = Path(tmp) / "commands"
+            commands_dir.mkdir()
+            (commands_dir / "plan-phase.md").write_text(
+                "---\n"
+                "name: gpd:plan-phase\n"
+                "description: Plan phase\n"
+                "allowed-tools:\n"
+                "  - file_read\n"
+                "---\n"
+                "Body.",
+                encoding="utf-8",
+            )
+
+            manifest_path = Path(tmp) / "plan-phase-stage-manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "workflow_id": "plan-phase",
+                        "stages": [
+                            {
+                                "id": "phase_bootstrap",
+                                "order": 1,
+                                "purpose": "phase lookup and routing",
+                                "mode_paths": ["workflows/plan-phase.md"],
+                                "required_init_fields": [],
+                                "loaded_authorities": ["workflows/plan-phase.md"],
+                                "conditional_authorities": [],
+                                "must_not_eager_load": ["references/ui/ui-brand.md"],
+                                "allowed_tools": ["file_read"],
+                                "writes_allowed": [],
+                                "produced_state": [],
+                                "next_stages": ["research_routing"],
+                                "checkpoints": [],
+                            },
+                            {
+                                "id": "planner_authoring",
+                                "order": 2,
+                                "purpose": "planner handoff",
+                                "mode_paths": ["workflows/plan-phase.md"],
+                                "required_init_fields": ["researcher_model"],
+                                "loaded_authorities": [
+                                    "workflows/plan-phase.md",
+                                    "templates/planner-subagent-prompt.md",
+                                ],
+                                "conditional_authorities": [],
+                                "must_not_eager_load": ["references/ui/ui-brand.md"],
+                                "allowed_tools": ["file_read"],
+                                "writes_allowed": ["GPD/phases"],
+                                "produced_state": [],
+                                "next_stages": [],
+                                "checkpoints": [],
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            original_resolve_manifest_path = registry.resolve_workflow_stage_manifest_path
+            monkeypatch = pytest.MonkeyPatch()
+            monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
+            monkeypatch.setattr(
+                registry,
+                "resolve_workflow_stage_manifest_path",
+                lambda workflow_id: manifest_path if workflow_id == "plan-phase" else original_resolve_manifest_path(workflow_id),
+            )
+            try:
+                registry.invalidate_cache()
+                cmd = registry.get_command("plan-phase")
+            finally:
+                monkeypatch.undo()
+                registry.invalidate_cache()
+
+            assert cmd.staged_loading is not None
+            assert cmd.staged_loading.workflow_id == "plan-phase"
+            assert cmd.staged_loading.stage_ids() == ("phase_bootstrap", "planner_authoring")
+            assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/plan-phase.md",)
+            assert "templates/planner-subagent-prompt.md" in cmd.staged_loading.stages[1].loaded_authorities
+
+    def test_get_command_verify_work_surfaces_staged_loading_manifest(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        commands_dir = tmp_path / "commands"
+        commands_dir.mkdir()
+        (commands_dir / "verify-work.md").write_text(
+            "---\n"
+            "name: gpd:verify-work\n"
+            "description: Verify work\n"
+            "allowed-tools:\n"
+            "  - file_read\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        manifest_path = tmp_path / "verify-work-stage-manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "workflow_id": "verify-work",
+                    "stages": [
+                        {
+                            "id": "session_router",
+                            "order": 1,
+                            "purpose": "route verification sessions",
+                            "mode_paths": ["workflows/verify-work.md"],
+                            "required_init_fields": [],
+                            "loaded_authorities": ["workflows/verify-work.md"],
+                            "conditional_authorities": [],
+                            "must_not_eager_load": ["references/verification/meta/verification-independence.md"],
+                            "allowed_tools": ["file_read"],
+                            "writes_allowed": [],
+                            "produced_state": [],
+                            "next_stages": [],
+                            "checkpoints": [],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        original_resolve_manifest_path = registry.resolve_workflow_stage_manifest_path
+        monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
+        monkeypatch.setattr(
+            registry,
+            "resolve_workflow_stage_manifest_path",
+            lambda workflow_id: manifest_path if workflow_id == "verify-work" else original_resolve_manifest_path(workflow_id),
+        )
+        registry.invalidate_cache()
+
+        cmd = registry.get_command("verify-work")
+
+        assert cmd.staged_loading is not None
+        assert cmd.staged_loading.workflow_id == "verify-work"
+        assert cmd.staged_loading.stage_ids() == ("session_router",)
+        assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/verify-work.md",)
+
+    def test_get_command_execute_phase_surfaces_staged_loading_manifest(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        commands_dir = tmp_path / "commands"
+        commands_dir.mkdir()
+        (commands_dir / "execute-phase.md").write_text(
+            "---\n"
+            "name: gpd:execute-phase\n"
+            "description: Execute phase\n"
+            "allowed-tools:\n"
+            "  - file_read\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        manifest_path = tmp_path / "execute-phase-stage-manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "workflow_id": "execute-phase",
+                    "stages": [
+                        {
+                            "id": "phase_bootstrap",
+                            "order": 1,
+                            "purpose": "phase lookup and routing",
+                            "mode_paths": ["workflows/execute-phase.md"],
+                            "required_init_fields": [],
+                            "loaded_authorities": ["workflows/execute-phase.md"],
+                            "conditional_authorities": [],
+                            "must_not_eager_load": ["references/ui/ui-brand.md"],
+                            "allowed_tools": ["file_read"],
+                            "writes_allowed": [],
+                            "produced_state": [],
+                            "next_stages": [],
+                            "checkpoints": [],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        original_resolve_manifest_path = registry.resolve_workflow_stage_manifest_path
+        monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
+        monkeypatch.setattr(
+            registry,
+            "resolve_workflow_stage_manifest_path",
+            lambda workflow_id: manifest_path if workflow_id == "execute-phase" else original_resolve_manifest_path(workflow_id),
+        )
+        registry.invalidate_cache()
+
+        cmd = registry.get_command("execute-phase")
+
+        assert cmd.staged_loading is not None
+        assert cmd.staged_loading.workflow_id == "execute-phase"
+        assert cmd.staged_loading.stage_ids() == ("phase_bootstrap",)
+        assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/execute-phase.md",)
+
+    def test_registry_cache_invalidation_clears_new_project_stage_manifest(self) -> None:
+        registry.invalidate_cache()
+        first = registry.get_command("gpd:new-project").staged_loading
+        assert first is not None
+
+        registry.invalidate_cache()
+        second = registry.get_command("gpd:new-project").staged_loading
+        assert second is not None
+
+        assert first is not second
+
     def test_get_command_accepts_public_command_label(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
@@ -1943,7 +2196,6 @@ class TestPublicAPI:
 
         assert registry.list_agents() == ["new"]
 
-
 class TestDataclasses:
     """Tests for AgentDef, CommandDef, and SkillDef dataclass properties."""
 
@@ -2004,6 +2256,45 @@ class TestDataclasses:
         )
         with pytest.raises((AttributeError, TypeError)):
             cmd.new_attr = "nope"  # type: ignore[misc]
+
+    def test_command_def_accepts_staged_loading_sidecar(self) -> None:
+        from gpd.core.workflow_staging import WorkflowStage
+
+        staged_loading = WorkflowStageManifest(
+            schema_version=1,
+            workflow_id="new-project",
+            stages=(
+                WorkflowStage(
+                    id="scope_intake",
+                    order=1,
+                    purpose="intake",
+                    mode_paths=("workflows/new-project.md",),
+                    required_init_fields=(),
+                    loaded_authorities=("workflows/new-project.md",),
+                    conditional_authorities=(),
+                    must_not_eager_load=(),
+                    allowed_tools=(),
+                    writes_allowed=(),
+                    produced_state=(),
+                    next_stages=(),
+                    checkpoints=(),
+                ),
+            ),
+        )
+        cmd = CommandDef(
+            name="c",
+            description="d",
+            argument_hint="",
+            context_mode="project-required",
+            requires={},
+            allowed_tools=[],
+            content="",
+            path="/p",
+            source="commands",
+            staged_loading=staged_loading,
+        )
+
+        assert cmd.staged_loading is staged_loading
 
     def test_skill_def_frozen(self) -> None:
         skill = SkillDef(
@@ -2076,3 +2367,28 @@ class TestSkillCategoryMap:
         from gpd.registry import _infer_skill_category
 
         assert _infer_skill_category("gpd-peer-review") == "paper"
+
+
+def test_executor_skill_defers_completion_only_materials_until_summary_creation() -> None:
+    skill = registry.get_skill("gpd-executor")
+    bootstrap, _, _ = skill.content.partition("<summary_creation>")
+
+    assert skill.name == "gpd-executor"
+    assert skill.source_kind == "agent"
+    assert "templates/summary.md" not in bootstrap
+    assert "templates/calculation-log.md" not in bootstrap
+    assert "Order-of-Limits Awareness" not in bootstrap
+
+
+def test_planner_skill_defers_late_planning_materials_into_on_demand_references() -> None:
+    skill = registry.get_skill("gpd-planner")
+    bootstrap, separator, _ = skill.content.partition("On-demand references:")
+
+    assert skill.name == "gpd-planner"
+    assert skill.source_kind == "agent"
+    assert separator == "On-demand references:"
+    assert "Phase Plan Prompt" in bootstrap
+    assert "PLAN Contract Schema" in bootstrap
+    assert "Read config.json for planning behavior settings." not in bootstrap
+    assert "## Summary Template" not in bootstrap
+    assert "Order-of-Limits Awareness" not in bootstrap

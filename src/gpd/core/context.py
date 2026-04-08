@@ -56,6 +56,7 @@ from gpd.core.continuation import (
 )
 from gpd.core.errors import ValidationError
 from gpd.core.extras import approximation_list
+from gpd.core.knowledge_runtime import discover_knowledge_docs
 from gpd.core.manuscript_artifacts import resolve_current_manuscript_entrypoint
 from gpd.core.phases import _milestone_completion_snapshot
 from gpd.core.project_reentry import (
@@ -99,9 +100,12 @@ logger = logging.getLogger(__name__)
 # Research file extensions for project detection.
 _RESEARCH_EXTENSIONS = frozenset({".tex", ".ipynb", ".py", ".jl", ".f90"})
 _LITERATURE_DIR_NAME = "literature"
+_LEGACY_RESEARCH_DIR_NAME = "research"
 _REFERENCE_MAP_DOCS = ("REFERENCES.md", "VALIDATION.md")
 _LITERATURE_INCLUDE_LIMIT = 2
 _RESEARCH_MAP_INCLUDE_LIMIT = 4
+_KNOWLEDGE_INCLUDE_LIMIT = 2
+_EXPERIMENT_DESIGN_SUFFIX = "-EXPERIMENT-DESIGN.md"
 _REFERENCE_ROLE_PRIORITY = {
     "benchmark": 0,
     "must_consider": 1,
@@ -110,7 +114,345 @@ _REFERENCE_ROLE_PRIORITY = {
     "background": 4,
     "other": 5,
 }
+_PLAN_PHASE_STAGE_ALLOWED_TOOLS = frozenset(
+    {
+        "file_read",
+        "file_write",
+        "shell",
+        "find_files",
+        "search_files",
+        "task",
+        "web_fetch",
+    }
+)
+_PLAN_PHASE_BASE_INIT_FIELDS = frozenset(
+    {
+        "researcher_model",
+        "planner_model",
+        "checker_model",
+        "research_enabled",
+        "plan_checker_enabled",
+        "commit_docs",
+        "autonomy",
+        "research_mode",
+        "phase_found",
+        "phase_dir",
+        "phase_number",
+        "phase_name",
+        "phase_slug",
+        "padded_phase",
+        "has_research",
+        "has_context",
+        "has_plans",
+        "plan_count",
+        "planning_exists",
+        "roadmap_exists",
+        "platform",
+    }
+)
+_PLAN_PHASE_CONTRACT_GATE_FIELDS = frozenset(
+    {
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+    }
+)
+_PLAN_PHASE_REFERENCE_RUNTIME_FIELDS = frozenset(
+    {
+        "contract_intake",
+        "effective_reference_intake",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_count",
+        "protocol_bundle_context",
+        "protocol_bundle_verifier_extensions",
+        "active_reference_context",
+        "knowledge_doc_files",
+        "knowledge_doc_count",
+        "stable_knowledge_doc_files",
+        "stable_knowledge_doc_count",
+        "knowledge_doc_status_counts",
+        "derived_knowledge_docs",
+        "derived_knowledge_doc_count",
+        "knowledge_doc_warnings",
+        "reference_artifact_files",
+        "reference_artifacts_content",
+        "literature_review_files",
+        "literature_review_count",
+        "research_map_reference_files",
+        "research_map_reference_count",
+        "derived_manuscript_proof_review_status",
+    }
+)
+_PLAN_PHASE_STRUCTURED_STATE_FIELDS = frozenset(
+    {
+        "state_load_source",
+        "state_integrity_issues",
+        "convention_lock",
+        "convention_lock_count",
+        "intermediate_results",
+        "intermediate_result_count",
+        "approximations",
+        "approximation_count",
+        "propagated_uncertainties",
+        "propagated_uncertainty_count",
+    }
+)
+_PLAN_PHASE_STATE_MEMORY_FIELDS = frozenset(
+    {
+        "derived_convention_lock",
+        "derived_convention_lock_count",
+        "derived_intermediate_results",
+        "derived_intermediate_result_count",
+        "derived_approximations",
+        "derived_approximation_count",
+    }
+)
+_PLAN_PHASE_FILE_CONTENT_FIELDS = frozenset(
+    {
+        "state_content",
+        "roadmap_content",
+        "requirements_content",
+        "context_content",
+        "research_content",
+        "experiment_design_content",
+        "verification_content",
+        "validation_content",
+    }
+)
+_PLAN_PHASE_INIT_FIELDS = frozenset(
+    {
+        *_PLAN_PHASE_BASE_INIT_FIELDS,
+        *_PLAN_PHASE_CONTRACT_GATE_FIELDS,
+        *_PLAN_PHASE_REFERENCE_RUNTIME_FIELDS,
+        *_PLAN_PHASE_STRUCTURED_STATE_FIELDS,
+        *_PLAN_PHASE_STATE_MEMORY_FIELDS,
+        *_PLAN_PHASE_FILE_CONTENT_FIELDS,
+    }
+)
+_VERIFY_WORK_STAGE_ALLOWED_TOOLS = frozenset(
+    {
+        "ask_user",
+        "file_read",
+        "file_edit",
+        "file_write",
+        "find_files",
+        "search_files",
+        "shell",
+        "task",
+    }
+)
+_VERIFY_WORK_BASE_INIT_FIELDS = frozenset(
+    {
+        "planner_model",
+        "checker_model",
+        "verifier_model",
+        "commit_docs",
+        "autonomy",
+        "research_mode",
+        "phase_found",
+        "phase_dir",
+        "phase_number",
+        "phase_name",
+        "has_verification",
+        "has_validation",
+        "phase_proof_review_status",
+        "platform",
+    }
+)
+_VERIFY_WORK_CONTRACT_GATE_FIELDS = frozenset(
+    {
+        "project_contract",
+        "project_contract_validation",
+        "project_contract_load_info",
+        "project_contract_gate",
+    }
+)
+_VERIFY_WORK_REFERENCE_RUNTIME_FIELDS = frozenset(
+    {
+        "contract_intake",
+        "effective_reference_intake",
+        "derived_active_references",
+        "derived_active_reference_count",
+        "derived_knowledge_docs",
+        "derived_knowledge_doc_count",
+        "knowledge_doc_warnings",
+        "citation_source_files",
+        "citation_source_count",
+        "citation_source_warnings",
+        "derived_citation_sources",
+        "derived_citation_source_count",
+        "derived_manuscript_reference_status",
+        "derived_manuscript_reference_status_count",
+        "derived_manuscript_proof_review_status",
+        "active_references",
+        "active_reference_count",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_count",
+        "protocol_bundle_verifier_extensions",
+        "protocol_bundle_context",
+        "active_reference_context",
+        "knowledge_doc_files",
+        "knowledge_doc_count",
+        "stable_knowledge_doc_files",
+        "stable_knowledge_doc_count",
+        "knowledge_doc_status_counts",
+        "literature_review_files",
+        "literature_review_count",
+        "research_map_reference_files",
+        "research_map_reference_count",
+        "reference_artifact_files",
+        "reference_artifacts_content",
+    }
+)
+_VERIFY_WORK_STRUCTURED_STATE_FIELDS = frozenset(
+    {
+        "state_load_source",
+        "state_integrity_issues",
+        "convention_lock",
+        "convention_lock_count",
+        "intermediate_results",
+        "intermediate_result_count",
+        "approximations",
+        "approximation_count",
+        "propagated_uncertainties",
+        "propagated_uncertainty_count",
+    }
+)
+_VERIFY_WORK_STATE_MEMORY_FIELDS = frozenset(
+    {
+        "derived_convention_lock",
+        "derived_convention_lock_count",
+        "derived_intermediate_results",
+        "derived_intermediate_result_count",
+        "derived_approximations",
+        "derived_approximation_count",
+    }
+)
+_VERIFY_WORK_INIT_FIELDS = frozenset(
+    {
+        *_VERIFY_WORK_BASE_INIT_FIELDS,
+        *_VERIFY_WORK_CONTRACT_GATE_FIELDS,
+        *_VERIFY_WORK_REFERENCE_RUNTIME_FIELDS,
+        *_VERIFY_WORK_STRUCTURED_STATE_FIELDS,
+        *_VERIFY_WORK_STATE_MEMORY_FIELDS,
+    }
+)
 
+_EXECUTE_PHASE_STAGE_ALLOWED_TOOLS = frozenset(
+    {
+        "ask_user",
+        "file_edit",
+        "file_read",
+        "file_write",
+        "find_files",
+        "search_files",
+        "shell",
+        "task",
+    }
+)
+_EXECUTE_PHASE_CONTRACT_GATE_FIELDS = frozenset(
+    {
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+    }
+)
+_EXECUTE_PHASE_REFERENCE_RUNTIME_FIELDS = frozenset(
+    {
+        "contract_intake",
+        "effective_reference_intake",
+        "derived_active_references",
+        "derived_active_reference_count",
+        "derived_knowledge_docs",
+        "derived_knowledge_doc_count",
+        "knowledge_doc_warnings",
+        "citation_source_files",
+        "citation_source_count",
+        "citation_source_warnings",
+        "derived_citation_sources",
+        "derived_citation_source_count",
+        "derived_manuscript_reference_status",
+        "derived_manuscript_reference_status_count",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_count",
+        "protocol_bundle_verifier_extensions",
+        "protocol_bundle_context",
+        "active_reference_context",
+        "active_references",
+        "active_reference_count",
+        "knowledge_doc_files",
+        "knowledge_doc_count",
+        "stable_knowledge_doc_files",
+        "stable_knowledge_doc_count",
+        "knowledge_doc_status_counts",
+        "reference_artifact_files",
+        "reference_artifacts_content",
+        "literature_review_files",
+        "literature_review_count",
+        "research_map_reference_files",
+        "research_map_reference_count",
+        "derived_manuscript_proof_review_status",
+    }
+)
+_EXECUTE_PHASE_STRUCTURED_STATE_FIELDS = frozenset(
+    {
+        "state_load_source",
+        "state_integrity_issues",
+        "convention_lock",
+        "convention_lock_count",
+        "intermediate_results",
+        "intermediate_result_count",
+        "approximations",
+        "approximation_count",
+        "propagated_uncertainties",
+        "propagated_uncertainty_count",
+    }
+)
+_EXECUTE_PHASE_STATE_MEMORY_FIELDS = frozenset(
+    {
+        "derived_convention_lock",
+        "derived_convention_lock_count",
+        "derived_intermediate_results",
+        "derived_intermediate_result_count",
+        "derived_approximations",
+        "derived_approximation_count",
+    }
+)
+_EXECUTE_PHASE_EXECUTION_RUNTIME_FIELDS = frozenset(
+    {
+        "current_execution",
+        "has_live_execution",
+        "execution_review_pending",
+        "execution_pre_fanout_review_pending",
+        "execution_skeptical_requestioning_required",
+        "execution_downstream_locked",
+        "execution_blocked",
+        "execution_resumable",
+        "execution_paused_at",
+        "current_execution_resume_file",
+        "session_resume_file",
+        "recorded_session_resume_file",
+        "missing_session_resume_file",
+        "execution_resume_file",
+        "execution_resume_file_source",
+        "resume_projection",
+        "current_hostname",
+        "current_platform",
+        "session_hostname",
+        "session_platform",
+        "session_last_date",
+        "session_stopped_at",
+        "machine_change_detected",
+        "machine_change_notice",
+        "derived_execution_head",
+        "continuity_handoff_file",
+        "recorded_continuity_handoff_file",
+        "missing_continuity_handoff_file",
+        "has_continuity_handoff",
+    }
+)
 # Directories to skip when scanning for research files.
 _LEADING_BLANK_LINES_BEFORE_FRONTMATTER_RE = re.compile(r"^(?:[ \t]*\r?\n)+(?=---[ \t]*\r?\n)")
 
@@ -497,6 +839,17 @@ def _sorted_markdown_files(directory: Path) -> list[Path]:
         return []
 
 
+def _preferred_review_dir(cwd: Path) -> Path | None:
+    """Return the canonical review directory, falling back to legacy research only when needed."""
+    literature_dir = cwd / PLANNING_DIR_NAME / _LITERATURE_DIR_NAME
+    if literature_dir.is_dir():
+        return literature_dir
+    legacy_research_dir = cwd / PLANNING_DIR_NAME / _LEGACY_RESEARCH_DIR_NAME
+    if legacy_research_dir.is_dir():
+        return legacy_research_dir
+    return None
+
+
 def _relative_posix(cwd: Path, path: Path) -> str:
     """Return a stable repo-relative POSIX path."""
     return path.relative_to(cwd).as_posix()
@@ -788,6 +1141,8 @@ def _canonicalize_project_contract(
 def _render_active_reference_context(
     active_references: list[dict[str, object]],
     effective_intake: dict[str, list[str]],
+    stable_knowledge_doc_files: list[str],
+    knowledge_doc_status_counts: dict[str, int],
     literature_review_files: list[str],
     research_map_reference_files: list[str],
     contract_validation: dict[str, object] | None = None,
@@ -813,7 +1168,7 @@ def _render_active_reference_context(
                 f"why: {ref['why_it_matters']}{source_note}"
             )
     else:
-        if literature_review_files or research_map_reference_files:
+        if stable_knowledge_doc_files or literature_review_files or research_map_reference_files:
             lines.append("- No structured anchors parsed yet; raw reference artifacts are available below.")
         else:
             lines.append("- None confirmed in `state.json.project_contract.references` yet.")
@@ -884,13 +1239,29 @@ def _render_active_reference_context(
         lines.extend(f"- Gap: {item}" for item in effective_intake["context_gaps"])
 
     lines.append("")
+    lines.append("## Stable Knowledge Documents")
+    if stable_knowledge_doc_files:
+        lines.extend(f"- Knowledge doc: {path}" for path in stable_knowledge_doc_files)
+    else:
+        lines.append("- No runtime-active stable knowledge docs found yet.")
+    suppressed_count = sum(
+        count for status, count in knowledge_doc_status_counts.items() if status != "stable"
+    )
+    if suppressed_count:
+        lines.append(
+            f"- {suppressed_count} non-stable knowledge doc(s) remain inventory-visible only and are excluded from active carry-forward context."
+        )
+
+    lines.append("")
     lines.append("## Reference Artifacts Available")
+    if stable_knowledge_doc_files:
+        lines.extend(f"- Stable knowledge: {path}" for path in stable_knowledge_doc_files)
     if literature_review_files:
         lines.extend(f"- Literature review: {path}" for path in literature_review_files)
     if research_map_reference_files:
         lines.extend(f"- Research map: {path}" for path in research_map_reference_files)
-    if not literature_review_files and not research_map_reference_files:
-        lines.append("- No literature-review or research-map anchor artifacts found yet.")
+    if not stable_knowledge_doc_files and not literature_review_files and not research_map_reference_files:
+        lines.append("- No stable knowledge, literature-review, or research-map anchor artifacts found yet.")
 
     return "\n".join(lines)
 
@@ -921,10 +1292,11 @@ def _append_contract_warnings(lines: list[str], warnings: list[str]) -> None:
 
 def _reference_artifact_payload(cwd: Path) -> dict[str, object]:
     """Collect durable reference artifacts for downstream planning and verification."""
-    literature_dir = cwd / PLANNING_DIR_NAME / _LITERATURE_DIR_NAME
-    literature_paths = _sorted_markdown_files(literature_dir)
+    review_dir = _preferred_review_dir(cwd)
+    literature_paths = _sorted_markdown_files(review_dir) if review_dir is not None else []
     research_map_dir = cwd / PLANNING_DIR_NAME / RESEARCH_MAP_DIR_NAME
     research_map_paths = _sorted_markdown_files(research_map_dir)
+    knowledge_inventory = discover_knowledge_docs(cwd)
     prioritized_research_map_paths = [
         research_map_dir / name for name in _REFERENCE_MAP_DOCS if (research_map_dir / name).is_file()
     ]
@@ -933,9 +1305,18 @@ def _reference_artifact_payload(cwd: Path) -> dict[str, object]:
 
     literature_review_files = [_relative_posix(cwd, path) for path in literature_paths]
     research_map_reference_files = [_relative_posix(cwd, path) for path in prioritized_research_map_paths]
+    knowledge_doc_files = [record.path for record in knowledge_inventory.records]
+    stable_knowledge_doc_files = [
+        record.path
+        for record in knowledge_inventory.records
+        if record.status == "stable" and record.is_fresh_approved
+    ]
+    stable_knowledge_paths = [cwd / rel_path for rel_path in stable_knowledge_doc_files]
+    knowledge_doc_status_counts = knowledge_inventory.status_counts()
 
     content_sections: list[str] = []
     selected_artifacts = [
+        *stable_knowledge_paths[:_KNOWLEDGE_INCLUDE_LIMIT],
         *prioritized_research_map_paths[:_RESEARCH_MAP_INCLUDE_LIMIT],
         *literature_paths[:_LITERATURE_INCLUDE_LIMIT],
     ]
@@ -950,7 +1331,12 @@ def _reference_artifact_payload(cwd: Path) -> dict[str, object]:
         "literature_review_count": len(literature_review_files),
         "research_map_reference_files": research_map_reference_files,
         "research_map_reference_count": len(research_map_reference_files),
-        "reference_artifact_files": [*research_map_reference_files, *literature_review_files],
+        "knowledge_doc_files": knowledge_doc_files,
+        "knowledge_doc_count": len(knowledge_doc_files),
+        "stable_knowledge_doc_files": stable_knowledge_doc_files,
+        "stable_knowledge_doc_count": len(stable_knowledge_doc_files),
+        "knowledge_doc_status_counts": knowledge_doc_status_counts,
+        "reference_artifact_files": [*stable_knowledge_doc_files, *research_map_reference_files, *literature_review_files],
         "reference_artifacts_content": "\n\n".join(content_sections) if content_sections else None,
     }
 
@@ -967,6 +1353,7 @@ def _build_reference_runtime_context(
         cwd,
         literature_review_files=list(artifact_payload["literature_review_files"]),
         research_map_reference_files=list(artifact_payload["research_map_reference_files"]),
+        knowledge_doc_files=list(artifact_payload["stable_knowledge_doc_files"]),
     )
     manuscript_reference_status = ingest_manuscript_reference_status(cwd)
     manuscript_proof_review_status = resolve_manuscript_proof_review_status(
@@ -974,6 +1361,7 @@ def _build_reference_runtime_context(
         persist_manifest=persist_manuscript_proof_review_manifest,
     )
     derived_references = [ref.to_context_dict() for ref in artifact_ingestion.references]
+    derived_knowledge_docs = [record.to_context_dict() for record in artifact_ingestion.knowledge_docs]
     derived_citation_sources = [item.to_context_dict() for item in artifact_ingestion.citation_sources]
     derived_manuscript_reference_status = {
         record.reference_id: record.to_context_dict()
@@ -1044,6 +1432,9 @@ def _build_reference_runtime_context(
         "effective_reference_intake": surfaced_effective_reference_intake,
         "derived_active_references": derived_references,
         "derived_active_reference_count": len(derived_references),
+        "derived_knowledge_docs": derived_knowledge_docs,
+        "derived_knowledge_doc_count": len(derived_knowledge_docs),
+        "knowledge_doc_warnings": list(artifact_ingestion.knowledge_doc_warnings),
         "citation_source_files": list(artifact_ingestion.citation_source_files),
         "citation_source_count": len(artifact_ingestion.citation_source_files),
         "citation_source_warnings": list(artifact_ingestion.citation_source_warnings),
@@ -1061,6 +1452,8 @@ def _build_reference_runtime_context(
         "active_reference_context": _render_active_reference_context(
             surfaced_active_references,
             surfaced_effective_reference_intake,
+            list(artifact_payload["stable_knowledge_doc_files"]),
+            dict(artifact_payload["knowledge_doc_status_counts"]),
             artifact_payload["literature_review_files"],
             artifact_payload["research_map_reference_files"],
             project_contract_validation,
@@ -1834,13 +2227,19 @@ def _detect_platform(cwd: Path | None = None) -> str:
 # ─── Context Assemblers ──────────────────────────────────────────────────────
 
 
-def init_execute_phase(cwd: Path, phase: str | None, includes: set[str] | None = None) -> dict:
+def init_execute_phase(
+    cwd: Path,
+    phase: str | None,
+    includes: set[str] | None = None,
+    stage: str | None = None,
+) -> dict:
     """Assemble context for phase execution.
 
     Args:
         cwd: Project root directory.
         phase: Phase identifier (e.g. "3", "03", "3.1").
         includes: Optional set of file sections to embed (state, config, roadmap).
+        stage: Optional staged execute-phase context identifier.
     """
     if not phase:
         raise ValidationError(
@@ -1849,6 +2248,11 @@ def init_execute_phase(cwd: Path, phase: str | None, includes: set[str] | None =
         )
 
     includes = includes or set()
+    if stage is not None and includes:
+        raise ValueError(
+            "gpd init execute-phase does not allow --include together with --stage; "
+            "stage payloads already declare their required context."
+        )
     config = load_config(cwd)
     phase_info = _try_find_phase(cwd, phase)
     milestone = _try_get_milestone_info(cwd)
@@ -1903,24 +2307,109 @@ def init_execute_phase(cwd: Path, phase: str | None, includes: set[str] | None =
         # Platform
         "platform": _detect_platform(cwd),
     }
-    result.update(_build_reference_runtime_context(cwd))
-    result.update(_build_state_memory_runtime_context(cwd))
-    result.update(_build_execution_runtime_context(cwd))
+    if stage is None:
+        result.update(_build_reference_runtime_context(cwd))
+        result.update(_build_state_memory_runtime_context(cwd))
+        result.update(_build_execution_runtime_context(cwd))
 
-    # Include file contents if requested
+        # Include file contents if requested
+        planning = cwd / PLANNING_DIR_NAME
+        if "state" in includes:
+            result["state_content"] = _safe_read_file_truncated(planning / STATE_MD_FILENAME)
+            result.update(_build_structured_state_runtime_context(cwd))
+        if "config" in includes:
+            result["config_content"] = _safe_read_file_truncated(planning / CONFIG_FILENAME)
+        if "roadmap" in includes:
+            result["roadmap_content"] = _safe_read_file_truncated(planning / ROADMAP_FILENAME)
+
+        return result
+
+    from gpd.core.workflow_staging import load_execute_phase_stage_contract
+
+    manifest = load_execute_phase_stage_contract()
+    try:
+        stage_def = manifest.stage_by_id(stage)
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown execute-phase stage {stage!r}. Allowed values: {', '.join(manifest.stage_ids())}."
+        ) from exc
+
+    required_fields = set(stage_def.required_init_fields)
+    staged_source = dict(result)
+
+    if required_fields & _EXECUTE_PHASE_CONTRACT_GATE_FIELDS:
+        staged_source.update(_build_new_project_contract_runtime_context(cwd))
+
+    if required_fields & _EXECUTE_PHASE_REFERENCE_RUNTIME_FIELDS:
+        staged_source.update(_build_reference_runtime_context(cwd))
+
+    if required_fields & _EXECUTE_PHASE_STRUCTURED_STATE_FIELDS:
+        staged_source.update(_build_structured_state_runtime_context(cwd))
+
+    if required_fields & _EXECUTE_PHASE_STATE_MEMORY_FIELDS:
+        staged_source.update(_build_state_memory_runtime_context(cwd))
+
+    if required_fields & _EXECUTE_PHASE_EXECUTION_RUNTIME_FIELDS:
+        staged_source.update(_build_execution_runtime_context(cwd))
+
+    missing_fields = [field for field in stage_def.required_init_fields if field not in staged_source]
+    if missing_fields:
+        raise ValueError(
+            f"execute-phase stage {stage!r} requires unavailable init field(s): {', '.join(missing_fields)}"
+        )
+
+    staged_payload = {field: staged_source[field] for field in stage_def.required_init_fields}
+    staged_payload["staged_loading"] = manifest.staged_loading_payload(stage_def.id)
+    return staged_payload
+
+
+def _build_plan_phase_file_context(
+    cwd: Path,
+    phase_info: dict[str, object] | None,
+    *,
+    include_state: bool = False,
+    include_roadmap: bool = False,
+    include_requirements: bool = False,
+    include_context: bool = False,
+    include_research: bool = False,
+    include_experiment_design: bool = False,
+    include_verification: bool = False,
+    include_validation: bool = False,
+) -> dict[str, object]:
+    """Build file-content payloads for plan-phase init surfaces."""
+    result: dict[str, object] = {}
     planning = cwd / PLANNING_DIR_NAME
-    if "state" in includes:
-        result["state_content"] = _safe_read_file_truncated(planning / STATE_MD_FILENAME)
-        result.update(_build_structured_state_runtime_context(cwd))
-    if "config" in includes:
-        result["config_content"] = _safe_read_file_truncated(planning / CONFIG_FILENAME)
-    if "roadmap" in includes:
-        result["roadmap_content"] = _safe_read_file_truncated(planning / ROADMAP_FILENAME)
 
+    if include_state:
+        result["state_content"] = _safe_read_file_truncated(planning / STATE_MD_FILENAME)
+    if include_roadmap:
+        result["roadmap_content"] = _safe_read_file_truncated(planning / ROADMAP_FILENAME)
+    if include_requirements:
+        result["requirements_content"] = _safe_read_file_truncated(planning / REQUIREMENTS_FILENAME)
+
+    if not phase_info or not phase_info.get("directory"):
+        return result
+
+    phase_dir = cwd / str(phase_info["directory"])
+    if include_context:
+        result["context_content"] = _find_phase_artifact(phase_dir, CONTEXT_SUFFIX, STANDALONE_CONTEXT)
+    if include_research:
+        result["research_content"] = _find_phase_artifact(phase_dir, RESEARCH_SUFFIX, STANDALONE_RESEARCH)
+    if include_experiment_design:
+        result["experiment_design_content"] = _find_phase_artifact(phase_dir, _EXPERIMENT_DESIGN_SUFFIX)
+    if include_verification:
+        result["verification_content"] = _find_phase_artifact(phase_dir, VERIFICATION_SUFFIX)
+    if include_validation:
+        result["validation_content"] = _find_phase_artifact(phase_dir, VALIDATION_SUFFIX, STANDALONE_VALIDATION)
     return result
 
 
-def init_plan_phase(cwd: Path, phase: str | None, includes: set[str] | None = None) -> dict:
+def init_plan_phase(
+    cwd: Path,
+    phase: str | None,
+    includes: set[str] | None = None,
+    stage: str | None = None,
+) -> dict:
     """Assemble context for phase planning.
 
     Args:
@@ -1936,6 +2425,11 @@ def init_plan_phase(cwd: Path, phase: str | None, includes: set[str] | None = No
         )
 
     includes = includes or set()
+    if stage is not None and includes:
+        raise ValueError(
+            "gpd init plan-phase does not allow --include together with --stage; "
+            "stage payloads already declare their required context."
+        )
     config = load_config(cwd)
     phase_info = _try_find_phase(cwd, phase)
 
@@ -1968,35 +2462,85 @@ def init_plan_phase(cwd: Path, phase: str | None, includes: set[str] | None = No
         # Platform
         "platform": _detect_platform(cwd),
     }
-    result.update(_build_reference_runtime_context(cwd))
-    result.update(_build_state_memory_runtime_context(cwd))
+    if stage is None:
+        result.update(_build_reference_runtime_context(cwd))
+        result.update(_build_state_memory_runtime_context(cwd))
+        result.update(
+            _build_plan_phase_file_context(
+                cwd,
+                phase_info,
+                include_state="state" in includes,
+                include_roadmap="roadmap" in includes,
+                include_requirements="requirements" in includes,
+                include_context="context" in includes,
+                include_research="research" in includes,
+                include_experiment_design=False,
+                include_verification="verification" in includes,
+                include_validation="validation" in includes,
+            )
+        )
+        if "state" in includes:
+            result.update(_build_structured_state_runtime_context(cwd))
+        return result
 
-    # Include file contents
-    planning = cwd / PLANNING_DIR_NAME
-    if "state" in includes:
-        result["state_content"] = _safe_read_file_truncated(planning / STATE_MD_FILENAME)
-        result.update(_build_structured_state_runtime_context(cwd))
-    if "roadmap" in includes:
-        result["roadmap_content"] = _safe_read_file_truncated(planning / ROADMAP_FILENAME)
-    if "requirements" in includes:
-        result["requirements_content"] = _safe_read_file_truncated(planning / REQUIREMENTS_FILENAME)
-    if "context" in includes and phase_info and phase_info.get("directory"):
-        phase_dir = cwd / phase_info["directory"]
-        result["context_content"] = _find_phase_artifact(phase_dir, CONTEXT_SUFFIX, STANDALONE_CONTEXT)
-    if "research" in includes and phase_info and phase_info.get("directory"):
-        phase_dir = cwd / phase_info["directory"]
-        result["research_content"] = _find_phase_artifact(phase_dir, RESEARCH_SUFFIX, STANDALONE_RESEARCH)
-    if "verification" in includes and phase_info and phase_info.get("directory"):
-        phase_dir = cwd / phase_info["directory"]
-        result["verification_content"] = _find_phase_artifact(phase_dir, VERIFICATION_SUFFIX)
-    if "validation" in includes and phase_info and phase_info.get("directory"):
-        phase_dir = cwd / phase_info["directory"]
-        result["validation_content"] = _find_phase_artifact(phase_dir, VALIDATION_SUFFIX, STANDALONE_VALIDATION)
+    from gpd.core.workflow_staging import load_workflow_stage_manifest
 
-    return result
+    manifest = load_workflow_stage_manifest(
+        "plan-phase",
+        allowed_tools=_PLAN_PHASE_STAGE_ALLOWED_TOOLS,
+        known_init_fields=_PLAN_PHASE_INIT_FIELDS,
+    )
+    try:
+        stage_def = manifest.stage_by_id(stage)
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown plan-phase stage {stage!r}. Allowed values: {', '.join(manifest.stage_ids())}."
+        ) from exc
+
+    required_fields = set(stage_def.required_init_fields)
+    staged_source = dict(result)
+    needs_full_reference_context = bool(required_fields & _PLAN_PHASE_REFERENCE_RUNTIME_FIELDS)
+    needs_contract_gate_context = bool(required_fields & _PLAN_PHASE_CONTRACT_GATE_FIELDS)
+
+    if needs_full_reference_context:
+        staged_source.update(_build_reference_runtime_context(cwd))
+    elif needs_contract_gate_context:
+        staged_source.update(_build_new_project_contract_runtime_context(cwd))
+
+    if required_fields & _PLAN_PHASE_STATE_MEMORY_FIELDS:
+        staged_source.update(_build_state_memory_runtime_context(cwd))
+
+    if required_fields & _PLAN_PHASE_STRUCTURED_STATE_FIELDS:
+        staged_source.update(_build_structured_state_runtime_context(cwd))
+
+    if required_fields & _PLAN_PHASE_FILE_CONTENT_FIELDS:
+        staged_source.update(
+            _build_plan_phase_file_context(
+                cwd,
+                phase_info,
+                include_state="state_content" in required_fields,
+                include_roadmap="roadmap_content" in required_fields,
+                include_requirements="requirements_content" in required_fields,
+                include_context="context_content" in required_fields,
+                include_research="research_content" in required_fields,
+                include_experiment_design="experiment_design_content" in required_fields,
+                include_verification="verification_content" in required_fields,
+                include_validation="validation_content" in required_fields,
+            )
+        )
+
+    missing_fields = [field for field in stage_def.required_init_fields if field not in staged_source]
+    if missing_fields:
+        raise ValueError(
+            f"plan-phase stage {stage!r} requires unavailable init field(s): {', '.join(missing_fields)}"
+        )
+
+    staged_payload = {field: staged_source[field] for field in stage_def.required_init_fields}
+    staged_payload["staged_loading"] = manifest.staged_loading_payload(stage_def.id)
+    return staged_payload
 
 
-def init_new_project(cwd: Path) -> dict:
+def init_new_project(cwd: Path, stage: str | None = None) -> dict:
     """Assemble context for new project creation."""
     config = load_config(cwd)
 
@@ -2032,7 +2576,7 @@ def init_new_project(cwd: Path) -> dict:
         or resolve_current_manuscript_entrypoint(cwd) is not None
     )
 
-    return {
+    result = {
         # Models
         "researcher_model": _resolve_model(cwd, "gpd-project-researcher", config),
         "synthesizer_model": _resolve_model(cwd, "gpd-research-synthesizer", config),
@@ -2057,6 +2601,33 @@ def init_new_project(cwd: Path) -> dict:
         # Platform
         "platform": _detect_platform(cwd),
     }
+
+    if stage is None:
+        return result
+
+    from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+    manifest = load_workflow_stage_manifest(
+        "new-project",
+        allowed_tools={"ask_user", "file_read", "file_write", "shell", "task"},
+        known_init_fields=set(result),
+    )
+    try:
+        stage_def = manifest.stage_by_id(stage)
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown new-project stage {stage!r}. Allowed values: {', '.join(manifest.stage_ids())}."
+        ) from exc
+
+    missing_fields = [field for field in stage_def.required_init_fields if field not in result]
+    if missing_fields:
+        raise ValueError(
+            f"new-project stage {stage!r} requires unavailable init field(s): {', '.join(missing_fields)}"
+        )
+
+    staged_payload = {field: result[field] for field in stage_def.required_init_fields}
+    staged_payload["staged_loading"] = manifest.staged_loading_payload(stage_def.id)
+    return staged_payload
 
 
 def init_new_milestone(cwd: Path) -> dict:
@@ -2274,7 +2845,7 @@ def init_resume(cwd: Path, *, data_root: Path | None = None) -> dict:
     return canonicalize_resume_public_payload(result)
 
 
-def init_verify_work(cwd: Path, phase: str | None) -> dict:
+def init_verify_work(cwd: Path, phase: str | None, stage: str | None = None) -> dict:
     """Assemble context for work verification."""
     if not phase:
         raise ValidationError(
@@ -2290,7 +2861,7 @@ def init_verify_work(cwd: Path, phase: str | None) -> dict:
         persist_manifest=True,
     )
 
-    result = {
+    base_result = {
         # Models
         "planner_model": _resolve_model(cwd, "gpd-planner", config),
         "checker_model": _resolve_model(cwd, "gpd-plan-checker", config),
@@ -2311,10 +2882,52 @@ def init_verify_work(cwd: Path, phase: str | None) -> dict:
         # Platform
         "platform": _detect_platform(cwd),
     }
-    result.update(_build_reference_runtime_context(cwd, persist_manuscript_proof_review_manifest=True))
-    result.update(_build_structured_state_runtime_context(cwd))
-    result.update(_build_state_memory_runtime_context(cwd))
-    return result
+    if stage is None:
+        result = dict(base_result)
+        result.update(_build_reference_runtime_context(cwd, persist_manuscript_proof_review_manifest=True))
+        result.update(_build_structured_state_runtime_context(cwd))
+        result.update(_build_state_memory_runtime_context(cwd))
+        return result
+
+    from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+    manifest = load_workflow_stage_manifest(
+        "verify-work",
+        allowed_tools=_VERIFY_WORK_STAGE_ALLOWED_TOOLS,
+        known_init_fields=_VERIFY_WORK_INIT_FIELDS,
+    )
+    try:
+        stage_def = manifest.stage_by_id(stage)
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown verify-work stage {stage!r}. Allowed values: {', '.join(manifest.stage_ids())}."
+        ) from exc
+
+    required_fields = set(stage_def.required_init_fields)
+    staged_source = dict(base_result)
+    needs_full_reference_context = bool(required_fields & _VERIFY_WORK_REFERENCE_RUNTIME_FIELDS)
+    needs_contract_gate_context = bool(required_fields & _VERIFY_WORK_CONTRACT_GATE_FIELDS)
+
+    if needs_full_reference_context:
+        staged_source.update(_build_reference_runtime_context(cwd))
+    elif needs_contract_gate_context:
+        staged_source.update(_build_new_project_contract_runtime_context(cwd))
+
+    if required_fields & _VERIFY_WORK_STRUCTURED_STATE_FIELDS:
+        staged_source.update(_build_structured_state_runtime_context(cwd))
+
+    if required_fields & _VERIFY_WORK_STATE_MEMORY_FIELDS:
+        staged_source.update(_build_state_memory_runtime_context(cwd))
+
+    missing_fields = [field for field in stage_def.required_init_fields if field not in staged_source]
+    if missing_fields:
+        raise ValueError(
+            f"verify-work stage {stage!r} requires unavailable init field(s): {', '.join(missing_fields)}"
+        )
+
+    staged_payload = {field: staged_source[field] for field in stage_def.required_init_fields}
+    staged_payload["staged_loading"] = manifest.staged_loading_payload(stage_def.id)
+    return staged_payload
 
 
 def init_phase_op(cwd: Path, phase: str | None = None, includes: set[str] | None = None) -> dict:

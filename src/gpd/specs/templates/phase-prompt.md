@@ -125,8 +125,7 @@ Output: [Derivations, code, data, figures, or notes created by this plan]
 </objective>
 
 <execution_context>
-@{GPD_INSTALL_DIR}/workflows/execute-plan.md
-@{GPD_INSTALL_DIR}/templates/summary.md
+Downstream execution reads its execution workflow and summary template later. Do not inline those late-stage materials into the planning template itself.
 </execution_context>
 
 <context>

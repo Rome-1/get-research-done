@@ -42,8 +42,7 @@ Load these shared execution contracts before producing runtime-facing artifacts:
 @{GPD_INSTALL_DIR}/references/tooling/tool-integration.md
 @{GPD_INSTALL_DIR}/references/execution/executor-index.md
 @{GPD_INSTALL_DIR}/templates/state-machine.md
-@{GPD_INSTALL_DIR}/templates/summary.md
-@{GPD_INSTALL_DIR}/templates/calculation-log.md
+Load `summary.md` and `calculation-log.md` only when the task reaches completion or a derivation-heavy logging stage.
 Legacy frontmatter aliases are forbidden in model-facing output; use only the canonical contract-ledger fields from `contract_results`.
 
 Loaded from agent-infrastructure.md reference.
@@ -251,7 +250,6 @@ If no `<context_hint>` is provided, use `standard` allocation.
 @{GPD_INSTALL_DIR}/references/shared/shared-protocols.md
 @{GPD_INSTALL_DIR}/references/verification/errors/llm-physics-errors.md
 @{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md
-@{GPD_INSTALL_DIR}/references/protocols/order-of-limits.md
 
 <protocol_loading>
 
@@ -275,7 +273,7 @@ Your system prompt is large. To preserve context for actual research work, start
 
 **Step 5:** If the work changes formulation mid-plan, load additional protocols on demand and record the shift. Do not stay trapped in the original bundle or fallback subfield if the actual computation demands a different method family.
 
-**Always loaded (via @-references above):** Convention tracking, common physics error taxonomy, agent infrastructure, order-of-limits. Deviation rules, checkpoint protocol, stuck protocol, and context pressure monitoring are inline below.
+**Always loaded (via @-references above):** Convention tracking, common physics error taxonomy, and agent infrastructure. Load `order-of-limits.md` only when the task actually involves competing limits or asymptotic order questions. Deviation rules, checkpoint protocol, stuck protocol, and context pressure monitoring are inline below.
 
 </protocol_loading>
 
@@ -939,13 +937,14 @@ After each task completes (verification passed, done criteria met), checkpoint i
 </task_checkpoint_protocol>
 
 <summary_creation>
-After all tasks complete, load the completion protocols reference for detailed SUMMARY.md templates, state update error handling, and the full structured return envelope:
+After all tasks complete, load the completion reference when preparing SUMMARY.md:
 
 **file_read:** `{GPD_INSTALL_DIR}/references/execution/executor-completion.md`
 
 For contract-backed SUMMARY frontmatter, explicitly load and read the canonical ledger schema before drafting any YAML:
 
 @{GPD_INSTALL_DIR}/templates/contract-results-schema.md
+@{GPD_INSTALL_DIR}/templates/summary.md
 
 This schema is authoritative for `plan_contract_ref`, `contract_results`, and `comparison_verdicts`. Re-open it immediately before writing frontmatter so the exact validator-consumed fields and closed-schema rules are visible in context.
 
@@ -1040,7 +1039,7 @@ Do NOT skip. Do NOT proceed to state updates if self-check fails.
 
 ## State Updates, Final Commit, and Completion
 
-Full templates and error handling in `executor-completion.md` (loaded during summary_creation). Inline minimums below ensure correct behavior if the file_read fails.
+Completion details live in `executor-completion.md`; the inline rules below only cover the minimum needed if that read fails.
 
 ### Shared State Discipline (after SUMMARY.md written)
 
@@ -1078,7 +1077,7 @@ gpd commit \
 - {hash}: {message}
 ```
 
-Append a structured YAML return envelope (see executor-completion.md for full schema):
+Append the structured YAML return envelope defined in `executor-completion.md`:
 
 ```yaml
 gpd_return:
@@ -1196,6 +1195,7 @@ Load these when you need more detail beyond the inline protocols:
 
 - **Deviation rules (expanded):** `{GPD_INSTALL_DIR}/references/execution/executor-deviation-rules.md` — Full rules, examples, and escalation protocols beyond the inline summary
 - **Task checkpoints (expanded):** `{GPD_INSTALL_DIR}/references/execution/executor-task-checkpoints.md` — Full checkpoint protocol with examples beyond the inline commit type list
+- **Order of limits:** `{GPD_INSTALL_DIR}/references/protocols/order-of-limits.md` — Load when a task involves competing limits, branch cuts, or asymptotic order questions
 - **Approximation selection:** `{GPD_INSTALL_DIR}/references/methods/approximation-selection.md` — Decision framework for choosing approximation methods when a task involves non-trivial method selection
 - **Physics code testing:** `{GPD_INSTALL_DIR}/references/verification/core/code-testing-physics.md` — Patterns for writing tests that catch physics errors (load for TDD tasks)
 - **Cross-project patterns:** `{GPD_INSTALL_DIR}/references/shared/cross-project-patterns.md` — Pattern library design and lifecycle (runtime integration handled by `consult_cross_project_patterns` step above)

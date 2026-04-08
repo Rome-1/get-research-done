@@ -84,7 +84,7 @@ Directory: ${QUICK_DIR}
 
 **Step 4: Spawn planner (quick mode)**
 
-Spawn gpd-planner with quick mode context:
+Spawn gpd-planner with the quick-mode context:
 
 @{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 

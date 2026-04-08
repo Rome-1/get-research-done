@@ -4,6 +4,7 @@ import subprocess
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 CI_CATEGORY_SHARD_COUNTS = {
@@ -99,8 +100,12 @@ def all_test_relpaths(*, tests_root: Path) -> tuple[str, ...]:
     return tuple(path.relative_to(tests_root).as_posix() for path in sorted(tests_root.rglob("test_*.py")))
 
 
-def collected_test_inventory(*, repo_root: Path | None = None) -> dict[str, tuple[str, ...]]:
-    root = Path.cwd() if repo_root is None else repo_root
+def _normalized_repo_root(repo_root: Path | None) -> Path:
+    return (Path.cwd() if repo_root is None else repo_root).resolve()
+
+
+@cache
+def _collected_test_inventory_items(repo_root: Path) -> tuple[tuple[str, tuple[str, ...]], ...]:
     proc = subprocess.run(
         [
             sys.executable,
@@ -112,7 +117,7 @@ def collected_test_inventory(*, repo_root: Path | None = None) -> dict[str, tupl
             "-n",
             "0",
         ],
-        cwd=root,
+        cwd=repo_root,
         check=True,
         text=True,
         capture_output=True,
@@ -126,7 +131,11 @@ def collected_test_inventory(*, repo_root: Path | None = None) -> dict[str, tupl
         if path_text.startswith("tests/"):
             path_text = path_text[len("tests/") :]
         inventory.setdefault(path_text, []).append(line)
-    return {rel_path: tuple(nodeids) for rel_path, nodeids in sorted(inventory.items())}
+    return tuple((rel_path, tuple(nodeids)) for rel_path, nodeids in sorted(inventory.items()))
+
+
+def collected_test_inventory(*, repo_root: Path | None = None) -> dict[str, tuple[str, ...]]:
+    return dict(_collected_test_inventory_items(_normalized_repo_root(repo_root)))
 
 
 def collected_test_counts_by_file(*, repo_root: Path | None = None) -> dict[str, int]:
@@ -211,12 +220,17 @@ def plan_category_ci_shards(
     *,
     category: str,
     repo_root: Path | None = None,
+    inventory: Mapping[str, tuple[str, ...]] | None = None,
+    work_units: tuple[CIWorkUnit, ...] | None = None,
 ) -> tuple[tuple[str, ...], ...]:
-    inventory = collected_test_inventory(repo_root=repo_root)
-    work_units = tuple(unit for unit in build_ci_work_units(inventory) if unit.category == category)
-    if not work_units:
+    if work_units is None:
+        if inventory is None:
+            inventory = collected_test_inventory(repo_root=repo_root)
+        work_units = build_ci_work_units(inventory)
+    category_work_units = tuple(unit for unit in work_units if unit.category == category)
+    if not category_work_units:
         raise ValueError(f"no work units matched category {category!r}")
-    return plan_work_units_into_shards(work_units, shard_total=CI_CATEGORY_SHARD_COUNTS[category])
+    return plan_work_units_into_shards(category_work_units, shard_total=CI_CATEGORY_SHARD_COUNTS[category])
 
 
 def expand_ci_targets_to_nodeids(

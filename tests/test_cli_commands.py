@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -41,7 +42,21 @@ from tests.manuscript_test_support import (
     manuscript_relpath as canonical_manuscript_relpath,
 )
 
-runner = CliRunner()
+
+class _StableCliRunner(CliRunner):
+    def invoke(self, *args, **kwargs):
+        kwargs.setdefault("color", False)
+        return super().invoke(*args, **kwargs)
+
+
+runner = _StableCliRunner()
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+
+
+def _normalize_cli_output(text: str) -> str:
+    return " ".join(_ANSI_ESCAPE_RE.sub("", text).split())
+
+
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures" / "stage0"
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
 _PRIMARY_RAW_RUNTIME_DESCRIPTOR = _RUNTIME_DESCRIPTORS[0]
@@ -2003,6 +2018,226 @@ class TestReviewValidationCommands:
             "Either provide phase, artifact, or comparison target explicitly, or initialize a project with "
             f"`{dollar_command_prefix}new-project` in the runtime surface or `gpd init new-project` in the local CLI."
         )
+
+    def test_command_context_digest_knowledge_requires_explicit_inputs_without_project(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-digest-knowledge"
+        outside_dir.mkdir()
+        monkeypatch.chdir(outside_dir)
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(outside_dir), "validate", "command-context", "digest-knowledge"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:digest-knowledge"
+        assert payload["context_mode"] == "project-aware"
+        assert payload["passed"] is False
+        assert checks["project_exists"]["passed"] is False
+        assert checks["explicit_inputs"]["passed"] is False
+
+    def test_command_context_digest_knowledge_accepts_explicit_topic_without_project(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-digest-knowledge-topic"
+        outside_dir.mkdir()
+        monkeypatch.chdir(outside_dir)
+
+        result = runner.invoke(
+            app,
+            [
+                "--raw",
+                "--cwd",
+                str(outside_dir),
+                "validate",
+                "command-context",
+                "digest-knowledge",
+                "renormalization group fixed points",
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:digest-knowledge"
+        assert payload["context_mode"] == "project-aware"
+        assert payload["passed"] is True
+        assert checks["project_exists"]["passed"] is False
+        assert checks["explicit_inputs"]["passed"] is True
+
+    def test_command_context_digest_knowledge_accepts_explicit_file_path_without_project(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-digest-knowledge-file"
+        outside_dir.mkdir()
+        knowledge_dir = outside_dir / "GPD" / "knowledge"
+        knowledge_dir.mkdir(parents=True)
+        knowledge_file = knowledge_dir / "K-renormalization-group-fixed-points.md"
+        knowledge_file.write_text("knowledge doc\n", encoding="utf-8")
+        monkeypatch.chdir(outside_dir)
+
+        result = runner.invoke(
+            app,
+            [
+                "--raw",
+                "--cwd",
+                str(outside_dir),
+                "validate",
+                "command-context",
+                "digest-knowledge",
+                str(knowledge_file.relative_to(outside_dir)),
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:digest-knowledge"
+        assert payload["context_mode"] == "project-aware"
+        assert payload["passed"] is True
+        assert checks["project_exists"]["passed"] is False
+        assert checks["explicit_inputs"]["passed"] is True
+
+    def test_command_context_digest_knowledge_accepts_explicit_modern_arxiv_without_project(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-digest-knowledge-arxiv"
+        outside_dir.mkdir()
+        monkeypatch.chdir(outside_dir)
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(outside_dir), "validate", "command-context", "digest-knowledge", "2401.12345v2"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:digest-knowledge"
+        assert payload["context_mode"] == "project-aware"
+        assert payload["passed"] is True
+        assert checks["project_exists"]["passed"] is False
+        assert checks["explicit_inputs"]["passed"] is True
+
+    def test_command_context_digest_knowledge_accepts_explicit_legacy_arxiv_without_project(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-digest-knowledge-legacy-arxiv"
+        outside_dir.mkdir()
+        monkeypatch.chdir(outside_dir)
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(outside_dir), "validate", "command-context", "digest-knowledge", "hep-th/9901001"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:digest-knowledge"
+        assert payload["context_mode"] == "project-aware"
+        assert payload["passed"] is True
+        assert checks["project_exists"]["passed"] is False
+        assert checks["explicit_inputs"]["passed"] is True
+
+    def test_command_context_review_knowledge_requires_explicit_inputs_without_project(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-review-knowledge"
+        outside_dir.mkdir()
+        monkeypatch.chdir(outside_dir)
+
+        result = runner.invoke(
+            app,
+            ["--raw", "--cwd", str(outside_dir), "validate", "command-context", "review-knowledge"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:review-knowledge"
+        assert payload["context_mode"] == "project-aware"
+        assert payload["passed"] is False
+        assert checks["project_exists"]["passed"] is False
+        assert checks["explicit_inputs"]["passed"] is False
+
+    def test_command_context_review_knowledge_accepts_explicit_knowledge_path_without_project(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-review-knowledge-path"
+        outside_dir.mkdir()
+        knowledge_dir = outside_dir / "GPD" / "knowledge"
+        knowledge_dir.mkdir(parents=True)
+        knowledge_file = knowledge_dir / "K-renormalization-group-fixed-points.md"
+        knowledge_file.write_text("knowledge doc\n", encoding="utf-8")
+        monkeypatch.chdir(outside_dir)
+
+        result = runner.invoke(
+            app,
+            [
+                "--raw",
+                "--cwd",
+                str(outside_dir),
+                "validate",
+                "command-context",
+                "review-knowledge",
+                str(knowledge_file.relative_to(outside_dir)),
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:review-knowledge"
+        assert payload["context_mode"] == "project-aware"
+        assert payload["passed"] is True
+        assert checks["project_exists"]["passed"] is False
+        assert checks["explicit_inputs"]["passed"] is True
+
+    def test_command_context_review_knowledge_accepts_explicit_knowledge_id_without_project(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-review-knowledge-id"
+        outside_dir.mkdir()
+        knowledge_dir = outside_dir / "GPD" / "knowledge"
+        knowledge_dir.mkdir(parents=True)
+        knowledge_file = knowledge_dir / "K-renormalization-group-fixed-points.md"
+        knowledge_file.write_text("knowledge doc\n", encoding="utf-8")
+        monkeypatch.chdir(outside_dir)
+
+        result = runner.invoke(
+            app,
+            [
+                "--raw",
+                "--cwd",
+                str(outside_dir),
+                "validate",
+                "command-context",
+                "review-knowledge",
+                "K-renormalization-group-fixed-points",
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        checks = {check["name"]: check for check in payload["checks"]}
+        assert payload["command"] == "gpd:review-knowledge"
+        assert payload["context_mode"] == "project-aware"
+        assert payload["passed"] is True
+        assert checks["project_exists"]["passed"] is False
+        assert checks["explicit_inputs"]["passed"] is True
 
     def test_review_preflight_write_paper_strict(self) -> None:
         result = runner.invoke(
@@ -5345,6 +5580,46 @@ def test_cli_uninstall_and_resolution_paths(monkeypatch: pytest.MonkeyPatch, gpd
     monkeypatch.setattr(cli_module, "_get_cwd", lambda: cwd)
     monkeypatch.setattr(cli_module, "_get_adapter_or_error", lambda runtime_name, action: _FakeAdapter())
     assert cli_module._target_dir_matches_global(_PRIMARY_RAW_RUNTIME_DESCRIPTOR.runtime_name, str(tricky_target), action="install") is True
+
+
+def test_init_new_project_help_surfaces_stage_option() -> None:
+    result = runner.invoke(app, ["init", "new-project", "--help"])
+    output = _normalize_cli_output(result.output)
+
+    assert result.exit_code == 0
+    assert "--stage" in output
+    assert "Load the staged new-project context for a specific" in output
+    assert "stage id." in output
+
+
+def test_init_verify_work_help_surfaces_stage_option() -> None:
+    result = runner.invoke(app, ["init", "verify-work", "--help"])
+    output = _normalize_cli_output(result.output)
+
+    assert result.exit_code == 0
+    assert "--stage" in output
+    assert "Load the staged verify-work context for a specific" in output
+    assert "stage id." in output
+
+
+def test_init_plan_phase_help_surfaces_stage_option() -> None:
+    result = runner.invoke(app, ["init", "plan-phase", "--help"])
+    output = _normalize_cli_output(result.output)
+
+    assert result.exit_code == 0
+    assert "--stage" in output
+    assert "Load the staged plan-phase context for a specific" in output
+    assert "stage id." in output
+
+
+def test_init_execute_phase_help_surfaces_stage_option() -> None:
+    result = runner.invoke(app, ["init", "execute-phase", "--help"])
+    output = _normalize_cli_output(result.output)
+
+    assert result.exit_code == 0
+    assert "--stage" in output
+    assert "Load the staged execute-phase context for a specific" in output
+    assert "stage id." in output
 
 
 class TestNoDuplicateTestMethods:

@@ -2497,6 +2497,24 @@ def _plan_with_tool_requirements(tool_requirements_block: str) -> str:
     return fixture.replace("interactive: false\n", f"interactive: false\n{tool_requirements_block}", 1)
 
 
+def _plan_with_knowledge_controls(
+    *,
+    knowledge_gate: str | None = None,
+    knowledge_deps: list[str] | None = None,
+) -> str:
+    fixture = (
+        Path(__file__).resolve().parents[1] / "fixtures" / "stage0" / "plan_with_contract.md"
+    ).read_text(encoding="utf-8")
+    metadata_block = ""
+    if knowledge_gate is not None:
+        metadata_block += f"knowledge_gate: {knowledge_gate}\n"
+    if knowledge_deps is not None:
+        metadata_block += "knowledge_deps:\n"
+        for dep in knowledge_deps:
+            metadata_block += f"  - {dep}\n"
+    return fixture.replace("interactive: false\n", f"interactive: false\n{metadata_block}", 1)
+
+
 def test_validate_plan_preflight_passes_when_no_specialized_tools_are_declared(tmp_path: Path) -> None:
     plan_path = tmp_path / "01-01-PLAN.md"
     plan_path.write_text(
@@ -2567,6 +2585,50 @@ def test_validate_plan_preflight_allows_missing_optional_wolfram_with_fallback(
     assert payload["passed"] is True
     assert payload["requirements"][0]["tool"] == "wolfram"
     assert payload["requirements"][0]["blocking"] is False
+
+
+def test_validate_plan_preflight_warns_on_missing_knowledge_dependency(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "01-01-PLAN.md"
+    plan_path.write_text(
+        _plan_with_knowledge_controls(
+            knowledge_gate="warn",
+            knowledge_deps=["K-missing-dependency"],
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["--raw", "validate", "plan-preflight", str(plan_path)])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["knowledge_gate"] == "warn"
+    assert payload["passed"] is True
+    assert payload["knowledge_dependency_checks"][0]["status"] == "missing"
+    assert any("K-missing-dependency" in warning for warning in payload["warnings"])
+
+
+def test_validate_plan_preflight_blocks_on_missing_knowledge_dependency(
+    tmp_path: Path,
+) -> None:
+    plan_path = tmp_path / "01-01-PLAN.md"
+    plan_path.write_text(
+        _plan_with_knowledge_controls(
+            knowledge_gate="block",
+            knowledge_deps=["K-missing-dependency"],
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["--raw", "validate", "plan-preflight", str(plan_path)])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["knowledge_gate"] == "block"
+    assert payload["passed"] is False
+    assert payload["knowledge_dependency_checks"][0]["status"] == "missing"
+    assert any("K-missing-dependency" in blocker for blocker in payload["blocking_conditions"])
 
 
 def test_resolve_model_help_lists_supported_runtime_ids():
@@ -5504,6 +5566,18 @@ def test_init_execute_phase(mock_init):
     mock_init.assert_called_once()
 
 
+@patch("gpd.core.context.init_execute_phase")
+def test_init_execute_phase_forwards_stage_option(mock_init):
+    mock_result = MagicMock()
+    mock_result.model_dump.return_value = {"context": "..."}
+    mock_init.return_value = mock_result
+    result = runner.invoke(app, ["init", "execute-phase", "42", "--stage", "phase_bootstrap"])
+    assert result.exit_code == 0
+    mock_init.assert_called_once()
+    assert mock_init.call_args.args == (cli_module._get_cwd(), "42")
+    assert mock_init.call_args.kwargs == {"includes": set(), "stage": "phase_bootstrap"}
+
+
 @patch("gpd.core.context.init_new_project")
 def test_init_new_project(mock_init):
     mock_result = MagicMock()
@@ -5512,6 +5586,154 @@ def test_init_new_project(mock_init):
     result = runner.invoke(app, ["init", "new-project"])
     assert result.exit_code == 0
     mock_init.assert_called_once()
+    assert len(mock_init.call_args.args) == 1
+    assert mock_init.call_args.kwargs == {}
+
+
+@patch("gpd.core.context.init_new_project")
+def test_init_new_project_stage(mock_init):
+    mock_result = MagicMock()
+    mock_result.model_dump.return_value = {"context": "..."}
+    mock_init.return_value = mock_result
+    result = runner.invoke(app, ["init", "new-project", "--stage", "scope_intake"])
+    assert result.exit_code == 0
+    mock_init.assert_called_once()
+    assert len(mock_init.call_args.args) == 1
+    assert mock_init.call_args.kwargs == {"stage": "scope_intake"}
+
+
+@patch("gpd.core.context.init_new_project", side_effect=ValueError("Unknown new-project stage 'bogus'."))
+def test_init_new_project_rejects_invalid_stage(mock_init):
+    result = runner.invoke(app, ["init", "new-project", "--stage", "bogus"])
+    assert result.exit_code == 1
+    assert "Unknown new-project stage 'bogus'." in result.output
+
+
+def test_init_verify_work_preserves_plain_call_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[Path, str | None, str | None]] = []
+
+    def fake_init(cwd: Path, phase: str | None, stage: str | None = None):
+        calls.append((cwd, phase, stage))
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"context": "..."}
+        return mock_result
+
+    monkeypatch.setattr("gpd.core.context.init_verify_work", fake_init)
+    result = runner.invoke(app, ["init", "verify-work", "01"])
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    cwd, phase, stage = calls[0]
+    assert cwd == cli_module._get_cwd()
+    assert phase == "01"
+    assert stage is None
+
+
+def test_init_verify_work_forwards_stage_option(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[Path, str | None, str | None]] = []
+
+    def fake_init(cwd: Path, phase: str | None, stage: str | None = None):
+        calls.append((cwd, phase, stage))
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"context": "..."}
+        return mock_result
+
+    monkeypatch.setattr("gpd.core.context.init_verify_work", fake_init)
+    result = runner.invoke(app, ["init", "verify-work", "01", "--stage", "session_router"])
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    cwd, phase, stage = calls[0]
+    assert cwd == cli_module._get_cwd()
+    assert phase == "01"
+    assert stage == "session_router"
+
+
+def test_init_plan_phase_preserves_plain_call_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[Path, str | None, set[str] | None, str | None]] = []
+
+    def fake_init(
+        cwd: Path,
+        phase: str | None,
+        includes: set[str] | None = None,
+        stage: str | None = None,
+    ):
+        calls.append((cwd, phase, includes, stage))
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"context": "..."}
+        return mock_result
+
+    monkeypatch.setattr("gpd.core.context.init_plan_phase", fake_init)
+    result = runner.invoke(app, ["init", "plan-phase", "02", "--include", "state,research"])
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    cwd, phase, includes, stage = calls[0]
+    assert cwd == cli_module._get_cwd()
+    assert phase == "02"
+    assert includes == {"state", "research"}
+    assert stage is None
+
+
+def test_init_plan_phase_forwards_stage_option(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[Path, str | None, set[str] | None, str | None]] = []
+
+    def fake_init(
+        cwd: Path,
+        phase: str | None,
+        includes: set[str] | None = None,
+        stage: str | None = None,
+    ):
+        calls.append((cwd, phase, includes, stage))
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = {"context": "..."}
+        return mock_result
+
+    monkeypatch.setattr("gpd.core.context.init_plan_phase", fake_init)
+    result = runner.invoke(app, ["init", "plan-phase", "02", "--stage", "phase_bootstrap"])
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    cwd, phase, includes, stage = calls[0]
+    assert cwd == cli_module._get_cwd()
+    assert phase == "02"
+    assert includes == set()
+    assert stage == "phase_bootstrap"
+
+
+def test_init_plan_phase_rejects_stage_and_include_mix(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_init(
+        cwd: Path,
+        phase: str | None,
+        includes: set[str] | None = None,
+        stage: str | None = None,
+    ):
+        raise ValueError(
+            "gpd init plan-phase does not allow --include together with --stage; "
+            "stage payloads already declare their required context."
+        )
+
+    monkeypatch.setattr("gpd.core.context.init_plan_phase", fake_init)
+    result = runner.invoke(app, ["init", "plan-phase", "02", "--include", "state", "--stage", "phase_bootstrap"])
+
+    assert result.exit_code == 1
+    assert "does not allow --include together with --stage" in result.output
+
+
+def test_init_plan_phase_rejects_invalid_stage(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_init(
+        cwd: Path,
+        phase: str | None,
+        includes: set[str] | None = None,
+        stage: str | None = None,
+    ):
+        raise ValueError("Unknown plan-phase stage 'bogus'. Allowed values: phase_bootstrap.")
+
+    monkeypatch.setattr("gpd.core.context.init_plan_phase", fake_init)
+    result = runner.invoke(app, ["init", "plan-phase", "02", "--stage", "bogus"])
+
+    assert result.exit_code == 1
+    assert "Unknown plan-phase stage 'bogus'" in result.output
 
 
 def test_init_resume_help_surfaces_recovery_snapshot_entrypoint() -> None:
@@ -6487,6 +6709,65 @@ def test_paper_build_auto_discovers_single_literature_citation_sources_sidecar(t
     assert any("temporary directory" in warning for warning in payload["warnings"])
     assert mock_build.await_args.kwargs["citation_sources"] is not None
     assert mock_build.await_args.kwargs["citation_sources"][0].title == "Auto Reference"
+
+
+def test_paper_build_auto_discovers_legacy_research_citation_sources_sidecar_when_literature_is_missing(
+    tmp_path: Path,
+) -> None:
+    nested_cwd = tmp_path / "notes"
+    nested_cwd.mkdir()
+    (tmp_path / "GPD").mkdir()
+    paper_dir = tmp_path / "paper"
+    paper_dir.mkdir()
+    (paper_dir / "PAPER-CONFIG.json").write_text(
+        json.dumps(
+            {
+                "title": "Configured Paper",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"title": "Intro", "content": "Hello."}],
+                "figures": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    research_dir = tmp_path / "GPD" / "research"
+    research_dir.mkdir(parents=True)
+    (research_dir / "topic-CITATION-SOURCES.json").write_text(
+        json.dumps(
+            [
+                {
+                    "reference_id": "ref-legacy",
+                    "source_type": "paper",
+                    "title": "Legacy Reference",
+                    "authors": ["A. Author"],
+                    "year": "2023",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result_payload = MagicMock()
+    result_payload.manifest_path = paper_dir / "ARTIFACT-MANIFEST.json"
+    result_payload.bibliography_audit_path = None
+    result_payload.pdf_path = paper_dir / "configured_paper.pdf"
+    result_payload.success = True
+    result_payload.errors = []
+
+    with (
+        patch("gpd.mcp.paper.compiler.detect_latex_toolchain", return_value=_toolchain_capability()),
+        patch("gpd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=result_payload)) as mock_build,
+    ):
+        result = runner.invoke(app, ["--raw", "--cwd", str(nested_cwd), "paper-build"], catch_exceptions=False)
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["citation_sources_path"] == "../GPD/research/topic-CITATION-SOURCES.json"
+    assert any("temporary directory" in warning for warning in payload["warnings"])
+    assert mock_build.await_args.kwargs["citation_sources"] is not None
+    assert mock_build.await_args.kwargs["citation_sources"][0].title == "Legacy Reference"
 
 
 def test_paper_build_warns_when_multiple_literature_citation_sidecars_exist(tmp_path: Path) -> None:

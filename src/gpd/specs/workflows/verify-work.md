@@ -19,19 +19,6 @@ Walk through derivation logic, perform numerical spot-checks, re-derive limiting
 **Verification independence:** Derive validation checks from the phase goal, the PLAN `contract`, and the actual research artifacts — not from phase-summary claims about what was accomplished. Summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`) `contract_results` and `comparison_verdicts` tell you where evidence lives; the expected physics comes from the phase goal, contract IDs, and domain knowledge. See @{GPD_INSTALL_DIR}/references/verification/meta/verification-independence.md.
 </philosophy>
 
-<template>
-@{GPD_INSTALL_DIR}/templates/research-verification.md
-</template>
-
-Use the researcher-session body scaffold from `research-verification.md`, but keep the frontmatter contract compatible with `@{GPD_INSTALL_DIR}/templates/verification-report.md` and `@{GPD_INSTALL_DIR}/templates/contract-results-schema.md`.
-
-<required_reading>
-@{GPD_INSTALL_DIR}/references/verification/meta/verification-independence.md
-@{GPD_INSTALL_DIR}/templates/verification-report.md
-@{GPD_INSTALL_DIR}/templates/contract-results-schema.md
-@{GPD_INSTALL_DIR}/references/protocols/error-propagation-protocol.md
-</required_reading>
-
 <process>
 
 <step name="check_type_selection">
@@ -162,7 +149,7 @@ Use `active_reference_context` from init JSON as a mandatory input to verificati
 
 - If it names a benchmark, prior artifact, or must-read reference, verification must explicitly check it or report why it could not.
 - Treat `effective_reference_intake` as the structured source of must-read refs, prior outputs, baselines, user anchors, and context gaps. `active_reference_context` is the readable rendering of that ledger, not its substitute.
-- Treat `reference_artifacts_content` as supporting evidence for what comparisons remain decisive.
+- Treat `reference_artifacts_content` as supporting evidence for what comparisons remain decisive. Stable knowledge docs that appear there are reviewed background synthesis: use them to clarify definitions, assumptions, and caveats only when they agree with stronger sources, and never as decisive evidence on their own.
 - Background literature may be reduced by mode; anchor checks may not.
 </step>
 
@@ -354,6 +341,8 @@ import numpy as np
 
 <step name="create_verification_file">
 **Create or extend verification file with all checks:**
+
+Load the researcher-session body scaffold from `research-verification.md` here, but keep the frontmatter contract compatible with `@{GPD_INSTALL_DIR}/templates/verification-report.md` and `@{GPD_INSTALL_DIR}/templates/contract-results-schema.md`. When you are about to write the canonical verification frontmatter or append the contract-results ledger, load `verification-report.md`, `contract-results-schema.md`, and `canonical-schema-discipline.md` at this stage so the constrained output sees the schema before it is emitted.
 
 ```bash
 mkdir -p "$phase_dir"
@@ -775,6 +764,8 @@ Custom checks are numbered continuing from the last automated check (e.g., if 6 
 <step name="cross_phase_uncertainty_audit">
 **Audit uncertainty propagation across phases with researcher.**
 
+Load `error-propagation-protocol.md` here, and only here, before summarizing how prior-phase uncertainties propagate into the current phase.
+
 This step checks that uncertainties from prior phases propagate correctly into the current phase's results — the #1 gap found by physics verification audits.
 
 **1. Identify inherited quantities:**
@@ -1005,7 +996,7 @@ Display:
 * Spawning planner for gap closure...
 ```
 
-Spawn gpd-planner in --gaps mode:
+Spawn gpd-planner in `--gaps` mode:
 > **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
 
 Planner prompt:
@@ -1013,7 +1004,7 @@ Planner prompt:
 @{GPD_INSTALL_DIR}/templates/planner-subagent-prompt.md
 
 ```markdown
-Render the template's `## Standard Planning Template` into `gap_closure_prompt` with these bindings:
+Render the stage-local planner template's `## Standard Planning Template` into `gap_closure_prompt` with these bindings:
 
 - `{phase_number}` -> {phase_number}
 - `{standard | gap_closure}` -> `gap_closure`
@@ -1037,9 +1028,9 @@ Render the template's `## Standard Planning Template` into `gap_closure_prompt` 
 - `{experiment_design_content}` -> No separate experiment-design artifact is preloaded for gap closure.
 - `{verification_content}` -> Read `${phase_dir}/${phase_number}-VERIFICATION.md` before drafting.
 - `{validation_content}` -> Use existing phase validation notes only if they already exist and matter to the diagnosed gaps.
-
 If the downstream fix plan needs specialized tooling or other machine-checkable hard requirements, keep them in PLAN frontmatter `tool_requirements`.
-Keep the prompt scoped to diagnosed verification gaps. Do not restate template-owned contract gates, tangent control, context-budget guidance, downstream-consumer rules, or the quality gate here.
+
+Keep the prompt scoped to diagnosed verification gaps and stage-local anchors.
 ```
 
 ```
@@ -1141,7 +1132,7 @@ Revision prompt:
 @{GPD_INSTALL_DIR}/templates/planner-subagent-prompt.md
 
 ```markdown
-Render the template's `## Revision Template` into `revision_prompt` with these bindings:
+Render the stage-local planner template's `## Revision Template` into `revision_prompt` with these bindings:
 
 - `{phase_number}` -> {phase_number}
 - `{plans_content}` -> Read all PLAN.md files in `${phase_dir}/` before revising.
@@ -1157,10 +1148,10 @@ Render the template's `## Revision Template` into `revision_prompt` with these b
 - `{active_reference_context}` -> {active_reference_context}
 - `{reference_artifacts_content}` -> {reference_artifacts_content}
 - `{context_content}` -> Keep revisions scoped to checker feedback plus the diagnosed verification gaps already surfaced in `${phase_dir}/${phase_number}-VERIFICATION.md`.
-
 If the revised fix plan still needs specialized tooling or other machine-checkable hard requirements, keep them in PLAN frontmatter `tool_requirements`.
 Treat `effective_reference_intake` as the structured source of carry-forward anchors; `active_reference_context` is the readable projection, not the source of truth.
-Keep the revision prompt scoped to targeted checker fixes. Do not restate template-owned revision policy here.
+
+Keep the revision prompt scoped to targeted checker fixes and stage-local anchors.
 ```
 
 ```

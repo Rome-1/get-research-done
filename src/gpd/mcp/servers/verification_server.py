@@ -3328,7 +3328,10 @@ def _contract_error_sort_key(error: str) -> tuple[object, ...]:
 
 
 def _contract_payload_error(errors: list[str]) -> dict[str, object]:
-    details = sorted(dict.fromkeys(errors), key=_contract_error_sort_key)
+    details = sorted(
+        dict.fromkeys(errors),
+        key=_contract_error_sort_key,
+    )
     if not details:
         return _error_result("Invalid contract payload")
     message = f"Invalid contract payload: {_summarize_contract_salvage_errors(details)}"

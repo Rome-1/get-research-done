@@ -26,6 +26,7 @@ from tests.doc_surface_contracts import (
     assert_beginner_startup_routing_contract,
     assert_cost_advisory_contract,
     assert_cost_surface_discoverability,
+    assert_health_command_public_contract,
     assert_help_command_all_extract_contract,
     assert_help_command_quick_start_extract_contract,
     assert_help_command_single_command_extract_contract,
@@ -403,6 +404,12 @@ def test_progress_prompt_runs_preflight_after_init_context() -> None:
     )
 
 
+def test_health_prompt_documents_the_real_raw_health_report_shape() -> None:
+    health_command = (COMMANDS_DIR / "health.md").read_text(encoding="utf-8")
+
+    assert_health_command_public_contract(health_command)
+
+
 def test_progress_prompt_requires_project_not_roadmap() -> None:
     command = (REPO_ROOT / "src/gpd/commands/progress.md").read_text(encoding="utf-8")
 
@@ -414,8 +421,8 @@ def test_plan_phase_prompt_is_a_thin_dispatch_shell() -> None:
     command = (REPO_ROOT / "src/gpd/commands/plan-phase.md").read_text(encoding="utf-8")
 
     assert "@{GPD_INSTALL_DIR}/workflows/plan-phase.md" in command
-    assert "@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md" in command
-    assert "@{GPD_INSTALL_DIR}/references/ui/ui-brand.md" in command
+    assert "@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md" not in command
+    assert "@{GPD_INSTALL_DIR}/references/ui/ui-brand.md" not in command
     assert "Follow the included workflow file exactly." in command
     assert "agent: gpd-planner" in command
     assert "What Makes a Good Physics Plan" not in command

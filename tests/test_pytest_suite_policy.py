@@ -170,11 +170,12 @@ def test_hotspot_files_are_split_into_multiple_work_units() -> None:
 
 def test_category_shard_layout_covers_every_collected_nodeid_without_overlap() -> None:
     inventory = collected_test_inventory(repo_root=_repo_root())
+    work_units = build_ci_work_units(inventory)
     all_nodeids = tuple(nodeid for nodeids in inventory.values() for nodeid in nodeids)
     flattened: list[str] = []
 
     for category, shard_total in CI_CATEGORY_SHARD_COUNTS.items():
-        planned_shards = plan_category_ci_shards(category=category, repo_root=_repo_root())
+        planned_shards = plan_category_ci_shards(category=category, work_units=work_units)
         expanded_targets = [
             expand_ci_targets_to_nodeids(shard_targets, inventory=inventory)
             for shard_targets in planned_shards
@@ -208,7 +209,7 @@ def test_split_categories_keep_runtime_informed_weight_spread_tight() -> None:
     for category, shard_total in CI_CATEGORY_SHARD_COUNTS.items():
         if shard_total == 1:
             continue
-        planned_shards = plan_category_ci_shards(category=category, repo_root=_repo_root())
+        planned_shards = plan_category_ci_shards(category=category, work_units=work_units)
         shard_weights = [
             sum(per_target_weight[target] for target in shard_targets)
             for shard_targets in planned_shards

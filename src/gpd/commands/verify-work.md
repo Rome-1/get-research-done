@@ -30,6 +30,7 @@ review-contract:
   required_state: phase_executed
 allowed-tools:
   - file_read
+  - ask_user
   - shell
   - find_files
   - search_files
@@ -55,9 +56,6 @@ Physics verification is not binary: checks can agree within expected approximati
 
 <execution_context>
 @{GPD_INSTALL_DIR}/workflows/verify-work.md
-@{GPD_INSTALL_DIR}/references/verification/core/verification-core.md
-@{GPD_INSTALL_DIR}/templates/verification-report.md
-@{GPD_INSTALL_DIR}/templates/contract-results-schema.md
 </execution_context>
 
 <context>

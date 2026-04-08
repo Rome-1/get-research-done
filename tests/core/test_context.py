@@ -35,9 +35,11 @@ from gpd.core.context import (
     load_config,
 )
 from gpd.core.errors import ConfigError, ValidationError
+from gpd.core.frontmatter import compute_knowledge_reviewed_content_sha256
 from gpd.core.recent_projects import record_recent_project
 from gpd.core.reproducibility import compute_sha256
 from gpd.core.resume_surface import RESUME_COMPATIBILITY_ALIAS_FIELDS
+from gpd.core.workflow_staging import NEW_PROJECT_INIT_FIELDS
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
@@ -70,6 +72,101 @@ def _create_config(tmp_path: Path, config: dict) -> Path:
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(json.dumps(config))
     return config_path
+
+
+_PLAN_PHASE_STAGE_BOOTSTRAP_FIELDS = [
+    "researcher_model",
+    "planner_model",
+    "checker_model",
+    "research_enabled",
+    "plan_checker_enabled",
+    "commit_docs",
+    "autonomy",
+    "research_mode",
+    "phase_found",
+    "phase_dir",
+    "phase_number",
+    "phase_name",
+    "phase_slug",
+    "padded_phase",
+    "has_research",
+    "has_context",
+    "has_plans",
+    "plan_count",
+    "planning_exists",
+    "roadmap_exists",
+    "project_contract",
+    "project_contract_gate",
+    "project_contract_load_info",
+    "project_contract_validation",
+    "platform",
+]
+
+_PLAN_PHASE_STAGE_AUTHORING_FIELDS = _PLAN_PHASE_STAGE_BOOTSTRAP_FIELDS + [
+    "contract_intake",
+    "effective_reference_intake",
+    "selected_protocol_bundle_ids",
+    "protocol_bundle_count",
+    "protocol_bundle_context",
+    "protocol_bundle_verifier_extensions",
+    "active_reference_context",
+    "reference_artifact_files",
+    "reference_artifacts_content",
+    "literature_review_files",
+    "literature_review_count",
+    "research_map_reference_files",
+    "research_map_reference_count",
+    "derived_manuscript_proof_review_status",
+    "state_content",
+    "roadmap_content",
+    "requirements_content",
+    "context_content",
+    "research_content",
+    "experiment_design_content",
+    "verification_content",
+    "validation_content",
+]
+
+
+class _FakePlanPhaseStage:
+    def __init__(self, stage_id: str, required_init_fields: list[str]) -> None:
+        self.id = stage_id
+        self.required_init_fields = required_init_fields
+
+
+class _FakePlanPhaseManifest:
+    def __init__(self) -> None:
+        self.workflow_id = "plan-phase"
+        self._stages = {
+            "phase_bootstrap": _FakePlanPhaseStage("phase_bootstrap", _PLAN_PHASE_STAGE_BOOTSTRAP_FIELDS),
+            "research_routing": _FakePlanPhaseStage("research_routing", _PLAN_PHASE_STAGE_BOOTSTRAP_FIELDS),
+            "planner_authoring": _FakePlanPhaseStage("planner_authoring", _PLAN_PHASE_STAGE_AUTHORING_FIELDS),
+            "checker_revision": _FakePlanPhaseStage("checker_revision", _PLAN_PHASE_STAGE_AUTHORING_FIELDS),
+        }
+
+    def stage_by_id(self, stage_id: str) -> _FakePlanPhaseStage:
+        return self._stages[stage_id]
+
+    def stage_ids(self) -> list[str]:
+        return list(self._stages)
+
+    def staged_loading_payload(self, stage_id: str) -> dict[str, object]:
+        return {"workflow_id": self.workflow_id, "stage_id": stage_id}
+
+
+def _install_fake_plan_phase_manifest(monkeypatch: pytest.MonkeyPatch) -> _FakePlanPhaseManifest:
+    manifest = _FakePlanPhaseManifest()
+
+    def fake_load_workflow_stage_manifest(
+        workflow_id: str,
+        allowed_tools: set[str] | None = None,
+        known_init_fields: set[str] | None = None,
+    ) -> _FakePlanPhaseManifest:
+        assert workflow_id == "plan-phase"
+        return manifest
+
+    monkeypatch.setattr("gpd.core.workflow_staging.load_workflow_stage_manifest", fake_load_workflow_stage_manifest)
+    return manifest
 
 
 def _write_state_intent_recovery_files(project_root: Path) -> ProjectLayout:
@@ -323,8 +420,13 @@ def _write_structured_state_payload(tmp_path: Path) -> None:
     """Persist a representative structured state payload into state.json."""
     from gpd.core.state import default_state_dict
 
-    state = default_state_dict()
-    state["convention_lock"].update(
+    state_path = tmp_path / "GPD" / "state.json"
+    if state_path.exists():
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    else:
+        state = default_state_dict()
+
+    state.setdefault("convention_lock", {}).update(
         {
             "metric_signature": "(-,+,+,+)",
             "fourier_convention": "physics",
@@ -361,7 +463,7 @@ def _write_structured_state_payload(tmp_path: Path) -> None:
             "method": "bootstrap",
         }
     ]
-    (tmp_path / "GPD" / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    state_path.write_text(json.dumps(state), encoding="utf-8")
 
 
 def _assert_structured_state_context(ctx: dict[str, object], tmp_path: Path) -> None:
@@ -408,6 +510,7 @@ def _write_bundle_ready_contract_state(tmp_path: Path) -> None:
 
     state = default_state_dict()
     state["project_contract"] = {
+        "schema_version": 1,
         "scope": {
             "question": "What finite-size scaling collapse and benchmark comparison does the simulation recover?",
             "in_scope": ["Recover the decisive finite-size scaling benchmark for the simulation regime"],
@@ -456,6 +559,9 @@ def _write_bundle_ready_contract_state(tmp_path: Path) -> None:
                 "required_actions": ["read", "compare", "cite"],
             }
         ],
+        "context_intake": {
+            "must_read_refs": ["ref-benchmark"],
+        },
         "forbidden_proxies": [
             {
                 "id": "fp-proxy",
@@ -758,6 +864,76 @@ def _write_research_map_anchor_files(tmp_path: Path) -> None:
     )
 
 
+def _write_knowledge_doc(
+    tmp_path: Path,
+    *,
+    knowledge_id: str = "K-renormalization-group-fixed-points",
+    status: str = "stable",
+    body: str = "Trusted knowledge body.\n",
+) -> None:
+    knowledge_dir = tmp_path / "GPD" / "knowledge"
+    knowledge_dir.mkdir(parents=True, exist_ok=True)
+    path = knowledge_dir / f"{knowledge_id}.md"
+    base_content = (
+        "---\n"
+        "knowledge_schema_version: 1\n"
+        f"knowledge_id: {knowledge_id}\n"
+        "title: Renormalization Group Fixed Points\n"
+        "topic: renormalization-group\n"
+        f"status: {status}\n"
+        "created_at: 2026-04-07T12:00:00Z\n"
+        "updated_at: 2026-04-07T12:00:00Z\n"
+        "sources:\n"
+        "  - source_id: source-main\n"
+        "    kind: paper\n"
+        "    locator: Author et al., 2024\n"
+        "    title: Benchmark Reference\n"
+        "    why_it_matters: Trusted source for the topic\n"
+        "coverage_summary:\n"
+        "  covered_topics: [fixed points]\n"
+        "  excluded_topics: [implementation]\n"
+        "  open_gaps: [none]\n"
+        "---\n\n"
+        f"{body}"
+    )
+    reviewed_content_sha256 = compute_knowledge_reviewed_content_sha256(base_content)
+    if status == "stable":
+        content = base_content.replace(
+            "---\n\n",
+            "review:\n"
+            "  reviewed_at: 2026-04-07T13:00:00Z\n"
+            "  review_round: 1\n"
+            "  reviewer_kind: workflow\n"
+            "  reviewer_id: gpd-review-knowledge\n"
+            "  decision: approved\n"
+            "  summary: Stable review approved.\n"
+            f"  approval_artifact_path: GPD/knowledge/reviews/{knowledge_id}-R1-REVIEW.md\n"
+            f"  approval_artifact_sha256: {'a' * 64}\n"
+            f"  reviewed_content_sha256: {reviewed_content_sha256}\n"
+            "  stale: false\n"
+            "---\n\n",
+        )
+    elif status == "in_review":
+        content = base_content.replace(
+            "---\n\n",
+            "review:\n"
+            "  reviewed_at: 2026-04-07T13:00:00Z\n"
+            "  review_round: 1\n"
+            "  reviewer_kind: workflow\n"
+            "  reviewer_id: gpd-review-knowledge\n"
+            "  decision: approved\n"
+            "  summary: Needs re-review after edits.\n"
+            f"  approval_artifact_path: GPD/knowledge/reviews/{knowledge_id}-R1-REVIEW.md\n"
+            f"  approval_artifact_sha256: {'a' * 64}\n"
+            f"  reviewed_content_sha256: {reviewed_content_sha256}\n"
+            "  stale: true\n"
+            "---\n\n",
+        )
+    else:
+        content = base_content
+    path.write_text(content, encoding="utf-8")
+
+
 # ─── Helper Tests ──────────────────────────────────────────────────────────────
 
 
@@ -957,6 +1133,8 @@ class TestInitExecutePhase:
             },
             literature_review_files=[],
             research_map_reference_files=[],
+            stable_knowledge_doc_files=[],
+            knowledge_doc_status_counts={},
             contract_validation={
                 "valid": False,
                 "errors": ["scope.question is required"],
@@ -1098,6 +1276,28 @@ class TestInitExecutePhase:
         assert checklist["bundle_checks"] == ctx["protocol_bundle_verifier_extensions"]
 
 
+class TestInitExecutePhaseStagedWiring:
+    def test_stage_phase_bootstrap_returns_only_bootstrap_payload(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-setup")
+        _write_project_contract_state(tmp_path)
+
+        ctx = init_execute_phase(tmp_path, "1", stage="phase_bootstrap")
+
+        assert ctx["phase_found"] is True
+        assert ctx["staged_loading"]["stage_id"] == "phase_bootstrap"
+        assert "reference_artifacts_content" not in ctx
+        assert "protocol_bundle_context" not in ctx
+        assert "current_execution" not in ctx
+
+    def test_stage_rejects_unknown_execute_phase_stage(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-setup")
+
+        with pytest.raises(ValueError, match="Unknown execute-phase stage 'bogus'"):
+            init_execute_phase(tmp_path, "1", stage="bogus")
+
+
 # ─── init_plan_phase ──────────────────────────────────────────────────────────
 
 
@@ -1113,6 +1313,93 @@ class TestInitPlanPhase:
         assert ctx["has_research"] is True
         assert ctx["has_plans"] is False
         assert ctx["padded_phase"] == "02"
+        assert "staged_loading" not in ctx
+
+    def test_stage_phase_bootstrap_returns_only_bootstrap_payload(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "02-analysis")
+        _write_project_contract_state(tmp_path)
+        _install_fake_plan_phase_manifest(monkeypatch)
+
+        ctx = init_plan_phase(tmp_path, "2", stage="phase_bootstrap")
+
+        assert ctx["phase_found"] is True
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert ctx["staged_loading"]["stage_id"] == "phase_bootstrap"
+        assert "contract_intake" not in ctx
+        assert "active_reference_context" not in ctx
+        assert "reference_artifacts_content" not in ctx
+        assert "state_content" not in ctx
+
+    def test_stage_planner_authoring_surfaces_reference_runtime_and_file_context(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _setup_project(tmp_path)
+        phase_dir = _create_phase_dir(tmp_path, "02-analysis")
+        _write_project_contract_state(tmp_path)
+        _write_literature_review_anchor_file(tmp_path)
+        _write_research_map_anchor_files(tmp_path)
+        (phase_dir / "02-CONTEXT.md").write_text("# Context\nLocked scope.\n", encoding="utf-8")
+        (phase_dir / "02-RESEARCH.md").write_text("# Research\nMethod comparison.\n", encoding="utf-8")
+        (phase_dir / "02-VERIFICATION.md").write_text("# Verification\nGap notes.\n", encoding="utf-8")
+        (phase_dir / "02-VALIDATION.md").write_text("# Validation\nChecks.\n", encoding="utf-8")
+        manifest = _install_fake_plan_phase_manifest(monkeypatch)
+
+        ctx = init_plan_phase(tmp_path, "2", stage="planner_authoring")
+        stage = manifest.stage_by_id("planner_authoring")
+
+        assert ctx["staged_loading"]["stage_id"] == "planner_authoring"
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["contract_intake"]["must_read_refs"] == ["ref-benchmark"]
+        assert "[ref-benchmark]" in ctx["active_reference_context"]
+        assert "Reference and Anchor Map" in ctx["reference_artifacts_content"]
+        assert "Universal crossing window" in ctx["reference_artifacts_content"]
+        assert "Locked scope." in ctx["context_content"]
+        assert "Method comparison." in ctx["research_content"]
+        assert "Gap notes." in ctx["verification_content"]
+        assert "Checks." in ctx["validation_content"]
+
+    def test_stage_checker_revision_uses_fresh_stage_payload(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _setup_project(tmp_path)
+        phase_dir = _create_phase_dir(tmp_path, "02-analysis")
+        _write_project_contract_state(tmp_path)
+        _write_literature_review_anchor_file(tmp_path)
+        _write_research_map_anchor_files(tmp_path)
+        (phase_dir / "02-CONTEXT.md").write_text("# Context\nLocked scope.\n", encoding="utf-8")
+        (phase_dir / "02-RESEARCH.md").write_text("# Research\nMethod comparison.\n", encoding="utf-8")
+        (phase_dir / "02-VERIFICATION.md").write_text("# Verification\nGap notes.\n", encoding="utf-8")
+        (phase_dir / "02-VALIDATION.md").write_text("# Validation\nChecks.\n", encoding="utf-8")
+        manifest = _install_fake_plan_phase_manifest(monkeypatch)
+
+        ctx = init_plan_phase(tmp_path, "2", stage="checker_revision")
+        stage = manifest.stage_by_id("checker_revision")
+
+        assert ctx["staged_loading"]["stage_id"] == "checker_revision"
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert "[ref-benchmark]" in ctx["active_reference_context"]
+        assert "Reference and Anchor Map" in ctx["reference_artifacts_content"]
+        assert "Universal crossing window" in ctx["reference_artifacts_content"]
+        assert "Locked scope." in ctx["context_content"]
+        assert "Method comparison." in ctx["research_content"]
+        assert "Gap notes." in ctx["verification_content"]
+        assert "Checks." in ctx["validation_content"]
+
+    def test_plan_phase_stage_rejects_include_mix(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "02-analysis")
+        _install_fake_plan_phase_manifest(monkeypatch)
+
+        with pytest.raises(ValueError, match="does not allow --include together with --stage"):
+            init_plan_phase(tmp_path, "2", includes={"state"}, stage="phase_bootstrap")
+
+    def test_plan_phase_stage_rejects_unknown_stage(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "02-analysis")
+        _install_fake_plan_phase_manifest(monkeypatch)
+
+        with pytest.raises(ValueError, match="Unknown plan-phase stage 'bogus'"):
+            init_plan_phase(tmp_path, "2", stage="bogus")
 
     def test_includes_research(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -1154,6 +1441,129 @@ class TestInitPlanPhase:
         assert "GPD/research-map/VALIDATION.md" in ctx["reference_artifact_files"]
         assert "benchmark details" in ctx["reference_artifacts_content"]
         assert "anchor registry" in ctx["reference_artifacts_content"]
+
+    def test_surfaces_stable_knowledge_docs_in_runtime_reference_payload(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "02-analysis")
+        _write_project_contract_state(tmp_path)
+        _write_knowledge_doc(tmp_path, status="stable")
+        _write_knowledge_doc(
+            tmp_path,
+            knowledge_id="K-work-in-progress",
+            status="in_review",
+            body="Draft knowledge body.\n",
+        )
+
+        ctx = init_plan_phase(tmp_path, "2")
+
+        assert "GPD/knowledge/K-renormalization-group-fixed-points.md" in ctx["knowledge_doc_files"]
+        assert ctx["knowledge_doc_count"] == 2
+        assert ctx["stable_knowledge_doc_files"] == ["GPD/knowledge/K-renormalization-group-fixed-points.md"]
+        assert ctx["stable_knowledge_doc_count"] == 1
+        assert ctx["knowledge_doc_status_counts"]["stable"] == 1
+        assert ctx["knowledge_doc_status_counts"]["in_review"] == 1
+        assert ctx["derived_knowledge_doc_count"] == 1
+        assert ctx["derived_knowledge_docs"][0]["knowledge_id"] == "K-renormalization-group-fixed-points"
+        assert ctx["knowledge_doc_warnings"] == []
+        assert "GPD/knowledge/K-renormalization-group-fixed-points.md" in ctx["reference_artifact_files"]
+        assert "Trusted knowledge body." in ctx["reference_artifacts_content"]
+        assert "Draft knowledge body." not in ctx["reference_artifacts_content"]
+        assert "K-work-in-progress" not in ctx["active_reference_context"]
+        assert "non-stable knowledge doc(s) remain inventory-visible only" in ctx["active_reference_context"]
+
+    def test_prefers_literature_review_files_over_legacy_research_when_both_exist(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "02-analysis")
+        _write_project_contract_state(tmp_path)
+
+        literature_dir = tmp_path / "GPD" / "literature"
+        literature_dir.mkdir()
+        (literature_dir / "canonical-REVIEW.md").write_text(
+            "# Literature Review\n\nCanonical details.\n",
+            encoding="utf-8",
+        )
+        (literature_dir / "canonical-CITATION-SOURCES.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "reference_id": "ref-canonical",
+                        "source_type": "paper",
+                        "title": "Canonical Reference",
+                        "authors": ["A. Author"],
+                        "year": "2026",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        research_dir = tmp_path / "GPD" / "research"
+        research_dir.mkdir()
+        (research_dir / "legacy-REVIEW.md").write_text(
+            "# Legacy Review\n\nLegacy details.\n",
+            encoding="utf-8",
+        )
+        (research_dir / "legacy-CITATION-SOURCES.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "reference_id": "ref-legacy",
+                        "source_type": "paper",
+                        "title": "Legacy Reference",
+                        "authors": ["A. Author"],
+                        "year": "2024",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        ctx = init_plan_phase(tmp_path, "2")
+
+        assert ctx["literature_review_files"] == ["GPD/literature/canonical-REVIEW.md"]
+        assert ctx["citation_source_files"] == ["GPD/literature/canonical-CITATION-SOURCES.json"]
+        assert "Canonical details." in ctx["reference_artifacts_content"]
+        assert "Legacy details." not in ctx["reference_artifacts_content"]
+        assert "GPD/research/legacy-REVIEW.md" not in ctx["reference_artifact_files"]
+
+    def test_falls_back_to_legacy_research_review_files_when_literature_is_missing(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "02-analysis")
+        _write_project_contract_state(tmp_path)
+
+        research_dir = tmp_path / "GPD" / "research"
+        research_dir.mkdir()
+        (research_dir / "legacy-REVIEW.md").write_text(
+            "# Legacy Review\n\nLegacy details.\n",
+            encoding="utf-8",
+        )
+        (research_dir / "legacy-CITATION-SOURCES.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "reference_id": "ref-legacy",
+                        "source_type": "paper",
+                        "title": "Legacy Reference",
+                        "authors": ["A. Author"],
+                        "year": "2024",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        ctx = init_plan_phase(tmp_path, "2")
+
+        assert ctx["literature_review_files"] == ["GPD/research/legacy-REVIEW.md"]
+        assert ctx["citation_source_files"] == ["GPD/research/legacy-CITATION-SOURCES.json"]
+        assert "Legacy details." in ctx["reference_artifacts_content"]
+        assert "GPD/research/legacy-REVIEW.md" in ctx["reference_artifact_files"]
 
     def test_does_not_bootstrap_manuscript_proof_review_manifest(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -1545,6 +1955,7 @@ class TestInitNewProject:
         assert ctx["has_project_manifest"] is False
         assert "has_existing_project" not in ctx
         assert ctx["planning_exists"] is False
+        assert "staged_loading" not in ctx
 
     def test_detects_research_files(self, tmp_path: Path) -> None:
         (tmp_path / "calc.py").write_text("import numpy")
@@ -1657,6 +2068,50 @@ class TestInitNewProject:
         assert ctx["project_contract_validation"]["valid"] is True
         assert ctx["project_contract_gate"]["authoritative"] is True
 
+    def test_new_project_stage_scope_intake_filters_payload(self, tmp_path: Path) -> None:
+        from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+        _setup_project(tmp_path)
+        _write_project_contract_state(tmp_path)
+
+        manifest = load_workflow_stage_manifest("new-project")
+        stage = manifest.get_stage("scope_intake")
+
+        ctx = init_new_project(tmp_path, stage="scope_intake")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["staged_loading"]["workflow_id"] == "new-project"
+        assert ctx["staged_loading"]["stage_id"] == "scope_intake"
+        assert ctx["staged_loading"]["order"] == 1
+        assert ctx["staged_loading"]["loaded_authorities"] == ["workflows/new-project.md"]
+        assert ctx["staged_loading"]["next_stages"] == ["scope_approval"]
+
+    def test_new_project_stage_scope_approval_filters_payload(self, tmp_path: Path) -> None:
+        from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+        _setup_project(tmp_path)
+        _write_project_contract_state(tmp_path)
+
+        manifest = load_workflow_stage_manifest("new-project")
+        stage = manifest.get_stage("scope_approval")
+
+        ctx = init_new_project(tmp_path, stage="scope_approval")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["staged_loading"]["workflow_id"] == "new-project"
+        assert ctx["staged_loading"]["stage_id"] == "scope_approval"
+        assert ctx["staged_loading"]["loaded_authorities"] == [
+            "templates/project-contract-schema.md",
+            "templates/project-contract-grounding-linkage.md",
+            "references/shared/canonical-schema-discipline.md",
+        ]
+
+    def test_new_project_stage_rejects_unknown_stage(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+
+        with pytest.raises(ValueError, match="Unknown new-project stage"):
+            init_new_project(tmp_path, stage="bogus")
+
     def test_new_project_bootstrap_omits_reference_ledger_payload(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         _write_project_contract_state(tmp_path)
@@ -1696,6 +2151,40 @@ class TestInitNewProject:
 
         assert ctx["project_contract_gate"]["visible"] is True
         assert ctx["project_contract_validation"]["valid"] is True
+
+    def test_stage_scope_intake_returns_only_manifest_required_fields(self, tmp_path: Path) -> None:
+        ctx = init_new_project(tmp_path, stage="scope_intake")
+
+        assert set(ctx) == {*NEW_PROJECT_INIT_FIELDS, "staged_loading"}
+        assert ctx["staged_loading"]["workflow_id"] == "new-project"
+        assert ctx["staged_loading"]["stage_id"] == "scope_intake"
+        assert ctx["staged_loading"]["order"] == 1
+        assert ctx["staged_loading"]["loaded_authorities"] == ["workflows/new-project.md"]
+        assert "references/research/questioning.md" in ctx["staged_loading"]["must_not_eager_load"]
+        assert ctx["staged_loading"]["writes_allowed"] == []
+
+    def test_stage_scope_approval_returns_only_contract_fields(self, tmp_path: Path) -> None:
+        ctx = init_new_project(tmp_path, stage="scope_approval")
+
+        assert set(ctx) == {
+            "project_contract",
+            "project_contract_gate",
+            "project_contract_load_info",
+            "project_contract_validation",
+            "staged_loading",
+        }
+        assert ctx["staged_loading"]["stage_id"] == "scope_approval"
+        assert ctx["staged_loading"]["order"] == 2
+        assert ctx["staged_loading"]["loaded_authorities"] == [
+            "templates/project-contract-schema.md",
+            "templates/project-contract-grounding-linkage.md",
+            "references/shared/canonical-schema-discipline.md",
+        ]
+        assert ctx["staged_loading"]["writes_allowed"] == ["GPD/state.json"]
+
+    def test_stage_rejection_is_clean(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Unknown new-project stage"):
+            init_new_project(tmp_path, stage="does-not-exist")
 
 
 # ─── init_new_milestone ───────────────────────────────────────────────────────
@@ -2206,9 +2695,79 @@ class TestInitVerifyWork:
         assert ctx["phase_found"] is True
         assert ctx["has_verification"] is True
 
+    def test_stage_session_router_returns_bootstrap_only_payload(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-setup")
+        _write_project_contract_state(tmp_path)
+
+        ctx = init_verify_work(tmp_path, "1", stage="session_router")
+
+        assert ctx["phase_found"] is True
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert ctx["staged_loading"]["stage_id"] == "session_router"
+        assert "project_contract" not in ctx
+        assert "active_reference_context" not in ctx
+        assert "reference_artifacts_content" not in ctx
+        assert "convention_lock" not in ctx
+
     def test_missing_phase_raises(self, tmp_path: Path) -> None:
         with pytest.raises(ValidationError, match="phase is required"):
             init_verify_work(tmp_path, "")
+
+    def test_stage_inventory_build_surfaces_reference_and_convention_context(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-setup")
+        _write_stat_mech_project(tmp_path)
+        _write_bundle_ready_contract_state(tmp_path)
+        _write_structured_state_payload(tmp_path)
+
+        ctx = init_verify_work(tmp_path, "1", stage="inventory_build")
+
+        assert ctx["staged_loading"]["stage_id"] == "inventory_build"
+        assert ctx["project_contract"]["references"][0]["role"] == "benchmark"
+        assert "## Active Reference Registry" in ctx["active_reference_context"]
+        assert "stat-mech-simulation" in ctx["selected_protocol_bundle_ids"]
+        assert ctx["convention_lock"]["metric_signature"] == "(-,+,+,+)"
+        assert ctx["derived_convention_lock"]["metric_signature"] == "(-,+,+,+)"
+        assert "reference_artifacts_content" not in ctx
+
+    def test_stage_interactive_validation_surfaces_reference_artifact_content(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-setup")
+        _write_project_contract_state(tmp_path)
+
+        literature_dir = tmp_path / "GPD" / "literature"
+        literature_dir.mkdir(parents=True)
+        (literature_dir / "benchmark-notes.md").write_text("# Benchmark\nReference details.\n", encoding="utf-8")
+
+        ctx = init_verify_work(tmp_path, "1", stage="interactive_validation")
+
+        assert ctx["staged_loading"]["stage_id"] == "interactive_validation"
+        assert ctx["reference_artifact_files"]
+        assert isinstance(ctx["reference_artifacts_content"], str)
+        assert "Benchmark" in ctx["reference_artifacts_content"]
+
+    def test_verify_work_surfaces_derived_stable_knowledge_docs(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-setup")
+        _write_knowledge_doc(tmp_path, status="stable")
+        _write_knowledge_doc(
+            tmp_path,
+            knowledge_id="K-work-in-progress",
+            status="draft",
+            body="Draft knowledge body.\n",
+        )
+
+        ctx = init_verify_work(tmp_path, "1")
+
+        assert ctx["knowledge_doc_count"] == 2
+        assert ctx["derived_knowledge_doc_count"] == 1
+        assert ctx["derived_knowledge_docs"][0]["status"] == "stable"
+        assert ctx["knowledge_doc_warnings"] == []
+        assert "GPD/knowledge/K-renormalization-group-fixed-points.md" in ctx["reference_artifact_files"]
+        assert "GPD/knowledge/K-work-in-progress.md" not in ctx["reference_artifact_files"]
+        assert "Draft knowledge body." not in ctx["reference_artifacts_content"]
+        assert "non-stable knowledge doc(s) remain inventory-visible only" in ctx["active_reference_context"]
 
     def test_exposes_active_reference_context(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -2219,6 +2778,13 @@ class TestInitVerifyWork:
 
         assert ctx["project_contract"]["references"][0]["role"] == "benchmark"
         assert "## Active Reference Registry" in ctx["active_reference_context"]
+
+    def test_stage_rejects_unknown_verify_work_stage(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-setup")
+
+        with pytest.raises(ValueError, match="Unknown verify-work stage 'bogus'"):
+            init_verify_work(tmp_path, "1", stage="bogus")
 
     def test_exposes_selected_protocol_bundle_ids(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -2804,6 +3370,27 @@ class TestInitProgress:
 
         assert ctx["project_contract"]["references"][0]["must_surface"] is True
         assert "10.1234/benchmark-figure-2" in ctx["active_reference_context"]
+
+    def test_progress_surfaces_knowledge_inventory_and_runtime_counts(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        _write_knowledge_doc(tmp_path, status="stable")
+        _write_knowledge_doc(
+            tmp_path,
+            knowledge_id="K-work-in-progress",
+            status="in_review",
+            body="Draft knowledge body.\n",
+        )
+
+        ctx = init_progress(tmp_path)
+
+        assert ctx["knowledge_doc_count"] == 2
+        assert ctx["stable_knowledge_doc_count"] == 1
+        assert ctx["knowledge_doc_status_counts"]["stable"] == 1
+        assert ctx["knowledge_doc_status_counts"]["in_review"] == 1
+        assert ctx["derived_knowledge_doc_count"] == 1
+        assert ctx["knowledge_doc_warnings"] == []
+        assert "GPD/knowledge/K-renormalization-group-fixed-points.md" in ctx["knowledge_doc_files"]
+        assert ctx["stable_knowledge_doc_files"] == ["GPD/knowledge/K-renormalization-group-fixed-points.md"]
 
     def test_progress_surfaces_derived_state_memory(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)

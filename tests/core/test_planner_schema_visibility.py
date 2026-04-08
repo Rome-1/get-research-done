@@ -29,8 +29,13 @@ def test_planner_role_owns_schema_visibility_and_workflows_use_the_short_role_pr
     for marker in required_markers:
         assert marker in planner_role
 
-    assert "canonical planner read surface" in planner_role
-    assert "Do not rely on nested include expansion" in planner_role
+    bootstrap = planner_role.partition("</role>")[0]
+
+    assert "Keep this agent prompt lean." in planner_role
+    assert "use this file for planner role, routing, and plan-shape guidance only." in planner_role
+    assert "@{GPD_INSTALL_DIR}/workflows/execute-plan.md" not in bootstrap
+    assert "@{GPD_INSTALL_DIR}/templates/summary.md" not in bootstrap
+    assert "@{GPD_INSTALL_DIR}/references/protocols/order-of-limits.md" not in bootstrap
     short_instruction = "First, read {GPD_AGENTS_DIR}/gpd-planner.md for your role and instructions."
     long_instruction = (
         "First, read {GPD_AGENTS_DIR}/gpd-planner.md, {GPD_INSTALL_DIR}/templates/phase-prompt.md, "

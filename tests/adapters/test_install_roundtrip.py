@@ -274,6 +274,9 @@ def _assert_installed_contract_visibility(
     execute_phase = _canonicalize_runtime_markdown(execute_phase, runtime=runtime)
     verify_work = _canonicalize_runtime_markdown(verify_work, runtime=runtime)
 
+    assert "Execute all phase plans with wave-based parallelization" in execute_phase
+    assert "Context budget: ~15% orchestrator, fresh context per subagent." in execute_phase
+
     assert "templates/contract-results-schema.md" in verifier
     assert "plan_contract_ref" in verifier
     assert "contract_results" in verifier
@@ -647,3 +650,34 @@ def test_installed_prompt_contract_visibility_survives_adapter_projection(
         assert "## Physics Stub Detection Patterns" not in verifier
     else:
         assert verifier.count("## Physics Stub Detection Patterns") == 1
+
+
+@pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
+def test_installed_executor_bootstrap_surface_defers_completion_only_materials(
+    real_installed_repo_factory,
+    runtime: str,
+) -> None:
+    target = real_installed_repo_factory(runtime)
+    executor = _read_runtime_agent_prompt(target, runtime, "gpd-executor")
+    bootstrap, _, _ = executor.partition("<summary_creation>")
+
+    assert "templates/summary.md" not in bootstrap
+    assert "templates/calculation-log.md" not in bootstrap
+    assert "Order-of-Limits Awareness" not in bootstrap
+
+
+@pytest.mark.parametrize("runtime", ["claude-code", "codex", "gemini", "opencode"])
+def test_installed_planner_bootstrap_surface_defers_execution_and_completion_materials(
+    real_installed_repo_factory,
+    runtime: str,
+) -> None:
+    target = real_installed_repo_factory(runtime)
+    planner = _read_runtime_agent_prompt(target, runtime, "gpd-planner")
+    bootstrap, separator, _ = planner.partition("On-demand references:")
+
+    assert separator == "On-demand references:"
+    assert "phase-prompt.md" in bootstrap
+    assert "plan-contract-schema.md" in bootstrap
+    assert "Read config.json for planning behavior settings." not in bootstrap
+    assert "## Summary Template" not in bootstrap
+    assert "Order-of-Limits Awareness" not in bootstrap

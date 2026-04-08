@@ -1,0 +1,324 @@
+{
+  "schema_version": 1,
+  "workflow_id": "plan-phase",
+  "stages": [
+    {
+      "id": "phase_bootstrap",
+      "order": 1,
+      "purpose": "phase lookup, contract-gate validation, and bootstrap routing",
+      "mode_paths": [
+        "workflows/plan-phase.md"
+      ],
+      "required_init_fields": [
+        "researcher_model",
+        "planner_model",
+        "checker_model",
+        "research_enabled",
+        "plan_checker_enabled",
+        "commit_docs",
+        "autonomy",
+        "research_mode",
+        "phase_found",
+        "phase_dir",
+        "phase_number",
+        "phase_name",
+        "phase_slug",
+        "padded_phase",
+        "has_research",
+        "has_context",
+        "has_plans",
+        "plan_count",
+        "planning_exists",
+        "roadmap_exists",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+        "platform"
+      ],
+      "loaded_authorities": [
+        "workflows/plan-phase.md"
+      ],
+      "conditional_authorities": [],
+      "must_not_eager_load": [
+        "references/ui/ui-brand.md",
+        "templates/planner-subagent-prompt.md",
+        "templates/phase-prompt.md",
+        "templates/plan-contract-schema.md"
+      ],
+      "allowed_tools": [
+        "file_read",
+        "shell",
+        "find_files",
+        "search_files",
+        "task"
+      ],
+      "writes_allowed": [],
+      "produced_state": [
+        "planning bootstrap state",
+        "contract gate decision state"
+      ],
+      "next_stages": [
+        "research_routing"
+      ],
+      "checkpoints": [
+        "phase resolution completed",
+        "contract gate evaluated before planning"
+      ]
+    },
+    {
+      "id": "research_routing",
+      "order": 2,
+      "purpose": "research reuse, refresh, and gap-closure routing",
+      "mode_paths": [
+        "workflows/plan-phase.md"
+      ],
+      "required_init_fields": [
+        "researcher_model",
+        "planner_model",
+        "checker_model",
+        "research_enabled",
+        "plan_checker_enabled",
+        "commit_docs",
+        "autonomy",
+        "research_mode",
+        "phase_found",
+        "phase_dir",
+        "phase_number",
+        "phase_name",
+        "phase_slug",
+        "padded_phase",
+        "has_research",
+        "has_context",
+        "has_plans",
+        "plan_count",
+        "planning_exists",
+        "roadmap_exists",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+        "roadmap_content",
+        "requirements_content",
+        "context_content",
+        "research_content",
+        "experiment_design_content",
+        "verification_content",
+        "validation_content",
+        "platform"
+      ],
+      "loaded_authorities": [
+        "workflows/plan-phase.md"
+      ],
+      "conditional_authorities": [],
+      "must_not_eager_load": [
+        "references/ui/ui-brand.md",
+        "templates/planner-subagent-prompt.md",
+        "templates/phase-prompt.md",
+        "templates/plan-contract-schema.md"
+      ],
+      "allowed_tools": [
+        "file_read",
+        "shell",
+        "find_files",
+        "search_files",
+        "task"
+      ],
+      "writes_allowed": [],
+      "produced_state": [
+        "research routing state",
+        "gap-closure planning mode"
+      ],
+      "next_stages": [
+        "planner_authoring"
+      ],
+      "checkpoints": [
+        "research reuse decision completed",
+        "gap routing decision completed"
+      ]
+    },
+    {
+      "id": "planner_authoring",
+      "order": 3,
+      "purpose": "researcher/planner prompt assembly and plan authoring",
+      "mode_paths": [
+        "workflows/plan-phase.md"
+      ],
+      "required_init_fields": [
+        "researcher_model",
+        "planner_model",
+        "checker_model",
+        "research_enabled",
+        "plan_checker_enabled",
+        "commit_docs",
+        "autonomy",
+        "research_mode",
+        "phase_found",
+        "phase_dir",
+        "phase_number",
+        "phase_name",
+        "phase_slug",
+        "padded_phase",
+        "has_research",
+        "has_context",
+        "has_plans",
+        "plan_count",
+        "planning_exists",
+        "roadmap_exists",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+        "contract_intake",
+        "effective_reference_intake",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_count",
+        "protocol_bundle_context",
+        "protocol_bundle_verifier_extensions",
+        "active_reference_context",
+        "reference_artifact_files",
+        "reference_artifacts_content",
+        "literature_review_files",
+        "literature_review_count",
+        "research_map_reference_files",
+        "research_map_reference_count",
+        "derived_manuscript_proof_review_status",
+        "state_content",
+        "roadmap_content",
+        "requirements_content",
+        "context_content",
+        "research_content",
+        "experiment_design_content",
+        "verification_content",
+        "validation_content",
+        "platform"
+      ],
+      "loaded_authorities": [
+        "workflows/plan-phase.md",
+        "templates/planner-subagent-prompt.md"
+      ],
+      "conditional_authorities": [],
+      "must_not_eager_load": [
+        "references/ui/ui-brand.md",
+        "templates/phase-prompt.md",
+        "templates/plan-contract-schema.md"
+      ],
+      "allowed_tools": [
+        "file_read",
+        "file_write",
+        "shell",
+        "find_files",
+        "search_files",
+        "task",
+        "web_fetch"
+      ],
+      "writes_allowed": [
+        "GPD/phases",
+        "GPD/ROADMAP.md"
+      ],
+      "produced_state": [
+        "research artifacts",
+        "phase plans",
+        "planner prompt state"
+      ],
+      "next_stages": [
+        "checker_revision"
+      ],
+      "checkpoints": [
+        "research refresh completed",
+        "planner prompt assembled with current evidence",
+        "plan artifacts written"
+      ]
+    },
+    {
+      "id": "checker_revision",
+      "order": 4,
+      "purpose": "checker loop, targeted revisions, and plan finalization",
+      "mode_paths": [
+        "workflows/plan-phase.md"
+      ],
+      "required_init_fields": [
+        "researcher_model",
+        "planner_model",
+        "checker_model",
+        "research_enabled",
+        "plan_checker_enabled",
+        "commit_docs",
+        "autonomy",
+        "research_mode",
+        "phase_found",
+        "phase_dir",
+        "phase_number",
+        "phase_name",
+        "phase_slug",
+        "padded_phase",
+        "has_research",
+        "has_context",
+        "has_plans",
+        "plan_count",
+        "planning_exists",
+        "roadmap_exists",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+        "contract_intake",
+        "effective_reference_intake",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_count",
+        "protocol_bundle_context",
+        "protocol_bundle_verifier_extensions",
+        "active_reference_context",
+        "reference_artifact_files",
+        "reference_artifacts_content",
+        "literature_review_files",
+        "literature_review_count",
+        "research_map_reference_files",
+        "research_map_reference_count",
+        "derived_manuscript_proof_review_status",
+        "state_content",
+        "roadmap_content",
+        "requirements_content",
+        "context_content",
+        "research_content",
+        "experiment_design_content",
+        "verification_content",
+        "validation_content",
+        "platform"
+      ],
+      "loaded_authorities": [
+        "workflows/plan-phase.md",
+        "templates/planner-subagent-prompt.md"
+      ],
+      "conditional_authorities": [],
+      "must_not_eager_load": [
+        "references/ui/ui-brand.md",
+        "templates/phase-prompt.md",
+        "templates/plan-contract-schema.md"
+      ],
+      "allowed_tools": [
+        "file_read",
+        "file_write",
+        "shell",
+        "find_files",
+        "search_files",
+        "task",
+        "web_fetch"
+      ],
+      "writes_allowed": [
+        "GPD/phases",
+        "GPD/ROADMAP.md"
+      ],
+      "produced_state": [
+        "checker findings",
+        "revised plans",
+        "final planning status"
+      ],
+      "next_stages": [],
+      "checkpoints": [
+        "checker loop completed",
+        "revision prompt assembled with current evidence"
+      ]
+    }
+  ]
+}

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
+
+from gpd.core.workflow_staging import load_workflow_stage_manifest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = REPO_ROOT / "src/gpd/specs/workflows"
@@ -58,3 +61,27 @@ def test_execute_plan_surfaces_github_lifecycle_wiring() -> None:
     assert "git branch --merged main" not in github_lifecycle
     assert "git push origin <tag-name>" not in github_lifecycle
     assert "git push origin --tags" not in github_lifecycle
+
+
+def test_execute_plan_uses_staged_execution_bootstrap_and_late_context_refreshes() -> None:
+    execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
+    manifest_stage_ids = set(load_workflow_stage_manifest("execute-phase").stage_ids())
+    requested_stage_ids = set(re.findall(r"--stage\s+(?:\"([^\"]+)\"|([A-Za-z0-9_]+))", execute_plan))
+    requested_stage_ids = {match[0] or match[1] for match in requested_stage_ids}
+
+    assert requested_stage_ids
+    assert requested_stage_ids <= manifest_stage_ids
+    assert "plan_bootstrap" not in requested_stage_ids
+    assert "contract_anchor_gate" not in requested_stage_ids
+    assert "segment_execution" not in requested_stage_ids
+    assert "summary_finalize" not in requested_stage_ids
+    assert 'gpd --raw init execute-phase "${phase}" --include state,config' not in execute_plan
+    assert "summary-schema loads until the stage that actually consumes them" in execute_plan
+
+
+def test_execute_phase_loader_does_not_silently_fallback_to_full_init() -> None:
+    execute_phase = (WORKFLOWS_DIR / "execute-phase.md").read_text(encoding="utf-8")
+
+    assert "staged gpd initialization failed for stage" in execute_phase
+    assert 'if [ $? -ne 0 ] || [ -z "$init_payload" ]; then' in execute_phase
+    assert 'if [ $? -eq 0 ] && [ -n "$init_payload" ]; then' not in execute_phase

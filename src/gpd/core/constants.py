@@ -37,6 +37,7 @@ __all__ = [
     "EXECUTION_LINEAGE_SCHEMA_VERSION",
     "HOME_DATA_DIR_NAME",
     "LITERATURE_DIR_NAME",
+    "KNOWLEDGE_DIR_NAME",
     "MILESTONES_DIR_NAME",
     "MILESTONES_FILENAME",
     "MIN_PYTHON_MAJOR",
@@ -179,6 +180,9 @@ TODOS_DIR_NAME = "todos"
 
 LITERATURE_DIR_NAME = "literature"
 """Subdirectory under GPD/ for literature review files."""
+
+KNOWLEDGE_DIR_NAME = "knowledge"
+"""Subdirectory under GPD/ for knowledge documents."""
 
 RESEARCH_MAP_DIR_NAME = "research-map"
 """Subdirectory under GPD/ for theory/research map files."""
@@ -513,6 +517,10 @@ class ProjectLayout:
     @property
     def literature_dir(self) -> Path:
         return self.gpd / LITERATURE_DIR_NAME
+
+    @property
+    def knowledge_dir(self) -> Path:
+        return self.gpd / KNOWLEDGE_DIR_NAME
 
     @property
     def research_map_dir(self) -> Path:

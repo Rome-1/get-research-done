@@ -22,8 +22,6 @@ Create executable phase prompts for a research phase.
 
 <execution_context>
 @{GPD_INSTALL_DIR}/workflows/plan-phase.md
-@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md
-@{GPD_INSTALL_DIR}/references/ui/ui-brand.md
 </execution_context>
 
 <context>
@@ -38,6 +36,10 @@ Phase number: $ARGUMENTS (optional; auto-detects the next unplanned phase if omi
 - `--light` -- Produce contract-plus-constraints plans only
 
 Normalize the phase input before any directory lookups.
+
+Canonical contract schema and hard validation rules load later at the staged planner and checker handoffs; keep this wrapper limited to routing, flags, and phase selection.
+
+For proof-bearing work, every proof-bearing plan must surface the theorem statement, named parameters, hypotheses, quantifier/domain obligations, and intended conclusion clauses visibly enough that a later audit can detect missing coverage.
 </context>
 
 <process>
