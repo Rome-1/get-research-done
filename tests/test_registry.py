@@ -1459,6 +1459,13 @@ class TestSkillDiscovery:
 class TestRegistryPromptIncludeInlining:
     """Tests for registry-loaded content surfaces that inline shared includes."""
 
+    def _assert_lightweight_source_surface(self, skill: SkillDef, paths: tuple[str, ...]) -> None:
+        for path in paths:
+            lightweight = f"{{GPD_INSTALL_DIR}}/{path}"
+            eager = f"@{{GPD_INSTALL_DIR}}/{path}"
+            assert lightweight in skill.content
+            assert eager not in skill.content
+
     def test_registry_projection_strips_generic_html_comments(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
         commands_dir.mkdir()
@@ -1543,49 +1550,52 @@ class TestRegistryPromptIncludeInlining:
         referee = get_skill("gpd-referee")
         review_reader = get_skill("gpd-review-reader")
 
-        for skill in (referee, review_reader):
-            assert "error" not in skill
-            assert any(path.endswith("peer-review-panel.md") for path in skill["contract_references"])
-            assert any(path.endswith("review-ledger-schema.md") for path in skill["schema_references"])
-            assert any(path.endswith("referee-decision-schema.md") for path in skill["schema_references"])
+        assert "error" not in referee
+        assert any(path.endswith("peer-review-panel.md") for path in referee["contract_references"])
+        assert any(path.endswith("review-ledger-schema.md") for path in referee["schema_references"])
+        assert any(path.endswith("referee-decision-schema.md") for path in referee["schema_references"])
+
+        assert "error" not in review_reader
+        assert any(path.endswith("peer-review-panel.md") for path in review_reader["contract_references"])
+        assert review_reader["schema_references"] == []
+        assert any(path.endswith("review-ledger-schema.md") for path in review_reader["transitive_schema_references"])
+        assert any(path.endswith("referee-decision-schema.md") for path in review_reader["transitive_schema_references"])
 
     def test_paper_writer_registry_surface_preserves_lightweight_path_mentions(self) -> None:
         skill = registry.get_skill("gpd-paper-writer")
 
         assert skill.source_kind == "agent"
         assert skill.path.endswith("gpd-paper-writer.md")
-        for path in (
-            "references/shared/shared-protocols.md",
-            "references/orchestration/agent-infrastructure.md",
-            "templates/notation-glossary.md",
-            "templates/latex-preamble.md",
-            "references/publication/publication-pipeline-modes.md",
-            "references/publication/figure-generation-templates.md",
-            "templates/paper/author-response.md",
-            ):
-            lightweight = f"{{GPD_INSTALL_DIR}}/{path}"
-            eager = f"@{{GPD_INSTALL_DIR}}/{path}"
-            assert lightweight in skill.content
-            assert eager not in skill.content
+        self._assert_lightweight_source_surface(
+            skill,
+            (
+                "references/shared/shared-protocols.md",
+                "references/orchestration/agent-infrastructure.md",
+                "templates/notation-glossary.md",
+                "templates/latex-preamble.md",
+                "references/publication/publication-pipeline-modes.md",
+                "references/publication/figure-generation-templates.md",
+                "templates/paper/author-response.md",
+            ),
+        )
 
     def test_bibliographer_registry_surface_preserves_lightweight_path_mentions(self) -> None:
         skill = registry.get_skill("gpd-bibliographer")
 
         assert skill.source_kind == "agent"
         assert skill.path.endswith("gpd-bibliographer.md")
-        for path in (
-            "references/shared/shared-protocols.md",
-            "references/physics-subfields.md",
-            "references/orchestration/agent-infrastructure.md",
-            "templates/notation-glossary.md",
-            "references/publication/bibtex-standards.md",
-            "references/publication/publication-pipeline-modes.md",
-            "references/publication/bibliography-advanced-search.md",
-        ):
-            lightweight = f"{{GPD_INSTALL_DIR}}/{path}"
-            eager = f"@{{GPD_INSTALL_DIR}}/{path}"
-            assert lightweight in skill.content
-            assert eager not in skill.content
+        self._assert_lightweight_source_surface(
+            skill,
+            (
+                "references/shared/shared-protocols.md",
+                "references/physics-subfields.md",
+                "references/orchestration/agent-infrastructure.md",
+                "templates/notation-glossary.md",
+                "references/publication/bibtex-standards.md",
+                "references/publication/publication-pipeline-modes.md",
+                "references/publication/bibliography-advanced-search.md",
+            ),
+        )
 
 
 class TestNonMdFilesIgnored:

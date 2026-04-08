@@ -2746,11 +2746,10 @@ def test_skill_surface_exposes_contract_references_for_paper_and_review_workflow
     assert any(path.endswith("referee-decision-schema.md") for path in write_paper_stage_authorities)
     assert any(path.endswith("review-ledger-schema.md") for path in peer_review_stage_authorities)
     assert any(path.endswith("referee-decision-schema.md") for path in peer_review_stage_authorities)
-    assert any(path.endswith("paper-quality-input-schema.md") for path in arxiv_submission["schema_references"])
+    assert any(entry["path"].endswith("paper-quality-scoring.md") for entry in arxiv_submission["referenced_files"])
     assert any(path.endswith("author-response.md") for path in respond_to_referees["schema_references"])
     assert any(path.endswith("reproducibility-manifest.md") for path in write_paper_stage_authorities)
     assert any(path.endswith("peer-review-panel.md") for path in write_paper_stage_authorities)
-    assert any(path.endswith("peer-review-reliability.md") for path in write_paper["contract_references"])
     assert any(path.endswith("peer-review-panel.md") for path in peer_review["contract_references"])
     assert any(path.endswith("peer-review-reliability.md") for path in peer_review["contract_references"])
     assert "Paper Config Schema" in write_paper_schema_documents["paper-config-schema.md"]["body"]
@@ -2761,6 +2760,27 @@ def test_skill_surface_exposes_contract_references_for_paper_and_review_workflow
     assert respond_contract_documents == {}
     assert "Treat `content` as the wrapper/context surface." in write_paper["loading_hint"]
     assert "Load `schema_documents` and `contract_documents` too when present" in write_paper["loading_hint"]
+
+
+def test_bibliographer_skill_surface_stays_direct_only() -> None:
+    from gpd.mcp.servers.skills_server import get_skill
+
+    bibliographer = get_skill("gpd-bibliographer")
+    direct_reference_suffixes = {
+        "references/shared/shared-protocols.md",
+        "references/physics-subfields.md",
+        "references/orchestration/agent-infrastructure.md",
+        "templates/notation-glossary.md",
+        "references/publication/bibtex-standards.md",
+        "references/publication/publication-pipeline-modes.md",
+        "references/publication/bibliography-advanced-search.md",
+    }
+
+    assert "error" not in bibliographer
+    assert bibliographer["reference_count"] == len(direct_reference_suffixes)
+    assert {
+        entry["path"].split("}/", 1)[1] for entry in bibliographer["referenced_files"]
+    } == direct_reference_suffixes
 
 
 def test_review_and_execution_prompts_expand_required_schema_sources() -> None:

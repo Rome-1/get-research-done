@@ -32,7 +32,7 @@ This graph therefore includes:
 - `src/gpd/agents/*.md`: `24`
 - `src/gpd/specs/workflows/*.md`: `67`
 - `src/gpd/specs/templates/**/*.md`: `76`
-- `src/gpd/specs/references/**/*.md`: `168`
+- `src/gpd/specs/references/**/*.md`: `169`
 - `src/gpd/adapters/*.py`: `9`
 - `src/gpd/hooks/*.py`: `11`
 - `src/gpd/mcp/servers/*.py`: `9`
@@ -645,7 +645,7 @@ flowchart TD
 - `src/gpd/agents/{gpd-consistency-checker,gpd-debugger,gpd-executor}.md -> src/gpd/specs/references/shared/cross-project-patterns.md`
   `include`
 
-- `src/gpd/agents/gpd-bibliographer.md -> src/gpd/specs/{templates/notation-glossary.md,references/publication/bibtex-standards.md}`
+- `src/gpd/agents/gpd-bibliographer.md -> src/gpd/specs/{templates/notation-glossary.md,references/publication/bibtex-standards.md,references/publication/bibliography-advanced-search.md}`
   `include`
 
 - `src/gpd/agents/gpd-explainer.md -> src/gpd/specs/templates/notation-glossary.md`

@@ -1503,6 +1503,24 @@ class TestSkillsServer:
         assert any(entry["kind"] == "workflow" for entry in result["referenced_files"])
         assert all(not entry["path"].startswith("/") for entry in result["referenced_files"])
 
+    def test_get_skill_surfaces_direct_and_transitive_references_when_exposed(self):
+        from gpd.mcp.servers.skills_server import get_skill
+
+        result = get_skill("gpd-bibliographer")
+
+        if "transitive_referenced_files" not in result:
+            pytest.skip("Phase 15 product lane has not exposed transitive skill metadata yet")
+
+        direct_paths = {entry["path"] for entry in result["referenced_files"]}
+        transitive_paths = {entry["path"] for entry in result["transitive_referenced_files"]}
+
+        assert "error" not in result
+        assert result["reference_count"] == len(direct_paths)
+        assert result["transitive_reference_count"] == len(transitive_paths)
+        assert direct_paths.isdisjoint(transitive_paths)
+        assert any(path.endswith("shared-protocols.md") for path in direct_paths)
+        assert any(path.endswith("bibliography-advanced-search.md") for path in transitive_paths)
+
     def test_get_skill_surfaces_schema_references(self):
         from gpd.mcp.servers.skills_server import get_skill
 

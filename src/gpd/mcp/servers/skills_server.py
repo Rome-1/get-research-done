@@ -455,20 +455,38 @@ def _reference_kind(path: str) -> str:
     return "spec"
 
 
-def _extract_referenced_files(content: str, *, source_path: Path | None = None) -> list[dict[str, str]]:
-    references: list[dict[str, str]] = []
-    seen: set[str] = set()
+def _extract_referenced_files(
+    content: str,
+    *,
+    source_path: Path | None = None,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """Return direct and transitive markdown references discovered in *content*."""
+
+    direct_references: list[dict[str, object]] = []
+    transitive_references: list[dict[str, object]] = []
+    direct_seen: set[str] = set()
+    transitive_seen: set[str] = set()
     visited_docs: set[str] = set()
 
-    def _collect(markdown: str, *, current_path: Path | None) -> None:
+    def _record(entry_list: list[dict[str, object]], seen: set[str], *, path: str, depth: int | None) -> None:
+        if path in seen:
+            return
+        seen.add(path)
+        entry: dict[str, object] = {"path": path, "kind": _reference_kind(path)}
+        if depth is not None:
+            entry["depth"] = depth
+        entry_list.append(entry)
+
+    def _collect(markdown: str, *, current_path: Path | None, depth: int) -> None:
         for match in _MARKDOWN_REFERENCE_RE.finditer(markdown):
             normalized = _portable_reference_path(match.group("path"), base_path=current_path)
             if normalized is None:
                 continue
             path, referenced_path = normalized
-            if path not in seen:
-                seen.add(path)
-                references.append({"path": path, "kind": _reference_kind(path)})
+            if depth == 0:
+                _record(direct_references, direct_seen, path=path, depth=None)
+            else:
+                _record(transitive_references, transitive_seen, path=path, depth=depth)
             if path in visited_docs:
                 continue
             visited_docs.add(path)
@@ -478,10 +496,10 @@ def _extract_referenced_files(content: str, *, source_path: Path | None = None) 
                 nested = _portable_skill_content(referenced_path.read_text(encoding="utf-8"))
             except OSError:
                 continue
-            _collect(nested, current_path=referenced_path)
+            _collect(nested, current_path=referenced_path, depth=depth + 1)
 
-    _collect(content, current_path=source_path)
-    return references
+    _collect(content, current_path=source_path, depth=0)
+    return direct_references, transitive_references
 
 
 def _is_schema_reference(path: str) -> bool:
@@ -564,7 +582,7 @@ def _load_reference_document(path: str, *, kind: str) -> dict[str, object]:
 
 
 def _expanded_reference_documents(
-    referenced_files: list[dict[str, str]],
+    referenced_files: list[dict[str, object]],
     *,
     predicate: Callable[[str], bool],
 ) -> tuple[list[str], list[dict[str, object]]]:
@@ -635,7 +653,7 @@ def get_skill(name: Annotated[str, Field(min_length=1, pattern=r"\S")]) -> dict:
                 )
 
             content, source_path = _canonical_skill_content(skill)
-            referenced_files = _extract_referenced_files(content, source_path=source_path)
+            referenced_files, transitive_referenced_files = _extract_referenced_files(content, source_path=source_path)
             template_references = [entry["path"] for entry in referenced_files if entry["kind"] == "template"]
             schema_references, schema_documents = _expanded_reference_documents(
                 referenced_files,
@@ -643,6 +661,17 @@ def get_skill(name: Annotated[str, Field(min_length=1, pattern=r"\S")]) -> dict:
             )
             contract_references, contract_documents = _expanded_reference_documents(
                 referenced_files,
+                predicate=lambda path: _is_contract_reference(path) and not _is_schema_reference(path),
+            )
+            transitive_template_references = [
+                entry["path"] for entry in transitive_referenced_files if entry["kind"] == "template"
+            ]
+            transitive_schema_references, transitive_schema_documents = _expanded_reference_documents(
+                transitive_referenced_files,
+                predicate=_is_schema_reference,
+            )
+            transitive_contract_references, transitive_contract_documents = _expanded_reference_documents(
+                transitive_referenced_files,
                 predicate=lambda path: _is_contract_reference(path) and not _is_schema_reference(path),
             )
             loading_hint = _skill_loading_hint(
@@ -662,6 +691,13 @@ def get_skill(name: Annotated[str, Field(min_length=1, pattern=r"\S")]) -> dict:
                 "schema_documents": schema_documents,
                 "contract_references": contract_references,
                 "contract_documents": contract_documents,
+                "transitive_referenced_files": transitive_referenced_files,
+                "transitive_reference_count": len(transitive_referenced_files),
+                "transitive_template_references": transitive_template_references,
+                "transitive_schema_references": transitive_schema_references,
+                "transitive_schema_documents": transitive_schema_documents,
+                "transitive_contract_references": transitive_contract_references,
+                "transitive_contract_documents": transitive_contract_documents,
                 "loading_hint": loading_hint,
             }
             if skill.source_kind == "command":
