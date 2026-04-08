@@ -1102,4 +1102,32 @@ Options:
 - [ ] Paper directory created with buildable LaTeX scaffold via `gpd paper-build`
 - [ ] Abstract accurately reflects paper content
 - [ ] Word/page count within journal limits
+- [ ] Community contribution prompt shown
 </success_criteria>
+
+<community_contribution>
+
+After a paper draft is finalized and passes peer review, display:
+
+```
+────────────────────────────────────────────────────────
+📄 Share your work with the GPD community
+
+Completed a paper with GPD? When it's published or posted to
+arXiv, consider opening a pull request to add it to the GPD
+examples gallery:
+
+  https://github.com/psi-oss/get-physics-done
+
+What to include:
+  • A short summary of the problem and approach
+  • The GPD commands/workflow you used
+  • Key results or figures (optional)
+
+This helps other researchers discover what GPD can do.
+────────────────────────────────────────────────────────
+```
+
+This prompt is informational only. Do not block the paper workflow on it.
+
+</community_contribution>
