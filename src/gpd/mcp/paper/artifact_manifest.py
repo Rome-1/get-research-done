@@ -21,9 +21,9 @@ def _sha256(path: Path) -> str:
 
 def _display_path(path: Path, output_dir: Path) -> str:
     try:
-        return str(path.relative_to(output_dir))
+        return path.relative_to(output_dir).as_posix()
     except ValueError:
-        return str(path)
+        return path.as_posix()
 
 
 def _portable_source_path(path: Path, output_dir: Path) -> str:

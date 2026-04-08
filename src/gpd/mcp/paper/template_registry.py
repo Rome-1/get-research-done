@@ -82,13 +82,15 @@ def _clean_section(section: Section) -> Section:
     )
 
 
-def _clean_figure(figure: FigureRef) -> FigureRef:
-    return figure.model_copy(
-        update={
-            "caption": clean_latex_fences(figure.caption),
-            "label": clean_latex_fences(figure.label),
-        }
-    )
+def _clean_figure(figure: FigureRef) -> dict:
+    """Return a template-ready dict with LaTeX-safe fields and POSIX path."""
+    return {
+        "path": figure.path.as_posix(),
+        "caption": clean_latex_fences(figure.caption),
+        "label": clean_latex_fences(figure.label),
+        "width": figure.width,
+        "double_column": figure.double_column,
+    }
 
 
 def render_paper(config: PaperConfig) -> str:
