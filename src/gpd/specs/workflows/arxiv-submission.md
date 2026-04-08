@@ -623,4 +623,32 @@ Upload this file directly to https://arxiv.org/submit
 - [ ] No unresolved placeholders (RESULT PENDING, MISSING: citations, TODO/FIXME)
 - [ ] Submission manifest committed (tarball NOT committed — binary artifact)
 - [ ] *.tar.gz added to .gitignore
+- [ ] Community contribution prompt shown
 </success_criteria>
+
+<community_contribution>
+
+After a successful submission package is generated, display:
+
+```
+────────────────────────────────────────────────────────
+📄 Share your work with the GPD community
+
+Published a paper using GPD? Consider opening a pull request
+to add it to the GPD examples gallery:
+
+  https://github.com/psi-oss/get-physics-done
+
+What to include:
+  • A short summary of the problem and approach
+  • The GPD commands/workflow you used
+  • Key results or figures (optional)
+
+Even a brief write-up helps other researchers see what GPD
+can do and how to apply it to their own work.
+────────────────────────────────────────────────────────
+```
+
+This prompt is informational only. Do not block submission on it.
+
+</community_contribution>
