@@ -1591,17 +1591,26 @@ Re-verify Phase {PHASE_NUMBER} after gap closure.
 	Focus on the gaps that were previously marked failed, partial, blocked, or otherwise unresolved in the previous verification. If the prior report carries `session_status: diagnosed`, use the recorded root causes and missing actions as the starting point for re-verification. For proof-bearing work, re-check every required `*-PROOF-REDTEAM.md` artifact and keep the phase blocked until those audits report `status: passed`.
 	Check whether the gap closure plans have resolved each issue.
 	Update VERIFICATION.md with new status for each gap.
-	Return verification status: passed | gaps_found.",
+	Return exactly one typed `gpd_return` envelope with `status: completed | checkpoint | blocked | failed`, include `files_written`, and write `{phase_dir}/{phase}-VERIFICATION.md` before returning. Use the verifier's canonical `verification_status: passed | gaps_found | expert_needed | human_needed` inside the structured return or the written report; do not return legacy `passed | gaps_found` text as the routing surface.",
   description="Re-verify Phase {PHASE_NUMBER} after gap closure"
 )
 ```
 
-**If the verifier agent fails to spawn or returns an error:** Stop in a blocked state. Do not mark the phase complete or clear gap-closure state on this path. The user should run `gpd:verify-work` separately to confirm gaps are closed. If the phase is proof-bearing, do NOT mark it complete on this path; proof-obligation work remains blocked until re-verification and proof-redteam audits actually clear.
+**If the verifier agent fails to spawn or returns an error:** Stop in a blocked state. Do not mark the phase complete or clear gap-closure state on this path. The user should run `gpd:verify-work` separately to confirm gaps are closed. If the phase is proof-bearing, do NOT mark it complete on this path; proof-obligation work remains blocked until re-verification and proof-redteam audits actually clear. Do not trust the runtime handoff status by itself. Do not let a stale existing verification file satisfy the success path.
 
-| Re-verification Result | Action |
-| ---------------------- | ------ |
-| `passed` | Mark phase complete, proceed to `update_roadmap` |
-| `gaps_found` | Report remaining gaps and STOP -- do not auto-loop. Present: "Re-verification found {N} remaining gaps. Review: {phase_dir}/{phase}-VERIFICATION.md" |
+**Handle the verifier response through `gpd_return.status`:**
+
+- `gpd_return.status: completed`:
+  1. Do not accept `gpd_return.status: completed` until `{phase_dir}/{phase}-VERIFICATION.md` exists on disk.
+  2. The same path appears in `gpd_return.files_written`.
+  3. If either check fails, treat the re-verification handoff as blocked. Do not let a stale existing verification file satisfy the success path.
+  4. After the artifact gate passes, use the canonical verifier verdict from `gpd_return.verification_status` or the written report frontmatter:
+     - `passed` -> mark phase complete, proceed to `update_roadmap`
+     - `gaps_found` / `expert_needed` / `human_needed` -> report remaining gaps and STOP -- do not auto-loop. Present: "Re-verification found {N} remaining gaps. Review: {phase_dir}/{phase}-VERIFICATION.md"
+- `gpd_return.status: checkpoint`: stop and surface the checkpoint payload. Do not wait in place for user input inside this run.
+- `gpd_return.status: blocked` / `gpd_return.status: failed`: stop in a blocked state, surface the issues, and keep gap-closure state intact.
+
+**If the verifier output is malformed or omits `gpd_return.status`:** Treat it as blocked. Do not infer success from prose headings or untyped legacy routing.
 
 </step>
 

@@ -534,7 +534,7 @@ Append this YAML block after the markdown return. Required per agent-infrastruct
 ```yaml
 gpd_return:
   status: completed | checkpoint | blocked | failed
-  files_written: [${phase_dir}/${phase_number}-VERIFICATION.md]
+  files_written: [list only files that actually landed on disk; use [] when no file was written]
   issues: [list of gaps or issues found, if any]
   next_actions: [list of recommended follow-up actions]
   verification_status: passed | gaps_found | expert_needed | human_needed
@@ -543,6 +543,7 @@ gpd_return:
 ```
 
 Use only status names: `completed` | `checkpoint` | `blocked` | `failed`.
+`gpd_return.files_written` is fail-closed: list only files that genuinely landed on disk in this run. `completed` should normally include `${phase_dir}/${phase_number}-VERIFICATION.md`. `checkpoint`, `blocked`, and `failed` may use `[]` unless a partial verification artifact was truly written and verified on disk.
 
 </structured_returns>
 
@@ -550,20 +551,13 @@ Use only status names: `completed` | `checkpoint` | `blocked` | `failed`.
 
 ## Precision Targets by Calculation Type
 
-Different types of calculations have different natural precision standards. Use this table to set appropriate verification thresholds:
+Use the smallest precision policy that matches the active calculation type; do not frontload every threshold family. When exact thresholds, convergence expectations, or cross-method tolerances are unclear, load only the relevant examples from `references/verification/core/computational-verification-templates.md`.
 
-| Calculation Type       | Expected Precision          | What "Agreement" Means                              | Red Flag If                                           |
-| ---------------------- | --------------------------- | --------------------------------------------------- | ----------------------------------------------------- |
-| **Analytical (exact)** | Machine epsilon (~10^{-15}) | Symbolic expressions are identical after simplification | Any numerical discrepancy beyond rounding              |
-| **Series expansion**   | O(ε^{n+1}) where n is the working order | First neglected term bounds the error          | Error exceeds the first neglected term estimate        |
-| **Variational**        | Positive excess energy OK   | Upper bound on ground state energy; excess is expected | Variational energy BELOW exact (violates variational principle) |
-| **Monte Carlo**        | Statistical: 3σ agreement   | Results agree within 3 standard deviations           | Systematic > statistical error, or > 5σ disagreement  |
-| **Lattice**            | Controlled extrapolation    | Continuum + infinite volume extrapolation performed  | No extrapolation attempted, or non-monotonic approach  |
-| **Perturbative QFT**   | Scheme-dependent intermediates, scheme-independent observables | Physical quantities agree across schemes | Physical observable depends on scheme or scale |
-| **Numerical ODE/PDE**  | Convergence with grid refinement | Richardson extrapolation or similar             | Non-monotonic convergence, order of convergence wrong  |
-| **WKB/Semiclassical**  | O(hbar^{n+1}) corrections   | Leading behavior correct, subleading estimated       | Fails at classical turning points without connection formula |
-
-Match the precision standard to the calculation type — do not demand analytical precision from Monte Carlo or vice versa. Flag discrepancies that exceed the expected precision.
+Minimum defaults to keep visible:
+- Analytical exact work: discrepancies beyond symbolic simplification or rounding are red flags.
+- Controlled expansions / semiclassical work: the first neglected term or stated working order bounds acceptable error.
+- Numerical solvers / lattice / Monte Carlo: agreement means convergence or statistical consistency, not exact equality.
+- Scheme-dependent intermediate objects: verify scheme-independent observables and explicitly flag scheme leakage.
 
 </precision_targets>
 
@@ -573,126 +567,27 @@ Match the precision standard to the calculation type — do not demand analytica
 
 When code execution is unavailable (missing dependencies, environment issues, sandbox restrictions, broken imports), fall back to static analysis with explicit confidence penalties.
 
-### Detection
+Keep the always-on rule set small:
+- After the first execution failure, attempt one reasonable recovery only. If recovery fails, explain the blocker and ask before any install attempt.
+- Maximum overall confidence when using static-only verification: MEDIUM.
+- Mark static-only checks as structural rather than independently confirmed.
+- Explicitly list deferred checks that require execution, especially convergence, stochastic/statistical validation, or heavy numerical cross-checks.
+- Recommend re-verification with execution whenever the blocked checks are decisive.
 
-Code execution is unavailable when:
-
-- Python/bash commands fail with ImportError, ModuleNotFoundError, or environment errors
-- Required computational libraries (numpy, scipy, sympy) are not installed
-- Code depends on project-specific modules that cannot be resolved
-- Sandbox restrictions prevent file I/O or subprocess execution
-
-**After the first execution failure**, attempt ONE recovery: check if the dependency is available under an alternative import. If the dependency is genuinely missing, explain it and ask the user before any install attempt. If recovery fails or the user does not authorize installation, switch to static analysis mode for the remainder of the verification.
-
-### Static Analysis Fallback
-
-When code cannot run, perform verification by reading and analyzing code/derivations statically. **Every check performed in static mode receives an automatic confidence downgrade.**
-
-| Normal Confidence | Static Fallback Confidence | Rationale |
-|---|---|---|
-| INDEPENDENTLY CONFIRMED | STRUCTURALLY PRESENT | Cannot confirm numerically without execution |
-| STRUCTURALLY PRESENT | STRUCTURALLY PRESENT | No change — already a structural assessment |
-| UNABLE TO VERIFY | UNABLE TO VERIFY | No change |
-
-**Maximum overall confidence when using static-only verification: MEDIUM.** Even if all static checks pass, the absence of computational verification caps confidence. Report this prominently in the VERIFICATION.md header.
-
-### Which Checks Can Be Performed Without Code Execution
-
-| # | Check | Static Feasibility | Static Method |
-|---|---|---|---|
-| 5.1 | Dimensional analysis | **FULL** | Read equations, trace dimensions symbol by symbol on paper |
-| 5.2 | Numerical spot-check | **PARTIAL** | Manual arithmetic for simple expressions; infeasible for complex functions |
-| 5.3 | Limiting cases | **FULL** | Take limits algebraically by reading expressions and simplifying by hand |
-| 5.4 | Cross-check (alternative method) | **PARTIAL** | Compare mathematical structure; cannot verify numerical agreement |
-| 5.5 | Intermediate spot-check | **PARTIAL** | Read intermediate expressions, verify algebraic steps; cannot run code |
-| 5.6 | Symmetry | **FULL** | Verify transformation properties from equations directly |
-| 5.7 | Conservation laws | **PARTIAL** | Verify analytically (dQ/dt=0 from EOM); cannot test numerically |
-| 5.8 | Math consistency | **FULL** | Sign tracking, index counting, integration measure checks by reading |
-| 5.9 | Convergence | **NONE** | Requires running at multiple resolutions; cannot assess statically |
-| 5.10 | Literature agreement | **FULL** | Compare claimed values against published benchmarks via web_search |
-| 5.11 | Plausibility | **FULL** | Check signs, bounds, causality from analytical expressions |
-| 5.12 | Statistical rigor | **NONE** | Requires recomputing error bars from data |
-| 5.13 | Thermodynamic consistency | **PARTIAL** | Verify Maxwell relations algebraically; cannot compute numerically |
-| 5.14 | Spectral/analytic | **PARTIAL** | Verify pole structure analytically; cannot compute Hilbert transforms |
-| 5.15 | Anomalies/topology | **PARTIAL** | Verify anomaly coefficients algebraically; cannot compute invariants numerically |
-
-**Summary:** 5 checks at full static feasibility, 7 at partial, 3 at none.
-
-### Minimum Confidence Thresholds
-
-| Verification Mode | Minimum Acceptable Confidence | When to Escalate |
-|---|---|---|
-| Full execution available | HIGH | N/A |
-| Partial execution (some deps missing) | MEDIUM | Flag missing checks, request environment fix |
-| Static analysis only | MEDIUM (capped) | Always flag in report; recommend re-verification with execution |
-| Static + no literature comparison | LOW | Escalate to user; recommend manual verification |
-
-### Reporting in Static Mode
-
-When operating in static analysis mode, add the following to VERIFICATION.md:
-
-1. **Header warning:**
-
-```markdown
-**⚠ STATIC ANALYSIS MODE:** Code execution unavailable ({reason}). Confidence capped at MEDIUM. Checks 5.9 (convergence), 5.12 (statistical rigor) could not be performed. Re-verification with code execution recommended.
-```
-
-2. **Per-check annotation:** For each check, append `(static)` to the confidence rating:
-
-```
-| 5.1 | Dimensional analysis | CONSISTENT | STRUCTURALLY PRESENT (static) | Traced dimensions through Eqs. 3, 7, 12 |
-```
-
-3. **Deferred checks section:** List all checks that could not be performed with explanation:
-
-```markdown
-## Deferred Checks (Code Execution Required)
-
-| Check | Why Deferred | What Would Be Tested |
-|-------|-------------|---------------------|
-| 5.9 Convergence | Requires running code at multiple resolutions | Grid convergence of energy eigenvalue |
-| 5.12 Statistics | Requires recomputing error bars from raw data | Jackknife error estimate for MC average |
-```
+Load deeper fallback detail from `references/verification/core/computational-verification-templates.md` only when the active phase genuinely needs a static-analysis decision tree.
 
 </code_execution_unavailable>
 
 <critical_rules>
 
-**DO NOT trust SUMMARY claims.** Verify the derivation is actually correct, not just that a file was created. A 200-line derivation file can have a sign error on line 47 that invalidates everything after it.
-
-**DO NOT assume existence = correctness.** A partition function file exists. Does it have the right prefactor? Does it reduce to known limits? Is every equation dimensionally consistent?
-
-**DO NOT search_files for physics concepts as a substitute for doing physics.** Searching for "Ward identity" tells you nothing about whether the Ward identity holds. Searching for "convergence" tells you nothing about whether the result converged. Searching for "dimensional analysis" tells you nothing about whether the dimensions are consistent. **Actually do the computation.**
-
-**DO NOT skip limiting case verification.** This is the single most powerful check in all of physics. If a result does not reduce to known expressions in appropriate limits, it is wrong. No exceptions. **Take the limit yourself.**
-
-**DO NOT report a check as "independently confirmed" unless you actually performed the computation.** If you only checked that the mathematical structure looks right, report "structurally present." If you could not check at all, report "unable to verify." Honesty about confidence is more valuable than a false sense of thoroughness.
-
-**DO perform numerical spot-checks** on every key expression. Substituting even one test point into an equation catches a large class of errors (wrong signs, missing factors, swapped arguments).
-
-**DO re-derive limiting cases independently.** Do not check whether the executor wrote "checked classical limit" — actually take hbar -> 0 in the final expression yourself and compare with the known classical result.
-
-**DO verify conservation laws computationally.** Compute the conserved quantity at two points and check it doesn't change, or compute dQ/dt using the equations of motion and verify it equals zero.
-
-**DO cross-check key results by an independent method.** If a result was derived analytically, evaluate it numerically. If computed numerically, check against an analytical approximation.
-
-**DO spot-check intermediate results** in long derivations. Pick one result near the middle and re-derive it independently — this catches compensating errors.
-
-**DO check Ward identities and sum rules** by evaluating both sides numerically at test points.
-
-**DO verify Kramers-Kronig consistency** by computing the Hilbert transform numerically.
-
-**DO check unitarity and positivity** by evaluating the relevant quantities at a grid of points.
-
-**DO validate statistics properly** for Monte Carlo and stochastic results. Recompute error bars from raw data if available.
-
-**Structure gaps in YAML frontmatter** for `gpd:plan-phase --gaps`. Include `computation_evidence` for every gap.
-
-**DO flag for expert verification when uncertain** (novel results, subtle cancellations, approximation validity, physical interpretation).
-
-**Assess confidence honestly.** A result that passes dimensional analysis and limiting cases but has not been compared to literature is MEDIUM confidence, not HIGH. A result where you could only do structural checks (not independent computation) is also MEDIUM at best. Be calibrated.
-
-**DO NOT commit.** Leave committing to the orchestrator.
+- Treat SUMMARY claims as assertions, not evidence.
+- Existence is never enough; verify correctness, limits, and consistency directly.
+- Search is not verification; compute or re-derive the decisive checks yourself.
+- Limiting cases, spot checks, and at least one independent cross-check are mandatory unless explicitly deferred with reason.
+- Report `independently confirmed` only when you actually executed or re-derived the check; otherwise downgrade honestly.
+- Load specialized computational diagnostics on demand, not by default.
+- Structure gaps in YAML frontmatter for `gpd:plan-phase --gaps`, including `computation_evidence`.
+- Flag expert review when uncertainty is real, assess confidence honestly, and never commit.
 
 </critical_rules>
 
@@ -703,31 +598,20 @@ When operating in static analysis mode, add the following to VERIFICATION.md:
 - [ ] If initial: verification targets established from PLAN `contract` first
 - [ ] All decisive contract targets verified with status and evidence
 - [ ] All artifacts checked at all three levels (exists, substantive, integrated)
-- [ ] **Numerical spot-checks** performed on key expressions with 2-3 test parameter sets each
-- [ ] **Limiting cases independently re-derived** with EVERY step shown (not just checked if mentioned)
-- [ ] **Intermediate result spot-checks** performed on derivations with >5 steps
 - [ ] **Dimensional analysis** performed by tracing dimensions of each symbol through each equation
+- [ ] **Numerical spot-checks** performed on key expressions or explicitly deferred with reason
+- [ ] **Limiting cases independently re-derived** with every decisive step shown
 - [ ] **Independent cross-checks** performed where feasible (alternative method, series expansion, special case)
-- [ ] **Symmetry preservation** verified by applying transformations and checking invariance
-- [ ] **Conservation laws** tested by computing conserved quantity at multiple points
-- [ ] **Ward identities / sum rules** verified by evaluating both sides at test points
-- [ ] **Kramers-Kronig consistency** checked by numerical Hilbert transform
-- [ ] **Unitarity and causality** verified by evaluating relevant quantities
-- [ ] **Positivity constraints** checked by evaluating at grid of points
-- [ ] **Mathematical consistency** verified by tracing algebra and substituting test values
-- [ ] **Numerical convergence** verified by running at multiple resolutions (or examining stored convergence data)
+- [ ] **Symmetry, conservation, and mathematical consistency** checked at the level the active phase actually needs
+- [ ] **Numerical convergence / stochastic validation / specialized diagnostics** either executed or explicitly deferred after loading the relevant on-demand computational checks
 - [ ] **Agreement with literature** checked by numerical comparison against benchmark values
 - [ ] Required `comparison_verdicts` recorded for decisive benchmark / prior-work / experiment / cross-method checks, including `inconclusive` / `tension` when that is the honest state
 - [ ] Forbidden proxies explicitly rejected or escalated
 - [ ] Missing decisive checks recorded as structured `suggested_contract_checks`
-- [ ] **Physical plausibility** assessed by evaluating constraints (positivity, boundedness, causality)
-- [ ] **Statistical rigor** evaluated by recomputing error bars where possible
+- [ ] **Physical plausibility** assessed by evaluating the decisive constraints for the phase
 - [ ] **Subfield-specific checklist** applied with computational checks (not just search_files)
 - [ ] **Confidence rating** assigned to every check (independently confirmed / structurally present / unable to verify)
-- [ ] **Gate A: Catastrophic cancellation** checked for all numerical results (R = |result|/max|terms|)
-- [ ] **Gate B: Analytical-numerical cross-validation** performed when both forms exist
-- [ ] **Gate C: Integration measure** verified with explicit Jacobian for every coordinate change
-- [ ] **Gate D: Approximation validity** enforced by evaluating controlling parameters at actual values
+- [ ] **Approximation validity / measure / cancellation gates** evaluated when they materially affect the active phase
 - [ ] **Conventions verified** against state.json convention_lock
 - [ ] Requirements coverage assessed (if applicable)
 - [ ] Anti-patterns scanned and categorized (physics-specific patterns)

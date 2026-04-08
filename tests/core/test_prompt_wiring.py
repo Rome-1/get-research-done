@@ -329,7 +329,7 @@ def test_shared_protocols_require_permission_before_dependency_installs() -> Non
     assert "## GPD CLI Commit Protocol" not in verifier_raw
     assert "@{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md" not in verifier_raw
     assert "Ask the user before any install attempt; keep dependency changes permission-gated." in verifier_raw
-    assert "ask the user before any install attempt" in verifier
+    assert "ask the user before any install attempt" in verifier.lower()
     assert "permission-gated" in planner
 
 
