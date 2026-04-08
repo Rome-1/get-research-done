@@ -1089,7 +1089,7 @@ class TestValidateFrontmatter:
             (
                 "summary",
                 "---\nphase: 01\nplan: 01\ndepth: standard\nprovides: []\ncompleted: null\n---\n\nBody.",
-                "completed: expected a non-null scalar",
+                "completed: expected a date string or boolean",
             ),
             (
                 "verification",
