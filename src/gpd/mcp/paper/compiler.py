@@ -692,7 +692,10 @@ async def build_paper(
     tex_content = render_paper(config)
     output_stem = derive_output_filename(config)
     tex_path = output_dir / f"{output_stem}.tex"
-    await asyncio.to_thread(tex_path.write_text, tex_content, encoding="utf-8")
+    if tex_path.exists():
+        logger.warning("Skipping .tex write — %s already exists. Delete it to regenerate.", tex_path)
+    else:
+        await asyncio.to_thread(tex_path.write_text, tex_content, encoding="utf-8")
 
     manifest = build_artifact_manifest(
         config,
