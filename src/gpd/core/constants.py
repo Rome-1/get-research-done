@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from gpd.core.return_contract import REQUIRED_RETURN_FIELDS, VALID_RETURN_STATUSES
+
 __all__ = [
     "ACTIVE_TRACE_FILENAME",
     "ANALYSIS_DIR_NAME",
@@ -363,12 +365,6 @@ RECOMMENDED_PYTHON_VERSION: tuple[int, int] = (3, 12)
 
 SEED_PATTERN_INITIAL_OCCURRENCES: int = 5
 """Initial occurrence count for seed patterns in pattern_seed()."""
-
-VALID_RETURN_STATUSES: frozenset[str] = frozenset({"completed", "checkpoint", "blocked", "failed"})
-"""Allowed values for gpd_return.status in summary files."""
-
-REQUIRED_RETURN_FIELDS: tuple[str, ...] = ("status", "files_written", "issues", "next_actions")
-"""Fields that must be present in a gpd_return YAML block."""
 
 
 # ─── Project Layout ─────────────────────────────────────────────────────────

@@ -291,8 +291,10 @@ def test_research_phase_verifies_research_artifact_before_accepting_handoff() ->
 
     assert "Accept the researcher handoff automatically only once `expected_artifacts` exist and pass the artifact check." in content
     assert "Do not trust the runtime handoff status by itself." in content
+    assert "Human-readable headings such as `## RESEARCH COMPLETE` and `## CHECKPOINT REACHED` are presentation only" in content
     assert "Artifact gate:" in content
-    assert "If the researcher reports `## RESEARCH COMPLETE` but the `expected_artifacts` entry (`RESEARCH.md`) is missing" in content
+    assert "If `gpd_return.status: completed` but the `expected_artifacts` entry (`RESEARCH.md`) is missing" in content
+    assert "gpd_return.status: checkpoint" in content
     assert "<spawn_contract>" in content
     assert "expected_artifacts:" in content
     assert "shared_state_policy: return_only" in content

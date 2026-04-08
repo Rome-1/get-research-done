@@ -28,7 +28,13 @@
       "telemetry_completeness": "none",
       "supports_usage_tokens": false,
       "supports_cost_usd": false,
-      "supports_context_meter": true
+      "supports_context_meter": true,
+      "child_artifact_persistence_reliability": "best-effort",
+      "supports_structured_child_results": false,
+      "continuation_surface": "none",
+      "checkpoint_stop_semantics": "stop",
+      "supports_runtime_session_payload_attribution": false,
+      "supports_agent_payload_attribution": false
     },
     "hook_payload": {
       "notify_event_types": [],
@@ -85,7 +91,13 @@
       "telemetry_completeness": "none",
       "supports_usage_tokens": false,
       "supports_cost_usd": false,
-      "supports_context_meter": true
+      "supports_context_meter": true,
+      "child_artifact_persistence_reliability": "best-effort",
+      "supports_structured_child_results": false,
+      "continuation_surface": "none",
+      "checkpoint_stop_semantics": "stop",
+      "supports_runtime_session_payload_attribution": false,
+      "supports_agent_payload_attribution": false
     },
     "hook_payload": {
       "notify_event_types": [],
@@ -143,7 +155,13 @@
       "telemetry_completeness": "best-effort",
       "supports_usage_tokens": true,
       "supports_cost_usd": true,
-      "supports_context_meter": false
+      "supports_context_meter": false,
+      "child_artifact_persistence_reliability": "best-effort",
+      "supports_structured_child_results": true,
+      "continuation_surface": "explicit",
+      "checkpoint_stop_semantics": "stop",
+      "supports_runtime_session_payload_attribution": false,
+      "supports_agent_payload_attribution": false
     },
     "hook_payload": {
       "notify_event_types": ["agent-turn-complete"],
@@ -201,7 +219,13 @@
       "telemetry_completeness": "none",
       "supports_usage_tokens": false,
       "supports_cost_usd": false,
-      "supports_context_meter": false
+      "supports_context_meter": false,
+      "child_artifact_persistence_reliability": "best-effort",
+      "supports_structured_child_results": false,
+      "continuation_surface": "none",
+      "checkpoint_stop_semantics": "stop",
+      "supports_runtime_session_payload_attribution": false,
+      "supports_agent_payload_attribution": false
     },
     "hook_payload": {
       "notify_event_types": [],

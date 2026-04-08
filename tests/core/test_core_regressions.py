@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -171,20 +172,41 @@ def test_json_set_reports_type_mismatch_errors(tmp_path: Path) -> None:
     assert "error" in result
 
 
-@pytest.mark.parametrize(
-    "yaml_block",
-    [
-        "gpd_return: completed",
-        "gpd_return:\n  - a\n  - b",
-        "gpd_return: null",
-    ],
-)
-def test_check_latest_return_tolerates_non_dict_gpd_return(tmp_path: Path, yaml_block: str) -> None:
-    from gpd.core.health import check_latest_return
+def test_check_latest_return_selects_latest_summary_file_deterministically(tmp_path: Path) -> None:
+    from gpd.core.health import CheckStatus, check_latest_return
 
-    result = check_latest_return(_setup_project_with_summary(tmp_path, yaml_block))
+    gpd_dir = tmp_path / "GPD" / "phases"
+    older_phase = gpd_dir / "01-alpha"
+    newer_phase = gpd_dir / "02-beta"
+    older_phase.mkdir(parents=True)
+    newer_phase.mkdir(parents=True)
 
-    assert result.label == "Latest Return Envelope"
+    older_summary = older_phase / "01-alpha-01-SUMMARY.md"
+    newer_summary = newer_phase / "02-beta-01-SUMMARY.md"
+    for summary in (older_summary, newer_summary):
+        summary.write_text(
+            "# Summary\n\n"
+            "```yaml\n"
+            "gpd_return:\n"
+            "  status: completed\n"
+            "  files_written: [src/main.py]\n"
+            "  issues: []\n"
+            "  next_actions: [/gpd:verify-work 01]\n"
+            "```\n",
+            encoding="utf-8",
+        )
+
+    same_mtime = 1_700_000_000
+    os.utime(older_summary, (same_mtime, same_mtime))
+    os.utime(newer_summary, (same_mtime, same_mtime))
+
+    result = check_latest_return(tmp_path)
+    repeated = check_latest_return(tmp_path)
+
+    assert result.status == CheckStatus.OK
+    assert result.details["file"] == "02-beta/02-beta-01-SUMMARY.md"
+    assert repeated.details["file"] == result.details["file"]
+    assert result.details["fields_found"] == ["files_written", "issues", "next_actions", "status"]
 
 
 def test_apply_fixes_resets_config_on_parse_error(tmp_path: Path) -> None:

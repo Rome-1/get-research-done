@@ -2577,6 +2577,58 @@ class TestValidateReturn:
         assert parsed["passed"] is True
         assert parsed["warning_count"] > 0
 
+    def test_validate_return_nested_payloads_are_preserved(self, gpd_project: Path) -> None:
+        """Nested continuation/state payloads should parse through the CLI path."""
+        return_file = gpd_project / "nested_return.md"
+        return_file.write_text(
+            "# Summary\n\n```yaml\ngpd_return:\n"
+            "  status: checkpoint\n"
+            "  files_written: [\"src/main.py\"]\n"
+            "  issues: []\n"
+            "  next_actions: [\"/gpd:resume-work\"]\n"
+            "  state_updates:\n"
+            "    - current_phase: 09\n"
+            "      blockers:\n"
+            "        - waiting on approval\n"
+            "  continuation_update:\n"
+            "    resume_contract:\n"
+            "      next_step: continue\n"
+            "      required_artifacts:\n"
+            "        - GPD/STATE.md\n"
+            "    execution_segment:\n"
+            "      current_cursor: 3\n"
+            "      completed_tasks:\n"
+            "        - task-1\n```\n"
+        )
+        result = _invoke("--raw", "validate-return", str(return_file))
+        parsed = json.loads(result.output)
+        assert parsed["passed"] is True
+        assert parsed["fields"]["state_updates"][0]["blockers"] == ["waiting on approval"]
+        assert parsed["fields"]["continuation_update"]["execution_segment"]["current_cursor"] == 3
+
+    def test_validate_return_rejects_malformed_nested_payloads(self, gpd_project: Path) -> None:
+        """Wrong scalar/list and mapping/list shapes should fail closed."""
+        return_file = gpd_project / "bad_nested_return.md"
+        return_file.write_text(
+            "# Summary\n\n```yaml\ngpd_return:\n"
+            "  status: blocked\n"
+            "  files_written: []\n"
+            "  issues: []\n"
+            "  next_actions: []\n"
+            "  blockers:\n"
+            "    - waiting on approval\n"
+            "  continuation_update: checkpoint\n```\n"
+        )
+        result = runner.invoke(
+            app,
+            ["--raw", "validate-return", str(return_file)],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 1
+        parsed = json.loads(result.output)
+        assert parsed["passed"] is False
+        assert any("continuation_update" in error for error in parsed["errors"])
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 7. config subcommands

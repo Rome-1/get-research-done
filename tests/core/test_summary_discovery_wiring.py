@@ -35,7 +35,8 @@ def test_verify_work_searches_canonical_phase_summary_artifacts() -> None:
 def test_verify_work_searches_canonical_phase_verification_artifacts() -> None:
     workflow_text = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
 
-    assert "rg -l '^session_status: (validating|diagnosed)$' GPD/phases/*/*-VERIFICATION.md 2>/dev/null | sort | head -5" in workflow_text
+    assert 'session_status=$(gpd frontmatter get "$file" --field session_status 2>/dev/null)' in workflow_text
+    assert 'done | sort | head -5' in workflow_text
     assert 'ls "$phase_dir"/*-VERIFICATION.md 2>/dev/null | head -1' in workflow_text
 
 
@@ -90,7 +91,8 @@ def test_summary_driven_workflows_search_canonical_summary_artifacts() -> None:
     assert "ls GPD/phases/*/*SUMMARY.md 2>/dev/null" in graph
     assert "cat GPD/phases/*/*SUMMARY.md" in write_paper
     assert 'cat "$PHASE_DIR"/*SUMMARY.md 2>/dev/null' in write_paper
-    assert 'VALIDATED=$(ls GPD/phases/*/*SUMMARY.md 2>/dev/null | xargs grep -El "approach_validated: true|comparison_verdicts:|contract_results:" 2>/dev/null | head -1)' in plan_phase
+    assert 'SUMMARY_FILE=$(ls GPD/phases/*/*SUMMARY.md 2>/dev/null | head -1)' in plan_phase
+    assert "inspect the loaded SUMMARY.md artifacts directly for decisive evidence before reusing research" in plan_phase
 
 
 def test_transition_workflow_surfaces_standalone_phase_artifact_support() -> None:

@@ -322,6 +322,23 @@ def test_runtime_catalog_accepts_future_validated_command_surface(
     assert descriptors[0].validated_command_surface == "public_runtime_semicolon_command"
 
 
+def test_runtime_catalog_rejects_invalid_delegation_capability_values(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = deepcopy(json.loads(_RUNTIME_CATALOG_PATH.read_text(encoding="utf-8")))
+    payload[0]["capabilities"]["child_artifact_persistence_reliability"] = "unstable"
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"runtime catalog entry 0\.capabilities\.child_artifact_persistence_reliability "
+            r"must be one of: best-effort, none, reliable"
+        ),
+    ):
+        _iter_runtime_descriptors_from_payload(payload, tmp_path=tmp_path, monkeypatch=monkeypatch)
+
+
 def test_runtime_catalog_rejects_invalid_capability_enum_values(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -549,6 +566,12 @@ def test_runtime_capabilities_are_explicit_per_runtime() -> None:
     assert claude.supports_context_meter is True
     assert claude.supports_usage_tokens is False
     assert claude.supports_cost_usd is False
+    assert claude.child_artifact_persistence_reliability == "best-effort"
+    assert claude.supports_structured_child_results is False
+    assert claude.continuation_surface == "none"
+    assert claude.checkpoint_stop_semantics == "stop"
+    assert claude.supports_runtime_session_payload_attribution is False
+    assert claude.supports_agent_payload_attribution is False
     assert claude.telemetry_completeness == "none"
     assert get_hook_payload_policy("claude-code").supports_runtime_session_payload_attribution is False
     assert get_hook_payload_policy("claude-code").supports_agent_payload_attribution is False
@@ -565,6 +588,12 @@ def test_runtime_capabilities_are_explicit_per_runtime() -> None:
     assert gemini.supports_context_meter is True
     assert gemini.supports_usage_tokens is False
     assert gemini.supports_cost_usd is False
+    assert gemini.child_artifact_persistence_reliability == "best-effort"
+    assert gemini.supports_structured_child_results is False
+    assert gemini.continuation_surface == "none"
+    assert gemini.checkpoint_stop_semantics == "stop"
+    assert gemini.supports_runtime_session_payload_attribution is False
+    assert gemini.supports_agent_payload_attribution is False
     assert gemini.telemetry_completeness == "none"
     assert get_hook_payload_policy("gemini").supports_runtime_session_payload_attribution is False
     assert get_hook_payload_policy("gemini").supports_agent_payload_attribution is False
@@ -583,6 +612,12 @@ def test_runtime_capabilities_are_explicit_per_runtime() -> None:
     assert codex.supports_context_meter is False
     assert codex.supports_usage_tokens is True
     assert codex.supports_cost_usd is True
+    assert codex.child_artifact_persistence_reliability == "best-effort"
+    assert codex.supports_structured_child_results is True
+    assert codex.continuation_surface == "explicit"
+    assert codex.checkpoint_stop_semantics == "stop"
+    assert codex.supports_runtime_session_payload_attribution is False
+    assert codex.supports_agent_payload_attribution is False
     assert get_hook_payload_policy("codex").supports_runtime_session_payload_attribution is False
     assert get_hook_payload_policy("codex").supports_agent_payload_attribution is False
 
@@ -599,6 +634,12 @@ def test_runtime_capabilities_are_explicit_per_runtime() -> None:
     assert opencode.supports_context_meter is False
     assert opencode.supports_usage_tokens is False
     assert opencode.supports_cost_usd is False
+    assert opencode.child_artifact_persistence_reliability == "best-effort"
+    assert opencode.supports_structured_child_results is False
+    assert opencode.continuation_surface == "none"
+    assert opencode.checkpoint_stop_semantics == "stop"
+    assert opencode.supports_runtime_session_payload_attribution is False
+    assert opencode.supports_agent_payload_attribution is False
     assert get_hook_payload_policy("opencode").supports_runtime_session_payload_attribution is False
     assert get_hook_payload_policy("opencode").supports_agent_payload_attribution is False
 
@@ -608,6 +649,9 @@ def test_runtime_capabilities_and_hook_payload_contract_stay_coherent() -> None:
     allowed_hook_surfaces = {"explicit", "none"}
     allowed_telemetry_sources = {"notify-hook", "none"}
     allowed_telemetry_completeness = {"best-effort", "none"}
+    allowed_child_artifact_persistence_reliability = {"best-effort", "none", "reliable"}
+    allowed_continuation_surfaces = {"explicit", "none"}
+    allowed_checkpoint_stop_semantics = {"continue", "none", "stop"}
     special_permission_surface_kinds = _special_permission_surface_kinds()
 
     for runtime_name in list_runtime_names():
@@ -638,6 +682,12 @@ def test_runtime_capabilities_and_hook_payload_contract_stay_coherent() -> None:
         assert isinstance(capabilities.supports_usage_tokens, bool)
         assert isinstance(capabilities.supports_cost_usd, bool)
         assert isinstance(capabilities.supports_context_meter, bool)
+        assert capabilities.child_artifact_persistence_reliability in allowed_child_artifact_persistence_reliability
+        assert isinstance(capabilities.supports_structured_child_results, bool)
+        assert capabilities.continuation_surface in allowed_continuation_surfaces
+        assert capabilities.checkpoint_stop_semantics in allowed_checkpoint_stop_semantics
+        assert isinstance(capabilities.supports_runtime_session_payload_attribution, bool)
+        assert isinstance(capabilities.supports_agent_payload_attribution, bool)
         assert hook_payload.supports_runtime_session_payload_attribution == bool(hook_payload.runtime_session_id_keys)
         assert hook_payload.supports_agent_payload_attribution == bool(
             hook_payload.agent_id_keys or hook_payload.agent_name_keys or hook_payload.agent_scope_keys
@@ -679,6 +729,9 @@ def test_runtime_capabilities_and_hook_payload_contract_stay_coherent() -> None:
             assert not hook_payload.input_tokens_keys
             assert not hook_payload.output_tokens_keys
             assert not hook_payload.cost_usd_keys
+
+        if capabilities.supports_structured_child_results:
+            assert capabilities.continuation_surface == "explicit"
 
         if hook_payload.supports_runtime_session_payload_attribution or hook_payload.supports_agent_payload_attribution:
             assert capabilities.notify_surface == "explicit"

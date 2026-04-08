@@ -244,19 +244,21 @@ if [ "$RESEARCH_MODE" = "explore" ]; then
 elif [ "$RESEARCH_MODE" = "exploit" ]; then
   # Exploit: reuse only if existing research already covers the exact method family
   # and contract-critical anchor/comparison path for this phase
-  if echo "$INIT" | gpd json get .research_content --default "" | grep -qi "method\\|benchmark\\|anchor"; then
-    echo "Research mode: exploit — existing targeted research appears sufficient"
-    # Skip to step 6
+  RESEARCH_FILE=$(ls "${PHASE_DIR}"/*-RESEARCH.md 2>/dev/null | head -1)
+  if [ -n "$RESEARCH_FILE" ]; then
+    echo "Research mode: exploit — existing RESEARCH.md found; compare it directly against the current contract slice before deciding to reuse it"
+    # Skip to step 6 only when the existing research already covers the exact method family,
+    # anchor set, and decisive evidence path for this phase.
   else
-    echo "Research mode: exploit — existing research is too generic, refreshing targeted method context"
+    echo "Research mode: exploit — no RESEARCH.md found, refreshing targeted method context"
     # Proceed to spawn researcher below
   fi
 elif [ "$RESEARCH_MODE" = "adaptive" ]; then
   # Adaptive: narrow only after prior decisive evidence or an explicit approach lock
-  VALIDATED=$(ls GPD/phases/*/*SUMMARY.md 2>/dev/null | xargs grep -El "approach_validated: true|comparison_verdicts:|contract_results:" 2>/dev/null | head -1)
-  if [ -n "$VALIDATED" ]; then
-    echo "Research mode: adaptive — prior decisive evidence found, using existing research as the starting point"
-    # Skip to step 6
+  SUMMARY_FILE=$(ls GPD/phases/*/*SUMMARY.md 2>/dev/null | head -1)
+  if [ -n "$SUMMARY_FILE" ]; then
+    echo "Research mode: adaptive — inspect the loaded SUMMARY.md artifacts directly for decisive evidence before reusing research"
+    # Skip to step 6 only after explicit decisive evidence or an approach-lock marker is confirmed in the summary artifacts.
   else
     echo "Research mode: adaptive — approach not yet locked, refreshing research before planning"
     # Proceed to spawn researcher below
@@ -294,7 +296,7 @@ Apply the shared runtime delegation note at task-construction time:
 ```bash
 PHASE_DESC=$(gpd --raw roadmap get-phase "${PHASE}" | gpd json get .section --default "")
 # Use requirements_content from INIT (already loaded via --include requirements)
-REQUIREMENTS=$(echo "$INIT" | gpd json get .requirements_content --default "" | grep -A100 "## Requirements" | head -50)
+REQUIREMENTS=$(echo "$INIT" | gpd json get .requirements_content --default "")
 STATE_SNAP=$(gpd state snapshot)
 # Extract decisions from gpd state snapshot JSON: echo "$STATE_SNAP" | gpd json list .decisions
 ```
@@ -369,8 +371,11 @@ task(
 
 ### Handle Researcher Return
 
-- **`## RESEARCH COMPLETE`:** Verify RESEARCH.md exists (below), then display confirmation, continue to step 6
-- **`## RESEARCH BLOCKED`:** Display blocker, offer: 1) Provide context, 2) Skip research, 3) Abort
+Human-readable headings such as `## RESEARCH COMPLETE` and `## RESEARCH BLOCKED` are presentation only. Route on `gpd_return.status` and the artifact gate below.
+
+- **`gpd_return.status: completed`:** Verify RESEARCH.md exists (below) and that `gpd_return.files_written` names it, then display confirmation and continue to step 6
+- **`gpd_return.status: checkpoint`:** Display blocker, offer: 1) Provide context, 2) Skip research, 3) Abort
+- **`gpd_return.status: blocked` or `failed`:** Display blocker, offer: 1) Provide context, 2) Skip research, 3) Abort
 
 **Verify RESEARCH.md was written (guard against silent researcher failure):**
 
@@ -581,11 +586,13 @@ task(
 
 ## 9. Handle Planner Return
 
-**If the planner agent fails to spawn or returns an error:** Check if any PLAN.md files were written to the phase directory (agents write files first). If plans exist, proceed as if PLANNING COMPLETE. If no plans, offer: 1) Retry planner, 2) Create plans in the main context, 3) Abort.
+**If the planner agent fails to spawn or returns an error:** Check if any PLAN.md files were written to the phase directory (agents write files first). If plans exist, proceed as if `gpd_return.status: completed`. If no plans, offer: 1) Retry planner, 2) Create plans in the main context, 3) Abort.
 
-- **`## PLANNING COMPLETE`:** Before accepting the success marker, verify that at least one readable `*-PLAN.md` artifact exists in `${PHASE_DIR}`. Do not accept the planner return text alone. If the planner says complete but no plan files are present, treat the handoff as incomplete and request a fresh continuation. Display plan count. If `AUTONOMY=supervised`, show the written draft plans and get user confirmation before advancing to checker or next-step output. If `--skip-verify` or `plan_checker_enabled` is false (from init): skip to step 13 only when no proof-bearing plans were written. Proof-bearing plans still require checker review or an equivalent main-context audit before planning is considered complete. Otherwise: step 10.
-- **`## CHECKPOINT REACHED`:** Present to user, get response, spawn continuation (step 12)
-- **`## PLANNING INCONCLUSIVE`:** Show attempts, offer: Add context / Retry / Manual
+Human-readable headings such as `## PLANNING COMPLETE`, `## CHECKPOINT REACHED`, and `## PLANNING INCONCLUSIVE` are presentation only. Route on the planner's structured `gpd_return.status`, `gpd_return.files_written`, and the on-disk artifact check.
+
+- **`gpd_return.status: completed`:** Before accepting the success state, verify that at least one readable `*-PLAN.md` artifact exists in `${PHASE_DIR}` and that `gpd_return.files_written` names the same file set. Do not accept the planner return text alone. If the planner says complete but no plan files are present, treat the handoff as incomplete and request a fresh continuation. Display plan count. If `AUTONOMY=supervised`, show the written draft plans and get user confirmation before advancing to checker or next-step output. If `--skip-verify` or `plan_checker_enabled` is false (from init): skip to step 13 only when no proof-bearing plans were written. Proof-bearing plans still require checker review or an equivalent main-context audit before planning is considered complete. Otherwise: step 10.
+- **`gpd_return.status: checkpoint`:** Present to user, get response, spawn continuation (step 12)
+- **`gpd_return.status: blocked` or `failed`:** Show attempts, offer: Add context / Retry / Manual
 
 Before the checker loop, validate every generated plan contract explicitly:
 
@@ -694,19 +701,21 @@ task(
 
 **If the plan-checker agent fails to spawn or returns an error:** Proceed without plan verification. Plans are still executable. Note that verification was skipped and recommend the user review the plans manually before executing. If any plan is proof-bearing, do NOT waive this gate: run an equivalent main-context proof-plan audit against the checker criteria above or STOP and report that proof-obligation planning could not be cleared safely.
 
-- **`## VERIFICATION PASSED`:** Display iteration-aware confirmation and proceed to step 13:
+Human-readable headings such as `## VERIFICATION PASSED`, `## ISSUES FOUND`, and `## PARTIAL APPROVAL` are presentation only. Route on the checker's structured `gpd_return.status` and plan lists.
+
+- **`gpd_return.status: completed`:** Display iteration-aware confirmation and proceed to step 13:
 
   ```
   Plan passed checker (attempt {iteration_count}/3)
   ```
 
-- **`## ISSUES FOUND`:** Display iteration-aware status, show issues, check iteration count, proceed to step 12:
+- **`gpd_return.status: failed`:** Display iteration-aware status, show issues, check iteration count, proceed to step 12:
 
   ```
   Checker found {N} issues (attempt {iteration_count}/3). Revising plan...
   ```
 
-- **`## PARTIAL APPROVAL`:** Some plans passed, others need revision. Split the work:
+- **`gpd_return.status: checkpoint`:** Some plans passed, others need revision. Split the work:
 
   1. Record approved plans (from the checker's "Approved Plans" table)
   2. Display status:
@@ -716,7 +725,7 @@ task(
      ```
 
   3. Send ONLY the blocked plans to the revision loop (step 12). Pass the checker's blocker details as `{structured_issues_from_checker}`. Do NOT re-check already-approved plans unless their inputs change during revision.
-  4. After revision + re-check cycle, if the re-check returns VERIFICATION PASSED for the revised plans, merge approved sets and proceed to step 13. If it returns PARTIAL APPROVAL again, repeat. If ISSUES FOUND, enter standard revision loop for remaining plans.
+  4. After revision + re-check cycle, if the re-check returns `gpd_return.status: completed` for the revised plans, merge approved sets and proceed to step 13. If it returns `gpd_return.status: checkpoint` again, repeat. If `gpd_return.status: failed`, enter standard revision loop for remaining plans.
   5. Approved plans from partial approval are final — they proceed to execution regardless of the revision outcome for blocked plans.
 
 ## 12. Revision Loop (Max 3 Iterations)

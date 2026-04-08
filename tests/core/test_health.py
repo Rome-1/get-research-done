@@ -2125,8 +2125,10 @@ class TestCheckLatestReturn:
 
         assert result.status == CheckStatus.OK
         assert result.label == "Latest Return Envelope"
+        assert result.details["file"] == "01-setup/01-setup-01-SUMMARY.md"
+        assert result.details["fields_found"] == ["files_written", "issues", "next_actions", "status"]
 
-    def test_summary_without_return_block_warns(self, tmp_path: Path) -> None:
+    def test_summary_without_return_block_fails_closed(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
         phase_dir = cwd / "GPD" / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
@@ -2137,8 +2139,66 @@ class TestCheckLatestReturn:
 
         result = check_latest_return(cwd)
 
-        assert result.status == CheckStatus.WARN
-        assert result.warnings
+        assert result.status == CheckStatus.FAIL
+        assert any("No gpd_return YAML block found" in issue for issue in result.issues)
+
+    def test_summary_with_malformed_return_envelope_propagates_validator_failure(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        phase_dir = cwd / "GPD" / "phases" / "01-setup"
+        phase_dir.mkdir(parents=True)
+        (phase_dir / "01-setup-01-SUMMARY.md").write_text(
+            "# Summary\n\n```yaml\ngpd_return:\n  status: completed\n```\n",
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(
+            health_module,
+            "cmd_validate_return",
+            lambda _path: SimpleNamespace(
+                passed=False,
+                errors=["gpd_return YAML parse error: malformed envelope"],
+                warnings=[],
+                fields={},
+                warning_count=0,
+            ),
+        )
+
+        result = check_latest_return(cwd)
+
+        assert result.status == CheckStatus.FAIL
+        assert result.details["fields_found"] == []
+        assert any("gpd_return YAML parse error: malformed envelope" in issue for issue in result.issues)
+
+    def test_summary_with_invalid_status_propagates_validator_failure(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        phase_dir = cwd / "GPD" / "phases" / "01-setup"
+        phase_dir.mkdir(parents=True)
+        (phase_dir / "01-setup-01-SUMMARY.md").write_text(
+            "# Summary\n\n```yaml\ngpd_return:\n  status: mystery\n```\n",
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(
+            health_module,
+            "cmd_validate_return",
+            lambda _path: SimpleNamespace(
+                passed=False,
+                errors=["Invalid status 'mystery'. Must be one of: blocked, checkpoint, completed, failed"],
+                warnings=[],
+                fields={"status": "mystery"},
+                warning_count=0,
+            ),
+        )
+
+        result = check_latest_return(cwd)
+
+        assert result.status == CheckStatus.FAIL
+        assert result.details["fields_found"] == ["status"]
+        assert any("Invalid status 'mystery'" in issue for issue in result.issues)
 
     def test_summary_with_coercive_numeric_return_counts_fails(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)

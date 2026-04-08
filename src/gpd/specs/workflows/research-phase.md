@@ -145,15 +145,16 @@ shared_state_policy: return_only
 ```
 
 Accept the researcher handoff automatically only once `expected_artifacts` exist and pass the artifact check. Do not trust the runtime handoff status by itself.
+Human-readable headings such as `## RESEARCH COMPLETE` and `## CHECKPOINT REACHED` are presentation only; route on `gpd_return.status` and the artifact gate.
 
 ## Step 5: Handle Return
 
 **If the researcher agent fails to spawn or returns an error:** Report the failure. Offer: 1) Retry with the same context, 2) Execute the research in the main context (slower but reliable), 3) Skip research and proceed to `gpd:plan-phase` directly (planner will work with less context). Do not silently continue without research output.
 
-- **Artifact gate:** If the researcher reports `## RESEARCH COMPLETE` but the `expected_artifacts` entry (`RESEARCH.md`) is missing from the phase directory, treat the handoff as incomplete. Offer: 1) Retry researcher, 2) Execute research in the main context, 3) Abort.
-- `## RESEARCH COMPLETE` -- Display summary, offer: Plan/Dig deeper/Review/Done
-- `## CHECKPOINT REACHED` -- Present to user, spawn continuation
-- `## RESEARCH INCONCLUSIVE` -- Show attempts, offer: Add context/Try different approach/Manual
+- **Artifact gate:** If `gpd_return.status: completed` but the `expected_artifacts` entry (`RESEARCH.md`) is missing from the phase directory or absent from `gpd_return.files_written`, treat the handoff as incomplete. Offer: 1) Retry researcher, 2) Execute the research in the main context, 3) Abort.
+- `gpd_return.status: completed` -- Display summary, offer: Plan/Dig deeper/Review/Done
+- `gpd_return.status: checkpoint` -- Present to user, spawn continuation
+- `gpd_return.status: blocked` or `failed` -- Show attempts, offer: Add context/Try different approach/Manual
 
 </process>
 
@@ -163,6 +164,7 @@ Accept the researcher handoff automatically only once `expected_artifacts` exist
 - [ ] Phase context gathered (roadmap section, requirements, prior decisions)
 - [ ] gpd-phase-researcher spawned with physics research directives
 - [ ] RESEARCH.md written to phase directory
+- [ ] Research return handled via typed `gpd_return.status` and artifact gating
 - [ ] Research covers: mathematical framework, known solutions, limiting cases, computational methods, dimensional analysis, potential pitfalls
 - [ ] Return handled (complete/checkpoint/inconclusive)
 - [ ] Next action offered (plan phase, dig deeper, review)

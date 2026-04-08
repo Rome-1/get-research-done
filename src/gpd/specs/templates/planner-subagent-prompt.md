@@ -19,7 +19,7 @@ Template for spawning `gpd-planner`. Keep wrappers thin: pass phase-specific inp
 **Autonomy:** {autonomy}
 
 Use `@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md` as the canonical contract source. Keep this prompt for scope selection, mode flags, and return conventions only.
-If `{project_contract}` is empty, stale, or too underspecified to identify the phase contract slice, return `## CHECKPOINT REACHED` rather than guessing.
+If `{project_contract}` is empty, stale, or too underspecified to identify the phase contract slice, return `gpd_return.status: checkpoint` rather than guessing.
 
 **Project State:** {state_content}
 **Project Contract:** {project_contract}
@@ -53,14 +53,14 @@ Keep dimensions, limits, and cross-method consistency explicit. For proof-bearin
 </physics_planning_requirements>
 
 <contract_visibility_requirements>
-Planning requires an approved `project_contract`. If `project_contract_gate.authoritative` is false, `project_contract_load_info.status` starts with `blocked`, or `project_contract_validation.valid` is false, return `## CHECKPOINT REACHED` instead of guessing.
+Planning requires an approved `project_contract`. If `project_contract_gate.authoritative` is false, `project_contract_load_info.status` starts with `blocked`, or `project_contract_validation.valid` is false, return `gpd_return.status: checkpoint` instead of guessing.
 Keep `project_contract` as the grounding ledger. Use `effective_reference_intake` and `active_reference_context` only as readable projections of the same anchors.
 Treat `approach_policy` as execution policy only. Keep `scope.in_scope` populated and `contract.context_intake` concrete enough to audit.
 For proof-bearing work, use an explicit non-`other` `claim_kind` with auditable hypotheses, quantified variables, and named parameters.
 </contract_visibility_requirements>
 
 <tangent_control>
-Do not silently branch or widen scope. If multiple viable main-line paths remain and the user has not chosen among them, return `## CHECKPOINT REACHED` instead of emitting parallel plans.
+Do not silently branch or widen scope. If multiple viable main-line paths remain and the user has not chosen among them, return `gpd_return.status: checkpoint` instead of emitting parallel plans.
 </tangent_control>
 
 <light_mode_instructions>
@@ -118,8 +118,8 @@ Revisions MUST still honor user decisions.
 <instructions>
 Make targeted updates to address checker issues.
 Do NOT replan from scratch unless issues are fundamental.
-If `project_contract_gate.authoritative` is false, `project_contract_load_info.status` starts with `blocked`, or `project_contract_validation.valid` is false, return `## CHECKPOINT REACHED` instead of patching around guessed scope.
-If the approved project contract is missing or no longer sufficient to identify the right phase slice, return `## CHECKPOINT REACHED` instead of patching around guessed scope.
+If `project_contract_gate.authoritative` is false, `project_contract_load_info.status` starts with `blocked`, or `project_contract_validation.valid` is false, return `gpd_return.status: checkpoint` instead of patching around guessed scope.
+If the approved project contract is missing or no longer sufficient to identify the right phase slice, return `gpd_return.status: checkpoint` instead of patching around guessed scope.
 Fix contract-gate blockers first: missing decisive outputs, missing acceptance tests, missing anchor refs, forbidden-proxy misses, and missing disconfirming paths.
 Return what changed.
 </instructions>
@@ -156,13 +156,16 @@ Return what changed.
 
 ## Return Contract
 
-Planner runs must return one of these markers:
+Planner runs must return a structured `gpd_return` envelope.
 
-- `## PLANNING COMPLETE`
-- `## CHECKPOINT REACHED`
-- `## PLANNING INCONCLUSIVE`
+The markdown headings `## PLANNING COMPLETE`, `## CHECKPOINT REACHED`, and `## PLANNING INCONCLUSIVE` are human-readable labels only. Do not route on them; route on `gpd_return.status` and the artifact gate below.
 
-When returning `CHECKPOINT`, include the checkpoint type, the blocking decision, and the exact user input needed to continue.
+- `gpd_return.status: completed` means the planner wrote the expected PLAN.md artifacts and they passed the on-disk artifact check.
+- `gpd_return.status: checkpoint` means the planner needs user input. Include the checkpoint type, the blocking decision, and the exact user input needed to continue.
+- `gpd_return.status: blocked` means the contract or scope cannot be completed without external repair.
+- `gpd_return.status: failed` means planning did not complete and must be retried or handled manually.
+
+Always verify `gpd_return.files_written` against the expected plan artifacts before accepting completion.
 
 ---
 
@@ -172,5 +175,5 @@ If planning cannot finish:
 
 1. State the blocker concretely.
 2. Report whether any PLAN.md files were written.
-3. Return `## PLANNING INCONCLUSIVE`.
+3. Return `gpd_return.status: failed` and, if helpful, include a human-readable `## PLANNING INCONCLUSIVE` heading in the body.
 4. Provide the smallest next action: more context, retry, or manual intervention.

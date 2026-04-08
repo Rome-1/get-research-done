@@ -9,6 +9,7 @@ discovery surfaces without re-parsing the canonical content.
 from __future__ import annotations
 
 import re
+import textwrap
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -60,6 +61,10 @@ _MODEL_VISIBLE_INCLUDE_START_RE = re.compile(r"^[ \t]*<!-- \[included:.*?\] -->[
 _MODEL_VISIBLE_INCLUDE_END_RE = re.compile(r"^[ \t]*<!-- \[end included\] -->[ \t]*$")
 _MODEL_VISIBLE_FENCE_RE = re.compile(r"^[ \t]*(?P<fence>`{3,}|~{3,})")
 _STANDALONE_HTML_COMMENT_RE = re.compile(r"^[ \t]*<!--(?P<body>.*?)-->[ \t]*$", re.DOTALL)
+_SPAWN_CONTRACT_BLOCK_RE = re.compile(
+    r"^[ \t]*<spawn_contract>[ \t]*$\n(?P<body>.*?)^[ \t]*</spawn_contract>[ \t]*$",
+    re.DOTALL | re.MULTILINE,
+)
 _COMMAND_FRONTMATTER_KEYS = frozenset(
     {
         "name",
@@ -215,6 +220,7 @@ class CommandDef:
     review_contract: ReviewCommandContract | None = None
     agent: str | None = None
     staged_loading: WorkflowStageManifest | None = None
+    spawn_contracts: tuple[dict[str, object], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,6 +261,7 @@ class SkillDef:
     path: str
     source_kind: str  # "command" or "agent"
     registry_name: str
+    spawn_contracts: tuple[dict[str, object], ...] = ()
 
 
 # ─── Parsing helpers ─────────────────────────────────────────────────────────
@@ -1022,6 +1029,70 @@ def _parse_review_contract(raw: object, command_name: str) -> ReviewCommandContr
     )
 
 
+def _parse_spawn_contracts(content: str, *, owner_name: str) -> tuple[dict[str, object], ...]:
+    """Parse canonical spawn-contract blocks from rendered markdown content."""
+
+    contracts: list[dict[str, object]] = []
+    for match in _SPAWN_CONTRACT_BLOCK_RE.finditer(content):
+        block = textwrap.dedent(match.group("body")).strip()
+        if not block:
+            raise ValueError(f"spawn-contract for {owner_name}: empty block")
+        parsed = _parse_spawn_contract_block(block, owner_name=owner_name)
+        contracts.append(parsed)
+    return tuple(contracts)
+
+
+def _parse_spawn_contract_block(block: str, *, owner_name: str) -> dict[str, object]:
+    """Parse one spawn-contract block without requiring strict YAML quoting."""
+
+    lines = [line.rstrip() for line in block.splitlines() if line.strip()]
+    contract: dict[str, object] = {}
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line == "write_scope:":
+            index += 1
+            write_scope: dict[str, object] = {}
+            while index < len(lines) and lines[index].startswith("  "):
+                nested = lines[index].strip()
+                if nested.startswith("mode:"):
+                    write_scope["mode"] = nested.split(":", 1)[1].strip()
+                    index += 1
+                    continue
+                if nested == "allowed_paths:":
+                    index += 1
+                    allowed_paths: list[str] = []
+                    while index < len(lines) and lines[index].startswith("    - "):
+                        allowed_paths.append(lines[index].split("- ", 1)[1].strip())
+                        index += 1
+                    write_scope["allowed_paths"] = allowed_paths
+                    continue
+                raise ValueError(f"spawn-contract for {owner_name}: unexpected write_scope field {nested!r}")
+            contract["write_scope"] = write_scope
+            continue
+        if line == "expected_artifacts:":
+            index += 1
+            expected_artifacts: list[str] = []
+            while index < len(lines) and lines[index].startswith("  - "):
+                expected_artifacts.append(lines[index].split("- ", 1)[1].strip())
+                index += 1
+            contract["expected_artifacts"] = expected_artifacts
+            continue
+        if line.startswith("shared_state_policy:"):
+            contract["shared_state_policy"] = line.split(":", 1)[1].strip()
+            index += 1
+            continue
+        raise ValueError(f"spawn-contract for {owner_name}: unexpected line {line!r}")
+
+    if "write_scope" not in contract:
+        raise ValueError(f"spawn-contract for {owner_name}: missing write_scope")
+    if "expected_artifacts" not in contract:
+        raise ValueError(f"spawn-contract for {owner_name}: missing expected_artifacts")
+    if "shared_state_policy" not in contract:
+        raise ValueError(f"spawn-contract for {owner_name}: missing shared_state_policy")
+    return contract
+
+
 def _load_command_staged_loading(path: Path, *, allowed_tools: list[str]) -> WorkflowStageManifest | None:
     """Load staged-loading metadata for a command from its workflow sidecar."""
 
@@ -1162,6 +1233,16 @@ def _parse_command_file(path: Path, source: str) -> CommandDef:
         context_mode=context_mode,
     )
     staged_loading = _load_command_staged_loading(path, allowed_tools=allowed_tools)
+    content = _command_model_content(
+        body,
+        review_contract,
+        context_mode=context_mode,
+        project_reentry_capable=project_reentry_capable,
+        agent=agent,
+        allowed_tools=allowed_tools,
+        requires=requires,
+    )
+    spawn_contracts = _parse_spawn_contracts(content, owner_name=command_name)
 
     return CommandDef(
         name=command_name,
@@ -1182,15 +1263,8 @@ def _parse_command_file(path: Path, source: str) -> CommandDef:
         allowed_tools=allowed_tools,
         review_contract=review_contract,
         staged_loading=staged_loading,
-        content=_command_model_content(
-            body,
-            review_contract,
-            context_mode=context_mode,
-            project_reentry_capable=project_reentry_capable,
-            agent=agent,
-            allowed_tools=allowed_tools,
-            requires=requires,
-        ),
+        spawn_contracts=spawn_contracts,
+        content=content,
         path=str(path),
         source=source,
     )
@@ -1405,6 +1479,7 @@ def _discover_skills(commands: dict[str, CommandDef], agents: dict[str, AgentDef
             path=command.path,
             source_kind="command",
             registry_name=registry_name,
+            spawn_contracts=command.spawn_contracts,
         )
 
     for registry_name, agent in sorted(agents.items()):

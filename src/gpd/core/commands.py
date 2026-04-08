@@ -7,7 +7,6 @@ Layer 1 code: stdlib + pathlib + re + pydantic only.
 from __future__ import annotations
 
 import re
-import shlex
 from datetime import UTC, datetime
 from functools import cmp_to_key
 from pathlib import Path
@@ -24,9 +23,7 @@ from gpd.core.constants import (
     PHASES_DIR_NAME,
     PLAN_SUFFIX,
     PLANNING_DIR_NAME,
-    REQUIRED_RETURN_FIELDS,
     STANDALONE_PLAN,
-    VALID_RETURN_STATUSES,
     VERIFICATION_SUFFIX,
     ProjectLayout,
 )
@@ -38,6 +35,7 @@ from gpd.core.frontmatter import (
     validate_frontmatter,
 )
 from gpd.core.observability import instrument_gpd_function
+from gpd.core.return_contract import validate_gpd_return_markdown
 from gpd.core.utils import (
     compare_phase_numbers,
     generate_slug,
@@ -785,84 +783,6 @@ def cmd_regression_check(cwd: Path, *, phase: str | None = None, quick: bool = F
     return RegressionCheckResult(passed=passed, issues=issues, phases_checked=len(completed_dirs))
 
 
-_GPD_RETURN_BLOCK_RE = re.compile(r"```ya?ml\s*\n(gpd_return:\s*\n[\s\S]*?)```")
-_GPD_RETURN_FIELD_RE = re.compile(r"^\s{2,4}(\w+):\s*(.+)")
-_GPD_RETURN_LIST_START_RE = re.compile(r"^\s{2,4}(\w+):\s*$")
-_GPD_RETURN_LIST_ITEM_RE = re.compile(r"^\s{4,}-\s*(.+)")
-
-
-def _strip_wrapping_quotes(value: str) -> str:
-    stripped = value.strip()
-    if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in {'"', "'"}:
-        return stripped[1:-1]
-    return stripped
-
-
-def _parse_inline_yaml_list(value: str) -> list[str]:
-    stripped = value.strip()
-    if not (stripped.startswith("[") and stripped.endswith("]")):
-        return []
-    inner = stripped[1:-1].strip()
-    if not inner:
-        return []
-
-    lexer = shlex.shlex(inner, posix=True)
-    lexer.whitespace = ","
-    lexer.whitespace_split = True
-    lexer.commenters = ""
-    return [_strip_wrapping_quotes(token) for token in lexer if _strip_wrapping_quotes(token)]
-
-
-def _parse_gpd_return_fields(yaml_block: str) -> dict[str, object]:
-    fields: dict[str, object] = {}
-    active_list_key: str | None = None
-
-    for line in yaml_block.split("\n"):
-        if not line.strip() or line.strip() == "gpd_return:":
-            if not line.strip():
-                active_list_key = None
-            continue
-
-        list_start = _GPD_RETURN_LIST_START_RE.match(line)
-        if list_start:
-            active_list_key = list_start.group(1).strip()
-            fields[active_list_key] = []
-            continue
-
-        kv = _GPD_RETURN_FIELD_RE.match(line)
-        if kv:
-            active_list_key = None
-            key = kv.group(1).strip()
-            raw_value = kv.group(2).strip()
-            if raw_value.startswith("[") and raw_value.endswith("]"):
-                fields[key] = _parse_inline_yaml_list(raw_value)
-            else:
-                fields[key] = _strip_wrapping_quotes(raw_value)
-            continue
-
-        if active_list_key is not None:
-            list_item = _GPD_RETURN_LIST_ITEM_RE.match(line)
-            if list_item:
-                value = _strip_wrapping_quotes(list_item.group(1).strip())
-                if value:
-                    current = fields.get(active_list_key)
-                    if isinstance(current, list):
-                        current.append(value)
-                continue
-            if line.strip():
-                active_list_key = None
-
-    return fields
-
-
-def _field_present(value: object) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, str):
-        return bool(value.strip())
-    return True
-
-
 @instrument_gpd_function("commands.validate_return")
 def cmd_validate_return(file_path: Path) -> ValidateReturnResult:
     """Validate a gpd_return YAML block in a file.
@@ -876,69 +796,12 @@ def cmd_validate_return(file_path: Path) -> ValidateReturnResult:
     if content is None:
         raise ValidationError(f"File not found: {file_path}")
 
-    errors: list[str] = []
-    warnings: list[str] = []
-
-    return_match = _GPD_RETURN_BLOCK_RE.search(content)
-    if not return_match:
-        return ValidateReturnResult(
-            passed=False,
-            errors=["No gpd_return YAML block found"],
-            warnings=warnings,
-        )
-
-    yaml_block = return_match.group(1)
-    fields = _parse_gpd_return_fields(yaml_block)
-
-    # Check required fields
-    for field in REQUIRED_RETURN_FIELDS:
-        if not _field_present(fields.get(field)):
-            errors.append(f"Missing required field: {field}")
-
-    # Normalize status for comparison (strip whitespace, lowercase)
-    raw_status = fields.get("status", "")
-    status_lower = raw_status.strip().lower() if isinstance(raw_status, str) else ""
-
-    # Validate status value
-    if raw_status and status_lower not in VALID_RETURN_STATUSES:
-        errors.append(
-            f"Invalid status '{raw_status}'. Must be one of: {', '.join(sorted(VALID_RETURN_STATUSES))}"
-        )
-
-    # Validate task counts are numbers
-    for count_field in ("tasks_completed", "tasks_total"):
-        val = fields.get(count_field)
-        if isinstance(val, str):
-            try:
-                int(val)
-            except ValueError:
-                errors.append(f"{count_field} is not a number: '{val}'")
-
-    # Warn if completed but tasks_completed < tasks_total
-    if (
-        status_lower == "completed"
-        and isinstance(fields.get("tasks_completed"), str)
-        and isinstance(fields.get("tasks_total"), str)
-    ):
-        try:
-            done = int(str(fields["tasks_completed"]))
-            total = int(str(fields["tasks_total"]))
-            if done < total:
-                warnings.append(f"Status is 'completed' but tasks_completed ({done}) < tasks_total ({total})")
-        except ValueError:
-            pass
-
-    # Check optional but recommended fields
-    for field in ("duration_seconds",):
-        if not fields.get(field):
-            warnings.append(f"Recommended field missing: {field}")
-
-    passed = len(errors) == 0
+    validation = validate_gpd_return_markdown(content)
     return ValidateReturnResult(
-        passed=passed,
-        errors=errors,
-        warnings=warnings,
-        fields=fields,
-        warning_count=len(warnings),
+        passed=validation.passed,
+        errors=validation.errors,
+        warnings=validation.warnings,
+        fields=validation.fields,
+        warning_count=validation.warning_count,
     )
 _MISSING = object()

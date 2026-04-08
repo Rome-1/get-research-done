@@ -52,7 +52,13 @@
     "telemetry_completeness",
     "supports_usage_tokens",
     "supports_cost_usd",
-    "supports_context_meter"
+    "supports_context_meter",
+    "child_artifact_persistence_reliability",
+    "supports_structured_child_results",
+    "continuation_surface",
+    "checkpoint_stop_semantics",
+    "supports_runtime_session_payload_attribution",
+    "supports_agent_payload_attribution"
   ],
   "capability_enums": {
     "permissions_surface": [
@@ -75,6 +81,20 @@
     "telemetry_completeness": [
       "best-effort",
       "none"
+    ],
+    "child_artifact_persistence_reliability": [
+      "best-effort",
+      "none",
+      "reliable"
+    ],
+    "continuation_surface": [
+      "explicit",
+      "none"
+    ],
+    "checkpoint_stop_semantics": [
+      "continue",
+      "none",
+      "stop"
     ]
   },
   "hook_payload_keys": [

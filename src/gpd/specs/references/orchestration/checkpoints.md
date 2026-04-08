@@ -299,11 +299,15 @@ Every authored or auto-inserted checkpoint must return a bounded execution paylo
 - `resume_contract` (what must be true before continuation)
 - `success_path`
 - `issue_path`
-- `execution_segment` with current cursor, completed tasks, current task, and resume preconditions
+- `execution_segment` with the canonical bounded-segment payload that will persist if the stop is recorded durably
 
 When the stop is a first-result, skeptical, or pre-fanout review, the `execution_segment` must also carry the live gate fields that keep resume/status surfaces honest: `first_result_gate_pending`, `pre_fanout_review_pending`, `pre_fanout_review_cleared` when applicable, `skeptical_requestioning_required`, and `downstream_locked`.
 
-`execution_segment` is the runtime transport payload. If the checkpoint is durably recorded, the same payload becomes the persisted `continuation.bounded_segment` record and is captured in execution lineage so the derived execution head can be rebuilt. Clear or replace that persisted copy when the bounded stop is consumed, retired, or superseded; do not rely on `.continue-here.md`, session fields, or the derived head as bounded authority.
+`execution_segment` is the runtime transport payload. If the checkpoint is durably recorded, the canonical bounded-segment subset of that payload becomes the persisted `continuation.bounded_segment` record and is captured in execution lineage so the derived execution head can be rebuilt.
+
+Persisted bounded-segment fields: `resume_file`, `phase`, `plan`, `segment_id`, `segment_status`, `checkpoint_reason`, `waiting_reason`, `blocked_reason`, `waiting_for_review`, `first_result_gate_pending`, `pre_fanout_review_pending`, `pre_fanout_review_cleared`, `skeptical_requestioning_required`, `downstream_locked`, `skeptical_requestioning_summary`, `weakest_unchecked_anchor`, `disconfirming_observation`, `transition_id`, `last_result_id`, `updated_at`, `source_session_id`, `recorded_by`.
+
+Task summaries, task tables, and other checkpoint prose stay in the checkpoint envelope; they are not part of canonical continuation persistence. Clear or replace that persisted copy when the bounded stop is consumed, retired, or superseded; do not rely on `.continue-here.md`, session fields, or the derived head as bounded authority.
 
 This keeps authored checkpoints and auto-inserted Stage 5 checkpoints on the same continuation path.
 

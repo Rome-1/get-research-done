@@ -139,12 +139,18 @@ After the proof critic returns, re-open `${phase_dir}/${phase_number}-PROOF-REDT
 **First: Check for active verification sessions**
 
 ```bash
-rg -l '^session_status: (validating|diagnosed)$' GPD/phases/*/*-VERIFICATION.md 2>/dev/null | sort | head -5
+for file in GPD/phases/*/*-VERIFICATION.md; do
+  [ -f "$file" ] || continue
+  session_status=$(gpd frontmatter get "$file" --field session_status 2>/dev/null)
+  if [ "$session_status" = "validating" ] || [ "$session_status" = "diagnosed" ]; then
+    printf '%s\n' "$file"
+  fi
+done | sort | head -5
 ```
 
 **If active sessions exist and no `$ARGUMENTS` are provided:**
 
-Only treat files with `session_status: validating` or `session_status: diagnosed` as active researcher sessions. Read each active file's frontmatter to extract canonical verification `status`, `session_status`, `phase`, and the Current Check section. Do not let `session_status` replace or overwrite the canonical verification `status`.
+Only treat files whose frontmatter `session_status` is `validating` or `diagnosed` as active researcher sessions. Read each active file's frontmatter to extract canonical verification `status`, `session_status`, `phase`, and the Current Check section. Do not let `session_status` replace or overwrite the canonical verification `status`.
 
 Display:
 
@@ -194,6 +200,7 @@ The delegation prompt must tell the verifier to own:
 
 Pass the project contract, proof freshness summary, active reference context, and protocol bundle context into the handoff so the verifier can build its own authoritative ledger.
 Use `protocol_bundle_verifier_extensions` as the primary source for bundle checklist extensions; `protocol_bundle_context` is the readable projection. Use `suggest_contract_checks(contract)` whenever decisive anchor actions or prior-output paths remain ambiguous. Required decisive comparisons should stay legible enough that the researcher can recognize in the phase promise which `claim`, acceptance test, or reference is still unresolved. Do not mark the parent claim or acceptance test as passed until that decisive comparison is resolved.
+Human-readable headings in the verifier output are presentation only; route on the canonical verification frontmatter and `gpd_return.status`, not on headings or marker strings.
 
 > Runtime delegation rule: this is a one-shot handoff. If the spawned verifier needs user input, it must checkpoint and return. The wrapper must start a fresh continuation after the user responds instead of trying to keep the original verifier alive.
 
@@ -207,6 +214,7 @@ Read the verifier-produced verification file or report path.
 - Run `gpd validate verification-contract "${phase_dir}/${phase_number}-VERIFICATION.md"` before any downstream routing.
 - If a canonical verification file already exists, preserve its authoritative frontmatter and append only the session-local overlay here.
 - Do not recompute canonical verification status in this workflow.
+- Human-readable headings in the verifier output are presentation only; route on the canonical verification frontmatter and `gpd_return.status`, not on headings or marker strings.
 
 Load the staged researcher-session scaffold and canonical schema pack at this stage.
 Keep the session overlay frontmatter compatible with the authoritative verification report.

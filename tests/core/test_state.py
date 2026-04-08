@@ -12,6 +12,7 @@ import pytest
 
 from gpd.core import state as state_module
 from gpd.core.constants import STATE_JSON_BACKUP_FILENAME, ProjectLayout
+from gpd.core.continuation import ContinuationBoundedSegment
 from gpd.core.state import (
     _load_recent_projects_index,
     _load_state_snapshot_for_mutation,
@@ -2933,8 +2934,10 @@ def test_state_set_continuation_bounded_segment_persists_strict_valid_payload(
     assert result.updated is True
     stored = load_state_json(cwd)
     assert stored is not None
-    assert stored["continuation"]["bounded_segment"]["resume_file"] == "GPD/phases/03-analysis/resume.md"
-    assert stored["continuation"]["bounded_segment"]["waiting_for_review"] is True
+    bounded_segment = stored["continuation"]["bounded_segment"]
+    assert set(bounded_segment) == set(ContinuationBoundedSegment.model_fields)
+    assert bounded_segment["resume_file"] == "GPD/phases/03-analysis/resume.md"
+    assert bounded_segment["waiting_for_review"] is True
 
 
 def test_save_state_markdown_does_not_override_canonical_continuation_session_mirror(

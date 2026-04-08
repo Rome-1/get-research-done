@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from gpd import registry
 from gpd.adapters.install_utils import project_markdown_for_runtime
 from gpd.adapters.runtime_catalog import get_runtime_descriptor, iter_runtime_descriptors
 from gpd.core.model_visible_text import (
@@ -14,12 +15,18 @@ from gpd.core.model_visible_text import (
     command_visibility_note,
     review_contract_visibility_note,
 )
+from gpd.registry import _parse_spawn_contracts
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMANDS_DIR = REPO_ROOT / "src/gpd/commands"
 AGENTS_DIR = REPO_ROOT / "src/gpd/agents"
 
 RUNTIMES = tuple(descriptor.runtime_name for descriptor in iter_runtime_descriptors())
+SPAWN_CONTRACT_COMMANDS = tuple(
+    command_name
+    for command_name in registry.list_commands()
+    if "<spawn_contract>" in registry.get_command(command_name).content
+)
 VERIFIER_BUDGET_BY_NATIVE_INCLUDE_SUPPORT = {
     True: (900, 60_000),
     False: (6_500, 430_000),
@@ -82,6 +89,10 @@ def _assert_fragments_visible(text: str, fragments: tuple[str, ...], *, label: s
     assert not missing, f"{label} is missing contract-bearing fragments: {', '.join(missing)}"
 
 
+def _extract_spawn_contracts(text: str) -> list[dict[str, object]]:
+    return list(_parse_spawn_contracts(text, owner_name="runtime-projected"))
+
+
 @pytest.mark.parametrize("runtime", RUNTIMES)
 @pytest.mark.parametrize(("command_name", "expected_fragments"), tuple(COMMAND_SURFACES.items()))
 def test_runtime_projected_commands_keep_model_visible_contract_wrappers(command_name: str, expected_fragments: tuple[str, ...], runtime: str) -> None:
@@ -133,3 +144,25 @@ def test_runtime_projected_verifier_surface_keeps_one_wrapper_and_stays_within_b
         assert projected.count("# Canonical Schema Discipline") == 1
     assert len(projected.splitlines()) <= line_budget
     assert len(projected) <= char_budget
+
+
+@pytest.mark.parametrize("runtime", RUNTIMES)
+@pytest.mark.parametrize("command_name", SPAWN_CONTRACT_COMMANDS)
+def test_runtime_projected_spawn_contract_blocks_match_canonical_command_content(
+    command_name: str,
+    runtime: str,
+) -> None:
+    command = registry.get_command(command_name)
+    projected = _project_markdown(COMMANDS_DIR / f"{command_name}.md", runtime, is_agent=False)
+    descriptor = get_runtime_descriptor(runtime)
+    projected_contracts = _extract_spawn_contracts(projected)
+    expanded_contracts = _extract_spawn_contracts(command.content)
+    source_contracts = _extract_spawn_contracts(_read(COMMANDS_DIR / f"{command_name}.md"))
+
+    if descriptor.native_include_support:
+        assert projected_contracts == source_contracts
+        if not source_contracts and expanded_contracts:
+            assert "@/runtime/get-physics-done/workflows/" in projected
+        return
+
+    assert projected_contracts == expanded_contracts

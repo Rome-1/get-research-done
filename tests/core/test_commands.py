@@ -561,3 +561,66 @@ class TestValidateReturn:
         assert result.fields["files_written"] == ["src/main.py", "tests/test_main.py"]
         assert result.fields["issues"] == ["waiting on benchmark rerun"]
         assert result.fields["next_actions"] == ["/gpd:verify-work 01"]
+
+    def test_nested_continuation_payload_is_preserved(self, tmp_path: Path):
+        f = self._write_return(
+            tmp_path,
+            (
+                "gpd_return:\n"
+                "  status: checkpoint\n"
+                "  files_written: [src/main.py]\n"
+                "  issues: []\n"
+                "  next_actions: [/gpd:resume-work]\n"
+                "  state_updates:\n"
+                "    - current_phase: 09\n"
+                "      blockers:\n"
+                "        - waiting on approval\n"
+                "  continuation_update:\n"
+                "    resume_contract:\n"
+                "      next_step: continue\n"
+                "      required_artifacts:\n"
+                "        - GPD/STATE.md\n"
+                "    execution_segment:\n"
+                "      current_cursor: 3\n"
+                "      completed_tasks:\n"
+                "        - task-1\n"
+            ),
+        )
+
+        result = cmd_validate_return(f)
+
+        assert result.passed is True
+        assert result.fields["state_updates"][0]["blockers"] == ["waiting on approval"]
+        assert result.fields["continuation_update"]["execution_segment"]["current_cursor"] == 3
+
+    def test_rejects_scalar_and_nested_map_shape_errors(self, tmp_path: Path):
+        scalar_file = self._write_return(
+            tmp_path,
+            (
+                "gpd_return:\n"
+                "  status: completed\n"
+                "  files_written: src/main.py\n"
+                "  issues: []\n"
+                "  next_actions: [/gpd:verify-work 01]\n"
+            ),
+        )
+        scalar_result = cmd_validate_return(scalar_file)
+        assert scalar_result.passed is False
+        assert any("files_written" in error and "list" in error for error in scalar_result.errors)
+
+        nested_map_file = self._write_return(
+            tmp_path,
+            (
+                "gpd_return:\n"
+                "  status: blocked\n"
+                "  files_written: []\n"
+                "  issues: []\n"
+                "  next_actions: []\n"
+                "  blockers:\n"
+                "    - waiting on approval\n"
+                "  continuation_update: checkpoint\n"
+            ),
+        )
+        nested_result = cmd_validate_return(nested_map_file)
+        assert nested_result.passed is False
+        assert any("continuation_update" in error and "mapping" in error for error in nested_result.errors)

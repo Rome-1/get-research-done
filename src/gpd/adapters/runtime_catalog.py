@@ -90,6 +90,12 @@ class RuntimeCapabilityPolicy:
     supports_usage_tokens: bool = False
     supports_cost_usd: bool = False
     supports_context_meter: bool = False
+    child_artifact_persistence_reliability: str = "best-effort"
+    supports_structured_child_results: bool = False
+    continuation_surface: str = "none"
+    checkpoint_stop_semantics: str = "stop"
+    supports_runtime_session_payload_attribution: bool = False
+    supports_agent_payload_attribution: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -457,6 +463,26 @@ def _parse_capabilities(
         supports_context_meter=_require_bool(
             payload.get("supports_context_meter"), label=f"{label}.supports_context_meter"
         ),
+        child_artifact_persistence_reliability=_require_string(
+            payload.get("child_artifact_persistence_reliability"),
+            label=f"{label}.child_artifact_persistence_reliability",
+        ),
+        supports_structured_child_results=_require_bool(
+            payload.get("supports_structured_child_results"),
+            label=f"{label}.supports_structured_child_results",
+        ),
+        continuation_surface=_require_string(payload.get("continuation_surface"), label=f"{label}.continuation_surface"),
+        checkpoint_stop_semantics=_require_string(
+            payload.get("checkpoint_stop_semantics"), label=f"{label}.checkpoint_stop_semantics"
+        ),
+        supports_runtime_session_payload_attribution=_require_bool(
+            payload.get("supports_runtime_session_payload_attribution"),
+            label=f"{label}.supports_runtime_session_payload_attribution",
+        ),
+        supports_agent_payload_attribution=_require_bool(
+            payload.get("supports_agent_payload_attribution"),
+            label=f"{label}.supports_agent_payload_attribution",
+        ),
     )
     if policy.permissions_surface == "config-file":
         if policy.permission_surface_kind == "none" or policy.permission_surface_kind in launch_wrapper_permission_surface_kinds:
@@ -482,6 +508,10 @@ def _parse_capabilities(
             raise ValueError(f"{label}.prompt_free_requires_relaunch must be false when permissions_surface=unsupported")
     if not policy.supports_prompt_free_mode and policy.prompt_free_requires_relaunch:
         raise ValueError(f"{label}.prompt_free_requires_relaunch requires supports_prompt_free_mode=true")
+    if policy.supports_structured_child_results and policy.continuation_surface != "explicit":
+        raise ValueError(
+            f"{label}.continuation_surface must be explicit when supports_structured_child_results=true"
+        )
     return policy
 
 

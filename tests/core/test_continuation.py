@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from gpd.core.continuation import (
+    ContinuationBoundedSegment,
     ContinuationResumeSource,
     ContinuationSource,
     canonical_bounded_segment_from_execution_snapshot,
@@ -12,12 +14,20 @@ from gpd.core.continuation import (
     resolve_continuation,
 )
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def _write_resume(project_root: Path, relative_path: str) -> Path:
     resume_path = project_root / relative_path
     resume_path.parent.mkdir(parents=True, exist_ok=True)
     resume_path.write_text("resume\n", encoding="utf-8")
     return resume_path
+
+
+def _documented_bounded_segment_fields(text: str) -> list[str]:
+    match = re.search(r"Persisted bounded-segment fields:\s*(?P<fields>.+?)\.", text, re.DOTALL)
+    assert match is not None
+    return re.findall(r"`([a-z_]+)`", match.group("fields"))
 
 
 def test_normalize_continuation_reference_normalizes_project_local_absolute_path(tmp_path: Path) -> None:
@@ -61,6 +71,15 @@ def test_normalize_continuation_normalizes_canonical_references(tmp_path: Path) 
     assert continuation.bounded_segment.resume_file == "GPD/phases/03-analysis/.continue-here.md"
     assert continuation.bounded_segment.phase == "03"
     assert continuation.bounded_segment.plan == "02"
+
+
+def test_canonical_bounded_segment_field_inventory_matches_documented_payload() -> None:
+    checkpoints = (REPO_ROOT / "src/gpd/specs/references/orchestration/checkpoints.md").read_text(encoding="utf-8")
+    continuation_prompt = (REPO_ROOT / "src/gpd/specs/templates/continuation-prompt.md").read_text(encoding="utf-8")
+    expected_fields = list(ContinuationBoundedSegment.model_fields)
+
+    assert _documented_bounded_segment_fields(checkpoints) == expected_fields
+    assert _documented_bounded_segment_fields(continuation_prompt) == expected_fields
 
 
 def test_normalize_continuation_with_issues_drops_malformed_boolean_gate_fields(tmp_path: Path) -> None:

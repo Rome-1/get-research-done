@@ -20,10 +20,10 @@ import time
 from enum import StrEnum
 from pathlib import Path
 
-import yaml
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydanticValidationError
 
+from gpd.core.commands import cmd_validate_return
 from gpd.core.config import GPDProjectConfig, load_config
 from gpd.core.constants import (
     DECISION_THRESHOLD,
@@ -34,11 +34,9 @@ from gpd.core.constants import (
     RECOMMENDED_PYTHON_VERSION,
     REQUIRED_PLANNING_DIRS,
     REQUIRED_PLANNING_FILES,
-    REQUIRED_RETURN_FIELDS,
     REQUIRED_SPECS_SUBDIRS,
     STATE_LINES_TARGET,
     UNCOMMITTED_FILES_THRESHOLD,
-    VALID_RETURN_STATUSES,
     ProjectLayout,
 )
 from gpd.core.contract_validation import validate_project_contract
@@ -63,7 +61,6 @@ from gpd.core.utils import (
     phase_normalize,
     phase_sort_key,
     safe_read_file,
-    strict_parse_int,
 )
 from gpd.core.workflow_presets import resolve_workflow_preset_readiness
 from gpd.hooks.install_metadata import InstallTargetAssessment, assess_install_target
@@ -547,26 +544,49 @@ def check_plan_frontmatter(cwd: Path) -> HealthCheck:
     return HealthCheck(status=status, label="Plan Frontmatter", details=details, issues=issues, warnings=warnings)
 
 
-def check_latest_return(cwd: Path) -> HealthCheck:
-    """Validate the gpd_return YAML block in the most recent SUMMARY file."""
+def _latest_summary_file(cwd: Path) -> tuple[Path, str] | None:
+    """Return the newest SUMMARY file using deterministic tie-breaking."""
+
     layout = ProjectLayout(cwd)
     phases_dir = layout.phases_dir
+    candidates: list[tuple[int, str, Path]] = []
+
+    if not phases_dir.is_dir():
+        return None
+
+    for phase_dir in sorted(
+        (entry for entry in phases_dir.iterdir() if entry.is_dir()),
+        key=lambda entry: phase_sort_key(entry.name),
+    ):
+        for summary in sorted(
+            (
+                entry
+                for entry in phase_dir.iterdir()
+                if entry.is_file() and layout.is_summary_file(entry.name)
+            ),
+            key=lambda entry: entry.name,
+        ):
+            try:
+                stat = summary.stat()
+            except OSError:
+                continue
+            mtime_ns = getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1_000_000_000))
+            candidates.append((mtime_ns, f"{phase_dir.name}/{summary.name}", summary))
+
+    if not candidates:
+        return None
+
+    _mtime_ns, summary_name, summary_path = max(candidates, key=lambda item: (item[0], item[1]))
+    return summary_path, summary_name
+
+
+def check_latest_return(cwd: Path) -> HealthCheck:
+    """Validate the gpd_return YAML block in the most recent SUMMARY file."""
     warnings: list[str] = []
     issues: list[str] = []
     details: dict[str, object] = {}
 
-    # Find most recent SUMMARY file
-    latest: tuple[float, Path, str] | None = None
-    if phases_dir.is_dir():
-        for phase_dir in phases_dir.iterdir():
-            if not phase_dir.is_dir():
-                continue
-            for f in phase_dir.iterdir():
-                if f.is_file() and layout.is_summary_file(f.name):
-                    mtime = f.stat().st_mtime
-                    if latest is None or mtime > latest[0]:
-                        latest = (mtime, f, f"{phase_dir.name}/{f.name}")
-
+    latest = _latest_summary_file(cwd)
     if latest is None:
         return HealthCheck(
             status=CheckStatus.OK,
@@ -574,45 +594,32 @@ def check_latest_return(cwd: Path) -> HealthCheck:
             details={"reason": "no_summaries"},
         )
 
-    _, summary_path, summary_name = latest
+    summary_path, summary_name = latest
     details["file"] = summary_name
-
-    content = safe_read_file(summary_path)
-    if content is None:
-        issues.append(f"{summary_name}: cannot read file")
-        return HealthCheck(status=CheckStatus.FAIL, label="Latest Return Envelope", details=details, issues=issues)
-
-    return_match = re.search(r"```ya?ml\s*\n(\s*gpd_return:\s*\n[\s\S]*?)```", content)
-    if not return_match:
-        warnings.append(f"{summary_name}: no gpd_return YAML block")
-        return HealthCheck(
-            status=CheckStatus.WARN,
-            label="Latest Return Envelope",
-            details=details,
-            warnings=warnings,
-        )
+    details["summary_path"] = str(summary_path)
 
     try:
-        parsed = yaml.safe_load(return_match.group(1))
-    except yaml.YAMLError as e:
-        issues.append(f"{summary_name}: gpd_return YAML parse error: {e}")
+        validation = cmd_validate_return(summary_path)
+    except ValidationError as exc:
+        issues.append(f"{summary_name}: {exc}")
         return HealthCheck(status=CheckStatus.FAIL, label="Latest Return Envelope", details=details, issues=issues)
 
-    raw = parsed.get("gpd_return") if isinstance(parsed, dict) else None
-    fields = raw if isinstance(raw, dict) else {}
-    details["fields_found"] = list(fields.keys())
-
-    for field_name in REQUIRED_RETURN_FIELDS:
-        if field_name not in fields or fields[field_name] is None:
-            issues.append(f"{summary_name}: missing required field '{field_name}' in gpd_return")
-
-    if fields.get("status") and str(fields["status"]).lower() not in VALID_RETURN_STATUSES:
-        issues.append(f"{summary_name}: invalid status '{fields['status']}'")
-
-    for numeric_field in ("tasks_completed", "tasks_total"):
-        val = fields.get(numeric_field)
-        if val is not None and strict_parse_int(val, None) is None:
-            issues.append(f"{summary_name}: {numeric_field} not a number")
+    details["fields_found"] = sorted(validation.fields.keys())
+    details["validator_warning_count"] = validation.warning_count
+    if validation.passed:
+        warnings.extend(
+            f"{summary_name}: {warning}"
+            for warning in validation.warnings
+            if not warning.startswith("Recommended field missing:")
+        )
+    else:
+        issues.extend(f"{summary_name}: {error}" for error in validation.errors)
+        warnings.extend(
+            f"{summary_name}: {warning}"
+            for warning in validation.warnings
+            if not warning.startswith("Recommended field missing:")
+        )
+    details["warning_count"] = len(warnings)
 
     status = CheckStatus.FAIL if issues else (CheckStatus.WARN if warnings else CheckStatus.OK)
     return HealthCheck(status=status, label="Latest Return Envelope", details=details, issues=issues, warnings=warnings)

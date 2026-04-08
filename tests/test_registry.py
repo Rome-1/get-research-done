@@ -1825,6 +1825,23 @@ class TestPublicAPI:
         assert cmd.staged_loading.stage_ids() == ("scope_intake", "scope_approval", "post_scope")
         assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/new-project.md",)
 
+    def test_get_command_new_project_surfaces_spawn_contract_inventory(self) -> None:
+        registry.invalidate_cache()
+
+        command = registry.get_command("gpd:new-project")
+        skill = registry.get_skill("gpd-new-project")
+
+        assert command.spawn_contracts
+        assert skill.spawn_contracts == command.spawn_contracts
+        assert len(command.spawn_contracts) == 7
+        assert all("write_scope" in contract for contract in command.spawn_contracts)
+        assert all("expected_artifacts" in contract for contract in command.spawn_contracts)
+        assert {contract["shared_state_policy"] for contract in command.spawn_contracts} == {
+            "return_only",
+            "direct",
+        }
+        assert {contract["write_scope"]["mode"] for contract in command.spawn_contracts} == {"scoped_write"}
+
     def test_get_command_plan_phase_surfaces_staged_loading_manifest(self) -> None:
         from tempfile import TemporaryDirectory
 

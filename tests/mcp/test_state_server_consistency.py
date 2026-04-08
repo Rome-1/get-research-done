@@ -9,6 +9,7 @@ import anyio
 import pytest
 
 from gpd.core.errors import GPDError
+from gpd.core.health import CheckStatus, HealthCheck, HealthReport, HealthSummary
 from gpd.core.state import default_state_dict
 from gpd.mcp.servers.state_server import (
     advance_plan,
@@ -125,6 +126,33 @@ def test_get_state_reports_current_project_state_guidance(monkeypatch, tmp_path:
         "error": "No project state found. Run 'gpd init new-project' to initialize a GPD project state.",
         "schema_version": 1,
     }
+
+
+def test_run_health_check_preserves_latest_return_failure_details(monkeypatch) -> None:
+    failing_check = HealthCheck(
+        status=CheckStatus.FAIL,
+        label="Latest Return Envelope",
+        details={
+            "file": "01-setup/01-setup-01-SUMMARY.md",
+            "fields_found": [],
+            "warning_count": 0,
+        },
+        issues=["01-setup/01-setup-01-SUMMARY.md: gpd_return YAML parse error: malformed envelope"],
+    )
+    mock_report = HealthReport(
+        overall=CheckStatus.FAIL,
+        summary=HealthSummary(ok=0, warn=0, fail=1, total=1),
+        checks=[failing_check],
+        fixes_applied=[],
+    )
+
+    monkeypatch.setattr("gpd.mcp.servers.state_server.run_health", lambda *_args, **_kwargs: mock_report)
+
+    result = run_health_check("/fake/project")
+
+    assert result["checks"][0]["label"] == "Latest Return Envelope"
+    assert result["checks"][0]["details"]["file"] == "01-setup/01-setup-01-SUMMARY.md"
+    assert result["checks"][0]["issues"][0].endswith("malformed envelope")
 
 
 def test_get_progress_does_not_mutate_checkpoint_shelf_artifacts(tmp_path: Path) -> None:

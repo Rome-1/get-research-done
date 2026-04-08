@@ -1214,6 +1214,10 @@ def test_planning_prompts_keep_contract_gate_in_light_mode_and_all_modes() -> No
         "All modes still require contract completeness, decisive outputs, required anchors, forbidden-proxy handling, and disconfirming paths before execution starts."
         in workflow_text
     )
+    assert "gpd_return.status: completed" in planner_prompt
+    assert "The markdown headings `## PLANNING COMPLETE`, `## CHECKPOINT REACHED`, and `## PLANNING INCONCLUSIVE` are human-readable labels only." in planner_prompt
+    assert "gpd_return.status: completed" in workflow_text
+    assert "Human-readable headings such as `## VERIFICATION PASSED`, `## ISSUES FOUND`, and `## PARTIAL APPROVAL` are presentation only." in workflow_text
     assert "Human review does not replace those requirements." in checker_agent
 
 
@@ -2588,14 +2592,8 @@ def test_verify_work_workflow_uses_body_only_subject_kind_fields() -> None:
 def test_verify_work_active_sessions_use_canonical_verification_path_and_keep_status_separate() -> None:
     verify_work = (WORKFLOWS_DIR / "verify-work.md").read_text(encoding="utf-8")
 
-    assert (
-        "rg -l '^session_status: (validating|diagnosed)$' GPD/phases/*/*-VERIFICATION.md 2>/dev/null | sort | head -5"
-        in verify_work
-    )
-    assert (
-        "Only treat files with `session_status: validating` or `session_status: diagnosed` as active researcher sessions."
-        in verify_work
-    )
+    assert "gpd frontmatter get \"$file\" --field session_status" in verify_work
+    assert "Only treat files whose frontmatter `session_status` is `validating` or `diagnosed` as active researcher sessions." in verify_work
     assert (
         "extract canonical verification `status`, `session_status`, `phase`, and the Current Check section"
         in verify_work
