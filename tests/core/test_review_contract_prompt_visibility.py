@@ -1197,7 +1197,10 @@ def test_write_paper_stage_visibility_delays_publication_review_schemas_until_th
     consistency = staging.stage("consistency_and_references")
     review = staging.stage("publication_review")
 
-    assert bootstrap.loaded_authorities == ("workflows/write-paper.md",)
+    assert bootstrap.loaded_authorities == (
+        "workflows/write-paper.md",
+        "templates/paper/publication-manuscript-root-preflight.md",
+    )
     assert "templates/paper/paper-config-schema.md" in outline.loaded_authorities
     assert "templates/paper/artifact-manifest-schema.md" in outline.loaded_authorities
     assert "templates/paper/bibliography-audit-schema.md" not in outline.loaded_authorities

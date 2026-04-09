@@ -50,6 +50,15 @@ REFERENCES_DIR = REPO_ROOT / "src/gpd/specs/references"
 FIXTURES_STAGE0 = REPO_ROOT / "tests" / "fixtures" / "stage0"
 FIXTURES_STAGE4 = REPO_ROOT / "tests" / "fixtures" / "stage4"
 WORKFLOW_EXEMPT_COMMANDS = frozenset({"health", "suggest-next"})
+PUBLICATION_SHARED_PREFLIGHT_INCLUDE = "@{GPD_INSTALL_DIR}/templates/paper/publication-manuscript-root-preflight.md"
+PUBLICATION_ROUND_ARTIFACTS_INCLUDE = (
+    "@{GPD_INSTALL_DIR}/references/publication/publication-review-round-artifacts.md"
+)
+PUBLICATION_ROUND_ARTIFACTS_PATH = "{GPD_INSTALL_DIR}/references/publication/publication-review-round-artifacts.md"
+PUBLICATION_RESPONSE_ARTIFACTS_INCLUDE = (
+    "@{GPD_INSTALL_DIR}/references/publication/publication-response-artifacts.md"
+)
+PUBLICATION_REVIEW_RELIABILITY_INCLUDE = "@{GPD_INSTALL_DIR}/references/publication/peer-review-reliability.md"
 
 
 def _assert_contains_fragments(text: str, *fragments: str) -> None:
@@ -772,20 +781,20 @@ def test_respond_to_referees_references_staged_review_artifacts() -> None:
     writer_text = (AGENTS_DIR / "gpd-paper-writer.md").read_text(encoding="utf-8")
 
     assert "argument-hint: \"[path to referee report or 'paste']\"" in command_text
-    assert "GPD/review/REVIEW-LEDGER{round_suffix}.json" in command_text
-    assert "GPD/review/REFEREE-DECISION{round_suffix}.json" in command_text
-    assert "explicit argument is the referee-report source path" in command_text
+    assert "@{GPD_INSTALL_DIR}/references/publication/publication-review-wrapper-guidance.md" in command_text
+    assert "Referee report source: $ARGUMENTS (file path or `paste`)." in command_text
     assert "Use the literal `paste` sentinel" in workflow_text
     assert "REVIEW-LEDGER*.json" in workflow_text
     assert "REFEREE-DECISION*.json" in workflow_text
-    assert "REVIEW-LEDGER{-RN}.json" in writer_text
-    assert "REFEREE-DECISION{-RN}.json" in writer_text
+    assert "GPD/review/REVIEW-LEDGER{round_suffix}.json" in writer_text
+    assert "GPD/review/REFEREE-DECISION{round_suffix}.json" in writer_text
 
 
 def test_review_workflows_keep_round_suffix_artifacts_visible_and_anchor_response_outputs() -> None:
     peer_review = (COMMANDS_DIR / "peer-review.md").read_text(encoding="utf-8")
     respond = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
     write_paper = (WORKFLOWS_DIR / "write-paper.md").read_text(encoding="utf-8")
+    write_paper_expanded = expand_at_includes(write_paper, REPO_ROOT / "src" / "gpd", "/runtime/")
     panel = (REFERENCES_DIR / "publication" / "peer-review-panel.md").read_text(encoding="utf-8")
 
     assert "GPD/review/CLAIMS{round_suffix}.json" in peer_review
@@ -808,10 +817,10 @@ def test_review_workflows_keep_round_suffix_artifacts_visible_and_anchor_respons
     assert "templates/paper/author-response.md" in respond
     assert "needs-calculation" in respond
 
-    assert "CLAIMS{round_suffix}.json" in write_paper
-    assert "REVIEW-LEDGER{round_suffix}.json" in write_paper
-    assert "REFEREE-DECISION{round_suffix}.json" in write_paper
-    assert "GPD/REFEREE-REPORT{round_suffix}.md" in write_paper
+    assert PUBLICATION_ROUND_ARTIFACTS_INCLUDE in write_paper
+    assert "REVIEW-LEDGER{round_suffix}.json" in write_paper_expanded
+    assert "REFEREE-DECISION{round_suffix}.json" in write_paper_expanded
+    assert "GPD/REFEREE-REPORT{round_suffix}.md" in write_paper_expanded
     assert "templates/paper/author-response.md" in write_paper
     assert "needs-calculation" in write_paper
 
@@ -838,9 +847,9 @@ def test_publication_commands_accept_documented_manuscript_layouts() -> None:
     assert "cleared manuscript proof review for theorem-bearing manuscripts" in arxiv
     assert "latest peer-review review ledger" in arxiv
     assert "latest peer-review referee decision" in arxiv
-    assert "latest staged review decision" in arxiv
-    assert "manuscript proof-review status before packaging begins" in arxiv
-    assert "resolve only from `paper/`, `manuscript/`, or `draft/`" in arxiv
+    assert "missing latest staged peer-review decision evidence" in arxiv
+    assert "The resolved manuscript root and its build artifacts satisfied the workflow gates" in arxiv
+    assert "Keep the wrapper thin and let the workflow own validation, packaging, and submission-gate details." in arxiv
     assert 'find . -name "main.tex"' not in arxiv
     assert 'find . -name "*.tex"' not in write_paper
     assert "first-match" not in arxiv
@@ -2487,7 +2496,7 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     peer_review_final = peer_review_staging.stage("final_adjudication")
     peer_review_finalize = peer_review_staging.stage("finalize")
 
-    assert write_paper_bootstrap.loaded_authorities == ("workflows/write-paper.md",)
+    assert "workflows/write-paper.md" in write_paper_bootstrap.loaded_authorities
     assert "references/publication/publication-pipeline-modes.md" in write_paper_outline.loaded_authorities
     assert "templates/paper/paper-config-schema.md" in write_paper_outline.loaded_authorities
     assert "templates/paper/artifact-manifest-schema.md" in write_paper_outline.loaded_authorities
@@ -2496,16 +2505,28 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     assert "templates/paper/reproducibility-manifest.md" in write_paper_consistency.loaded_authorities
     assert "references/publication/peer-review-panel.md" in write_paper_review.loaded_authorities
     assert "references/publication/peer-review-reliability.md" in write_paper_review.loaded_authorities
+    assert "references/publication/publication-review-round-artifacts.md" in write_paper_review.loaded_authorities
+    assert "references/publication/publication-response-artifacts.md" in write_paper_review.loaded_authorities
     assert "templates/paper/review-ledger-schema.md" in write_paper_review.loaded_authorities
     assert "templates/paper/referee-decision-schema.md" in write_paper_review.loaded_authorities
 
-    assert peer_review_bootstrap.loaded_authorities == ("workflows/peer-review.md",)
+    assert "workflows/peer-review.md" in peer_review_bootstrap.loaded_authorities
     assert "references/publication/peer-review-reliability.md" in peer_review_preflight.loaded_authorities
+    assert any(
+        token in peer_review_preflight.loaded_authorities
+        for token in (
+            "templates/paper/publication-manuscript-root-preflight.md",
+            "references/publication/publication-artifact-gates.md",
+        )
+    )
     assert "templates/paper/paper-config-schema.md" in peer_review_preflight.loaded_authorities
     assert "templates/paper/artifact-manifest-schema.md" in peer_review_preflight.loaded_authorities
     assert "templates/paper/bibliography-audit-schema.md" in peer_review_preflight.loaded_authorities
     assert "templates/paper/reproducibility-manifest.md" in peer_review_preflight.loaded_authorities
-    assert peer_review_artifacts.loaded_authorities == ("workflows/peer-review.md",)
+    assert peer_review_artifacts.loaded_authorities == (
+        "workflows/peer-review.md",
+        "references/publication/publication-review-round-artifacts.md",
+    )
     assert "references/publication/peer-review-panel.md" in peer_review_panel.loaded_authorities
     assert "references/publication/peer-review-panel.md" in peer_review_final.loaded_authorities
     assert "templates/paper/review-ledger-schema.md" in peer_review_final.loaded_authorities
@@ -2647,34 +2668,72 @@ def test_peer_review_referee_surface_fail_closed_stage6_contract() -> None:
 def test_publication_prompts_surface_strict_semantic_manuscript_gates() -> None:
     arxiv = (COMMANDS_DIR / "arxiv-submission.md").read_text(encoding="utf-8")
     respond = (COMMANDS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
-    shared_discipline = (REFERENCES_DIR / "shared" / "canonical-schema-discipline.md").read_text(encoding="utf-8")
     peer_review_workflow = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
     write_paper_workflow = (WORKFLOWS_DIR / "write-paper.md").read_text(encoding="utf-8")
+    respond_workflow = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
     arxiv_workflow = (WORKFLOWS_DIR / "arxiv-submission.md").read_text(encoding="utf-8")
+    respond_workflow_expanded = _expand_prompt_surface(WORKFLOWS_DIR / "respond-to-referees.md")
+    arxiv_workflow_expanded = _expand_prompt_surface(WORKFLOWS_DIR / "arxiv-submission.md")
+    shared_preflight = (TEMPLATES_DIR / "paper" / "publication-manuscript-root-preflight.md").read_text(
+        encoding="utf-8"
+    )
 
     for content in (peer_review_workflow, write_paper_workflow):
-        assert "reproducibility_ready" in content
-    for content in (write_paper_workflow, peer_review_workflow, arxiv_workflow):
+        assert PUBLICATION_SHARED_PREFLIGHT_INCLUDE in content
+        assert any(
+            token in content
+            for token in (
+                PUBLICATION_ROUND_ARTIFACTS_INCLUDE,
+                PUBLICATION_ROUND_ARTIFACTS_PATH,
+            )
+        )
+        if content is write_paper_workflow:
+            assert PUBLICATION_RESPONSE_ARTIFACTS_INCLUDE in content
+    for content in (respond, arxiv):
+        assert PUBLICATION_SHARED_PREFLIGHT_INCLUDE not in content
+        assert PUBLICATION_ROUND_ARTIFACTS_INCLUDE not in content
+        assert PUBLICATION_RESPONSE_ARTIFACTS_INCLUDE not in content
+        assert PUBLICATION_REVIEW_RELIABILITY_INCLUDE not in content
+        assert "@{GPD_INSTALL_DIR}/references/shared/canonical-schema-discipline.md" not in content
+        assert "templates/paper/review-ledger-schema.md" not in content
+        assert "templates/paper/referee-decision-schema.md" not in content
+    for content in (respond_workflow, arxiv_workflow):
+        assert PUBLICATION_SHARED_PREFLIGHT_INCLUDE in content
+        assert PUBLICATION_ROUND_ARTIFACTS_INCLUDE in content
+        if content is respond_workflow:
+            assert PUBLICATION_RESPONSE_ARTIFACTS_INCLUDE in content
+            assert PUBLICATION_REVIEW_RELIABILITY_INCLUDE in content
+        else:
+            assert PUBLICATION_RESPONSE_ARTIFACTS_INCLUDE not in content
+            assert PUBLICATION_REVIEW_RELIABILITY_INCLUDE in content
+    for content in (respond_workflow_expanded, arxiv_workflow_expanded):
         assert "bibliography_audit_clean" in content
-    for content in (arxiv, respond):
-        assert "templates/paper/review-ledger-schema.md" in content
-        assert "templates/paper/referee-decision-schema.md" in content
-        assert "references/publication/peer-review-reliability.md" in content
-        assert "@{GPD_INSTALL_DIR}/references/shared/canonical-schema-discipline.md" in content
-        expanded_content = expand_at_includes(content, REPO_ROOT / "src/gpd", "/runtime/")
-        assert (
-            "Use the explicitly loaded schema, template, and contract/reference files that define an output shape or "
-            "validation gate as the authority."
-        ) in expanded_content
+        assert "reproducibility_ready" in content
     assert (
-        "Use the explicitly loaded schema, template, and contract/reference files that define an output shape or "
-        "validation gate as the authority."
-    ) in shared_discipline
-    assert (
-        "If a field is hard-enforced, surface it in model-visible schema text before asking the model to satisfy it."
-        in shared_discipline
+        "For a resumed manuscript, strict preflight reads `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and "
+        "`reproducibility-manifest.json` from the resolved manuscript directory itself. Use `ARTIFACT-MANIFEST.json` "
+        "first and `PAPER-CONFIG.json` second when selecting the active manuscript entry point. Do not use ad hoc "
+        "wildcard discovery or first-match filename scans."
+        in shared_preflight
     )
-    assert "For publication and review artifacts" not in shared_discipline
+    assert (
+        "Resolve exactly one active manuscript root from the canonical manuscript family: `paper/`, `manuscript/`, or `draft/`."
+        in shared_preflight
+    )
+    assert (
+        "Keep all manuscript-local support artifacts rooted at the same explicit manuscript directory, and do not satisfy "
+        "strict review or packaging with artifacts copied from another manuscript root."
+        in shared_preflight
+    )
+    assert (
+        "Treat `gpd paper-build` as the authoritative step that regenerates the resolved manuscript-root "
+        "`ARTIFACT-MANIFEST.json` and `BIBLIOGRAPHY-AUDIT.json`."
+        in shared_preflight
+    )
+    assert "Do not use ad hoc wildcard discovery or first-match filename scans." in shared_preflight
+    assert "and do not satisfy strict review or packaging with artifacts copied from another manuscript root." in shared_preflight
+    assert "bibliography_audit_clean" in shared_preflight
+    assert "reproducibility_ready" in shared_preflight
 
 
 def test_publication_command_contexts_surface_schema_docs_before_generation() -> None:
@@ -2683,32 +2742,82 @@ def test_publication_command_contexts_surface_schema_docs_before_generation() ->
     arxiv = (COMMANDS_DIR / "arxiv-submission.md").read_text(encoding="utf-8")
     respond = (COMMANDS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
     write_paper_workflow = (WORKFLOWS_DIR / "write-paper.md").read_text(encoding="utf-8")
-    shared_include = "@{GPD_INSTALL_DIR}/references/shared/canonical-schema-discipline.md"
+    peer_review_workflow = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
+    respond_workflow = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
+    arxiv_workflow = (WORKFLOWS_DIR / "arxiv-submission.md").read_text(encoding="utf-8")
+    write_paper_workflow_expanded = _expand_prompt_surface(WORKFLOWS_DIR / "write-paper.md")
+    peer_review_workflow_expanded = _expand_prompt_surface(WORKFLOWS_DIR / "peer-review.md")
+    respond_workflow_expanded = _expand_prompt_surface(WORKFLOWS_DIR / "respond-to-referees.md")
+    arxiv_workflow_expanded = _expand_prompt_surface(WORKFLOWS_DIR / "arxiv-submission.md")
+    shared_preflight_include = "@{GPD_INSTALL_DIR}/templates/paper/publication-manuscript-root-preflight.md"
+    round_artifacts_include = "@{GPD_INSTALL_DIR}/references/publication/publication-review-round-artifacts.md"
+    response_artifacts_include = "@{GPD_INSTALL_DIR}/references/publication/publication-response-artifacts.md"
     write_paper_staging = registry.get_command("write-paper").staged_loading
 
     assert write_paper_staging is not None
 
-    for content in (write_paper, peer_review):
+    for content in (write_paper, peer_review, arxiv, respond):
         assert "templates/paper/paper-config-schema.md" not in content
         assert "templates/paper/artifact-manifest-schema.md" not in content
         assert "templates/paper/bibliography-audit-schema.md" not in content
         assert "templates/paper/reproducibility-manifest.md" not in content
+        assert PUBLICATION_REVIEW_RELIABILITY_INCLUDE not in content
+        assert shared_preflight_include not in content
+        assert round_artifacts_include not in content
+        assert response_artifacts_include not in content
+    for content in (write_paper, peer_review):
         assert "templates/paper/review-ledger-schema.md" not in content
         assert "templates/paper/referee-decision-schema.md" not in content
         assert "references/publication/peer-review-panel.md" not in content
         assert "references/publication/peer-review-reliability.md" not in content
-    for content in (write_paper_workflow, arxiv):
+    for content in (write_paper_workflow,):
         assert "templates/paper/paper-config-schema.md" in content
         assert "templates/paper/artifact-manifest-schema.md" in content
         assert "templates/paper/bibliography-audit-schema.md" in content
     assert "templates/paper/reproducibility-manifest.md" in write_paper_workflow
-    assert "templates/paper/bibliography-audit-schema.md" in respond
+    assert shared_preflight_include in write_paper_workflow
+    assert round_artifacts_include in write_paper_workflow
+    assert response_artifacts_include in write_paper_workflow
+    assert "bibliography_audit_clean" in write_paper_workflow_expanded
+    assert "reproducibility_ready" in write_paper_workflow_expanded
+    assert PUBLICATION_SHARED_PREFLIGHT_INCLUDE in peer_review_workflow
+    assert "templates/paper/review-ledger-schema.md" in peer_review_workflow
+    assert "templates/paper/referee-decision-schema.md" in peer_review_workflow
+    assert "templates/paper/review-ledger-schema.md" in peer_review_workflow
+    assert "templates/paper/referee-decision-schema.md" in peer_review_workflow
+    assert any(
+        token in peer_review_workflow
+        for token in (
+            round_artifacts_include,
+            PUBLICATION_ROUND_ARTIFACTS_PATH,
+        )
+    )
+    assert response_artifacts_include not in peer_review_workflow
+    assert "bibliography_audit_clean" in peer_review_workflow_expanded
+    assert "reproducibility_ready" in peer_review_workflow_expanded
+    assert "templates/paper/author-response.md" in respond_workflow
+    assert "templates/paper/referee-response.md" in respond_workflow
+    assert shared_preflight_include in respond_workflow
+    assert round_artifacts_include in respond_workflow
+    assert response_artifacts_include in respond_workflow
+    assert PUBLICATION_REVIEW_RELIABILITY_INCLUDE in respond_workflow
+    assert "bibliography_audit_clean" in respond_workflow_expanded
+    assert "reproducibility_ready" in respond_workflow_expanded
+    assert shared_preflight_include in arxiv_workflow
+    assert round_artifacts_include in arxiv_workflow
+    assert response_artifacts_include not in arxiv_workflow
+    assert PUBLICATION_REVIEW_RELIABILITY_INCLUDE in arxiv_workflow
+    assert "bibliography_audit_clean" in arxiv_workflow_expanded
+    assert "reproducibility_ready" in arxiv_workflow_expanded
     assert (
         "references/shared/canonical-schema-discipline.md"
         in write_paper_staging.stage("figure_and_section_authoring").loaded_authorities
     )
     for content in (respond, arxiv):
-        assert shared_include in content
+        assert shared_preflight_include not in content
+        assert round_artifacts_include not in content
+        assert response_artifacts_include not in content
+        assert PUBLICATION_REVIEW_RELIABILITY_INCLUDE not in content
 
 
 def test_research_verification_body_scaffold_keeps_body_only_subject_labels_distinct() -> None:
@@ -2832,8 +2941,11 @@ def test_skill_surface_exposes_contract_references_for_paper_and_review_workflow
     assert any(path.endswith("bibliography-audit-schema.md") for path in write_paper_stage_authorities)
     assert any(path.endswith("review-ledger-schema.md") for path in write_paper_stage_authorities)
     assert any(path.endswith("referee-decision-schema.md") for path in write_paper_stage_authorities)
+    assert any(path.endswith("publication-review-round-artifacts.md") for path in write_paper_stage_authorities)
+    assert any(path.endswith("publication-response-artifacts.md") for path in write_paper_stage_authorities)
     assert any(path.endswith("review-ledger-schema.md") for path in peer_review_stage_authorities)
     assert any(path.endswith("referee-decision-schema.md") for path in peer_review_stage_authorities)
+    assert any(path.endswith("publication-review-round-artifacts.md") for path in peer_review_stage_authorities)
     assert any(entry["path"].endswith("paper-quality-scoring.md") for entry in arxiv_submission["referenced_files"])
     assert any(path.endswith("author-response.md") for path in respond_to_referees["schema_references"])
     assert any(path.endswith("reproducibility-manifest.md") for path in write_paper_stage_authorities)
@@ -2845,7 +2957,9 @@ def test_skill_surface_exposes_contract_references_for_paper_and_review_workflow
     assert "Peer Review Panel Protocol" in peer_review_contract_documents["peer-review-panel.md"]["body"]
     assert "Peer Review Phase Reliability" in peer_review_contract_documents["peer-review-reliability.md"]["body"]
     assert arxiv_contract_documents == {}
-    assert respond_contract_documents == {}
+    assert set(respond_contract_documents) == {"peer-review-reliability.md"}
+    assert any(path.endswith("peer-review-reliability.md") for path in respond_to_referees["contract_references"])
+    assert "Peer Review Phase Reliability" in respond_contract_documents["peer-review-reliability.md"]["body"]
     assert "Treat `content` as the wrapper/context surface." in write_paper["loading_hint"]
     assert "Load `schema_documents` and `contract_documents` too when present" in write_paper["loading_hint"]
 
@@ -3655,11 +3769,11 @@ def test_publication_workflows_refresh_bibliography_audit_after_bibliography_cha
     respond = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
     peer_review = (WORKFLOWS_DIR / "peer-review.md").read_text(encoding="utf-8")
     arxiv_submission = (WORKFLOWS_DIR / "arxiv-submission.md").read_text(encoding="utf-8")
-
-    assert (
-        "`gpd paper-build` is the authoritative step that regenerates `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` "
-        "for the emitted bibliography and the derived `reference_id -> bibtex_key` bridge." in write_paper
+    shared_preflight = (TEMPLATES_DIR / "paper" / "publication-manuscript-root-preflight.md").read_text(
+        encoding="utf-8"
     )
+
+    assert "`gpd paper-build` is the authoritative step that regenerates `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json`" in write_paper
     assert "the derived `reference_id -> bibtex_key` bridge" in write_paper
     assert (
         "Prefer the `reference_id -> bibtex_key` mapping surfaced by `gpd paper-build` over reconstructing manuscript keys manually from prose or source ordering"
@@ -3674,19 +3788,25 @@ def test_publication_workflows_refresh_bibliography_audit_after_bibliography_cha
         "refresh `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` before generating the response letter or proceeding to final review"
         in respond
     )
-    assert (
-        "`gpd paper-build` is the step that regenerates `BIBLIOGRAPHY-AUDIT.json` for the current bibliography; rerun it before proceeding whenever the manuscript bibliography or citation set has changed."
-        in peer_review
+    assert PUBLICATION_SHARED_PREFLIGHT_INCLUDE in peer_review
+    assert any(
+        token in peer_review
+        for token in (
+            PUBLICATION_ROUND_ARTIFACTS_INCLUDE,
+            PUBLICATION_ROUND_ARTIFACTS_PATH,
+        )
     )
     assert "absent, stale, or not review-ready" in peer_review
+    assert "bibliography_audit_clean" in peer_review
+    assert "reproducibility_ready" in peer_review
     assert (
-        "Strict preflight also requires `ARTIFACT-MANIFEST.json` and `BIBLIOGRAPHY-AUDIT.json` beside the resolved manuscript entry point."
-        in arxiv_submission
+        "Treat `gpd paper-build` as the authoritative step that regenerates the resolved manuscript-root "
+        "`ARTIFACT-MANIFEST.json` and `BIBLIOGRAPHY-AUDIT.json`."
+        in shared_preflight
     )
-    assert (
-        "Treat `gpd paper-build` as the authoritative step that regenerates `BIBLIOGRAPHY-AUDIT.json` for the resolved manuscript root."
-        in arxiv_submission
-    )
+    assert PUBLICATION_SHARED_PREFLIGHT_INCLUDE in arxiv_submission
+    assert PUBLICATION_ROUND_ARTIFACTS_INCLUDE in arxiv_submission
+    assert PUBLICATION_RESPONSE_ARTIFACTS_INCLUDE not in arxiv_submission
 
 
 def test_publication_workflows_keep_manuscript_local_reference_status_rooted_at_the_resolved_manuscript_directory() -> (
@@ -3697,10 +3817,7 @@ def test_publication_workflows_keep_manuscript_local_reference_status_rooted_at_
     respond = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
     arxiv_submission = (WORKFLOWS_DIR / "arxiv-submission.md").read_text(encoding="utf-8")
 
-    assert (
-        "For any resumed manuscript, strict preflight reads `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and `reproducibility-manifest.json` from the resolved manuscript directory itself."
-        in write_paper
-    )
+    assert PUBLICATION_SHARED_PREFLIGHT_INCLUDE in write_paper
     assert (
         "After resolution, keep all manuscript-local support artifacts rooted at the same explicit manuscript directory:"
         in peer_review
@@ -3710,12 +3827,10 @@ def test_publication_workflows_keep_manuscript_local_reference_status_rooted_at_
         "refresh `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` before generating the response letter or proceeding to final review"
         in respond
     )
+    assert PUBLICATION_SHARED_PREFLIGHT_INCLUDE in arxiv_submission
+    assert "Use the resolved manuscript root as the scoring source of truth." in arxiv_submission
     assert (
-        "Strict preflight also requires `ARTIFACT-MANIFEST.json` and `BIBLIOGRAPHY-AUDIT.json` beside the resolved manuscript entry point."
-        in arxiv_submission
-    )
-    assert (
-        "Treat `gpd paper-build` as the authoritative step that regenerates `BIBLIOGRAPHY-AUDIT.json` for the resolved manuscript root."
+        "The same resolved manuscript root is also the strict preflight source of truth for `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and the compiled PDF."
         in arxiv_submission
     )
     assert (

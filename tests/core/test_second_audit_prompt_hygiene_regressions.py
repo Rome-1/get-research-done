@@ -8,6 +8,14 @@ AGENTS_DIR = Path("src/gpd/agents")
 REFERENCES_DIR = Path("src/gpd/specs/references")
 TEMPLATES_DIR = Path("src/gpd/specs/templates")
 PUBLICATION_SHARED_PREFLIGHT = TEMPLATES_DIR / "paper" / "publication-manuscript-root-preflight.md"
+PUBLICATION_SHARED_PREFLIGHT_INCLUDE = "@{GPD_INSTALL_DIR}/templates/paper/publication-manuscript-root-preflight.md"
+PUBLICATION_ROUND_ARTIFACTS_INCLUDE = (
+    "@{GPD_INSTALL_DIR}/references/publication/publication-review-round-artifacts.md"
+)
+PUBLICATION_RESPONSE_ARTIFACTS_INCLUDE = (
+    "@{GPD_INSTALL_DIR}/references/publication/publication-response-artifacts.md"
+)
+PUBLICATION_REVIEW_RELIABILITY_INCLUDE = "@{GPD_INSTALL_DIR}/references/publication/peer-review-reliability.md"
 OWNED_COMMANDS = (
     COMMANDS_DIR / "debug.md",
     COMMANDS_DIR / "research-phase.md",
@@ -77,10 +85,14 @@ def test_write_paper_workflow_drops_authoring_note_placeholders() -> None:
     assert "Default bootstrap wording:" not in write_paper
 
 
-def test_publication_commands_reference_one_shared_manuscript_root_preflight_block() -> None:
+def test_publication_commands_keep_shared_manuscript_root_preflight_out_of_wrappers() -> None:
     shared_preflight = PUBLICATION_SHARED_PREFLIGHT.read_text(encoding="utf-8")
 
-    assert "For any resumed manuscript, strict preflight reads `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and `reproducibility-manifest.json` from the resolved manuscript directory itself." in shared_preflight
+    assert (
+        "strict preflight reads `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and "
+        "`reproducibility-manifest.json` from the resolved manuscript directory itself."
+        in shared_preflight
+    )
     assert "Do not use ad hoc wildcard discovery or first-match filename scans." in shared_preflight
     assert "bibliography_audit_clean" in shared_preflight
     assert "reproducibility_ready" in shared_preflight
@@ -88,16 +100,43 @@ def test_publication_commands_reference_one_shared_manuscript_root_preflight_blo
     for path in (
         COMMANDS_DIR / "write-paper.md",
         COMMANDS_DIR / "peer-review.md",
+        COMMANDS_DIR / "respond-to-referees.md",
+        COMMANDS_DIR / "arxiv-submission.md",
     ):
         text = path.read_text(encoding="utf-8")
-        assert text.count("@{GPD_INSTALL_DIR}/templates/paper/publication-manuscript-root-preflight.md") == 0, path
+        assert text.count(PUBLICATION_SHARED_PREFLIGHT_INCLUDE) == 0, path
+        assert text.count(PUBLICATION_ROUND_ARTIFACTS_INCLUDE) == 0, path
+        assert text.count(PUBLICATION_RESPONSE_ARTIFACTS_INCLUDE) == 0, path
+        assert text.count(PUBLICATION_REVIEW_RELIABILITY_INCLUDE) == 0, path
 
     for path in (
-        COMMANDS_DIR / "arxiv-submission.md",
-        COMMANDS_DIR / "respond-to-referees.md",
+        WORKFLOWS_DIR / "write-paper.md",
+        WORKFLOWS_DIR / "peer-review.md",
+        WORKFLOWS_DIR / "respond-to-referees.md",
+        WORKFLOWS_DIR / "arxiv-submission.md",
     ):
         text = path.read_text(encoding="utf-8")
-        assert text.count("@{GPD_INSTALL_DIR}/templates/paper/publication-manuscript-root-preflight.md") == 1, path
+        assert text.count(PUBLICATION_SHARED_PREFLIGHT_INCLUDE) == 1, path
+        expected_round_counts = {
+            "write-paper.md": 1,
+            "peer-review.md": 0,
+            "respond-to-referees.md": 1,
+            "arxiv-submission.md": 1,
+        }
+        expected_response_counts = {
+            "write-paper.md": 1,
+            "respond-to-referees.md": 1,
+        }
+
+        assert text.count(PUBLICATION_ROUND_ARTIFACTS_INCLUDE) >= expected_round_counts[path.name], path
+        if path.name in expected_response_counts:
+            assert text.count(PUBLICATION_RESPONSE_ARTIFACTS_INCLUDE) >= expected_response_counts[path.name], path
+        else:
+            assert PUBLICATION_RESPONSE_ARTIFACTS_INCLUDE not in text, path
+        if path.name in {"peer-review.md", "respond-to-referees.md", "arxiv-submission.md"}:
+            assert text.count(PUBLICATION_REVIEW_RELIABILITY_INCLUDE) >= 1, path
+        else:
+            assert PUBLICATION_REVIEW_RELIABILITY_INCLUDE not in text, path
 
 
 def test_literature_and_research_commands_trim_inline_methodology_blocks() -> None:
@@ -153,8 +192,9 @@ def test_write_paper_command_defers_the_route_list_to_the_workflow() -> None:
 
     assert "Routes to the write-paper workflow:" not in write_paper
     assert "@{GPD_INSTALL_DIR}/workflows/write-paper.md" in write_paper
-    assert "bibliography_audit_clean" in write_paper_workflow
-    assert "reproducibility_ready" in write_paper_workflow
+    assert PUBLICATION_SHARED_PREFLIGHT_INCLUDE in write_paper_workflow
+    assert PUBLICATION_ROUND_ARTIFACTS_INCLUDE in write_paper_workflow
+    assert PUBLICATION_RESPONSE_ARTIFACTS_INCLUDE in write_paper_workflow
 
 
 def test_debug_workflow_path_note_is_not_self_contradictory() -> None:

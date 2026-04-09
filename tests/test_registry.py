@@ -1628,6 +1628,12 @@ class TestRegistryPromptIncludeInlining:
 
         assert "error" not in referee
         assert any(path.endswith("peer-review-panel.md") for path in referee["contract_references"])
+        assert any(
+            entry["path"].endswith("publication-review-round-artifacts.md") for entry in referee["referenced_files"]
+        )
+        assert any(
+            entry["path"].endswith("publication-response-artifacts.md") for entry in referee["referenced_files"]
+        )
         assert any(path.endswith("review-ledger-schema.md") for path in referee["schema_references"])
         assert any(path.endswith("referee-decision-schema.md") for path in referee["schema_references"])
 
@@ -1672,6 +1678,8 @@ class TestRegistryPromptIncludeInlining:
                 "references/publication/publication-pipeline-modes.md",
                 "references/publication/paper-writer-cookbook.md",
                 "references/publication/figure-generation-templates.md",
+                "references/publication/publication-review-round-artifacts.md",
+                "references/publication/publication-response-artifacts.md",
                 "templates/paper/author-response.md",
             ),
         )

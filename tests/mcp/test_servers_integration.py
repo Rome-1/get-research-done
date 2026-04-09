@@ -599,6 +599,8 @@ class TestSkillsServerIntegration:
                 "@{GPD_INSTALL_DIR}/templates/latex-preamble.md",
                 "@{GPD_INSTALL_DIR}/references/publication/figure-generation-templates.md",
                 "@{GPD_INSTALL_DIR}/references/publication/publication-pipeline-modes.md",
+                "@{GPD_INSTALL_DIR}/references/publication/publication-review-round-artifacts.md",
+                "@{GPD_INSTALL_DIR}/references/publication/publication-response-artifacts.md",
                 "@{GPD_INSTALL_DIR}/templates/paper/author-response.md",
             }
         )
@@ -610,6 +612,25 @@ class TestSkillsServerIntegration:
         assert paper_writer["schema_references"] == ["@{GPD_INSTALL_DIR}/templates/paper/author-response.md"]
         assert paper_writer["schema_documents"]
         assert any(path.endswith("verification-core.md") for path in paper_writer_transitive_paths)
+        assert any(path.endswith("publication-review-round-artifacts.md") for path in paper_writer_referenced_paths)
+        assert any(path.endswith("publication-response-artifacts.md") for path in paper_writer_referenced_paths)
+
+    def test_get_skill_surfaces_referee_reference_paths_and_transitive_metadata(self):
+        from gpd.mcp.servers.skills_server import get_skill
+
+        referee = get_skill("gpd-referee")
+        referee_referenced_paths = {entry["path"] for entry in referee["referenced_files"]}
+        referee_transitive_paths = {entry["path"] for entry in referee["transitive_referenced_files"]}
+
+        assert "error" not in referee
+        assert referee["reference_count"] == len(referee_referenced_paths)
+        assert referee["transitive_reference_count"] > referee["reference_count"]
+        assert any(path.endswith("peer-review-panel.md") for path in referee["contract_references"])
+        assert any(path.endswith("publication-review-round-artifacts.md") for path in referee_referenced_paths)
+        assert any(path.endswith("publication-response-artifacts.md") for path in referee_referenced_paths)
+        assert any(path.endswith("review-ledger-schema.md") for path in referee["schema_references"])
+        assert any(path.endswith("referee-decision-schema.md") for path in referee["schema_references"])
+        assert any(path.endswith("verification-core.md") for path in referee_transitive_paths)
 
     def test_get_skill_surfaces_lightweight_bibliographer_reference_paths_and_transitive_metadata(self):
         from gpd.mcp.servers.skills_server import get_skill

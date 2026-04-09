@@ -326,7 +326,9 @@ def test_validate_workflow_stage_manifest_payload_loads_write_paper_manifest() -
         "consistency_and_references",
         "publication_review",
     )
-    assert manifest.stages[0].loaded_authorities == ("workflows/write-paper.md",)
+    assert "workflows/write-paper.md" in manifest.stages[0].loaded_authorities
+    assert "references/publication/publication-review-round-artifacts.md" in manifest.stages[0].must_not_eager_load
+    assert "references/publication/publication-response-artifacts.md" in manifest.stages[0].must_not_eager_load
     assert "references/publication/publication-pipeline-modes.md" in manifest.stages[0].must_not_eager_load
     assert "references/publication/peer-review-panel.md" in manifest.stages[0].must_not_eager_load
     assert "templates/paper/paper-config-schema.md" in manifest.stages[0].must_not_eager_load
@@ -343,6 +345,8 @@ def test_validate_workflow_stage_manifest_payload_loads_write_paper_manifest() -
     )
     assert manifest.stages[4].loaded_authorities == (
         "workflows/write-paper.md",
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
         "references/publication/peer-review-panel.md",
         "references/publication/peer-review-reliability.md",
         "templates/paper/review-ledger-schema.md",
@@ -393,17 +397,23 @@ def test_validate_workflow_stage_manifest_payload_loads_peer_review_manifest() -
         "final_adjudication",
         "finalize",
     )
-    assert manifest.stages[0].loaded_authorities == ("workflows/peer-review.md",)
+    assert "workflows/peer-review.md" in manifest.stages[0].loaded_authorities
+    assert "references/publication/publication-review-round-artifacts.md" in manifest.stages[0].must_not_eager_load
     assert "references/publication/peer-review-panel.md" in manifest.stages[0].must_not_eager_load
     assert "references/publication/peer-review-reliability.md" in manifest.stages[0].must_not_eager_load
     assert "templates/paper/paper-config-schema.md" in manifest.stages[0].must_not_eager_load
     assert manifest.stages[1].loaded_authorities == (
         "workflows/peer-review.md",
+        "templates/paper/publication-manuscript-root-preflight.md",
         "references/publication/peer-review-reliability.md",
         "templates/paper/paper-config-schema.md",
         "templates/paper/artifact-manifest-schema.md",
         "templates/paper/bibliography-audit-schema.md",
         "templates/paper/reproducibility-manifest.md",
+    )
+    assert manifest.stages[2].loaded_authorities == (
+        "workflows/peer-review.md",
+        "references/publication/publication-review-round-artifacts.md",
     )
     assert manifest.stages[3].loaded_authorities == (
         "workflows/peer-review.md",
@@ -412,6 +422,7 @@ def test_validate_workflow_stage_manifest_payload_loads_peer_review_manifest() -
     assert manifest.stages[4].loaded_authorities == (
         "workflows/peer-review.md",
         "references/publication/peer-review-panel.md",
+        "templates/paper/publication-manuscript-root-preflight.md",
         "templates/paper/review-ledger-schema.md",
         "templates/paper/referee-decision-schema.md",
     )

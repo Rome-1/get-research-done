@@ -85,17 +85,22 @@ Run the centralized review preflight before continuing:
 gpd validate review-preflight write-paper --strict
 ```
 
-If review preflight exits nonzero because of missing project state, missing roadmap, degraded review integrity, missing research artifacts, or non-review-ready reproducibility coverage, STOP and show the blocking issues before drafting. Keep the current `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, and `active_reference_context` visible throughout the staged review; the contract is authoritative only when `project_contract_gate.authoritative` is true.
+If review preflight exits nonzero because of missing project state, missing roadmap, degraded review integrity, missing research artifacts, or non-review-ready reproducibility coverage, STOP and show the blocking issues before drafting.
+Apply the shared manuscript-root bootstrap contract exactly:
+
+@{GPD_INSTALL_DIR}/templates/paper/publication-manuscript-root-preflight.md
+
+Keep the current `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, and `active_reference_context` visible throughout the staged review; the contract is authoritative only when `project_contract_gate.authoritative` is true.
 If `derived_manuscript_proof_review_status` is present, use it as the first-pass manuscript-local summary of proof-review freshness for theorem-bearing results; keep passed proof-redteam artifacts authoritative for strict drafting decisions.
-For any resumed manuscript, strict preflight reads `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and `reproducibility-manifest.json` from the resolved manuscript directory itself. The strict gate also requires `bibliography_audit_clean` and `reproducibility_ready`, not just file presence. Do not satisfy that gate with legacy publication artifacts from a different manuscript directory when the active manuscript lives elsewhere.
 If the manuscript depends on any theorem-style or `proof_obligation` result, treat passed proof-redteam artifacts from the source phases as mandatory review inputs. Missing or open proof audits are CRITICAL blockers, not polish issues.
 
 **Resolve paper directory (if resuming):**
 
-If strict preflight or init already resolved an active manuscript under `paper/`, `manuscript/`, or `draft/`, keep that manuscript root as `PAPER_DIR`. Prefer the manuscript-root `ARTIFACT-MANIFEST.json`, then `PAPER-CONFIG.json`, then the canonical current manuscript entrypoint rules within those roots. Do not choose `PAPER_DIR` by first-match `*.tex` or `*.md` globbing.
+If strict preflight or init already resolved an active manuscript under `paper/`, `manuscript/`, or `draft/`, keep that manuscript root as `PAPER_DIR`.
+Strict review for that resume path uses `${PAPER_DIR}/ARTIFACT-MANIFEST.json`; do not satisfy that gate with legacy publication artifacts from a different manuscript directory.
 When strict preflight resolves a manuscript root, bind it explicitly as `PAPER_DIR="$DIR"` where `$DIR` is that resolved manuscript directory, and treat `${PAPER_DIR}/{topic_specific_stem}.tex` as the canonical emitted manuscript path recorded by `${PAPER_DIR}/ARTIFACT-MANIFEST.json`.
 
-If a manuscript root was resolved, the workflow is resuming or revising that manuscript directory. Strict review for that resume path uses `${PAPER_DIR}/ARTIFACT-MANIFEST.json`, `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json`, and `${PAPER_DIR}/reproducibility-manifest.json` from the same directory.
+If a manuscript root was resolved, the workflow is resuming or revising that manuscript directory. Keep every strict-review dependency rooted there.
 If no manuscript root was resolved, set `PAPER_DIR="paper"` and bootstrap a fresh scaffold there.
 
 **Check optional local LaTeX compiler availability for smoke tests (cross-platform):**
@@ -397,8 +402,7 @@ ls GPD/literature/*-REVIEW.md 2>/dev/null
 3. Are key prior works identified (the research digest's "Prior Work" or literature review)?
 4. If `GPD/literature/*-CITATION-SOURCES.json` exists for the current topic, treat it as the citation-source handoff from literature-review and pass it through `gpd paper-build --citation-sources` instead of reconstructing the list manually.
 5. If `derived_manuscript_reference_status` is present in the init/context payload, use it as the manuscript-local status summary for the active manuscript instead of reconstructing read/verified/cited state from prose or source ordering.
-6. `gpd paper-build` is the authoritative step that regenerates `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` for the emitted bibliography and the derived `reference_id -> bibtex_key` bridge. Rerun it whenever the bibliography or citation set changes before strict review. The JSON audit is the review contract artifact; `${PAPER_DIR}/CITATION-AUDIT.md` is only the human-readable report.
-   The manuscript-root build artifacts remain authoritative for final review, packaging, and any cross-check that needs the current on-disk bibliography state.
+6. `gpd paper-build` is the authoritative step that regenerates `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` and the derived `reference_id -> bibtex_key` bridge for the active manuscript root. Rerun it whenever the bibliography or citation set changes before strict review. The JSON audit is the review contract artifact; `${PAPER_DIR}/CITATION-AUDIT.md` is only the human-readable report.
    For the default bootstrap path, this means: rerun `paper-build` so `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` reflects the current bibliography before strict review.
 
 **No bibliography file, no literature review, and no citation-source sidecar** → WARNING (citations will need to be built from scratch).
@@ -963,7 +967,11 @@ For theorem-style or `proof_obligation` claims, this stage also carries the mand
 5. `gpd-review-significance`
 6. `gpd-referee` as final adjudicator
 
-For the detailed staging, artifact naming, round handling, `CLAIMS{round_suffix}.json` / `STAGE-*{round_suffix}.json` outputs, `REVIEW-LEDGER{round_suffix}.json`, `REFEREE-DECISION{round_suffix}.json`, and recommendation guardrails, follow `@{GPD_INSTALL_DIR}/workflows/peer-review.md` exactly, using the resolved `${PAPER_DIR}/{topic_specific_stem}.tex` target recorded in `ARTIFACT-MANIFEST.json` and the manuscript-root `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and `reproducibility-manifest.json` as the strict-review dependencies. Keep the current `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, and `active_reference_context` visible throughout that staged review; the contract remains authoritative only when `project_contract_gate.authoritative` is true.
+Apply the shared publication round contract exactly:
+
+@{GPD_INSTALL_DIR}/references/publication/publication-review-round-artifacts.md
+
+Then follow `@{GPD_INSTALL_DIR}/workflows/peer-review.md` exactly, using the resolved `${PAPER_DIR}/{topic_specific_stem}.tex` target recorded in `ARTIFACT-MANIFEST.json` as the review target. Keep the current `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, and `active_reference_context` visible throughout that staged review; the contract remains authoritative only when `project_contract_gate.authoritative` is true.
 
 **If the staged panel fails:** Do not silently waive the review. Note the failure and recommend running `gpd:peer-review` directly after resolving the blocking issue.
 
@@ -1041,7 +1049,7 @@ When revising a paper in response to referee reports:
      subagent_type="gpd-paper-writer",
      model="{writer_model}",
      readonly=false,
-     prompt="First, read {GPD_AGENTS_DIR}/gpd-paper-writer.md for your role and instructions.\n\nRead the canonical <author_response> protocol at {GPD_INSTALL_DIR}/templates/paper/author-response.md and the canonical referee response template at {GPD_INSTALL_DIR}/templates/paper/referee-response.md. Produce both `GPD/AUTHOR-RESPONSE{round_suffix}.md` and `GPD/review/REFEREE_RESPONSE{round_suffix}.md`.\n\n<autonomy_mode>{AUTONOMY}</autonomy_mode>\n<research_mode>{RESEARCH_MODE}</research_mode>\n" +
+     prompt="First, read {GPD_AGENTS_DIR}/gpd-paper-writer.md for your role and instructions.\n\nRead the canonical <author_response> protocol at {GPD_INSTALL_DIR}/templates/paper/author-response.md, the canonical referee response template at {GPD_INSTALL_DIR}/templates/paper/referee-response.md, and the shared response-artifact contract at {GPD_INSTALL_DIR}/references/publication/publication-response-artifacts.md. Produce both `GPD/AUTHOR-RESPONSE{round_suffix}.md` and `GPD/review/REFEREE_RESPONSE{round_suffix}.md`.\n\n<autonomy_mode>{AUTONOMY}</autonomy_mode>\n<research_mode>{RESEARCH_MODE}</research_mode>\n" +
        "Referee report: GPD/REFEREE-REPORT{round_suffix}.md\n" +
        "Review ledger (if present): GPD/review/REVIEW-LEDGER{round_suffix}.json\n" +
        "Decision artifact (if present): GPD/review/REFEREE-DECISION{round_suffix}.json\n" +
@@ -1054,11 +1062,15 @@ When revising a paper in response to referee reports:
    )
    ```
 
-   **If the response-artifact agent fails to spawn or returns an error:** Check the agent's typed `gpd_return.status` first. If it returned `status: completed`, verify that `gpd_return.files_written` names both `GPD/AUTHOR-RESPONSE{round_suffix}.md` and `GPD/review/REFEREE_RESPONSE{round_suffix}.md`, and verify both files exist on disk. If it returned `status: checkpoint`, treat that as a fresh continuation handoff rather than completion. If it returned `status: blocked` or `status: failed`, treat the response as incomplete. Do not accept preexisting response files as a substitute for a successful spawn; the round remains incomplete until a fresh typed return names both outputs and both files exist on disk. If not, offer: 1) Retry the agent, 2) Draft the response artifacts in the main context using the referee report and revised manuscript, 3) Skip structured response and proceed directly to calculation tracking.
+   Apply the shared publication round and response contracts exactly:
 
-   The `GPD/AUTHOR-RESPONSE{round_suffix}.md` tracker uses REF-xxx issue IDs matching the referee report, with classifications (fixed/rebutted/acknowledged/needs-calculation), specific change locations, and source-phase tracking for any new work. When present, `REVIEW-LEDGER{round_suffix}.json` and `REFEREE-DECISION{round_suffix}.json` provide the blocking-issue and recommendation-floor context that the response must resolve. See the canonical `templates/paper/author-response.md` contract and the gpd-paper-writer's `<author_response>` section for the full format.
+   @{GPD_INSTALL_DIR}/references/publication/publication-review-round-artifacts.md
+   @{GPD_INSTALL_DIR}/references/publication/publication-response-artifacts.md
 
-   Treat `GPD/AUTHOR-RESPONSE{round_suffix}.md`, `GPD/review/REFEREE_RESPONSE{round_suffix}.md`, and the writer's typed `gpd_return` envelope as the response success gate. If either artifact is missing after the writer returns, or if `gpd_return.files_written` does not name both outputs, the response is not complete.
+   **If the response-artifact agent fails to spawn or returns an error:** Check the agent's typed `gpd_return.status` first. If it returned `status: completed`, verify that `gpd_return.files_written` names both `GPD/AUTHOR-RESPONSE{round_suffix}.md` and `GPD/review/REFEREE_RESPONSE{round_suffix}.md`, and verify both files exist on disk. If it returned `status: checkpoint`, treat that as a fresh continuation handoff rather than completion. If it returned `status: blocked` or `status: failed`, treat the response as incomplete. Do not accept preexisting response files as a substitute for a successful spawn; the round remains incomplete until a fresh typed return names both outputs and both files exist on disk.
+   Treat `GPD/AUTHOR-RESPONSE{round_suffix}.md`, `GPD/review/REFEREE_RESPONSE{round_suffix}.md`, and the writer's typed `gpd_return` envelope as the response success gate. If the shared gate is not satisfied, offer: 1) Retry the agent, 2) Draft the response artifacts in the main context using the referee report and revised manuscript, 3) Skip structured response and proceed directly to calculation tracking.
+
+   See the canonical `templates/paper/author-response.md` and `templates/paper/referee-response.md` contracts plus the shared response-artifact contract for the full response-tracker format.
 
 4. **Track new calculations:** If referee requests require new derivations or simulations, create tasks in `${PAPER_DIR}/REVISION_TASKS.md` and route to appropriate phases.
 

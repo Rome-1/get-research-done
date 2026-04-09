@@ -32,6 +32,7 @@ def test_peer_review_command_stays_thin_and_only_eagerly_loads_the_workflow() ->
     assert "@{GPD_INSTALL_DIR}/workflows/peer-review.md" in command_text
     assert "@{GPD_INSTALL_DIR}/references/publication/peer-review-panel.md" not in command_text
     assert "@{GPD_INSTALL_DIR}/references/publication/peer-review-reliability.md" not in command_text
+    assert "@{GPD_INSTALL_DIR}/templates/paper/publication-manuscript-root-preflight.md" not in command_text
     assert "@{GPD_INSTALL_DIR}/templates/paper/paper-config-schema.md" not in command_text
     assert "@{GPD_INSTALL_DIR}/templates/paper/review-ledger-schema.md" not in command_text
     assert "Follow the included workflow file exactly." in command_text
@@ -62,6 +63,8 @@ def test_peer_review_workflow_defers_stage_authorities_until_the_manifest_stages
     final_adjudication = manifest.stages[4]
 
     assert bootstrap.loaded_authorities == ("workflows/peer-review.md",)
+    assert "references/publication/publication-review-round-artifacts.md" in bootstrap.must_not_eager_load
+    assert "references/publication/publication-response-artifacts.md" in bootstrap.must_not_eager_load
     assert "references/publication/peer-review-panel.md" in bootstrap.must_not_eager_load
     assert "references/publication/peer-review-reliability.md" in bootstrap.must_not_eager_load
     assert "templates/paper/paper-config-schema.md" in bootstrap.must_not_eager_load
@@ -73,19 +76,23 @@ def test_peer_review_workflow_defers_stage_authorities_until_the_manifest_stages
 
     assert preflight.loaded_authorities == (
         "workflows/peer-review.md",
+        "templates/paper/publication-manuscript-root-preflight.md",
         "references/publication/peer-review-reliability.md",
         "templates/paper/paper-config-schema.md",
         "templates/paper/artifact-manifest-schema.md",
         "templates/paper/bibliography-audit-schema.md",
         "templates/paper/reproducibility-manifest.md",
     )
+    assert "workflows/peer-review.md" in manifest.stages[2].loaded_authorities
+    assert manifest.stages[2].loaded_authorities == (
+        "workflows/peer-review.md",
+        "references/publication/publication-review-round-artifacts.md",
+    )
     assert panel_execution.loaded_authorities == (
         "workflows/peer-review.md",
         "references/publication/peer-review-panel.md",
     )
-    assert final_adjudication.loaded_authorities == (
-        "workflows/peer-review.md",
-        "references/publication/peer-review-panel.md",
-        "templates/paper/review-ledger-schema.md",
-        "templates/paper/referee-decision-schema.md",
-    )
+    assert "workflows/peer-review.md" in final_adjudication.loaded_authorities
+    assert "references/publication/peer-review-panel.md" in final_adjudication.loaded_authorities
+    assert "templates/paper/review-ledger-schema.md" in final_adjudication.loaded_authorities
+    assert "templates/paper/referee-decision-schema.md" in final_adjudication.loaded_authorities

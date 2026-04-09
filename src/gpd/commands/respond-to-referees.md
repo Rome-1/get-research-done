@@ -39,56 +39,29 @@ allowed-tools:
 <objective>
 Structure a point-by-point response to referee reports and revise the manuscript accordingly.
 
-Keep the wrapper focused on referee triage, revision routing, and synchronized response artifacts.
+Keep the wrapper focused on referee triage, revision routing, and synchronized response artifacts while the workflow owns the full revision pipeline.
 
 **Why subagent:** Referee triage and synchronized manuscript revision burn context fast. Fresh context keeps the orchestrator lean.
 </objective>
 
 <execution_context>
 @{GPD_INSTALL_DIR}/workflows/respond-to-referees.md
-@{GPD_INSTALL_DIR}/references/publication/peer-review-reliability.md
-@{GPD_INSTALL_DIR}/templates/paper/bibliography-audit-schema.md
-@{GPD_INSTALL_DIR}/templates/paper/review-ledger-schema.md
-@{GPD_INSTALL_DIR}/templates/paper/referee-decision-schema.md
+@{GPD_INSTALL_DIR}/references/publication/publication-review-wrapper-guidance.md
 </execution_context>
 
 <context>
-Referee report source: $ARGUMENTS (file path or "paste" for inline input)
+Referee report source: $ARGUMENTS (file path or `paste`).
 
-@GPD/STATE.md
-@GPD/AUTHOR-RESPONSE{round_suffix}.md
-@GPD/review/REFEREE_RESPONSE{round_suffix}.md
-@GPD/review/REVIEW-LEDGER{round_suffix}.json
-@GPD/review/REFEREE-DECISION{round_suffix}.json
-
-Check for prior response and staged review files:
-
-```bash
-ls GPD/AUTHOR-RESPONSE*.md 2>/dev/null
-ls GPD/review/REFEREE_RESPONSE*.md 2>/dev/null
-ls GPD/review/REVIEW-LEDGER*.json GPD/review/REFEREE-DECISION*.json 2>/dev/null
-```
-
-Use centralized preflight to resolve the active manuscript only from the canonical manuscript roots `paper/`, `manuscript/`, or `draft/` via the manuscript-root manifest/config/entrypoint resolver. For this command, the explicit argument is the referee-report source path (or the `paste` sentinel), not a manuscript selector. Do not reintroduce first-match wildcard discovery here.
-
+The workflow resolves the manuscript root, staged review artifacts, and revision targets.
 </context>
 
 <process>
-@{GPD_INSTALL_DIR}/references/publication/publication-review-wrapper-guidance.md
-@{GPD_INSTALL_DIR}/templates/paper/publication-manuscript-root-preflight.md
-@{GPD_INSTALL_DIR}/references/shared/canonical-schema-discipline.md
-
 Follow `@{GPD_INSTALL_DIR}/workflows/respond-to-referees.md` exactly.
 </process>
 
 <success_criteria>
-- [ ] Referee reports parsed and all comments categorized and prioritized
-- [ ] `GPD/review/REVIEW-LEDGER*.json` and `GPD/review/REFEREE-DECISION*.json` consumed when available
-- [ ] `GPD/AUTHOR-RESPONSE{round_suffix}.md` and `GPD/review/REFEREE_RESPONSE{round_suffix}.md` created with complete point-by-point structure
-- [ ] Comments triaged into response-only, revision, and new calculation groups
-- [ ] All responses drafted and revisions applied via paper-writer agents
-- [ ] Revised manuscript compiles without errors
-- [ ] Internal consistency verified after revisions (max 3 iterations)
-- [ ] Response letter generated with change summary
-- [ ] All artifacts committed
+- [ ] Workflow ran end to end
+- [ ] Referee response and manuscript revision artifacts were produced
+- [ ] Review artifacts and the manuscript stayed synchronized
+- [ ] Workflow-owned preflight and schema gates were handled inside the workflow
 </success_criteria>

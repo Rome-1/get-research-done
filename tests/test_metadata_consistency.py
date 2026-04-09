@@ -419,8 +419,8 @@ def test_referee_response_round_suffix_convention_is_consistent() -> None:
 
     assert 'ROUND_SUFFIX="-R2"' in peer_review
     assert 'ROUND_SUFFIX="-R3"' in peer_review
-    assert "REFEREE_RESPONSE-R2.md" in respond
-    assert "AUTHOR-RESPONSE-R2.md" in respond
+    assert '`GPD/review/REFEREE_RESPONSE{round_suffix}.md`' in respond
+    assert '`GPD/AUTHOR-RESPONSE{round_suffix}.md`' in respond
     assert "GPD/paper" not in respond
     assert "needs-calculation" in respond
     assert "issues_needing_calculation" in author_response
@@ -430,7 +430,7 @@ def test_referee_response_round_suffix_convention_is_consistent() -> None:
     assert "REFEREE_RESPONSE_R2.md" not in respond
     assert "REFEREE_RESPONSE_R2.md" not in template
     assert "paper/referee-reports" not in respond
-    assert "GPD/review/REFEREE_RESPONSE{ROUND_SUFFIX}.md" in peer_review
+    assert "publication-review-round-artifacts.md" in peer_review
     assert "${MANUSCRIPT_ROOT}/REFEREE_RESPONSE" not in peer_review
 
 

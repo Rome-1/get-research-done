@@ -49,7 +49,16 @@ If review preflight exits nonzero because of missing project state, missing manu
 If `derived_manuscript_proof_review_status` is present, use it as the first-pass summary of theorem-proof freshness for the resolved manuscript, but keep the manuscript-root proof-redteam and publication artifacts authoritative for strict packaging decisions.
 Strict preflight also requires `ARTIFACT-MANIFEST.json` and `BIBLIOGRAPHY-AUDIT.json` beside the resolved manuscript entry point. Treat those files as manuscript-root artifact gates. If `$ARGUMENTS` resolves to an explicit manuscript under `paper/`, `manuscript/`, or `draft/`, those review artifacts must come from that same resolved manuscript root, not from legacy `GPD/paper/` copies or some other manuscript directory.
 Treat `gpd paper-build` as the authoritative step that regenerates `BIBLIOGRAPHY-AUDIT.json` for the resolved manuscript root. Do not package stale audit artifacts, even if the bibliography only changed indirectly through a citation-source handoff.
+
+Apply the shared manuscript-root artifact gates, peer-review reliability, and round-artifact contract exactly:
+
+@{GPD_INSTALL_DIR}/templates/paper/publication-manuscript-root-preflight.md
+@{GPD_INSTALL_DIR}/references/publication/peer-review-reliability.md
+@{GPD_INSTALL_DIR}/references/publication/publication-review-round-artifacts.md
+
+Those shared references own the canonical manuscript-root and round-artifact policy for arXiv packaging. The local workflow below adds only submission-specific build, review-clearance, and tarball gates.
 Strict preflight also requires the latest round-specific `GPD/review/REVIEW-LEDGER*.json` / `GPD/review/REFEREE-DECISION*.json` pair as authoritative submission-gate input. Missing either artifact is a hard stop. That pair must validate against the active manuscript, and packaging may continue only when the latest recommendation is `accept` or `minor_revision` with no unresolved blocking issues. A latest `major_revision` or `reject` decision is a hard stop for submission packaging. For theorem-bearing manuscripts, `manuscript_proof_review` must also already be cleared; arXiv packaging is not allowed to repair or waive a stale proof review.
+Use `publication-review-round-artifacts.md` and `peer-review-reliability.md` as the canonical source of truth for which latest-round review artifacts count. The local rule above only adds the submission recommendation floor.
 
 **Resolve manuscript target from $ARGUMENTS:**
 

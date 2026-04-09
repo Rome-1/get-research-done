@@ -225,7 +225,7 @@ def test_arxiv_submission_does_not_instruct_unsupported_explicit_submission_root
     workflow = _workflow_text("arxiv-submission.md")
 
     assert "submission/topic_stem.tex" not in workflow
-    assert "explicit manuscript under `paper/`, `manuscript/`, or `draft/`" in workflow
+    assert "documented manuscript roots `paper/`, `manuscript/`, and `draft/`" in workflow
 
 
 def test_paper_quality_scoring_reference_tracks_per_journal_gate_and_generic_fallback() -> None:
