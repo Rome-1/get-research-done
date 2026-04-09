@@ -84,6 +84,7 @@ from gpd.core.recent_projects import (
 )
 from gpd.core.results import IntermediateResult
 from gpd.core.utils import (
+    _replace_with_retry,
     atomic_write,
     compare_phase_numbers,
     file_lock,
@@ -2741,8 +2742,8 @@ def _recover_intent_locked(cwd: Path) -> None:
 
     if json_tmp_exists and md_tmp_exists and json_valid and md_valid and not conflict_with_current:
         # Both temp files ready and valid — complete the interrupted write
-        json_tmp.replace(json_path)
-        md_tmp.replace(md_path)
+        _replace_with_retry(json_tmp, json_path)
+        _replace_with_retry(md_tmp, md_path)
     else:
         if conflict_with_current:
             logger.warning("Ignoring stale state write intent because current state files are newer than temp files")
@@ -2979,8 +2980,8 @@ def _write_state_pair_locked(
         atomic_write(md_tmp, md_content)
 
         intent_file.write_text(f"{json_tmp}\n{md_tmp}\n", encoding="utf-8")
-        json_tmp.replace(json_path)
-        md_tmp.replace(md_path)
+        _replace_with_retry(json_tmp, json_path)
+        _replace_with_retry(md_tmp, md_path)
         try:
             intent_file.unlink(missing_ok=True)
         except OSError:

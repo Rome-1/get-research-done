@@ -9,6 +9,7 @@ All return types are Pydantic models — no raw dicts cross module boundaries.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import shutil
@@ -606,6 +607,9 @@ class ProgressJsonResult(BaseModel):
     total_plans: int = 0
     total_summaries: int = 0
     percent: int = 0
+    state_progress_percent: int | None = None
+    diverged: bool = False
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ProgressBarResult(BaseModel):
@@ -2352,6 +2356,28 @@ def progress_render(cwd: Path, fmt: str = "json") -> ProgressJsonResult | Progre
             text = f"[{bar}] {total_summaries}/{total_plans} plans ({percent}%)"
             return ProgressBarResult(bar=text, percent=percent, completed=total_summaries, total=total_plans)
 
+        # Advisory read of state.json to detect divergence (read-only, no lock).
+        state_pct: int | None = None
+        diverged = False
+        progress_warnings: list[str] = []
+        try:
+            sj = layout.state_json
+            if sj.is_file():
+                raw = json.loads(sj.read_text(encoding="utf-8"))
+                pos = raw.get("position") or {}
+                val = pos.get("progress_percent")
+                if val is not None:
+                    state_pct = int(val)
+                    if state_pct != percent:
+                        diverged = True
+                        progress_warnings.append(
+                            f"state.json progress_percent ({state_pct}%) differs from "
+                            f"filesystem progress ({percent}%). "
+                            f"Run 'gpd state update-progress' to reconcile."
+                        )
+        except (FileNotFoundError, json.JSONDecodeError, OSError, KeyError, TypeError):
+            logger.debug("state.json advisory read failed during progress render", exc_info=True)
+
         return ProgressJsonResult(
             milestone_version=milestone.version,
             milestone_name=milestone.name,
@@ -2359,4 +2385,7 @@ def progress_render(cwd: Path, fmt: str = "json") -> ProgressJsonResult | Progre
             total_plans=total_plans,
             total_summaries=total_summaries,
             percent=percent,
+            state_progress_percent=state_pct,
+            diverged=diverged,
+            warnings=progress_warnings,
         )

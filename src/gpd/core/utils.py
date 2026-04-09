@@ -293,6 +293,28 @@ def safe_read_file_truncated(path: Path, max_chars: int | None = None) -> str | 
     return content[:limit] + f"\n\n...truncated ({len(content)} chars total, showing first {limit})."
 
 
+def _replace_with_retry(
+    src: str | Path,
+    dst: str | Path,
+    *,
+    max_attempts: int = 5,
+) -> None:
+    """Perform ``os.replace(src, dst)`` with retry for Dropbox/sync delays.
+
+    On Windows, cloud-sync tools (Dropbox, OneDrive) may hold a brief lock on
+    the destination file.  Retrying with exponential back-off (100-1600 ms)
+    avoids transient ``PermissionError`` without masking real failures.
+    """
+    for attempt in range(max_attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == max_attempts - 1:
+                raise
+            time.sleep(0.1 * (2 ** attempt))  # 100, 200, 400, 800, 1600 ms
+
+
 def atomic_write(filepath: Path, content: str) -> None:
     """Write a file atomically via temp file + fsync + rename.
 
@@ -310,7 +332,7 @@ def atomic_write(filepath: Path, content: str) -> None:
         os.fsync(fd.fileno())
         fd.close()
         fd = None
-        os.replace(tmp_path, filepath)
+        _replace_with_retry(tmp_path, filepath)
         tmp_path = None
     finally:
         if fd is not None:

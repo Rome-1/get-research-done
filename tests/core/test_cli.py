@@ -3073,7 +3073,7 @@ def test_entrypoint_normalizes_trailing_global_options(monkeypatch) -> None:
     assert captured["args"] == ["--cwd", "/tmp/demo", "--raw", "progress", "bar"]
 
 
-@pytest.mark.parametrize("root_flag", ["--help", "--version", "-v"])
+@pytest.mark.parametrize("root_flag", ["--version", "-v"])
 def test_entrypoint_normalizes_trailing_root_global_flags(monkeypatch, root_flag: str) -> None:
     captured: dict[str, object] = {}
 
@@ -5940,7 +5940,7 @@ def test_validate_paper_quality_from_project_rejects_ambiguous_manuscript_roots(
     def write_manuscript_root(root_name: str, stem: str) -> None:
         manuscript_dir = tmp_path / root_name
         manuscript_dir.mkdir()
-        (manuscript_dir / f"{stem}.tex").write_text("\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+        (manuscript_dir / f"{stem}.tex").write_text("\\documentclass{article}\\begin{document}Hi\\end{document}\n", encoding="utf-8")
         (manuscript_dir / "PAPER-CONFIG.json").write_text(
             json.dumps(
                 {

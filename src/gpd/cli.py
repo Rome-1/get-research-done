@@ -132,6 +132,17 @@ if TYPE_CHECKING:
 
 # ─── Output helpers ─────────────────────────────────────────────────────────
 
+# BUG-013: On Windows, Rich Console emits Unicode characters (em-dash, arrows)
+# that cp1252 cannot encode. Reconfigure stdout/stderr to UTF-8 before Console
+# objects are created so both CLI and test imports benefit.
+if sys.platform == "win32":
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            try:
+                _stream.reconfigure(encoding="utf-8")
+            except Exception:  # noqa: BLE001
+                pass
+
 console = Console()
 err_console = Console(stderr=True)
 logger = logging.getLogger(__name__)
@@ -2536,12 +2547,20 @@ result_app = typer.Typer(help="Intermediate results with dependency tracking")
 app.add_typer(result_app, name="result")
 
 
-def _split_depends_on_option(depends_on: str | None) -> list[str] | None:
-    """Parse a comma-separated dependency list, dropping whitespace and empty tokens."""
+def _split_depends_on_option(depends_on: list[str] | str | None) -> list[str] | None:
+    """Parse dependency IDs from repeated flags or comma-separated strings.
+
+    Accepts ``list[str]`` (Typer multi-value), a single comma-separated
+    ``str``, or ``None``.  Returns a flat list or ``None``.
+    """
     if depends_on is None:
         return None
-    parsed = [item.strip() for item in depends_on.split(",")]
-    return [item for item in parsed if item]
+    items: list[str] = []
+    source = depends_on if isinstance(depends_on, list) else [depends_on]
+    for entry in source:
+        items.extend(tok.strip() for tok in entry.split(","))
+    result = [tok for tok in items if tok]
+    return result or None
 
 
 def _load_mutation_state_snapshot(cwd: Path) -> dict[str, object]:
@@ -2612,7 +2631,7 @@ def result_add(
     units: str | None = typer.Option(None, "--units", help="Physical units"),
     validity: str | None = typer.Option(None, "--validity", help="Validity range"),
     phase: str | None = typer.Option(None, "--phase", help="Phase number"),
-    depends_on: str | None = typer.Option(None, "--depends-on", help="Comma-separated dependency IDs"),
+    depends_on: list[str] | None = typer.Option(None, "--depends-on", help="Dependency result ID (repeatable)"),
     verified: bool = typer.Option(False, "--verified", help="Mark as verified"),
 ) -> None:
     """Add an intermediate result to the results registry."""
@@ -2655,7 +2674,7 @@ def result_persist_derived(
     units: str | None = typer.Option(None, "--units", help="Physical units"),
     validity: str | None = typer.Option(None, "--validity", help="Validity range"),
     phase: str | None = typer.Option(None, "--phase", help="Phase number"),
-    depends_on: str | None = typer.Option(None, "--depends-on", help="Comma-separated dependency IDs"),
+    depends_on: list[str] | None = typer.Option(None, "--depends-on", help="Dependency result ID (repeatable)"),
     verified: bool | None = typer.Option(None, "--verified/--no-verified", help="Mark as verified or un-verify"),
 ) -> None:
     """Persist a derivation result through the canonical registry writer path."""
@@ -2975,7 +2994,7 @@ def result_upsert(
     units: str | None = typer.Option(None, "--units", help="Physical units"),
     validity: str | None = typer.Option(None, "--validity", help="Validity range"),
     phase: str | None = typer.Option(None, "--phase", help="Phase number"),
-    depends_on: str | None = typer.Option(None, "--depends-on", help="Comma-separated dependency IDs"),
+    depends_on: list[str] | None = typer.Option(None, "--depends-on", help="Dependency result ID (repeatable)"),
     verified: bool | None = typer.Option(None, "--verified/--no-verified", help="Mark as verified or un-verify"),
 ) -> None:
     """Add or update a canonical result by explicit ID or exact equation match."""
@@ -3035,7 +3054,7 @@ def result_update(
     units: str | None = typer.Option(None, "--units", help="Physical units"),
     validity: str | None = typer.Option(None, "--validity", help="Validity range"),
     phase: str | None = typer.Option(None, "--phase", help="Phase number"),
-    depends_on: str | None = typer.Option(None, "--depends-on", help="Comma-separated dependency IDs"),
+    depends_on: list[str] | None = typer.Option(None, "--depends-on", help="Dependency result ID (repeatable)"),
     verified: bool | None = typer.Option(None, "--verified/--no-verified", help="Mark as verified or un-verify"),
 ) -> None:
     """Update an existing result."""
@@ -4631,7 +4650,13 @@ def question_resolve(
 
     with file_lock(state_path):
         state = _load_mutation_state_snapshot(cwd)
-        res = question_resolve(state, " ".join(text))
+        joined = " ".join(text)
+        res = question_resolve(state, joined)
+        if res == 0:
+            _error(
+                f'No open question matching "{joined}". '
+                "Pass the question text (or a unique substring), not an ID."
+            )
         save_state_json_locked(cwd, state)
     _output(res)
 
@@ -4683,7 +4708,13 @@ def calculation_complete(
 
     with file_lock(state_path):
         state = _load_mutation_state_snapshot(cwd)
-        res = calculation_complete(state, " ".join(text))
+        joined = " ".join(text)
+        res = calculation_complete(state, joined)
+        if res == 0:
+            _error(
+                f'No active calculation matching "{joined}". '
+                "Pass the calculation text (or a unique substring), not an ID."
+            )
         save_state_json_locked(cwd, state)
     _output(res)
 

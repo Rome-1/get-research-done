@@ -70,7 +70,7 @@ def _create_config(tmp_path: Path, config: dict) -> Path:
     """Write config.json and return its path."""
     config_path = tmp_path / "GPD" / "config.json"
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(json.dumps(config))
+    config_path.write_text(json.dumps(config), encoding="utf-8")
     return config_path
 
 
@@ -447,7 +447,7 @@ def _create_roadmap(tmp_path: Path, content: str) -> Path:
     """Write ROADMAP.md and return its path."""
     roadmap = tmp_path / "GPD" / "ROADMAP.md"
     roadmap.parent.mkdir(parents=True, exist_ok=True)
-    roadmap.write_text(content)
+    roadmap.write_text(content, encoding="utf-8")
     return roadmap
 
 
@@ -1097,7 +1097,7 @@ class TestLoadConfig:
     def test_malformed_config_raises(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         config_path = tmp_path / "GPD" / "config.json"
-        config_path.write_text("not valid json {{{")
+        config_path.write_text("not valid json {{{", encoding="utf-8")
         with pytest.raises(ConfigError, match="Malformed config.json"):
             load_config(tmp_path)
 
@@ -1109,8 +1109,8 @@ class TestInitExecutePhase:
     def test_basic(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
-        (phase_dir / "a-PLAN.md").write_text("plan")
-        (phase_dir / "a-SUMMARY.md").write_text("summary")
+        (phase_dir / "a-PLAN.md").write_text("plan", encoding="utf-8")
+        (phase_dir / "a-SUMMARY.md").write_text("summary", encoding="utf-8")
 
         ctx = init_execute_phase(tmp_path, "1")
         assert ctx["phase_found"] is True
@@ -1128,7 +1128,7 @@ class TestInitExecutePhase:
     def test_includes_state(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         _create_phase_dir(tmp_path, "01-setup")
-        (tmp_path / "GPD" / "STATE.md").write_text("# State\nstuff")
+        (tmp_path / "GPD" / "STATE.md").write_text("# State\nstuff", encoding="utf-8")
 
         ctx = init_execute_phase(tmp_path, "1", includes={"state"})
         assert ctx["state_content"] == "# State\nstuff"
@@ -1147,7 +1147,7 @@ class TestInitExecutePhase:
 
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
-        (phase_dir / "a-PLAN.md").write_text("plan")
+        (phase_dir / "a-PLAN.md").write_text("plan", encoding="utf-8")
         (tmp_path / "GPD" / "state.json").write_text(json.dumps(default_state_dict()), encoding="utf-8")
 
         ctx = init_execute_phase(tmp_path, "1")
@@ -1157,7 +1157,7 @@ class TestInitExecutePhase:
     def test_surfaces_derived_state_memory(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
-        (phase_dir / "a-PLAN.md").write_text("plan")
+        (phase_dir / "a-PLAN.md").write_text("plan", encoding="utf-8")
         _write_structured_state_memory(tmp_path)
 
         ctx = init_execute_phase(tmp_path, "1")
@@ -1174,7 +1174,7 @@ class TestInitExecutePhase:
     def test_does_not_bootstrap_manuscript_proof_review_manifest(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
-        (phase_dir / "a-PLAN.md").write_text("plan")
+        (phase_dir / "a-PLAN.md").write_text("plan", encoding="utf-8")
         _write_manuscript_proof_review_artifacts(tmp_path)
 
         ctx = init_execute_phase(tmp_path, "1")
@@ -1202,7 +1202,7 @@ class TestInitExecutePhase:
     def test_surfaces_active_reference_context(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
-        (phase_dir / "a-PLAN.md").write_text("plan")
+        (phase_dir / "a-PLAN.md").write_text("plan", encoding="utf-8")
         _write_project_contract_state(tmp_path)
 
         ctx = init_execute_phase(tmp_path, "1")
@@ -1254,7 +1254,7 @@ class TestInitExecutePhase:
     def test_ingests_reference_artifacts_without_project_contract(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
-        (phase_dir / "a-PLAN.md").write_text("plan")
+        (phase_dir / "a-PLAN.md").write_text("plan", encoding="utf-8")
         _write_literature_review_anchor_file(tmp_path)
         _write_research_map_anchor_files(tmp_path)
 
@@ -1272,7 +1272,7 @@ class TestInitExecutePhase:
     def test_surfaces_live_execution_context(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
-        (phase_dir / "a-PLAN.md").write_text("plan")
+        (phase_dir / "a-PLAN.md").write_text("plan", encoding="utf-8")
         _write_current_execution(
             tmp_path,
             {
@@ -1294,7 +1294,7 @@ class TestInitExecutePhase:
     def test_surfaces_pre_fanout_and_skeptical_execution_flags(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
-        (phase_dir / "a-PLAN.md").write_text("plan")
+        (phase_dir / "a-PLAN.md").write_text("plan", encoding="utf-8")
         _write_current_execution(
             tmp_path,
             {
@@ -1319,7 +1319,7 @@ class TestInitExecutePhase:
     def test_surfaces_selected_protocol_bundles(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
-        (phase_dir / "a-PLAN.md").write_text("plan")
+        (phase_dir / "a-PLAN.md").write_text("plan", encoding="utf-8")
         _write_stat_mech_project(tmp_path)
         _write_bundle_ready_contract_state(tmp_path)
 
@@ -1337,7 +1337,7 @@ class TestInitExecutePhase:
     def test_surfaces_numerical_relativity_protocol_bundle(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
-        (phase_dir / "a-PLAN.md").write_text("plan")
+        (phase_dir / "a-PLAN.md").write_text("plan", encoding="utf-8")
         _write_numerical_relativity_project(tmp_path)
         _write_numerical_relativity_contract_state(tmp_path)
 
@@ -1355,7 +1355,7 @@ class TestInitExecutePhase:
 
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
-        (phase_dir / "a-PLAN.md").write_text("plan")
+        (phase_dir / "a-PLAN.md").write_text("plan", encoding="utf-8")
         _write_stat_mech_project(tmp_path)
         _write_bundle_ready_contract_state(tmp_path)
 
@@ -1395,7 +1395,7 @@ class TestInitPlanPhase:
     def test_basic(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "02-analysis")
-        (phase_dir / "RESEARCH.md").write_text("research")
+        (phase_dir / "RESEARCH.md").write_text("research", encoding="utf-8")
 
         ctx = init_plan_phase(tmp_path, "2")
         assert ctx["phase_found"] is True
@@ -1497,7 +1497,7 @@ class TestInitPlanPhase:
     def test_includes_research(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "02-analysis")
-        (phase_dir / "RESEARCH.md").write_text("findings here")
+        (phase_dir / "RESEARCH.md").write_text("findings here", encoding="utf-8")
 
         ctx = init_plan_phase(tmp_path, "2", includes={"research"})
         assert ctx["research_content"] == "findings here"
@@ -1517,11 +1517,11 @@ class TestInitPlanPhase:
         _write_project_contract_state(tmp_path)
         literature_dir = tmp_path / "GPD" / "literature"
         literature_dir.mkdir()
-        (literature_dir / "benchmark-REVIEW.md").write_text("# Literature Review\nbenchmark details")
+        (literature_dir / "benchmark-REVIEW.md").write_text("# Literature Review\nbenchmark details", encoding="utf-8")
         map_dir = tmp_path / "GPD" / "research-map"
         map_dir.mkdir()
-        (map_dir / "REFERENCES.md").write_text("# References Map\nanchor registry")
-        (map_dir / "VALIDATION.md").write_text("# Validation Map\nbenchmark checks")
+        (map_dir / "REFERENCES.md").write_text("# References Map\nanchor registry", encoding="utf-8")
+        (map_dir / "VALIDATION.md").write_text("# Validation Map\nbenchmark checks", encoding="utf-8")
 
         ctx = init_plan_phase(tmp_path, "2")
 
@@ -2051,7 +2051,7 @@ class TestInitNewProject:
         assert "staged_loading" not in ctx
 
     def test_detects_research_files(self, tmp_path: Path) -> None:
-        (tmp_path / "calc.py").write_text("import numpy")
+        (tmp_path / "calc.py").write_text("import numpy", encoding="utf-8")
         ctx = init_new_project(tmp_path)
         assert ctx["has_research_files"] is True
         assert "has_existing_project" not in ctx
@@ -2108,7 +2108,7 @@ class TestInitNewProject:
         assert "has_existing_project" not in ctx
 
     def test_detects_manifest(self, tmp_path: Path) -> None:
-        (tmp_path / "pyproject.toml").write_text("[project]")
+        (tmp_path / "pyproject.toml").write_text("[project]", encoding="utf-8")
         ctx = init_new_project(tmp_path)
         assert ctx["has_project_manifest"] is True
 
@@ -2418,7 +2418,7 @@ class TestInitResume:
 
     def test_with_interrupted_agent(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
-        (tmp_path / "GPD" / "current-agent-id.txt").write_text("agent-123\n")
+        (tmp_path / "GPD" / "current-agent-id.txt").write_text("agent-123\n", encoding="utf-8")
 
         ctx = init_resume(tmp_path)
         assert ctx["has_interrupted_agent"] is True
@@ -2782,7 +2782,7 @@ class TestInitVerifyWork:
     def test_basic(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "01-setup")
-        (phase_dir / "01-VERIFICATION.md").write_text("verified")
+        (phase_dir / "01-VERIFICATION.md").write_text("verified", encoding="utf-8")
 
         ctx = init_verify_work(tmp_path, "1")
         assert ctx["phase_found"] is True
@@ -3023,7 +3023,7 @@ class TestInitTodos:
         pending.mkdir(parents=True)
         (pending / "check-convergence.md").write_text(
             'title: "Check convergence"\narea: numerical\ncreated: 2026-03-01\n\n'
-            'The body may mention area: theory and created: 2024-01-01, but those lines must be ignored.'
+            'The body may mention area: theory and created: 2024-01-01, but those lines must be ignored.', encoding="utf-8"
         )
 
         ctx = init_todos(tmp_path)
@@ -3039,7 +3039,7 @@ class TestInitTodos:
         (pending / "check-convergence.md").write_text(
             'title: "Check convergence"\n\n'
             'The body may mention area: numerical and created: 2026-03-01.\n'
-            'Those lines must not be treated as todo metadata.'
+            'Those lines must not be treated as todo metadata.', encoding="utf-8"
         )
 
         ctx = init_todos(tmp_path)
@@ -3115,8 +3115,8 @@ class TestInitTodos:
         _setup_project(tmp_path)
         pending = tmp_path / "GPD" / "todos" / "pending"
         pending.mkdir(parents=True)
-        (pending / "a.md").write_text("title: A\narea: theory")
-        (pending / "b.md").write_text("title: B\narea: numerical")
+        (pending / "a.md").write_text("title: A\narea: theory", encoding="utf-8")
+        (pending / "b.md").write_text("title: B\narea: numerical", encoding="utf-8")
 
         ctx = init_todos(tmp_path, area="theory")
         assert ctx["todo_count"] == 1
@@ -3149,8 +3149,8 @@ class TestInitMilestoneOp:
             """,
         )
         p1 = _create_phase_dir(tmp_path, "01-setup")
-        (p1 / "a-PLAN.md").write_text("plan")
-        (p1 / "a-SUMMARY.md").write_text("summary")
+        (p1 / "a-PLAN.md").write_text("plan", encoding="utf-8")
+        (p1 / "a-SUMMARY.md").write_text("summary", encoding="utf-8")
 
         ctx = init_milestone_op(tmp_path)
 
@@ -3162,11 +3162,11 @@ class TestInitMilestoneOp:
         _setup_project(tmp_path)
         # Complete phase
         p1 = _create_phase_dir(tmp_path, "01-setup")
-        (p1 / "a-PLAN.md").write_text("plan")
-        (p1 / "a-SUMMARY.md").write_text("summary")
+        (p1 / "a-PLAN.md").write_text("plan", encoding="utf-8")
+        (p1 / "a-SUMMARY.md").write_text("summary", encoding="utf-8")
         # Incomplete phase
         p2 = _create_phase_dir(tmp_path, "02-analysis")
-        (p2 / "b-PLAN.md").write_text("plan")
+        (p2 / "b-PLAN.md").write_text("plan", encoding="utf-8")
 
         ctx = init_milestone_op(tmp_path)
         assert ctx["phase_count"] == 2
@@ -3178,7 +3178,7 @@ class TestInitMilestoneOp:
         archive_dir = tmp_path / "GPD" / "milestones"
         archive_dir.mkdir(parents=True, exist_ok=True)
         for name in ("v1.0-ROADMAP.md", "v1.0-REQUIREMENTS.md", "v1.0-MILESTONE-AUDIT.md"):
-            (archive_dir / name).write_text("archive")
+            (archive_dir / name).write_text("archive", encoding="utf-8")
 
         ctx = init_milestone_op(tmp_path)
 
@@ -3220,7 +3220,7 @@ class TestInitMapResearch:
         _setup_project(tmp_path)
         map_dir = tmp_path / "GPD" / "research-map"
         map_dir.mkdir()
-        (map_dir / "theory.md").write_text("# Theory Map")
+        (map_dir / "theory.md").write_text("# Theory Map", encoding="utf-8")
 
         ctx = init_map_research(tmp_path)
         assert ctx["has_maps"] is True
@@ -3264,11 +3264,11 @@ class TestInitProgress:
         _setup_project(tmp_path)
         # Complete phase
         p1 = _create_phase_dir(tmp_path, "01-setup")
-        (p1 / "a-PLAN.md").write_text("plan")
-        (p1 / "a-SUMMARY.md").write_text("summary")
+        (p1 / "a-PLAN.md").write_text("plan", encoding="utf-8")
+        (p1 / "a-SUMMARY.md").write_text("summary", encoding="utf-8")
         # In-progress phase
         p2 = _create_phase_dir(tmp_path, "02-analysis")
-        (p2 / "b-PLAN.md").write_text("plan")
+        (p2 / "b-PLAN.md").write_text("plan", encoding="utf-8")
         # Pending phase
         _create_phase_dir(tmp_path, "03-synthesis")
 
@@ -3284,7 +3284,7 @@ class TestInitProgress:
 
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "02-analysis")
-        (phase_dir / "b-PLAN.md").write_text("plan")
+        (phase_dir / "b-PLAN.md").write_text("plan", encoding="utf-8")
 
         state = default_state_dict()
         state["position"]["current_phase"] = "03"
@@ -3298,7 +3298,7 @@ class TestInitProgress:
     def test_detects_paused_state(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
         (tmp_path / "GPD" / "STATE.md").write_text(
-            "# State\n**Status:** Paused\n**Stopped at:** 2026-03-01T12:00:00Z"
+            "# State\n**Status:** Paused\n**Stopped at:** 2026-03-01T12:00:00Z", encoding="utf-8"
         )
 
         ctx = init_progress(tmp_path)
@@ -3457,7 +3457,7 @@ class TestInitProgress:
 
     def test_includes_project(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
-        (tmp_path / "GPD" / "PROJECT.md").write_text("# My Project")
+        (tmp_path / "GPD" / "PROJECT.md").write_text("# My Project", encoding="utf-8")
 
         ctx = init_progress(tmp_path, includes={"project"})
         assert ctx["project_content"] == "# My Project"

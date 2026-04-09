@@ -1019,6 +1019,23 @@ def _validate_required_scalar_field(meta: dict[str, object], field_name: str, er
         errors.append(f"{field_name}: expected a non-null scalar")
 
 
+def _validate_completed_field(meta: dict[str, object], errors: list[str]) -> None:
+    """Append an error when the ``completed`` field is not a scalar or bool.
+
+    Unlike `_validate_required_scalar_field`, this accepts booleans because
+    YAML parses bare ``true``/``false`` as bool.  Downstream coercion in
+    ``checkpoints.py`` converts the value via ``str(v) or ""``: ``True``
+    becomes ``"True"`` (displayed as-is) and ``False`` becomes ``""`` (no
+    completion date shown) because ``False or ""`` evaluates to ``""``.
+    Both outcomes are intentional.
+    """
+    if "completed" not in meta:
+        return
+    value = meta.get("completed")
+    if value is None or isinstance(value, (list, dict)):
+        errors.append("completed: expected a date string or boolean")
+
+
 def _validate_required_int_field(meta: dict[str, object], field_name: str, errors: list[str]) -> None:
     """Append an error when a required field is not a strict integer."""
     if field_name not in meta:
@@ -2022,8 +2039,9 @@ def validate_frontmatter(content: str, schema_name: str, source_path: Path | Non
         _validate_required_bool_field(meta, "interactive", errors)
         _validate_required_object_field(meta, "conventions", errors)
     elif schema_name == "summary":
-        for field_name in ("phase", "plan", "completed"):
+        for field_name in ("phase", "plan"):
             _validate_required_scalar_field(meta, field_name, errors)
+        _validate_completed_field(meta, errors)
         _validate_required_string_field(meta, "depth", errors)
         _validate_string_enum_field(meta, "depth", errors, allowed_values=SUMMARY_DEPTH_VALUES)
         _validate_non_empty_string_list_field(meta, "provides", errors)
