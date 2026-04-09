@@ -1462,6 +1462,21 @@ class TestDiscovery:
         assert phase_researcher_skill.category == "research"
         assert {"gpd-research-phase", "gpd-phase-researcher"}.issubset(registry.list_skills())
 
+    def test_literature_review_vertical_remains_registry_discoverable(self) -> None:
+        registry.invalidate_cache()
+
+        literature_command = registry.get_command("gpd:literature-review")
+        literature_skill = registry.get_skill("gpd-literature-review")
+        reviewer_skill = registry.get_skill("gpd-literature-reviewer")
+
+        assert literature_command.name == "gpd:literature-review"
+        assert literature_command.context_mode == "project-aware"
+        assert literature_skill.name == "gpd-literature-review"
+        assert literature_skill.category == "research"
+        assert reviewer_skill.name == "gpd-literature-reviewer"
+        assert reviewer_skill.category == "research"
+        assert {"gpd-literature-review", "gpd-literature-reviewer"}.issubset(registry.list_skills())
+
 class TestSkillDiscovery:
     """Tests for canonical skills derived from primary commands and agents."""
 

@@ -1,7 +1,7 @@
 <purpose>
 Orchestrate parallel research-mapper agents to analyze a physics research project and produce structured documents in GPD/research-map/
 
-Each agent has fresh context, explores a specific focus area, and **writes documents directly**. The orchestrator only receives confirmation + line counts, then writes a summary.
+Each agent has fresh context, explores a specific focus area, and **writes documents directly**. The orchestrator receives typed returns plus confirmation and line counts, verifies the expected files on disk, then writes a summary.
 
 Output: GPD/research-map/ folder with 7 structured documents covering theoretical content, computational methods, data artifacts, conventions, and open questions.
 </purpose>

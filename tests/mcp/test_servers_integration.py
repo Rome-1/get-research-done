@@ -472,7 +472,13 @@ class TestSkillsServerIntegration:
 
         assert result["count"] > 0
         names = {skill["name"] for skill in result["skills"]}
-        assert {"gpd-research-phase", "gpd-phase-researcher", "gpd-project-researcher"}.issubset(names)
+        assert {
+            "gpd-research-phase",
+            "gpd-phase-researcher",
+            "gpd-project-researcher",
+            "gpd-literature-review",
+            "gpd-literature-reviewer",
+        }.issubset(names)
         assert all(skill["category"] == "research" for skill in result["skills"])
 
     def test_debug_command_and_debugger_agent_surfaces_remain_available(self):
@@ -584,6 +590,24 @@ class TestSkillsServerIntegration:
             "references/orchestration/model-profile-resolution.md",
         ]
         assert result["structured_metadata_authority"]["staged_loading"] == "mirrored"
+
+    def test_get_skill_literature_review_surfaces_command_and_agent_vertical(self):
+        from gpd.mcp.servers.skills_server import get_skill
+
+        command = get_skill("gpd-literature-review")
+        reviewer = get_skill("gpd-literature-reviewer")
+
+        assert "error" not in command
+        assert "error" not in reviewer
+        assert command["name"] == "gpd-literature-review"
+        assert command["category"] == "research"
+        assert command["allowed_tools_surface"] == "command.allowed-tools"
+        assert command["context_mode"] == "project-aware"
+        assert reviewer["name"] == "gpd-literature-reviewer"
+        assert reviewer["category"] == "research"
+        assert reviewer["allowed_tools_surface"] == "agent.tools"
+        assert "Why subagent" in command["content"]
+        assert "literature-review" in reviewer["content"]
 
     def test_get_skill_surfaces_template_backed_schema_documents_for_writing_and_resume(self):
         from gpd.mcp.servers.skills_server import get_skill

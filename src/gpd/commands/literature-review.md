@@ -17,7 +17,7 @@ allowed-tools:
 <objective>
 Run the literature-review workflow as a thin wrapper around the staged review pipeline. Produce `GPD/literature/{slug}-REVIEW.md` and the matching `GPD/literature/{slug}-CITATION-SOURCES.json` sidecar.
 
-**Why subagent:** Literature searches burn context fast. Fresh context keeps the survey lean.
+**Why subagent:** Literature searches burn context fast. Fresh context keeps the survey lean and gives the dedicated reviewer handoff room to synthesize cleanly.
 </objective>
 
 <execution_context>
