@@ -30,6 +30,11 @@ from gpd.registry import (
 from gpd.specs import SPECS_DIR as CANONICAL_SPECS_DIR
 
 NEW_PROJECT_COMMAND_PATH = Path(__file__).resolve().parents[1] / "src" / "gpd" / "commands" / "new-project.md"
+RESEARCH_SYNTHESIZER_SUMMARY_CONTRACT = {
+    "write_scope": {"mode": "scoped_write", "allowed_paths": ["GPD/literature/SUMMARY.md"]},
+    "expected_artifacts": ["GPD/literature/SUMMARY.md"],
+    "shared_state_policy": "return_only",
+}
 
 
 def _write_review_contract_command(tmp_path: Path, file_name: str, review_contract_body: str) -> Path:
@@ -1447,6 +1452,36 @@ class TestDiscovery:
         assert agent.tools == ["file_read", "file_write", "shell", "search_files", "find_files"]
         assert "gpd-consistency-checker" in registry.list_skills()
 
+    def test_research_phase_vertical_remains_registry_discoverable(self) -> None:
+        registry.invalidate_cache()
+
+        research_command = registry.get_command("gpd:research-phase")
+        research_skill = registry.get_skill("gpd-research-phase")
+        phase_researcher_skill = registry.get_skill("gpd-phase-researcher")
+
+        assert research_command.name == "gpd:research-phase"
+        assert research_command.context_mode == "project-required"
+        assert research_skill.name == "gpd-research-phase"
+        assert research_skill.category == "research"
+        assert phase_researcher_skill.name == "gpd-phase-researcher"
+        assert phase_researcher_skill.category == "research"
+        assert {"gpd-research-phase", "gpd-phase-researcher"}.issubset(registry.list_skills())
+
+    def test_literature_review_vertical_remains_registry_discoverable(self) -> None:
+        registry.invalidate_cache()
+
+        literature_command = registry.get_command("gpd:literature-review")
+        literature_skill = registry.get_skill("gpd-literature-review")
+        reviewer_skill = registry.get_skill("gpd-literature-reviewer")
+
+        assert literature_command.name == "gpd:literature-review"
+        assert literature_command.context_mode == "project-aware"
+        assert literature_skill.name == "gpd-literature-review"
+        assert literature_skill.category == "research"
+        assert reviewer_skill.name == "gpd-literature-reviewer"
+        assert reviewer_skill.category == "research"
+        assert {"gpd-literature-review", "gpd-literature-reviewer"}.issubset(registry.list_skills())
+
 class TestSkillDiscovery:
     """Tests for canonical skills derived from primary commands and agents."""
 
@@ -1566,6 +1601,19 @@ class TestRegistryPromptIncludeInlining:
         assert "# Canonical Schema Discipline" in agent.system_prompt
         assert "<!-- [included:" not in agent.system_prompt
 
+    def test_project_researcher_system_prompt_keeps_one_shot_checkpoint_contract_visible(self) -> None:
+        agent = registry.get_skill("gpd-project-researcher")
+
+        assert agent.source_kind == "agent"
+        assert agent.path.endswith("gpd-project-researcher.md")
+        assert "Checkpoint after the initial survey with scope confirmation." in agent.content
+        assert "gpd_return:" in agent.content
+        assert "status: completed | checkpoint | blocked | failed" in agent.content
+        assert "Do NOT run `gpd commit`, `git commit`, or stage files." in agent.content
+        assert "wait for confirmation" not in agent.content
+        assert "pause here for approval" not in agent.content
+        assert "ask the user then continue" not in agent.content
+
     def test_plan_checker_registry_surface_keeps_direct_plan_contract_schema_and_checkpoint_contract_visible(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1628,6 +1676,12 @@ class TestRegistryPromptIncludeInlining:
 
         assert "error" not in referee
         assert any(path.endswith("peer-review-panel.md") for path in referee["contract_references"])
+        assert any(
+            entry["path"].endswith("publication-review-round-artifacts.md") for entry in referee["referenced_files"]
+        )
+        assert any(
+            entry["path"].endswith("publication-response-artifacts.md") for entry in referee["referenced_files"]
+        )
         assert any(path.endswith("review-ledger-schema.md") for path in referee["schema_references"])
         assert any(path.endswith("referee-decision-schema.md") for path in referee["schema_references"])
 
@@ -1672,7 +1726,9 @@ class TestRegistryPromptIncludeInlining:
                 "references/publication/publication-pipeline-modes.md",
                 "references/publication/paper-writer-cookbook.md",
                 "references/publication/figure-generation-templates.md",
+                "references/publication/publication-response-writer-handoff.md",
                 "templates/paper/author-response.md",
+                "templates/paper/referee-response.md",
             ),
         )
 
@@ -2101,6 +2157,29 @@ class TestPublicAPI:
         assert command.staged_loading.stages[0].writes_allowed == ()
         assert command.staged_loading.stages[0].next_stages == ()
 
+    def test_research_synthesizer_surface_keeps_canonical_summary_return_contract_visible(self) -> None:
+        registry.invalidate_cache()
+
+        synthesizer = registry.get_skill("gpd-research-synthesizer")
+        new_project = registry.get_skill("gpd-new-project")
+        new_milestone = registry.get_skill("gpd-new-milestone")
+        new_project_command = registry.get_command("gpd:new-project")
+        new_milestone_command = registry.get_command("gpd:new-milestone")
+
+        assert synthesizer.source_kind == "agent"
+        assert synthesizer.path.endswith("gpd-research-synthesizer.md")
+        assert "This agent writes only `GPD/literature/SUMMARY.md`;" in synthesizer.content
+        assert "files_written` must list only files actually written in this run." in synthesizer.content
+        assert "Use only status names: `completed` | `checkpoint` | `blocked` | `failed`." in synthesizer.content
+        assert "gpd_return:" in synthesizer.content
+
+        assert new_project.spawn_contracts == new_project_command.spawn_contracts
+        assert new_milestone.spawn_contracts == new_milestone_command.spawn_contracts
+        assert RESEARCH_SYNTHESIZER_SUMMARY_CONTRACT in new_project.spawn_contracts
+        assert RESEARCH_SYNTHESIZER_SUMMARY_CONTRACT in new_milestone.spawn_contracts
+        assert new_project.spawn_contracts[4] == RESEARCH_SYNTHESIZER_SUMMARY_CONTRACT
+        assert new_milestone.spawn_contracts[1] == RESEARCH_SYNTHESIZER_SUMMARY_CONTRACT
+
     def test_get_command_plan_phase_surfaces_staged_loading_manifest(self) -> None:
         from tempfile import TemporaryDirectory
 
@@ -2324,6 +2403,49 @@ class TestPublicAPI:
         assert cmd.staged_loading.workflow_id == "execute-phase"
         assert cmd.staged_loading.stage_ids() == ("phase_bootstrap",)
         assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/execute-phase.md",)
+
+    def test_get_command_research_phase_surfaces_staged_loading_manifest(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        manifest_path = repo_root / "src" / "gpd" / "specs" / "workflows" / "research-phase-stage-manifest.json"
+        original_resolve_manifest_path = registry.resolve_workflow_stage_manifest_path
+        monkeypatch.setattr(
+            registry,
+            "resolve_workflow_stage_manifest_path",
+            lambda workflow_id: manifest_path
+            if workflow_id == "research-phase"
+            else original_resolve_manifest_path(workflow_id),
+        )
+        registry.invalidate_cache()
+
+        cmd = registry.get_command("research-phase")
+
+        assert cmd.staged_loading is not None
+        assert cmd.staged_loading.workflow_id == "research-phase"
+        assert cmd.staged_loading.stage_ids() == ("phase_bootstrap", "research_handoff")
+        assert cmd.staged_loading.stages[0].loaded_authorities == (
+            "workflows/research-phase.md",
+            "references/orchestration/model-profile-resolution.md",
+        )
+        assert "references/orchestration/runtime-delegation-note.md" in cmd.staged_loading.stages[0].must_not_eager_load
+        assert cmd.staged_loading.stages[1].loaded_authorities == (
+            "workflows/research-phase.md",
+            "references/orchestration/model-profile-resolution.md",
+            "references/orchestration/runtime-delegation-note.md",
+        )
+        assert cmd.staged_loading.stages[1].writes_allowed == ("GPD/phases/XX-name/XX-RESEARCH.md",)
+        assert "reference_artifacts_content" in cmd.staged_loading.stages[1].required_init_fields
+
+    def test_get_agent_phase_researcher_surfaces_one_shot_handoff_contract(self) -> None:
+        agent = registry.get_agent("gpd-phase-researcher")
+
+        assert agent.name == "gpd-phase-researcher"
+        assert "## Active Anchor References" in agent.system_prompt
+        assert "## Don't Re-Derive" in agent.system_prompt
+        assert "## RESEARCH COMPLETE" in agent.system_prompt
+        assert "## RESEARCH BLOCKED" in agent.system_prompt
+        assert "gpd_return:" in agent.system_prompt
+        assert "status: completed | checkpoint | blocked | failed" in agent.system_prompt
+        assert "RESEARCH.md" in agent.system_prompt
 
     def test_registry_cache_invalidation_clears_new_project_stage_manifest(self) -> None:
         registry.invalidate_cache()

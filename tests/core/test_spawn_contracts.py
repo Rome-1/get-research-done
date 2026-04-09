@@ -418,10 +418,40 @@ def test_new_project_parallel_researchers_write_to_disjoint_artifacts() -> None:
     assert "Do not trust the runtime handoff status by itself." in content
     assert "If a scout reports success but its `expected_artifacts` entry" in content
     assert "`GPD/literature/{FILE}`" in content
-    assert "If the synthesizer reports success but `GPD/literature/SUMMARY.md` is missing" in content
+    assert "If `completed`, verify `GPD/literature/SUMMARY.md` exists and is named in the fresh return." in content
     assert "Do not proceed with a partial literature survey" in content
     assert "Do not synthesize from incomplete scout output" in content
     assert "Do not fabricate a fallback summary in the main context" in content
+
+
+def test_map_research_parallel_mappers_use_spawn_contracts_and_return_only_artifacts() -> None:
+    path = WORKFLOWS_DIR / "map-research.md"
+    content = _read(path)
+    tasks = _task_blocks_by_agent(path, "gpd-research-mapper")
+    outputs = {output for task in tasks for output in _extract_output_paths(task)}
+
+    expected = {
+        "GPD/research-map/FORMALISM.md",
+        "GPD/research-map/REFERENCES.md",
+        "GPD/research-map/ARCHITECTURE.md",
+        "GPD/research-map/STRUCTURE.md",
+        "GPD/research-map/CONVENTIONS.md",
+        "GPD/research-map/VALIDATION.md",
+        "GPD/research-map/CONCERNS.md",
+    }
+
+    assert expected <= outputs
+    assert len(outputs) == len(set(outputs))
+    assert len(tasks) == 4
+    assert content.count("<spawn_contract>") >= 4
+    assert "Route on `gpd_return.status`, then verify `gpd_return.files_written` against the expected artifacts before accepting the run." in content
+    assert "gpd --raw config get research_mode" not in content
+    assert 'RESEARCH_MODE=$(echo "$BOOTSTRAP_INIT" | gpd json get .research_mode --default balanced)' in content
+
+    for task in tasks:
+        task_outputs = tuple(_extract_output_paths(task))
+        assert len(task_outputs) in (1, 2)
+        _assert_spawn_contract(task, task_outputs)
 
 
 def test_new_project_roadmapper_uses_spawn_contract_and_artifact_gate() -> None:
@@ -476,7 +506,7 @@ def test_new_milestone_research_and_roadmapper_gate_success_path_artifacts() -> 
     assert content.count("<spawn_contract>") >= 3
     assert "Do not trust the runtime handoff status by itself." in content
     assert "If a scout reports success but its `expected_artifacts` entry (`GPD/literature/{FILE}`) is missing" in content
-    assert "If the synthesizer reports success but `GPD/literature/SUMMARY.md` is missing" in content
+    assert "If the synthesizer reports `gpd_return.status: completed`, verify that `GPD/literature/SUMMARY.md` is readable and named in `gpd_return.files_written`." in content
     assert "If the roadmapper reports `gpd_return.status: completed`, verify that `GPD/ROADMAP.md`, `GPD/STATE.md`, and `GPD/REQUIREMENTS.md` are readable and named in `gpd_return.files_written`." in content
     assert "If any expected artifact is missing from disk or from `gpd_return.files_written`, treat the handoff as incomplete and request a fresh continuation." in content
     assert "GPD/REQUIREMENTS.md" in content

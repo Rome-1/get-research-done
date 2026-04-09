@@ -56,6 +56,8 @@ Reference notes:
 **On-demand references:**
 - `{GPD_INSTALL_DIR}/references/publication/publication-pipeline-modes.md` -- Mode adaptation for referee strictness, scope of critique, and recommendation thresholds by autonomy and research_mode (load when reviewing for paper submission)
 - `{GPD_INSTALL_DIR}/references/publication/referee-review-playbook.md` -- Detailed rubric, venue-specific response strategy, revision-round guidance, and compact report hygiene rules (load when the review needs more than the core adjudication contract)
+- `{GPD_INSTALL_DIR}/references/publication/publication-review-round-artifacts.md` -- Canonical round-suffix and sibling-artifact naming for review and response rounds
+- `{GPD_INSTALL_DIR}/references/publication/publication-response-artifacts.md` -- Canonical paired `AUTHOR-RESPONSE` / `REFEREE_RESPONSE` contract for revision rounds and synchronized response status tracking
 - `{GPD_INSTALL_DIR}/templates/paper/referee-report.tex`
 - Canonical polished LaTeX companion template for the default referee-report `.tex` artifact
 </references>
@@ -63,6 +65,7 @@ Reference notes:
 Convention loading: see agent-infrastructure.md Convention Loading Protocol.
 
 Before writing `REVIEW-LEDGER{round_suffix}.json` or `REFEREE-DECISION{round_suffix}.json`, re-open `{GPD_INSTALL_DIR}/references/publication/peer-review-panel.md`, `{GPD_INSTALL_DIR}/templates/paper/review-ledger-schema.md`, and `{GPD_INSTALL_DIR}/templates/paper/referee-decision-schema.md`. Treat those files as the artifact and schema sources of truth; do not infer the JSON shape from memory or from earlier round artifacts.
+When the review depends on revision-round response artifacts, re-open the round and response refs on demand before adjudicating. Do not infer the active round or response completeness from a single response file.
 
 <panel_adjudication>
 
@@ -218,9 +221,12 @@ Use domain-specific expectations from the playbook when the paper requires speci
 ```bash
 ls GPD/REFEREE-REPORT*.md 2>/dev/null
 ls GPD/AUTHOR-RESPONSE*.md 2>/dev/null
+ls GPD/review/REFEREE_RESPONSE*.md 2>/dev/null
 ```
 
-**If both a previous REFEREE-REPORT and an AUTHOR-RESPONSE exist:** Enter Revision Review Mode (see `<revision_review_mode>` section). Skip the standard evaluation flow below — use the revision-specific protocol instead.
+**If a previous REFEREE-REPORT and the matching round's `AUTHOR-RESPONSE` plus `GPD/review/REFEREE_RESPONSE` both exist:** Enter Revision Review Mode (see `<revision_review_mode>` section). Skip the standard evaluation flow below — use the revision-specific protocol instead.
+
+**If only one response artifact exists, or the response suffixes disagree:** stop fail-closed with `gpd_return.status: checkpoint` and report the incomplete response package. Do not infer revision state from a single response artifact.
 
 **Otherwise:** Proceed with initial review (standard evaluation flow below).
 </step>
@@ -728,30 +734,37 @@ Real peer review involves revision and re-review. When author responses to a pre
 Revision Review Mode activates when:
 
 1. A previous `REFEREE-REPORT.md` (or `REFEREE-REPORT-R{N}.md`) exists in `GPD/`
-2. An author response file exists: `GPD/AUTHOR-RESPONSE.md` or `GPD/AUTHOR-RESPONSE-R{N}.md`
+2. A matching paired response package exists for the same round:
+   - `GPD/AUTHOR-RESPONSE.md` or `GPD/AUTHOR-RESPONSE-R{N}.md`
+   - `GPD/review/REFEREE_RESPONSE.md` or `GPD/review/REFEREE_RESPONSE-R{N}.md`
 
 Detection:
 
 ```bash
 ls GPD/REFEREE-REPORT*.md 2>/dev/null
 ls GPD/AUTHOR-RESPONSE*.md 2>/dev/null
+ls GPD/review/REFEREE_RESPONSE*.md 2>/dev/null
 ```
 
-If both exist, determine the current round number:
+If the report and both response artifacts exist with the same suffix, determine the current round number:
 
-- `REFEREE-REPORT.md` + `AUTHOR-RESPONSE.md` -> produce `REFEREE-REPORT-R2.md` (round 2)
-- `REFEREE-REPORT-R2.md` + `AUTHOR-RESPONSE-R2.md` -> produce `REFEREE-REPORT-R3.md` (round 3)
+- `REFEREE-REPORT.md` + `AUTHOR-RESPONSE.md` + `GPD/review/REFEREE_RESPONSE.md` -> produce `REFEREE-REPORT-R2.md` (round 2)
+- `REFEREE-REPORT-R2.md` + `AUTHOR-RESPONSE-R2.md` + `GPD/review/REFEREE_RESPONSE-R2.md` -> produce `REFEREE-REPORT-R3.md` (round 3)
 - **Maximum 3 review rounds.** After round 3, issue final recommendation regardless.
+- If one response artifact is missing or the suffixes disagree, stop fail-closed and report the incomplete response package instead of continuing as initial review or rereview.
 
 ### Revision Review Execution
 
-**Step 1: Load previous report and author response.**
+**Step 1: Load previous report and paired response artifacts.**
 
-Read the most recent REFEREE-REPORT and the corresponding AUTHOR-RESPONSE. Extract:
+Read the most recent REFEREE-REPORT together with the corresponding `AUTHOR-RESPONSE` and `GPD/review/REFEREE_RESPONSE` for the same round. Extract:
 
 - All major and minor issues from the previous report (with IDs like REF-001, REF-002)
 - The author's point-by-point response to each issue
+- The synchronized journal-facing response for each issue
 - Any new material added during revision (new derivations, additional checks, revised figures)
+
+Fail closed if issue IDs, classifications, status labels, or round suffixes diverge across the paired response artifacts.
 
 **Step 2: Check each previously flagged issue for resolution.**
 
@@ -933,7 +946,7 @@ Checkpoint ownership is orchestrator-side: when you stop, the orchestrator prese
 
 The markdown headings `## REVIEW COMPLETE`, `## REVIEW INCOMPLETE`, and `## CHECKPOINT REACHED` are human-readable labels only. Route on `gpd_return.status` and the written review artifacts, not on heading text.
 
-- `gpd_return.status: completed` -- Final review finished. Write the full report plus any decision/ledger artifacts produced in this run.
+- `gpd_return.status: completed` -- Final review finished. Write the full report plus any decision/ledger artifacts produced in this run, and treat completion as valid only when the fresh `gpd_return.files_written` names those artifacts and they exist on disk.
 - `gpd_return.status: checkpoint` -- Stop for missing inputs or an orchestrator-owned decision. Use the checkpoint format below and preserve a fresh continuation handoff.
 - `gpd_return.status: failed` -- Review could not complete from the available evidence. Write the partial report and list unresolved review issues explicitly.
 - `gpd_return.status: blocked` -- Use only for unrecoverable review-state problems that cannot proceed inside this run.
@@ -987,8 +1000,8 @@ gpd_return:
   files_written:
     - GPD/REFEREE-REPORT{round_suffix}.md
     - GPD/REFEREE-REPORT{round_suffix}.tex
-    - GPD/REFEREE-DECISION{round_suffix}.json
-    - GPD/REVIEW-LEDGER{round_suffix}.json
+    - GPD/review/REFEREE-DECISION{round_suffix}.json
+    - GPD/review/REVIEW-LEDGER{round_suffix}.json
   issues: [list of blocking or unresolved review issues, if any]
   next_actions: [list of recommended follow-up actions]
   recommendation: "{accept | minor_revision | major_revision | reject}"

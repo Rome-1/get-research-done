@@ -32,7 +32,7 @@ This graph therefore includes:
 - `src/gpd/agents/*.md`: `24`
 - `src/gpd/specs/workflows/*.md`: `69`
 - `src/gpd/specs/templates/**/*.md`: `79`
-- `src/gpd/specs/references/**/*.md`: `173`
+- `src/gpd/specs/references/**/*.md`: `180`
 - `src/gpd/adapters/*.py`: `9`
 - `src/gpd/hooks/*.py`: `11`
 - `src/gpd/mcp/servers/*.py`: `9`
@@ -493,7 +493,7 @@ flowchart TD
 - `src/gpd/commands/explain.md -> src/gpd/agents/{gpd-explainer,gpd-bibliographer}.md`
   `spawn`
 
-- `src/gpd/commands/literature-review.md -> src/gpd/agents/gpd-literature-reviewer.md`
+- `src/gpd/specs/workflows/literature-review.md -> src/gpd/agents/gpd-literature-reviewer.md`
   `spawn`
 
 - `src/gpd/commands/debug.md -> src/gpd/agents/gpd-debugger.md`

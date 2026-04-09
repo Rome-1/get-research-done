@@ -28,10 +28,13 @@
         "platform"
       ],
       "loaded_authorities": [
-        "workflows/write-paper.md"
+        "workflows/write-paper.md",
+        "templates/paper/publication-manuscript-root-preflight.md"
       ],
       "conditional_authorities": [],
       "must_not_eager_load": [
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
         "references/publication/publication-pipeline-modes.md",
         "references/publication/peer-review-panel.md",
         "references/publication/peer-review-reliability.md",
@@ -112,6 +115,8 @@
       ],
       "conditional_authorities": [],
       "must_not_eager_load": [
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
         "references/publication/peer-review-panel.md",
         "references/publication/peer-review-reliability.md",
         "references/shared/canonical-schema-discipline.md",
@@ -200,6 +205,8 @@
       ],
       "conditional_authorities": [],
       "must_not_eager_load": [
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
         "references/publication/publication-pipeline-modes.md",
         "references/publication/peer-review-panel.md",
         "references/publication/peer-review-reliability.md",
@@ -289,6 +296,8 @@
       "conditional_authorities": [],
       "must_not_eager_load": [
         "references/publication/publication-pipeline-modes.md",
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
         "references/publication/peer-review-panel.md",
         "references/publication/peer-review-reliability.md",
         "references/shared/canonical-schema-discipline.md",
@@ -369,6 +378,8 @@
       ],
       "loaded_authorities": [
         "workflows/write-paper.md",
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
         "references/publication/peer-review-panel.md",
         "references/publication/peer-review-reliability.md",
         "templates/paper/review-ledger-schema.md",

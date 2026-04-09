@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import json
 import re
 import sys
 import tomllib
@@ -236,6 +237,16 @@ def test_managed_mcp_server_keys_match_public_descriptors_and_infra_inventory() 
     assert GPD_MCP_SERVER_KEYS == infra_keys
 
 
+def test_gpd_skills_infra_health_check_tracks_the_research_vertical() -> None:
+    descriptor = json.loads(_read("infra/gpd-skills.json"))
+    health_check = descriptor["health_check"]
+
+    assert health_check["tool"] == "list_skills"
+    assert health_check["input"] == {}
+    assert "gpd-execute-phase" in health_check["expect"]
+    assert "gpd-research-phase" in health_check["expect"]
+
+
 def test_optional_wolfram_bridge_stays_outside_builtin_public_mcp_surface() -> None:
     from gpd.mcp.builtin_servers import GPD_MCP_SERVER_KEYS, build_public_descriptors
     from gpd.mcp.managed_integrations import WOLFRAM_BRIDGE_COMMAND, WOLFRAM_MANAGED_SERVER_KEY
@@ -412,15 +423,17 @@ def test_update_workflow_uses_runtime_placeholders_for_cache_paths() -> None:
 
 
 def test_referee_response_round_suffix_convention_is_consistent() -> None:
+    write_paper = _read("src/gpd/specs/workflows/write-paper.md")
     peer_review = _read("src/gpd/specs/workflows/peer-review.md")
     respond = _read("src/gpd/specs/workflows/respond-to-referees.md")
+    arxiv = _read("src/gpd/specs/workflows/arxiv-submission.md")
     author_response = _read("src/gpd/specs/templates/paper/author-response.md")
     template = _read("src/gpd/specs/templates/paper/referee-response.md")
 
     assert 'ROUND_SUFFIX="-R2"' in peer_review
     assert 'ROUND_SUFFIX="-R3"' in peer_review
-    assert "REFEREE_RESPONSE-R2.md" in respond
-    assert "AUTHOR-RESPONSE-R2.md" in respond
+    assert '`GPD/review/REFEREE_RESPONSE{round_suffix}.md`' in respond
+    assert '`GPD/AUTHOR-RESPONSE{round_suffix}.md`' in respond
     assert "GPD/paper" not in respond
     assert "needs-calculation" in respond
     assert "issues_needing_calculation" in author_response
@@ -430,8 +443,14 @@ def test_referee_response_round_suffix_convention_is_consistent() -> None:
     assert "REFEREE_RESPONSE_R2.md" not in respond
     assert "REFEREE_RESPONSE_R2.md" not in template
     assert "paper/referee-reports" not in respond
-    assert "GPD/review/REFEREE_RESPONSE{ROUND_SUFFIX}.md" in peer_review
+    assert "publication-manuscript-root-preflight.md" in peer_review
     assert "${MANUSCRIPT_ROOT}/REFEREE_RESPONSE" not in peer_review
+    assert "publication-bootstrap-preflight.md" in write_paper
+    assert "publication-response-writer-handoff.md" in write_paper
+    assert "publication-bootstrap-preflight.md" in respond
+    assert "publication-response-writer-handoff.md" in respond
+    assert "publication-bootstrap-preflight.md" in arxiv
+    assert "publication-response-writer-handoff.md" not in arxiv
 
 
 def test_bibliography_template_tracks_live_references_bib_path() -> None:

@@ -10,9 +10,12 @@ import pytest
 from gpd.core.context import init_write_paper
 from gpd.core.workflow_staging import (
     EXECUTE_PHASE_STAGE_MANIFEST_PATH,
+    LITERATURE_REVIEW_STAGE_MANIFEST_PATH,
+    MAP_RESEARCH_STAGE_MANIFEST_PATH,
     NEW_PROJECT_STAGE_MANIFEST_PATH,
     PLAN_PHASE_STAGE_MANIFEST_PATH,
     QUICK_STAGE_MANIFEST_PATH,
+    RESEARCH_PHASE_STAGE_MANIFEST_PATH,
     invalidate_workflow_stage_manifest_cache,
     known_init_fields_for_workflow,
     load_workflow_stage_manifest,
@@ -33,9 +36,13 @@ def _workflow_payload(workflow_id: str) -> dict[str, object]:
         ("new-project", NEW_PROJECT_STAGE_MANIFEST_PATH),
         ("plan-phase", PLAN_PHASE_STAGE_MANIFEST_PATH),
         ("quick", QUICK_STAGE_MANIFEST_PATH),
+        ("literature-review", LITERATURE_REVIEW_STAGE_MANIFEST_PATH),
+        ("research-phase", RESEARCH_PHASE_STAGE_MANIFEST_PATH),
+        ("map-research", MAP_RESEARCH_STAGE_MANIFEST_PATH),
         ("verify-work", NEW_PROJECT_STAGE_MANIFEST_PATH.parent / "verify-work-stage-manifest.json"),
         ("write-paper", NEW_PROJECT_STAGE_MANIFEST_PATH.parent / "write-paper-stage-manifest.json"),
         ("peer-review", NEW_PROJECT_STAGE_MANIFEST_PATH.parent / "peer-review-stage-manifest.json"),
+        ("arxiv-submission", NEW_PROJECT_STAGE_MANIFEST_PATH.parent / "arxiv-submission-stage-manifest.json"),
         ("execute-phase", EXECUTE_PHASE_STAGE_MANIFEST_PATH),
     ],
 )
@@ -326,7 +333,9 @@ def test_validate_workflow_stage_manifest_payload_loads_write_paper_manifest() -
         "consistency_and_references",
         "publication_review",
     )
-    assert manifest.stages[0].loaded_authorities == ("workflows/write-paper.md",)
+    assert "workflows/write-paper.md" in manifest.stages[0].loaded_authorities
+    assert "references/publication/publication-review-round-artifacts.md" in manifest.stages[0].must_not_eager_load
+    assert "references/publication/publication-response-artifacts.md" in manifest.stages[0].must_not_eager_load
     assert "references/publication/publication-pipeline-modes.md" in manifest.stages[0].must_not_eager_load
     assert "references/publication/peer-review-panel.md" in manifest.stages[0].must_not_eager_load
     assert "templates/paper/paper-config-schema.md" in manifest.stages[0].must_not_eager_load
@@ -343,6 +352,8 @@ def test_validate_workflow_stage_manifest_payload_loads_write_paper_manifest() -
     )
     assert manifest.stages[4].loaded_authorities == (
         "workflows/write-paper.md",
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
         "references/publication/peer-review-panel.md",
         "references/publication/peer-review-reliability.md",
         "templates/paper/review-ledger-schema.md",
@@ -378,6 +389,218 @@ def test_known_init_fields_for_quick_cover_task_bootstrap_and_reference_context(
     assert "reference_artifacts_content" in known_init_fields
 
 
+@pytest.mark.parametrize(
+    ("workflow_id", "expected_fields"),
+    [
+        (
+            "literature-review",
+            {
+                "topic",
+                "slug",
+                "commit_docs",
+                "project_contract_gate",
+                "contract_intake",
+                "effective_reference_intake",
+                "active_reference_context",
+                "reference_artifacts_content",
+                "derived_manuscript_proof_review_status",
+            },
+        ),
+        (
+            "research-phase",
+            {
+                "executor_model",
+                "phase_found",
+                "phase_dir",
+                "phase_number",
+                "phase_name",
+                "phase_slug",
+                "padded_phase",
+                "commit_docs",
+                "autonomy",
+                "research_mode",
+                "project_contract_gate",
+                "project_contract_load_info",
+                "project_contract_validation",
+                "contract_intake",
+                "effective_reference_intake",
+                "active_reference_context",
+                "reference_artifact_files",
+                "reference_artifacts_content",
+                "selected_protocol_bundle_ids",
+                "protocol_bundle_context",
+                "protocol_bundle_verifier_extensions",
+                "current_execution",
+                "derived_manuscript_proof_review_status",
+                "literature_review_files",
+                "research_map_reference_files",
+                "config_content",
+                "state_content",
+                "roadmap_content",
+            },
+        ),
+        (
+            "new-milestone",
+            {
+                "researcher_model",
+                "synthesizer_model",
+                "commit_docs",
+                "autonomy",
+                "research_mode",
+                "research_enabled",
+                "current_milestone",
+                "current_milestone_name",
+                "project_exists",
+                "roadmap_exists",
+                "state_exists",
+                "project_contract",
+                "project_contract_gate",
+                "project_contract_load_info",
+                "project_contract_validation",
+                "contract_intake",
+                "effective_reference_intake",
+                "active_reference_context",
+                "reference_artifact_files",
+                "reference_artifacts_content",
+                "literature_review_files",
+                "literature_review_count",
+                "research_map_reference_files",
+                "research_map_reference_count",
+                "derived_convention_lock",
+                "derived_convention_lock_count",
+                "derived_intermediate_results",
+                "derived_intermediate_result_count",
+                "derived_approximations",
+                "derived_approximation_count",
+                "project_content",
+                "state_content",
+                "milestones_content",
+                "platform",
+            },
+        ),
+        (
+            "map-research",
+            {
+                "mapper_model",
+                "research_map_dir",
+                "existing_maps",
+                "project_contract_gate",
+                "active_reference_context",
+                "reference_artifacts_content",
+                "derived_manuscript_proof_review_status",
+            },
+        ),
+    ],
+)
+def test_known_init_fields_for_new_stage_aware_workflows_cover_required_context(
+    workflow_id: str,
+    expected_fields: set[str],
+) -> None:
+    known_init_fields = known_init_fields_for_workflow(workflow_id)
+
+    assert known_init_fields is not None
+    for field in expected_fields:
+        assert field in known_init_fields
+    if workflow_id == "new-milestone":
+        assert "planning_exists" not in known_init_fields
+
+
+def test_validate_workflow_stage_manifest_payload_loads_research_phase_manifest() -> None:
+    manifest = validate_workflow_stage_manifest_payload(
+        _workflow_payload("research-phase"),
+        expected_workflow_id="research-phase",
+    )
+
+    assert manifest.workflow_id == "research-phase"
+    assert manifest.stage_ids() == ("phase_bootstrap", "research_handoff")
+    assert manifest.stage("phase_bootstrap").loaded_authorities == (
+        "workflows/research-phase.md",
+        "references/orchestration/model-profile-resolution.md",
+    )
+    assert "references/orchestration/runtime-delegation-note.md" in manifest.stage(
+        "phase_bootstrap"
+    ).must_not_eager_load
+    assert "reference_artifacts_content" not in manifest.stage("phase_bootstrap").required_init_fields
+    assert manifest.stage("research_handoff").loaded_authorities == (
+        "workflows/research-phase.md",
+        "references/orchestration/model-profile-resolution.md",
+        "references/orchestration/runtime-delegation-note.md",
+    )
+    assert manifest.stage("research_handoff").required_init_fields[:4] == (
+        "commit_docs",
+        "autonomy",
+        "review_cadence",
+        "research_mode",
+    )
+    assert "contract_intake" in manifest.stage("research_handoff").required_init_fields
+    assert "effective_reference_intake" in manifest.stage("research_handoff").required_init_fields
+    assert "reference_artifact_files" in manifest.stage("research_handoff").required_init_fields
+    assert "reference_artifacts_content" in manifest.stage("research_handoff").required_init_fields
+    assert "selected_protocol_bundle_ids" in manifest.stage("research_handoff").required_init_fields
+    assert "protocol_bundle_context" in manifest.stage("research_handoff").required_init_fields
+    assert "protocol_bundle_verifier_extensions" in manifest.stage("research_handoff").required_init_fields
+    assert "current_execution" in manifest.stage("research_handoff").required_init_fields
+    assert "derived_manuscript_proof_review_status" in manifest.stage("research_handoff").required_init_fields
+    assert "config_content" in manifest.stage("research_handoff").required_init_fields
+    assert "state_content" in manifest.stage("research_handoff").required_init_fields
+    assert "roadmap_content" in manifest.stage("research_handoff").required_init_fields
+    assert manifest.stage("research_handoff").writes_allowed == ("GPD/phases/XX-name/XX-RESEARCH.md",)
+    assert manifest.stage("research_handoff").checkpoints == (
+        "reference and contract context are visible to the handoff",
+        "runtime delegation note is loaded only for the child handoff",
+        "fresh RESEARCH artifact is required before completion",
+    )
+
+
+def test_validate_workflow_stage_manifest_payload_loads_new_milestone_manifest() -> None:
+    manifest = validate_workflow_stage_manifest_payload(
+        _workflow_payload("new-milestone"),
+        expected_workflow_id="new-milestone",
+    )
+
+    assert manifest.workflow_id == "new-milestone"
+    assert manifest.stage_ids() == ("milestone_bootstrap", "survey_objectives", "roadmap_authoring")
+    assert manifest.stage("milestone_bootstrap").loaded_authorities == ("workflows/new-milestone.md",)
+    assert "references/research/questioning.md" in manifest.stage("milestone_bootstrap").must_not_eager_load
+    assert "templates/project.md" in manifest.stage("milestone_bootstrap").must_not_eager_load
+    assert "templates/requirements.md" in manifest.stage("milestone_bootstrap").must_not_eager_load
+    assert "roadmapper_model" not in manifest.stage("milestone_bootstrap").required_init_fields
+    assert manifest.stage("survey_objectives").loaded_authorities == (
+        "workflows/new-milestone.md",
+        "references/research/questioning.md",
+    )
+    assert "roadmapper_model" not in manifest.stage("survey_objectives").required_init_fields
+    assert "contract_intake" in manifest.stage("survey_objectives").required_init_fields
+    assert "effective_reference_intake" in manifest.stage("survey_objectives").required_init_fields
+    assert "reference_artifacts_content" in manifest.stage("survey_objectives").required_init_fields
+    assert manifest.stage("survey_objectives").writes_allowed == (
+        "GPD/PROJECT.md",
+        "GPD/STATE.md",
+        "GPD/literature",
+    )
+    assert manifest.stage("survey_objectives").checkpoints == (
+        "prior milestone context reviewed",
+        "survey choice and objective scope captured",
+    )
+    assert manifest.stage("roadmap_authoring").loaded_authorities == (
+        "workflows/new-milestone.md",
+        "templates/project.md",
+        "templates/requirements.md",
+    )
+    assert "requirements_content" in manifest.stage("roadmap_authoring").required_init_fields
+    assert "roadmap_content" in manifest.stage("roadmap_authoring").required_init_fields
+    assert manifest.stage("roadmap_authoring").writes_allowed == (
+        "GPD/PROJECT.md",
+        "GPD/STATE.md",
+        "GPD/REQUIREMENTS.md",
+        "GPD/ROADMAP.md",
+    )
+    assert manifest.stage("roadmap_authoring").checkpoints == (
+        "objectives finalized",
+        "roadmap authored",
+    )
+
+
 def test_validate_workflow_stage_manifest_payload_loads_peer_review_manifest() -> None:
     manifest = validate_workflow_stage_manifest_payload(
         _workflow_payload("peer-review"),
@@ -393,17 +616,24 @@ def test_validate_workflow_stage_manifest_payload_loads_peer_review_manifest() -
         "final_adjudication",
         "finalize",
     )
-    assert manifest.stages[0].loaded_authorities == ("workflows/peer-review.md",)
+    assert "workflows/peer-review.md" in manifest.stages[0].loaded_authorities
+    assert "references/publication/publication-review-round-artifacts.md" in manifest.stages[0].must_not_eager_load
     assert "references/publication/peer-review-panel.md" in manifest.stages[0].must_not_eager_load
     assert "references/publication/peer-review-reliability.md" in manifest.stages[0].must_not_eager_load
     assert "templates/paper/paper-config-schema.md" in manifest.stages[0].must_not_eager_load
     assert manifest.stages[1].loaded_authorities == (
         "workflows/peer-review.md",
+        "templates/paper/publication-manuscript-root-preflight.md",
         "references/publication/peer-review-reliability.md",
         "templates/paper/paper-config-schema.md",
         "templates/paper/artifact-manifest-schema.md",
         "templates/paper/bibliography-audit-schema.md",
         "templates/paper/reproducibility-manifest.md",
+    )
+    assert manifest.stages[2].loaded_authorities == (
+        "workflows/peer-review.md",
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
     )
     assert manifest.stages[3].loaded_authorities == (
         "workflows/peer-review.md",
@@ -573,6 +803,36 @@ def test_validate_workflow_stage_manifest_payload_loads_execute_phase_manifest_s
     assert "references/orchestration/artifact-surfacing.md" in manifest.stages[2].loaded_authorities
     assert manifest.staged_loading_payload("phase_bootstrap")["next_stages"] == ["wave_planning"]
     assert manifest.staged_loading_payload("wave_dispatch")["checkpoints"] == []
+
+
+def test_arxiv_submission_stage_manifest_path_is_reserved_for_staged_loading() -> None:
+    manifest_path = resolve_workflow_stage_manifest_path("arxiv-submission")
+
+    assert manifest_path == NEW_PROJECT_STAGE_MANIFEST_PATH.parent / "arxiv-submission-stage-manifest.json"
+
+
+def test_arxiv_submission_stage_manifest_can_be_loaded_when_present() -> None:
+    manifest_path = resolve_workflow_stage_manifest_path("arxiv-submission")
+
+    if not manifest_path.exists():
+        pytest.skip("arxiv-submission stage manifest has not landed yet")
+
+    manifest = validate_workflow_stage_manifest_payload(
+        json.loads(manifest_path.read_text(encoding="utf-8")),
+        expected_workflow_id="arxiv-submission",
+    )
+
+    assert manifest.stage_ids() == (
+        "bootstrap",
+        "manuscript_preflight",
+        "review_gate",
+        "package",
+        "finalize",
+    )
+    assert "references/publication/publication-bootstrap-preflight.md" in manifest.stage("bootstrap").loaded_authorities
+    assert "references/publication/publication-review-round-artifacts.md" in manifest.stage("review_gate").loaded_authorities
+    assert "references/publication/peer-review-reliability.md" in manifest.stage("review_gate").loaded_authorities
+    assert "references/publication/publication-response-writer-handoff.md" not in manifest.stage("review_gate").loaded_authorities
 
 @pytest.mark.parametrize(
     ("mutator", "message"),

@@ -34,6 +34,8 @@
       ],
       "conditional_authorities": [],
       "must_not_eager_load": [
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
         "references/publication/peer-review-panel.md",
         "references/publication/peer-review-reliability.md",
         "references/shared/canonical-schema-discipline.md",
@@ -105,6 +107,7 @@
       ],
       "loaded_authorities": [
         "workflows/peer-review.md",
+        "templates/paper/publication-manuscript-root-preflight.md",
         "references/publication/peer-review-reliability.md",
         "templates/paper/paper-config-schema.md",
         "templates/paper/artifact-manifest-schema.md",
@@ -178,7 +181,9 @@
         "platform"
       ],
       "loaded_authorities": [
-        "workflows/peer-review.md"
+        "workflows/peer-review.md",
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md"
       ],
       "conditional_authorities": [],
       "must_not_eager_load": [
@@ -414,6 +419,7 @@
       ],
       "conditional_authorities": [],
       "must_not_eager_load": [
+        "references/publication/publication-review-round-artifacts.md",
         "references/publication/peer-review-panel.md",
         "references/publication/peer-review-reliability.md",
         "references/shared/canonical-schema-discipline.md",

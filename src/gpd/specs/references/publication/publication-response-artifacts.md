@@ -1,0 +1,30 @@
+---
+load_when:
+  - "publication response artifacts"
+  - "referee response"
+  - "review round suffix"
+type: publication-response-artifacts
+tier: 2
+context_cost: low
+---
+
+# Publication Response Artifacts
+
+Canonical paired response-artifact and one-shot child-return contract for referee-response work.
+
+## Canonical Pair
+
+- `GPD/AUTHOR-RESPONSE{round_suffix}.md` is the canonical internal tracker.
+- `GPD/review/REFEREE_RESPONSE{round_suffix}.md` is the journal-facing sibling and must mirror the same `REF-*` issue IDs, classifications, statuses, and new-calculation tracking, including source-phase linkage when present.
+- Treat the two files as one success gate: do not mark the round complete when only one of them is current.
+
+## Delegation Rule
+
+- If a spawned writer needs user input, it returns `status: checkpoint` and stops. The orchestrator resumes with a fresh continuation; it does not wait inside the same run.
+- A reported `status: completed` is provisional until the response pair exists on disk and those same fresh paths appear in typed `gpd_return.files_written`.
+
+## Completion Gate
+
+- Successful response-round completion requires both `GPD/AUTHOR-RESPONSE{round_suffix}.md` and `GPD/review/REFEREE_RESPONSE{round_suffix}.md`.
+- Do not accept stale preexisting files, prose-only status messages, or a single mirrored letter as proof of completion.
+- When decision artifacts exist, keep blocking issue IDs and their statuses synchronized across the paired response files.

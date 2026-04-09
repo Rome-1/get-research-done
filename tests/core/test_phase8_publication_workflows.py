@@ -54,6 +54,6 @@ def test_peer_review_stage_six_requires_report_artifacts_and_threads_mode_contex
     assert "<autonomy_mode>{AUTONOMY}</autonomy_mode>" in workflow
     assert "<research_mode>{RESEARCH_MODE}</research_mode>" in workflow
     assert "Treat the referee report files as required final-stage artifacts." in workflow
-    assert "Also confirm `GPD/REFEREE-REPORT{round_suffix}.md` and `GPD/REFEREE-REPORT{round_suffix}.tex` exist before treating the final recommendation as complete." in workflow
+    assert "confirm `GPD/REFEREE-REPORT{round_suffix}.md` and `GPD/REFEREE-REPORT{round_suffix}.tex` exist before treating the final recommendation as complete." in workflow
     assert "GPD/REFEREE-REPORT{round_suffix}.md" in workflow
     assert "GPD/REFEREE-REPORT{round_suffix}.tex" in workflow

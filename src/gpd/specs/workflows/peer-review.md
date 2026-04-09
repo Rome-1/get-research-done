@@ -40,6 +40,7 @@ RESEARCH_MODE=$(echo "$INIT" | gpd json get .research_mode --default balanced)
 Treat `project_contract_gate` as authoritative. Use `project_contract` and `contract_intake` only when `project_contract_gate.authoritative` is true; otherwise keep them as diagnostics/context and rely on `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as carry-forward evidence. Stage 1 stays manuscript-first, but later adjudication must not ignore either the approved contract or the active anchor ledger.
 If `derived_manuscript_reference_status` is present, use it as a first-pass manuscript-local summary of reference coverage, citation readiness, and audit freshness. Keep the manuscript-root publication artifacts authoritative for strict decisions: `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and the reproducibility manifest still decide pass/fail.
 If `derived_manuscript_proof_review_status` is present, use it as the first-pass manuscript-local summary of theorem/proof freshness and keep the manuscript-root proof-redteam artifacts authoritative for strict decisions.
+The shared manuscript-root bootstrap contract is applied in preflight. The local steps below add only peer-review-specific routing, proof-review, and adjudication rules.
 
 Run centralized context preflight before continuing:
 
@@ -104,6 +105,10 @@ Use `protocol_bundle_context` from init JSON as additive review guidance.
 
 <step name="preflight">
 **Run the executable review preflight checks before spawning the review panel:**
+
+Apply the shared manuscript-root bootstrap contract exactly:
+
+@{GPD_INSTALL_DIR}/templates/paper/publication-manuscript-root-preflight.md
 
 ```bash
 gpd validate review-preflight peer-review "$ARGUMENTS" --strict
@@ -188,19 +193,19 @@ Set:
 
 Stage artifacts for revision rounds should use the same suffix:
 
-- `GPD/review/CLAIMS{ROUND_SUFFIX}.json`
-- `GPD/review/STAGE-reader{ROUND_SUFFIX}.json`
-- `GPD/review/STAGE-literature{ROUND_SUFFIX}.json`
-- `GPD/review/STAGE-math{ROUND_SUFFIX}.json`
-- `GPD/review/STAGE-physics{ROUND_SUFFIX}.json`
-- `GPD/review/STAGE-interestingness{ROUND_SUFFIX}.json`
-- `GPD/review/REVIEW-LEDGER{ROUND_SUFFIX}.json`
-- `GPD/review/REFEREE-DECISION{ROUND_SUFFIX}.json`
+-- `GPD/review/CLAIMS{ROUND_SUFFIX}.json`
+-- `GPD/review/STAGE-reader{ROUND_SUFFIX}.json`
+-- `GPD/review/STAGE-literature{ROUND_SUFFIX}.json`
+-- `GPD/review/STAGE-math{ROUND_SUFFIX}.json`
+-- `GPD/review/STAGE-physics{ROUND_SUFFIX}.json`
+-- `GPD/review/STAGE-interestingness{ROUND_SUFFIX}.json`
+-- `GPD/review/REVIEW-LEDGER{ROUND_SUFFIX}.json`
+-- `GPD/review/REFEREE-DECISION{ROUND_SUFFIX}.json`
 
 Use the same `-R2` / `-R3` suffix convention for downstream response artifacts:
 
-- `GPD/AUTHOR-RESPONSE{ROUND_SUFFIX}.md`
-- `GPD/review/REFEREE_RESPONSE{ROUND_SUFFIX}.md`
+-- `GPD/AUTHOR-RESPONSE{ROUND_SUFFIX}.md`
+-- `GPD/review/REFEREE_RESPONSE{ROUND_SUFFIX}.md`
 
 </step>
 
@@ -636,6 +641,7 @@ Return REVIEW COMPLETE with recommendation, confidence, issue counts, and whethe
 
 If the referee agent fails to spawn or returns an error, STOP and report the failure. Do not silently skip final adjudication.
 Do not trust the referee's success text until the ledger, decision, and report files all exist on disk and validate. A returned recommendation without the files is incomplete.
+Do not trust the referee's success text until that typed return, the on-disk files, and the validators all agree.
 </step>
 
 <step name="stage_recovery_6">

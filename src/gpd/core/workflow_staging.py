@@ -18,6 +18,9 @@ NEW_MILESTONE_STAGE_MANIFEST_PATH = WORKFLOW_STAGE_MANIFEST_DIR / f"new-mileston
 EXECUTE_PHASE_STAGE_MANIFEST_PATH = WORKFLOW_STAGE_MANIFEST_DIR / f"execute-phase{WORKFLOW_STAGE_MANIFEST_SUFFIX}"
 PLAN_PHASE_STAGE_MANIFEST_PATH = WORKFLOW_STAGE_MANIFEST_DIR / f"plan-phase{WORKFLOW_STAGE_MANIFEST_SUFFIX}"
 QUICK_STAGE_MANIFEST_PATH = WORKFLOW_STAGE_MANIFEST_DIR / f"quick{WORKFLOW_STAGE_MANIFEST_SUFFIX}"
+LITERATURE_REVIEW_STAGE_MANIFEST_PATH = WORKFLOW_STAGE_MANIFEST_DIR / f"literature-review{WORKFLOW_STAGE_MANIFEST_SUFFIX}"
+RESEARCH_PHASE_STAGE_MANIFEST_PATH = WORKFLOW_STAGE_MANIFEST_DIR / f"research-phase{WORKFLOW_STAGE_MANIFEST_SUFFIX}"
+MAP_RESEARCH_STAGE_MANIFEST_PATH = WORKFLOW_STAGE_MANIFEST_DIR / f"map-research{WORKFLOW_STAGE_MANIFEST_SUFFIX}"
 RESUME_WORK_INIT_FIELDS = frozenset(
     {
         "workspace_root",
@@ -441,6 +444,224 @@ QUICK_INIT_FIELDS = frozenset(
         *QUICK_REFERENCE_RUNTIME_FIELDS,
     }
 )
+LITERATURE_REVIEW_INIT_FIELDS = frozenset(
+    {
+        "commit_docs",
+        "state_exists",
+        "project_exists",
+        "roadmap_exists",
+        "topic",
+        "slug",
+        "research_mode",
+        "autonomy",
+        "platform",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+        "contract_intake",
+        "effective_reference_intake",
+        "active_reference_context",
+        "reference_artifact_files",
+        "reference_artifacts_content",
+        "literature_review_files",
+        "literature_review_count",
+        "research_map_reference_files",
+        "research_map_reference_count",
+        "derived_active_references",
+        "derived_active_reference_count",
+        "derived_knowledge_docs",
+        "derived_knowledge_doc_count",
+        "knowledge_doc_files",
+        "knowledge_doc_count",
+        "stable_knowledge_doc_files",
+        "stable_knowledge_doc_count",
+        "knowledge_doc_status_counts",
+        "knowledge_doc_warnings",
+        "citation_source_files",
+        "citation_source_count",
+        "citation_source_warnings",
+        "derived_citation_sources",
+        "derived_citation_source_count",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_count",
+        "protocol_bundle_verifier_extensions",
+        "protocol_bundle_context",
+        "active_references",
+        "active_reference_count",
+        "derived_manuscript_reference_status",
+        "derived_manuscript_reference_status_count",
+        "derived_manuscript_proof_review_status",
+    }
+)
+RESEARCH_PHASE_INIT_FIELDS = frozenset(
+    {
+        "executor_model",
+        "verifier_model",
+        "commit_docs",
+        "autonomy",
+        "review_cadence",
+        "research_mode",
+        "parallelization",
+        "max_unattended_minutes_per_plan",
+        "max_unattended_minutes_per_wave",
+        "checkpoint_after_n_tasks",
+        "checkpoint_after_first_load_bearing_result",
+        "checkpoint_before_downstream_dependent_tasks",
+        "phase_found",
+        "phase_dir",
+        "phase_number",
+        "phase_name",
+        "phase_slug",
+        "padded_phase",
+        "plans",
+        "summaries",
+        "incomplete_plans",
+        "plan_count",
+        "incomplete_count",
+        "has_research",
+        "has_context",
+        "has_plans",
+        "has_verification",
+        "has_validation",
+        "state_exists",
+        "roadmap_exists",
+        "planning_exists",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_validation",
+        "project_contract_load_info",
+        "contract_intake",
+        "effective_reference_intake",
+        "active_reference_context",
+        "reference_artifact_files",
+        "reference_artifacts_content",
+        "knowledge_doc_files",
+        "knowledge_doc_count",
+        "stable_knowledge_doc_files",
+        "stable_knowledge_doc_count",
+        "knowledge_doc_status_counts",
+        "derived_knowledge_docs",
+        "derived_knowledge_doc_count",
+        "knowledge_doc_warnings",
+        "state_load_source",
+        "state_integrity_issues",
+        "convention_lock",
+        "convention_lock_count",
+        "intermediate_results",
+        "intermediate_result_count",
+        "approximations",
+        "approximation_count",
+        "propagated_uncertainties",
+        "propagated_uncertainty_count",
+        "derived_convention_lock",
+        "derived_convention_lock_count",
+        "derived_intermediate_results",
+        "derived_intermediate_result_count",
+        "derived_approximations",
+        "derived_approximation_count",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_count",
+        "protocol_bundle_context",
+        "protocol_bundle_verifier_extensions",
+        "current_execution",
+        "has_live_execution",
+        "execution_review_pending",
+        "execution_pre_fanout_review_pending",
+        "execution_skeptical_requestioning_required",
+        "execution_downstream_locked",
+        "execution_blocked",
+        "execution_resumable",
+        "execution_paused_at",
+        "current_execution_resume_file",
+        "session_resume_file",
+        "recorded_session_resume_file",
+        "missing_session_resume_file",
+        "execution_resume_file",
+        "execution_resume_file_source",
+        "resume_projection",
+        "current_hostname",
+        "current_platform",
+        "session_hostname",
+        "session_platform",
+        "session_last_date",
+        "session_stopped_at",
+        "machine_change_detected",
+        "machine_change_notice",
+        "literature_review_files",
+        "literature_review_count",
+        "research_map_reference_files",
+        "research_map_reference_count",
+        "derived_active_references",
+        "derived_active_reference_count",
+        "citation_source_files",
+        "citation_source_count",
+        "citation_source_warnings",
+        "derived_citation_sources",
+        "derived_citation_source_count",
+        "active_references",
+        "active_reference_count",
+        "derived_manuscript_reference_status",
+        "derived_manuscript_reference_status_count",
+        "derived_manuscript_proof_review_status",
+        "platform",
+        "state_content",
+        "config_content",
+        "roadmap_content",
+    }
+)
+MAP_RESEARCH_INIT_FIELDS = frozenset(
+    {
+        "mapper_model",
+        "commit_docs",
+        "autonomy",
+        "research_mode",
+        "parallelization",
+        "research_map_dir",
+        "existing_maps",
+        "has_maps",
+        "planning_exists",
+        "research_map_dir_exists",
+        "platform",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+        "contract_intake",
+        "effective_reference_intake",
+        "active_reference_context",
+        "reference_artifact_files",
+        "reference_artifacts_content",
+        "literature_review_files",
+        "literature_review_count",
+        "research_map_reference_files",
+        "research_map_reference_count",
+        "knowledge_doc_files",
+        "knowledge_doc_count",
+        "stable_knowledge_doc_files",
+        "stable_knowledge_doc_count",
+        "knowledge_doc_status_counts",
+        "derived_active_references",
+        "derived_active_reference_count",
+        "derived_knowledge_docs",
+        "derived_knowledge_doc_count",
+        "knowledge_doc_warnings",
+        "citation_source_files",
+        "citation_source_count",
+        "citation_source_warnings",
+        "derived_citation_sources",
+        "derived_citation_source_count",
+        "derived_manuscript_reference_status",
+        "derived_manuscript_reference_status_count",
+        "derived_manuscript_proof_review_status",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_count",
+        "protocol_bundle_verifier_extensions",
+        "protocol_bundle_context",
+        "active_references",
+        "active_reference_count",
+    }
+)
 VERIFY_WORK_INIT_FIELDS = frozenset(
     {
         "planner_model",
@@ -599,12 +820,69 @@ PEER_REVIEW_INIT_FIELDS = frozenset(
         "platform",
     }
 )
+ARXIV_SUBMISSION_BOOTSTRAP_FIELDS = frozenset(
+    {
+        "commit_docs",
+        "state_exists",
+        "project_exists",
+        "autonomy",
+        "research_mode",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_context",
+        "active_reference_context",
+        "derived_manuscript_reference_status",
+        "derived_manuscript_reference_status_count",
+        "derived_manuscript_proof_review_status",
+        "platform",
+    }
+)
+ARXIV_SUBMISSION_SNAPSHOT_FIELDS = frozenset(
+    {
+        "manuscript_resolution_status",
+        "manuscript_resolution_detail",
+        "manuscript_root",
+        "manuscript_entrypoint",
+        "artifact_manifest_path",
+        "bibliography_audit_path",
+        "reproducibility_manifest_path",
+        "manuscript_reference_status_warnings",
+        "publication_blockers",
+        "publication_blocker_count",
+        "latest_review_round",
+        "latest_review_round_suffix",
+        "latest_review_ledger",
+        "latest_referee_decision",
+        "latest_referee_report_md",
+        "latest_referee_report_tex",
+        "latest_proof_redteam",
+        "latest_review_artifacts",
+        "latest_response_round",
+        "latest_response_round_suffix",
+        "latest_author_response",
+        "latest_referee_response",
+        "latest_response_artifacts",
+    }
+)
+ARXIV_SUBMISSION_INIT_FIELDS = frozenset(
+    {
+        *ARXIV_SUBMISSION_BOOTSTRAP_FIELDS,
+        *ARXIV_SUBMISSION_SNAPSHOT_FIELDS,
+    }
+)
 _DEFAULT_KNOWN_INIT_FIELDS_BY_WORKFLOW = {
     "resume-work": RESUME_WORK_INIT_FIELDS,
     "sync-state": SYNC_STATE_INIT_FIELDS,
     "new-project": NEW_PROJECT_INIT_FIELDS,
     "new-milestone": NEW_MILESTONE_INIT_FIELDS,
+    "literature-review": LITERATURE_REVIEW_INIT_FIELDS,
+    "research-phase": RESEARCH_PHASE_INIT_FIELDS,
+    "map-research": MAP_RESEARCH_INIT_FIELDS,
     "peer-review": PEER_REVIEW_INIT_FIELDS,
+    "arxiv-submission": ARXIV_SUBMISSION_INIT_FIELDS,
     "plan-phase": PLAN_PHASE_INIT_FIELDS,
     "quick": QUICK_INIT_FIELDS,
     "verify-work": VERIFY_WORK_INIT_FIELDS,
@@ -862,7 +1140,9 @@ def known_init_fields_for_workflow(workflow_id: str | None) -> frozenset[str] | 
     return _DEFAULT_KNOWN_INIT_FIELDS_BY_WORKFLOW.get(normalized_workflow_id)
 
 
-def _validate_conditional_authorities(raw: object, *, stage_index: int) -> tuple[WorkflowStageConditionalAuthority, ...]:
+def _validate_conditional_authorities(
+    raw: object, *, stage_index: int
+) -> tuple[WorkflowStageConditionalAuthority, ...]:
     if not isinstance(raw, list):
         raise ValueError(f"stages[{stage_index}].conditional_authorities must be a list")
 
@@ -927,7 +1207,9 @@ def _validate_stage(
     loaded_authorities = tuple(
         _normalize_manifest_doc_path(authority, label=f"stages[{index}].loaded_authorities[{authority_index}]")
         for authority_index, authority in enumerate(
-            _require_string_tuple(raw["loaded_authorities"], label=f"stages[{index}].loaded_authorities", allow_empty=True)
+            _require_string_tuple(
+                raw["loaded_authorities"], label=f"stages[{index}].loaded_authorities", allow_empty=True
+            )
         )
     )
     conditional_authorities = _validate_conditional_authorities(
@@ -937,12 +1219,16 @@ def _validate_stage(
     must_not_eager_load = tuple(
         _normalize_manifest_doc_path(authority, label=f"stages[{index}].must_not_eager_load[{authority_index}]")
         for authority_index, authority in enumerate(
-            _require_string_tuple(raw["must_not_eager_load"], label=f"stages[{index}].must_not_eager_load", allow_empty=True)
+            _require_string_tuple(
+                raw["must_not_eager_load"], label=f"stages[{index}].must_not_eager_load", allow_empty=True
+            )
         )
     )
     allowed_tools_values = tuple(
         canonical(tool.strip())
-        for tool in _require_string_tuple(raw["allowed_tools"], label=f"stages[{index}].allowed_tools", allow_empty=True)
+        for tool in _require_string_tuple(
+            raw["allowed_tools"], label=f"stages[{index}].allowed_tools", allow_empty=True
+        )
     )
     writes_allowed = tuple(
         _normalize_write_path(write_path, label=f"stages[{index}].writes_allowed[{write_index}]")
@@ -1024,9 +1310,7 @@ def validate_workflow_stage_manifest_payload(
 
     workflow_id = _normalize_workflow_id(raw["workflow_id"])
     if expected_workflow_id is not None and workflow_id != expected_workflow_id:
-        raise ValueError(
-            f"workflow stage manifest workflow_id must be {expected_workflow_id!r}, got {workflow_id!r}"
-        )
+        raise ValueError(f"workflow stage manifest workflow_id must be {expected_workflow_id!r}, got {workflow_id!r}")
 
     stages_raw = raw["stages"]
     if not isinstance(stages_raw, list) or not stages_raw:
@@ -1064,9 +1348,7 @@ def validate_workflow_stage_manifest_payload(
             if next_stage in stage_id_set and order_by_id[next_stage] <= stage.order
         )
         if backward_next:
-            raise ValueError(
-                f"stage {stage.id!r} must only point to later stages; got {', '.join(backward_next)}"
-            )
+            raise ValueError(f"stage {stage.id!r} must only point to later stages; got {', '.join(backward_next)}")
 
     return WorkflowStageManifest(schema_version=schema_version, workflow_id=workflow_id, stages=stages)
 
@@ -1181,11 +1463,62 @@ def validate_execute_phase_stage_contract_payload(raw: object) -> WorkflowStageM
     return validate_workflow_stage_manifest_payload(raw, expected_workflow_id="execute-phase")
 
 
+def load_arxiv_submission_stage_contract() -> WorkflowStageManifest:
+    return load_workflow_stage_manifest("arxiv-submission")
+
+
+def validate_arxiv_submission_stage_contract_payload(raw: object) -> WorkflowStageManifest:
+    return validate_workflow_stage_manifest_payload(raw, expected_workflow_id="arxiv-submission")
+
+
+def load_literature_review_stage_contract() -> WorkflowStageManifest:
+    return load_workflow_stage_manifest("literature-review")
+
+
+def load_literature_review_stage_contract_from_path(manifest_path: Path) -> WorkflowStageManifest:
+    return load_workflow_stage_manifest_from_path(manifest_path, expected_workflow_id="literature-review")
+
+
+def validate_literature_review_stage_contract_payload(raw: object) -> WorkflowStageManifest:
+    return validate_workflow_stage_manifest_payload(raw, expected_workflow_id="literature-review")
+
+
+def load_research_phase_stage_contract() -> WorkflowStageManifest:
+    return load_workflow_stage_manifest("research-phase")
+
+
+def load_research_phase_stage_contract_from_path(manifest_path: Path) -> WorkflowStageManifest:
+    return load_workflow_stage_manifest_from_path(manifest_path, expected_workflow_id="research-phase")
+
+
+def validate_research_phase_stage_contract_payload(raw: object) -> WorkflowStageManifest:
+    return validate_workflow_stage_manifest_payload(raw, expected_workflow_id="research-phase")
+
+
+def load_map_research_stage_contract() -> WorkflowStageManifest:
+    return load_workflow_stage_manifest("map-research")
+
+
+def load_map_research_stage_contract_from_path(manifest_path: Path) -> WorkflowStageManifest:
+    return load_workflow_stage_manifest_from_path(manifest_path, expected_workflow_id="map-research")
+
+
+def validate_map_research_stage_contract_payload(raw: object) -> WorkflowStageManifest:
+    return validate_workflow_stage_manifest_payload(raw, expected_workflow_id="map-research")
+
+
 __all__ = [
+    "ARXIV_SUBMISSION_BOOTSTRAP_FIELDS",
+    "ARXIV_SUBMISSION_INIT_FIELDS",
+    "ARXIV_SUBMISSION_SNAPSHOT_FIELDS",
     "NEW_PROJECT_INIT_FIELDS",
     "NEW_PROJECT_STAGE_MANIFEST_PATH",
     "NEW_MILESTONE_INIT_FIELDS",
     "NEW_MILESTONE_STAGE_MANIFEST_PATH",
+    "LITERATURE_REVIEW_INIT_FIELDS",
+    "LITERATURE_REVIEW_STAGE_MANIFEST_PATH",
+    "MAP_RESEARCH_INIT_FIELDS",
+    "MAP_RESEARCH_STAGE_MANIFEST_PATH",
     "EXECUTE_PHASE_INIT_FIELDS",
     "EXECUTE_PHASE_STAGE_MANIFEST_PATH",
     "PLAN_PHASE_BASE_INIT_FIELDS",
@@ -1201,6 +1534,8 @@ __all__ = [
     "QUICK_INIT_FIELDS",
     "QUICK_REFERENCE_RUNTIME_FIELDS",
     "QUICK_STAGE_MANIFEST_PATH",
+    "RESEARCH_PHASE_INIT_FIELDS",
+    "RESEARCH_PHASE_STAGE_MANIFEST_PATH",
     "NewProjectConditionalAuthority",
     "NewProjectStage",
     "NewProjectStageContract",
@@ -1217,14 +1552,25 @@ __all__ = [
     "load_new_project_stage_contract_from_path",
     "load_new_milestone_stage_contract",
     "load_new_milestone_stage_contract_from_path",
+    "load_arxiv_submission_stage_contract",
+    "load_literature_review_stage_contract",
+    "load_literature_review_stage_contract_from_path",
     "load_execute_phase_stage_contract",
     "load_execute_phase_stage_contract_from_path",
+    "load_map_research_stage_contract",
+    "load_map_research_stage_contract_from_path",
+    "load_research_phase_stage_contract",
+    "load_research_phase_stage_contract_from_path",
     "load_workflow_stage_manifest",
     "load_workflow_stage_manifest_from_path",
     "known_init_fields_for_workflow",
     "resolve_workflow_stage_manifest_path",
     "validate_new_project_stage_contract_payload",
     "validate_new_milestone_stage_contract_payload",
+    "validate_arxiv_submission_stage_contract_payload",
+    "validate_literature_review_stage_contract_payload",
+    "validate_map_research_stage_contract_payload",
     "validate_execute_phase_stage_contract_payload",
+    "validate_research_phase_stage_contract_payload",
     "validate_workflow_stage_manifest_payload",
 ]

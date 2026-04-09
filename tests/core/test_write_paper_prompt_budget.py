@@ -71,10 +71,13 @@ def test_write_paper_workflow_defers_stage_authorities_until_the_manifest_stages
         if authority != "workflows/write-paper.md"
     }
 
-    assert bootstrap.loaded_authorities == ("workflows/write-paper.md",)
+    assert "workflows/write-paper.md" in bootstrap.loaded_authorities
     assert late_stage_authorities.issubset(set(bootstrap.must_not_eager_load))
-    assert "references/publication/publication-pipeline-modes.md" in bootstrap.must_not_eager_load
+    assert "references/publication/publication-review-round-artifacts.md" in bootstrap.must_not_eager_load
+    assert "references/publication/publication-response-artifacts.md" in bootstrap.must_not_eager_load
     assert "references/publication/peer-review-panel.md" in bootstrap.must_not_eager_load
+    assert "references/publication/peer-review-reliability.md" in bootstrap.must_not_eager_load
+    assert "references/publication/publication-pipeline-modes.md" in bootstrap.must_not_eager_load
     assert "templates/paper/paper-config-schema.md" in bootstrap.must_not_eager_load
     assert "templates/paper/artifact-manifest-schema.md" in bootstrap.must_not_eager_load
     assert "templates/paper/review-ledger-schema.md" in bootstrap.must_not_eager_load
@@ -98,6 +101,8 @@ def test_write_paper_workflow_defers_stage_authorities_until_the_manifest_stages
     )
     assert publication_review.loaded_authorities == (
         "workflows/write-paper.md",
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
         "references/publication/peer-review-panel.md",
         "references/publication/peer-review-reliability.md",
         "templates/paper/review-ledger-schema.md",

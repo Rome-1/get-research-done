@@ -104,6 +104,7 @@ Balanced mode follows the publication-pipeline matrix: draft the manuscript, sel
 - `{GPD_INSTALL_DIR}/references/publication/figure-generation-templates.md` -- Publication-quality matplotlib templates for common physics plot types (load when generating figures)
 - `{GPD_INSTALL_DIR}/references/publication/publication-pipeline-modes.md` -- Mode adaptation for paper structure, derivation detail, figure strategy, and literature integration by autonomy and research_mode (load when calibrating writing approach)
 - `{GPD_INSTALL_DIR}/references/publication/paper-writer-cookbook.md` -- Journal calibration, LaTeX scaffold patterns, figure sizing, and example framing guidance (load when choosing venue-specific structure or preamble details)
+- `{GPD_INSTALL_DIR}/references/publication/publication-response-writer-handoff.md` -- Canonical paired `AUTHOR-RESPONSE` / `REFEREE_RESPONSE` handoff and response-round success gate (load when drafting referee-response artifacts)
 </references>
 
 Convention loading: see agent-infrastructure.md Convention Loading Protocol.
@@ -1192,18 +1193,21 @@ The phase transition occurs at $g_c = \text{[PENDING]}$, which we determine by..
 
 ## Author Response Protocol
 
-When a `REFEREE-REPORT.md` or `REFEREE-REPORT-R{N}.md` exists in `GPD/`, use the canonical contract at `{GPD_INSTALL_DIR}/templates/paper/author-response.md`. Treat the referee report as the source of truth for `REF-*` IDs; use `GPD/review/REVIEW-LEDGER{-RN}.json` and `GPD/review/REFEREE-DECISION{-RN}.json` only as secondary calibration for blocking status and recommendation floor.
+When a `REFEREE-REPORT.md` or `REFEREE-REPORT-R{N}.md` exists in `GPD/`, use the canonical contract at `{GPD_INSTALL_DIR}/templates/paper/author-response.md` together with `{GPD_INSTALL_DIR}/templates/paper/referee-response.md` and the shared publication response-writer handoff at `{GPD_INSTALL_DIR}/references/publication/publication-response-writer-handoff.md`. Treat the referee report as the source of truth for `REF-*` IDs; use `GPD/review/REVIEW-LEDGER{round_suffix}.json` and `GPD/review/REFEREE-DECISION{round_suffix}.json` only as secondary calibration for blocking status and recommendation floor.
 
 ### Triggering
 
-Use this protocol when the orchestrator spawns you for `GPD/AUTHOR-RESPONSE*.md` work.
+Use this protocol when the orchestrator spawns you for `GPD/AUTHOR-RESPONSE*.md` work. If the workflow also requests the paired referee-facing artifact, write `GPD/review/REFEREE_RESPONSE{round_suffix}.md` for the same active round.
 
 ### Response Rules
 
+- `GPD/AUTHOR-RESPONSE{round_suffix}.md` is the canonical internal tracker.
+- `GPD/review/REFEREE_RESPONSE{round_suffix}.md` is the synchronized journal-facing sibling, not a wording-only cover letter. Keep the same `REF-*` IDs, classifications, status labels, blocking-item coverage, and new-calculation tracking aligned across both files.
 - Classify each `REF-*` item as `fixed`, `rebutted`, `acknowledged`, or `needs-calculation`.
 - Mark `fixed` only after the manuscript change is already on disk.
 - Keep `needs-calculation` explicit when new work is still required.
-- If the workflow also requests a response letter, mirror only the final user-facing wording there.
+- If the workflow also requests a short editor letter beyond `GPD/review/REFEREE_RESPONSE{round_suffix}.md`, that extra letter may compress tone and wording, but `REFEREE_RESPONSE{round_suffix}.md` must still preserve the full paired-artifact contract.
+- Do not treat the response pass as completed unless the fresh typed `gpd_return.files_written` names every response artifact requested for the active round and those files exist on disk. Preexisting files do not satisfy this gate.
 - If the response cannot be completed in one run, return `gpd_return.status: checkpoint` and stop; the orchestrator owns the continuation handoff.
 - Do not claim completion while blocking issues remain unresolved.
 

@@ -146,8 +146,8 @@ def test_command_surfaces_list_standalone_and_numbered_phase_artifacts() -> None
 def test_respond_to_referees_prefers_canonical_markdown_report_path() -> None:
     workflow_text = (WORKFLOWS_DIR / "respond-to-referees.md").read_text(encoding="utf-8")
 
-    assert "Use `GPD/REFEREE-REPORT{round_suffix}.md` as the canonical issue-ID source" in workflow_text
-    assert "use canonical `GPD/REFEREE-REPORT{round_suffix}.md` only" in workflow_text
+    assert "`GPD/REFEREE-REPORT{round_suffix}.md` remains the canonical issue-ID source" in workflow_text
+    assert "Use that shared handoff for `round_suffix`, sibling-artifact discovery, and the canonical response-artifact pair for the active round." in workflow_text
     assert "`GPD/review/REFEREE_RESPONSE{round_suffix}.md`" in workflow_text
     assert "`GPD/AUTHOR-RESPONSE{round_suffix}.md`" in workflow_text
     assert "Read the completed `GPD/AUTHOR-RESPONSE{round_suffix}.md` and `GPD/review/REFEREE_RESPONSE{round_suffix}.md`" in workflow_text

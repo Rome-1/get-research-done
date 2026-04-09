@@ -124,7 +124,6 @@ from gpd.core.workflow_presets import (
     list_workflow_presets,
     preview_workflow_preset_application,
 )
-from gpd.hooks.runtime_detect import detect_runtime_for_gpd_use
 from gpd.mcp.managed_integrations import WOLFRAM_MANAGED_INTEGRATION
 
 if TYPE_CHECKING:
@@ -4367,6 +4366,26 @@ def init_quick(
     _output(payload)
 
 
+@init_app.command("literature-review")
+def init_literature_review(
+    topic: list[str] = typer.Argument(None, help="Topic or research question"),
+    stage: str | None = typer.Option(
+        None,
+        "--stage",
+        help="Load the staged literature-review context for a specific stage id.",
+    ),
+) -> None:
+    """Assemble context for literature review orchestration."""
+    from gpd.core.context import init_literature_review
+
+    text = " ".join(topic) if topic else None
+    try:
+        payload = init_literature_review(_get_cwd(), topic=text, stage=stage)
+    except ValueError as exc:
+        _error(str(exc))
+    _output(payload)
+
+
 @init_app.command("resume")
 def init_resume(
     stage: str | None = typer.Option(
@@ -4443,11 +4462,21 @@ def init_progress(
 
 
 @init_app.command("map-research")
-def init_map_research() -> None:
+def init_map_research(
+    stage: str | None = typer.Option(
+        None,
+        "--stage",
+        help="Load the staged map-research context for a specific stage id.",
+    ),
+) -> None:
     """Assemble context for research mapping."""
     from gpd.core.context import init_map_research
 
-    _output(init_map_research(_get_cwd()))
+    try:
+        payload = init_map_research(_get_cwd(), stage=stage)
+    except ValueError as exc:
+        _error(str(exc))
+    _output(payload)
 
 
 @init_app.command("todos")
@@ -4464,6 +4493,11 @@ def init_todos(
 def init_phase_op(
     phase: str | None = typer.Argument(None, help="Phase number"),
     include: str | None = typer.Option(None, "--include", help="Additional context includes"),
+    stage: str | None = typer.Option(
+        None,
+        "--stage",
+        help="Load the staged research-phase context for a specific stage id.",
+    ),
 ) -> None:
     """Assemble context for generic phase operations."""
     from gpd.core.context import init_phase_op
@@ -4473,7 +4507,34 @@ def init_phase_op(
         command_name="gpd init phase-op",
         allowed=_INIT_PHASE_OP_INCLUDES,
     )
-    _output(init_phase_op(_get_cwd(), phase, includes))
+    try:
+        _output(init_phase_op(_get_cwd(), phase, includes, stage=stage))
+    except ValueError as exc:
+        _error(str(exc))
+
+
+@init_app.command("research-phase")
+def init_research_phase(
+    phase: str | None = typer.Argument(None, help="Phase number"),
+    include: str | None = typer.Option(None, "--include", help="Additional context includes"),
+    stage: str | None = typer.Option(
+        None,
+        "--stage",
+        help="Load the staged research-phase context for a specific stage id.",
+    ),
+) -> None:
+    """Assemble context for phase research."""
+    from gpd.core.context import init_research_phase
+
+    includes = _parse_init_include_option(
+        include,
+        command_name="gpd init research-phase",
+        allowed=_INIT_PHASE_OP_INCLUDES,
+    )
+    try:
+        _output(init_research_phase(_get_cwd(), phase, includes, stage=stage))
+    except ValueError as exc:
+        _error(str(exc))
 
 
 @init_app.command("milestone-op")
@@ -6305,6 +6366,13 @@ def _build_recoverable_workspace_guidance(*, init_command: str) -> str:
         f"Open the right project, use `{local_cli_resume_recent_command()}` to rediscover it, or "
         f"initialize a new project with `{init_command}` in the runtime surface or `gpd init new-project` in the local CLI."
     )
+
+
+def detect_runtime_for_gpd_use(*, cwd: Path | None = None, home: Path | None = None) -> str | None:
+    """Resolve the installed-surface runtime via the hook-owned detector."""
+    from gpd.hooks.runtime_detect import detect_runtime_for_gpd_use as _detect_runtime_for_gpd_use
+
+    return _detect_runtime_for_gpd_use(cwd=cwd, home=home)
 
 
 def _active_runtime_command_prefix(*, cwd: Path | None = None) -> str | None:

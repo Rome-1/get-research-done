@@ -22,13 +22,16 @@ from gpd.core.context import (
     _should_skip_research_scan_entry,
     _state_exists,
     init_execute_phase,
+    init_literature_review,
     init_map_research,
     init_milestone_op,
     init_new_milestone,
     init_new_project,
+    init_phase_op,
     init_plan_phase,
     init_progress,
     init_quick,
+    init_research_phase,
     init_resume,
     init_sync_state,
     init_todos,
@@ -255,6 +258,41 @@ def _install_fake_plan_phase_manifest(monkeypatch: pytest.MonkeyPatch) -> _FakeP
         known_init_fields: set[str] | None = None,
     ) -> _FakePlanPhaseManifest:
         assert workflow_id == "plan-phase"
+        return manifest
+
+    monkeypatch.setattr("gpd.core.workflow_staging.load_workflow_stage_manifest", fake_load_workflow_stage_manifest)
+    return manifest
+
+
+class _FakeStageManifest:
+    def __init__(self, workflow_id: str, stages: dict[str, list[str]]) -> None:
+        self.workflow_id = workflow_id
+        self._stages = {stage_id: _FakePlanPhaseStage(stage_id, fields) for stage_id, fields in stages.items()}
+
+    def stage_by_id(self, stage_id: str) -> _FakePlanPhaseStage:
+        return self._stages[stage_id]
+
+    def stage_ids(self) -> list[str]:
+        return list(self._stages)
+
+    def staged_loading_payload(self, stage_id: str) -> dict[str, object]:
+        return {"workflow_id": self.workflow_id, "stage_id": stage_id}
+
+
+def _install_fake_stage_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    workflow_id: str,
+    stages: dict[str, list[str]],
+) -> _FakeStageManifest:
+    manifest = _FakeStageManifest(workflow_id, stages)
+
+    def fake_load_workflow_stage_manifest(
+        requested_workflow_id: str,
+        allowed_tools: set[str] | None = None,
+        known_init_fields: set[str] | None = None,
+    ) -> _FakeStageManifest:
+        assert requested_workflow_id == workflow_id
         return manifest
 
     monkeypatch.setattr("gpd.core.workflow_staging.load_workflow_stage_manifest", fake_load_workflow_stage_manifest)
@@ -2489,6 +2527,7 @@ class TestInitNewMilestone:
         ctx = init_new_milestone(tmp_path)
         assert ctx["current_milestone"] == "v1.0"
         assert ctx["current_milestone_name"] == "Setup Phase"
+        assert "planning_exists" not in ctx
 
     def test_surfaces_project_contract_and_effective_reference_context(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -2510,6 +2549,25 @@ class TestInitNewMilestone:
         assert "GPD/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
         assert "Benchmark Ref 2024" in ctx["active_reference_context"]
         assert "GPD/research-map/REFERENCES.md" in ctx["reference_artifact_files"]
+
+    def test_new_milestone_stage_bootstrap_filters_payload(self, tmp_path: Path) -> None:
+        from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+        _setup_project(tmp_path)
+        _create_roadmap(tmp_path, "## Milestone v1.0: Setup Phase\n")
+        _write_project_contract_state(tmp_path)
+
+        manifest = load_workflow_stage_manifest("new-milestone")
+        stage = manifest.get_stage("milestone_bootstrap")
+
+        ctx = init_new_milestone(tmp_path, stage="milestone_bootstrap")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["staged_loading"]["workflow_id"] == "new-milestone"
+        assert ctx["staged_loading"]["stage_id"] == "milestone_bootstrap"
+        assert ctx["staged_loading"]["writes_allowed"] == []
+        assert "planning_exists" not in ctx
+        assert "roadmapper_model" not in ctx
 
     def test_does_not_bootstrap_manuscript_proof_review_manifest(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -2556,6 +2614,80 @@ class TestInitNewMilestone:
         assert ctx["project_contract_gate"]["authoritative"] is False
         assert "project_contract_load_info" in ctx
         assert "project_contract_validation" in ctx
+
+    def test_new_milestone_stage_survey_objectives_filters_payload(self, tmp_path: Path) -> None:
+        from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+        _setup_project(tmp_path)
+        _create_roadmap(tmp_path, "## Milestone v1.0: Setup Phase\n")
+        _write_project_contract_state(tmp_path)
+        _write_literature_review_anchor_file(tmp_path)
+        _write_research_map_anchor_files(tmp_path)
+
+        manifest = load_workflow_stage_manifest("new-milestone")
+        stage = manifest.get_stage("survey_objectives")
+
+        ctx = init_new_milestone(tmp_path, stage="survey_objectives")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["staged_loading"]["workflow_id"] == "new-milestone"
+        assert ctx["staged_loading"]["stage_id"] == "survey_objectives"
+        assert ctx["staged_loading"]["loaded_authorities"] == [
+            "workflows/new-milestone.md",
+            "references/research/questioning.md",
+        ]
+        assert ctx["staged_loading"]["writes_allowed"] == [
+            "GPD/PROJECT.md",
+            "GPD/STATE.md",
+            "GPD/literature",
+        ]
+        assert ctx["staged_loading"]["checkpoints"] == [
+            "prior milestone context reviewed",
+            "survey choice and objective scope captured",
+        ]
+        assert "contract_intake" in ctx
+        assert "effective_reference_intake" in ctx
+        assert "reference_artifacts_content" in ctx
+        assert "roadmapper_model" not in ctx
+
+    def test_new_milestone_stage_roadmap_authoring_filters_payload(self, tmp_path: Path) -> None:
+        from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+        _setup_project(tmp_path)
+        _create_roadmap(tmp_path, "## Milestone v1.0: Setup Phase\n")
+        (tmp_path / "GPD" / "PROJECT.md").write_text("# Project\n\nMilestone context.\n", encoding="utf-8")
+        (tmp_path / "GPD" / "STATE.md").write_text("# State\n\nReady.\n", encoding="utf-8")
+        (tmp_path / "GPD" / "REQUIREMENTS.md").write_text("# Requirements\n\n- Confirm objective.\n", encoding="utf-8")
+        (tmp_path / "GPD" / "ROADMAP.md").write_text("# Roadmap\n\n## Milestone v1.0\n", encoding="utf-8")
+        _write_project_contract_state(tmp_path)
+        _write_literature_review_anchor_file(tmp_path)
+        _write_research_map_anchor_files(tmp_path)
+
+        manifest = load_workflow_stage_manifest("new-milestone")
+        stage = manifest.get_stage("roadmap_authoring")
+
+        ctx = init_new_milestone(tmp_path, stage="roadmap_authoring")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["staged_loading"]["workflow_id"] == "new-milestone"
+        assert ctx["staged_loading"]["stage_id"] == "roadmap_authoring"
+        assert ctx["staged_loading"]["loaded_authorities"] == [
+            "workflows/new-milestone.md",
+            "templates/project.md",
+            "templates/requirements.md",
+        ]
+        assert ctx["staged_loading"]["writes_allowed"] == [
+            "GPD/PROJECT.md",
+            "GPD/STATE.md",
+            "GPD/REQUIREMENTS.md",
+            "GPD/ROADMAP.md",
+        ]
+        assert ctx["staged_loading"]["checkpoints"] == [
+            "objectives finalized",
+            "roadmap authored",
+        ]
+        assert "requirements_content" in ctx
+        assert "roadmap_content" in ctx
 
 
 # ─── init_quick ───────────────────────────────────────────────────────────────
@@ -3470,6 +3602,93 @@ class TestInitMapResearch:
         assert "Benchmark Ref 2024" in ctx["active_reference_context"]
         assert "GPD/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
 
+    def test_stage_bootstrap_returns_only_manifest_required_fields(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _setup_project(tmp_path)
+        _write_project_contract_state(tmp_path)
+        _install_fake_stage_manifest(
+            monkeypatch,
+            workflow_id="map-research",
+            stages={
+                "bootstrap": [
+                    "mapper_model",
+                    "commit_docs",
+                    "research_mode",
+                    "has_maps",
+                    "project_contract",
+                    "project_contract_gate",
+                    "project_contract_load_info",
+                    "project_contract_validation",
+                    "active_reference_context",
+                    "reference_artifacts_content",
+                ]
+            },
+        )
+
+        ctx = init_map_research(tmp_path, stage="bootstrap")
+
+        assert ctx["staged_loading"]["workflow_id"] == "map-research"
+        assert ctx["staged_loading"]["stage_id"] == "bootstrap"
+        assert set(ctx) == {
+            "mapper_model",
+            "commit_docs",
+            "research_mode",
+            "has_maps",
+            "project_contract",
+            "project_contract_gate",
+            "project_contract_load_info",
+            "project_contract_validation",
+            "active_reference_context",
+            "reference_artifacts_content",
+            "staged_loading",
+        }
+
+
+class TestInitLiteratureReview:
+    def test_stage_loads_review_bootstrap_payload(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        _setup_project(tmp_path)
+        _write_project_contract_state(tmp_path)
+        _write_literature_review_anchor_file(tmp_path)
+        _install_fake_stage_manifest(
+            monkeypatch,
+            workflow_id="literature-review",
+            stages={
+                "bootstrap": [
+                    "topic",
+                    "slug",
+                    "commit_docs",
+                    "state_exists",
+                    "project_exists",
+                    "project_contract",
+                    "project_contract_gate",
+                    "project_contract_load_info",
+                    "project_contract_validation",
+                    "active_reference_context",
+                    "reference_artifacts_content",
+                ]
+            },
+        )
+
+        ctx = init_literature_review(tmp_path, topic="Curvature flow bounds", stage="bootstrap")
+
+        assert ctx["topic"] == "Curvature flow bounds"
+        assert ctx["slug"] == "curvature-flow-bounds"
+        assert ctx["staged_loading"]["workflow_id"] == "literature-review"
+        assert ctx["staged_loading"]["stage_id"] == "bootstrap"
+        assert set(ctx) == {
+            "topic",
+            "slug",
+            "commit_docs",
+            "state_exists",
+            "project_exists",
+            "project_contract",
+            "project_contract_gate",
+            "project_contract_load_info",
+            "project_contract_validation",
+            "active_reference_context",
+            "reference_artifacts_content",
+            "staged_loading",
+        }
+
 
 # ─── init_progress ────────────────────────────────────────────────────────────
 
@@ -4037,3 +4256,142 @@ class TestInitPhaseOp:
         result = init_phase_op(tmp_path, phase="1", includes={"state"})
 
         _assert_structured_state_context(result, tmp_path)
+
+    def test_stage_bootstrap_returns_only_manifest_required_fields(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-test")
+        _write_structured_state_payload(tmp_path)
+        _write_project_contract_state(tmp_path)
+        _install_fake_stage_manifest(
+            monkeypatch,
+            workflow_id="research-phase",
+            stages={
+                "bootstrap": [
+                    "executor_model",
+                    "verifier_model",
+                    "commit_docs",
+                    "research_mode",
+                    "phase_found",
+                    "phase_dir",
+                    "phase_number",
+                    "phase_name",
+                    "project_contract",
+                    "project_contract_gate",
+                    "project_contract_load_info",
+                    "project_contract_validation",
+                    "active_reference_context",
+                    "reference_artifacts_content",
+                ]
+            },
+        )
+
+        result = init_phase_op(tmp_path, phase="1", stage="bootstrap")
+
+        assert result["staged_loading"]["workflow_id"] == "research-phase"
+        assert result["staged_loading"]["stage_id"] == "bootstrap"
+        assert set(result) == {
+            "executor_model",
+            "verifier_model",
+            "commit_docs",
+            "research_mode",
+            "phase_found",
+            "phase_dir",
+            "phase_number",
+            "phase_name",
+            "project_contract",
+            "project_contract_gate",
+            "project_contract_load_info",
+            "project_contract_validation",
+            "active_reference_context",
+            "reference_artifacts_content",
+            "staged_loading",
+        }
+
+    def test_init_research_phase_alias_uses_the_same_stage_manifest_contract(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-test")
+        _install_fake_stage_manifest(
+            monkeypatch,
+            workflow_id="research-phase",
+            stages={
+                "bootstrap": [
+                    "phase_found",
+                    "phase_dir",
+                    "phase_number",
+                    "phase_name",
+                    "commit_docs",
+                    "research_mode",
+                ]
+            },
+        )
+
+        result = init_research_phase(tmp_path, phase="1", stage="bootstrap")
+
+        assert result["staged_loading"]["workflow_id"] == "research-phase"
+        assert result["staged_loading"]["stage_id"] == "bootstrap"
+        assert set(result) == {
+            "phase_found",
+            "phase_dir",
+            "phase_number",
+            "phase_name",
+            "commit_docs",
+            "research_mode",
+            "staged_loading",
+        }
+
+    def test_stage_research_handoff_returns_only_manifest_required_fields(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _setup_project(tmp_path)
+        _create_phase_dir(tmp_path, "01-test")
+        _install_fake_stage_manifest(
+            monkeypatch,
+            workflow_id="research-phase",
+            stages={
+                "bootstrap": [
+                    "phase_found",
+                    "phase_dir",
+                    "phase_number",
+                    "phase_name",
+                    "commit_docs",
+                    "research_mode",
+                ],
+                "research_handoff": [
+                    "commit_docs",
+                    "autonomy",
+                    "review_cadence",
+                    "research_mode",
+                    "phase_found",
+                    "phase_dir",
+                    "phase_number",
+                    "phase_name",
+                    "phase_slug",
+                    "padded_phase",
+                    "contract_intake",
+                    "effective_reference_intake",
+                    "active_reference_context",
+                    "reference_artifact_files",
+                    "reference_artifacts_content",
+                    "selected_protocol_bundle_ids",
+                    "protocol_bundle_context",
+                    "protocol_bundle_verifier_extensions",
+                    "current_execution",
+                    "config_content",
+                    "state_content",
+                    "roadmap_content",
+                ],
+            },
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=(
+                r"research-phase stage 'research_handoff' requires unavailable init field\(s\): "
+                r"config_content, state_content, roadmap_content"
+            ),
+        ):
+            init_research_phase(tmp_path, phase="1", stage="research_handoff")

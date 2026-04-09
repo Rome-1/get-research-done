@@ -462,3 +462,15 @@ class TestResolveTier:
         )
         tier = resolve_tier(tmp_path, "gpd-project-researcher")
         assert tier == ModelTier.TIER_3
+
+    def test_phase_researcher_resolve_tier_defaults_to_tier_2(self, tmp_path: Path) -> None:
+        (tmp_path / "GPD").mkdir()
+        (tmp_path / "GPD" / "config.json").write_text("{}", encoding="utf-8")
+
+        tier = resolve_tier(tmp_path, "gpd-phase-researcher")
+
+        assert tier == ModelTier.TIER_2
+
+    def test_project_researcher_agent_tier_tracks_profile_specific_overrides(self) -> None:
+        assert resolve_agent_tier("gpd-project-researcher", ModelProfile.REVIEW) == ModelTier.TIER_2
+        assert resolve_agent_tier("gpd-project-researcher", ModelProfile.PAPER_WRITING) == ModelTier.TIER_3

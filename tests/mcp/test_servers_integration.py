@@ -446,6 +446,8 @@ class TestSkillsServerIntegration:
         assert "gpd-debug" in names or "gpd-debugger" in names
         assert "gpd-discover" in names
         assert "gpd-peer-review" in names
+        assert "gpd-research-phase" in names
+        assert "gpd-phase-researcher" in names
 
         # Each skill has expected shape
         for skill in result["skills"]:
@@ -462,6 +464,22 @@ class TestSkillsServerIntegration:
         names = {skill["name"] for skill in result["skills"]}
         assert {"gpd-consistency-checker", "gpd-plan-checker", "gpd-verifier"}.issubset(names)
         assert all(skill["category"] == "verification" for skill in result["skills"])
+
+    def test_list_skills_by_category_keeps_research_vertical_visible(self):
+        from gpd.mcp.servers.skills_server import list_skills
+
+        result = list_skills(category="research")
+
+        assert result["count"] > 0
+        names = {skill["name"] for skill in result["skills"]}
+        assert {
+            "gpd-research-phase",
+            "gpd-phase-researcher",
+            "gpd-project-researcher",
+            "gpd-literature-review",
+            "gpd-literature-reviewer",
+        }.issubset(names)
+        assert all(skill["category"] == "research" for skill in result["skills"])
 
     def test_debug_command_and_debugger_agent_surfaces_remain_available(self):
         from gpd.mcp.servers.skills_server import get_skill, list_skills
@@ -557,6 +575,100 @@ class TestSkillsServerIntegration:
         assert "Treat `content` as the wrapper/context surface." in result["loading_hint"]
         assert "Load `schema_documents` and `contract_documents` too when present" in result["loading_hint"]
 
+    def test_get_skill_research_phase_surfaces_staged_loading_sidecar(self):
+        from gpd.mcp.servers.skills_server import get_skill
+
+        result = get_skill("gpd-research-phase")
+
+        assert "error" not in result
+        assert result["name"] == "gpd-research-phase"
+        assert result["category"] == "research"
+        assert result["staged_loading"]["workflow_id"] == "research-phase"
+        assert result["staged_loading"]["stages"][0]["id"] == "phase_bootstrap"
+        assert result["staged_loading"]["stages"][0]["loaded_authorities"] == [
+            "workflows/research-phase.md",
+            "references/orchestration/model-profile-resolution.md",
+        ]
+        assert result["structured_metadata_authority"]["staged_loading"] == "mirrored"
+
+    def test_get_skill_literature_review_surfaces_command_and_agent_vertical(self):
+        from gpd.mcp.servers.skills_server import get_skill
+
+        command = get_skill("gpd-literature-review")
+        reviewer = get_skill("gpd-literature-reviewer")
+
+        assert "error" not in command
+        assert "error" not in reviewer
+        assert command["name"] == "gpd-literature-review"
+        assert command["category"] == "research"
+        assert command["allowed_tools_surface"] == "command.allowed-tools"
+        assert command["context_mode"] == "project-aware"
+        assert reviewer["name"] == "gpd-literature-reviewer"
+        assert reviewer["category"] == "research"
+        assert reviewer["allowed_tools_surface"] == "agent.tools"
+        assert "Why subagent" in command["content"]
+        assert "literature-review" in reviewer["content"]
+
+    def test_get_skill_project_researcher_surfaces_one_shot_handoff_contract(self):
+        from gpd.mcp.servers.skills_server import get_skill
+
+        result = get_skill("gpd-project-researcher")
+
+        assert "error" not in result
+        assert result["name"] == "gpd-project-researcher"
+        assert result["category"] == "research"
+        assert result["allowed_tools_surface"] == "agent.tools"
+        assert result["content_authority"] == "canonical"
+        assert result["structured_metadata_authority"]["content"] == "canonical"
+        assert result["structured_metadata_authority"]["allowed_tools"] == "mirrored"
+        assert result["structured_metadata_authority"]["agent_policy"] == "mirrored"
+        assert "Checkpoint after the initial survey with scope confirmation." in result["content"]
+        assert "gpd_return:" in result["content"]
+        assert "status: completed | checkpoint | blocked | failed" in result["content"]
+        assert "wait for confirmation" not in result["content"]
+        assert "pause here for approval" not in result["content"]
+        assert "ask the user then continue" not in result["content"]
+
+    def test_get_skill_research_synthesizer_and_literature_bootstrap_surfaces_remain_projected(self):
+        from gpd import registry
+        from gpd.mcp.servers.skills_server import get_skill
+
+        summary_contract = {
+            "write_scope": {"mode": "scoped_write", "allowed_paths": ["GPD/literature/SUMMARY.md"]},
+            "expected_artifacts": ["GPD/literature/SUMMARY.md"],
+            "shared_state_policy": "return_only",
+        }
+
+        synthesizer = get_skill("gpd-research-synthesizer")
+        new_project = get_skill("gpd-new-project")
+        new_milestone = get_skill("gpd-new-milestone")
+
+        assert "error" not in synthesizer
+        assert synthesizer["name"] == "gpd-research-synthesizer"
+        assert synthesizer["allowed_tools_surface"] == "agent.tools"
+        assert synthesizer["content_authority"] == "canonical"
+        assert synthesizer["structured_metadata_authority"] == {
+            "content": "canonical",
+            "allowed_tools": "mirrored",
+            "agent_policy": "mirrored",
+        }
+        assert "This agent writes only `GPD/literature/SUMMARY.md`;" in synthesizer["content"]
+        assert "files_written` must list only files actually written in this run." in synthesizer["content"]
+        assert "Use only status names: `completed` | `checkpoint` | `blocked` | `failed`." in synthesizer["content"]
+        assert "gpd_return:" in synthesizer["content"]
+
+        expected_project_spawn_contracts = [dict(contract) for contract in registry.get_command("gpd:new-project").spawn_contracts]
+        expected_milestone_spawn_contracts = [
+            dict(contract) for contract in registry.get_command("gpd:new-milestone").spawn_contracts
+        ]
+
+        assert new_project["spawn_contracts"] == expected_project_spawn_contracts
+        assert new_milestone["spawn_contracts"] == expected_milestone_spawn_contracts
+        assert summary_contract in new_project["spawn_contracts"]
+        assert summary_contract in new_milestone["spawn_contracts"]
+        assert new_project["structured_metadata_authority"]["spawn_contracts"] == "mirrored"
+        assert new_milestone["structured_metadata_authority"]["spawn_contracts"] == "mirrored"
+
     def test_get_skill_surfaces_template_backed_schema_documents_for_writing_and_resume(self):
         from gpd.mcp.servers.skills_server import get_skill
 
@@ -599,17 +711,38 @@ class TestSkillsServerIntegration:
                 "@{GPD_INSTALL_DIR}/templates/latex-preamble.md",
                 "@{GPD_INSTALL_DIR}/references/publication/figure-generation-templates.md",
                 "@{GPD_INSTALL_DIR}/references/publication/publication-pipeline-modes.md",
+                "@{GPD_INSTALL_DIR}/references/publication/publication-response-writer-handoff.md",
                 "@{GPD_INSTALL_DIR}/templates/paper/author-response.md",
+                "@{GPD_INSTALL_DIR}/templates/paper/referee-response.md",
             }
         )
         assert paper_writer_template_references == {
             "@{GPD_INSTALL_DIR}/templates/notation-glossary.md",
             "@{GPD_INSTALL_DIR}/templates/latex-preamble.md",
             "@{GPD_INSTALL_DIR}/templates/paper/author-response.md",
+            "@{GPD_INSTALL_DIR}/templates/paper/referee-response.md",
         }
         assert paper_writer["schema_references"] == ["@{GPD_INSTALL_DIR}/templates/paper/author-response.md"]
         assert paper_writer["schema_documents"]
         assert any(path.endswith("verification-core.md") for path in paper_writer_transitive_paths)
+        assert any(path.endswith("publication-response-writer-handoff.md") for path in paper_writer_referenced_paths)
+
+    def test_get_skill_surfaces_referee_reference_paths_and_transitive_metadata(self):
+        from gpd.mcp.servers.skills_server import get_skill
+
+        referee = get_skill("gpd-referee")
+        referee_referenced_paths = {entry["path"] for entry in referee["referenced_files"]}
+        referee_transitive_paths = {entry["path"] for entry in referee["transitive_referenced_files"]}
+
+        assert "error" not in referee
+        assert referee["reference_count"] == len(referee_referenced_paths)
+        assert referee["transitive_reference_count"] > referee["reference_count"]
+        assert any(path.endswith("peer-review-panel.md") for path in referee["contract_references"])
+        assert any(path.endswith("publication-review-round-artifacts.md") for path in referee_referenced_paths)
+        assert any(path.endswith("publication-response-artifacts.md") for path in referee_referenced_paths)
+        assert any(path.endswith("review-ledger-schema.md") for path in referee["schema_references"])
+        assert any(path.endswith("referee-decision-schema.md") for path in referee["schema_references"])
+        assert any(path.endswith("verification-core.md") for path in referee_transitive_paths)
 
     def test_get_skill_surfaces_lightweight_bibliographer_reference_paths_and_transitive_metadata(self):
         from gpd.mcp.servers.skills_server import get_skill
