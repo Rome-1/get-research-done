@@ -88,7 +88,10 @@ from gpd.core.public_surface_contract import (
 )
 from gpd.core.publication_review_paths import (
     manuscript_matches_review_artifact_path,
-    review_artifact_round,
+)
+from gpd.core.publication_runtime import (
+    publication_blockers_for_project,
+    resolve_latest_publication_review_artifacts,
 )
 from gpd.core.recovery_advice import (
     RecoveryAdvice,
@@ -388,16 +391,6 @@ class ReviewPreflightResult:
     public_runtime_command_prefix: str = ""
     local_cli_equivalence_guaranteed: bool = False
     dispatch_note: str = ""
-
-
-@dataclasses.dataclass(frozen=True)
-class PublicationReviewArtifacts:
-    """Latest staged publication-review artifacts discovered under GPD/review."""
-
-    round_number: int
-    round_suffix: str
-    review_ledger: Path | None
-    referee_decision: Path | None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -4301,30 +4294,114 @@ def init_new_project(
 
 
 @init_app.command("new-milestone")
-def init_new_milestone() -> None:
+def init_new_milestone(
+    stage: str | None = typer.Option(
+        None,
+        "--stage",
+        help="Load the staged new-milestone context for a specific stage id.",
+    ),
+) -> None:
     """Assemble context for starting a new milestone."""
     from gpd.core.context import init_new_milestone
 
-    _output(init_new_milestone(_get_cwd()))
+    try:
+        payload = init_new_milestone(_get_cwd(), stage=stage)
+    except ValueError as exc:
+        _error(str(exc))
+    _output(payload)
+
+
+@init_app.command("write-paper")
+def init_write_paper(
+    stage: str | None = typer.Option(
+        None,
+        "--stage",
+        help="Load the staged write-paper context for a specific stage id.",
+    ),
+) -> None:
+    """Assemble context for manuscript authoring."""
+    from gpd.core.context import init_write_paper
+
+    try:
+        payload = init_write_paper(_get_cwd(), stage=stage)
+    except ValueError as exc:
+        _error(str(exc))
+    _output(payload)
+
+
+@init_app.command("peer-review")
+def init_peer_review(
+    stage: str | None = typer.Option(
+        None,
+        "--stage",
+        help="Load the staged peer-review context for a specific stage id.",
+    ),
+) -> None:
+    """Assemble context for manuscript peer review."""
+    from gpd.core.context import init_peer_review
+
+    try:
+        payload = init_peer_review(_get_cwd(), stage=stage)
+    except ValueError as exc:
+        _error(str(exc))
+    _output(payload)
 
 
 @init_app.command("quick")
 def init_quick(
     description: list[str] = typer.Argument(None, help="Task description"),
+    stage: str | None = typer.Option(
+        None,
+        "--stage",
+        help="Load the staged quick context for a specific stage id.",
+    ),
 ) -> None:
     """Assemble context for a quick task."""
     from gpd.core.context import init_quick
 
     text = " ".join(description) if description else None
-    _output(init_quick(_get_cwd(), description=text))
+    try:
+        payload = init_quick(_get_cwd(), description=text, stage=stage)
+    except ValueError as exc:
+        _error(str(exc))
+    _output(payload)
 
 
 @init_app.command("resume")
-def init_resume() -> None:
+def init_resume(
+    stage: str | None = typer.Option(
+        None,
+        "--stage",
+        help="Load the staged resume-work context for a specific stage id.",
+    ),
+) -> None:
     """Assemble context for resuming previous work."""
     from gpd.core.context import init_resume
 
-    _output(init_resume(_get_cwd()))
+    _output(init_resume(_get_cwd(), stage=stage))
+
+
+@init_app.command("sync-state")
+def init_sync_state(
+    prefer: str | None = typer.Option(
+        None,
+        "--prefer",
+        help="Preferred mirrored-field authority for sync-state: md or json.",
+    ),
+    stage: str | None = typer.Option(
+        None,
+        "--stage",
+        help="Load the staged sync-state context for a specific stage id.",
+    ),
+) -> None:
+    """Assemble context for state reconciliation."""
+    from gpd.core.context import init_sync_state
+
+    try:
+        payload = init_sync_state(_get_cwd(), prefer_mode=prefer, stage=stage)
+    except ValueError as exc:
+        _error(str(exc))
+    _output(payload)
 
 
 @init_app.command("verify-work")
@@ -5537,39 +5614,6 @@ def _validate_bibliography_audit_semantics(bibliography_audit: Path) -> tuple[bo
     )
 
 
-_REVIEW_LEDGER_FILENAME_RE = re.compile(r"^REVIEW-LEDGER(?P<round_suffix>-R(?P<round>\d+))?\.json$")
-_REFEREE_DECISION_FILENAME_RE = re.compile(r"^REFEREE-DECISION(?P<round_suffix>-R(?P<round>\d+))?\.json$")
-_CLAIMS_FILENAME_RE = re.compile(r"^CLAIMS(?P<round_suffix>-R(?P<round>\d+))?\.json$")
-
-
-def _latest_publication_review_artifacts(review_dir: Path) -> PublicationReviewArtifacts | None:
-    """Return the latest round-specific review-ledger/decision pair, if any."""
-    ledger_by_round: dict[int, Path] = {}
-    decision_by_round: dict[int, Path] = {}
-
-    for path in sorted(review_dir.glob("REVIEW-LEDGER*.json")):
-        details = review_artifact_round(path, pattern=_REVIEW_LEDGER_FILENAME_RE)
-        if details is not None:
-            ledger_by_round[details[0]] = path
-
-    for path in sorted(review_dir.glob("REFEREE-DECISION*.json")):
-        details = review_artifact_round(path, pattern=_REFEREE_DECISION_FILENAME_RE)
-        if details is not None:
-            decision_by_round[details[0]] = path
-
-    all_rounds = sorted({*ledger_by_round, *decision_by_round}, reverse=True)
-    if not all_rounds:
-        return None
-
-    round_number = all_rounds[0]
-    return PublicationReviewArtifacts(
-        round_number=round_number,
-        round_suffix="" if round_number <= 1 else f"-R{round_number}",
-        review_ledger=ledger_by_round.get(round_number),
-        referee_decision=decision_by_round.get(round_number),
-    )
-
-
 _PHASE_EXECUTED_STATUSES = {
     "phase complete — ready for verification",
     "verifying",
@@ -5710,52 +5754,6 @@ def _current_review_phase_subject(cwd: Path) -> str | None:
         return None
     current_phase = phase_normalize(str(position.get("current_phase") or "")).strip()
     return current_phase or None
-
-
-_PUBLICATION_BLOCKER_PATTERNS = (
-    re.compile(r"\bpublication\b"),
-    re.compile(r"\b(arxiv|submission|manuscript)\b"),
-    re.compile(r"\b(peer review|peer-review|review round|referee)\b"),
-    re.compile(r"\b(journal|venue)\b"),
-)
-
-
-def _looks_like_publication_blocker(text: str) -> bool:
-    """Return True when text clearly refers to publication/review readiness."""
-    lowered = text.casefold().strip()
-    return any(pattern.search(lowered) for pattern in _PUBLICATION_BLOCKER_PATTERNS)
-
-
-def _current_publication_blockers(cwd: Path) -> list[str]:
-    """Return unresolved publication blockers from state.json."""
-    from gpd.core.state import load_state_json
-
-    state_obj = load_state_json(cwd)
-    if not isinstance(state_obj, dict):
-        return []
-
-    raw_blockers = state_obj.get("blockers") or []
-    blockers: list[str] = []
-    for item in raw_blockers:
-        if isinstance(item, str):
-            text = item.strip()
-            if not text:
-                continue
-            lowered = text.lower()
-            if "[resolved]" in lowered or "~~" in text:
-                continue
-            if _looks_like_publication_blocker(text):
-                blockers.append(text)
-        elif isinstance(item, dict) and not item.get("resolved", False):
-            text = str(item.get("text") or item.get("description") or "").strip()
-            labels = " ".join(
-                str(item.get(key) or "").strip()
-                for key in ("kind", "type", "category", "tag", "scope")
-                if str(item.get(key) or "").strip()
-            )
-            if text and (_looks_like_publication_blocker(text) or (labels and _looks_like_publication_blocker(labels))):
-                blockers.append(text)
-    return blockers
 
 
 def _has_any_phase_summary(phases_dir: Path) -> bool:
@@ -7177,7 +7175,7 @@ def _build_review_preflight(
                     )
 
                 if "publication_blockers" in requested_publication_checks:
-                    publication_blockers = _current_publication_blockers(project_cwd)
+                    publication_blockers = publication_blockers_for_project(project_cwd)
                     add_check(
                         "publication_blockers",
                         not publication_blockers,
@@ -7201,7 +7199,10 @@ def _build_review_preflight(
                     }
                 )
                 if review_checks_requested:
-                    latest_review_artifacts = _latest_publication_review_artifacts(layout.gpd / "review")
+                    latest_review_artifacts = resolve_latest_publication_review_artifacts(
+                        project_cwd,
+                        manuscript,
+                    )
                     if latest_review_artifacts is None:
                         if "review_ledger" in review_checks_requested:
                             add_check(

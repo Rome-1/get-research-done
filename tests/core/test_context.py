@@ -30,8 +30,10 @@ from gpd.core.context import (
     init_progress,
     init_quick,
     init_resume,
+    init_sync_state,
     init_todos,
     init_verify_work,
+    init_write_paper,
     load_config,
 )
 from gpd.core.errors import ConfigError, ValidationError
@@ -39,7 +41,7 @@ from gpd.core.frontmatter import compute_knowledge_reviewed_content_sha256
 from gpd.core.recent_projects import record_recent_project
 from gpd.core.reproducibility import compute_sha256
 from gpd.core.resume_surface import RESUME_COMPATIBILITY_ALIAS_FIELDS
-from gpd.core.workflow_staging import NEW_PROJECT_INIT_FIELDS
+from gpd.core.workflow_staging import load_workflow_stage_manifest
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
@@ -2177,6 +2179,13 @@ class TestInitNewProject:
         assert ctx["staged_loading"]["stage_id"] == "scope_intake"
         assert ctx["staged_loading"]["order"] == 1
         assert ctx["staged_loading"]["loaded_authorities"] == ["workflows/new-project.md"]
+        assert "references/research/questioning.md" in ctx["staged_loading"]["must_not_eager_load"]
+        assert "templates/project-contract-schema.md" in ctx["staged_loading"]["must_not_eager_load"]
+        assert ctx["staged_loading"]["checkpoints"] == [
+            "detect existing workspace state",
+            "surface the first scoping question",
+            "preserve contract gate visibility without assuming approval-stage authority",
+        ]
         assert ctx["staged_loading"]["next_stages"] == ["scope_approval"]
 
     def test_new_project_stage_scope_approval_filters_payload(self, tmp_path: Path) -> None:
@@ -2198,6 +2207,51 @@ class TestInitNewProject:
             "templates/project-contract-grounding-linkage.md",
             "references/shared/canonical-schema-discipline.md",
         ]
+        assert "templates/project.md" in ctx["staged_loading"]["must_not_eager_load"]
+        assert "templates/requirements.md" in ctx["staged_loading"]["must_not_eager_load"]
+        assert ctx["staged_loading"]["checkpoints"] == [
+            "approval gate has passed",
+            "project contract is ready for persistence",
+        ]
+
+    def test_new_project_stage_post_scope_filters_payload(self, tmp_path: Path) -> None:
+        from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+        _setup_project(tmp_path)
+        _write_project_contract_state(tmp_path)
+
+        manifest = load_workflow_stage_manifest("new-project")
+        stage = manifest.get_stage("post_scope")
+
+        ctx = init_new_project(tmp_path, stage="post_scope")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["staged_loading"]["workflow_id"] == "new-project"
+        assert ctx["staged_loading"]["stage_id"] == "post_scope"
+        assert ctx["staged_loading"]["loaded_authorities"] == [
+            "references/ui/ui-brand.md",
+            "templates/project.md",
+            "templates/requirements.md",
+        ]
+        assert ctx["staged_loading"]["writes_allowed"] == [
+            "GPD/PROJECT.md",
+            "GPD/REQUIREMENTS.md",
+            "GPD/ROADMAP.md",
+            "GPD/STATE.md",
+            "GPD/state.json",
+            "GPD/config.json",
+            "GPD/CONVENTIONS.md",
+            "GPD/literature/PRIOR-WORK.md",
+            "GPD/literature/METHODS.md",
+            "GPD/literature/COMPUTATIONAL.md",
+            "GPD/literature/PITFALLS.md",
+            "GPD/literature/SUMMARY.md",
+        ]
+        assert ctx["staged_loading"]["next_stages"] == []
+        assert "reference_artifacts_content" not in ctx
+        assert "active_reference_context" not in ctx
+        assert "effective_reference_intake" not in ctx
+        assert "reference_artifact_files" not in ctx
 
     def test_new_project_stage_rejects_unknown_stage(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -2246,14 +2300,24 @@ class TestInitNewProject:
         assert ctx["project_contract_validation"]["valid"] is True
 
     def test_stage_scope_intake_returns_only_manifest_required_fields(self, tmp_path: Path) -> None:
+        from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+        manifest = load_workflow_stage_manifest("new-project")
+        stage = manifest.get_stage("scope_intake")
+
         ctx = init_new_project(tmp_path, stage="scope_intake")
 
-        assert set(ctx) == {*NEW_PROJECT_INIT_FIELDS, "staged_loading"}
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
         assert ctx["staged_loading"]["workflow_id"] == "new-project"
         assert ctx["staged_loading"]["stage_id"] == "scope_intake"
         assert ctx["staged_loading"]["order"] == 1
         assert ctx["staged_loading"]["loaded_authorities"] == ["workflows/new-project.md"]
         assert "references/research/questioning.md" in ctx["staged_loading"]["must_not_eager_load"]
+        assert ctx["staged_loading"]["checkpoints"] == [
+            "detect existing workspace state",
+            "surface the first scoping question",
+            "preserve contract gate visibility without assuming approval-stage authority",
+        ]
         assert ctx["staged_loading"]["writes_allowed"] == []
 
     def test_stage_scope_approval_returns_only_contract_fields(self, tmp_path: Path) -> None:
@@ -2279,6 +2343,140 @@ class TestInitNewProject:
         with pytest.raises(ValueError, match="Unknown new-project stage"):
             init_new_project(tmp_path, stage="does-not-exist")
 
+    def test_resume_work_stage_resume_bootstrap_filters_payload(self, tmp_path: Path) -> None:
+        from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+        _setup_project(tmp_path)
+        _write_project_contract_state(tmp_path)
+        _write_literature_review_anchor_file(tmp_path)
+
+        manifest = load_workflow_stage_manifest("resume-work")
+        stage = manifest.get_stage("resume_bootstrap")
+
+        ctx = init_resume(tmp_path, stage="resume_bootstrap")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["staged_loading"]["workflow_id"] == "resume-work"
+        assert ctx["staged_loading"]["stage_id"] == "resume_bootstrap"
+        assert "templates/state-json-schema.md" in ctx["staged_loading"]["must_not_eager_load"]
+        assert "reference_artifacts_content" not in ctx
+        assert "active_reference_context" not in ctx
+        assert "project_contract_gate" not in ctx
+
+    def test_resume_work_stage_state_restore_filters_payload(self, tmp_path: Path) -> None:
+        from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+        _setup_project(tmp_path)
+        _write_project_contract_state(tmp_path)
+
+        manifest = load_workflow_stage_manifest("resume-work")
+        stage = manifest.get_stage("state_restore")
+
+        ctx = init_resume(tmp_path, stage="state_restore")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert "reference_artifacts_content" not in ctx
+
+    def test_sync_state_stage_sync_bootstrap_filters_payload(self, tmp_path: Path) -> None:
+        from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+        _setup_project(tmp_path)
+
+        manifest = load_workflow_stage_manifest("sync-state")
+        stage = manifest.get_stage("sync_bootstrap")
+
+        ctx = init_sync_state(tmp_path, stage="sync_bootstrap")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["staged_loading"]["workflow_id"] == "sync-state"
+        assert ctx["staged_loading"]["stage_id"] == "sync_bootstrap"
+        assert "templates/state-json-schema.md" in ctx["staged_loading"]["must_not_eager_load"]
+        assert "state_md_content" not in ctx
+        assert "state_json_content" not in ctx
+
+    def test_sync_state_stage_conflict_analysis_filters_payload(self, tmp_path: Path) -> None:
+        from gpd.core.workflow_staging import load_workflow_stage_manifest
+
+        _setup_project(tmp_path)
+        _write_project_contract_state(tmp_path)
+
+        manifest = load_workflow_stage_manifest("sync-state")
+        stage = manifest.get_stage("conflict_analysis")
+
+        ctx = init_sync_state(tmp_path, stage="conflict_analysis")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert "state_json_content" in ctx
+        assert "state_md_content" in ctx
+
+    def test_write_paper_bootstrap_stays_small_without_stage(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        (tmp_path / "GPD" / "PROJECT.md").write_text("# Project\n\nPaper target.\n", encoding="utf-8")
+        _write_project_contract_state(tmp_path)
+        _write_manuscript_proof_review_artifacts(tmp_path)
+
+        ctx = init_write_paper(tmp_path)
+
+        assert ctx["project_exists"] is True
+        assert "staged_loading" not in ctx
+        assert "reference_artifacts_content" not in ctx
+        assert "state_content" not in ctx
+        assert "current_execution" not in ctx
+        assert "derived_manuscript_reference_status" in ctx
+        assert "derived_manuscript_proof_review_status" in ctx
+        assert "protocol_bundle_context" in ctx
+
+    def test_write_paper_stage_paper_bootstrap_filters_payload(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        (tmp_path / "GPD" / "PROJECT.md").write_text("# Project\n\nPaper target.\n", encoding="utf-8")
+        _write_project_contract_state(tmp_path)
+
+        manifest = load_workflow_stage_manifest("write-paper")
+        stage = manifest.get_stage("paper_bootstrap")
+
+        ctx = init_write_paper(tmp_path, stage="paper_bootstrap")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["staged_loading"]["workflow_id"] == "write-paper"
+        assert ctx["staged_loading"]["stage_id"] == "paper_bootstrap"
+        assert "reference_artifacts_content" not in ctx
+        assert "state_content" not in ctx
+        assert "derived_convention_lock" not in ctx
+
+    def test_write_paper_stage_outline_and_scaffold_loads_deferred_context(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        planning = tmp_path / "GPD"
+        (planning / "PROJECT.md").write_text("# Project\n\nPaper target.\n", encoding="utf-8")
+        (planning / "STATE.md").write_text("# State\n\nReady.\n", encoding="utf-8")
+        (planning / "ROADMAP.md").write_text("# Roadmap\n\n## Milestone v1.0\n", encoding="utf-8")
+        (planning / "REQUIREMENTS.md").write_text("# Requirements\n\n- Verified evidence\n", encoding="utf-8")
+        _write_project_contract_state(tmp_path)
+        _write_literature_review_anchor_file(tmp_path)
+        _write_research_map_anchor_files(tmp_path)
+        _write_structured_state_memory(tmp_path)
+
+        manifest = load_workflow_stage_manifest("write-paper")
+        stage = manifest.get_stage("outline_and_scaffold")
+
+        ctx = init_write_paper(tmp_path, stage="outline_and_scaffold")
+
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert ctx["staged_loading"]["stage_id"] == "outline_and_scaffold"
+        assert "Reference and Anchor Map" in ctx["reference_artifacts_content"]
+        assert "Universal crossing window" in ctx["reference_artifacts_content"]
+        assert "Milestone v1.0" in ctx["roadmap_content"]
+        assert "Verified evidence" in ctx["requirements_content"]
+        assert ctx["derived_convention_lock_count"] == 2
+        assert ctx["derived_intermediate_result_count"] == 1
+
+    def test_write_paper_stage_rejects_unknown_stage(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+
+        with pytest.raises(ValueError, match="Unknown write-paper stage 'bogus'"):
+            init_write_paper(tmp_path, stage="bogus")
+
 
 # ─── init_new_milestone ───────────────────────────────────────────────────────
 
@@ -2302,8 +2500,11 @@ class TestInitNewMilestone:
         ctx = init_new_milestone(tmp_path)
 
         assert ctx["project_contract"]["scope"]["question"] == "What benchmark must the project recover?"
+        assert "roadmapper_model" in ctx
         assert ctx["contract_intake"]["must_read_refs"] == ["ref-benchmark"]
         assert ctx["project_contract"]["context_intake"]["must_read_refs"] == ["ref-benchmark"]
+        assert ctx["project_contract_gate"]["visible"] is True
+        assert ctx["project_contract_gate"]["authoritative"] is True
         assert "ref-benchmark" in ctx["effective_reference_intake"]["must_read_refs"]
         assert "lit-anchor-benchmark-ref-2024" in ctx["effective_reference_intake"]["must_read_refs"]
         assert "GPD/phases/01-test-phase/01-SUMMARY.md" in ctx["effective_reference_intake"]["must_include_prior_outputs"]
@@ -2398,6 +2599,21 @@ class TestInitQuick:
         ctx = init_quick(tmp_path, "some task")
         # Falls back to default numbering when directory is unreadable
         assert ctx["next_num"] == 1
+
+    def test_stage_task_authoring_uses_quick_manifest_contract(self, tmp_path: Path) -> None:
+        _setup_project(tmp_path)
+        (tmp_path / "GPD" / "PROJECT.md").write_text("# Project\n", encoding="utf-8")
+        _write_project_contract_state(tmp_path)
+        manifest = load_workflow_stage_manifest("quick")
+
+        ctx = init_quick(tmp_path, "Quick reference check", stage="task_authoring")
+        stage = manifest.stage_by_id("task_authoring")
+
+        assert ctx["staged_loading"]["stage_id"] == "task_authoring"
+        assert set(ctx) == set(stage.required_init_fields) | {"staged_loading"}
+        assert "project_contract_gate" in ctx
+        assert "reference_artifacts_content" in ctx
+        assert "active_reference_context" in ctx
 
     def test_no_description(self, tmp_path: Path) -> None:
         _setup_project(tmp_path)
@@ -2797,7 +3013,14 @@ class TestInitVerifyWork:
 
         assert ctx["phase_found"] is True
         assert ctx["project_contract_gate"]["visible"] is True
+        assert ctx["phase_proof_review_status"]["scope"] == "phase"
+        assert ctx["phase_proof_review_status"]["state"] == "not_reviewed"
         assert ctx["staged_loading"]["stage_id"] == "session_router"
+        assert ctx["staged_loading"]["checkpoints"] == [
+            "active session check completed",
+            "review preflight completed",
+            "contract gate remains visible",
+        ]
         assert "project_contract" not in ctx
         assert "active_reference_context" not in ctx
         assert "reference_artifacts_content" not in ctx

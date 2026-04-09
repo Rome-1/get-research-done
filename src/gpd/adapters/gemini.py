@@ -119,13 +119,6 @@ _GEMINI_COMMAND_RUNTIME_NOTE = (
     "- Keep contract JSON in-memory or under `GPD/`. Do not write approved contracts to `/tmp`.\n"
     "</gemini_runtime_notes>\n\n"
 )
-_GEMINI_NEW_PROJECT_INIT_BLOCK = """```bash
-INIT=$(gpd --raw init new-project)
-if [ $? -ne 0 ]; then
-  echo "ERROR: gpd initialization failed: $INIT"
-  # STOP — display the error to the user and do not proceed with the workflow.
-fi
-```"""
 _GEMINI_NEW_PROJECT_INIT_REPLACEMENT = """Run the init command as its own shell call in Gemini auto-edit mode. Do not wrap it in `INIT=$(...)` or an `if` block.
 
 ```bash
@@ -133,6 +126,16 @@ gpd --raw init new-project
 ```
 
 If the init command fails, stop, surface the error, and do not proceed with the workflow."""
+_GEMINI_NEW_PROJECT_INIT_BLOCK_RE = re.compile(
+    r"```bash\n"
+    r"INIT=\$\((?:gpd --raw init new-project(?: --stage [a-z_]+)?)\)\n"
+    r"if \[ \$\? -ne 0 \]; then\n"
+    r"  echo \"ERROR: (?:gpd )?[^\n]+: \$INIT\"\n"
+    r"  # STOP — display the error to the user and do not proceed with the workflow\.\n"
+    r"fi\n"
+    r"```",
+    re.MULTILINE,
+)
 _GEMINI_SET_PROFILE_BLOCK = """```bash
 gpd config ensure-section
 INIT=$(gpd --raw init progress --include state,config)
@@ -444,7 +447,7 @@ def _rewrite_gemini_shell_workflow_guidance(content: str) -> str:
     Gemini headless auto-edit they lead the model to generate commands that are
     denied before GPD ever runs.
     """
-    content = content.replace(_GEMINI_NEW_PROJECT_INIT_BLOCK, _GEMINI_NEW_PROJECT_INIT_REPLACEMENT)
+    content = _GEMINI_NEW_PROJECT_INIT_BLOCK_RE.sub(_GEMINI_NEW_PROJECT_INIT_REPLACEMENT, content)
     content = _GEMINI_SET_PROFILE_BLOCK_RE.sub(_GEMINI_SET_PROFILE_REPLACEMENT, content)
     content = content.replace(_GEMINI_MINIMAL_COMMIT_BLOCK, _GEMINI_MINIMAL_COMMIT_REPLACEMENT)
     content = re.sub(

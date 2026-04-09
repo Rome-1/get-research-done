@@ -1,6 +1,6 @@
 ---
 name: gpd:new-milestone
-description: Start a new research milestone cycle — update PROJECT.md and route to requirements
+description: Start a new research milestone cycle — staged init, requirements, and roadmap
 argument-hint: "[milestone name, e.g., 'v1.1 Finite-Temperature Extension']"
 context_mode: project-required
 allowed-tools:
@@ -13,7 +13,7 @@ allowed-tools:
 
 
 <objective>
-Start a new research milestone: questioning → literature research (optional) → requirements → roadmap.
+Start a new research milestone: questioning -> literature research (optional) -> requirements -> staged roadmap handoff.
 
 Continuation equivalent of new-project. Research project exists, PROJECT.md has history. Gathers "what's next", updates PROJECT.md, then runs requirements → roadmap cycle while honoring `planning.commit_docs` for milestone artifact commits.
 
@@ -47,6 +47,7 @@ Milestone name: $ARGUMENTS (optional - will prompt if not provided)
 
 <process>
 **Follow the new-milestone workflow** from `@{GPD_INSTALL_DIR}/workflows/new-milestone.md`.
+Use the workflow's staged init: bootstrap context first, then a fresh late-stage init before roadmapping. The roadmapper handoff must prove freshness with a typed return and `files_written`.
 
 Load late-stage authorities only when the workflow reaches the matching stage:
 - Read {GPD_INSTALL_DIR}/references/research/questioning.md only when you need guided milestone questioning.
@@ -70,7 +71,7 @@ Load late-stage authorities only when the workflow reaches the matching stage:
 - [ ] Literature survey completed (if selected) — 4 parallel agents, milestone-aware
 - [ ] Research requirements gathered and scoped per category
 - [ ] REQUIREMENTS.md created with REQ-IDs
-- [ ] gpd-roadmapper spawned with phase numbering context
+- [ ] gpd-roadmapper spawned with staged continuation context
 - [ ] Roadmap files written immediately (not draft)
 - [ ] User feedback incorporated (if any)
 - [ ] ROADMAP.md phases continue from previous milestone

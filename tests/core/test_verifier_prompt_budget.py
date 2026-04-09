@@ -43,9 +43,9 @@ def test_gpd_verifier_prompt_surface_stays_within_expected_budget() -> None:
         path_prefix=PATH_PREFIX,
     )
 
-    assert metrics.raw_include_count <= 7
-    assert metrics.expanded_line_count <= 9000
-    assert metrics.expanded_char_count <= 540000
+    assert metrics.raw_include_count <= 4
+    assert metrics.expanded_line_count <= 6500
+    assert metrics.expanded_char_count <= 430000
 
 
 @pytest.mark.parametrize("runtime", RUNTIMES)

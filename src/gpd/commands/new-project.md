@@ -16,12 +16,12 @@ allowed-tools:
 <context>
 **Flags:**
 - `--auto` — Automatic mode. Synthesizes a scoping contract from the supplied document, asks for one explicit scope approval, then runs research → requirements → roadmap with minimal follow-up interaction. Expects a research proposal document via @ reference.
-- `--minimal` — Fast bootstrapping mode. Uses one structured intake plus one scoping approval gate, then creates all `GPD/` artifacts with lean content. Scope, anchors, and decisive outputs are still required.
-- `--minimal @file.md` — Create project directly from a markdown file describing your research and phases. Parses research question, phases, and key parameters from the file.
+- `--minimal` — Fast staged-init mode. Uses one structured intake plus one scoping approval gate, then hands the roadmap and conventions to the staged post-scope agents with lean content. Scope, anchors, and decisive outputs are still required.
+- `--minimal @file.md` — Create project directly from a markdown file describing your research and staged continuation path. Parses research question, anchors, and key work chunks from the file.
 </context>
 
 <objective>
-Initialize a new physics research project through one flow: questioning or structured intake → scoping contract approval → literature survey (optional) → requirements → roadmap.
+Initialize a new physics research project through one flow: questioning or structured intake → scoping contract approval → literature survey (optional) → requirements → staged roadmap/conventions handoff.
 
 If no project config exists yet, start with physics questioning, surface a preset choice before workflow preferences, and ask detailed config questions only after scope approval and before the first project-artifact commit.
 
@@ -61,10 +61,10 @@ Execute the workflow end-to-end. Preserve all workflow gates (validation, approv
 Check `$ARGUMENTS` for flags:
 
 - **`--auto`** → Structured synthesis + scope approval
-- **`--minimal`** → Fast bootstrapping with scope approval
+- **`--minimal`** → Fast staged-init with scope approval
 - **`--minimal @file.md`** → Minimal mode with input file
 
-**If `--minimal` detected:** After Setup, route to the **minimal initialization path**. It keeps intake to one response, still requires a scoping contract with decisive outputs and anchors, and still needs explicit approval before downstream artifacts.
+**If `--minimal` detected:** After Setup, route to the **minimal staged initialization path**. It keeps intake to one response, still requires a scoping contract with decisive outputs and anchors, and then hands roadmap and conventions creation to the staged post-scope agents instead of building them directly in the main context.
 
 **If `--auto` detected:** After Setup, synthesize context from the provided document, repair blocking gaps only, present the scoping contract for approval, then run research → requirements → roadmap with smart defaults.
 </process>

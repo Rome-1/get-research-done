@@ -260,6 +260,7 @@ def _assert_installed_contract_visibility(
     executor: str,
     new_project: str,
     plan_phase: str,
+    write_paper: str,
     plan_schema: str,
     execute_phase: str,
     verify_work: str,
@@ -270,6 +271,7 @@ def _assert_installed_contract_visibility(
     executor = _canonicalize_runtime_markdown(executor, runtime=runtime)
     new_project = _canonicalize_runtime_markdown(new_project, runtime=runtime)
     plan_phase = _canonicalize_runtime_markdown(plan_phase, runtime=runtime)
+    write_paper = _canonicalize_runtime_markdown(write_paper, runtime=runtime)
     plan_schema = _canonicalize_runtime_markdown(plan_schema, runtime=runtime)
     execute_phase = _canonicalize_runtime_markdown(execute_phase, runtime=runtime)
     verify_work = _canonicalize_runtime_markdown(verify_work, runtime=runtime)
@@ -299,6 +301,13 @@ def _assert_installed_contract_visibility(
     assert "`approach_policy`" in new_project
     assert "`uncertainty_markers`" in new_project
     assert "`context_intake`, `approach_policy`, and `uncertainty_markers` must each stay as objects, not strings or lists." in new_project
+    assert "review_mode: publication" in write_paper
+    assert "GPD/AUTHOR-RESPONSE{round_suffix}.md" in write_paper
+    assert "GPD/review/REFEREE_RESPONSE{round_suffix}.md" in write_paper
+    assert "GPD/review/REVIEW-LEDGER{round_suffix}.json" in write_paper
+    assert "GPD/review/REFEREE-DECISION{round_suffix}.json" in write_paper
+    assert "GPD/REFEREE-REPORT{round_suffix}.md" in write_paper
+    assert "GPD/REFEREE-REPORT{round_suffix}.tex" in write_paper
 
     assert "Canonical contract schema and hard validation rules" in plan_phase
     assert (
@@ -656,6 +665,7 @@ def test_installed_prompt_contract_visibility_survives_adapter_projection(
     executor = _read_runtime_agent_prompt(target, runtime, "gpd-executor")
     new_project = _read_runtime_command_prompt(target.parent, target, runtime, "new-project")
     plan_phase = _read_runtime_command_prompt(target.parent, target, runtime, "plan-phase")
+    write_paper = _read_runtime_command_prompt(target.parent, target, runtime, "write-paper")
     plan_schema = (target / "get-physics-done" / "templates" / "plan-contract-schema.md").read_text(encoding="utf-8")
     execute_phase = _read_runtime_command_prompt(target.parent, target, runtime, "execute-phase")
     verify_work = _read_runtime_command_prompt(target.parent, target, runtime, "verify-work")
@@ -665,6 +675,7 @@ def test_installed_prompt_contract_visibility_survives_adapter_projection(
         executor,
         new_project,
         plan_phase,
+        write_paper,
         plan_schema,
         execute_phase,
         verify_work,

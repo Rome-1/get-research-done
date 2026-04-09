@@ -176,7 +176,6 @@
       "conditional_authorities": [],
       "must_not_eager_load": [
         "references/verification/core/verification-core.md",
-        "references/verification/meta/verification-independence.md",
         "references/shared/canonical-schema-discipline.md",
         "references/protocols/error-propagation-protocol.md",
         "templates/research-verification.md",

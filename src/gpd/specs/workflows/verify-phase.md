@@ -3,6 +3,8 @@ Verify research phase goal achievement through decisive verification. Check that
 
 Executed by a verification subagent spawned from execute-phase.md.
 
+`verify-phase` is the canonical owner of the verifier/proof child-return contract and artifact-gate seam for phase verification. Shared handoff mechanics live in `references/verification/core/verification-child-return-contract.md`, while report-schema and proof-audit authority stay local to this workflow.
+
 The standalone `gpd:verify-work` workflow reuses the same verification criteria through `verify-work.md`; this file itself is executed by the execute-phase orchestrator.
 </purpose>
 
@@ -38,6 +40,7 @@ For most research targets that means actual computation. For proof-bearing or `p
 <required_reading>
 @{GPD_INSTALL_DIR}/references/verification/core/verification-core.md
 @{GPD_INSTALL_DIR}/references/verification/core/verification-numerical.md
+@{GPD_INSTALL_DIR}/references/verification/core/verification-child-return-contract.md
 @{GPD_INSTALL_DIR}/references/verification/meta/verification-independence.md
 @{GPD_INSTALL_DIR}/references/protocols/error-propagation-protocol.md
 @{GPD_INSTALL_DIR}/templates/verification-report.md
@@ -154,6 +157,8 @@ If the phase includes a theorem-style claim or `proof_obligation` and no structu
 <step name="proof_obligation_gate">
 Detect whether any verification target is proof-bearing.
 
+Use the shared verification child-return contract for the generic handoff mechanics; keep the proof-redteam requirements below authoritative.
+
 Treat a target as proof-bearing when:
 
 - the contract includes an observable or claim with kind `proof_obligation`
@@ -181,7 +186,7 @@ When the proof-obligation gate finds a missing, stale, malformed, or non-passing
 CHECK_PROOF_MODEL=$(gpd resolve-model gpd-check-proof)
 ```
 
-> Runtime delegation rule: this is a single-turn handoff. If the spawned agent needs user input, it must checkpoint and return; do not keep the original run waiting inside the same task. Never trust the return text alone.
+> Runtime delegation rule: this is a single-turn handoff. Follow the shared verification child-return contract: if the spawned agent needs user input, it must checkpoint and return; do not keep the original run waiting inside the same task. Never trust the return text alone.
 
 ```
 task(
@@ -620,7 +625,7 @@ See {GPD_INSTALL_DIR}/templates/verification-report.md for complete template.
 </step>
 
 <step name="oracle_gate_check">
-**Before returning, verify that VERIFICATION.md contains at least one computational oracle block.**
+**Before returning, verify that VERIFICATION.md exists on disk, is named in the return envelope, passes the verification-contract schema gate, and contains at least one computational oracle block.**
 
 Scan the written VERIFICATION.md for evidence of actual code execution:
 
@@ -640,12 +645,14 @@ if [ -f "$VERIFICATION_FILE" ]; then
 fi
 ```
 
-If no computational output blocks are found, the verification is INCOMPLETE. The verifier must go back and execute at least one computational check before the workflow can proceed.
+If the file is missing, absent from `gpd_return.files_written`, or fails `gpd validate verification-contract "${VERIFICATION_FILE}"`, the verification is INCOMPLETE. If no computational output blocks are found, the verification is INCOMPLETE. The verifier must go back and execute at least one computational check before the workflow can proceed.
 
 This gate enforces the principle that verification must involve external computation, not just LLM reasoning about physics.
 </step>
 
 <step name="return_to_orchestrator">
+Route on `gpd_return.status`, not on headings. If the run reports `completed`, accept it only after `VERIFICATION.md` exists on disk, is named in `gpd_return.files_written`, and passes `gpd validate verification-contract "${phase_dir}/${phase_number}-VERIFICATION.md"`. For proof-bearing phases, the sibling `*-PROOF-REDTEAM.md` must also exist and report `status: passed` before the phase can be treated as verified. If the run reports `checkpoint`, present the checkpoint and start a fresh continuation after user input. If it reports `blocked` or `failed`, keep the session fail-closed and surface the issues.
+
 Return status (`passed` | `gaps_found` | `expert_needed` | `human_needed`), score (N/M contract targets), independently confirmed count (K/M), report path.
 
 If gaps_found: list gaps with contract IDs, computation evidence, comparison verdict failures or forbidden-proxy violations, and recommended fix plan names.

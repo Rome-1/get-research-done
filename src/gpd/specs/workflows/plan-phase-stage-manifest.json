@@ -42,9 +42,9 @@
       "conditional_authorities": [],
       "must_not_eager_load": [
         "references/ui/ui-brand.md",
-        "templates/planner-subagent-prompt.md",
         "templates/phase-prompt.md",
-        "templates/plan-contract-schema.md"
+        "templates/plan-contract-schema.md",
+        "templates/planner-subagent-prompt.md"
       ],
       "allowed_tools": [
         "file_read",
@@ -114,7 +114,6 @@
       "conditional_authorities": [],
       "must_not_eager_load": [
         "references/ui/ui-brand.md",
-        "templates/planner-subagent-prompt.md",
         "templates/phase-prompt.md",
         "templates/plan-contract-schema.md"
       ],
@@ -278,6 +277,7 @@
         "requirements_content",
         "context_content",
         "research_content",
+        "experiment_design_content",
         "verification_content",
         "validation_content",
         "platform"
@@ -290,7 +290,6 @@
       "must_not_eager_load": [
         "references/ui/ui-brand.md",
         "templates/phase-prompt.md",
-        "templates/planner-subagent-prompt.md",
         "templates/plan-contract-schema.md"
       ],
       "allowed_tools": [

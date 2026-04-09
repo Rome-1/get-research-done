@@ -1054,12 +1054,6 @@ def test_write_paper_review_contract_uses_round_suffixed_referee_outputs() -> No
         "${PAPER_DIR}/ARTIFACT-MANIFEST.json",
         "${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json",
         "${PAPER_DIR}/reproducibility-manifest.json",
-        "GPD/review/CLAIMS{round_suffix}.json",
-        "GPD/review/STAGE-reader{round_suffix}.json",
-        "GPD/review/STAGE-literature{round_suffix}.json",
-        "GPD/review/STAGE-math{round_suffix}.json",
-        "GPD/review/STAGE-physics{round_suffix}.json",
-        "GPD/review/STAGE-interestingness{round_suffix}.json",
         "GPD/review/REVIEW-LEDGER{round_suffix}.json",
         "GPD/review/REFEREE-DECISION{round_suffix}.json",
         "GPD/REFEREE-REPORT{round_suffix}.md",
@@ -1183,6 +1177,45 @@ def test_write_paper_prompt_loads_figure_tracker_schema_before_updating_tracker(
         "references/shared/canonical-schema-discipline.md"
         in staging.stage("figure_and_section_authoring").loaded_authorities
     )
+
+
+def test_write_paper_stage_visibility_delays_publication_review_schemas_until_their_stage() -> None:
+    staging = registry.get_command("write-paper").staged_loading
+
+    assert staging is not None
+    assert staging.stage_ids() == (
+        "paper_bootstrap",
+        "outline_and_scaffold",
+        "figure_and_section_authoring",
+        "consistency_and_references",
+        "publication_review",
+    )
+
+    bootstrap = staging.stage("paper_bootstrap")
+    outline = staging.stage("outline_and_scaffold")
+    figures = staging.stage("figure_and_section_authoring")
+    consistency = staging.stage("consistency_and_references")
+    review = staging.stage("publication_review")
+
+    assert bootstrap.loaded_authorities == ("workflows/write-paper.md",)
+    assert "templates/paper/paper-config-schema.md" in outline.loaded_authorities
+    assert "templates/paper/artifact-manifest-schema.md" in outline.loaded_authorities
+    assert "templates/paper/bibliography-audit-schema.md" not in outline.loaded_authorities
+    assert "templates/paper/review-ledger-schema.md" not in outline.loaded_authorities
+    assert "templates/paper/referee-decision-schema.md" not in outline.loaded_authorities
+    assert "templates/paper/figure-tracker.md" in figures.loaded_authorities
+    assert "references/shared/canonical-schema-discipline.md" in figures.loaded_authorities
+    assert "templates/paper/bibliography-audit-schema.md" in consistency.loaded_authorities
+    assert "templates/paper/reproducibility-manifest.md" in consistency.loaded_authorities
+    assert "templates/paper/figure-tracker.md" not in consistency.loaded_authorities
+    assert "references/publication/peer-review-panel.md" in review.loaded_authorities
+    assert "references/publication/peer-review-reliability.md" in review.loaded_authorities
+    assert "templates/paper/review-ledger-schema.md" in review.loaded_authorities
+    assert "templates/paper/referee-decision-schema.md" in review.loaded_authorities
+    assert "templates/paper/paper-config-schema.md" not in review.loaded_authorities
+    assert "templates/paper/artifact-manifest-schema.md" not in review.loaded_authorities
+    assert "templates/paper/figure-tracker.md" not in review.loaded_authorities
+    assert "templates/paper/reproducibility-manifest.md" not in review.loaded_authorities
 
 
 def test_comparison_templates_match_full_comparison_verdict_subject_kind_enum() -> None:

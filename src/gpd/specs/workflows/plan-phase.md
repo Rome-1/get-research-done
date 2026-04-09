@@ -23,21 +23,117 @@ Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_
 - `autonomy=balanced` (default): Write the plan and pause only if the plan-checker raises issues or the planning choices need user judgment.
 - `autonomy=yolo`: Write the plan and proceed without pausing.
 - `research_mode=explore`: Always run research step even if research exists. Expand research and comparison coverage, but do not auto-create git-backed branches or branch-like plans just because alternatives appear.
-- `research_mode=exploit`: Reuse existing research only when it already covers the exact method family, anchors, and decisive evidence path for this phase. Otherwise run targeted research. Suppress optional tangents unless the user explicitly asks for them.
+- `research_mode=exploit`: Reuse existing research only when it already covers the exact method family, anchors, and decisive evidence path for this phase. Otherwise run targeted research. suppress optional tangents entirely unless the user explicitly requests them. Do not volunteer `gpd:branch-hypothesis` as the default response in exploit mode.
 - `research_mode=balanced` (default): Use the standard research depth for the phase and keep the default contract-checking and comparison coverage unless the phase needs broader or narrower review.
 - `research_mode=adaptive`: Start broad until prior decisive evidence or an explicit approach lock justifies narrowing. Do not infer “safe to narrow” from phase number alone.
 - Tangent policy: when multiple viable approaches or optional side questions appear, do NOT silently branch or widen the plan. Use the canonical tangent decision model below instead of assuming extra plans or branches. `git.branching_strategy` does not override this rule.
 - All modes still require contract completeness, decisive outputs, required anchors, forbidden-proxy handling, and disconfirming paths before execution starts.
 
-**Set shell variables from init JSON:**
+**Bind the current INIT snapshot into shell variables, then re-run this binding after every staged reload before routing on any later step:**
 
 ```bash
+bind_plan_phase_init() {
+  local init="$1"
+
+  researcher_model=$(echo "$init" | gpd json get .researcher_model --default "")
+  planner_model=$(echo "$init" | gpd json get .planner_model --default "")
+  checker_model=$(echo "$init" | gpd json get .checker_model --default "")
+  research_enabled=$(echo "$init" | gpd json get .research_enabled --default false)
+  plan_checker_enabled=$(echo "$init" | gpd json get .plan_checker_enabled --default false)
+  commit_docs=$(echo "$init" | gpd json get .commit_docs --default false)
+  autonomy=$(echo "$init" | gpd json get .autonomy --default balanced)
+  research_mode=$(echo "$init" | gpd json get .research_mode --default balanced)
+  phase_found=$(echo "$init" | gpd json get .phase_found --default false)
+  phase_dir=$(echo "$init" | gpd json get .phase_dir --default "")
+  phase_number=$(echo "$init" | gpd json get .phase_number --default "")
+  phase_name=$(echo "$init" | gpd json get .phase_name --default "")
+  phase_slug=$(echo "$init" | gpd json get .phase_slug --default "")
+  padded_phase=$(echo "$init" | gpd json get .padded_phase --default "")
+  has_research=$(echo "$init" | gpd json get .has_research --default false)
+  has_context=$(echo "$init" | gpd json get .has_context --default false)
+  has_plans=$(echo "$init" | gpd json get .has_plans --default false)
+  plan_count=$(echo "$init" | gpd json get .plan_count --default 0)
+  planning_exists=$(echo "$init" | gpd json get .planning_exists --default false)
+  roadmap_exists=$(echo "$init" | gpd json get .roadmap_exists --default false)
+  project_contract=$(echo "$init" | gpd json get .project_contract --default "")
+  project_contract_gate=$(echo "$init" | gpd json get .project_contract_gate --default "")
+  project_contract_load_info=$(echo "$init" | gpd json get .project_contract_load_info --default "")
+  project_contract_validation=$(echo "$init" | gpd json get .project_contract_validation --default "")
+  contract_intake=$(echo "$init" | gpd json get .contract_intake --default "")
+  effective_reference_intake=$(echo "$init" | gpd json get .effective_reference_intake --default "")
+  selected_protocol_bundle_ids=$(echo "$init" | gpd json get .selected_protocol_bundle_ids --default "")
+  protocol_bundle_count=$(echo "$init" | gpd json get .protocol_bundle_count --default 0)
+  protocol_bundle_context=$(echo "$init" | gpd json get .protocol_bundle_context --default "")
+  protocol_bundle_verifier_extensions=$(echo "$init" | gpd json get .protocol_bundle_verifier_extensions --default "")
+  active_reference_context=$(echo "$init" | gpd json get .active_reference_context --default "")
+  reference_artifact_files=$(echo "$init" | gpd json get .reference_artifact_files --default "")
+  reference_artifacts_content=$(echo "$init" | gpd json get .reference_artifacts_content --default "")
+  literature_review_files=$(echo "$init" | gpd json get .literature_review_files --default "")
+  literature_review_count=$(echo "$init" | gpd json get .literature_review_count --default 0)
+  research_map_reference_files=$(echo "$init" | gpd json get .research_map_reference_files --default "")
+  research_map_reference_count=$(echo "$init" | gpd json get .research_map_reference_count --default 0)
+  derived_manuscript_proof_review_status=$(echo "$init" | gpd json get .derived_manuscript_proof_review_status --default "")
+  state_content=$(echo "$init" | gpd json get .state_content --default "")
+  roadmap_content=$(echo "$init" | gpd json get .roadmap_content --default "")
+  requirements_content=$(echo "$init" | gpd json get .requirements_content --default "")
+  context_content=$(echo "$init" | gpd json get .context_content --default "")
+  research_content=$(echo "$init" | gpd json get .research_content --default "")
+  experiment_design_content=$(echo "$init" | gpd json get .experiment_design_content --default "")
+  verification_content=$(echo "$init" | gpd json get .verification_content --default "")
+  validation_content=$(echo "$init" | gpd json get .validation_content --default "")
+
+  RESEARCHER_MODEL="$researcher_model"
+  PLANNER_MODEL="$planner_model"
+  CHECKER_MODEL="$checker_model"
+  RESEARCH_ENABLED="$research_enabled"
+  PLAN_CHECKER_ENABLED="$plan_checker_enabled"
+  COMMIT_DOCS="$commit_docs"
+  AUTONOMY="$autonomy"
+  RESEARCH_MODE="$research_mode"
+  PHASE_FOUND="$phase_found"
+  PHASE_DIR="$phase_dir"
+  PHASE_NUMBER="$phase_number"
+  PHASE_NAME="$phase_name"
+  PHASE_SLUG="$phase_slug"
+  PADDED_PHASE="$padded_phase"
+  HAS_RESEARCH="$has_research"
+  HAS_CONTEXT="$has_context"
+  HAS_PLANS="$has_plans"
+  PLAN_COUNT="$plan_count"
+  PLANNING_EXISTS="$planning_exists"
+  ROADMAP_EXISTS="$roadmap_exists"
+  PROJECT_CONTRACT="$project_contract"
+  PROJECT_CONTRACT_GATE="$project_contract_gate"
+  PROJECT_CONTRACT_LOAD_INFO="$project_contract_load_info"
+  PROJECT_CONTRACT_VALIDATION="$project_contract_validation"
+  CONTRACT_INTAKE="$contract_intake"
+  EFFECTIVE_REFERENCE_INTAKE="$effective_reference_intake"
+  SELECTED_PROTOCOL_BUNDLE_IDS="$selected_protocol_bundle_ids"
+  PROTOCOL_BUNDLE_COUNT="$protocol_bundle_count"
+  PROTOCOL_BUNDLE_CONTEXT="$protocol_bundle_context"
+  PROTOCOL_BUNDLE_VERIFIER_EXTENSIONS="$protocol_bundle_verifier_extensions"
+  ACTIVE_REFERENCE_CONTEXT="$active_reference_context"
+  REFERENCE_ARTIFACT_FILES="$reference_artifact_files"
+  REFERENCE_ARTIFACTS_CONTENT="$reference_artifacts_content"
+  LITERATURE_REVIEW_FILES="$literature_review_files"
+  LITERATURE_REVIEW_COUNT="$literature_review_count"
+  RESEARCH_MAP_REFERENCE_FILES="$research_map_reference_files"
+  RESEARCH_MAP_REFERENCE_COUNT="$research_map_reference_count"
+  DERIVED_MANUSCRIPT_PROOF_REVIEW_STATUS="$derived_manuscript_proof_review_status"
+  STATE_CONTENT="$state_content"
+  ROADMAP_CONTENT="$roadmap_content"
+  REQUIREMENTS_CONTENT="$requirements_content"
+  CONTEXT_CONTENT="$context_content"
+  RESEARCH_CONTENT="$research_content"
+  EXPERIMENT_DESIGN_CONTENT="$experiment_design_content"
+  VERIFICATION_CONTENT="$verification_content"
+  VALIDATION_CONTENT="$validation_content"
+}
+
 REQUESTED_PHASE="${PHASE}"
 INIT="${BOOTSTRAP_INIT}"
 PHASE=$(echo "$INIT" | gpd json get .phase_number --default "${REQUESTED_PHASE}")
-PHASE_DIR=$(echo "$BOOTSTRAP_INIT" | gpd json get .phase_dir --default "")
-AUTONOMY=$(echo "$BOOTSTRAP_INIT" | gpd json get .autonomy --default balanced)
-RESEARCH_MODE=$(echo "$BOOTSTRAP_INIT" | gpd json get .research_mode --default balanced)
+bind_plan_phase_init "$INIT"
 ```
 
 **If `planning_exists` is false:** Error -- run `gpd:new-project` first.
@@ -52,21 +148,7 @@ RESEARCH_MODE=$(echo "$BOOTSTRAP_INIT" | gpd json get .research_mode --default b
 
 ## 1.5 Proof-Obligation Planning Gate
 
-Before honoring `--skip-verify`, `--light`, or checker-disabled config, classify whether this phase includes proof-bearing work. Treat the phase as proof-bearing when any of the following are true:
-
-- the approved contract or contract intake names an observable or claim with kind `proof_obligation`
-- the phase goal, requirements, or existing plan objectives mention `theorem`, `lemma`, `corollary`, `proposition`, `claim`, `proof`, `prove`, `show that`, `existence`, or `uniqueness`
-- the intended deliverable is a formal derivation whose acceptance depends on named hypotheses, parameters, or quantifiers being covered in a proof
-
-If classification is ambiguous, default to proof-bearing.
-
-For proof-bearing work:
-
-- `--skip-verify` does NOT waive checker review, theorem-coverage planning, or downstream proof red-teaming
-- light mode may shorten prose, but it may not remove theorem inventories, proof-obligation acceptance tests, or blocking review steps
-- every proof-bearing plan must reserve a sibling audit artifact named `{plan_id}-PROOF-REDTEAM.md`
-- every proof-bearing plan must surface the theorem statement, named parameters, hypotheses, quantifier/domain obligations, and intended conclusion clauses visibly enough that a later audit can detect missing coverage
-- never treat "we will tidy the proof later", "browser review later", or "human can inspect manually" as an acceptable substitute for an explicit proof-redteam task and fail-closed gate
+The planner template owns the detailed theorem and proof-redteam policy. The workflow only needs to keep proof-bearing work fail-closed: `--skip-verify` does NOT waive checker review, checker-disabled config does not waive proof review, and any proof-bearing plan set still needs checker review or an equivalent main-context audit before planning is considered complete. Proof-bearing work includes theorem-style claims, `claim`, lemma, corollary, proposition, proof, prove, existence, and uniqueness tasks.
 
 ## 2. Parse and Normalize Arguments
 
@@ -186,20 +268,14 @@ If the check fails, warn the user before spawning the researcher or planner. Con
 
 ## 4.6. Tangent Control During Planning
 
-When planning reveals multiple viable approaches or optional side questions, treat them as tangent candidates rather than silently branching the plan. Use the canonical tangent decision model above.
+Required 4-way tangent decision model:
 
-**Required 4-way tangent decision model:**
+- Branch as alternative hypothesis -> route through `gpd:tangent` or `gpd:branch-hypothesis`
+- Run a bounded side investigation now -> route through `gpd:quick`
+- Capture and defer -> route through `gpd:add-todo`
+- Stay on the main line -> create plans only for the selected primary approach
 
-1. `Branch as alternative hypothesis` -> route through `gpd:tangent` or `gpd:branch-hypothesis`
-2. `Run a bounded side investigation now` -> route through `gpd:quick`
-3. `Capture and defer` -> route through `gpd:add-todo`
-4. `Stay on the main line` -> continue planning only the selected primary approach
-
-**Workflow rule:** Do NOT silently create branch-like alternative plans, speculative side tasks, or comparison-only detours unless the user has already chosen one of the tangent paths above.
-
-Explore mode may surface this choice more often, but it still does not auto-approve a branch or side investigation.
-
-**Exploit-mode rule:** If `research_mode=exploit`, suppress optional tangents entirely unless the user explicitly requests them or the current approach is blocked by contract, anchor, or physics-validity failure. Do not volunteer `gpd:branch-hypothesis` as the default response in exploit mode.
+The planner template owns the detailed tangent decision model. The workflow only needs to surface an explicit checkpoint when the planner reports multiple viable approaches; do NOT silently branch, widen scope, or create detached side plans here.
 
 ## 4.7 Refresh Research-Routing Context
 
@@ -211,17 +287,12 @@ if [ $? -ne 0 ]; then
   echo "ERROR: staged plan-phase init failed: $INIT"
   exit 1
 fi
+bind_plan_phase_init "$INIT"
 ```
 
 ## 5. Handle Research
 
 **Skip if:** `--gaps` flag, `--skip-research` flag, or `research_enabled` is false (from init) without `--research` override.
-
-**Read research mode from init JSON:**
-
-```bash
-RESEARCH_MODE=$(echo "$INIT" | gpd json get .research_mode --default balanced)
-```
 
 ### Research Mode Decision Matrix
 
@@ -498,7 +569,7 @@ ls "${PHASE_DIR}"/*-PLAN.md 2>/dev/null
 
 ## 7. Use Context Files from INIT
 
-Refresh the stage-local planning payload now that research routing is complete:
+Refresh the stage-local planning payload now that research routing is complete and immediately rebind the live shell variables:
 
 ```bash
 INIT=$(gpd --raw init plan-phase "$PHASE" --stage planner_authoring)
@@ -506,25 +577,8 @@ if [ $? -ne 0 ]; then
   echo "ERROR: staged plan-phase init failed: $INIT"
   exit 1
 fi
+bind_plan_phase_init "$INIT"
 ```
-
-Extract the full planning context from INIT (`@` syntax does not cross `task()` boundaries):
-
-```bash
-STATE_CONTENT=$(echo "$INIT" | gpd json get .state_content --default "")
-ROADMAP_CONTENT=$(echo "$INIT" | gpd json get .roadmap_content --default "")
-REQUIREMENTS_CONTENT=$(echo "$INIT" | gpd json get .requirements_content --default "")
-VERIFICATION_CONTENT=$(echo "$INIT" | gpd json get .verification_content --default "")
-UAT_CONTENT=$(echo "$INIT" | gpd json get .validation_content --default "")
-CONTEXT_CONTENT=$(echo "$INIT" | gpd json get .context_content --default "")
-PROJECT_CONTRACT=$(echo "$INIT" | gpd json get .project_contract --default "")
-PROTOCOL_BUNDLE_CONTEXT=$(echo "$INIT" | gpd json get .protocol_bundle_context --default "")
-ACTIVE_REFERENCE_CONTEXT=$(echo "$INIT" | gpd json get .active_reference_context --default "")
-REFERENCE_ARTIFACTS_CONTENT=$(echo "$INIT" | gpd json get .reference_artifacts_content --default "")
-```
-
-RESEARCH_CONTENT=$(echo "$INIT" | gpd json get .research_content --default "")
-EXPERIMENT_DESIGN_CONTENT=$(echo "$INIT" | gpd json get .experiment_design_content --default "")
 
 ## 8. Spawn gpd-planner Agent
 
@@ -588,18 +642,24 @@ task(
 
 ## 9. Handle Planner Return
 
-**If the planner agent fails to spawn or returns an error:** Check if any PLAN.md files were written to the phase directory (agents write files first). If plans exist, proceed as if `gpd_return.status: completed`. If no plans, offer: 1) Retry planner, 2) Create plans in the main context, 3) Abort.
+**If the planner agent fails to spawn or returns an error:** Do not infer completion from files that already exist on disk. Treat any preexisting `PLAN.md` artifacts as a stale baseline unless this run returns a fresh typed `gpd_return` that names them in `gpd_return.files_written`. If no fresh planner return is available, keep the handoff incomplete. Offer: 1) Retry planner, 2) Create plans in the main context, 3) Abort.
 
 Human-readable headings such as `## PLANNING COMPLETE`, `## CHECKPOINT REACHED`, and `## PLANNING INCONCLUSIVE` are presentation only. Route on the planner's structured `gpd_return.status`, `gpd_return.files_written`, and the on-disk artifact check.
 
-- **`gpd_return.status: completed`:** Before accepting the success state, verify that at least one readable `*-PLAN.md` artifact exists in `${PHASE_DIR}` and that `gpd_return.files_written` names the same file set. Do not accept the planner return text alone. If the planner says complete but no plan files are present, treat the handoff as incomplete and request a fresh continuation. Display plan count. If `AUTONOMY=supervised`, show the written draft plans and get user confirmation before advancing to checker or next-step output. If `--skip-verify` or `plan_checker_enabled` is false (from init): skip to step 13 only when no proof-bearing plans were written. Proof-bearing plans still require checker review or an equivalent main-context audit before planning is considered complete. Otherwise: step 10.
+- **`gpd_return.status: completed`:** Before accepting the success state, verify that at least one readable `*-PLAN.md` artifact exists in `${PHASE_DIR}` and extract the fresh plan artifact list from `gpd_return.files_written`; verify that every named file exists, is readable, and ends in `-PLAN.md`. Do not accept the planner return text alone. Use the init snapshot (`has_plans`, `plan_count`) as the stale baseline: a plan file that already existed before this handoff only counts as fresh output if this planner return explicitly names it in `gpd_return.files_written`. If the planner says complete but no plan files are present, treat the handoff as incomplete until a fresh continuation names them in `gpd_return.files_written`. Display plan count. If `AUTONOMY=supervised`, show the written draft plans and get user confirmation before advancing to checker or next-step output. If `--skip-verify` or `plan_checker_enabled` is false (from init): skip to step 13 only when no proof-bearing plans were written. Proof-bearing plans still require checker review or an equivalent main-context audit before planning is considered complete. Otherwise: step 10.
 - **`gpd_return.status: checkpoint`:** Present to user, get response, spawn a fresh planner continuation handoff. Do not route planner checkpoints into the checker revision loop.
 - **`gpd_return.status: blocked` or `failed`:** Show attempts, offer: Add context / Retry / Manual
 
-Before the checker loop, validate every generated plan contract explicitly:
+Before the checker loop, validate only the fresh plan artifacts named by the planner return:
 
 ```bash
-for plan_file in "${PHASE_DIR}"/*-PLAN.md; do
+FRESH_PLAN_FILES=$(echo "$PLANNER_RETURN" | gpd json list .gpd_return.files_written --default "")
+if [ -z "$FRESH_PLAN_FILES" ]; then
+  echo "ERROR: planner returned completed without naming fresh PLAN.md artifacts"
+  exit 1
+fi
+
+for plan_file in $FRESH_PLAN_FILES; do
   [ -f "$plan_file" ] || continue
   gpd validate plan-contract "$plan_file" || exit 1
 done
@@ -611,7 +671,7 @@ done
 
 If the planner returns `gpd_return.status: checkpoint`, present the checkpoint to the user, collect the response, and spawn a fresh `gpd-planner` continuation handoff with the updated context. Keep this path distinct from checker-driven revision.
 
-Before continuing, verify that the planner's expected `PLAN.md` artifacts still exist and are readable. If the planner continuation changes the plans, re-run the explicit plan-contract validation before checker review.
+Before continuing, verify that the planner's expected `PLAN.md` artifacts still exist and are readable. If the planner continuation changes the plans, re-run the explicit plan-contract validation against the refreshed `gpd_return.files_written` set before checker review.
 
 Only after the planner returns `completed` should the workflow advance to checker review.
 
@@ -635,10 +695,14 @@ if [ $? -ne 0 ]; then
   echo "ERROR: staged plan-phase init failed: $INIT"
   exit 1
 fi
+bind_plan_phase_init "$INIT"
 ```
 
 ```bash
-PLANS_CONTENT=$(cat "${PHASE_DIR}"/*-PLAN.md 2>/dev/null)
+PLANS_CONTENT=""
+for plan_file in $FRESH_PLAN_FILES; do
+  PLANS_CONTENT="${PLANS_CONTENT}$(cat "$plan_file" 2>/dev/null)"
+done
 ```
 
 Checker prompt:
@@ -719,7 +783,7 @@ Human-readable headings such as `## VERIFICATION PASSED`, `## ISSUES FOUND`, and
 
 - **`gpd_return.status: completed`:** Treat as a full pass only after plan-ID reconciliation succeeds. Before accepting the success state, verify:
 
-  1. `approved_plans` names only readable `*-PLAN.md` artifacts in `${PHASE_DIR}`
+  1. `approved_plans` names only readable `*-PLAN.md` artifacts in `FRESH_PLAN_FILES`
   2. `blocked_plans` is empty
   3. every approved plan file still exists and matches the approved plan IDs
   4. the checker's `files_written` value does not claim unrelated artifacts
@@ -736,14 +800,14 @@ Human-readable headings such as `## VERIFICATION PASSED`, `## ISSUES FOUND`, and
 
   1. Record approved plans from the structured `approved_plans` list only.
   2. Record blocked plans from the structured `blocked_plans` list only.
-  3. Reject the return if any listed plan ID does not map to a readable `*-PLAN.md` file in `${PHASE_DIR}`.
+  3. Reject the return if any listed plan ID does not map to a readable `*-PLAN.md` file in `FRESH_PLAN_FILES`.
   4. Display status:
 
      ```
      Partial approval (attempt {iteration_count}/3): {N_approved} plans approved, {N_blocked} need revision
      ```
 
-  5. Send ONLY the blocked plans to the revision loop (step 12). Pass the checker's blocker details as `{structured_issues_from_checker}`. Do NOT re-check already-approved plans unless their inputs change during revision.
+  5. Send ONLY the blocked plans from the fresh returned plan set to the revision loop (step 12). Pass the checker's blocker details as `{structured_issues_from_checker}`. Do NOT re-check already-approved plans unless their inputs change during revision, and do not treat preexisting blocked-plan files as revised unless the fresh planner return names them in `gpd_return.files_written`.
   6. After revision + re-check cycle, if the re-check returns `gpd_return.status: completed` for the revised plans, merge approved sets and proceed to step 13. If it returns `gpd_return.status: checkpoint` again, repeat. If `gpd_return.status: failed`, enter standard revision loop for remaining plans.
   7. Approved plans from partial approval are final only after the plan-ID reconciliation checks pass.
 
@@ -768,20 +832,26 @@ Track `iteration_count` (starts at 1 after initial plan + check).
 
 Display: `Checker found issues, revising plan (attempt {N}/3)...`
 
-```bash
-# If PARTIAL APPROVAL: only load blocked plans (stored in BLOCKED_PLANS list from step 11)
-# If ISSUES FOUND: load all plans
-if [ -n "$BLOCKED_PLANS" ]; then
-  PLANS_CONTENT=""
-  for plan_id in $BLOCKED_PLANS; do
-    PLANS_CONTENT="${PLANS_CONTENT}$(cat "${PHASE_DIR}"/*-${plan_id}-PLAN.md 2>/dev/null)"
-  done
-else
-  PLANS_CONTENT=$(cat "${PHASE_DIR}"/*-PLAN.md 2>/dev/null)
-fi
-```
+  ```bash
+  # If PARTIAL APPROVAL: only load blocked plans (stored in BLOCKED_PLANS list from step 11)
+  # If ISSUES FOUND: load all plans
+  if [ -n "$BLOCKED_PLANS" ]; then
+    PLANS_CONTENT=""
+    for plan_id in $BLOCKED_PLANS; do
+      for plan_file in $FRESH_PLAN_FILES; do
+        case "$plan_file" in
+          *-"$plan_id"-PLAN.md) PLANS_CONTENT="${PLANS_CONTENT}$(cat "$plan_file" 2>/dev/null)" ;;
+        esac
+      done
+    done
+  else
+    for plan_file in $FRESH_PLAN_FILES; do
+      PLANS_CONTENT="${PLANS_CONTENT}$(cat "$plan_file" 2>/dev/null)"
+    done
+  fi
+  ```
 
-Before spawning the revision planner, confirm that every `plan_id` in `BLOCKED_PLANS` maps to exactly one readable `*-PLAN.md` file in `${PHASE_DIR}`. If any blocked ID is missing or ambiguous, stop and report the reconciliation failure rather than inventing a fallback mapping.
+Before spawning the revision planner, confirm that every `plan_id` in `BLOCKED_PLANS` maps to exactly one readable `*-PLAN.md` file in `FRESH_PLAN_FILES`. If any blocked ID is missing or ambiguous, stop and report the reconciliation failure rather than inventing a fallback mapping.
 
 Revision prompt:
 
@@ -820,7 +890,7 @@ task(
 )
 ```
 
-**If the revision planner agent fails to spawn or returns an error:** Check if any revised PLAN.md files were written. If revisions exist, proceed to re-check (step 10). If no revisions, offer: 1) Retry revision planner, 2) Apply revisions manually in the main context using checker feedback, 3) Force proceed with current plans despite checker issues.
+**If the revision planner agent fails to spawn or returns an error:** Do not proceed to re-check just because revised `PLAN.md` files exist on disk. Treat any such files as incomplete until a fresh typed planner return explicitly names them in `gpd_return.files_written`. If no fresh revision return is available, keep the loop fail-closed and offer: 1) Retry revision planner, 2) Apply revisions manually in the main context using checker feedback, 3) Force proceed with current plans despite checker issues.
 
 After planner returns -> spawn checker again (step 10), increment iteration_count. If revising from PARTIAL APPROVAL, only pass the revised plans (not already-approved plans) to the checker.
 

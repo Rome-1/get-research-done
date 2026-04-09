@@ -7,9 +7,12 @@ from pathlib import Path
 
 import pytest
 
+from gpd.core.context import init_write_paper
 from gpd.core.workflow_staging import (
     EXECUTE_PHASE_STAGE_MANIFEST_PATH,
     NEW_PROJECT_STAGE_MANIFEST_PATH,
+    PLAN_PHASE_STAGE_MANIFEST_PATH,
+    QUICK_STAGE_MANIFEST_PATH,
     invalidate_workflow_stage_manifest_cache,
     known_init_fields_for_workflow,
     load_workflow_stage_manifest,
@@ -28,7 +31,8 @@ def _workflow_payload(workflow_id: str) -> dict[str, object]:
     ("workflow_id", "expected_path"),
     [
         ("new-project", NEW_PROJECT_STAGE_MANIFEST_PATH),
-        ("plan-phase", NEW_PROJECT_STAGE_MANIFEST_PATH.parent / "plan-phase-stage-manifest.json"),
+        ("plan-phase", PLAN_PHASE_STAGE_MANIFEST_PATH),
+        ("quick", QUICK_STAGE_MANIFEST_PATH),
         ("verify-work", NEW_PROJECT_STAGE_MANIFEST_PATH.parent / "verify-work-stage-manifest.json"),
         ("write-paper", NEW_PROJECT_STAGE_MANIFEST_PATH.parent / "write-paper-stage-manifest.json"),
         ("peer-review", NEW_PROJECT_STAGE_MANIFEST_PATH.parent / "peer-review-stage-manifest.json"),
@@ -49,6 +53,66 @@ def test_load_workflow_stage_manifest_is_cached() -> None:
     assert first is second
     assert first.stage_ids() == ("scope_intake", "scope_approval", "post_scope")
     assert "references/shared/canonical-schema-discipline.md" in first.stages[0].must_not_eager_load
+    assert first.stages[0].required_init_fields == (
+        "researcher_model",
+        "synthesizer_model",
+        "commit_docs",
+        "autonomy",
+        "research_mode",
+        "project_exists",
+        "has_research_map",
+        "planning_exists",
+        "has_research_files",
+        "has_project_manifest",
+        "needs_research_map",
+        "has_git",
+        "platform",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+    )
+    assert first.stages[0].produced_state == ("intake routing state", "scoping-contract gate state")
+    assert first.stages[0].checkpoints == (
+        "detect existing workspace state",
+        "surface the first scoping question",
+        "preserve contract gate visibility without assuming approval-stage authority",
+    )
+    assert first.stages[1].produced_state == ("approved project contract", "approval-state persistence")
+    assert first.stages[1].checkpoints == (
+        "approval gate has passed",
+        "project contract is ready for persistence",
+    )
+    assert first.stages[2].produced_state == (
+        "project artifacts",
+        "workflow preferences",
+        "downstream stage handoff",
+    )
+    assert first.stages[2].checkpoints == (
+        "approval gate has passed",
+        "stage-aware deferred reads are now allowed",
+    )
+    assert first.stages[2].loaded_authorities == (
+        "references/ui/ui-brand.md",
+        "templates/project.md",
+        "templates/requirements.md",
+    )
+    assert first.stages[2].must_not_eager_load == ()
+    assert first.stages[2].writes_allowed == (
+        "GPD/PROJECT.md",
+        "GPD/REQUIREMENTS.md",
+        "GPD/ROADMAP.md",
+        "GPD/STATE.md",
+        "GPD/state.json",
+        "GPD/config.json",
+        "GPD/CONVENTIONS.md",
+        "GPD/literature/PRIOR-WORK.md",
+        "GPD/literature/METHODS.md",
+        "GPD/literature/COMPUTATIONAL.md",
+        "GPD/literature/PITFALLS.md",
+        "GPD/literature/SUMMARY.md",
+    )
+    assert first.stages[2].next_stages == ()
 
     execute_phase_manifest = load_workflow_stage_manifest("execute-phase")
     assert execute_phase_manifest.stage_ids() == (
@@ -94,10 +158,19 @@ def test_validate_workflow_stage_manifest_payload_loads_verify_work_manifest() -
     assert manifest.stages[0].loaded_authorities == ("workflows/verify-work.md",)
     assert "references/verification/core/verification-core.md" in manifest.stages[0].must_not_eager_load
     assert "templates/verification-report.md" in manifest.stages[0].must_not_eager_load
+    assert "phase_proof_review_status" in manifest.stages[0].required_init_fields
+    assert "project_contract_gate" in manifest.stages[0].required_init_fields
+    assert "project_contract_load_info" in manifest.stages[0].required_init_fields
+    assert "project_contract_validation" in manifest.stages[0].required_init_fields
+    assert "references/verification/core/verification-core.md" in manifest.stages[1].must_not_eager_load
+    assert "phase_proof_review_status" in manifest.stages[1].required_init_fields
     assert manifest.stages[2].loaded_authorities == (
         "workflows/verify-work.md",
         "references/verification/meta/verification-independence.md",
     )
+    assert "protocol_bundle_verifier_extensions" in manifest.stages[2].required_init_fields
+    assert "active_reference_context" in manifest.stages[2].required_init_fields
+    assert "reference_artifacts_content" not in manifest.stages[2].required_init_fields
     assert manifest.stages[3].allowed_tools == (
         "ask_user",
         "file_read",
@@ -114,6 +187,8 @@ def test_validate_workflow_stage_manifest_payload_loads_verify_work_manifest() -
         "writer-stage schema is visible",
         "check results remain contract-backed",
     )
+    assert "reference_artifact_files" in manifest.stages[3].required_init_fields
+    assert "reference_artifacts_content" not in manifest.stages[3].required_init_fields
     assert manifest.stages[3].loaded_authorities == (
         "workflows/verify-work.md",
         "templates/research-verification.md",
@@ -137,6 +212,8 @@ def test_validate_workflow_stage_manifest_payload_loads_verify_work_manifest() -
         "repair plans are verified",
         "verification closeout is ready",
     )
+    assert "reference_artifact_files" in manifest.stages[4].required_init_fields
+    assert "reference_artifacts_content" in manifest.stages[4].required_init_fields
     assert manifest.stages[4].loaded_authorities == (
         "workflows/verify-work.md",
         "templates/research-verification.md",
@@ -145,7 +222,43 @@ def test_validate_workflow_stage_manifest_payload_loads_verify_work_manifest() -
         "references/shared/canonical-schema-discipline.md",
         "references/protocols/error-propagation-protocol.md",
     )
-    assert manifest.stages[4].next_stages == ()
+
+
+def test_known_init_fields_for_verify_work_include_proof_gate_and_artifact_context() -> None:
+    known_init_fields = known_init_fields_for_workflow("verify-work")
+
+    assert known_init_fields is not None
+    assert "phase_proof_review_status" in known_init_fields
+    assert "project_contract_gate" in known_init_fields
+    assert "project_contract_load_info" in known_init_fields
+    assert "project_contract_validation" in known_init_fields
+    assert "selected_protocol_bundle_ids" in known_init_fields
+    assert "protocol_bundle_verifier_extensions" in known_init_fields
+    assert "derived_manuscript_proof_review_status" in known_init_fields
+    assert "reference_artifact_files" in known_init_fields
+    assert "reference_artifacts_content" in known_init_fields
+
+
+def test_write_paper_staged_init_fields_match_manifest_required_fields(tmp_path: Path) -> None:
+    manifest = validate_workflow_stage_manifest_payload(
+        _workflow_payload("write-paper"),
+        expected_workflow_id="write-paper",
+    )
+
+    gpd_dir = tmp_path / "GPD"
+    gpd_dir.mkdir()
+    (gpd_dir / "config.json").write_text("{}", encoding="utf-8")
+    (gpd_dir / "state.json").write_text("{}", encoding="utf-8")
+
+    for stage_id in manifest.stage_ids():
+        payload = init_write_paper(tmp_path, stage=stage_id)
+        stage = manifest.stage(stage_id)
+
+        assert "staged_loading" in payload
+        assert tuple(field for field in payload if field != "staged_loading") == stage.required_init_fields
+        assert set(payload) == set(stage.required_init_fields) | {"staged_loading"}
+        assert payload["staged_loading"]["workflow_id"] == "write-paper"
+        assert payload["staged_loading"]["stage_id"] == stage_id
 
 
 def test_validate_workflow_stage_manifest_payload_loads_plan_phase_manifest() -> None:
@@ -178,6 +291,25 @@ def test_validate_workflow_stage_manifest_payload_loads_plan_phase_manifest() ->
     assert "experiment_design_content" in manifest.stages[3].required_init_fields
     assert "state_content" not in manifest.stages[3].required_init_fields
     assert "GPD/phases" in manifest.stages[2].writes_allowed
+
+
+def test_validate_workflow_stage_manifest_payload_loads_quick_manifest() -> None:
+    manifest = validate_workflow_stage_manifest_payload(
+        _workflow_payload("quick"),
+        expected_workflow_id="quick",
+    )
+
+    assert manifest.workflow_id == "quick"
+    assert manifest.stage_ids() == ("task_bootstrap", "task_authoring")
+    assert manifest.stages[0].loaded_authorities == ("workflows/quick.md",)
+    assert "references/ui/ui-brand.md" in manifest.stages[0].must_not_eager_load
+    assert "project_contract_gate" in manifest.stages[0].required_init_fields
+    assert "project_contract_validation" in manifest.stages[0].required_init_fields
+    assert "contract_intake" in manifest.stages[1].required_init_fields
+    assert "effective_reference_intake" in manifest.stages[1].required_init_fields
+    assert "reference_artifacts_content" in manifest.stages[1].required_init_fields
+    assert "templates/planner-subagent-prompt.md" in manifest.stages[1].must_not_eager_load
+    assert manifest.stages[1].writes_allowed == ("GPD/quick/NNN-slug/PLAN.md",)
 
 
 def test_validate_workflow_stage_manifest_payload_loads_write_paper_manifest() -> None:
@@ -216,6 +348,34 @@ def test_validate_workflow_stage_manifest_payload_loads_write_paper_manifest() -
         "templates/paper/review-ledger-schema.md",
         "templates/paper/referee-decision-schema.md",
     )
+
+
+def test_known_init_fields_for_write_paper_cover_bootstrap_and_deferred_publication_context() -> None:
+    known_init_fields = known_init_fields_for_workflow("write-paper")
+
+    assert known_init_fields is not None
+    assert "commit_docs" in known_init_fields
+    assert "project_contract_gate" in known_init_fields
+    assert "project_contract_load_info" in known_init_fields
+    assert "project_contract_validation" in known_init_fields
+    assert "selected_protocol_bundle_ids" in known_init_fields
+    assert "protocol_bundle_context" in known_init_fields
+    assert "active_reference_context" in known_init_fields
+    assert "reference_artifacts_content" in known_init_fields
+    assert "state_content" in known_init_fields
+    assert "requirements_content" in known_init_fields
+
+
+def test_known_init_fields_for_quick_cover_task_bootstrap_and_reference_context() -> None:
+    known_init_fields = known_init_fields_for_workflow("quick")
+
+    assert known_init_fields is not None
+    assert "executor_model" in known_init_fields
+    assert "next_num" in known_init_fields
+    assert "task_dir" in known_init_fields
+    assert "project_contract_gate" in known_init_fields
+    assert "contract_intake" in known_init_fields
+    assert "reference_artifacts_content" in known_init_fields
 
 
 def test_validate_workflow_stage_manifest_payload_loads_peer_review_manifest() -> None:
@@ -433,6 +593,13 @@ def test_validate_workflow_stage_manifest_payload_loads_execute_phase_manifest_s
             lambda payload: payload["stages"][0].__setitem__(
                 "must_not_eager_load",
                 [*payload["stages"][0]["must_not_eager_load"], "workflows/new-project.md"],
+            ),
+            "overlap with must_not_eager_load",
+        ),
+        (
+            lambda payload: payload["stages"][0].__setitem__(
+                "loaded_authorities",
+                [*payload["stages"][0]["loaded_authorities"], "references/shared/canonical-schema-discipline.md"],
             ),
             "overlap with must_not_eager_load",
         ),

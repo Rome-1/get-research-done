@@ -374,18 +374,13 @@ score: 3/5 contract targets verified
 consistency_score: 4/6 physics checks passed
 confidence: medium
 plan_contract_ref: GPD/phases/01-benchmark/01-plan-PLAN.md#/contract
-# Required for contract-backed plans, and also required whenever `contract_results`
-# or `comparison_verdicts` are present. Must resolve to the matching PLAN contract.
-# Record only user-visible contract targets here. Do not encode internal tool/process milestones.
+# Required whenever the plan has a contract or the contract ledgers are present.
 contract_results:
-  # Every claim, deliverable, acceptance test, reference, and forbidden proxy ID
-  # declared in the PLAN contract must appear in its matching section below.
   claims:
     claim-main:
       status: partial
       summary: "The benchmark comparison is close, but one decisive reference point is still missing."
       # `linked_ids: [deliverable-id, acceptance-test-id, reference-id]`
-      # keeps related contract targets explicit for downstream consumers.
       linked_ids: [deliverable-main, acceptance-test-main, reference-main]
       evidence:
         - verifier: gpd-verifier
@@ -423,13 +418,13 @@ contract_results:
     unvalidated_assumptions: [assumption-1]
     competing_explanations: [alternative-1]
     disconfirming_observations: [observation-1]
-re_verification:        # Only if previous VERIFICATION.md existed
+re_verification:
   previous_status: gaps_found
   previous_score: 2/5
   gaps_closed: ["The benchmark comparison was added."]
   gaps_remaining: []
   regressions: []
-gaps:                   # Only if status: gaps_found (same schema as Step 10)
+gaps:
   - gap_subject_kind: "claim"
     subject_id: "claim-main"
     expectation: "The benchmark comparison should land within the stated 1% tolerance."
@@ -442,7 +437,7 @@ gaps:                   # Only if status: gaps_found (same schema as Step 10)
     missing: ["final benchmark sample"]
     severity: blocker
     suggested_contract_checks: []
-comparison_verdicts:    # Required when a decisive comparison was required or attempted
+comparison_verdicts:
   - subject_kind: claim
     subject_id: "claim-main"
     subject_role: decisive
@@ -451,18 +446,15 @@ comparison_verdicts:    # Required when a decisive comparison was required or at
     verdict: inconclusive
     metric: "relative_error"
     threshold: "<= 0.01"
-    # Copy-safe scalar examples: `recommended_action: "[what to do next]"`, `notes: "[optional context]"`.
     recommended_action: "collect one more benchmark point before marking the claim as passed"
     notes: "The observed error is small, but the final reference point is still needed."
 suggested_contract_checks:
-  # Allowed keys are exactly `check`, `reason`, `suggested_subject_kind`,
-  # `suggested_subject_id`, and `evidence_path`.
   - check: "Add decisive benchmark comparison for the main claim"
     reason: "The claim still lacks one decisive benchmark point."
     suggested_subject_kind: acceptance_test
     suggested_subject_id: "acceptance-test-main"
     evidence_path: "GPD/phases/01-benchmark/benchmark-comparison.csv"
-expert_verification:    # Only if status: expert_needed | human_needed
+expert_verification:
   - check: "Confirm whether the residual mismatch is a finite-size artifact"
     expected: "The mismatch should disappear once the benchmark sample is enlarged."
     domain: "condensed matter"
@@ -472,25 +464,7 @@ expert_verification:    # Only if status: expert_needed | human_needed
 
 ### Report Body Sections
 
-1. **Header**: Phase goal, timestamp, status, confidence, re-verification flag
-2. **Contract Coverage**: Contract targets table (ID | Kind | Status | Confidence | Evidence)
-3. **Required Artifacts**: Artifact status table (Artifact | Expected | Status | Details)
-4. **Computational Verification Details** — subsections for each check type performed:
-   - Spot-Check Results (Expression | Test Point | Computed | Expected | Match)
-   - Limiting Cases Re-Derived (Limit | Parameter | Expression Limit | Expected | Agreement | Confidence)
-   - Cross-Checks Performed (Result | Primary Method | Cross-Check Method | Agreement)
-   - Intermediate Result Spot-Checks (Step | Intermediate Expression | Independent Result | Match)
-   - Dimensional Analysis Trace (Equation | Location | LHS Dims | RHS Dims | Consistent)
-5. **Physics Consistency**: Summary table matching the Consistency Summary from Step 5 (all executed verifier checks, including any required contract-aware checks)
-6. **Forbidden Proxy Audit**: Proxy ID | Status | Evidence | Why it matters
-7. **Comparison Verdict Ledger**: Subject ID | Comparison kind | Verdict | Threshold | Notes
-8. **Discrepancies Found**: Table with severity, location, computation evidence, root cause, suggested fix
-9. **Suggested Contract Checks**: Missing decisive checks, why they matter, where evidence should come from
-10. **Requirements Coverage**: Table with satisfaction status
-11. **Anti-Patterns Found**: Table with physics impact
-12. **Expert Verification Required**: Detailed items for domain expert
-13. **Confidence Assessment**: Narrative explaining confidence with computation details
-14. **Gaps Summary**: Narrative organized by root cause with computation evidence
+Keep the body lean and schema-driven: Header; Contract Coverage; Required Artifacts; Computational Verification Details (spot-checks, limiting cases, cross-checks, intermediate checks, dimensional trace); Physics Consistency; Forbidden Proxy Audit; Comparison Verdict Ledger; Discrepancies Found; Suggested Contract Checks; Requirements Coverage; Anti-Patterns Found; Expert Verification Required; Confidence Assessment; Gaps Summary.
 
 </output>
 

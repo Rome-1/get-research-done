@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tests.core.test_spawn_contracts import _find_single_task
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
+WORKFLOWS_DIR = REPO_ROOT / "src/gpd/specs/workflows"
 ROADMAPPER = REPO_ROOT / "src/gpd/agents/gpd-roadmapper.md"
 PLANNER = REPO_ROOT / "src/gpd/agents/gpd-planner.md"
 PHASE_RESEARCHER = REPO_ROOT / "src/gpd/agents/gpd-phase-researcher.md"
@@ -15,16 +18,30 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _yaml_envelope(text: str) -> str:
+    return text.split("```yaml\n", 1)[1].split("```", 1)[0]
+
+
 def test_roadmapper_prompt_example_includes_required_base_return_fields() -> None:
     roadmapper = _read(ROADMAPPER)
+    envelope = _yaml_envelope(roadmapper)
 
-    assert "gpd_return:" in roadmapper
-    assert "status: completed | checkpoint | blocked | failed" in roadmapper
-    assert "files_written: [GPD/ROADMAP.md, GPD/STATE.md]" in roadmapper
-    assert "issues: [list of issues encountered, if any]" in roadmapper
-    assert "next_actions: [list of recommended follow-up actions]" in roadmapper
-    assert "phases_created: {count}" in roadmapper
+    assert envelope.startswith("gpd_return:\n")
+    assert "status: completed | checkpoint | blocked | failed" in envelope
+    assert "files_written: [ROADMAP.md, STATE.md]" in envelope
+    assert "issues: [list of issues encountered, if any]" in envelope
+    assert "next_actions: [list of recommended follow-up actions]" in envelope
+    assert "phases_created: {count}" in envelope
     assert "base fields (status, files_written, issues, next_actions)" not in roadmapper
+
+
+def test_new_project_roadmapper_task_block_requires_requirements_freshness_and_named_files_written() -> None:
+    roadmapper_task = _find_single_task(WORKFLOWS_DIR / "new-project.md", "gpd-roadmapper")
+
+    assert "gpd_return.files_written" in roadmapper_task.text
+    assert "GPD/REQUIREMENTS.md" in roadmapper_task.text
+    assert "do not rely on runtime completion text alone." in roadmapper_task.text
+    assert "Write files first, then return." in roadmapper_task.text
 
 
 def test_planner_tangent_guidance_routes_on_typed_checkpoint_status() -> None:

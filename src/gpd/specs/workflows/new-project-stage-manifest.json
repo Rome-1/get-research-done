@@ -5,14 +5,13 @@
     {
       "id": "scope_intake",
       "order": 1,
-      "purpose": "startup routing, scoping intake, and first-question capture",
+      "purpose": "startup routing, lean scoping intake, and continuation detection",
       "mode_paths": [
         "workflows/new-project.md"
       ],
       "required_init_fields": [
         "researcher_model",
         "synthesizer_model",
-        "roadmapper_model",
         "commit_docs",
         "autonomy",
         "research_mode",
@@ -67,7 +66,7 @@
       "checkpoints": [
         "detect existing workspace state",
         "surface the first scoping question",
-        "preserve contract gate visibility"
+        "preserve contract gate visibility without assuming approval-stage authority"
       ]
     },
     {
@@ -120,7 +119,7 @@
     {
       "id": "post_scope",
       "order": 3,
-      "purpose": "deferred downstream project writing and late-stage orchestration",
+      "purpose": "deferred downstream project writing, staged roadmapping, and conventions continuation",
       "mode_paths": [
         "workflows/new-project.md"
       ],

@@ -13,6 +13,7 @@ from pydantic import ValidationError as PydanticValidationError
 from gpd.contracts import PROOF_AUDIT_REVIEWER, statement_looks_theorem_like
 from gpd.core.frontmatter import FrontmatterParseError, extract_frontmatter
 from gpd.core.manuscript_artifacts import resolve_current_manuscript_entrypoint
+from gpd.core.publication_review_paths import resolve_review_manuscript_path, review_artifact_round
 from gpd.core.referee_policy import validate_stage_review_artifact_alignment
 from gpd.core.reproducibility import compute_sha256
 from gpd.mcp.paper.review_artifacts import read_claim_index, read_stage_review_report
@@ -62,6 +63,7 @@ _MANUSCRIPT_PROOF_AFFECTING_EXTENSIONS = frozenset(
     }
 )
 _STAGE_MATH_FILENAME_RE = re.compile(r"^STAGE-math(?P<round_suffix>-R(?P<round>\d+))?\.json$")
+_CLAIMS_FILENAME_RE = re.compile(r"^CLAIMS(?P<round_suffix>-R(?P<round>\d+))?\.json$")
 _THEOREM_STYLE_MANUSCRIPT_RE = re.compile(
     r"(\\begin\{(?:theorem|lemma|corollary|proposition|claim|proof)\})"
     r"|(\\newtheorem\{)"
@@ -171,7 +173,7 @@ def manuscript_has_theorem_bearing_claim_inventory(
     if not review_dir.exists():
         return False
 
-    resolved_manuscript = _resolve_review_manuscript_path(project_root, entrypoint.as_posix())
+    resolved_manuscript = resolve_review_manuscript_path(project_root, entrypoint.as_posix())
     matches: list[tuple[int, int, bool]] = []
     for path in sorted(review_dir.glob("CLAIMS*.json")):
         match = _claim_round_details(path)
@@ -182,7 +184,7 @@ def manuscript_has_theorem_bearing_claim_inventory(
             claim_index = read_claim_index(path)
         except (OSError, json.JSONDecodeError, PydanticValidationError):
             continue
-        if _resolve_review_manuscript_path(project_root, claim_index.manuscript_path) != resolved_manuscript:
+        if resolve_review_manuscript_path(project_root, claim_index.manuscript_path) != resolved_manuscript:
             continue
         matches.append(
             (
@@ -245,7 +247,7 @@ def manuscript_requires_theorem_bearing_review(
 def _resolve_review_artifacts(project_root: Path, artifact_paths: tuple[str, ...]) -> tuple[Path, ...]:
     """Resolve review artifact paths against the project root."""
 
-    return tuple(_resolve_review_manuscript_path(project_root, path) for path in artifact_paths if path.strip())
+    return tuple(resolve_review_manuscript_path(project_root, path) for path in artifact_paths if path.strip())
 
 
 def resolve_phase_proof_review_status(
@@ -612,7 +614,7 @@ def _latest_matching_math_review_anchor(project_root: Path, manuscript_entrypoin
         return None
 
     matches: list[tuple[int, int, _MathReviewAnchor]] = []
-    resolved_manuscript = _resolve_review_manuscript_path(project_root, manuscript_entrypoint.as_posix())
+    resolved_manuscript = resolve_review_manuscript_path(project_root, manuscript_entrypoint.as_posix())
     expected_manuscript_path = _relative_path(project_root, manuscript_entrypoint)
     for path in sorted(review_dir.glob("STAGE-math*.json")):
         round_details = _math_review_round_details(path)
@@ -631,7 +633,7 @@ def _latest_matching_math_review_anchor(project_root: Path, manuscript_entrypoin
             validation_errors.append(f"{claim_index_path.name} could not be loaded: {exc}")
         else:
             claim_index_matches_current = (
-                _resolve_review_manuscript_path(project_root, claim_index.manuscript_path) == resolved_manuscript
+                resolve_review_manuscript_path(project_root, claim_index.manuscript_path) == resolved_manuscript
             )
             if claim_index_matches_current:
                 theorem_claim_ids = sorted(claim.claim_id for claim in claim_index.claims if claim.theorem_bearing)
@@ -668,7 +670,7 @@ def _latest_matching_math_review_anchor(project_root: Path, manuscript_entrypoin
                 )
             )
             continue
-        report_matches_current = _resolve_review_manuscript_path(project_root, report.manuscript_path) == resolved_manuscript
+        report_matches_current = resolve_review_manuscript_path(project_root, report.manuscript_path) == resolved_manuscript
         if not report_matches_current and not claim_index_matches_current:
             continue
         if claim_index is not None:
@@ -714,23 +716,11 @@ def _latest_matching_math_review_anchor(project_root: Path, manuscript_entrypoin
 
 
 def _math_review_round_details(path: Path) -> tuple[int, str] | None:
-    match = _STAGE_MATH_FILENAME_RE.fullmatch(path.name)
-    if match is None:
-        return None
-    round_text = match.group("round")
-    round_number = int(round_text) if round_text else 1
-    return round_number, match.group("round_suffix") or ""
+    return review_artifact_round(path, pattern=_STAGE_MATH_FILENAME_RE)
 
 
 def _claim_round_details(path: Path) -> tuple[int, str] | None:
-    if path.name == "CLAIMS.json":
-        return 1, ""
-    if path.name.startswith("CLAIMS-R") and path.name.endswith(".json"):
-        round_text = path.name[len("CLAIMS-R") : -len(".json")]
-        if round_text.isdigit():
-            round_number = int(round_text)
-            return round_number, f"-R{round_number}"
-    return None
+    return review_artifact_round(path, pattern=_CLAIMS_FILENAME_RE)
 
 
 def _read_proof_redteam_status(
@@ -777,7 +767,7 @@ def _read_proof_redteam_status(
         return None, "top-level frontmatter `proof_artifact_paths` must be a non-empty list of strings"
     normalized_proof_artifact_paths = tuple(dict.fromkeys(item.strip() for item in proof_artifact_paths))
     for proof_artifact_path in normalized_proof_artifact_paths:
-        resolved_proof_artifact_path = _resolve_review_manuscript_path(project_root, proof_artifact_path)
+        resolved_proof_artifact_path = resolve_review_manuscript_path(project_root, proof_artifact_path)
         if not resolved_proof_artifact_path.exists() or not resolved_proof_artifact_path.is_file():
             return None, f"proof_artifact_paths entry does not resolve to a readable file: {proof_artifact_path}"
     if expected_proof_artifact_paths:
@@ -793,8 +783,8 @@ def _read_proof_redteam_status(
         raw_manuscript_path = meta.get("manuscript_path")
         if not isinstance(raw_manuscript_path, str) or not raw_manuscript_path.strip():
             return None, "top-level frontmatter `manuscript_path` is missing"
-        resolved_artifact_path = _resolve_review_manuscript_path(project_root, raw_manuscript_path.strip())
-        resolved_expected_path = _resolve_review_manuscript_path(project_root, expected_manuscript_path)
+        resolved_artifact_path = resolve_review_manuscript_path(project_root, raw_manuscript_path.strip())
+        resolved_expected_path = resolve_review_manuscript_path(project_root, expected_manuscript_path)
         if resolved_artifact_path != resolved_expected_path:
             return None, "top-level frontmatter `manuscript_path` does not match the active manuscript"
 
@@ -983,13 +973,6 @@ def _section_has_substantive_content(body: str, heading: str) -> bool:
         if line.startswith("-"):
             return True
     return pipe_lines >= 2
-
-
-def _resolve_review_manuscript_path(project_root: Path, manuscript_path: str) -> Path:
-    artifact_path = Path(manuscript_path).expanduser()
-    if not artifact_path.is_absolute():
-        artifact_path = project_root / artifact_path
-    return artifact_path.resolve(strict=False)
 
 
 def _relative_path(project_root: Path, path: Path | None) -> str | None:

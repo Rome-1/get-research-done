@@ -265,7 +265,7 @@ Protocol bundle verifier extensions: {protocol_bundle_verifier_extensions}
 Proof freshness summary: {phase_proof_review_status}
 </verification_context>
 
-Treat `project_contract` as authoritative only when `project_contract_gate.authoritative` is true. Use `protocol_bundle_verifier_extensions` as the primary bundle-extension surface. Keep decisive comparison gaps legible at the claim / acceptance-test / reference level. If user input is required, return `gpd_return.status: checkpoint` and stop; do not wait inside the same run. Write the canonical verification artifact before returning.
+Treat `project_contract` as authoritative only when `project_contract_gate.authoritative` is true. Use `protocol_bundle_verifier_extensions` as the primary bundle-extension surface. Keep decisive comparison gaps legible at the claim / acceptance-test / reference level. If user input is required, return `gpd_return.status: checkpoint` and stop; do not wait inside the same run.
 
 <spawn_contract>
 write_scope:
@@ -418,6 +418,24 @@ Present the diagnosis results to the user and ask how to proceed:
 - Accept as-is
 </step>
 
+<step name="load_gap_repair_stage">
+## Load Gap Repair Stage
+
+When the user chooses auto-plan fixes, reload `verify-work` through the explicit gap-repair stage:
+
+```bash
+GAP_REPAIR_INIT=$(gpd --raw init verify-work "${PHASE_ARG}" --stage gap_repair)
+if [ $? -ne 0 ]; then
+  echo "ERROR: gpd gap-repair initialization failed: $GAP_REPAIR_INIT"
+  # STOP - display the error to the user and do not proceed.
+fi
+```
+
+Parse the same wrapper-facing fields from the staged payload as in the main init, then treat the staged payload as the source of truth for planner and checker routing. Use the staged `planner_model`, `checker_model`, `phase_dir`, `phase_number`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `protocol_bundle_verifier_extensions`, and `phase_proof_review_status` values for the gap-repair route.
+
+If the staged init is blocked, stale, or missing required fields, stop and surface the blocking issues instead of falling back to unstaged plan repair.
+</step>
+
 <step name="plan_gap_closure">
 **Auto-plan fixes from diagnosed gaps**
 
@@ -431,15 +449,18 @@ Display:
 * Spawning planner for gap closure...
 ```
 
-Spawn `gpd-planner` in `--gaps` mode as a fresh one-shot delegation.
+Spawn `gpd-planner` in `--gaps` mode as a fresh one-shot delegation from the staged gap-repair payload.
 First, read {GPD_AGENTS_DIR}/gpd-planner.md for your role and instructions.
-Use `templates/planner-subagent-prompt.md` to build the gap_closure planner handoff. Keep `tool_requirements` and other machine-checkable hard requirements explicit.
+Use `templates/planner-subagent-prompt.md` to build the gap_closure planner handoff from the staged payload. Keep `tool_requirements`, the checker feedback, and other machine-checkable hard requirements explicit.
 
 > Runtime delegation rule: the planner is single-shot. If it needs user input, it checkpoints and returns. Do not keep the same planner run open across user interaction.
 
-Before treating the handoff as complete, verify that the expected `PLAN.md` files exist in the phase directory.
+Before treating the handoff as complete, verify that the expected `PLAN.md` files exist in the phase directory and are listed in `gpd_return.files_written` from the fresh planner run.
+After the planner returns, route on `gpd_return.status`, not on headings. If `gpd_return.status` is `completed`, verify that each expected path is present on disk, readable, and present in `gpd_return.files_written` before treating the handoff as complete.
+If `gpd_return.status` is `checkpoint`, present the checkpoint, collect user input, and spawn a fresh planner continuation from the staged gap-repair payload instead of waiting inside the same run.
+If the planner reports `blocked` or `failed`, or if the expected `PLAN.md` files are missing, unreadable, stale, or absent from `gpd_return.files_written`, keep the session fail-closed and offer retry or manual plan creation.
 
-If the planner fails to spawn or returns an error, check whether any `PLAN.md` files were written. If plans exist, continue to `verify_gap_plans`. If no plans exist, offer retry, manual plan creation, or skipping gap closure.
+If the planner fails to spawn or returns an error, keep the session fail-closed and offer retry or manual plan creation. Do not fall through to gap verification on the basis of preexisting `PLAN.md` files alone.
 </step>
 
 <step name="verify_gap_plans">
@@ -459,23 +480,23 @@ Spawn `gpd-plan-checker` as a fresh one-shot delegation.
 
 > Runtime delegation rule: this checker is single-shot. If it needs user input, it checkpoints and returns. Do not keep the same checker run open across user interaction.
 
-Before accepting the handoff as complete, confirm the expected `PLAN.md` files are present and readable.
+Before accepting the handoff as complete, confirm the expected `PLAN.md` files are present, readable, and listed in `gpd_return.files_written` from the planner turn.
 
 If the checker fails to spawn or returns an error, proceed without plan verification but note that the plans were not verified.
 
 If the checker returns a structured `gpd_return`, route on `gpd_return.status` and the structured plan lists, not on presentation text:
 
-- `completed`: treat the fix plans as verified and continue.
+- `completed`: treat the fresh fix plans as verified only after the on-disk files still match the planner's `files_written` set.
 - `checkpoint`: some plans are approved and others need revision; record `approved_plans` and `blocked_plans`, then send only the blocked plans back through the revision loop.
-- `blocked`: nothing is approved; feed the checker issues and blocked plan IDs back into the revision loop.
-- `failed`: present the issues and offer retry, manual revision, or skipping gap closure.
+- `blocked`: nothing is approved; feed the checker issues and blocked plan IDs back into the revision loop without rewriting approved plans.
+- `failed`: present the issues and offer retry or manual revision.
 </step>
 
 <step name="revision_loop">
 **Iterate planner <-> checker until plans pass, up to 3 rounds**
 
-If the checker reports issues, send a fresh planner continuation with the checker feedback. After the planner returns, run the checker again. Each agent turn is one-shot; do not keep either agent alive across user interaction.
-When the checker returns `checkpoint` or `blocked`, use the structured `approved_plans`, `blocked_plans`, and `issues` fields to decide which plans to revise. Use the structured fields, not the human-readable approval table, as the source of truth.
+If the checker reports issues, send a fresh planner continuation from the staged gap-repair payload with the checker feedback. After the planner returns, run the checker again. Each agent turn is one-shot; do not keep either agent alive across user interaction.
+When the checker returns `checkpoint` or `blocked`, use the structured `approved_plans`, `blocked_plans`, and `issues` fields to decide which plans to revise. Use the structured fields, not the human-readable approval table, as the source of truth. Do not rewrite approved plans during the revision round.
 First, read {GPD_AGENTS_DIR}/gpd-planner.md for your role and instructions.
 Use `templates/planner-subagent-prompt.md` again for checker-driven gap_closure revisions.
 

@@ -20,6 +20,9 @@ def test_execute_phase_reverification_routes_on_typed_status_not_legacy_verifier
     assert "gpd_return.status: checkpoint" in workflow
     assert "gpd_return.status: blocked" in workflow
     assert "gpd_return.status: failed" in workflow
+    assert "gpd_return.files_written" in workflow
+    assert "verification_status: passed | gaps_found | expert_needed | human_needed" in workflow
+    assert "After the artifact gate passes, use the canonical verifier verdict from `gpd_return.verification_status` or the written report frontmatter:" in workflow
     assert "Return verification status: passed | gaps_found." not in workflow
     assert "legacy `passed | gaps_found` text as the routing surface" in workflow
     assert "Do not infer success from prose headings or untyped legacy routing." in workflow
@@ -35,6 +38,8 @@ def test_execute_phase_reverification_requires_files_written_and_disk_artifact_g
     assert "The same path appears in `gpd_return.files_written`." in workflow
     assert "Do not accept `gpd_return.status: completed` until" in workflow
     assert "exists on disk" in workflow
+    assert "Do not let a stale existing verification file satisfy the success path." in workflow
+    assert "If the verifier output is malformed or omits `gpd_return.status`" in workflow
     assert "stale preexisting verification file" in workflow or "stale existing verification file" in workflow
 
 

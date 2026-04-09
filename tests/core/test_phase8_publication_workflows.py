@@ -20,8 +20,13 @@ def test_write_paper_balanced_mode_keeps_outline_as_working_draft_and_threads_mo
     assert workflow.count("<autonomy_mode>{AUTONOMY}</autonomy_mode>") >= 3
     assert workflow.count("<research_mode>{RESEARCH_MODE}</research_mode>") >= 3
     assert "Treat the emitted `.tex` file as the success artifact gate for each section." in workflow
-    assert "Treat `${PAPER_DIR}/CITATION-AUDIT.md` and the refreshed `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` as the bibliography success gate." in workflow
+    assert (
+        "Treat `${PAPER_DIR}/CITATION-AUDIT.md`, the refreshed `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json`, and the bibliographer's typed `gpd_return` envelope as the bibliography success gate; all three must be present, and the typed return must name the bibliography outputs, before the pass is accepted."
+        in workflow
+    )
     assert "Confirm `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` exists after the refresh before proceeding to reproducibility or strict review." in workflow
+    assert "Do not accept a preexisting `.tex` file as a substitute for a successful spawn; a spawn error always leaves the section incomplete until a fresh typed return names the artifact and the file exists on disk." in workflow
+    assert "Do not accept preexisting response files as a substitute for a successful spawn; the round remains incomplete until a fresh typed return names both outputs and both files exist on disk." in workflow
 
 
 def test_respond_to_referees_balanced_mode_does_not_force_parse_confirmation() -> None:
@@ -37,6 +42,7 @@ def test_respond_to_referees_balanced_mode_does_not_force_parse_confirmation() -
     assert "<autonomy_mode>{AUTONOMY}</autonomy_mode>" in workflow
     assert "<research_mode>{RESEARCH_MODE}</research_mode>" in workflow
     assert "Treat `GPD/AUTHOR-RESPONSE{round_suffix}.md` and `GPD/review/REFEREE_RESPONSE{round_suffix}.md` as the response success gate." in workflow
+    assert "fresh `gpd_return.files_written`" in workflow
     assert "Confirm the refreshed JSON artifact exists before treating the round as complete." in workflow
 
 

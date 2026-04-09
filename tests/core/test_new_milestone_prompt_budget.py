@@ -22,6 +22,11 @@ def test_new_milestone_command_stays_thin_and_only_eagerly_loads_the_workflow() 
     )
 
     assert metrics.raw_include_count == 1
+    assert "Project contract gate:" not in command_text
+    assert "Project contract load info:" not in command_text
+    assert "Project contract validation:" not in command_text
+    assert "expected_artifacts:" not in command_text
+    assert "shared_state_policy:" not in command_text
     assert "@{GPD_INSTALL_DIR}/references/research/questioning.md" not in command_text
     assert "@{GPD_INSTALL_DIR}/references/ui/ui-brand.md" not in command_text
     assert "@{GPD_INSTALL_DIR}/templates/project.md" not in command_text

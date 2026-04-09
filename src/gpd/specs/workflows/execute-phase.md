@@ -1392,11 +1392,14 @@ Include in the verifier spawn prompt: `<phase_class>{PHASE_CLASSES}</phase_class
 
 Follow the verification workflow. Read `{GPD_INSTALL_DIR}/workflows/verify-phase.md` using the file_read tool.
 
-Read status after verification completes:
+Read status after verification completes through the typed child-return contract:
 
-```bash
-grep "^status:" "$phase_dir"/*-VERIFICATION.md 2>/dev/null | head -1 | cut -d: -f2 | tr -d ' '
-```
+- `gpd_return.status: completed` means success only after verifying that:
+  1. `${phase_dir}/${phase_number}-VERIFICATION.md` exists on disk and is readable
+  2. the same path appears in `gpd_return.files_written`
+  3. `gpd validate verification-contract "${phase_dir}/${phase_number}-VERIFICATION.md"` passes before any downstream routing
+- If a canonical verification file already existed before this run, do not treat it as fresh verifier output unless the child reported that same path in `gpd_return.files_written`.
+- Route only on `gpd_return.status` and the validated frontmatter; do not use `grep "^status:"`, headings, or marker strings to decide success.
 
 | Status         | Action                                                      |
 | -------------- | ----------------------------------------------------------- |

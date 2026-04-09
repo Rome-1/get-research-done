@@ -15,9 +15,9 @@ allowed-tools:
 
 
 <objective>
-Execute small, ad-hoc research tasks in an initialized GPD project with GPD guarantees (atomic commits and durable state tracking) while skipping optional agents (research, plan-checker, verifier).
+Execute small, ad-hoc research tasks in an initialized GPD project with GPD guarantees (atomic commits and durable state tracking) while skipping optional agents (research, plan-checker, verifier). The workflow owns the staged quick planner handoff, executor routing, and completion record.
 
-Quick mode is the same system with a shorter path:
+Quick mode keeps the same guarantees with a shorter path:
 
 - Spawns gpd-planner (quick mode) + gpd-executor(s)
 - Skips gpd-phase-researcher, gpd-plan-checker, gpd-verifier
@@ -78,5 +78,5 @@ Quick mode skips research and verification agents, but the physics must still be
 
 <process>
 Execute the quick workflow from @{GPD_INSTALL_DIR}/workflows/quick.md end-to-end.
-Preserve all workflow gates (validation, task description, planning, execution, state updates, commits).
+Preserve all workflow gates (validation, task description, staged planner loading, planning, execution, preflight, state updates, commits).
 </process>

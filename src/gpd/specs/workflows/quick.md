@@ -1,5 +1,5 @@
 <purpose>
-Execute small, ad-hoc physics tasks with GPD guarantees (atomic commits and durable state updates) while skipping optional agents (literature search, plan-checker, verifier). Quick mode spawns gpd-planner (quick mode) + gpd-executor(s), tracks artifacts in `GPD/quick/`, and records completion through the structured state commands plus the quick-task summary files. Typical quick tasks include: quick derivation, dimensional check, order-of-magnitude estimate, limiting case verification, and bibliography lookup. Quick mode is NOT authorized to close theorem-style or `proof_obligation` work.
+Execute small, ad-hoc physics tasks with GPD guarantees (atomic commits and durable state updates) while skipping optional agents (literature search, plan-checker, verifier). Quick mode routes through the canonical planner handoff, supports staged planner loading when available, tracks artifacts in `GPD/quick/`, and records completion through the structured state commands plus the quick-task summary files. Typical quick tasks include: quick derivation, dimensional check, order-of-magnitude estimate, limiting case verification, and bibliography lookup. Quick mode is NOT authorized to close theorem-style or `proof_obligation` work.
 </purpose>
 
 <required_reading>
@@ -43,6 +43,8 @@ fi
 ```
 
 Parse JSON for: `planner_model`, `executor_model`, `commit_docs`, `autonomy`, `next_num`, `slug`, `date`, `timestamp`, `quick_dir`, `task_dir`, `roadmap_exists`, `project_exists`, `planning_exists`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`.
+
+If staged planner-loading fields appear in the init payload, treat them as authoritative for the planner handoff shape rather than reconstructing a separate quick-specific prompt contract.
 
 **Mode-aware behavior:**
 - `autonomy=supervised`: Pause after the plan for user approval before execution.
@@ -120,6 +122,7 @@ Read the file at GPD/STATE.md
 - Create a SINGLE plan with 1-3 focused tasks
 - Quick tasks should be atomic and self-contained
 - No literature review phase, no checker phase
+- If staged planner-loading fields are present in the init payload, use them as the source of truth for the handoff instead of inventing a separate quick-only contract
 - If `project_contract_load_info.status` starts with `blocked` or `project_contract_validation.valid` is false, return `gpd_return.status: checkpoint` instead of drafting a plan from guessed scope. The `## CHECKPOINT REACHED` heading is presentation only.
 - If the task is theorem-style or proof-bearing, return `gpd_return.status: checkpoint` and tell the user quick mode is blocked pending the full proof-redteam workflow.
 - Target ~30% context usage (simple, focused)
@@ -127,7 +130,7 @@ Read the file at GPD/STATE.md
 
 <output>
 Write plan to: ${QUICK_DIR}/${next_num}-PLAN.md
-Return `gpd_return.status: completed` with plan path. The `## PLANNING COMPLETE` heading is presentation only.
+Return a structured `gpd_return` envelope. Use `gpd_return.status: completed` only when the plan file was written and named in `gpd_return.files_written`. Use `gpd_return.status: checkpoint` when user input is needed, `blocked` when the task cannot proceed without external repair, and `failed` when the handoff did not complete. The `## PLANNING COMPLETE` heading is presentation only.
 </output>
 ",
   subagent_type="gpd-planner",
@@ -141,11 +144,28 @@ Return `gpd_return.status: completed` with plan path. The `## PLANNING COMPLETE`
 
 After planner returns:
 
-1. Verify plan exists at `${QUICK_DIR}/${next_num}-PLAN.md`
-2. Extract plan count (typically 1 for quick tasks)
-3. Report: "Plan created: ${QUICK_DIR}/${next_num}-PLAN.md"
+1. Route on `gpd_return.status`, not on headings.
+2. Verify plan exists at `${QUICK_DIR}/${next_num}-PLAN.md` and that the same path appears in `gpd_return.files_written`.
+3. Treat any preexisting plan file as stale unless the child reported that exact path in `gpd_return.files_written` for this run.
+4. If the planner returned `checkpoint`, present the checkpoint to the user and wait for the updated continuation handoff before proceeding.
+5. If the planner returned `blocked` or `failed`, treat the handoff as incomplete unless a fresh plan file was created and named in `gpd_return.files_written`; then offer retry, main-context planning, or abort.
+6. Extract plan count (typically 1 for quick tasks).
+7. Report: "Plan created: ${QUICK_DIR}/${next_num}-PLAN.md"
 
-If plan not found, error: "Planner failed to create ${next_num}-PLAN.md"
+If the plan file is missing, unreadable, stale, or absent from `gpd_return.files_written`, error: "Planner failed to create ${next_num}-PLAN.md"
+
+If the plan declares specialized `tool_requirements`, run `gpd validate plan-preflight <PLAN.md>` before spawning the executor:
+
+```bash
+PLAN_TOOL_REQUIREMENTS=$(gpd frontmatter get "${QUICK_DIR}/${next_num}-PLAN.md" --field tool_requirements 2>/dev/null || true)
+if [ -n "$PLAN_TOOL_REQUIREMENTS" ]; then
+  PLAN_PREFLIGHT=$(gpd --raw validate plan-preflight "${QUICK_DIR}/${next_num}-PLAN.md")
+  if [ $? -ne 0 ]; then
+    echo "ERROR: plan-preflight failed: $PLAN_PREFLIGHT"
+    # STOP — display the error to the user and do not proceed.
+  fi
+fi
+```
 
 ---
 

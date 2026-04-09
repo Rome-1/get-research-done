@@ -1,6 +1,6 @@
 <purpose>
 
-Start a new research milestone cycle for an existing project. Loads project context, gathers milestone goals (from MILESTONE-CONTEXT.md or conversation), updates PROJECT.md and STATE.md, optionally runs parallel literature survey, defines scoped research objectives with REQ-IDs, spawns the roadmapper to create phased execution plan, and commits all artifacts. Continuation equivalent of new-project.
+Start a new research milestone cycle for an existing project. Uses staged init to load milestone context, gathers milestone goals from MILESTONE-CONTEXT.md or conversation, updates PROJECT.md and STATE.md, optionally runs a task-local parallel literature survey, defines scoped research objectives with REQ-IDs, and hands off to the roadmapper through a fresh typed continuation with freshness checks. Continuation equivalent of new-project.
 
 </purpose>
 
@@ -12,17 +12,17 @@ Read all files referenced by the invoking prompt's execution_context before star
 
 <process>
 
-## 1. Initialize and Load Context
+## 1. Bootstrap and Load Context
 
 ```bash
-INIT=$(gpd --raw init new-milestone)
+INIT=$(gpd --raw init new-milestone --stage milestone_bootstrap)
 if [ $? -ne 0 ]; then
   echo "ERROR: gpd initialization failed: $INIT"
   exit 1
 fi
 ```
 
-Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `research_enabled`, `current_milestone`, `current_milestone_name`, `project_exists`, `roadmap_exists`, `state_exists`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifact_files`, `reference_artifacts_content`.
+Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `research_enabled`, `current_milestone`, `current_milestone_name`, `project_exists`, `roadmap_exists`, `state_exists`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `platform`.
 
 **Mode-aware behavior:**
 - `autonomy=supervised`: Pause for user confirmation after requirements gathering and before roadmap generation.
@@ -43,15 +43,12 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Treat `project_contract` as the authoritative machine-readable project contract only when `project_contract_gate.authoritative` is true. Keep `project_contract_load_info` and `project_contract_validation` visible as gate inputs, and treat `project_contract` as visible-but-non-authoritative when the gate is blocked. Treat `active_reference_context` and `effective_reference_intake` as binding carry-forward context even when `project_contract` is empty or blocked.
+Treat `project_contract` as the authoritative machine-readable project contract only when `project_contract_gate.authoritative` is true. Keep `project_contract_load_info` and `project_contract_validation` visible as gate inputs, and treat `project_contract` as visible-but-non-authoritative when the gate is blocked.
 
-Before defining scope, inspect these carry-forward inputs and keep them visible through milestone planning:
-- `effective_reference_intake.must_read_refs`
-- `effective_reference_intake.must_include_prior_outputs`
-- `effective_reference_intake.user_asserted_anchors`
-- `effective_reference_intake.known_good_baselines`
-- `effective_reference_intake.context_gaps`
-- `effective_reference_intake.crucial_inputs`
+Treat init as staged:
+- Use this bootstrap init for milestone identity and contract gate state only.
+- Run a survey/objectives init before milestone scoping and treat that refresh as the source of truth for carry-forward reference intake, artifact snapshots, and prior-project file context.
+- Run a fresh late-stage init immediately before roadmapping and treat that later init as the source of truth for the final handoff.
 
 **If `roadmap_exists` is true:** Note — existing ROADMAP.md will be replaced by this milestone's roadmap.
 
@@ -61,10 +58,33 @@ Load project files:
 - Read MILESTONES.md (if exists — may not exist for first milestone)
 - Read STATE.md (if `state_exists` — pending items, blockers)
 - Check for MILESTONE-CONTEXT.md (from milestone discussion)
-- If `reference_artifact_files` is non-empty, read the listed reference artifacts or use `reference_artifacts_content` as a compact fallback
 - Keep `project_contract_load_info` and `project_contract_validation` visible while gathering goals, determining milestone version, and reviewing roadmap coverage; do not assume `project_contract` is authoritative unless `project_contract_gate.authoritative` is true.
-- Keep `active_reference_context` available while gathering goals, defining objectives, and reviewing roadmap coverage
 - If `project_contract_gate.authoritative` is false, checkpoint with the user and repair the stored contract before using it for milestone scope.
+
+Refresh the survey/objectives stage before gathering milestone goals:
+
+```bash
+SURVEY_INIT=$(gpd --raw init new-milestone --stage survey_objectives)
+if [ $? -ne 0 ]; then
+  echo "ERROR: survey/objectives init failed: $SURVEY_INIT"
+  exit 1
+fi
+```
+
+Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `research_enabled`, `current_milestone`, `current_milestone_name`, `project_exists`, `roadmap_exists`, `state_exists`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifact_files`, `reference_artifacts_content`, `literature_review_files`, `literature_review_count`, `research_map_reference_files`, `research_map_reference_count`, `derived_convention_lock`, `derived_convention_lock_count`, `derived_intermediate_results`, `derived_intermediate_result_count`, `derived_approximations`, `derived_approximation_count`, `project_content`, `state_content`, `milestones_content`, `platform`.
+
+Treat `active_reference_context` and `effective_reference_intake` from this survey/objectives init as binding carry-forward context even when `project_contract` is empty or blocked.
+
+Before defining scope, inspect these carry-forward inputs and keep them visible through milestone planning:
+- `effective_reference_intake.must_read_refs`
+- `effective_reference_intake.must_include_prior_outputs`
+- `effective_reference_intake.user_asserted_anchors`
+- `effective_reference_intake.known_good_baselines`
+- `effective_reference_intake.context_gaps`
+- `effective_reference_intake.crucial_inputs`
+- `contract_intake`
+
+If `reference_artifact_files` is non-empty, read the listed reference artifacts or use `reference_artifacts_content` as a compact fallback.
 
 ## 2. Gather Milestone Goals
 
@@ -219,6 +239,8 @@ shared_state_policy: return_only
 </spawn_contract>
 ```
 
+Each scout contract is task-local. Do not widen the write scope or reuse a shared survey contract across dimensions.
+
 **Dimension-specific fields:**
 
 | Field            | Prior Work                                                             | Methods                                                                     | Computational                                                                       | Pitfalls                                                                             |
@@ -231,11 +253,11 @@ shared_state_policy: return_only
 
 Before trusting the scout handoff, re-read the expected output files from disk and count only artifacts that actually exist. Do not trust the runtime handoff status by itself.
 
-**If any research agent fails to spawn or returns an error:** Check which output files were created. For each missing file, note the gap and continue with available outputs. If 3+ agents failed, offer: 1) Retry all agents, 2) Skip literature survey entirely (user selects "Skip survey"), 3) Stop. If 1-2 agents failed, proceed with the synthesizer using available files.
+**If any research agent fails to spawn or returns an error:** Verify which required scout artifacts exist (`PRIOR-WORK.md`, `METHODS.md`, `COMPUTATIONAL.md`, `PITFALLS.md`). Retry only the missing scout tasks once with the same task-local write scope. If any required research file is still missing after the retry, STOP this survey path and present the missing artifacts. Do not synthesize from incomplete scout output and do not continue the milestone on partial survey results.
 
-**Artifact gate:** If a scout reports success but its `expected_artifacts` entry (`GPD/literature/{FILE}`) is missing, treat that scout as incomplete. Offer: 1) Retry the missing scout in the same write scope, 2) Execute that scout's research in the main context, 3) Continue without that artifact only if the remaining survey still answers the milestone decision.
+**Artifact gate:** If a scout reports success but its `expected_artifacts` entry (`GPD/literature/{FILE}`) is missing, treat that scout as incomplete. Retry only the missing scout once in the same task-local write scope. If the artifact is still missing, stop the survey path. Do not substitute main-context research for the missing scout and do not continue with a partial survey.
 
-After all 4 complete (or partial completion handled), spawn synthesizer:
+After all 4 complete and required artifacts are present, spawn synthesizer:
 
 ```
 task(prompt="First, read {GPD_AGENTS_DIR}/gpd-research-synthesizer.md for your role and instructions.
@@ -274,9 +296,11 @@ shared_state_policy: return_only
 </spawn_contract>
 ```
 
-**If the synthesizer agent fails to spawn or returns an error:** Check if individual research files exist. If they do, create a minimal SUMMARY.md in the main context by extracting key findings from each file. Proceed with available research.
+This synthesizer contract is task-local. Do not reuse survey write scopes or widen the summary handoff.
 
-**Artifact gate:** If the synthesizer reports success but `GPD/literature/SUMMARY.md` is missing, treat the handoff as incomplete. Offer: 1) Retry synthesizer, 2) Create SUMMARY.md in the main context from the scout artifacts, 3) Stop and review the missing inputs.
+**If the synthesizer agent fails to spawn or returns an error:** Retry once if `GPD/literature/SUMMARY.md` is missing. If the summary artifact is still missing after the retry, STOP and surface the blocker. Do not fabricate a fallback summary in the main context or infer survey conclusions from partial files.
+
+**Artifact gate:** If the synthesizer reports success but `GPD/literature/SUMMARY.md` is missing, treat the handoff as incomplete. Retry the synthesizer once if the summary file is still missing. If it remains missing, stop and review the missing inputs. Do not create SUMMARY.md in the main context from partial scout output.
 
 Display key findings from SUMMARY.md:
 
@@ -394,6 +418,20 @@ gpd commit "docs: define milestone v[X.Y] objectives" --files GPD/REQUIREMENTS.m
 
 **Starting phase number:** Read MILESTONES.md for last phase number. Continue from there (v1.0 ended at phase 5 -> v1.1 starts at phase 6).
 
+**Roadmap handoff staging:** run a fresh late-stage init immediately before the roadmapper handoff and treat it as the source of truth for roadmap assembly.
+
+```bash
+ROADMAPPER_INIT=$(gpd --raw init new-milestone --stage roadmap_authoring)
+if [ $? -ne 0 ]; then
+  echo "ERROR: roadmap init failed: $ROADMAPPER_INIT"
+  exit 1
+fi
+```
+
+Parse JSON for: `roadmapper_model`, `commit_docs`, `autonomy`, `current_milestone`, `current_milestone_name`, `roadmap_exists`, `state_exists`, `planning_exists`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifact_files`, `reference_artifacts_content`, `requirements_content`, `roadmap_content`, `state_content`.
+
+Use the bootstrap init for milestone identity and contract gating. Use this late-stage init for the final handoff and do not reuse stale roadmapping inputs from the survey/objective loop.
+
 ```
 task(prompt="First, read {GPD_AGENTS_DIR}/gpd-roadmapper.md for your role and instructions.
 
@@ -420,6 +458,10 @@ Effective reference intake: {effective_reference_intake}
 Reference artifacts: {reference_artifacts_content}
 </contract_context>
 
+<continuation_context>
+This is a fresh continuation handoff for the current milestone roadmap. Carry forward the approved objectives, requirement traceability, prior survey findings, and any unresolved context gaps. Edit the existing roadmap files in place and return a fresh typed `gpd_return` envelope.
+</continuation_context>
+
 <instructions>
 Create research roadmap for milestone v[X.Y]:
 1. Start phase numbering from [N]
@@ -430,9 +472,9 @@ Create research roadmap for milestone v[X.Y]:
 6. Derive 2-5 success criteria per phase (concrete, verifiable results)
 7. Validate 100% objective coverage and surface all contract-critical items touched by this milestone
 8. Write files immediately (ROADMAP.md, STATE.md, update REQUIREMENTS.md traceability) while preserving existing `GPD/state.json` fields, especially `project_contract`
-9. Return `gpd_return.status: completed` with summary
+9. Return a typed `gpd_return` envelope with `status` and `files_written`; treat existing files as stale unless the same paths appear in `gpd_return.files_written`
+10. Do not rely on runtime completion text alone
 
-Write files first, then return.
 </instructions>
 ", subagent_type="gpd-roadmapper", model="{roadmapper_model}", readonly=false, description="Create research roadmap")
 ```
@@ -450,17 +492,26 @@ write_scope:
 expected_artifacts:
   - GPD/ROADMAP.md
   - GPD/STATE.md
-shared_state_policy: return_only
+  - GPD/REQUIREMENTS.md
+shared_state_policy: direct
 </spawn_contract>
 ```
 
+This roadmapper contract is task-local. Do not widen the write scope or reuse it outside this handoff.
+
 **Handle return:**
 
-**If the roadmapper agent fails to spawn or returns an error:** Check if ROADMAP.md was partially written. If it exists and has phases, offer to proceed with it. If no ROADMAP.md, offer: 1) Retry the roadmapper, 2) Create ROADMAP.md in the main context using PROJECT.md and REQUIREMENTS.md.
+**If the roadmapper agent fails to spawn or returns an error:** Treat the handoff as incomplete. Surface partial writes only as diagnostics. Do not fall back to any preexisting ROADMAP.md, STATE.md, or REQUIREMENTS.md content. Ask the user whether to retry this continuation or stop. If the user retries, spawn a fresh continuation handoff that includes the current objectives, the current milestone context, and any revision notes.
 
-**Artifact gate:** If the roadmapper reports `gpd_return.status: completed` but `GPD/ROADMAP.md` or `GPD/STATE.md` is missing, treat the handoff as incomplete. Do not trust the runtime handoff status by itself. Offer: 1) Retry the roadmapper, 2) Create the missing artifacts in the main context, 3) Abort and inspect the partial write.
+**Artifact gate:** If the roadmapper reports `gpd_return.status: completed`, verify that `GPD/ROADMAP.md`, `GPD/STATE.md`, and `GPD/REQUIREMENTS.md` are readable and named in `gpd_return.files_written`. If any expected artifact was already present before this handoff, it only counts as fresh output when the same path appears in `gpd_return.files_written`. If any expected artifact is missing from disk or from `gpd_return.files_written`, treat the handoff as incomplete and request a fresh continuation. Do not trust runtime completion text alone.
 
-**If `gpd_return.status: blocked`:** Present blocker, work with user, re-spawn.
+**One-shot freshness rule:** the only proof of success is a completed typed return naming the updated files. Existing files on disk are stale unless the same paths appear in `gpd_return.files_written` from this run.
+
+**If `gpd_return.status: checkpoint`:** Present the checkpoint, collect user input, and spawn a fresh roadmapper continuation after the user responds.
+
+**If `gpd_return.status: blocked`:** Present the blocker, work with the user, and spawn a fresh continuation once the blocker is resolved.
+
+**If `gpd_return.status: failed`:** Present the failure details, ask whether to retry the same continuation once or stop, and do not infer success from preexisting files.
 
 **If `gpd_return.status: completed`:** Read ROADMAP.md, present inline:
 
@@ -490,10 +541,39 @@ Success criteria:
 - "Adjust phases" — Tell me what to change
 - "Review full file" — Show raw ROADMAP.md
 
-**If "Adjust":** Get notes, re-spawn roadmapper with revision context, loop until approved.
-**If "Review":** Display raw ROADMAP.md, re-ask.
+**If "Adjust":** Get notes, then respawn the roadmapper with a revision continuation handoff:
 
-**Commit roadmap** (after approval):
+@{GPD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
+
+  ```
+  task(prompt="First, read {GPD_AGENTS_DIR}/gpd-roadmapper.md for your role and instructions.
+
+  <continuation>
+  This is a continuation of the current roadmap handoff, not a fresh brainstorm.
+
+  User feedback on roadmap:
+  [user's notes]
+
+  Current artifact snapshot:
+  - GPD/ROADMAP.md
+  - GPD/STATE.md
+  - GPD/REQUIREMENTS.md
+
+  Read the existing roadmap and requirements before editing.
+  Edit files in place.
+  Return a fresh typed `gpd_return` envelope with `status` and `files_written`.
+  </continuation>
+  ", subagent_type="gpd-roadmapper", model="{roadmapper_model}", readonly=false, description="Revise roadmap")
+  ```
+
+  **If the revision roadmapper agent fails to spawn or returns an error:** Treat the revision as incomplete. Do not compare old file contents as proof of success. Ask whether to retry the same continuation once or stop. If retrying, use a fresh continuation handoff that includes the current roadmap, requirements, and user notes.
+
+- Present revised roadmap
+- Loop until user approves (**maximum 3 revision iterations** - after 3, commit the current version with user's notes recorded as open questions in ROADMAP.md, and note: "Roadmap committed after 3 revision rounds. Further adjustments via `gpd:add-phase` or `gpd:remove-phase`.")
+
+**If "Review full file":** Display raw `cat GPD/ROADMAP.md`, then re-ask.
+
+**Commit roadmap** (after approval or auto mode):
 
 ```bash
 PRE_CHECK=$(gpd pre-commit-check --files GPD/ROADMAP.md GPD/STATE.md GPD/REQUIREMENTS.md 2>&1) || true
@@ -541,7 +621,7 @@ Also: `gpd:plan-phase [N]` — skip discussion, plan directly
 - [ ] Literature survey completed (if selected) — 4 parallel agents, milestone-aware
 - [ ] Objectives gathered and scoped per category
 - [ ] REQUIREMENTS.md created with REQ-IDs
-- [ ] gpd-roadmapper spawned with phase numbering context
+- [ ] gpd-roadmapper spawned with staged continuation context
 - [ ] Roadmap files written immediately (not draft)
 - [ ] User feedback incorporated (if any)
 - [ ] ROADMAP.md phases continue from previous milestone

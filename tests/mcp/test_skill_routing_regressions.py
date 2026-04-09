@@ -124,6 +124,7 @@ def test_route_skill_uses_live_registry_names_for_missing_manual_keyword_routes(
         return_value=[
             _skill("gpd-help", category="help", registry_name="help"),
             _skill("gpd-check-todos", category="project", registry_name="check-todos"),
+            _skill("gpd-new-milestone", category="project", registry_name="new-milestone"),
             _skill("gpd-compare-branches", category="project", registry_name="compare-branches"),
             _skill("gpd-record-insight", category="project", registry_name="record-insight"),
             _skill("gpd-merge-phases", category="project", registry_name="merge-phases"),
@@ -133,6 +134,7 @@ def test_route_skill_uses_live_registry_names_for_missing_manual_keyword_routes(
         ],
     ):
         assert route_skill("check pending todos")["suggestion"] == "gpd-check-todos"
+        assert route_skill("start a new milestone")["suggestion"] == "gpd-new-milestone"
         assert route_skill("compare two branches side by side")["suggestion"] == "gpd-compare-branches"
         assert route_skill("record an insight from this session")["suggestion"] == "gpd-record-insight"
         assert route_skill("merge two phases together")["suggestion"] == "gpd-merge-phases"

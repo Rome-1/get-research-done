@@ -16,6 +16,7 @@ from gpd.contracts import ResearchContract, VerificationEvidence
 from gpd.core.frontmatter import validate_frontmatter
 from gpd.core.workflow_staging import validate_workflow_stage_manifest_payload
 from gpd.registry import _parse_frontmatter, _parse_tools
+from tests.core.test_spawn_contracts import _find_single_task
 from tests.doc_surface_contracts import (
     assert_cost_surface_discoverability,
     assert_execution_observability_surface_contract,
@@ -160,6 +161,7 @@ AGENT_REFERENCE_TOKENS = {
         "references/shared/shared-protocols.md",
         "references/orchestration/agent-infrastructure.md",
         "references/publication/publication-pipeline-modes.md",
+        "references/publication/paper-writer-cookbook.md",
         "templates/notation-glossary.md",
         "templates/latex-preamble.md",
         "references/publication/figure-generation-templates.md",
@@ -235,6 +237,7 @@ AGENT_REFERENCE_TOKENS = {
         "references/physics-subfields.md",
         "references/verification/core/verification-core.md",
         "references/publication/publication-pipeline-modes.md",
+        "references/publication/referee-review-playbook.md",
         "references/publication/peer-review-panel.md",
         "templates/paper/referee-report.tex",
     ],
@@ -536,12 +539,6 @@ def test_review_commands_expose_typed_contracts() -> None:
 
     assert write_paper.review_contract is not None
     assert write_paper.review_contract.review_mode == "publication"
-    assert (
-        "manuscript scaffold target (existing draft or bootstrap target)"
-        in write_paper.review_contract.required_evidence
-    )
-    assert "manuscript-root artifact manifest" in write_paper.review_contract.required_evidence
-    assert "manuscript-root reproducibility manifest" in write_paper.review_contract.required_evidence
     assert "${PAPER_DIR}/ARTIFACT-MANIFEST.json" in write_paper.review_contract.required_outputs
     assert "${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json" in write_paper.review_contract.required_outputs
     assert "${PAPER_DIR}/reproducibility-manifest.json" in write_paper.review_contract.required_outputs
@@ -549,6 +546,7 @@ def test_review_commands_expose_typed_contracts() -> None:
     assert "GPD/review/REFEREE-DECISION{round_suffix}.json" in write_paper.review_contract.required_outputs
     assert "GPD/REFEREE-REPORT{round_suffix}.md" in write_paper.review_contract.required_outputs
     assert "GPD/REFEREE-REPORT{round_suffix}.tex" in write_paper.review_contract.required_outputs
+    assert write_paper.review_contract.required_evidence == []
     assert "command_context" in write_paper.review_contract.preflight_checks
     assert "verification_reports" in write_paper.review_contract.preflight_checks
     assert "manuscript" in write_paper.review_contract.preflight_checks
@@ -558,34 +556,17 @@ def test_review_commands_expose_typed_contracts() -> None:
     assert "reproducibility_manifest" in write_paper.review_contract.preflight_checks
     assert "reproducibility_ready" in write_paper.review_contract.preflight_checks
     assert "manuscript_proof_review" in write_paper.review_contract.preflight_checks
-    assert write_paper.review_contract.stage_artifacts == [
-        "GPD/review/CLAIMS{round_suffix}.json",
-        "GPD/review/STAGE-reader{round_suffix}.json",
-        "GPD/review/STAGE-literature{round_suffix}.json",
-        "GPD/review/STAGE-math{round_suffix}.json",
-        "GPD/review/STAGE-physics{round_suffix}.json",
-        "GPD/review/STAGE-interestingness{round_suffix}.json",
-        "GPD/review/REVIEW-LEDGER{round_suffix}.json",
-        "GPD/review/REFEREE-DECISION{round_suffix}.json",
-    ]
+    assert write_paper.review_contract.stage_artifacts == []
     assert [
         {
             "when": requirement.when,
             "required_outputs": list(requirement.required_outputs),
-            "required_evidence": list(requirement.required_evidence),
-            "blocking_conditions": list(requirement.blocking_conditions),
-            "blocking_preflight_checks": list(requirement.blocking_preflight_checks),
-            "stage_artifacts": list(requirement.stage_artifacts),
         }
         for requirement in write_paper.review_contract.conditional_requirements
     ] == [
         {
             "when": "theorem-bearing claims are present",
             "required_outputs": ["GPD/review/PROOF-REDTEAM{round_suffix}.md"],
-            "required_evidence": [],
-            "blocking_conditions": [],
-            "blocking_preflight_checks": [],
-            "stage_artifacts": ["GPD/review/PROOF-REDTEAM{round_suffix}.md"],
         }
     ]
 
@@ -1004,8 +985,9 @@ def test_new_project_requires_scoping_contract_across_setup_modes() -> None:
         "scoping contract",
         "decisive outputs",
         "anchors",
-        "explicit approval",
-        "downstream artifacts",
+        "one explicit scope approval",
+        "scoping approval gate",
+        "staged roadmap/conventions handoff",
     )
 
 
@@ -1029,7 +1011,6 @@ def test_new_project_wiring_mentions_contract_persistence_and_contract_first_dow
         (
             "researcher_model",
             "synthesizer_model",
-            "roadmapper_model",
             "commit_docs",
             "autonomy",
             "research_mode",
@@ -1046,6 +1027,8 @@ def test_new_project_wiring_mentions_contract_persistence_and_contract_first_dow
             "project_contract_validation",
         ),
     )
+    assert "POST_SCOPE_INIT=$(gpd --raw init new-project --stage post_scope)" in workflow_text
+    assert "roadmapper_model" in workflow_text
     _assert_contains_fragments(
         workflow_text,
         "project_contract_gate.authoritative",
@@ -1058,7 +1041,8 @@ def test_new_project_wiring_mentions_contract_persistence_and_contract_first_dow
         command_text,
         "scoping contract",
         "roadmap generation",
-        "explicit approval",
+        "one explicit scope approval",
+        "scoping approval gate",
     )
 
 
@@ -1115,11 +1099,7 @@ def test_new_project_questioning_requires_smoking_gun_and_rejects_proxy_only_rea
     guide_text = (REFERENCES_DIR / "research" / "questioning.md").read_text(encoding="utf-8")
 
     assert (
-        "What first smoking-gun observable, curve, benchmark reproduction, or scaling law they would trust before softer sanity checks"
-        in workflow_text
-    )
-    assert (
-        "Whether passing limiting cases, generic expectations, or qualitative agreement without that smoking gun should still count as failure"
+        "What exact smoking-gun observable, curve, benchmark reproduction, or scaling law they would trust before softer sanity checks"
         in workflow_text
     )
     assert (
@@ -1127,7 +1107,7 @@ def test_new_project_questioning_requires_smoking_gun_and_rejects_proxy_only_rea
         in workflow_text
     )
     assert (
-        "If you only have limiting cases, sanity checks, or generic benchmark language with no decisive smoking-gun observable"
+        "If you only have limiting cases, sanity checks, or generic benchmark language with no decisive smoking-gun observable, curve, or benchmark reproduction, keep exploring unless the user explicitly says that is the decisive standard."
         in workflow_text
     )
     assert (
@@ -1361,6 +1341,8 @@ def test_roadmap_template_and_workflows_surface_phase_contract_coverage() -> Non
     roadmapper_agent = (AGENTS_DIR / "gpd-roadmapper.md").read_text(encoding="utf-8")
     new_project = (WORKFLOWS_DIR / "new-project.md").read_text(encoding="utf-8")
     new_milestone = (WORKFLOWS_DIR / "new-milestone.md").read_text(encoding="utf-8")
+    new_project_roadmapper = _find_single_task(WORKFLOWS_DIR / "new-project.md", "gpd-roadmapper").text
+    new_milestone_roadmapper = _find_single_task(WORKFLOWS_DIR / "new-milestone.md", "gpd-roadmapper").text
 
     assert "## Contract Overview" in roadmap_template
     assert "**Contract Coverage:**" in roadmap_template
@@ -1373,15 +1355,21 @@ def test_roadmap_template_and_workflows_surface_phase_contract_coverage() -> Non
     assert "Paper Writing" not in roadmap_template
     assert "@{GPD_INSTALL_DIR}/templates/roadmap.md" in roadmapper_agent
     assert "@{GPD_INSTALL_DIR}/templates/state.md" in roadmapper_agent
-    assert "If literature/SUMMARY.md provided:" in roadmapper_agent
-    assert "literature/SUMMARY.md content" in roadmapper_agent
+    assert "## Step 3: Load Research Context (if exists)" in roadmapper_agent
     assert "Contract coverage" in roadmapper_agent
-    assert "Phase Details" in roadmapper_agent
-    assert "Active Calculations" in roadmapper_agent
+    assert "Machine-Readable Return Envelope" in roadmapper_agent
+    assert "gpd_return:" in roadmapper_agent
+    assert "status: completed | checkpoint | blocked | failed" in roadmapper_agent
+    assert "files_written: [ROADMAP.md, STATE.md]" in roadmapper_agent
+    assert "phases_created: {count}" in roadmapper_agent
+    assert "gpd_return.files_written" in new_project_roadmapper
+    assert "GPD/REQUIREMENTS.md" in new_project_roadmapper
+    assert "do not rely on runtime completion text alone." in new_project_roadmapper
+    assert "gpd_return.files_written" in new_milestone_roadmapper
+    assert "treat existing files as stale unless the same paths appear in `gpd_return.files_written`" in (
+        new_milestone_roadmapper
+    )
     assert "Intermediate Results" in state_template
-    assert "forbidden proxies a phase must carry" in roadmapper_agent
-    assert "Phase counts are heuristics, not quotas" in roadmapper_agent
-    assert "Do not pad the roadmap with speculative phases just to make it look complete." in roadmapper_agent
     assert "return `## ROADMAP BLOCKED`" in roadmapper_agent
     assert (
         "Treat `context_intake.must_read_refs`, `must_include_prior_outputs`, "
@@ -1406,7 +1394,7 @@ def test_research_prompt_surfaces_use_canonical_literature_outputs() -> None:
     assert "GPD/literature/" in project_researcher
     assert "GPD/literature/SUMMARY.md" in research_synthesizer
     assert "GPD/literature/SUMMARY.md" in phase_researcher
-    assert "If literature/SUMMARY.md provided:" in roadmapper_agent
+    assert "literature/SUMMARY.md" in roadmapper_agent
 
 
 def test_new_project_minimal_mode_and_planning_wiring_allow_coarse_scoped_decomposition() -> None:
@@ -1867,23 +1855,14 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
         assert legacy_alias not in summary_template
     assert "`suggested_contract_checks` is verification-only and does not belong in summaries." in summary_template
     assert "contract_results" in verification_template
-    assert "## Canonical Report Surface" in verification_template
     assert "machine-readable surface limited to the schema-owned ledgers" in verification_template
-    assert "Comparison verdicts must declare `subject_role` explicitly" in verification_template
-    assert "subject_role: decisive" in verification_template
     assert "verification-side `suggested_contract_checks`" in verification_template
-    assert "uncertainty_markers" in verification_template
     assert (
         "Use `@{GPD_INSTALL_DIR}/templates/verification-report.md` for the canonical verification frontmatter contract."
         in research_verification
     )
     assert "status: gaps_found" in research_verification
     assert "# Allowed status values: passed|gaps_found|expert_needed|human_needed" in research_verification
-    assert "status: passed | gaps_found | expert_needed | human_needed" not in research_verification
-    assert "deliverables: {}" not in research_verification
-    assert "acceptance_tests: {}" not in research_verification
-    assert "references: {}" not in research_verification
-    assert "forbidden_proxies: {}" not in research_verification
     assert "deliverable-main" in research_verification
     assert "acceptance-test-main" in research_verification
     assert "reference-main" in research_verification
@@ -1937,7 +1916,6 @@ def test_plan_tool_preflight_surfaces_across_planning_and_execution_prompts() ->
     assert "Each gap has: `gap_subject_kind`" in verifier_agent
     assert "Each gap has: `subject_kind`" not in verifier_agent
     assert "Verification Status:** {passed | gaps_found | expert_needed | human_needed}" in verifier_agent
-    assert "uncertainty_markers:" in verifier_agent
     assert "`suggested_contract_check`" not in verifier_agent
     assert "`contract_results` is authoritative." in execute_plan
     assert "project_contract_validation" in execute_plan
@@ -2463,8 +2441,13 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     assert "Canonical schema for `${PAPER_DIR}/reproducibility-manifest.json`:" in write_paper
     assert "Canonical reconciliation contract:" in sync_state
     assert "state-json-schema.md` itself" in sync_state
+    assert "state.json is authoritative for structured fields" in sync_state
+    assert "This workflow is intentionally fail-closed" in sync_state
+    assert "optional_commit" in sync_state
     assert "save_state_markdown" in sync_state
     assert "gpd --raw state snapshot" not in sync_state
+    assert "Proceed with reconciliation? (y/n)" not in sync_state
+    assert "determine which source is more recent" not in sync_state
     assert (
         "Keep the current `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, "
         "and `active_reference_context` visible throughout the staged review" in write_paper
@@ -3299,7 +3282,7 @@ def test_execute_phase_and_related_agents_surface_only_plan_scoped_verification_
     verifier = (AGENTS_DIR / "gpd-verifier.md").read_text(encoding="utf-8")
     audit_milestone = (WORKFLOWS_DIR / "audit-milestone.md").read_text(encoding="utf-8")
 
-    assert '"$phase_dir"/*-VERIFICATION.md' in execute_phase
+    assert "- Verification: {phase_dir}/{phase}-VERIFICATION.md" in execute_phase
     assert '"$phase_dir"/VERIFICATION.md "$phase_dir"/*-VERIFICATION.md' not in execute_phase
     assert 'ls "$phase_dir"/*-VERIFICATION.md 2>/dev/null' in planner
     assert 'find_files("$PHASE_DIR/*-VERIFICATION.md")' in verifier
@@ -3564,6 +3547,7 @@ def test_stage7_runtime_parity_docs_use_canonical_model_resolution_and_generic_h
     assert "False failure report despite delivered work" in execute_phase
     assert "Handoff verification" in quick
     assert "First, read {GPD_AGENTS_DIR}/gpd-planner.md for your role and instructions." in quick
+    assert "supports staged planner loading when available" in quick
     assert "project_contract_load_info.status" in quick
     assert "project_contract_validation.valid" in quick
     assert "project_contract_validation" in quick
@@ -3578,6 +3562,7 @@ def test_stage7_runtime_parity_docs_use_canonical_model_resolution_and_generic_h
     assert "**Contract Intake:** {contract_intake}" in quick
     assert "Contract intake: {contract_intake}" in quick
     assert "Project contract gate: {project_contract_gate}" in quick
+    assert "gpd validate plan-preflight" in quick
     assert "## CHECKPOINT REACHED" in quick
     assert "classifyHandoffIfNeeded" not in execute_phase
     assert "classifyHandoffIfNeeded" not in execute_plan

@@ -185,7 +185,7 @@ def test_contract_results_schema_and_verification_template_surface_canonical_res
     _assert_tokens_visible(contract_results_schema, tokens, label="contract-results-schema.md")
     _assert_phrases_visible(contract_results_schema, _choice_phrases(*RESULT_MODELS), label="contract-results-schema.md")
     assert "contract-results-schema.md" in verification_report
-    for token in ("contract_results", "comparison_verdicts", "suggested_contract_checks", "subject_role"):
+    for token in ("contract_results", "suggested_contract_checks"):
         assert token in verification_report
     assert "proof-audit rules in the canonical schema" in verification_report
 

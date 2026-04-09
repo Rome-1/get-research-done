@@ -147,17 +147,22 @@ def _extract_output_paths(task: TaskBlock) -> list[str]:
 
 
 def _assert_spawn_contract(
-    task: TaskBlock,
+    task: TaskBlock | str,
     expected_outputs: tuple[str, ...],
     *,
     shared_state_policy: str = "return_only",
+    expected_write_paths: tuple[str, ...] = (),
 ) -> None:
-    assert "<spawn_contract>" in task.text
-    assert "write_scope:" in task.text
-    assert "expected_artifacts:" in task.text
-    assert f"shared_state_policy: {shared_state_policy}" in task.text
+    text = task.text if isinstance(task, TaskBlock) else task
+
+    assert "<spawn_contract>" in text
+    assert "write_scope:" in text
+    assert "expected_artifacts:" in text
+    assert f"shared_state_policy: {shared_state_policy}" in text
     for output in expected_outputs:
-        assert output in task.text
+        assert output in text
+    for path in expected_write_paths:
+        assert path in text
 
 
 def test_agent_delegation_reference_defines_canonical_task_contract() -> None:
@@ -238,7 +243,65 @@ def test_representative_workflows_keep_runtime_note_and_agent_prompt_bootstrap()
 def test_every_workflow_task_block_carries_runtime_delegation_note_and_bootstrap() -> None:
     for path in WORKFLOW_PATHS:
         _assert_runtime_note_include(path)
-        _assert_expanded_runtime_note(path)
+
+
+def test_new_project_roadmapper_spawn_contract_uses_direct_shared_state_and_artifact_gate() -> None:
+    content = _read(WORKFLOWS_DIR / "new-project.md")
+    task = _find_single_task(WORKFLOWS_DIR / "new-project.md", "gpd-roadmapper")
+
+    _assert_spawn_contract(
+        content,
+        (
+            "GPD/ROADMAP.md",
+            "GPD/STATE.md",
+        ),
+        shared_state_policy="direct",
+        expected_write_paths=(
+            "GPD/ROADMAP.md",
+            "GPD/STATE.md",
+            "GPD/REQUIREMENTS.md",
+        ),
+    )
+    assert "Do not trust the runtime handoff status by itself." in content
+    assert "subagent_type=\"gpd-roadmapper\"" in task.text
+    assert "model=\"{roadmapper_model}\"" in task.text
+    assert "Write files immediately (ROADMAP.md, STATE.md, update REQUIREMENTS.md traceability)" in task.text
+    assert "gpd_return.files_written" in task.text
+    assert "GPD/REQUIREMENTS.md" in task.text
+    assert "do not rely on runtime completion text alone." in task.text
+    assert "If the roadmapper reports `gpd_return.status: completed`, verify that `GPD/ROADMAP.md`, `GPD/STATE.md`, and `GPD/REQUIREMENTS.md` are readable and named in `gpd_return.files_written`." in content
+
+
+def test_new_milestone_roadmapper_spawn_contract_keeps_return_only_shared_state_and_explicit_contract_inputs() -> None:
+    content = _read(WORKFLOWS_DIR / "new-milestone.md")
+    task = _find_single_task(WORKFLOWS_DIR / "new-milestone.md", "gpd-roadmapper")
+
+    _assert_spawn_contract(
+        content,
+        (
+            "GPD/ROADMAP.md",
+            "GPD/STATE.md",
+        ),
+        shared_state_policy="return_only",
+        expected_write_paths=(
+            "GPD/ROADMAP.md",
+            "GPD/STATE.md",
+            "GPD/REQUIREMENTS.md",
+        ),
+    )
+    assert "Do not trust the runtime handoff status by itself." in content
+    assert "<contract_context>" in task.text
+    assert "Project contract gate: {project_contract_gate}" in task.text
+    assert "Project contract load info: {project_contract_load_info}" in task.text
+    assert "Project contract validation: {project_contract_validation}" in task.text
+    assert "Contract intake: {contract_intake}" in task.text
+    assert "Active references: {active_reference_context}" in task.text
+    assert "Effective reference intake: {effective_reference_intake}" in task.text
+    assert "gpd_return.files_written" in task.text
+    assert "treat existing files as stale unless the same paths appear in `gpd_return.files_written`" in task.text
+    assert "GPD/REQUIREMENTS.md" in content
+    assert "If the roadmapper reports `gpd_return.status: completed`, verify that `GPD/ROADMAP.md`, `GPD/STATE.md`, and `GPD/REQUIREMENTS.md` are readable and named in `gpd_return.files_written`." in content
+    assert "If any expected artifact is missing from disk or from `gpd_return.files_written`, treat the handoff as incomplete and request a fresh continuation." in content
 
 
 def test_debug_workflow_and_command_share_the_same_one_shot_debugger_contract() -> None:
@@ -368,6 +431,7 @@ def test_new_project_roadmapper_uses_spawn_contract_and_artifact_gate() -> None:
 
     _assert_spawn_contract(roadmapper, ("GPD/ROADMAP.md", "GPD/STATE.md"), shared_state_policy="direct")
     assert "GPD/REQUIREMENTS.md" in roadmapper.text
+    assert "gpd_return.files_written" in roadmapper.text
     assert "GPD/literature/SUMMARY.md" in roadmapper.text
     assert "allowed_paths:" in roadmapper.text
     assert "If the roadmapper reports `gpd_return.status: completed`" in content
@@ -413,7 +477,10 @@ def test_new_milestone_research_and_roadmapper_gate_success_path_artifacts() -> 
     assert "Do not trust the runtime handoff status by itself." in content
     assert "If a scout reports success but its `expected_artifacts` entry (`GPD/literature/{FILE}`) is missing" in content
     assert "If the synthesizer reports success but `GPD/literature/SUMMARY.md` is missing" in content
-    assert "If the roadmapper reports `gpd_return.status: completed` but `GPD/ROADMAP.md` or `GPD/STATE.md` is missing" in content
+    assert "If the roadmapper reports `gpd_return.status: completed`, verify that `GPD/ROADMAP.md`, `GPD/STATE.md`, and `GPD/REQUIREMENTS.md` are readable and named in `gpd_return.files_written`." in content
+    assert "If any expected artifact is missing from disk or from `gpd_return.files_written`, treat the handoff as incomplete and request a fresh continuation." in content
+    assert "GPD/REQUIREMENTS.md" in content
+    assert "gpd_return.files_written" in content
     assert "shared_state_policy: return_only" in content
 
     assert 'subagent_type="gpd-project-researcher"' in content

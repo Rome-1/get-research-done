@@ -15,7 +15,6 @@ def test_verifier_prompt_keeps_the_canonical_return_contract_visible() -> None:
     verifier = _read_verifier_prompt()
 
     assert "Return with status `completed | checkpoint | blocked | failed`:" in verifier
-    assert "**Return Status:** {completed | checkpoint | blocked | failed}" in verifier
     assert "files_written: [list only files that actually landed on disk; use [] when no file was written]" in verifier
     assert "Use only status names: `completed` | `checkpoint` | `blocked` | `failed`." in verifier
     assert "Return changed paths in `gpd_return.files_written`." in verifier

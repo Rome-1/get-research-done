@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import posixpath
 import re
 from collections import Counter
 from enum import StrEnum
@@ -12,6 +11,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from pydantic import ValidationError as PydanticValidationError
 
+from gpd.core.publication_review_paths import normalize_review_path_label, review_artifact_round
 from gpd.mcp.paper.models import (
     ClaimIndex,
     ProofAuditStatus,
@@ -158,9 +158,11 @@ def _canonical_stage_artifact_details(stage_artifact_path: Path) -> tuple[str, s
     match = _STRICT_STAGE_ARTIFACT_RE.fullmatch(stage_artifact_path.name)
     if match is None:
         return None
-    round_text = match.group("round")
-    round_number = int(round_text) if round_text else 1
-    return match.group("stage_id"), match.group("round_suffix") or "", round_number
+    round_details = review_artifact_round(stage_artifact_path, pattern=_STRICT_STAGE_ARTIFACT_RE)
+    if round_details is None:
+        return None
+    round_number, round_suffix = round_details
+    return match.group("stage_id"), round_suffix, round_number
 
 
 def _claim_index_path_for_round(stage_artifact_path: Path, *, round_suffix: str) -> Path:
@@ -222,7 +224,7 @@ def validate_stage_review_artifact_alignment(
                 f"{artifact_path.name} round does not match filename suffix ({stage_report.round} != {expected_round})"
             )
 
-    if expected_manuscript_path and _normalize_path_label(stage_report.manuscript_path) != _normalize_path_label(expected_manuscript_path):
+    if expected_manuscript_path and normalize_review_path_label(stage_report.manuscript_path) != normalize_review_path_label(expected_manuscript_path):
         errors.append(f"{artifact_path.name} manuscript_path does not match the referee decision manuscript_path")
     if expected_manuscript_sha256 and stage_report.manuscript_sha256 != expected_manuscript_sha256:
         errors.append(f"{artifact_path.name} manuscript_sha256 does not match the active manuscript snapshot")
@@ -235,8 +237,8 @@ def validate_stage_review_artifact_alignment(
         )
         return errors
 
-    normalized_stage_path = _normalize_path_label(stage_report.manuscript_path)
-    normalized_claim_path = _normalize_path_label(claim_index.manuscript_path)
+    normalized_stage_path = normalize_review_path_label(stage_report.manuscript_path)
+    normalized_claim_path = normalize_review_path_label(claim_index.manuscript_path)
     if normalized_stage_path != normalized_claim_path:
         errors.append(
             f"{artifact_path.name} manuscript_path does not match the matching claim index ({stage_report.manuscript_path} != {claim_index.manuscript_path})"
@@ -416,18 +418,15 @@ def _strict_referee_decision_field_errors(data: RefereeDecisionInput) -> list[st
     ]
 
 
-def _normalize_path_label(path_text: str) -> str:
-    normalized = path_text.strip().replace("\\", "/")
-    if not normalized:
-        return ""
-    return posixpath.normpath(normalized)
-
-
 def _review_ledger_consistency_errors(data: RefereeDecisionInput, review_ledger: ReviewLedger) -> list[str]:
     errors: list[str] = []
 
-    normalized_decision_path = _normalize_path_label(data.manuscript_path) if data.manuscript_path.strip() else ""
-    normalized_ledger_path = _normalize_path_label(review_ledger.manuscript_path) if review_ledger.manuscript_path.strip() else ""
+    normalized_decision_path = (
+        normalize_review_path_label(data.manuscript_path) if data.manuscript_path.strip() else ""
+    )
+    normalized_ledger_path = (
+        normalize_review_path_label(review_ledger.manuscript_path) if review_ledger.manuscript_path.strip() else ""
+    )
     if not normalized_ledger_path:
         errors.append("review ledger manuscript_path must be non-empty")
     if normalized_decision_path and normalized_ledger_path and normalized_decision_path != normalized_ledger_path:

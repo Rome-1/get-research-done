@@ -41,6 +41,7 @@ def test_new_project_prompt_surface_is_heavier_than_start_but_uses_the_same_meas
     assert new_project.expanded_char_count > start.expanded_char_count
     assert new_project.expanded_line_count < workflow.expanded_line_count + 200
     assert new_project.expanded_char_count < workflow.expanded_char_count + 12000
+    assert new_project.raw_include_count == 1
     assert new_project.first_question_line is not None
     assert new_project.first_question_marker == MINIMAL_QUESTION
 
