@@ -1199,6 +1199,7 @@ fi
 Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`.
 
 Do not reuse stale bootstrap values for literature survey, roadmapping, or conventions once this post-scope init succeeds.
+Use the staged `research_mode` from `POST_SCOPE_INIT` for all scout handoffs. Do not reread config inside the scouts.
 
 ## 6. Literature Survey Decision
 
@@ -1272,6 +1273,8 @@ What are the key known results, exact solutions, and established techniques in [
 [PROJECT.md summary - research question, physical system, theoretical framework, key parameters]
 </project_context>
 
+Research mode from the staged post-scope init: {research_mode}. Use it as authoritative for this scout.
+
 <downstream_consumer>
 Your PRIOR-WORK.md feeds into research planning. Be precise:
 - Specific results with references (author, year, journal)
@@ -1324,6 +1327,8 @@ What analytical techniques, numerical methods, and computational tools are stand
 [PROJECT.md summary]
 </project_context>
 
+Research mode from the staged post-scope init: {research_mode}. Use it as authoritative for this scout.
+
 <downstream_consumer>
 Your METHODS.md feeds into approach selection. Categorize clearly:
 - Analytical methods (exact solutions, perturbation theory, RG, etc.)
@@ -1375,6 +1380,8 @@ What computational approaches, algorithms, and software tools are available for 
 <project_context>
 [PROJECT.md summary]
 </project_context>
+
+Research mode from the staged post-scope init: {research_mode}. Use it as authoritative for this scout.
 
 <downstream_consumer>
 Your COMPUTATIONAL.md informs the computational strategy. Include:
@@ -1429,6 +1436,8 @@ What are the open problems, common mistakes, and known pitfalls in [research dom
 [PROJECT.md summary]
 </project_context>
 
+Research mode from the staged post-scope init: {research_mode}. Use it as authoritative for this scout.
+
 <downstream_consumer>
 Your PITFALLS.md prevents wasted effort. For each pitfall:
 - Warning signs (how to detect early)
@@ -1459,6 +1468,8 @@ shared_state_policy: return_only
 </spawn_contract>
 ", subagent_type="gpd-project-researcher", model="{researcher_model}", readonly=false, description="Pitfalls research")
 ```
+
+**Handle scout returns:** Route on `gpd_return.status` and `gpd_return.files_written`. If `checkpoint`, present it to the user, collect the response, and spawn a fresh continuation; do not keep the original scout alive. If `blocked` or `failed`, surface the blocker and retry only once. If `completed`, verify the expected artifact exists on disk and is named in the fresh `gpd_return.files_written`. Treat any preexisting scout file as stale unless the same path appears in the fresh return. Do not trust runtime completion text alone.
 
 **If any research agent fails to spawn or returns an error:** Verify which required scout artifacts exist (`PRIOR-WORK.md`, `METHODS.md`, `COMPUTATIONAL.md`, `PITFALLS.md`). Retry only the missing scout tasks once. If any required research file is still missing after the retry, STOP this survey path and present the missing artifacts. Do not proceed with a partial literature survey. Do not synthesize from incomplete scout output. Do not silently downgrade to manual main-context research.
 
@@ -1500,6 +1511,8 @@ shared_state_policy: return_only
 </spawn_contract>
 ", subagent_type="gpd-research-synthesizer", model="{synthesizer_model}", readonly=false, description="Synthesize research")
 ```
+
+**Handle the synthesizer return:** Route on `gpd_return.status` and `gpd_return.files_written`. If `checkpoint`, present it to the user, collect the response, and spawn a fresh continuation after the response. If `blocked` or `failed`, surface the blocker and retry once. If `completed`, verify `GPD/literature/SUMMARY.md` exists and is named in the fresh return. Do not trust runtime completion text alone.
 
 **Artifact gate:** If a scout reports success but its `expected_artifacts` entry (`GPD/literature/{FILE}`) is missing, treat that scout as incomplete. If the synthesizer reports success but `GPD/literature/SUMMARY.md` is missing, treat that handoff as incomplete. Do not trust the runtime handoff status by itself.
 
