@@ -10,6 +10,7 @@ from gpd.adapters.install_utils import expand_at_includes
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = REPO_ROOT / "src/gpd/specs/workflows"
+COMMANDS_DIR = REPO_ROOT / "src/gpd/commands"
 REFERENCES_DIR = REPO_ROOT / "src/gpd/specs/references"
 TEMPLATES_DIR = REPO_ROOT / "src/gpd/specs/templates"
 WORKFLOW_PATHS = (
@@ -205,13 +206,14 @@ def test_representative_workflows_keep_runtime_note_and_agent_prompt_bootstrap()
         "write-paper.md": ["gpd-paper-writer", "gpd-bibliographer"],
         "respond-to-referees.md": ["gpd-paper-writer"],
         "peer-review.md": ["gpd-review-reader", "gpd-referee"],
-        "validate-conventions.md": ["gpd-consistency-checker", "gpd-notation-coordinator"],
+        "validate-conventions.md": ["gpd-consistency-checker"],
         "new-project.md": [
             "gpd-project-researcher",
             "gpd-research-synthesizer",
             "gpd-roadmapper",
             "gpd-notation-coordinator",
         ],
+        "verify-work.md": ["gpd-check-proof", "gpd-verifier"],
         "derive-equation.md": ["gpd-check-proof"],
         "explain.md": ["gpd-explainer"],
         "audit-milestone.md": ["gpd-consistency-checker", "gpd-referee"],
@@ -237,6 +239,28 @@ def test_every_workflow_task_block_carries_runtime_delegation_note_and_bootstrap
     for path in WORKFLOW_PATHS:
         _assert_runtime_note_include(path)
         _assert_expanded_runtime_note(path)
+
+
+def test_debug_workflow_and_command_share_the_same_one_shot_debugger_contract() -> None:
+    workflow = _read(WORKFLOWS_DIR / "debug.md")
+    command = _read(COMMANDS_DIR / "debug.md")
+    expanded_workflow = expand_at_includes(workflow, REPO_ROOT / "src/gpd", "/runtime/")
+
+    assert workflow.count('subagent_type="gpd-debugger"') == 1
+    assert workflow.count("readonly=false") == 1
+    assert 'description="Investigate: {truth_short}"' in workflow
+    assert "Spawn a fresh subagent for the task below." in expanded_workflow
+    assert "one-shot handoff" in expanded_workflow
+    assert "Always pass `readonly=false` for file-producing agents." in expanded_workflow
+
+    assert command.count('subagent_type="gpd-debugger"') == 2
+    assert command.count("readonly=false") == 2
+    assert 'description="Debug {slug}"' in command
+    assert 'description="Continue debug {slug}"' in command
+    assert "Create: GPD/debug/{slug}.md" in command
+    assert "Debug file path: GPD/debug/{slug}.md" in command
+    assert "expected debug session artifact" in command
+    assert "artifact gate" in command
 
 
 def test_quick_and_write_paper_gate_handoffs_on_expected_artifacts() -> None:
@@ -269,6 +293,9 @@ def test_execute_phase_requires_state_return_envelope_and_handoff_spot_checks() 
     assert "State updates returned (NOT written to STATE.md directly)" in executor.text
     assert "Executor subagents MUST NOT write STATE.md directly." in content
     assert "Verify expected output files, the structured return envelope, and git commits" in content
+    assert "pre_execution_specialists" in content
+    assert '# task(subagent_type="gpd-notation-coordinator"' not in content
+    assert '# task(subagent_type="gpd-experiment-designer"' not in content
 
 
 def test_parameter_sweep_executor_uses_spawn_contract_and_return_only_state_updates() -> None:
@@ -360,6 +387,23 @@ def test_new_project_notation_coordinator_uses_explicit_model_and_spawn_contract
     assert "Do not hardcode `natural` or `mostly_minus`" in content
     assert 'gpd convention set units "$RESOLVED_UNITS"' in content
     assert 'gpd convention set metric_signature "$RESOLVED_METRIC"' in content
+
+
+def test_validate_conventions_uses_one_shot_delegation_and_artifact_gating_for_resolution() -> None:
+    content = _read(WORKFLOWS_DIR / "validate-conventions.md")
+
+    assert content.count('subagent_type="gpd-consistency-checker"') == 1
+    assert content.count('subagent_type="gpd-notation-coordinator"') == 0
+    assert "Thin wrapper around `gpd-consistency-checker` for convention validation." in content
+    assert "Spawn `gpd-consistency-checker` once and let it own convention policy." in content
+    assert "Runtime delegation rule: this is a one-shot handoff." in content
+    assert "Route only on the canonical `gpd_return.status`:" in content
+    assert "Do not route on checker-local text markers or headings." in content
+    assert "gpd-notation-coordinator" in content
+    assert "If the checker's `next_actions` call for notation repair, spawn `gpd-notation-coordinator` with the checker report and the same scope." in content
+    assert "Keep that handoff thin: the coordinator owns the repair policy, not this workflow." in content
+    assert "If the checker returns `gpd_return.status: completed`, accept success only after verifying that:" in content
+    assert "The same path appears in `gpd_return.files_written`." in content
 
 
 def test_new_milestone_research_and_roadmapper_gate_success_path_artifacts() -> None:

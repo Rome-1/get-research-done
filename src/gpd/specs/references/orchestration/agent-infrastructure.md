@@ -54,7 +54,7 @@ If you reach ORANGE, include `context_pressure: high` in your output so the orch
 
 ## GPD Return Envelope
 
-All agents return a structured YAML block at the end of their output for machine-readable parsing by the orchestrator:
+Spawned agents that need to hand machine-readable results back to the orchestrator return a typed `gpd_return` envelope:
 
 ```yaml
 gpd_return:
@@ -64,7 +64,7 @@ gpd_return:
   next_actions: [list of recommended follow-up actions]
 ```
 
-Agents may extend this with additional fields specific to their role (e.g., `phases_created`, `dimensions_checked`). The four base fields above are required.
+Agents may extend this with additional fields specific to their role (e.g., `phases_created`, `dimensions_checked`). The four base fields above are required on this envelope.
 
 ### Next-Action Discipline
 

@@ -32,6 +32,9 @@ def test_validate_conventions_requires_artifact_and_lock_before_success() -> Non
     validate_conventions = _read("validate-conventions.md")
 
     assert "Runtime delegation rule: this is a one-shot handoff." in validate_conventions
+    assert "gpd_return.status: completed" in validate_conventions
+    assert "gpd_return.files_written" in validate_conventions
+    assert "expected artifact exists on disk" in validate_conventions
     assert "Verify that `GPD/CONVENTIONS.md` exists and that `gpd convention list` reflects the resolved fields before accepting the update." in validate_conventions
     assert "Convention artifact and lock re-verified after notation resolution before success is accepted" in validate_conventions
     assert "Present options, checkpoint, and return." in validate_conventions

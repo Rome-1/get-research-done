@@ -593,7 +593,7 @@ task(
 Human-readable headings such as `## PLANNING COMPLETE`, `## CHECKPOINT REACHED`, and `## PLANNING INCONCLUSIVE` are presentation only. Route on the planner's structured `gpd_return.status`, `gpd_return.files_written`, and the on-disk artifact check.
 
 - **`gpd_return.status: completed`:** Before accepting the success state, verify that at least one readable `*-PLAN.md` artifact exists in `${PHASE_DIR}` and that `gpd_return.files_written` names the same file set. Do not accept the planner return text alone. If the planner says complete but no plan files are present, treat the handoff as incomplete and request a fresh continuation. Display plan count. If `AUTONOMY=supervised`, show the written draft plans and get user confirmation before advancing to checker or next-step output. If `--skip-verify` or `plan_checker_enabled` is false (from init): skip to step 13 only when no proof-bearing plans were written. Proof-bearing plans still require checker review or an equivalent main-context audit before planning is considered complete. Otherwise: step 10.
-- **`gpd_return.status: checkpoint`:** Present to user, get response, spawn continuation (step 12)
+- **`gpd_return.status: checkpoint`:** Present to user, get response, spawn a fresh planner continuation handoff. Do not route planner checkpoints into the checker revision loop.
 - **`gpd_return.status: blocked` or `failed`:** Show attempts, offer: Add context / Retry / Manual
 
 Before the checker loop, validate every generated plan contract explicitly:
@@ -604,6 +604,16 @@ for plan_file in "${PHASE_DIR}"/*-PLAN.md; do
   gpd validate plan-contract "$plan_file" || exit 1
 done
 ```
+
+## 9b. Handle Planner Checkpoint
+
+**Planner checkpoints are a separate one-shot continuation path**
+
+If the planner returns `gpd_return.status: checkpoint`, present the checkpoint to the user, collect the response, and spawn a fresh `gpd-planner` continuation handoff with the updated context. Keep this path distinct from checker-driven revision.
+
+Before continuing, verify that the planner's expected `PLAN.md` artifacts still exist and are readable. If the planner continuation changes the plans, re-run the explicit plan-contract validation before checker review.
+
+Only after the planner returns `completed` should the workflow advance to checker review.
 
 ## 10. Spawn gpd-plan-checker Agent
 
@@ -707,30 +717,43 @@ task(
 
 Human-readable headings such as `## VERIFICATION PASSED`, `## ISSUES FOUND`, and `## PARTIAL APPROVAL` are presentation only. Route on the checker's structured `gpd_return.status` and plan lists.
 
-- **`gpd_return.status: completed`:** Display iteration-aware confirmation and proceed to step 13:
+- **`gpd_return.status: completed`:** Treat as a full pass only after plan-ID reconciliation succeeds. Before accepting the success state, verify:
+
+  1. `approved_plans` names only readable `*-PLAN.md` artifacts in `${PHASE_DIR}`
+  2. `blocked_plans` is empty
+  3. every approved plan file still exists and matches the approved plan IDs
+  4. the checker's `files_written` value does not claim unrelated artifacts
+
+  If any of those checks fail, reject the success state and send the checker output back through the revision loop as a fail-closed mismatch.
+
+  Display iteration-aware confirmation and proceed to step 13 only after reconciliation passes:
 
   ```
   Plan passed checker (attempt {iteration_count}/3)
   ```
+
+- **`gpd_return.status: checkpoint`:** Some plans passed, others need revision. Split the work:
+
+  1. Record approved plans from the structured `approved_plans` list only.
+  2. Record blocked plans from the structured `blocked_plans` list only.
+  3. Reject the return if any listed plan ID does not map to a readable `*-PLAN.md` file in `${PHASE_DIR}`.
+  4. Display status:
+
+     ```
+     Partial approval (attempt {iteration_count}/3): {N_approved} plans approved, {N_blocked} need revision
+     ```
+
+  5. Send ONLY the blocked plans to the revision loop (step 12). Pass the checker's blocker details as `{structured_issues_from_checker}`. Do NOT re-check already-approved plans unless their inputs change during revision.
+  6. After revision + re-check cycle, if the re-check returns `gpd_return.status: completed` for the revised plans, merge approved sets and proceed to step 13. If it returns `gpd_return.status: checkpoint` again, repeat. If `gpd_return.status: failed`, enter standard revision loop for remaining plans.
+  7. Approved plans from partial approval are final only after the plan-ID reconciliation checks pass.
+
+- **`gpd_return.status: blocked`:** The checker found a blocker that prevents accepting the current plan set as-is. If `approved_plans` is empty, treat this as a full rejection and send all plans to the revision loop. If `approved_plans` is non-empty, preserve the approved subset only after plan-ID reconciliation passes, then send the blocked subset to the revision loop with the structured issues.
 
 - **`gpd_return.status: failed`:** Display iteration-aware status, show issues, check iteration count, proceed to step 12:
 
   ```
   Checker found {N} issues (attempt {iteration_count}/3). Revising plan...
   ```
-
-- **`gpd_return.status: checkpoint`:** Some plans passed, others need revision. Split the work:
-
-  1. Record approved plans (from the checker's "Approved Plans" table)
-  2. Display status:
-
-     ```
-     Partial approval (attempt {iteration_count}/3): {N_approved} plans approved, {N_blocked} need revision
-     ```
-
-  3. Send ONLY the blocked plans to the revision loop (step 12). Pass the checker's blocker details as `{structured_issues_from_checker}`. Do NOT re-check already-approved plans unless their inputs change during revision.
-  4. After revision + re-check cycle, if the re-check returns `gpd_return.status: completed` for the revised plans, merge approved sets and proceed to step 13. If it returns `gpd_return.status: checkpoint` again, repeat. If `gpd_return.status: failed`, enter standard revision loop for remaining plans.
-  5. Approved plans from partial approval are final — they proceed to execution regardless of the revision outcome for blocked plans.
 
 ## 12. Revision Loop (Max 3 Iterations)
 
@@ -757,6 +780,8 @@ else
   PLANS_CONTENT=$(cat "${PHASE_DIR}"/*-PLAN.md 2>/dev/null)
 fi
 ```
+
+Before spawning the revision planner, confirm that every `plan_id` in `BLOCKED_PLANS` maps to exactly one readable `*-PLAN.md` file in `${PHASE_DIR}`. If any blocked ID is missing or ambiguous, stop and report the reconciliation failure rather than inventing a fallback mapping.
 
 Revision prompt:
 

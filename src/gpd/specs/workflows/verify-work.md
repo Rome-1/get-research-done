@@ -229,23 +229,81 @@ Human-readable headings in the verifier output are presentation only; route on t
 
 > Runtime delegation rule: this is a one-shot handoff. If the spawned verifier needs user input, it must checkpoint and return. The wrapper must start a fresh continuation after the user responds instead of trying to keep the original verifier alive.
 
+```
+task(
+  subagent_type="gpd-verifier",
+  model="{verifier_model}",
+  readonly=false,
+  prompt="First, read {GPD_AGENTS_DIR}/gpd-verifier.md for your role and instructions.
+
+Verify Phase {phase_number}. Keep verifier ownership of contract-backed target extraction, evidence mapping, proof-bearing policy, computational checks, decisive comparisons, and canonical verification status semantics.
+
+Verification flags from the invoking wrapper: $ARGUMENTS
+Treat `--dimensional`, `--limits`, `--convergence`, and `--regression` as optional-breadth narrowing only. Otherwise run the full verifier package.
+
+<files_to_read>
+Read these files using the file_read tool:
+- Verification artifact if present: {phase_dir}/{phase_number}-VERIFICATION.md
+- All PLAN.md files in {phase_dir}/
+- All SUMMARY.md files in {phase_dir}/
+- All `*-PROOF-REDTEAM.md` files in {phase_dir}/
+- GPD/STATE.md
+- GPD/ROADMAP.md
+</files_to_read>
+
+<verification_context>
+Project contract: {project_contract}
+Project contract gate: {project_contract_gate}
+Project contract load info: {project_contract_load_info}
+Project contract validation: {project_contract_validation}
+Contract intake: {contract_intake}
+Effective reference intake: {effective_reference_intake}
+Active reference context: {active_reference_context}
+Selected protocol bundle ids: {selected_protocol_bundle_ids}
+Protocol bundle context: {protocol_bundle_context}
+Protocol bundle verifier extensions: {protocol_bundle_verifier_extensions}
+Proof freshness summary: {phase_proof_review_status}
+</verification_context>
+
+Treat `project_contract` as authoritative only when `project_contract_gate.authoritative` is true. Use `protocol_bundle_verifier_extensions` as the primary bundle-extension surface. Keep decisive comparison gaps legible at the claim / acceptance-test / reference level. If user input is required, return `gpd_return.status: checkpoint` and stop; do not wait inside the same run. Write the canonical verification artifact before returning.
+
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - {phase_dir}/{phase_number}-VERIFICATION.md
+expected_artifacts:
+  - {phase_dir}/{phase_number}-VERIFICATION.md
+shared_state_policy: return_only
+</spawn_contract>
+",
+  description="Verify Phase {phase_number}"
+)
+```
+
 If runtime delegation is unavailable, execute the handoff in the main context, but do not re-implement verifier policy here.
 </step>
 
 <step name="sync_verifier_output">
 Read the verifier-produced verification file or report path.
 
-- Validate that the file exists.
-- Run `gpd validate verification-contract "${phase_dir}/${phase_number}-VERIFICATION.md"` before any downstream routing.
+- Route only on the canonical verification frontmatter and `gpd_return.status`; do not route on headings or marker strings.
+- `gpd_return.status: completed` means success only after verifying that:
+  1. `${phase_dir}/${phase_number}-VERIFICATION.md` exists on disk and is readable
+  2. the same path appears in `gpd_return.files_written`
+  3. `gpd validate verification-contract "${phase_dir}/${phase_number}-VERIFICATION.md"` passes before any downstream routing
+- If a canonical verification file already existed before this run, do not treat it as fresh verifier output unless the child reported that same path in `gpd_return.files_written`.
+- `gpd_return.status: checkpoint` means present the verifier checkpoint, collect user input, and spawn a fresh verifier continuation. Do not overwrite canonical verification status in this workflow.
+- `gpd_return.status: blocked` or `failed` means keep the session fail-closed, present the issues, and offer retry or manual follow-up. Do not treat any preexisting verification file as a new verifier result on this path.
+- If the verifier agent fails to spawn or returns an error, keep the session fail-closed. Do not let a stale existing verification file satisfy the success path.
+- If the canonical verification artifact is missing, unreadable, absent from `gpd_return.files_written`, or fails contract validation, treat the handoff as incomplete and request a fresh verifier continuation. Never trust the return text alone.
 - If a canonical verification file already exists, preserve its authoritative frontmatter and append only the session-local overlay here.
 - Do not recompute canonical verification status in this workflow.
-- Human-readable headings in the verifier output are presentation only; route on the canonical verification frontmatter and `gpd_return.status`, not on headings or marker strings.
 
 Load the staged researcher-session scaffold and canonical schema pack at this stage.
 Keep the session overlay frontmatter compatible with the authoritative verification report.
 Write to `${phase_dir}/${phase_number}-VERIFICATION.md`.
 Changed verification files fail `gpd pre-commit-check` when this header is missing or mismatched against the active lock.
-changed verification files fail `gpd pre-commit-check` when this header is missing or mismatched against the active lock
 </step>
 
 <step name="present_check">
@@ -404,12 +462,20 @@ Spawn `gpd-plan-checker` as a fresh one-shot delegation.
 Before accepting the handoff as complete, confirm the expected `PLAN.md` files are present and readable.
 
 If the checker fails to spawn or returns an error, proceed without plan verification but note that the plans were not verified.
+
+If the checker returns a structured `gpd_return`, route on `gpd_return.status` and the structured plan lists, not on presentation text:
+
+- `completed`: treat the fix plans as verified and continue.
+- `checkpoint`: some plans are approved and others need revision; record `approved_plans` and `blocked_plans`, then send only the blocked plans back through the revision loop.
+- `blocked`: nothing is approved; feed the checker issues and blocked plan IDs back into the revision loop.
+- `failed`: present the issues and offer retry, manual revision, or skipping gap closure.
 </step>
 
 <step name="revision_loop">
 **Iterate planner <-> checker until plans pass, up to 3 rounds**
 
 If the checker reports issues, send a fresh planner continuation with the checker feedback. After the planner returns, run the checker again. Each agent turn is one-shot; do not keep either agent alive across user interaction.
+When the checker returns `checkpoint` or `blocked`, use the structured `approved_plans`, `blocked_plans`, and `issues` fields to decide which plans to revise. Use the structured fields, not the human-readable approval table, as the source of truth.
 First, read {GPD_AGENTS_DIR}/gpd-planner.md for your role and instructions.
 Use `templates/planner-subagent-prompt.md` again for checker-driven gap_closure revisions.
 

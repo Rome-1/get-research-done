@@ -26,12 +26,6 @@ Detection: If `$ARGUMENTS` contains `--batch` or if `gaps_from_verification` con
 <paths>
 DEBUG_DIR=GPD/debug
 
-Ensure the debug directory exists before writing:
-
-```bash
-mkdir -p GPD/debug
-```
-
 Debug files use the `GPD/debug/` path.
 </paths>
 
@@ -86,7 +80,6 @@ Read the "Gaps" section (YAML format):
   reason: "Researcher reported: energy drifts by 1% over 1000 timesteps"
   severity: major
   check: 2
-  artifacts: []
   missing: []
 ```
 
@@ -190,40 +183,20 @@ Each agent should consider these common root causes:
   </step>
 
 <step name="collect_results">
-**Collect root causes from the debug file and typed return envelope:**
+**Collect root causes from the typed return envelope:**
 
-Each agent returns a typed `gpd_return` envelope and writes `GPD/debug/{slug}.md`.
+Each agent returns one typed `gpd_return` envelope and points to `GPD/debug/{slug}.md` as the session file.
 
-- If `gpd_return.status: completed`, verify `GPD/debug/{slug}.md` exists, read the file, and use the file-backed diagnosis as the authoritative root-cause record.
+- If `gpd_return.status: completed`, read `gpd_return.session_file` and use the file-backed diagnosis as the authoritative root-cause record.
 - If `gpd_return.status: checkpoint`, present the checkpoint details to the user and spawn a fresh continuation run.
 - If `gpd_return.status: blocked` or `failed`, report what was checked and keep the investigation incomplete.
-- Do not route on heading markers in the returned text; use the typed `gpd_return` envelope and the file-backed diagnosis instead.
+- Do not route on heading markers in the returned text; use the typed `gpd_return` envelope and the session file instead.
   </step>
 
 <step name="update_validation">
 **Update VERIFICATION.md gaps with diagnosis:**
 
-For each gap in the Gaps section, add artifacts and missing fields:
-
-```yaml
-- expectation: "Energy is conserved to machine precision"
-  status: failed
-  reason: "Researcher reported: energy drifts by 1% over 1000 timesteps"
-  severity: major
-  check: 2
-  root_cause: "Forward Euler integrator used instead of symplectic Verlet; energy error accumulates linearly"
-  artifacts:
-    - path: "src/integrator.py"
-      issue: "Using Euler method for Hamiltonian system"
-    - path: "src/simulation.py"
-      issue: "No energy conservation check in main loop"
-  missing:
-    - "Replace forward Euler with velocity Verlet integrator"
-    - "Add energy conservation monitoring per timestep"
-    - "Verify energy drift < 1e-10 over 10^6 steps"
-  physics_impact: "Energy drift causes systematic heating, affecting all thermodynamic averages"
-  debug_session: GPD/debug/energy-not-conserved.md
-```
+For each gap in the Gaps section, record the diagnosis fields the verifier actually consumes: `root_cause`, `missing`, `physics_impact`, and `debug_session`. Keep the update focused on the diagnosis rather than restating artifact inventories or path lists.
 
 Keep canonical verification `status` unchanged and set `session_status: diagnosed` in frontmatter.
 
@@ -294,7 +267,7 @@ Agents only diagnose -- plan-phase --gaps handles fixes (no fix application).
 - [ ] Gaps parsed from VERIFICATION.md
 - [ ] Investigation agents spawned in parallel
 - [ ] Root causes collected from all agents
-- [ ] VERIFICATION.md gaps updated with artifacts, missing items, and physics impact
+- [ ] VERIFICATION.md gaps updated with diagnosis and missing actions
 - [ ] Debug sessions saved to ${DEBUG_DIR}/
 - [ ] Hand off to verify-work for automatic planning
 

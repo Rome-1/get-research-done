@@ -84,7 +84,15 @@ class GpdReturnContinuationUpdate(BaseModel):
 RETURN_ENVELOPE_STATUS_CONTRACTS: dict[str, GpdReturnStatusContract] = {
     "completed": GpdReturnStatusContract(
         required_fields=REQUIRED_RETURN_FIELDS,
-        structured_fields=("state_updates", "contract_updates", "decisions", "continuation_update", "conventions_used"),
+        structured_fields=(
+            "state_updates",
+            "contract_updates",
+            "decisions",
+            "approved_plans",
+            "blocked_plans",
+            "continuation_update",
+            "conventions_used",
+        ),
     ),
     "checkpoint": GpdReturnStatusContract(
         required_fields=REQUIRED_RETURN_FIELDS,
@@ -92,17 +100,19 @@ RETURN_ENVELOPE_STATUS_CONTRACTS: dict[str, GpdReturnStatusContract] = {
             "state_updates",
             "contract_updates",
             "decisions",
+            "approved_plans",
+            "blocked_plans",
             "blockers",
             "continuation_update",
         ),
     ),
     "blocked": GpdReturnStatusContract(
         required_fields=REQUIRED_RETURN_FIELDS,
-        structured_fields=("blockers", "continuation_update"),
+        structured_fields=("approved_plans", "blocked_plans", "blockers", "continuation_update"),
     ),
     "failed": GpdReturnStatusContract(
         required_fields=REQUIRED_RETURN_FIELDS,
-        structured_fields=("blockers", "continuation_update"),
+        structured_fields=("approved_plans", "blocked_plans", "blockers", "continuation_update"),
     ),
 }
 """Explicit status-dependent contract structure for supported envelopes."""
@@ -127,6 +137,8 @@ class GpdReturnEnvelope(BaseModel):
     state_updates: dict[str, object] | None = None
     contract_updates: dict[str, object] | None = None
     decisions: list[object] | None = None
+    approved_plans: list[StrictStr] | None = None
+    blocked_plans: list[StrictStr] | None = None
     blockers: list[object] | None = None
     continuation_update: GpdReturnContinuationUpdate | None = None
     conventions_used: dict[str, object] | None = None
@@ -159,6 +171,11 @@ class GpdReturnEnvelope(BaseModel):
         for index, item in enumerate(value):
             _validate_yaml_native(item, f"gpd_return.{info.field_name}[{index}]")
         return value
+
+    @field_validator("approved_plans", "blocked_plans", mode="before")
+    @classmethod
+    def _validate_plan_id_list(cls, value: object, info) -> list[str] | None:
+        return _validate_string_list(value, field_name=info.field_name)
 
     @field_validator("tasks_completed", "tasks_total", mode="before")
     @classmethod

@@ -64,6 +64,12 @@ def test_load_workflow_stage_manifest_is_cached() -> None:
     assert execute_phase_manifest.stage("checkpoint_resume").next_stages == ("aggregate_and_verify",)
     assert execute_phase_manifest.stage("aggregate_and_verify").next_stages == ("closeout",)
     assert execute_phase_manifest.stage("closeout").next_stages == ()
+    assert execute_phase_manifest.stage("pre_execution_specialists").loaded_authorities == (
+        "workflows/execute-phase.md",
+        "references/orchestration/agent-delegation.md",
+        "references/orchestration/runtime-delegation-note.md",
+    )
+    assert execute_phase_manifest.stage("pre_execution_specialists").next_stages == ("wave_dispatch",)
     assert "templates/summary.md" in execute_phase_manifest.stage("aggregate_and_verify").loaded_authorities
     assert "templates/contract-results-schema.md" in execute_phase_manifest.stage(
         "aggregate_and_verify"
@@ -170,6 +176,7 @@ def test_validate_workflow_stage_manifest_payload_loads_plan_phase_manifest() ->
     assert "reference_artifacts_content" in manifest.stages[3].required_init_fields
     assert "experiment_design_content" in manifest.stages[2].required_init_fields
     assert "experiment_design_content" in manifest.stages[3].required_init_fields
+    assert "state_content" not in manifest.stages[3].required_init_fields
     assert "GPD/phases" in manifest.stages[2].writes_allowed
 
 

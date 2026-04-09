@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+AGENTS_DIR = REPO_ROOT / "src/gpd/agents"
 TEMPLATES_DIR = REPO_ROOT / "src/gpd/specs/templates"
 
 
@@ -117,6 +118,23 @@ def test_planner_and_checker_examples_surface_concrete_contract_anchors() -> Non
     )
     assert "GPD/phases/00-baseline/00-01-SUMMARY.md" in checker_prompt
     assert "GPD/phases/00-baseline/00-01-SUMMARY.md#gauge-unit-and-notation-conventions" in checker_prompt
+
+
+def test_plan_checker_prompt_surfaces_direct_schema_visibility_and_read_only_authority() -> None:
+    checker_prompt = (AGENTS_DIR / "gpd-plan-checker.md").read_text(encoding="utf-8")
+
+    assert checker_prompt.count("@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md") >= 2
+    assert "{GPD_INSTALL_DIR}/references/shared/shared-protocols.md" in checker_prompt
+    assert "@{GPD_INSTALL_DIR}/references/shared/shared-protocols.md" not in checker_prompt
+    assert "This is a one-shot handoff. If user input is needed, return `status: checkpoint`; do not wait inside the same run." in checker_prompt
+    assert "artifact_write_authority: read_only" in checker_prompt
+    assert "file_write" not in checker_prompt
+    assert "approved_plans: [list of plan IDs that passed]" in checker_prompt
+    assert "blocked_plans: [list of plan IDs needing revision or escalation]" in checker_prompt
+    assert "GPD/phases/00-baseline/00-01-SUMMARY.md" in checker_prompt
+    assert "GPD/phases/00-baseline/00-01-SUMMARY.md#gauge-unit-and-notation-conventions" in checker_prompt
+    assert "GPD/phases/00-baseline/00-01-SUMMARY.md#gauge-and-tensor-convention" in checker_prompt
+    assert "GPD/phases/01-vacuum-polarization/01-01-SUMMARY.md" in checker_prompt
 
 
 def test_phase_prompt_surfaces_default_salvage_and_hard_plan_requirements() -> None:

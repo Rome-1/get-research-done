@@ -86,6 +86,42 @@ def test_get_skill_command_surfaces_agent_metadata() -> None:
     assert "agent: gpd-planner" in result["content"]
 
 
+def test_list_skills_filters_consistency_checker_by_verification_category() -> None:
+    from gpd.mcp.servers.skills_server import list_skills
+
+    consistency_checker = SkillDef(
+        name="gpd-consistency-checker",
+        description="Consistency checker.",
+        content="Consistency checker body.",
+        category="verification",
+        path="/tmp/gpd-consistency-checker.md",
+        source_kind="agent",
+        registry_name="gpd-consistency-checker",
+    )
+    help_skill = SkillDef(
+        name="gpd-help",
+        description="Help.",
+        content="Help body.",
+        category="help",
+        path="/tmp/gpd-help.md",
+        source_kind="command",
+        registry_name="help",
+    )
+
+    with patch("gpd.mcp.servers.skills_server._load_skill_index", return_value=[consistency_checker, help_skill]):
+        result = list_skills(category="verification")
+
+    assert result["count"] == 1
+    assert result["skills"] == [
+        {
+            "name": "gpd-consistency-checker",
+            "category": "verification",
+            "description": "Consistency checker.",
+        }
+    ]
+    assert result["categories"] == ["help", "verification"]
+
+
 def test_get_skill_command_surfaces_staged_loading_sidecar() -> None:
     from gpd.mcp.servers.skills_server import get_skill
 
@@ -379,6 +415,16 @@ def test_get_skill_verify_work_surfaces_staged_loading_sidecar() -> None:
     ]
     assert result["staged_loading"]["workflow_id"] == "verify-work"
     assert result["staged_loading"]["stages"][0]["loaded_authorities"] == ["workflows/verify-work.md"]
+    assert "Follow the included workflow file exactly." in result["content"]
+    assert (
+        "The workflow file owns the detailed check taxonomy; this wrapper only bootstraps the canonical "
+        "verification surfaces and delegates the physics checks."
+        in result["content"]
+    )
+    assert "Severity Classification" not in result["content"]
+    assert "One check at a time, plain text responses, no interrogation." not in result["content"]
+    assert "Physics verification is not binary:" not in result["content"]
+    assert "For deeper focused analysis" not in result["content"]
     assert result["staged_loading"]["stages"][2]["loaded_authorities"] == [
         "workflows/verify-work.md",
         "references/verification/meta/verification-independence.md",
@@ -508,6 +554,25 @@ def test_get_skill_agent_surfaces_allowed_tools() -> None:
     assert agent.tools == ["shell", "file_read", "shell"]
 
 
+def test_get_skill_debugger_agent_keeps_schema_dependencies_transitive_only() -> None:
+    from gpd.mcp.servers.skills_server import get_skill
+
+    result = get_skill("gpd-debugger")
+
+    assert result["allowed_tools_surface"] == "agent.tools"
+    assert result["schema_references"] == []
+    assert result["schema_documents"] == []
+    assert result["contract_references"] == []
+    assert result["contract_documents"] == []
+    assert result["transitive_schema_references"] == []
+    assert result["transitive_schema_documents"] == []
+    assert result["structured_metadata_authority"] == {
+        "content": "canonical",
+        "allowed_tools": "mirrored",
+        "agent_policy": "mirrored",
+    }
+
+
 def test_get_skill_executor_agent_does_not_expose_staged_loading_sidecar() -> None:
     from gpd.mcp.servers.skills_server import get_skill
 
@@ -539,6 +604,49 @@ def test_get_skill_planner_agent_does_not_expose_staged_loading_sidecar(monkeypa
     assert result["structured_metadata_authority"]["content"] == "canonical"
     assert "staged_loading" not in result
     assert "staged_loading" not in result["structured_metadata_authority"]
+
+
+def test_get_skill_plan_checker_agent_surfaces_direct_schema_dependency_and_least_privilege(
+    tmp_path, monkeypatch
+) -> None:
+    from functools import lru_cache
+    from shutil import copytree
+
+    from gpd import registry as content_registry
+    from gpd.mcp.servers.skills_server import get_skill
+
+    agents_dir = tmp_path / "agents"
+    copytree(Path(__file__).resolve().parents[2] / "src" / "gpd" / "agents", agents_dir)
+    plan_checker_path = agents_dir / "gpd-plan-checker.md"
+    plan_checker_text = plan_checker_path.read_text(encoding="utf-8")
+    plan_checker_text = plan_checker_text.replace(
+        "artifact_write_authority: return_only",
+        "artifact_write_authority: read_only",
+    )
+    plan_checker_path.write_text(
+        plan_checker_text.replace(
+            "tools: file_read, file_write, shell, find_files, search_files, web_search, web_fetch",
+            "tools: file_read, shell, find_files, search_files, web_search, web_fetch",
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(content_registry, "AGENTS_DIR", agents_dir)
+    monkeypatch.setattr(
+        content_registry,
+        "_builtin_agent_names",
+        lru_cache(maxsize=1)(lambda: frozenset()),
+    )
+    content_registry.invalidate_cache()
+
+    result = get_skill("gpd-plan-checker")
+    schema_documents = {Path(entry["path"]).name: entry for entry in result["schema_documents"]}
+
+    assert result["allowed_tools_surface"] == "agent.tools"
+    assert "file_write" not in result["allowed_tools"]
+    assert any(path.endswith("plan-contract-schema.md") for path in result["schema_references"])
+    assert "@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md" in result["content"]
+    assert "plan-contract-schema.md" in schema_documents
+    assert "PLAN Contract Schema" in schema_documents["plan-contract-schema.md"]["body"]
 
 
 def test_skills_server_import_is_resilient_to_registry_index_failure(monkeypatch) -> None:

@@ -79,7 +79,7 @@ WORKFLOW_SPAWN_TOKENS = {
         "gpd-notation-coordinator",
         "gpd-experiment-designer",
     ],
-    "verify-work.md": ["gpd-check-proof", "gpd-planner", "gpd-plan-checker"],
+    "verify-work.md": ["gpd-check-proof", "gpd-verifier", "gpd-planner", "gpd-plan-checker"],
     "write-paper.md": ["gpd-paper-writer", "gpd-bibliographer", "gpd-referee"],
     "peer-review.md": [
         "gpd-review-reader",
@@ -115,24 +115,14 @@ AGENT_REFERENCE_TOKENS = {
         "references/physics-subfields.md",
         "templates/notation-glossary.md",
     ],
-    "gpd-consistency-checker.md": [
-        "references/shared/shared-protocols.md",
-        "references/orchestration/agent-infrastructure.md",
-        "references/physics-subfields.md",
-        "references/verification/core/verification-core.md",
-        "references/shared/cross-project-patterns.md",
-        "references/examples/contradiction-resolution-example.md",
-        "references/verification/meta/verification-hierarchy-mapping.md",
-        "templates/uncertainty-budget.md",
-        "templates/conventions.md",
-    ],
     "gpd-debugger.md": [
-        "references/shared/shared-protocols.md",
-        "references/orchestration/agent-infrastructure.md",
-        "references/physics-subfields.md",
-        "references/verification/core/verification-core.md",
-        "references/shared/cross-project-patterns.md",
-        "workflows/record-insight.md",
+        "Spawned by the debug orchestrator workflow.",
+        "Agent surface: public writable production agent specialized for discrepancy investigation and bounded repair work.",
+        "On demand only: shared protocols, verification core, physics subfields, agent infrastructure, and cross-project patterns.",
+        "Keep work in `gpd-debugger` while the task is root-cause isolation, validation, or a bounded repair tied to that investigation.",
+        "After root cause is confirmed, update `session_status` to \"diagnosed\".",
+        "goal: find_root_cause_only",
+        "goal: find_and_correct",
     ],
     "gpd-executor.md": [
         "references/shared/shared-protocols.md",
@@ -222,6 +212,7 @@ AGENT_REFERENCE_TOKENS = {
         "references/orchestration/agent-infrastructure.md",
         "references/physics-subfields.md",
         "references/verification/core/verification-core.md",
+        "templates/plan-contract-schema.md",
     ],
     "gpd-planner.md": [
         "references/shared/shared-protocols.md",
@@ -338,7 +329,7 @@ def test_shared_protocols_require_permission_before_dependency_installs() -> Non
     assert "## GPD CLI Commit Protocol" not in verifier_raw
     assert "@{GPD_INSTALL_DIR}/references/orchestration/agent-infrastructure.md" not in verifier_raw
     assert "Ask the user before any install attempt; keep dependency changes permission-gated." in verifier_raw
-    assert "ask the user before any install attempt" in verifier
+    assert "ask the user before any install attempt" in verifier.lower()
     assert "permission-gated" in planner
 
 
@@ -518,6 +509,22 @@ def test_workflows_reference_expected_spawn_agents() -> None:
 def test_agents_reference_expected_shared_specs() -> None:
     for agent_name, reference_tokens in AGENT_REFERENCE_TOKENS.items():
         _assert_contains_tokens(AGENTS_DIR / agent_name, reference_tokens)
+
+
+def test_consistency_checker_prompt_keeps_the_canonical_contract_and_stays_least_privileged() -> None:
+    source = (AGENTS_DIR / "gpd-consistency-checker.md").read_text(encoding="utf-8")
+
+    assert "one-shot handoff" in source
+    assert "status: completed | checkpoint | blocked | failed" in source
+    assert "files_written: [GPD/phases/{scope}/CONSISTENCY-CHECK.md]" in source
+    assert "GPD/CONSISTENCY-CHECK.md" in source
+    assert "@{GPD_INSTALL_DIR}" not in source
+    assert "Do not act as the default writable implementation agent" in source
+    assert "Do not claim ownership of code fixes, commits, convention-authoring, or pattern-library updates." in source
+    assert "Create it from the template" not in source
+    assert "gpd pattern add" not in source
+    assert "Step 0.5" not in source
+    assert "CONVENTIONS.md does not exist" not in source
 
 
 def test_review_commands_expose_typed_contracts() -> None:
@@ -1329,6 +1336,8 @@ def test_plan_checker_requires_contract_gate_and_reference_artifacts() -> None:
     workflow_text = (WORKFLOWS_DIR / "plan-phase.md").read_text(encoding="utf-8")
 
     assert "## Dimension 0: Contract Gate" in checker_agent
+    assert "{GPD_INSTALL_DIR}/templates/plan-contract-schema.md" in checker_agent
+    assert "This is a one-shot handoff. If user input is needed, return `status: checkpoint`; do not wait inside the same run." in checker_agent
     assert "contract_decisive_output" in checker_agent
     assert "contract_anchor_coverage" in checker_agent
     assert "proxy_only_success_path" in checker_agent
@@ -2433,6 +2442,16 @@ def test_review_and_verification_prompts_explicitly_surface_schema_sources_and_c
     assert "references/publication/peer-review-panel.md" not in peer_review_command
     assert "templates/verification-report.md" not in verify_command
     assert "templates/contract-results-schema.md" not in verify_command
+    assert "Follow the included workflow file exactly." in verify_command
+    assert (
+        "The workflow file owns the detailed check taxonomy; this wrapper only bootstraps the canonical "
+        "verification surfaces and delegates the physics checks."
+        in verify_command
+    )
+    assert "Severity Classification" not in verify_command
+    assert "One check at a time, plain text responses, no interrogation." not in verify_command
+    assert "Physics verification is not binary:" not in verify_command
+    assert "For deeper focused analysis" not in verify_command
     assert "Load the staged researcher-session scaffold and canonical schema pack at this stage." in verify_workflow
     assert "Keep the session overlay frontmatter compatible with the authoritative verification report." in verify_workflow
     assert "templates/verification-report.md" in interactive_validation.loaded_authorities
@@ -2761,7 +2780,7 @@ def test_verify_work_workflow_uses_body_only_subject_kind_fields() -> None:
     assert "GPD/phases/{phase_dir}" not in verify_work
     assert "Write to `${phase_dir}/${phase_number}-VERIFICATION.md`" in verify_work
     assert (
-        "changed verification files fail `gpd pre-commit-check` when this header is missing or mismatched against the active lock"
+        "Changed verification files fail `gpd pre-commit-check` when this header is missing or mismatched against the active lock."
         in verify_work
     )
     assert 'gpd validate verification-contract "${phase_dir}/${phase_number}-VERIFICATION.md"' in verify_work
@@ -3238,6 +3257,10 @@ def test_stage5_execution_surfaces_use_bounded_review_cadence_and_first_result_g
         in execute_plan
     )
     assert "Do NOT narrow just because a wave advanced or one proxy passed." in execute_phase
+    assert "pre_execution_specialists" in execute_phase
+    assert "PRE_EXECUTION_INIT=$(load_execute_phase_stage pre_execution_specialists)" in execute_phase
+    assert '# task(subagent_type="gpd-notation-coordinator"' not in execute_phase
+    assert '# task(subagent_type="gpd-experiment-designer"' not in execute_phase
     assert "What decisive evidence is still owed before downstream work is trustworthy?" in resume_work
     assert "Pattern D: Auto-bounded" in executor_agent
     assert "Canonical continuation fields define the public resume vocabulary" in resume_work
@@ -3292,6 +3315,18 @@ def test_debug_prompts_use_session_status_for_diagnosis_progress() -> None:
     assert 'Update status in frontmatter to "diagnosed"' not in debug_workflow
     assert 'update `session_status` to "diagnosed"' in debugger
     assert 'Update status to "diagnosed"' not in debugger
+
+
+def test_debug_command_and_workflow_wire_directly_to_gpd_debugger() -> None:
+    debug_command = (COMMANDS_DIR / "debug.md").read_text(encoding="utf-8")
+    debug_workflow = (WORKFLOWS_DIR / "debug.md").read_text(encoding="utf-8")
+    debugger = (AGENTS_DIR / "gpd-debugger.md").read_text(encoding="utf-8")
+
+    assert "gpd-debugger" in debug_command
+    assert 'DEBUGGER_MODEL=$(gpd resolve-model gpd-debugger)' in debug_command
+    assert 'subagent_type="gpd-debugger"' in debug_workflow
+    assert "First, read {GPD_AGENTS_DIR}/gpd-debugger.md" in debug_workflow
+    assert "public writable production agent specialized for discrepancy investigation" in debugger
 
 
 def test_resume_workflow_surfaces_contract_load_and_validation_state() -> None:

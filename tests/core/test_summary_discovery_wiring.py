@@ -87,7 +87,10 @@ def test_summary_driven_workflows_search_canonical_summary_artifacts() -> None:
 
     assert "roadmap-plus-disk union" in complete_milestone
     assert "Standalone `PLAN.md` / `SUMMARY.md` artifacts" in complete_milestone
-    assert "for SUMMARY in GPD/phases/${PHASE_DIR}/*SUMMARY.md; do" in validate_conventions
+    assert 'PHASE_ARG="${ARGUMENTS:-}"' in validate_conventions
+    assert 'ROADMAP=$(gpd --raw roadmap analyze)' in validate_conventions
+    assert 'for SUMMARY in "${PHASE_DIR}"/*SUMMARY.md; do' in validate_conventions
+    assert 'for SUMMARY in GPD/phases/*/*SUMMARY.md; do' in validate_conventions
     assert "ls GPD/phases/*/*SUMMARY.md 2>/dev/null" in graph
     assert "cat GPD/phases/*/*SUMMARY.md" in write_paper
     assert 'cat "$PHASE_DIR"/*SUMMARY.md 2>/dev/null' in write_paper

@@ -108,7 +108,8 @@
         "platform"
       ],
       "loaded_authorities": [
-        "workflows/plan-phase.md"
+        "workflows/plan-phase.md",
+        "templates/planner-subagent-prompt.md"
       ],
       "conditional_authorities": [],
       "must_not_eager_load": [
@@ -233,13 +234,11 @@
     {
       "id": "checker_revision",
       "order": 4,
-      "purpose": "checker loop, targeted revisions, and plan finalization",
+      "purpose": "checker audit, structured approval routing, and blocker reporting",
       "mode_paths": [
         "workflows/plan-phase.md"
       ],
       "required_init_fields": [
-        "researcher_model",
-        "planner_model",
         "checker_model",
         "research_enabled",
         "plan_checker_enabled",
@@ -276,12 +275,9 @@
         "research_map_reference_files",
         "research_map_reference_count",
         "derived_manuscript_proof_review_status",
-        "state_content",
-        "roadmap_content",
         "requirements_content",
         "context_content",
         "research_content",
-        "experiment_design_content",
         "verification_content",
         "validation_content",
         "platform"
@@ -294,30 +290,27 @@
       "must_not_eager_load": [
         "references/ui/ui-brand.md",
         "templates/phase-prompt.md",
+        "templates/planner-subagent-prompt.md",
         "templates/plan-contract-schema.md"
       ],
       "allowed_tools": [
         "file_read",
-        "file_write",
         "shell",
         "find_files",
         "search_files",
-        "task",
-        "web_fetch"
+        "task"
       ],
-      "writes_allowed": [
-        "GPD/phases",
-        "GPD/ROADMAP.md"
-      ],
+      "writes_allowed": [],
       "produced_state": [
         "checker findings",
-        "revised plans",
-        "final planning status"
+        "approval routing state",
+        "blocked plan routing state"
       ],
       "next_stages": [],
       "checkpoints": [
-        "checker loop completed",
-        "revision prompt assembled with current evidence"
+        "checker audit completed",
+        "blocked plans reconciled",
+        "approval routing decided"
       ]
     }
   ]

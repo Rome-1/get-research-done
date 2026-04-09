@@ -4,6 +4,7 @@ from gpd.adapters.install_utils import expand_at_includes
 
 WORKFLOWS_DIR = Path("src/gpd/specs/workflows")
 COMMANDS_DIR = Path("src/gpd/commands")
+AGENTS_DIR = Path("src/gpd/agents")
 REFERENCES_DIR = Path("src/gpd/specs/references")
 TEMPLATES_DIR = Path("src/gpd/specs/templates")
 PUBLICATION_SHARED_PREFLIGHT = TEMPLATES_DIR / "paper" / "publication-manuscript-root-preflight.md"
@@ -161,6 +162,21 @@ def test_debug_workflow_path_note_is_not_self_contradictory() -> None:
 
     assert "Debug files use the `GPD/debug/` path." in debug_workflow
     assert "hidden directory with leading dot" not in debug_workflow
+
+
+def test_debugger_session_paths_keep_the_active_and_resolved_lifecycles_separate() -> None:
+    debug_command = (COMMANDS_DIR / "debug.md").read_text(encoding="utf-8")
+    debug_agent = (AGENTS_DIR / "gpd-debugger.md").read_text(encoding="utf-8")
+    debug_workflow = (WORKFLOWS_DIR / "debug.md").read_text(encoding="utf-8")
+
+    assert "Create: GPD/debug/{slug}.md" in debug_command
+    assert "Debug file path: GPD/debug/{slug}.md" in debug_command
+    assert "files_written: [GPD/debug/{slug}.md, ...]" in debug_agent
+    assert "session_file: GPD/debug/{slug}.md" in debug_agent
+    assert "**Troubleshooting Session:** GPD/debug/resolved/{slug}.md" in debug_agent
+    assert "session_status: diagnosed" in debug_workflow
+    assert "Do not route on heading markers in the returned text" in debug_workflow
+    assert "typed `gpd_return` envelope and the session file instead" in debug_workflow
 
 
 def test_settings_workflow_reuses_one_terminal_follow_up_list() -> None:

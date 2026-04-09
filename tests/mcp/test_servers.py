@@ -1538,6 +1538,50 @@ class TestSkillsServer:
         assert any(path.endswith("shared-protocols.md") for path in direct_paths)
         assert any(path.endswith("bibliography-advanced-search.md") for path in transitive_paths)
 
+    def test_get_skill_consistency_checker_surfaces_agent_metadata(self):
+        from gpd import registry as content_registry
+        from gpd.mcp.servers.skills_server import get_skill
+
+        repo_root = Path(__file__).resolve().parents[2]
+        with (
+            patch("gpd.registry.COMMANDS_DIR", repo_root / "src" / "gpd" / "commands"),
+            patch("gpd.registry.AGENTS_DIR", repo_root / "src" / "gpd" / "agents"),
+        ):
+            content_registry.invalidate_cache()
+            result = get_skill("gpd-consistency-checker")
+            content_registry.invalidate_cache()
+
+        direct_paths = {entry["path"] for entry in result["referenced_files"]}
+
+        assert "error" not in result
+        assert result["name"] == "gpd-consistency-checker"
+        assert result["allowed_tools_surface"] == "agent.tools"
+        assert result["content_authority"] == "canonical"
+        assert result["allowed_tools"] == ["file_read", "file_write", "shell", "search_files", "find_files"]
+        assert result["agent_policy"] == {
+            "commit_authority": "orchestrator",
+            "surface": "internal",
+            "role_family": "verification",
+            "artifact_write_authority": "scoped_write",
+            "shared_state_authority": "return_only",
+            "tools": ["file_read", "file_write", "shell", "search_files", "find_files"],
+        }
+        assert result["structured_metadata_authority"] == {
+            "content": "canonical",
+            "allowed_tools": "mirrored",
+            "agent_policy": "mirrored",
+        }
+        assert result["schema_references"] == []
+        assert result["schema_documents"] == []
+        assert result["contract_references"] == []
+        assert result["contract_documents"] == []
+        assert result["reference_count"] == len(direct_paths)
+        assert result["transitive_reference_count"] == 0
+        assert result["transitive_referenced_files"] == []
+        assert "@GPD/CONVENTIONS.md" in direct_paths
+        assert "@GPD/phases/{scope}/CONSISTENCY-CHECK.md" in direct_paths
+        assert "@GPD/CONSISTENCY-CHECK.md" in direct_paths
+
     def test_get_skill_surfaces_schema_references(self):
         from gpd.mcp.servers.skills_server import get_skill
 
@@ -1585,6 +1629,51 @@ class TestSkillsServer:
         assert "review-contract:" not in result["content"]
         assert all(not entry["path"].startswith("/") for entry in result["schema_documents"])
         assert all(not entry["path"].startswith("/") for entry in result["contract_documents"])
+
+    def test_get_skill_surfaces_direct_plan_checker_schema_reference(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        from functools import lru_cache
+        from shutil import copytree
+
+        from gpd import registry as content_registry
+        from gpd.mcp.servers.skills_server import get_skill
+
+        agents_dir = tmp_path / "agents"
+        copytree(Path(__file__).resolve().parents[2] / "src" / "gpd" / "agents", agents_dir, dirs_exist_ok=True)
+        plan_checker_path = agents_dir / "gpd-plan-checker.md"
+        plan_checker_text = plan_checker_path.read_text(encoding="utf-8")
+        plan_checker_text = plan_checker_text.replace(
+            "artifact_write_authority: return_only",
+            "artifact_write_authority: read_only",
+        )
+        plan_checker_path.write_text(
+            plan_checker_text.replace(
+                "tools: file_read, file_write, shell, find_files, search_files, web_search, web_fetch",
+                "tools: file_read, shell, find_files, search_files, web_search, web_fetch",
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(content_registry, "AGENTS_DIR", agents_dir)
+        monkeypatch.setattr(
+            content_registry,
+            "_builtin_agent_names",
+            lru_cache(maxsize=1)(lambda: frozenset()),
+        )
+        content_registry.invalidate_cache()
+
+        result = get_skill("gpd-plan-checker")
+        schema_documents = {Path(entry["path"]).name: entry for entry in result["schema_documents"]}
+
+        assert "error" not in result
+        assert result["allowed_tools_surface"] == "agent.tools"
+        assert "file_write" not in result["allowed_tools"]
+        assert any(path.endswith("plan-contract-schema.md") for path in result["schema_references"])
+        assert "@{GPD_INSTALL_DIR}/templates/plan-contract-schema.md" in result["content"]
+        assert "plan-contract-schema.md" in schema_documents
+        assert "PLAN Contract Schema" in schema_documents["plan-contract-schema.md"]["body"]
+        assert "approved_plans" in result["content"]
+        assert "blocked_plans" in result["content"]
 
     def test_get_skill_surfaces_dedicated_proof_redteam_schema_and_contract_docs(self):
         from gpd.mcp.servers.skills_server import get_skill
@@ -1690,6 +1779,38 @@ class TestSkillsServer:
             "shared_state_authority": agent.shared_state_authority,
             "tools": agent.tools,
         }
+
+
+    def test_get_skill_debug_command_surfaces_debugger_seam_and_has_no_direct_schema_dependencies(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        from gpd import registry as content_registry
+        from gpd.mcp.servers.skills_server import get_skill
+
+        repo_root = Path(__file__).resolve().parents[2]
+        monkeypatch.setattr(content_registry, "COMMANDS_DIR", repo_root / "src" / "gpd" / "commands")
+        monkeypatch.setattr(content_registry, "AGENTS_DIR", repo_root / "src" / "gpd" / "agents")
+        content_registry.invalidate_cache()
+
+        result = get_skill("gpd-debug")
+
+        assert result["name"] == "gpd-debug"
+        assert result["allowed_tools_surface"] == "command.allowed-tools"
+        assert result["allowed_tools"] == ["file_read", "shell", "task", "ask_user"]
+        assert result["structured_metadata_authority"] == {
+            "content": "canonical",
+            "context_mode": "mirrored",
+            "project_reentry_capable": "mirrored",
+            "allowed_tools": "mirrored",
+            "requires": "mirrored",
+            "review_contract": "mirrored",
+        }
+        assert result["schema_references"] == []
+        assert result["schema_documents"] == []
+        assert result["contract_references"] == []
+        assert result["contract_documents"] == []
+        assert "gpd-debugger" in result["content"]
+        assert 'subagent_type="gpd-debugger"' in result["content"]
 
 
     def test_get_skill_executor_agent_defers_completion_only_materials_until_summary_creation(
@@ -1898,6 +2019,46 @@ class TestSkillsServer:
         result = route_skill("zzz yyy xxx")
         assert result["suggestion"] == "gpd-help"
         assert result["confidence"] <= 0.1
+
+    def test_route_skill_debug_intent_prefers_gpd_debug(self):
+        from gpd.mcp.servers.skills_server import route_skill
+        from gpd.registry import SkillDef
+
+        with patch(
+            "gpd.mcp.servers.skills_server._load_skill_index",
+            return_value=[
+                SkillDef(
+                    name="gpd-debug",
+                    description="Debug physics calculations.",
+                    content="Debug command.",
+                    category="execution",
+                    path="/tmp/gpd-debug.md",
+                    source_kind="command",
+                    registry_name="debug",
+                ),
+                SkillDef(
+                    name="gpd-debugger",
+                    description="Debugger.",
+                    content="Debugger agent.",
+                    category="debugging",
+                    path="/tmp/gpd-debugger.md",
+                    source_kind="agent",
+                    registry_name="gpd-debugger",
+                ),
+                SkillDef(
+                    name="gpd-help",
+                    description="Help.",
+                    content="Help.",
+                    category="help",
+                    path="/tmp/gpd-help.md",
+                    source_kind="command",
+                    registry_name="help",
+                ),
+            ],
+        ):
+            result = route_skill("debug this physics calculation")
+
+        assert result["suggestion"] == "gpd-debug"
 
     def test_route_skill_no_match_without_help_falls_back_to_first_skill(self):
         from gpd.mcp.servers.skills_server import route_skill

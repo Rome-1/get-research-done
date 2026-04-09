@@ -6,6 +6,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = REPO_ROOT / "src" / "gpd" / "specs" / "workflows"
+AGENTS_DIR = REPO_ROOT / "src" / "gpd" / "agents"
 
 
 def _read(name: str) -> str:
@@ -19,7 +20,10 @@ def test_debug_workflow_routes_on_typed_status_and_file_backed_diagnosis() -> No
     assert "gpd_return.status: checkpoint" in workflow
     assert "gpd_return.status: blocked" in workflow
     assert "GPD/debug/{slug}.md" in workflow
+    assert "session_status: diagnosed" in workflow
+    assert "session file" in workflow
     assert "Do not route on heading markers in the returned text" in workflow
+    assert "spawn a fresh continuation run" in workflow
     assert "## ROOT CAUSE FOUND" not in workflow
     assert "## INVESTIGATION INCONCLUSIVE" not in workflow
 
@@ -45,3 +49,16 @@ def test_parameter_sweep_balanced_mode_is_not_unconditionally_paused() -> None:
     assert "only then pause for user approval" in workflow
     assert "If `autonomy=supervised`, show this plan and ask for confirmation before generating plans." in workflow
     assert "Proceed? (y/n)" not in workflow
+
+
+def test_audit_milestone_consumes_a_typed_consistency_checker_return_without_routing_convention_ownership() -> None:
+    workflow = _read("audit-milestone.md")
+    checker = (AGENTS_DIR / "gpd-consistency-checker.md").read_text(encoding="utf-8")
+
+    assert workflow.count('subagent_type="gpd-consistency-checker"') == 1
+    assert "gpd-notation-coordinator" not in workflow
+    assert "Consistency checker's report (notation conflicts, parameter mismatches, broken reasoning chains) — or note \"skipped\" if agent failed" in workflow
+    assert "If the consistency checker agent fails to spawn or returns an error:" in workflow
+    assert "status: completed | checkpoint | blocked | failed" in checker
+    assert "This is a one-shot handoff: inspect once, write once, return once." in checker
+    assert "Human-readable headings in the report are presentation only; route on `gpd_return.status`." in checker

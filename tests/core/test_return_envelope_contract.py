@@ -42,6 +42,23 @@ def test_accepts_nested_state_and_continuation_payloads() -> None:
     assert result.fields["continuation_update"]["bounded_segment"]["segment_id"] == "seg-01"
 
 
+def test_accepts_typed_checker_plan_lists() -> None:
+    content = _wrap_return_block(
+        "  status: checkpoint\n"
+        "  files_written: []\n"
+        "  issues: []\n"
+        "  next_actions: [/gpd:plan-phase]\n"
+        "  approved_plans: [plan-01, plan-03]\n"
+        "  blocked_plans: [plan-02]\n"
+    )
+
+    result = validate_gpd_return_markdown(content)
+
+    assert result.passed is True
+    assert result.fields["approved_plans"] == ["plan-01", "plan-03"]
+    assert result.fields["blocked_plans"] == ["plan-02"]
+
+
 def test_rejects_scalar_where_list_field_is_required() -> None:
     content = _wrap_return_block(
         "  status: completed\n"
@@ -54,6 +71,25 @@ def test_rejects_scalar_where_list_field_is_required() -> None:
 
     assert result.passed is False
     assert any("files_written" in error and "list" in error for error in result.errors)
+
+
+def test_rejects_malformed_checker_plan_lists() -> None:
+    content = _wrap_return_block(
+        "  status: checkpoint\n"
+        "  files_written: []\n"
+        "  issues: []\n"
+        "  next_actions: [/gpd:plan-phase]\n"
+        "  approved_plans: plan-01\n"
+        "  blocked_plans:\n"
+        "    - plan-02\n"
+        "    - 3\n"
+    )
+
+    result = validate_gpd_return_markdown(content)
+
+    assert result.passed is False
+    assert any("approved_plans" in error and "list" in error for error in result.errors)
+    assert any("blocked_plans" in error and "string" in error for error in result.errors)
 
 
 def test_rejects_state_updates_when_not_a_mapping() -> None:

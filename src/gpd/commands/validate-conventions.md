@@ -21,6 +21,8 @@ Routes to the validate-conventions workflow which handles:
 - Scanning all phase artifacts for convention usage
 - Cross-checking consistency between phases
 - Reporting any mismatches or drift
+
+The optional scope argument is real: if you pass a phase number, the workflow validates only that phase and fails closed if the phase cannot be resolved. If you pass nothing, it scans all completed phases.
 </objective>
 
 <execution_context>
@@ -31,6 +33,7 @@ Routes to the validate-conventions workflow which handles:
 Scope: $ARGUMENTS (optional)
 - If a number (e.g., "3"): validate conventions only for that phase
 - If empty: validate conventions across all completed phases
+- Any other input is rejected by command-context validation instead of being guessed
 
 @GPD/STATE.md
 @GPD/ROADMAP.md

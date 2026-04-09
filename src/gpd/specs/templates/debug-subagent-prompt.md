@@ -8,9 +8,25 @@ Template for spawning `gpd-debugger`. The agent provides the debugging expertise
 
 ---
 
+## Canonical Debug Session Contract
+
+The spawned debugger must satisfy this contract before producing output:
+
+- Session artifact: `GPD/debug/{slug}.md`
+- Lifecycle/status vocabulary: `gathering | investigating | fixing | verifying | resolved`
+- Goal vocabulary: `find_root_cause_only | find_and_fix`
+- Continuation semantics: read `GPD/debug/{slug}.md` first, then continue from next_action
+
 ## Template
 
 ```markdown
+<debug_session_contract>
+session_artifact: GPD/debug/{slug}.md
+status: gathering | investigating | fixing | verifying | resolved
+goal: find_root_cause_only | find_and_fix
+continuation: Read the file at GPD/debug/{slug}.md first, then continue from next_action.
+</debug_session_contract>
+
 <objective>
 Investigate issue: {issue_id}
 
@@ -38,10 +54,6 @@ approximations: {approximations}
 symptoms_prefilled: {true_or_false}
 goal: {find_root_cause_only | find_and_fix}
 </mode>
-
-<debug_file>
-Create: GPD/debug/{slug}.md
-</debug_file>
 ```
 
 ---
@@ -110,6 +122,13 @@ The gpd-debugger agent applies a systematic approach to physics calculation erro
 For checkpoints, spawn a fresh agent with:
 
 ```markdown
+<debug_session_contract>
+session_artifact: GPD/debug/{slug}.md
+status: gathering | investigating | fixing | verifying | resolved
+goal: {goal}
+continuation: Read the file at GPD/debug/{slug}.md first, then continue from next_action.
+</debug_session_contract>
+
 <objective>
 Continue debugging {slug}. Evidence is in the debug file.
 </objective>

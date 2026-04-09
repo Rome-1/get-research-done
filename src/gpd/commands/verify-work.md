@@ -45,13 +45,9 @@ allowed-tools:
 <!-- Tool names and @ includes are runtime-specific; the installer rewrites paths for your runtime. -->
 
 <objective>
-Verify research results through persistent physics checks.
+Run the staged verification workflow for an executed phase.
 
-Confirm that derivations are correct, numerical results are trustworthy, and physical conclusions are sound. One check at a time, plain text responses, no interrogation. When issues are found, diagnose them, classify severity, and prepare fix plans.
-
-Output: `GPD/phases/XX-name/XX-VERIFICATION.md`. This workflow is only valid once the phase has reached the `phase_executed` state. If issues are found, return diagnosed gaps with severity classification and verified fix plans ready for `gpd:execute-phase`.
-
-Physics verification is not binary: checks can agree within expected approximation error or regime-dependent validity, and the framework should reflect that.
+Output: `GPD/phases/XX-name/XX-VERIFICATION.md`. This workflow is only valid once the phase has reached the `phase_executed` state.
 </objective>
 
 <execution_context>
@@ -71,15 +67,5 @@ Phase: $ARGUMENTS (optional)
 **CRITICAL: First, read the full workflow file using the file_read tool:**
 Follow the included workflow file exactly.
 
-Execute the workflow end-to-end and preserve its session, diagnosis, fix-planning, and routing gates.
 The workflow file owns the detailed check taxonomy; this wrapper only bootstraps the canonical verification surfaces and delegates the physics checks.
-
-## Severity Classification
-
-- **CRITICAL** — Result is wrong (dimensional error, symmetry violation, sign error). Blocks all downstream work.
-- **MAJOR** — Result may be wrong (failed limiting case, numerical non-convergence). Must be resolved before conclusions are drawn.
-- **MINOR** — Result is probably correct but incompletely validated (missing one limiting case, no error bars on a qualitative plot). Should be resolved before publication.
-- **NOTE** — Observation for the record (e.g., "convergence is slow but adequate", "agrees with Smith et al. to 3 significant figures").
-
-**For deeper focused analysis**, use the dedicated commands: `gpd:dimensional-analysis` (unit consistency), `gpd:limiting-cases` (known limit recovery), or `gpd:numerical-convergence` (convergence testing).
   </process>

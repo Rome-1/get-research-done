@@ -127,6 +127,96 @@ _PLAN_PHASE_STAGE_AUTHORING_FIELDS = _PLAN_PHASE_STAGE_BOOTSTRAP_FIELDS + [
     "validation_content",
 ]
 
+_PLAN_PHASE_STAGE_CHECKER_AUDIT_FIELDS = [
+    "checker_model",
+    "research_enabled",
+    "plan_checker_enabled",
+    "commit_docs",
+    "autonomy",
+    "research_mode",
+    "phase_found",
+    "phase_dir",
+    "phase_number",
+    "phase_name",
+    "phase_slug",
+    "padded_phase",
+    "has_research",
+    "has_context",
+    "has_plans",
+    "plan_count",
+    "planning_exists",
+    "roadmap_exists",
+    "project_contract",
+    "project_contract_gate",
+    "project_contract_load_info",
+    "project_contract_validation",
+    "contract_intake",
+    "effective_reference_intake",
+    "selected_protocol_bundle_ids",
+    "protocol_bundle_count",
+    "protocol_bundle_context",
+    "protocol_bundle_verifier_extensions",
+    "active_reference_context",
+    "reference_artifact_files",
+    "reference_artifacts_content",
+    "literature_review_files",
+    "literature_review_count",
+    "research_map_reference_files",
+    "research_map_reference_count",
+    "derived_manuscript_proof_review_status",
+    "requirements_content",
+    "context_content",
+    "research_content",
+    "verification_content",
+    "validation_content",
+    "platform",
+]
+
+_PLAN_PHASE_STAGE_PLANNER_REVISION_FIELDS = [
+    "planner_model",
+    "research_enabled",
+    "plan_checker_enabled",
+    "commit_docs",
+    "autonomy",
+    "research_mode",
+    "phase_found",
+    "phase_dir",
+    "phase_number",
+    "phase_name",
+    "phase_slug",
+    "padded_phase",
+    "has_research",
+    "has_context",
+    "has_plans",
+    "plan_count",
+    "planning_exists",
+    "roadmap_exists",
+    "project_contract",
+    "project_contract_gate",
+    "project_contract_load_info",
+    "project_contract_validation",
+    "contract_intake",
+    "effective_reference_intake",
+    "selected_protocol_bundle_ids",
+    "protocol_bundle_count",
+    "protocol_bundle_context",
+    "protocol_bundle_verifier_extensions",
+    "active_reference_context",
+    "reference_artifact_files",
+    "reference_artifacts_content",
+    "literature_review_files",
+    "literature_review_count",
+    "research_map_reference_files",
+    "research_map_reference_count",
+    "derived_manuscript_proof_review_status",
+    "state_content",
+    "context_content",
+    "research_content",
+    "verification_content",
+    "validation_content",
+    "platform",
+]
+
 
 class _FakePlanPhaseStage:
     def __init__(self, stage_id: str, required_init_fields: list[str]) -> None:
@@ -141,7 +231,7 @@ class _FakePlanPhaseManifest:
             "phase_bootstrap": _FakePlanPhaseStage("phase_bootstrap", _PLAN_PHASE_STAGE_BOOTSTRAP_FIELDS),
             "research_routing": _FakePlanPhaseStage("research_routing", _PLAN_PHASE_STAGE_BOOTSTRAP_FIELDS),
             "planner_authoring": _FakePlanPhaseStage("planner_authoring", _PLAN_PHASE_STAGE_AUTHORING_FIELDS),
-            "checker_revision": _FakePlanPhaseStage("checker_revision", _PLAN_PHASE_STAGE_AUTHORING_FIELDS),
+            "checker_revision": _FakePlanPhaseStage("checker_revision", _PLAN_PHASE_STAGE_CHECKER_AUDIT_FIELDS),
         }
 
     def stage_by_id(self, stage_id: str) -> _FakePlanPhaseStage:
@@ -1359,7 +1449,7 @@ class TestInitPlanPhase:
         assert "Gap notes." in ctx["verification_content"]
         assert "Checks." in ctx["validation_content"]
 
-    def test_stage_checker_revision_uses_fresh_stage_payload(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_stage_checker_revision_uses_tight_checker_payload(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         _setup_project(tmp_path)
         phase_dir = _create_phase_dir(tmp_path, "02-analysis")
         _write_project_contract_state(tmp_path)
@@ -1384,6 +1474,9 @@ class TestInitPlanPhase:
         assert "Method comparison." in ctx["research_content"]
         assert "Gap notes." in ctx["verification_content"]
         assert "Checks." in ctx["validation_content"]
+        assert "Method comparison." not in ctx.get("state_content", "")
+        assert "experiment_design_content" not in ctx
+        assert "planner_model" not in ctx
 
     def test_plan_phase_stage_rejects_include_mix(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         _setup_project(tmp_path)
