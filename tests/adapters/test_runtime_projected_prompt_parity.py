@@ -10,7 +10,6 @@ from gpd import registry
 from gpd.adapters.install_utils import project_markdown_for_runtime
 from gpd.adapters.runtime_catalog import get_runtime_descriptor, iter_runtime_descriptors
 from gpd.core.model_visible_text import (
-    REVIEW_CONTRACT_REQUIRED_STATES,
     agent_visibility_note,
     command_visibility_note,
     review_contract_visibility_note,
