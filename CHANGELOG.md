@@ -4,6 +4,7 @@ All notable changes to Get Physics Done are documented here.
 
 ## vNEXT
 
+- Fix LaTeX special character escaping in user-provided metadata fields: `~`, `#`, `%`, and `&` in title, abstract, author fields, and acknowledgments are now escaped before rendering, preventing compilation errors and silent data loss. Agent-generated LaTeX content (section bodies, figure captions, appendix content) is deliberately unaffected.
 - Add `check_result_consistency` health check: cross-validates `state.json` intermediate results against SUMMARY `provides` frontmatter with guards against empty-string false matches, short-string over-matching, and malformed state records.
 - Fix Windows test compatibility: cross-platform absolute paths in MCP tests, `shlex.quote`-aware assertions, `encoding="utf-8"` on `read_text()`, POSIX display paths in CLI/git_ops, permission/LaTeX/tilde/bash test portability, and schema pattern alignment.
 - Split releases into a manual release-PR preparation workflow and a separate publish workflow for PyPI, npm, tags, and GitHub Releases.
