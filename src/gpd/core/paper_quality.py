@@ -701,8 +701,25 @@ def score_paper_quality(data: PaperQualityInput) -> PaperQualityReport:
 
 
 _PLACEHOLDER_FINDING_RE = re.compile(r"\b(TODO|FIXME|PENDING|TBD|XXX)\b")
-_MISSING_CITE_FINDING_RE = re.compile(r"\\cite\{MISSING:")
-_EMPTY_CITE_FINDING_RE = re.compile(r"\\cite\{\s*\}")
+
+# Matches all standard LaTeX/natbib/biblatex citation commands (including
+# starred variants like \cite*{} and capitalized sentence-start forms).
+# Lowercase: \cite, \citep, \citet, \citealt, \citealp, \citeauthor,
+#   \citeyear, \citetext, \nocite
+# Capitalized: \Cite, \Citep, \Citet, \Citealt, \Citealp, \Citeauthor,
+#   \Citeyear
+# Biblatex: \parencite, \textcite, \autocite
+_CITE_CMD_PREFIX = (
+    r"\\(?:"
+    r"cite(?:p|t|alt|alp|author|year|text)?\*?"
+    r"|Cite(?:p|t|alt|alp|author|year)?\*?"
+    r"|nocite"
+    r"|parencite|textcite|autocite"
+    r")"
+)
+
+_MISSING_CITE_FINDING_RE = re.compile(_CITE_CMD_PREFIX + r"(?:\[[^\]]*\])*\{MISSING:")
+_EMPTY_CITE_FINDING_RE = re.compile(_CITE_CMD_PREFIX + r"(?:\[[^\]]*\])*\{\s*\}")
 _EMPTY_REF_FINDING_RE = re.compile(r"\\ref\{\s*\}")
 _EMPTY_LABEL_FINDING_RE = re.compile(r"\\label\{\s*\}")
 _LABEL_FINDING_RE = re.compile(r"\\label\{([^}]+)\}")
