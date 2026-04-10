@@ -142,13 +142,14 @@ class TestCitationBibCoherence:
         assert result.tex_cite_keys == {"a", "b", "c"}
         assert result.warnings == []
 
-    def test_citetext_nested_citealp_partially_extracted(self) -> None:
-        """citetext takes free-form text; nested \\citealp may be partially consumed.
+    def test_citetext_ignored_inner_citealp_extracted(self) -> None:
+        r"""\\citetext is excluded from the regex (BUG-076 fix).
 
-        The outer \\citetext{...} match consumes up to the first ``}``, which
-        swallows the first nested \\citealp.  The second nested \\citealp falls
-        outside the outer match and is correctly extracted.  This is a known
-        limitation (rare command, non-blocking warning).
+        \\citetext wraps free-form text that may contain nested citation
+        commands like \\citealp.  Because the non-brace-aware regex
+        ``\{([^}]*)\}`` truncates at the first inner ``}``, including
+        \\citetext produces garbage keys.  Instead, \\citetext is ignored
+        and the inner \\citealp commands are matched individually.
         """
         tex = r"\citetext{see \citealp{a}; compare \citealp{b}}"
         bib = (
@@ -156,8 +157,10 @@ class TestCitationBibCoherence:
             "@article{b,\n  title={B},\n  author={Doe},\n  year={2020}\n}\n"
         )
         result = check_citation_bib_coherence(tex, bib)
-        # "b" is detected from the second \citealp outside the citetext match
+        # Both inner \citealp commands are now detected correctly
+        assert "a" in result.tex_cite_keys
         assert "b" in result.tex_cite_keys
+        assert result.warnings == []
 
     def test_starred_natbib_variants_detected(self) -> None:
         """Starred variants like \\cite*{} and \\citep*{} should be matched."""

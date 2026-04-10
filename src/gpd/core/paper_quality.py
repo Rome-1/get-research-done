@@ -702,16 +702,38 @@ def score_paper_quality(data: PaperQualityInput) -> PaperQualityReport:
 
 _PLACEHOLDER_FINDING_RE = re.compile(r"\b(TODO|FIXME|PENDING|TBD|XXX)\b")
 
-# Matches all standard LaTeX/natbib/biblatex citation commands (including
+# Matches in-text LaTeX/natbib/biblatex citation commands (including
 # starred variants like \cite*{} and capitalized sentence-start forms).
+# Used by the quality scorer (paper_quality_artifacts.py) and draft lint.
+#
 # Lowercase: \cite, \citep, \citet, \citealt, \citealp, \citeauthor,
-#   \citeyear, \citetext, \nocite
+#   \citeyear
 # Capitalized: \Cite, \Citep, \Citet, \Citealt, \Citealp, \Citeauthor,
 #   \Citeyear
 # Biblatex: \parencite, \textcite, \autocite
+#
+# NOTE: \nocite is intentionally excluded — it does not represent an
+# in-text citation and must not inflate quality scores.  The coherence
+# checker uses _CITE_CMD_PREFIX_WITH_NOCITE instead.
+# NOTE: \citetext is intentionally excluded — it wraps other citation
+# commands (e.g. \citetext{see \citealp{a}; compare \citealp{b}}) and
+# the non-brace-aware regex \{([^}]*)\} truncates at the first inner
+# ``}``, producing garbage keys.  The inner \citealp commands are
+# already matched individually.
 _CITE_CMD_PREFIX = (
     r"\\(?:"
-    r"cite(?:p|t|alt|alp|author|year|text)?\*?"
+    r"cite(?:p|t|alt|alp|author|year)?\*?"
+    r"|Cite(?:p|t|alt|alp|author|year)?\*?"
+    r"|parencite|textcite|autocite"
+    r")"
+)
+
+# Extended prefix that additionally matches \nocite — used ONLY by the
+# citation-bibliography coherence checker in compiler.py where \nocite
+# keys need to be cross-referenced against the .bib file.
+_CITE_CMD_PREFIX_WITH_NOCITE = (
+    r"\\(?:"
+    r"cite(?:p|t|alt|alp|author|year)?\*?"
     r"|Cite(?:p|t|alt|alp|author|year)?\*?"
     r"|nocite"
     r"|parencite|textcite|autocite"

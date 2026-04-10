@@ -322,10 +322,10 @@ def check_citation_bib_coherence(
     Handles ``\\nocite{*}`` (standard LaTeX: all bib entries are considered
     referenced).  Splits multi-key citations (``\\cite{a,b,c}``).
     """
-    from gpd.core.paper_quality import _CITE_CMD_PREFIX
+    from gpd.core.paper_quality import _CITE_CMD_PREFIX_WITH_NOCITE
 
     all_cite_re = re.compile(
-        _CITE_CMD_PREFIX
+        _CITE_CMD_PREFIX_WITH_NOCITE
         + r"(?:\[[^\]]*\])*"  # optional [] arguments (natbib)
         + r"\{([^}]*)\}"  # capture the key list
     )
@@ -847,6 +847,10 @@ async def build_paper(
     tex_path = output_dir / f"{output_stem}.tex"
     if tex_path.exists():
         logger.warning("Skipping .tex write — %s already exists. Delete it to regenerate.", tex_path)
+        # BUG-076 fix: read on-disk content so the coherence check audits
+        # the file that will actually be compiled, not the freshly rendered
+        # string which may differ after manual edits or scaffold-once reruns.
+        tex_content = await asyncio.to_thread(tex_path.read_text, encoding="utf-8")
     else:
         await asyncio.to_thread(tex_path.write_text, tex_content, encoding="utf-8")
 
