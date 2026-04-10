@@ -22,5 +22,5 @@ Check physics research progress and route to the next action.
 </execution_context>
 
 <process>
-Read `{GPD_INSTALL_DIR}/workflows/progress.md` with the file-read tool and follow it exactly. Do not duplicate the workflow logic here.
+Read `@{GPD_INSTALL_DIR}/workflows/progress.md` with the file-read tool and follow it exactly. Do not duplicate the workflow logic here.
 </process>

@@ -50,10 +50,10 @@ Milestone name: $ARGUMENTS (optional - will prompt if not provided)
 Use the workflow's staged init: bootstrap context first, then a fresh late-stage init before roadmapping. The roadmapper handoff must prove freshness with a typed return and `files_written`.
 
 Load late-stage authorities only when the workflow reaches the matching stage:
-- Read {GPD_INSTALL_DIR}/references/research/questioning.md only when you need guided milestone questioning.
-- Read {GPD_INSTALL_DIR}/templates/project.md only when updating `GPD/PROJECT.md`.
-- Read {GPD_INSTALL_DIR}/templates/requirements.md only when writing `GPD/REQUIREMENTS.md`.
-- Read {GPD_INSTALL_DIR}/references/ui/ui-brand.md only when rendering branded completion or status blocks.
+- Read @{GPD_INSTALL_DIR}/references/research/questioning.md only when you need guided milestone questioning.
+- Read @{GPD_INSTALL_DIR}/templates/project.md only when updating `GPD/PROJECT.md`.
+- Read @{GPD_INSTALL_DIR}/templates/requirements.md only when writing `GPD/REQUIREMENTS.md`.
+- Read @{GPD_INSTALL_DIR}/references/ui/ui-brand.md only when rendering branded completion or status blocks.
 
 **Argument parsing:**
 

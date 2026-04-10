@@ -79,7 +79,7 @@ Cost: ~2-5k tokens per gate. Catches sign errors and convention drift before the
 
 <process>
 **CRITICAL: First, read the full workflow file using the file_read tool:**
-Read {GPD_INSTALL_DIR}/workflows/execute-phase.md first and follow it exactly.
+Read @{GPD_INSTALL_DIR}/workflows/execute-phase.md first and follow it exactly.
 
 Execute the workflow end-to-end and preserve all gates (wave execution, checkpoint handling, verification, state updates, routing).
 </process>
