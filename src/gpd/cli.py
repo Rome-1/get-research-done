@@ -222,9 +222,17 @@ def _get_cwd() -> Path:
     return _cwd.resolve()
 
 
+def _migrate_planning_files(cwd: Path) -> None:
+    """Auto-migrate ROADMAP.md / PROJECT.md from root into GPD/ if needed."""
+    from gpd.core.project_files import migrate_root_planning_files
+
+    migrate_root_planning_files(cwd)
+
+
 def _status_command_reentry(cwd: Path | None = None) -> ProjectReentryResolution:
     """Resolve the shared re-entry contract for recovery/status commands."""
     workspace_cwd = (cwd or _get_cwd()).expanduser().resolve(strict=False)
+    _migrate_planning_files(workspace_cwd)
     return resolve_project_reentry(workspace_cwd)
 
 
@@ -240,6 +248,7 @@ def _status_command_cwd(cwd: Path | None = None) -> Path:
 def _state_command_cwd(cwd: Path | None = None) -> Path:
     """Resolve the effective cwd for state and project-contract commands."""
     workspace_cwd = (cwd or _get_cwd()).expanduser().resolve(strict=False)
+    _migrate_planning_files(workspace_cwd)
     resolved = resolve_project_root(workspace_cwd, require_layout=True)
     if resolved is not None:
         return resolved
@@ -249,6 +258,7 @@ def _state_command_cwd(cwd: Path | None = None) -> Path:
 def _project_scoped_cwd(cwd: Path | None = None) -> Path:
     """Resolve the nearest verified project root for project-scoped preflights."""
     workspace_cwd = (cwd or _get_cwd()).expanduser().resolve(strict=False)
+    _migrate_planning_files(workspace_cwd)
     resolved = resolve_project_root(workspace_cwd, require_layout=True)
     return resolved if resolved is not None else workspace_cwd
 

@@ -31,10 +31,12 @@ from gpd.core.constants import (
     MIN_PYTHON_MINOR,
     OPTIONAL_PLANNING_FILES,
     PLANNING_DIR_NAME,
+    PROJECT_FILENAME,
     RECOMMENDED_PYTHON_VERSION,
     REQUIRED_PLANNING_DIRS,
     REQUIRED_PLANNING_FILES,
     REQUIRED_SPECS_SUBDIRS,
+    ROADMAP_FILENAME,
     STATE_LINES_TARGET,
     UNCOMMITTED_FILES_THRESHOLD,
     ProjectLayout,
@@ -156,16 +158,33 @@ def check_environment() -> HealthCheck:
     return HealthCheck(status=status, label="Environment", details=details, issues=issues)
 
 
+_ROOT_MIGRATABLE_FILES = frozenset({ROADMAP_FILENAME, PROJECT_FILENAME})
+
+
 def check_project_structure(cwd: Path) -> HealthCheck:
     """Check that required GPD/ files and directories exist."""
     layout = ProjectLayout(cwd)
     issues: list[str] = []
+    warnings: list[str] = []
     details: dict[str, object] = {}
 
     for name in REQUIRED_PLANNING_FILES:
         full = layout.gpd / name
+        root_path = layout.root / name
         if full.exists():
             details[name] = "present"
+            if name in _ROOT_MIGRATABLE_FILES and root_path.exists():
+                warnings.append(
+                    f"{name} exists at both project root and {PLANNING_DIR_NAME}/ "
+                    f"— the root copy is unused. Consider removing ./{name}."
+                )
+        elif name in _ROOT_MIGRATABLE_FILES and root_path.exists():
+            details[name] = "present (at project root)"
+            warnings.append(
+                f"{name} found at project root but not in {PLANNING_DIR_NAME}/. "
+                f"Run any GPD command from the project root to auto-migrate, "
+                f"or copy it manually to {PLANNING_DIR_NAME}/{name}."
+            )
         else:
             details[name] = "missing"
             issues.append(f"Required file missing: {PLANNING_DIR_NAME}/{name}")
@@ -182,8 +201,8 @@ def check_project_structure(cwd: Path) -> HealthCheck:
         full = layout.gpd / name
         details[name] = "present" if full.exists() else "absent"
 
-    status = CheckStatus.FAIL if issues else CheckStatus.OK
-    return HealthCheck(status=status, label="Project Structure", details=details, issues=issues)
+    status = CheckStatus.FAIL if issues else (CheckStatus.WARN if warnings else CheckStatus.OK)
+    return HealthCheck(status=status, label="Project Structure", details=details, issues=issues, warnings=warnings)
 
 
 def check_knowledge_inventory(cwd: Path) -> HealthCheck:
