@@ -1,9 +1,11 @@
 # Pitch: Pandoc as GRD's Structured LaTeX Conversion Layer
 
-**Bead:** ge-6we
+**Bead:** ge-6we (pitch) + ge-be3, ge-5e6, ge-4gr, ge-z7q, ge-xf5, ge-ow7 (implementation)
 **Author:** alice (crew)
-**Date:** 2026-04-11
-**Status:** Pitch for Rome's approval
+**Opened:** 2026-04-11
+**Status:** Living document — pitch awaiting approval; will track progress and evolution during implementation.
+
+**Portability goal:** If this approach works in GRD, the same tooling (pandoc utils, Lua filters, agent spec changes) should be portable to the original [Get Physics Done (GPD)](https://github.com/Rome-1/get-physics-done) repo via PR. Design decisions should favor GRD/GPD-agnostic abstractions where cheap — anything physics-specific goes in a separate layer.
 
 ---
 
@@ -249,3 +251,46 @@ Each phase is independently valuable. The plan can stop after phase 1 and still 
 Approve this plan for implementation, with any scope adjustments or priority changes.
 
 Beads: ge-be3, ge-5e6, ge-4gr, ge-z7q, ge-xf5, ge-ow7 (all discovered-from ge-6we)
+
+---
+
+## Progress Log
+
+Append-only log of work on this plan. Newest entries on top. Each entry: what was tried, what worked, what didn't, what it means for the plan.
+
+### Template for entries
+
+```
+### YYYY-MM-DD — <bead id>: <short title>
+
+**What changed:** One sentence on the concrete action.
+**Outcome:** Worked / partially worked / failed / superseded.
+**Findings:** What we learned — especially anything surprising.
+**Plan impact:** How this changes scope, priority, or ordering of remaining beads.
+**Artifacts:** Commit SHAs, files touched, test results.
+```
+
+### 2026-04-11 — ge-6we: Pitch drafted
+
+**What changed:** Researched both LaTeX pipelines (OSB pandoc + GRD paper system); wrote this pitch; created six implementation beads.
+**Outcome:** Worked — pitch committed, six beads created, ge-6we closed.
+**Findings:** GRD has two disconnected LaTeX paths (write-paper via agents + raw string export in workflow spec). OSB's pandoc pipeline is small (~150 LOC across 3 files) and proven. `latex.py`'s auto-fix engine exists specifically because LLMs write bad LaTeX — which is the exact problem pandoc-as-converter solves.
+**Plan impact:** None yet. Awaiting approval.
+**Artifacts:** Commit `678eef4`, file `research/pandoc-latex-pitch.md`.
+
+---
+
+## GPD Portability Notes
+
+Design choices that keep the work portable to Get Physics Done:
+
+- **Name filters/modules `grd-*` but structure them to be domain-agnostic.** The core of `grd-math.lua`, `grd-crossref.lua`, `grd-figure.lua` handles markdown→LaTeX mechanics, not physics. When porting, rename to `gpd-*` and the logic transfers unchanged.
+- **Journal templates are already shared concepts.** PRL, APJ, MNRAS, Nature, JHEP, JFM exist in both codebases (or will). Templates port 1:1.
+- **Keep GRD-specific conventions (phase cross-refs, SUMMARY.md schema) isolated.** The `grd-crossref.lua` filter handles phase references — GPD has the same concept with identical structure. Port is a find/replace of `.grd/` paths and bead ID prefixes.
+- **Avoid coupling to crew/bead tooling in the filter logic itself.** Filters should take markdown in, emit LaTeX out. Bead tracking belongs in the workflow specs, which differ more between repos.
+
+Checklist to maintain as the plan executes:
+- [ ] `grd.utils.pandoc` module has no GRD-specific hardcoded paths
+- [ ] Lua filters take config via frontmatter/metadata, not via hardcoded directory assumptions
+- [ ] Agent spec changes (markdown drafting) are expressed as a prompt pattern, portable to GPD's agents
+- [ ] A final "GPD port checklist" section added below when implementation completes
