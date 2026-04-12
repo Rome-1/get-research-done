@@ -530,7 +530,7 @@ def test_get_checklist_tool_description_mentions_full_live_registry() -> None:
 
     description = _tool_description(mcp, "get_checklist")
 
-    assert "currently 5.1-5.19" in description
+    assert "currently 5.1-5.21" in description
     assert "5.1-5.14" not in description
 
 

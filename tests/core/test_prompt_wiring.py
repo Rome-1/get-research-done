@@ -2104,7 +2104,7 @@ def test_stage8_surfaces_decisive_comparisons_paper_quality_artifacts_and_profil
     assert "figure_registry" in scoring
     assert "Review (Recommended)" in settings
     assert "all required contract-aware checks" in profiles
-    assert "current registry: 5.1-5.19" in quick_reference
+    assert "current registry: 5.1-5.21" in quick_reference
     assert "still run every contract-aware check required by the plan" in verifier_profiles
     assert "required first-result, anchor, and pre-fanout checkpoints" in planner
     assert "Do NOT change conventions mid-project without an explicit checkpoint" in planner

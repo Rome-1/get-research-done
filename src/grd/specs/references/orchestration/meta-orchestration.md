@@ -141,7 +141,7 @@ When verification fails, the failure type determines which agent to re-invoke an
 
 ```
 On verification failure:
-  1. CLASSIFY: Which check failed? (5.1-5.19 or consistency)
+  1. CLASSIFY: Which check failed? (5.1-5.21 or consistency)
   2. EXTRACT: What specifically was wrong? (equation number, step, value, expected vs actual)
   3. DIAGNOSE: Is this a derivation error, numerical error, convention error, or conceptual error?
   4. ROUTE: Select target agent from table above

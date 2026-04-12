@@ -365,6 +365,50 @@ class TestVerificationServerIntegration:
         assert result["status"] == "warning"
         assert "competing_family_checked" in result["metrics"]
 
+    def test_run_check_formal_statement_flags_missing_lean_content(self):
+        """5.20 — informal claims without any Lean handle should warn."""
+        from grd.mcp.servers.verification_server import run_check
+
+        artifact = "We claim that the limit of f(x) as x approaches infinity is 1."
+        result = run_check("5.20", "physics", artifact)
+
+        assert result["check_id"] == "5.20"
+        assert result["check_name"] == "Formal statement present"
+        assert result["evidence_kind"] == "structural"
+        assert any("Lean" in issue or "lean" in issue for issue in result["automated_issues"])
+
+    def test_run_check_formal_statement_accepts_lean_block(self):
+        from grd.mcp.servers.verification_server import run_check
+
+        artifact = (
+            "The claim is formalized as:\n\n"
+            "```lean\n"
+            "theorem limit_is_one (f : ℝ → ℝ) : Tendsto f atTop (𝓝 1) := sorry\n"
+            "```\n"
+        )
+        result = run_check("5.20", "physics", artifact)
+
+        assert not result["automated_issues"], result["automated_issues"]
+
+    def test_run_check_formal_proof_flags_sorry(self):
+        """5.21 — a ``sorry`` in the proof content is an immediate red flag."""
+        from grd.mcp.servers.verification_server import run_check
+
+        artifact = "```lean\ntheorem t : 1 + 1 = 2 := by sorry\n```\n"
+        result = run_check("5.21", "physics", artifact)
+
+        assert result["check_id"] == "5.21"
+        assert result["evidence_kind"] == "computational"
+        assert any("sorry" in issue or "admit" in issue for issue in result["automated_issues"])
+
+    def test_run_check_formal_proof_flags_missing_content_entirely(self):
+        from grd.mcp.servers.verification_server import run_check
+
+        artifact = "We proved the theorem by direct computation."
+        result = run_check("5.21", "physics", artifact)
+
+        assert any("Lean" in issue or "lean" in issue for issue in result["automated_issues"])
+
 
 # ===========================================================================
 # 4. Errors MCP Server

@@ -279,6 +279,50 @@ VERIFICATION_CHECK_DEFS: tuple[VerificationCheckDef, ...] = (
         contract_aware=True,
         binding_targets=["observable", "claim", "deliverable", "acceptance_test"],
     ),
+    VerificationCheckDef(
+        check_id="5.20",
+        check_key="universal.formal_statement",
+        name="Formal statement present",
+        description=(
+            "Verify the claim has an accompanying Lean 4 statement that type-checks against the "
+            "project's toolchain. Evidence that the informal claim has been translated into a "
+            "machine-parseable proposition — a prerequisite for any machine-checked proof."
+        ),
+        tier=3,
+        catches=(
+            "Informal hand-wavy claims, ambiguous quantifier order, missing side conditions that "
+            "only surface when you try to type a Lean `theorem` for the statement."
+        ),
+        evidence_kind="structural",
+        oracle_hint=(
+            "Type-check the Lean statement via `grd lean check` (or the daemon). Pass iff Lean "
+            "exits cleanly with no error-severity diagnostics for the statement body."
+        ),
+        binding_targets=["claim", "deliverable"],
+    ),
+    VerificationCheckDef(
+        check_id="5.21",
+        check_key="universal.formal_proof",
+        name="Formal proof complete",
+        description=(
+            "Verify the claim has a complete, closed Lean 4 proof — the statement type-checks "
+            "AND the proof term has no remaining `sorry`, `admit`, or open goals. This is the "
+            "strongest form of computational evidence GRD can produce."
+        ),
+        tier=4,
+        catches=(
+            "Proofs with hidden gaps (`sorry`, `admit`), proofs that rely on axioms not on the "
+            "allowed list, mistaken statement of a previously proven lemma, proofs that cheat by "
+            "invoking `native_decide` on an unsound kernel extension."
+        ),
+        evidence_kind="computational",
+        oracle_hint=(
+            "Compile the Lean file with `grd lean check --file <path>` and also scan the "
+            "compiled `.olean` (or the source) for `sorry`/`admit` usage. Pass iff compile is "
+            "clean AND no admitted obligations remain."
+        ),
+        binding_targets=["claim", "deliverable"],
+    ),
 )
 
 

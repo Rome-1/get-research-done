@@ -59,7 +59,7 @@ What type of result do you have?
 │  └─ If phase transition: #5 finite-size scaling, #6 compare known exponents
 │
 └─ Paper-ready result (final number for publication)
-   └─ Run every relevant live verifier-registry check (current registry: 5.1-5.19).
+   └─ Run every relevant live verifier-registry check (current registry: 5.1-5.21).
        Minimum: dimensional analysis, numerical spot-checks, limiting cases, literature cross-check, and every contract-aware check required by the plan. Add domain-specific checks from above.
 ```
 

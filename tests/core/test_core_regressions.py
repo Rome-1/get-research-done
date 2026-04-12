@@ -320,6 +320,37 @@ def test_verification_checks_api_handles_valid_and_invalid_ids() -> None:
     assert len(list_verification_checks()) >= 15
 
 
+def test_formal_statement_and_proof_checks_are_registered() -> None:
+    """5.20 (formal_statement) and 5.21 (formal_proof) are first-class universal checks.
+
+    Added for the Lean 4 integration (ge-7vm): every surface that enumerates
+    verification checks — prompts, MCP schemas, the Python API — picks them up
+    from this single registry, so the presence-and-metadata test lives here.
+    """
+    from grd.core.verification_checks import get_verification_check
+
+    stmt = get_verification_check("5.20")
+    assert stmt is not None
+    assert stmt.check_key == "universal.formal_statement"
+    assert stmt.tier == 3
+    assert stmt.evidence_kind == "structural"
+    assert stmt.check_class == "universal"
+    assert stmt.contract_aware is False
+    assert "claim" in stmt.binding_targets
+
+    proof = get_verification_check("5.21")
+    assert proof is not None
+    assert proof.check_key == "universal.formal_proof"
+    assert proof.tier == 4
+    assert proof.evidence_kind == "computational"
+    # Oracle hint must point at the actual CLI a caller would run.
+    assert "grd lean check" in proof.oracle_hint
+
+    # Alias lookup by key still works.
+    assert get_verification_check("universal.formal_statement") is stmt
+    assert get_verification_check("universal.formal_proof") is proof
+
+
 def test_error_class_3_maps_to_expected_primary_checks() -> None:
     from grd.core.verification_checks import ERROR_CLASS_COVERAGE_DEFS
 
@@ -562,10 +593,7 @@ def test_milestone_complete_surfaces_unexpected_checkpoint_sync_failure(
     _setup_phase_project(tmp_path)
     _write_phase_roadmap(
         tmp_path,
-        "## Milestone v1.0: Core\n\n"
-        "### Phase 1: Setup\n\n"
-        "**Goal:** Establish the framework\n"
-        "**Plans:** 1 plans\n",
+        "## Milestone v1.0: Core\n\n### Phase 1: Setup\n\n**Goal:** Establish the framework\n**Plans:** 1 plans\n",
     )
     _write_phase_state(
         tmp_path,
@@ -603,10 +631,7 @@ def test_milestone_complete_retry_after_checkpoint_sync_failure_does_not_duplica
     _setup_phase_project(tmp_path)
     _write_phase_roadmap(
         tmp_path,
-        "## Milestone v1.0: Core\n\n"
-        "### Phase 1: Setup\n\n"
-        "**Goal:** Establish the framework\n"
-        "**Plans:** 1 plans\n",
+        "## Milestone v1.0: Core\n\n### Phase 1: Setup\n\n**Goal:** Establish the framework\n**Plans:** 1 plans\n",
     )
     _write_phase_state(
         tmp_path,
