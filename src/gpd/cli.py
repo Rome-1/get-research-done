@@ -3418,14 +3418,12 @@ def suggest(
     limit: int | None = typer.Option(None, "--limit", help="Max suggestions to return"),
 ) -> None:
     """Suggest what to do next based on project state."""
-    from gpd.core.root_resolution import resolve_project_root
     from gpd.core.suggest import suggest_next
 
     kwargs: dict[str, int] = {}
     if limit is not None:
         kwargs["limit"] = limit
-    workspace_cwd = _get_cwd().expanduser().resolve(strict=False)
-    suggest_cwd = resolve_project_root(workspace_cwd, require_layout=True) or workspace_cwd
+    suggest_cwd = _project_scoped_cwd()
     _output(suggest_next(suggest_cwd, **kwargs))
 
 
