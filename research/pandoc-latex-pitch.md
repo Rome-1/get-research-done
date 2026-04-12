@@ -292,7 +292,7 @@ Append-only log of work on this plan. Newest entries on top. Each entry: what wa
 - `src/grd/agents/grd-paper-writer.md` (documents `{#fig:foo}` / `@fig:foo` + fallback)
 - `src/grd/specs/workflows/export.md` (notes auto-enablement + opt-out)
 - `tests/test_pandoc_utils.py` (+8 tests)
-- Commit SHA: *pending*
+- Commit SHA: `302b5a8`
 
 ### 2026-04-12 — ge-xf5: citation bridge (markdown @key → .bib audit)
 
