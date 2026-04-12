@@ -270,6 +270,26 @@ Append-only log of work on this plan. Newest entries on top. Each entry: what wa
 **Artifacts:** Commit SHAs, files touched, test results.
 ```
 
+### 2026-04-12 — ge-be3 + ge-5e6: Phase 1 foundation landed
+
+**What changed:** Built `grd.utils.pandoc` (programmatic pandoc wrapper with availability/version detection, subprocess execution, `markdown_to_latex_fragment` helper) and the four GRD Lua filters (`grd-obsidian-compat`, `grd-crossref`, `grd-math`, `grd-figure`). Wired pandoc availability into `grd health` as a WARN-level check so missing pandoc degrades gracefully. Added 40 tests across unit (parsing, error paths, mocked subprocess) and integration (real pandoc against each filter + composition).
+**Outcome:** Worked — all 40 new tests pass; no pre-existing tests regressed. Ruff clean. Pandoc 3.1.3 verified locally.
+**Findings:**
+- Pandoc 3.x uses a dedicated `Figure` AST block (not `Para [Image]`). `grd-figure.lua` has to handle both so it works across pandoc versions. Kept the `Para` path as a pandoc<3 fallback.
+- Lua `--[[ ]]` block comments terminate at the *first* `]]`, so any doc text mentioning `[[target]]` (wikilinks!) broke parsing silently. Switched every header to line comments.
+- Filter order matters in the bundled chain: `grd-crossref` must run before `grd-obsidian-compat` so namespaced `[[ns:id]]` links become `\ref{}` before the wikilink handler collapses them to plain text. Documented in the `all_filter_paths()` docstring.
+- Pandoc's `--citeproc` flag and our bracket-wikilink syntax don't actually overlap (we target `[[...]]`, citeproc uses `@key`), but the pitch's filter-ordering note still applies for pandoc-crossref (Phase 3).
+- External filter probe (`pandoc-crossref`, `pandoc-citeproc`) added to `PandocStatus.installed_filters` so Phase 3 can introspect cheaply.
+**Plan impact:**
+- Phase 2 (ge-4gr, ge-z7q) can start immediately; the programmatic API is the shape callers will want (`markdown_to_latex_fragment(md, lua_filters=all_filter_paths())`).
+- No change to Phase 3 scope. The `PandocStatus.installed_filters` tuple gives ge-ow7 a cheap capability check.
+**Artifacts:**
+- `src/grd/utils/pandoc.py` (core module, 299 LOC)
+- `src/grd/mcp/paper/filters/{grd-crossref,grd-figure,grd-math,grd-obsidian-compat}.lua` + `__init__.py` (filter loader)
+- `src/grd/core/health.py` (`check_pandoc`, registered in `_ALL_CHECKS`)
+- `tests/test_pandoc_utils.py` (20 tests) + `tests/test_pandoc_filters.py` (20 tests)
+- Commit SHA: (set at commit time)
+
 ### 2026-04-11 — ge-6we: Pitch drafted
 
 **What changed:** Researched both LaTeX pipelines (OSB pandoc + GRD paper system); wrote this pitch; created six implementation beads.
@@ -290,7 +310,7 @@ Design choices that keep the work portable to Get Physics Done:
 - **Avoid coupling to crew/bead tooling in the filter logic itself.** Filters should take markdown in, emit LaTeX out. Bead tracking belongs in the workflow specs, which differ more between repos.
 
 Checklist to maintain as the plan executes:
-- [ ] `grd.utils.pandoc` module has no GRD-specific hardcoded paths
-- [ ] Lua filters take config via frontmatter/metadata, not via hardcoded directory assumptions
-- [ ] Agent spec changes (markdown drafting) are expressed as a prompt pattern, portable to GPD's agents
-- [ ] A final "GPD port checklist" section added below when implementation completes
+- [x] `grd.utils.pandoc` module has no GRD-specific hardcoded paths (verified: no imports from `grd.core`, `grd.mcp.paper`; all config via function args)
+- [x] Lua filters take config via frontmatter/metadata, not via hardcoded directory assumptions (`figure_base_path`, `crossref_namespaces`, `obsidian_strip_fields`, `math_autowrap` all read from pandoc `Meta`)
+- [ ] Agent spec changes (markdown drafting) are expressed as a prompt pattern, portable to GPD's agents — *pending ge-z7q*
+- [ ] A final "GPD port checklist" section added below when implementation completes — *pending full Phase 3 completion*

@@ -146,6 +146,34 @@ def check_environment() -> HealthCheck:
     return HealthCheck(status=status, label="Environment", details=details, issues=issues)
 
 
+def check_pandoc() -> HealthCheck:
+    """Check pandoc availability (optional dependency for markdown->LaTeX conversion)."""
+    from grd.utils.pandoc import MIN_PANDOC_VERSION, detect_pandoc
+
+    status = detect_pandoc()
+    details: dict[str, object] = {
+        "available": status.available,
+        "binary_path": status.binary_path,
+        "version": status.version_string,
+        "meets_minimum": status.meets_minimum,
+        "installed_filters": list(status.installed_filters),
+    }
+    warnings: list[str] = []
+    if not status.available:
+        warnings.append(
+            f"pandoc not found on PATH ({status.error or 'unknown error'}); "
+            "markdown-to-LaTeX conversion will fall back to direct LaTeX. "
+            "Install: apt-get install pandoc | brew install pandoc"
+        )
+    elif not status.meets_minimum:
+        min_major, min_minor = MIN_PANDOC_VERSION
+        warnings.append(
+            f"pandoc {status.version_string or 'unknown'} < {min_major}.{min_minor}; "
+            "Lua filters may be unreliable"
+        )
+    return HealthCheck(status=CheckStatus.WARN if warnings else CheckStatus.OK, label="Pandoc", details=details, warnings=warnings)
+
+
 def check_project_structure(cwd: Path) -> HealthCheck:
     """Check that required .grd/ files and directories exist."""
     layout = ProjectLayout(cwd)
@@ -786,6 +814,7 @@ def _apply_fixes(
 # Ordered list of checks to run (each is a (name, callable) pair)
 _ALL_CHECKS: list[tuple[str, object]] = [
     ("environment", check_environment),
+    ("pandoc", check_pandoc),
     ("project_structure", check_project_structure),
     ("storage_paths", check_storage_paths),
     ("state_validity", check_state_validity),
@@ -813,7 +842,7 @@ def run_health(cwd: Path, *, fix: bool = False) -> HealthReport:
 
         for name, check_fn in _ALL_CHECKS:
             with grd_span(f"health.check.{name}"):
-                if name == "environment":
+                if name in ("environment", "pandoc"):
                     checks.append(check_fn())  # type: ignore[operator]
                 else:
                     checks.append(check_fn(cwd))  # type: ignore[operator]
@@ -825,6 +854,7 @@ def run_health(cwd: Path, *, fix: bool = False) -> HealthReport:
                 refreshed_checks: list[HealthCheck] = []
                 check_labels = {
                     "environment": "Environment",
+                    "pandoc": "Pandoc",
                     "project_structure": "Project Structure",
                     "storage_paths": "Storage-Path Policy",
                     "state_validity": "State Validity",
@@ -844,7 +874,7 @@ def run_health(cwd: Path, *, fix: bool = False) -> HealthReport:
                         refreshed_checks.append(next(c for c in checks if c.label == label))
                         continue
                     with grd_span(f"health.check.{name}"):
-                        if name == "environment":
+                        if name in ("environment", "pandoc"):
                             refreshed_checks.append(check_fn())  # type: ignore[operator]
                         else:
                             refreshed_checks.append(check_fn(cwd))  # type: ignore[operator]
@@ -1128,6 +1158,7 @@ __all__ = [
     "check_checkpoint_tags",
     "check_latest_return",
     "check_orphans",
+    "check_pandoc",
     "check_plan_frontmatter",
     "check_project_structure",
     "check_roadmap_consistency",
