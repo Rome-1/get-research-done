@@ -27,6 +27,11 @@ See ``research/formal-proof-integration/PITCH.md`` §Architecture Design.
 
 from __future__ import annotations
 
+from grd.core.lean.evidence import (
+    LEAN_METHOD_TYPECHECK,
+    LEAN_VERIFIER,
+    lean_result_to_evidence,
+)
 from grd.core.lean.protocol import (
     LeanCheckRequest,
     LeanCheckResult,
@@ -35,8 +40,11 @@ from grd.core.lean.protocol import (
 )
 
 __all__ = [
+    "LEAN_METHOD_TYPECHECK",
+    "LEAN_VERIFIER",
     "LeanCheckRequest",
     "LeanCheckResult",
     "LeanDiagnostic",
     "LeanEnvStatus",
+    "lean_result_to_evidence",
 ]
