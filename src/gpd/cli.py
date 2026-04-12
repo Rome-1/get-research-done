@@ -3423,6 +3423,10 @@ def suggest(
     kwargs: dict[str, int] = {}
     if limit is not None:
         kwargs["limit"] = limit
+    # NOTE: _project_scoped_cwd() runs migration before resolution. If run
+    # from a subfolder that has its own PROJECT.md, migration may create a
+    # spurious GPD/ there and resolve to the wrong project root. This is a
+    # known limitation shared with progress/state/status commands.
     suggest_cwd = _project_scoped_cwd()
     _output(suggest_next(suggest_cwd, **kwargs))
 
