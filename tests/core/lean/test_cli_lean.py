@@ -28,7 +28,7 @@ def _stub_lean(bin_dir: Path, *, exit_code: int = 0) -> Path:
 def test_help_lists_lean_subcommands() -> None:
     result = runner.invoke(app, ["lean", "--help"])
     assert result.exit_code == 0
-    for cmd in ("check", "typecheck-file", "env", "serve-repl", "stop-repl", "ping"):
+    for cmd in ("check", "typecheck-file", "env", "serve-repl", "stop-repl", "ping", "bootstrap"):
         assert cmd in result.stdout
 
 
@@ -138,3 +138,28 @@ def test_stop_repl_is_noop_when_no_daemon(tmp_path: Path) -> None:
     (tmp_path / ".grd").mkdir()
     result = runner.invoke(app, ["--raw", "--cwd", str(tmp_path), "lean", "stop-repl"])
     assert result.exit_code == 0, result.stdout
+
+
+def test_bootstrap_dry_run_emits_structured_report(tmp_path: Path) -> None:
+    (tmp_path / ".grd").mkdir()
+    result = runner.invoke(app, ["--raw", "--cwd", str(tmp_path), "lean", "bootstrap", "--dry-run"])
+    assert result.exit_code == 0, result.stdout
+    parsed = json.loads(result.stdout)
+    assert "stages" in parsed
+    assert parsed["ok"] is True
+    stage_names = [s["name"] for s in parsed["stages"]]
+    assert "elan" in stage_names
+    assert "toolchain" in stage_names
+    assert "pantograph" in stage_names
+
+
+def test_bootstrap_uninstall_dry_run(tmp_path: Path) -> None:
+    (tmp_path / ".grd").mkdir()
+    result = runner.invoke(
+        app,
+        ["--raw", "--cwd", str(tmp_path), "lean", "bootstrap", "--uninstall", "--dry-run"],
+    )
+    assert result.exit_code == 0, result.stdout
+    parsed = json.loads(result.stdout)
+    assert parsed["dry_run"] is True
+    assert isinstance(parsed["paths"], list)

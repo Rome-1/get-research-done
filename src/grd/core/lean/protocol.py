@@ -12,6 +12,9 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
+    "BootstrapReport",
+    "BootstrapStageResult",
+    "BootstrapStageStatus",
     "LeanCheckRequest",
     "LeanCheckResult",
     "LeanDiagnostic",
@@ -103,6 +106,55 @@ class LeanCheckResult(BaseModel):
     error: LeanErrorKind | None = None
     error_detail: str | None = None
     backend: Literal["subprocess", "daemon", "pantograph"] = "subprocess"
+
+
+BootstrapStageStatus = Literal[
+    "ok",
+    "skipped_already_installed",
+    "skipped_user_declined",
+    "skipped_not_requested",
+    "degraded",
+    "failed",
+]
+"""Outcome of a single bootstrap stage.
+
+``ok`` means we actually ran the installer and it succeeded.
+``skipped_already_installed`` means detection found the component in place.
+``skipped_user_declined`` means a stage requiring consent was answered "no"
+(remembered in ``.grd/lean-env.json`` so we don't re-ask).
+``skipped_not_requested`` means an optional stage wasn't enabled by the caller
+(e.g. ``--with-graphviz`` not passed).
+``degraded`` means the stage can't install cleanly but the surrounding
+workflow can proceed with reduced functionality — the canonical example is
+graphviz needing root on a non-user-package-manager host.
+``failed`` means an unexpected error; the report is saved with diagnostic detail
+but the overall bootstrap continues so later stages still get a chance.
+"""
+
+
+class BootstrapStageResult(BaseModel):
+    """Structured outcome of one stage in ``/grd:lean-bootstrap``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    status: BootstrapStageStatus
+    detail: str = ""
+    elapsed_ms: int = 0
+    version: str | None = None
+    path: str | None = None
+
+
+class BootstrapReport(BaseModel):
+    """Aggregate result of a bootstrap run written to ``.grd/lean-env.json``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    stages: list[BootstrapStageResult] = Field(default_factory=list)
+    env_file: str
+    elapsed_ms: int = 0
+    degraded_notes: list[str] = Field(default_factory=list)
 
 
 class LeanEnvStatus(BaseModel):

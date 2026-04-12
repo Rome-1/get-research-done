@@ -133,6 +133,81 @@ def lean_env() -> None:
     _output(compute_env_status(_get_cwd()))
 
 
+@lean_app.command("bootstrap")
+def lean_bootstrap(
+    with_graphviz: bool = typer.Option(
+        False,
+        "--with-graphviz",
+        help="Try to install graphviz via a user-level package manager (brew/nix-env). Falls back to ASCII dep graphs silently.",
+    ),
+    with_tectonic: bool = typer.Option(
+        False,
+        "--with-tectonic",
+        help="Install tectonic via cargo if no LaTeX compiler is present. HTML-only Blueprint works without this.",
+    ),
+    with_mathlib_cache: bool = typer.Option(
+        False,
+        "--with-mathlib-cache",
+        help="Opt-in: download Mathlib olean cache (~10 GB). Requires --yes or prior recorded consent.",
+    ),
+    with_leandojo: bool = typer.Option(
+        False,
+        "--with-leandojo",
+        help="Opt-in: install lean-dojo for premise retrieval (~3–5 GB). Requires --yes or prior recorded consent.",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Auto-confirm consent-gated stages (mathlib cache, leandojo). Also recorded in .grd/lean-env.json.",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Re-attempt every stage, ignoring cached skips or prior 'never' consent.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Report what would happen without touching anything.",
+    ),
+    uninstall_flag: bool = typer.Option(
+        False,
+        "--uninstall",
+        help="Remove GRD-added Lean artifacts (~/.elan, caches, project .lake).",
+    ),
+) -> None:
+    """Lazy bootstrap: idempotently install elan, the Lean toolchain, and Pantograph.
+
+    Stages 1–3 run unconditionally (no consent). Stages 4–5 (graphviz,
+    tectonic) run only when their flag is passed. Stages 6–7 (Mathlib cache,
+    LeanDojo) require both the flag AND ``--yes``. State is recorded to
+    ``.grd/lean-env.json`` after every stage so partial runs resume cleanly.
+    """
+    from grd.core.lean.bootstrap import BootstrapOptions, run_bootstrap, uninstall
+
+    project_root = _get_cwd()
+    if uninstall_flag:
+        _output(uninstall(project_root, dry_run=dry_run))
+        return
+
+    report = run_bootstrap(
+        project_root,
+        options=BootstrapOptions(
+            yes=yes,
+            with_graphviz=with_graphviz,
+            with_tectonic=with_tectonic,
+            with_mathlib_cache=with_mathlib_cache,
+            with_leandojo=with_leandojo,
+            dry_run=dry_run,
+            force=force,
+        ),
+    )
+    _output(report)
+    if not report.ok:
+        raise typer.Exit(code=1)
+
+
 @lean_app.command("serve-repl")
 def lean_serve_repl(
     idle_timeout_s: float = typer.Option(
