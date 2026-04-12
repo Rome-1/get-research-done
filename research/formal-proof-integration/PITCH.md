@@ -323,15 +323,33 @@ Each backend would expose the same tool interface (`verify_claim`, `check`, `pro
 
 ### Phase 3: AI-Assisted Proving (4-6 weeks)
 
-**Goal:** GRD agents can attempt proofs autonomously.
+**Goal:** GRD agents can attempt proofs autonomously. Pipeline grounded in the SOTA survey at `AUTOFORMALIZATION.md` (polecat research).
 
-- Implement `grd lean prove` subcommand using Pantograph tactic search
-- Create `grd-prover` agent definition
-- Integrate with LeanDojo for premise retrieval
-- Implement `/grd:formalize-claim` and `/grd:prove` commands
-- Implement best-practice autoformalization pipeline (see AUTOFORMALIZATION.md from polecat research — DRAFT-SKETCH-PROVE, back-translation faithfulness check, retrieval-augmented statement generation)
-- Implement ProofFlow-style dependency DAG → lemma decomposition
-- Test on real GRD phase: formalize a geometry analysis result
+**3.1 Autoformalization pipeline** (inside `grd lean prove` / `grd lean verify-claim`, not a new MCP):
+
+| Stage | What it does | Method (SOTA anchor) |
+|---|---|---|
+| 1. Extract | Pull claim + conventions + deps from phase artifacts | leanblueprint `\lemma{}\uses{}` |
+| 2. Retrieve | Ground against pinned Mathlib4 + PhysLean snapshot | DDR-style name-index + Suffix Array Check |
+| 3. Generate | N=4 (MVP) / N=16 (pro) candidate Lean statements | Claude Sonnet 4.5, DRAFT-SKETCH-PROVE framing |
+| 4. Compile-repair | APOLLO-style loop: compile → classify error → repair | 10-20 compiles/claim budget |
+| 5. Faithfulness | Back-translate to English; SBERT sim; symbolic-equiv cluster | ConsistencyCheck + GTED/ASSESS ranking |
+| 6. Gate | ≥0.85 auto-accept, 0.7-0.85 symbolic cluster, <0.7 `bd new -l human` | Escalation surfaces specific ambiguity |
+
+**3.2 Concrete deliverables:**
+
+- `grd lean prove` with Pantograph-backed tactic search and APOLLO repair loop
+- `grd lean verify-claim` running stages 1-6 above
+- `grd-prover` agent definition (uses CLI + skills only — no new MCPs)
+- Grounded retrieval index over pinned Mathlib4 + PhysLean snapshot (rebuilt on `grd lean sync`)
+- Back-translation faithfulness gate with configurable thresholds in `.grd/lean-env.json`
+- `/grd:formalize-claim` and `/grd:prove` skills
+- ProofFlow-style dependency-DAG decomposition for multi-lemma claims
+- End-to-end test on real GRD phase: formalize one result from the geometry analysis research
+
+**3.3 Budget targets:** MVP ~$10-100 per 50-claim phase at current API pricing; ≥40-60% of simple claims auto-accepted; remainder escalated with the specific ambiguity attached to the bead.
+
+**3.4 Deferred to later phase:** ensemble-of-3 model voting, Kimina-Prover-72B / DeepSeek-Prover-V2 as the core prover, test-time RL (AlphaProof-style). These land in Phase 4+ or flagship-milestone opt-in.
 
 ### Phase 4: Domain Packs and Polish (3-4 weeks)
 
