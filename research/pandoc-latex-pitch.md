@@ -270,6 +270,31 @@ Append-only log of work on this plan. Newest entries on top. Each entry: what wa
 **Artifacts:** Commit SHAs, files touched, test results.
 ```
 
+### 2026-04-12 — ge-4gr + ge-z7q: Phase 2 pipeline wired
+
+**What changed:** Two pieces of plumbing:
+1. `grd:export` LaTeX step (`src/grd/specs/workflows/export.md`) rewritten to assemble an intermediate `exports/results.md`, run it through `markdown_to_latex_fragment(..., lua_filters=all_filter_paths())`, then wrap in the journal template (or standalone article w/ `\usepackage{float}` for `[H]`). Legacy raw-LaTeX scaffold preserved as a fallback when `detect_pandoc()` reports unavailable/too-old.
+2. Paper-writer pipeline now accepts markdown in `Section.content`. New module `grd.mcp.paper.markdown_support` with `looks_like_latex()` (structural-sigil detection — section/begin/documentclass/title/author/bibliography, plus fenced ```latex/```tex blocks) and `maybe_convert_to_latex()` (graceful degradation: pandoc missing / too old / conversion error → content returned as-is). `template_registry.render_paper()` runs this conversion on every section + appendix_section before the existing `clean_latex_fences` step. Agent spec (`src/grd/agents/grd-paper-writer.md`) gained an `<authoring_format>` section documenting the two modes (markdown vs raw LaTeX) and the crossref / figure / equation syntax.
+
+**Outcome:** Worked — 22 new tests (`tests/test_paper_markdown_support.py`) pass; no regressions in `test_paper_models.py` / `test_paper_e2e.py` / `test_latex_utils.py` / `test_paper_quality.py` (76 total). Ruff clean.
+
+**Findings:**
+- Running pandoc blindly on fenced ```latex blocks mangled contents like `E = mc^2` (caret escaped, math semantics lost). Fix: treat fenced latex/tex blocks as an explicit author-declared "already LaTeX" signal in `_LATEX_SIGIL_PATTERN`. This is safer than cleaning fences first, because the unwrapped body (e.g. raw equation text) isn't valid markdown either.
+- Pre-existing contract: `PaperConfig` authors historically wrote raw LaTeX, including partial fragments (no `\documentclass`). The sigil check had to key on structural commands that *can't* appear in markdown prose — `\section{`, `\begin{figure}`, etc. — and explicitly exclude inline math (`$x$`) since math is valid markdown.
+- `render_paper` pays for `detect_pandoc()` once per call (not once per section). `all_filter_paths()` likewise resolved once.
+
+**Plan impact:**
+- Phase 3 (ge-xf5 citeproc + ge-ow7 pandoc-crossref) can now layer in cleanly. The hook for bibliography/citeproc is already present in `maybe_convert_to_latex(bibliography=..., citeproc=...)`; Phase 3 wires `PaperConfig.bib_file` through.
+- No change to downstream ordering.
+
+**Artifacts:**
+- `src/grd/specs/workflows/export.md` (primary/fallback paths in `generate_latex`)
+- `src/grd/mcp/paper/markdown_support.py` (new)
+- `src/grd/mcp/paper/template_registry.py` (conversion step added)
+- `src/grd/agents/grd-paper-writer.md` (`<authoring_format>` section)
+- `tests/test_paper_markdown_support.py` (22 tests)
+- Commit SHA: *pending*
+
 ### 2026-04-12 — ge-be3 + ge-5e6: Phase 1 foundation landed
 
 **What changed:** Built `grd.utils.pandoc` (programmatic pandoc wrapper with availability/version detection, subprocess execution, `markdown_to_latex_fragment` helper) and the four GRD Lua filters (`grd-obsidian-compat`, `grd-crossref`, `grd-math`, `grd-figure`). Wired pandoc availability into `grd health` as a WARN-level check so missing pandoc degrades gracefully. Added 40 tests across unit (parsing, error paths, mocked subprocess) and integration (real pandoc against each filter + composition).
@@ -312,5 +337,5 @@ Design choices that keep the work portable to Get Physics Done:
 Checklist to maintain as the plan executes:
 - [x] `grd.utils.pandoc` module has no GRD-specific hardcoded paths (verified: no imports from `grd.core`, `grd.mcp.paper`; all config via function args)
 - [x] Lua filters take config via frontmatter/metadata, not via hardcoded directory assumptions (`figure_base_path`, `crossref_namespaces`, `obsidian_strip_fields`, `math_autowrap` all read from pandoc `Meta`)
-- [ ] Agent spec changes (markdown drafting) are expressed as a prompt pattern, portable to GPD's agents — *pending ge-z7q*
+- [x] Agent spec changes (markdown drafting) are expressed as a prompt pattern, portable to GPD's agents (`<authoring_format>` section in `grd-paper-writer.md` describes markdown mode + raw-LaTeX fallback in prompt-only terms; no GRD-specific paths)
 - [ ] A final "GPD port checklist" section added below when implementation completes — *pending full Phase 3 completion*

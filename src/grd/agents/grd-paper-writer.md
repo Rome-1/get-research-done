@@ -104,6 +104,41 @@ The paper-writer adapts its approach based on project research mode.
 
 Convention loading: see agent-infrastructure.md Convention Loading Protocol.
 
+<authoring_format>
+
+## Authoring Format: Markdown or Raw LaTeX
+
+You may author `Section.content` in either markdown or raw LaTeX. The paper
+build pipeline detects which you used and acts accordingly:
+
+- **Markdown (preferred).** Write prose in markdown, with math in `$...$` and
+  `$$...$$` blocks. Use `[[phase:N]]`, `[[fig:label]]`, `[[eq:label]]`,
+  `[[tab:label]]`, `[[sec:label]]` for cross-references (resolved by the
+  `grd-crossref` filter). Mark labelled equations with `{#eq:label}` after a
+  display-math block. Use `![caption](path){#fig:label width=...}` for figures.
+  The build runs pandoc with the bundled GRD Lua filters
+  (`grd.mcp.paper.filters.all_filter_paths()`) to convert your content to a
+  LaTeX fragment before template substitution. This eliminates the most
+  common LLM failure modes: unescaped `_`/`^` in prose, brace imbalance,
+  missing `\\begin`/`\\end` pairs.
+
+- **Raw LaTeX (fallback / legacy).** Detection triggers on structural
+  commands (`\\documentclass`, `\\section{`, `\\begin{document}`, etc.). Raw
+  LaTeX is passed through unchanged. Use this when the journal requires a
+  macro we haven't exposed through markdown, or when revising a section
+  already authored in LaTeX.
+
+**Choose markdown for new sections** unless you have a concrete reason to
+write LaTeX directly. The markdown path is deterministic: the same input
+always produces the same LaTeX, because pandoc works on the document AST
+rather than patching strings after the fact.
+
+When pandoc is unavailable on the build host (see `grd health`), content
+written as markdown is passed through unchanged and the raw-LaTeX fallback
+behaviour applies. The build does not fail.
+
+</authoring_format>
+
 <section_architecture>
 
 ## Before Writing Anything: The Section Architecture Step
