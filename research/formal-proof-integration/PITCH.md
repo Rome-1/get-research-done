@@ -63,32 +63,45 @@ GRD Phase Derivation          Blueprint Layer              Lean 4
 
 **Key insight:** GRD phases already decompose research into atomic steps with dependency tracking. A Blueprint is essentially the same structure but with formal statement targets instead of informal verification checks.
 
+### Design constraint: CLI + skills, not MCP
+
+**Context cost matters.** MCP server tool schemas get injected into every agent turn's context window. A new `grd-lean` server with 6 tools could add ~2–4k tokens per turn — a tax paid on every prompt, for every project, whether formal proofs are in use or not. For a feature that most phases won't touch, that's too expensive.
+
+**GRD already has the right primitive:** the `grd` CLI and the slash-command skill system. Skills are loaded lazily (only when invoked), and CLI output is consumed only when an agent chooses to read it. This is the right surface for an opt-in verification backend.
+
 ### New Components
 
-#### 1. `grd-lean` MCP Server (new)
+#### 1. `grd lean` CLI subcommands (new)
 
-A new MCP server exposing formal proof tools:
+Rather than an MCP server, formal-proof operations live as subcommands of the existing `grd` CLI, backed by a Python module (`grd.lean`) that manages the Pantograph/Kimina connection:
 
-```python
-# Tools exposed:
-lean_check(code: str) -> LeanCheckResult
-    # Type-check Lean 4 code, return errors/goals
-    
-lean_prove(statement: str, context: str) -> ProofResult  
-    # Attempt automated proof via tactic search
-    # Uses Pantograph REPL under the hood
-    
-lean_verify_claim(claim_id: str, lean_file: str) -> VerificationEvidence
-    # Verify a contract claim maps to a checked Lean theorem
-    
-blueprint_status(phase: str) -> BlueprintStatus
-    # Parse blueprint dependency graph, return formalization progress
-    
-lean_typecheck_file(path: str) -> TypecheckResult
-    # Full file typecheck via Lake
+```bash
+grd lean check <file-or-inline>          # Type-check Lean 4 code → {success, errors[], goals[]}
+grd lean prove <stmt> [--ctx path]       # Attempt automated proof → {proof, tactics_tried, elapsed}
+grd lean verify-claim <claim-id>         # Bind claim → typechecked Lean theorem → evidence
+grd lean blueprint-status [--phase N]    # Dep-graph status: formalized / ready / blocked / total
+grd lean typecheck-file <path>           # Full file typecheck via Lake
+grd lean serve-repl                      # Start persistent REPL daemon (per-project)
+grd lean stop-repl                       # Shut it down
 ```
 
-**Backend:** Communicates with Lean 4 via Pantograph (Python ↔ Lean REPL with JSON protocol) or Kimina Lean Server (REST API for parallel verification). No subprocess spawning per check — persistent server connection.
+All commands emit JSON with `--json` for agent consumption. Human-readable output by default for interactive use.
+
+**Daemon model for speed.** A first `grd lean check` starts a Pantograph REPL subprocess and keeps it alive via a per-project Unix socket (`.grd/lean-repl.sock`). Subsequent calls reuse it (~50 ms round-trip vs. ~3 s cold start). Idle timeout (default 10 min) shuts it down. The daemon is managed transparently — users never need to invoke `serve-repl` / `stop-repl` manually; they exist only for debugging.
+
+**Skills wrap the CLI.** User-facing invocations are skills that orchestrate the right CLI calls:
+
+```
+/grd:formalize-claim <claim-id>   → calls grd lean verify-claim, writes blueprint stub
+/grd:prove <statement>            → calls grd lean prove, retries with premise retrieval
+/grd:blueprint-status             → calls grd lean blueprint-status, renders graph
+/grd:init-blueprint               → scaffolds blueprint/ directory in current phase
+/grd:lean-bootstrap               → runs the lazy install flow (see Bootstrap below)
+```
+
+Skills only enter context when the user invokes them. No per-turn tax.
+
+**Backend:** Pantograph (Python ↔ Lean REPL with JSON protocol) by default. Kimina Lean Server as optional parallel backend when batch verifying a whole phase.
 
 #### 2. Blueprint Phase Artifact
 
@@ -119,12 +132,12 @@ A new specialized agent, analogous to `grd-verifier` but for formal proofs:
 name: grd-prover
 description: Translates informal claims into formal Lean 4 statements and 
   attempts proof via tactic search, AI-assisted proving, and manual guidance.
-tools: file_read, file_write, shell, search_files, find_files, 
-       mcp__grd-lean__lean_check, mcp__grd-lean__lean_prove,
-       mcp__grd-lean__lean_verify_claim, mcp__grd-lean__blueprint_status
+tools: file_read, file_write, shell, search_files, find_files
 role_family: verification
 surface: internal
 ```
+
+The agent invokes `grd lean ...` subcommands via the shell tool. No MCP tool injection needed.
 
 **Workflow:**
 1. Reads phase SUMMARY.md and contract claims
@@ -290,9 +303,9 @@ Each backend would expose the same tool interface (`verify_claim`, `check`, `pro
 
 **Goal:** Lean 4 ↔ GRD communication works. Can typecheck Lean files from within a GRD workflow.
 
-- Install Lean 4 toolchain management (elan)
-- Implement `grd-lean` MCP server with `lean_check` and `lean_typecheck_file` tools
-- Use Pantograph REPL as backend
+- Implement lazy bootstrap skill (`/grd:lean-bootstrap`) that installs elan, Lean toolchain, Pantograph on demand
+- Implement `grd lean check` and `grd lean typecheck-file` CLI subcommands
+- Implement persistent REPL daemon with Unix-socket reuse
 - Add Lean project scaffolding to phase init (`lakefile.lean` template)
 - Add verification checks 5.20 (formal statement) and 5.21 (formal proof) to registry
 - Test on simple mathematical identity (e.g., Cauchy-Schwarz)
@@ -312,10 +325,11 @@ Each backend would expose the same tool interface (`verify_claim`, `check`, `pro
 
 **Goal:** GRD agents can attempt proofs autonomously.
 
-- Implement `lean_prove` MCP tool using Pantograph tactic search
+- Implement `grd lean prove` subcommand using Pantograph tactic search
 - Create `grd-prover` agent definition
 - Integrate with LeanDojo for premise retrieval
 - Implement `/grd:formalize-claim` and `/grd:prove` commands
+- Implement best-practice autoformalization pipeline (see AUTOFORMALIZATION.md from polecat research — DRAFT-SKETCH-PROVE, back-translation faithfulness check, retrieval-augmented statement generation)
 - Implement ProofFlow-style dependency DAG → lemma decomposition
 - Test on real GRD phase: formalize a geometry analysis result
 
@@ -363,6 +377,127 @@ Each backend would expose the same tool interface (`verify_claim`, `check`, `pro
 3. **Phase 3 gate:** `grd-prover` autonomously proves ≥1 non-trivial claim from a real GRD research phase without human Lean code.
 
 4. **Phase 4 gate:** A complete GRD research phase (e.g., polyhedral cone hypothesis from geometry analysis) has formal proofs for its top 3 claims, with verification evidence recorded in `state.json`.
+
+---
+
+---
+
+## System Requirements & Bootstrap (Lazy, Non-Blocking)
+
+**Principle:** No user pays cost for features they don't use. Bootstrap happens **on first invocation of a formal-proof skill**, not at GRD install time. Blocking prompts are minimized: if we can auto-install without root/sudo, we do. If we need sudo or the user's judgment, we offer the feature in a degraded mode and continue.
+
+### Bootstrap Skill: `/grd:lean-bootstrap`
+
+Idempotent. Detects existing install, skips what's present, installs the rest. Stages:
+
+| Stage | Action | Blocks user? |
+|---|---|---|
+| 0 | Check `.grd/lean-env.json` — if up-to-date, exit | No |
+| 1 | Install `elan` (user-local, ~15 MB) via official installer | No — writes to `~/.elan/` only |
+| 2 | Install project Lean toolchain (~400 MB–1 GB, pinned via `lean-toolchain` file) | No — background download with progress |
+| 3 | `pip install pantograph leanblueprint plastex` into GRD venv (~100 MB) | No |
+| 4 | Install `graphviz` (system package, ~10 MB) | **Auto-install if we can** — detect apt/brew/pacman, run without sudo if user-package manager, fall back to degraded-mode message only if root required. Never prompt. |
+| 5 | Install `tectonic` for LaTeX (single binary, ~50 MB, downloads packages on demand) | No — prefer tectonic over TeX Live (95% smaller). Skip if any working LaTeX compiler (`pdflatex`, `xelatex`, `lualatex`, `tectonic`) already present. |
+| 6 | (Optional) Download Mathlib olean cache via `lake exe cache get` (~8–12 GB) | **Ask once, remember.** Only triggered when user first writes Lean code that imports Mathlib. |
+| 7 | (Optional) LeanDojo + premise index (~3–5 GB) | **Ask once, remember.** Only triggered when premise retrieval is enabled for proving. |
+
+Write `.grd/lean-env.json` after each stage — crash-safe, resumable.
+
+### Non-Blocking Dependency Handling
+
+**Graphviz.** Needed for rendering Blueprint dependency graphs as SVG/PNG.
+- Auto-install via user-local package manager (`brew`, `apt` with user-available packages, `pacman` for `yay`/`paru` users, `nix-env`).
+- If system-level install would need root: render an **ASCII dep graph** to the terminal (no graphviz needed) and note that `SVG rendering requires graphviz — run 'sudo apt install graphviz' or set GRD_GRAPHVIZ_PATH`. User gets the dependency information; just not the pretty picture.
+- Don't install unless actually needed (first call to `grd lean blueprint-status --svg` or equivalent).
+
+**TeX / LaTeX.** Needed for PDF rendering of Blueprint (HTML rendering works without).
+- Detect in order: `tectonic` → `pdflatex`/`xelatex`/`lualatex` (TeX Live or MikTeX) → `pandoc` with `--pdf-engine=wkhtmltopdf` or HTML-only output.
+- If none: default to HTML-only Blueprint output. LaTeX PDF is a nice-to-have, not a blocker.
+- If the user explicitly asks for PDF: install `tectonic` (single binary, user-local, ~50 MB). Tectonic downloads required TeX packages on demand — no multi-GB TeX Live install ever.
+- Never install full TeX Live unless user explicitly requests it.
+
+**Visualization generally.** Ad hoc, not shipped by default. Offer it when the user's task benefits (e.g., "show me the dependency graph"), install the minimal tool for that task only, cache the install for later.
+
+### Storage Requirements (revised with tectonic)
+
+| Component | Location | Size | When |
+|---|---|---|---|
+| elan + Lean toolchain | `~/.elan/` | **~400 MB–1 GB** per toolchain | First bootstrap |
+| Pantograph + Python deps | GRD venv | ~100 MB | First bootstrap |
+| graphviz (system) | OS package dir | ~10 MB | First blueprint render, if graph requested |
+| tectonic (system) | `~/.local/bin/` or user bindir | ~50 MB | First PDF request, if needed |
+| tectonic on-demand TeX cache | `~/.cache/Tectonic/` | ~200 MB steady-state | As needed per document |
+| Project `.lake/` build cache | `{project}/blueprint/.lake/` | ~200–500 MB per phase using Lean | First `lake build` |
+| Mathlib4 olean cache (optional) | Project Lake cache | **~8–12 GB** | On opt-in via `lake exe cache get` |
+| LeanDojo premise index (optional) | `~/.cache/leandojo/` | **~3–5 GB** | On opt-in for premise retrieval |
+
+**Minimum viable install (Phase 1, no Mathlib):** ~1.5 GB.
+**Typical install (Phase 2 blueprints, HTML only):** ~1.7 GB.
+**Full install (Mathlib + LeanDojo + tectonic PDFs):** ~18–22 GB.
+
+### Generic Agent Bootstrap Instructions (Skill Body)
+
+When an agent encounters a formal-proof workflow, it:
+
+```
+1. Read .grd/lean-env.json
+   - If present and up-to-date → proceed
+   - If missing or stale → invoke /grd:lean-bootstrap
+
+2. /grd:lean-bootstrap logic:
+   a. Inspect host: which package managers are available? which Lean toolchain is pinned?
+   b. Run stages 1–3 unconditionally (no user confirmation — these are user-local, reversible)
+   c. Run stage 4 (graphviz) only on first call that requires graph rendering.
+      - If user-package manager works: install silently.
+      - Else: proceed in degraded mode (ASCII graphs), note the limitation in output.
+   d. Run stage 5 (tectonic) only if PDF requested and no working LaTeX engine exists.
+   e. Stages 6 and 7 are opt-in. On first trigger, the skill asks:
+      "This will download ~10 GB of Mathlib cache. Proceed? [y/N/never]"
+      Response is recorded in .grd/lean-env.json. "never" means skip forever until manually re-enabled.
+
+3. On any stage failure:
+   - Log the failure to .grd/lean-env.json with diagnostic.
+   - Continue with available functionality — do not abort the overall workflow.
+   - Surface the degradation to the user so they can decide whether to address it.
+
+4. Teardown: /grd:lean-bootstrap --uninstall
+   - Removes ~/.elan/, .lake/ caches, ~/.cache/leandojo/, ~/.cache/Tectonic/
+   - Does not remove system-installed graphviz or tectonic (user might use them elsewhere)
+```
+
+**Cross-agent compatibility.** The bootstrap skill is self-contained — any agent (grd-executor, grd-prover, user's own agents) can invoke it. It doesn't assume the caller is a specific agent type. Bootstrap output is structured JSON so callers can parse it.
+
+---
+
+## Parallel Work: Tracking External Improvements
+
+As implementation proceeds, we'll inevitably find friction points in upstream tooling (Leanblueprint, Pantograph, LeanDojo, Kimina server, etc.). These get captured in bead `ge-cch` as a running list:
+
+- Target repository + issue/PR link if applicable
+- GRD commit that surfaced the friction
+- Severity: bug / feature / developer-experience
+- Blocking for GRD? (If non-blocking, continue; if blocking, escalate to user for PR-approval decision)
+
+**Default behavior:** Work around the friction locally. **Do not submit upstream PRs without explicit approval from Rome.** When we have a batch of improvements worth pitching, surface them for review.
+
+---
+
+## Testing Strategy
+
+Captured in bead `ge-h0j`. The test matrix covers:
+
+1. **Bootstrap from a clean machine** — fresh VM / docker container → `/grd:lean-bootstrap` → Lean works
+2. **Typechecking tiers** — trivial (`1 + 1 = 2`), moderate (Cauchy-Schwarz in ℝⁿ), hard (a real lemma requiring Mathlib import)
+3. **Blueprint rendering** — dep graph renders correctly with colors matching formalization status
+4. **Autoformalization round-trip** — take a real claim from the geometry analysis research, translate to Lean, check faithfulness
+5. **Proof attempt** — grd-prover produces a proof for at least one non-trivial claim without human-written Lean
+6. **Convention bridge completeness** — all 18 convention fields generate valid Lean type class instances
+7. **Verification coverage report** — formal status correctly surfaced in `/grd:progress`
+8. **State persistence** — formal evidence recorded in `state.json` `intermediate_results[].verification_records[]` and survives session restart
+9. **Context cost measurement** — skill-based invocation does not measurably bloat agent context vs. the pre-formal-proofs baseline (the whole reason we rejected MCP)
+10. **Teardown** — `/grd:lean-bootstrap --uninstall` cleanly removes all GRD-added artifacts
+
+Each test row: pass/fail, commit SHA, evidence path. No phase is "done" until its tests are green.
 
 ---
 
