@@ -165,6 +165,7 @@ def _build_command(
     template: Path | None,
     standalone: bool,
     citeproc: bool,
+    external_filters: list[str] | None,
     extra_args: list[str] | None,
 ) -> list[str]:
     cmd: list[str] = [binary_path, "-f", from_format, "-t", to_format]
@@ -172,6 +173,12 @@ def _build_command(
         cmd.append("--standalone")
     if template is not None:
         cmd.extend(["--template", str(template)])
+    # External filters (pandoc-crossref, pandoc-citeproc) must come BEFORE
+    # Lua filters and BEFORE --citeproc so their transformations happen
+    # first in the filter chain -- pandoc-crossref has to resolve @fig:foo
+    # refs before citeproc would otherwise try to treat them as citations.
+    for name in external_filters or []:
+        cmd.extend(["--filter", name])
     for lua in lua_filters or []:
         cmd.extend(["--lua-filter", str(lua)])
     if bibliography is not None:
@@ -193,6 +200,7 @@ def run_pandoc(
     template: Path | None = None,
     standalone: bool = False,
     citeproc: bool = False,
+    external_filters: list[str] | None = None,
     extra_args: list[str] | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
     binary: str = "pandoc",
@@ -218,6 +226,7 @@ def run_pandoc(
         template=template,
         standalone=standalone,
         citeproc=citeproc,
+        external_filters=external_filters,
         extra_args=extra_args,
     )
 
@@ -251,12 +260,38 @@ def run_pandoc(
     return completed.stdout
 
 
+def resolve_external_filters(
+    requested: list[str] | None,
+    status: PandocStatus,
+) -> list[str]:
+    """Return the subset of *requested* external filters that are actually installed.
+
+    When *requested* is ``None`` (the "auto" case), every known filter
+    (``pandoc-crossref``, ``pandoc-citeproc``) is enabled if it is in
+    ``status.installed_filters``. This makes ``markdown_to_latex_fragment``
+    light up extra capabilities automatically when they happen to be
+    present on the compile host, without forcing callers to probe.
+
+    Passing an empty list explicitly disables all external filters.
+    """
+    if requested is None:
+        return [name for name in _KNOWN_EXTERNAL_FILTERS if name in status.installed_filters]
+    resolved: list[str] = []
+    for name in requested:
+        if name in status.installed_filters:
+            resolved.append(name)
+        else:
+            logger.debug("pandoc filter %s requested but not installed; skipping", name)
+    return resolved
+
+
 def markdown_to_latex_fragment(
     markdown: str,
     *,
     lua_filters: list[Path] | None = None,
     bibliography: Path | None = None,
     citeproc: bool = False,
+    external_filters: list[str] | None = None,
     extra_args: list[str] | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
     binary: str = "pandoc",
@@ -268,7 +303,15 @@ def markdown_to_latex_fragment(
     this function returns LaTeX that the template registry can substitute into
     a journal template. ``standalone`` is intentionally off so the output has
     no ``\\documentclass`` / ``\\begin{document}`` scaffolding.
+
+    *external_filters* defaults to ``None`` meaning "auto": every known
+    external filter (``pandoc-crossref``, ``pandoc-citeproc``) that is
+    installed on the host is added to the chain. Pass an explicit list to
+    pin the selection, or an empty list to disable them entirely.
     """
+    if status is None:
+        status = detect_pandoc(binary=binary)
+    resolved_externals = resolve_external_filters(external_filters, status)
     return run_pandoc(
         markdown,
         from_format="markdown",
@@ -278,6 +321,7 @@ def markdown_to_latex_fragment(
         template=None,
         standalone=False,
         citeproc=citeproc,
+        external_filters=resolved_externals,
         extra_args=extra_args,
         timeout=timeout,
         binary=binary,
@@ -295,5 +339,6 @@ __all__ = [
     "PandocStatus",
     "detect_pandoc",
     "markdown_to_latex_fragment",
+    "resolve_external_filters",
     "run_pandoc",
 ]

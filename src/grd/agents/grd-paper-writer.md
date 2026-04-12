@@ -127,6 +127,16 @@ build pipeline detects which you used and acts accordingly:
   sections — those conflict with the template's bibliography commands and
   force the build to strip one of them. The `@key` + template path is the
   supported way to cite work.
+  When `pandoc-crossref` is installed on the compile host (check
+  `grd health`), you may also use its cross-reference syntax for numbered
+  figures, equations, and tables: label with `{#fig:foo}`, `{#eq:bar}`,
+  `{#tbl:baz}`, and reference with `@fig:foo`, `@eq:bar`, `@tbl:baz`.
+  pandoc-crossref runs before citeproc in the filter chain, so `@fig:foo`
+  is never confused with a citation `@fig2019`. When pandoc-crossref is
+  absent, the bundled GRD Lua filters still handle `{#eq:label}` and
+  `[[eq:label]]` — the latter is the portable syntax and is recommended
+  for cross-references that must survive on hosts without
+  pandoc-crossref.
   The build runs pandoc with the bundled GRD Lua filters
   (`grd.mcp.paper.filters.all_filter_paths()`) to convert your content to a
   LaTeX fragment before template substitution. This eliminates the most
