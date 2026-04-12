@@ -291,7 +291,7 @@ Append-only log of work on this plan. Newest entries on top. Each entry: what wa
 - `src/grd/mcp/paper/compiler.py` (passes bib keys through to `render_paper`)
 - `src/grd/agents/grd-paper-writer.md` (documents `@key` citation syntax)
 - `tests/test_paper_citations.py` (21 tests)
-- Commit SHA: *pending*
+- Commit SHA: `3bb0872`
 
 ### 2026-04-12 — ge-4gr + ge-z7q: Phase 2 pipeline wired
 
