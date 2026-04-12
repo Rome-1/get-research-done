@@ -61,6 +61,7 @@ def maybe_convert_to_latex(
     lua_filters: list[Path] | None = None,
     bibliography: Path | None = None,
     citeproc: bool = False,
+    external_filters: list[str] | None = None,
     pandoc_status: PandocStatus | None = None,
 ) -> str:
     """Convert *content* to a LaTeX fragment if it looks like markdown.
@@ -73,6 +74,10 @@ def maybe_convert_to_latex(
     pandoc conversion raises      returned unchanged (logged)
     otherwise                     pandoc output
     ============================  ==============================
+
+    External filters (``pandoc-crossref``, ``pandoc-citeproc``) are
+    auto-detected via ``status.installed_filters`` and prepended to the
+    filter chain. Pass ``external_filters=[]`` to opt out.
 
     The graceful degradation path lets this function replace direct
     ``content`` use everywhere without risking regressions when pandoc
@@ -97,6 +102,7 @@ def maybe_convert_to_latex(
             lua_filters=lua_filters,
             bibliography=bibliography,
             citeproc=citeproc,
+            external_filters=external_filters,
             status=status,
         )
     except (PandocNotAvailable, PandocExecutionError) as exc:

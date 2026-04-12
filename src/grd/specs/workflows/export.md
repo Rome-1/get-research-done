@@ -287,6 +287,12 @@ environments) and lets the journal template system produce the final scaffold.
    )
    ```
 
+   If `pandoc-crossref` is installed on the host (visible in
+   `status.installed_filters`), `markdown_to_latex_fragment` prepends it
+   to the filter chain automatically so `{#fig:foo}` / `@fig:foo` style
+   refs produce numbered LaTeX cross-references. Pass
+   `external_filters=[]` to opt out.
+
 4. Write the fragment into a journal template. When a target journal is
    specified, use `grd.mcp.paper.template_registry.render_paper()` with a
    `PaperConfig` whose `Section.content` holds the LaTeX fragment. Otherwise

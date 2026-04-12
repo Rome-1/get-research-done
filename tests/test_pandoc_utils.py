@@ -18,6 +18,7 @@ from grd.utils.pandoc import (
     _parse_version,
     detect_pandoc,
     markdown_to_latex_fragment,
+    resolve_external_filters,
     run_pandoc,
 )
 
@@ -228,3 +229,100 @@ def test_markdown_to_latex_fragment_preserves_math() -> None:
 def test_markdown_to_latex_fragment_preserves_display_math() -> None:
     out = markdown_to_latex_fragment("$$\\int_0^1 x\\,dx = \\tfrac{1}{2}$$\n")
     assert "\\int_0^1" in out
+
+
+# ─── resolve_external_filters + external filter plumbing ────────────────────
+
+
+def _status_with_filters(filters: tuple[str, ...]) -> PandocStatus:
+    return PandocStatus(
+        available=True,
+        binary_path="/usr/bin/pandoc",
+        version=(3, 1, 3),
+        version_string="pandoc 3.1.3",
+        meets_minimum=True,
+        installed_filters=filters,
+    )
+
+
+def test_resolve_external_filters_auto_enables_installed() -> None:
+    status = _status_with_filters(("pandoc-crossref",))
+    assert resolve_external_filters(None, status) == ["pandoc-crossref"]
+
+
+def test_resolve_external_filters_auto_skips_uninstalled() -> None:
+    status = _status_with_filters(())
+    assert resolve_external_filters(None, status) == []
+
+
+def test_resolve_external_filters_explicit_list_filters_to_installed() -> None:
+    status = _status_with_filters(("pandoc-crossref",))
+    # pandoc-citeproc requested but not installed -> dropped.
+    resolved = resolve_external_filters(["pandoc-crossref", "pandoc-citeproc"], status)
+    assert resolved == ["pandoc-crossref"]
+
+
+def test_resolve_external_filters_empty_list_disables_all() -> None:
+    status = _status_with_filters(("pandoc-crossref", "pandoc-citeproc"))
+    assert resolve_external_filters([], status) == []
+
+
+def test_run_pandoc_injects_external_filters_before_lua(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    status = _status_with_filters(("pandoc-crossref",))
+    recorded: dict[str, object] = {}
+
+    def fake_run(cmd, *, input, capture_output, text, timeout, check):
+        recorded["cmd"] = cmd
+        return MagicMock(returncode=0, stdout="LATEX", stderr="")
+
+    monkeypatch.setattr(pandoc_mod.subprocess, "run", fake_run)
+    lua = tmp_path / "noop.lua"
+    lua.write_text("-- noop")
+    run_pandoc(
+        "# hi",
+        lua_filters=[lua],
+        external_filters=["pandoc-crossref"],
+        citeproc=True,
+        status=status,
+    )
+    cmd = recorded["cmd"]
+    crossref_idx = cmd.index("pandoc-crossref")
+    lua_idx = cmd.index("--lua-filter")
+    citeproc_idx = cmd.index("--citeproc")
+    # External filter must come before Lua filters and before citeproc.
+    assert crossref_idx < lua_idx
+    assert crossref_idx < citeproc_idx
+
+
+def test_markdown_to_latex_fragment_auto_enables_crossref_when_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    status = _status_with_filters(("pandoc-crossref",))
+    recorded: dict[str, object] = {}
+
+    def fake_run(cmd, *, input, capture_output, text, timeout, check):
+        recorded["cmd"] = cmd
+        return MagicMock(returncode=0, stdout="LATEX", stderr="")
+
+    monkeypatch.setattr(pandoc_mod.subprocess, "run", fake_run)
+    markdown_to_latex_fragment("hi", status=status)
+    cmd = recorded["cmd"]
+    assert "pandoc-crossref" in cmd
+
+
+def test_markdown_to_latex_fragment_does_not_add_missing_crossref(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    status = _status_with_filters(())  # no external filters installed
+    recorded: dict[str, object] = {}
+
+    def fake_run(cmd, *, input, capture_output, text, timeout, check):
+        recorded["cmd"] = cmd
+        return MagicMock(returncode=0, stdout="LATEX", stderr="")
+
+    monkeypatch.setattr(pandoc_mod.subprocess, "run", fake_run)
+    markdown_to_latex_fragment("hi", status=status)
+    cmd = recorded["cmd"]
+    assert "pandoc-crossref" not in cmd

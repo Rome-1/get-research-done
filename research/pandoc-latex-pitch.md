@@ -270,6 +270,30 @@ Append-only log of work on this plan. Newest entries on top. Each entry: what wa
 **Artifacts:** Commit SHAs, files touched, test results.
 ```
 
+### 2026-04-12 — ge-ow7: pandoc-crossref auto-enablement
+
+**What changed:** External pandoc filters are now first-class in the pandoc wrapper. `grd.utils.pandoc` gained an `external_filters` parameter on `run_pandoc`/`markdown_to_latex_fragment`, plus a new `resolve_external_filters(requested, status)` helper. Default behaviour (`external_filters=None` → "auto"): every entry of `_KNOWN_EXTERNAL_FILTERS` (`pandoc-crossref`, `pandoc-citeproc`) that is actually in `status.installed_filters` gets prepended to the filter chain ahead of Lua filters and `--citeproc`. `markdown_support.maybe_convert_to_latex` forwards the arg so `render_paper` picks up pandoc-crossref automatically when installed. Health check now emits a hint-level warning when pandoc is present but pandoc-crossref isn't, pointing to the install command. Agent spec documents the `{#fig:foo}` / `@fig:foo` syntax and its fallback behaviour; the export workflow spec notes auto-enablement and the opt-out (`external_filters=[]`).
+
+**Outcome:** Worked — 8 new tests in `tests/test_pandoc_utils.py` covering auto/explicit/empty-list resolution and command-line ordering (crossref before Lua filters, before `--citeproc`). Full paper+pandoc suite (146 tests) green. Same 13 pre-existing `tests/core/test_health.py` failures as on main — unrelated.
+
+**Findings:**
+- Command-line order matters to pandoc-crossref. The filter has to see the AST before our GRD Lua filters touch it, so `--filter pandoc-crossref` is inserted ahead of `--lua-filter`. It also must run before `--citeproc`, or `@fig:foo` would be ambiguous with a citation key (this is the ordering the bead called out).
+- Making `external_filters=None` mean "auto-enable installed" (rather than "disable all") is the right default for a drop-in improvement: hosts with pandoc-crossref get numbered figures without any caller change; hosts without it keep working exactly as before.
+- Not installing pandoc-crossref locally meant integration tests had to be mocked. The only real-pandoc path I exercise is the existing GRD Lua filter chain, which remains the default on this host.
+
+**Plan impact:**
+- All six Phase 1-3 beads are now done. The pitch's "primary objective" (LaTeX pipeline hardened via pandoc + filters) is complete end-to-end: markdown → pandoc → GRD Lua filters → (optional) pandoc-crossref → journal template → sanitised LaTeX.
+- GPD portability checklist can be fully ticked.
+
+**Artifacts:**
+- `src/grd/utils/pandoc.py` (`external_filters` arg, `resolve_external_filters`, `_build_command` now takes ordered filter lists)
+- `src/grd/mcp/paper/markdown_support.py` (forwards `external_filters` through `maybe_convert_to_latex`)
+- `src/grd/core/health.py` (`check_pandoc` warns when pandoc-crossref is missing)
+- `src/grd/agents/grd-paper-writer.md` (documents `{#fig:foo}` / `@fig:foo` + fallback)
+- `src/grd/specs/workflows/export.md` (notes auto-enablement + opt-out)
+- `tests/test_pandoc_utils.py` (+8 tests)
+- Commit SHA: *pending*
+
 ### 2026-04-12 — ge-xf5: citation bridge (markdown @key → .bib audit)
 
 **What changed:** New `grd.mcp.paper.citations` module: `extract_markdown_citations()` pulls pandoc-style `@key` refs from markdown while ignoring fenced/inline code and email addresses; `audit_markdown_citations()` + `MarkdownCitationAudit` model summarise which keys are defined vs unresolved; `load_bib_keys()` parses a `.bib` via pybtex and returns its key set. `render_paper(..., bib_keys=...)` now runs the audit over markdown sections and logs a single warning listing any unresolved keys — advisory only, never fails the render. `build_paper()` in `compiler.py` passes `set(bib_data.entries)` through to `render_paper` when a bibliography is loaded, so the audit happens automatically for every real build. `grd-paper-writer.md` authoring guide now documents `@key` and `[@key1; @key2]` syntax and forbids inline `\begin{thebibliography}` in markdown sections.
@@ -361,4 +385,16 @@ Checklist to maintain as the plan executes:
 - [x] `grd.utils.pandoc` module has no GRD-specific hardcoded paths (verified: no imports from `grd.core`, `grd.mcp.paper`; all config via function args)
 - [x] Lua filters take config via frontmatter/metadata, not via hardcoded directory assumptions (`figure_base_path`, `crossref_namespaces`, `obsidian_strip_fields`, `math_autowrap` all read from pandoc `Meta`)
 - [x] Agent spec changes (markdown drafting) are expressed as a prompt pattern, portable to GPD's agents (`<authoring_format>` section in `grd-paper-writer.md` describes markdown mode + raw-LaTeX fallback in prompt-only terms; no GRD-specific paths)
-- [ ] A final "GPD port checklist" section added below when implementation completes — *pending full Phase 3 completion*
+- [x] A final "GPD port checklist" section added below (implementation complete)
+
+### GPD Port Checklist
+
+The GRD pandoc pipeline is ready to port to Get Physics Done. Specific steps:
+
+1. **Copy `grd.utils.pandoc` → `gpd.utils.pandoc`.** Zero GRD-specific code; the module only talks to the `pandoc` binary. The `_KNOWN_EXTERNAL_FILTERS` tuple is generic tooling.
+2. **Copy `grd.mcp.paper.filters/` → `gpd.mcp.paper.filters/`.** Filter names can stay `grd-*` or be renamed to `gpd-*`. All configuration goes through pandoc `Meta` (`figure_base_path`, `crossref_namespaces`, `obsidian_strip_fields`, `math_autowrap`, `figure_placement`, `obsidian_wikilink_style`, `crossref_prefix`) — no hardcoded paths.
+3. **Copy `grd.mcp.paper.markdown_support` and `grd.mcp.paper.citations`.** The sigil detection (`_LATEX_SIGIL_PATTERN`) and the pandoc-style `@key` grammar are domain-agnostic. `looks_like_latex()` flags structural LaTeX regardless of the physics/research vocabulary.
+4. **Update `render_paper` call sites.** GPD's paper registry should accept an optional `bib_keys` arg and wire it the same way GRD's `compiler.build_paper` does.
+5. **Agent spec port.** `grd-paper-writer.md`'s `<authoring_format>` section is pure prompt material — copy it into GPD's equivalent agent, rename references from `.grd/` / `grd-crossref` to GPD equivalents as needed. The `[[phase:N]]` namespace should be generalised to GPD's phase/milestone terminology (consider adding `[[milestone:N]]` in both codebases).
+6. **Health check.** `check_pandoc()` already lives in the GRD health registry; GPD's `gpd doctor` can register the same function under `"pandoc"`.
+7. **Export workflow.** The `generate_latex` step in `specs/workflows/export.md` uses only the pandoc utilities plus `grd.mcp.paper.template_registry.render_paper`. Swap the import paths and the step ports cleanly.

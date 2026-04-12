@@ -171,6 +171,14 @@ def check_pandoc() -> HealthCheck:
             f"pandoc {status.version_string or 'unknown'} < {min_major}.{min_minor}; "
             "Lua filters may be unreliable"
         )
+    else:
+        if "pandoc-crossref" not in status.installed_filters:
+            warnings.append(
+                "pandoc-crossref not on PATH; figure/equation/table cross-references "
+                "fall back to the bundled Lua filters (less feature-complete than "
+                "pandoc-crossref's numbering). "
+                "Install: apt-get install pandoc-crossref | brew install pandoc-crossref"
+            )
     return HealthCheck(status=CheckStatus.WARN if warnings else CheckStatus.OK, label="Pandoc", details=details, warnings=warnings)
 
 
