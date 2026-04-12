@@ -293,7 +293,7 @@ Append-only log of work on this plan. Newest entries on top. Each entry: what wa
 - `src/grd/mcp/paper/template_registry.py` (conversion step added)
 - `src/grd/agents/grd-paper-writer.md` (`<authoring_format>` section)
 - `tests/test_paper_markdown_support.py` (22 tests)
-- Commit SHA: *pending*
+- Commit SHA: `2a0bc4b`
 
 ### 2026-04-12 — ge-be3 + ge-5e6: Phase 1 foundation landed
 
