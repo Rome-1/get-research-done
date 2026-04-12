@@ -28,7 +28,7 @@ def _stub_lean(bin_dir: Path, *, exit_code: int = 0) -> Path:
 def test_help_lists_lean_subcommands() -> None:
     result = runner.invoke(app, ["lean", "--help"])
     assert result.exit_code == 0
-    for cmd in ("check", "typecheck-file", "env", "serve-repl", "stop-repl", "ping", "bootstrap"):
+    for cmd in ("check", "typecheck-file", "env", "serve-repl", "stop-repl", "ping", "bootstrap", "prove"):
         assert cmd in result.stdout
 
 

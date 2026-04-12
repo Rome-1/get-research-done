@@ -125,6 +125,73 @@ def lean_typecheck_file(
         raise typer.Exit(code=1)
 
 
+@lean_app.command("prove")
+def lean_prove(
+    statement: str = typer.Argument(
+        ...,
+        help="Lean 4 statement to prove. Accepts a bare proposition (e.g. '1 + 1 = 2'), "
+        "a signature with a keyword header ('theorem foo : P → P'), or a full definition "
+        "whose ':=' tail will be rewritten with each candidate tactic.",
+    ),
+    tactic: list[str] = typer.Option(
+        [],
+        "--tactic",
+        help="Override the tactic ladder. Repeatable; order is preserved.",
+    ),
+    import_module: list[str] = typer.Option(
+        [],
+        "--import",
+        "-i",
+        help="Module to prepend as 'import <module>'. Repeatable.",
+    ),
+    max_attempts: int | None = typer.Option(
+        None,
+        "--max-attempts",
+        help="Cap the number of tactics tried. Default: run the full ladder.",
+        min=1,
+    ),
+    timeout_s: float = typer.Option(
+        30.0,
+        "--timeout",
+        help="Per-attempt wall-clock timeout in seconds.",
+        min=0.1,
+        max=600.0,
+    ),
+    no_daemon: bool = typer.Option(
+        False,
+        "--no-daemon",
+        help="Skip the socket daemon; run each attempt via a one-shot subprocess.",
+    ),
+    no_spawn: bool = typer.Option(
+        False,
+        "--no-spawn",
+        help="Do not auto-spawn the daemon if the socket is absent.",
+    ),
+) -> None:
+    """Tactic-search a proof for the given Lean 4 statement.
+
+    Iterates a fixed ladder of common tactics (``rfl``, ``decide``,
+    ``norm_num``, ``ring``, ``linarith``, ``omega``, ``simp``, ``aesop``)
+    and returns the first one that type-checks. Exit 0 on success, 1 if no
+    tactic closed the goal. JSON output is suitable for agent consumption.
+    """
+    from grd.core.lean.prove import prove_statement
+
+    result = prove_statement(
+        statement,
+        project_root=_get_cwd(),
+        tactics=list(tactic) if tactic else None,
+        imports=list(import_module),
+        max_attempts=max_attempts,
+        timeout_s=timeout_s,
+        use_daemon=not no_daemon,
+        auto_spawn=not no_spawn,
+    )
+    _output(result)
+    if not result.ok:
+        raise typer.Exit(code=1)
+
+
 @lean_app.command("env")
 def lean_env() -> None:
     """Show detected Lean toolchain, env file status, and daemon state."""
