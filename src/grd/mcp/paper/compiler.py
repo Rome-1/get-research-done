@@ -547,7 +547,8 @@ async def build_paper(
     bib_stem = config.bib_file.removesuffix(".bib")
     if bib_stem != config.bib_file:
         config = config.model_copy(update={"bib_file": bib_stem})
-    tex_content = render_paper(config)
+    bib_keys = set(bib_data.entries) if bib_data is not None else None
+    tex_content = render_paper(config, bib_keys=bib_keys)
     tex_path = output_dir / "main.tex"
     await asyncio.to_thread(tex_path.write_text, tex_content, encoding="utf-8")
 

@@ -116,6 +116,17 @@ build pipeline detects which you used and acts accordingly:
   `[[tab:label]]`, `[[sec:label]]` for cross-references (resolved by the
   `grd-crossref` filter). Mark labelled equations with `{#eq:label}` after a
   display-math block. Use `![caption](path){#fig:label width=...}` for figures.
+  Cite bibliography entries with pandoc's `@key` syntax (e.g. `as shown in
+  @smith2020` or multiple `[@smith2020; @jones2019]`). Pandoc converts
+  these to `\cite{key}` commands; the journal template's
+  `\bibliographystyle{...}` + `\bibliography{...}` directives resolve them
+  at compile time. Before conversion, the build runs an advisory audit:
+  any `@key` not defined in the loaded `.bib` file is logged as a warning,
+  so typos surface before pdflatex turns them into ``?`` placeholders.
+  Do **not** emit inline `\begin{thebibliography}` blocks in markdown
+  sections — those conflict with the template's bibliography commands and
+  force the build to strip one of them. The `@key` + template path is the
+  supported way to cite work.
   The build runs pandoc with the bundled GRD Lua filters
   (`grd.mcp.paper.filters.all_filter_paths()`) to convert your content to a
   LaTeX fragment before template substitution. This eliminates the most

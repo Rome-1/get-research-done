@@ -270,6 +270,29 @@ Append-only log of work on this plan. Newest entries on top. Each entry: what wa
 **Artifacts:** Commit SHAs, files touched, test results.
 ```
 
+### 2026-04-12 — ge-xf5: citation bridge (markdown @key → .bib audit)
+
+**What changed:** New `grd.mcp.paper.citations` module: `extract_markdown_citations()` pulls pandoc-style `@key` refs from markdown while ignoring fenced/inline code and email addresses; `audit_markdown_citations()` + `MarkdownCitationAudit` model summarise which keys are defined vs unresolved; `load_bib_keys()` parses a `.bib` via pybtex and returns its key set. `render_paper(..., bib_keys=...)` now runs the audit over markdown sections and logs a single warning listing any unresolved keys — advisory only, never fails the render. `build_paper()` in `compiler.py` passes `set(bib_data.entries)` through to `render_paper` when a bibliography is loaded, so the audit happens automatically for every real build. `grd-paper-writer.md` authoring guide now documents `@key` and `[@key1; @key2]` syntax and forbids inline `\begin{thebibliography}` in markdown sections.
+
+**Outcome:** Worked — 21 new tests (`tests/test_paper_citations.py`) pass; full paper+pandoc suite (139 tests) green; ruff clean.
+
+**Findings:**
+- Pandoc's citation-key grammar is permissive: keys may contain `_`, `:`, `-`, `+`, `/`, `#`, `$`, `%`, `&`, `?`, `.`, and internal digits. The naive `@[A-Za-z][\w.-]*` regex greedily captures trailing sentence punctuation (`@smith2020.` matches as key `smith2020.`). Fix: require the key to end on `[A-Za-z0-9]`, allow `.` only mid-key, and strip fenced/inline code regions before matching so `@name` inside backticks or ``` blocks isn't flagged.
+- Raw-LaTeX sections use `\cite{...}`, not `@key`, so the audit correctly skips anything that passes `looks_like_latex()`. Otherwise a legacy LaTeX section with `\cite{foo}` would (absurdly) be blamed for undefined markdown citations.
+- The "replace fragile inline thebibliography workaround" framing in the original pitch resolves naturally: agents write `@key` in markdown → pandoc emits `\cite{key}` → template's `\bibliography{...}` resolves at compile time. `fix_bibliography_conflict()` stays in place as a defensive patcher for legacy raw-LaTeX payloads, but new markdown-authored papers never trigger it.
+
+**Plan impact:**
+- ge-ow7 (pandoc-crossref) is the last Phase 3 bead. The `@key` audit is orthogonal to pandoc-crossref — that bead handles `{#eq:label}` / `{#fig:label}` resolution to numbered `\ref{...}` via the external pandoc-crossref filter. `PandocStatus.installed_filters` already exposes whether pandoc-crossref is present, so wiring it into the pipeline is straightforward.
+- No downstream reordering.
+
+**Artifacts:**
+- `src/grd/mcp/paper/citations.py` (new)
+- `src/grd/mcp/paper/template_registry.py` (`render_paper(config, *, bib_keys=None)` signature + audit helper)
+- `src/grd/mcp/paper/compiler.py` (passes bib keys through to `render_paper`)
+- `src/grd/agents/grd-paper-writer.md` (documents `@key` citation syntax)
+- `tests/test_paper_citations.py` (21 tests)
+- Commit SHA: *pending*
+
 ### 2026-04-12 — ge-4gr + ge-z7q: Phase 2 pipeline wired
 
 **What changed:** Two pieces of plumbing:
