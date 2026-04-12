@@ -288,7 +288,7 @@ Append-only log of work on this plan. Newest entries on top. Each entry: what wa
 - `src/grd/mcp/paper/filters/{grd-crossref,grd-figure,grd-math,grd-obsidian-compat}.lua` + `__init__.py` (filter loader)
 - `src/grd/core/health.py` (`check_pandoc`, registered in `_ALL_CHECKS`)
 - `tests/test_pandoc_utils.py` (20 tests) + `tests/test_pandoc_filters.py` (20 tests)
-- Commit SHA: (set at commit time)
+- Commit SHA: `f813997`
 
 ### 2026-04-11 — ge-6we: Pitch drafted
 
