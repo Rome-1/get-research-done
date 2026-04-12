@@ -47,6 +47,7 @@ from grd.cli.commands import (  # noqa: E402
 from grd.cli.convention import convention_app  # noqa: E402
 from grd.cli.domain import domain_app  # noqa: E402
 from grd.cli.frontmatter import frontmatter_app  # noqa: E402
+from grd.cli.lean import lean_app  # noqa: E402
 from grd.cli.pattern import pattern_app  # noqa: E402
 from grd.cli.phase import phase_app  # noqa: E402
 from grd.cli.result import result_app  # noqa: E402
@@ -83,6 +84,7 @@ app.add_typer(config_app, name="config")
 app.add_typer(json_app, name="json")
 app.add_typer(trace_app, name="trace")
 app.add_typer(observe_app, name="observe")
+app.add_typer(lean_app, name="lean")
 
 # ─── Import side-effect submodules that register directly on `app` ──────────
 # paper.py and install.py use @app.command() decorators, so importing them
