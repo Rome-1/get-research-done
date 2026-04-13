@@ -7,7 +7,7 @@ The final section of this README keeps the full checked-in repository interdepen
 ## Repository Interdependency Graph
 
 <!-- repo-graph-generated-on:start -->
-Generated on `2026-03-26` from the current worktree.
+Generated on `2026-04-13` from the current worktree.
 <!-- repo-graph-generated-on:end -->
 
 ## Status
@@ -26,17 +26,17 @@ This graph therefore includes:
 
 <!-- repo-graph-scope:start -->
 
-- Live repo files analyzed in the current tree: `681`
-- Python files under `src/` and `tests/`: `241`
-- `src/grd/commands/*.md`: `61`
+- Live repo files analyzed in the current tree: `791`
+- Python files under `src/` and `tests/`: `282`
+- `src/grd/commands/*.md`: `62`
 - `src/grd/agents/*.md`: `23`
 - `src/grd/specs/workflows/*.md`: `62`
 - `src/grd/specs/templates/**/*.md`: `71`
-- `src/grd/specs/references/**/*.md`: `160`
+- `src/grd/specs/references/**/*.md`: `47`
 - `src/grd/adapters/*.py`: `9`
 - `src/grd/hooks/*.py`: `7`
 - `src/grd/mcp/servers/*.py`: `8`
-- `tests/**` files: `170`
+- `tests/**` files: `185`
 - `infra/grd-*.json`: `8`
 
 Excluded as noise from node counting, but still modeled where contractually relevant:
@@ -49,7 +49,7 @@ Excluded as noise from node counting, but still modeled where contractually rele
 - `.pytest_cache/**`
 - `.mypy_cache/**`
 - `.ruff_cache/**`
-- `.grd/**`
+- `GRD/**`
 - `.claude/**`
 - `.gemini/**`
 - `.codex/**`

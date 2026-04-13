@@ -18,11 +18,14 @@ Wire format (newline-terminated JSON objects)::
     → {"op": "shutdown"}
     ← {"ok": true, "elapsed_ms": 0, "backend": "daemon"}   (then exits)
 
-Current backend: every ``check`` / ``typecheck_file`` request dispatches to
-the one-shot subprocess runner in ``backend.py``. This means the daemon
-today provides the socket protocol, lifecycle, and idle shutdown — not
-actual REPL reuse. Pantograph-backed REPL reuse lands in a follow-up bead;
-clients and the wire protocol will not change.
+Backend selection: ``check`` requests prefer the Pantograph REPL backend
+(one persistent ``pantograph.Server`` per daemon, ~50 ms per reused call)
+and fall back to the one-shot subprocess runner in ``backend.py`` when
+``pantograph`` is not installed, fails to start, or raises mid-elaboration.
+``typecheck_file`` always uses the one-shot path — it targets Lake-backed
+project files, which need the full toolchain environment, not a bare REPL.
+Wire protocol and ``LeanCheckResult`` schema are unchanged regardless of
+which backend ran.
 """
 
 from __future__ import annotations
@@ -42,6 +45,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from grd.core.lean import backend as lean_backend
 from grd.core.lean.env import pid_file_path, socket_path
+from grd.core.lean.pantograph_backend import PantographBackend
 from grd.core.lean.protocol import LeanCheckRequest, LeanCheckResult
 
 __all__ = [
@@ -65,8 +69,19 @@ _MAX_REQUEST_BYTES = 4 * 1024 * 1024
 logger = logging.getLogger("grd.lean.daemon")
 
 
-def handle_request(raw: str) -> LeanCheckResult:
-    """Parse a wire-format JSON line and dispatch to the appropriate handler."""
+def handle_request(
+    raw: str,
+    *,
+    pantograph_backend: PantographBackend | None = None,
+) -> LeanCheckResult:
+    """Parse a wire-format JSON line and dispatch to the appropriate handler.
+
+    When ``pantograph_backend`` is supplied and reports itself available,
+    ``check`` requests are routed through its reused ``pantograph.Server``.
+    A ``None`` return from the backend means "fall back" (pantograph not
+    installed, server failed, per-call exception) — we then run the one-shot
+    subprocess path so the caller still gets a valid result.
+    """
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as exc:
@@ -100,11 +115,18 @@ def handle_request(raw: str) -> LeanCheckResult:
                 error_detail="'check' requires 'code'.",
                 backend="daemon",
             )
-        result = lean_backend.run_check(
-            code=req.code,
-            imports=list(req.imports),
-            timeout_s=req.timeout_s,
-        )
+        result: LeanCheckResult | None = None
+        if pantograph_backend is not None and pantograph_backend.available:
+            result = pantograph_backend.run_check(
+                code=req.code,
+                imports=list(req.imports),
+            )
+        if result is None:
+            result = lean_backend.run_check(
+                code=req.code,
+                imports=list(req.imports),
+                timeout_s=req.timeout_s,
+            )
     elif req.op == "typecheck_file":
         if req.path is None:
             return LeanCheckResult(
@@ -125,8 +147,12 @@ def handle_request(raw: str) -> LeanCheckResult:
             backend="daemon",
         )
 
-    # Preserve the result while re-tagging the backend as 'daemon' so callers
-    # can tell the request went through the socket rather than a direct call.
+    # Preserve the result (including the specific backend tag from pantograph
+    # vs. subprocess) while marking transport as 'daemon' only when the
+    # subprocess path ran — pantograph results already carry their own tag,
+    # which is the signal tests and humans use to confirm REPL reuse.
+    if result.backend == "pantograph":
+        return result
     return result.model_copy(update={"backend": "daemon"})
 
 
@@ -196,6 +222,7 @@ class LeanDaemon:
         project_root: Path,
         idle_timeout_s: float = DEFAULT_IDLE_TIMEOUT_S,
         read_timeout_s: float = DEFAULT_READ_TIMEOUT_S,
+        pantograph_backend: PantographBackend | None = None,
     ) -> None:
         self.project_root = Path(project_root)
         self.idle_timeout_s = idle_timeout_s
@@ -204,6 +231,10 @@ class LeanDaemon:
         self.pid_path = pid_file_path(self.project_root)
         self._stop = threading.Event()
         self._last_activity = time.monotonic()
+        # One persistent Pantograph Server per daemon — reused across every
+        # check request. Left unavailable (no-op) when pantograph is missing;
+        # the handle_request fallback path covers that case transparently.
+        self._pantograph = pantograph_backend if pantograph_backend is not None else PantographBackend()
 
     def stop(self) -> None:
         self._stop.set()
@@ -230,7 +261,7 @@ class LeanDaemon:
             raw = _read_json_line(conn, self.read_timeout_s)
             if raw is None:
                 return False
-            result = handle_request(raw)
+            result = handle_request(raw, pantograph_backend=self._pantograph)
             # Determine shutdown *before* sending the response so the client
             # always gets an ack for the shutdown request.
             shutdown_requested = False
@@ -287,6 +318,10 @@ class LeanDaemon:
                 srv.close()
             except OSError:
                 pass
+            # Close the persistent Lean REPL (if any) before releasing the
+            # socket/pid — otherwise a stuck Server child could hold resources
+            # past "daemon gone" from the caller's perspective.
+            self._pantograph.close()
             self._remove_socket()
             self._remove_pid()
 
