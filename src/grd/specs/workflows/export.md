@@ -212,9 +212,120 @@ Structure:
 <step name="generate_latex">
 **If format is `latex` or `all`:**
 
-Write `exports/results.tex`:
+**Primary path (pandoc available).** Assemble the export as a single markdown
+document and convert it with pandoc. This avoids the syntax errors that
+arise when an agent writes raw LaTeX (unescaped `_`, brace mismatches, bad
+environments) and lets the journal template system produce the final scaffold.
 
-Structure:
+1. Probe pandoc availability:
+
+   ```python
+   from grd.utils.pandoc import detect_pandoc
+   status = detect_pandoc()
+   use_pandoc = status.available and status.meets_minimum
+   ```
+
+2. Assemble an intermediate markdown document at `exports/results.md` with the
+   structure below. Use markdown for prose; keep math in `$...$` / `$$...$$`
+   blocks; cross-reference phases with `[[phase:N]]` (resolved by the bundled
+   `grd-crossref` filter).
+
+   ```markdown
+   ---
+   title: "{project_title}"
+   author: "[Author Name]"
+   date: \today
+   crossref_namespaces: [phase, eq, fig, tab, sec]
+   ---
+
+   # Introduction
+
+   {Motivation and context from PROJECT.md}
+
+   # Methods
+
+   {Overview assembled from phase descriptions and approaches}
+
+   {For each completed phase:}
+   ## Phase {N}: {Name}
+
+   {One-liner description}
+
+   ### Key Results
+
+   - {key result 1}
+   - {key result 2}
+
+   {Equations as $$...$$ blocks, with optional `{#eq:label}` for numbering}
+
+   # Results
+
+   {Aggregate key findings, referencing phases via [[phase:N]]}
+
+   # Discussion
+
+   {Interpretation placeholder}
+
+   # Conclusion
+
+   {Summary placeholder}
+
+   # Appendix: Derivation Details
+
+   {For each phase with derivations, one subsection per phase}
+   ```
+
+3. Convert markdown to a LaTeX fragment with the bundled filters:
+
+   ```python
+   from grd.utils.pandoc import markdown_to_latex_fragment
+   from grd.mcp.paper.filters import all_filter_paths
+
+   fragment = markdown_to_latex_fragment(
+       markdown_text,
+       lua_filters=all_filter_paths(),
+   )
+   ```
+
+   If `pandoc-crossref` is installed on the host (visible in
+   `status.installed_filters`), `markdown_to_latex_fragment` prepends it
+   to the filter chain automatically so `{#fig:foo}` / `@fig:foo` style
+   refs produce numbered LaTeX cross-references. Pass
+   `external_filters=[]` to opt out.
+
+4. Write the fragment into a journal template. When a target journal is
+   specified, use `grd.mcp.paper.template_registry.render_paper()` with a
+   `PaperConfig` whose `Section.content` holds the LaTeX fragment. Otherwise
+   emit a standalone `article`-class document wrapping the fragment:
+
+   ```latex
+   \documentclass[12pt,a4paper]{article}
+   \usepackage{amsmath,amssymb,amsthm}
+   \usepackage{physics}
+   \usepackage{hyperref}
+   \usepackage{booktabs}
+   \usepackage{graphicx}
+   \usepackage{float}  % required by grd-figure filter ([H] placement)
+   \title{ {project_title} }
+   \author{[Author Name]}
+   \date{\today}
+   \begin{document}
+   \maketitle
+   % -- pandoc-produced fragment --
+   { fragment }
+   % --
+   \begin{center}
+   {\footnotesize\textit{Generated with Get Research Done (PSI)}}
+   \end{center}
+   \end{document}
+   ```
+
+   Write the result to `exports/results.tex`.
+
+**Fallback path (pandoc missing or below minimum version).** When
+`detect_pandoc()` reports unavailable, fall back to the legacy raw-LaTeX
+scaffold below. `grd health` will have already warned the user; this keeps
+`grd:export` functional either way.
 
 ```latex
 \documentclass[12pt,a4paper]{article}
@@ -253,13 +364,8 @@ Structure:
 {Equations as \begin{equation} blocks}
 
 \section{Results}
-% Aggregate key findings across all phases
-
 \section{Discussion}
-% Placeholder for interpretation
-
 \section{Conclusion}
-% Placeholder for summary
 
 \appendix
 {For each phase with detailed derivations:}

@@ -13,8 +13,12 @@ from importlib.resources import files
 
 from jinja2 import BaseLoader, Environment, TemplateNotFound
 
+from grd.mcp.paper.citations import extract_markdown_citations
+from grd.mcp.paper.filters import all_filter_paths
+from grd.mcp.paper.markdown_support import looks_like_latex, maybe_convert_to_latex
 from grd.mcp.paper.models import Author, FigureRef, PaperConfig, Section
 from grd.utils.latex import clean_latex_fences, fix_bibliography_conflict, sanitize_latex
+from grd.utils.pandoc import detect_pandoc
 
 logger = logging.getLogger(__name__)
 
@@ -81,20 +85,84 @@ def _clean_section(section: Section) -> Section:
     )
 
 
+def _convert_section_markdown(section: Section, *, lua_filters: list | None, pandoc_status) -> Section:
+    """Run markdown-to-LaTeX conversion on section content when applicable."""
+    converted = maybe_convert_to_latex(
+        section.content,
+        lua_filters=lua_filters,
+        pandoc_status=pandoc_status,
+    )
+    if converted is section.content:
+        return section
+    return section.model_copy(update={"content": converted})
+
+
 def _clean_figure(figure: FigureRef) -> FigureRef:
     return figure.model_copy(update={"caption": clean_latex_fences(figure.caption)})
 
 
-def render_paper(config: PaperConfig) -> str:
+def _audit_markdown_citations_over_sections(
+    sections: list[Section],
+    bib_keys: set[str],
+) -> None:
+    """Log a warning for every ``@key`` in markdown sections missing from *bib_keys*.
+
+    The audit only looks at sections whose content is still markdown at
+    render time (i.e. not raw LaTeX). Missing keys are advisory — pdflatex
+    will still run — but they let callers spot citation typos before the
+    compile step turns them into ``?`` placeholders.
+    """
+    referenced: set[str] = set()
+    for section in sections:
+        if looks_like_latex(section.content):
+            continue
+        referenced.update(extract_markdown_citations(section.content))
+    if not referenced:
+        return
+    unresolved = sorted(referenced - bib_keys)
+    if unresolved:
+        logger.warning(
+            "Markdown sections reference %d citation key(s) not found in the bibliography: %s",
+            len(unresolved),
+            ", ".join(unresolved),
+        )
+
+
+def render_paper(config: PaperConfig, *, bib_keys: set[str] | None = None) -> str:
     """Render a complete LaTeX document from a PaperConfig.
 
     Loads the template for config.journal, renders it with all config fields,
     and applies LaTeX sanitization to the output.
+
+    Section content written in markdown (no ``\\section{``/``\\begin{...}``
+    sigils) is converted to a LaTeX fragment via pandoc + the bundled GRD
+    Lua filters before template substitution. Content that already looks
+    like LaTeX is passed through unchanged, preserving the existing
+    contract for PaperConfig payloads authored in raw LaTeX.
+
+    When *bib_keys* is supplied (the set of citation keys defined in the
+    project's ``.bib`` file), any markdown section that references a
+    key not in that set triggers a warning log. This is advisory only;
+    the render never fails on unresolved keys because pdflatex + bibtex
+    is the authoritative resolver.
     """
     template = load_template(config.journal)
+    pandoc_status = detect_pandoc()
+    lua_filters = all_filter_paths() if pandoc_status.available and pandoc_status.meets_minimum else None
+
+    if bib_keys is not None:
+        all_md_sections = [*config.sections, *config.appendix_sections]
+        _audit_markdown_citations_over_sections(all_md_sections, bib_keys)
+
     authors = [_clean_author(author) for author in config.authors]
-    sections = [_clean_section(section) for section in config.sections]
-    appendix_sections = [_clean_section(section) for section in config.appendix_sections]
+    sections = [
+        _clean_section(_convert_section_markdown(s, lua_filters=lua_filters, pandoc_status=pandoc_status))
+        for s in config.sections
+    ]
+    appendix_sections = [
+        _clean_section(_convert_section_markdown(s, lua_filters=lua_filters, pandoc_status=pandoc_status))
+        for s in config.appendix_sections
+    ]
     figures = [_clean_figure(figure) for figure in config.figures]
     rendered = template.render(
         title=clean_latex_fences(config.title),

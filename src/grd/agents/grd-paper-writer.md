@@ -104,6 +104,62 @@ The paper-writer adapts its approach based on project research mode.
 
 Convention loading: see agent-infrastructure.md Convention Loading Protocol.
 
+<authoring_format>
+
+## Authoring Format: Markdown or Raw LaTeX
+
+You may author `Section.content` in either markdown or raw LaTeX. The paper
+build pipeline detects which you used and acts accordingly:
+
+- **Markdown (preferred).** Write prose in markdown, with math in `$...$` and
+  `$$...$$` blocks. Use `[[phase:N]]`, `[[fig:label]]`, `[[eq:label]]`,
+  `[[tab:label]]`, `[[sec:label]]` for cross-references (resolved by the
+  `grd-crossref` filter). Mark labelled equations with `{#eq:label}` after a
+  display-math block. Use `![caption](path){#fig:label width=...}` for figures.
+  Cite bibliography entries with pandoc's `@key` syntax (e.g. `as shown in
+  @smith2020` or multiple `[@smith2020; @jones2019]`). Pandoc converts
+  these to `\cite{key}` commands; the journal template's
+  `\bibliographystyle{...}` + `\bibliography{...}` directives resolve them
+  at compile time. Before conversion, the build runs an advisory audit:
+  any `@key` not defined in the loaded `.bib` file is logged as a warning,
+  so typos surface before pdflatex turns them into ``?`` placeholders.
+  Do **not** emit inline `\begin{thebibliography}` blocks in markdown
+  sections — those conflict with the template's bibliography commands and
+  force the build to strip one of them. The `@key` + template path is the
+  supported way to cite work.
+  When `pandoc-crossref` is installed on the compile host (check
+  `grd health`), you may also use its cross-reference syntax for numbered
+  figures, equations, and tables: label with `{#fig:foo}`, `{#eq:bar}`,
+  `{#tbl:baz}`, and reference with `@fig:foo`, `@eq:bar`, `@tbl:baz`.
+  pandoc-crossref runs before citeproc in the filter chain, so `@fig:foo`
+  is never confused with a citation `@fig2019`. When pandoc-crossref is
+  absent, the bundled GRD Lua filters still handle `{#eq:label}` and
+  `[[eq:label]]` — the latter is the portable syntax and is recommended
+  for cross-references that must survive on hosts without
+  pandoc-crossref.
+  The build runs pandoc with the bundled GRD Lua filters
+  (`grd.mcp.paper.filters.all_filter_paths()`) to convert your content to a
+  LaTeX fragment before template substitution. This eliminates the most
+  common LLM failure modes: unescaped `_`/`^` in prose, brace imbalance,
+  missing `\\begin`/`\\end` pairs.
+
+- **Raw LaTeX (fallback / legacy).** Detection triggers on structural
+  commands (`\\documentclass`, `\\section{`, `\\begin{document}`, etc.). Raw
+  LaTeX is passed through unchanged. Use this when the journal requires a
+  macro we haven't exposed through markdown, or when revising a section
+  already authored in LaTeX.
+
+**Choose markdown for new sections** unless you have a concrete reason to
+write LaTeX directly. The markdown path is deterministic: the same input
+always produces the same LaTeX, because pandoc works on the document AST
+rather than patching strings after the fact.
+
+When pandoc is unavailable on the build host (see `grd health`), content
+written as markdown is passed through unchanged and the raw-LaTeX fallback
+behaviour applies. The build does not fail.
+
+</authoring_format>
+
 <section_architecture>
 
 ## Before Writing Anything: The Section Architecture Step
