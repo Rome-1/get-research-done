@@ -35,6 +35,7 @@ from grd.core.verification_checks import (
     get_verification_check,
     list_verification_checks,
 )
+from grd.core.verification_coverage import formal_proof_coverage_from_records
 from grd.mcp.servers import stable_mcp_error, stable_mcp_response
 
 # MCP stdio uses stdout for JSON-RPC — redirect logging to stderr
@@ -1419,6 +1420,35 @@ def _validate_int_list(value: object, *, field_name: str) -> tuple[list[int] | N
     for index, item in enumerate(value):
         if isinstance(item, bool) or not isinstance(item, int):
             return None, _error_result(f"{field_name}[{index}] must be an integer")
+    return value, None
+
+
+def _validate_verification_records(
+    value: object, *, field_name: str
+) -> tuple[list[dict] | None, dict[str, object] | None]:
+    """Return a validated list of record dicts or an MCP error envelope."""
+    if value is None:
+        return None, None
+    if not isinstance(value, list):
+        return None, _error_result(f"{field_name} must be a list of objects")
+    validated: list[dict] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            return None, _error_result(f"{field_name}[{index}] must be an object")
+        validated.append(item)
+    return validated, None
+
+
+def _validate_optional_non_negative_int(
+    value: object, *, field_name: str
+) -> tuple[int | None, dict[str, object] | None]:
+    """Return a validated optional non-negative int or an MCP error envelope."""
+    if value is None:
+        return None, None
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None, _error_result(f"{field_name} must be a non-negative integer")
+    if value < 0:
+        return None, _error_result(f"{field_name} must be a non-negative integer")
     return value, None
 
 
@@ -3804,16 +3834,32 @@ def _symmetry_check_inner(expression: str, symmetries: list[str]) -> dict:
 
 
 @mcp.tool()
-def get_verification_coverage(error_class_ids: list[int], active_checks: list[str]) -> dict:
+def get_verification_coverage(
+    error_class_ids: list[int],
+    active_checks: list[str],
+    verification_records: list[dict] | None = None,
+    total_claims: int | None = None,
+) -> dict:
     """Return gap analysis: which error classes are covered by active checks.
 
     Maps error class IDs against the set of verification checks that are
     currently active (determined by profile). Identifies gaps where error
     classes have no active detection.
 
+    When ``verification_records`` is supplied (typically the flattened
+    ``intermediate_results[].verification_records`` list from state.json), the
+    response gains a ``formal_proof`` block summarising how many distinct
+    claims have a check 5.20 (formal statement) or 5.21 (formal proof) record,
+    together with a blueprint completion percentage.
+
     Args:
         error_class_ids: List of error class IDs to check coverage for
         active_checks: List of active check IDs (e.g., ["5.1", "5.2", "5.3"])
+        verification_records: Optional flat list of VerificationEvidence dicts
+            to compute formal proof coverage against.
+        total_claims: Optional denominator for blueprint completion. When
+            omitted, the denominator is the number of claims that have
+            entered the formal track (any 5.20 record).
     """
     with grd_span("mcp.verification.coverage"):
         validated_error_class_ids, error = _validate_int_list(error_class_ids, field_name="error_class_ids")
@@ -3823,7 +3869,22 @@ def get_verification_coverage(error_class_ids: list[int], active_checks: list[st
         if error is not None:
             return error
         normalized_active_checks = _normalize_active_checks(validated_active_checks)
-        return stable_mcp_response(_coverage_inner(validated_error_class_ids, normalized_active_checks))
+        validated_records, error = _validate_verification_records(
+            verification_records, field_name="verification_records"
+        )
+        if error is not None:
+            return error
+        validated_total_claims, error = _validate_optional_non_negative_int(
+            total_claims, field_name="total_claims"
+        )
+        if error is not None:
+            return error
+        result = _coverage_inner(validated_error_class_ids, normalized_active_checks)
+        if validated_records is not None:
+            result["formal_proof"] = formal_proof_coverage_from_records(
+                validated_records, total_claims=validated_total_claims
+            )
+        return stable_mcp_response(result)
 
 
 def _coverage_inner(error_class_ids: list[int], active_checks: list[str]) -> dict:
