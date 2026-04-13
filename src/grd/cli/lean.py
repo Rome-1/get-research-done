@@ -200,6 +200,138 @@ def lean_env() -> None:
     _output(compute_env_status(_get_cwd()))
 
 
+@lean_app.command("verify-claim")
+def lean_verify_claim(
+    claim: str = typer.Argument(
+        ...,
+        help="Informal mathematical/physical claim to autoformalize (e.g. 'for every prime p, p > 1').",
+    ),
+    phase: str | None = typer.Option(
+        None,
+        "--phase",
+        help="Phase identifier for logging / JSON trace. Does not alter behavior.",
+    ),
+    physics: bool = typer.Option(
+        False,
+        "--physics",
+        help="Force physics retrieval path (Mathlib4 + PhysLean); overrides auto-detection.",
+    ),
+    no_physics: bool = typer.Option(
+        False,
+        "--no-physics",
+        help="Force non-physics retrieval path (Mathlib4 only); overrides auto-detection.",
+    ),
+    import_module: list[str] = typer.Option(
+        [],
+        "--import",
+        "-i",
+        help="Module to prepend to each candidate as 'import <module>'. Repeatable.",
+    ),
+    timeout_s: float = typer.Option(
+        30.0,
+        "--timeout",
+        help="Per-compile wall-clock timeout in seconds.",
+        min=0.1,
+        max=600.0,
+    ),
+    no_daemon: bool = typer.Option(
+        False,
+        "--no-daemon",
+        help="Skip the socket daemon; run each compile via a one-shot subprocess.",
+    ),
+    no_llm: bool = typer.Option(
+        False,
+        "--no-llm",
+        help="Dry-run: skip LLM calls and emit a structured 'unconfigured' result "
+        "(useful for testing plumbing without an API key).",
+    ),
+) -> None:
+    """Autoformalize an informal claim into a Lean 4 theorem (6-stage pipeline).
+
+    Runs: extract → retrieve → generate → compile-repair → faithfulness →
+    decide. On high confidence (SBERT/Jaccard >= 0.85) emits the accepted
+    Lean statement. On low confidence or failed compile, files a `bd new -l
+    human` bead with the specific ambiguity and exits 1.
+
+    Requires ``ANTHROPIC_API_KEY`` (and the ``autoformalize`` optional extra)
+    unless ``--no-llm`` is passed.
+    """
+    import os as _os  # noqa: PLC0415
+
+    from grd.core.lean.autoformalize import (
+        AutoformalizeConfig,
+        MockLLM,
+        VerifyClaimResult,
+        load_autoformalize_config,
+        verify_claim,
+    )
+
+    if physics and no_physics:
+        _error("Pass at most one of --physics / --no-physics.")
+    physics_override: bool | None
+    if physics:
+        physics_override = True
+    elif no_physics:
+        physics_override = False
+    else:
+        physics_override = None
+
+    project_root = _get_cwd()
+    config: AutoformalizeConfig = load_autoformalize_config(project_root)
+
+    llm: object
+    if no_llm:
+        llm = MockLLM(responses=_unconfigured_llm_responses(config.num_candidates))
+    else:
+        from grd.core.lean.autoformalize.llm import AnthropicLLM  # noqa: PLC0415
+
+        api_key = _os.environ.get("ANTHROPIC_API_KEY")
+        llm = AnthropicLLM(model_id=config.model_id, api_key=api_key)
+
+    result: VerifyClaimResult = verify_claim(
+        claim=claim,
+        project_root=project_root,
+        llm=llm,  # type: ignore[arg-type]
+        config=config,
+        phase=phase,
+        physics_override=physics_override,
+        imports=list(import_module) if import_module else None,
+        timeout_s=timeout_s,
+        use_daemon=not no_daemon,
+    )
+
+    _output(_verify_result_to_dict(result))
+    if result.outcome != "auto_accept":
+        raise typer.Exit(code=1)
+
+
+def _unconfigured_llm_responses(n: int) -> list[str]:
+    """Provide placeholder responses for --no-llm dry-runs.
+
+    Each response is a visibly-stub Lean block so the rest of the pipeline
+    runs end-to-end without network; callers reading the JSON see the
+    ``sorry`` and the skipped status and know it wasn't real inference.
+    """
+    stub = "```lean\ntheorem autoformalize_dry_run : True := sorry\n```"
+    # Candidates + (potentially) back-translations + (potentially) repairs.
+    # We oversize the pool so the pipeline never aborts mid-run.
+    return [stub] * max(n * 4, 16) + ["stub (dry run — LLM disabled)"] * 16
+
+
+def _verify_result_to_dict(result: object) -> dict:
+    """Serialize a ``VerifyClaimResult`` (frozen dataclass) into a plain dict.
+
+    We prefer this over ``dataclasses.asdict`` because some nested fields
+    carry ``LeanDiagnostic`` Pydantic models that already know how to dump
+    themselves; mixing the two cleanly in one pass yields prettier JSON.
+    """
+    from dataclasses import asdict, is_dataclass  # noqa: PLC0415
+
+    if is_dataclass(result) and not isinstance(result, type):
+        return asdict(result)  # type: ignore[call-overload]
+    raise TypeError(f"Cannot serialize {type(result).__name__}")
+
+
 @lean_app.command("bootstrap")
 def lean_bootstrap(
     with_graphviz: bool = typer.Option(
