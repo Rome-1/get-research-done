@@ -168,6 +168,16 @@ Use this instead of manually reading/parsing ROADMAP.md.
 PROGRESS_BAR=$(grd --raw progress bar)
 ```
 
+**Fetch formal proof coverage from state.json** (checks 5.20/5.21):
+
+```bash
+FORMAL=$(grd --raw verify formal-coverage 2>/dev/null)
+```
+
+If `FORMAL` is non-empty and `claims_with_formal_statement > 0`, include the
+"Formal Proof Coverage" section in the report. Otherwise omit it entirely —
+projects without any formal evidence should not see an empty section.
+
 Present:
 
 ```
@@ -192,6 +202,11 @@ CONTEXT: [present if has_context | - if not]
 ## Key Decisions Made
 - [decision 1 from STATE.md — e.g., "Using dimensional regularization with MS-bar scheme"]
 - [decision 2]
+
+## Formal Proof Coverage
+(Only show this section if `claims_with_formal_statement > 0`.)
+- Blueprint completion: {blueprint_completion_percent}% ({claims_with_formal_proof}/{claims_with_formal_statement} claims proven)
+- Claims with a formal statement but no complete proof: {claims_with_statement_only}
 
 ## Blockers/Concerns
 - [any blockers or concerns from STATE.md — e.g., "Series diverges for g > 2, need resummation"]

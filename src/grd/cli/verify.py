@@ -88,3 +88,41 @@ def verify_artifacts(
     _output(result)
     if not result.all_passed:
         raise typer.Exit(code=1)
+
+
+@verify_app.command("formal-coverage")
+def verify_formal_coverage(
+    state_path: str | None = typer.Option(
+        None, "--state", help="Path to state.json (defaults to project state)"
+    ),
+    total_claims: int | None = typer.Option(
+        None,
+        "--total-claims",
+        help="Total claim count to use as blueprint completion denominator",
+    ),
+) -> None:
+    """Report formal proof coverage (checks 5.20/5.21) from state.json."""
+    import json
+
+    from grd.core.constants import ProjectLayout
+    from grd.core.verification_coverage import formal_proof_coverage_from_state
+
+    if state_path:
+        target = Path(state_path)
+        if not target.is_absolute():
+            target = _get_cwd() / target
+    else:
+        target = ProjectLayout(_get_cwd()).state_json
+
+    try:
+        raw = target.read_text(encoding="utf-8")
+    except OSError:
+        data: object = {}
+    else:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise typer.BadParameter(f"Malformed state.json at {target}: {exc}") from exc
+
+    result = formal_proof_coverage_from_state(data, total_claims=total_claims)
+    _output(result)

@@ -140,6 +140,11 @@ Use this instead of manually reading/parsing ROADMAP.md.
 ```bash
 # Get formatted progress bar
 PROGRESS_BAR=$(grd --raw progress bar)
+
+# Get formal proof coverage from state.json (checks 5.20/5.21).
+# Emits zeros when no formal evidence is recorded — only render the
+# "Formal Proof Coverage" section below when claims_with_formal_statement > 0.
+FORMAL=$(grd --raw verify formal-coverage 2>/dev/null)
 ```
 
 Present:
@@ -168,6 +173,11 @@ CONTEXT: [done if has_context | - if not]
 ## Accumulated Physics Insights
 - [insight 1, e.g., "Phase boundary shifts significantly at finite T"]
 - [insight 2, e.g., "Convergence requires at least N=12 for reliable extrapolation"]
+
+## Formal Proof Coverage
+(Only show this section if `claims_with_formal_statement > 0`.)
+- Blueprint completion: {blueprint_completion_percent}% ({claims_with_formal_proof}/{claims_with_formal_statement} claims proven)
+- Claims with a formal statement but no complete proof: {claims_with_statement_only}
 
 ## Blockers/Concerns
 - [any blockers or concerns from STATE.md]
