@@ -20,6 +20,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from grd.core.lean.hints import hint_for_message
 from grd.core.lean.protocol import LeanCheckResult, LeanDiagnostic
 
 __all__ = [
@@ -56,13 +57,15 @@ def parse_diagnostics(text: str) -> list[LeanDiagnostic]:
         msg = current["msg"]
         if buf:
             msg = str(msg) + "\n" + "\n".join(buf)
+        text = str(msg).rstrip()
         diags.append(
             LeanDiagnostic(
                 severity=current["severity"],  # type: ignore[arg-type]
                 file=current["file"],  # type: ignore[arg-type]
                 line=current["line"],  # type: ignore[arg-type]
                 column=current["column"],  # type: ignore[arg-type]
-                message=str(msg).rstrip(),
+                message=text,
+                hint=hint_for_message(text),
             )
         )
 

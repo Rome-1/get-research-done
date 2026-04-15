@@ -30,6 +30,7 @@ from grd.core.lean.autoformalize.llm import (
     classify_compile_error,
 )
 from grd.core.lean.client import check as default_lean_check
+from grd.core.lean.hints import hint_for_message
 from grd.core.lean.protocol import LeanCheckResult, LeanDiagnostic
 
 if TYPE_CHECKING:
@@ -65,6 +66,7 @@ class RepairStep:
     error_kind: ErrorKind | None
     unknown_identifiers: list[str] = field(default_factory=list)
     repair_applied: bool = False
+    lean_hints: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -181,6 +183,7 @@ def repair_candidate(
             )
 
         error_kind = classify_compile_error(result, source)
+        step_hints = [d.hint for d in result.diagnostics if d.severity == "error" and d.hint]
         steps.append(
             RepairStep(
                 iteration=iteration,
@@ -189,6 +192,7 @@ def repair_candidate(
                 elapsed_ms=result.elapsed_ms,
                 error_kind=error_kind,
                 repair_applied=is_repair,
+                lean_hints=step_hints,
             )
         )
         if iteration == max_attempts - 1:
@@ -251,5 +255,5 @@ def _synthetic_unknown_result(unknowns: list[str]) -> LeanCheckResult:
         ok=False,
         backend="subprocess",
         elapsed_ms=0,
-        diagnostics=[LeanDiagnostic(severity="error", message=m) for m in messages],
+        diagnostics=[LeanDiagnostic(severity="error", message=m, hint=hint_for_message(m)) for m in messages],
     )

@@ -65,6 +65,7 @@ class ProofAttempt(BaseModel):
     ok: bool
     elapsed_ms: int = 0
     error_summary: str | None = None
+    hint: str | None = None
 
 
 class ProveResult(BaseModel):
@@ -156,6 +157,7 @@ def prove_statement(
             ok=result.ok,
             elapsed_ms=result.elapsed_ms,
             error_summary=None if result.ok else _first_error_summary(result),
+            hint=None if result.ok else _first_error_hint(result),
         )
         attempts.append(attempt)
         if result.ok:
@@ -181,3 +183,16 @@ def _first_error_summary(result: LeanCheckResult) -> str:
             first_line = (diag.message or "").splitlines()[0] if diag.message else ""
             return first_line or "elaboration error"
     return "no error-level diagnostic"
+
+
+def _first_error_hint(result: LeanCheckResult) -> str | None:
+    """Return the first populated diagnostic hint, or ``None``.
+
+    Mirrors ``_first_error_summary`` so agents reading ``ProofAttempt`` see
+    both the raw summary (for fidelity) and the human-cause hint (for
+    actionability) without having to re-parse diagnostics themselves.
+    """
+    for diag in result.diagnostics:
+        if diag.severity == "error" and diag.hint:
+            return diag.hint
+    return None

@@ -8,12 +8,93 @@ for the layering rationale and PITCH.md §Architecture Design for the
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 
-from grd.cli._helpers import _error, _get_cwd, _output
+from grd.cli import _helpers
+from grd.cli._helpers import _error, _get_cwd, _output, err_console
+
+if TYPE_CHECKING:
+    from grd.core.lean.protocol import LeanCheckResult
+    from grd.core.lean.prove import ProveResult
 
 lean_app = typer.Typer(help="Lean 4 verification backend (type-check, proof daemon, env)")
+
+
+def _print_diagnostic_hints(result: LeanCheckResult) -> None:
+    """Print per-diagnostic hints to stderr for human consumption.
+
+    Runs after ``_output`` in non-raw mode so the rendered rich table still
+    owns the primary presentation but the error-explanation layer surfaces a
+    concrete next-step under each diagnostic Lean produced. Skipped when the
+    caller asked for ``--raw`` — the JSON already carries ``hint`` fields,
+    and duplicating them to stderr would interleave with machine consumers.
+    """
+    if _helpers._raw:
+        return
+    diagnostics = getattr(result, "diagnostics", None) or []
+    with_hints = [d for d in diagnostics if getattr(d, "hint", None)]
+    if not with_hints:
+        return
+    err_console.print("")
+    err_console.print("[bold]Hints[/]", highlight=False)
+    for diag in with_hints:
+        loc = ""
+        if getattr(diag, "line", None) is not None:
+            col = getattr(diag, "column", None)
+            loc = f" (line {diag.line}" + (f":{col}" if col is not None else "") + ")"
+        severity = getattr(diag, "severity", "error")
+        err_console.print(f"  [dim]{severity}{loc}[/] {diag.hint}", highlight=False)
+
+
+def _print_prove_hints(result: ProveResult) -> None:
+    """Print the hint for the last failing tactic attempt, if any."""
+    if _helpers._raw or getattr(result, "ok", True):
+        return
+    last_hint: str | None = None
+    last_tactic: str | None = None
+    for attempt in getattr(result, "attempts", []) or []:
+        if getattr(attempt, "hint", None):
+            last_hint = attempt.hint
+            last_tactic = attempt.tactic
+    if not last_hint:
+        return
+    err_console.print("")
+    err_console.print("[bold]Hint[/]", highlight=False)
+    err_console.print(f"  [dim]last tactic: {last_tactic}[/] {last_hint}", highlight=False)
+
+
+def _print_verify_claim_hints(result: object) -> None:
+    """Surface hints from the last failing candidate's last compile step.
+
+    verify-claim runs a repair loop per candidate; diagnostics are only kept
+    inside ``RepairStep.lean_hints``. When no candidate compiles we print the
+    hints from the most-informative failing step so the human sees *why* the
+    pipeline escalated without hunting through the JSON trace.
+    """
+    if _helpers._raw:
+        return
+    if getattr(result, "outcome", None) == "auto_accept":
+        return
+    candidates = getattr(result, "candidates", []) or []
+    hints: list[str] = []
+    for cand in reversed(candidates):
+        repair = getattr(cand, "repair", None)
+        steps = getattr(repair, "steps", None) or []
+        for step in reversed(steps):
+            step_hints = getattr(step, "lean_hints", None) or []
+            if step_hints:
+                hints = list(step_hints)
+                break
+        if hints:
+            break
+    if not hints:
+        return
+    err_console.print("")
+    err_console.print("[bold]Hints[/]", highlight=False)
+    for h in hints:
+        err_console.print(f"  {h}", highlight=False)
 
 
 @lean_app.command("check")
@@ -95,6 +176,7 @@ def lean_check(
         )
 
     _output(result)
+    _print_diagnostic_hints(result)
     if not result.ok:
         raise typer.Exit(code=1)
 
@@ -121,6 +203,7 @@ def lean_typecheck_file(
         auto_spawn=not no_spawn,
     )
     _output(result)
+    _print_diagnostic_hints(result)
     if not result.ok:
         raise typer.Exit(code=1)
 
@@ -188,6 +271,7 @@ def lean_prove(
         auto_spawn=not no_spawn,
     )
     _output(result)
+    _print_prove_hints(result)
     if not result.ok:
         raise typer.Exit(code=1)
 
@@ -301,6 +385,7 @@ def lean_verify_claim(
     )
 
     _output(_verify_result_to_dict(result))
+    _print_verify_claim_hints(result)
     if result.outcome != "auto_accept":
         raise typer.Exit(code=1)
 

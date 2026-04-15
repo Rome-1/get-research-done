@@ -58,6 +58,15 @@ class LeanDiagnostic(BaseModel):
     line: int | None = None
     column: int | None = None
     message: str
+    hint: str | None = Field(
+        default=None,
+        description=(
+            "Human-readable explanation of this Lean message plus a concrete "
+            "next step, populated by the error-explanation layer. None when "
+            "the message isn't recognized by any known pattern. Contract: one "
+            "line, cause + suggested action, no Lean jargon without a gloss."
+        ),
+    )
 
 
 class LeanCheckRequest(BaseModel):

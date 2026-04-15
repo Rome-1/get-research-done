@@ -77,6 +77,67 @@ class TestParseDiagnostics:
         assert diags[0].severity == "info"
 
 
+class TestParseDiagnosticsAttachesHints:
+    """Integration: parse_diagnostics must populate hints for the top-5 error
+    classes identified in the nitro UX study (ge-m0m, Q9). These are the
+    acceptance criteria for the P0-1 error-explanation layer (ge-13w)."""
+
+    def test_synth_instance_gets_hint(self) -> None:
+        text = "/tmp/x.lean:1:0: error: failed to synthesize instance Decidable (x = y)\n"
+        diags = lean_backend.parse_diagnostics(text)
+        assert len(diags) == 1
+        assert diags[0].hint is not None
+        assert "Decidable" in diags[0].hint
+
+    def test_type_mismatch_gets_hint(self) -> None:
+        text = "/tmp/x.lean:3:5: error: type mismatch\n  hfoo\nhas type\n  Nat\nbut is expected to have type\n  Int\n"
+        diags = lean_backend.parse_diagnostics(text)
+        assert len(diags) == 1
+        assert diags[0].hint is not None
+        # lean4#333 family — the hint must point at pp.all or ascription.
+        assert "pp.all" in diags[0].hint or "ascription" in diags[0].hint
+
+    def test_heartbeat_timeout_gets_hint(self) -> None:
+        text = (
+            "/tmp/x.lean:10:2: error: (deterministic) timeout at 'whnf', maximum number of "
+            "heartbeats (200000) has been reached\n"
+        )
+        diags = lean_backend.parse_diagnostics(text)
+        assert len(diags) == 1
+        assert diags[0].hint is not None
+        assert "maxHeartbeats" in diags[0].hint
+
+    def test_deep_recursion_gets_hint(self) -> None:
+        text = "/tmp/x.lean:7:0: error: deep recursion detected\n"
+        diags = lean_backend.parse_diagnostics(text)
+        assert len(diags) == 1
+        assert diags[0].hint is not None
+        assert "loop" in diags[0].hint.lower() or "typeclass" in diags[0].hint.lower()
+
+    def test_universe_error_gets_hint(self) -> None:
+        text = "/tmp/x.lean:2:0: error: invalid universe level\n"
+        diags = lean_backend.parse_diagnostics(text)
+        assert len(diags) == 1
+        assert diags[0].hint is not None
+        assert "universe" in diags[0].hint.lower()
+
+    def test_unknown_message_leaves_hint_none(self) -> None:
+        """Messages we don't recognize must not invent a hint."""
+        text = "/tmp/x.lean:1:0: error: some totally novel lean diagnostic we never imagined\n"
+        diags = lean_backend.parse_diagnostics(text)
+        assert len(diags) == 1
+        assert diags[0].hint is None
+
+    def test_warnings_also_get_hints(self) -> None:
+        """`declaration uses sorry` is a warning Lean users miss — hint it too."""
+        text = "/tmp/x.lean:3:8: warning: declaration uses 'sorry'\n"
+        diags = lean_backend.parse_diagnostics(text)
+        assert len(diags) == 1
+        assert diags[0].severity == "warning"
+        assert diags[0].hint is not None
+        assert "sorry" in diags[0].hint.lower()
+
+
 class TestRunCheck:
     def test_rejects_both_code_and_path(self, tmp_path: Path) -> None:
         result = lean_backend.run_check(code="x", path="/tmp/x.lean")
