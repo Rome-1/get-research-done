@@ -51,6 +51,22 @@ class TestLeanDiagnostic:
         assert d.line is None
         assert d.column is None
 
+    def test_hint_defaults_to_none(self) -> None:
+        d = LeanDiagnostic(severity="error", message="unknown identifier 'x'")
+        # Default is None — hints are attached by the parser, not the model.
+        assert d.hint is None
+
+    def test_hint_round_trips_via_json(self) -> None:
+        d = LeanDiagnostic(
+            severity="error",
+            message="failed to synthesize instance",
+            hint="Typeclass search couldn't find an instance. Try adding an import.",
+        )
+        payload = d.model_dump_json()
+        rehydrated = LeanDiagnostic.model_validate_json(payload)
+        assert rehydrated.hint == d.hint
+        assert rehydrated == d
+
 
 class TestLeanCheckResult:
     def test_json_roundtrip_preserves_diagnostics(self) -> None:
