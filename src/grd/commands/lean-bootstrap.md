@@ -28,7 +28,7 @@ Arguments: $ARGUMENTS
 Current environment:
 
 ```bash
-grd --raw lean env
+grd --json lean env
 ```
 
 Prior bootstrap state (if any):
@@ -67,7 +67,7 @@ For `--with-mathlib-cache`: check `.grd/lean-env.json` under `consent.mathlib_ca
 Record the answer to `consent.mathlib_cache` before running the stage:
 
 ```bash
-grd --raw lean bootstrap --with-mathlib-cache --yes
+grd --json lean bootstrap --with-mathlib-cache --yes
 ```
 
 Same protocol for `--with-leandojo` (~3–5 GB, premise retrieval).
@@ -77,7 +77,7 @@ If the user answered "no" or "never", **do not pass `--yes`** — let the stage 
 ## Step 3: Run the bootstrap
 
 ```bash
-REPORT=$(grd --raw lean bootstrap $FLAGS)
+REPORT=$(grd --json lean bootstrap $FLAGS)
 ```
 
 where `$FLAGS` is the subset of flags the user passed plus any consent-gated `--yes` we've earned in Step 2.
@@ -121,7 +121,7 @@ Status legend:
 ## Step 5: Uninstall flow (when --uninstall present)
 
 ```bash
-grd --raw lean bootstrap --uninstall $DRY
+grd --json lean bootstrap --uninstall $DRY
 ```
 
 where `$DRY` is `--dry-run` if the user passed it too.

@@ -300,6 +300,32 @@ def test_raw_json_get_error_outputs_json():
     assert "Invalid JSON input" in json.loads(result.output)["error"]
 
 
+def test_json_flag_is_alias_for_raw():
+    """--json is the canonical spelling; --raw remains a legacy alias."""
+    result = runner.invoke(app, ["--json", "json", "get", ".x"], input='{"x": 1}\n')
+    assert result.exit_code == 0
+    assert json.loads(result.output) == "1"
+
+
+def test_json_flag_hoists_when_trailing(tmp_path: Path) -> None:
+    argv = ["lean", "check", "stmt", "--json"]
+
+    assert cli_module._normalize_global_cli_options(argv) == [
+        "--json",
+        "lean",
+        "check",
+        "stmt",
+    ]
+
+
+def test_json_and_raw_hoist_identically() -> None:
+    for flag in ("--json", "--raw"):
+        assert cli_module._normalize_global_cli_options(["progress", flag]) == [
+            flag,
+            "progress",
+        ]
+
+
 def test_normalize_global_cli_options_moves_trailing_root_options(tmp_path: Path) -> None:
     argv = ["progress", "bar", "--cwd", str(tmp_path), "--raw"]
 

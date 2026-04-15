@@ -103,8 +103,10 @@ def _get_cwd() -> Path:
 def _split_global_cli_options(argv: list[str]) -> tuple[list[str], list[str]]:
     """Partition root-global CLI options from the rest of the argv stream.
 
-    This keeps ``--raw`` and ``--cwd`` usable even when agents append them after
-    the subcommand, while still respecting the ``--`` end-of-options marker.
+    This keeps ``--raw`` / ``--json`` and ``--cwd`` usable even when agents
+    append them after the subcommand, while still respecting the ``--``
+    end-of-options marker. ``--json`` is an alias for ``--raw``; both hoist
+    identically.
     """
     global_args: list[str] = []
     remaining_args: list[str] = []
@@ -124,7 +126,7 @@ def _split_global_cli_options(argv: list[str]) -> tuple[list[str], list[str]]:
             index += 1
             continue
 
-        if arg == "--raw":
+        if arg in ("--raw", "--json"):
             global_args.append(arg)
             index += 1
             continue
@@ -339,7 +341,7 @@ def _print_version(*, ctx: typer.Context | None = None) -> None:
 
 
 def _raw_option_callback(ctx: typer.Context, _: typer.CallbackParam, value: bool) -> bool:
-    """Capture --raw early enough for the eager --version option."""
+    """Capture --json / --raw early enough for the eager --version option."""
     global _raw  # noqa: PLW0603
     ctx.meta["raw_requested"] = value
     _raw = value
@@ -922,8 +924,9 @@ def main(
     _ctx: typer.Context,
     raw: bool = typer.Option(
         False,
+        "--json",
         "--raw",
-        help="Output raw JSON for programmatic consumption",
+        help="Emit JSON output for programmatic consumption (alias: --raw)",
         callback=_raw_option_callback,
         is_eager=True,
     ),

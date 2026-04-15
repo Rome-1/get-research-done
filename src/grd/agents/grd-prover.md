@@ -87,7 +87,7 @@ Record triage outcomes in the artifact so re-spawns can resume where triage left
 
 ```bash
 # Verify the Lean environment is ready. Lazy-bootstrap if anything is missing.
-grd --raw lean env
+grd --json lean env
 ```
 
 The JSON response contains two synthesized fields you should branch on:
