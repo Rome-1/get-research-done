@@ -86,12 +86,26 @@ Record triage outcomes in the artifact so re-spawns can resume where triage left
 ### 1. Read inputs and prepare the Lean environment
 
 ```bash
-# Verify the Lean environment is ready. Lazy-bootstrap if the skill indicates.
-grd lean env --json
-
-# If env reports "needs_bootstrap": run the bootstrap skill BEFORE any check/prove.
-# Do not attempt proofs against a half-installed toolchain — errors are misleading.
+# Verify the Lean environment is ready. Lazy-bootstrap if anything is missing.
+grd --raw lean env
 ```
+
+The JSON response contains two synthesized fields you should branch on:
+
+- `ready: bool` — True iff every component required to run `check` / `prove` /
+  `verify-claim` is in place. When True, proceed directly to step 2.
+- `blocked_by: list[str]` — names of the missing components when `ready` is
+  False. Possible values: `elan`, `lean`, `lake`, `pantograph`, `mathlib-cache`.
+
+If `ready` is False, invoke `/grd:lean-bootstrap` **before any check/prove**.
+Pass `--with-mathlib-cache --yes` iff `blocked_by` contains `mathlib-cache`
+(consent-gated opt-in; do not add it for claims that don't touch Mathlib).
+Do not attempt proofs against a half-installed toolchain — errors are
+misleading (a missing `pantograph` surfaces as a generic socket failure, a
+missing Mathlib cache as an unintelligible import-resolution error).
+
+Daemon state is reported separately in `daemon_running`; a stopped daemon is
+**not** a blocker because the client auto-spawns on first request.
 
 Read SUMMARY.md and the contract claims. Read `.grd/state.json` to extract the convention lock. Read any existing `blueprint/` directory to recover state from prior runs.
 

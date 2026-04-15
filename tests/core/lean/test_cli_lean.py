@@ -40,6 +40,24 @@ def test_env_command_raw_emits_valid_json(tmp_path: Path) -> None:
     assert "lean_found" in parsed
     assert "daemon_running" in parsed
     assert parsed["env_file"].endswith("/.grd/lean-env.json")
+    # P0-3: callers branch on these synthesized fields, so they must be present.
+    assert "ready" in parsed
+    assert "blocked_by" in parsed
+
+
+def test_env_command_human_output_prints_not_ready_summary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Empty PATH → elan/lean/lake all missing → summary line must surface the
+    # bootstrap pointer so a human doesn't re-implement readiness by eye.
+    (tmp_path / ".grd").mkdir()
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    result = runner.invoke(app, ["--cwd", str(tmp_path), "lean", "env"])
+    assert result.exit_code == 0, result.stdout
+    assert "Lean environment not ready" in result.stdout
+    assert "/grd:lean-bootstrap" in result.stdout
+    assert "elan" in result.stdout
 
 
 def test_check_with_missing_lean_exits_nonzero_and_emits_error(

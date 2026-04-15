@@ -11,7 +11,7 @@ from pathlib import Path
 
 import typer
 
-from grd.cli._helpers import _error, _get_cwd, _output
+from grd.cli._helpers import _error, _get_cwd, _output, console
 
 lean_app = typer.Typer(help="Lean 4 verification backend (type-check, proof daemon, env)")
 
@@ -194,10 +194,27 @@ def lean_prove(
 
 @lean_app.command("env")
 def lean_env() -> None:
-    """Show detected Lean toolchain, env file status, and daemon state."""
+    """Show detected Lean toolchain, env file status, and daemon state.
+
+    Prefixes non-raw output with a single-line readiness summary (``ready``
+    or ``blocked on: …``) so a human scanning the terminal knows whether to
+    run ``/grd:lean-bootstrap`` before anything else. The JSON ``--raw`` mode
+    emits only the structured payload — the summary is redundant there.
+    """
+    from grd.cli._helpers import _raw
     from grd.core.lean.env import compute_env_status
 
-    _output(compute_env_status(_get_cwd()))
+    status = compute_env_status(_get_cwd())
+    if not _raw:
+        if status.ready:
+            console.print("[bold green]Lean environment ready[/]")
+        else:
+            missing = ", ".join(status.blocked_by) if status.blocked_by else "unknown"
+            console.print(
+                f"[bold yellow]Lean environment not ready[/] — blocked on: {missing} "
+                "(run [cyan]/grd:lean-bootstrap[/] to install)"
+            )
+    _output(status)
 
 
 @lean_app.command("verify-claim")
