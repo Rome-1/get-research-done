@@ -104,3 +104,149 @@ def test_pantograph_available_returns_bool() -> None:
     # returns a plain bool without raising.
     result = lean_env.pantograph_available()
     assert isinstance(result, bool)
+
+
+def _stub_binary(bin_dir: Path, name: str, *, banner: str = "") -> Path:
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    script = bin_dir / name
+    body = f"#!/bin/bash\necho '{banner}'\n" if banner else "#!/bin/bash\nexit 0\n"
+    script.write_text(body, encoding="utf-8")
+    script.chmod(script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return script
+
+
+def test_compute_env_status_ready_false_when_nothing_installed(
+    isolated_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PATH", "/this/path/does/not/exist")
+    status = lean_env.compute_env_status(isolated_project)
+    assert status.ready is False
+    # Every core component should appear. pantograph availability is environment-
+    # dependent in CI, so we only assert that the three binary names are present.
+    for name in ("elan", "lean", "lake"):
+        assert name in status.blocked_by
+
+
+def test_compute_env_status_ready_true_when_all_core_components_present(
+    isolated_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bin_dir = isolated_project / "bin"
+    _stub_binary(bin_dir, "lean", banner="Lean (version 4.0.0-fake)")
+    _stub_binary(bin_dir, "elan", banner="elan 3.0.0")
+    _stub_binary(bin_dir, "lake", banner="Lake 5.0.0")
+    monkeypatch.setenv("PATH", str(bin_dir))
+    monkeypatch.setattr(lean_env, "pantograph_available", lambda: True)
+
+    status = lean_env.compute_env_status(isolated_project)
+    assert status.blocked_by == []
+    assert status.ready is True
+
+
+def test_compute_env_status_blocks_on_pantograph_only(
+    isolated_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bin_dir = isolated_project / "bin"
+    _stub_binary(bin_dir, "lean", banner="Lean (version 4.0.0-fake)")
+    _stub_binary(bin_dir, "elan", banner="elan 3.0.0")
+    _stub_binary(bin_dir, "lake", banner="Lake 5.0.0")
+    monkeypatch.setenv("PATH", str(bin_dir))
+    monkeypatch.setattr(lean_env, "pantograph_available", lambda: False)
+
+    status = lean_env.compute_env_status(isolated_project)
+    assert status.ready is False
+    assert status.blocked_by == ["pantograph"]
+
+
+def test_compute_env_status_ignores_mathlib_cache_when_not_opted_in(
+    isolated_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Core components all present, user has not opted into mathlib-cache —
+    # the cache must NOT appear in blocked_by because it's opt-in only.
+    bin_dir = isolated_project / "bin"
+    _stub_binary(bin_dir, "lean", banner="Lean (version 4.0.0-fake)")
+    _stub_binary(bin_dir, "elan", banner="elan 3.0.0")
+    _stub_binary(bin_dir, "lake", banner="Lake 5.0.0")
+    monkeypatch.setenv("PATH", str(bin_dir))
+    monkeypatch.setattr(lean_env, "pantograph_available", lambda: True)
+    lean_env.save_env(
+        isolated_project,
+        {
+            "options": {"with_mathlib_cache": False},
+            "stages": [],
+        },
+    )
+
+    status = lean_env.compute_env_status(isolated_project)
+    assert status.ready is True
+    assert "mathlib-cache" not in status.blocked_by
+
+
+def test_compute_env_status_blocks_on_mathlib_cache_when_opted_in_but_missing(
+    isolated_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # User opted in (`with_mathlib_cache=True`) but the stage record is
+    # absent → cache download hasn't completed yet → block.
+    bin_dir = isolated_project / "bin"
+    _stub_binary(bin_dir, "lean", banner="Lean (version 4.0.0-fake)")
+    _stub_binary(bin_dir, "elan", banner="elan 3.0.0")
+    _stub_binary(bin_dir, "lake", banner="Lake 5.0.0")
+    monkeypatch.setenv("PATH", str(bin_dir))
+    monkeypatch.setattr(lean_env, "pantograph_available", lambda: True)
+    lean_env.save_env(
+        isolated_project,
+        {
+            "options": {"with_mathlib_cache": True},
+            "stages": [],
+        },
+    )
+
+    status = lean_env.compute_env_status(isolated_project)
+    assert status.ready is False
+    assert status.blocked_by == ["mathlib-cache"]
+
+
+def test_compute_env_status_clears_mathlib_block_when_stage_ok(
+    isolated_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bin_dir = isolated_project / "bin"
+    _stub_binary(bin_dir, "lean", banner="Lean (version 4.0.0-fake)")
+    _stub_binary(bin_dir, "elan", banner="elan 3.0.0")
+    _stub_binary(bin_dir, "lake", banner="Lake 5.0.0")
+    monkeypatch.setenv("PATH", str(bin_dir))
+    monkeypatch.setattr(lean_env, "pantograph_available", lambda: True)
+    lean_env.save_env(
+        isolated_project,
+        {
+            "options": {"with_mathlib_cache": True},
+            "stages": [
+                {"name": "mathlib_cache", "status": "ok", "detail": "downloaded"},
+            ],
+        },
+    )
+
+    status = lean_env.compute_env_status(isolated_project)
+    assert status.ready is True
+    assert status.blocked_by == []
+
+
+def test_compute_env_status_daemon_state_does_not_affect_ready(
+    isolated_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A stopped daemon must not block readiness — the client auto-spawns.
+    bin_dir = isolated_project / "bin"
+    _stub_binary(bin_dir, "lean", banner="Lean (version 4.0.0-fake)")
+    _stub_binary(bin_dir, "elan", banner="elan 3.0.0")
+    _stub_binary(bin_dir, "lake", banner="Lake 5.0.0")
+    monkeypatch.setenv("PATH", str(bin_dir))
+    monkeypatch.setattr(lean_env, "pantograph_available", lambda: True)
+
+    status = lean_env.compute_env_status(isolated_project)
+    assert status.daemon_running is False
+    assert status.ready is True

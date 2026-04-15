@@ -188,6 +188,41 @@ def _pid_alive(pid: int) -> bool:
     return True
 
 
+_CORE_READINESS_COMPONENTS: tuple[str, ...] = ("elan", "lean", "lake", "pantograph")
+"""Components that must be present for any ``grd lean`` operation to succeed.
+
+Named with the tool's own spelling (``lean``, ``lake``) rather than the
+bootstrap stage labels (which group lean+lake under ``toolchain``) so a
+caller reading ``blocked_by`` sees exactly which binary to install.
+"""
+
+
+def _mathlib_cache_blocked(env_data: dict[str, object]) -> bool:
+    """Return True iff Mathlib cache is opt-in but not yet successfully installed.
+
+    Rules (designed so a user who never wants Mathlib is never blocked on it):
+
+    * If the bootstrap record does not show ``with_mathlib_cache=True``, the
+      user has not opted in — not a blocker.
+    * If it shows opt-in AND the ``mathlib_cache`` stage has status
+      ``ok`` / ``skipped_already_installed``, ready.
+    * Any other case (opt-in + stage missing / failed / declined) blocks.
+    """
+    options = env_data.get("options")
+    if not isinstance(options, dict) or not options.get("with_mathlib_cache"):
+        return False
+    stages = env_data.get("stages")
+    if not isinstance(stages, list):
+        return True
+    for stage in stages:
+        if not isinstance(stage, dict):
+            continue
+        if stage.get("name") != "mathlib_cache":
+            continue
+        return stage.get("status") not in {"ok", "skipped_already_installed"}
+    return True
+
+
 def compute_env_status(project_root: Path) -> LeanEnvStatus:
     """Build the ``grd lean env`` / status response from live host state."""
     tc = detect_toolchain()
@@ -195,6 +230,18 @@ def compute_env_status(project_root: Path) -> LeanEnvStatus:
     sock = socket_path(project_root)
     pid = _read_daemon_pid(project_root)
     daemon_running = pid is not None and _pid_alive(pid) and sock.exists()
+    pantograph_ok = pantograph_available()
+
+    present: dict[str, bool] = {
+        "elan": tc.elan_path is not None,
+        "lean": tc.lean_found,
+        "lake": tc.lake_path is not None,
+        "pantograph": pantograph_ok,
+    }
+    blocked_by: list[str] = [name for name in _CORE_READINESS_COMPONENTS if not present[name]]
+    if _mathlib_cache_blocked(load_env(project_root)):
+        blocked_by.append("mathlib-cache")
+
     return LeanEnvStatus(
         lean_found=tc.lean_found,
         lean_path=tc.lean_path,
@@ -203,10 +250,12 @@ def compute_env_status(project_root: Path) -> LeanEnvStatus:
         elan_version=tc.elan_version,
         lake_found=tc.lake_path is not None,
         lake_version=tc.lake_version,
-        pantograph_available=pantograph_available(),
+        pantograph_available=pantograph_ok,
         env_file=str(env_path),
         env_file_exists=env_path.exists(),
         socket_path=str(sock),
         daemon_running=daemon_running,
         daemon_pid=pid if daemon_running else None,
+        ready=not blocked_by,
+        blocked_by=blocked_by,
     )

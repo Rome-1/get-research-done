@@ -158,7 +158,16 @@ class BootstrapReport(BaseModel):
 
 
 class LeanEnvStatus(BaseModel):
-    """Snapshot of the host's Lean toolchain + daemon state."""
+    """Snapshot of the host's Lean toolchain + daemon state.
+
+    ``ready`` is a synthesized verdict: True iff every component required to
+    run ``grd lean check`` / ``prove`` / ``verify-claim`` is in place. When
+    False, ``blocked_by`` enumerates the missing components so callers (agents
+    in particular) can branch without re-implementing the check. Daemon state
+    is reported separately in ``daemon_running`` and deliberately does NOT
+    feed into ``ready`` — the client auto-spawns a daemon on first request
+    when the toolchain is available, so a stopped daemon is not a blocker.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -175,3 +184,5 @@ class LeanEnvStatus(BaseModel):
     socket_path: str | None = None
     daemon_running: bool = False
     daemon_pid: int | None = None
+    ready: bool = False
+    blocked_by: list[str] = Field(default_factory=list)
