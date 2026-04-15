@@ -50,6 +50,7 @@ class IntermediateResult(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     verified: bool = False
     verification_records: list[VerificationEvidence] = Field(default_factory=list)
+    needs_formalization: bool = False
 
 
 class ResultDeps(BaseModel):
@@ -75,7 +76,17 @@ class MissingDep(BaseModel):
 # --- Helpers ---
 
 RESULT_FIELDS = frozenset(
-    {"equation", "description", "units", "validity", "phase", "depends_on", "verified", "verification_records"}
+    {
+        "equation",
+        "description",
+        "units",
+        "validity",
+        "phase",
+        "depends_on",
+        "verified",
+        "verification_records",
+        "needs_formalization",
+    }
 )
 
 

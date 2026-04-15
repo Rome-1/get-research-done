@@ -58,11 +58,20 @@ def phase_remove(
 @phase_app.command("complete")
 def phase_complete(
     phase_num: str = typer.Argument(..., help="Phase number to mark complete"),
+    override_formalization: str | None = typer.Option(
+        None,
+        "--override-formalization",
+        help=(
+            "Brief justification to bypass the needs_formalization gate "
+            "(records a Decision in state.json). Use only when Lean verification "
+            "is legitimately out of scope for this phase-close."
+        ),
+    ),
 ) -> None:
     """Mark a phase as complete."""
     from grd.core.phases import phase_complete
 
-    _output(phase_complete(_get_cwd(), phase_num))
+    _output(phase_complete(_get_cwd(), phase_num, override_formalization=override_formalization))
 
 
 @phase_app.command("index")

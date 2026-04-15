@@ -11,6 +11,7 @@ import pytest
 from grd.core.phases import (
     MilestoneIncompleteError,
     PhaseIncompleteError,
+    PhaseNeedsFormalizationError,
     PhaseNotFoundError,
     PhaseValidationError,
     PlanEntry,
@@ -641,6 +642,151 @@ def test_phase_complete_incomplete(tmp_path: Path) -> None:
 
     with pytest.raises(PhaseIncompleteError):
         phase_complete(tmp_path, "1")
+
+
+# ─── phase_complete: needs_formalization gate (ge-s4fh) ─────────────────────────
+
+
+def _setup_phase_ready_to_complete(tmp_path: Path) -> None:
+    """Scaffold a project where phase 1 has one plan, one summary, and a next phase.
+
+    Uses the ``.grd`` planning dir (runtime layout) directly so the fixture
+    matches what ``phase_complete`` resolves via ``ProjectLayout``.
+    """
+    planning = tmp_path / ".grd"
+    (planning / "phases" / "01-setup").mkdir(parents=True)
+    (planning / "phases" / "02-build").mkdir(parents=True)
+    (planning / "phases" / "01-setup" / "a-PLAN.md").write_text("plan")
+    (planning / "phases" / "01-setup" / "a-SUMMARY.md").write_text("done")
+    (planning / "ROADMAP.md").write_text(
+        textwrap.dedent(
+            """\
+            ### Phase 1: Setup
+            **Goal:** setup
+            **Plans:** 1 plans
+
+            ### Phase 2: Build
+            **Goal:** build
+            """
+        )
+    )
+
+
+def _seed_state_with_results(tmp_path: Path, results: list[dict]) -> None:
+    from grd.core.state import save_state_json
+
+    save_state_json(tmp_path, {"intermediate_results": results, "decisions": []})
+
+
+def test_phase_complete_gate_blocks_unformalized_claim(tmp_path: Path) -> None:
+    _setup_phase_ready_to_complete(tmp_path)
+    _seed_state_with_results(
+        tmp_path,
+        [
+            {
+                "id": "c-1",
+                "phase": "1",
+                "needs_formalization": True,
+                "verification_records": [],
+                "verified": False,
+            }
+        ],
+    )
+
+    with pytest.raises(PhaseNeedsFormalizationError) as exc:
+        phase_complete(tmp_path, "1")
+    assert exc.value.unformalized_claim_ids == ["c-1"]
+
+
+def test_phase_complete_gate_passes_when_formal_proof_record_present(tmp_path: Path) -> None:
+    _setup_phase_ready_to_complete(tmp_path)
+    _seed_state_with_results(
+        tmp_path,
+        [
+            {
+                "id": "c-1",
+                "phase": "1",
+                "needs_formalization": True,
+                "verified": True,
+                "verification_records": [
+                    {
+                        "verified_at": "2026-04-15T00:00:00+00:00",
+                        "method": "formal_proof",
+                        "confidence": "high",
+                    }
+                ],
+            }
+        ],
+    )
+
+    result = phase_complete(tmp_path, "1")
+    assert result.formalization_overridden is False
+    assert result.formalization_override_claims == []
+
+
+def test_phase_complete_gate_ignores_opt_out_claims(tmp_path: Path) -> None:
+    _setup_phase_ready_to_complete(tmp_path)
+    _seed_state_with_results(
+        tmp_path,
+        [
+            {
+                "id": "c-1",
+                "phase": "1",
+                "needs_formalization": False,
+                "verification_records": [],
+            }
+        ],
+    )
+
+    result = phase_complete(tmp_path, "1")
+    assert result.formalization_overridden is False
+
+
+def test_phase_complete_override_records_decision(tmp_path: Path) -> None:
+    from grd.core.state import load_state_json
+
+    _setup_phase_ready_to_complete(tmp_path)
+    _seed_state_with_results(
+        tmp_path,
+        [
+            {
+                "id": "c-1",
+                "phase": "1",
+                "needs_formalization": True,
+                "verification_records": [],
+            }
+        ],
+    )
+
+    result = phase_complete(tmp_path, "1", override_formalization="Lean port deferred to phase 2")
+    assert result.formalization_overridden is True
+    assert result.formalization_override_claims == ["c-1"]
+
+    state = load_state_json(tmp_path)
+    assert state is not None
+    decisions = state.get("decisions") or []
+    assert any(
+        isinstance(d, dict) and d.get("rationale") == "Lean port deferred to phase 2"
+        for d in decisions
+    )
+
+
+def test_phase_complete_override_rejects_blank_justification(tmp_path: Path) -> None:
+    _setup_phase_ready_to_complete(tmp_path)
+    _seed_state_with_results(
+        tmp_path,
+        [
+            {
+                "id": "c-1",
+                "phase": "1",
+                "needs_formalization": True,
+                "verification_records": [],
+            }
+        ],
+    )
+
+    with pytest.raises(PhaseNeedsFormalizationError):
+        phase_complete(tmp_path, "1", override_formalization="   ")
 
 
 # ─── milestone_complete ──────────────────────────────────────────────────────────

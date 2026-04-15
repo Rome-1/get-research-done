@@ -71,6 +71,7 @@ __all__ = [
     "PhaseIncompleteError",
     "RoadmapNotFoundError",
     "MilestoneIncompleteError",
+    "PhaseNeedsFormalizationError",
     # Models
     "PhaseInfo",
     "WaveValidation",
@@ -159,6 +160,30 @@ class MilestoneIncompleteError(PhaseError):
         self.total = total
         super().__init__(
             f"Cannot complete milestone: {incomplete} of {total} phases are incomplete. Complete all phases first."
+        )
+
+
+class PhaseNeedsFormalizationError(PhaseError):
+    """Raised when phase-complete is blocked by unformalized needs-formalization claims.
+
+    Opt-in gate: only claims flagged ``needs_formalization=True`` in state.json are
+    checked. A claim satisfies the gate when it carries at least one verification
+    record whose ``method`` is in ``FORMAL_PROOF_METHODS`` (i.e., a Lean-checked
+    proof, per ``src/grd/core/verification_coverage.py``).
+
+    Override with ``--override-formalization '<justification>'`` on the CLI, which
+    appends a ``Decision`` to state and proceeds. See MATHEMATICIAN-WORKFLOWS.md §6.
+    """
+
+    def __init__(self, phase: str, unformalized_claim_ids: list[str]) -> None:
+        self.phase = phase
+        self.unformalized_claim_ids = list(unformalized_claim_ids)
+        listing = ", ".join(self.unformalized_claim_ids)
+        super().__init__(
+            f"Phase {phase} cannot be completed: {len(self.unformalized_claim_ids)} claim(s) "
+            f"flagged needs_formalization lack a formal_proof verification record ({listing}). "
+            f"Either complete the Lean verification, clear the flag, or pass "
+            f"--override-formalization '<brief justification>' to phase-complete anyway."
         )
 
 
@@ -402,6 +427,8 @@ class PhaseCompleteResult(BaseModel):
     date: str
     roadmap_updated: bool = False
     state_updated: bool = False
+    formalization_overridden: bool = False
+    formalization_override_claims: list[str] = Field(default_factory=list)
 
 
 class ArchiveStatus(BaseModel):
@@ -1871,16 +1898,102 @@ def _renumber_integer_phases(phases_dir: Path, removed_int: int) -> tuple[list[R
 # ─── Phase Complete ────────────────────────────────────────────────────────────
 
 
-def phase_complete(cwd: Path, phase_num: str) -> PhaseCompleteResult:
+def _collect_unformalized_claims(cwd: Path, phase_num: str) -> list[str]:
+    """Return IDs of claims in ``phase_num`` that are flagged needs_formalization
+    but lack a formal-proof verification record.
+
+    Opt-in: a claim participates only if ``needs_formalization`` is truthy in
+    state.json. The gate is satisfied when any verification record on the claim
+    has ``method`` in ``FORMAL_PROOF_METHODS``. See ge-s4fh, MATHEMATICIAN-
+    WORKFLOWS.md §6.
+    """
+    from grd.core.state import load_state_json
+    from grd.core.utils import phase_unpad
+    from grd.core.verification_coverage import FORMAL_PROOF_METHODS
+
+    state = load_state_json(cwd)
+    if not isinstance(state, dict):
+        return []
+    results = state.get("intermediate_results")
+    if not isinstance(results, list):
+        return []
+
+    target = phase_unpad(str(phase_num))
+    unformalized: list[str] = []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        if not item.get("needs_formalization"):
+            continue
+        item_phase = item.get("phase")
+        if item_phase is None or phase_unpad(str(item_phase)) != target:
+            continue
+        records = item.get("verification_records") or []
+        has_formal_proof = False
+        if isinstance(records, list):
+            for record in records:
+                if not isinstance(record, dict):
+                    continue
+                method = record.get("method")
+                if isinstance(method, str) and method.strip() in FORMAL_PROOF_METHODS:
+                    has_formal_proof = True
+                    break
+        if not has_formal_proof:
+            claim_id = item.get("id")
+            if isinstance(claim_id, str) and claim_id.strip():
+                unformalized.append(claim_id.strip())
+    return unformalized
+
+
+def _record_formalization_override(
+    cwd: Path,
+    phase_num: str,
+    claim_ids: list[str],
+    justification: str,
+) -> None:
+    """Append a ``Decision`` to state.json logging the override."""
+    from grd.core.state import load_state_json, save_state_json
+
+    state = load_state_json(cwd) or {}
+    decisions = state.get("decisions")
+    if not isinstance(decisions, list):
+        decisions = []
+    listing = ", ".join(claim_ids) if claim_ids else "(none)"
+    decisions.append(
+        {
+            "phase": phase_num,
+            "summary": f"Overrode formalization gate on phase-complete for claims: {listing}",
+            "rationale": justification,
+        }
+    )
+    state["decisions"] = decisions
+    save_state_json(cwd, state)
+
+
+def phase_complete(
+    cwd: Path,
+    phase_num: str,
+    *,
+    override_formalization: str | None = None,
+) -> PhaseCompleteResult:
     """Mark a phase as complete and transition to the next phase.
 
     Updates ROADMAP.md (checkbox, progress table, plan count) and STATE.md
     (current phase, status, last activity).
 
+    Args:
+        cwd: Project root.
+        phase_num: Phase to complete.
+        override_formalization: Brief justification (required & non-empty when
+            overriding). When provided, bypasses the needs_formalization gate
+            and appends a Decision to state.json recording the override.
+
     Raises:
         PhaseValidationError: If phase number format is invalid.
         PhaseNotFoundError: If the phase doesn't exist.
         PhaseIncompleteError: If not all plans have summaries.
+        PhaseNeedsFormalizationError: If claims are flagged needs_formalization
+            but lack a formal-proof record, and no override is supplied.
     """
     phase_num = str(phase_num)
     _validate_phase_number(phase_num)
@@ -1895,6 +2008,8 @@ def phase_complete(cwd: Path, phase_num: str) -> PhaseCompleteResult:
     is_last_phase = True
     plan_count = 0
     summary_count = 0
+    formalization_overridden = False
+    formalization_override_claims: list[str] = []
 
     with grd_span("phases.complete", phase=phase_num):
         with file_lock(roadmap_path) if roadmap_path.exists() else _null_context():
@@ -1909,6 +2024,15 @@ def phase_complete(cwd: Path, phase_num: str) -> PhaseCompleteResult:
 
             if not is_phase_complete(plan_count, summary_count):
                 raise PhaseIncompleteError(phase_num, summary_count, plan_count)
+
+            unformalized = _collect_unformalized_claims(cwd, phase_num)
+            if unformalized:
+                justification = (override_formalization or "").strip()
+                if not justification:
+                    raise PhaseNeedsFormalizationError(phase_num, unformalized)
+                _record_formalization_override(cwd, phase_num, unformalized, justification)
+                formalization_overridden = True
+                formalization_override_claims = list(unformalized)
 
             # Update ROADMAP.md
             if roadmap_path.exists():
@@ -1998,6 +2122,8 @@ def phase_complete(cwd: Path, phase_num: str) -> PhaseCompleteResult:
             date=today,
             roadmap_updated=roadmap_path.exists(),
             state_updated=state_path.exists(),
+            formalization_overridden=formalization_overridden,
+            formalization_override_claims=formalization_override_claims,
         )
 
 
