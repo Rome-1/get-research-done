@@ -233,6 +233,106 @@ def test_cluster_consensus_upgrades_two_agreeing_candidates_to_accept(tmp_path: 
     assert winner.decision.requires_cluster_consensus is True
 
 
+def test_escalate_unfiled_when_bd_missing(tmp_path: Path) -> None:
+    """bd missing from PATH must surface as ``escalate_unfiled`` with a
+    top-level warning so the human sees the silent-failure (UX-STUDY.md §P0-8
+    / ge-1hr). ``escalation_attempted`` and ``escalation_error`` are promoted
+    to the top-level result so ``--raw`` JSON consumers don't have to dig
+    into the nested ``escalation`` object.
+    """
+    cfg = AutoformalizeConfig(num_candidates=1, repair_budget=0)
+    llm = MockLLM(responses=["```lean\nbad1\n```"])
+    check = _StubCheck([_fail()])
+
+    def _escalate_bd_missing(**kwargs: object) -> BeadEscalationResult:
+        return BeadEscalationResult(
+            attempted=False,
+            bead_id=None,
+            error="bd CLI not found on PATH",
+            title=str(kwargs.get("title", "")),
+        )
+
+    result = verify_claim(
+        claim="some claim",
+        project_root=tmp_path,
+        llm=llm,
+        config=cfg,
+        index=NameIndex.empty(),
+        lean_check=check,
+        escalate_fn=_escalate_bd_missing,
+    )
+
+    assert result.outcome == "escalate_unfiled"
+    assert result.chosen_source is None
+    assert result.warning is not None
+    assert "ESCALATION NOT FILED" in result.warning
+    # The warning should direct the user to the install + manual-filing path.
+    assert "bd create" in result.warning
+    assert result.escalation_attempted is False
+    assert result.escalation_error == "bd CLI not found on PATH"
+    # The nested escalation block is still preserved for the manual-filing body.
+    assert result.escalation is not None
+    assert result.escalation.bead_id is None
+
+
+def test_escalate_unfiled_when_bd_runs_but_errors(tmp_path: Path) -> None:
+    """bd present but failing mid-run is a different failure mode than bd
+    missing — the warning text should explain that bd ran but returned no
+    bead id, and the outcome is still promoted to ``escalate_unfiled``.
+    """
+    cfg = AutoformalizeConfig(num_candidates=1, repair_budget=0)
+    llm = MockLLM(responses=["```lean\nbad1\n```"])
+    check = _StubCheck([_fail()])
+
+    def _escalate_bd_broken(**kwargs: object) -> BeadEscalationResult:
+        return BeadEscalationResult(
+            attempted=True,
+            bead_id=None,
+            error="bd create exited 2: dolt down",
+            title=str(kwargs.get("title", "")),
+        )
+
+    result = verify_claim(
+        claim="some claim",
+        project_root=tmp_path,
+        llm=llm,
+        config=cfg,
+        index=NameIndex.empty(),
+        lean_check=check,
+        escalate_fn=_escalate_bd_broken,
+    )
+
+    assert result.outcome == "escalate_unfiled"
+    assert result.warning is not None
+    assert "bd ran but did not return a bead id" in result.warning
+    assert "dolt down" in result.warning
+    assert result.escalation_attempted is True
+    assert result.escalation_error == "bd create exited 2: dolt down"
+
+
+def test_escalate_filed_stays_escalate(tmp_path: Path) -> None:
+    """When bd filed a bead the outcome stays ``escalate`` — no warning."""
+    cfg = AutoformalizeConfig(num_candidates=1, repair_budget=0)
+    llm = MockLLM(responses=["```lean\nbad\n```"])
+    check = _StubCheck([_fail()])
+    escalate = _EscalateSpy(bead_id="ge-filed")
+
+    result = verify_claim(
+        claim="some claim",
+        project_root=tmp_path,
+        llm=llm,
+        config=cfg,
+        index=NameIndex.empty(),
+        lean_check=check,
+        escalate_fn=escalate,
+    )
+
+    assert result.outcome == "escalate"
+    assert result.warning is None
+    assert result.escalation_attempted is True
+    assert result.escalation_error is None
+
+
 def test_notes_flag_empty_index(tmp_path: Path) -> None:
     """An empty NameIndex should surface a note explaining DDR is disabled."""
     cfg = AutoformalizeConfig(num_candidates=1, repair_budget=0)

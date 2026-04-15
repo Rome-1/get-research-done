@@ -70,10 +70,18 @@ class VerifyClaimResult:
     """Final pipeline output for one informal claim.
 
     ``outcome`` mirrors the winning candidate's decision (or ``"escalate"`` if
-    no candidate compiled). ``chosen_source`` is the Lean code the user should
-    accept; it's ``None`` when we bailed to human review. The ``candidates``
-    list carries every attempt for debugging — even the ones that failed — so
-    the CLI JSON is rich enough for a second pass without rerunning.
+    no candidate compiled). ``"escalate_unfiled"`` is the special variant used
+    when the pipeline wanted to file a bead but couldn't — typically because
+    ``bd`` is missing from ``PATH``; see ``warning`` for the human-readable
+    reason. Silent failure there would break trust in the escalation path
+    (ge-1hr / UX-STUDY.md §P0-8), so this case is promoted to a first-class
+    outcome and advertised in ``warning`` + ``escalation_attempted`` /
+    ``escalation_error`` at the top level.
+
+    ``chosen_source`` is the Lean code the user should accept; it's ``None``
+    when we bailed to human review. The ``candidates`` list carries every
+    attempt for debugging — even the ones that failed — so the CLI JSON is
+    rich enough for a second pass without rerunning.
     """
 
     claim: str
@@ -86,6 +94,9 @@ class VerifyClaimResult:
     index_source: str = ""
     escalation: BeadEscalationResult | None = None
     notes: list[str] = field(default_factory=list)
+    warning: str | None = None
+    escalation_attempted: bool | None = None
+    escalation_error: str | None = None
 
 
 def verify_claim(
@@ -161,9 +172,10 @@ def verify_claim(
             project_root=project_root,
             escalate_fn=escalate_fn,
         )
+        final_outcome, warning = _promote_unfiled_outcome(base_outcome="escalate", escalation=esc)
         return VerifyClaimResult(
             claim=claim,
-            outcome="escalate",
+            outcome=final_outcome,
             chosen_source=None,
             chosen_back_translation=None,
             chosen_similarity=None,
@@ -172,6 +184,9 @@ def verify_claim(
             index_source=idx.source,
             escalation=esc,
             notes=notes + ["no candidate compiled within repair budget"],
+            warning=warning,
+            escalation_attempted=esc.attempted if esc else None,
+            escalation_error=esc.error if esc else None,
         )
 
     # Score every compiled candidate so we have a cluster to reason over.
@@ -234,10 +249,11 @@ def verify_claim(
         )
 
     chosen_source = winner.repair.final_source if decision.outcome == "auto_accept" else None
+    final_outcome, warning = _promote_unfiled_outcome(base_outcome=decision.outcome, escalation=escalation)
 
     return VerifyClaimResult(
         claim=claim,
-        outcome=decision.outcome,
+        outcome=final_outcome,
         chosen_source=chosen_source,
         chosen_back_translation=winner.faithfulness.back_translation,
         chosen_similarity=winner.faithfulness.similarity,
@@ -246,6 +262,9 @@ def verify_claim(
         index_source=idx.source,
         escalation=escalation,
         notes=notes,
+        warning=warning,
+        escalation_attempted=escalation.attempted if escalation else None,
+        escalation_error=escalation.error if escalation else None,
     )
 
 
@@ -280,6 +299,47 @@ def _cluster_consensus_size(
     # similarity was already above auto_accept.
     _ = config  # reserved for future per-project overrides
     return cluster
+
+
+def _promote_unfiled_outcome(
+    *,
+    base_outcome: str,
+    escalation: BeadEscalationResult | None,
+) -> tuple[str, str | None]:
+    """Return (outcome, warning) with the unfiled case promoted to first-class.
+
+    When the pipeline decides a claim needs human review but the escalation
+    attempt produced no ``bead_id`` (either ``bd`` is missing, or ``bd
+    create`` errored), we want callers to treat this differently from a
+    normal ``escalate`` — the human reviewer will never see the bead.
+    Rewriting ``outcome`` and emitting a top-level ``warning`` lets CLI
+    consumers render a prominent notice without introspecting
+    ``escalation`` (ge-1hr / UX-STUDY.md §P0-8).
+
+    ``auto_accept`` is never promoted: a successful verdict doesn't need
+    a bead even when one would fail to file.
+    """
+    if base_outcome == "auto_accept":
+        return base_outcome, None
+    if escalation is None or escalation.bead_id is not None:
+        return base_outcome, None
+
+    if escalation.attempted is False:
+        cause = escalation.error or "bd CLI not available"
+        warning = (
+            f"ESCALATION NOT FILED ({cause}). "
+            "Install the beads CLI and re-run to file a human-review bead, or "
+            "copy the escalation title/body from the JSON below and file the "
+            "bead manually with `bd create -l human`."
+        )
+    else:
+        cause = escalation.error or "unknown bd failure"
+        warning = (
+            f"ESCALATION NOT FILED — bd ran but did not return a bead id ({cause}). "
+            "Check that dolt/beads is healthy, then re-run; meanwhile the "
+            "escalation body is preserved in the JSON below for manual filing."
+        )
+    return "escalate_unfiled", warning
 
 
 def _escalate_no_compile(
