@@ -4,6 +4,7 @@
 **Date:** 2026-04-11
 **Bead:** ge-plk
 **Status:** Proposal for Rome's review
+**Shipped vs. planned:** [STATUS.md](./STATUS.md) — canonical matrix of every `/grd:*` skill and `grd lean …` CLI command this pitch promises, tagged `shipped / planned / n/a`. Check it before assuming something exists.
 
 ---
 
