@@ -11,6 +11,11 @@
 \usepackage{hyperref}
 \usepackage[margin=1in]{geometry}
 
+%# Pandoc emits \tightlist for compact bullet lists; define as a no-op
+%# fallback so lists don't crash the compile when the macro isn't provided
+%# elsewhere.
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
 \title{\VAR{title}}
 
 \author{
