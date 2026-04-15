@@ -590,12 +590,16 @@ Uninstall removes GRD from the selected runtime config only. It does not delete 
 
 GRD takes its name in explicit analogy with [GSD (Get Shit Done)](https://github.com/gsd-build/get-shit-done), whose adoption demonstrates how AI-native command workflows can be genuinely useful. GRD takes inspiration from that system to build a sophisticated prompt-engineered agentic system specifically designed for research.
 
+GRD is also the research-general sibling of [Get Physics Done (GPD)](https://github.com/psi-oss/get-physics-done) — the physics-specific upstream that motivated much of the verification, formal-proof, and convention-lock tooling landing here. Improvements flow in both directions.
+
 ## Citation
 
-If GRD contributes to published research, please cite the software using [`CITATION.cff`](https://github.com/psi-oss/get-research-done/blob/main/CITATION.cff). Copy-ready formats:
+If GRD contributes to published research, please cite **both** the upstream project and this fork. Metadata for the upstream is in [`CITATION.cff`](https://github.com/psi-oss/get-research-done/blob/main/CITATION.cff).
+
+**Upstream (Physical Superintelligence PBC):**
 
 ```bib
-@software{physical_superintelligence_2026_gpd,
+@software{physical_superintelligence_2026_grd,
   author = {{Physical Superintelligence PBC}},
   title = {Get Research Done (GRD)},
   version = {1.1.0},
@@ -605,21 +609,24 @@ If GRD contributes to published research, please cite the software using [`CITAT
 }
 ```
 
-```text
-Physical Superintelligence PBC (2026). Get Research Done (GRD) (Version 1.1.0). https://github.com/psi-oss/get-research-done
+**This fork (Rome Thorstenson):**
+
+```bib
+@software{thorstenson_2026_grd_fork,
+  author = {Thorstenson, Rome},
+  title = {Get Research Done (GRD) --- Rome-1 fork},
+  year = {2026},
+  url = {https://github.com/Rome-1/get-research-done},
+  license = {Apache-2.0}
+}
 ```
 
-## Star History
+Plain text:
 
-<p align="center">
-  <a href="https://star-history.com/#Rome-1/get-research-done&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=Rome-1/get-research-done&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=Rome-1/get-research-done&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/image?repos=Rome-1/get-research-done&type=Date" />
-    </picture>
-  </a>
-</p>
+```text
+Physical Superintelligence PBC (2026). Get Research Done (GRD) (Version 1.1.0). https://github.com/psi-oss/get-research-done
+Thorstenson, R. (2026). Get Research Done (GRD) — Rome-1 fork. https://github.com/Rome-1/get-research-done
+```
 
 ## License
 
