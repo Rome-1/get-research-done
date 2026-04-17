@@ -1,6 +1,6 @@
 # Formal-Proof Integration — Status
 
-**Last updated:** 2026-04-15 (bead ge-nub)
+**Last updated:** 2026-04-17 (bead ge-8g5)
 **Pitch:** [PITCH.md](./PITCH.md)
 **Epic:** ge-wisp-rnf6 (mol-polecat-work)
 
@@ -22,8 +22,8 @@ Legend:
 |---|---|---|---|
 | `/grd:lean-bootstrap` | shipped | 1 | [`src/grd/commands/lean-bootstrap.md`](../../src/grd/commands/lean-bootstrap.md) |
 | `/grd:lean-check` | planned | 1 | [`src/grd/commands/lean-check.md`](../../src/grd/commands/lean-check.md) (stub) |
-| `/grd:init-blueprint` | planned | 2 | [`src/grd/commands/init-blueprint.md`](../../src/grd/commands/init-blueprint.md) (stub) |
-| `/grd:blueprint-status` | planned | 2 | [`src/grd/commands/blueprint-status.md`](../../src/grd/commands/blueprint-status.md) (stub) |
+| `/grd:init-blueprint` | shipped | 2 | [`src/grd/commands/init-blueprint.md`](../../src/grd/commands/init-blueprint.md) |
+| `/grd:blueprint-status` | shipped | 2 | [`src/grd/commands/blueprint-status.md`](../../src/grd/commands/blueprint-status.md) |
 | `/grd:formalize-claim` | planned | 3 | [`src/grd/commands/formalize-claim.md`](../../src/grd/commands/formalize-claim.md) (stub) |
 | `/grd:prove` | planned | 3 | [`src/grd/commands/prove.md`](../../src/grd/commands/prove.md) (stub) |
 | `/grd:plan-phase` | n/a | — | existing GRD skill; reused by the formal-proof workflow. |
@@ -48,7 +48,8 @@ the phase that will ship them.
 | `grd lean ping` | shipped | 1 | `src/grd/cli/lean.py` (`@lean_app.command("ping")`) — not in PITCH, daemon health check. |
 | `grd lean prove` | shipped | 3 | `src/grd/cli/lean.py` (`@lean_app.command("prove")`) |
 | `grd lean verify-claim` | shipped | 3 | `src/grd/cli/lean.py` (`@lean_app.command("verify-claim")`); drives the 6-stage autoformalization pipeline. |
-| `grd lean blueprint-status` | planned | 2 | Phase 2 Blueprint Integration (PITCH §Phase 2). |
+| `grd lean init-blueprint` | shipped | 2 | `src/grd/cli/lean.py` (`@lean_app.command("init-blueprint")`) |
+| `grd lean blueprint-status` | shipped | 2 | `src/grd/cli/lean.py` (`@lean_app.command("blueprint-status")`) |
 | `grd lean sync` | planned | 3 | Rebuilds grounded retrieval index against pinned Mathlib4 + PhysLean snapshot (PITCH §Phase 3 §3.2). |
 
 ### JSON-output flag
@@ -92,7 +93,7 @@ via the per-project Unix socket is in `src/grd/core/lean/daemon.py`.
 
 | Item | Status | Phase |
 |---|---|---|
-| `blueprint/` phase artifact directory (`content.tex`, `lakefile.lean`, `Proofs/`, `Blueprint.lean`) | planned | 2 |
+| `blueprint/` phase artifact directory (`content.tex`, `lakefile.lean`, `Proofs/`, `Blueprint.lean`) | shipped | 2 |
 | Convention bridge — Lean type classes generated from the 18-field convention lock | planned | 2 |
 | `formal-verification` domain pack | planned | 4 |
 | Kimina Lean Server batch backend | planned | 4 |
@@ -109,6 +110,7 @@ via the per-project Unix socket is in `src/grd/core/lean/daemon.py`.
 | ge-wbs | Formal-proof coverage metrics |
 | ge-d8s | `grd-prover` agent definition |
 | ge-nub | This status page + planned-skill stubs |
+| ge-8g5 | Blueprint MVP — init-blueprint + blueprint-status with auto-leanok |
 | ge-cch | Running list of upstream tooling friction (Leanblueprint, Pantograph, LeanDojo, Kimina) |
 | ge-h0j | Testing strategy / test matrix |
 

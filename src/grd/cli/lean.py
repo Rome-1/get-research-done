@@ -551,6 +551,84 @@ def _verify_result_to_dict(result: object) -> dict:
     raise TypeError(f"Cannot serialize {type(result).__name__}")
 
 
+@lean_app.command("init-blueprint")
+def lean_init_blueprint(
+    phase: str = typer.Argument(
+        ...,
+        help="Phase identifier (number, name prefix, or slug) to generate blueprint for.",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Overwrite an existing blueprint directory.",
+    ),
+) -> None:
+    """Generate a leanblueprint-compatible LaTeX skeleton from a GRD phase.
+
+    Maps plan entries to blueprint nodes (``\\begin{lemma}``/``\\begin{theorem}``),
+    plan ``depends_on`` edges to ``\\uses{...}``, and creates stub ``.lean``
+    proof files under ``Proofs/``.
+
+    The output directory is ``<phase-dir>/blueprint/`` with:
+    ``content.tex``, ``lakefile.lean``, ``lean-toolchain``, ``Blueprint.lean``,
+    and one ``Proofs/<PlanName>.lean`` stub per plan entry.
+    """
+    from grd.core.lean.blueprint_core import init_blueprint
+
+    result = init_blueprint(_get_cwd(), phase, force=force)
+    _output(result)
+    if not result.ok:
+        _error(result.error or "init-blueprint failed", code=EXIT_INPUT_ERROR)
+    if not _helpers._raw:
+        console.print(
+            f"[green]Blueprint created[/] at [cyan]{result.blueprint_dir}[/] "
+            f"({result.node_count} nodes, {result.edge_count} edges)"
+        )
+
+
+@lean_app.command("blueprint-status")
+def lean_blueprint_status(
+    phase: str = typer.Argument(
+        ...,
+        help="Phase identifier to check blueprint status for.",
+    ),
+    no_typecheck: bool = typer.Option(
+        False,
+        "--no-typecheck",
+        help="Skip Lean type-checking; report only what content.tex declares.",
+    ),
+    svg: bool = typer.Option(
+        False,
+        "--svg",
+        help="Render dependency graph as SVG (requires graphviz). Falls back to ASCII.",
+    ),
+) -> None:
+    """Walk a phase blueprint and report formalization status.
+
+    Cross-references each ``\\lean{...}`` in ``content.tex`` against actual
+    Lean type-checks and auto-marks ``\\leanok`` for proofs that pass.
+
+    Renders the standard dependency graph color-coded by status:
+    ``[OK]`` proved (green), ``[--]`` stated (yellow),
+    ``[  ]`` informal (grey), ``[!!]`` failed (red).
+    """
+    from grd.core.lean.blueprint_core import blueprint_status
+
+    result = blueprint_status(_get_cwd(), phase, typecheck=not no_typecheck)
+    _output(result)
+
+    if not result.ok:
+        _error(result.error or "blueprint-status failed", code=EXIT_INPUT_ERROR)
+
+    if not _helpers._raw and result.ascii_graph:
+        console.print("")
+        console.print(result.ascii_graph)
+        if result.summary.get("leanok_updated", 0) > 0:
+            console.print(
+                f"\n[green]Auto-marked {result.summary['leanok_updated']} node(s) as \\leanok[/]"
+            )
+
+
 @lean_app.command("bootstrap")
 def lean_bootstrap(
     with_graphviz: bool = typer.Option(

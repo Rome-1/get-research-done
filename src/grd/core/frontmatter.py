@@ -38,6 +38,7 @@ from grd.contracts import (
     parse_project_contract_data_strict,
 )
 from grd.core import knowledge_docs as _knowledge_docs
+from grd.core.strict_yaml import load_strict_yaml
 from grd.core.constants import (
     PLAN_SUFFIX,
     STANDALONE_PLAN,
