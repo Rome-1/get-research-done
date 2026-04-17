@@ -270,6 +270,96 @@ Append-only log of work on this plan. Newest entries on top. Each entry: what wa
 **Artifacts:** Commit SHAs, files touched, test results.
 ```
 
+### 2026-04-13 — reviewer sweep: three polecats, two HIGH fixes
+
+**What changed:** Before proceeding with the GPD PR, ran three parallel reviewers (Claude Opus, Claude Sonnet, OpenAI Codex GPT-5) against the working-tree diff. Consolidated findings surfaced three actionable HIGH-severity issues plus one LOW docstring gap. All four are now fixed in-tree.
+
+1. **PRL template: `\usepackage{natbib}` conflicted with revtex4-2's own citation engine.** revtex4-2 loads natbib internally when the `natbib` class option is set; layering `\usepackage{natbib}` on top of a class that already wraps the package risks option clashes and redundancy warnings. Fix: drop the `\usepackage{natbib}` line, add `natbib` to the class options: `\documentclass[aps,prl,twocolumn,superscriptaddress,natbib]{revtex4-2}`.
+
+2. **Nature template: `naturemag.bst` is not natbib-aware.** naturemag.bst predates natbib and has no author-name macro, so pandoc's `\citet{key}` output would have rendered as "(author?)" — the same failure class we just fixed for `plain.bst` in the standalone fallback. Fix: switch the Nature template to `\usepackage[numbers,super,sort&compress]{natbib}` with `\bibliographystyle{unsrtnat}` — natbib's numeric-super mode produces Nature's expected superscript-numeric citation style while remaining natbib-compatible. `journal_map.py` and `grd-paper-writer.md` updated to match (`bib_style="unsrtnat"`, `required_tex_files=["unsrtnat.bst"]`).
+
+3. **`pandoc-citeproc` auto-enabled alongside `--natbib` causes double citation processing.** `_KNOWN_EXTERNAL_FILTERS` listed `pandoc-citeproc` and `resolve_external_filters(None, …)` auto-added both known filters when installed. On older hosts that still have the deprecated binary, this stacks citation processing on top of `--natbib`, garbling the bibliography. Fix: remove `pandoc-citeproc` from `_KNOWN_EXTERNAL_FILTERS` (modern pandoc uses the `--citeproc` flag instead; legacy users can still request the filter by name explicitly). Two new regression tests guard the invariant: auto-mode excludes it even when installed; explicit opt-in still works as an escape hatch.
+
+4. **Docstrings:** `markdown_to_latex_fragment` and `maybe_convert_to_latex` now spell out the `\citet` / `\citep` output, the citeproc-precedence rule, and the "literal `@token` in prose is read as a cite key; escape as `\@` or pass `natbib=False`" caveat.
+
+**Outcome:** Worked — 34/34 pandoc tests pass (including the 2 new regression tests); 126/126 tests across the touched paths (pandoc, paper citations, paper markdown support, paper models, paper regressions, LaTeX utils, bibliography-conflict) pass. No regressions against the 48 pre-existing main-branch failures.
+
+**Findings:**
+- Reviewer divergence is signal. Opus and Sonnet flagged the PRL natbib conflict as HIGH; Codex dismissed it as a no-op. The tiebreaker was reading the template: `\documentclass[aps,prl,twocolumn,superscriptaddress]{revtex4-2}` does *not* pass the `natbib` class option, so revtex was using its APS cite engine and the explicit `\usepackage{natbib}` was doing something unpredictable. The class-option path is the documented idiom.
+- Sonnet's catch of `pandoc-citeproc` auto-enablement was the most subtle finding — the failure mode is silent on modern hosts (where `pandoc-citeproc` isn't installed) and only manifests on older CI boxes. It belongs in the portability checklist for the GPD port.
+- The `naturemag.bst` finding mirrors the `plain.bst` → `plainnat.bst` fix from 2026-04-13 earlier today: any pre-natbib bst will misbehave with pandoc's natbib output. Worth scanning the other templates' bsts during the GPD port.
+
+**Plan impact:**
+- GPD port checklist gains three lines:
+  1. Pass `natbib` as a revtex class option; do not `\usepackage{natbib}` alongside.
+  2. If the target template uses a pre-natbib `.bst`, swap for the natbib-compatible variant (`plainnat`/`abbrvnat`/`unsrtnat`) or use natbib's numeric mode.
+  3. Don't auto-enable `pandoc-citeproc` as an external filter alongside `--natbib`.
+- Consider a CI check that greps templates for the `\usepackage{natbib}` + revtex4-2 combination; flag as config-lint.
+
+**Artifacts:**
+- `src/grd/utils/pandoc.py` (drop `pandoc-citeproc` from auto-enabled filters; expanded docstring for `markdown_to_latex_fragment`)
+- `src/grd/mcp/paper/markdown_support.py` (expanded docstring for `maybe_convert_to_latex`)
+- `src/grd/mcp/paper/templates/prl/prl_template.tex` (natbib as class option, not `\usepackage`)
+- `src/grd/mcp/paper/templates/nature/nature_template.tex` (natbib numeric-super mode + `unsrtnat` bst)
+- `src/grd/mcp/paper/journal_map.py` (Nature `bib_style` → `unsrtnat`; required tex files updated)
+- `src/grd/agents/grd-paper-writer.md` (Nature guidance updated to match)
+- `tests/test_pandoc_utils.py` (+2 regression tests for auto/explicit citeproc behaviour; 34 total)
+- Commit: ff3a506 (bundled with ge-kus + demo hardening; see entries below for the full reviewer-sweep / plainnat / natbib-default landing).
+
+### 2026-04-13 — ge-kus: bibliography style must be natbib-compatible
+
+**What changed:** Pitch demo initially used `\bibliographystyle{plain}` in the standalone-article wrapper. `plain.bst` doesn't know about natbib's `\citet` / `\citep` (it's a pre-natbib BibTeX style), so `\citet{einstein1905}` rendered in the PDF as "(author?) [2]" — bibtex produced the citation number but had no author-name macro to fill in the textual form. Fix: switch to `plainnat` (the natbib-compatible drop-in replacement from the natbib package) in both the demo wrapper (`/tmp/pandoc-pitch-demo/demo.py`) and the `specs/workflows/export.md` standalone fallback. The rendered PDF now shows "Einstein [1905]" and "[Michelson and Morley, 1887, Eddington, 1919]" correctly.
+
+**Outcome:** Worked — demo regenerated, `pdftotext` output confirms resolved author-year citations. The fix also exposed a second render artefact in the demo: `[[phase:1]]` / `[[phase:2]]` / `[[sec:discussion]]` rendered as `??` because the demo didn't emit the matching `\label` commands. Fixed in the demo by prepending `\label{phase:1}` etc. to the relevant section markdown (pandoc passes bare `\label` through as raw inline LaTeX).
+
+**Findings:**
+- The natbib bst requirement is load-bearing and easy to miss: the LaTeX compile succeeds even with `plain.bst`, producing a "valid" PDF, but the rendered text is wrong. String-level invariants on the `.tex` file don't catch this class of bug — you have to extract text from the compiled PDF (`pdftotext`) and assert on rendered citations. Worth adding as a CI step once GPD port lands.
+- Journal templates that already have natbib-compatible styles (`mnras.bst`, `jfm.bst`, `naturemag.bst`, `JHEP.bst`) are unaffected. PRL (revtex4-2) and ApJ (aastex631) use their classes' own citation engines and are also fine. The bug is strictly in the standalone/article fallback.
+- Phase refs in a realistic `grd:export` run are emitted by the export workflow per completed phase. The demo's `??` artefact is expected in isolated runs without phase artefacts; filed as ge-y4u for follow-up (export workflow should synthesise `\label{phase:N}` per phase loop).
+
+**Plan impact:**
+- GPD port checklist gains one line: copy the `plainnat` bibliography-style default into the GPD equivalent of export.md.
+- Recommendation: add a `pdftotext`-based smoke assertion to the demo script and to CI once pandoc-crossref is wired in.
+
+**Artifacts:**
+- `src/grd/specs/workflows/export.md` (standalone fallback now emits `\bibliographystyle{plainnat}`)
+- `/tmp/pandoc-pitch-demo/demo.py` (wrapper uses plainnat; markdown sections emit `\label{phase:N}` / `\label{sec:discussion}`)
+- `research/pandoc-latex-pitch.md` (this log entry)
+- Beads: ge-kus (this fix), ge-y4u (export-workflow phase-label synthesis)
+- Commit: ff3a506 (bundled with the reviewer-sweep and demo-hardening entries above/below).
+
+### 2026-04-12 — demo hardening: natbib citation emission + template shims
+
+**What changed:** Built `/tmp/pandoc-pitch-demo/demo.py` to exercise the whole pipeline end-to-end against real pandoc + pdflatex + bibtex. The demo surfaced a real gap: without `--natbib` pandoc escaped `@key` / `[@a; @b]` as literal text instead of emitting citation commands, so the pitch's "agents write `@key`, pandoc emits `\cite{}`" promise was aspirational rather than actual. Fix: `markdown_to_latex_fragment` now passes `--natbib` by default (`citeproc=True` still wins if explicitly requested; `natbib=False` opts out). Pandoc with `--natbib` emits the natbib-native `\citet{key}` for textual cites and `\citep{k1, k2}` for parenthetical groups — strictly better than plain `\cite{}` because it preserves the author-vs-parenthetical intent. Journal templates grew `\usepackage{natbib}` (PRL, Nature; MNRAS and JFM already had it; ApJ/JHEP rely on class-provided compatibility shims) and `\providecommand{\tightlist}{...}` (pandoc emits `\tightlist` for compact lists and crashes the compile if the command isn't defined). `specs/workflows/export.md` standalone-article fallback got the same two additions.
+
+**Outcome:** Worked — demo runs clean end-to-end:
+- 20 hard render_paper invariants pass (natbib `\citet`/`\citep` present, `[[ns:id]]` → `\ref`, `{#eq:label}` → `\label`, figures, callouts, raw-LaTeX appendix label preserved verbatim, underscore escaping in inline code).
+- Full compile cycle `pdflatex → bibtex → pdflatex → pdflatex` all exit 0.
+- `paper_standalone.pdf` (157 KB) produced with resolved bibliography.
+- Graceful-degradation path still returns markdown verbatim when `PandocStatus(available=False)`.
+- pandoc-crossref auto-enable logic works against a synthesised `PandocStatus`.
+- Unit tests: 77 pandoc/markdown/citation tests pass; 86 paper-pipeline tests pass overall.
+
+**Findings:**
+- `--natbib` and `--citeproc` are mutually exclusive to pandoc; the wrapper codifies this precedence (`citeproc` wins) so callers can't accidentally emit both flags.
+- There is no "just emit `\cite{}`" option in pandoc — you pick `\citet`/`\citep` (natbib), `\autocite` (biblatex), or inline formatted text (citeproc). natbib is the most portable choice for physics/maths journals.
+- Pandoc's `\tightlist` macro is emitted unconditionally for tight bullet lists; any template missing the `\providecommand{\tightlist}` shim fails with `! Undefined control sequence` on the first list the author writes. The fix is a two-line `\providecommand` that makes compilation robust across document classes.
+- Exercising the actual PDF pipeline (not just asserting on the LaTeX string) was decisive — the string-level render_paper invariants were green before the natbib fix, because pandoc was dutifully writing escaped `@einstein1905` into the output, which is valid LaTeX that just doesn't mean anything to bibtex.
+
+**Plan impact:**
+- GPD port checklist now includes "copy template shims (natbib + tightlist)" — trivial two-line additions per template.
+- End-to-end demo script belongs in the GPD port as a smoke test (`tools/demo_pandoc_pipeline.py` or similar).
+
+**Artifacts:**
+- `src/grd/utils/pandoc.py` (new `natbib: bool = True` default on `markdown_to_latex_fragment`, `natbib=False` default on `run_pandoc` + `_build_command`; citeproc takes precedence)
+- `src/grd/mcp/paper/markdown_support.py` (forwards `natbib` through `maybe_convert_to_latex`)
+- `src/grd/specs/workflows/export.md` (fallback preamble adds `natbib` + `\providecommand{\tightlist}`)
+- `src/grd/mcp/paper/templates/{prl,nature,mnras,jfm}/` (add `\providecommand{\tightlist}`; `prl` + `nature` gain `\usepackage{natbib}`)
+- `src/grd/mcp/paper/templates/{apj,jhep}/` (add `\providecommand{\tightlist}`; rely on class's natbib shims)
+- `tests/test_pandoc_utils.py` (+5 tests: real-pandoc `\citet`/`\citep` assertion, default-off for `run_pandoc`, default-on for `markdown_to_latex_fragment`, citeproc precedence, `natbib=False` opt-out)
+- `/tmp/pandoc-pitch-demo/demo.py` (end-to-end demo, 40 green checks, produces real PDF)
+- Commit: ff3a506 (bundled with the reviewer-sweep and ge-kus entries; this is the landed state of the natbib-default + template-shim work described here).
+
 ### 2026-04-12 — ge-ow7: pandoc-crossref auto-enablement
 
 **What changed:** External pandoc filters are now first-class in the pandoc wrapper. `grd.utils.pandoc` gained an `external_filters` parameter on `run_pandoc`/`markdown_to_latex_fragment`, plus a new `resolve_external_filters(requested, status)` helper. Default behaviour (`external_filters=None` → "auto"): every entry of `_KNOWN_EXTERNAL_FILTERS` (`pandoc-crossref`, `pandoc-citeproc`) that is actually in `status.installed_filters` gets prepended to the filter chain ahead of Lua filters and `--citeproc`. `markdown_support.maybe_convert_to_latex` forwards the arg so `render_paper` picks up pandoc-crossref automatically when installed. Health check now emits a hint-level warning when pandoc is present but pandoc-crossref isn't, pointing to the install command. Agent spec documents the `{#fig:foo}` / `@fig:foo` syntax and its fallback behaviour; the export workflow spec notes auto-enablement and the opt-out (`external_filters=[]`).
