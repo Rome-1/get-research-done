@@ -51,6 +51,16 @@ the phase that will ship them.
 | `grd lean blueprint-status` | planned | 2 | Phase 2 Blueprint Integration (PITCH §Phase 2). |
 | `grd lean sync` | planned | 3 | Rebuilds grounded retrieval index against pinned Mathlib4 + PhysLean snapshot (PITCH §Phase 3 §3.2). |
 
+### JSON-output flag
+
+All `grd` subcommands accept `--json` (canonical) or `--raw` (legacy alias)
+as a global flag for machine-readable output. Both are hoisted to the root
+parser regardless of position, so `grd lean check '...' --json` and
+`grd --json lean check '...'` behave identically. Prefer `--json` in new
+documentation — `--raw` is kept for backwards compatibility with existing
+skill bodies and agent plumbing. Wired in `src/grd/cli/_helpers.py`
+(`@app.callback` + `_split_global_cli_options`).
+
 ## Agents
 
 | Agent | Status | Landing |

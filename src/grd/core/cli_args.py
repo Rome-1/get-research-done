@@ -31,7 +31,7 @@ def split_root_global_cli_options(argv: list[str]) -> tuple[list[str], list[str]
             index += 1
             continue
 
-        if arg == "--raw":
+        if arg in ("--raw", "--json"):
             global_args.append(arg)
             index += 1
             continue
