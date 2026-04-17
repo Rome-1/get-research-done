@@ -27,46 +27,27 @@ Your output must give later reviewers a concise statement of what is mathematica
 
 <process>
 1. Read the manuscript, verification artifacts, Stage 1 artifact, and any directly relevant summaries.
-2. Choose the 3-5 equations or derivation steps most central to the paper's claims.
+2. Choose the 3-5 equations or derivation steps most central to the paper's claims for general mathematical scrutiny.
 3. Check self-consistency, limits, signs, and approximation validity as far as the artifact set permits.
 4. Record what you actually checked and what remained unchecked.
 5. Write `.grd/review/STAGE-math.json` or the round-specific variant as a compact `StageReviewReport`.
 </process>
 
 <artifact_format>
-Use the stage artifact contract from `peer-review-panel.md`.
+Use `@{GRD_INSTALL_DIR}/references/publication/peer-review-panel.md` as the shared source of truth for the full `StageReviewReport` contract. Do not restate that schema here.
 
-Required schema for `STAGE-math{round_suffix}.json` (`StageReviewReport`, mirroring the staged-review contract):
+Math-specific deltas:
 
-- Top-level keys: `version`, `round`, `stage_id`, `stage_kind`, `manuscript_path`, `manuscript_sha256`, `claims_reviewed`, `summary`, `strengths`, `findings`, `confidence`, `recommendation_ceiling`
-- `stage_id` and `stage_kind` must both be `math`
-- The filename `STAGE-math{round_suffix}.json` and the JSON `round` field must agree: unsuffixed first-round artifacts use `round: 1`, and `-R<round>` filenames must use that same integer in `round`
-- `manuscript_path` must be non-empty and must exactly match the sibling `CLAIMS{round_suffix}.json`
-- `manuscript_sha256` must be the lowercase 64-hex digest for the exact manuscript snapshot under review
-- `claims_reviewed` must be an array of Stage 1 `CLM-...` claim IDs; use an empty array only when no indexed claim was actually reviewed
-- `manuscript_sha256` must exactly match the sibling `CLAIMS{round_suffix}.json`
-- Each `findings[]` entry is a `ReviewFinding` with: `issue_id`, `claim_ids`, `severity`, `summary`, `rationale`, `evidence_refs`, `manuscript_locations`, `support_status`, `blocking`, `required_action`
-- Reuse Stage 1 claim IDs like `CLM-001` in `claim_ids`; use `REF-...` issue IDs in `issue_id`
-- `claim_ids` must reuse Stage 1 `CLM-...` claim IDs; `issue_id` must use `REF-...`
-- `severity` must use exactly: `critical`, `major`, `minor`, `suggestion`
-- `support_status` must use exactly: `supported`, `partially_supported`, `unsupported`, `unclear`
-- `confidence` must use exactly: `high`, `medium`, `low`
-- `recommendation_ceiling` must use exactly: `accept`, `minor_revision`, `major_revision`, `reject`
-- `StageReviewReport` and every nested `ReviewFinding` use a closed schema; do not invent extra keys
-- Keep `claims_reviewed`, `strengths`, `findings`, `evidence_refs`, and `manuscript_locations` as arrays even when empty; do not collapse them to prose or scalars
-
-Required finding coverage:
-
-- key equations checked
-- limits and cross-checks
-- approximation and consistency notes
-- unchecked risk areas
-
-Include equation/location/check/status data in `findings` or supporting evidence refs.
+- For every reviewed theorem-bearing Stage 1 claim, emit exactly one `proof_audits[]` entry whose `claim_id` is also present in `claims_reviewed`.
+- Do not emit proof audits for unreviewed claims, and do not repeat `claim_id` values.
+- The theorem-to-proof audit must record what the proof actually uses, what it silently specializes away, and any remaining coverage gaps.
+- Keep the focus on key equations, limits, cross-checks, approximation notes, and theorem-to-proof alignment.
+- `recommendation_ceiling` must drop to `major_revision` or `reject` for central theorem-proof gaps or missing audits.
 </artifact_format>
 
 <anti_patterns>
 - Do not call a result "verified" just because it looks plausible.
 - Do not let missing checks disappear into prose; list them explicitly.
 - Do not soften a mathematically central gap into a presentation issue.
+- Do not treat a silently specialized proof as if it proved the stated theorem.
 </anti_patterns>

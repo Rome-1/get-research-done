@@ -46,7 +46,7 @@ def _create_roadmap(tmp_path: Path, content: str) -> Path:
     """Write ROADMAP.md and return its path."""
     roadmap = tmp_path / "GRD" / "ROADMAP.md"
     roadmap.parent.mkdir(parents=True, exist_ok=True)
-    roadmap.write_text(textwrap.dedent(content))
+    roadmap.write_text(textwrap.dedent(content), encoding="utf-8")
     return roadmap
 
 
@@ -54,7 +54,7 @@ def _create_state(tmp_path: Path, content: str) -> Path:
     """Write STATE.md and return its path."""
     state = tmp_path / "GRD" / "STATE.md"
     state.parent.mkdir(parents=True, exist_ok=True)
-    state.write_text(textwrap.dedent(content))
+    state.write_text(textwrap.dedent(content), encoding="utf-8")
     return state
 
 

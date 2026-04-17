@@ -1,16 +1,17 @@
 ---
 template_version: 1
+type: verification-report-template
 ---
 
 # Verification Report Template
 
 Template for `.grd/phases/XX-name/{phase}-VERIFICATION.md` -- physics verification of research phase results.
 
----
+## Canonical Report Surface
 
-## Verification Depth
+When `VERIFICATION.md` is contract-backed, keep the machine-readable surface limited to the schema-owned ledgers from `contract-results-schema.md`: `plan_contract_ref`, `contract_results`, `comparison_verdicts`, and `suggested_contract_checks`. Keep `status` strict, and do not invent verifier-local aliases or ad hoc machine-readable artifact fields.
 
-**Quick Verification:** For simple phases (single analytical result, no numerical computation), use Quick mode: complete only sections 1 (Dimensional Analysis), 3 (Limiting Cases), and 7 (Literature Comparison). All other sections can be marked N/A with justification.
+`status: passed` is strict: use it only when every contract-backed target is satisfied, every required decisive comparison is decisive, and `suggested_contract_checks` is empty. Keep `uncertainty_markers` explicit. If decisive work remains open, use `partial`, `gaps_found`, `expert_needed`, or `human_needed` and record structured `suggested_contract_checks` instead of padding prose.
 
 **Standard Verification:** All applicable sections for your project type (default).
 

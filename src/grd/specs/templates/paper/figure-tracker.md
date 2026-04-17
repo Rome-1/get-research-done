@@ -1,5 +1,6 @@
 ---
 template_version: 1
+type: figure-tracker-template
 ---
 
 <!-- Used by: write-paper workflow for tracking figure generation status. -->
@@ -16,11 +17,11 @@ Use this template as the canonical schema source of truth before creating or upd
 ```markdown
 ---
 figure_registry:
-  - id: fig-main
+  - id: fig-curvature-flow-bounds
     label: "Fig. 1"
     kind: figure
     role: smoking_gun|benchmark|comparison|sanity_check|publication_polish|other
-    path: paper/figures/fig-main.pdf
+    path: paper/figures/fig-curvature_flow_bounds.pdf
     contract_ids: [claim-id, deliverable-id]
     decisive: true
     has_units: true

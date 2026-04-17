@@ -69,9 +69,9 @@ def load_template(journal: str):
 def _clean_author(author: Author) -> Author:
     return author.model_copy(
         update={
-            "name": clean_latex_fences(author.name),
-            "email": clean_latex_fences(author.email),
-            "affiliation": clean_latex_fences(author.affiliation),
+            "name": _clean_user_text(author.name),
+            "email": _clean_user_text(author.email),
+            "affiliation": _clean_user_text(author.affiliation),
         }
     )
 
@@ -81,6 +81,7 @@ def _clean_section(section: Section) -> Section:
         update={
             "title": clean_latex_fences(section.title),
             "content": clean_latex_fences(section.content),
+            "label": clean_latex_fences(section.label),
         }
     )
 
@@ -165,12 +166,12 @@ def render_paper(config: PaperConfig, *, bib_keys: set[str] | None = None) -> st
     ]
     figures = [_clean_figure(figure) for figure in config.figures]
     rendered = template.render(
-        title=clean_latex_fences(config.title),
+        title=_clean_user_text(config.title),
         authors=authors,
-        abstract=clean_latex_fences(config.abstract),
+        abstract=_clean_user_text(config.abstract),
         sections=sections,
         figures=figures,
-        acknowledgments=clean_latex_fences(config.acknowledgments) if config.acknowledgments else None,
+        acknowledgments=_clean_user_text(normalize_acknowledgments(config.acknowledgments)),
         bib_file=config.bib_file,
         appendix_sections=appendix_sections,
         attribution_footer=clean_latex_fences(config.attribution_footer),

@@ -57,6 +57,331 @@ def _bootstrap_project(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _write_citation_sources_sidecar(
+    literature_dir: Path,
+    review_name: str,
+    entries: list[dict[str, object]],
+) -> Path:
+    path = literature_dir / f"{review_name.removesuffix('.md')}-CITATION-SOURCES.json"
+    path.write_text(json.dumps(entries, indent=2), encoding="utf-8")
+    return path
+
+
+def ingest_reference_artifacts(
+    cwd: Path,
+    *,
+    literature_review_files: list[str],
+    research_map_reference_files: list[str],
+    knowledge_doc_files: list[str] | None = None,
+):
+    return _ingest_reference_artifacts(
+        cwd,
+        literature_review_files=literature_review_files,
+        research_map_reference_files=research_map_reference_files,
+        knowledge_doc_files=knowledge_doc_files or [],
+    )
+
+
+def _write_knowledge_doc(
+    tmp_path: Path,
+    *,
+    knowledge_id: str = "K-renormalization-group-fixed-points",
+    status: str = "stable",
+    title: str = "Renormalization Group Fixed Points",
+    topic: str = "renormalization-group",
+    body: str = "Trusted knowledge body.\n",
+) -> Path:
+    knowledge_dir = tmp_path / "GRD" / "knowledge"
+    knowledge_dir.mkdir(parents=True, exist_ok=True)
+    path = knowledge_dir / f"{knowledge_id}.md"
+    base_content = (
+        "---\n"
+        "knowledge_schema_version: 1\n"
+        f"knowledge_id: {knowledge_id}\n"
+        f"title: {title}\n"
+        f"topic: {topic}\n"
+        f"status: {status}\n"
+        "created_at: 2026-04-07T12:00:00Z\n"
+        "updated_at: 2026-04-07T12:00:00Z\n"
+        "sources:\n"
+        "  - source_id: source-main\n"
+        "    kind: paper\n"
+        "    locator: Author et al., 2024\n"
+        "    title: Benchmark Reference\n"
+        "    why_it_matters: Trusted source for the topic\n"
+        "coverage_summary:\n"
+        "  covered_topics: [fixed points]\n"
+        "  excluded_topics: [implementation]\n"
+        "  open_gaps: [none]\n"
+        "---\n\n"
+        f"{body}"
+    )
+    reviewed_content_sha256 = compute_knowledge_reviewed_content_sha256(base_content)
+    review_block = (
+        "review:\n"
+        "  reviewed_at: 2026-04-07T13:00:00Z\n"
+        "  review_round: 1\n"
+        "  reviewer_kind: workflow\n"
+        "  reviewer_id: grd-review-knowledge\n"
+        "  decision: approved\n"
+        "  summary: Stable review approved.\n"
+        f"  approval_artifact_path: GRD/knowledge/reviews/{knowledge_id}-R1-REVIEW.md\n"
+        f"  approval_artifact_sha256: {'a' * 64}\n"
+        f"  reviewed_content_sha256: {reviewed_content_sha256}\n"
+        "  stale: false\n"
+    )
+    if status == "stable":
+        content = base_content.replace("coverage_summary:\n  covered_topics: [fixed points]\n  excluded_topics: [implementation]\n  open_gaps: [none]\n", "coverage_summary:\n  covered_topics: [fixed points]\n  excluded_topics: [implementation]\n  open_gaps: [none]\n" + review_block)
+    elif status == "in_review":
+        content = base_content.replace("status: in_review\n", "status: in_review\n" + review_block.replace("stale: false", "stale: true"))
+    elif status == "superseded":
+        content = base_content.replace(
+            "---\n\n",
+            f"review:\n  reviewed_at: 2026-04-07T13:00:00Z\n  review_round: 1\n  reviewer_kind: workflow\n  reviewer_id: grd-review-knowledge\n  decision: approved\n  summary: Stable review approved.\n  approval_artifact_path: GRD/knowledge/reviews/{knowledge_id}-R1-REVIEW.md\n  approval_artifact_sha256: {'a' * 64}\n  reviewed_content_sha256: {reviewed_content_sha256}\n  stale: false\nsuperseded_by: K-renormalization-group-successor\n---\n\n",
+        )
+    else:
+        content = base_content
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def test_ingest_reference_artifacts_parses_citation_source_sidecar(tmp_path: Path) -> None:
+    _bootstrap_project(tmp_path)
+    literature_dir = tmp_path / "GRD" / "literature"
+    literature_dir.mkdir(parents=True)
+    (literature_dir / "REVIEW.md").write_text("# Review\n", encoding="utf-8")
+    _write_citation_sources_sidecar(
+        literature_dir,
+        "REVIEW.md",
+        [
+            {
+                "reference_id": "ref-benchmark",
+                "source_type": "paper",
+                "title": "Benchmark Paper",
+                "authors": ["A. Researcher"],
+                "year": "2024",
+                "bibtex_key": "benchmark2024",
+                "doi": "10.1000/example",
+                "journal": "Phys. Rev. D",
+            },
+            {
+                "reference_id": "ref-method",
+                "source_type": "paper",
+                "title": "Method Paper",
+                "authors": ["B. Researcher"],
+                "year": "2023",
+                "arxiv_id": "2301.12345",
+            },
+        ],
+    )
+
+    result = ingest_reference_artifacts(
+        tmp_path,
+        literature_review_files=["GRD/literature/REVIEW.md"],
+        research_map_reference_files=[],
+    )
+
+    citation_sources = result.citation_sources
+    assert result.citation_source_files == ["GRD/literature/REVIEW-CITATION-SOURCES.json"]
+    assert result.citation_source_warnings == []
+    assert [source.reference_id for source in citation_sources] == ["ref-benchmark", "ref-method"]
+    assert citation_sources[0].bibtex_key == "benchmark2024"
+    assert citation_sources[0].doi == "10.1000/example"
+    assert citation_sources[1].arxiv_id == "2301.12345"
+
+
+def test_ingest_manuscript_reference_status_reads_current_audit(tmp_path: Path) -> None:
+    _bootstrap_project(tmp_path)
+    paper_dir = tmp_path / "paper"
+    paper_dir.mkdir()
+    (paper_dir / "BIBLIOGRAPHY-AUDIT.json").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-03-30T00:00:00+00:00",
+                "total_sources": 1,
+                "resolved_sources": 1,
+                "partial_sources": 0,
+                "unverified_sources": 0,
+                "failed_sources": 0,
+                "entries": [
+                    {
+                        "key": "benchmark2024",
+                        "source_type": "paper",
+                        "reference_id": "ref-benchmark",
+                        "title": "Benchmark Paper",
+                        "resolution_status": "provided",
+                        "verification_status": "verified",
+                        "verification_sources": ["manual"],
+                        "canonical_identifiers": ["doi:10.1000/example"],
+                        "missing_core_fields": [],
+                        "enriched_fields": [],
+                        "warnings": [],
+                        "errors": [],
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    result = ingest_manuscript_reference_status(tmp_path)
+
+    assert result.manuscript_root == "paper"
+    assert result.bibliography_audit_path == "paper/BIBLIOGRAPHY-AUDIT.json"
+    assert result.reference_status_warnings == []
+    assert [record.reference_id for record in result.reference_status] == ["ref-benchmark"]
+    assert result.reference_status[0].bibtex_key == "benchmark2024"
+    assert result.reference_status[0].title == "Benchmark Paper"
+    assert result.reference_status[0].resolution_status == "provided"
+    assert result.reference_status[0].verification_status == "verified"
+    assert result.reference_status[0].source_artifacts == ["paper/BIBLIOGRAPHY-AUDIT.json"]
+
+
+def test_ingest_reference_artifacts_ignores_malformed_citation_source_sidecar(tmp_path: Path) -> None:
+    _bootstrap_project(tmp_path)
+    literature_dir = tmp_path / "GRD" / "literature"
+    literature_dir.mkdir(parents=True)
+    (literature_dir / "REVIEW.md").write_text("# Review\n", encoding="utf-8")
+    _write_citation_sources_sidecar(
+        literature_dir,
+        "REVIEW.md",
+        {"reference_id": "broken", "source_type": "paper", "title": "Broken Sidecar"},
+    )
+
+    result = ingest_reference_artifacts(
+        tmp_path,
+        literature_review_files=["GRD/literature/REVIEW.md"],
+        research_map_reference_files=[],
+    )
+
+    assert result.citation_sources == []
+    assert result.citation_source_files == []
+    assert result.citation_source_warnings == [
+        "skipping citation source sidecar GRD/literature/REVIEW-CITATION-SOURCES.json: expected a JSON array"
+    ]
+
+
+def test_ingest_reference_artifacts_ignores_citation_source_without_reference_id(tmp_path: Path) -> None:
+    _bootstrap_project(tmp_path)
+    literature_dir = tmp_path / "GRD" / "literature"
+    literature_dir.mkdir(parents=True)
+    (literature_dir / "REVIEW.md").write_text("# Review\n", encoding="utf-8")
+    _write_citation_sources_sidecar(
+        literature_dir,
+        "REVIEW.md",
+        [
+            {
+                "source_type": "paper",
+                "title": "Broken Sidecar",
+                "year": "2024",
+            }
+        ],
+    )
+
+    result = ingest_reference_artifacts(
+        tmp_path,
+        literature_review_files=["GRD/literature/REVIEW.md"],
+        research_map_reference_files=[],
+    )
+
+    assert result.citation_sources == []
+    assert result.citation_source_files == ["GRD/literature/REVIEW-CITATION-SOURCES.json"]
+    assert result.citation_source_warnings == [
+        "citation source GRD/literature/REVIEW-CITATION-SOURCES.json[0].reference_id must be a non-empty string"
+    ]
+
+
+def test_ingest_reference_artifacts_rejects_unknown_citation_source_fields(tmp_path: Path) -> None:
+    _bootstrap_project(tmp_path)
+    literature_dir = tmp_path / "GRD" / "literature"
+    literature_dir.mkdir(parents=True)
+    (literature_dir / "REVIEW.md").write_text("# Review\n", encoding="utf-8")
+    _write_citation_sources_sidecar(
+        literature_dir,
+        "REVIEW.md",
+        [
+            {
+                "reference_id": "ref-extra",
+                "source_type": "paper",
+                "title": "Extra Field Paper",
+                "legacy_note": "stale",
+            }
+        ],
+    )
+
+    result = ingest_reference_artifacts(
+        tmp_path,
+        literature_review_files=["GRD/literature/REVIEW.md"],
+        research_map_reference_files=[],
+    )
+
+    assert result.citation_sources == []
+    assert result.citation_source_files == ["GRD/literature/REVIEW-CITATION-SOURCES.json"]
+    assert any("Extra inputs are not permitted" in warning for warning in result.citation_source_warnings)
+
+
+def test_literature_review_surfaces_publish_closed_citation_source_contract() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    command_doc = (repo_root / "src/grd/commands/literature-review.md").read_text(encoding="utf-8")
+    agent_doc = (repo_root / "src/grd/agents/grd-literature-reviewer.md").read_text(encoding="utf-8")
+    workflow_doc = (repo_root / "src/grd/specs/workflows/literature-review.md").read_text(encoding="utf-8")
+
+    assert "Run the literature-review workflow as a thin wrapper" in command_doc
+    assert "matching `GRD/literature/{slug}-CITATION-SOURCES.json` sidecar" in command_doc
+    assert "closed contract is:" in agent_doc
+    assert "Extra keys are rejected by the downstream parser." in agent_doc
+    assert "strict `CitationSource` objects" in workflow_doc
+    assert "Extra keys are rejected" in workflow_doc
+    assert "Only read or propagate the deferred reference-artifact context after the scope has been fixed." in workflow_doc
+
+
+def test_ingest_reference_artifacts_handles_sidecars_deterministically(tmp_path: Path) -> None:
+    _bootstrap_project(tmp_path)
+    literature_dir = tmp_path / "GRD" / "literature"
+    literature_dir.mkdir(parents=True)
+    (literature_dir / "A-REVIEW.md").write_text("# Review\n", encoding="utf-8")
+    (literature_dir / "B-REVIEW.md").write_text("# Review\n", encoding="utf-8")
+    _write_citation_sources_sidecar(
+        literature_dir,
+        "B-REVIEW.md",
+        [
+            {
+                "reference_id": "ref-b",
+                "source_type": "paper",
+                "title": "B Paper",
+                "year": "2024",
+            }
+        ],
+    )
+    _write_citation_sources_sidecar(
+        literature_dir,
+        "A-REVIEW.md",
+        [
+            {
+                "reference_id": "ref-a",
+                "source_type": "paper",
+                "title": "A Paper",
+                "year": "2023",
+            }
+        ],
+    )
+
+    result = ingest_reference_artifacts(
+        tmp_path,
+        literature_review_files=["GRD/literature/A-REVIEW.md", "GRD/literature/B-REVIEW.md"],
+        research_map_reference_files=[],
+    )
+
+    citation_sources = result.citation_sources
+    citation_source_files = result.citation_source_files
+    assert [source.reference_id for source in citation_sources] == ["ref-a", "ref-b"]
+    assert citation_source_files == [
+        "GRD/literature/A-REVIEW-CITATION-SOURCES.json",
+        "GRD/literature/B-REVIEW-CITATION-SOURCES.json",
+    ]
+
+
 def test_ingest_reference_artifacts_parses_literature_and_reference_map(tmp_path: Path) -> None:
     _bootstrap_project(tmp_path)
     literature_dir = tmp_path / "GRD" / "literature"
@@ -161,6 +486,11 @@ def test_ingest_reference_artifacts_ignores_legacy_review_summary_aliases(tmp_pa
 
 
 def test_context_surfaces_derived_reference_registry_without_project_contract(tmp_path: Path) -> None:
+    try:
+        from grd.core.context import init_verify_work
+    except SyntaxError as exc:  # pragma: no cover - blocked by unrelated knowledge_index syntax error
+        pytest.skip(f"knowledge runtime context is blocked by an unrelated syntax error: {exc}")
+
     _bootstrap_project(tmp_path)
     literature_dir = tmp_path / "GRD" / "literature"
     literature_dir.mkdir(parents=True)
@@ -245,6 +575,27 @@ def test_ingest_reference_artifacts_accepts_bullet_registries_and_direct_intake_
     assert "Control window from the accepted benchmark run" in result.intake.known_good_baselines
 
 
+def test_extract_section_keeps_nested_subsections_until_the_next_peer_heading() -> None:
+    content = (
+        "# Review\n\n"
+        "## Active References\n\n"
+        "### Benchmarks\n"
+        "- Anchor ID: ref-benchmark\n"
+        "- Source / Locator: Benchmark Ref 2026\n\n"
+        "### Prior Outputs\n"
+        "- GRD/phases/00-baseline/00-01-SUMMARY.md\n\n"
+        "## Other Section\n"
+        "- outside\n"
+    )
+
+    section = _extract_section(content, "Active References")
+
+    assert section is not None
+    assert "ref-benchmark" in section
+    assert "GRD/phases/00-baseline/00-01-SUMMARY.md" in section
+    assert "Other Section" not in section
+
+
 def test_ingest_reference_artifacts_preserves_repeated_bullet_detail_values(tmp_path: Path) -> None:
     _bootstrap_project(tmp_path)
     literature_dir = tmp_path / "GRD" / "literature"
@@ -278,7 +629,38 @@ def test_ingest_reference_artifacts_preserves_repeated_bullet_detail_values(tmp_
     assert "ref-benchmark-2026" in result.intake.must_read_refs
 
 
+def test_ingest_reference_artifacts_keeps_shared_alias_references_distinct(tmp_path: Path) -> None:
+    _bootstrap_project(tmp_path)
+    literature_dir = tmp_path / "GRD" / "literature"
+    literature_dir.mkdir(parents=True)
+    (literature_dir / "ALIASES.md").write_text(
+        "# Review\n\n"
+        "## Active References\n\n"
+        "| Anchor ID | Anchor | Type | Source / Locator | Why It Matters | Contract Subject IDs | Required Action | Carry Forward To |\n"
+        "| --------- | ------ | ---- | ---------------- | -------------- | -------------------- | --------------- | ---------------- |\n"
+        "| ref-a | shared-token | benchmark | Doc A | First anchor | claim-a | read | planning |\n"
+        "| ref-b | shared-token | benchmark | Doc B | Second anchor | claim-b | compare | planning |\n",
+        encoding="utf-8",
+    )
+
+    result = ingest_reference_artifacts(
+        tmp_path,
+        literature_review_files=["GRD/literature/ALIASES.md"],
+        research_map_reference_files=[],
+    )
+
+    assert [ref.id for ref in result.references] == ["ref-a", "ref-b"]
+    assert [ref.locator for ref in result.references] == ["Doc A", "Doc B"]
+    assert result.references[0].aliases == ["shared-token"]
+    assert result.references[1].aliases == ["shared-token"]
+
+
 def test_context_discovers_additional_research_map_reference_artifacts(tmp_path: Path) -> None:
+    try:
+        from grd.core.context import init_verify_work
+    except SyntaxError as exc:  # pragma: no cover - blocked by unrelated knowledge_index syntax error
+        pytest.skip(f"knowledge runtime context is blocked by an unrelated syntax error: {exc}")
+
     _bootstrap_project(tmp_path)
     research_map_dir = tmp_path / "GRD" / "research-map"
     research_map_dir.mkdir(parents=True)
@@ -333,3 +715,87 @@ def test_anchor_registry_templates_document_must_surface_column_and_fallback_heu
     assert "| Must Surface |" in reference_template
     assert "`Must Surface` marks anchors" in reference_template
     assert "required actions such as `use`, `compare`, or `avoid`" in reference_template
+
+
+def test_ingest_reference_artifacts_surfaces_stable_knowledge_docs_as_structured_inventory(tmp_path: Path) -> None:
+    _bootstrap_project(tmp_path)
+    stable_doc = _write_knowledge_doc(tmp_path, status="stable")
+    _write_knowledge_doc(tmp_path, knowledge_id="K-still-under-review", status="in_review")
+
+    result = ingest_reference_artifacts(
+        tmp_path,
+        literature_review_files=[],
+        research_map_reference_files=[],
+        knowledge_doc_files=[stable_doc.relative_to(tmp_path).as_posix()],
+    )
+
+    assert [record.knowledge_id for record in result.knowledge_docs] == ["K-renormalization-group-fixed-points"]
+    assert result.knowledge_docs[0].status == "stable"
+    assert result.knowledge_docs[0].is_fresh_approved is True
+    assert [reference.id for reference in result.references] == ["K-renormalization-group-fixed-points"]
+    assert result.references[0].source_kind == "knowledge_doc"
+    assert result.references[0].role == "background"
+    assert result.references[0].source_artifacts[0] == stable_doc.relative_to(tmp_path).as_posix()
+    assert result.knowledge_doc_warnings == []
+
+
+def test_ingest_reference_artifacts_emits_warning_for_invalid_knowledge_doc(tmp_path: Path) -> None:
+    _bootstrap_project(tmp_path)
+    knowledge_dir = tmp_path / "GRD" / "knowledge"
+    knowledge_dir.mkdir(parents=True, exist_ok=True)
+    invalid_path = knowledge_dir / "K-broken.md"
+    invalid_path.write_text(
+        "---\nknowledge_schema_version: 1\nknowledge_id: K-other\nstatus: stable\n---\n",
+        encoding="utf-8",
+    )
+
+    result = ingest_reference_artifacts(
+        tmp_path,
+        literature_review_files=[],
+        research_map_reference_files=[],
+        knowledge_doc_files=["GRD/knowledge/K-broken.md"],
+    )
+
+    assert result.knowledge_docs == []
+    assert result.knowledge_doc_warnings
+    assert "K-broken.md" in result.knowledge_doc_warnings[0]
+
+
+def test_ingest_reference_artifacts_reads_legacy_research_review_sidecars_when_literature_is_missing(
+    tmp_path: Path,
+) -> None:
+    _bootstrap_project(tmp_path)
+    research_dir = tmp_path / "GRD" / "research"
+    research_dir.mkdir(parents=True)
+    (research_dir / "LEGACY-REVIEW.md").write_text(
+        "# Legacy Review\n\n"
+        "## Active References\n\n"
+        "| Anchor ID | Anchor | Type | Source / Locator | Why It Matters | Contract Subject IDs | Required Action | Carry Forward To |\n"
+        "| --------- | ------ | ---- | ---------------- | -------------- | -------------------- | --------------- | ---------------- |\n"
+        "| ref-legacy | legacy-token | benchmark | Legacy Doc | Legacy anchor | claim-legacy | read | planning |\n",
+        encoding="utf-8",
+    )
+    _write_citation_sources_sidecar(
+        research_dir,
+        "LEGACY-REVIEW.md",
+        [
+            {
+                "reference_id": "ref-legacy",
+                "source_type": "paper",
+                "title": "Legacy Reference",
+                "authors": ["A. Author"],
+                "year": "2024",
+            }
+        ],
+    )
+
+    result = ingest_reference_artifacts(
+        tmp_path,
+        literature_review_files=["GRD/research/LEGACY-REVIEW.md"],
+        research_map_reference_files=[],
+    )
+
+    assert result.citation_source_files == ["GRD/research/LEGACY-REVIEW-CITATION-SOURCES.json"]
+    assert [source.reference_id for source in result.citation_sources] == ["ref-legacy"]
+    assert [ref.id for ref in result.references] == ["ref-legacy"]
+    assert result.references[0].source_artifacts == ["GRD/research/LEGACY-REVIEW.md"]

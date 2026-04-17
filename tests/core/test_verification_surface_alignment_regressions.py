@@ -16,15 +16,17 @@ def test_verification_scaffolds_surface_closed_comparison_kind_enum_without_blan
     research_verification = _read("src/grd/specs/templates/research-verification.md")
     verify_workflow = _read("src/grd/specs/workflows/verify-work.md")
 
-    expected_enum = "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other]"
+    expected_enum = "`comparison_kind`: benchmark|prior_work|experiment|cross_method|baseline|other"
     omit_instruction = "omit both `comparison_kind` and `comparison_reference_id` instead of leaving blank placeholders"
+    paired_id_instruction = "omit both keys instead of leaving one blank"
 
+    assert "Allowed body enum values:" in research_verification
     assert expected_enum in research_verification
-    assert expected_enum in verify_workflow
-    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other | \"\"]" not in research_verification
-    assert "comparison_kind: [benchmark | prior_work | experiment | cross_method | baseline | other | \"\"]" not in verify_workflow
-    assert omit_instruction in research_verification
-    assert omit_instruction in verify_workflow
+    assert expected_enum not in verify_workflow
+    assert research_verification.count(omit_instruction) == 1
+    assert research_verification.count(paired_id_instruction) == 1
+    assert "Update the session overlay only." in verify_workflow
+    assert "The wrapper should present verifier-produced evidence exactly once per check." in verify_workflow
 
 
 def test_verification_report_strict_pass_guidance_includes_reference_coverage_rules() -> None:
@@ -47,7 +49,6 @@ def test_verification_guidance_surfaces_the_same_canonical_suggestion_contract()
     verify_workflow = _read("src/grd/specs/workflows/verify-work.md")
 
     expected_suggestion = "suggested_contract_checks"
-    decisive_gap_text = "required_actions including `compare` is still incomplete"
 
     assert expected_suggestion in research_verification
     assert expected_suggestion in verify_workflow
@@ -60,25 +61,19 @@ def test_verification_guidance_surfaces_the_same_canonical_suggestion_contract()
 def test_verify_work_scaffold_uses_yaml_strings_for_scalar_placeholders() -> None:
     verify_workflow = _read("src/grd/specs/workflows/verify-work.md")
 
-    assert 'summary: "verification not started yet"' in verify_workflow
-    assert 'notes: "verification not started yet"' in verify_workflow
-    assert 'recommended_action: "close the decisive benchmark once the evidence is written"' in verify_workflow
-    assert 'evidence_path: "artifact path or expected evidence path"' in verify_workflow
-    assert 'source: ["list of phase-summary files"]' in verify_workflow
-    assert 'started: "ISO timestamp"' in verify_workflow
-    assert 'updated: "ISO timestamp"' in verify_workflow
-    assert 'subject_id: "contract id or \\"\\""' in verify_workflow
-    assert 'expected: "verifiable physics outcome"' in verify_workflow
-    assert 'computation: "specific numerical test performed"' in verify_workflow
-    assert 'result: "pending"' in verify_workflow
-    assert 'summary: [verification not started yet]' not in verify_workflow
-    assert 'notes: [verification not started yet]' not in verify_workflow
-    assert 'check: [missing decisive check]' not in verify_workflow
-    assert 'reason: [why the missing check matters]' not in verify_workflow
-    assert 'evidence_path: [artifact path or expected evidence path]' not in verify_workflow
-    assert 'subject_id: [contract id or ""]' not in verify_workflow
-    assert 'expected: [verifiable physics outcome]' not in verify_workflow
-    assert 'computation: [specific numerical test performed]' not in verify_workflow
+    assert "Read the verifier-supplied current check from the verification file or report state." in verify_workflow
+    assert "The wrapper should present verifier-produced evidence exactly once per check." in verify_workflow
+    assert "Update the session overlay only. The canonical verifier verdict remains verifier-owned." in verify_workflow
+    assert "one-shot delegation" in verify_workflow
+    assert "summary: \"verification not started yet\"" not in verify_workflow
+
+
+def test_verify_work_gap_repair_uses_explicit_stage_route_and_stays_fail_closed() -> None:
+    verify_workflow = _read("src/grd/specs/workflows/verify-work.md")
+
+    assert 'grd --raw init verify-work "${PHASE_ARG}" --stage gap_repair' in verify_workflow
+    assert "Do not fall through to gap verification on the basis of preexisting `PLAN.md` files alone." in verify_workflow
+    assert "skipping gap closure" not in verify_workflow
 
 
 def test_model_visible_worked_examples_keep_summary_and_verdict_shapes_copy_safe() -> None:

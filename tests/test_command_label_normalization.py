@@ -13,6 +13,8 @@ from grd.command_labels import (
     command_slug_from_label,
     rewrite_runtime_command_surfaces,
     runtime_command_prefixes,
+    runtime_public_command_prefixes,
+    validated_public_command_prefix,
 )
 from grd.mcp.servers.skills_server import _canonicalize_command_surface
 
@@ -44,7 +46,10 @@ def test_runtime_command_prefixes_are_derived_from_the_runtime_catalog() -> None
     expected_prefixes: list[str] = []
     seen: set[str] = set()
     for descriptor in iter_runtime_descriptors():
-        for candidate in (descriptor.command_prefix, descriptor.command_prefix[1:] if descriptor.command_prefix[:1] in {"/", "$"} else None):
+        for candidate in (
+            descriptor.command_prefix,
+            descriptor.command_prefix[1:] if descriptor.command_prefix[:1] in {"/", "$"} else None,
+        ):
             if candidate and candidate not in seen:
                 seen.add(candidate)
                 expected_prefixes.append(candidate)
@@ -55,6 +60,27 @@ def test_runtime_command_prefixes_are_derived_from_the_runtime_catalog() -> None
     expected_prefixes.sort(key=len, reverse=True)
 
     assert runtime_command_prefixes() == tuple(expected_prefixes)
+
+
+def test_runtime_public_command_prefixes_are_derived_from_the_runtime_catalog() -> None:
+    expected_prefixes = []
+    seen: set[str] = set()
+    for descriptor in iter_runtime_descriptors():
+        prefix = validated_public_command_prefix(descriptor)
+        if prefix in seen:
+            continue
+        seen.add(prefix)
+        expected_prefixes.append(prefix)
+    expected_prefixes.sort(key=len, reverse=True)
+
+    assert runtime_public_command_prefixes() == tuple(expected_prefixes)
+    assert "/grd-" in runtime_public_command_prefixes()
+
+
+def test_validated_public_command_prefix_uses_descriptor_owned_surface() -> None:
+    descriptor = iter_runtime_descriptors()[0]
+
+    assert validated_public_command_prefix(descriptor) == descriptor.public_command_surface_prefix
 
 
 @pytest.mark.parametrize("descriptor", iter_runtime_descriptors(), ids=lambda item: item.runtime_name)
@@ -112,10 +138,34 @@ def test_runtime_native_command_surfaces_rewrite_to_canonical_skill_labels(descr
     assert _canonicalize_command_surface(content) == rewritten
 
 
+@pytest.mark.parametrize("descriptor", iter_runtime_descriptors(), ids=lambda item: item.runtime_name)
+def test_runtime_native_command_wildcard_surfaces_rewrite_to_canonical_skill_wildcard(descriptor: object) -> None:
+    content = f"Use `{descriptor.command_prefix}*` to browse runtime commands.\n"
+
+    assert _canonicalize_command_surface(content) == "Use `grd-*` to browse runtime commands.\n"
+
+
 def test_runtime_command_surface_rewrite_does_not_mutate_markdown_paths() -> None:
     content = "Read /tmp/specs/grd-help.md and /tmp/agents/grd-executor.md before continuing."
 
     assert rewrite_runtime_command_surfaces(content, canonical="skill") == content
+
+
+def test_runtime_command_surface_rewrite_skips_urls_and_paths_but_keeps_examples() -> None:
+    content = (
+        "Use /grd:help when you want a real command example.\n"
+        "See https://example.test//grd:help and /tmp//grd:help.txt and /tmp/$grd-help.txt.\n"
+        "Keep ./docs/grd-help.md and foo$grd-help/bar untouched.\n"
+    )
+
+    rewritten = rewrite_runtime_command_surfaces(content, canonical="skill")
+
+    assert "Use grd-help when you want a real command example." in rewritten
+    assert "https://example.test//grd:help" in rewritten
+    assert "/tmp//grd:help.txt" in rewritten
+    assert "/tmp/$grd-help.txt" in rewritten
+    assert "./docs/grd-help.md" in rewritten
+    assert "foo$grd-help/bar" in rewritten
 
 
 def test_foreign_bare_slash_command_is_not_canonicalized_into_gpd() -> None:

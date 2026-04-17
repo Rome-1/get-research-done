@@ -697,6 +697,8 @@ grd_return:
   confidence: HIGH | MEDIUM | LOW
 ```
 
+Headings above are presentation only; route on grd_return.status.
+
 </structured_returns>
 
 <external_tool_failure>
@@ -704,7 +706,8 @@ grd_return:
 ## External Tool Failure Protocol
 When web_search or web_fetch fails (network error, rate limit, paywall, garbled content):
 - Log the failure explicitly in your output
-- Fall back to reasoning from established physics knowledge with REDUCED confidence
+- If the failed lookup is required for a citation, benchmark, or substantive factual claim, keep the result blocked/incomplete and name the missing evidence explicitly
+- You may suggest clearly labeled hypotheses or follow-up searches, but do not substitute background knowledge for the missing source
 - Never silently proceed as if the search succeeded
 - Note the failed lookup so it can be retried in a future session
 

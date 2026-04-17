@@ -9,6 +9,9 @@ stale managed-environment package contents.
 
 from __future__ import annotations
 
+import os
+import re
+import sys
 import tomllib
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -108,6 +111,8 @@ except PackageNotFoundError:
 __all__ = [
     "__version__",
     "checkout_root",
+    "current_python_executable",
+    "resolve_checkout_python",
     "resolve_active_version",
     "resolve_install_grd_root",
     "version_for_grd_root",

@@ -72,7 +72,7 @@ For each file in `backup-meta.json`:
    - `Skipped` -- modification already in upstream
    - `Conflict` -- user chose resolution
 
-## Step 4: Update manifest
+## Step 4: Record modified files
 
 After reapplying, regenerate the file manifest so future updates correctly detect these as user modifications:
 

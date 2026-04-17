@@ -5,15 +5,13 @@ argument-hint: "[optional: specific area to map, e.g., 'hamiltonian' or 'numeric
 context_mode: projectless
 allowed-tools:
   - file_read
+  - ask_user
   - shell
   - find_files
   - search_files
   - file_write
   - task
 ---
-
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Map an existing physics research project using parallel grd-research-mapper agents.
@@ -30,7 +28,7 @@ Output: .grd/research-map/ folder with 7 structured documents about the research
 </execution_context>
 
 <context>
-Focus area: $ARGUMENTS (optional - if provided, tells agents to focus on specific subsystem, theory sector, or computational domain)
+Focus area: $ARGUMENTS (optional - if provided, tells the workflow which subsystem, theory sector, or computational domain to emphasize)
 
 **Load project state if exists:**
 Check for .grd/STATE.md - loads context if project already initialized

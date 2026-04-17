@@ -20,11 +20,11 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Extract from init JSON: `milestone_version`, `milestone_name`, `phase_count`, `completed_phases`, `commit_docs`, `project_exists`, `project_contract`, `project_contract_load_info`, `project_contract_validation`, `active_reference_context`.
+Extract from init JSON: `milestone_version`, `milestone_name`, `phase_count`, `completed_phases`, `commit_docs`, `project_exists`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, `active_reference_context`.
 
 Keep `project_contract`, `project_contract_load_info`, `project_contract_validation`, and `active_reference_context` visible while auditing:
 
-- Treat `project_contract` as authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes.
+- Treat `project_contract` as authoritative only when `project_contract_gate.authoritative` is true.
 - If that contract gate is blocked, keep the contract visible as context but record contract repair as a blocker in the audit instead of silently substituting prose-only scope.
 - If contract repair is still pending, do not mark the milestone `passed` and do not trust mock peer-review publishability judgments as approval to submit.
 
@@ -80,13 +80,15 @@ grd phase list
 
 ## 2. Read All Phase Verifications
 
-For each phase directory, read the canonical `*-VERIFICATION.md` artifact:
+Use the canonical phase helpers instead of raw phase-path globbing:
 
 ```bash
 cat .grd/phases/01-*/*-VERIFICATION.md
 cat .grd/phases/02-*/*-VERIFICATION.md
 # etc.
 ```
+
+For each phase in the milestone, use `grd show-phase <phase-number>` to surface the canonical `*-VERIFICATION.md` artifact and its verification status, then read the artifact itself only when you need blocker-level detail. Do not `find_files` `GRD/phases/*/*-VERIFICATION.md` by hand.
 
 From each `*-VERIFICATION.md`, extract:
 
@@ -101,7 +103,9 @@ If a phase is missing `*-VERIFICATION.md`, flag it as "unverified phase" -- this
 ## 3. Spawn Consistency Checker
 
 With phase context collected:
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
+
+> If subagent spawning is unavailable, execute these steps sequentially in the main context.
 
 ```
 task(
@@ -214,7 +218,9 @@ Resolve referee model:
 ```bash
 REFEREE_MODEL=$(grd resolve-model grd-referee)
 ```
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
+
+> If subagent spawning is unavailable, execute these steps sequentially in the main context.
 
 ```
 task(
@@ -252,7 +258,7 @@ Evaluate across all 10 dimensions:
 9. Presentation quality -- organization, figures
 10. Publishability -- overall assessment
 
-Treat `project_contract` as approved milestone scope only when `project_contract_load_info` is clean and `project_contract_validation` passes. If the contract gate is blocked, keep it visible as context but call out the blocker explicitly instead of relying on it as approved scope.
+Treat `project_contract` as approved milestone scope only when `project_contract_gate.authoritative` is true. If the contract gate is blocked, keep it visible as context but call out the blocker explicitly instead of relying on it as approved scope.
 
 Write `.grd/v{milestone_version}-MILESTONE-REFEREE-REPORT.md` and the matching `.grd/v{milestone_version}-MILESTONE-REFEREE-REPORT.tex` companion.
 

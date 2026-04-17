@@ -26,7 +26,8 @@ def test_codex_skill_conversion_preserves_inline_triple_dash_in_description() ->
 
     assert "description: before --- after" in converted
     assert "allowed-tools:\n  - shell" in converted
-    assert converted.endswith("---\nBody\n")
+    assert "<!-- Managed by Get Physics Done (GPD). -->" in converted
+    assert converted.endswith("Body\n")
 
 
 def test_gemini_frontmatter_conversion_preserves_inline_triple_dash_in_description() -> None:
@@ -56,3 +57,22 @@ def test_opencode_frontmatter_conversion_preserves_inline_triple_dash_in_descrip
     assert "description: before --- after" in converted
     assert "tools:\n  shell: true" in converted
     assert converted.endswith("---\nBody\n")
+
+
+def test_codex_skill_conversion_preserves_crlf_frontmatter_delimiters() -> None:
+    content = (
+        "---\r\n"
+        "name: test\r\n"
+        "description: before --- after\r\n"
+        "allowed-tools:\r\n"
+        "  - shell\r\n"
+        "---\r\n"
+        "Body\r\n"
+    )
+
+    converted = _convert_to_codex_skill(content, "test")
+
+    assert "\r\n" in converted
+    assert "---\r\nname: test\r\n" in converted
+    assert "<!-- Managed by Get Physics Done (GPD). -->" in converted
+    assert converted.endswith("Body\r\n")

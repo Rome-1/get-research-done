@@ -12,8 +12,6 @@ allowed-tools:
   - find_files
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Inspect a single research phase in detail: its artifacts, completion status, key results, convention changes, and verification state. Produces a structured report for quick situational awareness.
@@ -49,7 +47,7 @@ Extract from init JSON: `phase_dir`, `phase_number`, `phase_name`, `phase_found`
 
 ## Step 2: Load Phase Directory
 
-List all files in the phase directory and categorize them (PLANs, SUMMARYs, CONTEXT, RESEARCH, DISCOVERY, VERIFICATION, VALIDATION, scripts, data).
+List all files in the phase directory and categorize them (PLANs, SUMMARYs, CONTEXT, RESEARCH, VERIFICATION, VALIDATION, scripts, data).
 
 ## Step 3: Parse Roadmap
 

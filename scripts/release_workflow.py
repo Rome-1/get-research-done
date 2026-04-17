@@ -68,7 +68,9 @@ def current_release_date() -> str:
 
 def _validate_release_date(release_date: str) -> str:
     try:
-        datetime.fromisoformat(release_date)
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", release_date):
+            raise ValueError(release_date)
+        datetime.strptime(release_date, "%Y-%m-%d")
     except ValueError as exc:
         raise ReleaseError("Release date must use ISO format YYYY-MM-DD.") from exc
     return release_date

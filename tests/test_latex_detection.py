@@ -9,6 +9,7 @@ from grd.mcp.paper.compiler import (
     find_latex_compiler,
     get_latex_install_guidance,
 )
+from grd.mcp.paper.models import PaperToolchainCapability
 
 
 class TestFindLatexCompiler:
@@ -30,7 +31,7 @@ class TestFindLatexCompiler:
         # Create a fake MiKTeX install directory
         miktex_bin = tmp_path / "MiKTeX" / "miktex" / "bin" / "x64"
         miktex_bin.mkdir(parents=True)
-        (miktex_bin / "pdflatex.exe").write_text("fake")
+        (miktex_bin / "pdflatex.exe").write_text("fake", encoding="utf-8")
 
         monkeypatch.setattr(
             "grd.mcp.paper.compiler._WINDOWS_LATEX_SEARCH_DIRS",
@@ -50,7 +51,7 @@ class TestFindLatexCompiler:
         # Create a fake TeX Live install directory with year subdir
         tl_bin = tmp_path / "texlive" / "2024" / "bin" / "windows"
         tl_bin.mkdir(parents=True)
-        (tl_bin / "pdflatex.exe").write_text("fake")
+        (tl_bin / "pdflatex.exe").write_text("fake", encoding="utf-8")
 
         monkeypatch.setattr(
             "grd.mcp.paper.compiler._WINDOWS_LATEX_SEARCH_DIRS",
@@ -81,6 +82,117 @@ class TestDetectLatexToolchain:
         status = detect_latex_toolchain()
         assert status.available is False
         assert status.compiler_path is None
+        assert "No LaTeX compiler found" in status.message
+
+    def test_reports_full_readiness_when_core_and_helper_tools_are_present(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def fake_find(binary: str) -> str | None:
+            mapping = {
+                "pdflatex": "/usr/bin/pdflatex",
+                "bibtex": "/usr/bin/bibtex",
+                "latexmk": "/usr/bin/latexmk",
+                "kpsewhich": "/usr/bin/kpsewhich",
+            }
+            return mapping.get(binary)
+
+        monkeypatch.setattr("grd.mcp.paper.compiler._which", fake_find)
+
+        status = detect_latex_toolchain()
+
+        assert status.compiler_available is True
+        assert status.available is True
+        assert status.bibtex_available is True
+        assert status.bibliography_support_available is True
+        assert status.latexmk_available is True
+        assert status.kpsewhich_available is True
+        assert status.readiness_state == "ready"
+        assert status.paper_build_ready is True
+        assert status.arxiv_submission_ready is True
+        assert "readiness=ready" in status.message
+
+    def test_degrades_when_bibtex_is_missing_but_compiler_is_present(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def fake_find(binary: str) -> str | None:
+            mapping = {
+                "pdflatex": "/usr/bin/pdflatex",
+                "bibtex": None,
+                "latexmk": None,
+                "kpsewhich": None,
+            }
+            return mapping.get(binary)
+
+        monkeypatch.setattr("grd.mcp.paper.compiler._which", fake_find)
+        monkeypatch.setattr("grd.mcp.paper.compiler._find_in_windows_paths", lambda _: None)
+
+        status = detect_latex_toolchain()
+
+        assert status.compiler_available is True
+        assert status.available is True
+        assert status.bibtex_available is False
+        assert status.bibliography_support_available is False
+        assert status.latexmk_available is False
+        assert status.kpsewhich_available is False
+        assert status.readiness_state == "degraded"
+        assert status.paper_build_ready is True
+        assert status.arxiv_submission_ready is False
+        assert "BibTeX missing" in status.message
+        assert status.warnings
+        assert any("citation-bearing builds" in warning for warning in status.warnings)
+
+
+class TestPaperToolchainCapability:
+    def test_paper_build_requires_compiler_and_bibliography_support_is_tracked_separately(self) -> None:
+        status = PaperToolchainCapability(
+            compiler_available=True,
+            bibtex_available=False,
+            latexmk_available=True,
+            kpsewhich_available=True,
+        )
+
+        assert status.paper_build_ready is True
+        assert status.bibliography_support_available is False
+        assert status.arxiv_submission_ready is False
+
+        readiness = PaperToolchainCapability.model_validate(
+            {
+                **status.model_dump(mode="python"),
+                "bibtex_available": True,
+                "kpsewhich_available": False,
+            }
+        )
+
+        assert readiness.bibliography_support_available is True
+        assert readiness.paper_build_ready is True
+        assert readiness.arxiv_submission_ready is False
+
+    def test_blocks_when_compiler_is_missing_even_if_helpers_are_present(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def fake_find(binary: str) -> str | None:
+            mapping = {
+                "pdflatex": None,
+                "bibtex": "/usr/bin/bibtex",
+                "latexmk": "/usr/bin/latexmk",
+                "kpsewhich": "/usr/bin/kpsewhich",
+            }
+            return mapping.get(binary)
+
+        monkeypatch.setattr("grd.mcp.paper.compiler._which", fake_find)
+        monkeypatch.setattr("grd.mcp.paper.compiler._find_in_windows_paths", lambda _: None)
+
+        status = detect_latex_toolchain()
+
+        assert status.compiler_available is False
+        assert status.available is False
+        assert status.bibtex_available is True
+        assert status.bibliography_support_available is False
+        assert status.latexmk_available is True
+        assert status.kpsewhich_available is True
+        assert status.readiness_state == "blocked"
+        assert status.paper_build_ready is False
+        assert status.arxiv_submission_ready is False
         assert "No LaTeX compiler found" in status.message
 
     def test_detects_miktex_distribution(self, monkeypatch: pytest.MonkeyPatch) -> None:

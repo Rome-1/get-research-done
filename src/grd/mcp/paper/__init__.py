@@ -28,6 +28,8 @@ from grd.mcp.paper.models import (
     JournalSpec,
     PaperConfig,
     PaperOutput,
+    ProofAuditRecord,
+    ProofAuditStatus,
     ReviewConfidence,
     ReviewFinding,
     ReviewIssue,
@@ -39,6 +41,7 @@ from grd.mcp.paper.models import (
     ReviewSupportStatus,
     Section,
     StageReviewReport,
+    derive_output_filename,
 )
 from grd.mcp.paper.review_artifacts import (
     read_claim_index,
@@ -64,6 +67,8 @@ __all__ = [
     "JournalSpec",
     "PaperConfig",
     "PaperOutput",
+    "ProofAuditRecord",
+    "ProofAuditStatus",
     "ReviewConfidence",
     "ReviewFinding",
     "ReviewIssue",
@@ -75,6 +80,7 @@ __all__ = [
     "ReviewSupportStatus",
     "Section",
     "StageReviewReport",
+    "derive_output_filename",
     "build_bibliography",
     "build_bibliography_with_audit",
     "build_paper",

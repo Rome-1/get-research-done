@@ -9,6 +9,29 @@ Reference document specifying all valid entity lifecycles, state ownership, and 
 
 ---
 
+## Continuation Surfaces
+
+Phase 5 separates three layers that were previously blurred together:
+
+1. An append-only execution lineage records what happened.
+2. A derived execution head projects the latest resumable execution state for compatibility surfaces.
+3. `state.json.continuation.bounded_segment` remains the durable bounded-resume authority.
+
+Current public behavior exposes the canonical continuation decision through `grd --raw resume`, which reads `state.json.continuation` first and only consults compatibility surfaces when canonical continuation is missing or incomplete. `session` is a compatibility mirror, and `.continue-here.md` plus `current-execution.json` are projections, not peer authorities.
+
+| Surface | Role | Authority Level | Notes |
+|---------|------|-----------------|-------|
+| `GRD/state.json` | Storage authority | Authoritative | Machine-readable project state, including canonical `continuation`; `session` is the compatibility mirror |
+| `GRD/state.json.bak` | Recovery backup | Fallback only | Used when the primary JSON state is unreadable or unavailable |
+| `GRD/STATE.md` | Editable mirror | Reconstruction/edit surface | Human-readable mirror of state; also the final reconstruction source if both JSON files are unavailable |
+| Execution lineage | Append-only execution history | Authoritative for provenance only | Records execution/workflow transitions and can rebuild the execution head |
+| Derived execution head / `GRD/observability/current-execution.json` | Compatibility mirror | Non-authoritative | Latest execution snapshot rebuilt from lineage; used by live status surfaces |
+| `GRD/phases/.../.continue-here.md` | Temporary handoff artifact | Non-authoritative | Written by `grd:pause-work`; may be referenced by canonical continuation, session compatibility, or a live execution snapshot |
+
+The canonical continuation decision comes from `grd --raw resume`, not from reading any one of these files in isolation. Canonical `state.json.continuation.bounded_segment` wins first; the derived execution head only fills compatibility gaps. The temporary handoff artifact and derived execution head remain projections, not independent sources of truth.
+
+---
+
 ## Entity Lifecycles
 
 ### Project
@@ -192,12 +215,20 @@ Three status systems coexist. The **disk status** (from `roadmap_analyze`) is th
 
 STATE.md and state.json are kept in sync via `sync_state_json()`:
 
-- **STATE.md** is the human-readable source, rendered by `generate_state_markdown()`
-- **state.json** is the machine-readable sidecar, with additional fields not in markdown (convention_lock, approximations, propagated_uncertainties, intermediate_results as structured objects)
-- Every write to STATE.md triggers `sync_state_json()` which parses markdown and merges into existing JSON
+- **state.json** is the authoritative machine-readable storage surface
+- **state.json.bak** is the crash-recovery backup if the primary JSON state becomes unreadable or unavailable
+- **STATE.md** is the editable human-readable mirror, rendered by `generate_state_markdown()` and still usable as the final reconstruction source when both JSON files are unavailable
+- Every write to STATE.md triggers `sync_state_json()` which parses markdown edits and merges them into existing JSON
 - Every write to state.json via `save_state_json()` also regenerates STATE.md
 - `state_validate` cross-checks position fields between both files
 - `state.json.bak` provides crash recovery if state.json becomes corrupt
+
+For continuation specifically:
+
+- `.continue-here.md` is the canonical temporary handoff projection, not the storage authority
+- append-only execution lineage is the provenance record, not the bounded-resume authority
+- the derived execution head and `GRD/observability/current-execution.json` are compatibility mirrors, not the storage authority
+- `grd --raw resume` resolves the canonical continuation view with `state.json.continuation` first and compatibility fallback only for incomplete bounded-segment recovery
 
 ---
 

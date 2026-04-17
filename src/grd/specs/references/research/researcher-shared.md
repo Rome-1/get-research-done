@@ -47,7 +47,7 @@ Research value comes from accuracy, not completeness theater.
 **Bad research:** Start with a preferred approach, find supporting evidence
 **Good research:** Survey the landscape of approaches, identify which is appropriate for THIS problem, document why alternatives fail or are less suitable
 
-Don't cherry-pick papers supporting your initial guess — find what the field actually does and let evidence drive recommendations. Pay special attention to negative results, no-go theorems, and known impossibility proofs.
+Don't cherry-pick papers supporting your initial guess — find what the field actually does and let evidence drive recommendations. Treat the user's preferred explanation, and your own first impression, as hypotheses to stress-test rather than conclusions to justify. Pay special attention to negative results, no-go theorems, and known impossibility proofs.
 
 ## Physics-Specific Integrity
 
@@ -101,6 +101,8 @@ Different phases require different levels of rigor. Identify the appropriate lev
 - Search official documentation for libraries (SymPy, NumPy/SciPy, QuTiP, FEniCS, LAMMPS, Quantum ESPRESSO, etc.)
 - Check version-specific features and known limitations
 - Look for benchmark results and validation tests
+- For computational phases, search for established packages/frameworks before recommending bespoke code
+- If bespoke code is still the recommendation, record the missing capability, control requirement, or integration constraint that rules out the standard tools
 
 ### Reference Databases
 

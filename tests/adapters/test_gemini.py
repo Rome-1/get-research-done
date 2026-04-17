@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
-import sys
+import shlex
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,15 @@ def expected_gemini_bridge(target: Path) -> str:
         is_global=False,
         explicit_target=False,
     )
+
+
+def _make_managed_home_python(tmp_path: Path) -> Path:
+    managed_home = tmp_path / "managed-home"
+    python_relpath = Path("Scripts/python.exe") if os.name == "nt" else Path("bin/python")
+    managed_python = managed_home / "venv" / python_relpath
+    managed_python.parent.mkdir(parents=True, exist_ok=True)
+    managed_python.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    return managed_python
 
 
 @pytest.fixture()
@@ -207,6 +217,7 @@ class TestConvertToGeminiToml:
         result = _convert_to_gemini_toml("Just a prompt body")
         assert "prompt" in result
         assert "Just a prompt body" in result
+        assert "prompt = '''" in result
 
     def test_extracts_description(self) -> None:
         content = "---\nname: test\ndescription: My description\n---\nPrompt body"
@@ -225,6 +236,29 @@ class TestConvertToGeminiToml:
         result = _convert_to_gemini_toml(content)
         assert 'context_mode = "project-aware"' in result
 
+    def test_preserves_project_reentry_capable_as_source_metadata_comment(self) -> None:
+        content = (
+            "---\n"
+            "name: grd:resume-work\n"
+            "context_mode: project-required\n"
+            "project_reentry_capable: true\n"
+            "---\n"
+            "Prompt body"
+        )
+
+        result = _convert_to_gemini_toml(content)
+
+        assert 'context_mode = "project-required"' in result
+        assert "# project_reentry_capable: true" in result
+        assert "project_reentry_capable =" not in result
+
+    def test_prepends_review_contract_to_prompt(self) -> None:
+        content = compile_review_contract_fixture_for_runtime("gemini")
+
+        result = _convert_to_gemini_toml(content)
+
+        assert_review_contract_prompt_surface(result)
+
     def test_uses_multiline_literal_string(self) -> None:
         content = "---\ndescription: D\n---\nMultiline\nprompt"
         result = _convert_to_gemini_toml(content)
@@ -237,6 +271,36 @@ class TestConvertToGeminiToml:
         assert "prompt" in result
         # The prompt is JSON-encoded, not wrapped in '''
         assert "prompt = '''" not in result
+
+    def test_no_frontmatter_with_non_bmp_unicode_uses_literal_prompt(self) -> None:
+        result = _convert_to_gemini_toml("📄 Prompt body")
+
+        assert "prompt = '''" in result
+        assert "\\ud83d" not in result
+
+
+class TestRewriteGeminiShellWorkflowGuidance:
+    def test_rewrites_updated_set_profile_block_with_reentry_comment_and_flag(self) -> None:
+        content = (
+            "```bash\n"
+            "grd config ensure-section\n"
+            "# Compatibility note for installer text checks:\n"
+            "# INIT=$(grd --raw init progress --include state,config)\n"
+            "INIT=$(grd --raw init progress --include state,config --no-project-reentry)\n"
+            "if [ $? -ne 0 ]; then\n"
+            '  echo "ERROR: grd initialization failed: $INIT"\n'
+            "  # STOP — display the error to the user and do not proceed.\n"
+            "fi\n"
+            "```"
+        )
+
+        result = _rewrite_gemini_shell_workflow_guidance(content)
+
+        assert "Run these as separate shell calls in Gemini auto-edit mode." in result
+        assert "grd config ensure-section" in result
+        assert "grd --raw init progress --include state,config --no-project-reentry" in result
+        assert "INIT=$(" not in result
+        assert "if [ $? -ne 0 ]" not in result
 
 
 class TestInstall:
@@ -298,13 +362,16 @@ class TestInstall:
 
         for agent_file in (target / "agents").glob("grd-*.md"):
             content = agent_file.read_text(encoding="utf-8")
+            frontmatter = content
+            if content.startswith("---\n"):
+                _, frontmatter, _ = content.split("---\n", 2)
             assert "color:" not in content
             assert "allowed-tools:" not in content
-            assert "commit_authority:" not in content
-            assert "surface:" not in content
-            assert "role_family:" not in content
-            assert "artifact_write_authority:" not in content
-            assert "shared_state_authority:" not in content
+            assert "commit_authority:" not in frontmatter
+            assert "surface:" not in frontmatter
+            assert "role_family:" not in frontmatter
+            assert "artifact_write_authority:" not in frontmatter
+            assert "shared_state_authority:" not in frontmatter
 
     def test_install_enables_experimental_agents(self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".gemini"
@@ -362,7 +429,7 @@ class TestInstall:
         ]
         assert any("check_update" in c for c in persisted_cmds)
 
-    def test_install_preserves_jsonc_settings_and_uses_current_interpreter(
+    def test_install_preserves_jsonc_settings_and_uses_managed_home_interpreter(
         self,
         adapter: GeminiAdapter,
         grd_root: Path,
@@ -387,10 +454,10 @@ class TestInstall:
 
         settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
         assert settings["theme"] == "solarized"
-        assert settings["statusLine"]["command"] == "/custom/venv/bin/python .gemini/hooks/statusline.py"
+        assert settings["statusLine"]["command"] == f"{shlex.quote(selected_python)} .gemini/hooks/statusline.py"
         session_start = settings.get("hooks", {}).get("SessionStart", [])
         cmds = [h.get("command", "") for entry in session_start for h in (entry.get("hooks") or [])]
-        assert "/custom/venv/bin/python .gemini/hooks/check_update.py" in cmds
+        assert f"{shlex.quote(selected_python)} .gemini/hooks/check_update.py" in cmds
 
     def test_install_uses_grd_python_override_for_hooks_and_mcp(
         self,
@@ -444,7 +511,7 @@ class TestInstall:
         settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
         session_start = settings.get("hooks", {}).get("SessionStart", [])
         cmds = [h.get("command", "") for entry in session_start for h in (entry.get("hooks") or [])]
-        assert cmds.count("/custom/venv/bin/python .gemini/hooks/check_update.py") == 1
+        assert cmds.count(f"{shlex.quote(selected_python)} .gemini/hooks/check_update.py") == 1
         assert "python3 .gemini/hooks/check_update.py" not in cmds
 
     def test_install_preserves_non_grd_check_update_hook(
@@ -505,7 +572,9 @@ class TestInstall:
         )
         session_start = settings.get("hooks", {}).get("SessionStart", [])
         cmds = [h.get("command", "") for entry in session_start for h in (entry.get("hooks") or [])]
-        assert f"{sys.executable or 'python3'} {(target / 'hooks' / 'check_update.py')}" in cmds
+        expected_check_update_path = str(target / 'hooks' / 'check_update.py').replace("\\", "/")
+        expected_check_update_cmd = f"{shlex.quote(hook_python)} {expected_check_update_path}"
+        assert expected_check_update_cmd in cmds
 
     def test_install_preserves_existing_mcp_overrides(
         self,
@@ -552,6 +621,99 @@ class TestInstall:
         assert server["trust"] is True
         assert settings["mcpServers"]["custom-server"] == {"command": "node", "args": ["custom.js"]}
 
+    def test_install_projects_managed_wolfram_mcp_without_secrets(
+        self,
+        adapter: GeminiAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        target = tmp_path / ".gemini"
+        target.mkdir()
+        monkeypatch.setenv("GPD_WOLFRAM_MCP_API_KEY", "super-secret-token")
+        monkeypatch.setenv("GPD_WOLFRAM_MCP_ENDPOINT", "https://example.invalid/api/mcp")
+
+        result = adapter.install(grd_root, target)
+        adapter.finalize_install(result)
+
+        settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
+        wolfram = settings["mcpServers"]["grd-wolfram"]
+        assert wolfram["command"] == "grd-mcp-wolfram"
+        assert wolfram["args"] == []
+        assert wolfram["env"] == {"GPD_WOLFRAM_MCP_ENDPOINT": "https://example.invalid/api/mcp"}
+        assert wolfram["trust"] is True
+        assert "super-secret-token" not in json.dumps(wolfram)
+        assert "GPD_WOLFRAM_MCP_API_KEY" not in json.dumps(wolfram)
+
+    def test_install_preserves_existing_managed_wolfram_overrides(
+        self,
+        adapter: GeminiAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        target = tmp_path / ".gemini"
+        target.mkdir()
+        monkeypatch.setenv("GPD_WOLFRAM_MCP_API_KEY", "super-secret-token")
+        monkeypatch.setenv("GPD_WOLFRAM_MCP_ENDPOINT", "https://example.invalid/api/mcp")
+        (target / "settings.json").write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "grd-wolfram": {
+                            "command": "legacy-wolfram-bridge",
+                            "args": ["--legacy"],
+                            "env": {
+                                "GPD_WOLFRAM_MCP_ENDPOINT": "https://custom.invalid/api/mcp",
+                                "EXTRA_FLAG": "1",
+                            },
+                            "cwd": "/tmp/custom-wolfram",
+                            "timeout": 15000,
+                            "trust": False,
+                        },
+                        "custom-server": {"command": "node", "args": ["custom.js"]},
+                    }
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = adapter.install(grd_root, target)
+        adapter.finalize_install(result)
+
+        settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
+        wolfram = settings["mcpServers"]["grd-wolfram"]
+        assert wolfram["command"] == "grd-mcp-wolfram"
+        assert wolfram["args"] == []
+        assert wolfram["env"]["GPD_WOLFRAM_MCP_ENDPOINT"] == "https://custom.invalid/api/mcp"
+        assert wolfram["env"]["EXTRA_FLAG"] == "1"
+        assert wolfram["cwd"] == "/tmp/custom-wolfram"
+        assert wolfram["timeout"] == 15000
+        assert wolfram["trust"] is False
+        assert "super-secret-token" not in json.dumps(wolfram)
+        assert settings["mcpServers"]["custom-server"] == {"command": "node", "args": ["custom.js"]}
+
+    def test_install_omits_managed_wolfram_when_project_override_disables_it(
+        self,
+        adapter: GeminiAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        target = tmp_path / ".gemini"
+        target.mkdir()
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "integrations.json").write_text('{"wolfram":{"enabled":false}}', encoding="utf-8")
+        monkeypatch.setenv("GPD_WOLFRAM_MCP_API_KEY", "super-secret-token")
+
+        result = adapter.install(grd_root, target)
+        adapter.finalize_install(result)
+
+        settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
+        assert "grd-wolfram" not in settings.get("mcpServers", {})
+
     def test_install_adds_policy_path_shell_sentinel_and_policy_file(
         self,
         adapter: GeminiAdapter,
@@ -574,8 +736,32 @@ class TestInstall:
         assert 'toolName = "run_shell_command"' in policy
         assert 'modes = ["autoEdit"]' in policy
         assert "allow_redirection = true" in policy
-        assert expected_gemini_bridge(target) in policy
+        import tomllib
+        parsed_policy = tomllib.loads(policy)
+        bridge = expected_gemini_bridge(target)
+        assert bridge in parsed_policy["rule"][0]["commandPrefix"]
         assert '"git init"' in policy
+
+    def test_install_surfaces_shell_prefix_allowlist_in_model_facing_content(
+        self,
+        adapter: GeminiAdapter,
+        tmp_path: Path,
+    ) -> None:
+        grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
+        target = tmp_path / ".gemini"
+        target.mkdir()
+
+        result = adapter.install(grd_root, target)
+        adapter.finalize_install(result)
+
+        command = (target / "commands" / "grd" / "new-project.toml").read_text(encoding="utf-8")
+        expected_bridge = expected_gemini_bridge(target)
+
+        assert "enforced shell-prefix allowlist" in command
+        assert f"`{expected_bridge}`" in command
+        assert "`git init`" in command
+        assert "`mkdir -p GRD`" in command
+        assert "`printf '%s\\n' \"$PROJECT_CONTRACT_JSON\"`" in command
 
     def test_install_preserves_existing_policy_paths_and_mcp_trust_choice(
         self,
@@ -687,7 +873,7 @@ class TestInstall:
         assert "INIT=$(" not in content
         assert "if [ $? -ne 0 ]" not in content
         assert expected_gemini_bridge(target) + " config ensure-section" in content
-        assert expected_gemini_bridge(target) + " init progress --include state,config" in content
+        assert expected_gemini_bridge(target) + " --raw init progress --include state,config --no-project-reentry" in content
 
     def test_install_agents_replace_runtime_placeholders(
         self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path
@@ -752,17 +938,90 @@ class TestInstall:
         assert adapter.missing_install_artifacts(target) == ("settings.json",)
 
     def test_install_returns_before_finalize_but_runtime_completeness_stays_strict(
-        self, adapter: GeminiAdapter, gpd_root: Path, tmp_path: Path
+        self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path
     ) -> None:
         """Install-time verification must not hide missing finalize artifacts afterwards."""
         target = tmp_path / ".gemini"
         target.mkdir()
 
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         missing = adapter.missing_install_artifacts(target)
         assert missing == ("settings.json",)
         assert adapter.missing_install_verification_artifacts(target) == ()
+
+    def test_install_fails_closed_for_malformed_settings_json(
+        self,
+        adapter: GeminiAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".gemini"
+        target.mkdir()
+        settings_path = target / "settings.json"
+        settings_path.write_text('{"hooks": [\n', encoding="utf-8")
+        before = settings_path.read_text(encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="malformed"):
+            adapter.install(grd_root, target)
+
+        assert settings_path.read_text(encoding="utf-8") == before
+
+    def test_install_fails_closed_for_structurally_invalid_settings_json(
+        self,
+        adapter: GeminiAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".gemini"
+        target.mkdir()
+        settings_path = target / "settings.json"
+        settings_path.write_text(json.dumps({"mcpServers": []}), encoding="utf-8")
+        before = settings_path.read_text(encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="malformed"):
+            adapter.install(grd_root, target)
+
+        assert settings_path.read_text(encoding="utf-8") == before
+
+    def test_install_fails_closed_for_structurally_invalid_mcp_server_entry(
+        self,
+        adapter: GeminiAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".gemini"
+        target.mkdir()
+        settings_path = target / "settings.json"
+        settings_path.write_text(json.dumps({"mcpServers": {"custom-server": []}}), encoding="utf-8")
+        before = settings_path.read_text(encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="malformed"):
+            adapter.install(grd_root, target)
+
+        assert settings_path.read_text(encoding="utf-8") == before
+
+    def test_reinstall_fails_closed_for_malformed_managed_config_manifest(
+        self,
+        adapter: GeminiAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".gemini"
+        target.mkdir()
+        result = adapter.install(grd_root, target)
+        adapter.finalize_install(result)
+
+        manifest_path = target / "grd-file-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["managed_config"] = ["broken"]
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        before = manifest_path.read_text(encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="managed_config"):
+            adapter.install(grd_root, target)
+
+        assert manifest_path.read_text(encoding="utf-8") == before
 
     def test_force_statusline_forwarded_through_finalize(
         self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path
@@ -796,6 +1055,44 @@ class TestInstall:
         adapter.finalize_install(result, force_statusline=True)
         settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
         assert "statusline.py" in settings["statusLine"]["command"]
+
+    def test_finalize_install_fails_closed_for_malformed_settings_json(
+        self,
+        adapter: GeminiAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".gemini"
+        target.mkdir()
+        result = adapter.install(grd_root, target)
+
+        settings_path = target / "settings.json"
+        settings_path.write_text('{"hooks": [\n', encoding="utf-8")
+        before = settings_path.read_text(encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="malformed"):
+            adapter.finalize_install(result)
+
+        assert settings_path.read_text(encoding="utf-8") == before
+
+    def test_finalize_install_fails_closed_for_structurally_invalid_settings_json(
+        self,
+        adapter: GeminiAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".gemini"
+        target.mkdir()
+        result = adapter.install(grd_root, target)
+
+        settings_path = target / "settings.json"
+        settings_path.write_text(json.dumps({"policyPaths": {}}), encoding="utf-8")
+        before = settings_path.read_text(encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="malformed"):
+            adapter.finalize_install(result)
+
+        assert settings_path.read_text(encoding="utf-8") == before
 
     def test_install_agents_at_includes_receive_runtime(
         self, adapter: GeminiAdapter, grd_root: Path, tmp_path: Path
@@ -852,15 +1149,32 @@ class TestInstall:
 
 
 class TestRuntimePermissions:
-    def test_sync_runtime_permissions_yolo_creates_launcher_wrapper(
+    def test_runtime_permissions_status_marks_yolo_launcher_as_relaunch_required(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
+        adapter.sync_runtime_permissions(target, autonomy="yolo")
+
+        status = adapter.runtime_permissions_status(target, autonomy="yolo")
+
+        assert status["config_aligned"] is True
+        assert status["requires_relaunch"] is True
+        assert "gemini-grd-yolo" in str(status["next_step"])
+
+    def test_sync_runtime_permissions_yolo_creates_launcher_wrapper(
+        self,
+        adapter: GeminiAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".gemini"
+        target.mkdir()
+        adapter.install(grd_root, target)
 
         result = adapter.sync_runtime_permissions(target, autonomy="yolo")
         wrapper = target / "get-research-done" / "bin" / "gemini-grd-yolo"
@@ -868,18 +1182,18 @@ class TestRuntimePermissions:
         assert wrapper.exists()
         assert '--approval-mode=yolo "$@"' in wrapper.read_text(encoding="utf-8")
         assert result["sync_applied"] is True
-        assert result["launch_command"] == str(wrapper)
+        assert result["launch_command"] == shlex.quote(str(wrapper))
         assert result["requires_relaunch"] is True
 
     def test_sync_runtime_permissions_non_yolo_removes_launcher_wrapper(
         self,
         adapter: GeminiAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".gemini"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
         adapter.sync_runtime_permissions(target, autonomy="yolo")
 
         result = adapter.sync_runtime_permissions(target, autonomy="balanced")
@@ -957,6 +1271,11 @@ class TestUninstall:
 
         settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
         settings["mcpServers"]["custom-server"] = {"command": "node", "args": ["custom.js"]}
+        settings["mcpServers"]["grd-wolfram"] = {
+            "command": "grd-mcp-wolfram",
+            "args": [],
+            "env": {"GPD_WOLFRAM_MCP_ENDPOINT": "https://example.invalid/api/mcp"},
+        }
         (target / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
 
         adapter.uninstall(target)

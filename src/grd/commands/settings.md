@@ -9,20 +9,13 @@ allowed-tools:
   - ask_user
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Interactive configuration of GRD workflow agents, runtime-specific tier model overrides, `execution.review_cadence`, and workflow/git preferences via multi-question prompt.
 
-Routes to the settings workflow which handles:
-
-- Config existence ensuring
-- Current settings reading and parsing
-- Interactive prompt covering research profile, runtime-specific tier models, review cadence, and workflow/git toggles
-- Config merging and writing
-- Confirmation display with quick command references
-  </objective>
+Keep this wrapper thin: follow the workflow and let it own option vocabulary,
+user-facing explanations, and confirmation copy.
+</objective>
 
 <execution_context>
 @{GRD_INSTALL_DIR}/workflows/settings.md

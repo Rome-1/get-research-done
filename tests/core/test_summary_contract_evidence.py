@@ -103,6 +103,56 @@ def test_summary_extract_rejects_placeholder_contract_results_section_shapes(
         cmd_summary_extract(tmp_path, "broken-SUMMARY.md")
 
 
+def test_summary_extract_rejects_explicit_null_contract_results_block(tmp_path: Path) -> None:
+    summary_text = (FIXTURES_DIR / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
+        "contract_results:\n"
+        "  claims:\n"
+        "    claim-benchmark:\n"
+        "      status: passed\n"
+        "      summary: Benchmark claim verified against the decisive anchor.\n"
+        "      linked_ids: [deliv-figure, test-benchmark, ref-benchmark]\n"
+        "      evidence:\n"
+        "        - verifier: grd-verifier\n"
+        "          method: benchmark reproduction\n"
+        "          confidence: high\n"
+        "          claim_id: claim-benchmark\n"
+        "          deliverable_id: deliv-figure\n"
+        "          acceptance_test_id: test-benchmark\n"
+        "          reference_id: ref-benchmark\n"
+        "          evidence_path: GRD/phases/01-benchmark/01-VERIFICATION.md\n"
+        "  deliverables:\n"
+        "    deliv-figure:\n"
+        "      status: passed\n"
+        "      path: figures/benchmark.png\n"
+        "      summary: Figure produced with uncertainty band and benchmark overlay.\n"
+        "      linked_ids: [claim-benchmark, test-benchmark]\n"
+        "  acceptance_tests:\n"
+        "    test-benchmark:\n"
+        "      status: passed\n"
+        "      summary: Benchmark reproduced within the contracted tolerance.\n"
+        "      linked_ids: [claim-benchmark, deliv-figure, ref-benchmark]\n"
+        "  references:\n"
+        "    ref-benchmark:\n"
+        "      status: completed\n"
+        "      completed_actions: [read, compare, cite]\n"
+        "      missing_actions: []\n"
+        "      summary: Benchmark anchor surfaced in the comparison figure and manuscript text.\n"
+        "  forbidden_proxies:\n"
+        "    fp-benchmark:\n"
+        "      status: rejected\n"
+        "      notes: Qualitative trend agreement was not accepted without the numerical benchmark check.\n"
+        "  uncertainty_markers:\n"
+        "    weakest_anchors: [Reference tolerance interpretation]\n"
+        "    disconfirming_observations: [Benchmark agreement disappears once normalization is fixed]\n",
+        "contract_results:\n",
+        1,
+    )
+    _write_contract_backed_summary(tmp_path, summary_text, filename="broken-SUMMARY.md")
+
+    with pytest.raises(ValidationError, match="contract_results"):
+        cmd_summary_extract(tmp_path, "broken-SUMMARY.md")
+
+
 def test_summary_extract_requires_explicit_uncertainty_markers(tmp_path: Path) -> None:
     summary_text = (FIXTURES_DIR / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
         "  uncertainty_markers:\n"
@@ -117,7 +167,7 @@ def test_summary_extract_requires_explicit_uncertainty_markers(tmp_path: Path) -
         cmd_summary_extract(tmp_path, "broken-SUMMARY.md")
 
 
-def test_summary_extract_normalizes_reference_action_ledgers(tmp_path: Path) -> None:
+def test_summary_extract_rejects_reference_action_ledgers_with_blank_and_duplicate_entries(tmp_path: Path) -> None:
     _write_contract_backed_summary(
         tmp_path,
         _summary_with_reference_usage(
@@ -128,14 +178,15 @@ def test_summary_extract_normalizes_reference_action_ledgers(tmp_path: Path) -> 
         required_actions=["read"],
     )
 
-    result = cmd_summary_extract(tmp_path, "01-SUMMARY.md")
+    with pytest.raises(ValidationError) as excinfo:
+        cmd_summary_extract(tmp_path, "01-SUMMARY.md")
 
-    assert result.contract_results is not None
-    assert result.contract_results.references["ref-benchmark"].completed_actions == ["read", "compare", "cite"]
-    assert result.contract_results.references["ref-benchmark"].missing_actions == []
+    message = str(excinfo.value)
+    assert "completed_actions.3 must not be blank" in message
+    assert "completed_actions.4 is a duplicate" in message
 
 
-def test_summary_extract_rejects_scalar_reference_action_ledgers_for_contract_backed_summary(
+def test_summary_extract_accepts_scalar_reference_action_ledgers_for_contract_backed_summary(
     tmp_path: Path,
 ) -> None:
     _write_contract_backed_summary(
@@ -148,43 +199,30 @@ def test_summary_extract_rejects_scalar_reference_action_ledgers_for_contract_ba
         required_actions=["read"],
     )
 
-    with pytest.raises(ValidationError) as excinfo:
-        cmd_summary_extract(tmp_path, "01-SUMMARY.md")
+    result = cmd_summary_extract(tmp_path, "01-SUMMARY.md")
 
-    message = str(excinfo.value)
-    assert "completed_actions must be a list, not str" in message
+    assert result.contract_results is not None
+    assert result.contract_results.references["ref-benchmark"].completed_actions == ["read"]
 
 
-@pytest.mark.parametrize(
-    ("status", "completed_actions", "missing_actions", "expected_completed", "expected_missing"),
-    [
-        ("completed", '[" read ", READ, "read"]', "[]", ["read"], []),
-    ],
-)
-def test_summary_extract_normalizes_case_variant_reference_action_ledgers(
+def test_summary_extract_rejects_case_variant_reference_action_ledgers(
     tmp_path: Path,
-    status: str,
-    completed_actions: str,
-    missing_actions: str,
-    expected_completed: list[str],
-    expected_missing: list[str],
 ) -> None:
     _write_contract_backed_summary(
         tmp_path,
         _summary_with_reference_usage(
-            status=status,
-            completed_actions=completed_actions,
-            missing_actions=missing_actions,
+            status="completed",
+            completed_actions='[" read ", READ, "read"]',
+            missing_actions="[]",
         ),
         required_actions=["read"],
     )
 
-    result = cmd_summary_extract(tmp_path, "01-SUMMARY.md")
+    with pytest.raises(ValidationError) as excinfo:
+        cmd_summary_extract(tmp_path, "01-SUMMARY.md")
 
-    assert result.contract_results is not None
-    assert result.contract_results.references["ref-benchmark"].status == status.casefold()
-    assert result.contract_results.references["ref-benchmark"].completed_actions == expected_completed
-    assert result.contract_results.references["ref-benchmark"].missing_actions == expected_missing
+    message = str(excinfo.value)
+    assert "completed_actions.2 is a duplicate" in message
 
 
 @pytest.mark.parametrize(

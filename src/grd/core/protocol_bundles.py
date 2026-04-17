@@ -7,6 +7,7 @@ verification assets plus planning / execution / verification hints.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import textwrap
@@ -206,6 +207,16 @@ def _contains_term(normalized_text: str, term: str) -> bool:
     padded_text = f" {normalized_text} "
     padded_term = f" {normalized_term} "
     return padded_term in padded_text
+
+
+def _literalize_markdown_text(value: str) -> str:
+    """Return one-line literal text that cannot reshape markdown structure."""
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _literalize_markdown_list(values: list[str]) -> str:
+    """Return a compact literal list for prompt-visible metadata."""
+    return "[" + ", ".join(_literalize_markdown_text(value) for value in values) + "]"
 
 
 def _extract_sections(markdown: str) -> dict[str, str]:
@@ -429,21 +440,21 @@ def render_protocol_bundle_context(selected: list[ResolvedProtocolBundle]) -> st
     for bundle in selected:
         reason_bits: list[str] = []
         if bundle.matched_tags:
-            reason_bits.append("tags=" + ", ".join(bundle.matched_tags))
+            reason_bits.append("tags=" + _literalize_markdown_list(bundle.matched_tags))
         if bundle.matched_terms:
-            reason_bits.append("terms=" + ", ".join(bundle.matched_terms))
+            reason_bits.append("terms=" + _literalize_markdown_list(bundle.matched_terms))
         reason = "; ".join(reason_bits) if reason_bits else "metadata match"
 
         lines.extend(
             [
                 "",
-                f"### {bundle.title} [{bundle.bundle_id}]",
+                f"### {_literalize_markdown_text(bundle.title)} [{_literalize_markdown_text(bundle.bundle_id)}]",
                 f"- Why selected: {reason}",
-                f"- Summary: {bundle.summary}",
+                f"- Summary: {_literalize_markdown_text(bundle.summary)}",
             ]
         )
         if bundle.selection_tags:
-            lines.append("- Selection tags: " + ", ".join(bundle.selection_tags))
+            lines.append("- Selection tags: " + _literalize_markdown_list(bundle.selection_tags))
 
         for role in (
             "project_types",
@@ -458,16 +469,28 @@ def render_protocol_bundle_context(selected: list[ResolvedProtocolBundle]) -> st
                 lines.append(asset_line)
 
         if bundle.anchor_prompts:
-            lines.append("- Anchor prompts: " + " | ".join(bundle.anchor_prompts))
+            lines.append(
+                "- Anchor prompts: " + " | ".join(_literalize_markdown_text(prompt) for prompt in bundle.anchor_prompts)
+            )
         if bundle.reference_prompts:
-            lines.append("- Reference prompts: " + " | ".join(bundle.reference_prompts))
+            lines.append(
+                "- Reference prompts: "
+                + " | ".join(_literalize_markdown_text(prompt) for prompt in bundle.reference_prompts)
+            )
         if bundle.estimator_policies:
-            lines.append("- Estimator policies: " + " | ".join(bundle.estimator_policies))
+            lines.append(
+                "- Estimator policies: "
+                + " | ".join(_literalize_markdown_text(policy) for policy in bundle.estimator_policies)
+            )
         if bundle.decisive_artifact_guidance:
-            lines.append("- Decisive artifacts: " + " | ".join(bundle.decisive_artifact_guidance))
+            lines.append(
+                "- Decisive artifacts: "
+                + " | ".join(_literalize_markdown_text(guidance) for guidance in bundle.decisive_artifact_guidance)
+            )
         if bundle.verifier_extensions:
             rendered_extensions = " | ".join(
-                f"{extension.name} [{', '.join(extension.check_ids) or 'no-check-ids'}]"
+                f"{_literalize_markdown_text(extension.name)} "
+                f"[{_literalize_markdown_list(extension.check_ids) if extension.check_ids else _literalize_markdown_text('no-check-ids')}]"
                 for extension in bundle.verifier_extensions
             )
             lines.append("- Verifier extensions: " + rendered_extensions)

@@ -1,15 +1,19 @@
 <purpose>
-Check convention consistency across all completed phases with a scan-only audit. Detects sign errors, notation drift, metric signature mismatches, and convention lock violations. Critical for catching errors that propagate silently across phases — a wrong sign convention in Phase 2 invalidates everything built on it.
+Thin wrapper around `grd-consistency-checker` for convention validation.
+
+This workflow resolves the requested scope, delegates the physics policy to the checker, and accepts success only when the typed `grd_return.status` and the expected consistency report artifact both check out. The checker owns the convention logic; this workflow only gates scope, artifact presence, and post-return routing.
 </purpose>
 
 <required_reading>
 Read all files referenced by the invoking prompt's execution_context before starting.
 </required_reading>
 
+@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
+
 <process>
 
-<step name="init" priority="first">
-**Load project conventions and state:**
+<step name="initialize" priority="first">
+Load project context and scope:
 
 ```bash
 INIT=$(grd init progress --include state,roadmap,config)
@@ -19,18 +23,13 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Extract: `state_exists`, `roadmap_exists`, `phases`, `current_phase`.
+Parse JSON for: `state_exists`, `roadmap_exists`, `phases`, `current_phase`, `derived_convention_lock`, and when phase-scoped `phase_found`, `phase_dir`, `phase_number`.
 
-**Read mode settings:**
+Read mode settings:
 
 ```bash
 AUTONOMY=$(grd --raw config get autonomy 2>/dev/null | grd json get .value --default balanced 2>/dev/null || echo "balanced")
 ```
-
-**Mode-aware behavior:**
-- `autonomy=supervised`: Present each convention conflict for user resolution before applying fixes.
-- `autonomy=balanced` (default): Auto-fix trivial conflicts and clear lock-consistency issues. Pause for ambiguous conflicts requiring physics judgment.
-- `autonomy=yolo`: Auto-fix all conflicts using most recent convention as authoritative.
 
 Run centralized context preflight before continuing:
 
@@ -42,7 +41,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-**If `state_exists` is false:**
+If `state_exists` is false:
 
 ```
 No project state found. Run /grd:new-project first.
@@ -50,25 +49,47 @@ No project state found. Run /grd:new-project first.
 
 Exit.
 
-**Load convention lock from state.json:**
+Resolve scope immediately after preflight:
+
+- If `$PHASE_ARG` is set, require `phase_found: true` from `init phase-op` and derive a single-phase scope from `phase_dir`.
+- If `$PHASE_ARG` is empty, scan all completed phases from `grd --raw roadmap analyze`.
+- If the requested phase cannot be resolved, fail closed with `ERROR: Phase not found: ${PHASE_ARG}`.
+
+Capture the selected phase directory and roadmap view for the downstream scan:
+
+```bash
+ROADMAP=$(grd --raw roadmap analyze)
+```
+
+Load the convention ledger:
 
 ```bash
 CONVENTIONS=$(grd convention list)
 ```
 
-Parse JSON for all locked convention fields and their values. The convention lock is the project-level source of truth.
+Read `GRD/CONVENTIONS.md` when present so the checker can compare the human-readable convention record against the structured lock. If the file is missing, continue with the structured lock and report the missing artifact as a limitation rather than inventing a fallback policy.
+</step>
 
-**Load CONVENTIONS.md if it exists:**
+<step name="delegate_checker">
+Spawn `grd-consistency-checker` once and let it own convention policy.
+
+Use the requested scope to choose checker mode:
+
+- `PHASE_ARG` present -> `rapid`
+- no phase argument -> `full`
+
+For the checker prompt, provide only the scope, expected artifact path, and the required project files. Do not restate the checker's severity taxonomy or convention policy here.
+
+Derive the routed scope explicitly:
 
 ```bash
 cat .grd/CONVENTIONS.md 2>/dev/null
 ```
 
-CONVENTIONS.md is the human-readable convention reference. Convention lock (in state.json) is the machine-readable enforced version.
-</step>
+Expected artifact:
 
-<step name="check_convention_lock_drift">
-**Compare convention lock against CONVENTIONS.md:**
+- phase-scoped run: `GRD/phases/${PHASE_DIR}/CONSISTENCY-CHECK.md`
+- project-wide run: `GRD/CONSISTENCY-CHECK.md`
 
 For each field in the convention lock:
 
@@ -103,7 +124,7 @@ update the lock: grd convention set {field} "{value}"
 ROADMAP=$(grd roadmap analyze)
 ```
 
-For each phase with `disk_status: "complete"` or `disk_status: "partial"`:
+Use the selected scope to gather summary artifacts:
 
 ```bash
 # Extract conventions from summary-artifact frontmatter
@@ -179,7 +200,6 @@ If phases disagree, this is a potential error source.
 ```bash
 CONSISTENCY_MODEL=$(grd resolve-model grd-consistency-checker)
 ```
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
 
 ```
 task(
@@ -188,8 +208,11 @@ task(
   readonly=false,
   prompt="First, read {GRD_AGENTS_DIR}/grd-consistency-checker.md for your role and instructions.
 
-    <mode>rapid</mode>
-    <scope>all-phases</scope>
+<mode>{CHECKER_MODE}</mode>
+<scope>{CHECK_SCOPE}</scope>
+<expected_artifacts>
+- {EXPECTED_ARTIFACT}
+</expected_artifacts>
 
     Validate convention consistency across the entire project.
     Read conventions from state.json via: grd convention list
@@ -211,20 +234,35 @@ task(
 
 **If the consistency checker agent fails to spawn or returns an error:** Proceed without automated consistency checking. Note in the validation report that cross-phase consistency verification was skipped. The convention lock fields and CONVENTIONS.md can still be inspected manually. The user should run `/grd:validate-conventions` again or inspect conventions manually.
 
-Parse return for `consistency_status`: CONSISTENT, WARNING, or INCONSISTENT.
+1. The expected artifact exists on disk.
+2. The same path appears in `grd_return.files_written`.
+
+If either check fails, treat the handoff as incomplete and do not accept success.
+</step>
+
+<step name="route_return">
+Route only on the canonical `grd_return.status`:
+
+- `grd_return.status: completed` means the checker finished for the selected scope. Surface any advisory items from `grd_return.issues`, but do not reinterpret the status text.
+- `grd_return.status: checkpoint` means the checker needs user input. Present the checkpoint, offer the user the next action, and stop. Present options, checkpoint, and return.
+- `grd_return.status: blocked` or `grd_return.status: failed` means the checker could not complete. Surface `grd_return.issues`, keep the run fail-closed, and stop.
+
+Do not route on checker-local text markers or headings. Those are presentation only; route only on the canonical `grd_return.status`.
+
+If the checker's `next_actions` call for notation repair, spawn `grd-notation-coordinator` with the checker report and the same scope. Keep that handoff thin: the coordinator owns the repair policy, not this workflow.
+
+Verify that `GRD/CONVENTIONS.md` exists and that `grd convention list` reflects the resolved fields before accepting the update. Convention artifact and lock re-verified after notation resolution before success is accepted.
 </step>
 
 <step name="report">
-**Present convention consistency report:**
+Present a concise convention report:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  GRD > CONVENTION VALIDATION REPORT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-**Phases scanned:** {count}
-**Convention lock fields:** {count}
-**Status:** {CONSISTENT / ISSUES FOUND}
+Before accepting any repaired result from the notation coordinator, re-check that `GRD/CONVENTIONS.md` exists and that `grd convention list` reflects the resolved fields.
 
 ### Convention Lock vs CONVENTIONS.md
 

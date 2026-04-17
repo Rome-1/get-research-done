@@ -1,7 +1,7 @@
 ---
 name: grd:regression-check
 description: Scan completed phase summaries and verifications for convention conflicts and verification-state regressions
-argument-hint: "[phase number to limit scope, or empty for all]"
+argument-hint: "[phase] [--quick]"
 context_mode: project-required
 allowed-tools:
   - file_read
@@ -10,8 +10,6 @@ allowed-tools:
   - search_files
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Run the lightweight regression audit implemented by `grd regression-check`.

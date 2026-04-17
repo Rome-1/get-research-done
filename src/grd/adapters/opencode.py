@@ -17,6 +17,7 @@ import logging
 import os
 import re
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
 
 from grd.adapters.base import RuntimeAdapter
@@ -37,17 +38,18 @@ from grd.adapters.install_utils import (
     hook_python_interpreter,
     install_grd_content,
     managed_hook_paths,
-    materialize_first_round_review_schema_headings,
     parse_jsonc,
     prune_empty_ancestors,
     remove_empty_json_object_file,
     remove_stale_agents,
     render_markdown_frontmatter,
     replace_placeholders,
+    should_preserve_public_local_cli_command,
     split_markdown_frontmatter,
     strip_sub_tags,
 )
 from grd.adapters.tool_names import build_runtime_alias_map, reference_translation_map, translate_for_runtime
+from grd.mcp import managed_integrations as _managed_integrations
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +99,7 @@ _SHELL_FENCE_LANGUAGES = frozenset({"bash", "sh", "shell", "zsh"})
 _INLINE_GRD_COMMAND_RE = re.compile(r"`(?P<command>grd(?=\s)[^`]*?)`")
 _OPENCODE_PERMISSION_DECISIONS = frozenset({"allow", "ask", "deny"})
 _OPENCODE_YOLO_PERMISSION = "allow"
-_OPENCODE_HELP_WORDING_RE = re.compile(r"\bslash-command\b")
+_MANIFEST_OPENCODE_GENERATED_COMMAND_FILES_KEY = "opencode_generated_command_files"
 
 # ---------------------------------------------------------------------------
 # XDG config directory resolution
@@ -130,6 +132,22 @@ def convert_tool_name(tool_name: str) -> str:
     """
     mapped = translate_for_runtime(tool_name, _TOOL_NAME_MAP)
     return mapped if mapped is not None else tool_name
+
+
+def _project_managed_mcp_servers(
+    env: Mapping[str, str] | None = None,
+    *,
+    cwd: Path | None = None,
+) -> dict[str, dict[str, object]]:
+    """Project shared optional integrations into OpenCode's neutral MCP shape."""
+    return _managed_integrations.projected_managed_optional_mcp_servers(env, cwd=cwd)
+
+
+def _managed_mcp_server_keys() -> frozenset[str]:
+    """Return GRD-managed OpenCode MCP server keys, including optional integrations."""
+    from grd.mcp.builtin_servers import GPD_MCP_SERVER_KEYS
+
+    return frozenset(set(GPD_MCP_SERVER_KEYS) | set(_managed_integrations.managed_optional_mcp_server_keys()))
 
 
 # ---------------------------------------------------------------------------
@@ -289,6 +307,10 @@ def _rewrite_grd_shell_line(line: str, bridge_command: str) -> str:
             and _is_grd_command_start(line, index)
             and _is_grd_token_end(line, index + 3)
         ):
+            if should_preserve_public_local_cli_command(line[index:]):
+                pieces.append("grd")
+                index += 3
+                continue
             pieces.append(bridge_command)
             index += 3
             continue
@@ -335,9 +357,12 @@ def copy_flattened_commands(
     prefix: str,
     path_prefix: str,
     workflow_target_dir: Path | None = None,
-    gpd_src_root: Path | None = None,
+    grd_src_root: Path | None = None,
     install_scope: str | None = None,
     bridge_command: str | None = None,
+    *,
+    explicit_target: bool = False,
+    managed_command_files: set[str] | None = None,
 ) -> int:
     """Copy commands to a flat structure for OpenCode.
 
@@ -366,9 +391,11 @@ def copy_flattened_commands(
                 f"{prefix}-{entry.name}",
                 path_prefix,
                 workflow_target_dir,
-                gpd_src_root,
+                grd_src_root,
                 install_scope,
                 bridge_command,
+                explicit_target=explicit_target,
+                managed_command_files=managed_command_files,
             )
         elif entry.name.endswith(".md"):
             base_name = entry.stem
@@ -380,8 +407,9 @@ def copy_flattened_commands(
                 runtime="opencode",
                 path_prefix=path_prefix,
                 install_scope=install_scope,
-                src_root=gpd_src_root,
+                src_root=grd_src_root,
                 workflow_target_dir=workflow_target_dir,
+                explicit_target=explicit_target,
             )
             if bridge_command:
                 content = _rewrite_grd_cli_invocations(content, bridge_command)
@@ -390,6 +418,8 @@ def copy_flattened_commands(
                 content = _rewrite_opencode_help_wording(content)
 
             dest_path.write_text(content, encoding="utf-8")
+            if managed_command_files is not None and dest_name.startswith("grd-"):
+                managed_command_files.add(dest_name)
             count += 1
 
     return count
@@ -404,7 +434,7 @@ def copy_agents_as_agent_files(
     agents_src: Path,
     agents_dest: Path,
     path_prefix: str,
-    gpd_src_root: Path | None = None,
+    grd_src_root: Path | None = None,
     install_scope: str | None = None,
     bridge_command: str | None = None,
 ) -> int:
@@ -417,7 +447,7 @@ def copy_agents_as_agent_files(
         return 0
 
     agents_dest.mkdir(parents=True, exist_ok=True)
-    source_root = gpd_src_root or agents_src.parent / "specs"
+    source_root = grd_src_root or agents_src.parent / "specs"
 
     new_agent_names: set[str] = set()
     count = 0
@@ -434,7 +464,6 @@ def copy_agents_as_agent_files(
             src_root=source_root,
             protect_agent_prompt_body=True,
         )
-        content = materialize_first_round_review_schema_headings(content)
         if bridge_command:
             content = _rewrite_grd_cli_invocations(content, bridge_command)
         content = convert_claude_to_opencode_frontmatter(content, path_prefix)
@@ -459,27 +488,106 @@ def _opencode_managed_permission_keys(config_dir: Path) -> tuple[str, ...]:
     return (f"{actual_config_dir.as_posix()}/get-research-done/*",)
 
 
-def _read_opencode_config(config_dir: Path) -> dict[str, object]:
-    """Return parsed OpenCode config or an empty mapping."""
-    config_path = config_dir / "opencode.json"
-    if not config_path.exists():
-        return {}
-    try:
-        parsed = parse_jsonc(config_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError, ValueError):
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
-
-
 def _write_opencode_config(config_dir: Path, config: dict[str, object]) -> None:
     """Persist OpenCode config as normalized JSON."""
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "opencode.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
 
+def _read_opencode_config_state(config_dir: Path) -> tuple[dict[str, object] | None, str | None]:
+    """Return parsed OpenCode config and a malformed marker when parsing fails."""
+    config_path = config_dir / "opencode.json"
+    if not config_path.exists():
+        return None, None
+    try:
+        parsed = parse_jsonc(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, ValueError):
+        return None, "malformed"
+    if not isinstance(parsed, dict):
+        return None, "malformed"
+    if not _opencode_permission_shape_is_valid(parsed.get("permission")):
+        return None, "malformed"
+    if not _opencode_mcp_shape_is_valid(parsed.get("mcp")):
+        return None, "malformed"
+    return parsed, None
+
+
+def _load_manifest_opencode_generated_command_files(target_dir: Path) -> tuple[str, ...]:
+    """Return tracked OpenCode command filenames from the local manifest metadata."""
+    manifest_path = target_dir / MANIFEST_NAME
+    if not manifest_path.exists():
+        return ()
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return ()
+
+    if not isinstance(manifest, dict):
+        return ()
+
+    command_files = manifest.get(_MANIFEST_OPENCODE_GENERATED_COMMAND_FILES_KEY)
+    if not isinstance(command_files, list):
+        return ()
+
+    tracked: list[str] = []
+    for entry in command_files:
+        if isinstance(entry, str) and entry.startswith("grd-") and entry.endswith(".md"):
+            tracked.append(entry)
+    return tuple(dict.fromkeys(tracked))
+
+
+def _load_manifest_opencode_command_files(target_dir: Path) -> tuple[str, ...]:
+    """Return tracked OpenCode command filenames, falling back to manifest files entries."""
+    generated_command_files = _load_manifest_opencode_generated_command_files(target_dir)
+    if generated_command_files:
+        return generated_command_files
+
+    manifest_path = target_dir / MANIFEST_NAME
+    if not manifest_path.exists():
+        return ()
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return ()
+
+    if not isinstance(manifest, dict):
+        return ()
+
+    manifest_files = manifest.get("files")
+    if not isinstance(manifest_files, dict):
+        return ()
+
+    tracked: list[str] = []
+    for rel_path in manifest_files:
+        if not isinstance(rel_path, str) or not rel_path.startswith("command/"):
+            continue
+        name = rel_path.removeprefix("command/")
+        if name.startswith("grd-") and name.endswith(".md"):
+            tracked.append(name)
+    return tuple(dict.fromkeys(tracked))
+
+
 def _clone_json_value(value: object) -> object:
     """Deep-copy JSON-compatible values."""
     return json.loads(json.dumps(value))
+
+
+def _opencode_permission_shape_is_valid(permission_value: object) -> bool:
+    if permission_value is None:
+        return True
+    if isinstance(permission_value, dict):
+        return True
+    return isinstance(permission_value, str) and permission_value in _OPENCODE_PERMISSION_DECISIONS
+
+
+def _opencode_mcp_shape_is_valid(mcp_value: object) -> bool:
+    if mcp_value is None:
+        return True
+    if not isinstance(mcp_value, dict):
+        return False
+    return all(isinstance(entry, dict) for entry in mcp_value.values())
 
 
 def _normalize_opencode_permission_value(permission_value: object) -> tuple[dict[str, object], bool]:
@@ -515,7 +623,10 @@ def configure_opencode_permissions(config_dir: Path) -> bool:
     Modifies opencode.json to add permission.read and permission.external_directory
     grants for the GRD path. Returns True if config was modified.
     """
-    config = _read_opencode_config(config_dir)
+    config_state, config_parse_error = _read_opencode_config_state(config_dir)
+    if config_parse_error is not None:
+        raise RuntimeError("OpenCode opencode.json is malformed; refusing to overwrite it during install.")
+    config = config_state or {}
     permission_value = config.get("permission")
     if _opencode_permission_is_yolo(permission_value):
         return False
@@ -527,7 +638,7 @@ def configure_opencode_permissions(config_dir: Path) -> bool:
         config["permission"] = permission_config
 
     managed_keys = _opencode_managed_permission_keys(config_dir)
-    gpd_path = managed_keys[0]
+    grd_path = managed_keys[0]
 
     modified = permission_value is None or coerced
 
@@ -537,8 +648,8 @@ def configure_opencode_permissions(config_dir: Path) -> bool:
         read_permissions = {}
         permission_config["read"] = read_permissions
         modified = True
-    if read_permissions.get(gpd_path) != "allow":
-        read_permissions[gpd_path] = "allow"
+    if read_permissions.get(grd_path) != "allow":
+        read_permissions[grd_path] = "allow"
         modified = True
 
     # Configure external_directory permission
@@ -547,8 +658,8 @@ def configure_opencode_permissions(config_dir: Path) -> bool:
         external_permissions = {}
         permission_config["external_directory"] = external_permissions
         modified = True
-    if external_permissions.get(gpd_path) != "allow":
-        external_permissions[gpd_path] = "allow"
+    if external_permissions.get(grd_path) != "allow":
+        external_permissions[grd_path] = "allow"
         modified = True
 
     if modified:
@@ -570,6 +681,7 @@ def write_manifest(
     runtime: str | None = None,
     install_scope: str | None = None,
     explicit_target: bool | None = None,
+    managed_command_file_names: tuple[str, ...] | None = None,
 ) -> dict:
     """Write file manifest after installation for future modification detection.
 
@@ -599,13 +711,21 @@ def write_manifest(
     if explicit_target is not None:
         manifest["explicit_target"] = bool(explicit_target)
     elif isinstance(runtime, str) and runtime.strip() and normalized_scope in {"--local", "--global"}:
-        default_target = _default_install_target(config_dir, runtime.strip(), normalized_scope)
+        default_target = _default_install_target(runtime.strip(), normalized_scope)
         if default_target is not None:
             manifest["explicit_target"] = not _paths_equal(config_dir, default_target)
+    if managed_command_file_names:
+        manifest[_MANIFEST_OPENCODE_GENERATED_COMMAND_FILES_KEY] = sorted(
+            {
+                name
+                for name in managed_command_file_names
+                if isinstance(name, str) and name.startswith("grd-") and name.endswith(".md")
+            }
+        )
 
     # get-research-done/ files
-    gpd_hashes = generate_manifest(grd_dir)
-    for rel, h in gpd_hashes.items():
+    grd_hashes = generate_manifest(grd_dir)
+    for rel, h in grd_hashes.items():
         manifest["files"]["get-research-done/" + rel] = h
 
     # command/grd-*.md files (OpenCode flat structure)
@@ -722,6 +842,7 @@ def uninstall_opencode(target_dir: Path, *, config_dir: Path) -> dict[str, int]:
     counts: dict[str, int] = {"commands": 0, "agents": 0, "hooks": 0, "dirs": 0, "permissions": 0}
     managed_hooks = managed_hook_paths(target_dir)
     runtime_permission_state: dict[str, object] | None = None
+    tracked_command_files = _load_manifest_opencode_command_files(target_dir)
 
     # 1. Remove command/grd-*.md files
     command_dir = target_dir / "command"
@@ -742,10 +863,10 @@ def uninstall_opencode(target_dir: Path, *, config_dir: Path) -> dict[str, int]:
     if manifest_file.exists():
         try:
             manifest_payload = json.loads(manifest_file.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             manifest_payload = {}
         if isinstance(manifest_payload, dict):
-            state = manifest_payload.get("gpd_runtime_permissions")
+            state = manifest_payload.get("grd_runtime_permissions")
             if isinstance(state, dict):
                 runtime_permission_state = state
         manifest_file.unlink()
@@ -790,10 +911,10 @@ def uninstall_opencode(target_dir: Path, *, config_dir: Path) -> dict[str, int]:
         if isinstance(oc_mcp, dict) and isinstance(oc_mcp.get("mcp"), dict):
             from grd.mcp.builtin_servers import GPD_MCP_SERVER_KEYS
 
-            gpd_keys = [k for k in oc_mcp["mcp"] if k in GPD_MCP_SERVER_KEYS]
-            for k in gpd_keys:
+            grd_keys = [k for k in oc_mcp["mcp"] if k in GPD_MCP_SERVER_KEYS]
+            for k in grd_keys:
                 del oc_mcp["mcp"][k]
-            if gpd_keys:
+            if grd_keys:
                 if not oc_mcp["mcp"]:
                     del oc_mcp["mcp"]
                 oc_config_path_mcp.write_text(json.dumps(oc_mcp, indent=2) + "\n", encoding="utf-8")
@@ -841,7 +962,8 @@ def uninstall_opencode(target_dir: Path, *, config_dir: Path) -> dict[str, int]:
         if modified:
             oc_config_path.write_text(json.dumps(oc_config, indent=2) + "\n", encoding="utf-8")
             counts["permissions"] += 1
-        remove_empty_json_object_file(oc_config_path)
+        if allow_empty_config_removal:
+            remove_empty_json_object_file(oc_config_path)
 
     for path in (
         target_dir / "command",
@@ -870,14 +992,10 @@ def _write_mcp_servers_opencode(config_dir: Path, servers: dict[str, dict[str, o
     config_path = config_dir / "opencode.json"
     config_dir.mkdir(parents=True, exist_ok=True)
 
-    config: dict = {}
-    if config_path.exists():
-        try:
-            config = parse_jsonc(config_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, ValueError):
-            config = {}
-        if not isinstance(config, dict):
-            config = {}
+    config_state, config_parse_error = _read_opencode_config_state(config_dir)
+    if config_parse_error is not None:
+        raise RuntimeError("OpenCode opencode.json is malformed; refusing to overwrite it during install.")
+    config = config_state or {}
 
     existing_mcp = config.get("mcp", {})
     if not isinstance(existing_mcp, dict):
@@ -955,23 +1073,60 @@ class OpenCodeAdapter(RuntimeAdapter):
             explicit_target=getattr(self, "_install_explicit_target", False),
         )
 
-    def _install_commands(self, gpd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
-        commands_src = gpd_root / "commands"
+    def runtime_install_required_relpaths(self) -> tuple[str, ...]:
+        """Return OpenCode-owned files required for a complete install."""
+        return ("opencode.json",)
+
+    def missing_install_artifacts(self, target_dir: Path) -> tuple[str, ...]:
+        """Return missing OpenCode install artifacts, including the command surface."""
+        missing = list(super().missing_install_artifacts(target_dir))
+        command_dir = target_dir / "command"
+        tracked_command_files = _load_manifest_opencode_generated_command_files(target_dir)
+
+        if not tracked_command_files:
+            missing.append("command/grd-*.md")
+            return tuple(dict.fromkeys(missing))
+
+        missing_command_files: list[str] = []
+        for name in tracked_command_files:
+            command_path = command_dir / name
+            try:
+                if not command_path.is_file():
+                    missing_command_files.append(f"command/{name}")
+            except OSError:
+                missing_command_files.append(f"command/{name}")
+
+        if not command_dir.is_dir():
+            missing_command_files.append("command/grd-*.md")
+
+        if missing_command_files and "command/grd-*.md" not in missing_command_files:
+            missing_command_files.append("command/grd-*.md")
+
+        missing.extend(missing_command_files)
+        return tuple(dict.fromkeys(missing))
+
+    def _install_commands(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
+        commands_src = grd_root / "commands"
         command_dir = target_dir / "command"
         command_dir.mkdir(parents=True, exist_ok=True)
         bridge_command = self.runtime_cli_bridge_command(target_dir)
-        return copy_flattened_commands(
+        generated_command_files: set[str] = set()
+        count = copy_flattened_commands(
             commands_src,
             command_dir,
             "grd",
             path_prefix,
             target_dir,
-            gpd_root / "specs",
+            grd_root / "specs",
             self._current_install_scope_flag(),
             bridge_command,
+            explicit_target=getattr(self, "_install_explicit_target", False),
+            managed_command_files=generated_command_files,
         )
+        self._generated_command_files = tuple(sorted(generated_command_files))
+        return count
 
-    def _install_content(self, gpd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> None:
+    def _install_content(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> None:
         bridge_command = self.runtime_cli_bridge_command(target_dir)
 
         def _translate(content: str, prefix: str, install_scope: str | None = None) -> str:
@@ -984,19 +1139,20 @@ class OpenCodeAdapter(RuntimeAdapter):
 
         failures.extend(
             install_grd_content(
-                gpd_root / "specs",
+                grd_root / "specs",
                 target_dir,
                 path_prefix,
                 self.runtime_name,
                 install_scope=self._current_install_scope_flag(),
                 markdown_transform=_translate,
+                explicit_target=getattr(self, "_install_explicit_target", False),
             )
         )
         skill_dest = target_dir / "get-research-done"
         self._grd_files_count = sum(1 for _ in skill_dest.rglob("*") if _.is_file())
 
-    def _install_agents(self, gpd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
-        agents_src = gpd_root / "agents"
+    def _install_agents(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
+        agents_src = grd_root / "agents"
         if agents_src.exists():
             agents_dest = target_dir / "agents"
             bridge_command = self.runtime_cli_bridge_command(target_dir)
@@ -1004,7 +1160,7 @@ class OpenCodeAdapter(RuntimeAdapter):
                 agents_src,
                 agents_dest,
                 path_prefix,
-                gpd_root / "specs",
+                grd_root / "specs",
                 self._current_install_scope_flag(),
                 bridge_command,
             )
@@ -1019,27 +1175,25 @@ class OpenCodeAdapter(RuntimeAdapter):
         except Exception as exc:
             failures.append(f"VERSION: {exc}")
 
-    def _install_hooks(self, gpd_root: Path, target_dir: Path, failures: list[str]) -> None:
-        hooks_src = gpd_root / "hooks"
+    def _install_hooks(self, grd_root: Path, target_dir: Path, failures: list[str]) -> None:
+        del grd_root, target_dir, failures
+        # OpenCode does not wire any bundled Python hook surface.
         self._hooks_count = 0
-        if hooks_src.exists():
-            hooks_dest = target_dir / "hooks"
-            hooks_dest.mkdir(parents=True, exist_ok=True)
-            try:
-                for entry in hooks_src.iterdir():
-                    if entry.is_file() and not entry.name.startswith("__"):
-                        shutil.copy2(entry, hooks_dest / entry.name)
-                        self._hooks_count += 1
-            except Exception as exc:
-                failures.append(f"hooks: {exc}")
 
     def _configure_runtime(self, target_dir: Path, is_global: bool) -> dict[str, object]:
+        _, config_parse_error = _read_opencode_config_state(target_dir)
+        if config_parse_error is not None:
+            raise RuntimeError("OpenCode opencode.json is malformed; refusing to overwrite it during install.")
         configure_opencode_permissions(target_dir)
 
         # Wire MCP servers into opencode.json.
         from grd.mcp.builtin_servers import build_mcp_servers_dict
 
         mcp_servers = build_mcp_servers_dict(python_path=hook_python_interpreter())
+        project_cwd = None if is_global or getattr(self, "_install_explicit_target", False) else target_dir.parent
+        managed_mcp_servers = _project_managed_mcp_servers(cwd=project_cwd)
+        if managed_mcp_servers:
+            mcp_servers.update(managed_mcp_servers)
         mcp_count = 0
         if mcp_servers:
             mcp_count = _write_mcp_servers_opencode(target_dir, mcp_servers)
@@ -1047,27 +1201,37 @@ class OpenCodeAdapter(RuntimeAdapter):
         return {
             "target": str(target_dir),
             "hooks": getattr(self, "_hooks_count", 0),
-            "gpd_files": getattr(self, "_grd_files_count", 0),
+            "grd_files": getattr(self, "_grd_files_count", 0),
             "mcpServers": mcp_count,
         }
 
     def runtime_permissions_status(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
         """Report whether OpenCode permissions are aligned with GRD autonomy."""
         config_path = target_dir / "opencode.json"
-        config = _read_opencode_config(target_dir)
+        config, config_parse_error = _read_opencode_config_state(target_dir)
+        config_valid = config_parse_error is None
+        config = config or {}
         permission_value = config.get("permission")
         desired_mode = "yolo" if autonomy == "yolo" else "default"
         managed_state = self._runtime_permissions_manifest_state(target_dir) or {}
         managed_by_grd = managed_state.get("mode") == "yolo"
         configured_mode = "yolo" if _opencode_permission_is_yolo(permission_value) else "default"
 
-        if desired_mode == "yolo":
+        if not config_valid:
+            config_aligned = False
+            message = "OpenCode opencode.json is malformed; GRD will not treat it as a defaulted permission state."
+        elif desired_mode == "yolo":
             config_aligned = configured_mode == "yolo"
+            requires_relaunch = config_aligned
             message = (
                 "OpenCode is configured for prompt-free permissions on the next session."
                 if config_aligned
                 else 'OpenCode is not yet configured for prompt-free execution; set `permission` to `"allow"`.'
             )
+            if config_aligned:
+                next_step = (
+                    "Restart OpenCode so the current session picks up the prompt-free permission setting."
+                )
         else:
             config_aligned = not managed_by_grd
             if managed_by_grd:
@@ -1087,12 +1251,25 @@ class OpenCodeAdapter(RuntimeAdapter):
             "config_aligned": config_aligned,
             "managed_by_grd": managed_by_grd,
             "settings_path": str(config_path),
+            "config_valid": config_valid,
+            "config_parse_error": config_parse_error,
             "message": message,
+            "next_step": next_step,
         }
 
     def sync_runtime_permissions(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
         """Align OpenCode permissions with the requested autonomy mode."""
-        config = _read_opencode_config(target_dir)
+        config, config_parse_error = _read_opencode_config_state(target_dir)
+        if config_parse_error is not None:
+            status = self.runtime_permissions_status(target_dir, autonomy=autonomy)
+            return {
+                **status,
+                "changed": False,
+                "sync_applied": False,
+                "requires_relaunch": False,
+                "warning": "OpenCode opencode.json is malformed; GRD will not overwrite it.",
+            }
+        config = config or {}
         changed = False
 
         if autonomy == "yolo":
@@ -1157,6 +1334,7 @@ class OpenCodeAdapter(RuntimeAdapter):
             runtime=self.runtime_name,
             install_scope=self._current_install_scope_flag(),
             explicit_target=getattr(self, "_install_explicit_target", False),
+            managed_command_file_names=getattr(self, "_generated_command_files", ()),
         )
 
     def uninstall(self, target_dir: Path) -> dict[str, object]:
@@ -1171,7 +1349,11 @@ class OpenCodeAdapter(RuntimeAdapter):
 
         with grd_span("adapter.uninstall", runtime=self.runtime_name, target=str(target_dir)) as span:
             self._validate_target_runtime(target_dir, action="uninstall from")
-            result = uninstall_opencode(target_dir, config_dir=target_dir)
+            result = uninstall_opencode(
+                target_dir,
+                config_dir=target_dir,
+                allow_empty_config_removal=self._has_authoritative_install_manifest(target_dir),
+            )
             removed: list[str] = []
             if result["commands"]:
                 removed.append(f"{result['commands']} GRD commands")

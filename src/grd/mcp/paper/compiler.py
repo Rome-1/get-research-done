@@ -11,6 +11,7 @@ import asyncio
 import logging
 import os
 import platform
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -20,14 +21,22 @@ from pybtex.database import BibliographyData
 
 from grd.mcp.paper.artifact_manifest import build_artifact_manifest, write_artifact_manifest
 from grd.mcp.paper.bibliography import (
+    BibliographyAudit,
     CitationSource,
+    audit_bibliography,
     build_bibliography_with_audit,
     write_bib_file,
     write_bibliography_audit,
 )
 from grd.mcp.paper.figures import _prepare_figures_with_sources
 from grd.mcp.paper.journal_map import get_journal_spec
-from grd.mcp.paper.models import FigureRef, JournalSpec, PaperConfig, PaperOutput
+from grd.mcp.paper.models import (
+    FigureRef,
+    JournalSpec,
+    PaperConfig,
+    PaperOutput,
+    PaperToolchainCapability,
+)
 from grd.mcp.paper.template_registry import render_paper
 
 logger = logging.getLogger(__name__)
@@ -44,6 +53,11 @@ _WINDOWS_LATEX_SEARCH_DIRS: list[str] = [
     os.path.join(os.environ.get("PROGRAMFILES", ""), "texlive"),
     os.path.join("C:\\", "texlive"),
 ]
+
+
+def _which(binary: str) -> str | None:
+    """Module-local wrapper around :func:`shutil.which` for test isolation."""
+    return shutil.which(binary)
 
 
 def _find_in_windows_paths(binary: str) -> str | None:
@@ -78,7 +92,7 @@ def find_latex_compiler(compiler: str = "pdflatex") -> str | None:
 
     Returns the full path to the compiler, or ``None`` if not found.
     """
-    found = shutil.which(compiler)
+    found = _which(compiler)
     if found:
         return found
     if platform.system() == "Windows":
@@ -86,46 +100,97 @@ def find_latex_compiler(compiler: str = "pdflatex") -> str | None:
     return None
 
 
-@dataclass(frozen=True)
-class LatexToolchainStatus:
-    """Result of a LaTeX toolchain availability check."""
-
-    available: bool
-    compiler_path: str | None = None
-    distribution: str | None = None
-    message: str = ""
+LatexToolchainStatus = PaperToolchainCapability
 
 
 def detect_latex_toolchain(compiler: str = "pdflatex") -> LatexToolchainStatus:
-    """Detect whether a usable LaTeX toolchain is present.
+    """Detect whether a usable paper toolchain is present.
 
-    Returns a :class:`LatexToolchainStatus` summarising availability, the
-    resolved compiler path, the likely distribution name, and a
-    human-readable message.
+    Returns a :class:`LatexToolchainStatus` summarising compiler availability,
+    the resolved compiler path, helper-tool availability, the likely
+    distribution name, and a human-readable readiness summary.
     """
     path = find_latex_compiler(compiler)
-    if path is None:
-        return LatexToolchainStatus(
-            available=False,
-            message=get_latex_install_guidance(),
-        )
+    bibtex_path = find_latex_compiler("bibtex")
+    latexmk_path = find_latex_compiler("latexmk")
+    kpsewhich_path = find_latex_compiler("kpsewhich")
+
+    compiler_available = path is not None
+    bibtex_available = bibtex_path is not None
+    latexmk_available = latexmk_path is not None
+    kpsewhich_available = kpsewhich_path is not None
+    warnings: list[str] = []
+
+    if compiler_available:
+        if not bibtex_available:
+            warnings.append(
+                "bibtex not found; bibliography-free builds may still work, but citation-bearing builds and "
+                "submission prep can fail without bibtex."
+            )
+        if not latexmk_available:
+            warnings.append("latexmk not found; multi-pass compilation will fall back to manual passes.")
+        if not kpsewhich_available:
+            warnings.append("kpsewhich not found; TeX resource checks will assume installed resources.")
+    else:
+        warnings.append("Install a LaTeX distribution to enable paper compilation.")
 
     # Heuristic distribution name
-    lower = path.lower().replace("\\", "/")
-    if "miktex" in lower:
-        dist = "MiKTeX"
-    elif "texlive" in lower:
-        dist = "TeX Live"
-    elif "mactex" in lower or "/Library/TeX/" in path:
-        dist = "MacTeX"
+    dist: str | None
+    if compiler_available:
+        lower = path.lower().replace("\\", "/")
+        if "miktex" in lower:
+            dist = "MiKTeX"
+        elif "texlive" in lower:
+            dist = "TeX Live"
+        elif "mactex" in lower or "/Library/TeX/" in path:
+            dist = "MacTeX"
+        else:
+            dist = "TeX distribution"
     else:
-        dist = "TeX distribution"
+        dist = None
+
+    if not compiler_available:
+        return LatexToolchainStatus(
+            compiler=compiler,
+            compiler_available=False,
+            compiler_path=None,
+            distribution=None,
+            bibtex_available=bibtex_available,
+            latexmk_available=latexmk_available,
+            kpsewhich_available=kpsewhich_available,
+            readiness_state="blocked",
+            message=get_latex_install_guidance(),
+            warnings=warnings,
+        )
+
+    if bibtex_available:
+        readiness_state = "ready"
+        summary = f"{compiler} found ({dist}): {path}; BibTeX available"
+    else:
+        readiness_state = "degraded"
+        summary = f"{compiler} found ({dist}): {path}; BibTeX missing"
+
+    if latexmk_available:
+        summary += "; latexmk available"
+    else:
+        summary += "; latexmk unavailable"
+    if kpsewhich_available:
+        summary += "; kpsewhich available"
+    else:
+        summary += "; kpsewhich unavailable"
+    summary += f"; readiness={readiness_state}"
 
     return LatexToolchainStatus(
-        available=True,
+        compiler=compiler,
+        compiler_available=True,
         compiler_path=path,
         distribution=dist,
-        message=f"{compiler} found ({dist}): {path}",
+        bibtex_available=bibtex_available,
+        latexmk_available=latexmk_available,
+        kpsewhich_available=kpsewhich_available,
+        readiness_state=readiness_state,
+        message=summary,
+        warnings=warnings,
     )
 
 
@@ -201,34 +266,184 @@ def _merge_bibliography_data(*bibliographies: BibliographyData) -> BibliographyD
     return merged
 
 
-def check_tex_file(resource_name: str, install_hint: str | None = None) -> tuple[bool, str]:
+def _reference_bibtex_keys_from_audit(audit: BibliographyAudit | None) -> dict[str, str]:
+    """Return the final emitted BibTeX key for each referenced project anchor."""
+    if audit is None:
+        return {}
+
+    reference_bibtex_keys: dict[str, str] = {}
+    for entry in audit.entries:
+        if entry.reference_id:
+            reference_bibtex_keys[entry.reference_id] = entry.key
+    return reference_bibtex_keys
+
+
+class CitationCoherenceResult:
+    """Result of comparing .tex citations against .bib entries."""
+
+    __slots__ = (
+        "tex_cite_keys",
+        "bib_entry_keys",
+        "unreferenced_bib_keys",
+        "unresolved_cite_keys",
+        "warnings",
+    )
+
+    def __init__(
+        self,
+        tex_cite_keys: set[str],
+        bib_entry_keys: set[str],
+        unreferenced_bib_keys: set[str],
+        unresolved_cite_keys: set[str],
+        warnings: list[str],
+    ) -> None:
+        self.tex_cite_keys = tex_cite_keys
+        self.bib_entry_keys = bib_entry_keys
+        self.unreferenced_bib_keys = unreferenced_bib_keys
+        self.unresolved_cite_keys = unresolved_cite_keys
+        self.warnings = warnings
+
+
+_NOCITE_STAR_RE = re.compile(r"\\nocite\{\s*\*\s*\}")
+_BIB_KEY_RE = re.compile(r"@\w+\s*\{\s*([^,\s]+)\s*,")
+
+
+def check_citation_bib_coherence(
+    tex_content: str,
+    bib_content: str,
+) -> CitationCoherenceResult:
+    """Compare citation commands in rendered .tex against entries in .bib.
+
+    Operates on in-memory strings only -- no disk I/O.  Designed to run
+    inside ``build_paper()`` between the TeX render step and the artifact
+    manifest step.
+
+    Handles ``\\nocite{*}`` (standard LaTeX: all bib entries are considered
+    referenced).  Splits multi-key citations (``\\cite{a,b,c}``).
+    """
+    from grd.core.paper_quality import _CITE_CMD_PREFIX_WITH_NOCITE
+
+    all_cite_re = re.compile(
+        _CITE_CMD_PREFIX_WITH_NOCITE
+        + r"(?:\[[^\]]*\])*"  # optional [] arguments (natbib)
+        + r"\{([^}]*)\}"  # capture the key list
+    )
+
+    # Detect \nocite{*} -- all bib entries are considered referenced
+    nocite_star = bool(_NOCITE_STAR_RE.search(tex_content))
+
+    # Parse all \cite-family commands from .tex
+    tex_cite_keys: set[str] = set()
+    for match in all_cite_re.finditer(tex_content):
+        for key in match.group(1).split(","):
+            stripped = key.strip()
+            if stripped:
+                tex_cite_keys.add(stripped)
+
+    # Parse all @type{key, entries from .bib
+    bib_entry_keys: set[str] = set()
+    for match in _BIB_KEY_RE.finditer(bib_content):
+        key = match.group(1).strip()
+        if key:
+            bib_entry_keys.add(key)
+
+    # If \nocite{*} is present, all bib entries count as referenced
+    if nocite_star:
+        unreferenced: set[str] = set()
+    else:
+        unreferenced = bib_entry_keys - tex_cite_keys
+
+    unresolved = tex_cite_keys - bib_entry_keys
+    # Remove the special "*" key from unresolved (it's a \nocite{*} artifact)
+    unresolved.discard("*")
+
+    warnings: list[str] = []
+
+    if bib_entry_keys and not tex_cite_keys and not nocite_star:
+        warnings.append(
+            f"Bibliography contains {len(bib_entry_keys)} entries but the "
+            f"manuscript body has zero \\cite{{}} commands. The bibliography "
+            f"will not appear in the compiled paper."
+        )
+    elif unreferenced:
+        sorted_keys = sorted(unreferenced)
+        preview = ", ".join(sorted_keys[:5])
+        suffix = f" (+{len(sorted_keys) - 5} more)" if len(sorted_keys) > 5 else ""
+        warnings.append(
+            f"{len(unreferenced)} bibliography entries are never cited: "
+            f"{preview}{suffix}"
+        )
+
+    if unresolved:
+        sorted_keys = sorted(unresolved)
+        preview = ", ".join(sorted_keys[:5])
+        suffix = f" (+{len(sorted_keys) - 5} more)" if len(sorted_keys) > 5 else ""
+        warnings.append(
+            f"{len(unresolved)} \\cite{{}} keys have no matching bibliography "
+            f"entry: {preview}{suffix}"
+        )
+
+    return CitationCoherenceResult(
+        tex_cite_keys=tex_cite_keys,
+        bib_entry_keys=bib_entry_keys,
+        unreferenced_bib_keys=unreferenced,
+        unresolved_cite_keys=unresolved,
+        warnings=warnings,
+    )
+
+
+def check_tex_file(
+    resource_name: str,
+    install_hint: str | None = None,
+    *,
+    assume_present_when_unavailable: bool = True,
+) -> tuple[bool, str]:
     """Check if a TeX resource file is available via kpsewhich.
 
     Returns:
         (available, message) tuple. If kpsewhich is not installed,
         assumes the resource is present.
     """
+    kpsewhich = find_latex_compiler("kpsewhich")
+    hint = install_hint or _default_install_hint(Path(resource_name).stem)
+    if not kpsewhich:
+        if assume_present_when_unavailable:
+            return True, "kpsewhich not available, assuming TeX resource present"
+        return False, f"kpsewhich not available; cannot verify {resource_name}. {hint}"
+
     try:
         result = subprocess.run(
-            ["kpsewhich", resource_name],
+            [kpsewhich, resource_name],
             capture_output=True,
             text=True,
             timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():
             return True, result.stdout.strip()
-        hint = install_hint or _default_install_hint(Path(resource_name).stem)
         return False, f"{resource_name} not found. {hint}"
     except FileNotFoundError:
-        return True, "kpsewhich not available, assuming TeX resource present"
+        if assume_present_when_unavailable:
+            return True, "kpsewhich not available, assuming TeX resource present"
+        return False, f"kpsewhich not available; cannot verify {resource_name}. {hint}"
     except subprocess.TimeoutExpired:
-        return True, "kpsewhich timed out, assuming TeX resource present"
+        if assume_present_when_unavailable:
+            return True, "kpsewhich timed out, assuming TeX resource present"
+        return False, f"kpsewhich timed out while checking {resource_name}. {hint}"
 
 
-def check_class_file(document_class: str, install_hint: str | None = None) -> tuple[bool, str]:
+def check_class_file(
+    document_class: str,
+    install_hint: str | None = None,
+    *,
+    assume_present_when_unavailable: bool = True,
+) -> tuple[bool, str]:
     """Check if a LaTeX class file is available via kpsewhich."""
     hint = install_hint or _default_install_hint(_get_tlmgr_package(document_class))
-    return check_tex_file(f"{document_class}.cls", install_hint=hint)
+    return check_tex_file(
+        f"{document_class}.cls",
+        install_hint=hint,
+        assume_present_when_unavailable=assume_present_when_unavailable,
+    )
 
 
 def check_journal_dependencies(spec: JournalSpec) -> tuple[bool, list[str]]:
@@ -236,12 +451,18 @@ def check_journal_dependencies(spec: JournalSpec) -> tuple[bool, list[str]]:
     errors: list[str] = []
     install_hint = spec.install_hint or _default_install_hint(spec.texlive_package)
 
-    available, message = check_class_file(spec.document_class, install_hint=install_hint)
+    available, message = check_class_file(
+        spec.document_class,
+        install_hint=install_hint,
+    )
     if not available:
         errors.append(message)
 
     for resource_name in spec.required_tex_files:
-        available, message = check_tex_file(resource_name, install_hint=install_hint)
+        available, message = check_tex_file(
+            resource_name,
+            install_hint=install_hint,
+        )
         if not available:
             errors.append(message)
 
@@ -259,6 +480,7 @@ class CompilationResult:
     pdf_path: Path | None = None
     error: str | None = None
     log: str | None = None
+    warning: str | None = None
 
 
 async def compile_paper(tex_path: Path, output_dir: Path, compiler: str = "pdflatex") -> CompilationResult:
@@ -283,19 +505,40 @@ async def compile_paper(tex_path: Path, output_dir: Path, compiler: str = "pdfla
             error=f"Compiler '{compiler}' not found. {guidance}",
         )
 
-    if shutil.which("latexmk"):
-        return await _compile_with_latexmk(tex_path, output_dir, compiler)
+    latexmk_path = find_latex_compiler("latexmk")
+    if latexmk_path:
+        return await _compile_with_latexmk(tex_path, output_dir, compiler, latexmk_path=latexmk_path)
     return await _compile_manual_multipass(tex_path, output_dir, compiler)
 
 
-async def _compile_with_latexmk(tex_path: Path, output_dir: Path, compiler: str) -> CompilationResult:
+async def _compile_with_latexmk(
+    tex_path: Path,
+    output_dir: Path,
+    compiler: str,
+    *,
+    latexmk_path: str,
+) -> CompilationResult:
     """Compile using latexmk (handles bibtex + multiple passes automatically)."""
     if compiler == "xelatex":
-        cmd = ["latexmk", "-xelatex", "-interaction=nonstopmode", f"-output-directory={output_dir}", str(tex_path)]
+        cmd = [latexmk_path, "-xelatex", "-interaction=nonstopmode", f"-output-directory={output_dir}", str(tex_path)]
     else:
-        cmd = ["latexmk", "-pdf", "-interaction=nonstopmode", f"-output-directory={output_dir}", str(tex_path)]
+        cmd = [latexmk_path, "-pdf", "-interaction=nonstopmode", f"-output-directory={output_dir}", str(tex_path)]
 
     logger.info("Compiling with latexmk: %s", " ".join(cmd))
+
+    pdf_path = output_dir / f"{tex_path.stem}.pdf"
+
+    def _pdf_signature() -> tuple[int, int] | None:
+        """Return (size, mtime_ns) if the PDF exists, else None."""
+        if not pdf_path.exists():
+            return None
+        try:
+            stat = pdf_path.stat()
+        except OSError:
+            return None
+        return stat.st_size, stat.st_mtime_ns
+
+    initial_signature = _pdf_signature()
 
     try:
         process = await asyncio.create_subprocess_exec(
@@ -311,16 +554,39 @@ async def _compile_with_latexmk(tex_path: Path, output_dir: Path, compiler: str)
             await process.wait()
             return CompilationResult(success=False, error="Compilation timed out after 120 seconds")
 
-        pdf_path = output_dir / f"{tex_path.stem}.pdf"
         log_content = stdout.decode(errors="replace") + stderr.decode(errors="replace")
 
-        if pdf_path.exists():
+        # Freshness check: PDF must exist and differ from the pre-run snapshot.
+        current_signature = _pdf_signature()
+        pdf_is_fresh = (
+            current_signature is not None
+            and (initial_signature is None or current_signature != initial_signature)
+        )
+
+        if pdf_is_fresh:
+            # Fresh PDF produced. latexmk exit code 12 means "failure in
+            # some part of making files" but pdflatex may still produce a
+            # valid PDF (e.g., unresolved references in nonstop mode).
+            # The freshness check confirms the PDF is real, not stale.
             if process.returncode == 0:
                 return CompilationResult(success=True, pdf_path=pdf_path)
             return CompilationResult(
+                success=True,
+                pdf_path=pdf_path,
+                warning=f"latexmk exited with code {process.returncode} — PDF was produced but check the log for issues",
+                log=log_content[-5000:],
+            )
+
+        # No fresh PDF. A stale file may sit on disk from an earlier build.
+        if pdf_path.exists():
+            if process.returncode != 0:
+                error = f"latexmk exited with code {process.returncode}"
+            else:
+                error = "latexmk finished without producing a fresh PDF"
+            return CompilationResult(
                 success=False,
                 pdf_path=pdf_path,
-                error=f"latexmk exited with code {process.returncode}",
+                error=error,
                 log=log_content[-5000:],
             )
 
@@ -386,6 +652,26 @@ async def _compile_manual_multipass(tex_path: Path, output_dir: Path, compiler: 
             return False
         return initial_signature is None or current_signature != initial_signature
 
+    def aux_requires_bibliography(aux_path: Path) -> bool:
+        try:
+            content = aux_path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            return False
+        return "\\citation" in content or "\\bibdata" in content
+
+    def record_missing_bibtex_requirement() -> None:
+        if bibtex or not aux_path.exists() or not aux_requires_bibliography(aux_path):
+            return
+        warning = "bibtex not found -- bibliography will not be processed; citations will show as [?]"
+        logger.warning(warning)
+        if warning + "\n" not in combined_log_parts:
+            combined_log_parts.append(warning + "\n")
+        error = "bibtex not found but citations require bibliography processing"
+        if error not in compile_errors:
+            compile_errors.append(error)
+        if error not in fatal_errors:
+            fatal_errors.append(error)
+
     try:
         # Pass 1: pdflatex
         returncode, log = await run_cmd(base_cmd, cwd)
@@ -393,9 +679,9 @@ async def _compile_manual_multipass(tex_path: Path, output_dir: Path, compiler: 
 
         # bibtex
         aux_path = output_dir / f"{tex_path.stem}.aux"
-        bibtex = shutil.which("bibtex")
+        bibtex = find_latex_compiler("bibtex")
         if not bibtex:
-            logger.warning("bibtex not found -- bibliography will not be processed; citations will show as [?]")
+            record_missing_bibtex_requirement()
         if bibtex and aux_path.exists():
             returncode, log = await run_cmd([bibtex, str(aux_path)], cwd)
             record_result("bibtex", returncode, log, fatal=True)
@@ -433,6 +719,8 @@ async def _compile_manual_multipass(tex_path: Path, output_dir: Path, compiler: 
             if bibtex and aux_path.exists():
                 returncode, log = await run_cmd([bibtex, str(aux_path)], cwd)
                 record_result("bibtex autofix", returncode, log, fatal=True)
+            if not bibtex:
+                record_missing_bibtex_requirement()
             returncode, log = await run_cmd(base_cmd, cwd)
             record_result("pdflatex autofix pass 2", returncode, log)
             returncode, log = await run_cmd(base_cmd, cwd)
@@ -478,6 +766,7 @@ async def build_paper(
     figures_prepared_successfully = True
     bib_path: Path | None = None
     bib_entry_source: str | None = "bib_data" if bib_data is not None else None
+    citation_audit_entries = None
 
     # 1. Prepare figures
     if config.figures:
@@ -526,14 +815,19 @@ async def build_paper(
             enrich_bibliography,
             reserved_bib_keys,
         )
+        citation_audit_entries = list(bibliography_audit.entries)
         if bib_data is None:
             bib_data = built_bib
             bib_entry_source = "citation_sources"
         else:
             bib_data = _merge_bibliography_data(bib_data, built_bib)
             bib_entry_source = "bib_data+citation_sources"
+
+    if bib_data is not None:
+        bibliography_audit = audit_bibliography(bib_data, source_audit_entries=citation_audit_entries)
         bibliography_audit_path = output_dir / "BIBLIOGRAPHY-AUDIT.json"
         await asyncio.to_thread(write_bibliography_audit, bibliography_audit, bibliography_audit_path)
+    reference_bibtex_keys = _reference_bibtex_keys_from_audit(bibliography_audit)
 
     # 2. Write .bib file
     bib_content = ""
@@ -572,14 +866,17 @@ async def build_paper(
         return PaperOutput(
             tex_content=tex_content,
             bib_content=bib_content,
+            tex_path=tex_path,
             figures_dir=figures_dir,
             pdf_path=None,
             bibliography_audit_path=bibliography_audit_path,
             bibliography_audit=bibliography_audit,
+            reference_bibtex_keys=reference_bibtex_keys,
             manifest_path=manifest_path,
             manifest=manifest,
             success=False,
             errors=errors,
+            citation_warnings=citation_warnings,
         )
 
     # 5. Compile
@@ -606,12 +903,15 @@ async def build_paper(
     return PaperOutput(
         tex_content=tex_content,
         bib_content=bib_content,
+        tex_path=tex_path,
         figures_dir=figures_dir,
         pdf_path=result.pdf_path,
         bibliography_audit_path=bibliography_audit_path,
         bibliography_audit=bibliography_audit,
+        reference_bibtex_keys=reference_bibtex_keys,
         manifest_path=manifest_path,
         manifest=manifest,
         success=final_success,
         errors=errors,
+        citation_warnings=citation_warnings,
     )

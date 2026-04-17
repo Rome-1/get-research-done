@@ -11,9 +11,6 @@ allowed-tools:
   - ask_user
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
-
 <context>
 **Flags:**
 - `--auto` — Automatic mode. Synthesizes a scoping contract from the supplied document, asks for one explicit scope approval, then runs research → requirements → roadmap with minimal follow-up interaction. Expects a research proposal document via @ reference.
@@ -22,9 +19,9 @@ allowed-tools:
 </context>
 
 <objective>
-Initialize a new physics research project through unified flow: questioning or structured intake → scoping contract approval → literature survey (optional) → requirements → roadmap.
+Initialize a new physics research project through one flow: questioning or structured intake → scoping contract approval → literature survey (optional) → requirements → staged roadmap/conventions handoff.
 
-If no project config exists yet, the workflow opens with the physics-questioning pass, then asks for workflow preferences only after scope approval and before the first project-artifact commit.
+If no project config exists yet, start with physics questioning, surface a preset choice before workflow preferences, and ask detailed config questions only after scope approval and before the first project-artifact commit.
 
 **Creates:**
 
@@ -66,13 +63,13 @@ Execute the workflow end-to-end. Preserve all workflow gates (validation, approv
 
 Check `$ARGUMENTS` for flags:
 
-- **`--auto`** → Auto mode (structured document synthesis + scope approval)
-- **`--minimal`** → Minimal mode (fast bootstrapping path with scope approval)
+- **`--auto`** → Structured synthesis + scope approval
+- **`--minimal`** → Fast staged-init with scope approval
 - **`--minimal @file.md`** → Minimal mode with input file
 
-**If `--minimal` detected:** After Setup, route to the **minimal initialization path** in the workflow. This compresses questioning and research, but still requires a scoping contract with decisive outputs, anchors, and explicit approval before downstream artifacts.
+**If `--minimal` detected:** After Setup, route to the **minimal staged initialization path**. It keeps intake to one response, still requires a scoping contract with decisive outputs and anchors, and then hands roadmap and conventions creation to the staged post-scope agents instead of building them directly in the main context.
 
-**If `--auto` detected:** After Setup, synthesize context from the provided document, repair only blocking gaps, present the scoping contract for approval, then run research → requirements → roadmap automatically with smart defaults.
+**If `--auto` detected:** After Setup, synthesize context from the provided document, repair blocking gaps only, present the scoping contract for approval, then run research → requirements → roadmap with smart defaults.
 </process>
 
 <output>
@@ -115,12 +112,12 @@ Check `$ARGUMENTS` for flags:
 - [ ] Git repo initialized
 - [ ] Structured intake captured core question, decisive outputs, anchors, and known gaps
 - [ ] Scoping contract approved before requirements or roadmap generation
-- [ ] PROJECT.md created from single description or input file → **committed**
-- [ ] ROADMAP.md created with phases derived from input → **committed**
-- [ ] REQUIREMENTS.md created with auto-generated REQ-IDs → **committed**
-- [ ] STATE.md initialized → **committed**
-- [ ] config.json created with defaults → **committed**
-- [ ] All files committed in single commit: "docs: initialize research project (minimal)"
+- [ ] `PROJECT.md` created from one description or input file and committed
+- [ ] `ROADMAP.md` created from the input and committed
+- [ ] `REQUIREMENTS.md` created with auto-generated REQ-IDs and committed
+- [ ] `STATE.md` initialized and committed
+- [ ] `config.json` created with defaults and committed
+- [ ] All files committed in one commit: `docs: initialize research project (minimal)`
 - [ ] Same directory structure and file set as full path
 - [ ] User offered "Discuss phase 1 now?"
 

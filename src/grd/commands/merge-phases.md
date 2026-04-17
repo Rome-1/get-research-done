@@ -12,8 +12,6 @@ allowed-tools:
   - find_files
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Merge the results, artifacts, and state updates from a source phase into a target phase. Useful when phases are reorganized, when a decimal phase (e.g., 2.1) needs to be folded back into its parent, or when parallel investigation branches converge.
@@ -43,7 +41,7 @@ Target phase: second argument (e.g., "2")
 <process>
 Execute the merge-phases workflow from @{GRD_INSTALL_DIR}/workflows/merge-phases.md end-to-end.
 
-If `--dry-run` flag is present, show the merge plan (which artifacts would move, which results would combine) without executing any changes.
+This wrapper runs the merge workflow directly. Any stopping points come from the workflow's own validation gates.
 
 The workflow handles:
 

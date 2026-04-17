@@ -11,7 +11,7 @@ import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import pytest
 
@@ -24,14 +24,18 @@ from grd.hooks.statusline import (
     _context_bar,
     _execution_badge,
     _format_context_window_size,
+    _project_state_dir,
     _read_current_task,
+    _read_execution_state,
     _read_model_label,
     _read_position,
+    _read_session_id,
     _read_workspace_label,
-    _workspace_from_payload,
-    _workspace_root_from_payload,
+    _statusline_project_root,
     main,
 )
+from tests.hooks.helpers import mark_complete_install as _mark_complete_install
+from tests.hooks.helpers import repair_command as _repair_command
 
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
 
@@ -182,12 +186,27 @@ class TestStatusMetadata:
         label = _read_model_label({"model": {"display_name": "Opus 4.6"}, "context_window": {"context_window_size": 1_000_000}})
         assert label == "Opus 4.6 (1M context)"
 
+    def test_read_model_label_uses_canonical_fallback_keys_when_policy_is_sparse(self) -> None:
+        label = _read_model_label(
+            {"model": {"display_name": "Opus 4.6"}, "context_window": {"context_window_size": 1_000_000}},
+            SimpleNamespace(model_keys=(), context_window_size_keys=()),
+        )
+        assert label == "Opus 4.6 (1M context)"
+
     def test_read_workspace_label_prefers_project_relative_path(self, tmp_path: Path) -> None:
         project = tmp_path / "project"
         current = project / "src" / "grd"
         current.mkdir(parents=True)
 
         label = _read_workspace_label({"workspace": {"project_dir": str(project)}}, str(current))
+        assert label == "[project/src/grd]"
+
+    def test_read_workspace_label_prefers_resolved_project_root_argument(self, tmp_path: Path) -> None:
+        project = tmp_path / "project"
+        current = project / "src" / "grd"
+        current.mkdir(parents=True)
+
+        label = _read_workspace_label({}, str(current), project_root=str(project))
         assert label == "[project/src/grd]"
 
     def test_read_workspace_label_falls_back_to_directory_name(self, tmp_path: Path) -> None:
@@ -197,6 +216,12 @@ class TestStatusMetadata:
         label = _read_workspace_label({}, str(current))
         assert label == "[workspace]"
 
+    def test_read_session_id_uses_adapter_exposed_runtime_key_before_top_level_legacy_field(self) -> None:
+        payload = {
+            "session_id": "legacy-top-level",
+            "workspace": {"runtime_session_id": "runtime-owned"},
+        }
+        hook_payload = SimpleNamespace(runtime_session_id_keys=("runtime_session_id",))
 
 def test_read_current_task_uses_shared_todo_directory_constant_for_self_owned_install(
     tmp_path: Path,
@@ -229,6 +254,7 @@ def test_read_current_task_uses_shared_todo_directory_constant_for_self_owned_in
     ):
         assert _read_current_task("session") == "working from shared todos"
 
+        assert _read_session_id(payload, hook_payload) == ""
 
 class TestExecutionBadge:
     def test_first_result_gate_badge_wins(self) -> None:
@@ -252,6 +278,39 @@ class TestExecutionBadge:
     def test_resume_badge_surfaces_resume_state(self) -> None:
         badge = _execution_badge({"segment_status": "paused", "resume_file": ".grd/phases/02/.continue-here.md"})
         assert badge == "RESUME"
+
+    def test_visibility_paused_or_resumable_with_resume_file_uses_resume_badge(self) -> None:
+        badge = _execution_badge(
+            {"segment_status": "active"},
+            _visibility_state(
+                has_live_execution=True,
+                status_classification="paused-or-resumable",
+                assessment="paused-or-resumable",
+                current_execution={
+                    "segment_status": "paused",
+                    "resume_file": "GRD/phases/02/.continue-here.md",
+                },
+                resume_file="GRD/phases/02/.continue-here.md",
+            ),
+        )
+        assert badge == "RESUME"
+
+    def test_visibility_active_possibly_stalled_uses_stall_badge(self) -> None:
+        badge = _execution_badge(
+            {"segment_status": "active"},
+            _visibility_state(
+                has_live_execution=True,
+                status_classification="active",
+                assessment="possibly stalled",
+                possibly_stalled=True,
+                last_updated_age_label="45m ago",
+                current_execution={
+                    "segment_status": "active",
+                    "updated_at": "2026-03-10T00:45:00+00:00",
+                },
+            ),
+        )
+        assert "STALL?" in badge
 
     def test_review_badge_wins_over_resume_for_bounded_gate_state(self) -> None:
         badge = _execution_badge(
@@ -302,6 +361,47 @@ class TestExecutionBadge:
         assert "REVIEW:pre-fanout" in badge
 
 
+def test_read_execution_state_prefers_lineage_head_over_legacy_current_execution_snapshot(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    observability = workspace / "GRD" / "observability"
+    observability.mkdir(parents=True, exist_ok=True)
+    (observability / "current-execution.json").write_text(
+        json.dumps(
+            {
+                "session_id": "legacy-session",
+                "phase": "06",
+                "plan": "03",
+                "segment_status": "paused",
+                "current_task": "Legacy snapshot task",
+                "updated_at": "2026-03-27T12:01:00+00:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    head_snapshot = _ExecutionSnapshot(
+        session_id="lineage-session",
+        phase="06",
+        plan="03",
+        segment_status="waiting_review",
+        waiting_for_review=True,
+        checkpoint_reason="pre_fanout",
+        pre_fanout_review_pending=True,
+        current_task="Lineage head task",
+        updated_at="2026-03-27T12:03:00+00:00",
+    )
+
+    with patch("grd.core.observability.get_current_execution", return_value=head_snapshot):
+        execution = _read_execution_state(str(workspace))
+
+    assert execution["current_task"] == "Lineage head task"
+    assert execution["checkpoint_reason"] == "pre_fanout"
+    assert execution["segment_status"] == "waiting_review"
+    assert execution["current_task"] != "Legacy snapshot task"
+
+
 # ─── _read_position edge cases ─────────────────────────────────────────────
 
 
@@ -315,41 +415,41 @@ class TestReadPosition:
         planning = tmp_path / "GRD"
         planning.mkdir()
         state = {"position": {"current_phase": 3, "total_phases": 10}}
-        (planning / "state.json").write_text(json.dumps(state))
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
         assert _read_position(str(tmp_path)) == "P3/10"
 
     def test_valid_state_with_phase_and_plan(self, tmp_path: Path) -> None:
         planning = tmp_path / "GRD"
         planning.mkdir()
         state = {"position": {"current_phase": 2, "total_phases": 5, "current_plan": 1, "total_plans_in_phase": 3}}
-        (planning / "state.json").write_text(json.dumps(state))
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
         assert _read_position(str(tmp_path)) == "P2/5 plan 1/3"
 
     def test_empty_position_returns_empty(self, tmp_path: Path) -> None:
         planning = tmp_path / "GRD"
         planning.mkdir()
         state = {"position": {}}
-        (planning / "state.json").write_text(json.dumps(state))
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
         assert _read_position(str(tmp_path)) == ""
 
     def test_missing_phase_returns_empty(self, tmp_path: Path) -> None:
         planning = tmp_path / "GRD"
         planning.mkdir()
         state = {"position": {"total_phases": 5}}
-        (planning / "state.json").write_text(json.dumps(state))
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
         assert _read_position(str(tmp_path)) == ""
 
     def test_missing_total_phases_returns_empty(self, tmp_path: Path) -> None:
         planning = tmp_path / "GRD"
         planning.mkdir()
         state = {"position": {"current_phase": 3}}
-        (planning / "state.json").write_text(json.dumps(state))
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
         assert _read_position(str(tmp_path)) == ""
 
     def test_corrupt_json_returns_empty(self, tmp_path: Path) -> None:
         planning = tmp_path / "GRD"
         planning.mkdir()
-        (planning / "state.json").write_text("not valid json{{{")
+        (planning / "state.json").write_text("not valid json{{{", encoding="utf-8")
         assert _read_position(str(tmp_path)) == ""
 
     def test_nested_workspace_walks_up_to_project_root(self, tmp_path: Path) -> None:
@@ -358,8 +458,45 @@ class TestReadPosition:
         nested = tmp_path / "src" / "notes"
         nested.mkdir(parents=True)
         state = {"position": {"current_phase": 4, "total_phases": 9}}
-        (planning / "state.json").write_text(json.dumps(state))
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
         assert _read_position(str(nested)) == "P4/9"
+        assert _statusline_project_root(str(nested)) == project.resolve(strict=False)
+        assert not (nested / "GRD" / "GRD").exists()
+
+    def test_nested_empty_grd_stub_does_not_capture_root_when_durable_ancestor_exists(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        project = tmp_path / "project"
+        planning = project / "GRD"
+        planning.mkdir(parents=True)
+        nested = project / "workspace" / "notes"
+        nested.mkdir(parents=True)
+        (nested / "GRD").mkdir()
+        state = {"position": {"current_phase": 8, "total_phases": 12}}
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+        with patch("grd.hooks.statusline.peek_state_json") as mock_peek:
+            mock_peek.return_value = (state, [], "state.json")
+            assert _read_position(str(nested)) == "P8/12"
+
+        assert _statusline_project_root(str(nested)) == project.resolve(strict=False)
+        assert not (nested / "GRD" / "GRD").exists()
+        mock_peek.assert_called_once()
+        _, kwargs = mock_peek.call_args
+        assert kwargs["acquire_lock"] is False
+        assert kwargs["recover_intent"] is False
+        assert kwargs["surface_blocked_project_contract"] is True
+
+    def test_empty_grd_ancestor_without_project_markers_does_not_capture_statusline_root(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        workspace = tmp_path / "scratch" / "workspace"
+        workspace.mkdir(parents=True)
+        (tmp_path / "GRD").mkdir()
+
+        assert _statusline_project_root(str(workspace)) is None
 
     def test_tilde_workspace_expands_before_project_root_lookup(self, tmp_path: Path) -> None:
         home = tmp_path / "home"
@@ -369,15 +506,15 @@ class TestReadPosition:
         nested = project / "src"
         nested.mkdir(parents=True)
         state = {"position": {"current_phase": 7, "total_phases": 8}}
-        (planning / "state.json").write_text(json.dumps(state))
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
 
-        with patch.dict(os.environ, {"HOME": str(home)}):
+        with patch.dict(os.environ, {"HOME": str(home), "USERPROFILE": str(home)}):
             assert _read_position("~/project/src") == "P7/8"
 
     def test_no_position_key_returns_empty(self, tmp_path: Path) -> None:
         planning = tmp_path / "GRD"
         planning.mkdir()
-        (planning / "state.json").write_text(json.dumps({"other": "data"}))
+        (planning / "state.json").write_text(json.dumps({"other": "data"}), encoding="utf-8")
         assert _read_position(str(tmp_path)) == ""
 
 
@@ -575,7 +712,31 @@ class TestReadCurrentTask:
             "grd.hooks.runtime_detect.get_todo_candidates",
             return_value=_todo_candidates(local_todo_dir, global_todo_dir),
         ):
-            assert _read_current_task("session-123") == "Do not prefer global"
+            assert _read_current_task("session-123") == "Prefer local"
+
+    def test_lower_priority_todo_candidate_is_used_when_higher_priority_candidate_has_no_in_progress_task(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        local_todo_dir = tmp_path / ".codex" / "todos"
+        global_todo_dir = tmp_path / "home" / ".codex" / "todos"
+        local_todo_dir.mkdir(parents=True)
+        global_todo_dir.mkdir(parents=True)
+
+        (local_todo_dir / "session-123-agent-local.json").write_text(
+            json.dumps([{"status": "completed", "activeForm": "Completed local"}]),
+            encoding="utf-8",
+        )
+        (global_todo_dir / "session-123-agent-global.json").write_text(
+            json.dumps([{"status": "in_progress", "activeForm": "Use global fallback"}]),
+            encoding="utf-8",
+        )
+
+        with patch(
+            "grd.hooks.install_context.ordered_todo_lookup_candidates",
+            return_value=_todo_candidates(local_todo_dir, global_todo_dir),
+        ):
+            assert _read_current_task("session-123") == "Use global fallback"
 
     def test_corrupt_todo_file_returns_empty(self, tmp_path: Path) -> None:
         todo_dir = tmp_path / "todos"
@@ -606,6 +767,36 @@ class TestReadCurrentTask:
         with patch("grd.hooks.runtime_detect.get_todo_candidates", return_value=_todo_candidates(todo_dir)):
             assert _read_current_task("session-1") == "Correct task"
 
+    def test_self_owned_todo_candidate_moves_to_front_when_already_present(self, tmp_path: Path) -> None:
+        from grd.hooks.install_context import HookLookupContext, SelfOwnedInstallContext, ordered_todo_lookup_candidates
+
+        hook_file = tmp_path / ".codex" / "hooks" / "statusline.py"
+        self_install = SelfOwnedInstallContext(
+            config_dir=tmp_path / ".codex",
+            runtime="codex",
+            install_scope="local",
+        )
+        self_candidate = TodoCandidate(path=tmp_path / ".codex" / "todos", runtime="codex", scope="local")
+        other_candidate = TodoCandidate(path=tmp_path / "other" / "todos", runtime="claude-code", scope="global")
+
+        with (
+            patch(
+                "grd.hooks.install_context.resolve_hook_lookup_context",
+                return_value=HookLookupContext(
+                    lookup_cwd=tmp_path,
+                    resolved_home=tmp_path / "home",
+                    active_runtime=None,
+                    preferred_runtime="codex",
+                ),
+            ),
+            patch("grd.hooks.install_context.detect_self_owned_install", return_value=self_install),
+            patch("grd.hooks.runtime_detect.get_todo_candidates", return_value=[other_candidate, self_candidate]),
+            patch("grd.hooks.runtime_detect.should_consider_todo_candidate", return_value=True),
+        ):
+            candidates = ordered_todo_lookup_candidates(hook_file=hook_file, cwd=tmp_path)
+
+        assert candidates[0] == self_candidate
+
 
 # ─── _check_update edge cases ──────────────────────────────────────────────
 
@@ -621,9 +812,9 @@ class TestCheckUpdateHook:
             assert _check_update() == ""
 
     def test_cache_with_update_available(self, tmp_path: Path) -> None:
-        gpd_cache = tmp_path / "GRD" / "cache"
-        gpd_cache.mkdir(parents=True)
-        (gpd_cache / "grd-update-check.json").write_text(json.dumps({"update_available": True}))
+        grd_cache = tmp_path / "GRD" / "cache"
+        grd_cache.mkdir(parents=True)
+        (grd_cache / "grd-update-check.json").write_text(json.dumps({"update_available": True}))
         with (
             patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
             patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path),
@@ -634,9 +825,9 @@ class TestCheckUpdateHook:
             assert expected in result
 
     def test_cache_with_no_update(self, tmp_path: Path) -> None:
-        gpd_cache = tmp_path / "GRD" / "cache"
-        gpd_cache.mkdir(parents=True)
-        (gpd_cache / "grd-update-check.json").write_text(json.dumps({"update_available": False}))
+        grd_cache = tmp_path / "GRD" / "cache"
+        grd_cache.mkdir(parents=True)
+        (grd_cache / "grd-update-check.json").write_text(json.dumps({"update_available": False}))
         with (
             patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
             patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path),
@@ -644,9 +835,9 @@ class TestCheckUpdateHook:
             assert _check_update() == ""
 
     def test_corrupt_cache_returns_empty(self, tmp_path: Path) -> None:
-        gpd_cache = tmp_path / "GRD" / "cache"
-        gpd_cache.mkdir(parents=True)
-        (gpd_cache / "grd-update-check.json").write_text("broken{json")
+        grd_cache = tmp_path / "GRD" / "cache"
+        grd_cache.mkdir(parents=True)
+        (grd_cache / "grd-update-check.json").write_text("broken{json")
         with (
             patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
             patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path),
@@ -654,9 +845,9 @@ class TestCheckUpdateHook:
             assert _check_update() == ""
 
     def test_non_mapping_cache_is_ignored_instead_of_crashing(self, tmp_path: Path) -> None:
-        gpd_cache = tmp_path / "GRD" / "cache"
-        gpd_cache.mkdir(parents=True)
-        (gpd_cache / "grd-update-check.json").write_text(json.dumps(["not", "a", "mapping"]), encoding="utf-8")
+        grd_cache = tmp_path / "GRD" / "cache"
+        grd_cache.mkdir(parents=True)
+        (grd_cache / "grd-update-check.json").write_text(json.dumps(["not", "a", "mapping"]), encoding="utf-8")
 
         with (
             patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
@@ -818,6 +1009,8 @@ class TestCheckUpdateHook:
     def test_explicit_target_hook_cache_uses_target_dir_update_command(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
         workspace.mkdir()
+        home = tmp_path / "home"
+        home.mkdir()
         explicit_target = tmp_path / "custom-runtime-dir"
         hook_path = explicit_target / "hooks" / "statusline.py"
         cache_file = explicit_target / "cache" / "grd-update-check.json"
@@ -998,9 +1191,9 @@ class TestCheckUpdateHook:
             assert _check_update() == ""
 
     def test_unknown_runtime_falls_back_to_runtime_neutral_update_command(self, tmp_path: Path) -> None:
-        gpd_cache = tmp_path / "GRD" / "cache"
-        gpd_cache.mkdir(parents=True)
-        (gpd_cache / "grd-update-check.json").write_text(json.dumps({"update_available": True}), encoding="utf-8")
+        grd_cache = tmp_path / "GRD" / "cache"
+        grd_cache.mkdir(parents=True)
+        (grd_cache / "grd-update-check.json").write_text(json.dumps({"update_available": True}), encoding="utf-8")
 
         with (
             patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
@@ -1026,9 +1219,9 @@ class TestCheckUpdateHook:
 
     def test_known_runtime_resolves_scope_for_bootstrap_update_command(self, tmp_path: Path) -> None:
         """Known runtimes should still resolve scope before rendering the bootstrap command."""
-        gpd_cache = tmp_path / "GRD" / "cache"
-        gpd_cache.mkdir(parents=True)
-        (gpd_cache / "grd-update-check.json").write_text(json.dumps({"update_available": True}))
+        grd_cache = tmp_path / "GRD" / "cache"
+        grd_cache.mkdir(parents=True)
+        (grd_cache / "grd-update-check.json").write_text(json.dumps({"update_available": True}))
 
         with (
             patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
@@ -1038,7 +1231,7 @@ class TestCheckUpdateHook:
         ):
             result = _check_update()
 
-        mock_scope.assert_called_once_with("claude-code", cwd=None)
+        mock_scope.assert_called_once_with("claude-code", cwd=None, home=tmp_path)
         assert result != ""
 
 
@@ -1054,6 +1247,7 @@ class TestMain:
         with (
             patch("sys.stdin", io.StringIO(json.dumps(input_data))),
             patch("sys.stdout", captured),
+            patch("grd.hooks.statusline._read_runtime_hints", return_value=_runtime_hints_payload(_visibility_state())),
             patch("grd.hooks.statusline._read_position", return_value=""),
             patch("grd.hooks.statusline._read_current_task", return_value=""),
             patch("grd.hooks.statusline._read_execution_state", return_value={}),
@@ -1151,22 +1345,188 @@ class TestMain:
         project = tmp_path / "project"
         nested = project / "src" / "notes"
         nested.mkdir(parents=True)
+        (project / "GRD").mkdir(parents=True)
+        _mark_complete_install(nested / ".codex", runtime="codex")
+
+        payload = {
+            "workspace": {"cwd": str(nested), "project_dir": str(project)},
+            "runtime_session_id": "sess-runtime",
+        }
+        hook_payload = SimpleNamespace(
+            project_dir_keys=("project_dir",),
+            runtime_session_id_keys=("runtime_session_id",),
+            model_keys=(),
+            context_remaining_keys=(),
+        )
 
         captured = io.StringIO()
         with (
-            patch("sys.stdin", io.StringIO(json.dumps({"workspace": {"cwd": str(nested), "project_dir": str(project)}}))),
+            patch("sys.stdin", io.StringIO(json.dumps(payload))),
             patch("sys.stdout", captured),
+            patch(
+                "grd.hooks.statusline._resolve_payload_roots",
+                return_value=SimpleNamespace(
+                    workspace_dir=str(nested),
+                    project_root=str(project),
+                    project_dir_present=True,
+                    project_dir_trusted=False,
+                ),
+            ),
+            patch(
+                "grd.hooks.install_context.resolve_hook_lookup_context",
+                return_value=SimpleNamespace(
+                    lookup_cwd=nested,
+                    resolved_home=tmp_path / "home",
+                    active_runtime="codex",
+                    preferred_runtime="codex",
+                ),
+            ),
+            patch(
+                "grd.hooks.statusline.resolve_runtime_lookup_context_from_payload_roots",
+                return_value=SimpleNamespace(lookup_dir=str(nested), active_runtime="codex"),
+            ) as mock_runtime_lookup,
+            patch("grd.hooks.statusline._hook_payload_policy", return_value=hook_payload) as mock_policy,
+            patch("grd.hooks.statusline._read_runtime_hints", return_value=_runtime_hints_payload(_visibility_state())) as mock_hints,
+            patch("grd.hooks.statusline._read_execution_state", return_value={}) as mock_execution,
             patch("grd.hooks.statusline._read_position", return_value="") as mock_position,
             patch("grd.hooks.statusline._read_current_task", return_value="") as mock_task,
-            patch("grd.hooks.statusline._read_execution_state", return_value={}) as mock_execution,
             patch("grd.hooks.statusline._check_update", return_value="") as mock_update,
+            patch("grd.hooks.statusline._read_workspace_label", return_value="[project/src/notes]") as mock_label,
+            patch("grd.hooks.statusline._read_model_label", return_value="model") as mock_model,
         ):
             main()
 
-        mock_position.assert_called_once_with(str(project))
-        mock_task.assert_called_once_with("", str(project))
-        mock_execution.assert_called_once_with(str(project))
-        mock_update.assert_called_once_with(str(project))
+        mock_runtime_lookup.assert_called_once()
+        assert mock_policy.call_args_list == [call(str(nested)), call(str(nested))]
+        mock_hints.assert_called_once_with(str(nested))
+        mock_execution.assert_called_once_with(str(nested))
+        mock_position.assert_called_once_with(str(nested))
+        mock_task.assert_called_once_with("sess-runtime", str(nested))
+        mock_update.assert_called_once_with(str(nested))
+        mock_label.assert_called_once()
+        mock_model.assert_called_once()
+        assert "[project/src/notes]" in captured.getvalue()
+
+    def test_main_uses_workspace_runtime_lookup_when_project_dir_hint_is_not_authoritative(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        project = tmp_path / "project"
+        nested = project / "src" / "notes"
+        nested.mkdir(parents=True)
+        (project / "GRD").mkdir(parents=True)
+        _mark_complete_install(nested / ".codex", runtime="codex")
+
+        stale_project_dir = tmp_path / "stale" / "project"
+        payload = {
+            "workspace": {"cwd": str(nested), "project_dir": str(stale_project_dir)},
+            "runtime_session_id": "sess-runtime",
+        }
+        hook_payload = SimpleNamespace(
+            project_dir_keys=("project_dir",),
+            runtime_session_id_keys=("runtime_session_id",),
+            model_keys=(),
+            context_remaining_keys=(),
+        )
+
+        def _fake_payload_runtime(cwd: str | None = None) -> str | None:
+            if cwd == str(nested):
+                return "codex"
+            if cwd == str(project):
+                return None
+            return None
+
+        captured = io.StringIO()
+        with (
+            patch("sys.stdin", io.StringIO(json.dumps(payload))),
+            patch("sys.stdout", captured),
+            patch(
+                "grd.hooks.statusline._resolve_payload_roots",
+                return_value=SimpleNamespace(
+                    workspace_dir=str(nested),
+                    project_root=str(project),
+                    project_dir_present=True,
+                    project_dir_trusted=False,
+                ),
+            ),
+            patch(
+                "grd.hooks.statusline.resolve_runtime_lookup_context_from_payload_roots",
+                return_value=SimpleNamespace(lookup_dir=str(nested), active_runtime="codex"),
+            ) as mock_runtime_lookup,
+            patch("grd.hooks.statusline._hook_payload_policy", return_value=hook_payload) as mock_policy,
+            patch("grd.hooks.statusline._read_runtime_hints", return_value=_runtime_hints_payload(_visibility_state())) as mock_hints,
+            patch("grd.hooks.statusline._read_execution_state", return_value={}) as mock_execution,
+            patch("grd.hooks.statusline._read_position", return_value="") as mock_position,
+            patch("grd.hooks.statusline._read_current_task", return_value="") as mock_task,
+            patch("grd.hooks.statusline._check_update", return_value="") as mock_update,
+            patch("grd.hooks.statusline._read_workspace_label", return_value="[project/src/notes]") as mock_label,
+            patch("grd.hooks.statusline._read_model_label", return_value="model") as mock_model,
+        ):
+            main()
+
+        mock_runtime_lookup.assert_called_once()
+        assert mock_policy.call_args_list == [call(str(nested)), call(str(nested))]
+        mock_hints.assert_called_once_with(str(nested))
+        mock_execution.assert_called_once_with(str(nested))
+        mock_position.assert_called_once_with(str(nested))
+        mock_task.assert_called_once_with("sess-runtime", str(nested))
+        mock_update.assert_called_once_with(str(nested))
+        mock_label.assert_called_once()
+        mock_model.assert_called_once()
+        assert "[project/src/notes]" in captured.getvalue()
+
+    def test_main_downgrades_top_level_alias_only_workspace_mapping_to_keep_workspace_lookup(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        project = tmp_path / "project"
+        nested = project / "src" / "notes"
+        nested.mkdir(parents=True)
+        (project / "GRD").mkdir(parents=True)
+
+        payload = {
+            "current_dir": str(nested),
+            "project_root": str(project),
+            "runtime_session_id": "sess-runtime",
+        }
+        hook_payload = SimpleNamespace(
+            workspace_keys=("cwd", "current_dir"),
+            project_dir_keys=("project_dir", "project_root"),
+            runtime_session_id_keys=("runtime_session_id",),
+            model_keys=(),
+            context_remaining_keys=(),
+        )
+
+        captured = io.StringIO()
+        with (
+            patch("sys.stdin", io.StringIO(json.dumps(payload))),
+            patch("sys.stdout", captured),
+            patch(
+                "grd.hooks.statusline._resolve_payload_roots",
+                return_value=SimpleNamespace(
+                    workspace_dir=str(nested),
+                    project_root=str(project),
+                    project_dir_present=True,
+                    project_dir_trusted=True,
+                ),
+            ),
+            patch(
+                "grd.hooks.statusline.resolve_runtime_lookup_context_from_payload_roots",
+                return_value=SimpleNamespace(lookup_dir=str(nested), active_runtime="codex"),
+            ) as mock_runtime_lookup,
+            patch("grd.hooks.statusline._hook_payload_policy", return_value=hook_payload),
+            patch("grd.hooks.statusline._read_runtime_hints", return_value=_runtime_hints_payload(_visibility_state())),
+            patch("grd.hooks.statusline._read_execution_state", return_value={}),
+            patch("grd.hooks.statusline._read_position", return_value=""),
+            patch("grd.hooks.statusline._read_current_task", return_value=""),
+            patch("grd.hooks.statusline._check_update", return_value=""),
+            patch("grd.hooks.statusline._read_workspace_label", return_value="[project/src/notes]"),
+            patch("grd.hooks.statusline._read_model_label", return_value="model"),
+        ):
+            main()
+
+        runtime_roots = mock_runtime_lookup.call_args.args[0]
+        assert runtime_roots.project_dir_trusted is False
         assert "[project/src/notes]" in captured.getvalue()
 
     def test_main_prefers_live_execution_task_over_todo_fallback(self) -> None:
@@ -1209,10 +1569,34 @@ class TestMain:
         output = self._run_main({"context_window": {"remainingPercent": 20}})
         assert "100%" in output
 
+    def test_context_window_uses_canonical_aliases_when_policy_is_sparse(self) -> None:
+        captured = io.StringIO()
+        sparse_policy = SimpleNamespace(
+            workspace_keys=(),
+            project_dir_keys=(),
+            runtime_session_id_keys=(),
+            model_keys=(),
+            context_window_size_keys=(),
+            context_remaining_keys=(),
+        )
+        with (
+            patch("sys.stdin", io.StringIO(json.dumps({"context_window": {"remaining_percentage": 0}}))),
+            patch("sys.stdout", captured),
+            patch("grd.hooks.statusline._hook_payload_policy", return_value=sparse_policy),
+            patch("grd.hooks.statusline._read_runtime_hints", return_value=_runtime_hints_payload(_visibility_state())),
+            patch("grd.hooks.statusline._read_position", return_value=""),
+            patch("grd.hooks.statusline._read_current_task", return_value=""),
+            patch("grd.hooks.statusline._read_execution_state", return_value={}),
+            patch("grd.hooks.statusline._check_update", return_value=""),
+        ):
+            main()
+
+        assert "100%" in captured.getvalue()
+
     def test_string_model_workspace_and_context_payloads_do_not_crash(self) -> None:
         output = self._run_main(
             {
-                "model": "gpt-5",
+                "model": _TEST_MODEL,
                 "workspace": "/tmp/research-project",
                 "context_window": "not-a-mapping",
             }
@@ -1337,6 +1721,40 @@ class TestMain:
         assert "REVIEW:first-result adaptive" in output
         assert "Routine task" not in output
         assert "Benchmark reproduction" in output
+        assert "rerun anchor: R-bridge-01" not in output
+
+    def test_first_result_gate_renders_last_result_id_when_label_missing(self) -> None:
+        captured = io.StringIO()
+        with (
+            patch("sys.stdin", io.StringIO(json.dumps({}))),
+            patch("sys.stdout", captured),
+            patch(
+                "grd.hooks.statusline._read_runtime_hints",
+                return_value=_runtime_hints_payload(
+                    _visibility_state(
+                        has_live_execution=True,
+                        status_classification="waiting",
+                        assessment="waiting",
+                        current_execution={
+                            "segment_status": "waiting_review",
+                            "first_result_gate_pending": True,
+                            "review_cadence": "adaptive",
+                            "last_result_id": "R-bridge-01",
+                        },
+                    )
+                ),
+            ),
+            patch("grd.hooks.statusline._read_position", return_value="P3/10"),
+            patch("grd.hooks.statusline._read_current_task", return_value="Routine task"),
+            patch("grd.hooks.statusline._read_execution_state", return_value={}),
+            patch("grd.hooks.statusline._check_update", return_value=""),
+        ):
+            main()
+
+        output = captured.getvalue()
+        assert "REVIEW:first-result adaptive" in output
+        assert "Routine task" not in output
+        assert "rerun anchor: R-bridge-01" in output
 
     def test_skeptical_review_prefers_anchor_label_over_result_label(self) -> None:
         captured = io.StringIO()
@@ -1365,3 +1783,105 @@ class TestMain:
         assert "REVIEW:skeptical" in output
         assert "Direct observable benchmark" in output
         assert "Proxy fit" not in output
+        assert "rerun anchor: R-bridge-01" not in output
+
+    def test_execution_state_rendering_does_not_claim_stuck(self) -> None:
+        captured = io.StringIO()
+        with (
+            patch("sys.stdin", io.StringIO(json.dumps({}))),
+            patch("sys.stdout", captured),
+            patch(
+                "grd.hooks.statusline._read_runtime_hints",
+                return_value=_runtime_hints_payload(
+                    _visibility_state(
+                        has_live_execution=True,
+                        status_classification="waiting",
+                        assessment="waiting",
+                        current_execution={
+                            "segment_status": "waiting_review",
+                            "waiting_for_review": True,
+                            "waiting_reason": "time_budget_exceeded",
+                            "segment_started_at": "2026-03-10T00:00:00+00:00",
+                            "updated_at": "2026-03-10T00:45:00+00:00",
+                        },
+                    )
+                ),
+            ),
+            patch("grd.hooks.statusline._read_position", return_value="P4/10"),
+            patch("grd.hooks.statusline._read_current_task", return_value="Routine task"),
+            patch("grd.hooks.statusline._read_execution_state", return_value={}),
+            patch("grd.hooks.statusline._check_update", return_value=""),
+        ):
+            main()
+
+        output = captured.getvalue().lower()
+        assert "stuck" not in output
+        assert "wait:budget" in output or "review" in output
+
+    def test_main_uses_visibility_stall_badge_without_raw_snapshot_heuristics(self) -> None:
+        captured = io.StringIO()
+        with (
+            patch("sys.stdin", io.StringIO(json.dumps({}))),
+            patch("sys.stdout", captured),
+            patch(
+                "grd.hooks.statusline._read_runtime_hints",
+                return_value=_runtime_hints_payload(
+                    _visibility_state(
+                        has_live_execution=True,
+                        status_classification="active",
+                        assessment="possibly stalled",
+                        possibly_stalled=True,
+                        last_updated_age_label="45m ago",
+                        current_task="Benchmark reproduction",
+                        current_execution={
+                            "segment_status": "active",
+                            "current_task": "Benchmark reproduction",
+                            "updated_at": "2026-03-10T00:45:00+00:00",
+                        },
+                    )
+                ),
+            ),
+            patch("grd.hooks.statusline._read_position", return_value=""),
+            patch("grd.hooks.statusline._read_current_task", return_value="Todo task"),
+            patch("grd.hooks.statusline._read_execution_state", return_value={}),
+            patch("grd.hooks.statusline._check_update", return_value=""),
+        ):
+            main()
+
+        output = captured.getvalue()
+        assert "STALL?" in output
+        assert "Todo task" not in output
+
+    def test_main_keeps_review_badge_and_surfaces_tangent_summary_in_detail_slot(self) -> None:
+        captured = io.StringIO()
+        with (
+            patch("sys.stdin", io.StringIO(json.dumps({}))),
+            patch("sys.stdout", captured),
+            patch(
+                "grd.hooks.statusline._read_runtime_hints",
+                return_value=_runtime_hints_payload(
+                    _visibility_state(
+                        has_live_execution=True,
+                        status_classification="waiting",
+                        assessment="waiting",
+                        current_task="Review benchmark",
+                        current_execution={
+                            "segment_status": "waiting_review",
+                            "waiting_for_review": True,
+                            "tangent_summary": "Check whether the 2D case is degenerate",
+                            "tangent_decision": "branch_later",
+                            "updated_at": "2026-03-10T00:45:00+00:00",
+                        },
+                    )
+                ),
+            ),
+            patch("grd.hooks.statusline._read_position", return_value=""),
+            patch("grd.hooks.statusline._read_current_task", return_value="Todo task"),
+            patch("grd.hooks.statusline._read_execution_state", return_value={}),
+            patch("grd.hooks.statusline._check_update", return_value=""),
+        ):
+            main()
+
+        output = captured.getvalue().lower()
+        assert "review" in output
+        assert "branch later: check whether the 2d case is degenerate" in output

@@ -27,7 +27,7 @@ When a research milestone completes:
 
 **Context Efficiency:** Archives keep ROADMAP.md constant-size and REQUIREMENTS.md milestone-scoped.
 
-**ROADMAP archive** uses `templates/milestone-archive.md` -- includes milestone header (status, phases, date), full phase details, milestone summary (decisions, key findings, open questions).
+**ROADMAP archive** uses `@{GRD_INSTALL_DIR}/templates/milestone-archive.md` -- includes milestone header (status, phases, date), full phase details, milestone summary (decisions, key findings, open questions).
 
 **REQUIREMENTS archive** contains all requirements marked complete with outcomes, traceability table with final status, notes on changed requirements.
 
@@ -371,7 +371,9 @@ to a paper's Introduction -> Methods -> Results flow.]
 | [N]   | [Description] | [Equation or numerical value from intermediate_results] | [Parameter regime] | [From verification] |
 | ...   | ...           | ...                                                     | ...                | ...                 |
 
-Source: state.json intermediate_results, organized by phase ordering.
+Source: prefer the structured init payload fields for derived intermediate
+results and related state; use raw `state.json` only as a fallback when a
+specific value is not present in the structured snapshot.
 
 ## Methods Employed
 
@@ -405,8 +407,9 @@ Extracted from phase directories and SUMMARY.md artifacts sections.]
 
 ## Open Questions
 
-[From state.json open_questions field. These become the "Future Work" section of a
-paper or motivate the next milestone.]
+[Prefer the structured init payload's projected open questions or summary
+artifacts when available; fall back to raw state only if necessary. These
+become the "Future Work" section of a paper or motivate the next milestone.]
 
 1. [Open question 1]
 2. [Open question 2]
@@ -441,11 +444,12 @@ were fulfilled by which phases/results.]
 Before proceeding, confirm:
 
 - [ ] Narrative arc covers the full research trajectory (not just the last phase)
-- [ ] All intermediate_results from state.json appear in the Key Results table
+- [ ] All available intermediate_results from the structured init payload appear
+      in the Key Results table; raw state is used only to fill gaps
 - [ ] Methods list is complete (cross-check with SUMMARY frontmatter)
 - [ ] Convention timeline includes all entries from `grd convention list`
 - [ ] Figures/data registry includes all artifacts from phase directories
-- [ ] Open questions match state.json
+- [ ] Open questions match the structured payload or, if necessary, raw state
 - [ ] Dependency graph matches history-digest output
 - [ ] Requirements mapping covers all REQUIREMENTS.md items
 

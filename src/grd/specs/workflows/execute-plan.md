@@ -1,9 +1,10 @@
 <purpose>
 Execute a research plan (`PLAN.md` or `*-PLAN.md`) -- carry out derivations, calculations, simulations, or analysis -- and create the matching outcome summary (`SUMMARY.md` or `*-SUMMARY.md`).
+`execute-phase.md` owns wave-level routing and fanout; this workflow owns the selected plan's local execution semantics, bounded gates, and summary emission.
 </purpose>
 
 <required_reading>
-Read STATE.md before any operation to load project context.
+Load the structured init-state payload first; reopen `STATE.md` only if the payload is missing, stale, or flagged by `state_load_source` / `state_integrity_issues`.
 Read config.json for planning behavior settings.
 
 Read these reference files using the file_read tool:
@@ -24,7 +25,7 @@ When following GitHub lifecycle examples, substitute the repository's actual def
 <process>
 
 <step name="init_context" priority="first">
-Load execution context (uses `init execute-phase` for full context, including file contents):
+Load the bootstrap execution context using the staged init payload:
 
 ```bash
 INIT=$(grd init execute-phase "${phase}" --include state,config)
@@ -34,7 +35,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Extract from init JSON: `executor_model`, `commit_docs`, `phase_dir`, `phase_number`, `plans`, `summaries`, `incomplete_plans`, `autonomy`, `review_cadence`, `max_unattended_minutes_per_plan`, `max_unattended_minutes_per_wave`, `checkpoint_after_n_tasks`, `checkpoint_after_first_load_bearing_result`, `checkpoint_before_downstream_dependent_tasks`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`, `selected_protocol_bundle_ids`, `protocol_bundle_context`.
+This workflow assumes `execute-phase.md` already selected the plan and wave. It does not re-decide wave routing or specialist selection.
 
 **File contents (from --include):** `state_content`, `config_content`. Access with:
 
@@ -46,22 +47,30 @@ CONFIG_CONTENT=$(echo "$INIT" | grd json get .config_content --default "")
 If `.grd/` missing: error.
 </step>
 
-<step name="load_contract_anchor_context">
+<step name="load_phase_classification_context">
+Load the phase-classification payload only when you actually need it:
+
+```bash
+CONTRACT_INIT=$(grd --raw init execute-phase "${phase}" --stage phase_classification)
+if [ $? -ne 0 ]; then
+  echo "ERROR: staged phase-classification init failed: $CONTRACT_INIT"
+  exit 1
+fi
+```
+
+Extract from init JSON: `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `convention_lock`, `convention_lock_count`, `derived_convention_lock`, `derived_convention_lock_count`, `state_load_source`, `state_integrity_issues`. This is the phase_classification payload.
+
 If `project_contract_load_info.status` starts with `blocked`, STOP and repair the stored contract before executing. Use the surfaced `project_contract_load_info.errors` / `warnings`; do not guess around them from prose-only context.
 
 If `project_contract_validation.valid` is false, STOP and repair the contract before executing. A visible-but-blocked contract is still not an approved execution contract.
 
-Treat `project_contract` as authoritative machine-readable scope only when present and `project_contract_validation.valid` is true. Do not execute from PLAN markdown alone if the contract or active-anchor ledger says a decisive reference, prior output, or forbidden proxy still constrains the work.
+Treat `project_contract` as authoritative machine-readable scope only when `project_contract_gate.authoritative` is true. Do not execute from PLAN markdown alone if the contract or active-anchor ledger says a decisive reference, prior output, or forbidden proxy still constrains the work.
 
-Treat `effective_reference_intake` as the structured carry-forward ledger for must-read refs, baselines, prior outputs, user anchors, and context gaps. Use `active_reference_context` and `reference_artifacts_content` to interpret that ledger quickly, not to replace it with prose-only reconstruction.
+Treat `effective_reference_intake` as the structured carry-forward ledger for must-read refs, baselines, prior outputs, user anchors, and context gaps. Use `active_reference_context` to interpret that ledger quickly, not to replace it with prose-only reconstruction.
 </step>
 
 <step name="load_protocol_bundle_context">
-If `selected_protocol_bundle_ids` is non-empty, treat `protocol_bundle_context` as the primary specialized-loading guide for this plan.
-
-- Read the bundle-listed core assets before starting substantive work.
-- Carry bundle estimator policies and decisive artifact guidance into task execution and SUMMARY evidence.
-- If no bundle is selected, fall back to shared protocols plus on-demand routing through the executor index.
+Keep bundle asset reads out of bootstrap. If the plan later needs specialized execution guidance, the wave_planning stage will load the bundle payload and the bundle-listed core assets there instead of here.
 </step>
 
 <step name="verify_conventions">
@@ -83,7 +92,7 @@ If the project has existing phases and the convention lock is empty, this is an 
 CONVENTIONS=$(grd --raw convention list 2>/dev/null)
 ```
 
-Single source of truth is `state.json` convention_lock. Before using any equation from a prior phase or external source, verify conventions match the lock. See `shared-protocols.md` Convention Tracking Protocol for the 5-point checklist (metric, Fourier, normalization, coupling, renormalization scheme).
+Single source of truth is the structured init-state convention payload (`convention_lock` / `derived_convention_lock`). Before using any equation from a prior phase or external source, verify conventions match the lock. See `shared-protocols.md` Convention Tracking Protocol for the 5-point checklist (metric, Fourier, normalization, coupling, renormalization scheme).
 </step>
 
 <step name="identify_plan">
@@ -109,6 +118,21 @@ Present plan identification, wait for confirmation.
 </if>
 </step>
 
+<step name="run_plan_tool_preflight">
+Before executing the selected plan, validate any machine-checkable specialized tool requirements declared in plan frontmatter:
+
+```bash
+PLAN_PREFLIGHT=$(grd --raw validate plan-preflight "${PLAN_PATH}")
+if [ $? -ne 0 ]; then
+  echo "ERROR: plan specialized-tool preflight failed"
+  echo "$PLAN_PREFLIGHT"
+  exit 1
+fi
+```
+
+If the preflight reports warnings only, keep them visible during execution. Use declared fallbacks automatically only for non-blocking preferred tools (`required: false`) when the fallback preserves the plan's scientific intent, and document the switch in `SUMMARY.md`. If a required specialized tool is unavailable, stop and revise the plan or environment before execution.
+</step>
+
 <step name="record_start_time">
 ```bash
 PLAN_START_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -126,6 +150,8 @@ Start execution trace for debugging:
 ```bash
 grd trace start "${phase}" "${plan}" 2>/dev/null || true
 ```
+
+Keep the GitHub lifecycle reference deferred until the plan reaches its checkpoint / closeout handling, but remember that this plan will eventually need `{GRD_INSTALL_DIR}/references/execution/github-lifecycle.md` for branch and remote examples.
 </step>
 
 <step name="resolve_autonomy_mode">
@@ -257,7 +283,7 @@ Pattern B/D only (authored or virtual checkpoints). Skip for A/C.
 2. Per segment:
    - Subagent route: spawn grd-executor for assigned tasks only. Prompt: task range, plan path, read full plan for context, execute assigned tasks, track deviations, `<autonomy_mode>{AUTONOMY}</autonomy_mode>`, `<review_cadence>{REVIEW_CADENCE}</review_cadence>`, `<segment_task_cap>{SEGMENT_TASK_CAP}</segment_task_cap>`, `<max_unattended_minutes_per_plan>{MAX_UNATTENDED_MINUTES_PER_PLAN}</max_unattended_minutes_per_plan>`, `<first_result_gate>{FIRST_RESULT_GATE_REQUIRED}</first_result_gate>`, NO SUMMARY/commit, but RETURN `contract_updates` keyed by claim/deliverable/acceptance-test/reference/forbidden-proxy IDs and any `execution_segment` fields needed to keep bounded gates live across continuation. Track via agent protocol.
    - Main route: execute tasks using standard flow (step name="execute")
-3. After ALL segments: aggregate files/deviations/decisions/`contract_updates` -> create SUMMARY.md -> apply returned state updates in main context -> final metadata commit -> self-check:
+3. After ALL segments: aggregate files/deviations/decisions/`contract_updates` -> create SUMMARY.md -> apply returned state updates in main context via `grd apply-return-updates` -> final metadata commit -> self-check:
 
    - Verify key-files.created exist on disk with `[ -f ]`
    - Check `git log --oneline --grep="{phase}-{plan}"` returns >=1 commit
@@ -284,6 +310,38 @@ ls .grd/phases/*/*SUMMARY.md 2>/dev/null | sort -r | head -2 | tail -1
 If previous SUMMARY has unresolved "Issues Encountered" or "Next Phase Readiness" blockers: ask_user(header="Previous Issues", options: "Proceed anyway" | "Address first" | "Review previous").
 </step>
 
+<step name="load_wave_planning_context">
+Load the wave-planning payload only when the plan is ready to move into segment execution:
+
+```bash
+SEGMENT_INIT=$(grd --raw init execute-phase "${phase}" --stage wave_planning)
+if [ $? -ne 0 ]; then
+  echo "ERROR: staged wave-planning init failed: $SEGMENT_INIT"
+  exit 1
+fi
+```
+
+Extract from wave_planning init JSON: `selected_protocol_bundle_ids`, `protocol_bundle_context`, `active_reference_context`, `reference_artifacts_content`, `state_load_source`, `state_integrity_issues`, `convention_lock`, `convention_lock_count`, `intermediate_results`, `intermediate_result_count`, `approximations`, `approximation_count`, `propagated_uncertainties`, `propagated_uncertainty_count`, `derived_convention_lock`, `derived_convention_lock_count`, `derived_intermediate_results`, `derived_intermediate_result_count`, `derived_approximations`, `derived_approximation_count`.
+
+If `selected_protocol_bundle_ids` is non-empty, treat `protocol_bundle_context` as the plan-execution specialized-loading guide for this plan. Read any bundle-listed core assets now, not during bootstrap.
+
+Use `reference_artifacts_content` only here, when the segment actually needs to interpret prior outputs, baselines, or unresolved gaps. Stable knowledge docs may be present in that content as reviewed background, but they do not override the contract, conventions, or decisive evidence requirements.
+
+Read these reference files using the file_read tool only now, in the segment-execution stage:
+- {GRD_INSTALL_DIR}/references/execution/git-integration.md
+- {GRD_INSTALL_DIR}/references/execution/github-lifecycle.md
+- {GRD_INSTALL_DIR}/references/execution/execute-plan-recovery.md
+- {GRD_INSTALL_DIR}/references/execution/execute-plan-validation.md
+- {GRD_INSTALL_DIR}/references/execution/execute-plan-checkpoints.md
+- {GRD_INSTALL_DIR}/references/protocols/reproducibility.md
+- {GRD_INSTALL_DIR}/references/protocols/error-propagation-protocol.md -- Cross-phase uncertainty propagation protocol (Uncertainty Budget declaration format, verification checks, phase handoff format)
+- {GRD_INSTALL_DIR}/references/execution/executor-index.md -- Maps execution scenarios (QFT, condensed matter, numerical, paper writing, debugging) to the correct domain-specific reference files
+- {GRD_INSTALL_DIR}/templates/calculation-log.md -- Template for CALCULATION_LOG.md (detailed derivation records within a phase)
+- {GRD_INSTALL_DIR}/templates/recovery-plan.md -- Template for RECOVERY.md (structured recovery after plan execution failure)
+
+When following GitHub lifecycle examples, substitute the repository's actual default branch and remote names for `<default-branch>` and `<remote-name>`; those placeholders are not literal branch or remote names.
+</step>
+
 <step name="execute">
 Deviations are normal -- handle via deviation rules in `execute-plan-validation.md`.
 
@@ -307,6 +365,11 @@ Deviations are normal -- handle via deviation rules in `execute-plan-validation.
      grd observe event execution gate --action enter --phase "${phase}" --plan "${plan}" \
        --data "{\"execution\":{\"checkpoint_reason\":\"first_result\",\"review_cadence\":\"${REVIEW_CADENCE}\",\"first_result_ready\":true,\"first_result_gate_pending\":true,\"current_task\":\"${TASK_DESCRIPTION}\"}}" 2>/dev/null || true
      ```
+
+     If this same bounded stop surfaces an unexpected but non-blocking alternative path, keep it in the same execution payload rather than inventing a new event family. Optional fields:
+
+     - `tangent_summary` — short description of the alternative path
+     - `tangent_decision` — `ignore | defer | branch_later | pursue_now` once classified
 
      When the first-result stop is accepted, record the matching clear before any dependent work resumes:
 
@@ -349,9 +412,11 @@ Deviations are normal -- handle via deviation rules in `execute-plan-validation.
 
      If the pre-fanout stop also carried skeptical re-questioning, clear that state explicitly before or alongside the pre-fanout clear; a `pre_fanout` clear must not wipe skeptical fields implicitly.
 
-     **Supervised mode post-task checkpoint:** If `AUTONOMY="supervised"`, insert a `checkpoint:human-verify` after EVERY completed task. Present the task result with all intermediate values and wait for user approval before proceeding to the next task.
+     If the same stop also carried a tangent proposal, keep the optional `tangent_summary` / `tangent_decision` fields on the existing `execution` payload until that review stop is explicitly resolved. Do not auto-branch or create side work from telemetry alone.
+
+     **Supervised mode post-task checkpoint:** If `AUTONOMY="supervised"`, insert a `checkpoint:human-verify` after EVERY completed task. Emit the checkpoint return with the task result and all intermediate values; the orchestrator owns presenting it and collecting approval in a fresh continuation before any next task is accepted.
    - `type="checkpoint:*"`: Route by autonomy mode:
-     - **supervised:** STOP -> checkpoint protocol (see `execute-plan-checkpoints.md`) -> wait for user -> continue only after confirmation.
+     - **supervised:** STOP -> checkpoint protocol (see `execute-plan-checkpoints.md`) -> return structured checkpoint state to the orchestrator. The orchestrator presents the checkpoint and resumes only through a fresh continuation.
      - **balanced:** Stop for `checkpoint:decision`, `checkpoint:human-verify`, required first-result gates, any checkpoint tied to deviation rules 5-6 or unresolved convergence failure, and any case where decisive evidence is still missing but the next tasks would assume it. Log routine checkpoint markers and continue when no judgment is needed.
      - **yolo:** Do NOT skip required first-result, bounded-segment, skeptical, or pre-fanout checkpoints. Auto-continue only after the gate is explicitly cleared and the remaining work is genuinely independent of the unresolved decisive comparison. STOP on failed sanity, unresolved skeptical review, anchor-gate failure, or unrecoverable computation error.
 3. Run `<verification>` checks including physics validation (see `execute-plan-validation.md`)
@@ -364,7 +429,7 @@ Deviations are normal -- handle via deviation rules in `execute-plan-validation.
 
 **Context awareness (after each task):**
 
-Context is finite (~200k tokens, ~80% usable). After completing each task:
+Context is finite (~80% usable before compression). After completing each task:
 
 1. Check statusline context percentage
 2. If >60% with heavy work remaining: consider proactive pause
@@ -584,7 +649,7 @@ grd_return:
     contract_completion_status: complete | partial | blocked
 ```
 
-**Exception:** If executing in Pattern C (main context, no subagent), you ARE the orchestrator — apply state updates directly:
+**Exception:** If executing in Pattern C (main context, no subagent), you ARE the orchestrator — apply state updates directly by invoking the same canonical applicator on the summary file:
 
 ```bash
 grd state advance
@@ -609,7 +674,7 @@ grd_return:
     - text: "Blocker description"
 ```
 
-**Exception:** If executing in Pattern C (main context, no subagent), apply directly:
+**Exception:** If executing in Pattern C (main context, no subagent), apply directly through the same applicator:
 
 ```bash
 grd state add-decision \
@@ -629,7 +694,7 @@ grd_return:
     resume_file: "—"
 ```
 
-**Exception:** If executing in Pattern C (main context, no subagent), apply directly:
+**Exception:** If executing in Pattern C (main context, no subagent), apply directly through the same applicator:
 
 ```bash
 grd state record-session \
@@ -637,6 +702,8 @@ grd state record-session \
   --resume-file "—"
 grd observe event session continuity-updated --phase "${phase}" --plan "${plan}" --data "{\"stopped_at\":\"Completed ${phase}-${plan}-PLAN.md\",\"resume_file\":\"—\"}" 2>/dev/null || true
 ```
+
+This continuation update is the authoritative completion cleanup boundary. It retires any stale `continuation.bounded_segment` that still points at the completed work and clears the canonical handoff pointer for this plan. The matching execution-lineage record remains as history even after the bounded stop is retired. `session` and STATE.md are projection surfaces that should reflect this update after persistence, not independent authorities.
 
 Keep STATE.md under 150 lines.
 </step>

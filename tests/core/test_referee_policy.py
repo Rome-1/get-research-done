@@ -15,11 +15,13 @@ from grd.mcp.paper.models import (
     ReviewStageKind,
 )
 
+MANUSCRIPT_PATH = "paper/curvature_flow_bounds.tex"
+
 
 def test_prl_weak_significance_cannot_receive_minor_revision():
     report = evaluate_referee_decision(
         RefereeDecisionInput(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             target_journal="prl",
             final_recommendation=ReviewRecommendation.minor_revision,
             stage_artifacts=[
@@ -40,7 +42,7 @@ def test_prl_weak_significance_cannot_receive_minor_revision():
 def test_fixable_overclaim_caps_standard_venue_at_major_revision():
     report = evaluate_referee_decision(
         RefereeDecisionInput(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
             stage_artifacts=[
@@ -60,10 +62,54 @@ def test_fixable_overclaim_caps_standard_venue_at_major_revision():
     assert report.most_positive_allowed_recommendation == ReviewRecommendation.major_revision
 
 
+def test_missing_proof_audit_coverage_caps_recommendation_at_major_revision() -> None:
+    report = evaluate_referee_decision(
+        RefereeDecisionInput(
+            manuscript_path=MANUSCRIPT_PATH,
+            target_journal="jhep",
+            final_recommendation=ReviewRecommendation.minor_revision,
+            stage_artifacts=[f"GRD/review/STAGE-{name}.json" for name in ("reader", "literature", "math", "physics", "interestingness")],
+            proof_audit_coverage_complete=False,
+            theorem_proof_alignment_adequate=True,
+            novelty=ReviewAdequacy.adequate,
+            significance=ReviewAdequacy.adequate,
+            venue_fit=ReviewAdequacy.adequate,
+        ),
+        strict=True,
+    )
+
+    assert report.valid is False
+    assert report.most_positive_allowed_recommendation == ReviewRecommendation.major_revision
+    assert any("proof-audit coverage" in reason for reason in report.reasons)
+
+
+def test_central_theorem_proof_misalignment_requires_reject_when_not_salvageable() -> None:
+    report = evaluate_referee_decision(
+        RefereeDecisionInput(
+            manuscript_path=MANUSCRIPT_PATH,
+            target_journal="jhep",
+            final_recommendation=ReviewRecommendation.major_revision,
+            stage_artifacts=[f"GRD/review/STAGE-{name}.json" for name in ("reader", "literature", "math", "physics", "interestingness")],
+            central_claims_supported=False,
+            theorem_proof_alignment_adequate=False,
+            unsupported_claims_are_central=True,
+            reframing_possible_without_new_results=False,
+            novelty=ReviewAdequacy.adequate,
+            significance=ReviewAdequacy.adequate,
+            venue_fit=ReviewAdequacy.adequate,
+        ),
+        strict=True,
+    )
+
+    assert report.valid is False
+    assert report.most_positive_allowed_recommendation == ReviewRecommendation.reject
+    assert any("Theorem statements and proofs are misaligned" in reason for reason in report.reasons)
+
+
 def test_minor_revision_allowed_only_for_minor_follow_up():
     report = evaluate_referee_decision(
         RefereeDecisionInput(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             target_journal="prd",
             final_recommendation=ReviewRecommendation.minor_revision,
             stage_artifacts=[
@@ -86,7 +132,7 @@ def test_minor_revision_allowed_only_for_minor_follow_up():
 def test_review_ledger_consistency_rejects_unknown_blocking_issue_ids():
     report = evaluate_referee_decision(
         RefereeDecisionInput(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
             stage_artifacts=[
@@ -97,7 +143,7 @@ def test_review_ledger_consistency_rejects_unknown_blocking_issue_ids():
         ),
         strict=True,
         review_ledger=ReviewLedger(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             issues=[
                 ReviewIssue(
                     issue_id="REF-001",
@@ -126,7 +172,7 @@ def test_review_ledger_rejects_blank_manuscript_path() -> None:
 def test_review_ledger_consistency_rejects_blank_manuscript_path_from_model_construct() -> None:
     report = evaluate_referee_decision(
         RefereeDecisionInput(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
             stage_artifacts=[f".grd/review/STAGE-{name}.json" for name in ("reader", "literature", "math", "physics", "interestingness")],
@@ -151,7 +197,7 @@ def test_missing_stage_artifacts_reject_decision_when_project_root_supplied(tmp_
 
     report = evaluate_referee_decision(
         RefereeDecisionInput(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
             stage_artifacts=[
@@ -173,7 +219,7 @@ def test_missing_stage_artifacts_reject_decision_when_project_root_supplied(tmp_
 def test_unresolved_critical_ledger_issues_count_toward_major_issue_total():
     report = evaluate_referee_decision(
         RefereeDecisionInput(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
             stage_artifacts=[
@@ -184,7 +230,7 @@ def test_unresolved_critical_ledger_issues_count_toward_major_issue_total():
         ),
         strict=True,
         review_ledger=ReviewLedger(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             issues=[
                 ReviewIssue(
                     issue_id="REF-CRIT",
@@ -202,7 +248,10 @@ def test_unresolved_critical_ledger_issues_count_toward_major_issue_total():
     assert any("unresolved_major_issues does not match review ledger count" in reason for reason in report.reasons)
 
 
-@pytest.mark.parametrize("manuscript_path", ["./paper//main.tex", "paper/../paper/main.tex"])
+@pytest.mark.parametrize(
+    "manuscript_path",
+    ["./paper//curvature_flow_bounds.tex", "paper/../paper/curvature_flow_bounds.tex"],
+)
 def test_manuscript_path_comparison_normalizes_equivalent_paths(manuscript_path: str):
     report = evaluate_referee_decision(
         RefereeDecisionInput(
@@ -216,7 +265,7 @@ def test_manuscript_path_comparison_normalizes_equivalent_paths(manuscript_path:
         ),
         strict=True,
         review_ledger=ReviewLedger(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             issues=[],
         ),
     )
@@ -227,7 +276,7 @@ def test_manuscript_path_comparison_normalizes_equivalent_paths(manuscript_path:
 def test_review_ledger_round_mismatch_rejects_stage_artifacts() -> None:
     report = evaluate_referee_decision(
         RefereeDecisionInput(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
             stage_artifacts=[
@@ -237,7 +286,7 @@ def test_review_ledger_round_mismatch_rejects_stage_artifacts() -> None:
         strict=True,
         review_ledger=ReviewLedger(
             round=1,
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             issues=[],
         ),
     )
@@ -249,7 +298,7 @@ def test_review_ledger_round_mismatch_rejects_stage_artifacts() -> None:
 def test_strict_review_requires_at_least_five_stage_artifacts() -> None:
     report = evaluate_referee_decision(
         RefereeDecisionInput(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
             stage_artifacts=[f".grd/review/STAGE-{name}.json" for name in ("reader", "literature", "math", "physics")],
@@ -264,7 +313,7 @@ def test_strict_review_requires_at_least_five_stage_artifacts() -> None:
 def test_strict_review_rejects_noncanonical_stage_artifact_filenames() -> None:
     report = evaluate_referee_decision(
         RefereeDecisionInput(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
             stage_artifacts=[
@@ -285,7 +334,7 @@ def test_strict_review_rejects_noncanonical_stage_artifact_filenames() -> None:
 def test_strict_review_rejects_canonical_five_plus_invalid_extra_stage_artifact() -> None:
     report = evaluate_referee_decision(
         RefereeDecisionInput(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
             stage_artifacts=[
@@ -308,7 +357,7 @@ def test_strict_review_rejects_canonical_five_plus_invalid_extra_stage_artifact(
 def test_strict_review_rejects_mixed_stage_round_suffixes() -> None:
     report = evaluate_referee_decision(
         RefereeDecisionInput(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
             stage_artifacts=[
@@ -330,7 +379,7 @@ def test_strict_review_rejects_mixed_stage_round_suffixes() -> None:
 def test_referee_decision_counts_must_be_non_negative(field_name: str) -> None:
     with pytest.raises(ValidationError):
         RefereeDecisionInput(
-            manuscript_path="paper/main.tex",
+            manuscript_path=MANUSCRIPT_PATH,
             target_journal="jhep",
             final_recommendation=ReviewRecommendation.major_revision,
             **{field_name: -1},
@@ -341,7 +390,7 @@ def test_referee_decision_input_rejects_unknown_top_level_keys() -> None:
     with pytest.raises(ValidationError):
         RefereeDecisionInput.model_validate(
             {
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "target_journal": "jhep",
                 "final_recommendation": "major_revision",
                 "unexpected": "boom",
@@ -362,7 +411,7 @@ def test_referee_decision_input_rejects_malformed_blocking_issue_ids(
     with pytest.raises(ValidationError):
         RefereeDecisionInput.model_validate(
             {
-                "manuscript_path": "paper/main.tex",
+                "manuscript_path": MANUSCRIPT_PATH,
                 "target_journal": "jhep",
                 "final_recommendation": "major_revision",
                 "blocking_issue_ids": blocking_issue_ids,

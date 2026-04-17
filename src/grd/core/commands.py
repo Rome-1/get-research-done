@@ -6,9 +6,7 @@ Layer 1 code: stdlib + pathlib + re + pydantic only.
 
 from __future__ import annotations
 
-import json
 import re
-import shlex
 from datetime import UTC, datetime
 from functools import cmp_to_key
 from pathlib import Path
@@ -20,9 +18,7 @@ from grd.core.constants import (
     PHASES_DIR_NAME,
     PLAN_SUFFIX,
     PLANNING_DIR_NAME,
-    REQUIRED_RETURN_FIELDS,
     STANDALONE_PLAN,
-    VALID_RETURN_STATUSES,
     VERIFICATION_SUFFIX,
     ProjectLayout,
 )
@@ -43,6 +39,7 @@ from grd.core.utils import (
 )
 
 __all__ = [
+    "ApplyChildReturnResult",
     "CurrentTimestampResult",
     "DecisionEntry",
     "GenerateSlugResult",
@@ -57,6 +54,7 @@ __all__ = [
     "cmd_current_timestamp",
     "cmd_generate_slug",
     "cmd_history_digest",
+    "cmd_apply_return_updates",
     "cmd_regression_check",
     "cmd_summary_extract",
     "cmd_validate_return",
@@ -138,6 +136,7 @@ class RegressionCheckResult(BaseModel):
     passed: bool
     issues: list[RegressionIssue] = Field(default_factory=list)
     phases_checked: int = 0
+    warning: str | None = None
 
 
 class ValidateReturnResult(BaseModel):
@@ -225,36 +224,59 @@ def _phase_name_from_dir(dir_name: str) -> str:
     return "Unknown"
 
 
-def _parse_decisions(decisions_list: object) -> list[SummaryDecision]:
+def _parse_decisions(decisions_list: object, *, summary_path: str) -> list[SummaryDecision]:
     """Parse key-decisions from frontmatter into structured format."""
-    if not decisions_list or not isinstance(decisions_list, list):
+    if decisions_list is None:
         return []
+    if not isinstance(decisions_list, list):
+        raise ValidationError(f"Invalid key-decisions in {summary_path}: expected a list")
 
     results: list[SummaryDecision] = []
-    for d in decisions_list:
+    for index, d in enumerate(decisions_list):
         if isinstance(d, dict):
             entries = list(d.items())
-            if len(entries) == 1:
-                results.append(
-                    SummaryDecision(
-                        summary=str(entries[0][0]).strip(),
-                        rationale=str(entries[0][1]).strip(),
-                    )
+            if len(entries) != 1:
+                raise ValidationError(
+                    f"Invalid key-decisions in {summary_path}: entry {index} must be a single-entry mapping"
                 )
-            else:
-                results.append(SummaryDecision(summary=json.dumps(d), rationale=None))
+            summary, rationale = entries[0]
+            if not isinstance(summary, str) or not summary.strip():
+                raise ValidationError(
+                    f"Invalid key-decisions in {summary_path}: entry {index} summary must be a non-empty string"
+                )
+            if not isinstance(rationale, str) or not rationale.strip():
+                raise ValidationError(
+                    f"Invalid key-decisions in {summary_path}: entry {index} rationale must be a non-empty string"
+                )
+            results.append(
+                SummaryDecision(
+                    summary=summary.strip(),
+                    rationale=rationale.strip(),
+                )
+            )
+            continue
+
+        if not isinstance(d, str) or not d.strip():
+            raise ValidationError(
+                f"Invalid key-decisions in {summary_path}: entry {index} must be a non-empty string or mapping"
+            )
+        s = d.strip()
+        colon_idx = s.find(":")
+        if colon_idx > 0:
+            summary = s[:colon_idx].strip()
+            rationale = s[colon_idx + 1 :].strip()
+            if not summary or not rationale:
+                raise ValidationError(
+                    f"Invalid key-decisions in {summary_path}: entry {index} must include non-empty summary and rationale"
+                )
+            results.append(
+                SummaryDecision(
+                    summary=summary,
+                    rationale=rationale,
+                )
+            )
         else:
-            s = str(d)
-            colon_idx = s.find(":")
-            if colon_idx > 0:
-                results.append(
-                    SummaryDecision(
-                        summary=s[:colon_idx].strip(),
-                        rationale=s[colon_idx + 1 :].strip(),
-                    )
-                )
-            else:
-                results.append(SummaryDecision(summary=s, rationale=None))
+            results.append(SummaryDecision(summary=s, rationale=None))
     return results
 
 
@@ -271,7 +293,7 @@ def _extract_section(content: str, heading: str) -> str | None:
 
 
 def _normalize_string_list(value: object) -> list[str]:
-    """Normalize a YAML field into a list of strings."""
+    """Best-effort string-list normalization for derived, non-authoritative readers."""
     if value is None:
         return []
     if isinstance(value, str):
@@ -292,38 +314,85 @@ def _normalize_string_list(value: object) -> list[str]:
     return []
 
 
-def _extract_key_files(value: object) -> tuple[list[str], list[str], list[str]]:
+def _require_non_empty_string_list(
+    value: object,
+    *,
+    field_name: str,
+    summary_path: str,
+) -> list[str]:
+    """Return a validated list of non-empty strings or raise."""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValidationError(f"Invalid {field_name} in {summary_path}: expected a list of non-empty strings")
+
+    normalized: list[str] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or not item.strip():
+            raise ValidationError(
+                f"Invalid {field_name} in {summary_path}: entry {index} must be a non-empty string"
+            )
+        normalized.append(item.strip())
+    return normalized
+
+
+def _extract_key_files(value: object, *, summary_path: str) -> tuple[list[str], list[str], list[str]]:
     """Return flattened, created, and modified file lists from summary frontmatter."""
     if isinstance(value, dict):
-        created = _normalize_string_list(value.get("created"))
-        modified = _normalize_string_list(value.get("modified"))
+        extra_keys = sorted(str(key) for key in value if key not in {"created", "modified"})
+        if extra_keys:
+            raise ValidationError(
+                f"Invalid key-files in {summary_path}: unexpected key(s) {', '.join(extra_keys)}"
+            )
+        created = _require_non_empty_string_list(
+            value.get("created"),
+            field_name="key-files.created",
+            summary_path=summary_path,
+        )
+        modified = _require_non_empty_string_list(
+            value.get("modified"),
+            field_name="key-files.modified",
+            summary_path=summary_path,
+        )
         flattened = list(dict.fromkeys(created + modified))
         return flattened, created, modified
+    if value is not None and not isinstance(value, list):
+        raise ValidationError(
+            f"Invalid key-files in {summary_path}: expected a list of non-empty strings or an object with created/modified lists"
+        )
 
-    flattened = _normalize_string_list(value)
+    flattened = _require_non_empty_string_list(value, field_name="key-files", summary_path=summary_path)
     return flattened, flattened, []
+
+
+def _extract_methods_added(frontmatter: dict[str, object], *, summary_path: str) -> list[str]:
+    """Return validated ``methods.added`` entries from summary frontmatter."""
+    methods = frontmatter.get("methods")
+    if methods is None:
+        return []
+    if not isinstance(methods, dict):
+        raise ValidationError(f"Invalid methods in {summary_path}: expected an object")
+    return _require_non_empty_string_list(
+        methods.get("added"),
+        field_name="methods.added",
+        summary_path=summary_path,
+    )
 
 
 def _parse_contract_results(value: object, summary_path: str) -> ContractResults | None:
     """Validate the optional contract-results block in a summary."""
-    if value is None:
+    if value is _MISSING:
         return None
-    if not isinstance(value, dict):
-        raise ValidationError(f"Invalid contract_results in {summary_path}: expected an object")
     try:
-        return ContractResults.model_validate(normalize_contract_results_input(value, strict=True))
+        return parse_contract_results_data_artifact(value)
     except Exception as exc:  # pragma: no cover - pydantic version specifics
         raise ValidationError(f"Invalid contract_results in {summary_path}: {exc}") from exc
 
 
 def _parse_comparison_verdicts(value: object, summary_path: str) -> list[ComparisonVerdict]:
     """Validate the optional comparison-verdict ledger in a summary."""
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise ValidationError(f"Invalid comparison_verdicts in {summary_path}: expected a list")
     try:
-        return [ComparisonVerdict.model_validate(item) for item in value]
+        return parse_comparison_verdicts_data_strict(value)
     except Exception as exc:  # pragma: no cover - pydantic version specifics
         raise ValidationError(f"Invalid comparison_verdicts in {summary_path}: {exc}") from exc
 
@@ -373,9 +442,20 @@ def cmd_summary_extract(
             one_liner = body_match.group(1)
 
     raw_key_files = fm.get("key-files")
-    key_files, key_files_created, key_files_modified = _extract_key_files(raw_key_files)
+    key_files, key_files_created, key_files_modified = _extract_key_files(raw_key_files, summary_path=summary_path)
+    methods_added = _extract_methods_added(fm, summary_path=summary_path)
+    patterns = _require_non_empty_string_list(
+        fm.get("patterns-established"),
+        field_name="patterns-established",
+        summary_path=summary_path,
+    )
+    affects = _require_non_empty_string_list(
+        fm.get("affects"),
+        field_name="affects",
+        summary_path=summary_path,
+    )
     contract_results = _parse_contract_results(
-        fm.get("contract_results"),
+        fm["contract_results"] if "contract_results" in fm else _MISSING,
         summary_path,
     )
     comparison_verdicts = _parse_comparison_verdicts(fm.get("comparison_verdicts"), summary_path)
@@ -386,10 +466,10 @@ def cmd_summary_extract(
         key_files=key_files,
         key_files_created=key_files_created,
         key_files_modified=key_files_modified,
-        methods_added=((fm.get("methods", {}) or {}).get("added", []) if isinstance(fm.get("methods"), dict) else []),
-        patterns=fm.get("patterns-established", []) if isinstance(fm.get("patterns-established"), list) else [],
-        decisions=_parse_decisions(fm.get("key-decisions")),
-        affects=fm.get("affects", []) if isinstance(fm.get("affects"), list) else [],
+        methods_added=methods_added,
+        patterns=patterns,
+        decisions=_parse_decisions(fm.get("key-decisions"), summary_path=summary_path),
+        affects=affects,
         conventions=fm.get("conventions"),
         plan_contract_ref=fm.get("plan_contract_ref") if isinstance(fm.get("plan_contract_ref"), str) else None,
         contract_results=contract_results,
@@ -409,13 +489,24 @@ def cmd_summary_extract(
     return full_result
 
 
-def _merge_list_or_string(target_set: set[str], value: object) -> None:
+def _merge_list_or_string(target_set: set[str], value: object, *, field_name: str, summary_path: str) -> None:
     """Merge a value that may be a list of strings or a single string into a set."""
     if isinstance(value, list):
-        for item in value:
-            target_set.add(str(item))
-    elif isinstance(value, str):
-        target_set.add(value)
+        for index, item in enumerate(value):
+            if not isinstance(item, str) or not item.strip():
+                raise ValidationError(
+                    f"Invalid {field_name} in {summary_path}: entry {index} must be a non-empty string"
+                )
+            target_set.add(item.strip())
+        return
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ValidationError(f"Invalid {field_name} in {summary_path}: expected a non-empty string")
+        target_set.add(stripped)
+        return
+    if value is not None:
+        raise ValidationError(f"Invalid {field_name} in {summary_path}: expected a string or list of non-empty strings")
 
 
 @instrument_grd_function("commands.history_digest")
@@ -448,10 +539,11 @@ def cmd_history_digest(cwd: Path) -> HistoryDigestResult:
             content = safe_read_file(summary_file)
             if content is None:
                 continue
+            summary_relpath = summary_file.relative_to(cwd).as_posix()
             try:
                 fm, _body = extract_frontmatter(content)
-            except FrontmatterParseError:
-                continue
+            except FrontmatterParseError as exc:
+                raise ValidationError(f"Malformed frontmatter in {summary_relpath}: {exc}") from exc
 
             raw_phase = fm.get("phase", dir_name.split("-")[0])
             phase_match = re.match(r"^(\d+(?:\.\d+)*)", str(raw_phase))
@@ -469,31 +561,46 @@ def cmd_history_digest(cwd: Path) -> HistoryDigestResult:
             # Merge provides
             dep_graph = fm.get("dependency-graph")
             provides = (dep_graph.get("provides") if isinstance(dep_graph, dict) else None) or fm.get("provides")
-            _merge_list_or_string(phase_sets[phase_num]["provides"], provides)
+            _merge_list_or_string(
+                phase_sets[phase_num]["provides"],
+                provides,
+                field_name="provides",
+                summary_path=summary_relpath,
+            )
 
             # Merge affects
             affects = (dep_graph.get("affects") if isinstance(dep_graph, dict) else None) or fm.get("affects")
-            _merge_list_or_string(phase_sets[phase_num]["affects"], affects)
+            _merge_list_or_string(
+                phase_sets[phase_num]["affects"],
+                affects,
+                field_name="affects",
+                summary_path=summary_relpath,
+            )
 
             # Merge patterns
-            _merge_list_or_string(phase_sets[phase_num]["patterns"], fm.get("patterns-established"))
+            _merge_list_or_string(
+                phase_sets[phase_num]["patterns"],
+                fm.get("patterns-established"),
+                field_name="patterns-established",
+                summary_path=summary_relpath,
+            )
 
             # Merge decisions
             key_decisions = fm.get("key-decisions")
-            if isinstance(key_decisions, list):
-                for d in key_decisions:
-                    digest.decisions.append(DecisionEntry(phase=phase_num, decision=str(d)))
-            elif isinstance(key_decisions, str):
-                digest.decisions.append(DecisionEntry(phase=phase_num, decision=key_decisions))
+            for decision in _parse_decisions(key_decisions, summary_path=summary_relpath):
+                text = decision.summary if decision.rationale is None else f"{decision.summary}: {decision.rationale}"
+                digest.decisions.append(DecisionEntry(phase=phase_num, decision=text))
 
             # Merge methods
             methods = fm.get("methods")
-            methods_added = methods.get("added") if isinstance(methods, dict) else None
-            if isinstance(methods_added, list):
-                for t in methods_added:
-                    methods_set.add(str(t) if not isinstance(t, str) else t)
-            elif isinstance(methods_added, str):
-                methods_set.add(methods_added)
+            if methods is not None and not isinstance(methods, dict):
+                raise ValidationError(f"Invalid methods in {summary_relpath}: expected an object")
+            methods_added = _require_non_empty_string_list(
+                methods.get("added") if isinstance(methods, dict) else None,
+                field_name="methods.added",
+                summary_path=summary_relpath,
+            )
+            methods_set.update(methods_added)
 
     # Convert sets to lists
     for p, sets in phase_sets.items():
@@ -544,7 +651,7 @@ def cmd_regression_check(cwd: Path, *, phase: str | None = None, quick: bool = F
             key=cmp_to_key(lambda a, b: compare_phase_numbers(a.name, b.name)),
         )
     except FileNotFoundError:
-        return RegressionCheckResult(passed=True, issues=[], phases_checked=0)
+        return RegressionCheckResult(passed=True, issues=[], phases_checked=0, warning="No completed phases found to check")
 
     layout = ProjectLayout(cwd)
     completed_dirs: list[Path] = []
@@ -556,10 +663,10 @@ def cmd_regression_check(cwd: Path, *, phase: str | None = None, quick: bool = F
             completed_dirs.append(d)
 
     if not completed_dirs:
-        return RegressionCheckResult(passed=True, issues=[], phases_checked=0)
+        return RegressionCheckResult(passed=True, issues=[], phases_checked=0, warning="No completed phases found to check")
     completed_dirs = [d for d in completed_dirs if _matches_phase_scope(d.name, phase)]
     if not completed_dirs:
-        return RegressionCheckResult(passed=True, issues=[], phases_checked=0)
+        return RegressionCheckResult(passed=True, issues=[], phases_checked=0, warning="No completed phases found to check")
 
     if quick and len(completed_dirs) > 2:
         completed_dirs = completed_dirs[-2:]
@@ -673,7 +780,7 @@ def cmd_regression_check(cwd: Path, *, phase: str | None = None, quick: bool = F
     return RegressionCheckResult(passed=passed, issues=issues, phases_checked=len(completed_dirs))
 
 
-_GRD_RETURN_BLOCK_RE = re.compile(r"```ya?ml\s*\n(gpd_return:\s*\n[\s\S]*?)```")
+_GRD_RETURN_BLOCK_RE = re.compile(r"```ya?ml\s*\n(grd_return:\s*\n[\s\S]*?)```")
 _GRD_RETURN_FIELD_RE = re.compile(r"^\s{2,4}(\w+):\s*(.+)")
 _GRD_RETURN_LIST_START_RE = re.compile(r"^\s{2,4}(\w+):\s*$")
 _GRD_RETURN_LIST_ITEM_RE = re.compile(r"^\s{4,}-\s*(.+)")
@@ -706,7 +813,7 @@ def _parse_grd_return_fields(yaml_block: str) -> dict[str, object]:
     active_list_key: str | None = None
 
     for line in yaml_block.split("\n"):
-        if not line.strip() or line.strip() == "gpd_return:":
+        if not line.strip() or line.strip() == "grd_return:":
             if not line.strip():
                 active_list_key = None
             continue
@@ -753,7 +860,7 @@ def _field_present(value: object) -> bool:
 
 @instrument_grd_function("commands.validate_return")
 def cmd_validate_return(file_path: Path) -> ValidateReturnResult:
-    """Validate a gpd_return YAML block in a file.
+    """Validate a grd_return YAML block in a file.
 
     Checks for required fields, valid status values, and numeric task counts.
 
@@ -771,7 +878,7 @@ def cmd_validate_return(file_path: Path) -> ValidateReturnResult:
     if not return_match:
         return ValidateReturnResult(
             passed=False,
-            errors=["No gpd_return YAML block found"],
+            errors=["No grd_return YAML block found"],
             warnings=warnings,
         )
 
@@ -823,9 +930,32 @@ def cmd_validate_return(file_path: Path) -> ValidateReturnResult:
 
     passed = len(errors) == 0
     return ValidateReturnResult(
-        passed=passed,
-        errors=errors,
-        warnings=warnings,
-        fields=fields,
-        warning_count=len(warnings),
+        passed=validation.passed,
+        errors=validation.errors,
+        warnings=validation.warnings,
+        fields=validation.fields,
+        warning_count=validation.warning_count,
     )
+
+
+@instrument_grd_function("commands.apply_return_updates")
+def cmd_apply_return_updates(cwd: Path, file_path: Path) -> ApplyChildReturnResult:
+    """Validate and apply the durable subset of one ``grd_return`` envelope."""
+    content = safe_read_file(file_path)
+    if content is None:
+        raise ValidationError(f"File not found: {file_path}")
+
+    validation = validate_grd_return_markdown(content)
+    if not validation.passed or validation.envelope is None:
+        return ApplyChildReturnResult(
+            passed=False,
+            status="failed",
+            errors=list(validation.errors),
+            warnings=list(validation.warnings),
+        )
+
+    result = apply_child_return_updates(cwd, validation.envelope)
+    if validation.warnings:
+        result.warnings.extend(warning for warning in validation.warnings if warning not in result.warnings)
+    return result
+_MISSING = object()

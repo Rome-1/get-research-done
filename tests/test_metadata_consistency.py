@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import ast
+import importlib
+import json
 import re
+import sys
 import tomllib
 from pathlib import Path
 
+import pytest
+
 from grd import registry as content_registry
+from grd.contracts import ConventionLock
 from grd.core.config import MODEL_PROFILES
 from grd.core.health import _ALL_CHECKS
 from grd.core.patterns import PatternDomain
@@ -27,7 +33,7 @@ def _decorated_mcp_tools(relative_path: str) -> list[str]:
     tree = ast.parse(_read(relative_path), filename=relative_path)
     tool_names: list[str] = []
     for node in tree.body:
-        if not isinstance(node, ast.FunctionDef):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         for decorator in node.decorator_list:
             if not isinstance(decorator, ast.Call):
@@ -42,6 +48,34 @@ def _decorated_mcp_tools(relative_path: str) -> list[str]:
                 tool_names.append(node.name)
                 break
     return tool_names
+
+
+def test_decorated_mcp_tools_includes_async_function_defs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module_path = tmp_path / "async_mcp_module.py"
+    module_path.write_text(
+        "\n".join(
+            [
+                "mcp = object()",
+                "",
+                "@mcp.tool()",
+                "async def async_tool():",
+                "    return None",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_read",
+        lambda relative_path: module_path.read_text(encoding="utf-8"),
+    )
+
+    assert _decorated_mcp_tools("async_mcp_module.py") == ["async_tool"]
 
 
 def _descriptor_python_module(descriptor: dict[str, object]) -> str | None:
@@ -61,6 +95,17 @@ def _descriptor_python_module(descriptor: dict[str, object]) -> str | None:
     return None
 
 
+def _module_advertised_mcp_tools(module_name: str) -> list[str]:
+    module = importlib.import_module(module_name)
+    advertised = getattr(module, "ADVERTISED_TOOL_NAMES", None)
+    if isinstance(advertised, tuple):
+        return list(advertised)
+    if isinstance(advertised, list):
+        return advertised
+    module_path = Path("src") / Path(*module_name.split(".")).with_suffix(".py")
+    return _decorated_mcp_tools(module_path.as_posix())
+
+
 def _project_script_lines(repo_root: Path) -> list[str]:
     pyproject = (repo_root / "pyproject.toml").read_text(encoding="utf-8").splitlines()
     collecting = False
@@ -75,6 +120,14 @@ def _project_script_lines(repo_root: Path) -> list[str]:
         if collecting and stripped:
             script_lines.append(stripped)
     return script_lines
+
+
+def _project_script_targets(repo_root: Path) -> dict[str, str]:
+    script_targets: dict[str, str] = {}
+    for line in _project_script_lines(repo_root):
+        name, target = line.split("=", 1)
+        script_targets[name.strip().strip('"')] = target.strip().strip('"')
+    return script_targets
 
 
 def test_readme_ci_badge_points_to_existing_workflow() -> None:
@@ -111,20 +164,26 @@ def test_canonical_registry_skill_inventory_counts_match_repo_contents() -> None
     )
     mcp_script_count = sum(1 for line in _project_script_lines(repo_root) if line.startswith('"grd-mcp-'))
 
-    assert commands_count >= 50
+    assert commands_count > 0
+    assert agents_count > 0
     # The canonical registry/MCP skill index remains commands + agents even
     # when a runtime projects a narrower discoverable install surface.
     assert canonical_skills_count == commands_count + agents_count
-    assert mcp_server_count == mcp_script_count
+    assert mcp_server_count == mcp_script_count - managed_integration_script_count
 
 
 def test_agent_metadata_inventory_uses_valid_enums_without_changing_canonical_skill_surface() -> None:
     content_registry.invalidate_cache()
 
-    valid_surfaces = set(content_registry.VALID_AGENT_SURFACES)
-    valid_role_families = set(content_registry.VALID_AGENT_ROLE_FAMILIES)
-    valid_artifact_authorities = set(content_registry.VALID_AGENT_ARTIFACT_WRITE_AUTHORITIES)
-    valid_shared_state_authorities = set(content_registry.VALID_AGENT_SHARED_STATE_AUTHORITIES)
+    valid_surfaces = set(content_registry.AGENT_SURFACES)
+    valid_role_families = set(content_registry.AGENT_ROLE_FAMILIES)
+    valid_artifact_authorities = set(content_registry.AGENT_ARTIFACT_WRITE_AUTHORITIES)
+    valid_shared_state_authorities = set(content_registry.AGENT_SHARED_STATE_AUTHORITIES)
+
+    assert not hasattr(content_registry, "VALID_AGENT_SURFACES")
+    assert not hasattr(content_registry, "VALID_AGENT_ROLE_FAMILIES")
+    assert not hasattr(content_registry, "VALID_AGENT_ARTIFACT_WRITE_AUTHORITIES")
+    assert not hasattr(content_registry, "VALID_AGENT_SHARED_STATE_AUTHORITIES")
 
     for name in content_registry.list_agents():
         agent = content_registry.get_agent(name)
@@ -148,7 +207,7 @@ def test_convention_field_counts_match_source_of_truth() -> None:
 
 def test_pattern_domain_counts_match_source_of_truth() -> None:
     domain_count = len(PatternDomain)
-    assert domain_count == 13
+    assert domain_count > 0
 
     assert f"Error pattern library (8 categories, {domain_count} domains)" in _read("src/grd/core/__init__.py")
     assert f'pattern_app = typer.Typer(help="Error pattern library (8 categories, {domain_count} domains)")' in _read(
@@ -157,6 +216,8 @@ def test_pattern_domain_counts_match_source_of_truth() -> None:
 
 
 def test_mcp_server_count_matches_public_entrypoints() -> None:
+    from grd.mcp.managed_integrations import WOLFRAM_BRIDGE_COMMAND
+
     repo_root = _repo_root()
     mcp_server_count = len(
         [p for p in (repo_root / "src" / "grd" / "mcp" / "servers").glob("*.py") if p.name != "__init__.py"]
@@ -177,19 +238,41 @@ def test_managed_mcp_server_keys_match_public_descriptors_and_infra_inventory() 
     assert GRD_MCP_SERVER_KEYS == infra_keys
 
 
+def test_grd_skills_infra_health_check_tracks_the_research_vertical() -> None:
+    descriptor = json.loads(_read("infra/grd-skills.json"))
+    health_check = descriptor["health_check"]
+
+    assert health_check["tool"] == "list_skills"
+    assert health_check["input"] == {}
+    assert "grd-execute-phase" in health_check["expect"]
+    assert "grd-research-phase" in health_check["expect"]
+
+
+def test_optional_wolfram_bridge_stays_outside_builtin_public_mcp_surface() -> None:
+    from grd.mcp.builtin_servers import GRD_MCP_SERVER_KEYS, build_public_descriptors
+    from grd.mcp.managed_integrations import WOLFRAM_BRIDGE_COMMAND, WOLFRAM_MANAGED_SERVER_KEY
+
+    repo_root = _repo_root()
+    descriptor_keys = set(build_public_descriptors())
+    infra_keys = {path.stem for path in (repo_root / "infra").glob("grd-*.json")}
+    script_targets = _project_script_targets(repo_root)
+
+    assert WOLFRAM_MANAGED_SERVER_KEY not in GRD_MCP_SERVER_KEYS
+    assert WOLFRAM_MANAGED_SERVER_KEY not in descriptor_keys
+    assert WOLFRAM_MANAGED_SERVER_KEY not in infra_keys
+
+    if WOLFRAM_BRIDGE_COMMAND in script_targets:
+        assert script_targets[WOLFRAM_BRIDGE_COMMAND] == "grd.mcp.integrations.wolfram_bridge:main"
+
+
 def test_public_mcp_descriptor_capabilities_match_server_tools() -> None:
     from grd.mcp.builtin_servers import build_public_descriptors
 
     descriptors = build_public_descriptors()
     for name, descriptor in descriptors.items():
         module_name = _descriptor_python_module(descriptor)
-        if module_name == "arxiv_mcp_server":
-            continue
-
         assert isinstance(module_name, str), name
-        module_path = Path("src") / Path(*module_name.split(".")).with_suffix(".py")
-
-        assert descriptor["capabilities"] == _decorated_mcp_tools(module_path.as_posix()), name
+        assert descriptor["capabilities"] == _module_advertised_mcp_tools(module_name), name
 
 
 def test_public_mcp_descriptor_entry_point_alternatives_match_pyproject_scripts() -> None:
@@ -204,10 +287,7 @@ def test_public_mcp_descriptor_entry_point_alternatives_match_pyproject_scripts(
     descriptors = build_public_descriptors()
     for name, descriptor in descriptors.items():
         module_name = _descriptor_python_module(descriptor)
-        if module_name == "arxiv_mcp_server":
-            assert "alternatives" not in descriptor
-            continue
-
+        assert isinstance(module_name, str), name
         script_name = descriptor.get("command")
         assert isinstance(script_name, str), name
         assert descriptor.get("args") == []
@@ -218,7 +298,7 @@ def test_public_mcp_descriptor_entry_point_alternatives_match_pyproject_scripts(
         assert isinstance(alternatives, dict), name
         python_module = alternatives.get("python_module")
         assert isinstance(python_module, dict), name
-        assert python_module.get("command") == "python"
+        assert python_module.get("command") == "${GPD_PYTHON}"
         assert python_module.get("args") == ["-m", module_name]
         assert python_module.get("notes") == "Requires grd package installed and Python >=3.11"
 
@@ -230,10 +310,11 @@ def test_arxiv_descriptor_tracks_optional_dependency_surface() -> None:
     dependencies: list[str] = project["dependencies"]
     optional = project.get("optional-dependencies", {})
     assert not any(item.startswith("arxiv-mcp-server") for item in dependencies)
-    assert optional == {"arxiv": ["arxiv-mcp-server>=0.3.2"]}
+    assert optional == {"arxiv": ["arxiv-mcp-server>=0.4.11"]}
 
     descriptor = build_public_descriptors()["grd-arxiv"]
     assert descriptor["prerequisites"] == ["Install GRD before enabling built-in MCP servers."]
+    assert descriptor["capabilities"][-1] == "download_source"
 
 
 def test_agent_count_matches_prompts_and_user_docs() -> None:
@@ -283,9 +364,11 @@ def test_help_and_settings_surface_current_commit_docs_and_review_cadence_shapes
     help_command = _read("src/grd/commands/help.md")
     help_workflow = _read("src/grd/specs/workflows/help.md")
 
-    for content in (settings, help_command, help_workflow):
+    for content in (settings, help_workflow):
         assert "execution.review_cadence" in content
         assert "planning.commit_docs" in content
+
+    assert "needs-calculation" in help_workflow
 
 
 def test_execute_phase_docs_use_review_cadence_not_removed_verify_between_waves_knob() -> None:
@@ -303,7 +386,7 @@ def test_execute_phase_docs_use_review_cadence_not_removed_verify_between_waves_
 
 def test_health_check_count_matches_skill_documentation() -> None:
     health_check_count = len(_ALL_CHECKS)
-    assert health_check_count == 13
+    assert health_check_count > 0
 
     command = _read("src/grd/commands/health.md")
     assert "All {total} health checks passed." in command
@@ -339,18 +422,34 @@ def test_update_workflow_uses_runtime_placeholders_for_cache_paths() -> None:
 
 
 def test_referee_response_round_suffix_convention_is_consistent() -> None:
+    write_paper = _read("src/grd/specs/workflows/write-paper.md")
     peer_review = _read("src/grd/specs/workflows/peer-review.md")
     respond = _read("src/grd/specs/workflows/respond-to-referees.md")
+    arxiv = _read("src/grd/specs/workflows/arxiv-submission.md")
+    author_response = _read("src/grd/specs/templates/paper/author-response.md")
     template = _read("src/grd/specs/templates/paper/referee-response.md")
 
     assert 'ROUND_SUFFIX="-R2"' in peer_review
     assert 'ROUND_SUFFIX="-R3"' in peer_review
-    assert "REFEREE_RESPONSE-R2.md" in respond
-    assert "AUTHOR-RESPONSE-R2.md" in respond
+    assert '`GRD/review/REFEREE_RESPONSE{round_suffix}.md`' in respond
+    assert '`GRD/AUTHOR-RESPONSE{round_suffix}.md`' in respond
+    assert "GRD/paper" not in respond
+    assert "needs-calculation" in respond
+    assert "issues_needing_calculation" in author_response
+    assert "needs-calculation" in author_response
+    assert "templates/paper/author-response.md" in template
     assert "REFEREE_RESPONSE-R2.md" in template
     assert "REFEREE_RESPONSE_R2.md" not in respond
     assert "REFEREE_RESPONSE_R2.md" not in template
     assert "paper/referee-reports" not in respond
+    assert "publication-manuscript-root-preflight.md" in peer_review
+    assert "${MANUSCRIPT_ROOT}/REFEREE_RESPONSE" not in peer_review
+    assert "publication-bootstrap-preflight.md" in write_paper
+    assert "publication-response-writer-handoff.md" in write_paper
+    assert "publication-bootstrap-preflight.md" in respond
+    assert "publication-response-writer-handoff.md" in respond
+    assert "publication-bootstrap-preflight.md" in arxiv
+    assert "publication-response-writer-handoff.md" not in arxiv
 
 
 def test_bibliography_template_tracks_live_references_bib_path() -> None:

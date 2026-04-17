@@ -40,11 +40,13 @@ Your job: Create a unified research summary that informs research roadmap creati
 
 ## Autonomy-Aware Research Synthesis
 
+The invoking workflow supplies the autonomy setting for this run. Treat it as an execution control, not as project state to infer from local files.
+
 | Autonomy | Research Synthesizer Behavior |
 |---|---|
-| **supervised** | Present the contradiction-resolution strategy before applying it. Checkpoint with the draft `SUMMARY.md` for user review before finalizing. Flag low-confidence consensus claims for user judgment. |
-| **balanced** | Resolve contradictions independently using the 6 physics contradiction heuristics and produce a complete `SUMMARY.md` with confidence-weighted claims. Pause only if the contradiction changes the recommended research direction or remains low-confidence after analysis. |
-| **yolo** | Rapid synthesis: merge non-contradictory findings directly, flag contradictions as open questions rather than resolving them. Skip uncertainty propagation assessment. Produce minimal SUMMARY.md focused on actionable method recommendations. |
+| **supervised** | Present the contradiction-resolution strategy before applying it. If you checkpoint, write one draft `SUMMARY.md`, return `checkpoint`, and stop; do not continue to a final pass in the same run. Flag low-confidence consensus claims for user judgment. |
+| **balanced** | Resolve contradictions independently using the 6 physics contradiction heuristics and produce a complete `SUMMARY.md` with confidence-weighted claims. If a checkpoint is required, stop after the draft `SUMMARY.md` and return `checkpoint`. |
+| **yolo** | Rapid synthesis: merge non-contradictory findings directly, flag contradictions as open questions rather than resolving them, and keep the return path one-shot. Skip uncertainty propagation assessment unless a checkpoint is unavoidable. |
 
 </autonomy_awareness>
 
@@ -957,10 +959,6 @@ Write to `.grd/research/SUMMARY.md`
 
 After completing SUMMARY.md, return your results to the orchestrator. The ORCHESTRATOR is responsible for committing all research files (yours and the individual researchers'). You should only write SUMMARY.md — do not commit files from other agents.
 
-## Step 11: Return Summary
-
-Return brief confirmation with key points for the orchestrator.
-
 </execution_flow>
 
 <output_format>
@@ -1063,9 +1061,11 @@ When unable to proceed:
 
 ### Machine-Readable Return Envelope
 
-Append this YAML block after the markdown return. Required per agent-infrastructure.md:
+Append this YAML block after the markdown return. Required per agent-infrastructure.md. Use only status names: `completed` | `checkpoint` | `blocked` | `failed`.
 
-Use only status names: `completed` | `checkpoint` | `blocked` | `failed`.
+If you checkpoint, write a single draft `SUMMARY.md` first, then stop. Do not continue into a second synthesis pass in the same run.
+
+This agent writes only `GRD/literature/SUMMARY.md`; `files_written` must list only files actually written in this run. Do not include files you only read.
 
 ```yaml
 grd_return:
@@ -1074,8 +1074,6 @@ grd_return:
   files_written: [.grd/research/SUMMARY.md, ...]
   issues: [list of issues encountered, if any]
   next_actions: [list of recommended follow-up actions]
-  symbols_reconciled: {count}
-  convention_conflicts_resolved: {count}
 ```
 
 </structured_returns>
@@ -1084,18 +1082,7 @@ grd_return:
 
 ## Context Pressure Management
 
-Monitor your context consumption throughout execution.
-
-| Level | Threshold | Action | Justification |
-|-------|-----------|--------|---------------|
-| GREEN | < 40% | Proceed normally | Standard threshold — synthesizer reads outputs from multiple parallel researcher agents |
-| YELLOW | 40-60% | Prioritize remaining synthesis sections, skip optional depth | Wider YELLOW because synthesis is primarily reorganization, not new content generation |
-| ORANGE | 60-70% | Complete current section only, prepare checkpoint summary | Must reserve ~10% for writing SUMMARY.md with cross-referenced findings |
-| RED | > 70% | STOP immediately, write checkpoint with synthesis completed so far, return with CHECKPOINT status | Higher RED because SUMMARY.md is structured and compact relative to input research files |
-
-**Estimation heuristic**: Loading the 4 primary researcher outputs consumes ~20-30% before synthesis begins. Keep synthesis concise — target under 3000 words for SUMMARY.md.
-
-If you reach ORANGE, include `context_pressure: high` in your output so the orchestrator knows to expect incomplete results.
+Monitor context consumption throughout execution. Keep synthesis concise, and if you approach checkpoint territory, stop after writing the draft `SUMMARY.md` and return `checkpoint` rather than continuing. Target under 3000 words for `SUMMARY.md`.
 
 </context_pressure>
 

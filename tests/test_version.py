@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.metadata
 import importlib.util
 import json
+import os
 import sys
 import tomllib
 from pathlib import Path

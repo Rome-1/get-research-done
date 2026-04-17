@@ -13,6 +13,7 @@ Peer review should be staged, evidence-aware, and fail-closed on unsupported sci
 6. Whether the paper should be accepted, revised, or rejected
 
 Each stage runs in a fresh subagent context and writes a compact artifact. The final referee decides only after reading those artifacts.
+If any spawned reviewer or proof auditor needs user input, it must return `status: checkpoint` and stop. The orchestrator presents the checkpoint and spawns a fresh continuation handoff after the user responds. Do not keep the same spawned run alive waiting for confirmation.
 </core_principle>
 
 <process>
@@ -28,8 +29,18 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `project_exists`, `state_exists`, `commit_docs`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `reference_artifacts_content`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `active_reference_context`.
-Treat `project_contract_load_info` and `project_contract_validation` as the authoritative contract gate state. Treat `project_contract` and `contract_intake` as approved contract scope only when that gate is clean and passing. Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence context even when the structured contract is blocked. Stage 1 stays manuscript-first, but later adjudication must not ignore either the approved contract or the active anchor ledger.
+Parse JSON for: `project_exists`, `state_exists`, `commit_docs`, `autonomy`, `research_mode`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `reference_artifacts_content`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `active_reference_context`, `derived_manuscript_reference_status`, `derived_manuscript_reference_status_count`, `derived_manuscript_proof_review_status`.
+
+**Read mode settings:**
+
+```bash
+AUTONOMY=$(echo "$INIT" | grd json get .autonomy --default balanced)
+RESEARCH_MODE=$(echo "$INIT" | grd json get .research_mode --default balanced)
+```
+Treat `project_contract_gate` as authoritative. Use `project_contract` and `contract_intake` only when `project_contract_gate.authoritative` is true; otherwise keep them as diagnostics/context and rely on `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as carry-forward evidence. Stage 1 stays manuscript-first, but later adjudication must not ignore either the approved contract or the active anchor ledger.
+If `derived_manuscript_reference_status` is present, use it as a first-pass manuscript-local summary of reference coverage, citation readiness, and audit freshness. Keep the manuscript-root publication artifacts authoritative for strict decisions: `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and the reproducibility manifest still decide pass/fail.
+If `derived_manuscript_proof_review_status` is present, use it as the first-pass manuscript-local summary of theorem/proof freshness and keep the manuscript-root proof-redteam artifacts authoritative for strict decisions.
+The shared manuscript-root bootstrap contract is applied in preflight. The local steps below add only peer-review-specific routing, proof-review, and adjudication rules.
 
 Run centralized context preflight before continuing:
 
@@ -46,9 +57,9 @@ fi
 1. If `$ARGUMENTS` names a directory, use it as the candidate paper directory.
 2. If `$ARGUMENTS` names a `.tex` or `.md` file, use that file and its parent directory as the review root.
 3. Otherwise search, in order:
-   - `paper/main.tex`
-   - `manuscript/main.tex`
-   - `draft/main.tex`
+   - the resolved manuscript entrypoint under `paper/`
+   - the resolved manuscript entrypoint under `manuscript/`
+   - the resolved manuscript entrypoint under `draft/`
 
 After resolution, keep all manuscript-local support artifacts rooted at the same explicit manuscript directory:
 
@@ -56,7 +67,7 @@ After resolution, keep all manuscript-local support artifacts rooted at the same
 - `MANUSCRIPT_ROOT` = parent directory of `RESOLVED_MANUSCRIPT`
 - `ARTIFACT_MANIFEST_PATH` = `${MANUSCRIPT_ROOT}/ARTIFACT-MANIFEST.json`
 - `BIBLIOGRAPHY_AUDIT_PATH` = `${MANUSCRIPT_ROOT}/BIBLIOGRAPHY-AUDIT.json`
-- `REPRODUCIBILITY_MANIFEST_PATH` = first existing of `${MANUSCRIPT_ROOT}/reproducibility-manifest.json` or `${MANUSCRIPT_ROOT}/REPRODUCIBILITY-MANIFEST.json`
+- `REPRODUCIBILITY_MANIFEST_PATH` = `${MANUSCRIPT_ROOT}/reproducibility-manifest.json`
 - `PAPER_CONFIG_PATH` = `${MANUSCRIPT_ROOT}/PAPER-CONFIG.json`
 - `LOCAL_BIB_FILES` = all `*.bib` files under `${MANUSCRIPT_ROOT}`
 
@@ -95,14 +106,18 @@ Use `protocol_bundle_context` from init JSON as additive review guidance.
 <step name="preflight">
 **Run the executable review preflight checks before spawning the review panel:**
 
+Apply the shared manuscript-root bootstrap contract exactly:
+
+@{GRD_INSTALL_DIR}/templates/paper/publication-manuscript-root-preflight.md
+
 ```bash
 grd validate review-preflight peer-review "$ARGUMENTS" --strict
 ```
 
 If preflight exits nonzero because of missing project state, missing manuscript, degraded review integrity, or missing review-grade paper artifacts, STOP and show the blocking issues.
-If preflight reports blocked contract/state integrity, surface `project_contract_load_info` and `project_contract_validation` details in the stop message and repair the blocked contract before retrying.
+If preflight reports blocked contract/state integrity, surface `project_contract_gate`, `project_contract_load_info`, and `project_contract_validation` details in the stop message and repair the blocked contract before retrying.
 
-In strict peer-review mode, `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and a reproducibility manifest are required inputs. If the manuscript bibliography changed after the last audit, refresh `BIBLIOGRAPHY_AUDIT_PATH` before proceeding. Peer review is expected to fail closed when those review-support artifacts are absent, stale, or not review-ready.
+In strict peer-review mode, `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and a reproducibility manifest are required inputs. `grd paper-build` is the step that regenerates `BIBLIOGRAPHY-AUDIT.json` for the current bibliography; rerun it before proceeding whenever the manuscript bibliography or citation set has changed. Strict preflight also enforces the semantic gates `bibliography_audit_clean` and `reproducibility_ready`; those artifacts must be review-ready, not merely present. If `derived_manuscript_reference_status` is available from init, use it as a quick read on what is likely stale or complete, but do not let it override the manuscript-root publication artifacts. Peer review is expected to fail closed when those review-support artifacts are absent, stale, or not review-ready.
 Passing preflight still does not establish scientific support. Complete manifests and audits cannot rescue missing decisive comparisons, overclaimed conclusions, or absent contract-backed evidence.
 </step>
 
@@ -125,6 +140,7 @@ Load the following files:
 - All `*.bib` files under `${MANUSCRIPT_ROOT}`, plus `references/references.bib` if present
 
 Infer the target journal from `${PAPER_CONFIG_PATH}` when available; otherwise use `unspecified`.
+Do not rediscover the manuscript by `find` or first-match globbing at this stage; the resolved manuscript root from init/preflight remains authoritative.
 
 If bundle context is present, compare its decisive-artifact and reference expectations against the actual comparison artifacts and figure tracker. Missing bundle-suggested coverage is a warning unless the manuscript has narrowed the claim honestly; missing contract-backed decisive evidence remains a blocker.
 
@@ -133,6 +149,30 @@ Create the review artifact directory if needed:
 ```bash
 mkdir -p .grd/review
 ```
+</step>
+
+<step name="detect_proof_bearing_manuscript">
+Classify whether the manuscript contains theorem-style or `proof_obligation` claims before the staged panel proceeds.
+
+Treat the review target as proof-bearing when any of the following are true:
+
+- the approved project contract includes a claim or observable with kind `proof_obligation`
+- the manuscript text uses theorem-style language (`theorem`, `lemma`, `corollary`, `proposition`, `claim`, `proof`, `we prove`, `show that`)
+- a core claim depends on a formal derivation whose validity turns on named hypotheses, parameters, or quantifiers
+
+If ambiguous, default to proof-bearing.
+
+When proof-bearing review is active:
+
+- spawn the auxiliary proof-critique agent `grd-check-proof`
+- `grd-check-proof` must write the auxiliary audit artifact `GRD/review/PROOF-REDTEAM{round_suffix}.md`
+- the `grd-check-proof` task must carry the active `manuscript_path`, `manuscript_sha256`, `round`, theorem-bearing `claim_ids`, and `proof_artifact_paths`, and the emitted frontmatter must echo those values exactly
+- this proof audit is manuscript-bound: the auxiliary critic must use the active Stage 1 manuscript snapshot and claim map from this review round, not any phase-local shortcut
+- later stages must read that artifact alongside the normal staged-review JSON files
+- the Stage 3 math artifact must emit exactly one `proof_audits[]` entry for each reviewed theorem-bearing claim, and every `proof_audits[].claim_id` must also appear in `claims_reviewed`
+- missing or malformed proof-redteam artifacts are hard blockers
+- a proof-redteam artifact with `status: gaps_found` or `status: human_needed` remains a blocking major concern and prevents a favorable final recommendation
+- do not bypass this gate because the manuscript looks polished, the algebra appears locally correct, or the user asks to "just review everything else"
 </step>
 
 <step name="round_detection">
@@ -174,7 +214,7 @@ Use the same `-R2` / `-R3` suffix convention for downstream response artifacts:
 
 Use one short sentence that names each stage's job, for example:
 
-`Launching the six-stage review panel: Stage 1 maps the paper's claims; Stages 2-3 check prior work and mathematical soundness in parallel; Stage 4 checks whether the physical interpretation is supported; Stage 5 judges significance and venue fit; Stage 6 synthesizes everything into the final recommendation.`
+`Launching the six-stage review panel: Stage 1 maps the paper's claims; Stages 2-3 check prior work and mathematical soundness in parallel; theorem-style claims also trigger the auxiliary grd-check-proof audit; Stage 4 checks whether the physical interpretation is supported; Stage 5 judges significance and venue fit; Stage 6 synthesizes everything into the final recommendation.`
 </step>
 
 <step name="stage_1_read">
@@ -186,7 +226,9 @@ Resolve reader model:
 READ_MODEL=$(grd resolve-model grd-review-reader)
 ```
 
-> **Runtime delegation:** Spawn a fresh subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
+
+> If subagent spawning is unavailable, execute these steps sequentially in the main context.
 
 ```
 task(
@@ -293,8 +335,7 @@ Files to read:
 - `${BIBLIOGRAPHY_AUDIT_PATH}` if present
 - All `*.bib` files under `${MANUSCRIPT_ROOT}`, plus `references/references.bib` if present
 
-Use targeted web search when novelty, significance, or prior-work positioning is uncertain. Treat novelty-heavy claims as requiring external comparison, not trust. Use bundle reference prompts only as additive hints about which prior-work or benchmark framing should be visible; do not infer novelty or correctness from bundle presence alone.
-Treat `project_contract_load_info` and `project_contract_validation` as the authoritative contract gate state. Treat `project_contract` and `contract_intake` as approved evidence only when that gate is clean and passing. Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence even when the contract gate is blocked. If that gate is blocked, keep `project_contract` and `contract_intake` visible as context but do not rely on them as approved scope.
+Use targeted web search when novelty, significance, or prior-work positioning is uncertain. Treat novelty-heavy claims as requiring external comparison, not trust. Use bundle reference prompts only as additive hints about prior-work or benchmark framing; do not infer novelty or correctness from bundle presence alone.
 Return STAGE 2 COMPLETE with assessment, blocker count, and major concern count.",
   description="Peer review stage 2: literature context"
 )
@@ -340,15 +381,54 @@ Files to read:
 - `${REPRODUCIBILITY_MANIFEST_PATH}` if present
 
 Focus on key equations, limits, internal consistency, and approximation validity.
-Treat `project_contract_load_info` and `project_contract_validation` as the authoritative contract gate state. Treat `project_contract` and `contract_intake` as approved evidence only when that gate is clean and passing. Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence even when the contract gate is blocked. If that gate is blocked, keep `project_contract` and `contract_intake` visible as context but do not rely on them as approved scope.
+If theorem-bearing claims are present, `grd-check-proof` may be running in parallel and will produce `GRD/review/PROOF-REDTEAM{round_suffix}.md`; do not wait on that artifact to begin the math review, and do not duplicate the proof audit yourself.
 Return STAGE 3 COMPLETE with assessment, blocker count, and major concern count.",
   description="Peer review stage 3: mathematical soundness"
 )
 ```
 
-If the runtime supports parallel subagent execution, run Stage 2 and Stage 3 in parallel. Otherwise run Stage 2 first, then Stage 3.
+Conditional proof-critique prompt when theorem-bearing claims are present:
 
-If either stage fails, STOP and report the failure.
+```
+task(
+  subagent_type="grd-check-proof",
+  model="{check_proof_model}",
+  readonly=false,
+  prompt="First, read {GRD_AGENTS_DIR}/grd-check-proof.md for your role and instructions.
+Then read {GRD_INSTALL_DIR}/templates/proof-redteam-schema.md and {GRD_INSTALL_DIR}/references/verification/core/proof-redteam-protocol.md before writing any proof audit artifact.
+
+Operate in adversarial proof-critique mode with a fresh context.
+If the runtime needs user input, return `status: checkpoint` instead of waiting inside this run.
+
+Target journal: {target_journal}
+Round: {round}
+Carry-forward context: project contract {project_contract}; project contract gate {project_contract_gate}; project contract load info {project_contract_load_info}; project contract validation {project_contract_validation}; active references {active_reference_context}; derived manuscript reference status {derived_manuscript_reference_status}; contract intake {contract_intake}; effective reference intake {effective_reference_intake}; reference artifacts content {reference_artifacts_content}
+Write to: `GRD/review/PROOF-REDTEAM{round_suffix}.md`
+
+Before writing frontmatter, bind these fields exactly from the active round artifacts rather than approximating them:
+- `manuscript_path`: copy exactly from `GRD/review/CLAIMS{round_suffix}.json`
+- `manuscript_sha256`: copy exactly from `GRD/review/CLAIMS{round_suffix}.json`
+- `round`: use the active review round number for `{round_suffix}`
+- `claim_ids`: copy exactly the theorem-bearing Stage 1 `claim_id` values that are under review in the active round
+- `proof_artifact_paths`: copy exactly the theorem-bearing proof artifact paths under review, plus the manuscript entrypoint if it is not already listed
+
+Files to read:
+- Resolved manuscript main file and all nearby section .tex files
+- `GRD/review/CLAIMS{round_suffix}.json`
+- `GRD/review/STAGE-reader{round_suffix}.json`
+- Summary artifacts matching `GRD/phases/*/*SUMMARY.md`
+- `GRD/phases/*/*-VERIFICATION.md`
+- `${ARTIFACT_MANIFEST_PATH}` if present
+- `${REPRODUCIBILITY_MANIFEST_PATH}` if present
+
+Reconstruct the theorem / proof inventory explicitly before judging the proof. If any named parameter, hypothesis, quantifier, or conclusion clause disappears from the proof, set `status: gaps_found`. Do not silently accept a proof of a narrower special case. Run at least one adversarial probe against scope, quantifier coverage, or hidden assumptions before you pass the proof.",
+  description="Peer review auxiliary proof critique"
+)
+```
+
+If the runtime supports parallel subagent execution, run Stage 2, Stage 3, and the conditional proof-critique pass in parallel when theorem-bearing claims are present. Otherwise run Stage 2 first, then Stage 3, then the conditional proof-critique pass.
+
+If literature, math, or the conditional proof-critique stage fails, STOP and report the failure.
 </step>
 
 <step name="stage_recovery_2_3">
@@ -361,12 +441,24 @@ grd validate review-stage-report .grd/review/STAGE-literature{round_suffix}.json
 grd validate review-stage-report .grd/review/STAGE-math{round_suffix}.json
 ```
 
+If proof-bearing review is active, also require `GRD/review/PROOF-REDTEAM{round_suffix}.md`. It must contain:
+
+- top-level `status: passed | gaps_found | human_needed`
+- top-level `reviewer: grd-check-proof`
+- theorem-binding frontmatter (`claim_ids` and non-empty `proof_artifact_paths`)
+- manuscript-binding frontmatter (`manuscript_path`, `manuscript_sha256`, and `round`)
+- the canonical sections `# Proof Redteam`, `## Proof Inventory`, `## Coverage Ledger`, `## Adversarial Probe`, `## Verdict`, and `## Required Follow-Up`
+
+Missing file, missing frontmatter, or missing required sections is a hard failure. `gaps_found` or `human_needed` may continue as a recorded blocker only if the panel is collecting a fuller diagnosis, but the proof issue remains fail-closed for the final recommendation.
+
 If validation fails for either stage:
 
 1. **Retry once.** Re-run only the failed stage subagent with the same inputs and an explicit reminder to match the `StageReviewReport` JSON schema from `peer-review-panel.md`, then rerun `grd validate review-stage-report`.
 2. **If the retry also fails,** STOP the pipeline and report the failure: stage name, missing or malformed fields, and any partial output. Do not proceed to Stage 4.
 
 Max retries per stage: **1**.
+
+If the proof-redteam artifact is missing, malformed, lacks the canonical frontmatter, or omits required sections, retry `grd-check-proof` once with the same inputs and an explicit reminder to emit the full canonical proof-audit artifact. If the retry also fails, STOP the pipeline and report that proof review could not be completed.
 </step>
 
 <step name="stage_4_physics">
@@ -426,8 +518,7 @@ Focus on:
 3. Unsupported or unfounded connections between formal manipulations and physics
 4. Whether decisive comparison artifacts, benchmark anchors, and estimator caveats expected by the specialized workflow are actually visible in the manuscript or honestly scoped down
 
-Treat bundle guidance as additive skepticism only. It may highlight missing decisive comparisons or estimator caveats, but it must not replace contract-backed evidence or create new manuscript obligations out of thin air.
-Treat `project_contract_load_info` and `project_contract_validation` as the authoritative contract gate state. Treat `project_contract` and `contract_intake` as approved evidence only when that gate is clean and passing. Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence even when the contract gate is blocked. If that gate is blocked, keep `project_contract` and `contract_intake` visible as context but do not rely on them as approved scope.
+Treat bundle guidance as additive skepticism only: it may highlight missing decisive comparisons or estimator caveats, but it must not replace contract-backed evidence or create new manuscript obligations out of thin air.
 
 Return STAGE 4 COMPLETE with assessment, blocker count, and major concern count.",
   description="Peer review stage 4: physical soundness"
@@ -504,8 +595,6 @@ You must explicitly decide whether the paper is:
 2. Merely technically competent
 3. Overclaimed relative to its actual contribution
 
-Treat `project_contract_load_info` and `project_contract_validation` as the authoritative contract gate state. Treat `project_contract` and `contract_intake` as approved evidence only when that gate is clean and passing. Treat `effective_reference_intake`, `reference_artifacts_content`, and `active_reference_context` as binding carry-forward evidence even when the contract gate is blocked. If that gate is blocked, keep `project_contract` and `contract_intake` visible as context but do not rely on them as approved scope.
-
 Return STAGE 5 COMPLETE with assessment, blocker count, and major concern count.",
   description="Peer review stage 5: significance and venue fit"
 )
@@ -552,23 +641,11 @@ Act as the final adjudicating referee for the staged peer-review panel.
 
 Target journal: {target_journal}
 Round: {round}
+<autonomy_mode>{AUTONOMY}</autonomy_mode>
+<research_mode>{RESEARCH_MODE}</research_mode>
 Selected protocol bundles: {selected_protocol_bundle_ids}
-Additive specialized guidance:
-{protocol_bundle_context}
-Project Contract:
-{project_contract}
-Project Contract Load Info:
-{project_contract_load_info}
-Project Contract Validation:
-{project_contract_validation}
-Active References:
-{active_reference_context}
-Contract Intake:
-{contract_intake}
-Effective Reference Intake:
-{effective_reference_intake}
-Reference Artifacts Content:
-{reference_artifacts_content}
+Additive specialized guidance: {protocol_bundle_context}
+Carry-forward context: project contract {project_contract}; project contract gate {project_contract_gate}; project contract load info {project_contract_load_info}; project contract validation {project_contract_validation}; active references {active_reference_context}; derived manuscript reference status {derived_manuscript_reference_status}; contract intake {contract_intake}; effective reference intake {effective_reference_intake}; reference artifacts content {reference_artifacts_content}
 
 Files to read:
 - Resolved manuscript main file and all nearby section .tex files
@@ -614,6 +691,8 @@ Return REVIEW COMPLETE with recommendation, confidence, issue counts, and whethe
 ```
 
 If the referee agent fails to spawn or returns an error, STOP and report the failure. Do not silently skip final adjudication.
+Do not trust the referee's success text until the ledger, decision, and report files all exist on disk and validate. A returned recommendation without the files is incomplete.
+Do not trust the referee's success text until that typed return, the on-disk files, and the validators all agree.
 </step>
 
 <step name="stage_recovery_6">
@@ -706,6 +785,7 @@ If this was a revision round, state the round number and whether the referee con
 - [ ] Stage 2 literature-context artifact written
 - [ ] Stage 3 mathematical-soundness artifact written
 - [ ] Stages 2-3 outputs validated (JSON schema check passed or retry succeeded)
+- [ ] Proof-bearing manuscripts also produce `GRD/review/PROOF-REDTEAM{round_suffix}.md`
 - [ ] Stage 4 physical-soundness artifact written
 - [ ] Stage 4 output validated (JSON schema check passed or retry succeeded)
 - [ ] Stage 5 interestingness artifact written

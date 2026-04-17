@@ -104,8 +104,19 @@ If the version file is missing, treat the install as version `0.0.0` and continu
 Check the npm registry for the latest released `get-research-done` version:
 
 ```bash
-"$PYTHON_BIN" - <<'PY'
+LATEST_RELEASE_URL="{GPD_RELEASE_LATEST_URL}"
+PYTHON_BIN="${GPD_PYTHON:-}"
+
+if [ -z "$PYTHON_BIN" ]; then
+  PYTHON_BIN=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)
+fi
+if [ -z "$PYTHON_BIN" ]; then
+  PYTHON_BIN="python3"
+fi
+
+"$PYTHON_BIN" - "$LATEST_RELEASE_URL" <<'PY'
 import json
+import sys
 import urllib.request
 
 with urllib.request.urlopen("https://registry.npmjs.org/get-research-done/latest", timeout=10) as resp:
@@ -119,7 +130,7 @@ If that fails, show:
 ```text
 ## GRD Update
 
-Couldn't check for updates (offline or npm unavailable).
+Couldn't check for updates (offline or release metadata unavailable).
 
 To update manually, run:
 `<UPDATE_COMMAND>`
@@ -208,7 +219,7 @@ Run the update with the public bootstrap command from step 1:
 
 Capture output. If the update command fails, show the error and exit.
 
-Then clear update caches so indicators disappear immediately:
+Then clear the configured update caches so indicators disappear immediately:
 
 ```bash
 rm -f \
@@ -249,7 +260,7 @@ Otherwise continue normally.
 <success_criteria>
 
 - [ ] Installed version read from the runtime install
-- [ ] Latest released version checked from npm
+- [ ] Latest released version checked from the canonical release metadata endpoint
 - [ ] Update skipped if already current
 - [ ] Recent release notes shown before updating when available
 - [ ] Clean reinstall warning shown

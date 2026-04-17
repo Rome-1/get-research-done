@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
-from datetime import date
-from functools import lru_cache
+from functools import cache, lru_cache
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -84,6 +84,52 @@ def load_contract() -> dict[str, object]:
     return json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 
 
+_GRAPH_EDGE_RE = re.compile(r"^- `([^`\n]+?) -> ([^`\n]+?)`$", re.MULTILINE)
+
+
+def iter_graph_edges(graph_text: str | None = None) -> tuple[str, ...]:
+    text = graph_text if graph_text is not None else read_graph_text()
+    return tuple(
+        f"{match.group(1)} -> {match.group(2)}"
+        for match in _GRAPH_EDGE_RE.finditer(text)
+    )
+
+
+def iter_graph_edge_specs(graph_text: str | None = None) -> tuple[tuple[str, str], ...]:
+    text = graph_text if graph_text is not None else read_graph_text()
+    return tuple((match.group(1), match.group(2)) for match in _GRAPH_EDGE_RE.finditer(text))
+
+
+@cache
+def _expand_braced_edge_endpoint(endpoint: str) -> tuple[str, ...]:
+    match = re.search(r"\{([^{}]+)\}", endpoint)
+    if match is None:
+        return (endpoint,)
+
+    prefix = endpoint[: match.start()]
+    suffix = endpoint[match.end() :]
+    expansions: list[str] = []
+    for option in (item.strip() for item in match.group(1).split(",")):
+        if not option:
+            continue
+        for expanded_suffix in _expand_braced_edge_endpoint(suffix):
+            expansions.append(f"{prefix}{option}{expanded_suffix}")
+    return tuple(expansions)
+
+
+def _edge_endpoint_matches(expected: str, rendered: str) -> bool:
+    if expected == rendered or expected in rendered:
+        return True
+    return expected in _expand_braced_edge_endpoint(rendered)
+
+
+def graph_has_edge(source: str, target: str, graph_text: str | None = None) -> bool:
+    for rendered_source, rendered_target in iter_graph_edge_specs(graph_text):
+        if _edge_endpoint_matches(source, rendered_source) and _edge_endpoint_matches(target, rendered_target):
+            return True
+    return False
+
+
 def _is_excluded_path(path: Path) -> bool:
     return any(part in EXCLUDED_GRAPH_DIRS for part in path.parts)
 
@@ -124,28 +170,6 @@ def _is_under(path: Path, *parent_parts: str) -> bool:
 
 def _has_parent(path: Path, *parent_parts: str) -> bool:
     return path.parts[:-1] == parent_parts
-
-
-def _preserved_generated_on(
-    scope_counts: dict[str, int],
-    excluded_dirs: list[str],
-    contract_path: Path,
-) -> str | None:
-    if not contract_path.exists():
-        return None
-
-    existing_contract = json.loads(contract_path.read_text(encoding="utf-8"))
-    if not isinstance(existing_contract, dict):
-        return None
-    if existing_contract.get("schema_version") != SCHEMA_VERSION:
-        return None
-    if existing_contract.get("excluded_graph_dirs") != excluded_dirs:
-        return None
-    if existing_contract.get("scope_counts") != scope_counts:
-        return None
-
-    generated_on = existing_contract.get("generated_on")
-    return generated_on if isinstance(generated_on, str) else None
 
 
 def canonical_scope_label(label: str) -> str:
@@ -221,16 +245,12 @@ def expected_scope_counts(repo_root: Path = REPO_ROOT) -> dict[str, int]:
 
 def build_contract(
     repo_root: Path = REPO_ROOT,
-    generated_on: str | None = None,
-    contract_path: Path = CONTRACT_PATH,
 ) -> dict[str, object]:
     scope_counts = expected_scope_counts(repo_root)
     excluded_dirs = list(EXCLUDED_GRAPH_DIRS)
-    effective_generated_on = generated_on or _preserved_generated_on(scope_counts, excluded_dirs, contract_path)
 
     return {
         "schema_version": SCHEMA_VERSION,
-        "generated_on": effective_generated_on or date.today().isoformat(),
         "excluded_graph_dirs": excluded_dirs,
         "scope_counts": scope_counts,
     }
@@ -244,13 +264,11 @@ def _excluded_dir_readme_pattern(path_name: str) -> str:
     return path_name if path_name == ".mcp.json" else f"{path_name}/**"
 
 
-def render_generated_on_block(contract: dict[str, object]) -> str:
-    generated_on = contract["generated_on"]
-    assert isinstance(generated_on, str), "generated_on must be a string"
+def render_generated_on_block(_contract: dict[str, object]) -> str:
     return "\n".join(
         (
             GENERATED_ON_START,
-            f"Generated on `{generated_on}` from the current worktree.",
+            "Generated from the current worktree via `python scripts/sync_repo_graph_contract.py`.",
             GENERATED_ON_END,
         )
     )
@@ -323,4 +341,3 @@ def sync_readme_text(readme_text: str, contract: dict[str, object]) -> str:
         SAME_STEM_COMMAND_WORKFLOW_END,
         render_same_stem_command_workflow_block(),
     )
-

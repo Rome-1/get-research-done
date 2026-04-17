@@ -8,7 +8,38 @@ __all__ = [
     "normalize_root_global_cli_options",
     "resolve_root_global_cli_cwd_from_argv",
     "split_root_global_cli_options",
+    "validate_root_global_cli_passthrough",
 ]
+
+_ROOT_GLOBAL_FLAG_TOKENS = frozenset({"--raw", "--version", "-v"})
+
+
+def validate_root_global_cli_passthrough(argv: list[str]) -> None:
+    """Validate root-global GRD flags before the downstream command token.
+
+    The runtime bridge uses this shared validator so it stays aligned with the
+    canonical root-global flag grammar owned by this module.
+    """
+
+    index = 0
+    while index < len(argv):
+        arg = str(argv[index])
+        if arg == "--":
+            return
+        if not arg.startswith("-"):
+            return
+        if arg in _ROOT_GLOBAL_FLAG_TOKENS or arg == "--help":
+            index += 1
+            continue
+        if arg == "--cwd":
+            if index + 1 >= len(argv):
+                raise ValueError("argument --cwd: expected one argument")
+            index += 2
+            continue
+        if arg.startswith("--cwd="):
+            index += 1
+            continue
+        raise ValueError(f"unrecognized forwarded grd root flag: {arg}")
 
 
 def split_root_global_cli_options(argv: list[str]) -> tuple[list[str], list[str]]:

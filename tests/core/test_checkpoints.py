@@ -25,7 +25,7 @@ def _write_summary(
     plan: str,
     one_liner: str,
     completed: str = "2026-03-17",
-    provides: str | list[str] = "phase checkpoint",
+    provides: str | list[str] = ("phase checkpoint",),
 ) -> None:
     lines = [
         "---",
@@ -33,7 +33,7 @@ def _write_summary(
         f'plan: "{plan}"',
         "depth: full",
     ]
-    if isinstance(provides, list):
+    if isinstance(provides, (list, tuple)):
         lines.append("provides:")
         lines.extend(f"  - {item}" for item in provides)
     else:
@@ -132,7 +132,7 @@ def test_sync_phase_checkpoints_generates_root_and_phase_docs(tmp_path: Path) ->
     assert rerun.removed_files == []
 
 
-def test_sync_phase_checkpoints_preserves_scalar_provides(tmp_path: Path) -> None:
+def test_sync_phase_checkpoints_renders_canonical_list_provides(tmp_path: Path) -> None:
     cwd = _setup_project(tmp_path)
     phase_dir = cwd / "GRD" / "phases" / "01-test-phase"
     phase_dir.mkdir()
@@ -141,7 +141,7 @@ def test_sync_phase_checkpoints_preserves_scalar_provides(tmp_path: Path) -> Non
         phase="01",
         plan="01",
         one_liner="Set up the project",
-        provides="solver",
+        provides=["solver"],
     )
 
     result = sync_phase_checkpoints(cwd)

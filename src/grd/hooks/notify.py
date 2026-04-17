@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Runtime notification hook for GRD."""
 
+import hashlib
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import grd.hooks.install_context as hook_layout
 from grd.core.constants import ENV_GRD_DEBUG, ProjectLayout
@@ -33,14 +35,18 @@ def _first_string(value: object, *keys: str) -> str:
     return ""
 
 
-def _normalize_workspace_text(value: str | None) -> str:
-    if not value:
-        return str(Path.cwd().resolve(strict=False))
-    path = Path(value).expanduser()
-    try:
-        return str(path.resolve(strict=False))
-    except OSError:
-        return str(path)
+def _has_project_layout(cwd: str) -> bool:
+    resolved_root = resolve_project_root(cwd, require_layout=True)
+    return resolved_root is not None
+
+
+def _workspace_mapping_prefers_local_notify_lookup(
+    data: dict[str, object],
+    *,
+    hook_payload: object,
+) -> bool:
+    """Keep notify lookup anchored to the workspace when only non-primary aliases were populated."""
+    return payload_uses_alias_only_workspace_mapping(data, hook_payload=hook_payload)
 
 
 def _trigger_update_check(cwd: str) -> None:
@@ -142,9 +148,15 @@ def _check_and_notify_update(cwd: str | None = None) -> None:
 
     workspace_path = resolve_project_root(cwd) if cwd else None
     latest_cache, latest_candidate = _latest_update_cache(cwd)
-    self_install = hook_layout.detect_self_owned_install(__file__)
 
     if latest_cache and latest_cache.get("update_available"):
+        cmd = _shared_update_command_for_candidate(latest_candidate, hook_file=__file__, cwd=cwd)
+        if cmd is None:
+            return
+        fingerprint = _update_notification_fingerprint(latest_cache, cmd)
+        claimed = _claim_last_notification(cwd or str(Path.cwd()), channel="update", fingerprint=fingerprint)
+        if claimed is False:
+            return
         installed = latest_cache.get("installed", "?")
         latest = latest_cache.get("latest", "?")
         if self_install is not None and latest_candidate is not None and latest_candidate.path == self_install.cache_file:
@@ -197,8 +209,13 @@ def _workspace_from_payload(data: dict[str, object], *, cwd: str | None = None) 
 
 
 def _notification_state_path(cwd: str) -> Path:
-    workspace_root = resolve_project_root(cwd) or Path(cwd).expanduser().resolve(strict=False)
-    return ProjectLayout(workspace_root).last_observability_notification
+    workspace_root = resolve_project_root(cwd, require_layout=True)
+    if workspace_root is not None:
+        return ProjectLayout(workspace_root).last_observability_notification
+    self_install = detect_self_owned_install(__file__)
+    if self_install is not None:
+        return self_install.config_dir / OBSERVABILITY_DIR_NAME / OBSERVABILITY_LAST_NOTIFY_FILENAME
+    return Path.home() / HOME_DATA_DIR_NAME / OBSERVABILITY_DIR_NAME / OBSERVABILITY_LAST_NOTIFY_FILENAME
 
 
 def _load_last_notification(cwd: str) -> dict[str, object]:
@@ -210,15 +227,48 @@ def _load_last_notification(cwd: str) -> dict[str, object]:
     return raw if isinstance(raw, dict) else {}
 
 
-def _claim_last_notification(cwd: str, fingerprint: str) -> bool:
-    """Atomically claim a notification fingerprint for one workspace."""
+def _channel_scoped_fingerprint(cwd: str, *, channel: str, fingerprint: str) -> str:
+    """Avoid cross-workspace dedupe collisions when execution falls back to home state."""
+    if channel != "execution":
+        return fingerprint
+    if resolve_project_root(cwd, require_layout=True) is not None:
+        return fingerprint
+    return f"{Path(cwd).expanduser().resolve(strict=False).as_posix()}::{fingerprint}"
+
+
+def _claim_last_notification(cwd: str, *, channel: str, fingerprint: str) -> bool | None:
+    """Atomically claim a notification fingerprint for one channel in one workspace."""
     path = _notification_state_path(cwd)
-    with file_lock(path):
-        previous = _load_last_notification(cwd)
-        if previous.get("fingerprint") == fingerprint:
-            return False
-        atomic_write(path, json.dumps({"fingerprint": fingerprint}, indent=2))
-        return True
+    channel_key = f"{channel}_fingerprint"
+    scoped_fingerprint = _channel_scoped_fingerprint(cwd, channel=channel, fingerprint=fingerprint)
+    try:
+        with file_lock(path):
+            previous = _load_last_notification(cwd)
+            if previous.get(channel_key) == scoped_fingerprint or previous.get("fingerprint") == scoped_fingerprint:
+                return False
+            previous[channel_key] = scoped_fingerprint
+            previous.pop("fingerprint", None)
+            atomic_write(path, json.dumps(previous, indent=2))
+            return True
+    except OSError as exc:
+        _debug(f"notification dedupe skipped for {path}: {exc}")
+        return None
+
+
+def _update_notification_fingerprint(latest_cache: dict[str, object], cmd: str) -> str:
+    """Return the dedupe fingerprint for one update notice payload."""
+    installed = str(latest_cache.get("installed", "?")).strip() or "?"
+    latest = str(latest_cache.get("latest", "?")).strip() or "?"
+    return f"update:{installed}:{latest}:{cmd}"
+
+
+def _execution_claim_fingerprint(cwd: str, fingerprint: str) -> str:
+    """Scope execution dedupe to one workspace when no project layout is available."""
+    if _has_project_layout(cwd):
+        return fingerprint
+    normalized_cwd = str(Path(cwd).expanduser().resolve(strict=False))
+    workspace_hash = hashlib.sha256(normalized_cwd.encode("utf-8")).hexdigest()[:16]
+    return f"{fingerprint}:workspace:{workspace_hash}"
 
 
 def _execution_notification_message(cwd: str) -> tuple[str | None, str | None]:
@@ -230,8 +280,14 @@ def _execution_notification_message(cwd: str) -> tuple[str | None, str | None]:
 
     phase_plan = "-".join(part for part in (snapshot.phase, snapshot.plan) if part) or "current work"
     artifact = snapshot.last_result_label or snapshot.last_artifact_path or snapshot.current_task or "latest result"
+    if artifact == "latest result":
+        last_result_id = snapshot.last_result_id
+        if isinstance(last_result_id, str) and last_result_id.strip():
+            artifact = f"rerun anchor: {last_result_id.strip()}"
+    segment_status = (snapshot.segment_status or "").strip().lower()
 
     if snapshot.blocked_reason:
+        blocked_reason = humanize_execution_reason(snapshot.blocked_reason) or snapshot.blocked_reason
         return (
             f"[GRD] Blocked in {phase_plan}: {snapshot.blocked_reason}\n",
             f"blocked:{snapshot.transition_id or snapshot.segment_id or snapshot.blocked_reason}",
@@ -260,15 +316,28 @@ def _execution_notification_message(cwd: str) -> tuple[str | None, str | None]:
             f"review:{snapshot.transition_id or snapshot.segment_id or checkpoint}",
         )
     if snapshot.waiting_reason:
+        waiting_reason = humanize_execution_reason(snapshot.waiting_reason) or snapshot.waiting_reason
         return (
             f"[GRD] Waiting in {phase_plan}: {snapshot.waiting_reason}\n",
             f"wait:{snapshot.transition_id or snapshot.segment_id or snapshot.waiting_reason}",
         )
-    if snapshot.segment_status in {"paused", "ready_to_continue"}:
-        resume_target = snapshot.resume_file or artifact
+    if segment_status in _COMPLETED_SEGMENT_STATES:
+        return None, None
+    if snapshot.resume_file:
+        resume_target = snapshot.resume_file
         return (
             f"[GRD] Resume ready for {phase_plan}: {resume_target}\n",
             f"resume:{snapshot.transition_id or snapshot.segment_id or resume_target}",
+        )
+    if segment_status in _PAUSED_SEGMENT_STATES:
+        if segment_status == "awaiting_user":
+            return (
+                f"[GRD] Waiting for user in {phase_plan}: {artifact}\n",
+                f"paused:{snapshot.transition_id or snapshot.segment_id or artifact}",
+            )
+        return (
+            f"[GRD] Paused in {phase_plan}: {artifact}\n",
+            f"paused:{snapshot.transition_id or snapshot.segment_id or artifact}",
         )
     return None, None
 
@@ -278,7 +347,9 @@ def _emit_execution_notification(cwd: str) -> None:
     if not message or not fingerprint:
         return
 
-    if not _claim_last_notification(cwd, fingerprint):
+    claim_fingerprint = _execution_claim_fingerprint(cwd, fingerprint)
+    claimed = _claim_last_notification(cwd, channel="execution", fingerprint=claim_fingerprint)
+    if claimed is False:
         return
 
     sys.stderr.write(message)
@@ -296,14 +367,42 @@ def main() -> None:
         return
 
     try:
-        cwd = _workspace_from_payload(data)
-        hook_payload = _hook_payload_policy(cwd)
+        roots = _resolve_payload_roots(data, policy_getter=_root_resolution_policy)
+        workspace_dir = roots.workspace_dir
+        project_root = roots.project_root
+        project_dir_present = roots.project_dir_present
+        project_dir_trusted = roots.project_dir_trusted
+        payload_policy = _hook_payload_policy(workspace_dir)
+        if project_dir_trusted is True and _workspace_mapping_prefers_local_notify_lookup(
+            data,
+            hook_payload=payload_policy,
+        ):
+            project_dir_trusted = False
+        runtime_roots = SimpleNamespace(
+            workspace_dir=workspace_dir,
+            project_root=project_root,
+            project_dir_present=project_dir_present,
+            project_dir_trusted=project_dir_trusted,
+        )
+        runtime_lookup = resolve_runtime_lookup_context_from_payload_roots(
+            runtime_roots,
+            runtime_resolver=_payload_runtime,
+        )
+        runtime_lookup_dir = runtime_lookup.lookup_dir
+        hook_payload = _hook_payload_policy(runtime_lookup_dir)
         allowed_event_types = hook_payload.notify_event_types
-        if allowed_event_types and data.get("type") not in (*allowed_event_types, None):
+        event_type = data.get("type")
+        if allowed_event_types and event_type not in allowed_event_types:
             return
-        _trigger_update_check(cwd)
-        _check_and_notify_update(cwd)
-        _emit_execution_notification(cwd)
+        _record_usage_telemetry(
+            data,
+            workspace_dir=workspace_dir,
+            project_root=project_root,
+            active_runtime=runtime_lookup.active_runtime,
+        )
+        _trigger_update_check(runtime_lookup_dir)
+        _check_and_notify_update(runtime_lookup_dir)
+        _emit_execution_notification(runtime_lookup_dir)
     except Exception as exc:
         _debug(f"notify handler failed: {exc}")
 

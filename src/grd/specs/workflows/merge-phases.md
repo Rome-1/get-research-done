@@ -94,10 +94,10 @@ fi
 2. **Completion status check:**
 
    ```bash
-   ls "${SOURCE_DIR}"/*-SUMMARY.md 2>/dev/null | wc -l
-   ls "${SOURCE_DIR}"/*-PLAN.md 2>/dev/null | wc -l
-   ls "${TARGET_DIR}"/*-SUMMARY.md 2>/dev/null | wc -l
-   ls "${TARGET_DIR}"/*-PLAN.md 2>/dev/null | wc -l
+   SOURCE_SUMMARY_COUNT=$(grd --raw phase list --type summaries --phase "${SOURCE_PHASE}" | grd json get .count --default 0)
+   SOURCE_PLAN_COUNT=$(grd --raw phase list --type plans --phase "${SOURCE_PHASE}" | grd json get .count --default 0)
+   TARGET_SUMMARY_COUNT=$(grd --raw phase list --type summaries --phase "${TARGET_PHASE}" | grd json get .count --default 0)
+   TARGET_PLAN_COUNT=$(grd --raw phase list --type plans --phase "${TARGET_PHASE}" | grd json get .count --default 0)
    ```
 
    Report status of both phases (complete, partial, unstarted).

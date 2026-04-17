@@ -25,7 +25,7 @@
   },
   "alternatives": {
     "python_module": {
-      "command": "python3",
+      "command": "${GPD_PYTHON}",
       "args": [
         "-m",
         "grd.mcp.servers.errors_mcp"

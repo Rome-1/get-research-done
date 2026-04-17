@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "workflow_id": "new-project",
+  "stages": [
+    {
+      "id": "scope_intake",
+      "order": 1,
+      "purpose": "startup routing, lean scoping intake, and continuation detection",
+      "mode_paths": [
+        "workflows/new-project.md"
+      ],
+      "required_init_fields": [
+        "researcher_model",
+        "synthesizer_model",
+        "commit_docs",
+        "autonomy",
+        "research_mode",
+        "project_exists",
+        "has_research_map",
+        "planning_exists",
+        "has_research_files",
+        "has_project_manifest",
+        "needs_research_map",
+        "has_git",
+        "platform",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation"
+      ],
+      "loaded_authorities": [
+        "workflows/new-project.md"
+      ],
+      "conditional_authorities": [
+        {
+          "when": "full_questioning_path",
+          "authorities": [
+            "references/research/questioning.md"
+          ]
+        }
+      ],
+      "must_not_eager_load": [
+        "references/research/questioning.md",
+        "references/ui/ui-brand.md",
+        "references/shared/canonical-schema-discipline.md",
+        "templates/project.md",
+        "templates/requirements.md",
+        "templates/project-contract-grounding-linkage.md",
+        "templates/project-contract-schema.md"
+      ],
+      "allowed_tools": [
+        "file_read",
+        "ask_user",
+        "shell",
+        "file_write",
+        "task"
+      ],
+      "writes_allowed": [],
+      "produced_state": [
+        "intake routing state",
+        "scoping-contract gate state"
+      ],
+      "next_stages": [
+        "scope_approval"
+      ],
+      "checkpoints": [
+        "detect existing workspace state",
+        "surface the first scoping question",
+        "preserve contract gate visibility without assuming approval-stage authority"
+      ]
+    },
+    {
+      "id": "scope_approval",
+      "order": 2,
+      "purpose": "scoping contract approval and approval-state persistence",
+      "mode_paths": [
+        "workflows/new-project.md"
+      ],
+      "required_init_fields": [
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation"
+      ],
+      "loaded_authorities": [
+        "templates/project-contract-schema.md",
+        "templates/project-contract-grounding-linkage.md",
+        "references/shared/canonical-schema-discipline.md"
+      ],
+      "conditional_authorities": [],
+      "must_not_eager_load": [
+        "references/research/questioning.md",
+        "references/ui/ui-brand.md",
+        "templates/project.md",
+        "templates/requirements.md"
+      ],
+      "allowed_tools": [
+        "file_read",
+        "shell",
+        "file_write",
+        "task",
+        "ask_user"
+      ],
+      "writes_allowed": [
+        "GRD/state.json"
+      ],
+      "produced_state": [
+        "approved project contract",
+        "approval-state persistence"
+      ],
+      "next_stages": [
+        "post_scope"
+      ],
+      "checkpoints": [
+        "approval gate has passed",
+        "project contract is ready for persistence"
+      ]
+    },
+    {
+      "id": "post_scope",
+      "order": 3,
+      "purpose": "deferred downstream project writing, staged roadmapping, and conventions continuation",
+      "mode_paths": [
+        "workflows/new-project.md"
+      ],
+      "required_init_fields": [
+        "researcher_model",
+        "synthesizer_model",
+        "roadmapper_model",
+        "commit_docs",
+        "autonomy",
+        "research_mode",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation"
+      ],
+      "loaded_authorities": [
+        "references/ui/ui-brand.md",
+        "templates/project.md",
+        "templates/requirements.md"
+      ],
+      "conditional_authorities": [],
+      "must_not_eager_load": [],
+      "allowed_tools": [
+        "file_read",
+        "shell",
+        "file_write",
+        "task",
+        "ask_user"
+      ],
+      "writes_allowed": [
+        "GRD/PROJECT.md",
+        "GRD/REQUIREMENTS.md",
+        "GRD/ROADMAP.md",
+        "GRD/STATE.md",
+        "GRD/state.json",
+        "GRD/config.json",
+        "GRD/CONVENTIONS.md",
+        "GRD/literature/PRIOR-WORK.md",
+        "GRD/literature/METHODS.md",
+        "GRD/literature/COMPUTATIONAL.md",
+        "GRD/literature/PITFALLS.md",
+        "GRD/literature/SUMMARY.md"
+      ],
+      "produced_state": [
+        "project artifacts",
+        "workflow preferences",
+        "downstream stage handoff"
+      ],
+      "next_stages": [],
+      "checkpoints": [
+        "approval gate has passed",
+        "stage-aware deferred reads are now allowed"
+      ]
+    }
+  ]
+}

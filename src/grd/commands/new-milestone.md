@@ -11,11 +11,9 @@ allowed-tools:
   - ask_user
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
-Start a new research milestone: questioning → literature research (optional) → requirements → roadmap.
+Start a new research milestone: questioning -> literature research (optional) -> requirements -> staged roadmap handoff.
 
 Continuation equivalent of new-project. Research project exists, PROJECT.md has history. Gathers "what's next", updates PROJECT.md, then runs requirements → roadmap cycle while honoring `planning.commit_docs` for milestone artifact commits.
 

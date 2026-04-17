@@ -4,6 +4,8 @@ This directory contains the automated test suite for GRD: core CLI and state reg
 
 The final section of this README keeps the full checked-in repository interdependency graph that the graph guardrail tests read directly.
 
+Default `uv run pytest` runs the full checked-in suite, and `uv run pytest -q` does the same with quieter output. Both inherit `-n auto --dist=worksteal` from `pyproject.toml`, so pytest parallelizes by default and can rebalance giant modules across idle workers. For default full-suite local runs, `tests/conftest.py` also raises xdist auto-worker selection toward the current CI shard fanout, so local `uv run pytest` stays in the same rough parallelism range as CI without changing what gets collected. If you need a serial run for debugging, override that default explicitly with `uv run pytest -n 0`. For a focused smoke pass, run `uv run pytest tests/test_runtime_abstraction_boundaries.py tests/core/test_contract_schema_prompt_parity.py tests/core/test_review_contract_prompt_visibility.py tests/mcp/test_tool_contract_visibility.py tests/core/test_verifier_prompt_contract_visibility.py tests/core/test_verification_surface_alignment_regressions.py -q`. The GitHub Actions workflow runs that same full suite as category-named runtime-informed shards: `root 1/9` through `root 9/9`, `adapters 1/2` through `adapters 2/2`, `hooks 1/2` through `hooks 2/2`, `mcp`, and `core 1/5` through `core 5/5`. `tests/ci_sharding.py` still weights files by collected test counts, boosts root modules that have been slow on GitHub Actions, splits known hotspot modules such as `tests/test_runtime_cli.py`, `tests/test_registry.py`, `tests/test_update_workflow.py`, and `tests/hooks/test_runtime_detect.py`, and greedily rebalances those work units inside each category so the thematic shard names remain close to the well-balanced anonymous-shard timings while each shard still inherits the same default pytest work-stealing parallelism policy.
+
 ## Repository Interdependency Graph
 
 <!-- repo-graph-generated-on:start -->
@@ -63,7 +65,7 @@ Generated-output families are modeled when code or tests depend on them:
 - `dist/*.tar.gz`
 - `<workspace>/.grd/**`
 - runtime config files and caches
-- paper build outputs such as `main.pdf`, `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`
+- paper build outputs such as `{topic_specific_stem}.pdf`, `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`
 
 ## Edge Taxonomy
 
@@ -206,7 +208,7 @@ flowchart TD
 
 - `.github/workflows/test.yml -> tests/**`
   `authority`
-  Runs `uv run pytest tests/ -v` across the whole test tree.
+  Runs fast and full pytest coverage explicitly in CI.
 
 - `.github/workflows/test.yml -> pyproject.toml`
   `authority`
@@ -607,6 +609,9 @@ flowchart TD
 - `src/grd/specs/workflows/plan-phase.md -> src/grd/specs/templates/phase-prompt.md`
   `include`
 
+- `src/grd/specs/workflows/plan-phase.md -> src/grd/specs/templates/plan-contract-schema.md`
+  `include`
+
 - `src/grd/specs/workflows/plan-phase.md -> src/grd/specs/references/ui/ui-brand.md`
   `include`
 
@@ -732,6 +737,8 @@ flowchart TD
 - `src/grd/specs/workflows/execute-phase.md -> selector tree {phase classification, force-sequential, YOLO restrictions, inter-wave verification gates}`
   `selector-input`
 
+- `src/grd/specs/workflows/execute-phase.md -> src/grd/specs/{references/orchestration/meta-orchestration.md,references/orchestration/checkpoints.md,references/orchestration/continuous-execution.md,references/verification/core/verification-core.md,templates/summary.md,templates/continuation-prompt.md,templates/paper/figure-tracker.md,templates/paper/experimental-comparison.md,templates/recovery-plan.md}`
+  `include`
 - `src/grd/specs/workflows/execute-plan.md -> src/grd/specs/references/protocols/error-propagation-protocol.md`
   `include`
 
@@ -742,6 +749,9 @@ flowchart TD
   `include`
 
 - `src/grd/specs/workflows/execute-plan.md -> src/grd/specs/templates/calculation-log.md`
+  `include`
+
+- `src/grd/specs/workflows/execute-plan.md -> src/grd/specs/templates/contract-results-schema.md`
   `include`
 
 - `src/grd/specs/workflows/execute-plan.md -> src/grd/specs/templates/recovery-plan.md`
@@ -756,10 +766,16 @@ flowchart TD
 - `src/grd/specs/workflows/verify-work.md -> src/grd/specs/templates/research-verification.md`
   `include`
 
+- `src/grd/specs/workflows/verify-work.md -> src/grd/specs/templates/contract-results-schema.md`
+  `include`
+
 - `src/grd/specs/workflows/verify-work.md -> src/grd/specs/references/protocols/error-propagation-protocol.md`
   `include`
 
 - `src/grd/specs/workflows/verify-work.md -> src/grd/specs/{references/verification/meta/verification-independence.md,workflows/debug.md}`
+  `include`
+
+- `src/grd/specs/workflows/verify-work.md -> src/grd/specs/templates/plan-contract-schema.md`
   `include`
 
 - `src/grd/specs/workflows/verify-work.md -> src/grd/agents/grd-planner.md`
@@ -817,6 +833,9 @@ flowchart TD
 - `src/grd/specs/workflows/write-paper.md -> src/grd/specs/{references/publication/publication-pipeline-modes.md,references/publication/paper-quality-scoring.md,templates/latex-preamble.md,templates/paper/supplemental-material.md,templates/paper/experimental-comparison.md}`
   `include`
 
+- `src/grd/specs/workflows/write-paper.md -> src/grd/specs/templates/paper/{paper-config-schema.md,artifact-manifest-schema.md,bibliography-audit-schema.md,reproducibility-manifest.md}`
+  `include`
+
 - `src/grd/specs/workflows/debug.md -> src/grd/specs/templates/debug-subagent-prompt.md`
   `conditional-include`
   One per detected gap.
@@ -848,6 +867,9 @@ flowchart TD
   `include`
 
 - `src/grd/specs/workflows/new-project.md -> src/grd/specs/{references/research/questioning.md,references/conventions/subfield-convention-defaults.md}`
+  `include`
+
+- `src/grd/specs/workflows/new-project.md -> src/grd/specs/templates/project-contract-schema.md`
   `include`
 
 - `src/grd/specs/workflows/new-project.md -> src/grd/specs/templates/research-project/PRIOR-WORK.md`
@@ -1335,7 +1357,7 @@ They explicitly preserve:
 - `tests/test_paper_e2e.py -> src/grd/mcp/paper/bibliography.py`
   `hard-import`
 
-- `tests/test_paper_e2e.py -> generated outputs {main.tex, references.bib, ARTIFACT-MANIFEST.json, BIBLIOGRAPHY-AUDIT.json, main.pdf, figures/**}`
+- `tests/test_paper_e2e.py -> generated outputs {<topic_stem>.tex, references.bib, ARTIFACT-MANIFEST.json, BIBLIOGRAPHY-AUDIT.json, <topic_stem>.pdf, figures/**}`
   `generated-output`
 
 - `tests/test_paper_models.py -> src/grd/mcp/paper/{models,journal_map,template_registry}.py`
@@ -1649,7 +1671,7 @@ Operationally important node families that are not canonical repo files:
 - `<cwd>/.grd/phase-checkpoints/*.md`
 - `dist/*.whl`
 - `dist/*.tar.gz`
-- paper outputs `main.tex`, `references.bib`, `main.pdf`, `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`
+- paper outputs `<topic_stem>.tex`, `references.bib`, `<topic_stem>.pdf`, `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`
 - GitHub Actions used by CI
 - npm latest-version endpoint `https://registry.npmjs.org/get-research-done/latest`
 

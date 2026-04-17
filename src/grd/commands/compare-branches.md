@@ -1,7 +1,6 @@
 ---
 name: grd:compare-branches
 description: Compare results across hypothesis branches side-by-side
-argument-hint: ""
 context_mode: project-required
 allowed-tools:
   - file_read
@@ -10,8 +9,6 @@ allowed-tools:
   - find_files
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Compare research results across hypothesis branches to determine which approach is more promising.

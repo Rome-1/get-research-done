@@ -4,29 +4,17 @@ description: Research how to tackle a phase (standalone - usually use /grd:plan-
 argument-hint: "[phase]"
 context_mode: project-required
 allowed-tools:
+  - ask_user
   - file_read
   - shell
   - task
 ---
-
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
-
 <objective>
 Research how to tackle a phase. Spawns grd-phase-researcher agent with phase context.
 
 **Note:** This is a standalone research command. For most workflows, use `/grd:plan-phase` which integrates research automatically.
 
-**Use this command when:**
-
-- You want to research without planning yet
-- You want to re-research after planning is complete
-- You need to investigate before deciding if a phase is feasible
-- You need to survey the literature or mathematical landscape for a physics problem
-
-**Orchestrator role:** Parse phase, validate against roadmap, check existing research, gather context, spawn researcher agent, present results.
-
-**Why subagent:** Research burns context fast (literature searches, method surveys, source verification). Fresh 200k context for investigation. Main context stays lean for user interaction.
+**Why subagent:** Fresh context keeps the phase survey scoped instead of carrying stale planning detail.
 </objective>
 
 <execution_context>
@@ -37,7 +25,7 @@ Research how to tackle a phase. Spawns grd-phase-researcher agent with phase con
 <context>
 Phase number: $ARGUMENTS (required)
 
-Normalize phase input in step 1 before any directory lookups.
+Normalize phase input before any directory lookups.
 </context>
 
 <process>

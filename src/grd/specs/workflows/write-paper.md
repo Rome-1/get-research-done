@@ -18,35 +18,25 @@ A physics paper has a narrative arc. It is not a report of everything that was d
 
 <journal_formats>
 
-### Physical Review Letters (PRL)
+### Builder-Supported Manuscript Scaffolds
 
-- **Length:** 4 pages (3750 words including references)
-- **Style:** Impact-focused. The first paragraph must hook the reader. No leisurely introduction.
-- **Equations:** Only the essential ones. Derivations go to Supplemental Material.
-- **Figures:** Maximum 4 (including insets). Each must be publication quality.
-- **References:** ~30-40 citations maximum.
+The manuscript builder and emitted `${PAPER_DIR}/ARTIFACT-MANIFEST.json` currently support only these `PAPER-CONFIG.json` journal keys:
 
-### Physical Review (PRD/PRB/PRA/PRE)
+- `prl` — short, impact-focused letter; only the essential equations stay in the main text
+- `apj` — astrophysics manuscript with data/software citation expectations
+- `mnras` — astronomy manuscript using the shared generic scoring profile for now
+- `nature` — broad-impact scaffold with accessibility emphasis
+- `jhep` — theory-first scaffold with stronger derivation and convention expectations
+- `jfm` — fluids manuscript using the shared generic scoring profile for now
 
-- **Length:** Full-length (8-15 pages typical)
-- **Style:** Detailed and complete. Sufficient for a reader to reproduce the work.
-- **Equations:** Include all essential steps. Move lengthy algebra to appendices.
-- **Figures:** As many as needed. Must be referenced in text.
-- **References:** Comprehensive.
+These are the only valid `journal` values in `PAPER-CONFIG.json` and `${PAPER_DIR}/ARTIFACT-MANIFEST.json`.
 
-### Reviews of Modern Physics (RMP)
+### Manual Paper-Quality Profiles
 
-- **Length:** 30-80+ pages
-- **Style:** Pedagogical review. Should be accessible to non-specialists in the subfield.
-- **Equations:** Include derivations of key results. Pedagogical clarity over brevity.
-- **References:** Exhaustive.
+Manual `PaperQualityInput` JSON can use additional scoring-only profiles such as `prd`, `prb`, `prc`, or `nature_physics`, but those are not supported `PAPER-CONFIG.json` builder keys yet.
 
-### arXiv Preprint
-
-- **Length:** Flexible
-- **Style:** Vary from PRL-like to full detail
-- **Priority:** Establishing priority and getting community feedback
-  </journal_formats>
+When `grd --raw validate paper-quality --from-project .` runs, the journal is resolved only from supported builder keys surfaced by `${PAPER_DIR}/ARTIFACT-MANIFEST.json` or `${PAPER_DIR}/PAPER-CONFIG.json`. Unsupported values fall back to the `generic` scoring profile rather than being inferred.
+</journal_formats>
 
 <process>
 
@@ -61,7 +51,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `commit_docs`, `state_exists`, `project_exists`, `project_contract`, `project_contract_load_info`, `project_contract_validation`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `active_reference_context`.
+Parse JSON for: `commit_docs`, `state_exists`, `project_exists`, `autonomy`, `research_mode`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `active_reference_context`, `derived_manuscript_reference_status`, `derived_manuscript_reference_status_count`, `derived_manuscript_proof_review_status`.
 
 **Load mode settings:**
 
@@ -74,7 +64,7 @@ Mode effects on the write-paper pipeline:
 - **Explore mode**: Paper structured as a comparison/survey; broader literature review; more figures; comprehensive related-work section
 - **Exploit mode**: Paper structured as a focused result; streamlined introduction; minimal related-work; optimized for tight prose
 - **Supervised autonomy**: Checkpoints after the outline, after each section draft, and before referee review.
-- **Balanced autonomy**: Auto-generate the outline from the research digest, draft all sections, and pause only for claim-level decisions, major structural changes, or referee conflicts.
+- **Balanced autonomy**: Auto-generate the outline from the research digest, draft all sections, and continue automatically unless the outline, a draft section, or referee feedback exposes a genuine ambiguity, missing evidence path, claim-level decision, or major structural change. Do not force a routine outline-approval pause in balanced mode.
 - **YOLO autonomy**: Draft all sections, run referee, and present the final result with only hard-stop interruptions.
 
 For detailed mode adaptation specifications (bibliographer search breadth, referee strictness, paper-writer style by mode), see `{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/publication-pipeline-modes.md`.
@@ -98,24 +88,22 @@ grd validate review-preflight write-paper --strict
 If review preflight exits nonzero because of missing project state, missing roadmap, degraded review integrity, missing research artifacts, or non-review-ready reproducibility coverage, STOP and show the blocking issues before drafting. Keep the current `project_contract`, `project_contract_load_info`, `project_contract_validation`, and `active_reference_context` visible throughout the staged review; they are authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes.
 For any resumed manuscript, strict preflight reads `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and `reproducibility-manifest.json` from the resolved manuscript directory itself. Do not satisfy that gate with legacy `.grd/paper/` publication artifacts when the active manuscript lives elsewhere.
 
-**Locate paper directory (if resuming):**
+@{GRD_INSTALL_DIR}/references/publication/publication-bootstrap-preflight.md
 
-```bash
-for DIR in paper manuscript draft; do
-  if [ -f "${DIR}/main.tex" ]; then
-    PAPER_DIR="$DIR"
-    break
-  fi
-done
-if [ -z "${PAPER_DIR}" ]; then
-  PAPER_DIR="paper"
-fi
-```
+Keep the current `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, and `active_reference_context` visible throughout the staged review; the contract is authoritative only when `project_contract_gate.authoritative` is true.
+If `derived_manuscript_proof_review_status` is present, use it as the first-pass manuscript-local summary of proof-review freshness for theorem-bearing results; keep passed proof-redteam artifacts authoritative for strict drafting decisions.
+If the manuscript depends on any theorem-style or `proof_obligation` result, treat passed proof-redteam artifacts from the source phases as mandatory review inputs. Missing or open proof audits are CRITICAL blockers, not polish issues.
 
-If the loop found an existing `main.tex`, the workflow is resuming or revising that manuscript directory. Strict review for that resume path uses `${PAPER_DIR}/ARTIFACT-MANIFEST.json`, `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json`, and `${PAPER_DIR}/reproducibility-manifest.json` from the same directory.
-If no existing manuscript was found, `PAPER_DIR` defaults to `paper` and the workflow bootstraps a fresh scaffold there.
+**Resolve paper directory (if resuming):**
 
-**Check pdflatex availability (cross-platform):**
+If strict preflight or init already resolved an active manuscript under `paper/`, `manuscript/`, or `draft/`, keep that manuscript root as `PAPER_DIR`.
+Strict review for that resume path uses `${PAPER_DIR}/ARTIFACT-MANIFEST.json`; do not satisfy that gate with legacy publication artifacts from a different manuscript directory.
+When strict preflight resolves a manuscript root, bind it explicitly as `PAPER_DIR="$DIR"` where `$DIR` is that resolved manuscript directory, and treat `${PAPER_DIR}/{topic_specific_stem}.tex` as the canonical emitted manuscript path recorded by `${PAPER_DIR}/ARTIFACT-MANIFEST.json`.
+
+If a manuscript root was resolved, the workflow is resuming or revising that manuscript directory. Keep every strict-review dependency rooted there.
+If no manuscript root was resolved, set `PAPER_DIR="paper"` and bootstrap a fresh scaffold there.
+
+**Check optional local LaTeX compiler availability for smoke tests (cross-platform):**
 
 ```bash
 # Check standard PATH first, then platform-specific locations
@@ -145,16 +133,16 @@ fi
 If `PDFLATEX_AVAILABLE` is false, display a warning:
 
 ```
-⚠ pdflatex not found. LaTeX compilation checks will be skipped.
+⚠ pdflatex not found. Local compilation smoke checks will be skipped.
   The paper .tex files will still be generated correctly.
 
-  To enable compilation checks, install a LaTeX distribution:
+  To enable local smoke checks, install a LaTeX distribution:
     - Windows:     MiKTeX (https://miktex.org/download) or TeX Live
     - macOS:       brew install --cask mactex
     - Linux:       sudo apt install texlive-latex-base  (Debian/Ubuntu)
 ```
 
-The workflow continues without compilation checks — .tex file generation does not require pdflatex.
+The workflow continues without local compilation smoke checks — .tex file generation does not require pdflatex, and `grd paper-build` remains the canonical manuscript scaffold contract.
 
 **Convention verification** — papers must use consistent conventions throughout:
 
@@ -221,7 +209,13 @@ The research digest provides a direct scaffolding for paper organization:
 
 **Step 3 -- Identify digest gaps:**
 
-If the digest is incomplete or missing sections, note which paper sections will need to be built from raw phase data instead:
+If the digest is incomplete or missing sections, note which paper sections will need to be built from raw phase data instead. Prefer the structured init payload first for the canonical state slices already exposed there:
+
+- `derived_convention_lock` and `derived_convention_lock_count`
+- `derived_intermediate_results` and `derived_intermediate_result_count`
+- `derived_approximations` and `derived_approximation_count`
+
+Use raw phase files only for details that are not already surfaced through init.
 
 ```bash
 # Fall back to raw sources if digest is insufficient
@@ -258,7 +252,7 @@ for PHASE_NUM in $(echo "$FROM_PHASES" | tr ',' ' '); do
 done
 ```
 
-Proceed to establish_scope and catalog_artifacts, which will gather research context from raw phase data, summary artifacts, and state.json directly.
+Proceed to establish_scope and catalog_artifacts, which will gather research context from the init payload first, then summary artifacts, and only the remaining raw phase files directly.
 
 </step>
 
@@ -352,13 +346,13 @@ Read the convention declarations from each phase's summary artifact or derivatio
 2. Fourier convention — must be identical across all phases
 3. Unit system — must be identical (or conversions documented)
 
-Also check `convention_lock` in STATE.md or state.json. If a convention lock exists, verify all phases comply.
+Also check `derived_convention_lock` from the init payload first. If a convention lock exists, verify all phases comply. Fall back to `STATE.md` or `state.json` only if the structured field is unavailable.
 
 **Convention mismatch between phases** → CRITICAL gap (combining results with different conventions produces wrong answers).
 
 ### Check 3: Numerical value stability
 
-For each key result listed in the research digest (or `intermediate_results` in state.json):
+For each key result listed in the research digest (or `derived_intermediate_results` from the init payload):
 
 1. Locate the value in its source phase summary artifact
 2. Compare with any cross-references in other phases
@@ -380,7 +374,7 @@ ls .grd/paper/FIGURE_TRACKER.md 2>/dev/null
 Default bootstrap example:
 
 ```bash
-find artifacts/phases figures paper/figures -maxdepth 3
+find artifacts/phases figures "${PAPER_DIR}/figures" -maxdepth 3
 ```
 
 For each figure referenced in the research digest or artifact catalog:
@@ -406,10 +400,12 @@ ls .grd/literature/*-REVIEW.md 2>/dev/null
 1. Does a project bibliography exist (`references/references.bib` or `${PAPER_DIR}/references.bib`)?
 2. Does at least one `.grd/literature/*-REVIEW.md` or phase `RESEARCH.md` exist?
 3. Are key prior works identified (the research digest's "Prior Work" or literature review)?
-4. If the bibliography changed after the last audit, refresh `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` before strict review. The JSON audit is the review contract artifact; `${PAPER_DIR}/CITATION-AUDIT.md` is only the human-readable report.
-   For the default bootstrap path, this means: `If the bibliography changed after the last audit, refresh `paper/BIBLIOGRAPHY-AUDIT.json` before strict review.`
+4. If `GRD/literature/*-CITATION-SOURCES.json` exists for the current topic, treat it as the citation-source handoff from literature-review and pass it through `grd paper-build --citation-sources` instead of reconstructing the list manually.
+5. If `derived_manuscript_reference_status` is present in the init/context payload, use it as the manuscript-local status summary for the active manuscript instead of reconstructing read/verified/cited state from prose or source ordering.
+6. `grd paper-build` is the authoritative step that regenerates `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` and the derived `reference_id -> bibtex_key` bridge for the active manuscript root. Rerun it whenever the bibliography or citation set changes before strict review. The JSON audit is the review contract artifact; `${PAPER_DIR}/CITATION-AUDIT.md` is only the human-readable report.
+   For the default bootstrap path, this means: rerun `paper-build` so `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` reflects the current bibliography before strict review.
 
-**No bibliography file and no literature review** → WARNING (citations will need to be built from scratch).
+**No bibliography file, no literature review, and no citation-source sidecar** → WARNING (citations will need to be built from scratch).
 
 ### Check 6: Decisive comparison continuity
 
@@ -422,6 +418,27 @@ Check that the manuscript can surface the decisive evidence, not just supporting
 
 **Decisive comparison missing for a central claim** → CRITICAL gap.
 **Bundle guidance suggests a decisive comparison that is absent, but the manuscript narrows the claim honestly** → WARNING, not blocker.
+
+### Check 7: Proof-obligation coverage
+
+Check whether any contributing phase or manuscript section makes theorem-style claims.
+
+Treat a manuscript claim as proof-bearing when:
+
+1. the supporting phase contract includes `proof_obligation`
+2. the manuscript uses theorem-style language (`theorem`, `lemma`, `corollary`, `proposition`, `claim`, `proof`, `we prove`, `show that`)
+3. the draft strengthens a formal result beyond the audited scope of a source derivation
+
+For each such claim:
+
+1. locate the source `*-PROOF-REDTEAM.md` artifact in the contributing phase, or the manuscript-round `GRD/review/PROOF-REDTEAM{round_suffix}.md` artifact when it already exists
+2. confirm the audit reports `status: passed`
+3. confirm the audit closed parameter, hypothesis, quantifier/domain, and conclusion-clause coverage
+4. confirm the manuscript wording does not overstate what the passed audit actually established
+
+**Missing proof-redteam artifact for a theorem-style claim** → CRITICAL gap.
+**Proof-redteam artifact present but `status != passed`** → CRITICAL gap.
+**Manuscript strengthens the claim beyond the audited theorem statement** → CRITICAL gap.
 
 ### Audit Report
 
@@ -439,9 +456,10 @@ Phases audited: {N}
 	  SUMMARY completeness      {P/F}     {details}
 	  Convention consistency     {P/F}     {details}
 	  Numerical stability        {P/F}     {details}
-	  Figure readiness           {P/F}     {details}
-	  Citation readiness         {P/F}     {details}
-	  Decisive comparisons       {P/F}     {details}
+		  Figure readiness           {P/F}     {details}
+		  Citation readiness         {P/F}     {details}
+		  Decisive comparisons       {P/F}     {details}
+		  Proof obligations          {P/F}     {details}
 
   CRITICAL gaps: {count}
   Warnings:      {count}
@@ -487,7 +505,7 @@ The outline must satisfy:
 3. A reader of Abstract + Conclusions gets the full story in miniature
 4. The Discussion adds value beyond repeating Results (interpretation, implications, connections)
 
-Present outline for approval before proceeding.
+If `autonomy=supervised`, present the outline for approval before proceeding. If `autonomy=balanced`, treat the outline as a working draft and continue automatically unless it exposes a genuine ambiguity, missing evidence path, or scope-changing decision that needs user judgment. If `autonomy=yolo`, continue automatically after the artifact checks.
 </step>
 
 <step name="generate_files">
@@ -495,7 +513,7 @@ Create the paper directory structure under `${PAPER_DIR}/`:
 
 ```
 ${PAPER_DIR}/
-+-- main.tex              # Master document with \input commands
++-- {topic_specific_stem}.tex   # Master document with \input commands
 +-- abstract.tex
 +-- introduction.tex
 +-- model.tex             # or setup.tex
@@ -510,7 +528,7 @@ ${PAPER_DIR}/
 +-- Makefile              # Build: pdflatex + bibtex
 ```
 
-The main.tex should:
+The manuscript entrypoint should:
 
 - Use the target journal's document class
 - Define all custom macros in a preamble block (see `{GRD_INSTALL_DIR}/templates/latex-preamble.md` for standard packages, project-specific macros, equation labeling conventions, and SymPy-to-LaTeX integration)
@@ -532,8 +550,17 @@ When authoring `${PAPER_DIR}/PAPER-CONFIG.json`:
 
 - use the exact top-level fields from `{GRD_INSTALL_DIR}/templates/paper/paper-config-schema.md`
 - keep `authors`, `sections`, `figures`, and `appendix_sections` as JSON arrays
+- keep any custom funding/collaborator text in `acknowledgments`; `grd paper-build` appends this exact sentence automatically if it is missing: `This research made use of Get Physics Done (GPD) and was supported in part by a GRD Research Grant from Physical Superintelligence PBC (PSI).`
 - keep `journal` to a supported builder key like `prl`, `apj`, `mnras`, `nature`, `jhep`, or `jfm`
 - do not invent extra keys just because a journal asks for extra prose; put that prose in the section content instead
+
+Canonical schema for `${PAPER_DIR}/ARTIFACT-MANIFEST.json`:
+@{GRD_INSTALL_DIR}/templates/paper/artifact-manifest-schema.md
+
+Canonical schema for `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json`:
+@{GRD_INSTALL_DIR}/templates/paper/bibliography-audit-schema.md
+
+Treat both emitted JSON artifacts as strict review inputs. If they need to be recreated or repaired, match those schema surfaces exactly instead of inventing keys from prose memory.
 
 **Supplemental material:** If the paper requires supplemental material (common for PRL and other letter-format journals), use `{GRD_INSTALL_DIR}/templates/paper/supplemental-material.md` for the standard structure (extended derivations, computational details, additional figures, data tables, code availability).
 
@@ -560,7 +587,7 @@ Before drafting sections, generate all planned figures:
       - Font size 10pt, axes labels with units, legend
       - Error bars where applicable, colorblind-safe colors
    c. Execute script, save to `${PAPER_DIR}/figures/`
-   d. Update FIGURE_TRACKER.md status
+   d. Update `${PAPER_DIR}/FIGURE_TRACKER.md` status
 4. Verify all figures referenced in outline exist as files
 
 **If figure data is missing:** Flag as blocker, suggest which phase needs re-execution.
@@ -588,15 +615,15 @@ Spawn grd-paper-writer agents for section drafting.
 5. **Wave 5:** Abstract -- distill everything into 150-300 words (write LAST)
 6. **Wave 6:** Appendices -- technical details moved from main text
 
-**LaTeX compilation check after each wave (if pdflatex available):**
+**Optional local compilation smoke check after each wave (if a compiler is available):**
 
-Skip this check if `PDFLATEX_AVAILABLE` is false (set in init step).
+Skip this check if `PDFLATEX_AVAILABLE` is false (set in init step). `grd paper-build` remains the source of build truth either way.
 
 After each drafting wave completes, verify the document compiles:
 
 ```bash
 cd "${PAPER_DIR}"
-pdflatex -interaction=nonstopmode main.tex 2>&1 | tail -20
+pdflatex -interaction=nonstopmode "${MANUSCRIPT_BASENAME}" 2>&1 | tail -20
 ```
 
 **If compilation errors:**
@@ -623,9 +650,13 @@ fi
 ```
 
 Apply this pattern to each wave: check for the expected .tex output files before spawning writer agents.
+Check if the expected .tex file was written to `${PAPER_DIR}/` before treating a section handoff as complete.
+If the file exists, proceed to the next section.
 
 **For each section, spawn a writer agent:**
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
+
+> If subagent spawning is unavailable, execute these steps sequentially in the main context.
 
 ```
 task(
@@ -637,8 +668,10 @@ task(
 )
 ```
 
-**If a writer agent fails to spawn or returns an error:** Check if the expected .tex file was written to `${PAPER_DIR}/` (agents write files first). If the file exists, proceed to the next section. If not, offer: 1) Retry the failed section, 2) Draft the section in the main context using the section brief, 3) Skip the section and continue with remaining waves. Do not block the entire paper on a single section failure — other sections can still be drafted in parallel.
-Default bootstrap wording: `Check if the expected .tex file was written to `paper/``. If the file exists, proceed to the next section.
+**If a writer agent fails to spawn or returns an error:** Check the writer's typed `grd_return.status` first. If the writer returned `status: completed`, verify that `grd_return.files_written` names the expected `.tex` file and that the file exists on disk. If the writer returned `status: checkpoint`, treat it as an incomplete handoff and continue only by spawning a fresh continuation run after the orchestrator/user review. If the writer returned `status: blocked` or `status: failed`, treat the section as incomplete. Do not accept a preexisting `.tex` file as a substitute for a successful spawn; a spawn error always leaves the section incomplete until a fresh typed return names the artifact and the file exists on disk.
+
+Treat the emitted `.tex` file as the success artifact gate for each section.
+Route on the writer's typed return envelope. A writer response that does not report `status: completed`, does not list the emitted path in `files_written`, or does not leave the expected file on disk is not a completed section, even if the agent returned success text.
 
 **Each writer agent receives:**
 
@@ -649,6 +682,8 @@ Default bootstrap wording: `Check if the expected .tex file was written to `pape
 - Active decisive-comparison artifacts (`.grd/comparisons/*-COMPARISON.md`) and relevant `FIGURE_TRACKER.md` entries for any contract-critical figure or table
 - `protocol_bundle_context` and `selected_protocol_bundle_ids` as additive specialized guidance only; they help decide which decisive anchors, estimator caveats, and benchmark comparisons must stay visible, but they do not replace the contract-backed evidence ledger
 - Writing principles (see command file)
+
+Writer agents must not strengthen, generalize, or rhetorically smooth theorem-style claims beyond what the proof-redteam artifacts actually passed. If the section brief implies a stronger theorem than the available audit supports, STOP and route the claim back for proof review instead of writing around the gap.
 
 **What makes good physics writing:**
 
@@ -813,7 +848,9 @@ Resolve bibliographer model:
 ```bash
 BIBLIO_MODEL=$(grd resolve-model grd-bibliographer)
 ```
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
+
+> If subagent spawning is unavailable, execute these steps sequentially in the main context.
 
 ```
 task(
@@ -828,7 +865,8 @@ Mode: Audit bibliography + Audit manuscript
 
 Paper directory: ${PAPER_DIR}/
 Bibliography: `references/references.bib` (preferred) or `${PAPER_DIR}/references.bib` if the manuscript keeps a local copy
-Manuscript files: ${PAPER_DIR}/*.tex
+Citation sources: `GRD/literature/*-CITATION-SOURCES.json` when literature-review has already assembled a machine-readable citation list for the current topic
+Manuscript tree: all `.tex` files under `${PAPER_DIR}` recursively, rooted at the manifest-resolved manuscript directory
 Target journal: {target_journal}
 
 Tasks:
@@ -838,16 +876,20 @@ Tasks:
 4. Scan for uncited named results, theorems, or methods that should have citations
 5. Verify BibTeX formatting matches {target_journal} requirements
 6. Check arXiv preprints for published versions (update stale preprint-only entries)
+7. Preserve `GRD/literature/*-CITATION-SOURCES.json` as the source artifact that seeded the bibliography; do not treat it as a competing registry
 
 Write audit report to ${PAPER_DIR}/CITATION-AUDIT.md
 
-Return BIBLIOGRAPHY UPDATED or CITATION ISSUES FOUND."
+Return a typed `grd_return` envelope. Use `status: completed` when the bibliography task finished, even if the human-readable heading is `## CITATION ISSUES FOUND`; use `status: checkpoint` only when researcher input is required to continue. A completed return must list `references/references.bib` and `GRD/references-status.json` in `grd_return.files_written`, and both files must exist on disk before the bibliography pass is accepted."
 )
 ```
 
 **If the bibliographer agent fails to spawn or returns an error:** Proceed without bibliography verification — note in the paper status that citations are unverified. The user should run `/grd:literature-review` to verify citations after the paper is written.
 
-**If CITATION ISSUES FOUND:**
+Treat `${PAPER_DIR}/CITATION-AUDIT.md`, the refreshed `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json`, and the bibliographer's typed `grd_return` envelope as the bibliography success gate; all three must be present, and the typed return must name the bibliography outputs, before the pass is accepted.
+If the typed return is missing, blocked, or does not name the bibliography outputs, keep the bibliography pass incomplete even if older audit files are still on disk.
+
+**If the bibliographer completed with issues recorded in the audit report or `GRD/references-status.json`:**
 
 - Read the audit report and `.grd/references-status.json`
 - Replace resolved `MISSING:` markers: for each entry in `resolved_markers`, find-and-replace `\cite{MISSING:X}` → `\cite{resolved_key}` in all .tex files and remove the associated `% MISSING CITATION:` comment
@@ -855,13 +897,15 @@ Return BIBLIOGRAPHY UPDATED or CITATION ISSUES FOUND."
 - Apply metadata corrections to .bib entries
 - Add missing citations identified by the bibliographer
 - Re-run the audit if substantial changes were made
-- Refresh `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` after the bibliography changes before entering strict review or `pre_submission_review`.
-  Default bootstrap wording: `Refresh `paper/BIBLIOGRAPHY-AUDIT.json` after the bibliography changes before entering strict review or `pre_submission_review`.`
+- Re-run `grd paper-build` after bibliography changes so `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` and the derived reference bridge are regenerated before entering strict review or `pre_submission_review`.
+- Confirm `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` exists after the refresh before proceeding to reproducibility or strict review.
 
-**If BIBLIOGRAPHY UPDATED:**
+**If the bibliographer completed cleanly with no remaining citation issues:**
 
 - Corrections already applied to .bib by bibliographer
-- Refresh `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` so downstream strict review reads the current bibliography state.
+- Re-run `grd paper-build` so `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` reflects the current bibliography state and the derived reference bridge stays current for downstream strict review.
+- If `derived_manuscript_reference_status` is present, use it to confirm which manuscript-local references still need attention, but let the refreshed manuscript-root build artifacts decide the final state.
+- If the bibliography was seeded from `GRD/literature/*-CITATION-SOURCES.json`, keep that handoff artifact visible for reruns of `grd paper-build --citation-sources`.
 - Review the changes summary, proceed to final review
   </step>
 
@@ -887,8 +931,7 @@ Minimum required inputs:
 - `.grd/paper/FIGURE_TRACKER.md`
 - contract-backed summary-artifact / `VERIFICATION.md` evidence for decisive claims, figures, and comparisons
 
-If the manuscript bibliography or citation set changed after the last audit, refresh `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` before building the reproducibility manifest. Stale bibliography audits are not acceptable review inputs.
-Default bootstrap wording: `If the manuscript bibliography or citation set changed after the last audit, refresh `paper/BIBLIOGRAPHY-AUDIT.json` before building the reproducibility manifest.`
+`grd paper-build` must have regenerated `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` for the current bibliography before building the reproducibility manifest. Stale bibliography audits are not acceptable review inputs.
 
 Validate it before entering strict review:
 
@@ -944,7 +987,7 @@ Before declaring the draft complete:
 
 **7. Run paper quality scoring** (see `{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/paper-quality-scoring.md`):
 
-Score the paper across 7 dimensions (equations, figures, citations, conventions, verification, completeness, results presentation) for a total out of 100. Apply journal-specific multipliers for the target journal.
+Score the paper across 7 dimensions (equations, figures, citations, conventions, verification, completeness, results presentation) for a total out of 100. Apply journal-specific multipliers for the resolved journal profile, noting that the artifact-driven path only honors supported builder journals surfaced by `${PAPER_DIR}/ARTIFACT-MANIFEST.json` or `${PAPER_DIR}/PAPER-CONFIG.json`.
 
 ```bash
 QUALITY=$(grd --raw validate paper-quality --from-project . 2>/dev/null)
@@ -1001,11 +1044,7 @@ When revising a paper in response to referee reports:
 
    Also create `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` (the human-readable response letter source) using the `templates/paper/referee-response.md` template for the actual journal submission cover letter.
 
-3. **Spawn section revision agents:** For each major concern requiring manuscript changes, spawn a paper-writer agent with:
-   - The specific referee point
-   - The current section text
-   - The planned response
-   - Any new calculations or results needed
+   See the canonical `templates/paper/author-response.md` and `templates/paper/referee-response.md` contracts plus the shared publication response-writer handoff for the full response-tracker format.
 
 4. **Track new calculations:** If referee requests require new derivations or simulations, create tasks in `.grd/paper/REVISION_TASKS.md` and route to appropriate phases.
 
@@ -1041,12 +1080,12 @@ Options:
 <success_criteria>
 
 - [ ] Project context loaded via init (commit_docs, state_exists)
-- [ ] pdflatex availability checked (compilation tests skipped if unavailable)
+- [ ] Local compilation smoke check run when available (skipped otherwise)
 - [ ] Research digest checked and loaded (if available from milestone completion)
 - [ ] Paper scope established (journal, type, key result, audience)
 - [ ] Research artifacts cataloged and mapped to sections
 - [ ] Paper-readiness audit passed (0 critical gaps, or user approved proceeding with gaps)
-- [ ] Detailed outline created and approved
+- [ ] Detailed outline created; approval captured only when autonomy requires it
 - [ ] All sections drafted in correct order (Results first, Abstract last)
 - [ ] Every equation numbered, labeled, defined, and contextualized
 - [ ] Every figure captioned, labeled, and discussed in text
@@ -1058,7 +1097,35 @@ Options:
 - [ ] Internal consistency verified (notation, cross-references, conventions)
 - [ ] Notation audit includes NOTATION_GLOSSARY.md cross-reference (if glossary exists)
 - [ ] Narrative arc flows from motivation through result to significance
-- [ ] Paper directory created with buildable LaTeX (if pdflatex available)
+- [ ] Paper directory created with buildable LaTeX scaffold via `grd paper-build`
 - [ ] Abstract accurately reflects paper content
 - [ ] Word/page count within journal limits
 </success_criteria>
+
+<community_contribution>
+
+After a paper draft is finalized and passes peer review, display:
+
+```
+────────────────────────────────────────────────────────
+📄 Share your work with the GRD community
+
+When the paper is posted to arXiv or otherwise public,
+consider opening a pull request to add it to the
+README.md "Papers Using GRD" list:
+
+  https://github.com/psi-oss/get-physics-done#papers-using-grd
+
+What to include:
+  • A short summary of the problem and approach
+  • The GRD commands/workflow you used
+  • Key results or figures (optional)
+
+This helps other researchers discover real GRD papers and
+learn from concrete workflows.
+────────────────────────────────────────────────────────
+```
+
+This prompt is informational only. Do not block the paper workflow on it.
+
+</community_contribution>

@@ -46,6 +46,7 @@ def test_protocols_success_envelope() -> None:
             "steps": ["Identify small parameter"],
             "checkpoints": ["Verify limiting cases"],
             "content": "# Perturbation Theory Protocol\n",
+            "usage_caution": _PROTOCOL_USAGE_CAUTION,
         },
     )
 
@@ -161,6 +162,6 @@ def test_conventions_error_envelope() -> None:
         "grd.mcp.servers.conventions_server._update_lock_in_project",
         side_effect=TimeoutError("lock acquisition timed out"),
     ):
-        result = convention_set("/tmp/project", "metric_signature", "(+,-,-,-)")
+        result = convention_set(fake_project_dir, "metric_signature", "(+,-,-,-)")
 
     _assert_strict_envelope(result, {"error": "lock acquisition timed out"})

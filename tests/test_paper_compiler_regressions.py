@@ -30,7 +30,7 @@ async def test_latexmk_rejects_pdf_when_exit_code_is_nonzero(tmp_path, monkeypat
 
     monkeypatch.setattr("grd.mcp.paper.compiler.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
 
-    result = await _compile_with_latexmk(tex_path, tmp_path, "pdflatex")
+    result = await _compile_with_latexmk(tex_path, tmp_path, "pdflatex", latexmk_path="/usr/bin/latexmk")
 
     assert result.success is False
     assert result.pdf_path is not None  # PDF returned even on non-zero exit

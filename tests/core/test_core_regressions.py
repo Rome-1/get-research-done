@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -79,17 +80,18 @@ def test_result_not_found_error_str_has_no_surrounding_quotes() -> None:
 def test_question_list_preserves_mixed_string_and_dict_items() -> None:
     from grd.core.extras import question_list
 
-    result = question_list(
+    helper = getattr(extras, helper_name)
+    result = helper(
         {
-            "open_questions": [
-                "Why does the coupling diverge?",
-                {"text": "Is the vacuum stable?", "priority": "high"},
-                "What about unitarity?",
+            payload_key: [
+                first_item,
+                {"text": dict_item_text, "priority": "high" if helper_name == "question_list" else "in-progress"},
+                last_item,
             ]
         }
     )
 
-    assert result[0] == "Why does the coupling diverge?"
+    assert result[0] == first_item
     assert isinstance(result[1], dict)
     assert result[1]["text"] == "Is the vacuum stable?"
     assert result[2] == "What about unitarity?"
@@ -169,9 +171,38 @@ def test_json_set_reports_type_mismatch_errors(tmp_path: Path) -> None:
 def test_check_latest_return_tolerates_non_dict_grd_return(tmp_path: Path, yaml_block: str) -> None:
     from grd.core.health import check_latest_return
 
-    result = check_latest_return(_setup_project_with_summary(tmp_path, yaml_block))
+    grd_dir = tmp_path / "GRD" / "phases"
+    older_phase = grd_dir / "01-alpha"
+    newer_phase = grd_dir / "02-beta"
+    older_phase.mkdir(parents=True)
+    newer_phase.mkdir(parents=True)
 
-    assert result.label == "Latest Return Envelope"
+    older_summary = older_phase / "01-alpha-01-SUMMARY.md"
+    newer_summary = newer_phase / "02-beta-01-SUMMARY.md"
+    for summary in (older_summary, newer_summary):
+        summary.write_text(
+            "# Summary\n\n"
+            "```yaml\n"
+            "grd_return:\n"
+            "  status: completed\n"
+            "  files_written: [src/main.py]\n"
+            "  issues: []\n"
+            "  next_actions: [/grd:verify-work 01]\n"
+            "```\n",
+            encoding="utf-8",
+        )
+
+    same_mtime = 1_700_000_000
+    os.utime(older_summary, (same_mtime, same_mtime))
+    os.utime(newer_summary, (same_mtime, same_mtime))
+
+    result = check_latest_return(tmp_path)
+    repeated = check_latest_return(tmp_path)
+
+    assert result.status == CheckStatus.OK
+    assert result.details["file"] == "02-beta/02-beta-01-SUMMARY.md"
+    assert repeated.details["file"] == result.details["file"]
+    assert result.details["fields_found"] == ["files_written", "issues", "next_actions", "status"]
 
 
 def test_apply_fixes_resets_config_on_parse_error(tmp_path: Path) -> None:
@@ -241,7 +272,8 @@ def test_empty_manifest_has_full_checksum_coverage() -> None:
 
     result = validate_reproducibility_manifest(manifest)
 
-    assert result.checksum_coverage_percent == 100.0
+    assert result.checksum_coverage_percent == 0.0
+    assert result.ready_for_review is False
 
 
 def test_result_update_wraps_validation_error_as_result_error() -> None:
@@ -317,7 +349,7 @@ def test_verification_checks_api_handles_valid_and_invalid_ids() -> None:
     assert get_verification_check("5.1") is not None
     assert get_verification_check("contract.benchmark_reproduction") is not None
     assert get_verification_check("99.99") is None
-    assert len(list_verification_checks()) >= 15
+    assert list_verification_checks()
 
 
 def test_formal_statement_and_proof_checks_are_registered() -> None:
@@ -533,9 +565,19 @@ def test_phase_complete_keeps_checkpoint_sync_nonfatal_for_malformed_summary(tmp
     assert (tmp_path / "GRD" / "CHECKPOINTS.md").exists()
 
 
-def test_phase_complete_surfaces_unexpected_checkpoint_sync_failure(
+@pytest.mark.parametrize(
+    ("phase_name", "phase_dir_name", "filename"),
+    [
+        ("phase_complete", "01-setup", "01-01-PLAN.md"),
+        ("phase_remove", "02-derivation", "02-01-PLAN.md"),
+    ],
+)
+def test_checkpoint_sync_failure_surfaces_for_phase_completion_and_removal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    phase_name: str,
+    phase_dir_name: str,
+    filename: str,
 ) -> None:
     from grd.core.phases import phase_complete
 

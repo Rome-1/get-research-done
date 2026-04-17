@@ -1,7 +1,7 @@
 ---
 name: grd:discuss-phase
 description: Gather phase context through adaptive questioning before planning
-argument-hint: "<phase>"
+argument-hint: "<phase> [--auto]"
 context_mode: project-required
 allowed-tools:
   - file_read
@@ -12,8 +12,6 @@ allowed-tools:
   - ask_user
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Extract research decisions that downstream agents need -- researcher and planner will use CONTEXT.md to know what to investigate, which anchors and prior outputs must stay visible, and what choices are locked.
@@ -24,6 +22,8 @@ Extract research decisions that downstream agents need -- researcher and planner
 2. Present gray areas -- user selects which to discuss
 3. Deep-dive each selected area until satisfied
 4. Create CONTEXT.md with decisions, carry-forward inputs, and skeptical review items that guide research and planning
+
+**`--auto` mode:** Compress the discussion to 2-3 critical gray areas, 1 question each, then auto-proceed to planning. For researchers who want fast iteration with sensible defaults.
 
 **Output:** `{phase}-CONTEXT.md` -- decisions clear enough that downstream agents can act without asking the user again
 </objective>
@@ -44,13 +44,13 @@ Phase number: $ARGUMENTS (required)
 </context>
 
 <process>
-1. Validate phase number (error if missing or not in roadmap)
-2. Check if CONTEXT.md exists (offer update/view/skip if yes)
+1. Validate phase number and detect `--auto` flag (error if phase missing or not in roadmap)
+2. Check if CONTEXT.md exists (offer update/view/skip if yes; in `--auto` mode: reuse existing, skip to planning)
 3. **Analyze phase** -- Identify domain and generate phase-specific gray areas
-4. **Present gray areas** -- Multi-select: which to discuss? (NO skip option)
-5. **Deep-dive each area** -- 4 questions per area, then offer more/next
+4. **Present gray areas** -- Multi-select: which to discuss? (NO skip option; `--auto`: auto-select top 2-3)
+5. **Deep-dive each area** -- 4 questions per area, then offer more/next (`--auto`: 1 question per area, no follow-up rounds)
 6. **Write CONTEXT.md** -- Sections match areas discussed
-7. Offer next steps (research or plan)
+7. Offer next steps (`--auto`: auto-suggest `grd:plan-phase` and proceed if user confirms)
 
 **CRITICAL: Scope guardrail**
 

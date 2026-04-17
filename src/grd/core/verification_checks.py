@@ -55,6 +55,11 @@ class VerificationCheckDef(BaseModel):
         "contract_direct_proxy_consistency",
         "contract_fit_family_mismatch",
         "contract_estimator_family_mismatch",
+        "contract_proof_hypothesis_coverage",
+        "contract_proof_parameter_coverage",
+        "contract_proof_quantifier_domain",
+        "contract_claim_to_proof_alignment",
+        "contract_counterexample_search",
     ] = "universal"
     contract_aware: bool = False
     binding_targets: list[

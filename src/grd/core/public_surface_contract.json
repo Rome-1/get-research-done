@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "beginner_onboarding": {
+    "hub_url": "./docs/README.md",
+    "preflight_requirements": [
+      "One supported runtime is already installed and can open from your normal terminal.",
+      "Node.js 20+ is available in that same terminal.",
+      "Python 3.11+ with the standard `venv` module is available there too."
+    ],
+    "caveats": [
+      "GRD is not a standalone app.",
+      "GRD does not install your runtime for you.",
+      "GRD does not include model access, billing, or API credits.",
+      "This hub is the beginner path, not the full reference.",
+      "If evidence, references, or artifacts are missing, say so explicitly; GRD should not invent them."
+    ],
+    "startup_ladder": [
+      "help",
+      "start",
+      "tour",
+      "new-project / map-research",
+      "resume-work"
+    ]
+  },
+  "local_cli_bridge": {
+    "commands": [
+      "grd --help",
+      "grd doctor",
+      "grd validate unattended-readiness --runtime <runtime> --autonomy balanced",
+      "grd permissions status --runtime <runtime> --autonomy balanced",
+      "grd permissions sync --runtime <runtime> --autonomy balanced",
+      "grd resume",
+      "grd resume --recent",
+      "grd observe execution",
+      "grd cost",
+      "grd presets list",
+      "grd validate plan-preflight <PLAN.md>",
+      "grd integrations status wolfram"
+    ],
+    "named_commands": {
+      "help": "grd --help",
+      "doctor": "grd doctor",
+      "unattended_readiness": "grd validate unattended-readiness --runtime <runtime> --autonomy balanced",
+      "permissions_status": "grd permissions status --runtime <runtime> --autonomy balanced",
+      "permissions_sync": "grd permissions sync --runtime <runtime> --autonomy balanced",
+      "resume": "grd resume",
+      "resume_recent": "grd resume --recent",
+      "observe_execution": "grd observe execution",
+      "cost": "grd cost",
+      "presets_list": "grd presets list",
+      "plan_preflight": "grd validate plan-preflight <PLAN.md>",
+      "integrations_status_wolfram": "grd integrations status wolfram"
+    },
+    "terminal_phrase": "from your normal terminal",
+    "purpose_phrase": "the broader local install, readiness, validation, permissions, observability, diagnostics, recovery, cost, preset, and shared Wolfram integration surface",
+    "install_local_example": "grd install <runtime> --local",
+    "doctor_local_command": "grd doctor --runtime <runtime> --local",
+    "doctor_global_command": "grd doctor --runtime <runtime> --global",
+    "validate_command_context_command": "grd validate command-context grd:<name>"
+  },
+  "post_start_settings": {
+    "primary_sentence": "After your first successful start or later, use the runtime `settings` command to review autonomy, workflow defaults, model-cost posture, runtime permission sync, and preset/tier overrides.",
+    "default_sentence": "The safest starting point is `review` plus runtime defaults. Favor scientific rigor and explicit uncertainty over agreement-seeking, and keep missing evidence or artifacts explicit instead of inventing them."
+  },
+  "resume_authority": {
+    "durable_authority_phrase": "`state.json.continuation` is the durable authority",
+    "public_vocabulary_intro": "Canonical continuation fields define the public resume vocabulary",
+    "public_fields": [
+      "active_resume_kind",
+      "active_resume_origin",
+      "active_resume_pointer",
+      "active_bounded_segment",
+      "derived_execution_head",
+      "active_resume_result",
+      "continuity_handoff_file",
+      "recorded_continuity_handoff_file",
+      "missing_continuity_handoff_file",
+      "resume_candidates"
+    ]
+  },
+  "recovery_ladder": {
+    "title": "Recovery ladder",
+    "local_snapshot_command": "grd resume",
+    "local_snapshot_phrase": "the current-workspace read-only recovery snapshot",
+    "cross_workspace_command": "grd resume --recent",
+    "cross_workspace_phrase": "find the workspace first",
+    "resume_phrase": "continue inside that workspace",
+    "next_phrase": "the fastest next command",
+    "pause_phrase": "an explicit handoff to restore, projected from canonical continuation"
+  }
+}

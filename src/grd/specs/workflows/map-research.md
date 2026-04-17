@@ -1,7 +1,7 @@
 <purpose>
 Orchestrate parallel research-mapper agents to analyze a physics research project and produce structured documents in .grd/research-map/
 
-Each agent has fresh context, explores a specific focus area, and **writes documents directly**. The orchestrator only receives confirmation + line counts, then writes a summary.
+Each agent has fresh context, explores a specific focus area, and **writes documents directly**. The orchestrator receives typed returns plus confirmation and line counts, verifies the expected files on disk, then writes a summary.
 
 Output: .grd/research-map/ folder with 7 structured documents covering theoretical content, computational methods, data artifacts, conventions, and open questions.
 </purpose>
@@ -19,7 +19,7 @@ Include enough detail to be useful as reference. Prioritize practical examples (
 **Document templates:** Mapper agents load templates from `{GRD_INSTALL_DIR}/references/templates/research-mapper/` (FORMALISM.md, CONVENTIONS.md, CONCERNS.md, etc.). These paths are deterministic across runtimes after install; if they are missing, treat that as a broken install and fall back to the agent's built-in structural guidance rather than searching alternate runtime-specific locations.
 
 **Always include file paths:**
-Documents are reference material for the AI when planning/executing. Always include actual file paths formatted with backticks: `src/hamiltonian.py`, `notebooks/convergence_test.ipynb`, `latex/main.tex`.
+Documents are reference material for the AI when planning/executing. Always include actual file paths formatted with backticks: `src/hamiltonian.py`, `notebooks/convergence_test.ipynb`, `latex/topic_stem.tex`.
 
 **Map all project artifacts:**
 A physics research project typically contains:
@@ -47,7 +47,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Extract from init JSON: `mapper_model`, `commit_docs`, `research_map_dir`, `existing_maps`, `has_maps`, `research_map_dir_exists`, `project_contract`, `project_contract_load_info`, `project_contract_validation`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`.
+Extract from init JSON: `mapper_model`, `commit_docs`, `research_mode`, `research_map_dir`, `existing_maps`, `has_maps`, `research_map_dir_exists`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`.
 
 **Read mode settings:**
 
@@ -58,13 +58,14 @@ RESEARCH_MODE=$(grd --raw config get research_mode 2>/dev/null | grd json get .v
 **Mode-aware behavior:**
 - `research_mode=explore`: Map broadly — include alternative theoretical frameworks, speculative connections, open questions across related domains.
 - `research_mode=exploit`: Map narrowly — focus on primary formalism, established results, direct computational needs.
+- `research_mode=balanced` (default): Use the standard mapping depth for this workflow and preserve the default anchor and contract coverage unless the research question needs broader or narrower mapping.
 - `research_mode=adaptive`: Start with primary framework, expand mapping if connections to other domains appear.
 - Regardless of mode, do not drop contract-critical anchors, prior baselines, or user-mandated references.
-- Treat `effective_reference_intake` as the machine-readable carry-forward registry for anchors, prior outputs, baselines, and unresolved gaps. Use `active_reference_context` to render and explain it, not to replace it.
-- Use `reference_artifacts_content` when the existing literature/research-map artifacts already contain stable citations, prior-output paths, or benchmark wording that should be preserved verbatim.
+- `RESEARCH_MODE` is sourced from the init payload. Do not re-query config later in this workflow.
 - Preserve stable anchor identity when you rewrite or merge references: every durable anchor in `REFERENCES.md` should carry a reusable `Anchor ID` and a concrete `Source / Locator`.
 - Keep workflow carry-forward scope separate from canonical contract subject linkage. `Carry Forward To` names workflow stages; if exact claim/deliverable IDs are known, record them in a dedicated `Contract Subject IDs` field instead of overloading the stage field.
-- Treat `project_contract` as authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes. If either gate is blocked, keep the contract visible as context but do not treat it as approved mapping truth.
+- Treat `project_contract` as authoritative only when `project_contract_gate.authoritative` is true. If the gate is blocked, keep the contract visible as context but do not treat it as approved mapping truth.
+Each mapper agent is a one-shot file-producing handoff. Route on `grd_return.status`, then verify `grd_return.files_written` against the expected artifacts before accepting the run.
 </step>
 
 <step name="check_existing">
@@ -128,11 +129,13 @@ Use task tool with `subagent_type="grd-research-mapper"`, `model="{mapper_model}
 
 **Agent 1: Theory Focus**
 
+task(
 task tool parameters:
 
 ```
 subagent_type="grd-research-mapper"
 model: "{mapper_model}"
+readonly=false
 run_in_background: true
 description: "Map research project theoretical content"
 ```
@@ -160,7 +163,7 @@ Project contract load info:
 Project contract validation:
 {project_contract_validation}
 
-If `project_contract` is present and `project_contract_load_info` is clean and `project_contract_validation` passes, use its existing IDs as the preferred canonical names for anchors and contract subject references:
+If `project_contract` is present and `project_contract_gate.authoritative` is true, use its existing IDs as the preferred canonical names for anchors and contract subject references:
 {project_contract}
 
 If the contract is blocked or not approved, keep it visible as context only and do not treat its IDs as authoritative mapping truth.
@@ -169,16 +172,36 @@ Write these documents to .grd/research-map/:
 - FORMALISM.md - Lagrangians/Hamiltonians, symmetries, gauge groups, field content, key equations, approximation schemes, effective theories, governing PDEs/ODEs, boundary conditions, conservation laws
 - REFERENCES.md - Active anchor registry: papers cited, benchmarks, prior artifacts, required carry-forward actions, open questions from literature, experimental data sources, collaboration context. Every row must have a stable `Anchor ID` and concrete `Source / Locator`. Use `Carry Forward To` for workflow stages only; if exact contract claim/deliverable IDs are known, record them separately as `Contract Subject IDs`.
 
+Write to: GRD/research-map/FORMALISM.md
+Write to: GRD/research-map/REFERENCES.md
+
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - GRD/research-map/FORMALISM.md
+    - GRD/research-map/REFERENCES.md
+expected_artifacts:
+  - GRD/research-map/FORMALISM.md
+  - GRD/research-map/REFERENCES.md
+shared_state_policy: return_only
+</spawn_contract>
+
+Return a typed `grd_return` envelope. Treat `grd_return.status: completed` as provisional until both files exist on disk and appear in `grd_return.files_written`.
+
 Explore thoroughly: read LaTeX files, markdown notes, code comments, docstrings, README files, BibTeX databases, and any documentation. Write documents directly using templates. Return confirmation only.
 ```
+)
 
 **Agent 2: Computation Focus**
 
+task(
 task tool parameters:
 
 ```
 subagent_type="grd-research-mapper"
 model: "{mapper_model}"
+readonly=false
 run_in_background: true
 description: "Map research project computational methods"
 ```
@@ -210,16 +233,36 @@ Write these documents to .grd/research-map/:
 - ARCHITECTURE.md - Computational pipeline, solver choices (ODE/PDE/linear algebra), algorithm design, parallelization strategy, key libraries used (NumPy, SciPy, PETSc, etc.), MCP simulation servers, data flow from input to output, performance bottlenecks
 - STRUCTURE.md - Directory layout, file organization (code vs data vs docs vs notebooks), naming conventions, input/output formats (HDF5, CSV, JSON), dependency graph between scripts, build system, job submission scripts
 
+Write to: GRD/research-map/ARCHITECTURE.md
+Write to: GRD/research-map/STRUCTURE.md
+
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - GRD/research-map/ARCHITECTURE.md
+    - GRD/research-map/STRUCTURE.md
+expected_artifacts:
+  - GRD/research-map/ARCHITECTURE.md
+  - GRD/research-map/STRUCTURE.md
+shared_state_policy: return_only
+</spawn_contract>
+
+Return a typed `grd_return` envelope. Treat `grd_return.status: completed` as provisional until both files exist on disk and appear in `grd_return.files_written`.
+
 Explore thoroughly: read Python/Julia/C++/Fortran files, Jupyter notebooks, Makefiles, configuration files, requirements/pyproject files. Write documents directly using templates. Return confirmation only.
 ```
+)
 
 **Agent 3: Methodology Focus**
 
+task(
 task tool parameters:
 
 ```
 subagent_type="grd-research-mapper"
 model: "{mapper_model}"
+readonly=false
 run_in_background: true
 description: "Map research project conventions and validation"
 ```
@@ -251,16 +294,36 @@ Write these documents to .grd/research-map/:
 - CONVENTIONS.md - Notation system, sign conventions (metric signature, Fourier transforms), unit system (natural/SI/CGS), index placement conventions (Einstein summation), coordinate labeling, variable naming in code vs equations, coupling constant definitions, Wick rotation conventions
 - VALIDATION.md - Known limits checked (analytic benchmarks, exact solutions), convergence tests performed, consistency checks (conservation laws, sum rules, Ward identities), comparison with published results, test suite structure, regression tests, error analysis methodology
 
+Write to: GRD/research-map/CONVENTIONS.md
+Write to: GRD/research-map/VALIDATION.md
+
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - GRD/research-map/CONVENTIONS.md
+    - GRD/research-map/VALIDATION.md
+expected_artifacts:
+  - GRD/research-map/CONVENTIONS.md
+  - GRD/research-map/VALIDATION.md
+shared_state_policy: return_only
+</spawn_contract>
+
+Return a typed `grd_return` envelope. Treat `grd_return.status: completed` as provisional until both files exist on disk and appear in `grd_return.files_written`.
+
 Explore thoroughly: read LaTeX preambles for notation macros, code variable naming, test files, validation scripts, comparison notebooks. Write documents directly using templates. Return confirmation only.
 ```
+)
 
 **Agent 4: Status Focus**
 
+task(
 task tool parameters:
 
 ```
 subagent_type="grd-research-mapper"
 model: "{mapper_model}"
+readonly=false
 run_in_background: true
 description: "Map research project concerns and open questions"
 ```
@@ -291,8 +354,23 @@ Project contract validation:
 Write this document to .grd/research-map/:
 - CONCERNS.md - Known issues (unresolved divergences, numerical instabilities, sign ambiguities), theoretical gaps (missing diagrams, uncontrolled approximations, gauge artifacts), TODO items found in code and notes, fragile areas (code that breaks easily, calculations sensitive to parameter choices), missing validation (untested regimes, unchecked limits), computational bottlenecks, stale or abandoned branches of investigation
 
+Write to: GRD/research-map/CONCERNS.md
+
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - GRD/research-map/CONCERNS.md
+expected_artifacts:
+  - GRD/research-map/CONCERNS.md
+shared_state_policy: return_only
+</spawn_contract>
+
+Return a typed `grd_return` envelope. Treat `grd_return.status: completed` as provisional until the file exists on disk and appears in `grd_return.files_written`.
+
 Explore thoroughly: search for TODO/FIXME/HACK/XXX comments, read issue trackers, check for commented-out code, look for notebooks with error outputs. Write document directly using template. Return confirmation only.
 ```
+)
 
 **If any mapper agent fails to spawn or returns an error:** Continue with remaining agents. After all agents complete, report which focus areas failed. For each failed agent, offer: 1) Retry that focus area, 2) Skip it (the research map will be incomplete but usable for the covered areas). A partial research map is still valuable — do not abort the entire mapping operation for individual agent failures.
 
@@ -302,7 +380,7 @@ Continue to collect_confirmations.
 <step name="collect_confirmations">
 Wait for all 4 agents to complete.
 
-Read each agent's output file to collect confirmations.
+Read each agent's output file to collect confirmations, then reconcile the typed return envelope with the on-disk artifacts.
 
 **Expected confirmation format from each agent:**
 
@@ -317,7 +395,9 @@ Read each agent's output file to collect confirmations.
 Ready for orchestrator summary.
 ```
 
-**What you receive:** Just file paths and line counts. NOT document contents.
+**What you receive:** Typed return + file paths and line counts. NOT document contents.
+
+If an agent reports `grd_return.status: completed`, treat the handoff as provisional until every expected artifact exists on disk and the same paths appear in `grd_return.files_written`.
 
 If any agent failed, note the failure and continue with successful documents.
 

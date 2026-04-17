@@ -85,6 +85,28 @@ def test_templates_handle_empty_authors_without_dangling_breaks() -> None:
     assert "\\\\[6pt]" not in nature_match.group(1).strip()
 
 
+def test_render_paper_injects_required_acknowledgment_even_if_validation_was_bypassed() -> None:
+    from grd.mcp.paper.models import REQUIRED_GPD_ACKNOWLEDGMENT, Author, PaperConfig, Section
+    from grd.mcp.paper.template_registry import render_paper
+
+    config = PaperConfig.model_construct(
+        title="Constructed Paper",
+        authors=[Author(name="Jane Doe")],
+        abstract="Abstract.",
+        sections=[Section(title="Intro", content="Content.")],
+        figures=[],
+        acknowledgments="",
+        bib_file="references",
+        journal="prl",
+        appendix_sections=[],
+        attribution_footer="Generated with Get Physics Done",
+        output_filename=None,
+    )
+
+    tex = render_paper(config)
+    assert REQUIRED_GPD_ACKNOWLEDGMENT in tex
+
+
 def test_build_artifact_manifest_captures_tex_and_optional_bib(tmp_path) -> None:
     from grd.mcp.paper.artifact_manifest import build_artifact_manifest
     from grd.mcp.paper.models import Author, PaperConfig, Section
@@ -99,7 +121,7 @@ def test_build_artifact_manifest_captures_tex_and_optional_bib(tmp_path) -> None
     config = PaperConfig(
         title="Test Paper",
         authors=[Author(name="Test Author", affiliation="Test Univ")],
-        abstract="",
+        abstract="Abstract text.",
         sections=[Section(title="Intro", content="Content")],
         journal="mnras",
     )
@@ -135,6 +157,47 @@ def test_artifact_manifest_models_reject_extra_fields_and_invalid_sha256() -> No
         )
 
 
+def test_artifact_manifest_rejects_unsupported_builder_journal() -> None:
+    from grd.mcp.paper.models import ArtifactManifest
+
+    with pytest.raises(ValidationError, match="journal"):
+        ArtifactManifest.model_validate(
+            {
+                "version": 1,
+                "paper_title": "Strict Manifest",
+                "journal": "prd",
+                "created_at": "2026-03-17T00:00:00+00:00",
+                "artifacts": [],
+            }
+        )
+
+
+def test_artifact_manifest_models_reject_blank_titles_and_invalid_timestamps() -> None:
+    from grd.mcp.paper.models import ArtifactManifest
+
+    with pytest.raises(ValidationError, match=r"paper_title[\s\S]*non-empty string"):
+        ArtifactManifest.model_validate(
+            {
+                "version": 1,
+                "paper_title": "   ",
+                "journal": "prl",
+                "created_at": "2026-03-17T00:00:00+00:00",
+                "artifacts": [],
+            }
+        )
+
+    with pytest.raises(ValidationError, match=r"created_at[\s\S]*ISO 8601 timestamp"):
+        ArtifactManifest.model_validate(
+            {
+                "version": 1,
+                "paper_title": "Strict Manifest",
+                "journal": "prl",
+                "created_at": "not-a-timestamp",
+                "artifacts": [],
+            }
+        )
+
+
 def test_build_artifact_manifest_preserves_absolute_source_paths(tmp_path) -> None:
     from grd.mcp.paper.artifact_manifest import build_artifact_manifest
     from grd.mcp.paper.models import Author, FigureRef, PaperConfig, Section
@@ -155,7 +218,7 @@ def test_build_artifact_manifest_preserves_absolute_source_paths(tmp_path) -> No
     config = PaperConfig(
         title="Portable Manifest",
         authors=[Author(name="Test Author", affiliation="Test Univ")],
-        abstract="",
+        abstract="Abstract text.",
         sections=[Section(title="Intro", content="Content")],
         journal="jhep",
     )
@@ -166,8 +229,8 @@ def test_build_artifact_manifest_preserves_absolute_source_paths(tmp_path) -> No
         tex_path=tex_path,
         figure_source_pairs=[
             (
-                FigureRef(path=original_path, caption="Source", label="fig:source"),
-                FigureRef(path=Path("figures/prepared-figure.pdf"), caption="Prepared", label="fig:prepared"),
+                FigureRef(path=original_path, caption="Source", label="source"),
+                FigureRef(path=Path("figures/prepared-figure.pdf"), caption="Prepared", label="prepared"),
             )
         ],
     )

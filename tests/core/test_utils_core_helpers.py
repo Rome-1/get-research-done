@@ -10,12 +10,14 @@ import pytest
 import grd.core.utils as utils
 from grd.core.utils import (
     compare_phase_numbers,
+    dedupe_preserve_order,
     file_lock,
     phase_normalize,
     phase_unpad,
     safe_parse_int,
     safe_read_file,
     safe_read_file_truncated,
+    strict_parse_int,
 )
 
 
@@ -102,6 +104,25 @@ def test_safe_parse_int(value: object, default: int | None, expected: int | None
     assert safe_parse_int(value, default=default) == expected
 
 
+@pytest.mark.parametrize(
+    ("value", "default", "expected"),
+    [
+        ("42", 0, 42),
+        (" 7 ", 0, 7),
+        (7, 0, 7),
+        (True, 9, 9),
+        (3.9, None, None),
+        ("3.14", None, None),
+        ("", None, None),
+        (None, -1, -1),
+    ],
+)
+def test_strict_parse_int_rejects_coercive_numeric_shapes(
+    value: object, default: int | None, expected: int | None
+) -> None:
+    assert strict_parse_int(value, default=default) == expected
+
+
 def test_safe_read_file_reads_existing_text_file(tmp_path: Path) -> None:
     target = tmp_path / "test.txt"
     target.write_text("hello world", encoding="utf-8")
@@ -133,6 +154,20 @@ def test_safe_read_file_truncated_marks_large_files(tmp_path: Path) -> None:
 
 def test_safe_read_file_truncated_returns_none_for_missing_files(tmp_path: Path) -> None:
     assert safe_read_file_truncated(tmp_path / "missing.txt") is None
+
+
+def test_dedupe_preserve_order_keeps_first_seen_sequence() -> None:
+    assert dedupe_preserve_order(["claim-a", "claim-b", "claim-a", "claim-c", "claim-b"]) == [
+        "claim-a",
+        "claim-b",
+        "claim-c",
+    ]
+
+
+def test_dedupe_preserve_order_accepts_generators() -> None:
+    values = (value for value in (Path("a"), Path("b"), Path("a"), Path("c")))
+
+    assert dedupe_preserve_order(values) == [Path("a"), Path("b"), Path("c")]
 
 
 def test_utils_module_imports_without_fcntl(monkeypatch: pytest.MonkeyPatch) -> None:

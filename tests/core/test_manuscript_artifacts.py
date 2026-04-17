@@ -1,0 +1,772 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from grd.core.manuscript_artifacts import (
+    ManuscriptArtifacts,
+    ManuscriptResolution,
+    ManuscriptRootResolution,
+    locate_publication_artifact,
+    resolve_current_manuscript_artifacts,
+    resolve_current_manuscript_entrypoint,
+    resolve_current_manuscript_resolution,
+    resolve_current_manuscript_root,
+    resolve_manuscript_entrypoint_from_root,
+)
+
+
+def _write(path: Path, content: str = "") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def test_resolve_current_manuscript_artifacts_prefers_manifest_declared_entrypoint(tmp_path: Path) -> None:
+    _write(tmp_path / "paper" / "curvature_flow_bounds.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prl",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+    _write(tmp_path / "paper" / "BIBLIOGRAPHY-AUDIT.json", "{}\n")
+    _write(tmp_path / "paper" / "reproducibility-manifest.json", "{}\n")
+
+    artifacts = resolve_current_manuscript_artifacts(tmp_path)
+
+    assert isinstance(artifacts, ManuscriptArtifacts)
+    assert artifacts.manuscript_entrypoint == tmp_path / "paper" / "curvature_flow_bounds.tex"
+    assert artifacts.manuscript_root == tmp_path / "paper"
+    assert artifacts.artifact_manifest == tmp_path / "paper" / "ARTIFACT-MANIFEST.json"
+    assert artifacts.bibliography_audit == tmp_path / "paper" / "BIBLIOGRAPHY-AUDIT.json"
+    assert artifacts.reproducibility_manifest == tmp_path / "paper" / "reproducibility-manifest.json"
+    assert resolve_current_manuscript_entrypoint(tmp_path) == tmp_path / "paper" / "curvature_flow_bounds.tex"
+    assert resolve_current_manuscript_root(tmp_path) == tmp_path / "paper"
+
+
+def test_resolve_current_manuscript_artifacts_supports_config_derived_markdown_and_canonical_reproducibility(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path / "manuscript" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Asymptotic Matching Note",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        )
+        + "\n",
+    )
+    _write(tmp_path / "manuscript" / "asymptotic_matching_note.md", "# Manuscript\n")
+    _write(tmp_path / "manuscript" / "ARTIFACT-MANIFEST.json", "{}\n")
+    _write(tmp_path / "manuscript" / "BIBLIOGRAPHY-AUDIT.json", "{}\n")
+    _write(tmp_path / "manuscript" / "reproducibility-manifest.json", "{}\n")
+
+    artifacts = resolve_current_manuscript_artifacts(tmp_path)
+
+    assert artifacts.manuscript_entrypoint == tmp_path / "manuscript" / "asymptotic_matching_note.md"
+    assert artifacts.manuscript_root == tmp_path / "manuscript"
+    assert artifacts.reproducibility_manifest == tmp_path / "manuscript" / "reproducibility-manifest.json"
+
+
+def test_resolve_current_manuscript_artifacts_keep_supported_root_for_nested_manifest_entrypoint(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "paper" / "sections" / "curvature_flow_bounds.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prl",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "sections/curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+    _write(tmp_path / "paper" / "BIBLIOGRAPHY-AUDIT.json", "{}\n")
+    _write(tmp_path / "paper" / "reproducibility-manifest.json", "{}\n")
+
+    artifacts = resolve_current_manuscript_artifacts(tmp_path)
+
+    assert artifacts.manuscript_entrypoint == tmp_path / "paper" / "sections" / "curvature_flow_bounds.tex"
+    assert artifacts.manuscript_root == tmp_path / "paper"
+    assert artifacts.artifact_manifest == tmp_path / "paper" / "ARTIFACT-MANIFEST.json"
+    assert artifacts.bibliography_audit == tmp_path / "paper" / "BIBLIOGRAPHY-AUDIT.json"
+    assert artifacts.reproducibility_manifest == tmp_path / "paper" / "reproducibility-manifest.json"
+    assert resolve_current_manuscript_root(tmp_path) == tmp_path / "paper"
+    assert locate_publication_artifact(
+        tmp_path / "paper" / "sections" / "curvature_flow_bounds.tex",
+        "ARTIFACT-MANIFEST.json",
+    ) == tmp_path / "paper" / "ARTIFACT-MANIFEST.json"
+
+
+def test_resolve_current_manuscript_artifacts_ignores_uppercase_reproducibility_manifest_alias(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _write(
+        tmp_path / "manuscript" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Asymptotic Matching Note",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        )
+        + "\n",
+    )
+    _write(tmp_path / "manuscript" / "asymptotic_matching_note.md", "# Manuscript\n")
+    _write(tmp_path / "manuscript" / "REPRODUCIBILITY-MANIFEST.json", "{}\n")
+
+    requested_filenames: list[tuple[str, ...]] = []
+
+    def fake_locate_publication_artifact(manuscript_root: Path, *filenames: str) -> Path | None:
+        requested_filenames.append(filenames)
+        if filenames == ("ARTIFACT-MANIFEST.json",):
+            return manuscript_root / "ARTIFACT-MANIFEST.json"
+        if filenames == ("BIBLIOGRAPHY-AUDIT.json",):
+            return manuscript_root / "BIBLIOGRAPHY-AUDIT.json"
+        if filenames == ("reproducibility-manifest.json",):
+            return manuscript_root / "reproducibility-manifest.json"
+        return None
+
+    monkeypatch.setattr("grd.core.manuscript_artifacts.locate_publication_artifact", fake_locate_publication_artifact)
+
+    artifacts = resolve_current_manuscript_artifacts(tmp_path)
+
+    assert artifacts.manuscript_entrypoint == tmp_path / "manuscript" / "asymptotic_matching_note.md"
+    assert requested_filenames == [
+        ("ARTIFACT-MANIFEST.json",),
+        ("BIBLIOGRAPHY-AUDIT.json",),
+        ("reproducibility-manifest.json",),
+    ]
+    assert artifacts.reproducibility_manifest == tmp_path / "manuscript" / "reproducibility-manifest.json"
+
+
+def test_resolve_current_manuscript_entrypoint_ignores_manifest_paths_outside_root(tmp_path: Path) -> None:
+    _write(tmp_path / "submission" / "curvature_flow_bounds.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prl",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "../submission/curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+
+    resolution = resolve_current_manuscript_resolution(tmp_path)
+
+    assert resolution.status == "missing"
+    assert resolution.manuscript_root is None
+    assert resolution.manuscript_entrypoint is None
+    assert resolve_current_manuscript_entrypoint(tmp_path) is None
+
+
+def test_resolve_current_manuscript_entrypoint_fails_closed_when_multiple_roots_resolve(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "paper" / "curvature_flow_bounds.tex", "\\documentclass{article}\\begin{document}Paper\\end{document}\n")
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "jhep",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+    _write(tmp_path / "manuscript" / "curvature_flow_bounds.tex", "\\documentclass{article}\\begin{document}Manuscript\\end{document}\n")
+    _write(
+        tmp_path / "manuscript" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "jhep",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-manuscript",
+                        "category": "tex",
+                        "path": "curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+
+    assert resolve_current_manuscript_entrypoint(tmp_path) is None
+    assert resolve_current_manuscript_root(tmp_path) is None
+
+
+def test_resolve_current_manuscript_resolution_marks_multiple_roots_ambiguous(tmp_path: Path) -> None:
+    _write(tmp_path / "paper" / "curvature_flow_bounds.tex", "\\documentclass{article}\\begin{document}Paper\\end{document}\n")
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "jhep",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+    _write(tmp_path / "manuscript" / "curvature_flow_bounds.tex", "\\documentclass{article}\\begin{document}Manuscript\\end{document}\n")
+    _write(
+        tmp_path / "manuscript" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "jhep",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-manuscript",
+                        "category": "tex",
+                        "path": "curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+
+    resolution = resolve_current_manuscript_resolution(tmp_path)
+
+    assert isinstance(resolution, ManuscriptResolution)
+    assert resolution.status == "ambiguous"
+    assert resolution.manuscript_entrypoint is None
+    assert {root_resolution.status for root_resolution in resolution.root_resolutions} == {"resolved", "missing"}
+    assert any(isinstance(root_resolution, ManuscriptRootResolution) for root_resolution in resolution.root_resolutions)
+    assert "multiple manuscript roots resolve" in resolution.detail
+
+
+def test_resolve_current_manuscript_resolution_marks_root_mismatch_invalid(tmp_path: Path) -> None:
+    _write(tmp_path / "paper" / "curvature_flow_bounds.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prl",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+    _write(
+        tmp_path / "paper" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Alternate Title",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        )
+        + "\n",
+    )
+
+    resolution = resolve_current_manuscript_resolution(tmp_path)
+
+    assert resolution.status == "invalid"
+    assert resolution.manuscript_entrypoint is None
+    assert any(root_resolution.status == "invalid" for root_resolution in resolution.root_resolutions)
+    assert "resolves to" in resolution.detail
+
+
+def test_resolve_current_manuscript_resolution_prefers_config_when_manifest_is_invalid(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "paper" / "config-entry.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(tmp_path / "paper" / "manifest-entry.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prd",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "manifest-entry.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+    _write(
+        tmp_path / "paper" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Config Entry",
+                "output_filename": "config-entry",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        )
+        + "\n",
+    )
+
+    resolution = resolve_current_manuscript_resolution(tmp_path)
+
+    assert resolution.status == "resolved"
+    assert resolution.manuscript_entrypoint == tmp_path / "paper" / "config-entry.tex"
+    assert any(
+        root_resolution.status == "resolved" and root_resolution.manuscript_entrypoint == tmp_path / "paper" / "config-entry.tex"
+        for root_resolution in resolution.root_resolutions
+    )
+    assert "resolved from paper config" in resolution.detail
+
+
+def test_resolve_current_manuscript_resolution_prefers_single_resolved_root_over_stale_invalid_sibling(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "paper" / "paper-entry.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(
+        tmp_path / "paper" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Config Entry",
+                "output_filename": "paper-entry",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        )
+        + "\n",
+    )
+    _write(
+        tmp_path / "draft" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prl",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "draft-entry.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+    _write(tmp_path / "draft" / "draft-entry.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(tmp_path / "draft" / "other-entry.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(
+        tmp_path / "draft" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Mismatched Draft",
+                "output_filename": "other-entry",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        )
+        + "\n",
+    )
+
+    resolution = resolve_current_manuscript_resolution(tmp_path)
+
+    assert resolution.status == "resolved"
+    assert resolution.manuscript_entrypoint == tmp_path / "paper" / "paper-entry.tex"
+    assert "paper config" in resolution.detail
+
+
+def test_resolve_current_manuscript_resolution_ignores_invalid_manifest_entrypoints_without_valid_manifest(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "paper" / "manifest-entry.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prd",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "manifest-entry.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+
+    resolution = resolve_current_manuscript_resolution(tmp_path)
+
+    assert resolution.status == "missing"
+    assert resolution.manuscript_entrypoint is None
+    assert "no manuscript entrypoint found" in resolution.detail
+
+
+def test_resolve_current_manuscript_resolution_marks_missing_when_no_manuscript_exists(tmp_path: Path) -> None:
+    resolution = resolve_current_manuscript_resolution(tmp_path)
+
+    assert resolution.status == "missing"
+    assert resolution.manuscript_entrypoint is None
+    assert resolution.detail.startswith("no manuscript entrypoint")
+
+
+def test_resolve_current_manuscript_resolution_treats_stale_manifest_without_output_as_missing(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prl",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+    _write(
+        tmp_path / "paper" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Curvature Flow Bounds",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        )
+        + "\n",
+    )
+
+    resolution = resolve_current_manuscript_resolution(tmp_path)
+
+    assert resolution.status == "missing"
+    assert resolution.manuscript_entrypoint is None
+    assert "no manuscript entrypoint found" in resolution.detail
+
+
+def test_resolve_current_manuscript_resolution_prefers_config_output_when_manifest_is_stale(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "paper" / "curvature_flow_bounds.md", "# Draft\n")
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prl",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+    _write(
+        tmp_path / "paper" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Curvature Flow Bounds",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        )
+        + "\n",
+    )
+
+    resolution = resolve_current_manuscript_resolution(tmp_path)
+
+    assert resolution.status == "resolved"
+    assert resolution.manuscript_entrypoint == tmp_path / "paper" / "curvature_flow_bounds.md"
+    assert resolution.detail.endswith("resolved from paper config")
+
+
+def test_resolve_manuscript_entrypoint_from_root_returns_invalid_when_manifest_and_config_disagree(
+    tmp_path: Path,
+) -> None:
+    manuscript_root = tmp_path / "paper"
+    _write(manuscript_root / "curvature_flow_bounds.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(
+        manuscript_root / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "prl",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+    _write(
+        manuscript_root / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Alternate Title",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        )
+        + "\n",
+    )
+
+    assert resolve_manuscript_entrypoint_from_root(manuscript_root) is None
+
+
+def test_locate_publication_artifact_accepts_named_entrypoint_path(tmp_path: Path) -> None:
+    manuscript = tmp_path / "draft" / "scalar_gap_bounds.tex"
+    _write(manuscript, "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(tmp_path / "draft" / "ARTIFACT-MANIFEST.json", "{}\n")
+
+    assert locate_publication_artifact(manuscript, "ARTIFACT-MANIFEST.json") == tmp_path / "draft" / "ARTIFACT-MANIFEST.json"
+
+
+def test_resolve_current_manuscript_artifacts_does_not_fall_back_to_legacy_main_entrypoint(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "draft" / "main.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+
+    assert resolve_current_manuscript_entrypoint(tmp_path) is None
+
+
+def test_resolve_current_manuscript_artifacts_requires_manifest_or_config_for_topic_stem_entrypoint(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "draft" / "curvature_flow_bounds.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(
+        tmp_path / "draft" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "jhep",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-draft",
+                        "category": "tex",
+                        "path": "curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        ),
+    )
+
+    assert resolve_current_manuscript_entrypoint(tmp_path) == tmp_path / "draft" / "curvature_flow_bounds.tex"
+
+
+def test_resolve_current_manuscript_entrypoint_fails_closed_when_manifest_and_config_disagree(tmp_path: Path) -> None:
+    _write(tmp_path / "paper" / "curvature_flow_bounds.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(tmp_path / "paper" / "alternate_title.tex", "\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+    _write(
+        tmp_path / "paper" / "ARTIFACT-MANIFEST.json",
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "jhep",
+                "created_at": "2026-04-02T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "tex-paper",
+                        "category": "tex",
+                        "path": "curvature_flow_bounds.tex",
+                        "sha256": "0" * 64,
+                        "produced_by": "test",
+                        "sources": [],
+                        "metadata": {},
+                    }
+                ],
+            }
+        )
+        + "\n",
+    )
+    _write(
+        tmp_path / "paper" / "PAPER-CONFIG.json",
+        json.dumps(
+            {
+                "title": "Alternate Title",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        )
+        + "\n",
+    )
+
+    assert resolve_current_manuscript_entrypoint(tmp_path) is None
+    assert resolve_current_manuscript_root(tmp_path) is None
+
+
+def test_resolve_current_manuscript_artifacts_returns_none_when_missing(tmp_path: Path) -> None:
+    artifacts = resolve_current_manuscript_artifacts(tmp_path)
+
+    assert artifacts == ManuscriptArtifacts(
+        project_root=tmp_path,
+        manuscript_root=None,
+        manuscript_entrypoint=None,
+        artifact_manifest=None,
+        bibliography_audit=None,
+        reproducibility_manifest=None,
+    )
+    assert resolve_current_manuscript_entrypoint(tmp_path) is None
+    assert resolve_current_manuscript_root(tmp_path) is None

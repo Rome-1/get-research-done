@@ -10,8 +10,6 @@ allowed-tools:
   - find_files
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Remove an unstarted future phase from the roadmap and renumber all subsequent phases to maintain a clean, linear sequence.
@@ -38,7 +36,7 @@ Phase: $ARGUMENTS
 </context>
 
 <process>
-If `--dry-run` flag is present, show what would be removed and what renumbering would occur, then stop without making changes.
+This wrapper runs the remove-phase workflow directly. Any stopping points come from the workflow's own validation gates.
 
 Execute the remove-phase workflow from @{GRD_INSTALL_DIR}/workflows/remove-phase.md end-to-end.
 Preserve all validation gates (future phase check, work check), renumbering logic, and commit.

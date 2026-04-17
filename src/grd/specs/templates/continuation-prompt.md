@@ -14,6 +14,7 @@ Referenced by `workflows/execute-phase.md` checkpoint_handling step.
 
 ```markdown
 <objective>
+This is a fresh continuation handoff owned by the orchestrator. Do not wait for the user inside the spawned run.
 Continue executing plan {plan_number} of phase {phase_number}-{phase_name} from task {resume_task_number}.
 
 Previous tasks are completed and committed. Verify prior commits exist, then continue from task {resume_task_number}: {resume_task_name}.
@@ -37,6 +38,8 @@ Return state updates (position, decisions, metrics) in your response -- do NOT w
 <execution_segment>
 {execution_segment}
 </execution_segment>
+
+`execution_segment` is the transient runtime handoff payload. `continuation.bounded_segment` is the persisted storage shape that records the same bounded stop when the orchestrator durably writes or refreshes the pause state. Clear or replace that persisted field when the bounded stop is consumed, retired, or superseded by a newer segment. Keep `.continue-here.md` and `session` as handoff surfaces only, and treat the derived execution head as a compatibility projection rather than the bounded authority. Any task-summary narration belongs to the checkpoint envelope, not the persisted bounded segment.
 
 If the execution segment indicates `pre_fanout_review_pending: true`, do not unlock downstream dependent work until the review outcome has been incorporated into this continuation.
 
@@ -73,6 +76,8 @@ Before executing task {resume_task_number}, verify that prior tasks' commits exi
 git log --oneline --grep="({phase}-{plan}):" | head -20
 
 Compare against the completed tasks table above. If any expected commits are missing, STOP and report the discrepancy -- do not proceed with incomplete prior state.
+
+If the checkpoint or execution segment names expected artifacts, verify them on disk before continuing; do not treat returned text alone as sufficient evidence.
 
 Also verify the bounded execution segment still satisfies its resume preconditions:
 
@@ -111,7 +116,7 @@ Also verify the bounded execution segment still satisfies its resume preconditio
 | `{checkpoint_type}`       | From checkpoint return              | `human-verify`                                                            |
 | `{user_response}`         | User's response to checkpoint       | `approved` or `Select: option-a` or `done`                                |
 | `{resume_instructions}`   | Generated from checkpoint type      | See table below                                                           |
-| `{execution_segment}`     | Structured bounded segment state    | Segment JSON or markdown block with cursor, checkpoint cause, downstream-lock status, any `pre_fanout_review_cleared` marker, skeptical re-questioning fields, and resume preconditions |
+| `{execution_segment}`     | Runtime handoff payload             | Segment JSON or markdown block whose persisted bounded-segment subset contains exactly the canonical continuation fields listed above |
 | `{protocol_bundle_context}` | Selected protocol bundle summary | Additive specialized-loading guidance carried across continuations |
 | `{phase_dir}`             | Phase directory path                | `.grd/phases/03-phase-diagram`                                       |
 | `{plan_file}`             | Plan filename                       | `03-03-PLAN.md`                                                           |

@@ -975,11 +975,9 @@ All returns to the orchestrator MUST use this YAML envelope for reliable parsing
 ```yaml
 grd_return:
   status: completed | checkpoint | blocked | failed
-  # Use canonical status values directly.
-  # Put warnings in issues instead of encoding them in the status field.
-  files_written: [CONSISTENCY-CHECK.md, ...]
-  issues: [list of issues encountered, if any — include warnings here]
-  next_actions: [list of recommended follow-up actions]
+  files_written: [GRD/phases/{scope}/CONSISTENCY-CHECK.md]
+  issues: [list of issues, including warnings]
+  next_actions: [recommended follow-up]
   phase_checked: [phase or milestone scope]
   checks_performed: [count]
   issues_found: [count]

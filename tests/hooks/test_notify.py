@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import io
 import json
-import os
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -141,10 +141,12 @@ def test_notify_uses_latest_local_cache_and_scoped_codex_install_command(tmp_pat
     assert f"Run: {expected}" in output
 
 
-def test_notify_prefers_active_runtime_cache_over_newer_unrelated_runtime_cache(tmp_path: Path) -> None:
+def test_notify_dedupes_repeated_update_notices(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
     home = tmp_path / "home"
 
-    local_runtime_dir = tmp_path / ".codex"
+    local_runtime_dir = workspace / ".codex"
     local_cache = local_runtime_dir / "cache"
     local_cache.mkdir(parents=True)
     _mark_complete_install(local_runtime_dir, runtime="codex")
@@ -274,10 +276,17 @@ def test_notify_uses_explicit_workspace_cwd_over_process_cwd(tmp_path: Path) -> 
     assert "Run: npx -y get-research-done --codex --local" in output
 
 
-def test_latest_update_cache_uses_runtime_unknown_constant_not_literal(tmp_path: Path) -> None:
+def test_notify_keeps_update_and_execution_fingerprints_isolated(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    runtime_unknown = "runtime-unknown"
+    (workspace / "GRD").mkdir(parents=True)
+
+    stderr = io.StringIO()
+    update_cache = {
+        "update_available": True,
+        "installed": "1.2.3",
+        "latest": "1.3.0",
+        "checked": 20,
+    }
 
     with (
         patch("grd.hooks.install_context.detect_self_owned_install", return_value=None),
@@ -287,7 +296,32 @@ def test_latest_update_cache_uses_runtime_unknown_constant_not_literal(tmp_path:
         patch("grd.hooks.runtime_detect.detect_runtime_install_target", side_effect=AssertionError("unexpected lookup")),
         patch("grd.hooks.runtime_detect.get_update_cache_candidates", return_value=[]),
     ):
-        assert notify_module._latest_update_cache(str(workspace)) == (None, None)
+        _check_and_notify_update(str(workspace))
+        _emit_execution_notification(str(workspace))
+        _check_and_notify_update(str(workspace))
+
+    output = stderr.getvalue()
+    assert output.count("Update available: v1.2.3") == 1
+    assert output.count("Execution review due") == 1
+    state = json.loads(ProjectLayout(workspace).last_observability_notification.read_text(encoding="utf-8"))
+    assert state["update_fingerprint"] == "update:1.2.3:1.3.0:runtime-update-command"
+    assert state["execution_fingerprint"] == "resume:seg-2"
+    assert "fingerprint" not in state
+
+
+def test_emit_execution_notification_still_emits_when_dedupe_persistence_fails(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    stderr = io.StringIO()
+    with (
+        patch("grd.hooks.notify._execution_notification_message", return_value=("[GRD] Execution review due\n", "resume:seg-2")),
+        patch("grd.hooks.notify._claim_last_notification", return_value=None),
+        patch("sys.stderr", stderr),
+    ):
+        _emit_execution_notification(str(workspace))
+
+    assert "Execution review due" in stderr.getvalue()
 
 
 def test_trigger_update_check_uses_sibling_check_update_script(tmp_path: Path) -> None:
@@ -329,6 +363,7 @@ def test_notify_prefers_explicit_target_hook_cache_and_target_dir_command(tmp_pa
     stderr = io.StringIO()
     with (
         patch("grd.hooks.notify.__file__", str(hook_path)),
+        patch("grd.hooks.notify.Path.home", return_value=tmp_path / "home"),
         patch("sys.stderr", stderr),
     ):
         _check_and_notify_update(str(workspace))
@@ -373,6 +408,7 @@ def test_notify_explicit_target_hook_cache_does_not_recover_missing_install_scop
     stderr = io.StringIO()
     with (
         patch("grd.hooks.notify.__file__", str(hook_path)),
+        patch("grd.hooks.notify.Path.home", return_value=tmp_path / "home"),
         patch("sys.stderr", stderr),
     ):
         _check_and_notify_update(str(workspace))
@@ -466,6 +502,7 @@ def test_notify_keeps_target_dir_for_default_named_explicit_target(tmp_path: Pat
     stderr = io.StringIO()
     with (
         patch("grd.hooks.notify.__file__", str(hook_path)),
+        patch("grd.hooks.notify.Path.home", return_value=tmp_path / "home"),
         patch("sys.stderr", stderr),
     ):
         _check_and_notify_update(str(workspace))
@@ -533,10 +570,10 @@ def test_notify_runtime_directory_without_install_emits_no_update_command(tmp_pa
     assert stderr.getvalue() == ""
 
 
-def test_notify_ignores_stale_uninstalled_runtime_cache_when_other_runtime_is_installed(tmp_path: Path) -> None:
+def test_notify_skips_closed_contract_payload_without_event_type(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    home = tmp_path / "home"
+    payload = json.dumps({"workspace": {"cwd": str(workspace)}})
 
     stale_cache = workspace / ".codex" / "cache"
     stale_cache.mkdir(parents=True)
@@ -552,17 +589,16 @@ def test_notify_ignores_stale_uninstalled_runtime_cache_when_other_runtime_is_in
         encoding="utf-8",
     )
 
-    global_runtime_dir = home / ".claude"
-    _mark_complete_install(global_runtime_dir, runtime="claude-code", install_scope="global")
-
     stderr = io.StringIO()
     with (
         patch("grd.hooks.runtime_detect.Path.home", return_value=home),
         patch("sys.stderr", stderr),
     ):
-        _check_and_notify_update(str(workspace))
+        _check_and_notify_update()
 
-    assert stderr.getvalue() == ""
+    output = stderr.getvalue()
+    assert f"Run: {update_command_for_runtime('unknown')}" in output
+    assert "Run: grd-update" not in output
 
 
 def test_notification_state_path_uses_project_layout_observability_root(tmp_path: Path) -> None:
@@ -574,6 +610,167 @@ def test_notification_state_path_uses_project_layout_observability_root(tmp_path
     from grd.hooks.notify import _notification_state_path
 
     assert _notification_state_path(str(nested)) == ProjectLayout(workspace).last_observability_notification
+
+
+def test_notification_state_path_uses_home_data_root_outside_project_layout(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    home = tmp_path / "home"
+    expected = home / HOME_DATA_DIR_NAME / OBSERVABILITY_DIR_NAME / OBSERVABILITY_LAST_NOTIFY_FILENAME
+
+    from grd.hooks.notify import _notification_state_path
+
+    with patch("grd.hooks.notify.Path.home", return_value=home):
+        assert _notification_state_path(str(workspace)) == expected
+
+
+def test_notification_state_path_prefers_self_owned_install_outside_project_layout(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    self_owned_runtime_dir = tmp_path / ".codex"
+    hook_path = self_owned_runtime_dir / "hooks" / "notify.py"
+    hook_path.parent.mkdir(parents=True)
+    hook_path.write_text("# hook\n", encoding="utf-8")
+    _mark_complete_install(self_owned_runtime_dir, runtime="codex")
+
+    from grd.hooks.notify import _notification_state_path
+
+    with patch("grd.hooks.notify.__file__", str(hook_path)):
+        assert _notification_state_path(str(workspace)) == (
+            self_owned_runtime_dir / OBSERVABILITY_DIR_NAME / OBSERVABILITY_LAST_NOTIFY_FILENAME
+        )
+
+
+def test_check_and_notify_update_uses_home_state_without_creating_workspace_gpd(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    home = tmp_path / "home"
+    state_path = home / HOME_DATA_DIR_NAME / OBSERVABILITY_DIR_NAME / OBSERVABILITY_LAST_NOTIFY_FILENAME
+
+    stderr = io.StringIO()
+    with (
+        patch("grd.hooks.notify.Path.home", return_value=home),
+        patch(
+            "grd.hooks.notify._latest_update_cache",
+            return_value=(
+                {
+                    "update_available": True,
+                    "installed": "1.2.3",
+                    "latest": "1.3.0",
+                    "checked": 20,
+                },
+                object(),
+            ),
+        ),
+        patch("grd.hooks.notify._shared_update_command_for_candidate", return_value="runtime-update-command"),
+        patch("sys.stderr", stderr),
+    ):
+        _check_and_notify_update(str(workspace))
+
+    assert "Update available: v1.2.3" in stderr.getvalue()
+    assert not (workspace / "GRD").exists()
+    assert state_path.exists()
+
+
+def test_check_and_notify_update_prefers_self_owned_state_outside_project_layout(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    self_owned_runtime_dir = tmp_path / ".codex"
+    hook_path = self_owned_runtime_dir / "hooks" / "notify.py"
+    hook_path.parent.mkdir(parents=True)
+    hook_path.write_text("# hook\n", encoding="utf-8")
+    _mark_complete_install(self_owned_runtime_dir, runtime="codex")
+
+    stderr = io.StringIO()
+    with (
+        patch("grd.hooks.notify.__file__", str(hook_path)),
+        patch("grd.hooks.notify.Path.home", side_effect=AssertionError("home fallback should not be used")),
+        patch(
+            "grd.hooks.notify._latest_update_cache",
+            return_value=(
+                {
+                    "update_available": True,
+                    "installed": "1.2.3",
+                    "latest": "1.3.0",
+                    "checked": 20,
+                },
+                object(),
+            ),
+        ),
+        patch("grd.hooks.notify._shared_update_command_for_candidate", return_value="runtime-update-command"),
+        patch("sys.stderr", stderr),
+    ):
+        _check_and_notify_update(str(workspace))
+
+    assert "Update available: v1.2.3" in stderr.getvalue()
+    state_path = self_owned_runtime_dir / OBSERVABILITY_DIR_NAME / OBSERVABILITY_LAST_NOTIFY_FILENAME
+    assert state_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("patch_target", "error_message"),
+    [
+        ("grd.hooks.notify.file_lock", "lock denied"),
+        ("grd.hooks.notify.atomic_write", "write denied"),
+    ],
+)
+def test_check_and_notify_update_stays_advisory_when_notification_state_persistence_fails(
+    tmp_path: Path,
+    patch_target: str,
+    error_message: str,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    home = tmp_path / "home"
+
+    stderr = io.StringIO()
+    with (
+        patch("grd.hooks.notify.Path.home", return_value=home),
+        patch(
+            "grd.hooks.notify._latest_update_cache",
+            return_value=(
+                {
+                    "update_available": True,
+                    "installed": "1.2.3",
+                    "latest": "1.3.0",
+                    "checked": 20,
+                },
+                object(),
+            ),
+        ),
+        patch("grd.hooks.notify._shared_update_command_for_candidate", return_value="runtime-update-command"),
+        patch(patch_target, side_effect=PermissionError(error_message)),
+        patch("sys.stderr", stderr),
+    ):
+        _check_and_notify_update(str(workspace))
+
+    assert "Update available: v1.2.3" in stderr.getvalue()
+
+
+def test_emit_execution_notification_scopes_home_fallback_dedupe_per_workspace(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    workspace_a = tmp_path / "workspace-a"
+    workspace_b = tmp_path / "workspace-b"
+    workspace_a.mkdir()
+    workspace_b.mkdir()
+    stderr = io.StringIO()
+
+    with (
+        patch("grd.hooks.notify.Path.home", return_value=home),
+        patch(
+            "grd.hooks.notify._execution_notification_message",
+            return_value=("[GRD] First-result review due for 03-01: rerun anchor: result-42\n", "first-result:seg-1"),
+        ),
+        patch("sys.stderr", stderr),
+    ):
+        _emit_execution_notification(str(workspace_a))
+        _emit_execution_notification(str(workspace_b))
+
+    output = stderr.getvalue()
+    assert output.count("First-result review due for 03-01") == 2
+    assert output.count("rerun anchor: result-42") == 2
 
 
 def test_hook_payload_policy_prefers_installed_runtime_over_stale_local_runtime_dir(tmp_path: Path) -> None:
@@ -618,6 +815,56 @@ def test_main_resolves_workspace_before_filtering_event_types(tmp_path: Path) ->
     mock_notify.assert_called_once_with(str(workspace))
 
 
+def test_main_uses_self_owned_hook_policy_even_when_workspace_runtime_differs(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    self_owned_runtime_dir = tmp_path / ".codex"
+    hook_path = self_owned_runtime_dir / "hooks" / "notify.py"
+    hook_path.parent.mkdir(parents=True)
+    hook_path.write_text("# hook\n", encoding="utf-8")
+    _mark_complete_install(self_owned_runtime_dir, runtime="codex")
+    _mark_complete_install(workspace / ".claude", runtime="claude-code", install_scope="global")
+
+    payload = json.dumps({"type": "session-end", "workspace": str(workspace)})
+    with (
+        patch("sys.stdin", io.StringIO(payload)),
+        patch("grd.hooks.notify.__file__", str(hook_path)),
+        patch("grd.hooks.notify._trigger_update_check") as mock_trigger,
+        patch("grd.hooks.notify._check_and_notify_update") as mock_update,
+        patch("grd.hooks.notify._emit_execution_notification") as mock_execution,
+    ):
+        main()
+
+    mock_trigger.assert_not_called()
+    mock_update.assert_not_called()
+    mock_execution.assert_not_called()
+
+
+def test_main_uses_self_owned_hook_policy_with_alias_only_workspace_payload(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    self_owned_runtime_dir = tmp_path / ".codex"
+    hook_path = self_owned_runtime_dir / "hooks" / "notify.py"
+    hook_path.parent.mkdir(parents=True)
+    hook_path.write_text("# hook\n", encoding="utf-8")
+    _mark_complete_install(self_owned_runtime_dir, runtime="codex")
+    _mark_complete_install(workspace / ".claude", runtime="claude-code", install_scope="global")
+
+    payload = json.dumps({"type": "session-end", "workspace": {"current_dir": str(workspace)}})
+    with (
+        patch("sys.stdin", io.StringIO(payload)),
+        patch("grd.hooks.notify.__file__", str(hook_path)),
+        patch("grd.hooks.notify._trigger_update_check") as mock_trigger,
+        patch("grd.hooks.notify._check_and_notify_update") as mock_update,
+        patch("grd.hooks.notify._emit_execution_notification") as mock_execution,
+    ):
+        main()
+
+    mock_trigger.assert_not_called()
+    mock_update.assert_not_called()
+    mock_execution.assert_not_called()
+
+
 def test_main_accepts_workspace_mapping_with_cwd_field() -> None:
     expected = str(Path("/tmp/project").resolve(strict=False))
     with (
@@ -633,23 +880,59 @@ def test_main_accepts_workspace_mapping_with_cwd_field() -> None:
     mock_notify.assert_called_once_with(expected)
 
 
-def test_main_prefers_project_dir_root_over_nested_workspace_cwd(tmp_path: Path) -> None:
+def test_main_passes_workspace_and_project_roots_to_usage_recorder_when_supported(tmp_path: Path) -> None:
     project = tmp_path / "project"
     nested = project / "src" / "notes"
     nested.mkdir(parents=True)
+    (project / "GRD").mkdir()
 
-    payload = {"type": "agent-turn-complete", "workspace": {"cwd": str(nested), "project_dir": str(project)}}
+    payload = {
+        "type": "agent-turn-complete",
+        "workspace": {"cwd": str(nested), "project_dir": str(project)},
+        "model": {"id": _TEST_MODEL, "provider": _TEST_PROVIDER},
+        "tokens": {"promptTokens": 120, "completionTokens": 30},
+    }
+    captured: dict[str, object] = {}
+
+    def _record(
+        payload_arg: dict[str, object],
+        *,
+        runtime: str | None,
+        cwd: Path,
+        workspace_root: Path,
+        project_root: Path,
+    ) -> None:
+        captured["payload"] = payload_arg
+        captured["runtime"] = runtime
+        captured["cwd"] = cwd
+        captured["workspace_root"] = workspace_root
+        captured["project_root"] = project_root
+
     with (
         patch("sys.stdin", io.StringIO(json.dumps(payload))),
+        patch("grd.hooks.notify._payload_runtime", return_value=_TELEMETRY_RUNTIME),
+        patch("grd.hooks.notify._runtime_supports_usage_telemetry", return_value=True),
+        patch("grd.core.costs.record_usage_from_runtime_payload", side_effect=_record) as mock_record,
         patch("grd.hooks.notify._trigger_update_check") as mock_trigger,
         patch("grd.hooks.notify._check_and_notify_update") as mock_notify,
         patch("grd.hooks.notify._emit_execution_notification") as mock_execution,
     ):
         main()
 
+    resolved_nested = nested.resolve(strict=False)
+    resolved_project = project.resolve(strict=False)
+
+    mock_record.assert_called_once()
     mock_trigger.assert_called_once_with(str(project))
     mock_notify.assert_called_once_with(str(project))
     mock_execution.assert_called_once_with(str(project))
+    assert captured["payload"] == payload
+    assert captured["runtime"] == _TELEMETRY_RUNTIME
+    assert captured["cwd"] == resolved_nested
+    assert captured["workspace_root"] == resolved_nested
+    assert captured["project_root"] == resolved_project
+    assert captured["cwd"] == captured["workspace_root"]
+    assert captured["workspace_root"] != captured["project_root"]
 
 
 def test_main_expands_tilde_workspace_and_project_dir(tmp_path: Path) -> None:
@@ -657,10 +940,11 @@ def test_main_expands_tilde_workspace_and_project_dir(tmp_path: Path) -> None:
     project = home / "project"
     nested = project / "src"
     nested.mkdir(parents=True)
+    (project / "GRD").mkdir()
     payload = {"type": "agent-turn-complete", "workspace": {"cwd": "~/project/src", "project_dir": "~/project"}}
 
     with (
-        patch.dict("os.environ", {"HOME": str(home)}),
+        patch.dict("os.environ", {"HOME": str(home), "USERPROFILE": str(home)}),
         patch("sys.stdin", io.StringIO(json.dumps(payload))),
         patch("grd.hooks.notify._trigger_update_check") as mock_trigger,
         patch("grd.hooks.notify._check_and_notify_update") as mock_notify,
@@ -671,8 +955,10 @@ def test_main_expands_tilde_workspace_and_project_dir(tmp_path: Path) -> None:
     mock_notify.assert_called_once_with(str(project))
 
 
-def test_main_accepts_top_level_cwd_workspace_alias() -> None:
-    expected = str(Path("/tmp/project").resolve(strict=False))
+def test_main_defaults_project_root_to_workspace_dir_when_project_dir_is_missing(tmp_path: Path) -> None:
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+
     with (
         patch("sys.stdin", io.StringIO(json.dumps({"type": "agent-turn-complete", "cwd": "/tmp/project"}))),
         patch("grd.hooks.notify._trigger_update_check") as mock_trigger,
@@ -680,12 +966,29 @@ def test_main_accepts_top_level_cwd_workspace_alias() -> None:
     ):
         main()
 
-    mock_trigger.assert_called_once_with(expected)
-    mock_notify.assert_called_once_with(expected)
+    mock_telemetry.assert_called_once()
+    mock_trigger.assert_called_once_with(str(workspace.resolve(strict=False)))
+    mock_notify.assert_called_once_with(str(workspace.resolve(strict=False)))
+    mock_exec.assert_called_once_with(str(workspace.resolve(strict=False)))
 
 
-def test_main_accepts_string_workspace_payload() -> None:
-    expected = str(Path("/tmp/project").resolve(strict=False))
+def test_main_records_usage_telemetry_from_alias_fields(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    data_root = tmp_path / "data-root"
+    payload = {
+        "type": "agent-turn-complete",
+        "workspace": str(workspace),
+        "model": {"id": _TEST_MODEL, "provider": _TEST_PROVIDER},
+        "tokens": {
+            "promptTokens": 120,
+            "completionTokens": 30,
+            "cacheReadInputTokens": 12,
+            "cacheCreationInputTokens": 5,
+            "usdCost": 0.42,
+        },
+    }
+
     with (
         patch("sys.stdin", io.StringIO(json.dumps({"type": "agent-turn-complete", "workspace": "/tmp/project"}))),
         patch("grd.hooks.notify._trigger_update_check") as mock_trigger,
@@ -693,8 +996,189 @@ def test_main_accepts_string_workspace_payload() -> None:
     ):
         main()
 
-    mock_trigger.assert_called_once_with(expected)
-    mock_notify.assert_called_once_with(expected)
+    ledger_path = usage_ledger_path(data_root)
+    rows = [json.loads(line) for line in ledger_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["runtime"] == _TELEMETRY_RUNTIME
+    assert row["provider"] == _TEST_PROVIDER
+    assert row["model"] == _TEST_MODEL
+    assert row["input_tokens"] == 120
+    assert row["output_tokens"] == 30
+    assert row["total_tokens"] == 150
+    assert row["cached_input_tokens"] == 12
+    assert row["cache_write_input_tokens"] == 5
+    assert row["cost_usd"] == 0.42
+    assert row["cost_status"] == "measured"
+    assert row["agent_scope"] == "unknown"
+    assert row["agent_attribution_source"] == "unknown"
+
+
+def test_main_records_workspace_state_subagent_attribution(tmp_path: Path) -> None:
+    project = tmp_path / "workspace"
+    nested = project / "src"
+    nested.mkdir(parents=True)
+    data_root = tmp_path / "data-root"
+    (project / "GRD").mkdir(parents=True, exist_ok=True)
+    (project / "GRD" / "current-agent-id.txt").write_text("agent-77\n", encoding="utf-8")
+    _write_current_execution(
+        project,
+        {
+            "session_id": "sess-subagent",
+            "segment_status": "active",
+            "current_task": "Run executor task",
+        },
+    )
+    payload = {
+        "type": "agent-turn-complete",
+        "workspace": {"cwd": str(nested), "project_dir": str(project)},
+        "model": {"id": _TEST_MODEL, "provider": _TEST_PROVIDER},
+        "tokens": {
+            "promptTokens": 120,
+            "completionTokens": 30,
+            "usdCost": 0.42,
+        },
+    }
+
+    with (
+        patch.dict("os.environ", {"GPD_DATA_DIR": str(data_root)}),
+        patch("sys.stdin", io.StringIO(json.dumps(payload))),
+        patch("grd.hooks.notify._payload_runtime", return_value=_TELEMETRY_RUNTIME),
+        patch("grd.hooks.notify._runtime_supports_usage_telemetry", return_value=True),
+        patch("grd.core.costs.get_current_session_id", return_value="sess-subagent"),
+        patch("grd.hooks.notify._trigger_update_check"),
+        patch("grd.hooks.notify._check_and_notify_update"),
+        patch("grd.hooks.notify._emit_execution_notification"),
+    ):
+        main()
+
+    ledger_path = usage_ledger_path(data_root)
+    rows = [json.loads(line) for line in ledger_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["workspace_root"] == nested.resolve(strict=False).as_posix()
+    assert row["project_root"] == project.resolve(strict=False).as_posix()
+    assert row["workspace_root"] != row["project_root"]
+    assert row["agent_scope"] == "subagent"
+    assert row["agent_id"] == "agent-77"
+    assert row["agent_attribution_source"] == "workspace-state"
+    assert row["agent_id_source"] == "workspace.current-agent-id"
+
+
+def test_main_does_not_record_usage_when_runtime_capability_is_unknown(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    data_root = tmp_path / "data-root"
+    payload = {
+        "type": "agent-turn-complete",
+        "workspace": str(workspace),
+        "model": {"id": _TEST_MODEL, "provider": _TEST_PROVIDER},
+        "tokens": {
+            "promptTokens": 120,
+            "completionTokens": 30,
+            "usdCost": 0.42,
+        },
+    }
+
+    with (
+        patch.dict("os.environ", {"GPD_DATA_DIR": str(data_root)}),
+        patch("sys.stdin", io.StringIO(json.dumps(payload))),
+        patch("grd.hooks.notify._payload_runtime", return_value=None),
+        patch("grd.core.costs.record_usage_from_runtime_payload") as mock_record,
+        patch("grd.hooks.notify._trigger_update_check"),
+        patch("grd.hooks.notify._check_and_notify_update"),
+        patch("grd.hooks.notify._emit_execution_notification"),
+    ):
+        main()
+
+    mock_record.assert_not_called()
+    assert not usage_ledger_path(data_root).exists()
+
+
+def test_main_logs_usage_skip_when_runtime_capability_is_unknown(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    payload = json.dumps({"type": "agent-turn-complete", "workspace": str(workspace)})
+    stderr = io.StringIO()
+
+    with (
+        patch("sys.stdin", io.StringIO(payload)),
+        patch("grd.hooks.notify._payload_runtime", return_value=""),
+        patch("grd.hooks.notify._trigger_update_check"),
+        patch("grd.hooks.notify._check_and_notify_update"),
+        patch("grd.hooks.notify._emit_execution_notification"),
+        patch.dict("os.environ", {"GPD_DEBUG": "1"}),
+        patch("sys.stderr", stderr),
+    ):
+        main()
+
+    assert "usage telemetry skipped: runtime capability unknown or unsupported" in stderr.getvalue()
+
+
+def test_runtime_supports_usage_telemetry_returns_false_for_unknown_runtime() -> None:
+    with patch("grd.adapters.runtime_catalog.get_runtime_capabilities", side_effect=KeyError("unknown runtime")):
+        assert notify_module._runtime_supports_usage_telemetry("broken-runtime") is False
+
+
+def test_runtime_supports_usage_telemetry_propagates_unexpected_runtime_catalog_errors() -> None:
+    with patch(
+        "grd.adapters.runtime_catalog.get_runtime_capabilities",
+        side_effect=RuntimeError("catalog boom"),
+    ):
+        with pytest.raises(RuntimeError, match="catalog boom"):
+            notify_module._runtime_supports_usage_telemetry("broken-runtime")
+
+
+def test_main_does_not_record_usage_when_usage_container_has_no_token_or_cost_signal(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    data_root = tmp_path / "data-root"
+    payload = {
+        "type": "agent-turn-complete",
+        "workspace": str(workspace),
+        "model": {"id": _TEST_MODEL, "provider": _TEST_PROVIDER},
+        "token_usage": {"requestCount": 1},
+    }
+
+    with (
+        patch.dict("os.environ", {"GPD_DATA_DIR": str(data_root)}),
+        patch("sys.stdin", io.StringIO(json.dumps(payload))),
+        patch("grd.hooks.notify._payload_runtime", return_value=_TELEMETRY_RUNTIME),
+        patch("grd.hooks.notify._runtime_supports_usage_telemetry", return_value=True),
+        patch("grd.hooks.notify._trigger_update_check"),
+        patch("grd.hooks.notify._check_and_notify_update"),
+        patch("grd.hooks.notify._emit_execution_notification"),
+    ):
+        main()
+
+    assert not usage_ledger_path(data_root).exists()
+
+
+def test_record_usage_telemetry_logs_advisory_when_runtime_capability_lookup_fails_unexpectedly(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    stderr = io.StringIO()
+
+    with (
+        patch("grd.adapters.runtime_catalog.get_runtime_capabilities", side_effect=RuntimeError("catalog boom")),
+        patch("grd.core.costs.record_usage_from_runtime_payload") as mock_record,
+        patch("grd.hooks.notify._debug") as mock_debug,
+        patch.dict("os.environ", {"GPD_DEBUG": "1"}),
+        patch("sys.stderr", stderr),
+    ):
+        notify_module._record_usage_telemetry(
+            {"type": "agent-turn-complete"},
+            workspace_dir=str(workspace),
+            project_root=str(workspace),
+            active_runtime="broken-runtime",
+        )
+
+    mock_record.assert_not_called()
+    mock_debug.assert_called_once_with("usage telemetry skipped: catalog boom")
 
 
 def test_main_logs_handler_exception_instead_of_swallowing(tmp_path: Path) -> None:
@@ -714,6 +1198,28 @@ def test_main_logs_handler_exception_instead_of_swallowing(tmp_path: Path) -> No
     assert "notify handler failed: boom" in output
 
 
+def test_main_treats_usage_telemetry_failures_as_advisory(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    payload = json.dumps({"type": "agent-turn-complete", "workspace": str(workspace)})
+    stderr = io.StringIO()
+    with (
+        patch("sys.stdin", io.StringIO(payload)),
+        patch("grd.hooks.notify._payload_runtime", return_value=_TELEMETRY_RUNTIME),
+        patch("grd.hooks.notify._runtime_supports_usage_telemetry", return_value=True),
+        patch("grd.core.costs.record_usage_from_runtime_payload", side_effect=RuntimeError("telemetry boom")),
+        patch("grd.hooks.notify._trigger_update_check"),
+        patch("grd.hooks.notify._check_and_notify_update"),
+        patch("grd.hooks.notify._emit_execution_notification") as mock_emit,
+        patch.dict("os.environ", {"GPD_DEBUG": "1"}),
+        patch("sys.stderr", stderr),
+    ):
+        main()
+
+    assert "usage telemetry skipped: telemetry boom" in stderr.getvalue()
+    mock_emit.assert_called_once_with(str(workspace.resolve(strict=False)))
+
+
 def test_main_logs_workspace_resolution_exception_instead_of_raising() -> None:
     payload = json.dumps({"type": "agent-turn-complete", "workspace": "/tmp/project"})
     stderr = io.StringIO()
@@ -731,6 +1237,7 @@ def test_main_logs_workspace_resolution_exception_instead_of_raising() -> None:
 def test_emit_execution_notification_for_first_result_gate(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
+    (workspace / "GRD").mkdir()
     _write_current_execution(
         workspace,
         {
@@ -748,6 +1255,100 @@ def test_emit_execution_notification_for_first_result_gate(tmp_path: Path) -> No
 
     assert "First-result review due for 03-01" in stderr.getvalue()
     assert "Benchmark reproduction" in stderr.getvalue()
+
+
+def test_emit_execution_notification_falls_back_to_last_result_id_when_no_label_or_task(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "GRD").mkdir()
+    snapshot = _ExecutionSnapshot(
+        phase="03",
+        plan="01",
+        segment_id="seg-1",
+        first_result_gate_pending=True,
+        last_result_id="result-42",
+    )
+
+    stderr = io.StringIO()
+    with (
+        patch("grd.core.observability.get_current_execution", return_value=snapshot),
+        patch("sys.stderr", stderr),
+    ):
+        _emit_execution_notification(str(workspace))
+
+    output = stderr.getvalue()
+    assert "First-result review due for 03-01" in output
+    assert "rerun anchor: result-42" in output
+
+
+@pytest.mark.parametrize(
+    ("snapshot_kwargs", "expected_artifact"),
+    [
+        (
+            {"last_result_label": "Benchmark reproduction", "last_result_id": "result-42"},
+            "Benchmark reproduction",
+        ),
+        (
+            {"current_task": "Investigating the current task", "last_result_id": "result-42"},
+            "Investigating the current task",
+        ),
+    ],
+)
+def test_emit_execution_notification_prefers_label_or_current_task_over_last_result_id(
+    tmp_path: Path,
+    snapshot_kwargs: dict[str, object],
+    expected_artifact: str,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "GRD").mkdir()
+    snapshot = _ExecutionSnapshot(
+        phase="03",
+        plan="01",
+        segment_id="seg-1",
+        first_result_gate_pending=True,
+        **snapshot_kwargs,
+    )
+
+    stderr = io.StringIO()
+    with (
+        patch("grd.core.observability.get_current_execution", return_value=snapshot),
+        patch("sys.stderr", stderr),
+    ):
+        _emit_execution_notification(str(workspace))
+
+    output = stderr.getvalue()
+    assert "First-result review due for 03-01" in output
+    assert expected_artifact in output
+    assert "rerun anchor: result-42" not in output
+
+
+def test_emit_execution_notification_outside_project_layout_dedupes_per_workspace(tmp_path: Path) -> None:
+    workspace_a = tmp_path / "workspace-a"
+    workspace_b = tmp_path / "workspace-b"
+    workspace_a.mkdir()
+    workspace_b.mkdir()
+    home = tmp_path / "home"
+    snapshot = _ExecutionSnapshot(
+        phase="03",
+        plan="01",
+        segment_id="seg-1",
+        first_result_gate_pending=True,
+        last_result_id="result-42",
+    )
+
+    stderr = io.StringIO()
+    with (
+        patch("grd.core.observability.get_current_execution", return_value=snapshot),
+        patch("grd.hooks.notify.Path.home", return_value=home),
+        patch("sys.stderr", stderr),
+    ):
+        _emit_execution_notification(str(workspace_a))
+        _emit_execution_notification(str(workspace_b))
+
+    assert stderr.getvalue().count("First-result review due for 03-01") == 2
 
 
 def test_emit_execution_notification_walks_up_from_nested_workspace(tmp_path: Path) -> None:
@@ -795,6 +1396,46 @@ def test_emit_execution_notification_for_pre_fanout_review(tmp_path: Path) -> No
     assert "Pre-fanout review due for 05-03" in stderr.getvalue()
 
 
+def test_emit_execution_notification_prefers_lineage_head_over_legacy_current_execution_snapshot(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _write_current_execution(
+        workspace,
+        {
+            "phase": "07",
+            "plan": "02",
+            "segment_id": "legacy-seg",
+            "segment_status": "paused",
+            "resume_file": "GRD/phases/07/.continue-here.md",
+            "updated_at": "2026-03-27T12:01:00+00:00",
+        },
+    )
+
+    head_snapshot = _ExecutionSnapshot(
+        phase="07",
+        plan="02",
+        segment_id="head-seg",
+        segment_status="blocked",
+        blocked_reason="manual stop required",
+        current_task="Lineage head task",
+        updated_at="2026-03-27T12:03:00+00:00",
+    )
+
+    stderr = io.StringIO()
+    with (
+        patch("grd.core.observability.get_current_execution", return_value=head_snapshot),
+        patch("sys.stderr", stderr),
+    ):
+        _emit_execution_notification(str(workspace))
+
+    output = stderr.getvalue()
+    assert "Blocked in 07-02" in output
+    assert "manual stop required" in output
+    assert "Resume candidate from live overlay" not in output
+
+
 def test_emit_execution_notification_prefers_review_over_resume_for_bounded_gate_state(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -817,7 +1458,7 @@ def test_emit_execution_notification_prefers_review_over_resume_for_bounded_gate
         _emit_execution_notification(str(workspace))
 
     assert "Pre-fanout review due for 05-03" in stderr.getvalue()
-    assert "Resume ready" not in stderr.getvalue()
+    assert "Resume candidate from live overlay" not in stderr.getvalue()
 
 
 def test_emit_execution_notification_for_skeptical_review_uses_anchor_focus(tmp_path: Path) -> None:
@@ -870,6 +1511,32 @@ def test_emit_execution_notification_keeps_pre_fanout_review_until_clear_even_if
     assert "Pre-fanout review due for 05-05" in stderr.getvalue()
 
 
+def test_emit_execution_notification_does_not_claim_stuck(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _write_current_execution(
+        workspace,
+        {
+            "phase": "06",
+            "plan": "01",
+            "segment_id": "seg-12",
+            "segment_status": "blocked",
+            "blocked_reason": "anchor mismatch",
+            "waiting_reason": "time_budget_exceeded",
+            "waiting_for_review": True,
+        },
+    )
+
+    stderr = io.StringIO()
+    with patch("sys.stderr", stderr):
+        _emit_execution_notification(str(workspace))
+
+    output = stderr.getvalue().lower()
+    assert "stuck" not in output
+    assert "blocked in 06-01" in output or "waiting in 06-01" in output
+    assert "time budget exceeded" in output or "anchor mismatch" in output
+
+
 def test_emit_execution_notification_dedupes_repeated_resume_state(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -890,12 +1557,36 @@ def test_emit_execution_notification_dedupes_repeated_resume_state(tmp_path: Pat
         _emit_execution_notification(str(workspace))
 
     output = stderr.getvalue()
-    assert output.count("Resume ready for 04-02") == 1
+    assert output.count("Resume candidate from live overlay for 04-02") == 1
+
+
+def test_emit_execution_notification_for_paused_state_without_resume_file_is_conservative(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _write_current_execution(
+        workspace,
+        {
+            "phase": "04",
+            "plan": "03",
+            "segment_id": "seg-3",
+            "segment_status": "paused",
+            "last_result_label": "Recent artifact",
+        },
+    )
+
+    stderr = io.StringIO()
+    with patch("sys.stderr", stderr):
+        _emit_execution_notification(str(workspace))
+
+    output = stderr.getvalue()
+    assert "Paused in 04-03" in output
+    assert "Resume candidate from live overlay" not in output
 
 
 def test_emit_execution_notification_dedupes_concurrent_resume_state(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
+    (workspace / "GRD").mkdir()
     barrier = threading.Barrier(2)
 
     class _SlowStderr:
@@ -940,6 +1631,7 @@ def test_emit_execution_notification_dedupes_concurrent_resume_state(tmp_path: P
             thread.join()
 
     assert errors == []
-    assert stderr.getvalue().count("Resume ready for 04-02") == 1
+    assert stderr.getvalue().count("Resume candidate from live overlay for 04-02") == 1
     state = json.loads(ProjectLayout(workspace).last_observability_notification.read_text(encoding="utf-8"))
-    assert state["fingerprint"] == "resume:seg-2"
+    assert state["execution_fingerprint"] == "resume:seg-2"
+    assert "fingerprint" not in state

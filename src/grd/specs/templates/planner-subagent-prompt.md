@@ -18,11 +18,14 @@ Template for spawning `grd-planner`. The planner agent owns the planning logic; 
 **Research mode:** {research_mode}
 **Autonomy:** {autonomy}
 
-Planning requires an approved scoping contract. That contract must include a non-empty `context_intake`. If `{project_contract}` is empty, stale, or too underspecified to identify the phase contract slice, return `## CHECKPOINT REACHED` instead of inferring scope from roadmap text alone.
-The contract still exposes defaultable semantic fields: `observables[].kind`, `deliverables[].kind`, `acceptance_tests[].kind`, `references[].kind`, `references[].role`, and `links[].relation`. They default to `other` and may be omitted only when that generic category is actually intended.
+Use `@{GRD_INSTALL_DIR}/templates/plan-contract-schema.md` as the canonical contract source. Keep this prompt for scope selection, mode flags, and return conventions only.
+If `{project_contract}` is empty, stale, or too underspecified to identify the phase contract slice, return `grd_return.status: checkpoint` rather than guessing.
 
 **Project State:** {state_content}
 **Project Contract:** {project_contract}
+**Project Contract Gate:** {project_contract_gate}
+**Project Contract Load Info:** {project_contract_load_info}
+**Project Contract Validation:** {project_contract_validation}
 **Contract Intake:** {contract_intake}
 **Effective Reference Intake:** {effective_reference_intake}
 **Roadmap:** {roadmap_content}
@@ -46,44 +49,25 @@ IMPORTANT: If context exists below, it contains USER DECISIONS from /grd:discuss
 </planning_context>
 
 <physics_planning_requirements>
-Each plan MUST include:
-
-- **Mathematical rigor checkpoints:** Points where derivations must be verified for dimensional consistency, symmetry preservation, and correct tensor structure
-- **Limiting case validation:** Explicit checks that results reduce correctly in all known limits (classical, non-relativistic, weak-coupling, thermodynamic, etc.)
-- **Order-of-magnitude estimates:** Before any detailed calculation, estimate the expected scale of the answer
-- **Error budget:** For numerical work, specify target precision and identify dominant error sources
-- **Consistency checks:** Cross-checks between independent methods or approaches where possible
-- **Contract completeness:** Every plan must carry decisive claims, deliverables, references, acceptance tests, forbidden proxies, and uncertainty markers in frontmatter
-- **Semantic defaults:** Omit `kind`, `role`, or `relation` only when the schema default `other` is genuinely intended; otherwise set the more specific value explicitly
-- **Defaulted semantic fields:** `observables[].kind`, `deliverables[].kind`, `acceptance_tests[].kind`, `references[].kind`, `references[].role`, and `links[].relation` all exist in the contract and default to `other`
-- **Context intake:** Every plan must carry a non-empty `context_intake` object with the must-read refs, prior outputs, baselines, user anchors, context gaps, and crucial inputs the executor needs before planning
-- **Anchor discipline:** If a benchmark, paper, dataset, baseline, or prior artifact is contract-critical, surface it in the plan instead of treating it as optional background
-- **Protocol bundle coverage:** If specialized protocol bundles are selected, carry their anchor prompts, estimator policies, decisive artifact guidance, and verification extensions into the plan rather than leaving them implicit
+Keep dimensions, limits, and cross-method consistency explicit. For proof-bearing work, keep hypotheses, parameters, and conclusions auditable in the body.
 </physics_planning_requirements>
 
-<contract_completion_requirements>
-Planning requires `project_contract`:
+<contract_visibility_requirements>
+Planning requires an approved `project_contract`. If `project_contract_gate.authoritative` is false, `project_contract_load_info.status` starts with `blocked`, or `project_contract_validation.valid` is false, return `grd_return.status: checkpoint` instead of guessing.
+Keep `project_contract` as the grounding ledger. Use `effective_reference_intake` and `active_reference_context` only as readable projections of the same anchors.
+Treat stable knowledge docs surfaced through `active_reference_context` and `reference_artifacts_content` as reviewed background syntheses. They may clarify assumptions, caveats, and method choice when they agree with stronger sources, but they do not override `convention_lock`, `project_contract`, the PLAN `contract`, `contract_results`, `comparison_verdicts`, proof-review artifacts, or direct benchmark/result evidence.
+If stable knowledge materially shapes the plan, surface it explicitly in existing plan structures or prose; do not invent a separate knowledge authority or ledger.
+Use explicit `knowledge_deps` when a plan materially depends on a reviewed knowledge doc and downstream gating should be enforced; keep implicit stable background advisory only.
+Treat `approach_policy` as execution policy only. Keep `scope.in_scope` populated and `contract.context_intake` concrete enough to audit.
+For proof-bearing work, use an explicit non-`other` `claim_kind` with auditable hypotheses, quantified variables, and named parameters.
+</contract_visibility_requirements>
 
-- If `project_contract` is empty, stale, or too underspecified to identify the phase contract slice, return `## CHECKPOINT REACHED` instead of writing a weak or guessed plan.
-- Every PLAN.md must include a `contract` frontmatter block with exact IDs for claims, deliverables, references, acceptance tests, and forbidden proxies.
-- Every PLAN.md must include a non-empty `context_intake` frontmatter block with the must-read refs, prior outputs, baselines, user anchors, context gaps, and crucial inputs needed to execute the plan.
-- Every PLAN.md must carry forward required context from the contract: must-read refs, prior outputs, baselines, and user anchors when execution depends on them.
-- Treat `effective_reference_intake` as the machine-readable carry-forward ledger. Use `active_reference_context` to interpret it, not to replace it.
-- Every PLAN.md must include uncertainty markers from the contract when they constrain interpretation or verification.
-- Every PLAN.md should express result wiring through `contract.links` or explicit task/verification handoffs, not through a second ad hoc success schema.
-- Autonomy mode and model profile may change cadence or detail, but they do NOT relax contract completeness.
-</contract_completion_requirements>
+<tangent_control>
+Do not silently branch or widen scope. If multiple viable main-line paths remain and the user has not chosen among them, return `grd_return.status: checkpoint` instead of emitting parallel plans.
+</tangent_control>
 
 <light_mode_instructions>
-**If plan depth is `light`:** Keep the full canonical frontmatter, including `wave`, `depends_on`, `files_modified`, `interactive`, `conventions`, `contract`, and `context_intake`.
-
-Simplify only the body:
-
-- keep one high-level task block per plan
-- keep verification and success criteria concise
-- omit code snippets and unnecessary implementation detail
-
-Light mode changes verbosity, not contract completeness.
+**If plan depth is `light`:** Keep the full canonical frontmatter and contract block. Light mode changes body verbosity only.
 </light_mode_instructions>
 
 <context_budget_guidance>
@@ -111,19 +95,17 @@ Output consumed by /grd:execute-phase. Plans need:
 </downstream_consumer>
 
 <quality_gate>
-
 - [ ] PLAN.md files created in phase directory
-- [ ] Each plan has valid frontmatter
-- [ ] Each plan includes a contract block with claims, deliverables, references, acceptance tests, forbidden proxies, and uncertainty markers
-- [ ] Tasks are specific and actionable with clear mathematical deliverables
-- [ ] Dependencies correctly identified
-- [ ] Waves assigned for parallel execution
-- [ ] Contract links or explicit task-level dependency wiring cover the critical handoffs and limiting-case recovery path
-- [ ] Required refs, prior outputs, and baselines are surfaced in `<context>` or verification paths
-- [ ] Selected protocol bundle guidance is reflected in the task structure, estimator guards, or decisive artifacts when applicable
-- [ ] Forbidden proxies are rejected explicitly in `<done>` or `<success_criteria>`
-- [ ] Dimensional analysis check specified for each quantitative result
-- [ ] Validation checkpoints placed after each major derivation step
+- [ ] Frontmatter is valid
+- [ ] The contract block is complete per `plan-contract-schema.md`
+- [ ] `tool_requirements` are declared whenever specialized machine-checkable prerequisites exist
+- [ ] `tool_requirements` pass `grd validate plan-preflight <PLAN.md>` before the plan is treated as execution-ready
+- [ ] Tasks are specific, actionable, and testable
+- [ ] Dependencies and waves are correct
+- [ ] Required refs, prior outputs, baselines, and protocol bundle guidance are surfaced where needed
+- [ ] Forbidden proxies are rejected explicitly
+- [ ] Dimensional analysis and validation checkpoints cover each quantitative result
+- [ ] Proof-bearing plans keep proof artifacts and sibling `*-PROOF-REDTEAM.md` audits explicit
 </quality_gate>
 ```
 
@@ -146,6 +128,9 @@ Load the validator-enforced PLAN contract schema before writing or revising any 
 **Checker issues:** {structured_issues_from_checker}
 **Project State:** {state_content}
 **Project Contract:** {project_contract}
+**Project Contract Gate:** {project_contract_gate}
+**Project Contract Load Info:** {project_contract_load_info}
+**Project Contract Validation:** {project_contract_validation}
 **Contract Intake:** {contract_intake}
 **Effective Reference Intake:** {effective_reference_intake}
 **Protocol Bundles:** {protocol_bundle_context}
@@ -164,7 +149,8 @@ Revisions MUST still honor user decisions.
 <instructions>
 Make targeted updates to address checker issues.
 Do NOT replan from scratch unless issues are fundamental.
-If the approved project contract is missing or no longer sufficient to identify the right phase slice, return `## CHECKPOINT REACHED` instead of patching around guessed scope.
+If `project_contract_gate.authoritative` is false, `project_contract_load_info.status` starts with `blocked`, or `project_contract_validation.valid` is false, return `grd_return.status: checkpoint` instead of patching around guessed scope.
+If the approved project contract is missing or no longer sufficient to identify the right phase slice, return `grd_return.status: checkpoint` instead of patching around guessed scope.
 Fix contract-gate blockers first: missing decisive outputs, missing acceptance tests, missing anchor refs, forbidden-proxy misses, and missing disconfirming paths.
 Return what changed.
 </instructions>
@@ -181,6 +167,9 @@ Return what changed.
 | `{autonomy}` | `.grd/config.json` or init JSON |
 | `{state_content}` | `state_content` from init JSON |
 | `{project_contract}` | `project_contract` from init JSON |
+| `{project_contract_gate}` | `project_contract_gate` from init JSON |
+| `{project_contract_load_info}` | `project_contract_load_info` from init JSON |
+| `{project_contract_validation}` | `project_contract_validation` from init JSON |
 | `{roadmap_content}` | `roadmap_content` from init JSON |
 | `{requirements_content}` | `requirements_content` from init JSON |
 | `{protocol_bundle_context}` | `protocol_bundle_context` from init JSON |
@@ -198,13 +187,16 @@ Return what changed.
 
 ## Return Contract
 
-Planner runs must return one of these markers:
+Planner runs must return a structured `grd_return` envelope.
 
-- `## PLANNING COMPLETE`
-- `## CHECKPOINT REACHED`
-- `## PLANNING INCONCLUSIVE`
+The markdown headings `## PLANNING COMPLETE`, `## CHECKPOINT REACHED`, and `## PLANNING INCONCLUSIVE` are human-readable labels only. Do not route on them; route on `grd_return.status` and the artifact gate below.
 
-When returning `CHECKPOINT`, include the checkpoint type, the blocking decision, and the exact user input needed to continue.
+- `grd_return.status: completed` means the planner wrote the expected PLAN.md artifacts and they passed the on-disk artifact check.
+- `grd_return.status: checkpoint` means the planner needs user input. Include the checkpoint type, the blocking decision, and the exact user input needed to continue.
+- `grd_return.status: blocked` means the contract or scope cannot be completed without external repair.
+- `grd_return.status: failed` means planning did not complete and must be retried or handled manually.
+
+Always verify `grd_return.files_written` against the expected plan artifacts before accepting completion.
 
 ---
 
@@ -214,5 +206,5 @@ If planning cannot finish:
 
 1. State the blocker concretely.
 2. Report whether any PLAN.md files were written.
-3. Return `## PLANNING INCONCLUSIVE`.
+3. Return `grd_return.status: failed` and, if helpful, include a human-readable `## PLANNING INCONCLUSIVE` heading in the body.
 4. Provide the smallest next action: more context, retry, or manual intervention.

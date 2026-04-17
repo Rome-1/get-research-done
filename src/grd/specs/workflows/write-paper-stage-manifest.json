@@ -1,0 +1,427 @@
+{
+  "schema_version": 1,
+  "workflow_id": "write-paper",
+  "stages": [
+    {
+      "id": "paper_bootstrap",
+      "order": 1,
+      "purpose": "manuscript bootstrap, scope resolution, and readiness audit",
+      "mode_paths": [
+        "workflows/write-paper.md"
+      ],
+      "required_init_fields": [
+        "commit_docs",
+        "state_exists",
+        "project_exists",
+        "autonomy",
+        "research_mode",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_context",
+        "active_reference_context",
+        "derived_manuscript_reference_status",
+        "derived_manuscript_reference_status_count",
+        "derived_manuscript_proof_review_status",
+        "platform"
+      ],
+      "loaded_authorities": [
+        "workflows/write-paper.md",
+        "templates/paper/publication-manuscript-root-preflight.md"
+      ],
+      "conditional_authorities": [],
+      "must_not_eager_load": [
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
+        "references/publication/publication-pipeline-modes.md",
+        "references/publication/peer-review-panel.md",
+        "references/publication/peer-review-reliability.md",
+        "references/shared/canonical-schema-discipline.md",
+        "templates/paper/paper-config-schema.md",
+        "templates/paper/artifact-manifest-schema.md",
+        "templates/paper/bibliography-audit-schema.md",
+        "templates/paper/review-ledger-schema.md",
+        "templates/paper/referee-decision-schema.md",
+        "templates/paper/figure-tracker.md",
+        "templates/paper/reproducibility-manifest.md"
+      ],
+      "allowed_tools": [
+        "ask_user",
+        "file_read",
+        "file_write",
+        "shell",
+        "task"
+      ],
+      "writes_allowed": [],
+      "produced_state": [
+        "manuscript bootstrap state",
+        "readiness audit state"
+      ],
+      "next_stages": [
+        "outline_and_scaffold"
+      ],
+      "checkpoints": [
+        "paper target resolved",
+        "scope and readiness audited"
+      ]
+    },
+    {
+      "id": "outline_and_scaffold",
+      "order": 2,
+      "purpose": "paper scope, outline, and manuscript scaffold generation",
+      "mode_paths": [
+        "workflows/write-paper.md"
+      ],
+      "required_init_fields": [
+        "commit_docs",
+        "state_exists",
+        "project_exists",
+        "autonomy",
+        "research_mode",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_context",
+        "active_reference_context",
+        "derived_manuscript_reference_status",
+        "derived_manuscript_reference_status_count",
+        "derived_manuscript_proof_review_status",
+        "roadmap_content",
+        "requirements_content",
+        "state_content",
+        "reference_artifact_files",
+        "reference_artifacts_content",
+        "literature_review_files",
+        "literature_review_count",
+        "research_map_reference_files",
+        "research_map_reference_count",
+        "derived_convention_lock",
+        "derived_convention_lock_count",
+        "derived_intermediate_results",
+        "derived_intermediate_result_count",
+        "derived_approximations",
+        "derived_approximation_count",
+        "platform"
+      ],
+      "loaded_authorities": [
+        "workflows/write-paper.md",
+        "references/publication/publication-pipeline-modes.md",
+        "templates/paper/paper-config-schema.md",
+        "templates/paper/artifact-manifest-schema.md"
+      ],
+      "conditional_authorities": [],
+      "must_not_eager_load": [
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
+        "references/publication/peer-review-panel.md",
+        "references/publication/peer-review-reliability.md",
+        "references/shared/canonical-schema-discipline.md",
+        "templates/paper/bibliography-audit-schema.md",
+        "templates/paper/review-ledger-schema.md",
+        "templates/paper/referee-decision-schema.md",
+        "templates/paper/figure-tracker.md",
+        "templates/paper/reproducibility-manifest.md"
+      ],
+      "allowed_tools": [
+        "ask_user",
+        "file_read",
+        "file_write",
+        "find_files",
+        "search_files",
+        "shell",
+        "task",
+        "web_search"
+      ],
+      "writes_allowed": [
+        "GRD/PROJECT.md",
+        "GRD/REQUIREMENTS.md",
+        "GRD/ROADMAP.md",
+        "GRD/STATE.md",
+        "GRD/state.json",
+        "GRD/config.json"
+      ],
+      "produced_state": [
+        "paper scope",
+        "paper outline",
+        "manuscript scaffold state"
+      ],
+      "next_stages": [
+        "figure_and_section_authoring"
+      ],
+      "checkpoints": [
+        "journal and key result established",
+        "outline approved or accepted as working draft",
+        "manuscript scaffold created"
+      ]
+    },
+    {
+      "id": "figure_and_section_authoring",
+      "order": 3,
+      "purpose": "figure preparation, section drafting, and equation presentation",
+      "mode_paths": [
+        "workflows/write-paper.md"
+      ],
+      "required_init_fields": [
+        "commit_docs",
+        "state_exists",
+        "project_exists",
+        "autonomy",
+        "research_mode",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_context",
+        "active_reference_context",
+        "derived_manuscript_reference_status",
+        "derived_manuscript_reference_status_count",
+        "derived_manuscript_proof_review_status",
+        "reference_artifact_files",
+        "reference_artifacts_content",
+        "literature_review_files",
+        "literature_review_count",
+        "research_map_reference_files",
+        "research_map_reference_count",
+        "derived_convention_lock",
+        "derived_convention_lock_count",
+        "derived_intermediate_results",
+        "derived_intermediate_result_count",
+        "derived_approximations",
+        "derived_approximation_count",
+        "state_content",
+        "roadmap_content",
+        "requirements_content",
+        "platform"
+      ],
+      "loaded_authorities": [
+        "workflows/write-paper.md",
+        "references/shared/canonical-schema-discipline.md",
+        "templates/paper/figure-tracker.md"
+      ],
+      "conditional_authorities": [],
+      "must_not_eager_load": [
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
+        "references/publication/publication-pipeline-modes.md",
+        "references/publication/peer-review-panel.md",
+        "references/publication/peer-review-reliability.md",
+        "templates/paper/paper-config-schema.md",
+        "templates/paper/artifact-manifest-schema.md",
+        "templates/paper/bibliography-audit-schema.md",
+        "templates/paper/review-ledger-schema.md",
+        "templates/paper/referee-decision-schema.md",
+        "templates/paper/reproducibility-manifest.md"
+      ],
+      "allowed_tools": [
+        "ask_user",
+        "file_read",
+        "file_write",
+        "file_edit",
+        "find_files",
+        "search_files",
+        "shell",
+        "task",
+        "web_search"
+      ],
+      "writes_allowed": [
+        "GRD/phases",
+        "GRD/ROADMAP.md",
+        "GRD/STATE.md",
+        "GRD/state.json"
+      ],
+      "produced_state": [
+        "figure plan state",
+        "section draft state",
+        "equation presentation state"
+      ],
+      "next_stages": [
+        "consistency_and_references"
+      ],
+      "checkpoints": [
+        "figures prepared or queued",
+        "sections drafted"
+      ]
+    },
+    {
+      "id": "consistency_and_references",
+      "order": 4,
+      "purpose": "notation audit, reference verification, and reproducibility manifest refresh",
+      "mode_paths": [
+        "workflows/write-paper.md"
+      ],
+      "required_init_fields": [
+        "commit_docs",
+        "state_exists",
+        "project_exists",
+        "autonomy",
+        "research_mode",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_context",
+        "active_reference_context",
+        "derived_manuscript_reference_status",
+        "derived_manuscript_reference_status_count",
+        "derived_manuscript_proof_review_status",
+        "reference_artifact_files",
+        "reference_artifacts_content",
+        "citation_source_files",
+        "citation_source_count",
+        "citation_source_warnings",
+        "derived_citation_sources",
+        "derived_citation_source_count",
+        "derived_convention_lock",
+        "derived_convention_lock_count",
+        "derived_intermediate_results",
+        "derived_intermediate_result_count",
+        "derived_approximations",
+        "derived_approximation_count",
+        "state_content",
+        "roadmap_content",
+        "requirements_content",
+        "platform"
+      ],
+      "loaded_authorities": [
+        "workflows/write-paper.md",
+        "templates/paper/bibliography-audit-schema.md",
+        "templates/paper/reproducibility-manifest.md"
+      ],
+      "conditional_authorities": [],
+      "must_not_eager_load": [
+        "references/publication/publication-pipeline-modes.md",
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
+        "references/publication/peer-review-panel.md",
+        "references/publication/peer-review-reliability.md",
+        "references/shared/canonical-schema-discipline.md",
+        "templates/paper/paper-config-schema.md",
+        "templates/paper/artifact-manifest-schema.md",
+        "templates/paper/review-ledger-schema.md",
+        "templates/paper/referee-decision-schema.md",
+        "templates/paper/figure-tracker.md"
+      ],
+      "allowed_tools": [
+        "ask_user",
+        "file_read",
+        "file_edit",
+        "file_write",
+        "find_files",
+        "search_files",
+        "shell",
+        "task",
+        "web_search"
+      ],
+      "writes_allowed": [
+        "GRD/STATE.md",
+        "GRD/state.json",
+        "GRD/review",
+        "GRD/CONVENTIONS.md"
+      ],
+      "produced_state": [
+        "reference audit state",
+        "reproducibility state",
+        "consistency audit state"
+      ],
+      "next_stages": [
+        "publication_review"
+      ],
+      "checkpoints": [
+        "notation is consistent",
+        "references are verified",
+        "reproducibility manifest refreshed"
+      ]
+    },
+    {
+      "id": "publication_review",
+      "order": 5,
+      "purpose": "staged peer review, referee adjudication, and revision routing",
+      "mode_paths": [
+        "workflows/write-paper.md"
+      ],
+      "required_init_fields": [
+        "commit_docs",
+        "state_exists",
+        "project_exists",
+        "autonomy",
+        "research_mode",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+        "selected_protocol_bundle_ids",
+        "protocol_bundle_context",
+        "active_reference_context",
+        "derived_manuscript_reference_status",
+        "derived_manuscript_reference_status_count",
+        "derived_manuscript_proof_review_status",
+        "reference_artifact_files",
+        "reference_artifacts_content",
+        "citation_source_files",
+        "citation_source_count",
+        "citation_source_warnings",
+        "derived_citation_sources",
+        "derived_citation_source_count",
+        "derived_convention_lock",
+        "derived_convention_lock_count",
+        "derived_intermediate_results",
+        "derived_intermediate_result_count",
+        "derived_approximations",
+        "derived_approximation_count",
+        "platform"
+      ],
+      "loaded_authorities": [
+        "workflows/write-paper.md",
+        "references/publication/publication-review-round-artifacts.md",
+        "references/publication/publication-response-artifacts.md",
+        "references/publication/peer-review-panel.md",
+        "references/publication/peer-review-reliability.md",
+        "templates/paper/review-ledger-schema.md",
+        "templates/paper/referee-decision-schema.md"
+      ],
+      "conditional_authorities": [],
+      "must_not_eager_load": [
+        "references/publication/publication-pipeline-modes.md",
+        "references/shared/canonical-schema-discipline.md",
+        "templates/paper/paper-config-schema.md",
+        "templates/paper/artifact-manifest-schema.md",
+        "templates/paper/bibliography-audit-schema.md",
+        "templates/paper/figure-tracker.md",
+        "templates/paper/reproducibility-manifest.md"
+      ],
+      "allowed_tools": [
+        "ask_user",
+        "file_read",
+        "file_write",
+        "find_files",
+        "search_files",
+        "shell",
+        "task",
+        "web_search"
+      ],
+      "writes_allowed": [
+        "GRD/review",
+        "GRD/REFEREE-REPORT.md",
+        "GRD/REFEREE-REPORT-R2.md",
+        "GRD/REFEREE-REPORT-R3.md"
+      ],
+      "produced_state": [
+        "review ledger state",
+        "referee decision state",
+        "submission readiness state"
+      ],
+      "next_stages": [],
+      "checkpoints": [
+        "peer review completed",
+        "referee adjudication completed",
+        "revision routing decided"
+      ]
+    }
+  ]
+}

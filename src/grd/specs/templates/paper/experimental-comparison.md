@@ -13,23 +13,25 @@ Template for systematic comparison of theoretical predictions with experimental 
 
 ```markdown
 ---
-protocol_bundle_ids (optional):
+protocol_bundle_ids:
   - bundle-id
-bundle_expectations (optional):
+bundle_expectations:
   - "[additive decisive-artifact, estimator, or benchmark expectation recorded for provenance]"
 comparison_verdicts:
   - subject_id: claim-id
-    subject_kind: claim|deliverable|acceptance_test|reference
-    subject_role: decisive|supporting|supplemental|other
+    subject_kind: claim
+    subject_role: decisive
     reference_id: ref-id
-    comparison_kind: benchmark|prior_work|experiment|cross_method|baseline|other
-    metric: relative_error | chi2_ndof | pull
+    comparison_kind: experiment
+    metric: chi2_ndof
     threshold: "<= 2 sigma"
-    verdict: pass | tension | fail | inconclusive
+    verdict: pass
     recommended_action: "[what to do next]"
 ---
 
 # Experimental Comparison: [Observable/Quantity]
+
+If no selected protocol bundle materially informed the comparison, omit `protocol_bundle_ids` and `bundle_expectations` entirely.
 
 **Date:** [YYYY-MM-DD]
 **Theory source:** [Phase/derivation that produced the prediction]

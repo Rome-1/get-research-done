@@ -4,7 +4,7 @@ description: Structure a point-by-point response to referee reports and update t
 argument-hint: "[path to referee report or 'paste']"
 context_mode: project-required
 requires:
-  files: ["paper/*.tex", "manuscript/*.tex", "draft/*.tex"]
+  files: ["paper/*.tex", "paper/*.md", "manuscript/*.tex", "manuscript/*.md", "draft/*.tex", "draft/*.md"]
 review-contract:
   review_mode: publication
   schema_version: 1
@@ -13,11 +13,7 @@ review-contract:
     - ".grd/AUTHOR-RESPONSE{round_suffix}.md"
   required_evidence:
     - existing manuscript
-    - structured referee issues
     - referee report source when provided as a path
-    - peer-review review ledger when available
-    - peer-review decision artifacts when available
-    - revision verification evidence
   blocking_conditions:
     - missing project state
     - missing manuscript
@@ -25,6 +21,7 @@ review-contract:
     - missing conventions
     - degraded review integrity
   preflight_checks:
+    - command_context
     - project_state
     - manuscript
     - referee_report_source
@@ -39,20 +36,12 @@ allowed-tools:
   - task
   - ask_user
 ---
-
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
-
 <objective>
 Structure a point-by-point response to referee reports and revise the manuscript accordingly.
 
-Handles the full revision pipeline: parsing referee comments, categorizing by priority and type, drafting responses, spawning revision agents for manuscript changes, tracking new calculations needed, verifying consistency after revisions, and producing both the internal author-response tracker and the journal-facing response letter.
+Keep the wrapper focused on referee triage, revision routing, and synchronized response artifacts while the workflow owns the full revision pipeline.
 
-**Orchestrator role:** Parse and triage referee comments, coordinate revision agents, track new calculation requests, and keep the internal and journal-facing response artifacts synchronized.
-
-**Why subagent:** Each section revision needs the full context of the referee comment, current section text, and planned response. Fresh 200k context per section revision ensures quality. Main context coordinates the overall response structure.
-
-Responding to referees is collaborative improvement: every comment, even an incorrect one, reveals something about how the paper communicates its results. The goal is a stronger paper.
+**Why subagent:** Referee triage and synchronized manuscript revision burn context fast. Fresh context keeps the orchestrator lean.
 </objective>
 
 <execution_context>
@@ -77,6 +66,7 @@ ls .grd/paper/REFEREE_RESPONSE*.md 2>/dev/null
 ls .grd/review/REVIEW-LEDGER*.json .grd/review/REFEREE-DECISION*.json 2>/dev/null
 ```
 
+The workflow resolves the manuscript root, staged review artifacts, and revision targets.
 </context>
 
 <process>

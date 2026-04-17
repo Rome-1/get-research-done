@@ -15,7 +15,7 @@ def test_compare_branches_uses_in_memory_branch_summary_extraction() -> None:
     assert "do not use `.grd/tmp/`, `/tmp`, or another temp root for this step." in workflow_text
 
 
-def test_parameter_sweep_keeps_internal_docs_in_gpd_and_durable_data_in_artifacts() -> None:
+def test_parameter_sweep_keeps_internal_docs_in_grd_and_durable_data_in_artifacts() -> None:
     workflow_text = (WORKFLOWS_DIR / "parameter-sweep.md").read_text(encoding="utf-8")
 
     assert 'SWEEP_ARTIFACT_DIR="artifacts/phases/${SWEEP_PHASE_KEY}/sweeps/${SWEEP_SLUG}"' in workflow_text

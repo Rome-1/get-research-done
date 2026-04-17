@@ -70,6 +70,8 @@ fi
 ```
 
 - **If init succeeds** (non-empty JSON with `state_exists: true`): Extract `convention_lock` for metric signature, Fourier transform convention, and index ranges. Extract active approximations and their validity ranges. Load any previously established notation from STATE.md.
+- If project state exists, inspect `intermediate_results` before re-deriving. Capture any existing canonical equation/result entries related to the target, including `id`, `equation`, `description`, `phase`, `depends_on`, and `verified`, so you can reuse the authoritative result instead of restating it.
+- Use `grd result search` to locate the canonical result first when the target equation or derived quantity may already exist in the registry. Prefer `--equation` for exact formula lookup and `--text` for descriptive or shorthand matching. Once a canonical `result_id` is known, use `grd result show "{result_id}"` for the direct stored-result view before deciding whether a fresh derivation is still warranted.
 - **If init fails or `state_exists` is false** (standalone usage): Proceed with explicit convention declarations required from user in Step 1. All conventions must be stated explicitly before any derivation begins.
 
 **This is the most critical workflow to have convention context.** Derivations without locked conventions risk sign errors, missing factors of 2pi, and metric signature inconsistencies that propagate silently through all subsequent steps.
@@ -105,6 +107,40 @@ Before any calculation, write:
 ```
 
 This forces clarity about what is being assumed and what is being derived.
+</step>
+
+<step name="proof_obligation_screen">
+**Step 0.5: Classify proof-bearing work before deriving**
+
+If the objective is theorem-style or contract-backed `proof_obligation` work, proof review is mandatory and fail-closed.
+
+Treat the derivation as proof-bearing when any of the following are true:
+
+- the goal or linked contract says `proof_obligation`
+- the requested result is phrased as `theorem`, `lemma`, `corollary`, `proposition`, `claim`, `proof`, `prove`, `show that`, `existence`, or `uniqueness`
+- the derivation is intended to establish a universal statement rather than only compute an expression in a special case
+
+If ambiguous, default to proof-bearing.
+
+For proof-bearing derivations, create a theorem inventory before Step 1 and carry it through the document:
+
+```markdown
+## Proof Inventory
+
+- **Claim / theorem target:** [exact statement being proved]
+- **Named parameters:** [symbol -> role / domain]
+- **Hypotheses:** [H1, H2, ...]
+- **Quantifier / domain obligations:** [for all x in ..., exists y such that ...]
+- **Conclusion clauses:** [what the proof must establish]
+```
+
+Proof-bearing derivations must also reserve a sibling audit artifact:
+
+- **Phase-scoped:** `${phase_dir}/DERIVATION-{slug}-PROOF-REDTEAM.md`
+- **Standalone:** `GRD/analysis/derivation-{slug}-proof-redteam.md`
+
+That audit must inventory coverage of every parameter, hypothesis, quantifier, and conclusion clause, and it must probe at least one adversarial special case. Do not treat a derivation as complete or established without it.
+When runtime delegation is available, spawn `grd-check-proof` to produce that artifact instead of relying on the derivation writer to audit their own proof. If the runtime cannot spawn `grd-check-proof`, stop at a checkpoint rather than self-certifying theorem-proof alignment in the same context that wrote the proof.
 </step>
 
 <step name="establish_framework">
@@ -365,6 +401,7 @@ status: completed | draft
 assumptions: [A1, A2, ...]
 method: [variational, perturbative, etc.]
 result: [brief form of final expression]
+result_id: [stable registry ID, if persisted]
 verified_limits: [list of limits checked]
 ---
 
@@ -458,6 +495,7 @@ Write to `.grd/analysis/derivation-{slug}.md`.
 - [ ] ASSERT_CONVENTION comment included in derivation document header AND per derivation step
 - [ ] No convention drift: every step's ASSERT_CONVENTION matches Step 1 declaration and project lock
 - [ ] Cross-phase convention consistency verified (if combining with prior results)
+- [ ] Existing `intermediate_results` inspected before re-deriving, and matching canonical results reused when present
 - [ ] Derivation objective clearly stated
 - [ ] All assumptions numbered and explicit
 - [ ] All notation defined before use
@@ -472,6 +510,12 @@ Write to `.grd/analysis/derivation-{slug}.md`.
 - [ ] Regime of validity stated
 - [ ] All relevant limiting cases verified
 - [ ] Connection to known results documented
+- [ ] Proof-bearing derivations include a theorem inventory before the algebra starts
+- [ ] Proof-bearing derivations reserve the sibling `DERIVATION-{slug}-PROOF-REDTEAM.md` artifact and hand it to `grd-check-proof`
+- [ ] The theorem is not treated as established unless `grd-check-proof` writes that sibling artifact with `status: passed`
+- [ ] Proof-bearing derivations fail closed when a named parameter, hypothesis, quantifier, or conclusion clause is uncovered
+- [ ] Final derived equation persisted through the executable `grd result persist-derived` bridge in project mode, with the actual persisted canonical `result_id` retained for later reruns and carried into canonical continuation for later pause/resume continuity
+- [ ] Standalone mode skipped registry write-back and stayed self-contained
 - [ ] Complete derivation document written
 
 </success_criteria>

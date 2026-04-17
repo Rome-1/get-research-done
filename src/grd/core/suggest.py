@@ -13,6 +13,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from pydantic import ValidationError as PydanticValidationError
+
+from grd.command_labels import canonical_command_label
+from grd.contracts import ConventionLock
 from grd.core.constants import (
     LITERATURE_DIR_NAME,
     PHASES_DIR_NAME,
@@ -29,7 +33,23 @@ from grd.core.constants import (
     TODOS_DIR_NAME,
     VERIFICATION_SUFFIX,
 )
+from grd.core.manuscript_artifacts import (
+    locate_publication_artifact,
+    resolve_current_manuscript_artifacts,
+    resolve_current_manuscript_resolution,
+)
 from grd.core.phases import _milestone_completion_snapshot
+from grd.core.proof_review import (
+    manuscript_requires_theorem_bearing_review,
+    resolve_manuscript_proof_review_status,
+)
+from grd.core.public_surface_contract import recovery_local_snapshot_command
+from grd.core.publication_review_paths import (
+    manuscript_matches_review_artifact_path,
+    review_artifact_round,
+)
+from grd.core.reproducibility import compute_sha256
+from grd.core.runtime_command_surfaces import format_active_runtime_command
 from grd.core.utils import (
     is_phase_complete as _is_phase_complete,
 )
@@ -40,6 +60,8 @@ from grd.core.utils import (
 from grd.core.utils import (
     phase_unpad as _phase_unpad,
 )
+from grd.mcp.paper.bibliography import BibliographyAudit
+from grd.mcp.paper.models import ArtifactManifest
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +75,8 @@ __all__ = [
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 CORE_CONVENTIONS = ("metric_signature", "natural_units", "coordinate_system")
-
-# Paper search paths relative to cwd
-PAPER_PATHS = ("paper/main.tex", "manuscript/main.tex", "draft/main.tex")
+_REVIEW_LEDGER_FILENAME_RE = re.compile(r"^REVIEW-LEDGER(?P<round_suffix>-R(?P<round>\d+))?\.json$")
+_REFEREE_DECISION_FILENAME_RE = re.compile(r"^REFEREE-DECISION(?P<round_suffix>-R(?P<round>\d+))?\.json$")
 
 
 # ─── Data Models ──────────────────────────────────────────────────────────────
@@ -203,9 +224,20 @@ _LOCAL_CLI_INIT_COMMANDS: dict[str, str] = {
     "verify-work": "verify-work",
 }
 
+_LOCAL_CLI_PUBLIC_COMMANDS: dict[str, str] = {
+    # Resume is a user-facing recovery command even when the local CLI still
+    # routes most workflow assembly through `grd init ...`.
+    "resume": recovery_local_snapshot_command(),
+    "resume-work": recovery_local_snapshot_command(),
+    "progress": "grd progress",
+}
+
 
 def _format_local_cli_command(action: str) -> str:
     """Format the best available local CLI equivalent for a workflow action."""
+    public_command = _LOCAL_CLI_PUBLIC_COMMANDS.get(action)
+    if public_command is not None:
+        return public_command
     init_action = _LOCAL_CLI_INIT_COMMANDS.get(action)
     if init_action is not None:
         return f"grd init {init_action}"
@@ -226,7 +258,8 @@ def _format_command(action: str, *, cwd: Path | None = None) -> str:
             return _format_local_cli_command(action)
         return get_adapter(runtime).format_command(action)
     except Exception:
-        return _format_local_cli_command(action)
+        formatted = None
+    return formatted if formatted is not None else _format_local_cli_command(action)
 
 
 def _scan_phases(cwd: Path) -> list[_PhaseAnalysis]:
@@ -361,18 +394,246 @@ def _has_literature_review(cwd: Path) -> bool:
     return any(f.name.endswith("-REVIEW.md") for f in lit_dir.iterdir() if f.is_file())
 
 
+def _has_author_response(cwd: Path) -> bool:
+    responses_dir = _planning_dir(cwd)
+    if not responses_dir.is_dir():
+        return False
+    return any(path.is_file() for path in responses_dir.glob("AUTHOR-RESPONSE*.md"))
+
+
+def _latest_referee_decision_recommendation(cwd: Path) -> str | None:
+    review_dir = _planning_dir(cwd) / "review"
+    if not review_dir.is_dir():
+        return None
+
+    decision_by_round: dict[int, Path] = {}
+    for path in sorted(review_dir.glob("REFEREE-DECISION*.json")):
+        details = review_artifact_round(path, pattern=_REFEREE_DECISION_FILENAME_RE)
+        if details is not None:
+            decision_by_round[details[0]] = path
+
+    if not decision_by_round:
+        return None
+
+    latest_round = max(decision_by_round)
+    try:
+        payload = json.loads(decision_by_round[latest_round].read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    recommendation = payload.get("final_recommendation")
+    if not isinstance(recommendation, str):
+        return None
+    normalized = recommendation.strip().lower()
+    return normalized or None
+
+
+def _latest_publication_review_package(review_dir: Path) -> tuple[Path, Path] | None:
+    ledger_by_round: dict[int, Path] = {}
+    decision_by_round: dict[int, Path] = {}
+
+    for path in sorted(review_dir.glob("REVIEW-LEDGER*.json")):
+        details = review_artifact_round(path, pattern=_REVIEW_LEDGER_FILENAME_RE)
+        if details is not None:
+            ledger_by_round[details[0]] = path
+    for path in sorted(review_dir.glob("REFEREE-DECISION*.json")):
+        details = review_artifact_round(path, pattern=_REFEREE_DECISION_FILENAME_RE)
+        if details is not None:
+            decision_by_round[details[0]] = path
+
+    if not ledger_by_round or not decision_by_round:
+        return None
+
+    latest_round = max({*ledger_by_round.keys(), *decision_by_round.keys()})
+    ledger_path = ledger_by_round.get(latest_round)
+    decision_path = decision_by_round.get(latest_round)
+    if ledger_path is None or decision_path is None:
+        return None
+    return ledger_path, decision_path
+
+
+def _manuscript_has_submission_support_artifacts(cwd: Path, manuscript_entrypoint: Path | None) -> bool:
+    if manuscript_entrypoint is None or manuscript_entrypoint.suffix != ".tex":
+        return False
+
+    artifacts = resolve_current_manuscript_artifacts(cwd, allow_markdown=True)
+    if artifacts.manuscript_entrypoint is None:
+        return False
+    if artifacts.manuscript_entrypoint.resolve(strict=False) != manuscript_entrypoint.resolve(strict=False):
+        return False
+    if artifacts.artifact_manifest is None or artifacts.bibliography_audit is None:
+        return False
+
+    try:
+        ArtifactManifest.model_validate(json.loads(artifacts.artifact_manifest.read_text(encoding="utf-8")))
+        bibliography_audit = BibliographyAudit.model_validate(
+            json.loads(artifacts.bibliography_audit.read_text(encoding="utf-8"))
+        )
+    except (OSError, json.JSONDecodeError, PydanticValidationError):
+        return False
+    if not (
+        bibliography_audit.resolved_sources == bibliography_audit.total_sources
+        and bibliography_audit.partial_sources == 0
+        and bibliography_audit.unverified_sources == 0
+        and bibliography_audit.failed_sources == 0
+    ):
+        return False
+
+    if artifacts.reproducibility_manifest is None:
+        return False
+    if not _reproducibility_manifest_is_ready(artifacts.reproducibility_manifest):
+        return False
+
+    compiled_manuscript = locate_publication_artifact(
+        manuscript_entrypoint,
+        manuscript_entrypoint.with_suffix(".pdf").name,
+    )
+    return compiled_manuscript is not None and compiled_manuscript.exists()
+
+
+def _reproducibility_manifest_is_ready(reproducibility_manifest: Path) -> bool:
+    try:
+        payload = json.loads(reproducibility_manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    from grd.core.reproducibility import validate_reproducibility_manifest
+
+    validation = validate_reproducibility_manifest(payload)
+    return validation.valid and validation.ready_for_review and not validation.warnings
+
+
+def _current_publication_blockers(cwd: Path) -> list[str]:
+    state = _load_state_json_safe(cwd) or {}
+    raw_blockers = state.get("blockers") or []
+    blockers: list[str] = []
+    for item in _filter_unresolved(raw_blockers):
+        text = _item_text(item, ("text", "description")).strip()
+        if text:
+            blockers.append(text)
+    return blockers
+
+
+def _publication_review_package_allows_submission(cwd: Path, manuscript_entrypoint: Path | None) -> bool:
+    if manuscript_entrypoint is None or manuscript_entrypoint.suffix != ".tex":
+        return False
+
+    review_dir = _planning_dir(cwd) / "review"
+    if not review_dir.is_dir():
+        return False
+
+    latest_package = _latest_publication_review_package(review_dir)
+    if latest_package is None:
+        return False
+
+    ledger_path, decision_path = latest_package
+    try:
+        from grd.core.referee_policy import evaluate_referee_decision
+        from grd.mcp.paper.review_artifacts import read_referee_decision, read_review_ledger
+
+        review_ledger = read_review_ledger(ledger_path)
+        decision = read_referee_decision(decision_path)
+        if not manuscript_matches_review_artifact_path(review_ledger.manuscript_path, manuscript_entrypoint, cwd=cwd):
+            return False
+        manuscript_matches_decision = manuscript_matches_review_artifact_path(
+            decision.manuscript_path,
+            manuscript_entrypoint,
+            cwd=cwd,
+        )
+        if not manuscript_matches_decision:
+            return False
+        report = evaluate_referee_decision(
+            decision,
+            strict=True,
+            require_explicit_inputs=True,
+            review_ledger=review_ledger,
+            project_root=cwd,
+            expected_manuscript_sha256=compute_sha256(manuscript_entrypoint),
+        )
+    except (OSError, json.JSONDecodeError, PydanticValidationError):
+        return False
+    except ValueError:
+        return False
+    if not report.valid:
+        return False
+    if decision.final_recommendation not in {"accept", "minor_revision"}:
+        return False
+    return not decision.blocking_issue_ids and _manuscript_has_submission_support_artifacts(cwd, manuscript_entrypoint)
+
+
+def _conventions_are_ready(cwd: Path) -> bool:
+    state = _load_state_json_safe(cwd) or {}
+    convention_lock = state.get("convention_lock")
+    if not isinstance(convention_lock, dict):
+        return False
+    from grd.core.conventions import is_bogus_value
+
+    return all(convention_lock.get(key) and not is_bogus_value(convention_lock.get(key)) for key in CORE_CONVENTIONS)
+
+
+def _missing_conventions_from_state(state: dict[str, object]) -> tuple[str, ...]:
+    """Return canonical missing convention keys from a loaded state payload."""
+    convention_lock = state.get("convention_lock")
+    if not isinstance(convention_lock, dict):
+        return ()
+
+    try:
+        lock = ConventionLock.model_validate(convention_lock)
+    except PydanticValidationError:
+        return ()
+
+    from grd.core.conventions import convention_check
+
+    return tuple(entry.key for entry in convention_check(lock).missing)
+
+
+def _format_missing_conventions_reason(missing: tuple[str, ...]) -> str:
+    """Format a readable missing-convention recommendation without truncating the count."""
+    from grd.core.conventions import CONVENTION_LABELS
+
+    labels = [CONVENTION_LABELS.get(key, key.replace("_", " ").title()) for key in missing]
+    preview_count = min(4, len(labels))
+    preview = ", ".join(labels[:preview_count])
+    if len(labels) > preview_count:
+        preview += f", and {len(labels) - preview_count} more"
+    plural = "field" if len(labels) == 1 else "fields"
+    return f"{len(labels)} convention {plural} missing: {preview} — define before calculations"
+
+
+def _publication_submission_is_strictly_ready(cwd: Path, manuscript_entrypoint: Path | None) -> bool:
+    if manuscript_entrypoint is None:
+        return False
+    if _current_publication_blockers(cwd):
+        return False
+    if not _conventions_are_ready(cwd):
+        return False
+    if not _publication_review_package_allows_submission(cwd, manuscript_entrypoint):
+        return False
+    return _manuscript_submission_proof_review_is_fresh(cwd, manuscript_entrypoint)
+
+
+def _manuscript_submission_proof_review_is_fresh(
+    cwd: Path,
+    manuscript_entrypoint: Path | None,
+) -> bool:
+    if manuscript_entrypoint is None:
+        return True
+
+    if not manuscript_requires_theorem_bearing_review(cwd, manuscript_entrypoint):
+        return True
+
+    proof_review_status = resolve_manuscript_proof_review_status(cwd, manuscript_entrypoint)
+    return proof_review_status.can_rely_on_prior_review and proof_review_status.state == "fresh"
+
+
 def _has_referee_report(cwd: Path) -> bool:
     """Check for canonical referee report files in `.grd/` only."""
 
     reports_dir = _planning_dir(cwd)
     if not reports_dir.is_dir():
         return False
+    if _has_author_response(cwd) and _latest_referee_decision_recommendation(cwd) == "accept":
+        return False
     return any(f.is_file() for f in reports_dir.glob("REFEREE-REPORT*.md"))
-
-
-def _has_paper(cwd: Path) -> bool:
-    """Check if a paper draft exists at any known path."""
-    return any((cwd / p).exists() for p in PAPER_PATHS)
 
 
 def _has_adaptive_lock_signal(cwd: Path) -> bool:
@@ -474,8 +735,11 @@ def suggest_next(cwd: Path, *, limit: int = 5) -> SuggestResult:
     # ── 0. Check project existence ──────────────────────────────────────
     project_exists = _path_exists(cwd, f"{PLANNING_DIR_NAME}/{PROJECT_FILENAME}")
     roadmap_exists = _path_exists(cwd, f"{PLANNING_DIR_NAME}/{ROADMAP_FILENAME}")
+    manuscript_resolution = resolve_current_manuscript_resolution(cwd, allow_markdown=True)
+    manuscript_entrypoint = manuscript_resolution.manuscript_entrypoint if manuscript_resolution.status == "resolved" else None
+    manuscript_state_is_blocked = manuscript_resolution.status in {"ambiguous", "invalid"}
 
-    if not project_exists:
+    if not project_exists and manuscript_entrypoint is None:
         only = Recommendation(
             action="new-project",
             priority=1,
@@ -693,8 +957,8 @@ def suggest_next(cwd: Path, *, limit: int = 5) -> SuggestResult:
                         priority=6,
                         command=format_command("validate-conventions"),
                         reason=f"Core conventions not set: {', '.join(missing)} — define before calculations",
-                    )
                 )
+            )
 
     # ── 11. No roadmap yet ──────────────────────────────────────────────
     if not roadmap_exists:
@@ -719,16 +983,18 @@ def suggest_next(cwd: Path, *, limit: int = 5) -> SuggestResult:
         )
 
     # ── 13. Paper pipeline awareness ────────────────────────────────────
-    has_paper_flag = _has_paper(cwd)
+    has_paper_flag = manuscript_entrypoint is not None
+    has_latex_manuscript = manuscript_entrypoint is not None and manuscript_entrypoint.suffix == ".tex"
     has_lit_review = _has_literature_review(cwd)
     has_referee = _has_referee_report(cwd)
+    submission_ready_review = _publication_submission_is_strictly_ready(cwd, manuscript_entrypoint)
 
     ctx_kwargs["has_paper"] = has_paper_flag
     ctx_kwargs["has_literature_review"] = has_lit_review
     ctx_kwargs["has_referee_report"] = has_referee
 
     # 13a. All phases complete + verified → suggest paper writing
-    if all_complete and phase_analysis and not has_paper_flag:
+    if all_complete and phase_analysis and not has_paper_flag and not manuscript_state_is_blocked:
         all_verified = all(p.has_verification for p in phase_analysis)
         if all_verified:
             suggestions.append(
@@ -753,7 +1019,18 @@ def suggest_next(cwd: Path, *, limit: int = 5) -> SuggestResult:
 
     # 13b. Paper exists → suggest submission or referee response
     if has_paper_flag:
-        if has_referee:
+        if submission_ready_review and has_latex_manuscript:
+            suggestions.append(
+                _MutableRecommendation(
+                    action="arxiv-submission",
+                    priority=3,
+                    command=format_command("arxiv-submission"),
+                    reason=(
+                        "Latest peer-review decision clears submission packaging — prepare the LaTeX manuscript for arXiv"
+                    ),
+                )
+            )
+        elif has_referee:
             suggestions.append(
                 _MutableRecommendation(
                     action="respond-to-referees",
@@ -771,18 +1048,6 @@ def suggest_next(cwd: Path, *, limit: int = 5) -> SuggestResult:
                     reason="Paper draft exists — run standalone peer review before submission packaging",
                 )
             )
-            suggestions.append(
-                _MutableRecommendation(
-                    action="arxiv-submission",
-                    priority=5,
-                    command=format_command("arxiv-submission"),
-                    reason=(
-                        "Paper draft exists — prepare for arXiv submission "
-                        "(validates LaTeX, flattens bibliography, packages)"
-                    ),
-                )
-            )
-
     # ── 14. No phases at all → need to plan ─────────────────────────────
     if not phase_analysis and roadmap_exists:
         suggestions.append(

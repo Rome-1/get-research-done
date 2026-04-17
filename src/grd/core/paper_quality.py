@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -11,6 +12,7 @@ __all__ = [
     "CoverageMetric",
     "BinaryCheck",
     "VerificationConfidence",
+    "DraftingFinding",
     "EquationsQualityInput",
     "FiguresQualityInput",
     "CitationsQualityInput",
@@ -23,6 +25,7 @@ __all__ = [
     "CategoryScore",
     "PaperQualityReport",
     "score_paper_quality",
+    "validate_tex_draft",
 ]
 
 
@@ -179,6 +182,16 @@ class PaperQualityIssue(BaseModel):
     severity: Severity
     summary: str
     blocking: bool = False
+
+
+class DraftingFinding(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    category: str
+    check: str
+    severity: Severity
+    message: str
+    line: int | None = None
 
 
 class CategoryScore(BaseModel):
@@ -518,7 +531,6 @@ def score_paper_quality(data: PaperQualityInput) -> PaperQualityReport:
         ]
         if issue is not None
     )
-
     blockers: list[PaperQualityIssue] = []
     if not data.citations.missing_placeholders.passed and not data.citations.missing_placeholders.not_applicable:
         blockers.append(
@@ -530,6 +542,16 @@ def score_paper_quality(data: PaperQualityInput) -> PaperQualityReport:
                 blocking=True,
             )
         )
+    if not data.citations.hallucination_free.not_applicable and not data.citations.hallucination_free.passed:
+        blockers.append(
+            PaperQualityIssue(
+                category="citations",
+                check="hallucination_free",
+                severity=Severity.blocker,
+                summary="Citation audit is missing or unresolved where citations are in play.",
+                blocking=True,
+            )
+        )
     if unreliable_count > 0:
         blockers.append(
             PaperQualityIssue(
@@ -537,6 +559,16 @@ def score_paper_quality(data: PaperQualityInput) -> PaperQualityReport:
                 check="no_unreliable_results",
                 severity=Severity.blocker,
                 summary="At least one key result is marked UNRELIABLE.",
+                blocking=True,
+            )
+        )
+    if not data.results.comparison_with_prior_work_present.not_applicable and not data.results.comparison_with_prior_work_present.passed:
+        blockers.append(
+            PaperQualityIssue(
+                category="results",
+                check="comparison_with_prior_work_present",
+                severity=Severity.blocker,
+                summary="Decisive comparison work is missing or unresolved.",
                 blocking=True,
             )
         )
@@ -578,6 +610,54 @@ def score_paper_quality(data: PaperQualityInput) -> PaperQualityReport:
                 blocking=True,
             )
         )
+    if not data.completeness.placeholders_cleared.passed and not data.completeness.placeholders_cleared.not_applicable:
+        blockers.append(
+            PaperQualityIssue(
+                category="completeness",
+                check="placeholders_cleared",
+                severity=Severity.blocker,
+                summary="TODO/FIXME/PENDING placeholders remain in the manuscript.",
+                blocking=True,
+            )
+        )
+
+    integrity_blockers = {
+        "contract_results_parse_ok": "Contract-results ledger could not be parsed cleanly.",
+        "contract_results_alignment_ok": "Contract-results ledger is not aligned with the active contract.",
+        "comparison_verdicts_valid": "Comparison verdict ledgers are malformed or inconsistent.",
+    }
+    for check_name, summary in integrity_blockers.items():
+        if check_name in data.journal_extra_checks and not data.journal_extra_checks[check_name]:
+            blockers.append(
+                PaperQualityIssue(
+                    category="results",
+                    check=check_name,
+                    severity=Severity.blocker,
+                    summary=summary,
+                    blocking=True,
+                )
+            )
+    extra_artifact_blockers = {
+        "empty_citation_commands_absent": (
+            "citations",
+            "Empty \\cite{} commands remain in the manuscript.",
+        ),
+        "empty_reference_commands_absent": (
+            "references",
+            "Empty \\ref{} commands remain in the manuscript.",
+        ),
+    }
+    for check_name, (category, summary) in extra_artifact_blockers.items():
+        if check_name in data.journal_extra_checks and not data.journal_extra_checks[check_name]:
+            blockers.append(
+                PaperQualityIssue(
+                    category=category,
+                    check=check_name,
+                    severity=Severity.blocker,
+                    summary=summary,
+                    blocking=True,
+                )
+            )
 
     base_score = round(sum(category.score for category in categories.values()), 2)
 
@@ -624,3 +704,209 @@ def score_paper_quality(data: PaperQualityInput) -> PaperQualityReport:
         issues=issues,
         blocking_issues=blockers,
     )
+
+
+_PLACEHOLDER_FINDING_RE = re.compile(r"\b(TODO|FIXME|PENDING|TBD|XXX)\b")
+
+# Matches in-text LaTeX/natbib/biblatex citation commands (including
+# starred variants like \cite*{} and capitalized sentence-start forms).
+# Used by the quality scorer (paper_quality_artifacts.py) and draft lint.
+#
+# Lowercase: \cite, \citep, \citet, \citealt, \citealp, \citeauthor,
+#   \citeyear
+# Capitalized: \Cite, \Citep, \Citet, \Citealt, \Citealp, \Citeauthor,
+#   \Citeyear
+# Biblatex: \parencite, \textcite, \autocite
+#
+# NOTE: \nocite is intentionally excluded — it does not represent an
+# in-text citation and must not inflate quality scores.  The coherence
+# checker uses _CITE_CMD_PREFIX_WITH_NOCITE instead.
+# NOTE: \citetext is intentionally excluded — it wraps other citation
+# commands (e.g. \citetext{see \citealp{a}; compare \citealp{b}}) and
+# the non-brace-aware regex \{([^}]*)\} truncates at the first inner
+# ``}``, producing garbage keys.  The inner \citealp commands are
+# already matched individually.
+_CITE_CMD_PREFIX = (
+    r"\\(?:"
+    r"cite(?:p|t|alt|alp|author|year)?\*?"
+    r"|Cite(?:p|t|alt|alp|author|year)?\*?"
+    r"|parencite|textcite|autocite"
+    r")"
+)
+
+# Extended prefix that additionally matches \nocite — used ONLY by the
+# citation-bibliography coherence checker in compiler.py where \nocite
+# keys need to be cross-referenced against the .bib file.
+_CITE_CMD_PREFIX_WITH_NOCITE = (
+    r"\\(?:"
+    r"cite(?:p|t|alt|alp|author|year)?\*?"
+    r"|Cite(?:p|t|alt|alp|author|year)?\*?"
+    r"|nocite"
+    r"|parencite|textcite|autocite"
+    r")"
+)
+
+_MISSING_CITE_FINDING_RE = re.compile(_CITE_CMD_PREFIX + r"(?:\[[^\]]*\])*\{MISSING:")
+_EMPTY_CITE_FINDING_RE = re.compile(_CITE_CMD_PREFIX + r"(?:\[[^\]]*\])*\{\s*\}")
+_EMPTY_REF_FINDING_RE = re.compile(r"\\ref\{\s*\}")
+_EMPTY_LABEL_FINDING_RE = re.compile(r"\\label\{\s*\}")
+_LABEL_FINDING_RE = re.compile(r"\\label\{([^}]+)\}")
+_BEGIN_ENV_FINDING_RE = re.compile(r"\\begin\{([^}]+)\}")
+_END_ENV_FINDING_RE = re.compile(r"\\end\{([^}]+)\}")
+_UNLABELED_EQUATION_FINDING_RE = re.compile(r"\\begin\{equation\}(.*?)\\end\{equation\}", re.DOTALL)
+
+
+def _comment_start_index(line: str) -> int | None:
+    for idx, char in enumerate(line):
+        if char != "%":
+            continue
+        backslashes = 0
+        cursor = idx - 1
+        while cursor >= 0 and line[cursor] == "\\":
+            backslashes += 1
+            cursor -= 1
+        if backslashes % 2 == 0:
+            return idx
+    return None
+
+
+def validate_tex_draft(tex_content: str) -> list[DraftingFinding]:
+    """Return structured draft-lint findings without mutating manuscript text."""
+
+    findings: list[DraftingFinding] = []
+    seen_labels: dict[str, int] = {}
+    env_stack: list[tuple[str, int]] = []
+    visible_lines: list[str] = []
+
+    for lineno, line in enumerate(tex_content.splitlines(), start=1):
+        comment_start = _comment_start_index(line)
+        visible = line if comment_start is None else line[:comment_start]
+        visible_lines.append(visible)
+
+        for match in _PLACEHOLDER_FINDING_RE.finditer(visible):
+            findings.append(
+                DraftingFinding(
+                    category="completeness",
+                    check="placeholder_marker",
+                    severity=Severity.blocker,
+                    message=f"Placeholder '{match.group(1)}' remains in the manuscript.",
+                    line=lineno,
+                )
+            )
+
+        if _MISSING_CITE_FINDING_RE.search(visible):
+            findings.append(
+                DraftingFinding(
+                    category="citations",
+                    check="missing_citation_placeholder",
+                    severity=Severity.blocker,
+                    message="Unresolved \\cite{MISSING:...} placeholder remains in the manuscript.",
+                    line=lineno,
+                )
+            )
+
+        if _EMPTY_CITE_FINDING_RE.search(visible):
+            findings.append(
+                DraftingFinding(
+                    category="citations",
+                    check="empty_citation_command",
+                    severity=Severity.blocker,
+                    message="Empty \\cite{} command remains in the manuscript.",
+                    line=lineno,
+                )
+            )
+
+        if _EMPTY_REF_FINDING_RE.search(visible):
+            findings.append(
+                DraftingFinding(
+                    category="references",
+                    check="empty_reference_command",
+                    severity=Severity.blocker,
+                    message="Empty \\ref{} command remains in the manuscript.",
+                    line=lineno,
+                )
+            )
+
+        if _EMPTY_LABEL_FINDING_RE.search(visible):
+            findings.append(
+                DraftingFinding(
+                    category="references",
+                    check="empty_label_command",
+                    severity=Severity.major,
+                    message="Empty \\label{} command remains in the manuscript.",
+                    line=lineno,
+                )
+            )
+
+        for match in _LABEL_FINDING_RE.finditer(visible):
+            label = match.group(1).strip()
+            if label in seen_labels:
+                findings.append(
+                    DraftingFinding(
+                        category="references",
+                        check="duplicate_label",
+                        severity=Severity.major,
+                        message=f"Duplicate \\label{{{label}}}; first defined at line {seen_labels[label]}.",
+                        line=lineno,
+                    )
+                )
+            elif label:
+                seen_labels[label] = lineno
+
+        for match in _BEGIN_ENV_FINDING_RE.finditer(visible):
+            env_stack.append((match.group(1), lineno))
+        for match in _END_ENV_FINDING_RE.finditer(visible):
+            env_name = match.group(1)
+            if env_stack and env_stack[-1][0] == env_name:
+                env_stack.pop()
+                continue
+            expected_env = env_stack[-1][0] if env_stack else None
+            expected_line = env_stack[-1][1] if env_stack else None
+            expected_detail = (
+                f" expected \\end{{{expected_env}}} for environment opened at line {expected_line}."
+                if expected_env is not None and expected_line is not None
+                else ""
+            )
+            findings.append(
+                DraftingFinding(
+                    category="latex",
+                    check="mismatched_environment",
+                    severity=Severity.major,
+                    message=f"Mismatched \\end{{{env_name}}}.{expected_detail}",
+                    line=lineno,
+                )
+            )
+
+    visible_content = "\n".join(visible_lines)
+    for match in _UNLABELED_EQUATION_FINDING_RE.finditer(visible_content):
+        if "\\label{" in match.group(1):
+            continue
+        line = visible_content.count("\n", 0, match.start()) + 1
+        findings.append(
+            DraftingFinding(
+                category="equations",
+                check="unlabeled_equation",
+                severity=Severity.minor,
+                message="Displayed equation is missing a \\label{}.",
+                line=line,
+            )
+        )
+
+    for env_name, line in env_stack:
+        findings.append(
+            DraftingFinding(
+                category="latex",
+                check="unclosed_environment",
+                severity=Severity.major,
+                message=f"Unclosed \\begin{{{env_name}}} environment.",
+                line=line,
+            )
+        )
+
+    severity_order = {
+        Severity.blocker: 0,
+        Severity.major: 1,
+        Severity.minor: 2,
+    }
+    findings.sort(key=lambda finding: (severity_order[finding.severity], finding.line or 0, finding.check))
+    return findings

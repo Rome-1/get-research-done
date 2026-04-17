@@ -206,10 +206,10 @@ class TestLoadStateJsonFallback:
         assert result["position"]["current_phase"] == "01"
         assert result["position"]["status"] == "Executing"
 
-    def test_tier3_falls_back_to_state_md_without_overwriting_unreadable_state_json(
+    def test_tier3_repairs_unreadable_state_json_from_state_md(
         self, tmp_path: Path
     ) -> None:
-        """Unreadable state.json should remain untouched when STATE.md is used as fallback."""
+        """Unreadable state.json should be repaired from STATE.md instead of remaining corrupt."""
         cwd = _make_planning(tmp_path)
         layout = ProjectLayout(cwd)
         layout.state_json.write_text("CORRUPT", encoding="utf-8")
@@ -219,7 +219,9 @@ class TestLoadStateJsonFallback:
 
         assert result is not None
         assert result["position"]["current_phase"] == "01"
-        assert layout.state_json.read_text(encoding="utf-8") == "CORRUPT"
+        repaired = json.loads(layout.state_json.read_text(encoding="utf-8"))
+        assert repaired["position"]["current_phase"] == "01"
+        assert repaired["position"]["status"] == "Executing"
 
     def test_returns_none_when_no_state_exists(self, tmp_path: Path) -> None:
         """When no state files exist at all, return None (not raise)."""
@@ -499,6 +501,11 @@ class TestFrontmatterErrorHandling:
         with pytest.raises(FrontmatterParseError):
             extract_frontmatter(content)
 
+    def test_duplicate_keys_raise(self) -> None:
+        content = "---\ntitle: First\ntitle: Second\n---\n\nBody"
+        with pytest.raises(FrontmatterParseError, match="duplicate key"):
+            extract_frontmatter(content)
+
     def test_non_dict_yaml_raises(self) -> None:
         """If YAML block parses to a list instead of dict, raise."""
         content = "---\n- item1\n- item2\n---\n\nBody"
@@ -568,6 +575,7 @@ class TestValidateFrontmatter:
             "  metric: (+,-,-,-)\n"
             "  coordinates: Cartesian\n"
             "contract:\n"
+            "  schema_version: 1\n"
             "  scope:\n"
             "    question: What benchmark must this plan recover?\n"
             "  context_intake:\n"
@@ -616,6 +624,11 @@ class TestValidateFrontmatter:
         """Malformed YAML in validate propagates as FrontmatterParseError."""
         content = "---\n: : bad\n---\n\nBody"
         with pytest.raises(FrontmatterParseError):
+            validate_frontmatter(content, "plan")
+
+    def test_duplicate_keys_in_validate_raise(self) -> None:
+        content = "---\ntitle: First\ntitle: Second\n---\n\nBody"
+        with pytest.raises(FrontmatterParseError, match="duplicate key"):
             validate_frontmatter(content, "plan")
 
 
@@ -748,15 +761,12 @@ class TestSafeParseFunctions:
         """Reading a directory returns None (not raise)."""
         assert safe_read_file(tmp_path) is None
 
-    def test_safe_read_file_permission_error(self, tmp_path: Path) -> None:
+    def test_safe_read_file_permission_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Reading a file with permission error returns None."""
         f = tmp_path / "noperm.txt"
-        f.write_text("content")
-        f.chmod(0o000)
-        try:
-            assert safe_read_file(f) is None
-        finally:
-            f.chmod(0o644)
+        f.write_text("content", encoding="utf-8")
+        monkeypatch.setattr("pathlib.Path.read_text", lambda *a, **kw: (_ for _ in ()).throw(PermissionError("denied")))
+        assert safe_read_file(f) is None
 
 
 # ===================================================================

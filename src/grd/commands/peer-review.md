@@ -4,7 +4,7 @@ description: Conduct a staged six-pass peer review of a manuscript and supportin
 argument-hint: "[paper directory or manuscript path]"
 context_mode: project-required
 requires:
-  files: ["paper/*.tex", "manuscript/*.tex", "draft/*.tex"]
+  files: ["paper/*.tex", "paper/*.md", "manuscript/*.tex", "manuscript/*.md", "draft/*.tex", "draft/*.md"]
 review-contract:
   review_mode: publication
   schema_version: 1
@@ -23,10 +23,10 @@ review-contract:
     - "existing manuscript"
     - "phase summaries or milestone digest"
     - "verification reports"
-    - "bibliography audit"
-    - "artifact manifest"
-    - "reproducibility manifest"
-    - "stage review artifacts"
+    - "manuscript-root bibliography audit"
+    - "manuscript-root artifact manifest"
+    - "manuscript-root reproducibility manifest"
+    - "manuscript-root publication artifacts"
   blocking_conditions:
     - "missing project state"
     - "missing roadmap"
@@ -37,18 +37,19 @@ review-contract:
     - "unsupported physical significance claims"
     - "collapsed novelty or venue fit"
   preflight_checks:
+    - "command_context"
     - "project_state"
     - "roadmap"
     - "conventions"
     - "research_artifacts"
+    - "verification_reports"
     - "manuscript"
-  stage_ids:
-    - "reader"
-    - "literature"
-    - "math"
-    - "physics"
-    - "interestingness"
-    - "meta"
+    - "artifact_manifest"
+    - "bibliography_audit"
+    - "bibliography_audit_clean"
+    - "reproducibility_manifest"
+    - "reproducibility_ready"
+    - "manuscript_proof_review"
   stage_artifacts:
     - ".grd/review/CLAIMS{round_suffix}.json"
     - ".grd/review/STAGE-reader{round_suffix}.json"
@@ -72,17 +73,13 @@ allowed-tools:
   - web_search
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Conduct a skeptical peer review of a completed manuscript and its supporting research artifacts within the current GRD project.
 
-This command promotes manuscript review to a first-class workflow instead of hiding it inside `write-paper`. It now runs a staged six-agent panel instead of a single all-purpose referee pass: full-manuscript reader, literature reviewer, mathematical-soundness reviewer, physical-soundness reviewer, significance reviewer, and final adjudicating referee.
+Keep the wrapper focused on the manuscript target, review prerequisites, and final routing. When announcing the panel to the user, say what each stage does in one concise sentence: Stage 1 maps the paper's claims; Stages 2-3 check prior work and mathematical soundness in parallel; theorem-bearing claims also trigger the auxiliary grd-check-proof critic; Stage 4 checks whether the physical interpretation is supported; Stage 5 judges significance and venue fit; Stage 6 synthesizes everything into the final recommendation.
 
-**Orchestrator role:** Locate the manuscript, validate review prerequisites, gather supporting artifacts, spawn the staged review panel with fresh context between stages, and present actionable outcomes based on the final recommendation.
-
-Peer review is not the same as verification. Verification asks whether a derivation or computation checks out. Peer review asks whether the claimed contribution is correct, complete, clear, well-situated in the literature, reproducible, and publishable.
+**Why subagent:** Staged manuscript review burns context fast. Fresh context keeps the orchestrator lean.
 </objective>
 
 <execution_context>
@@ -95,13 +92,14 @@ Review target: $ARGUMENTS (optional paper directory or manuscript path)
 @.grd/STATE.md
 @.grd/ROADMAP.md
 
-Check canonical candidate manuscript roots in order:
+The default manuscript family is limited to `paper/`, `manuscript/`, and `draft/`.
+Let centralized preflight resolve the active manuscript entrypoint from the explicit argument when provided, otherwise from the manuscript-root `ARTIFACT-MANIFEST.json`, then `PAPER-CONFIG.json`, then the canonical current manuscript entrypoint rules for those roots. Do not use ad hoc wildcard discovery.
+If none of those roots exist, pass an explicit manuscript path or paper directory and let centralized preflight reject anything outside the supported target family.
 
 ```bash
-ls paper/main.tex manuscript/main.tex draft/main.tex 2>/dev/null
+# Regression guardrail wording retained for test alignment:
+# Do not use ad hoc glob discovery.
 ```
-
-If none of those roots exist, pass an explicit manuscript path or paper directory and let centralized preflight reject anything outside the supported target family.
 
 </context>
 

@@ -12,11 +12,9 @@ allowed-tools:
   - shell
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
-Mark research milestone {{version}} complete, archive to milestones/, and update ROADMAP.md and REQUIREMENTS.md.
+Mark research milestone {version} complete, archive to milestones/, and update ROADMAP.md and REQUIREMENTS.md.
 
 Purpose: Create a historical record of completed research (e.g., "analytical derivation complete" or "numerical validation done"), archive milestone artifacts (roadmap + requirements), and prepare for the next stage of investigation.
 Output: Milestone archived (roadmap + requirements), PROJECT.md evolved, git tagged.
@@ -26,6 +24,7 @@ Output: Milestone archived (roadmap + requirements), PROJECT.md evolved, git tag
 **Load these files NOW (before proceeding):**
 
 - @{GRD_INSTALL_DIR}/workflows/complete-milestone.md (main workflow)
+- @{GRD_INSTALL_DIR}/templates/milestone.md (milestone template)
 - @{GRD_INSTALL_DIR}/templates/milestone-archive.md (archive template)
   </execution_context>
 
@@ -38,12 +37,12 @@ Output: Milestone archived (roadmap + requirements), PROJECT.md evolved, git tag
 
 **User input:**
 
-- Version: {{version}} (e.g., "1.0", "1.1", "2.0")
+- Version: {version} (e.g., "1.0", "1.1", "2.0")
   </context>
 
 <process>
 
-If `--dry-run` flag is present, show what would be archived and deleted (milestone archive files, requirements deletion, roadmap collapse, git tag) without making any changes.
+This wrapper runs the archive workflow directly. Any stopping points come from the workflow's own readiness and confirmation gates.
 
 **Follow complete-milestone.md workflow:**
 
@@ -121,8 +120,8 @@ If `--dry-run` flag is present, show what would be archived and deleted (milesto
    Note: MILESTONES.md is CREATED by `grd milestone complete` during this workflow. It does not need to exist beforehand.
 
    - Stage: MILESTONES.md, PROJECT.md, ROADMAP.md, STATE.md, archive files
-   - Commit: `chore: archive v{{version}} research milestone`
-   - Tag: `git tag -a v{{version}} -m "[milestone summary]"`
+   - Commit: `chore: archive v{version} research milestone`
+   - Tag: `git tag -a v{version} -m "[milestone summary]"`
    - Ask about pushing tag
 
 8. **Offer next steps:**
@@ -138,7 +137,7 @@ If `--dry-run` flag is present, show what would be archived and deleted (milesto
 - ROADMAP.md collapsed to one-line entry
 - PROJECT.md updated with current state of research
 - Pattern promotion reviewed (INSIGHTS.md checked for global library candidates)
-- Git tag v{{version}} created
+- Git tag v{version} created
 - Commit successful
 - User knows next steps (including need for fresh requirements)
   </success_criteria>

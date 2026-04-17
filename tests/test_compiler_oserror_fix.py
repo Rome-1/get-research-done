@@ -25,7 +25,7 @@ def _minimal_config(tmp_path: Path) -> PaperConfig:
         authors=[Author(name="A. Tester")],
         abstract="Abstract text.",
         sections=[Section(title="Introduction", content="Hello world.")],
-        figures=[FigureRef(path=fig_path, caption="A figure", label="fig:test")],
+        figures=[FigureRef(path=fig_path, caption="A figure", label="test")],
         journal="prl",
     )
 

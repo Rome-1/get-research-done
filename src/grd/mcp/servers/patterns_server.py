@@ -9,8 +9,6 @@ Usage:
     grd-mcp-patterns
 """
 
-import logging
-import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -240,6 +238,9 @@ def main() -> None:
     from grd.mcp.servers import run_mcp_server
 
     run_mcp_server(mcp, "GRD Patterns MCP Server")
+
+
+tighten_registered_tool_contracts(mcp)
 
 
 if __name__ == "__main__":

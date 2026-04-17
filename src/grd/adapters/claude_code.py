@@ -3,25 +3,26 @@
 from __future__ import annotations
 
 import logging
-import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from grd.adapters.base import RuntimeAdapter
 from grd.adapters.install_utils import (
     HOOK_SCRIPTS,
+    MANIFEST_NAME,
     _is_hook_command_for_script,
     build_hook_command,
     compile_markdown_for_runtime,
+    convert_tool_references_in_body,
     copy_with_path_replacement,
     ensure_update_hook,
     hook_python_interpreter,
-    materialize_first_round_review_schema_headings,
     parse_jsonc,
     prune_empty_ancestors,
     read_settings,
     remove_empty_json_object_file,
     remove_stale_agents,
+    should_preserve_public_local_cli_command,
     translate_frontmatter_tool_names,
     verify_installed,
     write_settings,
@@ -29,6 +30,7 @@ from grd.adapters.install_utils import (
 from grd.adapters.install_utils import (
     finish_install as _finish_install,
 )
+from grd.mcp import managed_integrations as _managed_integrations
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +67,8 @@ class ClaudeCodeAdapter(RuntimeAdapter):
 
     # --- Template method hooks ---
 
-    def _install_commands(self, gpd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
-        commands_src = gpd_root / "commands"
+    def _install_commands(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
+        commands_src = grd_root / "commands"
         commands_dest = target_dir / "commands" / "grd"
         (target_dir / "commands").mkdir(parents=True, exist_ok=True)
         bridge_command = self.runtime_cli_bridge_command(target_dir)
@@ -88,6 +90,7 @@ class ClaudeCodeAdapter(RuntimeAdapter):
             markdown_transform=_translate,
             workflow_paths=True,
             workflow_target_dir=target_dir,
+            explicit_target=getattr(self, "_install_explicit_target", False),
         )
         if verify_installed(commands_dest, "commands/grd"):
             logger.info("Installed commands/grd")
@@ -95,8 +98,8 @@ class ClaudeCodeAdapter(RuntimeAdapter):
             failures.append("commands/grd")
         return sum(1 for f in commands_dest.rglob("*.md") if f.is_file()) if commands_dest.exists() else 0
 
-    def _install_agents(self, gpd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
-        agents_src = gpd_root / "agents"
+    def _install_agents(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
+        agents_src = grd_root / "agents"
         agents_dest = target_dir / "agents"
         bridge_command = self.runtime_cli_bridge_command(target_dir)
         _copy_agents_native(
@@ -108,13 +111,13 @@ class ClaudeCodeAdapter(RuntimeAdapter):
             translate_tool_name=self.translate_frontmatter_tool_name,
             content_transform=lambda content: _rewrite_grd_cli_invocations(content, bridge_command),
         )
-        if verify_installed(agents_dest, "agents"):
+        if verify_installed(agents_dest):
             logger.info("Installed agents")
         else:
             failures.append("agents")
         return sum(1 for f in agents_dest.iterdir() if f.is_file() and f.suffix == ".md") if agents_dest.exists() else 0
 
-    def _install_content(self, gpd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> None:
+    def _install_content(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> None:
         """Install shared specs content with the shared runtime CLI bridge."""
         bridge_command = self.runtime_cli_bridge_command(target_dir)
 
@@ -130,12 +133,13 @@ class ClaudeCodeAdapter(RuntimeAdapter):
 
         failures.extend(
             install_grd_content(
-                gpd_root / "specs",
+                grd_root / "specs",
                 target_dir,
                 path_prefix,
                 self.runtime_name,
                 install_scope=self._current_install_scope_flag(),
                 markdown_transform=_translate,
+                explicit_target=getattr(self, "_install_explicit_target", False),
             )
         )
 
@@ -147,9 +151,20 @@ class ClaudeCodeAdapter(RuntimeAdapter):
         """Verify the Claude Code install satisfies the shared contract."""
         super()._verify(target_dir)
 
+    def runtime_install_required_relpaths(self) -> tuple[str, ...]:
+        """Return Claude-owned files required for a complete install."""
+        return ("settings.json",)
+
+    def install_verification_relpaths(self) -> tuple[str, ...]:
+        """Defer settings.json validation until finalize_install()."""
+        return self.install_detection_relpaths()
+
     def _configure_runtime(self, target_dir: Path, is_global: bool) -> dict[str, object]:
         settings_path = target_dir / "settings.json"
-        settings = read_settings(settings_path)
+        settings_state, settings_parse_error = _read_claude_settings_state(settings_path)
+        if settings_parse_error is not None:
+            raise RuntimeError("Claude Code settings.json is malformed; refusing to overwrite it during install.")
+        settings = settings_state or {}
         statusline_command = build_hook_command(
             target_dir,
             HOOK_SCRIPTS["statusline"],
@@ -179,7 +194,8 @@ class ClaudeCodeAdapter(RuntimeAdapter):
 
         from grd.mcp.builtin_servers import build_mcp_servers_dict, merge_managed_mcp_servers
 
-        mcp_servers = build_mcp_servers_dict(python_path=hook_python_interpreter())
+        project_cwd = None if is_global or getattr(self, "_install_explicit_target", False) else target_dir.parent
+        mcp_servers = _build_managed_mcp_servers(cwd=project_cwd)
         mcp_count = 0
         if mcp_servers:
             mcp_config_path = _mcp_config_path(target_dir, is_global=is_global)
@@ -188,10 +204,18 @@ class ClaudeCodeAdapter(RuntimeAdapter):
             if mcp_config_path.exists():
                 try:
                     mcp_config = parse_jsonc(mcp_config_path.read_text(encoding="utf-8"))
-                except (ValueError, OSError):
-                    mcp_config = {}
+                except (ValueError, OSError) as exc:
+                    raise RuntimeError(
+                        f"{mcp_config_path.name} is malformed; refusing to overwrite Claude MCP config during install."
+                    ) from exc
             if not isinstance(mcp_config, dict):
-                mcp_config = {}
+                raise RuntimeError(
+                    f"{mcp_config_path.name} is malformed; refusing to overwrite Claude MCP config during install."
+                )
+            if not _claude_mcp_config_shape_is_valid(mcp_config):
+                raise RuntimeError(
+                    f"{mcp_config_path.name} is malformed; refusing to overwrite Claude MCP config during install."
+                )
 
             existing_mcp = mcp_config.get("mcpServers", {})
             mcp_config["mcpServers"] = merge_managed_mcp_servers(existing_mcp, mcp_servers)
@@ -209,7 +233,9 @@ class ClaudeCodeAdapter(RuntimeAdapter):
     def runtime_permissions_status(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
         """Report whether Claude Code is configured for GRD autonomy alignment."""
         settings_path = target_dir / "settings.json"
-        settings = read_settings(settings_path)
+        settings, settings_parse_error = _read_claude_settings_state(settings_path)
+        config_valid = settings_parse_error is None
+        settings = settings or {}
         permissions = settings.get("permissions")
         permissions_dict = permissions if isinstance(permissions, dict) else {}
         default_mode = permissions_dict.get("defaultMode") if isinstance(permissions_dict.get("defaultMode"), str) else None
@@ -219,15 +245,22 @@ class ClaudeCodeAdapter(RuntimeAdapter):
         managed_by_grd = managed_state.get("mode") == "yolo"
         config_aligned = default_mode == "bypassPermissions" if desired_mode == "yolo" else not managed_by_grd
         message = "Claude Code is using its normal permission mode."
-        if desired_mode == "yolo":
+        if not config_valid:
+            message = "Claude Code settings.json is malformed; GRD will not treat it as a defaulted permission state."
+        elif desired_mode == "yolo":
             if bypass_disabled:
                 config_aligned = False
+                requires_relaunch = False
                 message = (
                     "Claude Code bypassPermissions is disabled by managed settings, so GRD cannot enable "
                     "prompt-free runtime mode automatically."
                 )
             elif default_mode == "bypassPermissions":
                 message = "Claude Code will open in bypassPermissions mode on the next launch."
+                next_step = (
+                    "Restart the Claude Code session, or switch the current session to bypassPermissions, "
+                    "before expecting uninterrupted yolo execution."
+                )
             else:
                 message = "Claude Code is not yet configured to open in bypassPermissions mode."
         elif managed_by_grd:
@@ -235,17 +268,30 @@ class ClaudeCodeAdapter(RuntimeAdapter):
         return {
             "runtime": self.runtime_name,
             "desired_mode": desired_mode,
-            "configured_mode": default_mode or "default",
+            "configured_mode": "malformed" if not config_valid else default_mode or "default",
             "config_aligned": config_aligned,
             "managed_by_grd": managed_by_grd,
             "settings_path": str(settings_path),
+            "config_valid": config_valid,
+            "config_parse_error": settings_parse_error,
             "message": message,
+            "next_step": next_step,
         }
 
     def sync_runtime_permissions(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
         """Align Claude Code defaultMode with GRD autonomy."""
         settings_path = target_dir / "settings.json"
-        settings = read_settings(settings_path)
+        settings, settings_parse_error = _read_claude_settings_state(settings_path)
+        if settings_parse_error is not None:
+            status = self.runtime_permissions_status(target_dir, autonomy=autonomy)
+            return {
+                **status,
+                "changed": False,
+                "sync_applied": False,
+                "requires_relaunch": False,
+                "warning": "Claude Code settings.json is malformed; GRD will not overwrite it.",
+            }
+        settings = settings or {}
         permissions = settings.get("permissions")
         permissions_dict = dict(permissions) if isinstance(permissions, dict) else {}
         settings_had_permissions = isinstance(permissions, dict)
@@ -359,6 +405,9 @@ class ClaudeCodeAdapter(RuntimeAdapter):
         settings = install_result.get("settings")
         statusline_command = install_result.get("statuslineCommand")
         if isinstance(settings_path, (str, Path)) and isinstance(settings, dict) and isinstance(statusline_command, str):
+            _, settings_parse_error = _read_claude_settings_state(Path(settings_path))
+            if settings_parse_error is not None:
+                raise RuntimeError("Claude Code settings.json is malformed; refusing to overwrite it during finalize.")
             self.finish_install(
                 settings_path,
                 settings,
@@ -371,6 +420,7 @@ class ClaudeCodeAdapter(RuntimeAdapter):
         """Remove GRD from Claude Code config and clean the matching MCP config."""
         manifest = read_settings(target_dir / "grd-file-manifest.json")
         install_scope = manifest.get("install_scope")
+        has_authoritative_manifest = self._has_authoritative_install_manifest(target_dir)
         result = super().uninstall(target_dir)
 
         if install_scope == "global":
@@ -388,7 +438,7 @@ class ClaudeCodeAdapter(RuntimeAdapter):
             settings = read_settings(settings_path)
             modified = False
 
-            runtime_permission_state = manifest.get("gpd_runtime_permissions")
+            runtime_permission_state = manifest.get("grd_runtime_permissions")
             restore_state = (
                 runtime_permission_state.get("restore")
                 if isinstance(runtime_permission_state, dict) and runtime_permission_state.get("mode") == "yolo"
@@ -438,7 +488,7 @@ class ClaudeCodeAdapter(RuntimeAdapter):
 
             if modified:
                 write_settings(settings_path, settings)
-            if remove_empty_json_object_file(settings_path):
+            if has_authoritative_manifest and remove_empty_json_object_file(settings_path):
                 result["removed"].append(settings_path.name)
 
         if not is_global_target:
@@ -461,7 +511,7 @@ class ClaudeCodeAdapter(RuntimeAdapter):
                             del mcp_config["mcpServers"]
                         mcp_config_path.write_text(_json.dumps(mcp_config, indent=2) + "\n", encoding="utf-8")
                         result["removed"].append(f"MCP servers from {mcp_config_path.name}")
-                if remove_empty_json_object_file(mcp_config_path):
+                if has_authoritative_manifest and remove_empty_json_object_file(mcp_config_path):
                     result["removed"].append(mcp_config_path.name)
             for path in (
                 target_dir / "commands",
@@ -494,7 +544,7 @@ class ClaudeCodeAdapter(RuntimeAdapter):
         if not isinstance(mcp_servers, dict):
             return result
 
-        removed_keys = [key for key in list(mcp_servers) if key in GPD_MCP_SERVER_KEYS]
+        removed_keys = [key for key in list(mcp_servers) if key in _managed_mcp_server_keys()]
         if not removed_keys:
             for path in (
                 target_dir / "commands",
@@ -539,6 +589,7 @@ def _copy_agents_native(
     install_scope: str | None = None,
     translate_tool_name: Callable[[str], str | None] | None = None,
     content_transform: Callable[[str], str] | None = None,
+    body_tool_reference_map: dict[str, str] | None = None,
 ) -> None:
     """Copy agent .md files with placeholder replacement and tool-name translation.
 
@@ -563,9 +614,13 @@ def _copy_agents_native(
         )
         if translate_tool_name is not None:
             content = translate_frontmatter_tool_names(content, translate_tool_name)
-        content = materialize_first_round_review_schema_headings(content)
         if content_transform is not None:
             content = content_transform(content)
+        if body_tool_reference_map is None:
+            from grd.adapters import get_adapter
+
+            body_tool_reference_map = get_adapter(runtime).tool_reference_translation_map()
+        content = convert_tool_references_in_body(content, body_tool_reference_map)
         (agents_dest / agent_md.name).write_text(content, encoding="utf-8")
         new_agent_names.add(agent_md.name)
 
@@ -637,6 +692,10 @@ def _rewrite_grd_shell_line(line: str, command: str) -> str:
             and _is_grd_command_start(line, index)
             and _is_grd_token_end(line, index + 3)
         ):
+            if should_preserve_public_local_cli_command(line[index:]):
+                pieces.append("grd")
+                index += 3
+                continue
             pieces.append(command)
             index += 3
             continue
@@ -712,6 +771,35 @@ def _entry_has_grd_hook(
         )
         for hook in entry_hooks
     )
+
+
+def _build_managed_mcp_servers(
+    *,
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, dict[str, object]]:
+    """Return shared MCP servers plus configured optional integrations."""
+    from grd.mcp.builtin_servers import build_mcp_servers_dict
+
+    servers = build_mcp_servers_dict(python_path=hook_python_interpreter())
+    servers.update(_build_managed_optional_mcp_servers(cwd=cwd, env=env))
+    return servers
+
+
+def _build_managed_optional_mcp_servers(
+    *,
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, dict[str, object]]:
+    """Return optional managed MCP servers that are currently configured."""
+    return _managed_integrations.projected_managed_optional_mcp_servers(env, cwd=cwd)
+
+
+def _managed_mcp_server_keys() -> frozenset[str]:
+    """Return MCP server keys owned by GRD or managed optional integrations."""
+    from grd.mcp.builtin_servers import GPD_MCP_SERVER_KEYS
+
+    return frozenset(set(GPD_MCP_SERVER_KEYS) | set(_managed_integrations.managed_optional_mcp_server_keys()))
 
 
 __all__ = ["ClaudeCodeAdapter"]

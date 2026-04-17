@@ -7,20 +7,24 @@ Entry point: python -m grd.mcp.servers.protocols_server
 Console script: grd-mcp-protocols
 """
 
-import logging
+import json
 import re
-import sys
 import threading
+from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
+from pydantic import Field
 
 from grd.core.observability import grd_span
 from grd.mcp.servers import (
     parse_frontmatter_safe,
     run_mcp_server,
+    set_registered_and_published_tool_input_schema,
     stable_mcp_error,
     stable_mcp_response,
+    tighten_registered_tool_contracts,
 )
 from grd.specs import SPECS_DIR
 
@@ -29,6 +33,7 @@ logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(name)s %(le
 logger = logging.getLogger("grd-protocols")
 
 PROTOCOLS_DIR = SPECS_DIR / "references" / "protocols"
+PROTOCOL_DOMAINS_MANIFEST = PROTOCOLS_DIR / "protocol-domains.json"
 
 # ---------------------------------------------------------------------------
 # Parsing
@@ -74,97 +79,178 @@ def _extract_steps_and_checkpoints(body: str) -> tuple[list[str], list[str]]:
     return steps, checkpoints
 
 
-def _infer_domain(name: str, _load_when: list[str]) -> str:
-    """Infer a domain category from the protocol name and load_when keywords."""
-    # Domain mapping based on shared-protocols.md categories
-    core_derivation = {
-        "derivation-discipline",
-        "integral-evaluation",
-        "perturbation-theory",
-        "renormalization-group",
-        "path-integrals",
-        "effective-field-theory",
-        "electrodynamics",
-        "analytic-continuation",
-        "order-of-limits",
-        "classical-mechanics",
-        "hamiltonian-mechanics",
-        "scattering-theory",
-        "supersymmetry",
-        "string-field-theory",
-        "cosmological-perturbation-theory",
-        "holography-ads-cft",
-        "quantum-error-correction",
-        "resummation",
-        "asymptotic-symmetries",
-        "generalized-symmetries",
-    }
-    computational = {
-        "monte-carlo",
-        "variational-methods",
-        "density-functional-theory",
-        "lattice-gauge-theory",
-        "tensor-networks",
-        "symmetry-analysis",
-        "non-equilibrium-transport",
-        "finite-temperature-field-theory",
-        "conformal-bootstrap",
-        "numerical-relativity",
-        "exact-diagonalization",
-        "many-body-perturbation-theory",
-        "molecular-dynamics",
-        "machine-learning-physics",
-        "stochastic-processes",
-        "kinetic-theory",
-        "bethe-ansatz",
-        "random-matrix-theory",
-    }
-    mathematical = {
-        "algebraic-qft",
-        "group-theory",
-        "topological-methods",
-        "green-functions",
-        "wkb-semiclassical",
-        "large-n-expansion",
-        "statistical-inference",
-    }
-    numerical = {"numerical-computation", "symbolic-to-numerical"}
-    domain_standalone = {
-        "general-relativity": "gr_cosmology",
-        "fluid-dynamics-mhd": "fluid_plasma",
-        "open-quantum-systems": "quantum_info",
-        "quantum-many-body": "condensed_matter",
-        "de-sitter-space": "gr_cosmology",
-        "phenomenology": "nuclear_particle",
-    }
+def _load_authoritative_protocol_parts(path: Path) -> tuple[dict[str, object], str]:
+    """Read one authoritative protocol document or fail closed."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise OSError(f"Failed to read {path}: {exc}") from exc
 
-    if name in domain_standalone:
-        return domain_standalone[name]
-    if name in core_derivation:
-        return "core_derivation"
-    if name in computational:
-        return "computational_methods"
-    if name in mathematical:
-        return "mathematical_methods"
-    if name in numerical:
-        return "numerical_translation"
-    return "general"
+    meta, body, parse_error = parse_frontmatter_with_error(text)
+    if parse_error is not None:
+        raise ValueError(f"Malformed frontmatter in {path}: {parse_error}")
+    return meta, body
+
+
+@lru_cache(maxsize=1)
+def _load_protocol_domain_manifest() -> dict[str, str]:
+    """Load the authoritative protocol-domain manifest."""
+    try:
+        raw = json.loads(PROTOCOL_DOMAINS_MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Failed to read protocol domain manifest {PROTOCOL_DOMAINS_MANIFEST}: {exc}") from exc
+
+    if not isinstance(raw, dict):
+        raise ValueError("Protocol domain manifest must be a JSON object")
+
+    allowed_keys = {"schema_version", "protocol_domains"}
+    extra_keys = sorted(str(key) for key in raw if str(key) not in allowed_keys)
+    if extra_keys:
+        raise ValueError(f"Protocol domain manifest has unexpected keys: {', '.join(extra_keys)}")
+
+    schema_version = raw.get("schema_version")
+    if not isinstance(schema_version, int) or isinstance(schema_version, bool) or schema_version != 1:
+        raise ValueError(f"Unsupported protocol domain manifest schema_version: {raw.get('schema_version')!r}")
+
+    protocol_domains = raw.get("protocol_domains")
+    if not isinstance(protocol_domains, dict) or not protocol_domains:
+        raise ValueError("Protocol domain manifest must include a non-empty protocol_domains object")
+
+    domains: dict[str, str] = {}
+    for protocol_name, domain in protocol_domains.items():
+        if not isinstance(protocol_name, str) or not protocol_name.strip():
+            raise ValueError("Protocol domain manifest contains a blank protocol name")
+        if not isinstance(domain, str) or not domain.strip():
+            raise ValueError(f"Protocol domain manifest for {protocol_name!r} must be a non-empty string")
+        normalized_name = protocol_name.strip()
+        normalized_domain = domain.strip()
+        if normalized_name in domains:
+            raise ValueError(f"Protocol domain manifest contains duplicate protocol {normalized_name!r}")
+        domains[normalized_name] = normalized_domain
+    return domains
+
+
+def _protocol_domain(name: str) -> str:
+    """Return the authoritative domain for one protocol name."""
+    domains = _load_protocol_domain_manifest()
+    try:
+        return domains[name]
+    except KeyError as exc:
+        raise ValueError(f"Protocol {name!r} is missing domain metadata in {PROTOCOL_DOMAINS_MANIFEST.name}") from exc
+
+
+def _protocol_domain_values() -> tuple[str, ...]:
+    """Return the authoritative protocol-domain enum values."""
+
+    return tuple(sorted(set(_load_protocol_domain_manifest().values())))
+
+
+ProtocolDomainFilter = str
+
+
+def _schema_with_refreshed_protocol_domain_enum(schema: dict[str, object]) -> dict[str, object]:
+    """Return one published schema with the live protocol-domain enum refreshed."""
+
+    return refresh_string_enum_property_schema(
+        schema,
+        property_name="domain",
+        enum_values=list(_protocol_domain_values()),
+    )
 
 
 def _normalize_protocol_tier(raw: object, *, protocol_name: str) -> int:
-    """Return a safe integer tier for protocol sorting and ranking."""
-    if isinstance(raw, int):
-        return raw
-    if isinstance(raw, str):
-        stripped = raw.strip()
-        if stripped:
-            try:
-                return int(stripped)
-            except ValueError:
-                pass
+    """Return an integer tier for protocol sorting and ranking."""
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise ValueError(f"Protocol {protocol_name!r} has invalid frontmatter: tier must be an integer, got {raw!r}")
+    return raw
 
-    logger.warning("Protocol %s has invalid tier %r; defaulting to 2", protocol_name, raw)
-    return 2
+
+def _normalize_protocol_load_when(raw: object, *, protocol_name: str) -> list[str]:
+    """Return a validated ``load_when`` keyword list for protocol routing."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValueError(
+            f"Protocol {protocol_name!r} has invalid frontmatter: load_when must be a list of non-empty strings"
+        )
+
+    cleaned: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            raise ValueError(
+                "Protocol "
+                f"{protocol_name!r} has invalid frontmatter: load_when contains non-string entry {item!r}"
+            )
+        stripped = item.strip()
+        if not stripped:
+            raise ValueError(
+                f"Protocol {protocol_name!r} has invalid frontmatter: load_when entries must be non-empty strings"
+            )
+        cleaned.append(stripped)
+    return cleaned
+
+
+def _normalize_protocol_context_cost(raw: object, *, protocol_name: str) -> str:
+    """Return a validated string ``context_cost`` label for protocol metadata."""
+    if not isinstance(raw, str):
+        raise ValueError(
+            f"Protocol {protocol_name!r} has invalid frontmatter: context_cost must be a non-empty string, got {raw!r}"
+        )
+    stripped = raw.strip()
+    if not stripped:
+        raise ValueError(
+            f"Protocol {protocol_name!r} has invalid frontmatter: context_cost must be a non-empty string"
+        )
+    return stripped
+
+
+def _tokenize_route_text(text: str) -> list[str]:
+    """Return lower-cased alphanumeric tokens for routing comparisons."""
+    return [_normalize_route_token(token) for token in re.findall(r"[a-z0-9]+", text.casefold())]
+
+
+def _normalize_route_token(token: str) -> str:
+    """Normalize morphology-heavy routing tokens to a stable lexical stem."""
+    for suffix in ("ization", "isation", "ative", "ation", "ments", "ment", "ing", "ed", "es", "s"):
+        if token.endswith(suffix) and len(token) - len(suffix) >= 4:
+            return token[: -len(suffix)]
+    return token
+
+
+def _contains_token_sequence(haystack: list[str], needle: list[str]) -> bool:
+    """Return whether ``needle`` appears as a contiguous token sequence in ``haystack``."""
+    if not needle or len(needle) > len(haystack):
+        return False
+    sequence_length = len(needle)
+    return any(haystack[index : index + sequence_length] == needle for index in range(len(haystack) - sequence_length + 1))
+
+
+def _route_keyword_score(keyword: str, query_tokens: list[str]) -> int:
+    """Return a score for one routing keyword against tokenized query text."""
+    keyword_tokens = _tokenize_route_text(keyword)
+    if not keyword_tokens:
+        return 0
+    if len(keyword_tokens) == 1:
+        return 10 if keyword_tokens[0] in query_tokens else 0
+    if _contains_token_sequence(query_tokens, keyword_tokens):
+        return 10 + len(keyword_tokens)
+    if any(token in query_tokens and len(token) >= 7 for token in keyword_tokens):
+        return 4
+    return 0
+
+
+def _route_name_score(name: str, query_tokens: list[str]) -> int:
+    """Return a score for one protocol name against tokenized query text."""
+    name_tokens = _tokenize_route_text(name.replace("-", " "))
+    if not name_tokens:
+        return 0
+    if len(name_tokens) == 1:
+        return 5 if name_tokens[0] in query_tokens else 0
+    if _contains_token_sequence(query_tokens, name_tokens):
+        return 5 + len(name_tokens)
+    if any(token in query_tokens and len(token) >= 7 for token in name_tokens):
+        return 2
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -185,24 +271,20 @@ class ProtocolStore:
 
     def _do_load(self, protocols_dir: Path) -> None:
         if not protocols_dir.is_dir():
-            logger.warning("Protocols directory not found: %s", protocols_dir)
-            return
-        for path in sorted(protocols_dir.glob("*.md")):
+            raise OSError(f"Protocols directory not found: {protocols_dir}")
+        domain_manifest = _load_protocol_domain_manifest()
+        protocol_files = sorted(protocols_dir.glob("*.md"))
+        if not protocol_files:
+            raise ValueError(f"No protocol files found in {protocols_dir}")
+        protocol_names = {path.stem for path in protocol_files}
+        for path in protocol_files:
             name = path.stem
-            try:
-                text = path.read_text(encoding="utf-8")
-            except OSError as exc:
-                logger.warning("Failed to read %s: %s", path, exc)
-                continue
-
-            meta, body = parse_frontmatter_safe(text)
-            load_when = meta.get("load_when", [])
-            if not isinstance(load_when, list):
-                load_when = []
+            meta, body = _load_authoritative_protocol_parts(path)
+            load_when = _normalize_protocol_load_when(meta.get("load_when", []), protocol_name=name)
             tier = _normalize_protocol_tier(meta.get("tier", 2), protocol_name=name)
-            context_cost = meta.get("context_cost", "medium")
+            context_cost = _normalize_protocol_context_cost(meta.get("context_cost", "medium"), protocol_name=name)
 
-            domain = _infer_domain(name, load_when)
+            domain = _protocol_domain(name)
             steps, checkpoints = _extract_steps_and_checkpoints(body)
 
             # Extract title from first H1
@@ -221,6 +303,12 @@ class ProtocolStore:
                 "body": body,
             }
 
+        unused_manifest_entries = sorted(name for name in domain_manifest if name not in protocol_names)
+        if unused_manifest_entries:
+            raise ValueError(
+                "Protocol domain manifest has entries without protocol files: " + ", ".join(unused_manifest_entries)
+            )
+
         logger.info("Loaded %d protocols from %s", len(self._protocols), protocols_dir)
 
     def get(self, name: str) -> dict[str, object] | None:
@@ -229,6 +317,8 @@ class ProtocolStore:
 
     def list_all(self, domain: str | None = None) -> list[dict[str, object]]:
         """List protocols, optionally filtered by domain."""
+        if domain is not None and domain not in self.domains:
+            raise ValueError(f"Unknown protocol domain: {domain}")
         result = []
         for p in self._protocols.values():
             if domain and p["domain"] != domain:
@@ -248,28 +338,22 @@ class ProtocolStore:
     def route(self, computation_type: str) -> list[dict[str, object]]:
         """Find protocols matching a computation type description.
 
-        Matches against load_when keywords using case-insensitive substring matching.
+        Matches against load_when keywords and protocol names using exact token or
+        contiguous token-sequence matching. This avoids short acronym substrings
+        from leaking into unrelated queries.
         """
-        query = computation_type.lower()
+        query_tokens = _tokenize_route_text(computation_type)
         scored: list[tuple[int, dict[str, object]]] = []
 
         for p in self._protocols.values():
             score = 0
-            # Check load_when keywords
             for keyword in p["load_when"]:
-                if isinstance(keyword, str) and keyword.lower() in query:
-                    score += 10
-                elif isinstance(keyword, str) and any(w in query for w in keyword.lower().split()):
-                    score += 3
+                if isinstance(keyword, str):
+                    score += _route_keyword_score(keyword, query_tokens)
 
-            # Check protocol name
-            name_words = str(p["name"]).replace("-", " ").split()
-            for w in name_words:
-                if w.lower() in query:
-                    score += 5
+            score += _route_name_score(str(p["name"]), query_tokens)
 
-            # Tier 1 protocols get a bonus
-            if p["tier"] == 1:
+            if score > 0 and p["tier"] == 1:
                 score += 2
 
             if score > 0:
@@ -316,10 +400,14 @@ def _get_store() -> ProtocolStore:
 
 
 mcp = FastMCP("grd-protocols")
+_PROTOCOL_USAGE_CAUTION = (
+    "Protocol content is methodological guidance only. Do not claim any step, checkpoint, artifact, or result was "
+    "completed unless it was actually executed or observed. Missing inputs remain blockers, not invitations to improvise."
+)
 
 
 @mcp.tool()
-def get_protocol(name: str) -> dict[str, object]:
+def get_protocol(name: Annotated[str, Field(min_length=1, pattern=r"\S")]) -> dict[str, object]:
     """Get a physics computation protocol by name.
 
     Returns the full protocol content including steps, checkpoints,
@@ -347,6 +435,7 @@ def get_protocol(name: str) -> dict[str, object]:
                     "steps": protocol["steps"],
                     "checkpoints": protocol["checkpoints"],
                     "content": protocol["body"],
+                    "usage_caution": _PROTOCOL_USAGE_CAUTION,
                 }
             )
         except Exception as exc:  # pragma: no cover - defensive envelope
@@ -354,14 +443,18 @@ def get_protocol(name: str) -> dict[str, object]:
 
 
 @mcp.tool()
-def list_protocols(domain: str | None = None) -> dict[str, object]:
+def list_protocols(
+    domain: Annotated[ProtocolDomainFilter, Field(min_length=1, pattern=r"\S")] | None = None,
+) -> dict[str, object]:
     """List available physics computation protocols.
 
     Args:
-        domain: Optional domain filter. Available domains include:
+        domain: Optional domain filter. Use one of the values returned in
+                ``available_domains`` such as:
                 "core_derivation", "computational_methods", "mathematical_methods",
                 "numerical_translation", "gr_cosmology", "fluid_plasma",
-                "quantum_info", "condensed_matter", "general".
+                "quantum_info", "condensed_matter", "nuclear_particle",
+                "general".
     """
     with grd_span("mcp.protocols.list", domain=domain or "all"):
         try:
@@ -379,7 +472,9 @@ def list_protocols(domain: str | None = None) -> dict[str, object]:
 
 
 @mcp.tool()
-def route_protocol(computation_type: str) -> dict[str, object]:
+def route_protocol(
+    computation_type: Annotated[str, Field(min_length=1, pattern=r"\S")],
+) -> dict[str, object]:
     """Auto-select the best protocols for a computation type.
 
     Given a description of the computation being performed, finds the most
@@ -398,6 +493,7 @@ def route_protocol(computation_type: str) -> dict[str, object]:
                     "query": computation_type,
                     "match_count": len(matches),
                     "protocols": matches[:10],  # Top 10 matches
+                    "usage_caution": _PROTOCOL_USAGE_CAUTION,
                 }
             )
         except Exception as exc:  # pragma: no cover - defensive envelope
@@ -405,7 +501,7 @@ def route_protocol(computation_type: str) -> dict[str, object]:
 
 
 @mcp.tool()
-def get_protocol_checkpoints(name: str) -> dict[str, object]:
+def get_protocol_checkpoints(name: Annotated[str, Field(min_length=1, pattern=r"\S")]) -> dict[str, object]:
     """Get verification checkpoints for a specific protocol.
 
     Returns the list of checkpoint/verification steps that should be performed
@@ -427,6 +523,7 @@ def get_protocol_checkpoints(name: str) -> dict[str, object]:
                     "title": protocol["title"],
                     "checkpoints": protocol["checkpoints"],
                     "checkpoint_count": len(protocol["checkpoints"]),
+                    "usage_caution": _PROTOCOL_USAGE_CAUTION,
                 }
             )
         except Exception as exc:  # pragma: no cover - defensive envelope
@@ -441,6 +538,30 @@ def get_protocol_checkpoints(name: str) -> dict[str, object]:
 def main() -> None:
     """Run the grd-protocols MCP server."""
     run_mcp_server(mcp, "GRD Protocols MCP Server")
+
+
+tighten_registered_tool_contracts(mcp)
+
+_BASE_LIST_TOOLS = mcp.list_tools
+
+
+async def _list_tools_with_fresh_protocol_schema():
+    tools = await _BASE_LIST_TOOLS()
+    for tool in tools:
+        if tool.name != "list_protocols":
+            continue
+        schema = published_tool_input_schema(tool)
+        if schema is None:
+            continue
+        set_registered_and_published_tool_input_schema(
+            mcp,
+            tool,
+            _schema_with_refreshed_protocol_domain_enum(schema),
+        )
+    return tools
+
+
+mcp.list_tools = _list_tools_with_fresh_protocol_schema
 
 
 if __name__ == "__main__":

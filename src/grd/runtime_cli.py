@@ -15,6 +15,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from grd.adapters import get_adapter
@@ -60,16 +62,19 @@ def _parse_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         break
 
     options = parser.parse_args(bridge_args)
-    gpd_args = argv[index:]
-    if gpd_args[:1] == ["--"]:
-        gpd_args = gpd_args[1:]
-    return options, gpd_args
+    grd_args = argv[index:]
+    if grd_args[:1] == ["--"]:
+        grd_args = grd_args[1:]
+    try:
+        _validate_root_global_cli_passthrough(grd_args)
+    except ValueError as exc:
+        raise _BridgeArgumentError(str(exc)) from exc
+    return options, grd_args
 
 
-def _manifest_runtime_status(config_dir: Path) -> tuple[str | None, str]:
-    """Return the persisted runtime plus the manifest contract status."""
-    manifest_state, _manifest, runtime = load_install_manifest_runtime_status(config_dir)
-    return runtime, manifest_state
+def _bridge_argument_error_message(message: str) -> str:
+    """Return a stable user-facing message for malformed bridge invocations."""
+    return f"GRD runtime bridge rejected malformed bridge invocation.\n{message}"
 
 
 def _runtime_display_name(runtime: str) -> str:
@@ -85,6 +90,21 @@ def _format_unknown_runtime_error(exc: KeyError) -> str:
     if len(exc.args) == 1 and isinstance(exc.args[0], str):
         return exc.args[0]
     return str(exc)
+
+
+def _bridge_failure(kind: _BridgeFailureKind, message: str, *, exit_code: int = 127) -> _BridgeFailure:
+    """Build a structured failure record for bridge rejection paths."""
+
+    return _BridgeFailure(kind=kind, message=message, exit_code=exit_code)
+
+
+def _emit_bridge_failure(failure: _BridgeFailure) -> int:
+    """Write a structured bridge failure to stderr and return its exit code."""
+
+    sys.stderr.write(failure.message)
+    if not failure.message.endswith("\n"):
+        sys.stderr.write("\n")
+    return failure.exit_code
 
 
 def _canonical_runtime_name(runtime: str) -> str:
@@ -103,29 +123,25 @@ def _paths_equal(left: Path, right: Path) -> bool:
         return left.expanduser() == right.expanduser()
 
 
-def _is_matching_local_install_candidate(candidate: Path, *, runtime: str, cli_cwd: Path) -> bool:
+def _is_matching_local_install_candidate(candidate: Path, *, runtime: str) -> bool:
     """Return whether *candidate* should satisfy a local bridge config-dir lookup."""
     if not candidate.is_dir():
         return False
 
     adapter = get_adapter(runtime)
     manifest_status, manifest, manifest_runtime = load_install_manifest_runtime_status(candidate)
-    canonical_global_dir = adapter.resolve_global_config_dir(home=Path.home())
     if manifest_status == "ok":
         if manifest_runtime != runtime:
             return False
 
         manifest_scope = manifest.get("install_scope")
-        if manifest_scope == "global":
-            return False
-        if _paths_equal(candidate, canonical_global_dir) and manifest_scope != "local":
-            return False
-        return True
+        return manifest_scope == "local"
 
-    has_install_markers = _has_managed_install_markers(candidate)
+    global_config_dirs = resolve_global_config_dir_candidates(adapter.runtime_descriptor, home=Path.home())
+    has_install_markers = config_dir_has_managed_install_markers(candidate)
     if not has_install_markers:
         return False
-    if _paths_equal(candidate, canonical_global_dir):
+    if any(_paths_equal(candidate, global_dir) for global_dir in global_config_dirs):
         return False
     return True
 
@@ -147,19 +163,10 @@ def _resolve_local_config_dir(raw_value: str, *, runtime: str, cli_cwd: Path) ->
     """Resolve a local config dir reference against the nearest matching ancestor."""
     relative = Path(raw_value).expanduser()
     resolved_cwd = cli_cwd.resolve(strict=False)
-    fallback: Path | None = None
-    adapter = get_adapter(runtime)
     for base in (resolved_cwd, *resolved_cwd.parents):
         candidate = (base / relative).resolve(strict=False)
-        if not _is_matching_local_install_candidate(candidate, runtime=runtime, cli_cwd=resolved_cwd):
-            continue
-        _, manifest_status = _manifest_runtime_status(candidate)
-        if manifest_status == "ok" and adapter.has_complete_install(candidate):
+        if _is_matching_local_install_candidate(candidate, runtime=runtime):
             return candidate
-        if fallback is None:
-            fallback = candidate
-    if fallback is not None:
-        return fallback
     return (resolved_cwd / relative).resolve(strict=False)
 
 
@@ -183,7 +190,6 @@ def _resolve_config_dir(
 def _uses_effective_explicit_target(
     *,
     runtime: str,
-    raw_config_dir: str,
     config_dir: Path,
     install_scope: str,
     explicit_target: bool,
@@ -200,6 +206,30 @@ def _uses_effective_explicit_target(
 
     default_local_config_dir = adapter.resolve_local_config_dir(cli_cwd).resolve(strict=False)
     return not _paths_equal(config_dir, default_local_config_dir)
+
+
+def _build_repair_command(
+    *,
+    runtime: str,
+    config_dir: Path,
+    install_scope: str,
+    explicit_target: bool,
+    cli_cwd: Path,
+) -> str:
+    """Return the reinstall command with the effective target-dir projection."""
+
+    return build_runtime_install_repair_command(
+        runtime,
+        install_scope=install_scope,
+        target_dir=config_dir,
+        explicit_target=_uses_effective_explicit_target(
+            runtime=runtime,
+            config_dir=config_dir,
+            install_scope=install_scope,
+            explicit_target=explicit_target,
+            cli_cwd=cli_cwd,
+        ),
+    )
 
 
 def _maybe_reexec_from_checkout(raw_argv: list[str], *, cli_cwd: Path) -> None:
@@ -230,7 +260,6 @@ def _maybe_reexec_from_checkout(raw_argv: list[str], *, cli_cwd: Path) -> None:
 def _install_error_message(
     *,
     runtime: str,
-    raw_config_dir: str,
     config_dir: Path,
     install_scope: str,
     explicit_target: bool,
@@ -240,23 +269,17 @@ def _install_error_message(
     """Return a deterministic repair message for an incomplete runtime install."""
     adapter = get_adapter(runtime)
     missing_list = ", ".join(f"`{relpath}`" for relpath in missing)
-    repair_command = build_runtime_install_repair_command(
-        runtime,
+    repair_command = _build_repair_command(
+        runtime=runtime,
+        config_dir=config_dir,
         install_scope=install_scope,
-        target_dir=config_dir,
-        explicit_target=_uses_effective_explicit_target(
-            runtime=runtime,
-            raw_config_dir=raw_config_dir,
-            config_dir=config_dir,
-            install_scope=install_scope,
-            explicit_target=explicit_target,
-            cli_cwd=cli_cwd,
-        ),
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
     )
     return (
         f"GRD runtime install incomplete for {adapter.display_name} at `{config_dir}`.\n"
         f"Missing required install artifacts: {missing_list}\n"
-        f"Repair the install with: `{repair_command}`\n"
+        f"Repair the install with: `{repair_command}`"
     )
 
 
@@ -265,7 +288,6 @@ def _runtime_mismatch_error_message(
     runtime: str,
     manifest_runtime: str,
     manifest_install_scope: str | None,
-    raw_config_dir: str,
     config_dir: Path,
     install_scope: str,
     explicit_target: bool,
@@ -273,110 +295,272 @@ def _runtime_mismatch_error_message(
 ) -> str:
     """Return repair guidance when the resolved config dir belongs to another runtime."""
     owning_install_scope = manifest_install_scope if manifest_install_scope in {"local", "global"} else install_scope
-    repair_command = build_runtime_install_repair_command(
-        manifest_runtime,
+    repair_command = _build_repair_command(
+        runtime=manifest_runtime,
+        config_dir=config_dir,
         install_scope=owning_install_scope,
-        target_dir=config_dir,
-        explicit_target=_uses_effective_explicit_target(
-            runtime=manifest_runtime,
-            raw_config_dir=raw_config_dir,
-            config_dir=config_dir,
-            install_scope=owning_install_scope,
-            explicit_target=explicit_target,
-            cli_cwd=cli_cwd,
-        ),
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
     )
     return (
         f"GRD runtime bridge mismatch for {_runtime_display_name(runtime)} at `{config_dir}`.\n"
         f"Resolved install manifest pins {_runtime_display_name(manifest_runtime)} (`{manifest_runtime}`), "
         "so this bridge cannot safely continue.\n"
-        f"Repair or reinstall with the owning runtime: `{repair_command}`\n"
+        f"Repair or reinstall with the owning runtime: `{repair_command}`"
+    )
+
+
+def _install_scope_mismatch_error_message(
+    *,
+    runtime: str,
+    manifest_install_scope: str,
+    config_dir: Path,
+    install_scope: str,
+    explicit_target: bool,
+    cli_cwd: Path,
+) -> str:
+    """Return repair guidance when the manifest scope disagrees with the bridge scope."""
+    repair_command = _build_repair_command(
+        runtime=runtime,
+        config_dir=config_dir,
+        install_scope=manifest_install_scope,
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
+    )
+    return (
+        f"GRD runtime bridge scope mismatch for {_runtime_display_name(runtime)} at `{config_dir}`.\n"
+        f"Resolved install manifest pins `{manifest_install_scope}`, but this bridge was launched as `{install_scope}`.\n"
+        f"Repair or reinstall with the owning scope: `{repair_command}`"
     )
 
 
 def _malformed_manifest_runtime_error_message(
     *,
     runtime: str,
-    raw_config_dir: str,
     config_dir: Path,
     install_scope: str,
     explicit_target: bool,
     cli_cwd: Path,
 ) -> str:
     """Return repair guidance when the install manifest runtime field is malformed."""
-    repair_command = build_runtime_install_repair_command(
-        runtime,
+    repair_command = _build_repair_command(
+        runtime=runtime,
+        config_dir=config_dir,
         install_scope=install_scope,
-        target_dir=config_dir,
-        explicit_target=_uses_effective_explicit_target(
-            runtime=runtime,
-            raw_config_dir=raw_config_dir,
-            config_dir=config_dir,
-            install_scope=install_scope,
-            explicit_target=explicit_target,
-            cli_cwd=cli_cwd,
-        ),
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
     )
     return (
         f"GRD runtime bridge rejected malformed install manifest at `{config_dir}`.\n"
         "The manifest `runtime` field must be a recognized non-empty runtime string.\n"
-        f"Repair or reinstall with: `{repair_command}`\n"
+        f"Repair or reinstall with: `{repair_command}`"
     )
 
 
 def _missing_manifest_runtime_error_message(
     *,
     runtime: str,
-    raw_config_dir: str,
     config_dir: Path,
     install_scope: str,
     explicit_target: bool,
     cli_cwd: Path,
 ) -> str:
     """Return repair guidance when the install manifest omits ``runtime``."""
-    repair_command = build_runtime_install_repair_command(
-        runtime,
+    repair_command = _build_repair_command(
+        runtime=runtime,
+        config_dir=config_dir,
         install_scope=install_scope,
-        target_dir=config_dir,
-        explicit_target=_uses_effective_explicit_target(
-            runtime=runtime,
-            raw_config_dir=raw_config_dir,
-            config_dir=config_dir,
-            install_scope=install_scope,
-            explicit_target=explicit_target,
-            cli_cwd=cli_cwd,
-        ),
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
     )
     return (
         f"GRD runtime bridge rejected incomplete install manifest at `{config_dir}`.\n"
         "The manifest must declare a non-empty `runtime` field.\n"
-        f"Repair or reinstall with: `{repair_command}`\n"
+        f"Repair or reinstall with: `{repair_command}`"
     )
+
+
+def _install_scope_status_error_message(
+    *,
+    runtime: str,
+    config_dir: Path,
+    install_scope: str,
+    explicit_target: bool,
+    cli_cwd: Path,
+    state: str,
+) -> str:
+    """Return repair guidance when the manifest install_scope field is missing or malformed."""
+    repair_command = _build_repair_command(
+        runtime=runtime,
+        config_dir=config_dir,
+        install_scope=install_scope,
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
+    )
+    if state == "missing_install_scope":
+        scope_issue = "The manifest must declare a non-empty `install_scope` field."
+    else:
+        scope_issue = "The manifest `install_scope` field must be exactly `local` or `global`."
+    return (
+        f"GRD runtime bridge rejected incomplete install manifest at `{config_dir}`.\n"
+        f"{scope_issue}\n"
+        f"Repair or reinstall with: `{repair_command}`"
+    )
+
+
+def _classify_bridge_failure(
+    *,
+    runtime: str,
+    config_dir: Path,
+    install_scope: str,
+    explicit_target: bool,
+    cli_cwd: Path,
+    manifest_status: str,
+    manifest_runtime: str | None,
+    manifest_scope_status: str,
+    manifest_install_scope: str | None,
+    missing: tuple[str, ...] | None,
+    has_managed_install_markers: bool,
+) -> _BridgeFailure | None:
+    """Return the first structured bridge failure for the current install state."""
+
+    if manifest_scope_status == "missing_install_scope":
+        return _bridge_failure(
+            _BridgeFailureKind.MISSING_INSTALL_SCOPE,
+            _install_scope_status_error_message(
+                runtime=runtime,
+                config_dir=config_dir,
+                install_scope=install_scope,
+                explicit_target=explicit_target,
+                cli_cwd=cli_cwd,
+                state=manifest_scope_status,
+            ),
+        )
+    if manifest_scope_status == "malformed_install_scope":
+        return _bridge_failure(
+            _BridgeFailureKind.MALFORMED_INSTALL_SCOPE,
+            _install_scope_status_error_message(
+                runtime=runtime,
+                config_dir=config_dir,
+                install_scope=install_scope,
+                explicit_target=explicit_target,
+                cli_cwd=cli_cwd,
+                state=manifest_scope_status,
+            ),
+        )
+    if manifest_status == "missing" and has_managed_install_markers:
+        return _bridge_failure(
+            _BridgeFailureKind.MISSING_MANIFEST,
+            _missing_manifest_error_message(
+                runtime=runtime,
+                config_dir=config_dir,
+                install_scope=install_scope,
+                explicit_target=explicit_target,
+                cli_cwd=cli_cwd,
+            ),
+        )
+    if manifest_status == "corrupt":
+        return _bridge_failure(
+            _BridgeFailureKind.CORRUPT_MANIFEST,
+            _untrusted_manifest_error_message(
+                runtime=runtime,
+                config_dir=config_dir,
+                install_scope=install_scope,
+                explicit_target=explicit_target,
+                cli_cwd=cli_cwd,
+            ),
+        )
+    if manifest_status == "invalid":
+        return _bridge_failure(
+            _BridgeFailureKind.INVALID_MANIFEST,
+            _untrusted_manifest_error_message(
+                runtime=runtime,
+                config_dir=config_dir,
+                install_scope=install_scope,
+                explicit_target=explicit_target,
+                cli_cwd=cli_cwd,
+            ),
+        )
+    if manifest_status == "missing_runtime":
+        return _bridge_failure(
+            _BridgeFailureKind.MISSING_RUNTIME,
+            _missing_manifest_runtime_error_message(
+                runtime=runtime,
+                config_dir=config_dir,
+                install_scope=install_scope,
+                explicit_target=explicit_target,
+                cli_cwd=cli_cwd,
+            ),
+        )
+    if manifest_status == "malformed_runtime":
+        return _bridge_failure(
+            _BridgeFailureKind.MALFORMED_RUNTIME,
+            _malformed_manifest_runtime_error_message(
+                runtime=runtime,
+                config_dir=config_dir,
+                install_scope=install_scope,
+                explicit_target=explicit_target,
+                cli_cwd=cli_cwd,
+            ),
+        )
+    if manifest_runtime is not None and manifest_runtime != runtime:
+        return _bridge_failure(
+            _BridgeFailureKind.RUNTIME_MISMATCH,
+            _runtime_mismatch_error_message(
+                runtime=runtime,
+                manifest_runtime=manifest_runtime,
+                manifest_install_scope=manifest_install_scope,
+                config_dir=config_dir,
+                install_scope=install_scope,
+                explicit_target=explicit_target,
+                cli_cwd=cli_cwd,
+            ),
+        )
+    if isinstance(manifest_install_scope, str) and manifest_install_scope in {"local", "global"}:
+        if manifest_install_scope != install_scope:
+            return _bridge_failure(
+                _BridgeFailureKind.INSTALL_SCOPE_MISMATCH,
+                _install_scope_mismatch_error_message(
+                    runtime=runtime,
+                    manifest_install_scope=manifest_install_scope,
+                    config_dir=config_dir,
+                    install_scope=install_scope,
+                    explicit_target=explicit_target,
+                    cli_cwd=cli_cwd,
+                ),
+            )
+    if missing:
+        return _bridge_failure(
+            _BridgeFailureKind.MISSING_INSTALL_ARTIFACTS,
+            _install_error_message(
+                runtime=runtime,
+                config_dir=config_dir,
+                install_scope=install_scope,
+                explicit_target=explicit_target,
+                cli_cwd=cli_cwd,
+                missing=missing,
+            ),
+        )
+    return None
 
 
 def _missing_manifest_error_message(
     *,
     runtime: str,
-    raw_config_dir: str,
     config_dir: Path,
     install_scope: str,
     explicit_target: bool,
     cli_cwd: Path,
 ) -> str:
     """Return repair guidance when a managed install surface has no manifest."""
-    repair_command = build_runtime_install_repair_command(
-        runtime,
+    repair_command = _build_repair_command(
+        runtime=runtime,
+        config_dir=config_dir,
         install_scope=install_scope,
-        target_dir=config_dir,
-        explicit_target=_uses_effective_explicit_target(
-            runtime=runtime,
-            raw_config_dir=raw_config_dir,
-            config_dir=config_dir,
-            install_scope=install_scope,
-            explicit_target=explicit_target,
-            cli_cwd=cli_cwd,
-        ),
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
     )
+    shared_install = get_shared_install_metadata()
     return (
         f"GRD runtime bridge rejected missing install manifest at `{config_dir}`.\n"
         "Managed installs must include `grd-file-manifest.json` so runtime identity stays authoritative.\n"
@@ -387,45 +571,45 @@ def _missing_manifest_error_message(
 def _untrusted_manifest_error_message(
     *,
     runtime: str,
-    raw_config_dir: str,
     config_dir: Path,
     install_scope: str,
     explicit_target: bool,
     cli_cwd: Path,
 ) -> str:
     """Return repair guidance when the install manifest cannot be trusted."""
-    repair_command = build_runtime_install_repair_command(
-        runtime,
+    repair_command = _build_repair_command(
+        runtime=runtime,
+        config_dir=config_dir,
         install_scope=install_scope,
-        target_dir=config_dir,
-        explicit_target=_uses_effective_explicit_target(
-            runtime=runtime,
-            raw_config_dir=raw_config_dir,
-            config_dir=config_dir,
-            install_scope=install_scope,
-            explicit_target=explicit_target,
-            cli_cwd=cli_cwd,
-        ),
+        explicit_target=explicit_target,
+        cli_cwd=cli_cwd,
     )
     return (
         f"GRD runtime bridge rejected unreadable install manifest at `{config_dir}`.\n"
         "The manifest must be a JSON object with a non-empty `runtime` field.\n"
-        f"Repair or reinstall with: `{repair_command}`\n"
+        f"Repair or reinstall with: `{repair_command}`"
     )
 
 
 def main(argv: list[str] | None = None) -> int:
     """Validate the install contract, then dispatch into ``grd.cli``."""
     raw_argv = list(sys.argv[1:] if argv is None else argv)
-    options, gpd_args = _parse_args(raw_argv)
+    try:
+        options, grd_args = _parse_args(raw_argv)
+    except _BridgeArgumentError as exc:
+        return _emit_bridge_failure(
+            _bridge_failure(
+                _BridgeFailureKind.MALFORMED_INVOCATION,
+                _bridge_argument_error_message(str(exc)),
+            )
+        )
     runtime = _canonical_runtime_name(options.runtime)
-    cli_cwd = _resolve_cli_cwd_from_argv(gpd_args)
+    cli_cwd = _resolve_cli_cwd_from_argv(grd_args)
     _maybe_reexec_from_checkout(raw_argv, cli_cwd=cli_cwd)
     try:
         adapter = get_adapter(runtime)
     except KeyError as exc:
-        sys.stderr.write(_format_unknown_runtime_error(exc) + "\n")
-        return 127
+        return _emit_bridge_failure(_bridge_failure(_BridgeFailureKind.UNKNOWN_RUNTIME, _format_unknown_runtime_error(exc)))
     config_dir = _resolve_config_dir(
         options.config_dir,
         runtime=runtime,
@@ -434,86 +618,47 @@ def main(argv: list[str] | None = None) -> int:
         cli_cwd=cli_cwd,
     )
     manifest_status, manifest_payload, manifest_runtime = load_install_manifest_runtime_status(config_dir)
-    manifest_install_scope = manifest_payload.get("install_scope") if manifest_status == "ok" else None
-    if not isinstance(manifest_install_scope, str):
-        manifest_install_scope = None
-    if manifest_status == "missing" and _has_managed_install_markers(config_dir):
-        sys.stderr.write(
-            _missing_manifest_error_message(
-                runtime=runtime,
-                raw_config_dir=options.config_dir,
-                config_dir=config_dir,
-                install_scope=options.install_scope,
-                explicit_target=bool(options.explicit_target),
-                cli_cwd=cli_cwd,
-            )
+    manifest_scope_status, manifest_scope_payload, manifest_install_scope = load_install_manifest_scope_status(config_dir)
+    manifest_explicit_target = manifest_payload.get("explicit_target")
+    if not isinstance(manifest_explicit_target, bool):
+        manifest_explicit_target = None
+    repair_explicit_target = (
+        manifest_explicit_target if manifest_explicit_target is not None else bool(options.explicit_target)
+    )
+    if manifest_scope_status == "ok":
+        manifest_install_scope = manifest_scope_payload.get("install_scope")
+        if not isinstance(manifest_install_scope, str):
+            manifest_install_scope = None
+    has_managed_install_markers = config_dir_has_managed_install_markers(config_dir)
+    failure = _classify_bridge_failure(
+        runtime=runtime,
+        config_dir=config_dir,
+        install_scope=options.install_scope,
+        explicit_target=repair_explicit_target,
+        cli_cwd=cli_cwd,
+        manifest_status=manifest_status,
+        manifest_runtime=manifest_runtime,
+        manifest_scope_status=manifest_scope_status,
+        manifest_install_scope=manifest_install_scope,
+        missing=None,
+        has_managed_install_markers=has_managed_install_markers,
+    )
+    if failure is None:
+        failure = _classify_bridge_failure(
+            runtime=runtime,
+            config_dir=config_dir,
+            install_scope=options.install_scope,
+            explicit_target=repair_explicit_target,
+            cli_cwd=cli_cwd,
+            manifest_status=manifest_status,
+            manifest_runtime=manifest_runtime,
+            manifest_scope_status=manifest_scope_status,
+            manifest_install_scope=manifest_install_scope,
+            missing=adapter.missing_install_artifacts(config_dir),
+            has_managed_install_markers=has_managed_install_markers,
         )
-        return 127
-    if manifest_status in {"corrupt", "invalid"}:
-        sys.stderr.write(
-            _untrusted_manifest_error_message(
-                runtime=runtime,
-                raw_config_dir=options.config_dir,
-                config_dir=config_dir,
-                install_scope=options.install_scope,
-                explicit_target=bool(options.explicit_target),
-                cli_cwd=cli_cwd,
-            )
-        )
-        return 127
-    if manifest_status == "missing_runtime":
-        sys.stderr.write(
-            _missing_manifest_runtime_error_message(
-                runtime=runtime,
-                raw_config_dir=options.config_dir,
-                config_dir=config_dir,
-                install_scope=options.install_scope,
-                explicit_target=bool(options.explicit_target),
-                cli_cwd=cli_cwd,
-            )
-        )
-        return 127
-    if manifest_status == "malformed_runtime":
-        sys.stderr.write(
-            _malformed_manifest_runtime_error_message(
-                runtime=runtime,
-                raw_config_dir=options.config_dir,
-                config_dir=config_dir,
-                install_scope=options.install_scope,
-                explicit_target=bool(options.explicit_target),
-                cli_cwd=cli_cwd,
-            )
-        )
-        return 127
-    if manifest_runtime is not None and manifest_runtime != runtime:
-        sys.stderr.write(
-            _runtime_mismatch_error_message(
-                runtime=runtime,
-                manifest_runtime=manifest_runtime,
-                manifest_install_scope=manifest_install_scope,
-                raw_config_dir=options.config_dir,
-                config_dir=config_dir,
-                install_scope=options.install_scope,
-                explicit_target=bool(options.explicit_target),
-                cli_cwd=cli_cwd,
-            )
-        )
-        return 127
-
-    missing = adapter.missing_install_artifacts(config_dir)
-    if missing:
-        sys.stderr.write(
-            _install_error_message(
-                runtime=adapter.runtime_name,
-                raw_config_dir=options.config_dir,
-                config_dir=config_dir,
-                install_scope=options.install_scope,
-                explicit_target=bool(options.explicit_target),
-                cli_cwd=cli_cwd,
-                missing=missing,
-            )
-        )
-        return 127
+    if failure is not None:
+        return _emit_bridge_failure(failure)
 
     os.environ[ENV_GRD_ACTIVE_RUNTIME] = adapter.runtime_name
     os.environ[ENV_GRD_DISABLE_CHECKOUT_REEXEC] = "1"
@@ -522,10 +667,18 @@ def main(argv: list[str] | None = None) -> int:
 
     original_argv = list(sys.argv)
     try:
-        sys.argv = ["grd", *gpd_args]
+        sys.argv = ["grd", *grd_args]
         result = entrypoint()
     finally:
         sys.argv = original_argv
+        if prior_active_runtime is None:
+            os.environ.pop(ENV_GPD_ACTIVE_RUNTIME, None)
+        else:
+            os.environ[ENV_GPD_ACTIVE_RUNTIME] = prior_active_runtime
+        if prior_disable_checkout_reexec is None:
+            os.environ.pop(ENV_GPD_DISABLE_CHECKOUT_REEXEC, None)
+        else:
+            os.environ[ENV_GPD_DISABLE_CHECKOUT_REEXEC] = prior_disable_checkout_reexec
 
     if result is None:
         return 0

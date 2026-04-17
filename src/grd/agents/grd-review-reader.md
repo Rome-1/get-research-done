@@ -36,43 +36,17 @@ You are not the final referee. Do not issue the panel's final recommendation for
 <artifact_format>
 Before writing either JSON artifact, read `@{GRD_INSTALL_DIR}/domains/{GRD_DOMAIN}/publication/peer-review-panel.md` directly and use its stage artifact contract exactly.
 
-Required schema for `CLAIMS{round_suffix}.json` (`ClaimIndex`):
+Reader-specific deltas:
 
-- Top-level keys: `version`, `manuscript_path`, `manuscript_sha256`, `claims`
-- `ClaimIndex` and each nested `ClaimRecord` use a closed schema; do not invent extra keys
-- `manuscript_path` and `manuscript_sha256` are required metadata for the exact manuscript snapshot under review; do not omit them
-- `manuscript_path` must be non-empty and must name the exact manuscript snapshot under review
-- `manuscript_sha256` must be the lowercase 64-hex digest for the exact manuscript snapshot under review
-- Each entry in `claims` is a `ClaimRecord` with: `claim_id`, `claim_type`, `text`, `artifact_path`, `section`, `equation_refs`, `figure_refs`, `supporting_artifacts`
-- `claim_type` must use exactly: `main_result`, `novelty`, `significance`, `physical_interpretation`, `generality`, `method`
-- Use `section` as an empty string and the reference/artifact arrays as empty lists when a field is not applicable; do not invent locations or evidence
-
-Required schema for `STAGE-reader{round_suffix}.json` (`StageReviewReport`, mirroring the staged-review contract):
-
-- Top-level keys: `version`, `round`, `stage_id`, `stage_kind`, `manuscript_path`, `manuscript_sha256`, `claims_reviewed`, `summary`, `strengths`, `findings`, `confidence`, `recommendation_ceiling`
-- `stage_id` and `stage_kind` must both be `reader`
-- The filename `STAGE-reader{round_suffix}.json` and the JSON `round` field must agree: unsuffixed first-round artifacts use `round: 1`, and `-R<round>` filenames must use that same integer in `round`
-- `manuscript_path` must be non-empty and must exactly match the sibling `CLAIMS{round_suffix}.json`
-- `claims_reviewed` must be an array of Stage 1 `CLM-...` claim IDs; use an empty array only when no indexed claim was actually reviewed
-- `manuscript_sha256` must exactly match the sibling `CLAIMS{round_suffix}.json`
-- `manuscript_sha256` must be the lowercase 64-hex digest for the exact manuscript snapshot under review
-- `summary` should capture the main claim, paper logic, and strongest suspected narrative weakness
-- `findings` should include overclaims, missing promised deliverables, or claim-structure blockers
-- `claims_reviewed`, `strengths`, and `findings` are arrays even when empty; do not collapse them to prose or scalars
-- Each `findings[]` entry is a `ReviewFinding` with: `issue_id`, `claim_ids`, `severity`, `summary`, `rationale`, `evidence_refs`, `manuscript_locations`, `support_status`, `blocking`, `required_action`
-- `issue_id` must use `REF-...`; `claim_ids` must reuse Stage 1 `CLM-...` claim IDs
-- `severity` must use exactly: `critical`, `major`, `minor`, `suggestion`
-- `support_status` must use exactly: `supported`, `partially_supported`, `unsupported`, `unclear`
-- `confidence` must use exactly: `high`, `medium`, `low`
-- `recommendation_ceiling` must use exactly: `accept`, `minor_revision`, `major_revision`, `reject`
-- `StageReviewReport` and every nested entry use a closed schema; do not invent extra keys
-- Keep `evidence_refs` and `manuscript_locations` as arrays even when empty; do not invent citations or locations
-- `recommendation_ceiling` is a stage-local upper bound for the later panel, not the final referee decision
-- `recommendation_ceiling` should be `major_revision` or `reject` if the paper's framing is materially stronger than its evidence
+- Stage 1 must also emit `GRD/review/CLAIMS{round_suffix}.json`.
+- Capture theorem kind, explicit hypotheses, and free target parameters for theorem-like claims.
+- Keep `proof_audits` empty in this stage.
+- Focus `findings` on overclaiming, missing promised deliverables, and claim-structure blockers.
 </artifact_format>
 
 <anti_patterns>
 - Do not perform literature search here.
 - Do not spend your budget re-deriving equations.
 - Do not excuse overclaiming as a later presentation issue if it appears central to the paper's framing.
+- Do not collapse theorem hypotheses or free parameters into vague prose. If a theorem statement names them, index them explicitly.
 </anti_patterns>

@@ -1,13 +1,11 @@
 <purpose>
 Validate research results through conversational research validation with persistent state. Creates the canonical `XX-VERIFICATION.md` artifact that tracks verification progress, survives /clear, and feeds gaps into /grd:plan-phase --gaps.
 
-Researcher validates, the AI records. One check at a time. Plain text responses.
-
-**Key upgrade: checks now include computational spot-checks that the AI performs before presenting to the researcher, and the researcher is walked through numerical verification rather than just qualitative confirmation.**
+The verifier agent owns contract-backed target construction, proof policy, computational checks, comparison verdicts, and canonical verification status. This workflow owns preflight, session routing, researcher interaction, report synchronization, diagnosis, and gap-repair routing.
 </purpose>
 
 <philosophy>
-**Show expected physics AND computational evidence, ask if reality matches.**
+**Do not duplicate verifier policy here.**
 
 The AI does not just present what the research SHOULD show — it COMPUTES what the research should show at specific test points, then asks the researcher to confirm.
 
@@ -37,18 +35,19 @@ Use the researcher-session body scaffold from `research-verification.md`, but ke
 <step name="check_type_selection">
 ## Check Type Selection
 
-Parse `$ARGUMENTS` for specific check flags:
-- `--dimensional` — Run only dimensional analysis checks
-- `--limits` — Run only limiting case checks
-- `--convergence` — Run only numerical convergence checks
-- `--regression` — Run regression scan (check summary artifacts (`SUMMARY.md` and `*-SUMMARY.md`) / `*-VERIFICATION.md` frontmatter for convention conflicts and verification-state issues)
-- `--all` or no flags — Run full verification suite
+Parse `$ARGUMENTS` for targeted verification flags:
 
-This allows targeted verification without running the full suite.
+- `--dimensional` - narrow the verifier's optional breadth to dimensional checks
+- `--limits` - narrow the verifier's optional breadth to limiting cases
+- `--convergence` - narrow the verifier's optional breadth to numerical convergence
+- `--regression` - narrow the verifier's optional breadth to regression scans
+- `--all` or no flags - delegate the full verifier package
+
+Targeted flags narrow the optional check mix only. They do not change canonical verifier ownership or relax fail-closed routing.
 </step>
 
 <step name="initialize" priority="first">
-If $ARGUMENTS contains a phase number, load context:
+Load the workflow context:
 
 ```bash
 INIT=$(grd init verify-work "${PHASE_ARG}")
@@ -58,15 +57,9 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `planner_model`, `checker_model`, `commit_docs`, `autonomy`, `research_mode`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `has_verification`, `has_validation`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `protocol_bundle_verifier_extensions`, `active_reference_context`, `reference_artifacts_content`.
+Parse the init JSON for the wrapper-facing fields only: `planner_model`, `checker_model`, `verifier_model`, `commit_docs`, `autonomy`, `research_mode`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `has_verification`, `has_validation`, `phase_proof_review_status`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `project_contract_gate`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `protocol_bundle_verifier_extensions`.
 
-**Mode-aware behavior:**
-- `autonomy=supervised`: Pause after each verification round for user review. Present findings and wait for confirmation before writing the canonical `XX-VERIFICATION.md` artifact.
-- `autonomy=balanced` (default): Run the full verification pipeline. Pause only if verification reveals critical issues that require user judgment or claim-level decisions.
-- `autonomy=yolo`: Run verification but skip optional cross-checks and literature comparison. Do NOT skip contract-critical anchors, decisive benchmarks, or user-mandated references.
-- `research_mode=explore`: Thorough verification — run all check types, compare against literature, verify intermediate steps. More spawned verifier agents.
-- `research_mode=exploit`: Keep the full contract-critical floor, but narrow optional breadth around the already-validated method family. Favor decisive comparisons over extra exploratory audits.
-- `research_mode=adaptive`: Keep the same contract-critical floor at all times. Start with explore-style skepticism until prior decisive evidence or an explicit approach lock exists, then narrow only the optional breadth that no longer serves the locked method.
+Treat `effective_reference_intake` as the structured source of carry-forward anchors; `active_reference_context` is the readable projection, not the source of truth.
 
 **If `phase_found` is false:**
 
@@ -95,11 +88,56 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-If review preflight exits nonzero because the project state is missing or not yet ready for verification, the roadmap is missing, review integrity is degraded, or the selected phase lacks the required artifacts, STOP and show the blocking issues before starting the session.
+If review preflight exits nonzero because the project state is missing or not yet ready for verification, the roadmap is missing, review integrity is degraded, or the selected phase lacks the required artifacts, stop and show the blocking issues before any delegation.
 
-If `project_contract_load_info.status` starts with `blocked`, STOP and show the surfaced `project_contract_load_info.errors` / `warnings` before verification. Do not infer contract intent from prose-only artifacts when the stored contract payload could not be loaded cleanly.
+If `project_contract_load_info.status` starts with `blocked`, stop and show the surfaced `project_contract_load_info.errors` / `warnings` before delegation.
 
-If `project_contract_validation.valid` is false, STOP and show `project_contract_validation.errors` before verification. A visible-but-blocked contract must be repaired before it is used as authoritative verification scope.
+If `project_contract_validation.valid` is false, stop and show `project_contract_validation.errors` before delegation.
+
+Use canonical artifact discovery helpers during bootstrap:
+
+```bash
+PHASE_INFO=$(grd --raw roadmap get-phase "${phase_number}")
+ls "$phase_dir"/*SUMMARY.md 2>/dev/null
+ls "$phase_dir"/*-VERIFICATION.md 2>/dev/null | head -1
+ls GRD/phases/*/*SUMMARY.md 2>/dev/null | sort
+```
+
+Read all PLAN.md files in ${phase_dir}/ using the file_read tool.
+</step>
+
+<step name="proof_readiness_gate">
+Detect whether the phase is proof-bearing before any verifier handoff.
+
+Use `phase_proof_review_status` as the structured freshness summary for the phase proof-review manifest if present. If a required proof-redteam audit is missing, stale, malformed, or not `passed`, spawn `grd-check-proof` once before finalizing the gap ledger.
+Proof-bearing phases require a canonical `*-PROOF-REDTEAM.md` artifact.
+For proof-bearing work, an additional mandatory floor applies before the wrapper can accept a passed verification result.
+
+```bash
+CHECK_PROOF_MODEL=$(grd resolve-model grd-check-proof)
+```
+
+> Runtime delegation rule: this is a single-turn handoff. If the spawned agent needs user input, it checkpoints and returns; do not keep the original run waiting inside the same task. If the proof critic cannot produce a passed audit, keep the verification session fail-closed.
+
+```
+task(
+  subagent_type="grd-check-proof",
+  model="{check_proof_model}",
+  readonly=false,
+  prompt="First, read {GRD_AGENTS_DIR}/grd-check-proof.md for your role and instructions.
+Then read {GRD_INSTALL_DIR}/templates/proof-redteam-schema.md and {GRD_INSTALL_DIR}/references/verification/core/proof-redteam-protocol.md before writing any proof audit artifact.
+
+Write to:
+- `${phase_dir}/${phase_number}-PROOF-REDTEAM.md`
+
+Read the phase proof artifacts, the relevant PLAN contract slice, and any current verification artifact before auditing.
+Return `status: checkpoint` instead of waiting for user input inside this run.",
+  description="Repair proof audit for phase {phase_number}"
+)
+```
+
+After the proof critic returns, re-open `${phase_dir}/${phase_number}-PROOF-REDTEAM.md` from disk and confirm the artifact exists and is `passed` before finalizing the gap ledger. Never trust the return text alone; if the file is missing, stale, malformed, or not passed, keep the verification session fail-closed and start a fresh proof continuation.
+If `grd-check-proof` still cannot produce a passed audit, keep the verification status fail-closed.
 </step>
 
 <step name="load_anchor_context">
@@ -107,7 +145,7 @@ Use `active_reference_context` from init JSON as a mandatory input to verificati
 
 - If it names a benchmark, prior artifact, or must-read reference, verification must explicitly check it or report why it could not.
 - Treat `effective_reference_intake` as the structured source of must-read refs, prior outputs, baselines, user anchors, and context gaps. `active_reference_context` is the readable rendering of that ledger, not its substitute.
-- Treat `reference_artifacts_content` as supporting evidence for what comparisons remain decisive.
+- Treat `reference_artifacts_content` as supporting evidence for what comparisons remain decisive. Stable knowledge docs that appear there are reviewed background synthesis: use them to clarify definitions, assumptions, and caveats only when they agree with stronger sources, and never as decisive evidence on their own.
 - Background literature may be reduced by mode; anchor checks may not.
 </step>
 
@@ -118,7 +156,11 @@ Use `protocol_bundle_context` from init JSON as additive specialized guidance.
 - Call `get_bundle_checklist(selected_protocol_bundle_ids)` through the verification server only when the init payload lacks those extensions or when you need a fallback consistency check.
 - Bundle guidance may add estimator checks, decisive artifact expectations, or domain-specific audits, but it does NOT replace the plan contract or reduce anchor obligations.
 - Use `protocol_bundle_verifier_extensions` as the machine-readable quick map when deciding which contract-aware checks deserve deeper scrutiny first.
-- If the phase has a PLAN `contract`, call `suggest_contract_checks(contract)` through the verification server before finalizing the check inventory. Treat the returned items as the default contract-aware check seed unless they are clearly inapplicable to this phase. For each returned check, use the returned `request_template` as the starting request, fill the listed `required_request_fields`, stay within the returned `supported_binding_fields`, and then call `run_contract_check(request=...)` so contract-aware checks are executed rather than only discovered.
+- If the phase has a PLAN `contract` and project-local anchors or prior-output paths matter, use this contract-check loop before finalizing the inventory:
+  1. Call `suggest_contract_checks(contract, project_dir=...)`.
+  2. Treat the returned items as the default contract-aware seed unless they are clearly inapplicable.
+  3. For each returned check, start from `request_template`, satisfy `required_request_fields` and `schema_required_request_fields`, satisfy one full alternative from `schema_required_request_anyof_fields`, stay within `supported_binding_fields` for `request.binding`, and keep `project_dir` as the top-level absolute project root argument.
+  4. Call `run_contract_check(request=..., project_dir=...)` so contract-aware checks are executed rather than only discovered.
 </step>
 
 <step name="check_active_session">
@@ -128,12 +170,11 @@ Use `protocol_bundle_context` from init JSON as additive specialized guidance.
 rg -l '^session_status: (validating|diagnosed)$' .grd/phases/*/*-VERIFICATION.md 2>/dev/null | sort | head -5
 ```
 
-**If active sessions exist AND no $ARGUMENTS provided:**
+**If active sessions exist and no `$ARGUMENTS` are provided:**
 
-Only treat files with `session_status: validating` or `session_status: diagnosed` as active researcher sessions.
-Read each active file's frontmatter to extract canonical verification `status`, `session_status`, `phase`, and the Current Check section. Do not let `session_status` replace or overwrite the canonical verification `status`.
+Only treat files whose frontmatter `session_status` is `validating` or `diagnosed` as active researcher sessions. Read each active file's frontmatter to extract canonical verification `status`, `session_status`, `phase`, and the Current Check section. Do not let `session_status` replace or overwrite the canonical verification `status`.
 
-Display inline:
+Display:
 
 ```
 ## Active Verification Sessions
@@ -148,15 +189,11 @@ Reply with a number to resume, or provide a phase number to start new.
 
 Wait for user response.
 
-- If user replies with number (1, 2) -> Load that file, go to `resume_from_file`
-- If user replies with phase number -> Treat as new session, go to `create_verification_file`
+**If active sessions exist and `$ARGUMENTS` are provided:**
 
-**If active sessions exist AND $ARGUMENTS provided:**
+Check whether a session already exists for that phase. If yes, offer to resume or restart. If no, continue to verifier delegation.
 
-Check if session exists for that phase. If yes, offer to resume or restart.
-If no, continue to `create_verification_file`.
-
-**If no active sessions AND no $ARGUMENTS:**
+**If no active sessions exist and no `$ARGUMENTS` are provided:**
 
 ```
 No active verification sessions.
@@ -164,15 +201,15 @@ No active verification sessions.
 Provide a phase number to start validation (e.g., /grd:verify-work 4)
 ```
 
-**If no active sessions AND $ARGUMENTS provided:**
+**If no active sessions exist and `$ARGUMENTS` are provided:**
 
-Continue to `create_verification_file`.
+Continue to verifier delegation.
 </step>
 
-<step name="find_summaries">
-**Find what to validate:**
+<step name="delegate_verification">
+## Delegate Verification
 
-Use `phase_dir` from init (or run init if not already done).
+Spawn `grd-verifier` once and let it own the physics policy.
 
 ```bash
 ls "$phase_dir"/*SUMMARY.md 2>/dev/null
@@ -188,12 +225,24 @@ Also load the phase goal from ROADMAP.md to derive expected physics outcomes ind
 grd roadmap get-phase "${phase_number}"
 ```
 
+If runtime delegation is unavailable, execute the handoff in the main context, but do not re-implement verifier policy here.
 </step>
 
-<step name="extract_checks">
-**Extract validatable contract-backed checks from PLAN `contract` first, then use phase-summary artifacts as an evidence map:**
+<step name="sync_verifier_output">
+Read the verifier-produced verification file or report path.
 
-Parse for:
+- Route only on the canonical verification frontmatter and `grd_return.status`; do not route on headings or marker strings.
+- `grd_return.status: completed` means success only after verifying that:
+  1. `${phase_dir}/${phase_number}-VERIFICATION.md` exists on disk and is readable
+  2. the same path appears in `grd_return.files_written`
+  3. `grd validate verification-contract "${phase_dir}/${phase_number}-VERIFICATION.md"` passes before any downstream routing
+- If a canonical verification file already existed before this run, do not treat it as fresh verifier output unless the child reported that same path in `grd_return.files_written`.
+- `grd_return.status: checkpoint` means present the verifier checkpoint, collect user input, and spawn a fresh verifier continuation. Do not overwrite canonical verification status in this workflow.
+- `grd_return.status: blocked` or `failed` means keep the session fail-closed, present the issues, and offer retry or manual follow-up. Do not treat any preexisting verification file as a new verifier result on this path.
+- If the verifier agent fails to spawn or returns an error, keep the session fail-closed. Do not let a stale existing verification file satisfy the success path.
+- If the canonical verification artifact is missing, unreadable, absent from `grd_return.files_written`, or fails contract validation, treat the handoff as incomplete and request a fresh verifier continuation. Never trust the return text alone.
+- If a canonical verification file already exists, preserve its authoritative frontmatter and append only the session-local overlay here.
+- Do not recompute canonical verification status in this workflow.
 
 1. **Claims** - Contract-backed statements the phase is supposed to establish
 2. **Deliverables** - Analytical results, numerical outputs, plots, tables, code artifacts
@@ -484,9 +533,9 @@ Proceed to `present_check`.
 </step>
 
 <step name="present_check">
-**Present current check to researcher with computational evidence:**
+**Present current check to the researcher with verifier evidence:**
 
-Read Current Check section from verification file.
+Read the verifier-supplied current check from the verification file or report state.
 
 Display using checkpoint box format:
 
@@ -507,55 +556,27 @@ Display using checkpoint box format:
 --------------------------------------------------------------
 ```
 
-The key upgrade: instead of just asking "does it look right?", present concrete numbers from your independent computation so the researcher has something specific to compare against.
+The wrapper should present verifier-produced evidence exactly once per check. It should not derive a new physics criterion here.
 
-**Guide the researcher through numerical spot-checks when appropriate:**
-
-For derivation checks:
-
-```
-I independently evaluated your expression at [test point]:
-  Your expression gives: [value]
-  Expected (from [source]): [value]
-  Relative error: [value]
-
-Does this match what you see when you evaluate at this point?
-```
-
-For limiting case checks:
-
-```
-I took the [limit name] limit of your final expression:
-  Your expression in the limit: [simplified form]
-  Known result in this limit: [known form]
-  Agreement: [yes/no, with details]
-
-Can you confirm this is the correct limiting behavior?
-```
-
-For numerical checks:
-
-```
-I ran your code at resolutions N=[50, 100, 200]:
-  N=50:  result = [value]
-  N=100: result = [value]
-  N=200: result = [value]
-  Convergence rate: O(1/N^[p])
-
-Does this convergence rate match the expected order of your method?
-```
+Keep body-only session-overlay fields aligned with the staged researcher-session scaffold. Use `forbidden_proxy_id` for explicit proxy-rejection checks instead of inventing extra body subject kinds.
 
 Wait for researcher response (plain text).
 </step>
 
 <step name="process_response">
-**Process researcher response and update file:**
+**Process researcher response and update the session overlay**
 
-**If response indicates pass:**
+- Empty response, `yes`, `y`, `ok`, `pass`, `next`, `confirmed`, `correct` -> pass
+- `skip`, `cannot check`, `n/a`, `not applicable` -> skipped
+- Anything else -> issue
 
-- Empty response, "yes", "y", "ok", "pass", "next", "confirmed", "correct"
+Infer severity from the response text:
 
-Update Checks section:
+- `wrong`, `error`, `diverges`, `unphysical`, `violates` -> blocker
+- `disagrees`, `inconsistent`, `does not match`, `off by`, `missing` -> major
+- `approximate`, `close but`, `small discrepancy`, `minor` -> minor
+- `label`, `formatting`, `axis`, `legend`, `cosmetic` -> cosmetic
+- default -> major
 
 ```
 ### {N}. {name}
@@ -660,9 +681,7 @@ If no more checks -> Go to `complete_session`
 <step name="resume_from_file">
 **Resume validation from file:**
 
-Read the full verification file.
-
-Find first check with `result: [pending]`.
+Read the active verification file. Find the first verifier-supplied check with `result: pending`.
 
 Announce:
 
@@ -674,15 +693,14 @@ Issues found so far: {issues count}
 Continuing from Check {N}...
 ```
 
-Update Current Check section with the pending check.
-Proceed to `present_check`.
+Update the current check display and continue to `present_check`.
 </step>
 
 <step name="researcher_custom_checks">
-**After presenting all automated checks, invite researcher to add their own:**
+**After the verifier-supplied checks are complete, invite researcher-supplied checks:**
 
 ```
-All {N} automated checks complete ({passed} passed, {issues} issues, {skipped} skipped).
+All {N} verifier checks complete ({passed} passed, {issues} issues, {skipped} skipped).
 
 Are there any additional physics checks you'd like to verify?
 Examples: "check Ward identity", "verify sum rule", "test at strong coupling"
@@ -837,19 +855,23 @@ All checks passed. Research validated. Ready to continue.
 - `/grd:execute-phase {next}` -- Execute next research phase
 ```
 
+If the researcher says `done`, `no`, `skip`, or leaves it empty, proceed to issue routing.
 </step>
 
 <step name="diagnose_issues">
-**Diagnose root causes before planning fixes:**
+**Diagnose root causes before planning fixes**
 
-**Severity gate:** Only spawn parallel diagnosis agents for major+ issues. Minor and cosmetic issues are reported directly without investigation overhead.
+**Severity gate:** only spawn parallel diagnosis agents for major+ issues. Minor and cosmetic issues are reported directly without investigation overhead.
 
-**1. Partition issues by severity:**
+**Major+ issues**
 
-- **Major+ issues** (blocker, major): Collect into `investigate_issues` list
-- **Minor/cosmetic issues** (minor, cosmetic): Collect into `report_directly` list
+- Collect the major+ issues into an investigation list.
+- Spawn parallel diagnosis agents once per issue.
+- Pass the pre-check evidence and researcher response into each agent.
+- Each spawned agent is a one-shot handoff and must checkpoint instead of waiting for user interaction.
+- Collect root causes and update the verification overlay with the diagnosis result.
 
-**2. Present minor/cosmetic issues directly:**
+**Minor/cosmetic issues**
 
 If `report_directly` is non-empty:
 
@@ -903,20 +925,17 @@ Diagnosis runs automatically for major+ issues — no researcher prompt. Paralle
 <step name="diagnosis_review">
 ## Diagnosis Review
 
-Present the diagnosis results to the user:
+Present the diagnosis results to the user and ask how to proceed:
 
-| Issue | Root Cause | Confidence |
-|-------|-----------|------------|
-{diagnosis results from investigation agents}
+- Auto-plan fixes
+- Investigate manually
+- Accept as-is
+</step>
 
-Use ask_user:
+<step name="load_gap_repair_stage">
+## Load Gap Repair Stage
 
-- header: "Fix Approach"
-- question: "How would you like to handle the identified issues?"
-- options:
-  - "Auto-plan fixes (Recommended)" — Spawn planner for systematic gap closure
-  - "Investigate manually" — I want to explore the issues myself first
-  - "Accept as-is" — The issues are minor, results are acceptable
+When the user chooses auto-plan fixes, reload `verify-work` through the explicit gap-repair stage:
 
 **If "Auto-plan fixes":** Continue to plan_gap_closure step.
 **If "Investigate manually":** Present the detailed diagnosis and pause. Offer `/grd:debug` for structured investigation.
@@ -924,7 +943,7 @@ Use ask_user:
 </step>
 
 <step name="plan_gap_closure">
-**Auto-plan fixes from diagnosed gaps:**
+**Auto-plan fixes from diagnosed gaps**
 
 Display:
 
@@ -943,7 +962,10 @@ Spawn grd-planner in --gaps mode:
 task(
   prompt="""First, read {GRD_AGENTS_DIR}/grd-planner.md for your role and instructions.
 
-<planning_context>
+Before treating the handoff as complete, verify that the expected `PLAN.md` files exist in the phase directory and are listed in `grd_return.files_written` from the fresh planner run.
+After the planner returns, route on `grd_return.status`, not on headings. If `grd_return.status` is `completed`, verify that each expected path is present on disk, readable, and present in `grd_return.files_written` before treating the handoff as complete.
+If `grd_return.status` is `checkpoint`, present the checkpoint, collect user input, and spawn a fresh planner continuation from the staged gap-repair payload instead of waiting inside the same run.
+If the planner reports `blocked` or `failed`, or if the expected `PLAN.md` files are missing, unreadable, stale, or absent from `grd_return.files_written`, keep the session fail-closed and offer retry or manual plan creation.
 
 **Phase:** {phase_number}
 **Mode:** gap_closure
@@ -988,7 +1010,7 @@ On return:
   </step>
 
 <step name="verify_gap_plans">
-**Verify fix plans with checker:**
+**Verify fix plans with checker**
 
 Display:
 
@@ -1000,17 +1022,17 @@ Display:
 * Spawning plan checker...
 ```
 
-Initialize: `iteration_count = 1`
+Spawn `grd-plan-checker` as a fresh one-shot delegation.
 
 Spawn grd-plan-checker:
 
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+Before accepting the handoff as complete, confirm the expected `PLAN.md` files are present, readable, and listed in `grd_return.files_written` from the planner turn.
 
 ```
 task(
   prompt="""First, read {GRD_AGENTS_DIR}/grd-plan-checker.md for your role and instructions.
 
-<verification_context>
+If the checker returns a structured `grd_return`, route on `grd_return.status` and the structured plan lists, not on presentation text:
 
 **Phase:** {phase_number}
 **Phase Goal:** Close diagnosed gaps from research validation
@@ -1111,73 +1133,49 @@ Offer options:
 Wait for researcher response.
 </step>
 
-<step name="present_ready">
-**Present completion and next steps:**
+<step name="revision_loop">
+**Iterate planner <-> checker until plans pass, up to 3 rounds**
 
 ```
-====================================================
- GRD > FIXES READY
-====================================================
 
-**Phase {X}: {Name}** -- {N} gap(s) diagnosed, {M} fix plan(s) created
+If iteration count reaches 3, stop and offer the user:
 
-| Contract Target | Root Cause | Computation Evidence | Fix Plan |
-|-----------------|------------|---------------------|----------|
-| {subject-id or expected check 1} | {root_cause} | {what test showed} | {phase_number}-04 |
-| {subject-id or expected check 2} | {root_cause} | {what test showed} | {phase_number}-04 |
+1. Force proceed
+2. Provide guidance and retry
+3. Abandon and exit
+</step>
 
-Plans verified and ready for execution.
+<step name="complete_session">
+**Complete validation and commit**
 
----------------------------------------------------------------
+Update the verification file overlay:
 
-## > Next Up
+- `verified`: now
+- `updated`: now
+- `session_status`: `completed`
 
-**Execute fixes** -- run fix plans
+Clear the current check display to indicate completion.
 
 `/clear` then `/grd:execute-phase {phase_number} --gaps-only`
 
----------------------------------------------------------------
+```bash
+grd commit "verify(${phase_number}): complete research validation - {passed} passed, {issues} issues" --files "${phase_dir}/${phase_number}-VERIFICATION.md"
 ```
 
+Present the summary of passed, issue, and skipped checks. Do not relax verifier fail-closed results.
 </step>
 
 </process>
 
 <update_rules>
-**Batched writes for efficiency:**
+Write only when needed:
 
-Keep results in memory. Write to file only when:
+1. issue found
+2. session complete
+3. every 5 passed checks as a safety net
 
-1. **Issue found** -- Preserve the problem immediately
-2. **Session complete** -- Final write before commit
-3. **Checkpoint** -- Every 5 passed checks (safety net)
-
-| Section             | Rule      | When Written      |
-| ------------------- | --------- | ----------------- |
-| Frontmatter.status  | OVERWRITE | Start, complete   |
-| Frontmatter.updated | OVERWRITE | On any file write |
-| Current Check       | OVERWRITE | On any file write |
-| Checks.{N}.result   | OVERWRITE | On any file write |
-| Summary             | OVERWRITE | On any file write |
-| Gaps                | APPEND    | When issue found  |
-
-On context reset: File shows last checkpoint. Resume from there.
+Keep the current check display, summary, and session overlay in sync with the verifier output. The canonical verifier report content remains owned by `grd-verifier`.
 </update_rules>
-
-<severity_inference>
-**Infer severity from researcher's natural language:**
-
-| Researcher says                                                 | Infer    |
-| --------------------------------------------------------------- | -------- |
-| "wrong sign", "diverges", "unphysical", "violates conservation" | blocker  |
-| "disagrees with literature", "off by factor", "missing term"    | major    |
-| "close but not exact", "small discrepancy", "approximate"       | minor    |
-| "axis label", "legend", "formatting", "color"                   | cosmetic |
-
-Default to **major** if unclear. Researcher can correct if needed.
-
-**Never ask "how severe is this?"** - just infer and move on.
-</severity_inference>
 
 <success_criteria>
 

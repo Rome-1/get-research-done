@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import Literal
 
 from pybtex.database import BibliographyData, Entry
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ValidationError as PydanticValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +26,13 @@ logger = logging.getLogger(__name__)
 class CitationSource(BaseModel):
     """A citation source from the research provenance chain."""
 
+    model_config = ConfigDict(extra="forbid")
+
     source_type: Literal["paper", "tool", "data", "website"]
+    reference_id: str | None = None
+    bibtex_key: str | None = None
     title: str
-    authors: list[str] = []
+    authors: list[str] = Field(default_factory=list)
     year: str = ""
     arxiv_id: str | None = None
     doi: str | None = None
@@ -35,6 +40,87 @@ class CitationSource(BaseModel):
     journal: str = ""
     volume: str = ""
     pages: str = ""
+
+    @field_validator("authors", mode="before")
+    @classmethod
+    def _normalize_authors(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        normalized: list[object] = []
+        for item in value:
+            if not isinstance(item, str):
+                normalized.append(item)
+                continue
+            stripped = item.strip()
+            if not stripped:
+                raise ValueError("authors must not contain blank entries")
+            normalized.append(stripped)
+        return normalized
+
+
+def _citation_source_label(source_path: str | None = None, index: int | None = None) -> str:
+    label = "citation source"
+    if source_path:
+        label = f"{label} {source_path}"
+    if index is not None:
+        label = f"{label}[{index}]"
+    return label
+
+
+def parse_citation_source_payload(
+    payload: object,
+    *,
+    source_path: str | None = None,
+    index: int | None = None,
+) -> CitationSource:
+    """Parse one strict citation-source payload.
+
+    The model boundary stays closed through :class:`CitationSource` itself;
+    this helper only adds the non-blank ``reference_id`` requirement that the
+    sidecar contract imposes on project-local reuse.
+    """
+
+    label = _citation_source_label(source_path, index)
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must be a JSON object")
+
+    try:
+        source = CitationSource.model_validate(payload)
+    except PydanticValidationError as exc:
+        details: list[str] = []
+        for error in exc.errors()[:3]:
+            location = ".".join(str(part) for part in error.get("loc", ()))
+            prefix = f"{label}.{location}" if location else label
+            message = str(error.get("msg", "validation failed")).strip() or "validation failed"
+            details.append(f"{prefix}: {message}")
+        raise ValueError("; ".join(details)) from exc
+
+    reference_id = source.reference_id.strip() if isinstance(source.reference_id, str) else ""
+    if not reference_id:
+        raise ValueError(f"{label}.reference_id must be a non-empty string")
+    if not source.title.strip():
+        raise ValueError(f"{label}.title must be a non-empty string")
+    if any(not author.strip() for author in source.authors):
+        raise ValueError(f"{label}.authors entries must be non-empty strings")
+
+    return source.model_copy(update={"reference_id": reference_id})
+
+
+def parse_citation_source_sidecar_payload(
+    payload: object,
+    *,
+    source_path: str | None = None,
+) -> list[CitationSource]:
+    """Parse a citation-source sidecar payload from a JSON array."""
+
+    label = source_path or "citation source sidecar"
+    if not isinstance(payload, list):
+        raise ValueError(f"{label} must be a JSON array")
+
+    sources: list[CitationSource] = []
+    for index, item in enumerate(payload):
+        sources.append(parse_citation_source_payload(item, source_path=source_path, index=index))
+    return sources
 
 
 CitationResolutionStatus = Literal["provided", "enriched", "incomplete", "failed"]
@@ -44,21 +130,26 @@ CitationVerificationStatus = Literal["verified", "partial", "unverified"]
 class CitationAuditRecord(BaseModel):
     """Machine-readable audit record for a citation source."""
 
+    model_config = ConfigDict(extra="forbid")
+
     key: str
     source_type: Literal["paper", "tool", "data", "website"]
+    reference_id: str | None = None
     title: str
     resolution_status: CitationResolutionStatus
     verification_status: CitationVerificationStatus
-    verification_sources: list[str] = []
-    canonical_identifiers: list[str] = []
-    missing_core_fields: list[str] = []
-    enriched_fields: list[str] = []
-    warnings: list[str] = []
-    errors: list[str] = []
+    verification_sources: list[str] = Field(default_factory=list)
+    canonical_identifiers: list[str] = Field(default_factory=list)
+    missing_core_fields: list[str] = Field(default_factory=list)
+    enriched_fields: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
 
 
 class BibliographyAudit(BaseModel):
     """Summary audit artifact for a bibliography emission batch."""
+
+    model_config = ConfigDict(extra="forbid")
 
     generated_at: str
     total_sources: int
@@ -72,12 +163,24 @@ class BibliographyAudit(BaseModel):
 # ---- BibTeX entry creation ----
 
 
+def _preferred_bibtex_key(source: CitationSource) -> str | None:
+    """Return the preferred BibTeX key when one is provided."""
+    if source.bibtex_key is None:
+        return None
+
+    preferred = source.bibtex_key.strip()
+    return preferred or None
+
+
 def _create_bib_key(source: CitationSource, existing_keys: set[str]) -> str:
-    """Generate a BibTeX key from first author last name + year.
+    """Generate a BibTeX key from a preferred key or first author last name + year.
 
     Deduplicates by appending a/b/c suffix.
     """
-    if source.authors:
+    preferred_key = _preferred_bibtex_key(source)
+    if preferred_key:
+        base_key = preferred_key
+    elif source.authors:
         # Extract last name from first author (handle "First Last" and "Last, First")
         first_author = source.authors[0]
         if "," in first_author:
@@ -85,15 +188,12 @@ def _create_bib_key(source: CitationSource, existing_keys: set[str]) -> str:
         else:
             parts = first_author.strip().split()
             last_name = parts[-1] if parts else "unknown"
+        base_key = re.sub(r"[^a-zA-Z]", "", last_name).lower() or "unknown"
     else:
-        last_name = "unknown"
+        base_key = "unknown"
 
-    # Normalize: lowercase, remove non-alphanumeric
-    last_name = re.sub(r"[^a-zA-Z]", "", last_name).lower()
-    if not last_name:
-        last_name = "unknown"
-
-    base_key = f"{last_name}{source.year}"
+    if not preferred_key:
+        base_key = f"{base_key}{source.year}"
 
     if base_key not in existing_keys:
         return base_key
@@ -315,6 +415,7 @@ def audit_citation_source(
     record = CitationAuditRecord(
         key=key,
         source_type=resolved.source_type,
+        reference_id=resolved.reference_id,
         title=resolved.title,
         resolution_status=resolution_status,
         verification_status=verification_status,
@@ -409,6 +510,168 @@ def write_bibliography_audit(audit: BibliographyAudit, output_path: Path) -> Non
     output_path.write_text(audit.model_dump_json(indent=2), encoding="utf-8")
 
 
+def _entry_field(entry: Entry, field_name: str) -> str:
+    """Return a normalized BibTeX field value."""
+    value = entry.fields.get(field_name, "")
+    return str(value).strip()
+
+
+def _entry_authors(entry: Entry) -> list[str]:
+    """Return author strings from a pybtex entry."""
+    persons = entry.persons.get("author", [])
+    if persons:
+        return [str(person).strip() for person in persons if str(person).strip()]
+
+    author_field = _entry_field(entry, "author")
+    if not author_field:
+        return []
+
+    return [part.strip() for part in author_field.split(" and ") if part.strip()]
+
+
+def _entry_core_missing_fields(entry: Entry) -> list[str]:
+    """Return the core fields missing from an emitted BibTeX entry."""
+    missing: list[str] = []
+    if not _entry_field(entry, "title"):
+        missing.append("title")
+    if not _entry_authors(entry):
+        missing.append("authors")
+    if not _entry_field(entry, "year"):
+        missing.append("year")
+    return missing
+
+
+def _entry_canonical_identifiers(entry: Entry) -> list[str]:
+    """Return normalized identifiers extracted from a BibTeX entry."""
+    identifiers: list[str] = []
+    doi = _entry_field(entry, "doi")
+    if doi:
+        identifiers.append(f"doi:{doi}")
+
+    eprint = _entry_field(entry, "eprint")
+    archive_prefix = (_entry_field(entry, "archiveprefix") or _entry_field(entry, "archivePrefix")).lower()
+    if eprint and archive_prefix == "arxiv":
+        identifiers.append(f"arxiv:{eprint}")
+    else:
+        note = _entry_field(entry, "note")
+        match = re.search(r"arXiv[:\s]+([^\s,;]+)", note, re.IGNORECASE)
+        if match:
+            identifiers.append(f"arxiv:{match.group(1)}")
+
+    url = _entry_field(entry, "url")
+    if url:
+        identifiers.append(f"url:{url}")
+
+    return identifiers
+
+
+def _entry_source_type(entry: Entry) -> Literal["paper", "tool", "data", "website"]:
+    """Coarsely classify a plain BibTeX entry for audit reporting."""
+    entry_type = entry.type.lower()
+    if entry_type == "misc":
+        if _entry_field(entry, "url") and not _entry_authors(entry):
+            return "website"
+        return "tool"
+
+    if entry_type in {
+        "article",
+        "inproceedings",
+        "proceedings",
+        "book",
+        "incollection",
+        "phdthesis",
+        "mastersthesis",
+        "techreport",
+        "manual",
+    }:
+        return "paper"
+
+    return "paper"
+
+
+def _bibliography_audit_record_from_entry(
+    key: str,
+    entry: Entry,
+) -> CitationAuditRecord:
+    """Build an audit record for a plain BibTeX entry."""
+    missing_core_fields = _entry_core_missing_fields(entry)
+    canonical_identifiers = _entry_canonical_identifiers(entry)
+    warnings: list[str] = []
+    if missing_core_fields:
+        warnings.append(f"Missing core citation fields: {', '.join(missing_core_fields)}")
+    if not canonical_identifiers:
+        warnings.append("No canonical identifier available")
+
+    return CitationAuditRecord(
+        key=key,
+        source_type=_entry_source_type(entry),
+        reference_id=None,
+        title=_entry_field(entry, "title"),
+        resolution_status="provided" if not missing_core_fields else "incomplete",
+        verification_status="unverified",
+        verification_sources=[],
+        canonical_identifiers=canonical_identifiers,
+        missing_core_fields=missing_core_fields,
+        enriched_fields=[],
+        warnings=warnings,
+        errors=[],
+    )
+
+
+def _bibliography_audit_from_entries(
+    bib_data: BibliographyData,
+    source_records_by_key: dict[str, CitationAuditRecord] | None = None,
+) -> BibliographyAudit:
+    """Summarize the emitted bibliography as a machine-readable audit."""
+    audit_entries: list[CitationAuditRecord] = []
+
+    for key, entry in bib_data.entries.items():
+        source_record = source_records_by_key.get(key) if source_records_by_key else None
+        if source_record is not None:
+            audit_entries.append(source_record if source_record.key == key else source_record.model_copy(update={"key": key}))
+        else:
+            audit_entries.append(_bibliography_audit_record_from_entry(key, entry))
+
+    return BibliographyAudit(
+        generated_at=datetime.now(UTC).isoformat(),
+        total_sources=len(audit_entries),
+        resolved_sources=sum(
+            1 for entry in audit_entries if entry.resolution_status in {"provided", "enriched"}
+        ),
+        partial_sources=sum(1 for entry in audit_entries if entry.verification_status == "partial"),
+        unverified_sources=sum(1 for entry in audit_entries if entry.verification_status == "unverified"),
+        failed_sources=sum(1 for entry in audit_entries if entry.resolution_status == "failed"),
+        entries=audit_entries,
+    )
+
+
+def audit_bibliography(
+    bib_data: BibliographyData,
+    citation_sources: list[CitationSource] | None = None,
+    source_audit_entries: list[CitationAuditRecord] | None = None,
+    enrich: bool = True,
+    existing_keys: set[str] | None = None,
+) -> BibliographyAudit:
+    """Audit a final bibliography, mixing source-backed and plain BibTeX entries.
+
+    Plain BibTeX entries are treated as provided, unverified citations.
+    Citation-source inputs, when supplied, are resolved first so the audit
+    preserves their existing verification and enrichment metadata.
+    """
+    source_records_by_key: dict[str, CitationAuditRecord] | None = None
+    if source_audit_entries is not None:
+        source_records_by_key = {entry.key: entry for entry in source_audit_entries}
+    elif citation_sources is not None:
+        _audited_sources, audit_entries = _resolve_sources_for_bibliography(
+            citation_sources,
+            enrich=enrich,
+            existing_keys=existing_keys,
+        )
+        source_records_by_key = {entry.key: entry for entry in audit_entries}
+
+    return _bibliography_audit_from_entries(bib_data, source_records_by_key)
+
+
 # ---- arXiv metadata to BibTeX ----
 
 
@@ -467,18 +730,8 @@ def build_bibliography_with_audit(
         else:
             normalized_audit_entries.append(audit_entry.model_copy(update={"key": key}))
 
-    audit = BibliographyAudit(
-        generated_at=datetime.now(UTC).isoformat(),
-        total_sources=len(normalized_audit_entries),
-        resolved_sources=sum(
-            1 for entry in normalized_audit_entries if entry.resolution_status in {"provided", "enriched"}
-        ),
-        partial_sources=sum(1 for entry in normalized_audit_entries if entry.verification_status == "partial"),
-        unverified_sources=sum(1 for entry in normalized_audit_entries if entry.verification_status == "unverified"),
-        failed_sources=sum(1 for entry in normalized_audit_entries if entry.resolution_status == "failed"),
-        entries=normalized_audit_entries,
-    )
-    return bib, audit
+    source_records_by_key = {entry.key: entry for entry in normalized_audit_entries}
+    return bib, _bibliography_audit_from_entries(bib, source_records_by_key)
 
 
 def build_bibliography(sources: list[CitationSource], enrich: bool = True) -> BibliographyData:

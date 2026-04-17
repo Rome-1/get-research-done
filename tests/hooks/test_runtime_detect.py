@@ -6,6 +6,7 @@ priority ordering, helper functions, and unknown runtime fallback.
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 from pathlib import Path
@@ -43,11 +44,15 @@ from grd.hooks.runtime_detect import (
     resolve_effective_runtime,
     should_consider_todo_candidate,
     should_consider_update_cache_candidate,
+    supported_runtime_names,
     update_command_for_runtime,
 )
+from tests.hooks.helpers import clean_runtime_env as _clean_runtime_env
+from tests.hooks.helpers import mark_complete_install as _mark_complete_install
 
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
 _RUNTIME_BY_NAME = {descriptor.runtime_name: descriptor for descriptor in _RUNTIME_DESCRIPTORS}
+_SHARED_INSTALL = get_shared_install_metadata()
 RUNTIME_CLAUDE = _RUNTIME_BY_NAME["claude-code"].runtime_name
 RUNTIME_CODEX = _RUNTIME_BY_NAME["codex"].runtime_name
 RUNTIME_GEMINI = _RUNTIME_BY_NAME["gemini"].runtime_name
@@ -341,7 +346,7 @@ class TestResolveEffectiveRuntime:
         assert result.source == SOURCE_UNKNOWN
         assert result.has_grd_install is False
 
-    def test_manifest_runtime_alias_is_normalized_for_installed_runtime(self, tmp_path: Path) -> None:
+    def test_manifest_runtime_alias_fails_closed_for_installed_runtime(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
         home = tmp_path / "home"
         workspace.mkdir()
@@ -402,6 +407,39 @@ class TestResolveEffectiveRuntime:
 
         assert result.runtime == RUNTIME_UNKNOWN
 
+    def test_require_grd_install_does_not_fall_through_to_another_installed_runtime(
+        self, tmp_path: Path
+    ) -> None:
+        _mark_grd_install(tmp_path / ".codex")
+
+        env = _clean_runtime_env()
+        env["CLAUDE_CODE_SESSION"] = "1"
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path),
+            patch("grd.hooks.runtime_detect.Path.cwd", return_value=tmp_path),
+        ):
+            result = resolve_effective_runtime(require_grd_install=True)
+
+        assert result.runtime == RUNTIME_UNKNOWN
+
+    def test_require_grd_install_reports_local_source_for_explicit_target_install(self, tmp_path: Path) -> None:
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        home = tmp_path / "home"
+        custom_dir = tmp_path / "custom-codex"
+        _mark_grd_install(custom_dir, runtime=RUNTIME_CODEX, install_scope=SCOPE_LOCAL)
+
+        env = _clean_runtime_env()
+        env["CODEX_CONFIG_DIR"] = str(custom_dir)
+        with patch.dict(os.environ, env, clear=True):
+            result = resolve_effective_runtime(cwd=workspace, home=home, require_grd_install=True)
+
+        assert result.runtime == RUNTIME_CODEX
+        assert result.source == SOURCE_LOCAL
+        assert result.has_grd_install is True
+        assert result.install_scope == SCOPE_LOCAL
+
 
 class TestNormalizeRuntimeName:
     """Tests for the shared runtime-name normalizer."""
@@ -411,15 +449,60 @@ class TestNormalizeRuntimeName:
         assert normalize_runtime_name("Claude Code") == RUNTIME_CLAUDE
         assert normalize_runtime_name("claude") == RUNTIME_CLAUDE
         assert normalize_runtime_name("open code") == RUNTIME_OPENCODE
+        assert catalog_normalize_runtime_name("claude-code") == RUNTIME_CLAUDE
+        assert catalog_normalize_runtime_name("Claude Code") == RUNTIME_CLAUDE
+        assert catalog_normalize_runtime_name("claude") == RUNTIME_CLAUDE
+        assert catalog_normalize_runtime_name("open code") == RUNTIME_OPENCODE
 
     def test_rejects_unknown_runtime_names(self) -> None:
         assert normalize_runtime_name("not-a-runtime") is None
+        assert catalog_normalize_runtime_name("not-a-runtime") is None
+
+    def test_detect_runtime_install_target_returns_none_for_unknown_runtime(self, tmp_path: Path) -> None:
+        assert detect_runtime_install_target("not-a-runtime", cwd=tmp_path, home=tmp_path / "home") is None
+
+
+def test_supported_runtime_names_reflect_live_runtime_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runtime_detect_module, "list_runtime_names", lambda: ["alpha", "beta", "gamma"])
+    monkeypatch.setattr(
+        runtime_detect_module.adapters_module,
+        "get_adapter",
+        lambda runtime: (_ for _ in ()).throw(AssertionError(f"unexpected adapter load: {runtime}")),
+    )
+
+    assert supported_runtime_names() == ("alpha", "beta", "gamma")
+    assert runtime_detect_module._prioritized_runtimes("beta") == ["beta", "alpha", "gamma"]
+
+
+def test_get_adapter_loads_only_one_runtime_module(monkeypatch: pytest.MonkeyPatch) -> None:
+    import grd.adapters as adapters_module
+
+    loaded_modules: list[str] = []
+    real_import_module = adapters_module.import_module
+
+    def tracking_import_module(name: str, package: str | None = None) -> object:
+        if name.startswith("grd.adapters."):
+            loaded_modules.append(name)
+        return real_import_module(name, package)
+
+    monkeypatch.setattr(adapters_module, "_REGISTRY", {})
+    monkeypatch.setattr(adapters_module, "import_module", tracking_import_module)
+
+    adapter = adapters_module.get_adapter(RUNTIME_CODEX)
+
+    assert adapter.runtime_name == RUNTIME_CODEX
+    assert loaded_modules == [f"grd.adapters.{RUNTIME_CODEX.replace('-', '_')}"]
+
+
+def test_runtime_detect_does_not_export_cached_runtime_inventory() -> None:
+    assert hasattr(runtime_detect_module, "supported_runtime_names")
+    assert not hasattr(runtime_detect_module, "ALL_RUNTIMES")
 
 
 class TestDetectActiveRuntimeWithInstall:
     """Tests for the install-aware runtime detection helper used by hooks."""
 
-    def test_plain_runtime_dirs_without_gpd_install_do_not_count(self, tmp_path: Path) -> None:
+    def test_plain_runtime_dirs_without_grd_install_do_not_count(self, tmp_path: Path) -> None:
         (tmp_path / ".claude").mkdir()
         (tmp_path / ".codex").mkdir()
         (tmp_path / ".gemini").mkdir()
@@ -451,6 +534,7 @@ class TestDetectActiveRuntimeWithInstall:
         _mark_grd_install(tmp_path / ".codex")
 
         env = _clean_runtime_env()
+        env["CLAUDE_CODE_SESSION"] = "1"
         with (
             patch.dict(os.environ, env, clear=True),
             patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path),
@@ -582,7 +666,21 @@ class TestDetectActiveRuntimeWithInstall:
             patch("grd.hooks.runtime_detect.Path.cwd", return_value=workspace),
             patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
         ):
-            assert _runtime_from_manifest_or_path(candidate, cwd=workspace, home=tmp_path / "home") is None
+            assert _runtime_from_manifest_or_path(candidate) is None
+
+    def test_runtime_from_manifest_or_path_rejects_manifestless_env_global_dir(self, tmp_path: Path) -> None:
+        home = tmp_path / "home"
+        custom_dir = tmp_path / "custom-codex"
+        _mark_grd_install(custom_dir, runtime=RUNTIME_CODEX, install_scope=SCOPE_GLOBAL)
+        (custom_dir / "grd-file-manifest.json").unlink()
+
+        env = _clean_runtime_env()
+        env["CODEX_CONFIG_DIR"] = str(custom_dir)
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch("grd.hooks.runtime_detect.Path.home", return_value=home),
+        ):
+            assert _runtime_from_manifest_or_path(custom_dir) is None
 
     def test_installed_runtime_fails_closed_for_runtime_less_manifest_without_prefix_evidence(
         self, tmp_path: Path
@@ -687,6 +785,7 @@ class TestDetectRuntimeForGpdUse:
         _mark_grd_install(tmp_path / ".codex")
 
         env = _clean_runtime_env()
+        env["CLAUDE_CODE_SESSION"] = "1"
         with (
             patch.dict(os.environ, env, clear=True),
             patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path),
@@ -695,9 +794,8 @@ class TestDetectRuntimeForGpdUse:
             assert detect_runtime_for_grd_use() == RUNTIME_CODEX
 
     def test_falls_back_to_plain_active_runtime_when_no_install_is_found(self, tmp_path: Path) -> None:
-        (tmp_path / ".gemini").mkdir()
-
         env = _clean_runtime_env()
+        env["GEMINI_CLI"] = "1"
         with (
             patch.dict(os.environ, env, clear=True),
             patch("grd.hooks.runtime_detect.Path.home", return_value=tmp_path / "home"),
@@ -705,7 +803,7 @@ class TestDetectRuntimeForGpdUse:
         ):
             assert detect_runtime_for_grd_use() == RUNTIME_UNKNOWN
 
-    def test_explicit_target_install_is_detected_for_gpd_surfaces(self, tmp_path: Path) -> None:
+    def test_explicit_target_install_is_detected_for_grd_surfaces(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
         workspace.mkdir()
         home = tmp_path / "home"
@@ -731,6 +829,26 @@ class TestDetectRuntimeForGpdUse:
         ):
             assert detect_runtime_for_grd_use() == RUNTIME_CODEX
 
+
+    def test_import_time_patched_adapter_lookup_does_not_poison_runtime_resolution(self, tmp_path: Path) -> None:
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        home = tmp_path / "home"
+        global_dir = get_adapter(RUNTIME_CLAUDE).resolve_global_config_dir(home=home)
+        _mark_grd_install(global_dir, runtime=RUNTIME_CLAUDE, install_scope=SCOPE_GLOBAL)
+
+        class _DummyAdapter:
+            pass
+
+        try:
+            with patch("grd.adapters.get_adapter", return_value=_DummyAdapter()):
+                importlib.reload(runtime_detect_module)
+
+            env = _clean_runtime_env()
+            with patch.dict(os.environ, env, clear=True):
+                assert runtime_detect_module.detect_runtime_for_grd_use(cwd=workspace, home=home) == RUNTIME_CLAUDE
+        finally:
+            importlib.reload(runtime_detect_module)
 
 # ─── all_runtime_dirs ──────────────────────────────────────────────────────
 
@@ -909,7 +1027,7 @@ class TestDetectInstallScope:
         ):
             assert detect_install_scope(RUNTIME_CODEX) == SCOPE_LOCAL
 
-    def test_ignores_workspace_runtime_dir_without_gpd_install_when_global_install_exists(self, tmp_path: Path) -> None:
+    def test_ignores_workspace_runtime_dir_without_grd_install_when_global_install_exists(self, tmp_path: Path) -> None:
         home = tmp_path / "home"
         (tmp_path / ".codex").mkdir()
         global_dir = home / ".codex"
@@ -921,7 +1039,7 @@ class TestDetectInstallScope:
         ):
             assert detect_install_scope(RUNTIME_CODEX) == SCOPE_GLOBAL
 
-    def test_returns_none_when_runtime_dirs_have_no_gpd_install_markers(self, tmp_path: Path) -> None:
+    def test_returns_none_when_runtime_dirs_have_no_grd_install_markers(self, tmp_path: Path) -> None:
         home = tmp_path / "home"
         (tmp_path / ".claude").mkdir()
         (home / ".claude").mkdir(parents=True)
@@ -1016,7 +1134,7 @@ class TestUpdateCacheFiles:
         assert files[0] == workspace / ".claude" / "cache" / "grd-update-check.json"
         assert files[1] == home / ".claude" / "cache" / "grd-update-check.json"
 
-    def test_unknown_preferred_runtime_uses_installed_runtime_for_gpd_surfaces(self, tmp_path: Path) -> None:
+    def test_unknown_preferred_runtime_uses_installed_runtime_for_grd_surfaces(self, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
         home = tmp_path / "home"
         workspace.mkdir()

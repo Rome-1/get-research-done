@@ -5,11 +5,13 @@ Tests the pure logic functions without filesystem mocking (uses tmp_path).
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from grd.core.commands import (
+    cmd_apply_return_updates,
     cmd_current_timestamp,
     cmd_generate_slug,
     cmd_history_digest,
@@ -19,6 +21,7 @@ from grd.core.commands import (
     cmd_verify_path_exists,
 )
 from grd.core.errors import ValidationError
+from grd.core.state import default_state_dict, generate_state_markdown
 
 # ─── cmd_current_timestamp ─────────────────────────────────────────────────
 
@@ -70,7 +73,7 @@ class TestGenerateSlug:
 
 class TestVerifyPathExists:
     def test_file_exists(self, tmp_path: Path):
-        (tmp_path / "test.txt").write_text("hello")
+        (tmp_path / "test.txt").write_text("hello", encoding="utf-8")
         result = cmd_verify_path_exists(tmp_path, "test.txt")
         assert result.exists is True
         assert result.type == "file"
@@ -88,7 +91,7 @@ class TestVerifyPathExists:
 
     def test_absolute_path(self, tmp_path: Path):
         f = tmp_path / "abs.txt"
-        f.write_text("content")
+        f.write_text("content", encoding="utf-8")
         result = cmd_verify_path_exists(tmp_path, str(f))
         assert result.exists is True
 
@@ -103,7 +106,7 @@ class TestVerifyPathExists:
 class TestSummaryExtract:
     def _write_summary(self, tmp_path: Path, content: str) -> str:
         summary = tmp_path / "test-SUMMARY.md"
-        summary.write_text(content)
+        summary.write_text(content, encoding="utf-8")
         return "test-SUMMARY.md"
 
     def test_basic_extract(self, tmp_path: Path):
@@ -195,6 +198,42 @@ class TestSummaryExtract:
         with pytest.raises(ValidationError, match="File not found"):
             cmd_summary_extract(tmp_path, "nonexistent.md")
 
+    @pytest.mark.parametrize(
+        ("frontmatter_fragment", "match"),
+        [
+            ("key-files: src/main.py\n", r"Invalid key-files in test-SUMMARY\.md"),
+            ("key-files:\n  created: src/main.py\n", r"Invalid key-files\.created in test-SUMMARY\.md"),
+            ("key-files:\n  createdd:\n    - src/main.py\n", r"Invalid key-files in test-SUMMARY\.md: unexpected key\(s\) createdd"),
+            ("methods: finite-difference\n", r"Invalid methods in test-SUMMARY\.md"),
+            ("methods:\n  added: finite-difference\n", r"Invalid methods\.added in test-SUMMARY\.md"),
+            ("patterns-established: test-first\n", r"Invalid patterns-established in test-SUMMARY\.md"),
+            ("affects:\n  - \"\"\n", r"Invalid affects in test-SUMMARY\.md: entry 0 must be a non-empty string"),
+            ("key-decisions:\n  - {summary: Use numpy, rationale: Fast, extra: nope}\n", r"Invalid key-decisions in test-SUMMARY\.md"),
+        ],
+    )
+    def test_rejects_malformed_summary_evidence_shapes(
+        self,
+        tmp_path: Path,
+        frontmatter_fragment: str,
+        match: str,
+    ):
+        path = self._write_summary(
+            tmp_path,
+            (
+                "---\n"
+                'phase: "01"\n'
+                'plan: "01"\n'
+                "depth: standard\n"
+                "provides: []\n"
+                'completed: "2026-03-22"\n'
+                f"{frontmatter_fragment}"
+                "---\n\n# Summary\n"
+            ),
+        )
+
+        with pytest.raises(ValidationError, match=match):
+            cmd_summary_extract(tmp_path, path)
+
 
 # ─── cmd_history_digest ───────────────────────────────────────────────────
 
@@ -214,7 +253,7 @@ class TestHistoryDigest:
             "patterns-established:\n  - test-driven\n"
             "key-decisions:\n  - Use Python 3.11\n"
             "methods:\n  added:\n    - spectral-method\n"
-            "---\n\n# Setup Summary\n"
+            "---\n\n# Setup Summary\n", encoding="utf-8"
         )
         (phases_dir / "02-core" / "02-SUMMARY.md").write_text(
             "---\n"
@@ -222,7 +261,7 @@ class TestHistoryDigest:
             "phase: 2\n"
             "provides:\n  - solver\n"
             "patterns-established:\n  - convention-lock\n"
-            "---\n\n# Core Summary\n"
+            "---\n\n# Core Summary\n", encoding="utf-8"
         )
 
     def test_full_digest(self, tmp_path: Path):
@@ -248,6 +287,46 @@ class TestHistoryDigest:
         result = cmd_history_digest(tmp_path)
         assert result.phases == {}
 
+    def test_history_digest_rejects_malformed_summary_field_members(self, tmp_path: Path):
+        phases_dir = tmp_path / "GRD" / "phases" / "01-setup"
+        phases_dir.mkdir(parents=True)
+        (phases_dir / "01-SUMMARY.md").write_text(
+            "---\n"
+            "name: Setup\n"
+            "phase: 1\n"
+            "provides:\n"
+            "  - base-framework\n"
+            "patterns-established:\n"
+            "  - pattern-a\n"
+            "key-decisions:\n"
+            "  - Use numpy: fast\n"
+            "methods:\n"
+            "  added:\n"
+            "    - spectral-method\n"
+            "dependency-graph:\n"
+            "  affects:\n"
+            "    - 12\n"
+            "---\n\n# Setup Summary\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValidationError, match="Invalid affects in GRD/phases/01-setup/01-SUMMARY\\.md"):
+            cmd_history_digest(tmp_path)
+
+    def test_history_digest_rejects_malformed_summary_frontmatter(self, tmp_path: Path):
+        phases_dir = tmp_path / "GRD" / "phases" / "01-setup"
+        phases_dir.mkdir(parents=True)
+        (phases_dir / "01-SUMMARY.md").write_text(
+            "---\n"
+            "phase: 1\n"
+            "provides: [unterminated\n"
+            "---\n\n# Setup Summary\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValidationError, match="Malformed frontmatter in GRD/phases/01-setup/01-SUMMARY\\.md"):
+            cmd_history_digest(tmp_path)
+
 
 # ─── cmd_regression_check ─────────────────────────────────────────────────
 
@@ -258,9 +337,9 @@ class TestRegressionCheck:
         for name in ("01-setup", "02-core"):
             d = phases / name
             d.mkdir(parents=True)
-            (d / f"{name}-01-PLAN.md").write_text("---\nwave: 1\n---\n\n# Plan\n")
+            (d / f"{name}-01-PLAN.md").write_text("---\nwave: 1\n---\n\n# Plan\n", encoding="utf-8")
             (d / f"{name}-01-SUMMARY.md").write_text(
-                f"---\nphase: {name[:2]}\nconventions:\n  - metric = mostly-minus\n---\n\n# Summary\n"
+                f"---\nphase: {name[:2]}\nconventions:\n  - metric = mostly-minus\n---\n\n# Summary\n", encoding="utf-8"
             )
 
     def test_passing_check(self, tmp_path: Path):
@@ -274,7 +353,7 @@ class TestRegressionCheck:
         # Add a conflicting convention in phase 2
         phase2_dir = tmp_path / "GRD" / "phases" / "02-core"
         (phase2_dir / "02-core-01-SUMMARY.md").write_text(
-            "---\nconventions:\n  - metric = mostly-plus\n---\n\n# Summary\n"
+            "---\nconventions:\n  - metric = mostly-plus\n---\n\n# Summary\n", encoding="utf-8"
         )
         result = cmd_regression_check(tmp_path)
         assert result.passed is False
@@ -286,7 +365,7 @@ class TestRegressionCheck:
         self._setup_complete_phases(tmp_path)
         phase1_dir = tmp_path / "GRD" / "phases" / "01-setup"
         (phase1_dir / "01-setup-VERIFICATION.md").write_text(
-            "---\nstatus: gaps_found\nscore: 2/5 checks verified\n---\n\n# Verification\n"
+            "---\nstatus: gaps_found\nscore: 2/5 checks verified\n---\n\n# Verification\n", encoding="utf-8"
         )
         result = cmd_regression_check(tmp_path)
         assert result.passed is False
@@ -298,7 +377,7 @@ class TestRegressionCheck:
         self._setup_complete_phases(tmp_path)
         phase2_dir = tmp_path / "GRD" / "phases" / "02-core"
         (phase2_dir / "02-core-01-SUMMARY.md").write_text(
-            "---\nconventions:\n  - metric = mostly-plus\n---\n\n# Summary\n"
+            "---\nconventions:\n  - metric = mostly-plus\n---\n\n# Summary\n", encoding="utf-8"
         )
         result = cmd_regression_check(tmp_path, phase="1")
         assert result.passed is True
@@ -308,7 +387,7 @@ class TestRegressionCheck:
         self._setup_complete_phases(tmp_path)
         phase1_dir = tmp_path / "GRD" / "phases" / "01-setup"
         (phase1_dir / "01-setup-VERIFICATION.md").write_text(
-            "---\nstatus: validating\nscore: 2/5 checks verified\n---\n\n# Verification\n"
+            "---\nstatus: validating\nscore: 2/5 checks verified\n---\n\n# Verification\n", encoding="utf-8"
         )
         result = cmd_regression_check(tmp_path)
         assert result.passed is False
@@ -323,8 +402,8 @@ class TestRegressionCheck:
             name = f"{str(i).zfill(2)}-phase{i}"
             d = phases / name
             d.mkdir(parents=True)
-            (d / f"{name}-01-PLAN.md").write_text("---\nwave: 1\n---\n")
-            (d / f"{name}-01-SUMMARY.md").write_text(f"---\nphase: {i}\n---\n")
+            (d / f"{name}-01-PLAN.md").write_text("---\nwave: 1\n---\n", encoding="utf-8")
+            (d / f"{name}-01-SUMMARY.md").write_text(f"---\nphase: {i}\n---\n", encoding="utf-8")
         result = cmd_regression_check(tmp_path, quick=True)
         assert result.phases_checked == 2
 
@@ -340,7 +419,7 @@ class TestRegressionCheck:
 class TestValidateReturn:
     def _write_return(self, tmp_path: Path, yaml_block: str) -> Path:
         f = tmp_path / "output.md"
-        f.write_text(f"# Result\n\n```yaml\n{yaml_block}```\n")
+        f.write_text(f"# Result\n\n```yaml\n{yaml_block}```\n", encoding="utf-8")
         return f
 
     def test_valid_return(self, tmp_path: Path):
@@ -445,6 +524,79 @@ class TestValidateReturn:
         with pytest.raises(ValidationError, match="File not found"):
             cmd_validate_return(tmp_path / "nonexistent.md")
 
+
+class TestApplyReturnUpdates:
+    def _write_state_project(self, tmp_path: Path) -> tuple[Path, Path]:
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        state = default_state_dict()
+        (planning / "state.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+        (planning / "STATE.md").write_text(generate_state_markdown(state), encoding="utf-8")
+        return planning, planning / "STATE.md"
+
+    def _write_return(self, tmp_path: Path, yaml_body: str) -> Path:
+        f = tmp_path / "output.md"
+        f.write_text(f"# Result\n\n```yaml\n{yaml_body}```\n", encoding="utf-8")
+        return f
+
+    def test_applies_explicit_state_changes_and_preserves_contract_updates(self, tmp_path: Path):
+        _, state_path = self._write_state_project(tmp_path)
+        before = state_path.read_text(encoding="utf-8")
+        f = self._write_return(
+            tmp_path,
+            (
+                "grd_return:\n"
+                "  status: checkpoint\n"
+                "  files_written: [GRD/STATE.md]\n"
+                "  issues: []\n"
+                "  next_actions: [/grd:resume-work]\n"
+                "  decisions:\n"
+                "    - summary: Prefer canonical child-return application\n"
+                '      phase: "10"\n'
+                "  blockers:\n"
+                "    - waiting on approval\n"
+                "  contract_updates:\n"
+                "    project_contract: retained\n"
+            ),
+        )
+
+        result = cmd_apply_return_updates(tmp_path, f)
+
+        assert result.passed is True
+        assert result.status == "checkpoint"
+        assert result.applied_decisions == 1
+        assert result.applied_blockers == 1
+        assert result.applied_state_operations == []
+        assert result.applied_continuation_operations == []
+        assert result.contract_updates == {"project_contract": "retained"}
+        assert state_path.read_text(encoding="utf-8") != before
+        updated_state = state_path.read_text(encoding="utf-8")
+        assert "Prefer canonical child-return application" in updated_state
+        assert "waiting on approval" in updated_state
+
+    def test_rejects_unsupported_state_update_keys_before_mutation(self, tmp_path: Path):
+        _, state_path = self._write_state_project(tmp_path)
+        before = state_path.read_text(encoding="utf-8")
+        f = self._write_return(
+            tmp_path,
+            (
+                "grd_return:\n"
+                "  status: checkpoint\n"
+                "  files_written: [GRD/STATE.md]\n"
+                "  issues: []\n"
+                "  next_actions: [/grd:resume-work]\n"
+                "  state_updates:\n"
+                "    unexpected_operation: true\n"
+            ),
+        )
+
+        result = cmd_apply_return_updates(tmp_path, f)
+
+        assert result.passed is False
+        assert result.status == "failed"
+        assert any("state_updates" in error and "unexpected_operation" in error for error in result.errors)
+        assert state_path.read_text(encoding="utf-8") == before
+
     def test_quoted_values_stripped(self, tmp_path: Path):
         f = self._write_return(
             tmp_path,
@@ -485,3 +637,91 @@ class TestValidateReturn:
         assert result.fields["files_written"] == ["src/main.py", "tests/test_main.py"]
         assert result.fields["issues"] == ["waiting on benchmark rerun"]
         assert result.fields["next_actions"] == ["/grd:verify-work 01"]
+
+    def test_nested_continuation_payload_is_preserved(self, tmp_path: Path):
+        f = self._write_return(
+            tmp_path,
+            (
+                "grd_return:\n"
+                "  status: checkpoint\n"
+                "  files_written: [src/main.py]\n"
+                "  issues: []\n"
+                "  next_actions: [/grd:resume-work]\n"
+                "  state_updates:\n"
+                "    advance_plan: true\n"
+                "    update_progress: true\n"
+                "  continuation_update:\n"
+                "    handoff:\n"
+                "      recorded_at: 2026-04-08T12:00:00Z\n"
+                "      recorded_by: execute-plan\n"
+                "      stopped_at: Completed phase 01\n"
+                "      resume_file: GRD/phases/01-test-phase/.continue-here.md\n"
+                "    bounded_segment:\n"
+                "      resume_file: GRD/phases/01-test-phase/.continue-here.md\n"
+                "      phase: 01\n"
+                "      plan: 01\n"
+                "      segment_id: seg-01\n"
+                "      segment_status: paused\n"
+                "      checkpoint_reason: segment_boundary\n"
+            ),
+        )
+
+        result = cmd_validate_return(f)
+
+        assert result.passed is True
+        assert result.fields["state_updates"]["advance_plan"] is True
+        assert result.fields["state_updates"]["update_progress"] is True
+        assert result.fields["continuation_update"]["handoff"]["recorded_by"] == "execute-plan"
+        assert result.fields["continuation_update"]["bounded_segment"]["segment_id"] == "seg-01"
+
+    def test_rejects_transport_only_execution_segment_inside_continuation_update(self, tmp_path: Path):
+        f = self._write_return(
+            tmp_path,
+            (
+                "grd_return:\n"
+                "  status: checkpoint\n"
+                "  files_written: [src/main.py]\n"
+                "  issues: []\n"
+                "  next_actions: [/grd:resume-work]\n"
+                "  continuation_update:\n"
+                "    execution_segment:\n"
+                "      current_cursor: 3\n"
+            ),
+        )
+
+        result = cmd_validate_return(f)
+
+        assert result.passed is False
+        assert any("continuation_update" in error and "execution_segment" in error for error in result.errors)
+
+    def test_rejects_scalar_and_nested_map_shape_errors(self, tmp_path: Path):
+        scalar_file = self._write_return(
+            tmp_path,
+            (
+                "grd_return:\n"
+                "  status: completed\n"
+                "  files_written: src/main.py\n"
+                "  issues: []\n"
+                "  next_actions: [/grd:verify-work 01]\n"
+            ),
+        )
+        scalar_result = cmd_validate_return(scalar_file)
+        assert scalar_result.passed is False
+        assert any("files_written" in error and "list" in error for error in scalar_result.errors)
+
+        nested_map_file = self._write_return(
+            tmp_path,
+            (
+                "grd_return:\n"
+                "  status: blocked\n"
+                "  files_written: []\n"
+                "  issues: []\n"
+                "  next_actions: []\n"
+                "  blockers:\n"
+                "    - waiting on approval\n"
+                "  continuation_update: checkpoint\n"
+            ),
+        )
+        nested_result = cmd_validate_return(nested_map_file)
+        assert nested_result.passed is False
+        assert any("continuation_update" in error for error in nested_result.errors)

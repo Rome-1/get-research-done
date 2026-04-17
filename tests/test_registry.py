@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,16 @@ from grd.registry import (
     _parse_tools,
     _RegistryCache,
     load_agents_from_dir,
+    render_command_visibility_sections_from_frontmatter,
 )
+from grd.specs import SPECS_DIR as CANONICAL_SPECS_DIR
+
+NEW_PROJECT_COMMAND_PATH = Path(__file__).resolve().parents[1] / "src" / "grd" / "commands" / "new-project.md"
+RESEARCH_SYNTHESIZER_SUMMARY_CONTRACT = {
+    "write_scope": {"mode": "scoped_write", "allowed_paths": ["GRD/literature/SUMMARY.md"]},
+    "expected_artifacts": ["GRD/literature/SUMMARY.md"],
+    "shared_state_policy": "return_only",
+}
 
 
 def _write_review_contract_command(tmp_path: Path, file_name: str, review_contract_body: str) -> Path:
@@ -40,6 +50,9 @@ def _write_review_contract_command(tmp_path: Path, file_name: str, review_contra
 
 class TestParseFrontmatter:
     """Tests for _parse_frontmatter edge cases."""
+
+    def test_registry_exports_canonical_specs_dir(self) -> None:
+        assert registry.SPECS_DIR == CANONICAL_SPECS_DIR
 
     def test_valid_frontmatter(self) -> None:
         meta, body = _parse_frontmatter("---\nname: test\ndescription: hello\n---\nBody here.")
@@ -73,6 +86,11 @@ class TestParseFrontmatter:
         with pytest.raises(ValueError, match="Frontmatter must parse to a mapping"):
             _parse_frontmatter(text)
 
+    def test_model_visible_wrapper_notes_use_concise_yaml_prefixes(self) -> None:
+        assert agent_visibility_note().startswith("Agent YAML rules. Use this YAML.")
+        assert command_visibility_note().startswith("Command YAML rules. Use this YAML.")
+        assert review_contract_visibility_note().startswith("Review-contract YAML rules. Use this YAML.")
+
     def test_malformed_yaml_frontmatter_raises(self) -> None:
         text = "---\nname: test\nbad: [unterminated\n---\nBody."
 
@@ -96,6 +114,27 @@ class TestParseFrontmatter:
         assert meta["another"] == 42
         assert body == "Body."
 
+    def test_frontmatter_rejects_duplicate_keys(self) -> None:
+        text = "---\nname: test\nname: duplicate\n---\nBody."
+
+        with pytest.raises(ValueError, match="duplicate key"):
+            _parse_frontmatter(text)
+
+    def test_frontmatter_uses_shared_strict_yaml_loader(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        seen: dict[str, str] = {}
+
+        def _fake_load_strict_yaml(content: str) -> object:
+            seen["content"] = content
+            return {"name": "test"}
+
+        monkeypatch.setattr(registry, "load_strict_yaml", _fake_load_strict_yaml)
+
+        meta, body = _parse_frontmatter("---\nname: test\n---\nBody.")
+
+        assert seen["content"] == "name: test\n"
+        assert meta == {"name": "test"}
+        assert body == "Body."
+
     def test_frontmatter_with_leading_blank_lines_is_parsed(self) -> None:
         text = "\n\n---\nname: test\n---\nBody."
         meta, body = _parse_frontmatter(text)
@@ -111,10 +150,6 @@ class TestParseFrontmatter:
         assert body == "Body."
 
 
-def test_review_contract_registry_defaults_are_empty() -> None:
-    assert _DEFAULT_REVIEW_CONTRACTS == {}
-
-
 class TestParseTools:
     """Tests for _parse_tools normalization."""
 
@@ -124,8 +159,9 @@ class TestParseTools:
     def test_list_input(self) -> None:
         assert _parse_tools(["file_read", "file_write"]) == ["file_read", "file_write"]
 
-    def test_empty_string(self) -> None:
-        assert _parse_tools("") == []
+    def test_empty_string_raises(self) -> None:
+        with pytest.raises(ValueError, match="tools must not contain blank entries"):
+            _parse_tools("")
 
     def test_none_returns_empty(self) -> None:
         assert _parse_tools(None) == []
@@ -139,7 +175,11 @@ class TestParseTools:
             _parse_tools([1, True, "shell"])
 
     def test_string_with_extra_whitespace(self) -> None:
-        assert _parse_tools("  file_read ,  , file_write  ") == ["file_read", "file_write"]
+        assert _parse_tools("  file_read , file_write  ") == ["file_read", "file_write"]
+
+    def test_string_with_blank_member_raises(self) -> None:
+        with pytest.raises(ValueError, match="tools must not contain blank entries"):
+            _parse_tools("file_read, ,file_write")
 
 
 class TestParseAgentFile:
@@ -163,17 +203,26 @@ class TestParseAgentFile:
         assert agent.artifact_write_authority == "scoped_write"
         assert agent.shared_state_authority == "direct"
         assert agent.color == "blue"
-        assert agent.system_prompt == "System prompt."
+        assert agent.system_prompt.startswith("## Agent Requirements\n")
+        assert "Agent YAML rules. Use this YAML." in agent.system_prompt
+        assert "Closed schema; no extra keys." in agent.system_prompt
+        assert agent_visibility_note() in agent.system_prompt
+        assert "commit_authority: orchestrator" in agent.system_prompt
+        assert "surface: public" in agent.system_prompt
+        assert "role_family: worker" in agent.system_prompt
+        assert "artifact_write_authority: scoped_write" in agent.system_prompt
+        assert "shared_state_authority: direct" in agent.system_prompt
+        assert "tools:\n- file_read\n- file_write" in agent.system_prompt
+        assert skeptical_rigor_guardrails_section() in agent.system_prompt
+        assert agent.system_prompt.endswith("System prompt.")
         assert agent.source == "agents"
 
-    def test_agent_file_no_frontmatter(self, tmp_path: Path) -> None:
+    def test_agent_file_no_frontmatter_raises(self, tmp_path: Path) -> None:
         f = tmp_path / "bare-agent.md"
         f.write_text("Just a body, no frontmatter.", encoding="utf-8")
-        agent = _parse_agent_file(f, source="agents")
-        assert agent.name == "bare-agent"
-        assert agent.description == ""
-        assert agent.tools == []
-        assert agent.system_prompt == "Just a body, no frontmatter."
+
+        with pytest.raises(ValueError, match="name for bare-agent must be a non-empty string"):
+            _parse_agent_file(f, source="agents")
 
     def test_agent_file_missing_optional_fields(self, tmp_path: Path) -> None:
         f = tmp_path / "minimal.md"
@@ -189,6 +238,9 @@ class TestParseAgentFile:
         assert agent.shared_state_authority == "return_only"
         assert agent.color == ""
         assert agent.source == "agents"
+        assert agent.system_prompt.startswith("## Agent Requirements\n")
+        assert skeptical_rigor_guardrails_section() in agent.system_prompt
+        assert agent.system_prompt.endswith("Prompt.")
 
     def test_agent_file_parses_explicit_commit_authority(self, tmp_path: Path) -> None:
         f = tmp_path / "direct.md"
@@ -230,15 +282,26 @@ class TestParseAgentFile:
     def test_agent_file_unexpected_extra_fields(self, tmp_path: Path) -> None:
         f = tmp_path / "extra.md"
         f.write_text("---\nname: extra\nversion: 2\ncustom_key: hi\n---\nBody.", encoding="utf-8")
-        agent = _parse_agent_file(f, source="agents")
-        assert agent.name == "extra"
-        assert agent.system_prompt == "Body."
+
+        with pytest.raises(ValueError, match=r"unknown frontmatter keys for extra: custom_key, version"):
+            _parse_agent_file(f, source="agents")
 
     def test_agent_file_tools_as_list(self, tmp_path: Path) -> None:
         f = tmp_path / "list-tools.md"
         f.write_text("---\nname: list-tools\ntools:\n  - file_read\n  - shell\n---\nBody.", encoding="utf-8")
         agent = _parse_agent_file(f, source="agents")
         assert agent.tools == ["file_read", "shell"]
+
+    def test_agent_file_allowed_tools_alias_merges_into_tools(self, tmp_path: Path) -> None:
+        f = tmp_path / "aliased-tools.md"
+        f.write_text(
+            "---\nname: aliased-tools\ntools: shell\nallowed-tools:\n  - file_read\n  - shell\n---\nBody.",
+            encoding="utf-8",
+        )
+
+        agent = _parse_agent_file(f, source="agents")
+
+        assert agent.tools == ["shell", "file_read"]
 
     def test_agent_file_invalid_tools_scalar_raises(self, tmp_path: Path) -> None:
         f = tmp_path / "bad-tools-scalar.md"
@@ -254,11 +317,64 @@ class TestParseAgentFile:
         with pytest.raises(ValueError, match="tools for bad-agent must contain only strings"):
             _parse_agent_file(f, source="agents")
 
+    def test_agent_file_tools_list_rejects_blank_members(self, tmp_path: Path) -> None:
+        f = tmp_path / "bad-tools-list-blank.md"
+        f.write_text("---\nname: bad-agent\ntools:\n  - file_read\n  - \"  \"\n---\nBody.", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="tools for bad-agent must not contain blank entries"):
+            _parse_agent_file(f, source="agents")
+
+    def test_agent_file_allowed_tools_list_rejects_blank_members(self, tmp_path: Path) -> None:
+        f = tmp_path / "bad-allowed-tools-list-blank.md"
+        f.write_text("---\nname: bad-agent\nallowed-tools:\n  - file_read\n  - \"\"\n---\nBody.", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="allowed-tools for bad-agent must not contain blank entries"):
+            _parse_agent_file(f, source="agents")
+
+    def test_agent_file_blank_commit_authority_raises(self, tmp_path: Path) -> None:
+        f = tmp_path / "blank-authority.md"
+        f.write_text("---\nname: bad\ncommit_authority: \"  \"\n---\nPrompt.", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="commit_authority for bad must be a non-empty string"):
+            _parse_agent_file(f, source="agents")
+
+    def test_agent_file_null_commit_authority_raises(self, tmp_path: Path) -> None:
+        f = tmp_path / "null-authority.md"
+        f.write_text("---\nname: bad\ncommit_authority:\n---\nPrompt.", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="commit_authority for null-authority must be a non-empty string"):
+            _parse_agent_file(f, source="agents")
+
+    @pytest.mark.parametrize(
+        ("field_name", "expected_error"),
+        [
+            ("surface", "surface for bad must be a non-empty string"),
+            ("role_family", "role_family for bad must be a non-empty string"),
+            ("artifact_write_authority", "artifact_write_authority for bad must be a non-empty string"),
+            ("shared_state_authority", "shared_state_authority for bad must be a non-empty string"),
+        ],
+    )
+    def test_agent_file_blank_spawn_metadata_raises(
+        self,
+        tmp_path: Path,
+        field_name: str,
+        expected_error: str,
+    ) -> None:
+        f = tmp_path / "bad-metadata-blank.md"
+        f.write_text(f"---\nname: bad\n{field_name}: \"  \"\n---\nPrompt.", encoding="utf-8")
+
+        with pytest.raises(ValueError, match=expected_error):
+            _parse_agent_file(f, source="agents")
+
     def test_agent_file_empty_body(self, tmp_path: Path) -> None:
         f = tmp_path / "nobody.md"
         f.write_text("---\nname: nobody\n---\n", encoding="utf-8")
         agent = _parse_agent_file(f, source="agents")
-        assert agent.system_prompt == ""
+        assert agent.system_prompt.startswith("## Agent Requirements\n")
+        assert "Agent YAML rules. Use this YAML." in agent.system_prompt
+        assert "commit_authority:" in agent.system_prompt
+        assert skeptical_rigor_guardrails_section() in agent.system_prompt
+        assert agent.system_prompt.rstrip().endswith("disconfirming check still needed.")
 
     def test_agent_file_invalid_frontmatter_raises_with_path(self, tmp_path: Path) -> None:
         f = tmp_path / "broken.md"
@@ -279,10 +395,16 @@ class TestParseAgentFile:
         self, tmp_path: Path, frontmatter_line: str, expected_error: str
     ) -> None:
         f = tmp_path / "bad-agent.md"
-        f.write_text(
-            f"---\n{frontmatter_line}\n---\nPrompt.",
-            encoding="utf-8",
-        )
+        if frontmatter_line.startswith("name:"):
+            f.write_text(
+                f"---\n{frontmatter_line}\n---\nPrompt.",
+                encoding="utf-8",
+            )
+        else:
+            f.write_text(
+                f"---\nname: bad-agent\n{frontmatter_line}\n---\nPrompt.",
+                encoding="utf-8",
+            )
 
         with pytest.raises(ValueError, match=expected_error):
             _parse_agent_file(f, source="agents")
@@ -304,9 +426,50 @@ class TestParseCommandFile:
         assert cmd.description == "Debug command"
         assert cmd.argument_hint == "<error>"
         assert cmd.context_mode == "project-required"
-        assert cmd.requires == {"project": True}
+        assert cmd.project_reentry_capable is False
+        assert cmd.requires == {"files": ["GRD/ROADMAP.md"]}
         assert cmd.allowed_tools == ["file_read", "shell"]
-        assert cmd.content == "Command body."
+        assert cmd.content.startswith("## Command Requirements\n\n")
+        assert "Closed schema; no extra keys." in cmd.content
+        assert "Strict booleans only." in cmd.content
+        assert command_visibility_note() in cmd.content
+        assert "GRD/ROADMAP.md" in cmd.content
+        assert skeptical_rigor_guardrails_section() in cmd.content
+        assert cmd.content.endswith("Command body.")
+
+    def test_command_file_with_requires_and_review_contract_renders_requirements_first(
+        self, tmp_path: Path
+    ) -> None:
+        f = tmp_path / "review.md"
+        f.write_text(
+            "---\n"
+            "name: grd:review\n"
+            "description: Review command\n"
+            "argument-hint: <phase>\n"
+            "requires:\n"
+            "  files:\n"
+            "    - GRD/ROADMAP.md\n"
+            "review-contract:\n"
+            "  review_mode: review\n"
+            "  schema_version: 1\n"
+            "  required_outputs:\n"
+            "    - GRD/review/REPORT.md\n"
+            "  required_evidence:\n"
+            "    - phase artifacts\n"
+            "  preflight_checks:\n"
+            "    - project_state\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        cmd = _parse_command_file(f, source="commands")
+
+        assert cmd.content.startswith("## Command Requirements\n\n")
+        assert "Closed schema; no extra keys." in cmd.content
+        assert "Strict booleans only." in cmd.content
+        assert cmd.content.index("## Review Contract") > cmd.content.index("## Command Requirements")
+        assert cmd.content.endswith("Body.")
 
     def test_command_file_no_frontmatter(self, tmp_path: Path) -> None:
         f = tmp_path / "bare.md"
@@ -316,6 +479,7 @@ class TestParseCommandFile:
         assert cmd.description == ""
         assert cmd.argument_hint == ""
         assert cmd.context_mode == "project-required"
+        assert cmd.project_reentry_capable is False
         assert cmd.requires == {}
         assert cmd.allowed_tools == []
 
@@ -324,6 +488,27 @@ class TestParseCommandFile:
         f.write_text("---\nname: bad\nrequires: not-a-dict\n---\nBody.", encoding="utf-8")
 
         with pytest.raises(ValueError, match="requires for bad must be a mapping"):
+            _parse_command_file(f, source="commands")
+
+    def test_command_requires_files_rejects_non_string_members(self, tmp_path: Path) -> None:
+        f = tmp_path / "bad-requires-files-members.md"
+        f.write_text(
+            "---\nname: bad\nrequires:\n  files:\n    - GRD/ROADMAP.md\n    - true\n---\nBody.",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match="files for bad must contain only strings"):
+            _parse_command_file(f, source="commands")
+
+    @pytest.mark.parametrize("field_name", ["state", "recommended"])
+    def test_command_requires_rejects_unknown_keys(self, tmp_path: Path, field_name: str) -> None:
+        f = tmp_path / f"bad-requires-{field_name}.md"
+        f.write_text(
+            f"---\nname: bad\nrequires:\n  {field_name}: phase_planned\n---\nBody.",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match=rf"requires for bad only supports files; got {field_name}"):
             _parse_command_file(f, source="commands")
 
     def test_command_allowed_tools_non_list_raises(self, tmp_path: Path) -> None:
@@ -340,12 +525,70 @@ class TestParseCommandFile:
         with pytest.raises(ValueError, match="allowed-tools for bad must contain only strings"):
             _parse_command_file(f, source="commands")
 
+    def test_command_allowed_tools_list_rejects_blank_members(self, tmp_path: Path) -> None:
+        f = tmp_path / "bad-tools-members-blank.md"
+        f.write_text("---\nname: bad\nallowed-tools:\n  - file_read\n  - \"\"\n---\nBody.", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="allowed-tools for bad must not contain blank entries"):
+            _parse_command_file(f, source="commands")
+
     def test_command_unexpected_fields(self, tmp_path: Path) -> None:
         f = tmp_path / "extra.md"
         f.write_text("---\nname: extra\nversion: 99\nfoo: bar\n---\nBody.", encoding="utf-8")
+        with pytest.raises(ValueError, match=r"unknown frontmatter keys for extra: foo, version"):
+            _parse_command_file(f, source="commands")
+
+    def test_render_command_visibility_sections_rejects_unknown_frontmatter_keys(self) -> None:
+        with pytest.raises(ValueError, match=r"unknown frontmatter keys for grd:test: foo"):
+            render_command_visibility_sections_from_frontmatter(
+                "name: grd:test\nfoo: bar\n",
+                command_name="grd:test",
+            )
+
+    def test_render_command_visibility_sections_include_agent_metadata(self) -> None:
+        rendered = render_command_visibility_sections_from_frontmatter(
+            "name: grd:plan-phase\nagent: grd-planner\n",
+            command_name="grd:plan-phase",
+        )
+
+        assert "agent: grd-planner" in rendered
+        assert "context_mode: project-required" in rendered
+
+    def test_render_command_visibility_sections_comment_only_frontmatter_keeps_default_constraints(self) -> None:
+        rendered = render_command_visibility_sections_from_frontmatter(
+            "# comment only\n",
+            command_name="grd:test",
+        )
+
+        assert "## Command Requirements" in rendered
+        assert "context_mode: project-required" in rendered
+        assert "project_reentry_capable: false" in rendered
+
+    def test_command_agent_frontmatter_key_is_explicitly_allowed(self, tmp_path: Path) -> None:
+        f = tmp_path / "plan-phase.md"
+        f.write_text("---\nname: grd:plan-phase\nagent: grd-planner\n---\nBody.", encoding="utf-8")
+
         cmd = _parse_command_file(f, source="commands")
-        assert cmd.name == "extra"
-        assert cmd.content == "Body."
+
+        assert cmd.name == "grd:plan-phase"
+        assert cmd.agent == "grd-planner"
+        assert "agent: grd-planner" in cmd.content
+        assert cmd.content.endswith("Body.")
+
+    def test_command_agent_validation_uses_canonical_inventory_not_patched_agents_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        patched_agents_dir = tmp_path / "agents"
+        patched_agents_dir.mkdir()
+        monkeypatch.setattr(registry, "AGENTS_DIR", patched_agents_dir)
+        registry.invalidate_cache()
+
+        f = tmp_path / "plan-phase.md"
+        f.write_text("---\nname: grd:plan-phase\nagent: grd-planner\n---\nBody.", encoding="utf-8")
+
+        cmd = _parse_command_file(f, source="commands")
+
+        assert cmd.agent == "grd-planner"
 
     def test_command_parses_explicit_context_mode(self, tmp_path: Path) -> None:
         f = tmp_path / "help.md"
@@ -355,12 +598,191 @@ class TestParseCommandFile:
 
         assert cmd.context_mode == "global"
 
+    def test_command_parses_project_reentry_capable_for_project_required_commands(self, tmp_path: Path) -> None:
+        f = tmp_path / "resume-work.md"
+        f.write_text(
+            "---\n"
+            "name: grd:resume-work\n"
+            "context_mode: project-required\n"
+            "project_reentry_capable: true\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        cmd = _parse_command_file(f, source="commands")
+
+        assert cmd.context_mode == "project-required"
+        assert cmd.project_reentry_capable is True
+
+
+    def test_new_project_command_source_uses_narrow_contract_schema_without_include_markers(self) -> None:
+        command_text = NEW_PROJECT_COMMAND_PATH.read_text(encoding="utf-8")
+
+        assert "project-contract-schema.md" in command_text
+        assert "project-contract-grounding-linkage.md" in command_text
+        assert "staged_loading" not in command_text
+        assert "new-project-stage-manifest.json" not in command_text
+        assert "<!-- [included:" not in command_text
+        assert "<!-- [end included] -->" not in command_text
+
+    def test_new_project_command_source_stays_prompt_budget_thin(self) -> None:
+        command_text = NEW_PROJECT_COMMAND_PATH.read_text(encoding="utf-8")
+
+        assert "staged_loading" not in command_text
+        assert "new-project-stage-manifest.json" not in command_text
+        assert "conditional_authorities" not in command_text
+
+    def test_command_project_reentry_capable_rejects_non_boolean_values(self, tmp_path: Path) -> None:
+        f = tmp_path / "resume-work.md"
+        f.write_text(
+            "---\n"
+            "name: grd:resume-work\n"
+            "project_reentry_capable: maybe\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match="project_reentry_capable for grd:resume-work must be a boolean"):
+            _parse_command_file(f, source="commands")
+
+    @pytest.mark.parametrize("raw_value", ['"true"', '"false"', "1", "0", "yes", "no"])
+    def test_command_project_reentry_capable_rejects_legacy_boolean_aliases(
+        self,
+        tmp_path: Path,
+        raw_value: str,
+    ) -> None:
+        f = tmp_path / "resume-work.md"
+        f.write_text(
+            "---\n"
+            "name: grd:resume-work\n"
+            f"project_reentry_capable: {raw_value}\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match="project_reentry_capable for grd:resume-work must be a boolean"):
+            _parse_command_file(f, source="commands")
+
+    @pytest.mark.parametrize(("raw_value", "expected"), [("True", True), ("FALSE", False)])
+    def test_command_project_reentry_capable_accepts_yaml_boolean_case_variants(
+        self,
+        tmp_path: Path,
+        raw_value: str,
+        expected: bool,
+    ) -> None:
+        f = tmp_path / "resume-work.md"
+        f.write_text(
+            "---\n"
+            "name: grd:resume-work\n"
+            "context_mode: project-required\n"
+            f"project_reentry_capable: {raw_value}\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        cmd = _parse_command_file(f, source="commands")
+
+        assert cmd.project_reentry_capable is expected
+
+    @pytest.mark.parametrize("frontmatter_line", ["project_reentry_capable:", "project_reentry_capable: null"])
+    def test_command_project_reentry_capable_rejects_explicitly_empty_values(
+        self,
+        tmp_path: Path,
+        frontmatter_line: str,
+    ) -> None:
+        f = tmp_path / "resume-work.md"
+        f.write_text(
+            "---\n"
+            "name: grd:resume-work\n"
+            f"{frontmatter_line}\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match="project_reentry_capable for grd:resume-work must be a boolean"):
+            _parse_command_file(f, source="commands")
+
+    def test_command_project_reentry_capable_requires_project_required_context_mode(self, tmp_path: Path) -> None:
+        f = tmp_path / "start.md"
+        f.write_text(
+            "---\n"
+            "name: grd:start\n"
+            "context_mode: projectless\n"
+            "project_reentry_capable: true\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="project_reentry_capable for grd:start requires context_mode 'project-required'",
+        ):
+            _parse_command_file(f, source="commands")
+
     def test_command_invalid_context_mode_raises(self, tmp_path: Path) -> None:
         f = tmp_path / "help.md"
         f.write_text("---\nname: grd:help\ncontext_mode: somewhere\n---\nBody.", encoding="utf-8")
 
         with pytest.raises(ValueError, match="Invalid context_mode"):
             _parse_command_file(f, source="commands")
+
+    def test_command_blank_context_mode_raises(self, tmp_path: Path) -> None:
+        f = tmp_path / "help.md"
+        f.write_text("---\nname: grd:help\ncontext_mode: \"  \"\n---\nBody.", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="context_mode for grd:help must be a non-empty string"):
+            _parse_command_file(f, source="commands")
+
+    @pytest.mark.parametrize("frontmatter_line", ["context_mode:", "context_mode: null"])
+    def test_command_explicitly_empty_context_mode_raises(self, tmp_path: Path, frontmatter_line: str) -> None:
+        f = tmp_path / "help.md"
+        f.write_text(f"---\nname: grd:help\n{frontmatter_line}\n---\nBody.", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="context_mode for grd:help must be a non-empty string"):
+            _parse_command_file(f, source="commands")
+
+    @pytest.mark.parametrize("frontmatter_line", ["agent:", "agent: null"])
+    def test_command_explicitly_empty_agent_raises(self, tmp_path: Path, frontmatter_line: str) -> None:
+        f = tmp_path / "plan-phase.md"
+        f.write_text(f"---\nname: grd:plan-phase\n{frontmatter_line}\n---\nBody.", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="agent for grd:plan-phase must be a non-empty string"):
+            _parse_command_file(f, source="commands")
+
+    def test_command_unknown_agent_raises(self, tmp_path: Path) -> None:
+        f = tmp_path / "plan-phase.md"
+        f.write_text("---\nname: grd:plan-phase\nagent: grd-not-real\n---\nBody.", encoding="utf-8")
+
+        with pytest.raises(ValueError, match=r"Unknown agent 'grd-not-real' for grd:plan-phase"):
+            _parse_command_file(f, source="commands")
+
+    def test_command_builtin_agent_survives_monkeypatched_agent_root(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        f = tmp_path / "plan-phase.md"
+        f.write_text("---\nname: grd:plan-phase\nagent: grd-planner\n---\nBody.", encoding="utf-8")
+
+        patched_agents_dir = tmp_path / "agents"
+        patched_agents_dir.mkdir()
+        (patched_agents_dir / "grd-debugger.md").write_text(
+            "---\nname: grd-debugger\ndescription: Debugger\n---\nPrompt.",
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(registry, "AGENTS_DIR", patched_agents_dir)
+        registry.invalidate_cache()
+
+        cmd = _parse_command_file(f, source="commands")
+
+        assert cmd.agent == "grd-planner"
 
     def test_command_file_invalid_frontmatter_raises_with_path(self, tmp_path: Path) -> None:
         f = tmp_path / "help.md"
@@ -449,7 +871,6 @@ class TestParseCommandFile:
             "required_evidence",
             "blocking_conditions",
             "preflight_checks",
-            "stage_ids",
             "stage_artifacts",
         ],
     )
@@ -474,7 +895,6 @@ class TestParseCommandFile:
             "required_evidence",
             "blocking_conditions",
             "preflight_checks",
-            "stage_ids",
             "stage_artifacts",
         ],
     )
@@ -490,6 +910,25 @@ class TestParseCommandFile:
         with pytest.raises(ValueError, match=rf"Invalid review-contract in .*{field_name}-invalid-scalar\.md.*{field_name}"):
             _parse_command_file(f, source="commands")
 
+    def test_command_review_contract_list_fields_reject_singleton_string_scalars(self, tmp_path: Path) -> None:
+        f = _write_review_contract_command(
+            tmp_path,
+            "singleton-string-list-fields.md",
+            "  required_outputs: GRD/output.md\n"
+            "  preflight_checks:\n"
+            "    - manuscript\n"
+            "  conditional_requirements:\n"
+            "    - when: theorem-bearing claims are present\n"
+            "      required_outputs:\n"
+            "        - GRD/review/PROOF-REDTEAM{round_suffix}.md\n",
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"Invalid review-contract in .*singleton-string-list-fields\.md.*required_outputs must be a list of strings",
+        ):
+            _parse_command_file(f, source="commands")
+
     @pytest.mark.parametrize(
         "field_name",
         [
@@ -497,7 +936,6 @@ class TestParseCommandFile:
             "required_evidence",
             "blocking_conditions",
             "preflight_checks",
-            "stage_ids",
             "stage_artifacts",
         ],
     )
@@ -516,29 +954,199 @@ class TestParseCommandFile:
         ):
             _parse_command_file(f, source="commands")
 
-    def test_command_review_contract_bool_max_rounds_is_rejected(self, tmp_path: Path) -> None:
+    def test_command_review_contract_conditional_list_fields_reject_singleton_string_scalars(self, tmp_path: Path) -> None:
         f = _write_review_contract_command(
             tmp_path,
-            "review-rounds-bool.md",
-            "  max_review_rounds: true\n",
-        )
-
-        with pytest.raises(ValueError, match=r"Invalid review-contract in .*review-rounds-bool\.md.*max_review_rounds"):
-            _parse_command_file(f, source="commands")
-
-    @pytest.mark.parametrize("raw_value", ["7", "true"])
-    def test_command_review_contract_final_decision_output_requires_string(
-        self, tmp_path: Path, raw_value: str
-    ) -> None:
-        f = _write_review_contract_command(
-            tmp_path,
-            f"final-decision-output-{raw_value}.md",
-            f"  final_decision_output: {raw_value}\n",
+            "singleton-list-scalars.md",
+            "  required_outputs:\n"
+            "    - GRD/REFEREE-REPORT{round_suffix}.md\n"
+            "  preflight_checks:\n"
+            "    - manuscript\n"
+            "  conditional_requirements:\n"
+            "    - when: theorem-bearing claims are present\n"
+            "      required_outputs: GRD/review/PROOF-REDTEAM{round_suffix}.md\n",
         )
 
         with pytest.raises(
             ValueError,
-            match=rf"Invalid review-contract in .*final-decision-output-{raw_value}\.md.*final_decision_output",
+            match=(
+                r"Invalid review-contract in .*singleton-list-scalars\.md.*"
+                r"conditional_requirements\[0\]\.required_outputs must be a list of strings"
+            ),
+        ):
+            _parse_command_file(f, source="commands")
+
+    def test_command_review_contract_parses_conditional_requirements(self, tmp_path: Path) -> None:
+        f = _write_review_contract_command(
+            tmp_path,
+            "conditional-requirements.md",
+            "  conditional_requirements:\n"
+            "    - when: theorem-bearing claims are present\n"
+            "      required_outputs:\n"
+            "        - GRD/review/PROOF-REDTEAM{round_suffix}.md\n"
+            "      stage_artifacts:\n"
+            "        - GRD/review/PROOF-REDTEAM{round_suffix}.md\n",
+        )
+
+        cmd = _parse_command_file(f, source="commands")
+
+        assert cmd.review_contract is not None
+        assert len(cmd.review_contract.conditional_requirements) == 1
+        requirement = cmd.review_contract.conditional_requirements[0]
+        assert requirement.when == "theorem-bearing claims are present"
+        assert requirement.required_outputs == ["GRD/review/PROOF-REDTEAM{round_suffix}.md"]
+        assert requirement.required_evidence == []
+        assert requirement.blocking_conditions == []
+        assert requirement.stage_artifacts == ["GRD/review/PROOF-REDTEAM{round_suffix}.md"]
+
+    def test_command_review_contract_rejects_duplicate_conditional_requirement_when(
+        self, tmp_path: Path
+    ) -> None:
+        f = _write_review_contract_command(
+            tmp_path,
+            "duplicate-conditional-requirements.md",
+            "  conditional_requirements:\n"
+            "    - when: theorem-bearing claims are present\n"
+            "      required_outputs:\n"
+            "        - GRD/review/PROOF-REDTEAM{round_suffix}.md\n"
+            "    - when: theorem-bearing claims are present\n"
+            "      required_evidence:\n"
+            "        - duplicate activation clause\n",
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=(
+                r"Invalid review-contract in .*duplicate-conditional-requirements\.md.*"
+                r"conditional_requirements\[1\]\.when duplicates conditional_requirements\[0\]\.when: "
+                r"theorem-bearing claims are present"
+            ),
+        ):
+            _parse_command_file(f, source="commands")
+
+    def test_command_review_contract_conditional_requirements_reject_non_list(self, tmp_path: Path) -> None:
+        f = _write_review_contract_command(
+            tmp_path,
+            "conditional-requirements-non-list.md",
+            "  conditional_requirements: true\n",
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"Invalid review-contract in .*conditional-requirements-non-list\.md.*conditional_requirements",
+        ):
+            _parse_command_file(f, source="commands")
+
+    def test_command_review_contract_conditional_requirements_reject_non_mapping_items(self, tmp_path: Path) -> None:
+        f = _write_review_contract_command(
+            tmp_path,
+            "conditional-requirements-non-mapping-item.md",
+            "  conditional_requirements:\n"
+            "    - oops\n",
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"Invalid review-contract in .*conditional-requirements-non-mapping-item\.md.*conditional_requirements\[0\]",
+        ):
+            _parse_command_file(f, source="commands")
+
+    def test_command_review_contract_conditional_requirements_reject_unknown_nested_fields(self, tmp_path: Path) -> None:
+        f = _write_review_contract_command(
+            tmp_path,
+            "conditional-requirements-unknown-field.md",
+            "  conditional_requirements:\n"
+            "    - when: theorem-bearing claims are present\n"
+            "      legacy_note: stale\n",
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"Invalid review-contract in .*conditional-requirements-unknown-field\.md.*conditional_requirements\[0\].*legacy_note",
+        ):
+            _parse_command_file(f, source="commands")
+
+    def test_command_review_contract_conditional_requirements_reject_blank_when(self, tmp_path: Path) -> None:
+        f = _write_review_contract_command(
+            tmp_path,
+            "conditional-requirements-blank-when.md",
+            '  conditional_requirements:\n    - when: "   "\n',
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"Invalid review-contract in .*conditional-requirements-blank-when\.md.*conditional_requirements\[0\]\.when",
+        ):
+            _parse_command_file(f, source="commands")
+
+    def test_command_review_contract_conditional_requirements_reject_unsupported_when(self, tmp_path: Path) -> None:
+        f = _write_review_contract_command(
+            tmp_path,
+            "conditional-requirements-invalid-when.md",
+            "  conditional_requirements:\n"
+            "    - when: proof-bearing work is present\n"
+            "      required_outputs:\n"
+            "        - GRD/review/PROOF-REDTEAM{round_suffix}.md\n",
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"Invalid review-contract in .*conditional-requirements-invalid-when\.md.*conditional_requirements\[0\]\.when",
+        ):
+            _parse_command_file(f, source="commands")
+
+    def test_command_review_contract_conditional_requirements_reject_non_string_members(self, tmp_path: Path) -> None:
+        f = _write_review_contract_command(
+            tmp_path,
+            "conditional-requirements-non-string-member.md",
+            "  conditional_requirements:\n"
+            "    - when: theorem-bearing claims are present\n"
+            "      required_outputs:\n"
+            "        - GRD/review/PROOF-REDTEAM{round_suffix}.md\n"
+            "        - true\n",
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"Invalid review-contract in .*conditional-requirements-non-string-member\.md.*conditional_requirements\[0\]\.required_outputs",
+        ):
+            _parse_command_file(f, source="commands")
+
+    def test_command_review_contract_conditional_requirements_reject_empty_requirement(self, tmp_path: Path) -> None:
+        f = _write_review_contract_command(
+            tmp_path,
+            "conditional-requirements-empty.md",
+            "  conditional_requirements:\n"
+            "    - when: theorem-bearing claims are present\n",
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"Invalid review-contract in .*conditional-requirements-empty\.md.*conditional_requirements\[0\]",
+        ):
+            _parse_command_file(f, source="commands")
+
+    @pytest.mark.parametrize(
+        "field_name",
+        [
+            "stage_ids",
+            "final_decision_output",
+            "requires_fresh_context_per_stage",
+            "max_review_rounds",
+        ],
+    )
+    def test_command_review_contract_removed_dead_fields_raise_unknown_field_errors(
+        self, tmp_path: Path, field_name: str
+    ) -> None:
+        f = _write_review_contract_command(
+            tmp_path,
+            f"removed-{field_name}.md",
+            f"  {field_name}: legacy-value\n",
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=rf"Invalid review-contract in .*removed-{field_name}\.md.*Unknown review-contract field\(s\):",
         ):
             _parse_command_file(f, source="commands")
 
@@ -604,10 +1212,8 @@ class TestParseCommandFile:
         ):
             _parse_command_file(f, source="commands")
 
-    def test_command_review_contract_does_not_infer_required_state_from_requires_state(
-        self, tmp_path: Path
-    ) -> None:
-        f = tmp_path / "required-state-from-requires.md"
+    def test_command_review_contract_does_not_accept_dead_requires_state_metadata(self, tmp_path: Path) -> None:
+        f = tmp_path / "dead-requires-state.md"
         f.write_text(
             "---\n"
             "name: grd:required-state-from-requires\n"
@@ -621,10 +1227,8 @@ class TestParseCommandFile:
             encoding="utf-8",
         )
 
-        cmd = _parse_command_file(f, source="commands")
-
-        assert cmd.review_contract is not None
-        assert cmd.review_contract.required_state == ""
+        with pytest.raises(ValueError, match="requires for grd:dead-requires-state only supports files; got state"):
+            _parse_command_file(f, source="commands")
 
     def test_command_review_contract_requires_explicit_schema_version(self, tmp_path: Path) -> None:
         f = tmp_path / "missing-schema-version.md"
@@ -641,6 +1245,23 @@ class TestParseCommandFile:
         with pytest.raises(
             ValueError,
             match=r"Invalid review-contract in .*missing-schema-version\.md.*must set schema_version",
+        ):
+            _parse_command_file(f, source="commands")
+
+    def test_command_review_contract_rejects_explicit_null_block(self, tmp_path: Path) -> None:
+        f = tmp_path / "null-review-contract.md"
+        f.write_text(
+            "---\n"
+            "name: grd:null-review-contract\n"
+            "review-contract:\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"Invalid review-contract in .*null-review-contract\.md.*must set schema_version, review_mode",
         ):
             _parse_command_file(f, source="commands")
 
@@ -678,6 +1299,49 @@ class TestParseCommandFile:
         with pytest.raises(ValueError, match=r"Invalid review-contract in .*write-paper\.md.*approval_gate"):
             _parse_command_file(f, source="commands")
 
+    def test_command_review_contract_rejects_review_contract_frontmatter_alias(self, tmp_path: Path) -> None:
+        f = tmp_path / "write-paper.md"
+        f.write_text(
+            "---\n"
+            "name: grd:write-paper\n"
+            "review_contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: publication\n"
+            "  required_outputs:\n"
+            "    - GRD/output.md\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"Invalid review-contract in .*write-paper\.md.*must use the canonical frontmatter key 'review-contract'",
+        ):
+            _parse_command_file(f, source="commands")
+
+    def test_command_review_contract_rejects_duplicate_frontmatter_aliases(self, tmp_path: Path) -> None:
+        f = tmp_path / "write-paper.md"
+        f.write_text(
+            "---\n"
+            "name: grd:write-paper\n"
+            "review-contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: publication\n"
+            "review_contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: publication\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"Invalid review-contract in .*write-paper\.md.*must use the canonical frontmatter key 'review-contract'",
+        ):
+            _parse_command_file(f, source="commands")
+
 
 class TestEncodingEdgeCases:
     """Tests for files with encoding issues."""
@@ -699,6 +1363,7 @@ class TestEncodingEdgeCases:
         f.write_bytes(b"\xef\xbb\xbf---\nname: bom-test\n---\nBody.")
         agent = _parse_agent_file(f, source="agents")
         assert agent.name == "bom-test"
+        assert agent.system_prompt.startswith("## Agent Requirements\n")
         assert "Body." in agent.system_prompt
 
 
@@ -765,7 +1430,7 @@ class TestDiscovery:
         assert "grd-alias" in result
         assert "alias" not in result
 
-    def test_duplicate_agent_names_raise(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_agent_name_mismatch_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
         (agents_dir / "first.md").write_text("---\nname: grd-duplicate\n---\nFirst prompt.", encoding="utf-8")
@@ -776,6 +1441,77 @@ class TestDiscovery:
         with pytest.raises(ValueError, match="Duplicate agent name 'grd-duplicate'"):
             registry._discover_agents()
 
+    def test_debug_command_and_debugger_agent_remain_registry_discoverable(self) -> None:
+        registry.invalidate_cache()
+
+        debug_command = registry.get_command("grd:debug")
+        debug_skill = registry.get_skill("grd-debug")
+        debugger_agent = registry.get_agent("grd-debugger")
+        debugger_skill = registry.get_skill("grd-debugger")
+
+        assert debug_command.name == "grd:debug"
+        assert debug_command.agent is None
+        assert debug_command.context_mode == "project-required"
+        assert debug_command.project_reentry_capable is False
+        assert debug_command.allowed_tools == ["file_read", "shell", "task", "ask_user"]
+        assert "grd-debugger" in debug_command.content
+
+        assert debug_skill.source_kind == "command"
+        assert debugger_skill.source_kind == "agent"
+        assert debug_skill.name == "grd-debug"
+        assert debugger_skill.name == "grd-debugger"
+        assert debugger_agent.surface == "public"
+        assert debugger_agent.role_family == "worker"
+        assert "public writable production agent specialized for discrepancy investigation" in debugger_agent.system_prompt
+        assert {"grd-debug", "grd-debugger"}.issubset(registry.list_skills())
+
+    def test_consistency_checker_remains_registry_discoverable(self) -> None:
+        registry.invalidate_cache()
+
+        skill = registry.get_skill("grd-consistency-checker")
+        agent = registry.get_agent("grd-consistency-checker")
+
+        assert skill.name == "grd-consistency-checker"
+        assert skill.source_kind == "agent"
+        assert skill.category == "verification"
+        assert skill.path.endswith("grd-consistency-checker.md")
+        assert agent.surface == "internal"
+        assert agent.role_family == "verification"
+        assert agent.commit_authority == "orchestrator"
+        assert agent.artifact_write_authority == "scoped_write"
+        assert agent.shared_state_authority == "return_only"
+        assert agent.tools == ["file_read", "file_write", "shell", "search_files", "find_files"]
+        assert "grd-consistency-checker" in registry.list_skills()
+
+    def test_research_phase_vertical_remains_registry_discoverable(self) -> None:
+        registry.invalidate_cache()
+
+        research_command = registry.get_command("grd:research-phase")
+        research_skill = registry.get_skill("grd-research-phase")
+        phase_researcher_skill = registry.get_skill("grd-phase-researcher")
+
+        assert research_command.name == "grd:research-phase"
+        assert research_command.context_mode == "project-required"
+        assert research_skill.name == "grd-research-phase"
+        assert research_skill.category == "research"
+        assert phase_researcher_skill.name == "grd-phase-researcher"
+        assert phase_researcher_skill.category == "research"
+        assert {"grd-research-phase", "grd-phase-researcher"}.issubset(registry.list_skills())
+
+    def test_literature_review_vertical_remains_registry_discoverable(self) -> None:
+        registry.invalidate_cache()
+
+        literature_command = registry.get_command("grd:literature-review")
+        literature_skill = registry.get_skill("grd-literature-review")
+        reviewer_skill = registry.get_skill("grd-literature-reviewer")
+
+        assert literature_command.name == "grd:literature-review"
+        assert literature_command.context_mode == "project-aware"
+        assert literature_skill.name == "grd-literature-review"
+        assert literature_skill.category == "research"
+        assert reviewer_skill.name == "grd-literature-reviewer"
+        assert reviewer_skill.category == "research"
+        assert {"grd-literature-review", "grd-literature-reviewer"}.issubset(registry.list_skills())
 
 class TestSkillDiscovery:
     """Tests for canonical skills derived from primary commands and agents."""
@@ -822,6 +1558,224 @@ class TestSkillDiscovery:
 
         with pytest.raises(ValueError, match="Duplicate skill name 'grd-foo'"):
             registry._discover_skills(registry._discover_commands(), registry._discover_agents())
+
+
+class TestRegistryPromptIncludeInlining:
+    """Tests for registry-loaded content surfaces that inline shared includes."""
+
+    def _assert_lightweight_source_surface(self, skill: SkillDef, paths: tuple[str, ...]) -> None:
+        for path in paths:
+            lightweight = f"{{GRD_INSTALL_DIR}}/{path}"
+            eager = f"@{{GRD_INSTALL_DIR}}/{path}"
+            assert lightweight in skill.content
+            assert eager not in skill.content
+
+    def test_registry_projection_strips_generic_html_comments(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        commands_dir = tmp_path / "commands"
+        commands_dir.mkdir()
+        (commands_dir / "commented.md").write_text(
+            "---\nname: grd:commented\ndescription: Commented command\n---\n"
+            "Command body.\n"
+            "<!-- hidden command note -->\n"
+            "Inline marker prose keeps <!-- AI-drafted --> visible.\n"
+            "```markdown\n"
+            "<!-- AI-drafted -->\n"
+            "```\n"
+            "Visible tail.",
+            encoding="utf-8",
+        )
+
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        (agents_dir / "grd-commented.md").write_text(
+            "---\nname: grd-commented\ndescription: Commented agent\ntools: file_read\n---\n"
+            "Agent body.\n"
+            "<!-- hidden agent note -->\n"
+            "Inline marker prose keeps <!-- AI-drafted --> visible.\n"
+            "```markdown\n"
+            "<!-- AI-drafted -->\n"
+            "```\n"
+            "Visible tail.",
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
+        monkeypatch.setattr(registry, "AGENTS_DIR", agents_dir)
+        registry.invalidate_cache()
+
+        try:
+            command = registry.get_command("grd:commented")
+            agent = registry.get_agent("grd-commented")
+
+            assert "<!-- hidden command note -->" not in command.content
+            assert "<!-- hidden agent note -->" not in agent.system_prompt
+            assert "Inline marker prose keeps <!-- AI-drafted --> visible." in command.content
+            assert "Inline marker prose keeps <!-- AI-drafted --> visible." in agent.system_prompt
+            assert "```markdown\n<!-- AI-drafted -->\n```" in command.content
+            assert "```markdown\n<!-- AI-drafted -->\n```" in agent.system_prompt
+            assert "Visible tail." in command.content
+            assert "Visible tail." in agent.system_prompt
+        finally:
+            registry.invalidate_cache()
+
+    def test_verifier_system_prompt_keeps_verifier_routing_stub_and_schema_references_visible(self) -> None:
+        agent = registry.get_agent("grd-verifier")
+
+        assert "## Domain Routing Stub" in agent.system_prompt
+        assert "Load only the matching domain checklist pack(s);" in agent.system_prompt
+        assert "# Verification Report Template" in agent.system_prompt
+        assert "# Contract Results Schema" in agent.system_prompt
+        assert "# Canonical Schema Discipline" in agent.system_prompt
+        assert "<!-- [included:" not in agent.system_prompt
+
+    def test_project_researcher_system_prompt_keeps_one_shot_checkpoint_contract_visible(self) -> None:
+        agent = registry.get_skill("grd-project-researcher")
+
+        assert agent.source_kind == "agent"
+        assert agent.path.endswith("grd-project-researcher.md")
+        assert "Checkpoint after the initial survey with scope confirmation." in agent.content
+        assert "grd_return:" in agent.content
+        assert "status: completed | checkpoint | blocked | failed" in agent.content
+        assert "Do NOT run `grd commit`, `git commit`, or stage files." in agent.content
+        assert "wait for confirmation" not in agent.content
+        assert "pause here for approval" not in agent.content
+        assert "ask the user then continue" not in agent.content
+
+    def test_plan_checker_registry_surface_keeps_direct_plan_contract_schema_and_checkpoint_contract_visible(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from functools import lru_cache
+        from shutil import copytree
+
+        agents_dir = tmp_path / "agents"
+        copytree(Path(__file__).resolve().parents[1] / "src" / "grd" / "agents", agents_dir)
+        plan_checker_path = agents_dir / "grd-plan-checker.md"
+        plan_checker_text = plan_checker_path.read_text(encoding="utf-8")
+        plan_checker_text = plan_checker_text.replace(
+            "artifact_write_authority: return_only",
+            "artifact_write_authority: read_only",
+        )
+        plan_checker_path.write_text(
+            plan_checker_text.replace(
+                "tools: file_read, file_write, shell, find_files, search_files, web_search, web_fetch",
+                "tools: file_read, shell, find_files, search_files, web_search, web_fetch",
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(registry, "AGENTS_DIR", agents_dir)
+        monkeypatch.setattr(registry, "_builtin_agent_names", lru_cache(maxsize=1)(lambda: frozenset()))
+        registry.invalidate_cache()
+
+        skill = registry.get_skill("grd-plan-checker")
+
+        assert skill.source_kind == "agent"
+        assert skill.path.endswith("grd-plan-checker.md")
+        assert "{GRD_INSTALL_DIR}/templates/plan-contract-schema.md" in skill.content
+        assert "This is a one-shot handoff. If user input is needed, return `status: checkpoint`; do not wait inside the same run." in skill.content
+        assert "approved_plans: [list of plan IDs that passed]" in skill.content
+        assert "blocked_plans: [list of plan IDs needing revision or escalation]" in skill.content
+
+    def test_write_paper_command_surface_uses_staged_loading_for_contract_schemas(self) -> None:
+        command = registry.get_command("grd:write-paper")
+
+        assert command.staged_loading is not None
+        assert "Paper Config Schema" not in command.content
+        assert "Review Ledger Schema" not in command.content
+        assert "Referee Decision Schema" not in command.content
+        assert "templates/paper/paper-config-schema.md" in command.staged_loading.stage(
+            "outline_and_scaffold"
+        ).loaded_authorities
+        assert "references/publication/peer-review-panel.md" in command.staged_loading.stage(
+            "publication_review"
+        ).loaded_authorities
+        assert "templates/paper/review-ledger-schema.md" in command.staged_loading.stage(
+            "publication_review"
+        ).loaded_authorities
+        assert "templates/paper/referee-decision-schema.md" in command.staged_loading.stage(
+            "publication_review"
+        ).loaded_authorities
+
+    def test_publication_review_skills_keep_the_needed_contract_references_visible(self) -> None:
+        from grd.mcp.servers.skills_server import get_skill
+
+        referee = get_skill("grd-referee")
+        review_reader = get_skill("grd-review-reader")
+
+        assert "error" not in referee
+        assert any(path.endswith("peer-review-panel.md") for path in referee["contract_references"])
+        assert any(
+            entry["path"].endswith("publication-review-round-artifacts.md") for entry in referee["referenced_files"]
+        )
+        assert any(
+            entry["path"].endswith("publication-response-artifacts.md") for entry in referee["referenced_files"]
+        )
+        assert any(path.endswith("review-ledger-schema.md") for path in referee["schema_references"])
+        assert any(path.endswith("referee-decision-schema.md") for path in referee["schema_references"])
+
+        assert "error" not in review_reader
+        assert any(path.endswith("peer-review-panel.md") for path in review_reader["contract_references"])
+        assert review_reader["schema_references"] == []
+        assert any(path.endswith("review-ledger-schema.md") for path in review_reader["transitive_schema_references"])
+        assert any(path.endswith("referee-decision-schema.md") for path in review_reader["transitive_schema_references"])
+
+    def test_check_proof_registry_surface_preserves_lightweight_path_mentions(self) -> None:
+        skill = registry.get_skill("grd-check-proof")
+
+        assert skill.source_kind == "agent"
+        assert skill.path.endswith("grd-check-proof.md")
+        self._assert_lightweight_source_surface(
+            skill,
+            (
+                "references/shared/shared-protocols.md",
+                "references/orchestration/agent-infrastructure.md",
+                "references/physics-subfields.md",
+                "references/verification/core/verification-core.md",
+                "templates/proof-redteam-schema.md",
+                "references/verification/core/proof-redteam-protocol.md",
+                "references/publication/peer-review-panel.md",
+            ),
+        )
+        assert "Proof-redteam" in skill.content
+        assert "Manuscript review on demand only" in skill.content
+
+    def test_paper_writer_registry_surface_preserves_lightweight_path_mentions(self) -> None:
+        skill = registry.get_skill("grd-paper-writer")
+
+        assert skill.source_kind == "agent"
+        assert skill.path.endswith("grd-paper-writer.md")
+        self._assert_lightweight_source_surface(
+            skill,
+            (
+                "references/shared/shared-protocols.md",
+                "references/orchestration/agent-infrastructure.md",
+                "templates/notation-glossary.md",
+                "templates/latex-preamble.md",
+                "references/publication/publication-pipeline-modes.md",
+                "references/publication/paper-writer-cookbook.md",
+                "references/publication/figure-generation-templates.md",
+                "references/publication/publication-response-writer-handoff.md",
+                "templates/paper/author-response.md",
+                "templates/paper/referee-response.md",
+            ),
+        )
+
+    def test_bibliographer_registry_surface_preserves_lightweight_path_mentions(self) -> None:
+        skill = registry.get_skill("grd-bibliographer")
+
+        assert skill.source_kind == "agent"
+        assert skill.path.endswith("grd-bibliographer.md")
+        self._assert_lightweight_source_surface(
+            skill,
+            (
+                "references/shared/shared-protocols.md",
+                "references/physics-subfields.md",
+                "references/orchestration/agent-infrastructure.md",
+                "templates/notation-glossary.md",
+                "references/publication/bibtex-standards.md",
+                "references/publication/publication-pipeline-modes.md",
+                "references/publication/bibliography-advanced-search.md",
+            ),
+        )
 
 
 class TestNonMdFilesIgnored:
@@ -916,6 +1870,18 @@ class TestRegistryCache:
         assert cache._commands is None
         assert cache._skills is None
 
+    def test_invalidate_cache_clears_workflow_stage_manifest_cache(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[str] = []
+
+        monkeypatch.setattr(registry, "invalidate_workflow_stage_manifest_cache", lambda: calls.append("called"))
+
+        registry.invalidate_cache()
+
+        assert calls == ["called"]
+
     def test_invalidate_forces_re_discovery(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         agents_dir = tmp_path / "agents"
         agents_dir.mkdir()
@@ -981,6 +1947,17 @@ class TestPublicAPI:
         registry.invalidate_cache()
 
         assert registry.list_agents() == ["alpha", "bravo", "charlie"]
+
+    def test_canonical_agent_names_follows_monkeypatched_agent_root(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        agents_dir = tmp_path / "patched-agents"
+        agents_dir.mkdir()
+        (agents_dir / "zeta.md").write_text("---\nname: zeta\n---\nPrompt.", encoding="utf-8")
+        (agents_dir / "alpha.md").write_text("---\nname: alpha\n---\nPrompt.", encoding="utf-8")
+
+        monkeypatch.setattr(registry, "AGENTS_DIR", agents_dir)
+        registry.invalidate_cache()
+
+        assert registry.canonical_agent_names() == ("alpha", "zeta")
 
     def test_load_agents_from_dir_parses_arbitrary_agent_directory(self, tmp_path: Path) -> None:
         agents_dir = tmp_path / "agents"
@@ -1075,6 +2052,8 @@ class TestPublicAPI:
         assert agent.role_family == "coordination"
         assert agent.artifact_write_authority == "scoped_write"
         assert agent.shared_state_authority == "direct"
+        assert agent.system_prompt.startswith("## Agent Requirements\n")
+        assert agent.system_prompt.endswith("Test prompt.")
 
     def test_get_command_returns_correct_def(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
@@ -1090,6 +2069,424 @@ class TestPublicAPI:
         assert isinstance(cmd, CommandDef)
         assert cmd.name == "grd:test-cmd"
         assert cmd.description == "Tested"
+
+    def test_get_command_new_project_surfaces_staged_loading_manifest(self) -> None:
+        registry.invalidate_cache()
+
+        cmd = registry.get_command("grd:new-project")
+
+        assert cmd.staged_loading is not None
+        assert cmd.staged_loading.workflow_id == "new-project"
+        assert cmd.staged_loading.stage_ids() == ("scope_intake", "scope_approval", "post_scope")
+        assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/new-project.md",)
+        assert "project_contract_gate" in cmd.staged_loading.stages[0].required_init_fields
+        assert "project_contract_load_info" in cmd.staged_loading.stages[0].required_init_fields
+        assert cmd.staged_loading.stages[0].produced_state == (
+            "intake routing state",
+            "scoping-contract gate state",
+        )
+        assert cmd.staged_loading.stages[0].checkpoints == (
+            "detect existing workspace state",
+            "surface the first scoping question",
+            "preserve contract gate visibility without assuming approval-stage authority",
+        )
+        assert cmd.staged_loading.stages[1].produced_state == (
+            "approved project contract",
+            "approval-state persistence",
+        )
+        assert cmd.staged_loading.stages[1].checkpoints == (
+            "approval gate has passed",
+            "project contract is ready for persistence",
+        )
+        assert cmd.staged_loading.stages[2].produced_state == (
+            "project artifacts",
+            "workflow preferences",
+            "downstream stage handoff",
+        )
+        assert cmd.staged_loading.stages[2].checkpoints == (
+            "approval gate has passed",
+            "stage-aware deferred reads are now allowed",
+        )
+
+    def test_get_command_new_project_surfaces_spawn_contract_inventory(self) -> None:
+        registry.invalidate_cache()
+
+        command = registry.get_command("grd:new-project")
+        skill = registry.get_skill("grd-new-project")
+
+        assert command.spawn_contracts
+        assert skill.spawn_contracts == command.spawn_contracts
+        assert len(command.spawn_contracts) == 7
+        assert all("write_scope" in contract for contract in command.spawn_contracts)
+        assert all("expected_artifacts" in contract for contract in command.spawn_contracts)
+        assert {contract["shared_state_policy"] for contract in command.spawn_contracts} == {
+            "return_only",
+            "direct",
+        }
+        assert {contract["write_scope"]["mode"] for contract in command.spawn_contracts} == {"scoped_write"}
+
+    def test_get_command_new_milestone_surfaces_roadmapper_handoff(self) -> None:
+        registry.invalidate_cache()
+
+        command = registry.get_command("grd:new-milestone")
+
+        assert "grd-roadmapper spawned with staged continuation context" in command.content
+        assert "grd-roadmapper" in command.content
+        assert "roadmapper" in command.content
+
+    def test_get_command_new_milestone_surfaces_staged_loading_manifest(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        manifest_path = tmp_path / "new-milestone-stage-manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "workflow_id": "new-milestone",
+                    "stages": [
+                        {
+                            "id": "milestone_bootstrap",
+                            "order": 1,
+                            "purpose": "milestone lookup and routing",
+                            "mode_paths": ["workflows/new-milestone.md"],
+                            "required_init_fields": [],
+                            "loaded_authorities": ["workflows/new-milestone.md"],
+                            "conditional_authorities": [],
+                            "must_not_eager_load": ["references/research/questioning.md"],
+                            "allowed_tools": ["file_read", "task"],
+                            "writes_allowed": [],
+                            "produced_state": [],
+                            "next_stages": [],
+                            "checkpoints": [],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        original_resolve_manifest_path = registry.resolve_workflow_stage_manifest_path
+        monkeypatch.setattr(
+            registry,
+            "resolve_workflow_stage_manifest_path",
+            lambda workflow_id: manifest_path
+            if workflow_id == "new-milestone"
+            else original_resolve_manifest_path(workflow_id),
+        )
+        registry.invalidate_cache()
+
+        command = registry.get_command("grd:new-milestone")
+
+        assert command.staged_loading is not None
+        assert command.staged_loading.workflow_id == "new-milestone"
+        assert command.staged_loading.stage_ids() == ("milestone_bootstrap",)
+        assert command.staged_loading.stages[0].loaded_authorities == ("workflows/new-milestone.md",)
+        assert command.staged_loading.stages[0].must_not_eager_load == ("references/research/questioning.md",)
+        assert command.staged_loading.stages[0].writes_allowed == ()
+        assert command.staged_loading.stages[0].next_stages == ()
+
+    def test_research_synthesizer_surface_keeps_canonical_summary_return_contract_visible(self) -> None:
+        registry.invalidate_cache()
+
+        synthesizer = registry.get_skill("grd-research-synthesizer")
+        new_project = registry.get_skill("grd-new-project")
+        new_milestone = registry.get_skill("grd-new-milestone")
+        new_project_command = registry.get_command("grd:new-project")
+        new_milestone_command = registry.get_command("grd:new-milestone")
+
+        assert synthesizer.source_kind == "agent"
+        assert synthesizer.path.endswith("grd-research-synthesizer.md")
+        assert "This agent writes only `GRD/literature/SUMMARY.md`;" in synthesizer.content
+        assert "files_written` must list only files actually written in this run." in synthesizer.content
+        assert "Use only status names: `completed` | `checkpoint` | `blocked` | `failed`." in synthesizer.content
+        assert "grd_return:" in synthesizer.content
+
+        assert new_project.spawn_contracts == new_project_command.spawn_contracts
+        assert new_milestone.spawn_contracts == new_milestone_command.spawn_contracts
+        assert RESEARCH_SYNTHESIZER_SUMMARY_CONTRACT in new_project.spawn_contracts
+        assert RESEARCH_SYNTHESIZER_SUMMARY_CONTRACT in new_milestone.spawn_contracts
+        assert new_project.spawn_contracts[4] == RESEARCH_SYNTHESIZER_SUMMARY_CONTRACT
+        assert new_milestone.spawn_contracts[1] == RESEARCH_SYNTHESIZER_SUMMARY_CONTRACT
+
+    def test_get_command_plan_phase_surfaces_staged_loading_manifest(self) -> None:
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as tmp:
+            commands_dir = Path(tmp) / "commands"
+            commands_dir.mkdir()
+            (commands_dir / "plan-phase.md").write_text(
+                "---\n"
+                "name: grd:plan-phase\n"
+                "description: Plan phase\n"
+                "allowed-tools:\n"
+                "  - file_read\n"
+                "---\n"
+                "Body.",
+                encoding="utf-8",
+            )
+
+            manifest_path = Path(tmp) / "plan-phase-stage-manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "workflow_id": "plan-phase",
+                        "stages": [
+                            {
+                                "id": "phase_bootstrap",
+                                "order": 1,
+                                "purpose": "phase lookup and routing",
+                                "mode_paths": ["workflows/plan-phase.md"],
+                                "required_init_fields": [],
+                                "loaded_authorities": ["workflows/plan-phase.md"],
+                                "conditional_authorities": [],
+                                "must_not_eager_load": ["references/ui/ui-brand.md"],
+                                "allowed_tools": ["file_read"],
+                                "writes_allowed": [],
+                                "produced_state": [],
+                                "next_stages": ["research_routing"],
+                                "checkpoints": [],
+                            },
+                            {
+                                "id": "planner_authoring",
+                                "order": 2,
+                                "purpose": "planner handoff",
+                                "mode_paths": ["workflows/plan-phase.md"],
+                                "required_init_fields": ["researcher_model"],
+                                "loaded_authorities": [
+                                    "workflows/plan-phase.md",
+                                    "templates/planner-subagent-prompt.md",
+                                ],
+                                "conditional_authorities": [],
+                                "must_not_eager_load": ["references/ui/ui-brand.md"],
+                                "allowed_tools": ["file_read"],
+                                "writes_allowed": ["GRD/phases"],
+                                "produced_state": [],
+                                "next_stages": [],
+                                "checkpoints": [],
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            original_resolve_manifest_path = registry.resolve_workflow_stage_manifest_path
+            monkeypatch = pytest.MonkeyPatch()
+            monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
+            monkeypatch.setattr(
+                registry,
+                "resolve_workflow_stage_manifest_path",
+                lambda workflow_id: manifest_path if workflow_id == "plan-phase" else original_resolve_manifest_path(workflow_id),
+            )
+            try:
+                registry.invalidate_cache()
+                cmd = registry.get_command("plan-phase")
+            finally:
+                monkeypatch.undo()
+                registry.invalidate_cache()
+
+            assert cmd.staged_loading is not None
+            assert cmd.staged_loading.workflow_id == "plan-phase"
+            assert cmd.staged_loading.stage_ids() == ("phase_bootstrap", "planner_authoring")
+            assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/plan-phase.md",)
+            assert "templates/planner-subagent-prompt.md" in cmd.staged_loading.stages[1].loaded_authorities
+
+    def test_get_command_verify_work_surfaces_staged_loading_manifest(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        manifest_path = repo_root / "src" / "grd" / "specs" / "workflows" / "verify-work-stage-manifest.json"
+        original_resolve_manifest_path = registry.resolve_workflow_stage_manifest_path
+        monkeypatch.setattr(
+            registry,
+            "resolve_workflow_stage_manifest_path",
+            lambda workflow_id: manifest_path
+            if workflow_id == "verify-work"
+            else original_resolve_manifest_path(workflow_id),
+        )
+        registry.invalidate_cache()
+
+        cmd = registry.get_command("verify-work")
+
+        assert cmd.staged_loading is not None
+        assert cmd.staged_loading.workflow_id == "verify-work"
+        assert cmd.staged_loading.stage_ids() == (
+            "session_router",
+            "phase_bootstrap",
+            "inventory_build",
+            "interactive_validation",
+            "gap_repair",
+        )
+        assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/verify-work.md",)
+        assert cmd.staged_loading.stages[2].loaded_authorities == (
+            "workflows/verify-work.md",
+            "references/verification/meta/verification-independence.md",
+        )
+        assert cmd.staged_loading.stages[2].next_stages == ("interactive_validation",)
+        assert cmd.staged_loading.stages[2].checkpoints == (
+            "verifier delegation completed",
+            "handoff remains fail-closed",
+            "anchor obligations explicit",
+        )
+        assert cmd.staged_loading.stages[3].allowed_tools == (
+            "ask_user",
+            "file_read",
+            "file_edit",
+            "file_write",
+            "find_files",
+            "search_files",
+            "shell",
+            "task",
+        )
+        assert cmd.staged_loading.stages[3].loaded_authorities == (
+            "workflows/verify-work.md",
+            "templates/research-verification.md",
+            "templates/verification-report.md",
+            "templates/contract-results-schema.md",
+            "references/shared/canonical-schema-discipline.md",
+        )
+        assert cmd.staged_loading.stages[3].writes_allowed == ("GRD/phases/XX-name/XX-VERIFICATION.md",)
+        assert cmd.staged_loading.stages[3].next_stages == ("gap_repair",)
+        assert cmd.staged_loading.stages[3].checkpoints == (
+            "verification file can be written",
+            "writer-stage schema is visible",
+            "check results remain contract-backed",
+        )
+        assert cmd.staged_loading.stages[4].loaded_authorities == (
+            "workflows/verify-work.md",
+            "templates/research-verification.md",
+            "templates/verification-report.md",
+            "templates/contract-results-schema.md",
+            "references/shared/canonical-schema-discipline.md",
+            "references/protocols/error-propagation-protocol.md",
+        )
+        assert cmd.staged_loading.stages[4].writes_allowed == ("GRD/phases/XX-name/XX-VERIFICATION.md",)
+        assert cmd.staged_loading.stages[4].next_stages == ()
+        assert cmd.staged_loading.stages[4].checkpoints == (
+            "gaps are diagnosed",
+            "repair plans are verified",
+            "verification closeout is ready",
+        )
+
+    def test_get_command_execute_phase_surfaces_staged_loading_manifest(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        commands_dir = tmp_path / "commands"
+        commands_dir.mkdir()
+        (commands_dir / "execute-phase.md").write_text(
+            "---\n"
+            "name: grd:execute-phase\n"
+            "description: Execute phase\n"
+            "allowed-tools:\n"
+            "  - file_read\n"
+            "---\n"
+            "Body.",
+            encoding="utf-8",
+        )
+
+        manifest_path = tmp_path / "execute-phase-stage-manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "workflow_id": "execute-phase",
+                    "stages": [
+                        {
+                            "id": "phase_bootstrap",
+                            "order": 1,
+                            "purpose": "phase lookup and routing",
+                            "mode_paths": ["workflows/execute-phase.md"],
+                            "required_init_fields": [],
+                            "loaded_authorities": ["workflows/execute-phase.md"],
+                            "conditional_authorities": [],
+                            "must_not_eager_load": ["references/ui/ui-brand.md"],
+                            "allowed_tools": ["file_read"],
+                            "writes_allowed": [],
+                            "produced_state": [],
+                            "next_stages": [],
+                            "checkpoints": [],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        original_resolve_manifest_path = registry.resolve_workflow_stage_manifest_path
+        monkeypatch.setattr(registry, "COMMANDS_DIR", commands_dir)
+        monkeypatch.setattr(
+            registry,
+            "resolve_workflow_stage_manifest_path",
+            lambda workflow_id: manifest_path if workflow_id == "execute-phase" else original_resolve_manifest_path(workflow_id),
+        )
+        registry.invalidate_cache()
+
+        cmd = registry.get_command("execute-phase")
+
+        assert cmd.staged_loading is not None
+        assert cmd.staged_loading.workflow_id == "execute-phase"
+        assert cmd.staged_loading.stage_ids() == ("phase_bootstrap",)
+        assert cmd.staged_loading.stages[0].loaded_authorities == ("workflows/execute-phase.md",)
+
+    def test_get_command_research_phase_surfaces_staged_loading_manifest(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        manifest_path = repo_root / "src" / "grd" / "specs" / "workflows" / "research-phase-stage-manifest.json"
+        original_resolve_manifest_path = registry.resolve_workflow_stage_manifest_path
+        monkeypatch.setattr(
+            registry,
+            "resolve_workflow_stage_manifest_path",
+            lambda workflow_id: manifest_path
+            if workflow_id == "research-phase"
+            else original_resolve_manifest_path(workflow_id),
+        )
+        registry.invalidate_cache()
+
+        cmd = registry.get_command("research-phase")
+
+        assert cmd.staged_loading is not None
+        assert cmd.staged_loading.workflow_id == "research-phase"
+        assert cmd.staged_loading.stage_ids() == ("phase_bootstrap", "research_handoff")
+        assert cmd.staged_loading.stages[0].loaded_authorities == (
+            "workflows/research-phase.md",
+            "references/orchestration/model-profile-resolution.md",
+        )
+        assert "references/orchestration/runtime-delegation-note.md" in cmd.staged_loading.stages[0].must_not_eager_load
+        assert cmd.staged_loading.stages[1].loaded_authorities == (
+            "workflows/research-phase.md",
+            "references/orchestration/model-profile-resolution.md",
+            "references/orchestration/runtime-delegation-note.md",
+        )
+        assert cmd.staged_loading.stages[1].writes_allowed == ("GRD/phases/XX-name/XX-RESEARCH.md",)
+        assert "reference_artifacts_content" in cmd.staged_loading.stages[1].required_init_fields
+
+    def test_get_agent_phase_researcher_surfaces_one_shot_handoff_contract(self) -> None:
+        agent = registry.get_agent("grd-phase-researcher")
+
+        assert agent.name == "grd-phase-researcher"
+        assert "## Active Anchor References" in agent.system_prompt
+        assert "## Don't Re-Derive" in agent.system_prompt
+        assert "## RESEARCH COMPLETE" in agent.system_prompt
+        assert "## RESEARCH BLOCKED" in agent.system_prompt
+        assert "grd_return:" in agent.system_prompt
+        assert "status: completed | checkpoint | blocked | failed" in agent.system_prompt
+        assert "RESEARCH.md" in agent.system_prompt
+
+    def test_registry_cache_invalidation_clears_new_project_stage_manifest(self) -> None:
+        registry.invalidate_cache()
+        first = registry.get_command("grd:new-project").staged_loading
+        assert first is not None
+
+        registry.invalidate_cache()
+        second = registry.get_command("grd:new-project").staged_loading
+        assert second is not None
+
+        assert first is not second
 
     def test_get_command_accepts_public_command_label(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
@@ -1136,7 +2533,8 @@ class TestPublicAPI:
         assert skill.name == "grd-execute-phase"
         assert skill.registry_name == "execute-phase"
         assert skill.source_kind == "command"
-        assert skill.content == "Execute body."
+        assert skill.content.startswith("## Command Requirements\n")
+        assert skill.content.endswith("Execute body.")
 
     def test_get_skill_accepts_registry_name(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         commands_dir = tmp_path / "commands"
@@ -1207,6 +2605,20 @@ class TestPublicAPI:
             "ask_user",
         ]
 
+    def test_real_recovery_commands_expose_project_reentry_metadata(self) -> None:
+        registry.invalidate_cache()
+
+        progress = registry.get_command("progress")
+        resume_work = registry.get_command("resume-work")
+        quick = registry.get_command("quick")
+
+        assert progress.context_mode == "project-required"
+        assert progress.project_reentry_capable is True
+        assert resume_work.context_mode == "project-required"
+        assert resume_work.project_reentry_capable is True
+        assert quick.context_mode == "project-required"
+        assert quick.project_reentry_capable is False
+
     def test_real_slides_skill_uses_output_category(self) -> None:
         registry.invalidate_cache()
 
@@ -1228,7 +2640,6 @@ class TestPublicAPI:
         registry.invalidate_cache()
 
         assert registry.list_agents() == ["new"]
-
 
 class TestDataclasses:
     """Tests for AgentDef, CommandDef, and SkillDef dataclass properties."""
@@ -1290,6 +2701,45 @@ class TestDataclasses:
         )
         with pytest.raises((AttributeError, TypeError)):
             cmd.new_attr = "nope"  # type: ignore[misc]
+
+    def test_command_def_accepts_staged_loading_sidecar(self) -> None:
+        from grd.core.workflow_staging import WorkflowStage
+
+        staged_loading = WorkflowStageManifest(
+            schema_version=1,
+            workflow_id="new-project",
+            stages=(
+                WorkflowStage(
+                    id="scope_intake",
+                    order=1,
+                    purpose="intake",
+                    mode_paths=("workflows/new-project.md",),
+                    required_init_fields=(),
+                    loaded_authorities=("workflows/new-project.md",),
+                    conditional_authorities=(),
+                    must_not_eager_load=(),
+                    allowed_tools=(),
+                    writes_allowed=(),
+                    produced_state=(),
+                    next_stages=(),
+                    checkpoints=(),
+                ),
+            ),
+        )
+        cmd = CommandDef(
+            name="c",
+            description="d",
+            argument_hint="",
+            context_mode="project-required",
+            requires={},
+            allowed_tools=[],
+            content="",
+            path="/p",
+            source="commands",
+            staged_loading=staged_loading,
+        )
+
+        assert cmd.staged_loading is staged_loading
 
     def test_skill_def_frozen(self) -> None:
         skill = SkillDef(
@@ -1361,3 +2811,28 @@ class TestSkillCategoryMap:
         from grd.registry import _infer_skill_category
 
         assert _infer_skill_category("grd-peer-review") == "paper"
+
+
+def test_executor_skill_defers_completion_only_materials_until_summary_creation() -> None:
+    skill = registry.get_skill("grd-executor")
+    bootstrap, _, _ = skill.content.partition("<summary_creation>")
+
+    assert skill.name == "grd-executor"
+    assert skill.source_kind == "agent"
+    assert "templates/summary.md" not in bootstrap
+    assert "templates/calculation-log.md" not in bootstrap
+    assert "Order-of-Limits Awareness" not in bootstrap
+
+
+def test_planner_skill_defers_late_planning_materials_into_on_demand_references() -> None:
+    skill = registry.get_skill("grd-planner")
+    bootstrap, separator, _ = skill.content.partition("On-demand references:")
+
+    assert skill.name == "grd-planner"
+    assert skill.source_kind == "agent"
+    assert separator == "On-demand references:"
+    assert "Phase Plan Prompt" in bootstrap
+    assert "PLAN Contract Schema" in bootstrap
+    assert "Read config.json for planning behavior settings." not in bootstrap
+    assert "## Summary Template" not in bootstrap
+    assert "Order-of-Limits Awareness" not in bootstrap

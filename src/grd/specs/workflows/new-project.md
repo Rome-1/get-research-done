@@ -115,6 +115,7 @@ Wait for response. From the single response, extract:
 #### M1.5. Synthesize And Approve The Scoping Contract
 
 Build a canonical scoping contract from the extracted input.
+Before you ask for approval, keep the contract as a literal JSON object for the `project_contract` subsection of `templates/project-contract-schema.md`, and use that schema as the canonical source of truth for the object rules. Do not restate the full contract rules here; keep only the approval-critical reminders below.
 
 **Blocking fields that must be present before approval:**
 
@@ -126,43 +127,39 @@ Build a canonical scoping contract from the extracted input.
 **Fields to capture even if still uncertain:**
 
 - In-scope and out-of-scope boundaries
-- Must-read references, benchmarks, or prior outputs
-- User-stated observables, deliverables, decisive plots, or artifact expectations
+- Must-read references or prior outputs
+- User-stated observables, deliverables, or artifact expectations
 - User-stated stop conditions, rethink triggers, or "come back to me before continuing" guidance
-- Initial investigation chunk or decomposition sketch if the user already knows it
 - Weakest anchor
 - What would look like progress but should not count as success
 - What result would make the current framing look wrong or incomplete
 - Unresolved questions / context gaps
 
-**Preservation rule:** If the user names a specific observable, figure, dataset, derivation, paper, benchmark, notebook, prior run, or stop condition, keep that wording recognizable in the contract. Do not generalize it away into a vague proxy.
-If the user does not know the anchor yet, preserve that explicitly in `scope.unresolved_questions`, `context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors` rather than inventing a paper, benchmark, or baseline.
-Prefer explicit missing-anchor wording such as `Which reference should serve as the decisive benchmark anchor?`, `Benchmark reference not yet selected`, `need grounding before the decisive anchor is chosen`, `decisive target not yet chosen`, or `baseline comparison is TBD`.
+**Preservation rule:** Keep named observables, figures, datasets, derivations, papers, benchmarks, notebooks, prior runs, and stop conditions recognizable in the contract; if the anchor is unknown, record that explicitly instead of inventing a paper, benchmark, or baseline.
+Prefer explicit missing-anchor wording such as `Which reference should serve as the decisive benchmark anchor?`, `Benchmark reference not yet selected`, or `decisive target not yet chosen`.
 Do not force a phase list just to make the scoping contract look complete. If decomposition is still unclear, record that uncertainty and let `ROADMAP.md` start with a single coarse phase or first grounded investigation chunk.
 If the init JSON already contains `project_contract`, `project_contract_load_info`, or `project_contract_validation`, preserve that state in the approval gate and continuation decision. Do not collapse a visible-but-blocked contract into a blank slate when deciding whether this is a fresh project or a continuation.
 
 If a blocking field is missing, ask exactly one repair prompt that targets only the missing field. Do not silently continue with placeholders.
+If no must-read references are confirmed yet, record that explicitly in the contract rather than inventing one.
+If the user does not know the anchor yet, preserve that explicitly in `scope.unresolved_questions`, `context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors` rather than inventing a paper, benchmark, or baseline. Accepted shorthand like `need grounding` or `target not yet chosen` is fine when it clearly refers to the missing decisive anchor.
+If the user supplied explicit observables, deliverables, prior outputs, or stop conditions, preserve them in the contract using wording the user would still recognize. Do not paraphrase them into generic "benchmark" or "artifact" language unless the user asked you to broaden them.
+For observables, preserve any user-named decisive quantity, signal, or behavior, especially the first smoking-gun check they would trust over softer proxies or limiting cases.
+If the user named a prior output or review checkpoint that must ground approval or be carried forward, put it in `context_intake.must_include_prior_outputs`. Use `context_intake.crucial_inputs` for user-stated observables, stop conditions, review requests, or constraints that must stay visible but do not themselves replace approved-mode grounding.
+Do not approve a scoping contract that strips decisive outputs, anchors, prior outputs, or review/stop triggers down to generic placeholders. The approved contract must preserve the user guidance that downstream planning needs.
+If the only checks captured so far are limiting cases, sanity checks, or qualitative expectations, treat the contract as still underspecified unless the user explicitly states that these are the decisive standard.
+Missing-anchor notes preserve uncertainty, but they do not satisfy approval on their own. Do not offer approval until at least one concrete anchor, reference, prior-output constraint, or baseline is present.
+Before you show the approval gate, build the raw contract as a literal JSON object for the `project_contract` subsection of `templates/project-contract-schema.md`:
 
-Before you show the approval gate, build the raw contract as a literal JSON object that follows `templates/state-json-schema.md` exactly:
+- author only the JSON object that will be stored in `project_contract`, not the surrounding `state.json` envelope
+- follow the `project_contract` object rules in `templates/project-contract-schema.md` exactly
+- do not paraphrase the schema here; reuse its exact keys, enum values, list/object shapes, ID-linkage rules, and proof-bearing claim requirements
+- do not invent near-miss enum values, extra keys, or scalar shortcuts for list fields
+- fix them to the schema before approval
+- `context_intake`, `approach_policy`, and `uncertainty_markers` must each stay as objects, not strings or lists.
+- `schema_version` must be the integer `1`, `references[].must_surface` must stay a boolean `true` or `false`, and `context_intake`, `uncertainty_markers`, and `references[]` must stay visible in the approval gate so the contract still reflects the real inputs
 
-- `project_contract` is a JSON object, not prose
-- `observables`, `claims`, `deliverables`, `acceptance_tests`, `references`, `forbidden_proxies`, and `links` are arrays of objects, not strings
-- every object in those arrays must declare a stable `id`
-- `context_intake.must_read_refs` must contain only `references[].id` values
-- `claims[].observables`, `claims[].deliverables`, `claims[].acceptance_tests`, and `claims[].references` must point only to declared IDs
-- `acceptance_tests[].subject`, `references[].applies_to`, and `forbidden_proxies[].subject` must point to a claim ID or deliverable ID, never an observable label or free text
-- `acceptance_tests[].evidence_required`, `links[].source`, and `links[].target` may only point to declared claim, deliverable, acceptance-test, or reference IDs
-- for enum fields, use only the exact schema vocabulary:
-  - `observables[].kind`: `scalar | curve | map | classification | proof_obligation | other`
-  - `deliverables[].kind`: `figure | table | dataset | data | derivation | code | note | report | other`
-  - `acceptance_tests[].kind`: `existence | schema | benchmark | consistency | cross_method | limiting_case | symmetry | dimensional_analysis | convergence | oracle | proxy | reproducibility | human_review | other`
-  - `acceptance_tests[].automation`: `automated | hybrid | human`
-  - `references[].kind`: `paper | dataset | prior_artifact | spec | user_anchor | other`
-  - `references[].role`: `definition | benchmark | method | must_consider | background | other`
-  - `links[].relation`: `supports | computes | visualizes | benchmarks | depends_on | evaluated_by | other`
-  - `references[].carry_forward_to[]` is free-text workflow scope such as `planning`, `execution`, `verification`, or `writing`; it is not an enum and must not be reused for IDs or relation names
-- do **not** invent near-miss enum values such as `anchor`, `manual`, `content-check`, `benchmark-record`, or `anchors`; rewrite them to the exact schema term before approval
-- if the user chooses "Review raw contract", show the exact JSON object that will be validated and persisted
+@{GRD_INSTALL_DIR}/references/shared/canonical-schema-discipline.md
 
 Then present a concise scoping summary and require explicit approval:
 
@@ -255,25 +252,43 @@ Fill in what was extracted. For sections without enough information, use sensibl
 
 - [Unresolved question or context gap]
 
-## Physics Subfield
+## Research Context
 
-[Inferred from input, e.g., "Condensed matter — phase transitions"]
+### Physical System
 
-## Mathematical Framework
+[Inferred from input]
+
+### Theoretical Framework
 
 [Inferred from input, or "To be determined during Phase 1"]
 
-## Notation Conventions
+### Key Parameters and Scales
 
-To be established during initial phases.
+| Parameter | Symbol | Regime | Notes |
+| --------- | ------ | ------ | ----- |
+| [param 1] | [sym]  | [range] | [notes] |
+
+### Known Results
+
+- [Known prior result, benchmark, or "To be filled after survey"]
+
+### What Is New
+
+[What this project is trying to establish]
+
+### Computational Environment
+
+[Extracted from input, or "To be determined"]
+
+## Notation and Conventions
+
+See `GRD/CONVENTIONS.md`. Add `GRD/NOTATION_GLOSSARY.md` later only if the project needs a dedicated symbol glossary.
 
 ## Unit System
 
-[Inferred from input, or "Natural units (hbar = c = 1)"]
+[Inferred from input, or "To be determined from conventions setup"]
 
-## Computational Tools
-
-[Extracted from input, or "To be determined"]
+If the project may rely on Wolfram capability, distinguish a local Mathematica / Wolfram Language install from the shared optional Wolfram integration config. Add `--live-executable-probes` to `grd doctor` if you also want cheap local executable probes such as `pdflatex --version` or `wolframscript -version`, but that stays separate from the shared path enabled with `grd integrations enable wolfram`, and it is still separate from `grd validate plan-preflight <PLAN.md>` and from local install checks.
 
 ## Requirements
 
@@ -305,7 +320,7 @@ To be established during initial phases.
 
 | Decision                                    | Rationale              | Outcome   |
 | ------------------------------------------- | ---------------------- | --------- |
-| Minimal initialization — defer deep scoping | Fast project bootstrap | — Pending |
+| Minimal initialization — defer deep scoping | Fast staged initialization | — Pending |
 
 ---
 
@@ -353,7 +368,7 @@ For each phase, create one or more requirements using the standard format:
 
 Create `.grd/ROADMAP.md` directly from the phase descriptions or inferred work chunks (no roadmapper agent).
 
-Use the coarsest decomposition the approved contract actually supports. If the input only supports one grounded stage so far, create a one-phase roadmap and carry later decomposition as an open question instead of inventing filler phases.
+Use the coarsest decomposition the approved contract actually supports. If the input only supports one grounded stage so far, keep the roadmap coarse and carry later decomposition as an open question instead of inventing filler phases.
 
 Use the standard roadmap template structure:
 
@@ -571,7 +586,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `project_exists`, `has_research_map`, `planning_exists`, `has_research_files`, `has_project_manifest`, `has_existing_project`, `needs_research_map`, `has_git`, `project_contract`, `project_contract_load_info`, `project_contract_validation`.
+Parse JSON for: `researcher_model`, `synthesizer_model`, `commit_docs`, `autonomy`, `research_mode`, `project_exists`, `has_research_map`, `planning_exists`, `has_research_files`, `has_project_manifest`, `needs_research_map`, `has_git`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`.
 
 **Mode-aware behavior:**
 - `autonomy=supervised`: Pause for user confirmation after each major step (questioning, scoping contract, research, roadmap). Show summaries and wait for approval before proceeding.
@@ -580,6 +595,7 @@ Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `co
 - `--auto` changes how intake happens, not who owns later review gates. If `autonomy=supervised`, keep the roadmap approval checkpoint even in auto mode.
 - `research_mode=explore`: Expand literature survey (spawn 5+ researchers), broader questioning, include speculative research directions in roadmap.
 - `research_mode=exploit`: Focused literature survey (2-3 researchers), targeted questioning, lean roadmap with minimal exploratory phases.
+- `research_mode=balanced` (default): Use the standard literature-survey depth and keep the default anchor and contract coverage unless scoping or evidence calls for broader or narrower review.
 - `research_mode=adaptive`: Start broad enough to compare viable approaches while scoping the project. Narrow the roadmap only after anchors or decisive evidence make one method family clearly preferable.
 - Before `.grd/config.json` exists, the `autonomy` and `research_mode` values from `grd init new-project` are temporary defaults, not a durable user choice. Let those defaults govern the initial questioning and scoping pass, then run Step 5 immediately after scope approval and before the first project-artifact commit so the durable config takes over before research and roadmap execution.
 
@@ -600,8 +616,8 @@ if [ -f .grd/init-progress.json ]; then
   PREV_DESC=""
   INIT_PROGRESS_RAW=$(cat .grd/init-progress.json 2>/dev/null || echo "")
   if [ -n "$INIT_PROGRESS_RAW" ]; then
-    PREV_STEP=$(echo "$INIT_PROGRESS_RAW" | python3 -c "import sys,json; d=json.loads(sys.stdin.read()); print(d.get('step',''))" 2>/dev/null)
-    PREV_DESC=$(echo "$INIT_PROGRESS_RAW" | python3 -c "import sys,json; d=json.loads(sys.stdin.read()); print(d.get('description',''))" 2>/dev/null)
+    PREV_STEP=$(echo "$INIT_PROGRESS_RAW" | grd json get .step --default "" 2>/dev/null)
+    PREV_DESC=$(echo "$INIT_PROGRESS_RAW" | grd json get .description --default "" 2>/dev/null)
   fi
 
   # If JSON was corrupted (empty step), treat as fresh start
@@ -623,12 +639,12 @@ Completed through step {PREV_STEP}: {PREV_DESC}
 
 ──────────────────────────────────────────────────────
 Options:
-  1. "Resume from step {PREV_STEP + 1}" -- continue where you left off
+  1. "Resume from the next unfinished checkpoint" -- continue where you left off
   2. "Start fresh" -- re-run from the beginning
 ──────────────────────────────────────────────────────
 ```
 
-If resume: skip to the step after PREV_STEP (check which artifacts already exist on disk to confirm).
+If resume: continue from the next unfinished checkpoint after `PREV_STEP` (check which artifacts already exist on disk to confirm).
 If start fresh: delete `init-progress.json` and proceed normally.
 
 ## 2. Existing Work Offer
@@ -663,7 +679,7 @@ Run `/grd:map-research` first, then return to `/grd:new-project`
 
 Exit command.
 
-If `project_contract` is present in the init JSON, keep `project_contract`, `project_contract_load_info`, and `project_contract_validation` visible while deciding whether this is fresh work or a continuation. Preserve blockers, warnings, and approval state rather than flattening them into a blank-slate prompt.
+If `project_contract` is present in the init JSON, keep `project_contract` and `project_contract_load_info` visible while deciding whether this is fresh work or a continuation. Treat `project_contract_validation` as approval-stage authority rather than a stage-1 requirement. Preserve blockers, warnings, and approval state rather than flattening them into a blank-slate prompt.
 
 **If "Skip mapping" OR `needs_research_map` is false:** Continue to Step 3.
 
@@ -694,22 +710,15 @@ Based on what they said, ask follow-up questions that dig into their response. U
 Keep following threads. Each answer opens new threads to explore. Ask about:
 
 - What physical system or phenomenon motivated this
-- What they currently suspect about the answer, and what evidence would change their mind
 - What theoretical framework they are working in
-- What approximations or limits they are considering
 - What observable or measurable quantities they care about
 - What exact output, artifact, or benchmark would count as success
-- What exact observable, figure, derivation, dataset, or note they would personally look for first
-- What first smoking-gun observable, curve, benchmark reproduction, or scaling law they would trust before softer sanity checks
-- What would look like progress but should not count as success
-- Whether passing limiting cases, generic expectations, or qualitative agreement without that smoking gun should still count as failure
-- What references, benchmark results, datasets, or prior internal outputs must stay visible
-- What prior plots, notebooks, code outputs, or existing artifacts already matter and must not be ignored
+- What exact smoking-gun observable, curve, benchmark reproduction, or scaling law they would trust before softer sanity checks
+- What references, benchmark results, datasets, or prior outputs must stay visible
 - What should make the system stop, re-scope, or ask them again before a long execution branch
 - Which anchor or assumption feels weakest right now
 - What result would make the current framing look wrong or incomplete
-- What computational resources they have access to
-- Whether this connects to existing experimental data
+- What would look like progress but should not count as success
 
 If the user names a specific observable, deliverable, anchor paper, benchmark, figure, notebook, or prior result, reflect it back using recognizable wording and treat it as binding context unless the user later revises it.
 
@@ -734,17 +743,9 @@ Context to gather:
 - Research question (precise, falsifiable or answerable)
 - Physical system and regime
 - Theoretical framework (QFT, condensed matter, GR, statistical mechanics, etc.)
-- Key parameters and scales
-- User-stated observables, smoking-gun signals, or decisive plots
-- Decisive outputs, deliverables, or benchmark targets
-- Must-read references, baselines, and prior outputs to carry forward
-- User-stated stop conditions, rethink triggers, or review requests before long execution
-- Known results in the field (what has been done)
-- What is new or open (what has NOT been done)
-- Computational vs analytical approach preference
-- Target audience and venue (journal, conference)
-- Timeline and collaboration context
-- Available computational resources
+- Key observables or decisive outputs
+- Must-read references or prior outputs
+- User-stated stop conditions or rethink triggers before long execution
 - Weakest anchor or assumption
 - Disconfirming observation / change-course trigger
 - False-progress signals to reject
@@ -761,14 +762,16 @@ When you could write a clear scoping contract, use ask_user:
 
 If "Keep exploring" — ask what they want to add, or identify gaps and probe naturally.
 
-Avoid rigid turn-counting. After several substantive exchanges, if you can state the core question, one decisive output or deliverable, and at least one concrete anchor/reference/prior-output/baseline while keeping any still-missing decisive anchor explicit as an open question, offer to proceed. If those blocking fields are still missing after roughly 6 follow-ups, summarize what is missing and ask whether to keep exploring or proceed with explicit open questions. A full phase breakdown is not required at this stage; if only the first grounded investigation chunk is clear, say so and carry later decomposition as an open question. Do not force closure just because a counter was hit, and do not imply certainty where there is still ambiguity.
+Avoid rigid turn-counting. After several substantive exchanges, if you can state the core question, one decisive output or deliverable, and at least one concrete anchor/reference/prior-output/baseline while keeping any still-missing decisive anchor explicit as an open question, offer to proceed. If those blocking fields are still missing after roughly 6 follow-ups, summarize what is missing and keep exploring or pause until at least one concrete anchor/reference/prior-output/baseline is available; do not offer approval yet. A full phase breakdown is not required at this stage; if only the first grounded investigation chunk is clear, say so and carry later decomposition as an open question. Do not force closure just because a counter was hit, and do not imply certainty where there is still ambiguity.
 If you only have limiting cases, sanity checks, or generic benchmark language with no decisive smoking-gun observable, curve, or benchmark reproduction, keep exploring unless the user explicitly says that is the decisive standard.
 
 ## 4. Synthesize The Approved Project Contract And Write PROJECT.md
 
-**If auto mode:** Synthesize the scoping contract from the provided document, ask at most one repair prompt for blocking gaps, and require one explicit scope approval before continuing.
+Use the scoping-contract procedure from Step M1.5 for every flow before writing `PROJECT.md`.
 
-Before writing `PROJECT.md`, synthesize a canonical project contract with at least these elements:
+- Standard flow: synthesize the contract from the questioning conversation.
+- Auto mode: synthesize it from the provided document, ask at most one repair prompt for blocking gaps, and still require one explicit scope approval before continuing.
+- Minimal mode: the intake already happened in Step M1; continue only after the Step M1.5 contract is approved, validated, and persisted.
 
 - `scope.question`
 - `scope.in_scope`
@@ -1014,19 +1017,27 @@ CHECKPOINT
 
 ## 5. Workflow Preferences
 
-**Quick setup gate — offer recommended defaults before individual questions:**
+**Quick setup gate — offer a preset choice before individual questions:**
 
 Run this step after scope approval and before the first project-artifact commit whenever `.grd/config.json` does not exist yet.
+
+Treat the selected setup as a workflow preset bundle over the existing config knobs, not a new persisted preset block. The workflow should only write `autonomy`, `research_mode`, `parallelization`, `planning.commit_docs`, `execution.review_cadence`, `model_profile`, and the workflow toggles that already exist.
+
+First surface a preset choice so the user can start from a bundle or jump straight to customization. If a preset is selected, preview the changed knobs before writing `GRD/config.json`, then ask for explicit apply or customize. Do not persist a separate preset key.
 
 Use ask_user:
 
 - header: "Workflow Setup"
 - question: "How would you like to write `.grd/config.json`? Recommended defaults set `autonomy=balanced`, `research_mode=balanced`, `parallelization=true`, `planning.commit_docs=true`, `execution.review_cadence=adaptive`, `model_profile=review`, and enable `workflow.research`, `workflow.plan_checker`, and `workflow.verifier`. After writing config, also sync runtime permissions so yolo behaves correctly in the active runtime."
 - options:
-  - "Use recommended defaults (Recommended)" — write those exact values now. Saves 3-5 minutes.
+  - "Core research (Recommended)" — balanced planning/execution/verification default using the base runtime-readiness contract only
+  - "Theory" — derivation-heavy workflow with `model_profile=deep-theory` and denser review cadence
+  - "Numerics" — computation-heavy workflow with `model_profile=numerical` and the base runtime-readiness contract only
+  - "Publication / manuscript" — paper-writing workflow with `model_profile=paper-writing`; `paper-build` is the manuscript build contract and `arxiv-submission` depends on that built output later
+  - "Full research" — core research defaults plus publication readiness tracking for projects expected to end in a paper
   - "Customize settings" — choose `autonomy`, `research_mode`, `parallelization`, `planning.commit_docs`, `execution.review_cadence`, workflow agents, and `model_profile` individually
 
-**If "Use recommended defaults":** Skip all 8 config questions below. Create config.json directly with:
+**If a preset is selected:** Resolve the selected catalog preset into the existing config keys, show the changed knobs before writing config.json, and if the user wants to adjust the bundle, fall back to "Customize settings". For the recommended `core-research` preset, that preview should surface `autonomy=balanced`, `research_mode=balanced`, `parallelization=true`, `planning.commit_docs=true`, `execution.review_cadence=adaptive`, and `model_profile=review`. Example for `core-research`:
 
 ```json
 {
@@ -1227,7 +1238,20 @@ CHECKPOINT
 
 ## 5.5. Resolve Model Profile
 
-Use models from init: `researcher_model`, `synthesizer_model`, `roadmapper_model`.
+Run a fresh post-scope init immediately before literature survey, requirements finalization, roadmapping, or conventions. Treat this late-stage init as the source of truth for downstream model selection, commit policy, and approval-state visibility.
+
+```bash
+POST_SCOPE_INIT=$(grd --raw init new-project --stage post_scope)
+if [ $? -ne 0 ]; then
+  echo "ERROR: post-scope init failed: $POST_SCOPE_INIT"
+  exit 1
+fi
+```
+
+Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `autonomy`, `research_mode`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`.
+
+Do not reuse stale bootstrap values for literature survey, roadmapping, or conventions once this post-scope init succeeds.
+Use the staged `research_mode` from `POST_SCOPE_INIT` for all scout handoffs. Do not reread config inside the scouts.
 
 ## 6. Literature Survey Decision
 
@@ -1253,7 +1277,7 @@ Display stage banner:
 Surveying [research domain] landscape...
 ```
 
-Create research directory:
+Create literature directory:
 
 ```bash
 mkdir -p .grd/research
@@ -1301,6 +1325,8 @@ What are the key known results, exact solutions, and established techniques in [
 [PROJECT.md summary - research question, physical system, theoretical framework, key parameters]
 </project_context>
 
+Research mode from the staged post-scope init: {research_mode}. Use it as authoritative for this scout.
+
 <downstream_consumer>
 Your PRIOR-WORK.md feeds into research planning. Be precise:
 - Specific results with references (author, year, journal)
@@ -1342,6 +1368,8 @@ What analytical techniques, numerical methods, and computational tools are stand
 [PROJECT.md summary]
 </project_context>
 
+Research mode from the staged post-scope init: {research_mode}. Use it as authoritative for this scout.
+
 <downstream_consumer>
 Your METHODS.md feeds into approach selection. Categorize clearly:
 - Analytical methods (exact solutions, perturbation theory, RG, etc.)
@@ -1382,6 +1410,8 @@ What computational approaches, algorithms, and software tools are available for 
 <project_context>
 [PROJECT.md summary]
 </project_context>
+
+Research mode from the staged post-scope init: {research_mode}. Use it as authoritative for this scout.
 
 <downstream_consumer>
 Your COMPUTATIONAL.md informs the computational strategy. Include:
@@ -1425,6 +1455,8 @@ What are the open problems, common mistakes, and known pitfalls in [research dom
 [PROJECT.md summary]
 </project_context>
 
+Research mode from the staged post-scope init: {research_mode}. Use it as authoritative for this scout.
+
 <downstream_consumer>
 Your PITFALLS.md prevents wasted effort. For each pitfall:
 - Warning signs (how to detect early)
@@ -1447,11 +1479,15 @@ Use template: {GRD_INSTALL_DIR}/templates/research-project/PITFALLS.md
 ", subagent_type="grd-project-researcher", model="{researcher_model}", readonly=false, description="Pitfalls research")
 ```
 
-**If any research agent fails to spawn or returns an error:** Check which output files were created (PRIOR-WORK.md, METHODS.md, COMPUTATIONAL.md, PITFALLS.md). For each missing file, note the gap and continue with available outputs. If 3+ agents failed, offer: 1) Retry all agents, 2) Skip literature survey and proceed with manual research context, 3) Stop initialization. If 1-2 agents failed, proceed with the synthesizer using available files — the synthesis will be partial but usable.
+**Handle scout returns:** Route on the full canonical `grd_return` envelope (`status`, `files_written`, `issues`, and `next_actions`), and fail closed unless `grd_return.status` is typed and the expected artifact is freshly named in `grd_return.files_written`. If `checkpoint`, present it to the user, collect the response, and spawn a fresh continuation; do not keep the original scout alive. If `blocked`, surface the blocker, stop this scout path, and do not treat it as a retryable success. If `failed`, surface the failure and retry only once. If `completed`, verify the expected artifact exists on disk and is named in the fresh `grd_return.files_written`. Treat any preexisting scout file as stale unless the same path appears in the fresh return. Do not trust runtime completion text alone.
 
-After all 4 agents complete (or partial completion handled), spawn synthesizer to create SUMMARY.md:
+**If any research agent fails to spawn or returns an error:** Verify which required scout artifacts exist (`PRIOR-WORK.md`, `METHODS.md`, `COMPUTATIONAL.md`, `PITFALLS.md`). Retry only the missing scout tasks once. If any required research file is still missing after the retry, STOP this survey path and present the missing artifacts. Do not proceed with a partial literature survey. Do not synthesize from incomplete scout output. Do not silently downgrade to manual main-context research.
+
+After all 4 scout artifacts are present on disk and each fresh `grd_return.files_written` proves its expected artifact, spawn synthesizer to create SUMMARY.md:
 
 ```
+@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
+
 task(prompt="First, read {GRD_AGENTS_DIR}/grd-research-synthesizer.md for your role and instructions.
 
 <task>
@@ -1474,7 +1510,11 @@ Do NOT commit — the orchestrator handles commits.
 ", subagent_type="grd-research-synthesizer", model="{synthesizer_model}", readonly=false, description="Synthesize research")
 ```
 
-**If the synthesizer agent fails to spawn or returns an error:** Check if individual research files exist. If they do, create a minimal SUMMARY.md in the main context by reading each file's key findings. The individual research files are more important than the synthesis — proceed with what exists.
+**Handle the synthesizer return:** Route on the full canonical `grd_return` envelope (`status`, `files_written`, `issues`, and `next_actions`), and fail closed unless `grd_return.status` is typed and `GRD/literature/SUMMARY.md` is freshly named in `grd_return.files_written`. If `checkpoint`, present it to the user, collect the response, and spawn a fresh continuation after the response. If `blocked`, surface the blocker and stop this synth path until it is resolved. If `failed`, surface the failure and retry once. If `completed`, verify `GRD/literature/SUMMARY.md` exists and is named in the fresh return. Do not trust runtime completion text alone.
+
+**Artifact gate:** If a scout reports success but its `expected_artifacts` entry (`GRD/literature/{FILE}`) is missing, treat that scout as incomplete. If the synthesizer reports success but `GRD/literature/SUMMARY.md` is missing, treat that handoff as incomplete. Do not trust the runtime handoff status by itself.
+
+**If the synthesizer agent fails to spawn or returns an error:** Treat any preexisting `GRD/literature/SUMMARY.md` as stale. Retry once only to obtain a fresh typed `grd_return` that names `GRD/literature/SUMMARY.md` in `grd_return.files_written`. If the summary artifact is still missing, or the retry does not produce a fresh typed return naming it, STOP and surface the blocker. Do not fabricate a fallback summary in the main context when the chosen survey path asked for a synthesized research brief.
 
 Display research complete banner and key findings:
 
@@ -1535,7 +1575,7 @@ Read PROJECT.md and `.grd/state.json` and extract:
 - Decisive outputs, deliverables, and forbidden proxies from the contract
 - Must-read references, prior outputs, and known baselines from the contract
 
-**If literature survey exists:** Read research/METHODS.md and PRIOR-WORK.md and extract available approaches.
+**If literature survey exists:** Read GRD/literature/METHODS.md and GRD/literature/PRIOR-WORK.md and extract available approaches.
 
 **If auto mode:**
 
@@ -1694,6 +1734,8 @@ Display stage banner:
 
 Spawn grd-roadmapper agent with context:
 
+@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
+
 ```
 task(prompt="First, read {GRD_AGENTS_DIR}/grd-roadmapper.md for your role and instructions.
 
@@ -1725,15 +1767,34 @@ Write files first, then return. This ensures artifacts persist even if context i
 
 **Handle roadmapper return:**
 
-**If the roadmapper agent fails to spawn or returns an error:** Check if ROADMAP.md was partially written (the agent writes files first). If ROADMAP.md exists, verify it has phases and offer to proceed with it. If no ROADMAP.md exists, offer: 1) Retry the roadmapper, 2) Create ROADMAP.md in the main context using PROJECT.md and REQUIREMENTS.md. Do not leave the project in a state with REQUIREMENTS.md but no ROADMAP.md. **Also check if STATE.md exists** — the roadmapper creates both. If STATE.md is missing, create a minimal STATE.md (using the template from Step M5 in the minimal mode section above) so that downstream commands (`convention set`, `state validate`, etc.) can function.
+Route on `grd_return.status` and `grd_return.files_written`.
+Do not route on the `## ROADMAP CREATED` heading alone.
+Do not route on the `## ROADMAP BLOCKED` heading alone.
 
-**If `## ROADMAP BLOCKED`:**
+**If the roadmapper agent fails to spawn or returns an error:** Do not infer completion from files that already exist on disk. Treat any preexisting `GRD/ROADMAP.md`, `GRD/STATE.md`, or `GRD/REQUIREMENTS.md` as a stale baseline unless this run returns a fresh typed `grd_return` that names them in `grd_return.files_written`. Check whether both `GRD/ROADMAP.md` and `GRD/STATE.md` already exist and are non-trivial (the agent writes files first) only as a partial-write recovery aid, not as proof of freshness. Otherwise retry the roadmapper once. If either required artifact is still missing after the retry, STOP and surface the blocker. Do not create a second main-context roadmap implementation path, and do not continue with `REQUIREMENTS.md` but no canonical roadmap/state pair.
+
+**Artifact gate:** If the roadmapper reports `grd_return.status: completed` but `GRD/ROADMAP.md` or `GRD/STATE.md` is missing, treat the handoff as incomplete. Do not trust the runtime handoff status by itself.
+If the roadmapper reports `grd_return.status: completed`, verify that `GRD/ROADMAP.md`, `GRD/STATE.md`, and `GRD/REQUIREMENTS.md` are readable and named in `grd_return.files_written`. If any expected artifact was already present before this handoff, it only counts as fresh output when the same path appears in `grd_return.files_written`.
+
+**If `grd_return.status: checkpoint`:**
+
+- Present the checkpoint
+- Collect the user's response
+- Re-spawn the roadmapper with a fresh continuation handoff once the blocker is resolved
+
+**If `grd_return.status: blocked`:**
 
 - Present blocker information
 - Work with user to resolve
 - Re-spawn when resolved
 
-**If `## ROADMAP CREATED`:**
+**If `grd_return.status: failed`:**
+
+- Present the failure details
+- Retry the roadmapper once
+- If the retry still fails, surface the blocker and stop
+
+**If `grd_return.status: completed`:**
 
 Read the created ROADMAP.md and present it nicely inline:
 
@@ -1795,6 +1856,8 @@ Use ask_user:
 - Get user's adjustment notes
 - Re-spawn roadmapper with revision context:
 
+@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
+
   ```
   task(prompt="First, read {GRD_AGENTS_DIR}/grd-roadmapper.md for your role and instructions.
 
@@ -1810,7 +1873,7 @@ Use ask_user:
   ", subagent_type="grd-roadmapper", model="{roadmapper_model}", readonly=false, description="Revise roadmap")
   ```
 
-  **If the revision roadmapper agent fails to spawn or returns an error:** Check if ROADMAP.md was updated (compare with pre-revision content). If changes were made, proceed to present the revised roadmap. If no changes, offer: 1) Retry the revision agent, 2) Apply the user's adjustment notes manually in the main context by editing ROADMAP.md directly.
+  **If the revision roadmapper agent fails to spawn or returns an error:** Compare `GRD/ROADMAP.md` with the pre-revision content. If the artifact changed, proceed to present the revised roadmap. If it did not change, retry the revision agent once; if the roadmap still does not update, STOP and surface that the revision handoff failed. Do not fork a second manual roadmap-editing path in the main context.
 
 - Present revised roadmap
 - Loop until user approves (**maximum 3 revision iterations** — after 3, commit the current version with user's notes recorded as open questions in ROADMAP.md, and note: "Roadmap committed after 3 revision rounds. Further adjustments via `/grd:add-phase` or `/grd:remove-phase`.")
@@ -1840,7 +1903,12 @@ CHECKPOINT
 
 This step is critical for multi-phase projects where convention mismatches cause silent errors (wrong signs, factors of 2*pi, metric signature confusion).
 
-**If auto mode:** Auto-approve subfield defaults without user confirmation.
+**Convention setup mode is driven by autonomy, not by whether the intake used `--auto`:**
+
+- `autonomy=supervised`: use `interactive` mode. The notation coordinator must return a checkpoint proposal before writing anything, the orchestrator presents it to the user, and a fresh continuation handoff performs the final write after confirmation/override.
+- `autonomy=balanced` (default): use `auto` mode. Lock clear subfield defaults automatically and only return a checkpoint/conflict if the context contains a genuine ambiguity or cross-subfield conflict that needs user judgment.
+- `autonomy=yolo`: use `auto` mode and accept the returned conventions automatically.
+- `--auto` only compresses intake. It does not force interactive convention review for `balanced` / `yolo`, and it does not remove the supervised checkpoint.
 
 Display stage banner:
 
@@ -1858,10 +1926,17 @@ NOTATION_MODEL=$(grd resolve-model grd-notation-coordinator)
 
 If `NOTATION_MODEL` is empty or null, omit `model=` entirely in the spawn call. If it has a concrete value, include `model="$NOTATION_MODEL"`.
 
+Set `CONVENTION_MODE` before spawning:
+
+- `interactive` only when `autonomy=supervised`
+- `auto` for `autonomy=balanced` and `autonomy=yolo`
+
 Spawn grd-notation-coordinator:
 
+@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
+
 ```
-task(prompt="First, read {GRD_AGENTS_DIR}/grd-notation-coordinator.md for your role and instructions.
+  task(prompt="First, read {GRD_AGENTS_DIR}/grd-notation-coordinator.md for your role and instructions.
 
 <task>
 Establish initial conventions for this research project.
@@ -1876,25 +1951,42 @@ Read these files:
 </project_context>
 
 <mode>
-{auto | interactive}
-Auto mode: Use subfield defaults, lock all, skip user confirmation.
-Interactive mode: Present suggested conventions, wait for user confirmation/override.
+{CONVENTION_MODE}
+Auto mode: Use subfield defaults, lock all, skip user confirmation unless a genuine ambiguity or conflict blocks completion.
+Interactive mode: Return `status: checkpoint` with the suggested conventions, rationale, test values, and any conflicts. Do NOT write `GRD/CONVENTIONS.md` and do NOT call `grd convention set` until the orchestrator collects the user's confirmation/override and spawns a fresh continuation handoff.
 </mode>
 
 <output>
 1. Create: .grd/CONVENTIONS.md (full convention reference)
 2. Lock conventions via: grd convention set
 3. Return CONVENTIONS ESTABLISHED with summary
+
+If mode=`interactive`:
+1. Return a checkpoint proposal only
+2. Include the suggested conventions, rationale, test values, and any conflicts
+3. Leave file creation and `grd convention set` for the continuation handoff after user confirmation
 </output>
 ", subagent_type="grd-notation-coordinator", readonly=false, description="Establish project conventions")
 ```
 
 **Handle notation-coordinator return:**
 
-**If the notation-coordinator agent fails to spawn or returns an error:** Conventions are not critical for project initialization to succeed, BUT the convention_lock in state.json must be populated for downstream defense layers (L1-L4) to function. Fallback:
+- **Artifact gate:** If the notation-coordinator returns success but `GRD/CONVENTIONS.md` is missing, treat the handoff as incomplete. Recover via the artifact-recovery protocol: write the returned content in the main context if available; otherwise re-execute the convention-establishment task in the main context. Do not silently proceed.
 
-1. Create a minimal CONVENTIONS.md with the project's unit system and metric signature from PROJECT.md (if specified)
-2. **Populate the convention_lock** with at minimum the unit system and metric signature:
+- **`status: checkpoint` / `CHECKPOINT REACHED`:** Present the proposed conventions, rationale, test values, and any conflict table to the user. Collect confirmation or overrides. Then spawn a fresh `grd-notation-coordinator` handoff (NOT send-message/resume) with:
+  1. the original project context,
+  2. the proposal returned by the first handoff,
+  3. the user-approved / user-overridden convention values,
+  4. instructions to write `GRD/CONVENTIONS.md`, run `grd convention set` for each approved category, and return `CONVENTIONS ESTABLISHED`.
+  Treat that continuation handoff as the normal success path for `autonomy=supervised`, not as an error.
+
+**If the notation-coordinator agent fails to spawn or returns an error:** Use a deterministic fallback instead of hardcoded defaults:
+
+1. Read `GRD/PROJECT.md` and extract any explicit unit-system or metric-signature choices already recorded there.
+2. If either value is still missing, read `{GRD_INSTALL_DIR}/references/conventions/subfield-convention-defaults.md`, identify the project's physics subfield from `GRD/PROJECT.md`, and resolve the matching default convention pair from that table.
+3. If you still cannot resolve both the unit system and metric signature, STOP and ask the user. Do not hardcode `natural` or `mostly_minus`.
+4. Create a minimal `GRD/CONVENTIONS.md` that records the resolved values and states that richer convention coverage is still pending.
+5. Populate the convention lock with the same resolved values:
 
    ```bash
    # Populate convention_lock so downstream L1-L4 defense layers are active

@@ -9,10 +9,13 @@ All return types are Pydantic models — no raw dicts cross module boundaries.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import shutil
+import tempfile
 from collections import deque
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -54,8 +57,8 @@ from grd.core.utils import (
     phase_artifact_id,
     phase_normalize,
     phase_unpad,
-    safe_parse_int,
     safe_read_file,
+    strict_parse_int,
 )
 from grd.core.utils import (
     phase_sort_key as _phase_sort_key,
@@ -202,7 +205,165 @@ def _save_state_markdown(cwd: Path, state_content: str) -> None:
     """Lazy-load the canonical markdown -> state save path."""
     from grd.core.state import save_state_markdown
 
-    save_state_markdown(cwd, state_content)
+    save_state_markdown_locked(cwd, state_content)
+
+
+def _parse_plan_wave(value: object) -> int:
+    """Return a canonical wave number from frontmatter without coercive drift."""
+    if value is None:
+        return 1
+    wave = strict_parse_int(value, None)
+    if wave is None:
+        raise PhaseValidationError(f"wave must be an integer, got {value!r}")
+    return wave
+
+
+def _update_state_markdown_locked(cwd: Path, update_state_content: Callable[[str], str]) -> bool:
+    """Rewrite STATE.md through the canonical state lock and locked writer path."""
+    from grd.core.state import _load_or_rebuild_state_markdown_locked
+
+    state_json_path = ProjectLayout(cwd).state_json
+    with file_lock(state_json_path):
+        state_content = _load_or_rebuild_state_markdown_locked(cwd)
+        if state_content is None:
+            return False
+        _save_state_markdown_locked(cwd, update_state_content(state_content))
+    return True
+
+
+def _restore_text_file(path: Path, previous_content: str | None) -> None:
+    """Restore one text file to its previous on-disk state."""
+    if previous_content is None:
+        if path.exists():
+            path.unlink()
+        return
+    atomic_write(path, previous_content)
+
+
+def _backup_directory_tree(path: Path) -> tuple[Path | None, Path | None]:
+    """Copy *path* to a temporary backup tree for rollback."""
+    if not path.exists():
+        return None, None
+    backup_root = Path(tempfile.mkdtemp(prefix=f"grd-{path.name}-backup-"))
+    backup_path = backup_root / path.name
+    shutil.copytree(path, backup_path)
+    return backup_root, backup_path
+
+
+def _restore_directory_tree(path: Path, backup_path: Path | None) -> None:
+    """Restore *path* from *backup_path* when rollback is required."""
+    if path.exists():
+        shutil.rmtree(path)
+    if backup_path is not None and backup_path.exists():
+        shutil.copytree(backup_path, path)
+
+
+def _state_content_with_total_phases(state_content: str, *, total_phases: int) -> str:
+    """Rewrite total-phase counters in STATE.md content."""
+    updated = re.sub(
+        r"(\*\*Total Phases:\*\*\s*)(?:\d+|[—\-]+)",
+        rf"\g<1>{total_phases}",
+        state_content,
+    )
+    return re.sub(
+        r"(\bof\s+)\d+(\s*(?:\(|phases?))",
+        rf"\g<1>{total_phases}\2",
+        updated,
+        flags=re.IGNORECASE,
+    )
+
+
+def _phase_remove_state_content(
+    cwd: Path,
+    state_content: str,
+    *,
+    target_phase: str,
+    updated_roadmap: RoadmapAnalysis,
+) -> str:
+    """Rewrite STATE.md after removing a phase."""
+    total_phases = updated_roadmap.phase_count
+
+    state_content = _state_content_with_total_phases(state_content, total_phases=total_phases)
+    current_phase_before = _extract_state_field(state_content, "Current Phase")
+    mapped_phase = _remap_phase_after_removal(
+        current_phase_before,
+        target_phase,
+        [phase.number for phase in updated_roadmap.phases],
+    )
+    mapped_phase_name = None
+    if mapped_phase is not None:
+        mapped_phase_entry = _get_roadmap_phase_by_number(cwd, mapped_phase)
+        mapped_phase_name = mapped_phase_entry.name if mapped_phase_entry else None
+
+    replacement_phase = mapped_phase or "\u2014"
+    replacement_name = mapped_phase_name or "\u2014"
+    state_content = _replace_state_field(state_content, "Current Phase", replacement_phase)
+    state_content = _replace_state_field(state_content, "Current Phase Name", replacement_name)
+
+    current_was_removed = _phase_in_subtree(current_phase_before, target_phase)
+    if current_was_removed:
+        state_content = _replace_state_field(state_content, "Current Plan", "\u2014")
+
+    if mapped_phase is not None:
+        mapped_info = find_phase(cwd, mapped_phase)
+        plan_total = len(mapped_info.plans) if mapped_info else 0
+        total_plans_value = str(plan_total) if plan_total else "\u2014"
+    else:
+        total_plans_value = "\u2014"
+    return _replace_state_field(state_content, "Total Plans in Phase", total_plans_value)
+
+
+def _phase_complete_state_content(
+    cwd: Path,
+    state_content: str,
+    *,
+    phase_num: str,
+    next_phase_num: str | None,
+    next_phase_name: str | None,
+    today: str,
+    is_last_phase: bool,
+) -> str:
+    """Rewrite STATE.md after completing a phase."""
+    new_status = "Milestone complete" if is_last_phase else "Ready to plan"
+    current_status = _extract_state_field(state_content, "Status") or ""
+    _validate_transition(current_status, new_status)
+
+    state_content = _replace_state_field(state_content, "Current Phase", next_phase_num or phase_num)
+    phase_name_display = next_phase_name.replace("-", " ") if next_phase_name else (next_phase_num or "\u2014")
+    state_content = _replace_state_field(state_content, "Current Phase Name", phase_name_display)
+    state_content = _replace_state_field(
+        state_content,
+        "Status",
+        "Milestone complete" if is_last_phase else "Ready to plan",
+    )
+    state_content = _replace_state_field(state_content, "Current Plan", "\u2014")
+
+    em_dash = "\u2014"
+    if next_phase_num:
+        next_info = find_phase(cwd, next_phase_num)
+        next_plan_count = len(next_info.plans) if next_info else 0
+        replacement = str(next_plan_count) if next_plan_count else em_dash
+        state_content = _replace_state_field(state_content, "Total Plans in Phase", replacement)
+    else:
+        state_content = _replace_state_field(state_content, "Total Plans in Phase", em_dash)
+
+    state_content = _replace_state_field(state_content, "Last Activity", today)
+
+    transition_msg = f"Phase {phase_num} complete"
+    if next_phase_num:
+        transition_msg += f", transitioned to Phase {next_phase_num}"
+    return _replace_state_field(state_content, "Last Activity Description", transition_msg)
+
+
+def _milestone_complete_state_content(state_content: str, *, today: str, version: str) -> str:
+    """Rewrite STATE.md after completing a milestone."""
+    current_status = _extract_state_field(state_content, "Status") or ""
+    _validate_transition(current_status, "Milestone complete")
+    state_content = _replace_state_field(state_content, "Status", "Milestone complete")
+    state_content = _replace_state_field(state_content, "Last Activity", today)
+    return _replace_state_field(
+        state_content, "Last Activity Description", f"{version} milestone completed and archived"
+    )
 
 
 def _replace_state_field(state_content: str, field_name: str, new_value: str) -> str:
@@ -475,6 +636,9 @@ class ProgressJsonResult(BaseModel):
     total_plans: int = 0
     total_summaries: int = 0
     percent: int = 0
+    state_progress_percent: int | None = None
+    diverged: bool = False
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ProgressBarResult(BaseModel):
@@ -501,14 +665,6 @@ class PhaseWaveValidationResult(BaseModel):
 
 
 # ─── Internal Helpers ──────────────────────────────────────────────────────────
-
-
-def _strip_suffix(name: str, suffix: str) -> str:
-    """Strip a suffix from a string if present; return unchanged otherwise."""
-    if name.endswith(suffix):
-        return name[: -len(suffix)]
-    return name
-
 
 
 def _sorted_phases(dirs: list[str]) -> list[str]:
@@ -577,10 +733,6 @@ def _phases_dir(cwd: Path) -> Path:
 
 def _roadmap_path(cwd: Path) -> Path:
     return ProjectLayout(cwd).roadmap
-
-
-def _state_path(cwd: Path) -> Path:
-    return ProjectLayout(cwd).state_md
 
 
 def _list_phase_dirs(cwd: Path) -> list[str]:
@@ -999,11 +1151,10 @@ def validate_phase_waves(cwd: Path, phase: str) -> PhaseWaveValidationResult:
                 fm = _extract_frontmatter(content)
                 files_modified = _ensure_list(fm.get("files_modified"), field_name="files_modified")
                 depends_on = _ensure_list(fm.get("depends_on"), field_name="depends_on")
+                wave = _parse_plan_wave(fm.get("wave"))
             except (FrontmatterParseError, PhaseValidationError, OSError, UnicodeDecodeError) as exc:
                 errors.append(f"{plan_file}: {exc}")
                 continue
-
-            wave = safe_parse_int(fm.get("wave"), 1)
 
             plans.append(PlanEntry(id=plan_id, wave=wave, depends_on=depends_on, files_modified=files_modified))
 
@@ -1043,6 +1194,7 @@ def phase_plan_index(cwd: Path, phase: str) -> PhasePlanIndex:
                 fm = _extract_frontmatter(content)
                 files_modified = _ensure_list(fm.get("files_modified"), field_name="files_modified")
                 depends_on = _ensure_list(fm.get("depends_on"), field_name="depends_on")
+                wave = _parse_plan_wave(fm.get("wave"))
             except (FrontmatterParseError, PhaseValidationError, OSError, UnicodeDecodeError) as exc:
                 validation_errors.append(f"{plan_file}: {exc}")
                 continue
@@ -1050,7 +1202,6 @@ def phase_plan_index(cwd: Path, phase: str) -> PhasePlanIndex:
             task_count = len(re.findall(r"##\s*Task\s*\d+", content, re.IGNORECASE))
             if task_count == 0:
                 task_count = len(re.findall(r"<task\b", content, re.IGNORECASE))
-            wave = safe_parse_int(fm.get("wave"), 1)
 
             interactive = False
             if "interactive" in fm:
@@ -1218,8 +1369,36 @@ def roadmap_analyze(cwd: Path) -> RoadmapAnalysis:
 
         # Find current and next phase
         current_phase = next((p for p in phases if p.disk_status in ("planned", "partial")), None)
+        if current_phase is None:
+            state_content = safe_read_file(layout.state_md)
+            if state_content is not None:
+                state_phase = _extract_state_field(state_content, "Current Phase")
+                if state_phase is not None:
+                    try:
+                        _validate_phase_number(state_phase)
+                    except PhaseValidationError:
+                        pass
+                    else:
+                        normalized_state_phase = phase_normalize(state_phase)
+                        current_phase = next(
+                            (
+                                p
+                                for p in phases
+                                if compare_phase_numbers(phase_normalize(p.number), normalized_state_phase) == 0
+                            ),
+                            None,
+                        )
+        current_phase_number = current_phase.number if current_phase else None
         next_phase = next(
-            (p for p in phases if p.disk_status in ("empty", "no_directory", "discussed", "researched")),
+            (
+                p
+                for p in phases
+                if p.disk_status in ("empty", "no_directory", "discussed", "researched")
+                and (
+                    current_phase_number is None
+                    or compare_phase_numbers(phase_normalize(p.number), phase_normalize(current_phase_number)) != 0
+                )
+            ),
             None,
         )
 
@@ -1248,6 +1427,71 @@ def _normalize_phase_label(phase: str | None) -> str | None:
     return phase_normalize(str(phase))
 
 
+def _phase_in_subtree(candidate_phase: str | None, target_phase: str) -> bool:
+    """Return whether *candidate_phase* is *target_phase* or one of its descendants."""
+    normalized_candidate = _normalize_phase_label(candidate_phase)
+    if normalized_candidate is None:
+        return False
+    normalized_target = phase_normalize(target_phase)
+    return normalized_candidate == normalized_target or normalized_candidate.startswith(normalized_target + ".")
+
+
+def _phase_dir_entry(dir_name: str) -> tuple[str, str]:
+    """Split a phase directory name into its numeric prefix and optional slug."""
+    match = re.match(r"^(\d+(?:\.\d+)*)(?:-(.*))?$", dir_name)
+    if match is None:
+        raise PhaseError(f'Invalid phase directory name: "{dir_name}"')
+    return match.group(1), match.group(2) or ""
+
+
+def _phase_dir_in_subtree(dir_name: str, target_phase: str) -> bool:
+    """Return whether a phase directory belongs to the removed subtree."""
+    try:
+        prefix, _slug = _phase_dir_entry(dir_name)
+    except PhaseError:
+        return False
+    return _phase_in_subtree(prefix, target_phase)
+
+
+def _phase_number_parts(phase_ref: str) -> list[int] | None:
+    """Return integer segments for a phase reference."""
+    if not re.fullmatch(r"\d+(?:\.\d+)*", phase_ref):
+        return None
+    return [int(part) for part in phase_ref.split(".")]
+
+
+def _shift_phase_reference_after_removal(
+    phase_ref: str,
+    removed_phase: str,
+    *,
+    normalize_output: bool = False,
+) -> str:
+    """Shift one surviving phase reference after removing a sibling or subtree phase."""
+    phase_parts = _phase_number_parts(phase_unpad(phase_ref))
+    removed_parts = _phase_number_parts(phase_unpad(removed_phase))
+    if phase_parts is None or removed_parts is None:
+        return phase_ref
+
+    if len(removed_parts) == 1:
+        if phase_parts[0] <= removed_parts[0]:
+            return phase_ref
+        shifted_parts = [phase_parts[0] - 1, *phase_parts[1:]]
+    else:
+        sibling_depth = len(removed_parts) - 1
+        if len(phase_parts) <= sibling_depth or phase_parts[:sibling_depth] != removed_parts[:sibling_depth]:
+            return phase_ref
+        if phase_parts[sibling_depth] <= removed_parts[sibling_depth]:
+            return phase_ref
+        shifted_parts = [
+            *phase_parts[:sibling_depth],
+            phase_parts[sibling_depth] - 1,
+            *phase_parts[sibling_depth + 1 :],
+        ]
+
+    shifted = ".".join(str(part) for part in shifted_parts)
+    return phase_normalize(shifted) if normalize_output else shifted
+
+
 def _get_roadmap_phase_sequence(cwd: Path) -> list[RoadmapPhase]:
     """Return roadmap phases in document order."""
     return roadmap_analyze(cwd).phases
@@ -1272,21 +1516,6 @@ def _get_roadmap_phase_by_number(cwd: Path, phase_num: str | None) -> RoadmapPha
         if compare_phase_numbers(phase_normalize(phase.number), normalized) == 0:
             return phase
     return None
-
-
-def _decrement_phase_reference(phase_ref: str, removed_int: int) -> str:
-    """Shift the top-level integer of a phase reference down after integer removal."""
-    match = re.match(r"^(\d+)(\.\d+)*$", phase_ref)
-    if not match:
-        return phase_ref
-    parts = phase_ref.split(".")
-    top_level = int(parts[0])
-    if top_level <= removed_int:
-        return phase_ref
-    parts[0] = str(top_level - 1)
-    return ".".join(parts)
-
-
 def _remap_phase_after_removal(current_phase: str | None, removed_phase: str, remaining: list[str]) -> str | None:
     """Map a stored current phase to the post-removal numbering scheme."""
     current_norm = _normalize_phase_label(current_phase)
@@ -1311,6 +1540,8 @@ def _remap_phase_after_removal(current_phase: str | None, removed_phase: str, re
         current_base = current_parts[0]
         if current_base != removed_base or len(current_parts) == 1:
             return current_norm if _phase_exists(current_norm) else _closest_previous(current_norm)
+        if _phase_in_subtree(current_norm, removed_norm) and current_norm != removed_norm:
+            return _closest_previous(removed_norm)
 
         # Only handle single-level decimals (e.g. "06.2"); multi-level
         # sub-phases like "06.1.2" are not subject to decimal renumbering.
@@ -1343,6 +1574,74 @@ def _remap_phase_after_removal(current_phase: str | None, removed_phase: str, re
     return _closest_previous(removed_norm)
 
 
+# ─── Phase heading format detection ──────────────────────────────────────────
+
+_PHASE_HEADING_RE = re.compile(
+    r"(#{2,4})\s*Phase\s+(\d+)(?:\.\d+)?\s*(?:(\s+\u2014\s+)|(:\s*))",
+    re.IGNORECASE,
+)
+
+
+def _detect_phase_heading_format(content: str) -> tuple[str, int, str]:
+    """Detect heading level, padding width, and separator from existing phase headings.
+
+    Returns:
+        (heading_prefix, pad_width, separator) where:
+        - heading_prefix is e.g. ``"###"``
+        - pad_width is 0 for no padding or N for ``zfill(N)``
+        - separator is e.g. ``": "`` or ``" \\u2014 "``
+
+    When no existing phases are found, returns defaults matching the
+    ``new-project`` template: ``("###", 0, ": ")``.
+    """
+    matches = list(_PHASE_HEADING_RE.finditer(content))
+    if not matches:
+        return "###", 0, ": "
+
+    # Prefer the first integer-only phase (no decimal) for heading level
+    heading_level: str | None = None
+    for m in matches:
+        # Check this is an integer phase (no dot after the captured digits)
+        after_digits = content[m.end(2):]
+        if not after_digits.startswith("."):
+            heading_level = m.group(1)
+            break
+    if heading_level is None:
+        # All phases are decimal; use the first match
+        heading_level = matches[0].group(1)
+
+    # Detect padding: check if any integer phase number has a leading zero
+    pad_width = 0
+    for m in matches:
+        raw_num = m.group(2)
+        after_digits = content[m.end(2):]
+        if after_digits.startswith("."):
+            continue  # skip decimal phases for padding detection
+        if len(raw_num) > 1 and raw_num[0] == "0":
+            pad_width = len(raw_num)
+            break
+
+    # Detect separator: colon vs em-dash
+    separator = ": "  # default
+    for m in matches:
+        if m.group(3):  # em-dash group matched
+            separator = m.group(3)
+            break
+        if m.group(4):  # colon group matched
+            separator = m.group(4)
+            break
+
+    return heading_level, pad_width, separator
+
+
+def _format_phase_display_num(num: int | str, pad_width: int) -> str:
+    """Format a phase number for display in headings."""
+    s = str(num)
+    if pad_width > 0:
+        return s.zfill(pad_width)
+    return s
+
+
 # ─── Phase Add ─────────────────────────────────────────────────────────────────
 
 
@@ -1369,7 +1668,11 @@ def phase_add(cwd: Path, description: str) -> PhaseAddResult:
             content = roadmap_path.read_text(encoding="utf-8")
 
             max_phase = 0
-            for m in re.finditer(r"#{2,4}\s*Phase\s+(\d+)(?:\.\d+)?:", content, re.IGNORECASE):
+            for m in re.finditer(
+                r"#{2,4}\s*Phase\s+(\d+)(?:\.\d+)?(?::|(?:\s+\u2014\s+))",
+                content,
+                re.IGNORECASE,
+            ):
                 num = int(m.group(1))
                 if num > max_phase:
                     max_phase = num
@@ -1381,9 +1684,12 @@ def phase_add(cwd: Path, description: str) -> PhaseAddResult:
 
             dir_path.mkdir(parents=True, exist_ok=True)
 
-            depends = f"Phase {max_phase}" if max_phase > 0 else "None"
+            heading_level, pad_width, separator = _detect_phase_heading_format(content)
+            display_num = _format_phase_display_num(new_phase_num, pad_width)
+            depends_display = _format_phase_display_num(max_phase, pad_width) if max_phase > 0 else None
+            depends = f"Phase {depends_display}" if depends_display else "None"
             phase_entry = (
-                f"\n### Phase {new_phase_num}: {description}\n\n"
+                f"\n{heading_level} Phase {display_num}{separator}{description}\n\n"
                 f"**Goal:** [To be planned]\n"
                 f"**Depends on:** {depends}\n"
                 f"**Plans:** 0 plans\n\n"
@@ -1398,26 +1704,22 @@ def phase_add(cwd: Path, description: str) -> PhaseAddResult:
                 updated = content + phase_entry
 
             atomic_write(roadmap_path, updated)
-
-        # Update total_phases in STATE.md to stay in sync with ROADMAP
-        state_path = _state_path(cwd)
-        if state_path.exists():
-            with file_lock(state_path):
-                state_content = state_path.read_text(encoding="utf-8")
-                updated_roadmap = roadmap_analyze(cwd)
-                total_phases = updated_roadmap.phase_count
-                state_content = re.sub(
-                    r"(\*\*Total Phases:\*\*\s*)(?:\d+|[—\-]+)",
-                    rf"\g<1>{total_phases}",
-                    state_content,
+            try:
+                # Update STATE.md using the canonical state lock so the markdown
+                # write stays coupled to the state.json write path.
+                total_phases = roadmap_analyze(cwd).phase_count
+                _update_state_markdown_locked(
+                    cwd,
+                    lambda state_content: _state_content_with_total_phases(
+                        state_content,
+                        total_phases=total_phases,
+                    ),
                 )
-                state_content = re.sub(
-                    r"(\bof\s+)\d+(\s*(?:\(|phases?))",
-                    rf"\g<1>{total_phases}\2",
-                    state_content,
-                    flags=re.IGNORECASE,
-                )
-                _save_state_markdown(cwd, state_content)
+            except Exception:
+                if dir_path.exists():
+                    shutil.rmtree(dir_path)
+                atomic_write(roadmap_path, content)
+                raise
 
         return PhaseAddResult(
             phase_number=new_phase_num,
@@ -1458,7 +1760,11 @@ def phase_insert(cwd: Path, after_phase: str, description: str) -> PhaseInsertRe
             content = roadmap_path.read_text(encoding="utf-8")
 
             escaped = re.escape(after_phase)
-            if not re.search(rf"#{{2,4}}\s*Phase\s+{escaped}:", content, re.IGNORECASE):
+            if not re.search(
+                rf"#{{2,4}}\s*Phase\s+{escaped}(?::|(?:\s+\u2014\s+))",
+                content,
+                re.IGNORECASE,
+            ):
                 raise PhaseValidationError(f"Phase {after_phase} not found in ROADMAP.md")
 
             normalized_base = phase_normalize(after_phase)
@@ -1478,16 +1784,21 @@ def phase_insert(cwd: Path, after_phase: str, description: str) -> PhaseInsertRe
             decimal_phase = f"{normalized_base}.{next_decimal}"
             dir_name = f"{decimal_phase}-{slug}" if slug else decimal_phase
 
+            heading_level, _pad_width, separator = _detect_phase_heading_format(content)
+            depends_display = phase_normalize(after_phase)
             phase_entry = (
-                f"\n### Phase {decimal_phase}: {description} (INSERTED)\n\n"
+                f"\n{heading_level} Phase {decimal_phase}{separator}{description} (INSERTED)\n\n"
                 f"**Goal:** [Urgent work - to be planned]\n"
-                f"**Depends on:** Phase {after_phase}\n"
+                f"**Depends on:** Phase {depends_display}\n"
                 f"**Plans:** 0 plans\n\n"
                 f"Plans:\n"
                 f"- [ ] TBD (run plan-phase {decimal_phase} to break down)\n"
             )
 
-            header_pattern = re.compile(rf"(#{{2,4}}\s*Phase\s+{escaped}:[^\n]*\n)", re.IGNORECASE)
+            header_pattern = re.compile(
+                rf"(#{{2,4}}\s*Phase\s+{escaped}(?::|(?:\s+\u2014\s+))[^\n]*\n)",
+                re.IGNORECASE,
+            )
             header_match = header_pattern.search(content)
             if not header_match:
                 raise PhaseValidationError(f"Could not find Phase {after_phase} header")
@@ -1506,26 +1817,22 @@ def phase_insert(cwd: Path, after_phase: str, description: str) -> PhaseInsertRe
 
             updated = content[:insert_idx] + phase_entry + content[insert_idx:]
             atomic_write(roadmap_path, updated)
-
-        # Update total_phases in STATE.md to stay in sync with ROADMAP
-        state_path = _state_path(cwd)
-        if state_path.exists():
-            with file_lock(state_path):
-                state_content = state_path.read_text(encoding="utf-8")
-                updated_roadmap = roadmap_analyze(cwd)
-                total_phases = updated_roadmap.phase_count
-                state_content = re.sub(
-                    r"(\*\*Total Phases:\*\*\s*)(?:\d+|[—\-]+)",
-                    rf"\g<1>{total_phases}",
-                    state_content,
+            try:
+                # Update STATE.md using the canonical state lock so the
+                # markdown write stays coupled to the state.json write path.
+                total_phases = roadmap_analyze(cwd).phase_count
+                _update_state_markdown_locked(
+                    cwd,
+                    lambda state_content: _state_content_with_total_phases(
+                        state_content,
+                        total_phases=total_phases,
+                    ),
                 )
-                state_content = re.sub(
-                    r"(\bof\s+)\d+(\s*(?:\(|phases?))",
-                    rf"\g<1>{total_phases}\2",
-                    state_content,
-                    flags=re.IGNORECASE,
-                )
-                _save_state_markdown(cwd, state_content)
+            except Exception:
+                if dir_path.exists():
+                    shutil.rmtree(dir_path)
+                atomic_write(roadmap_path, content)
+                raise
 
         return PhaseInsertResult(
             phase_number=decimal_phase,
@@ -1567,150 +1874,120 @@ def phase_remove(cwd: Path, target_phase: str, *, force: bool = False) -> PhaseR
         target_dir: str | None = None
         if phases_dir.is_dir():
             dirs = _list_phase_dirs(cwd)
-            target_dir = next(
-                (d for d in dirs if d.startswith(normalized + "-") or d == normalized),
-                None,
-            )
+            target_dirs = [d for d in dirs if _phase_dir_in_subtree(d, normalized)]
+        target_dir = next(
+            (dir_name for dir_name in target_dirs if phase_normalize(_phase_dir_entry(dir_name)[0]) == normalized),
+            None,
+        )
 
         renamed_dirs: list[RenameEntry] = []
         renamed_files: list[RenameEntry] = []
 
         with file_lock(roadmap_path):
+            roadmap_before = roadmap_path.read_text(encoding="utf-8")
+            phases_backup_root, phases_backup_path = _backup_directory_tree(phases_dir)
             # Check for executed work (inside lock to avoid TOCTOU race)
-            if target_dir and not force:
-                target_path = phases_dir / target_dir
-                summaries = [f.name for f in target_path.iterdir() if layout.is_summary_file(f.name)]
+            if target_dirs and not force:
+                summaries: list[str] = []
+                for dir_name in target_dirs:
+                    target_path = phases_dir / dir_name
+                    summaries.extend(f.name for f in target_path.iterdir() if layout.is_summary_file(f.name))
                 if summaries:
                     raise PhaseValidationError(
                         f"Phase {target_phase} has {len(summaries)} executed plan(s). Use force=True to remove anyway."
                     )
 
             # Step 1: Update ROADMAP.md
-            roadmap_content = roadmap_path.read_text(encoding="utf-8")
-            roadmap_phase_num = phase_unpad(target_phase)
-            target_escaped = re.escape(roadmap_phase_num)
+            roadmap_content = roadmap_before
+            removed_phase_numbers = [
+                phase.number for phase in roadmap_analyze(cwd).phases if _phase_in_subtree(phase.number, normalized)
+            ]
+            if not removed_phase_numbers:
+                removed_phase_numbers = [phase_unpad(target_phase)]
 
-            # Remove phase section
-            section_pattern = re.compile(
-                rf"\n?#{{2,4}}\s*Phase\s+{target_escaped}\s*:[\s\S]*?(?=\n#{{2,4}}\s+Phase\s+\d|$)",
-                re.IGNORECASE,
+            for phase_num in sorted(removed_phase_numbers, key=lambda value: (len(value.split(".")), value), reverse=True):
+                target_escaped = re.escape(phase_num)
+
+                section_pattern = re.compile(
+                    rf"\n?#{{2,4}}\s*Phase\s+{target_escaped}\s*:[\s\S]*?(?=\n#{{2,4}}\s+Phase\s+\d|$)",
+                    re.IGNORECASE,
+                )
+                roadmap_content = section_pattern.sub("", roadmap_content)
+
+                checkbox_pattern = re.compile(
+                    rf"\n?-\s*\[[ x]\]\s*.*Phase\s+{target_escaped}[:\s][^\n]*",
+                    re.IGNORECASE,
+                )
+                roadmap_content = checkbox_pattern.sub("", roadmap_content)
+
+                table_pattern = re.compile(
+                    rf"\n?\|\s*{target_escaped}\.?\s[^|]*\|[^\n]*",
+                    re.IGNORECASE,
+                )
+                roadmap_content = table_pattern.sub("", roadmap_content)
+
+            roadmap_content = re.sub(
+                r"(#{2,4}\s*Phase\s+)(\d+(?:\.\d+)*)(\s*:)",
+                lambda m: f"{m.group(1)}{_shift_phase_reference_after_removal(m.group(2), normalized)}{m.group(3)}",
+                roadmap_content,
+                flags=re.IGNORECASE,
             )
-            roadmap_content = section_pattern.sub("", roadmap_content)
-
-            # Remove checkbox
-            checkbox_pattern = re.compile(
-                rf"\n?-\s*\[[ x]\]\s*.*Phase\s+{target_escaped}[:\s][^\n]*",
-                re.IGNORECASE,
+            roadmap_content = re.sub(
+                r"(^\s*-\s*\[[ x]\]\s*(?:\*\*)?Phase\s+)(\d+(?:\.\d+)*)([:\s])",
+                lambda m: f"{m.group(1)}{_shift_phase_reference_after_removal(m.group(2), normalized)}{m.group(3)}",
+                roadmap_content,
+                flags=re.MULTILINE,
             )
-            roadmap_content = checkbox_pattern.sub("", roadmap_content)
-
-            # Remove table row
-            table_pattern = re.compile(
-                rf"\n?\|\s*{target_escaped}\.?\s[^|]*\|[^\n]*",
-                re.IGNORECASE,
+            roadmap_content = re.sub(
+                r"(Depends on:\*\*\s*Phase\s+)(\d+(?:\.\d+)*)\b",
+                lambda m: f"{m.group(1)}{_shift_phase_reference_after_removal(m.group(2), normalized)}",
+                roadmap_content,
+                flags=re.IGNORECASE,
             )
-            roadmap_content = table_pattern.sub("", roadmap_content)
-
-            # Renumber ROADMAP references for integer removal
-            if not is_decimal:
-                removed_int = int(normalized)
-                roadmap_content = re.sub(
-                    r"(#{2,4}\s*Phase\s+)(\d+(?:\.\d+)*)(\s*:)",
-                    lambda m: f"{m.group(1)}{_decrement_phase_reference(m.group(2), removed_int)}{m.group(3)}",
-                    roadmap_content,
-                    flags=re.IGNORECASE,
-                )
-                roadmap_content = re.sub(
-                    r"(^\s*-\s*\[[ x]\]\s*(?:\*\*)?Phase\s+)(\d+(?:\.\d+)*)([:\s])",
-                    lambda m: f"{m.group(1)}{_decrement_phase_reference(m.group(2), removed_int)}{m.group(3)}",
-                    roadmap_content,
-                    flags=re.MULTILINE,
-                )
-                roadmap_content = re.sub(
-                    r"(Depends on:\*\*\s*Phase\s+)(\d+(?:\.\d+)*)\b",
-                    lambda m: f"{m.group(1)}{_decrement_phase_reference(m.group(2), removed_int)}",
-                    roadmap_content,
-                    flags=re.IGNORECASE,
-                )
-                roadmap_content = re.sub(
-                    r"(\|\s*)(\d+(?:\.\d+)*)(\.\s)",
-                    lambda m: f"{m.group(1)}{_decrement_phase_reference(m.group(2), removed_int)}{m.group(3)}",
-                    roadmap_content,
-                )
-                roadmap_content = re.sub(
-                    r"(?<![\d.])(\d{2}(?:\.\d+)*)(?=-)",
-                    lambda m: phase_normalize(_decrement_phase_reference(phase_unpad(m.group(1)), removed_int)),
-                    roadmap_content,
-                )
+            roadmap_content = re.sub(
+                r"(\|\s*)(\d+(?:\.\d+)*)(\.\s)",
+                lambda m: f"{m.group(1)}{_shift_phase_reference_after_removal(m.group(2), normalized)}{m.group(3)}",
+                roadmap_content,
+            )
+            roadmap_content = re.sub(
+                r"(?<![\d.])(\d{2}(?:\.\d+)*)(?=-)",
+                lambda m: _shift_phase_reference_after_removal(m.group(1), normalized, normalize_output=True),
+                roadmap_content,
+            )
 
             atomic_write(roadmap_path, roadmap_content)
+            try:
+                # Step 2: Filesystem operations
+                for dir_name in target_dirs:
+                    shutil.rmtree(phases_dir / dir_name)
 
-            # Step 2: Filesystem operations
-            if target_dir:
-                shutil.rmtree(phases_dir / target_dir)
+                if is_decimal:
+                    rd, rf_ = _renumber_decimal_phases(phases_dir, normalized)
+                elif phases_dir.is_dir():
+                    rd, rf_ = _renumber_integer_phases(phases_dir, int(normalized))
+                else:
+                    rd, rf_ = [], []
+                renamed_dirs = rd
+                renamed_files = rf_
 
-            if is_decimal:
-                rd, rf_ = _renumber_decimal_phases(phases_dir, normalized)
-            elif phases_dir.is_dir():
-                rd, rf_ = _renumber_integer_phases(phases_dir, int(normalized))
-            else:
-                rd, rf_ = [], []
-            renamed_dirs = rd
-            renamed_files = rf_
-
-            # Step 3: Update STATE.md
-            state_path = _state_path(cwd)
-            if state_path.exists():
-                with file_lock(state_path):
-                    state_content = state_path.read_text(encoding="utf-8")
-                    updated_roadmap = roadmap_analyze(cwd)
-                    total_phases = updated_roadmap.phase_count
-
-                    state_content = re.sub(
-                        r"(\*\*Total Phases:\*\*\s*)(?:\d+|[—\-]+)",
-                        rf"\g<1>{total_phases}",
+                # Step 3: Update STATE.md through the canonical state lock path.
+                updated_roadmap = roadmap_analyze(cwd)
+                state_updated = _update_state_markdown_locked(
+                    cwd,
+                    lambda state_content: _phase_remove_state_content(
+                        cwd,
                         state_content,
-                    )
-                    state_content = re.sub(
-                        r"(\bof\s+)\d+(\s*(?:\(|phases?))",
-                        rf"\g<1>{total_phases}\2",
-                        state_content,
-                        flags=re.IGNORECASE,
-                    )
-
-                    current_phase_before = _extract_state_field(state_content, "Current Phase")
-                    mapped_phase = _remap_phase_after_removal(
-                        current_phase_before,
-                        target_phase,
-                        [phase.number for phase in updated_roadmap.phases],
-                    )
-                    mapped_phase_name = None
-                    if mapped_phase is not None:
-                        mapped_phase_entry = _get_roadmap_phase_by_number(cwd, mapped_phase)
-                        mapped_phase_name = mapped_phase_entry.name if mapped_phase_entry else None
-
-                    replacement_phase = mapped_phase or "\u2014"
-                    replacement_name = mapped_phase_name or "\u2014"
-                    state_content = _replace_state_field(state_content, "Current Phase", replacement_phase)
-                    state_content = _replace_state_field(state_content, "Current Phase Name", replacement_name)
-
-                    current_was_removed = (
-                        current_phase_before is not None
-                        and compare_phase_numbers(phase_normalize(current_phase_before), phase_normalize(target_phase))
-                        == 0
-                    )
-                    if current_was_removed:
-                        state_content = _replace_state_field(state_content, "Current Plan", "\u2014")
-
-                    if mapped_phase is not None:
-                        mapped_info = find_phase(cwd, mapped_phase)
-                        plan_total = len(mapped_info.plans) if mapped_info else 0
-                        total_plans_value = str(plan_total) if plan_total else "\u2014"
-                    else:
-                        total_plans_value = "\u2014"
-                    state_content = _replace_state_field(state_content, "Total Plans in Phase", total_plans_value)
-
-                    _save_state_markdown(cwd, state_content)
+                        target_phase=target_phase,
+                        updated_roadmap=updated_roadmap,
+                    ),
+                )
+            except Exception:
+                atomic_write(roadmap_path, roadmap_before)
+                _restore_directory_tree(phases_dir, phases_backup_path)
+                raise
+            finally:
+                if phases_backup_root is not None and phases_backup_root.exists():
+                    shutil.rmtree(phases_backup_root, ignore_errors=True)
 
         result = PhaseRemoveResult(
             removed=target_phase,
@@ -1718,7 +1995,7 @@ def phase_remove(cwd: Path, target_phase: str, *, force: bool = False) -> PhaseR
             renamed_directories=renamed_dirs,
             renamed_files=renamed_files,
             roadmap_updated=True,
-            state_updated=state_path.exists(),
+            state_updated=state_updated,
         )
 
     sync_phase_checkpoints(cwd)
@@ -1726,12 +2003,10 @@ def phase_remove(cwd: Path, target_phase: str, *, force: bool = False) -> PhaseR
 
 
 def _renumber_decimal_phases(phases_dir: Path, normalized: str) -> tuple[list[RenameEntry], list[RenameEntry]]:
-    """Renumber sibling decimal phases after removing one.
+    """Renumber later sibling subtrees after removing a decimal phase.
 
-    E.g., removing 06.2: 06.3 -> 06.2, 06.4 -> 06.3.
-    Sorts ascending so each rename lands on the slot just vacated by the
-    previous rename, avoiding collisions when sibling directories share
-    the same slug.  Validates before executing.
+    E.g., removing ``06.2`` shifts ``06.3`` -> ``06.2`` and
+    ``06.3.1`` -> ``06.2.1`` while preserving deeper suffixes.
     """
     renamed_dirs: list[RenameEntry] = []
     renamed_files: list[RenameEntry] = []
@@ -1739,60 +2014,44 @@ def _renumber_decimal_phases(phases_dir: Path, normalized: str) -> tuple[list[Re
     if not phases_dir.is_dir():
         return renamed_dirs, renamed_files
 
-    base_parts = normalized.split(".")
-    # Only renumber single-level decimal phases (e.g. "06.2").
-    # Multi-level phases like "06.1.2" are sub-phases of sub-phases
-    # and should not trigger sibling renumbering.
-    if len(base_parts) != 2:
-        return renamed_dirs, renamed_files
-    base_int = base_parts[0]
-    removed_decimal = int(base_parts[1])
-
     dirs = _list_phase_dirs_raw(phases_dir)
-    dec_pattern = re.compile(rf"^{re.escape(base_int)}\.(\d+)-?(.*)$")
-
-    to_rename = []
+    to_rename: list[dict[str, str]] = []
     for d in dirs:
-        dm = dec_pattern.match(d)
-        if dm and int(dm.group(1)) > removed_decimal:
-            to_rename.append(
-                {
-                    "dir": d,
-                    "old_decimal": int(dm.group(1)),
-                    "slug": dm.group(2) or "",
-                }
-            )
+        try:
+            old_prefix, slug = _phase_dir_entry(d)
+        except PhaseError:
+            continue
+        new_prefix = _shift_phase_reference_after_removal(old_prefix, normalized, normalize_output=True)
+        if new_prefix == old_prefix:
+            continue
+        to_rename.append({"dir": d, "old_prefix": old_prefix, "new_prefix": new_prefix, "slug": slug})
 
-    to_rename.sort(key=lambda x: x["old_decimal"])
+    to_rename.sort(key=lambda item: [int(part) for part in phase_unpad(item["old_prefix"]).split(".")])
 
     # Dry-run validation
-    planned_ops = []
+    planned_ops: list[tuple[dict[str, str], str]] = []
     for item in to_rename:
-        new_decimal = item["old_decimal"] - 1
-        new_dir_name = f"{base_int}.{new_decimal}-{item['slug']}" if item["slug"] else f"{base_int}.{new_decimal}"
+        new_dir_name = f"{item['new_prefix']}-{item['slug']}" if item["slug"] else item["new_prefix"]
         src = phases_dir / item["dir"]
         dest = phases_dir / new_dir_name
         if not src.exists():
             raise PhaseError(f'Renumber validation failed: source "{item["dir"]}" does not exist')
         if dest.exists() and not any(t["dir"] == new_dir_name for t in to_rename):
             raise PhaseError(f'Renumber validation failed: destination "{new_dir_name}" already exists')
-        planned_ops.append((item, new_decimal, new_dir_name))
+        planned_ops.append((item, new_dir_name))
 
     # Execute with rollback tracking
     completed_dir_ops: list[tuple[str, str]] = []
     completed_file_ops: list[tuple[str, str, str]] = []
     try:
-        for item, new_decimal, new_dir_name in planned_ops:
-            old_phase_id = f"{base_int}.{item['old_decimal']}"
-            new_phase_id = f"{base_int}.{new_decimal}"
-
+        for item, new_dir_name in planned_ops:
             (phases_dir / item["dir"]).rename(phases_dir / new_dir_name)
             completed_dir_ops.append((item["dir"], new_dir_name))
             renamed_dirs.append(RenameEntry(**{"from": item["dir"], "to": new_dir_name}))
 
             for f in sorted((phases_dir / new_dir_name).iterdir()):
-                if f.is_file() and f.name.startswith(old_phase_id):
-                    new_file_name = new_phase_id + f.name[len(old_phase_id) :]
+                if f.is_file() and f.name.startswith(item["old_prefix"]):
+                    new_file_name = item["new_prefix"] + f.name[len(item["old_prefix"]) :]
                     f.rename(phases_dir / new_dir_name / new_file_name)
                     completed_file_ops.append((new_dir_name, f.name, new_file_name))
                     renamed_files.append(RenameEntry(**{"from": f.name, "to": new_file_name}))
@@ -1999,7 +2258,6 @@ def phase_complete(
     _validate_phase_number(phase_num)
 
     roadmap_path = _roadmap_path(cwd)
-    state_path = _state_path(cwd)
     unpadded = phase_unpad(phase_num)
     today = datetime.now(tz=UTC).strftime("%Y-%m-%d")
 
@@ -2035,8 +2293,9 @@ def phase_complete(
                 formalization_override_claims = list(unformalized)
 
             # Update ROADMAP.md
+            roadmap_before = roadmap_path.read_text(encoding="utf-8") if roadmap_path.exists() else None
             if roadmap_path.exists():
-                roadmap_content = roadmap_path.read_text(encoding="utf-8")
+                roadmap_content = roadmap_before or ""
                 roadmap_phase = phase_unpad(phase_num)
                 roadmap_escaped = re.escape(roadmap_phase)
                 unpadded_escaped = re.escape(unpadded)
@@ -2061,50 +2320,31 @@ def phase_complete(
                 )
                 atomic_write(roadmap_path, roadmap_content)
 
-            # Find next phase from ROADMAP, even if no directory exists yet.
-            next_phase = _get_next_roadmap_phase(cwd, phase_num)
-            if next_phase is not None:
-                next_phase_num = phase_normalize(next_phase.number)
-                next_phase_name = next_phase.name or None
-                is_last_phase = False
+            try:
+                # Find next phase from ROADMAP, even if no directory exists yet.
+                next_phase = _get_next_roadmap_phase(cwd, phase_num)
+                if next_phase is not None:
+                    next_phase_num = phase_normalize(next_phase.number)
+                    next_phase_name = next_phase.name or None
+                    is_last_phase = False
 
-            # Update STATE.md
-            if state_path.exists():
-                with file_lock(state_path):
-                    state_content = state_path.read_text(encoding="utf-8")
-
-                    new_status = "Milestone complete" if is_last_phase else "Ready to plan"
-                    current_status = _extract_state_field(state_content, "Status") or ""
-                    _validate_transition(current_status, new_status)
-
-                    state_content = _replace_state_field(state_content, "Current Phase", next_phase_num or phase_num)
-
-                    phase_name_display = next_phase_name.replace('-', ' ') if next_phase_name else (next_phase_num or "\u2014")
-                    state_content = _replace_state_field(state_content, "Current Phase Name", phase_name_display)
-                    state_content = _replace_state_field(
+                # Update STATE.md through the canonical state lock path.
+                state_updated = _update_state_markdown_locked(
+                    cwd,
+                    lambda state_content: _phase_complete_state_content(
+                        cwd,
                         state_content,
-                        "Status",
-                        "Milestone complete" if is_last_phase else "Ready to plan",
-                    )
-                    state_content = _replace_state_field(state_content, "Current Plan", "\u2014")
-
-                    em_dash = "\u2014"
-                    if next_phase_num:
-                        next_info = find_phase(cwd, next_phase_num)
-                        next_plan_count = len(next_info.plans) if next_info else 0
-                        replacement = str(next_plan_count) if next_plan_count else em_dash
-                        state_content = _replace_state_field(state_content, "Total Plans in Phase", replacement)
-                    else:
-                        state_content = _replace_state_field(state_content, "Total Plans in Phase", em_dash)
-
-                    state_content = _replace_state_field(state_content, "Last Activity", today)
-
-                    transition_msg = f"Phase {phase_num} complete"
-                    if next_phase_num:
-                        transition_msg += f", transitioned to Phase {next_phase_num}"
-                    state_content = _replace_state_field(state_content, "Last Activity Description", transition_msg)
-
-                    _save_state_markdown(cwd, state_content)
+                        phase_num=phase_num,
+                        next_phase_num=next_phase_num,
+                        next_phase_name=next_phase_name,
+                        today=today,
+                        is_last_phase=is_last_phase,
+                    ),
+                )
+            except Exception:
+                if roadmap_before is not None:
+                    atomic_write(roadmap_path, roadmap_before)
+                raise
 
             # sync_phase_checkpoints() already degrades gracefully for malformed
             # or unreadable summaries. Let unexpected render/write failures
@@ -2145,7 +2385,6 @@ def milestone_complete(cwd: Path, version: str, *, name: str | None = None) -> M
 
     roadmap_path = _roadmap_path(cwd)
     req_path = _planning_path(cwd) / REQUIREMENTS_FILENAME
-    state_path = _state_path(cwd)
     milestones_path = _planning_path(cwd) / MILESTONES_FILENAME
     archive_dir = _planning_path(cwd) / MILESTONES_DIR_NAME
     phases_dir = _phases_dir(cwd)
@@ -2153,6 +2392,7 @@ def milestone_complete(cwd: Path, version: str, *, name: str | None = None) -> M
     milestone_name = name or version
 
     archive_dir.mkdir(parents=True, exist_ok=True)
+    state_updated = False
 
     with grd_span("milestone.complete", version=version, milestone=milestone_name):
         # Gather stats from the union of roadmap phases and on-disk phase dirs so
@@ -2201,48 +2441,61 @@ def milestone_complete(cwd: Path, version: str, *, name: str | None = None) -> M
             )
 
         with file_lock(roadmap_path):
-            if roadmap_path.exists():
-                content = roadmap_path.read_text(encoding="utf-8")
-                atomic_write(archive_dir / f"{version}-ROADMAP.md", content)
-
-            if req_path.exists():
-                req_content = req_path.read_text(encoding="utf-8")
-                archive_header = (
-                    f"# Requirements Archive: {version} {milestone_name}\n\n"
-                    f"**Archived:** {today}\n"
-                    f"**Status:** SHIPPED\n\n"
-                    f"For current requirements, see `{PLANNING_DIR_NAME}/REQUIREMENTS.md`.\n\n---\n\n"
-                )
-                atomic_write(archive_dir / f"{version}-REQUIREMENTS.md", archive_header + req_content)
-
+            milestones_before = milestones_path.read_text(encoding="utf-8") if milestones_path.exists() else None
+            roadmap_archive_path = archive_dir / f"{version}-ROADMAP.md"
+            requirements_archive_path = archive_dir / f"{version}-REQUIREMENTS.md"
+            archived_audit_path = archive_dir / f"{version}-MILESTONE-AUDIT.md"
             audit_file = _planning_path(cwd) / f"{version}-MILESTONE-AUDIT.md"
-            if audit_file.exists():
-                shutil.move(str(audit_file), str(archive_dir / f"{version}-MILESTONE-AUDIT.md"))
+            try:
+                if roadmap_path.exists():
+                    content = roadmap_path.read_text(encoding="utf-8")
+                    atomic_write(roadmap_archive_path, content)
 
-            acc_list = "\n".join(f"- {a}" for a in accomplishments) if accomplishments else "- (none recorded)"
-            milestone_entry = (
-                f"## {version} {milestone_name} (Shipped: {today})\n\n"
-                f"**Phases completed:** {completion_snapshot.phase_count} phases, {completion_snapshot.total_plans} plans, {total_tasks} tasks\n\n"
-                f"**Key accomplishments:**\n{acc_list}\n\n---\n\n"
-            )
-
-            if milestones_path.exists():
-                existing = milestones_path.read_text(encoding="utf-8")
-                atomic_write(milestones_path, _upsert_milestone_entry(existing, version, milestone_entry))
-            else:
-                atomic_write(milestones_path, f"# Milestones\n\n{milestone_entry}")
-
-            if state_path.exists():
-                with file_lock(state_path):
-                    state_content = state_path.read_text(encoding="utf-8")
-                    current_status = _extract_state_field(state_content, "Status") or ""
-                    _validate_transition(current_status, "Milestone complete")
-                    state_content = _replace_state_field(state_content, "Status", "Milestone complete")
-                    state_content = _replace_state_field(state_content, "Last Activity", today)
-                    state_content = _replace_state_field(
-                        state_content, "Last Activity Description", f"{version} milestone completed and archived"
+                if req_path.exists():
+                    req_content = req_path.read_text(encoding="utf-8")
+                    archive_header = (
+                        f"# Requirements Archive: {version} {milestone_name}\n\n"
+                        f"**Archived:** {today}\n"
+                        f"**Status:** SHIPPED\n\n"
+                        f"For current requirements, see `{PLANNING_DIR_NAME}/REQUIREMENTS.md`.\n\n---\n\n"
                     )
-                    _save_state_markdown(cwd, state_content)
+                    atomic_write(requirements_archive_path, archive_header + req_content)
+
+                if audit_file.exists():
+                    shutil.move(str(audit_file), str(archived_audit_path))
+
+                acc_list = "\n".join(f"- {a}" for a in accomplishments) if accomplishments else "- (none recorded)"
+                milestone_entry = (
+                    f"## {version} {milestone_name} (Shipped: {today})\n\n"
+                    f"**Phases completed:** {completion_snapshot.phase_count} phases, {completion_snapshot.total_plans} plans, {total_tasks} tasks\n\n"
+                    f"**Key accomplishments:**\n{acc_list}\n\n---\n\n"
+                )
+
+                if milestones_path.exists():
+                    existing = milestones_path.read_text(encoding="utf-8")
+                    atomic_write(milestones_path, _upsert_milestone_entry(existing, version, milestone_entry))
+                else:
+                    atomic_write(milestones_path, f"# Milestones\n\n{milestone_entry}")
+
+                state_updated = _update_state_markdown_locked(
+                    cwd,
+                    lambda state_content: _milestone_complete_state_content(
+                        state_content,
+                        today=today,
+                        version=version,
+                    ),
+                )
+            except Exception:
+                _restore_text_file(milestones_path, milestones_before)
+                if archived_audit_path.exists() and not audit_file.exists():
+                    shutil.move(str(archived_audit_path), str(audit_file))
+                if roadmap_archive_path.exists():
+                    roadmap_archive_path.unlink()
+                if requirements_archive_path.exists():
+                    requirements_archive_path.unlink()
+                if not any(archive_dir.iterdir()):
+                    archive_dir.rmdir()
+                raise
 
             # sync_phase_checkpoints() already handles malformed or unreadable
             # summaries non-fatally. Let unexpected sync failures propagate.
@@ -2262,7 +2515,7 @@ def milestone_complete(cwd: Path, version: str, *, name: str | None = None) -> M
                 audit=(archive_dir / f"{version}-MILESTONE-AUDIT.md").exists(),
             ),
             milestones_updated=True,
-            state_updated=state_path.exists(),
+            state_updated=state_updated,
         )
 
 
@@ -2342,6 +2595,28 @@ def progress_render(cwd: Path, fmt: str = "json") -> ProgressJsonResult | Progre
             text = f"[{bar}] {total_summaries}/{total_plans} plans ({percent}%)"
             return ProgressBarResult(bar=text, percent=percent, completed=total_summaries, total=total_plans)
 
+        # Advisory read of state.json to detect divergence (read-only, no lock).
+        state_pct: int | None = None
+        diverged = False
+        progress_warnings: list[str] = []
+        try:
+            sj = layout.state_json
+            if sj.is_file():
+                raw = json.loads(sj.read_text(encoding="utf-8"))
+                pos = raw.get("position") or {}
+                val = pos.get("progress_percent")
+                if val is not None:
+                    state_pct = int(val)
+                    if state_pct != percent:
+                        diverged = True
+                        progress_warnings.append(
+                            f"state.json progress_percent ({state_pct}%) differs from "
+                            f"filesystem progress ({percent}%). "
+                            f"Run 'grd state update-progress' to reconcile."
+                        )
+        except (FileNotFoundError, json.JSONDecodeError, OSError, KeyError, TypeError):
+            logger.debug("state.json advisory read failed during progress render", exc_info=True)
+
         return ProgressJsonResult(
             milestone_version=milestone.version,
             milestone_name=milestone.name,
@@ -2349,4 +2624,7 @@ def progress_render(cwd: Path, fmt: str = "json") -> ProgressJsonResult | Progre
             total_plans=total_plans,
             total_summaries=total_summaries,
             percent=percent,
+            state_progress_percent=state_pct,
+            diverged=diverged,
+            warnings=progress_warnings,
         )

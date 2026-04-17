@@ -49,10 +49,15 @@ def test_orchestrator_owned_agents_include_edit_capable_writers() -> None:
 
 
 def test_registry_agent_metadata_values_are_valid() -> None:
-    valid_surfaces = set(registry.VALID_AGENT_SURFACES)
-    valid_role_families = set(registry.VALID_AGENT_ROLE_FAMILIES)
-    valid_artifact_authorities = set(registry.VALID_AGENT_ARTIFACT_WRITE_AUTHORITIES)
-    valid_shared_state_authorities = set(registry.VALID_AGENT_SHARED_STATE_AUTHORITIES)
+    valid_surfaces = set(registry.AGENT_SURFACES)
+    valid_role_families = set(registry.AGENT_ROLE_FAMILIES)
+    valid_artifact_authorities = set(registry.AGENT_ARTIFACT_WRITE_AUTHORITIES)
+    valid_shared_state_authorities = set(registry.AGENT_SHARED_STATE_AUTHORITIES)
+
+    assert not hasattr(registry, "VALID_AGENT_SURFACES")
+    assert not hasattr(registry, "VALID_AGENT_ROLE_FAMILIES")
+    assert not hasattr(registry, "VALID_AGENT_ARTIFACT_WRITE_AUTHORITIES")
+    assert not hasattr(registry, "VALID_AGENT_SHARED_STATE_AUTHORITIES")
 
     for name in registry.list_agents():
         agent = registry.get_agent(name)

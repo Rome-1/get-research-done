@@ -1,10 +1,11 @@
 ---
 template_version: 1
+type: continue-here-template
 ---
 
-<!-- Used by: pause-work workflow for session handoff. -->
+<!-- Used by: pause-work workflow as the canonical temporary pause/resume handoff artifact. -->
 
-# Continue-Here Template
+# Canonical Temporary Continue-Here Handoff Template
 
 Copy and fill this structure for `.grd/phases/XX-name/.continue-here.md`:
 
@@ -54,6 +55,8 @@ last_updated: 2026-03-15T14:30:00Z
 [Expressions, values, and partial derivations that the next session needs.
 Each entry should have: LaTeX equation, explicit units, and validity range.]
 
+If a canonical derived result was persisted this session, record its `result_id` here and repeat it as `last_result_id` so a later rerun can target the same registry entry directly.
+
 Equations:
 
 - `H_eff = H_0 + \lambda V_1 + \lambda^2 V_2` (units: energy, valid: \lambda << 1)
@@ -65,7 +68,7 @@ Numerical values:
 - Coupling at critical point: [value +/- uncertainty, units, scheme]
 - Eigenvalues computed for N = [values], stored in [file path]
 
-Convention snapshot (must match state.json convention_lock):
+Convention snapshot (must match `state.json.convention_lock`):
 
 - Metric: [signature used in this session]
 - Fourier: [convention used]
@@ -122,6 +125,7 @@ this file is deleted on resume. That file is append-only and cumulative.
 
 <!-- Reference the result IDs added to state.json this session -->
 <!-- Each entry links back to the state.json intermediate_results key -->
+<!-- If a derived result is the rerun anchor, repeat it explicitly as last_result_id. -->
 
 - Result ID: [id] -- [brief description of what was computed]
 
@@ -146,6 +150,7 @@ Required YAML frontmatter:
 <guidelines>
 - Be specific enough that a fresh agent instance understands immediately
 - Include WHY decisions were made, not just what (physics reasoning)
+- Preserve these canonical section names so pause/resume tooling and humans see the same structure every time
 - Record intermediate results as structured entries: LaTeX equation + units + validity range
 - Every equation must have explicit units (even if dimensionless) and validity domain
 - Note sign conventions and normalization choices (these are the #1 source of errors on resume)

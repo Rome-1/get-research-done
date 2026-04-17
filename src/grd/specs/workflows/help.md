@@ -99,10 +99,24 @@ Project ─── the overall research goal
 
 **GRD** (Get Research Done) creates hierarchical research plans optimized for solo agentic physics research with AI research agents.
 
+## Startup Checklist
+
+Use the shared onboarding surfaces in the README or installer output for the longer beginner-first startup order and prerequisites.
+
+1. `grd:help` - See the command reference first.
+2. `grd:start` - Let GRD choose the safest first step for the current folder.
+3. `grd:tour` - Get a read-only walkthrough before you choose.
+4. `grd:new-project` or `grd:map-research` - Begin the actual work path once you know the folder state.
+5. `grd:resume-work` - Continue later from the selected project's canonical state.
+6. `grd:settings` - Change autonomy, permissions, or runtime preferences after your first successful start or later.
+7. `grd:set-tier-models` - Directly pin concrete `tier-1`, `tier-2`, and `tier-3` model ids for the active runtime.
+
 ## Invocation Surfaces
 
 This reference lists canonical in-runtime slash-command names in `/grd:*` form.
 
+- If you are new to terminals or runtime setup, start with the Beginner Onboarding Hub linked from the README and installer output.
+- That shared onboarding surface keeps the OS guides, runtime guides, and startup checklist in one place.
 - Use these names inside the installed agent/runtime command surface.
 - The local `grd` CLI may expose different `grd ...` subcommands and grouping. Use `grd --help` to inspect the executable CLI surface directly.
 - If you need to validate whether a slash-command can run in the current workspace, use `grd validate command-context grd:<name>`.
@@ -114,7 +128,136 @@ This reference lists canonical in-runtime slash-command names in `/grd:*` form.
 3. `/grd:plan-phase 1` - Create detailed plan for first phase
 4. `/grd:execute-phase 1` - Execute the phase
 
-## Core Workflow
+Use the path that matches your current situation:
+
+**New work**
+1. `grd:start` - Guided first-run router that chooses the safest first step for this folder
+2. `grd:tour` - Get a read-only overview before choosing
+3. `grd:new-project` - Create a full GRD project
+4. `grd:new-project --minimal` - Create a project through the shortest setup path
+
+**Existing work**
+1. `grd:map-research` - Map an existing folder before turning it into a GRD project
+2. `grd:new-project` - Turn that mapped context into a full GRD project
+
+**Returning work**
+1. `grd resume` - Reopen the current-workspace recovery snapshot from your normal terminal
+2. `grd resume --recent` - Find a different workspace first from your normal terminal
+3. `grd:resume-work` - Continue inside the reopened project's canonical state
+4. `grd:progress` - See the broader project snapshot
+5. `grd:suggest-next` - Get the fastest next action
+6. `grd observe execution` - Watch progress / waiting state, conservative `possibly stalled` wording, and the next read-only checks from your normal terminal
+7. `grd cost` - Review recorded machine-local usage / cost from your normal terminal
+
+**Post-startup settings**
+1. `grd:settings` - Change autonomy, permissions, and broader runtime preferences after your first successful start or later
+2. `grd:set-tier-models` - Pin concrete `tier-1`, `tier-2`, and `tier-3` model ids only
+
+When a side investigation appears later, use `grd:tangent` first. It is the chooser for stay / quick / defer / branch. Use `grd:branch-hypothesis` only when that tangent needs its own git-backed branch.
+
+## Command Index
+
+This is the compact grouped list of runtime commands. For normal-terminal install, readiness, and diagnostics commands, use `grd --help`.
+
+### Starter commands
+
+- `grd:help` - Show the quick start or command index
+- `grd:start` - Guided first-run router for the safest first path in the current folder
+- `grd:tour` - Show a read-only overview of the main commands
+- `grd:new-project` - Create a full GRD project
+- `grd:new-project --minimal` - Create a GRD project through the shortest setup path
+- `grd:map-research` - Map an existing research folder before planning
+- `grd:resume-work` - Resume the selected project's canonical state inside the runtime
+- `grd:progress` - Review project status and likely next steps
+- `grd:suggest-next` - Ask only for the next best action
+- `grd:explain [concept]` - Explain a concept, method, result, or paper
+- `grd:quick` - Run one small bounded task without the full phase workflow
+
+### Planning and execution
+
+- `grd:discuss-phase <number>` - Capture phase context before planning
+- `grd:research-phase <number>` - Run a focused phase literature survey
+- `grd:list-phase-assumptions <number>` - Preview the planned phase approach
+- `grd:discover [phase or topic]` - Survey methods, literature, and tools before planning
+- `grd:show-phase <number>` - Inspect one phase's artifacts and status
+- `grd:plan-phase <number>` - Build a detailed execution plan for a phase
+- `grd:execute-phase <phase-number>` - Run all plans in a phase
+- `grd:autonomous [--from N]` - Run all remaining phases autonomously (discuss→plan→execute→verify each)
+- `grd:derive-equation` - Run a rigorous derivation workflow
+
+### Roadmap and milestones
+
+- `grd:add-phase <description>` - Append a new phase to the roadmap
+- `grd:insert-phase <after> <description>` - Insert urgent work between phases
+- `grd:remove-phase <number>` - Remove a future phase and renumber later ones
+- `grd:revise-phase <number> "<reason>"` - Supersede a completed phase with a replacement
+- `grd:merge-phases <source> <target>` - Fold one phase's results into another
+- `grd:new-milestone <name>` - Start the next milestone
+- `grd:complete-milestone <version>` - Archive a completed milestone
+
+### Validation and analysis
+
+- `grd:verify-work [phase]` - Run physics verification checks
+- `grd:debug [issue description]` - Start a persistent debug session
+- `grd:dimensional-analysis` - Check dimensional consistency
+- `grd:limiting-cases` - Check known limits
+- `grd:numerical-convergence` - Run convergence checks for numerical work
+- `grd:compare-experiment` - Compare results against external data
+- `grd:compare-results` - Compare internal results or baselines
+- `grd:validate-conventions [phase]` - Check notation and convention consistency
+- `grd:regression-check [phase]` - Scan for regressions in recorded verification state
+- `grd:health` - Run project health checks
+- `grd:parameter-sweep [phase]` - Run a structured parameter sweep
+- `grd:sensitivity-analysis` - Rank which inputs matter most
+- `grd:error-propagation` - Track uncertainties through a calculation chain
+
+### Knowledge authoring
+
+- `grd:digest-knowledge [topic|arXiv id|source file|knowledge path]` - Create or update a draft knowledge doc from a topic, arXiv paper, source file, or explicit `GRD/knowledge/` path
+- `grd:review-knowledge [knowledge path|knowledge id]` - Review a knowledge doc, write the review artifact, and promote fresh approved drafts to stable
+
+### Writing and publication
+
+- `grd:literature-review [topic]` - Create a structured literature review
+- `grd:write-paper [title or topic] [--from-phases 1,2,3]` - Draft a paper from project results
+- `grd:peer-review [paper directory or manuscript path]` - Run the staged review workflow
+- `grd:respond-to-referees` - Draft referee responses and revise the paper
+- `grd:arxiv-submission` - Package a built manuscript for arXiv
+- `grd:slides [topic, audience, or source path]` - Create presentation slides
+
+### Tangents, memory, and exports
+
+- `grd:tangent [description]` - Chooser for stay / quick / defer / branch when a side investigation appears
+- `grd:branch-hypothesis <description>` - Explicit git-backed alternative path for a side investigation
+- `grd:compare-branches` - Compare results across hypothesis branches
+- `grd:pause-work` - Save a continuation handoff before stepping away
+- `grd:add-todo [description]` - Capture a task or idea
+- `grd:check-todos [area]` - Review pending todos and pick one
+- `grd:decisions [phase or keyword]` - Search the decision log
+- `grd:graph` - Visualize phase dependencies
+- `grd:export [--format html|latex|zip|all]` - Export project artifacts
+- `grd:export-logs [--format jsonl|json|markdown] [--session <id>] [--last N] [--no-traces] [--output-dir <path>]` - Export observability logs
+- `grd:error-patterns [category]` - Review common project-specific errors
+- `grd:record-insight [description]` - Save a project-specific lesson
+- `grd:audit-milestone [version]` - Audit milestone completion against goals
+- `grd:plan-milestone-gaps` - Turn audit gaps into new phases
+
+### Configuration and maintenance
+
+- `grd:settings` - Guided autonomy, permissions, and runtime configuration after your first successful start or later
+- `grd:set-tier-models` - Directly pin concrete tier model ids
+- `grd:set-profile <profile>` - Switch the abstract model profile
+- `grd:compact-state` - Archive old `STATE.md` entries
+- `grd:sync-state` - Repair diverged `STATE.md` and `state.json`
+- `grd:undo` - Roll back the last GRD operation with a safety checkpoint
+- `grd:update` - Update GRD to the latest version
+- `grd:reapply-patches` - Reapply local modifications after updating
+
+## Detailed Command Reference
+
+Use `grd:help --command <name>` when you want the detailed notes for one runtime command at a time.
+
+### Core Workflow
 
 ```
 /grd:new-project -> /grd:discuss-phase -> /grd:plan-phase -> /grd:execute-phase -> repeat
@@ -125,7 +268,26 @@ This reference lists canonical in-runtime slash-command names in `/grd:*` form.
 **`/grd:new-project`**
 Initialize new research project through unified flow.
 
-One command takes you from research idea to ready-for-investigation:
+- Detects whether the current folder is an existing GRD project, existing non-GRD research, or a new folder
+- Recommends the right entry point instead of forcing the user to guess
+- Routes into `grd:resume-work`, `grd:suggest-next`, `grd:progress`, `grd:tour`, `grd:map-research`, `grd:new-project`, `grd:new-project --minimal`, `grd:help --all`, or `grd:explain`
+- Does not create project artifacts itself; it is an onboarding router
+
+Usage: `grd:start`
+
+**`grd:tour`**
+Show a guided beginner tour of the core GRD commands without taking action.
+
+- Explains the main commands and when to use them
+- Stays read-only and does not create files or route into another workflow
+- Good optional first stop if you want a quick orientation before choosing a path
+
+Usage: `grd:tour`
+
+**`grd:new-project`**
+Initialize a new research project through questioning, optional survey, scoping, and roadmap generation.
+
+One command takes you from idea to ready-for-investigation:
 
 - Deep questioning to understand the physics problem
 - Optional literature survey (spawns 4 parallel scout agents)
@@ -255,6 +417,7 @@ Perform a rigorous physics derivation with systematic verification at each step.
 - Performs step-by-step derivation with dimensional analysis at each stage
 - Verifies intermediate results against known limits and symmetry properties
 - Justifies and bounds all approximations with error estimates
+- For theorem-bearing work, spawns `grd-check-proof` and blocks completion until the proof audit passes
 - Produces a complete, self-contained derivation document with boxed final result
 
 Usage: `/grd:derive-equation "derive the one-loop beta function"`
@@ -366,6 +529,9 @@ Check research status and intelligently route to next action.
 - Lists key results and open issues
 - Offers to execute next plan or create it if missing
 - Detects 100% milestone completion
+- Use `--brief` when returning and you only need orientation
+- Use `--reconcile` only on the runtime `grd:progress` surface when state appears out of sync with disk artifacts
+- The local CLI `grd progress` is a separate read-only renderer and uses `json|bar|table` instead of these runtime flags
 
 Usage: `/grd:progress`
 Usage: `/grd:progress --full` (detailed view with all phase artifacts)
@@ -377,18 +543,20 @@ Usage: `/grd:progress --reconcile` (fix diverged STATE.md and state.json)
 **`/grd:resume-work`**
 Resume research from previous session with full context restoration.
 
-- Reads STATE.md for project context
-- Shows current position and recent progress
-- Offers next actions based on project state
+@{GRD_INSTALL_DIR}/references/orchestration/resume-vocabulary.md
 
 Usage: `/grd:resume-work`
 
 **`/grd:pause-work`**
 Create context handoff when pausing work mid-phase.
 
-- Creates .continue-here file with current state
-- Updates STATE.md session continuity section
+**`grd:pause-work`**
+Create a continuation handoff artifact when pausing work mid-phase.
+
+- Creates the canonical `.continue-here.md` continuation handoff artifact with current state
+- Updates the mirrored STATE.md session continuity entry
 - Captures in-progress work context
+- Run this before leaving mid-phase so `grd:resume-work` has an explicit recorded handoff artifact to restore from canonical continuation state
 
 Usage: `/grd:pause-work`
 
@@ -594,7 +762,6 @@ Usage: `/grd:peer-review paper/`
 
 **`/grd:respond-to-referees`**
 Structure point-by-point response to referee reports and revise the manuscript.
-
 - Parses referee comments into structured items with severity levels
 - Drafts both `.grd/AUTHOR-RESPONSE{round_suffix}.md` and `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` with REF-xxx issue tracking (fixed/rebutted/acknowledged)
 - Consumes `.grd/review/REVIEW-LEDGER*.json` and `.grd/review/REFEREE-DECISION*.json` when present to preserve blocking-issue context
@@ -608,7 +775,8 @@ Usage: `/grd:respond-to-referees`
 **`/grd:arxiv-submission`**
 Prepare a completed paper for arXiv submission with validation and packaging.
 
-- LaTeX validation and compilation check
+- Requires a successful `grd paper-build` before packaging
+- Optional local compiler smoke check if available
 - Bibliography flattening (inline .bbl or resolve .bib)
 - Figure format and resolution checking
 - `\input` resolution into single .tex file (optional)
@@ -635,6 +803,7 @@ Suggest the most impactful next action based on current project state.
 - Produces a prioritized action list
 - Local CLI fallback: `grd --raw suggest`
 - Fastest way to answer "what should I do next?" without reading through progress reports
+- Fastest post-resume command when you only need the next action
 
 Usage: `/grd:suggest-next`
 
@@ -648,14 +817,15 @@ Structured literature review for a physics research topic.
 
 Usage: `/grd:literature-review "Sachdev-Ye-Kitaev model thermodynamics"`
 
-### Hypothesis Branches
+**`grd:digest-knowledge [topic|arXiv id|source file|knowledge path]`**
+Create or update a knowledge document draft from a topic, paper, source file, or explicit knowledge path.
 
 **`/grd:branch-hypothesis <description>`**
 Create a hypothesis branch for parallel investigation of an alternative approach.
 
 - Creates git branch with isolated `.grd/` state
 - Allows exploring alternative methods without disrupting main line
-- Use when two valid approaches exist and you want to compare
+- Use when the tangent should become an explicit git-backed alternative path you intend to compare
 
 Usage: `/grd:branch-hypothesis "Try perturbative RG instead of exact RG"`
 
@@ -764,11 +934,16 @@ Usage: `/grd:plan-milestone-gaps`
 **`/grd:settings`**
 Configure workflow toggles, model profile, `execution.review_cadence`, and runtime-specific tier model overrides interactively.
 
+- Choose how often GRD should pause for you (`Balanced (Recommended)` is the best default for most unattended runs)
+- Review unattended execution budgets and other bounded continuation limits before leaving runs alone
+- Start with a qualitative model-cost posture: `Max quality`, `Balanced`, or `Budget-aware`
+- Sync runtime-owned permissions after autonomy changes when the active runtime supports it
+- If settings reports a relaunch is required, the new autonomy level is not unattended-ready yet
 - Toggle plan researcher, plan checker, and execution verifier agents
 - Configure inter-wave verification gates (`execution.review_cadence`: `dense`, `adaptive`, or `sparse`)
 - Toggle parallel execution of wave plans
-- Select model profile (deep-theory/numerical/exploratory/review/paper-writing)
-- Optionally pin concrete runtime model strings for `tier-1`, `tier-2`, and `tier-3`
+- Select model profile (deep-theory/numerical/exploratory/review/paper-writing); `review` with runtime defaults is the safest first choice
+- Let that posture drive whether you keep runtime defaults or pin concrete runtime model strings for `tier-1`, `tier-2`, and `tier-3`
 - Configure whether planning artifacts are committed (`planning.commit_docs`)
 - Configure git branching strategy (`git.branching_strategy`: `none`, `per-phase`, or `per-milestone`)
 - Updates `.grd/config.json`
@@ -839,6 +1014,8 @@ Show this command reference.
 
 ## Files & Structure
 
+The literature survey lives under `GRD/literature/`, and reviewed knowledge docs live under `GRD/knowledge/` with review artifacts in `GRD/knowledge/reviews/`.
+
 ```
 .grd/
 |-- PROJECT.md            # Research question, framework, parameters
@@ -847,12 +1024,15 @@ Show this command reference.
 |-- STATE.md              # Project memory & context
 |-- MILESTONES.md         # Milestone history
 |-- config.json           # Workflow mode & gates
-|-- research/             # Literature survey results
+|-- literature/           # Literature survey results and citation artifacts
 |   |-- PRIOR-WORK.md     # Established results in the field
 |   |-- METHODS.md        # Standard methods and tools
 |   |-- COMPUTATIONAL.md  # Computational approaches and tools
 |   |-- PITFALLS.md       # Known pitfalls and open problems
 |   +-- SUMMARY.md        # Synthesized survey
+|-- knowledge/            # Knowledge docs and typed review artifacts
+|   |-- K-*.md            # Draft, in_review, stable, or superseded knowledge docs
+|   +-- reviews/          # Deterministic review artifacts
 |-- research-map/         # Theory map (existing research projects)
 |   |-- FORMALISM.md      # Mathematical framework and key equations
 |   |-- REFERENCES.md     # Key papers and their relationships
@@ -887,18 +1067,23 @@ Set during `/grd:new-project` or changed later with `/grd:settings`:
 - Confirms each major step
 - Uses the most checkpoints
 - Best for high-stakes work or learning the workflow
+- Best when you plan to stay nearby and approve each physics-bearing move
 
 **Balanced (Recommended)**
 
 - Handles routine work automatically
 - Pauses on physics decisions, ambiguities, blockers, or scope changes
 - Best default for most projects
+- Best first choice for unattended runs because it still pauses on important physics, scope, and blocker decisions
 
 **YOLO**
 
 - Fastest and least interactive
 - Auto-approves checkpoints and keeps going unless a hard stop fires
 - Best when you want maximum speed and minimal interruptions
+- Use only after `grd:settings` reports runtime permissions are synchronized and no relaunch is still required
+
+Change anytime with `grd:settings`. If it says a relaunch is required, the new autonomy level is not unattended-ready yet.
 
 ## Planning Configuration
 
@@ -949,11 +1134,25 @@ Example config:
 /grd:new-project --minimal @plan.md     # Generate from existing research plan file
 ```
 
-**Resuming work after a break:**
+**Leaving and returning after a break:**
 
 ```
 /grd:progress  # See where you left off and continue
 ```
+
+**Normal terminal, read-only recovery snapshot:**
+
+```
+grd resume
+```
+
+**Normal terminal, read-only machine-local usage / cost summary:**
+
+```
+grd cost
+```
+
+Read-only machine-local usage / cost summary from recorded local telemetry, optional USD budget guardrails, and the current profile tier mix; advisory only, not live budget enforcement or provider billing truth. If telemetry is missing, the USD view stays partial or estimated rather than exact.
 
 **Adding urgent mid-milestone work:**
 
