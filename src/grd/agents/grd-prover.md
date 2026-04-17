@@ -107,6 +107,11 @@ missing Mathlib cache as an unintelligible import-resolution error).
 Daemon state is reported separately in `daemon_running`; a stopped daemon is
 **not** a blocker because the client auto-spawns on first request.
 
+**Exit codes.** All `grd lean` commands use split exit codes — branch on them:
+`0` success, `1` soft-fail (Lean said "no"), `2` bad input, `3` env/bootstrap
+error, `4` daemon/internal crash. An exit 3 means re-run bootstrap; exit 4
+means retry or escalate; exit 1 means the proof failed normally.
+
 Read SUMMARY.md and the contract claims. Read `.grd/state.json` to extract the convention lock. Read any existing `blueprint/` directory to recover state from prior runs.
 
 ### 2. Translate informal → Lean statement (autoformalization)

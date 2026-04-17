@@ -21,6 +21,40 @@ if TYPE_CHECKING:
 
 lean_app = typer.Typer(help="Lean 4 verification backend (type-check, proof daemon, env)")
 
+# ─── Exit code convention (ge-oc0) ─────────────────────────────────────────
+#   0 = success
+#   1 = soft-fail: Lean/proof/faithfulness rejection (the check ran, answer is "no")
+#   2 = user input error (bad flag combo, malformed claim, missing required arg)
+#   3 = environment / bootstrap error (lean not found, mathlib stale, consent needed)
+#   4 = daemon / internal error (backend crashed, unexpected exception)
+
+EXIT_SOFT_FAIL = 1
+EXIT_INPUT_ERROR = 2
+EXIT_ENV_ERROR = 3
+EXIT_INTERNAL_ERROR = 4
+
+_ERROR_KIND_TO_EXIT: dict[str, int] = {
+    "lean_not_found": EXIT_ENV_ERROR,
+    "timeout": EXIT_SOFT_FAIL,
+    "daemon_unavailable": EXIT_INTERNAL_ERROR,
+    "invalid_request": EXIT_INPUT_ERROR,
+    "io_error": EXIT_INTERNAL_ERROR,
+    "internal_error": EXIT_INTERNAL_ERROR,
+}
+
+
+def _exit_code_for_result(result: object) -> int:
+    """Map a ``LeanCheckResult`` or ``ProveResult`` to the right exit code.
+
+    If the result carries an ``error`` field (orchestration failures),
+    route to the appropriate bucket. Otherwise the Lean/proof check
+    ran but the answer was "no" — soft-fail (exit 1).
+    """
+    error_kind = getattr(result, "error", None)
+    if error_kind is not None:
+        return _ERROR_KIND_TO_EXIT.get(error_kind, EXIT_INTERNAL_ERROR)
+    return EXIT_SOFT_FAIL
+
 
 def _print_diagnostic_hints(result: LeanCheckResult) -> None:
     """Print per-diagnostic hints to stderr for human consumption.
@@ -156,9 +190,8 @@ def lean_check(
 ) -> None:
     """Type-check Lean 4 source.
 
-    Fails (exit 1) when Lean reports error-severity diagnostics or an
-    orchestration error occurs. Successful compiles — including those with
-    warnings — exit 0.
+    Exit codes: 0 success, 1 Lean elaboration error, 2 bad input,
+    3 missing toolchain, 4 internal/daemon error.
     """
     from grd.core.lean.client import check, check_file
 
@@ -169,15 +202,15 @@ def lean_check(
         if not _sys.stdin.isatty():
             code = _sys.stdin.read()
         if not code:
-            _error("Provide inline Lean code, --file <path>, or pipe source on stdin.")
+            _error("Provide inline Lean code, --file <path>, or pipe source on stdin.", code=EXIT_INPUT_ERROR)
 
     if code is not None and file is not None:
-        _error("Pass only one of inline code or --file, not both.")
+        _error("Pass only one of inline code or --file, not both.", code=EXIT_INPUT_ERROR)
 
     if file is not None:
         resolved = file if file.is_absolute() else (_get_cwd() / file).resolve()
         if not resolved.is_file():
-            _error(f"File not found: {resolved}")
+            _error(f"File not found: {resolved}", code=EXIT_INPUT_ERROR)
         result = check_file(
             path=resolved,
             project_root=_get_cwd(),
@@ -199,7 +232,7 @@ def lean_check(
     _output(result)
     _print_diagnostic_hints(result)
     if not result.ok:
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=_exit_code_for_result(result))
 
 
 @lean_app.command("typecheck-file")
@@ -214,7 +247,7 @@ def lean_typecheck_file(
 
     resolved = path if path.is_absolute() else (_get_cwd() / path).resolve()
     if not resolved.is_file():
-        _error(f"File not found: {resolved}")
+        _error(f"File not found: {resolved}", code=EXIT_INPUT_ERROR)
 
     result = check_file(
         path=resolved,
@@ -226,7 +259,7 @@ def lean_typecheck_file(
     _output(result)
     _print_diagnostic_hints(result)
     if not result.ok:
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=_exit_code_for_result(result))
 
 
 @lean_app.command("prove")
@@ -295,7 +328,7 @@ def lean_prove(
         return
 
     if statement is None:
-        _error("Provide a Lean 4 statement, or pass --list-tactics to dump the default ladder.")
+        _error("Provide a Lean 4 statement, or pass --list-tactics to dump the default ladder.", code=EXIT_INPUT_ERROR)
 
     result = prove_statement(
         statement,
@@ -310,7 +343,7 @@ def lean_prove(
     _output(result)
     _print_prove_hints(result)
     if not result.ok:
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=_exit_code_for_result(result))
 
 
 @lean_app.command("env")
@@ -405,7 +438,7 @@ def lean_verify_claim(
     )
 
     if physics and no_physics:
-        _error("Pass at most one of --physics / --no-physics.")
+        _error("Pass at most one of --physics / --no-physics.", code=EXIT_INPUT_ERROR)
     physics_override: bool | None
     if physics:
         physics_override = True
@@ -544,7 +577,7 @@ def lean_bootstrap(
     )
     _output(report)
     if not report.ok:
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=EXIT_ENV_ERROR)
 
 
 @lean_app.command("serve-repl")
@@ -580,7 +613,10 @@ def lean_serve_repl(
 
         ok = spawn_daemon(project_root, idle_timeout_s=idle_timeout_s)
         if not ok:
-            _error(f"Failed to spawn detached daemon (socket never appeared at {socket_path(project_root)}).")
+            _error(
+                f"Failed to spawn detached daemon (socket never appeared at {socket_path(project_root)}).",
+                code=EXIT_ENV_ERROR,
+            )
         _output({"ok": True, "socket": str(socket_path(project_root))})
         return
 

@@ -86,7 +86,17 @@ grd lean serve-repl                      # Start persistent REPL daemon (per-pro
 grd lean stop-repl                       # Shut it down
 ```
 
-All commands emit JSON with `--json` for agent consumption. Human-readable output by default for interactive use.
+All commands emit JSON with `--raw` for agent consumption. Human-readable output by default for interactive use.
+
+**Exit codes.** Every `grd lean` subcommand uses a split exit code so shell callers and CI can route without parsing JSON:
+
+| Code | Meaning | Examples |
+|------|---------|---------|
+| 0 | Success | Clean typecheck, proof found, env ready |
+| 1 | Soft-fail | Lean elaboration error, no tactic closed the goal, faithfulness rejection |
+| 2 | User input error | Bad flag combo, missing required argument, file not found |
+| 3 | Environment / bootstrap error | `lean` not found, Mathlib cache stale, consent required |
+| 4 | Internal / daemon error | Backend crashed, socket failure, unexpected exception |
 
 **Daemon model for speed.** A first `grd lean check` starts a Pantograph REPL subprocess and keeps it alive via a per-project Unix socket (`.grd/lean-repl.sock`). Subsequent calls reuse it (~50 ms round-trip vs. ~3 s cold start). Idle timeout (default 10 min) shuts it down. The daemon is managed transparently — users never need to invoke `serve-repl` / `stop-repl` manually; they exist only for debugging.
 

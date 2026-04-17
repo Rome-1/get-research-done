@@ -215,7 +215,8 @@ def test_physics_and_no_physics_are_mutually_exclusive(tmp_path: Path) -> None:
             "--no-llm",
         ],
     )
-    assert result.exit_code != 0
+    # ge-oc0: conflicting flags is a user input error → exit 2.
+    assert result.exit_code == 2
 
 
 def test_physics_override_propagates_to_pipeline(
