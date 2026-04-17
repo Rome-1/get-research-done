@@ -10,6 +10,7 @@ import math
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import grd.hooks.install_context as hook_layout
 from grd.core.constants import ENV_GRD_DEBUG, PLANNING_DIR_NAME, STATE_JSON_FILENAME
@@ -21,6 +22,9 @@ _CONTEXT_WARN_THRESHOLD = 63
 _CONTEXT_HIGH_THRESHOLD = 81
 _CONTEXT_CRITICAL_THRESHOLD = 95
 _STATUS_LABEL = "GRD"
+_CANONICAL_MODEL_KEYS = ("display_name", "name", "id")
+_CANONICAL_CONTEXT_WINDOW_SIZE_KEYS = ("context_window_size",)
+_CANONICAL_CONTEXT_REMAINING_KEYS = ("remaining_percentage", "remainingPercent", "remaining")
 
 
 def _context_bar(remaining_pct: float) -> str:
@@ -70,14 +74,50 @@ def _first_value(value: object, *keys: str) -> object | None:
     return None
 
 
-def _normalize_workspace_text(value: str | None) -> str:
-    if not value:
-        return str(Path.cwd().resolve(strict=False))
-    path = Path(value).expanduser()
-    try:
-        return str(path.resolve(strict=False))
-    except OSError:
-        return str(path)
+def _merged_policy_keys(value: object, attribute: str, *, fallback: tuple[str, ...]) -> tuple[str, ...]:
+    """Return policy-owned keys plus canonical fallbacks, deduplicated in order."""
+    raw_keys = getattr(value, attribute, ())
+    merged: list[str] = []
+    for key in (*raw_keys, *fallback):
+        if isinstance(key, str) and key and key not in merged:
+            merged.append(key)
+    return tuple(merged)
+
+
+def _object_value(value: object, key: str) -> object | None:
+    """Return *key* from either a mapping or an attribute-bearing object."""
+    if isinstance(value, dict) and key in value:
+        return value.get(key)
+    if hasattr(value, key):
+        return getattr(value, key)
+    return None
+
+
+def _object_string(value: object, key: str) -> str:
+    """Return a non-empty string field from either a mapping or an object."""
+    candidate = _object_value(value, key)
+    return candidate if isinstance(candidate, str) and candidate else ""
+
+
+def _workspace_mapping_prefers_local_statusline_lookup(
+    data: dict[str, object],
+    *,
+    hook_payload: object,
+) -> bool:
+    """Keep alias-only workspace mappings anchored to the runtime-owned workspace."""
+    return payload_uses_alias_only_workspace_mapping(data, hook_payload=hook_payload)
+
+
+def _compact_age_label(value: object) -> str:
+    """Return a short age label like ``45m`` from a human label like ``45m ago``."""
+    if not isinstance(value, str):
+        return ""
+    label = value.strip()
+    if not label:
+        return ""
+    if label.endswith(" ago"):
+        return label[:-4]
+    return label
 
 
 def _hook_payload_policy(workspace_dir: str | None = None):
@@ -119,17 +159,29 @@ def _read_model_label(data: dict[str, object], hook_payload=None) -> str:
     if isinstance(model_value, str) and model_value:
         model_label = model_value
     else:
-        model_label = _first_string(model_value, *policy.model_keys)
+        model_label = _first_string(
+            model_value,
+            *_merged_policy_keys(policy, "model_keys", fallback=_CANONICAL_MODEL_KEYS),
+        )
 
     context_label = _format_context_window_size(
-        _first_value(data.get("context_window"), *policy.context_window_size_keys)
+        _first_value(
+            data.get("context_window"),
+            *_merged_policy_keys(policy, "context_window_size_keys", fallback=_CANONICAL_CONTEXT_WINDOW_SIZE_KEYS),
+        )
     )
     if model_label and context_label:
         return f"{model_label} ({context_label})"
     return model_label
 
 
-def _read_workspace_label(data: dict[str, object], workspace_dir: str, hook_payload=None) -> str:
+def _read_workspace_label(
+    data: dict[str, object],
+    workspace_dir: str,
+    *,
+    project_root: str | None = None,
+    hook_payload=None,
+) -> str:
     """Return a compact workspace label, relative to the project root when possible."""
     if not workspace_dir:
         return ""
@@ -137,7 +189,10 @@ def _read_workspace_label(data: dict[str, object], workspace_dir: str, hook_payl
     policy = hook_payload or _hook_payload_policy(workspace_dir)
     workspace_path = Path(workspace_dir).expanduser()
     workspace_value = data.get("workspace")
-    project_dir = _first_string(workspace_value, *policy.project_dir_keys) or _first_string(data, *policy.project_dir_keys)
+    project_dir = project_root or _first_string(workspace_value, *policy.project_dir_keys) or _first_string(
+        data,
+        *policy.project_dir_keys,
+    )
 
     try:
         resolved_workspace = workspace_path.resolve()
@@ -160,6 +215,30 @@ def _read_workspace_label(data: dict[str, object], workspace_dir: str, hook_payl
     return f"[{display_name}]"
 
 
+def _statusline_project_root(workspace_dir: str) -> Path | None:
+    """Return the most durable project root visible from one workspace path."""
+    normalized = normalize_workspace_hint(workspace_dir)
+    if normalized is None:
+        return None
+
+    bare_grd_root: Path | None = None
+    for steps, candidate in enumerate((normalized, *normalized.parents)):
+        layout = ProjectLayout(candidate)
+        if not layout.grd.is_dir():
+            continue
+        if (
+            layout.state_json.exists()
+            or layout.state_md.exists()
+            or layout.project_md.exists()
+            or layout.roadmap.exists()
+            or layout.phases_dir.is_dir()
+        ):
+            return candidate
+        if steps == 0 and bare_grd_root is None:
+            bare_grd_root = candidate
+    return bare_grd_root
+
+
 def _read_position(workspace_dir: str) -> str:
     """Read research position from .grd/state.json."""
     workspace_root = resolve_project_root(workspace_dir) or Path(workspace_dir).expanduser().resolve(strict=False)
@@ -167,23 +246,29 @@ def _read_position(workspace_dir: str) -> str:
     if not state_file.exists():
         return ""
     try:
-        state = json.loads(state_file.read_text(encoding="utf-8"))
-        if not isinstance(state, dict):
-            return ""
-        pos = state.get("position", {})
-        phase = pos.get("current_phase")
-        total_phases = pos.get("total_phases")
-        if phase is None or total_phases is None:
-            return ""
-        result = f"P{phase}/{total_phases}"
-        plan = pos.get("current_plan")
-        total_plans = pos.get("total_plans_in_phase")
-        if plan is not None and total_plans is not None:
-            result += f" plan {plan}/{total_plans}"
-        return result
+        state, _issues, _source = peek_state_json(
+            workspace_root,
+            recover_intent=False,
+            surface_blocked_project_contract=True,
+            acquire_lock=False,
+        )
     except Exception as exc:
-        _debug(f"Failed to read state.json: {exc}")
+        _debug(f"Failed to read state via canonical loader: {exc}")
         return ""
+
+    if not isinstance(state, dict):
+        return ""
+    pos = state.get("position", {})
+    phase = pos.get("current_phase")
+    total_phases = pos.get("total_phases")
+    if phase is None or total_phases is None:
+        return ""
+    result = f"P{phase}/{total_phases}"
+    plan = pos.get("current_plan")
+    total_plans = pos.get("total_plans_in_phase")
+    if plan is not None and total_plans is not None:
+        result += f" plan {plan}/{total_plans}"
+    return result
 
 
 def _matching_todo_files(todos_dir: Path, session_id: str) -> list[tuple[float, Path]]:
@@ -256,25 +341,16 @@ def _read_current_task(session_id: str, workspace_dir: str | None = None) -> str
 
     todo_files: list[tuple[float, Path]] = []
     for candidate in todo_candidates:
-        if not should_consider_todo_candidate(
-            candidate,
-            active_installed_runtime=active_installed_runtime,
-            cwd=workspace_path,
-        ):
-            continue
         todos_dir = candidate.path
         if not todos_dir.is_dir():
             continue
-        todo_files.extend(_matching_todo_files(todos_dir, session_id))
-
-    todo_files.sort(key=lambda item: item[0], reverse=True)
-    for _mtime, todo_file in todo_files:
-        for todo in _read_todo_entries(todo_file):
-            if todo.get("status") != "in_progress":
-                continue
-            active_form = todo.get("activeForm")
-            if isinstance(active_form, str) and active_form:
-                return active_form
+        for _mtime, todo_file in _matching_todo_files(todos_dir, session_id):
+            for todo in _read_todo_entries(todo_file):
+                if todo.get("status") != "in_progress":
+                    continue
+                active_form = todo.get("activeForm")
+                if isinstance(active_form, str) and active_form:
+                    return active_form
 
     return ""
 
@@ -314,10 +390,28 @@ def _workspace_root_from_payload(
 
 def _read_context_remaining(data: dict[str, object], hook_payload) -> float | int | None:
     """Read remaining context percentage from runtime payload aliases."""
-    remaining = _first_value(data.get("context_window"), *hook_payload.context_remaining_keys)
+    remaining = _first_value(
+        data.get("context_window"),
+        *_merged_policy_keys(hook_payload, "context_remaining_keys", fallback=_CANONICAL_CONTEXT_REMAINING_KEYS),
+    )
     if isinstance(remaining, (int, float)) and math.isfinite(remaining):
         return remaining
     return None
+
+
+def _read_session_id(data: dict[str, object], hook_payload) -> str:
+    """Read the runtime session id using the adapter-owned contract."""
+    for container in (
+        data,
+        data.get("workspace"),
+        data.get("model"),
+        data.get("usage"),
+        data.get("token_usage"),
+    ):
+        session_id = _first_string(container, *hook_payload.runtime_session_id_keys)
+        if session_id:
+            return session_id
+    return ""
 
 
 def _read_execution_state(workspace_dir: str | None = None) -> dict[str, object]:
@@ -329,10 +423,58 @@ def _read_execution_state(workspace_dir: str | None = None) -> dict[str, object]
     return snapshot.model_dump(mode="json") if snapshot is not None else {}
 
 
+def _read_runtime_hints(workspace_dir: str | None = None) -> dict[str, object]:
+    """Return the shallow runtime hint payload for the workspace."""
+    from grd.core.runtime_hints import build_runtime_hint_payload
+
+    payload = build_runtime_hint_payload(
+        Path(workspace_dir) if workspace_dir else None,
+        include_recovery=False,
+        include_cost=False,
+        include_workflow_presets=False,
+    )
+    return payload.model_dump(mode="json")
+
+
+def _project_state_dir(
+    data: dict[str, object],
+    *,
+    workspace_dir: str,
+    project_root: str,
+    runtime_lookup_dir: str,
+    active_runtime: str | None,
+    hook_payload: object,
+) -> str:
+    """Route project-owned state helpers to the project root unless the workspace owns the live runtime."""
+
+    if runtime_lookup_dir != workspace_dir:
+        return runtime_lookup_dir
+    if not project_root or project_root == workspace_dir:
+        return runtime_lookup_dir
+    if _workspace_mapping_prefers_local_statusline_lookup(data, hook_payload=hook_payload):
+        return runtime_lookup_dir
+
+    normalized_project_root = str(Path(project_root).expanduser().resolve(strict=False))
+
+    if isinstance(active_runtime, str) and active_runtime:
+        install_target = detect_runtime_install_target(
+            active_runtime,
+            cwd=Path(workspace_dir).expanduser().resolve(strict=False),
+        )
+        if install_target is not None and install_target.install_scope == SCOPE_LOCAL:
+            return runtime_lookup_dir
+
+    return normalized_project_root
+
+
 def _execution_reason_label(reason: str | None, *, default: str) -> str:
     text = (reason or "").strip().lower()
     if not text:
         return default
+    if "result" in text or "skeptical" in text or "fanout" in text:
+        return "review"
+    if "budget" in text or "time" in text:
+        return "budget"
     if "user" in text or "review" in text or "approve" in text:
         return "user"
     if "depend" in text or "upstream" in text or "fanout" in text:
@@ -361,27 +503,19 @@ def _elapsed_segment_label(started_at: object, updated_at: object) -> str:
     return f"{elapsed_seconds // 3600}h"
 
 
-def _execution_badge(snapshot: dict[str, object]) -> str:
-    """Return a compact badge describing live execution state."""
-    if not snapshot:
-        return ""
-
+def _execution_review_badge(snapshot: dict[str, object]) -> str:
+    """Return a compact review/wait badge from a raw execution snapshot."""
     checkpoint_reason = _first_string(snapshot, "checkpoint_reason")
     waiting_reason = _first_string(snapshot, "waiting_reason")
-    blocked_reason = _first_string(snapshot, "blocked_reason")
     segment_status = _first_string(snapshot, "segment_status").lower()
-    skeptical_review = bool(snapshot.get("skeptical_requestioning_required"))
-    pre_fanout_review = bool(snapshot.get("pre_fanout_review_pending"))
 
-    if blocked_reason:
-        badge = "BLOCKED"
-    elif skeptical_review:
-        badge = "REVIEW:skeptical"
-    elif bool(snapshot.get("first_result_gate_pending")):
-        badge = "REVIEW:first-result"
-    elif pre_fanout_review:
-        badge = "REVIEW:pre-fanout"
-    elif bool(snapshot.get("waiting_for_review")):
+    if bool(snapshot.get("skeptical_requestioning_required")):
+        return "REVIEW:skeptical"
+    if bool(snapshot.get("first_result_gate_pending")):
+        return "REVIEW:first-result"
+    if bool(snapshot.get("pre_fanout_review_pending")):
+        return "REVIEW:pre-fanout"
+    if bool(snapshot.get("waiting_for_review")):
         label = "checkpoint"
         if checkpoint_reason == "first_result":
             label = "first-result"
@@ -391,18 +525,64 @@ def _execution_badge(snapshot: dict[str, object]) -> str:
             label = "pre-fanout"
         elif checkpoint_reason:
             label = checkpoint_reason.replace("_", "-")
-        badge = f"REVIEW:{label}"
-    elif waiting_reason:
-        badge = f"WAIT:{_execution_reason_label(waiting_reason, default='hold')}"
-    elif segment_status in {"paused", "ready_to_continue"}:
-        badge = "RESUME" if _first_string(snapshot, "resume_file") else "PAUSED"
-    elif segment_status:
-        badge = "EXEC" if segment_status == "active" else segment_status.upper().replace("_", "-")
-    else:
+        return f"REVIEW:{label}"
+    if waiting_reason:
+        return f"WAIT:{_execution_reason_label(waiting_reason, default='hold')}"
+    if segment_status in {"paused", "ready_to_continue"}:
+        return "RESUME" if _first_string(snapshot, "resume_file") else "PAUSED"
+    if segment_status:
+        return "EXEC" if segment_status == "active" else segment_status.upper().replace("_", "-")
+    return ""
+
+
+def _execution_badge(snapshot: dict[str, object], visibility: object | None = None) -> str:
+    """Return a compact badge describing live execution state."""
+    if not snapshot and visibility is None:
         return ""
 
+    current_snapshot = snapshot
+    classification = ""
+    possibly_stalled = False
+    if visibility is not None:
+        current_execution = _object_value(visibility, "current_execution")
+        if isinstance(current_execution, dict):
+            current_snapshot = current_execution
+        classification = _object_string(visibility, "status_classification")
+        possibly_stalled = bool(_object_value(visibility, "possibly_stalled"))
+        if not classification and isinstance(current_snapshot, dict):
+            classification = _first_string(current_snapshot, "segment_status").lower()
+    else:
+        classification = _first_string(snapshot, "segment_status").lower()
+
+    blocked_reason = _first_string(current_snapshot, "blocked_reason")
+    if visibility is not None and not classification:
+        return ""
+
+    if visibility is not None:
+        if classification == "blocked" or blocked_reason:
+            badge = "BLOCKED"
+        elif classification == "waiting":
+            badge = _execution_review_badge(current_snapshot)
+        elif classification == "paused-or-resumable":
+            badge = "RESUME" if _first_string(current_snapshot, "resume_file") else "PAUSED"
+        elif classification == "active":
+            badge = "STALL?" if possibly_stalled else "EXEC"
+        elif classification == "idle":
+            return ""
+        else:
+            badge = _execution_review_badge(current_snapshot)
+    else:
+        badge = _execution_review_badge(current_snapshot)
+        if not badge:
+            return ""
+        if blocked_reason:
+            badge = "BLOCKED"
+
     cadence = _first_string(snapshot, "review_cadence")
-    elapsed = _elapsed_segment_label(snapshot.get("segment_started_at"), snapshot.get("updated_at"))
+    if badge == "STALL?" and visibility is not None:
+        elapsed = _compact_age_label(_object_string(visibility, "last_updated_age_label"))
+    else:
+        elapsed = _elapsed_segment_label(snapshot.get("segment_started_at"), snapshot.get("updated_at"))
     parts = [badge]
     if cadence:
         parts.append(cadence)
@@ -412,15 +592,27 @@ def _execution_badge(snapshot: dict[str, object]) -> str:
 
 
 def _execution_artifact_label(snapshot: dict[str, object]) -> str:
-    """Return the latest artifact or result label for live execution state."""
+    """Return the latest artifact, result, or rerun anchor label for live execution state."""
     if bool(snapshot.get("skeptical_requestioning_required")):
         weakest_anchor = _first_string(snapshot, "weakest_unchecked_anchor")
         if weakest_anchor:
             return weakest_anchor
+    tangent_summary = _first_string(snapshot, "tangent_summary")
+    if tangent_summary:
+        tangent_decision = _first_string(snapshot, "tangent_decision")
+        if tangent_decision:
+            return f"{tangent_decision.replace('_', ' ')}: {tangent_summary}"
+        return tangent_summary
     artifact = _first_string(snapshot, "last_artifact_path")
     if artifact:
         return Path(artifact).name
-    return _first_string(snapshot, "last_result_label")
+    last_result_label = _first_string(snapshot, "last_result_label")
+    if last_result_label:
+        return last_result_label
+    last_result_id = _first_string(snapshot, "last_result_id")
+    if last_result_id:
+        return f"rerun anchor: {last_result_id}"
+    return ""
 
 
 def _latest_update_cache(workspace_dir: str | None = None) -> tuple[dict[str, object] | None, object | None]:
@@ -533,28 +725,68 @@ def main() -> None:
         return
 
     try:
-        workspace_dir = _workspace_from_payload(data)
-        workspace_root = _workspace_root_from_payload(data, workspace_dir)
-        hook_payload = _hook_payload_policy(workspace_root)
+        roots = _resolve_payload_roots(data, policy_getter=_root_resolution_policy)
+        workspace_dir = roots.workspace_dir
+        project_root = roots.project_root
+        project_dir_present = roots.project_dir_present
+        project_dir_trusted = roots.project_dir_trusted
+        payload_policy = _hook_payload_policy(workspace_dir)
+        if project_dir_trusted is True and _workspace_mapping_prefers_local_statusline_lookup(
+            data,
+            hook_payload=payload_policy,
+        ):
+            project_dir_trusted = False
+        statusline_project_root = _statusline_project_root(workspace_dir)
+        if statusline_project_root is not None:
+            project_root = str(statusline_project_root)
+        elif not project_dir_trusted:
+            project_root = workspace_dir
+        runtime_roots = SimpleNamespace(
+            workspace_dir=workspace_dir,
+            project_root=project_root,
+            project_dir_present=project_dir_present,
+            project_dir_trusted=project_dir_trusted,
+        )
+        runtime_lookup = resolve_runtime_lookup_context_from_payload_roots(
+            runtime_roots,
+            runtime_resolver=_payload_runtime,
+        )
+        runtime_lookup_dir = runtime_lookup.lookup_dir
 
-        session_value = data.get("session_id")
-        session_id = session_value if isinstance(session_value, str) else ""
+        hook_payload = _hook_payload_policy(runtime_lookup_dir)
+        project_state_dir = _project_state_dir(
+            data,
+            workspace_dir=workspace_dir,
+            project_root=project_root,
+            runtime_lookup_dir=runtime_lookup_dir,
+            active_runtime=runtime_lookup.active_runtime,
+            hook_payload=hook_payload,
+        )
+
+        session_id = _read_session_id(data, hook_payload)
         remaining = _read_context_remaining(data, hook_payload)
-        execution = _read_execution_state(workspace_root)
+        runtime_hints = _read_runtime_hints(project_state_dir)
+        visibility = _mapping(runtime_hints.get("execution"))
+        execution = _mapping(visibility.get("current_execution")) or _read_execution_state(project_state_dir)
 
         ctx = _context_bar(remaining) if isinstance(remaining, (int, float)) and math.isfinite(remaining) else ""
-        position = _read_position(workspace_root)
-        execution_badge = _execution_badge(execution)
-        execution_task = _first_string(execution, "current_task")
-        task = execution_task or _read_current_task(session_id, workspace_root)
+        position = _read_position(project_state_dir)
+        execution_badge = _execution_badge(execution, visibility or None)
+        execution_task = _object_string(visibility, "current_task") or _first_string(execution, "current_task")
+        task = execution_task or _read_current_task(session_id, project_state_dir)
         if execution_task:
             task = execution_task
         elif execution_badge:
             task = ""
         artifact_label = _execution_artifact_label(execution)
-        gpd_update = _check_update(workspace_root)
+        grd_update = _check_update(project_state_dir)
         model_label = _read_model_label(data, hook_payload)
-        workspace_label = _read_workspace_label(data, workspace_dir, hook_payload)
+        workspace_label = _read_workspace_label(
+            data,
+            workspace_dir,
+            project_root=project_root,
+            hook_payload=hook_payload,
+        )
 
         segments = [f"\x1b[2m{_STATUS_LABEL}\x1b[0m"]
         if model_label:
@@ -571,8 +803,8 @@ def main() -> None:
             segments.append(f"\x1b[36m{position}\x1b[0m")
 
         statusline = " \u2502 ".join(segments)
-        if gpd_update:
-            statusline = f"{gpd_update}{statusline}"
+        if grd_update:
+            statusline = f"{grd_update}{statusline}"
 
         sys.stdout.write(statusline)
         if ctx:

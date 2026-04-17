@@ -5,6 +5,7 @@ load_when:
   - "review recovery"
   - "stage failure"
   - "review phase entry"
+type: peer-review-reliability
 tier: 2
 context_cost: low
 ---
@@ -29,6 +30,7 @@ The peer review phase activates **after a complete manuscript draft exists** and
 - `.grd/STATE.md` and `.grd/ROADMAP.md` are present
 - Phase summaries and verification reports are available under `.grd/phases/`
 - `ARTIFACT-MANIFEST.json`, `BIBLIOGRAPHY-AUDIT.json`, and reproducibility manifest are present (strict mode)
+- Strict preflight semantic gates pass: `bibliography_audit_clean` and `reproducibility_ready`
 
 If any precondition fails, the review preflight blocks entry and reports the missing items.
 
@@ -84,6 +86,7 @@ Each of the six review stages can fail. The pipeline is **fail-closed**: a faile
 | Manuscript file not found | Stage 1 | Reader cannot locate `.tex` files | Verify manuscript path before retrying |
 | Timeout or resource limit | Any | Stage does not complete | Retry once; if persistent, reduce manuscript scope or run stages sequentially |
 | Claim index missing | Stages 2-6 | `CLAIMS{round_suffix}.json` absent after Stage 1 | Re-run Stage 1 before proceeding |
+| Theorem-proof audit missing or stale | Stages 3, 6 | The claim record contains theorem-bearing claims but `STAGE-math{round_suffix}.json` omits `proof_audits[]` for them, `PROOF-REDTEAM{round_suffix}.md` is missing or malformed, or central audits use `not_applicable` / leave explicit parameters uncovered | Re-run `grd-check-proof` and Stage 3 with an explicit theorem-to-proof coverage checklist before allowing Stage 6 to adjudicate |
 
 ### Recovery Protocol
 
@@ -105,6 +108,7 @@ After each stage writes its artifact, confirm:
   - `grd validate referee-decision .grd/review/REFEREE-DECISION{round_suffix}.json --strict --ledger .grd/review/REVIEW-LEDGER{round_suffix}.json`
 - Do not reimplement the schema checks manually in the workflow prose. The validators are the source of truth for required keys and cross-artifact consistency.
 - A blank `manuscript_path` in the review ledger or referee decision is a contract failure, not a recoverable omission.
+- For theorem-bearing claims, Stage 1 should preserve explicit theorem hypotheses and parameters in `CLAIMS{round_suffix}.json`, and Stage 3 should preserve the corresponding theorem-to-proof audit in `proof_audits[]`. The runtime determines theorem-bearing coverage from the claim record itself, not from a single proxy field. If that chain breaks, treat it as a stage failure rather than proceeding with a stale or inferred review.
 
 If validation fails, treat it as a stage failure and apply the retry protocol above.
 

@@ -78,6 +78,7 @@ def test_classify_distinguishes_internal_scratch_user_project_and_external_paths
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     layout = _make_layout(tmp_path)
+    manuscript_stem = "curvature_flow_bounds"
     temp_root = tmp_path / "outside-temp"
     external_root = tmp_path / "outside"
     temp_root.mkdir()
@@ -91,8 +92,8 @@ def test_classify_distinguishes_internal_scratch_user_project_and_external_paths
 
     assert layout.classify(Path(PLANNING_DIR_NAME) / "STATE.md") == StorageClass.INTERNAL_DURABLE
     assert layout.classify(Path(PLANNING_DIR_NAME) / "tmp" / "cache" / "state.json") == StorageClass.SCRATCH
-    assert layout.classify("paper/main.tex") == StorageClass.USER_DURABLE
-    assert layout.classify("paper/main.tex.tmp") == StorageClass.USER_DURABLE
+    assert layout.classify(f"paper/{manuscript_stem}.tex") == StorageClass.USER_DURABLE
+    assert layout.classify(f"paper/{manuscript_stem}.tex.tmp") == StorageClass.USER_DURABLE
     assert layout.classify("notes/todo.md") == StorageClass.PROJECT_LOCAL_OTHER
     assert layout.classify(temp_root / "run.log") == StorageClass.TEMP_ROOT
     assert layout.classify(external_root / "artifact.txt") == StorageClass.EXTERNAL
@@ -157,7 +158,7 @@ def test_validate_internal_output_accepts_internal_paths_and_rejects_non_interna
     assert absolute_internal == layout.internal_root / "traces" / "trace.jsonl"
 
     with pytest.raises(StoragePathError, match="Internal durable outputs must stay under"):
-        layout.validate_internal_output("paper/main.tex")
+        layout.validate_internal_output("paper/curvature_flow_bounds.tex")
 
     with pytest.raises(StoragePathError, match="Internal durable outputs must stay under"):
         layout.validate_internal_output(Path(PLANNING_DIR_NAME) / "tmp" / "cache.json")
@@ -205,8 +206,12 @@ def test_validate_user_output_rejects_scratch_temp_and_external_absolute_paths(
 def test_validate_final_output_accepts_user_durable_and_custom_stable_project_dirs(tmp_path: Path) -> None:
     layout = _make_layout(tmp_path)
 
-    assert layout.validate_final_output("paper/main.tex") == layout.root / "paper" / "main.tex"
-    assert layout.validate_final_output("release-paper/main.tex") == layout.root / "release-paper" / "main.tex"
+    assert layout.validate_final_output("paper/curvature_flow_bounds.tex") == (
+        layout.root / "paper" / "curvature_flow_bounds.tex"
+    )
+    assert layout.validate_final_output("release-paper/curvature_flow_bounds.tex") == (
+        layout.root / "release-paper" / "curvature_flow_bounds.tex"
+    )
 
 
 def test_validate_final_output_rejects_internal_project_scratch_temp_and_external_paths(
@@ -248,7 +253,7 @@ def test_validate_commit_target_allows_internal_docs_but_rejects_internal_artifa
     with pytest.raises(StoragePathError, match=r"Suspicious durable-artifact path under .*GRD"):
         layout.validate_commit_target(hidden_results)
 
-    artifact_like = layout.internal_root / "paper" / "main.tex"
+    artifact_like = layout.internal_root / "paper" / "curvature_flow_bounds.tex"
     artifact_like.parent.mkdir(parents=True)
     artifact_like.write_text("\\documentclass{article}\n", encoding="utf-8")
     with pytest.raises(StoragePathError, match="Artifact-like file stored under internal metadata directories"):
@@ -293,7 +298,7 @@ def test_check_user_output_warns_when_project_root_is_temporary(
     (temp_project / PLANNING_DIR_NAME).mkdir()
     layout = ProjectStorageLayout(temp_project)
 
-    check = layout.check_user_output("paper/main.tex", kind=DurableOutputKind.PAPER)
+    check = layout.check_user_output("paper/curvature_flow_bounds.tex", kind=DurableOutputKind.PAPER)
 
     assert check.classification == StorageClass.USER_DURABLE
     assert any("Project root is under a temporary directory" in warning for warning in check.warnings)
@@ -304,7 +309,7 @@ def test_audit_storage_warnings_flags_hidden_results_and_scratch_outputs(tmp_pat
     hidden_results = layout.internal_root / "phases" / "01-setup" / "results"
     hidden_results.mkdir(parents=True)
     (hidden_results / "out.json").write_text("{}", encoding="utf-8")
-    artifact_like = layout.internal_root / "paper" / "main.tex"
+    artifact_like = layout.internal_root / "paper" / "curvature_flow_bounds.tex"
     artifact_like.parent.mkdir(parents=True)
     artifact_like.write_text("\\documentclass{article}\n", encoding="utf-8")
     scratch_output = layout.scratch_dir / "final.csv"
@@ -313,6 +318,12 @@ def test_audit_storage_warnings_flags_hidden_results_and_scratch_outputs(tmp_pat
     project_scratch_output = layout.root / "tmp" / "final.csv"
     project_scratch_output.parent.mkdir(parents=True, exist_ok=True)
     project_scratch_output.write_text("x,y\n", encoding="utf-8")
+    nested_project_scratch_output = layout.root / "notes" / "tmp" / "final.csv"
+    nested_project_scratch_output.parent.mkdir(parents=True, exist_ok=True)
+    nested_project_scratch_output.write_text("x,y\n", encoding="utf-8")
+    user_durable_scratch_output = layout.root / "artifacts" / "tmp" / "final.csv"
+    user_durable_scratch_output.parent.mkdir(parents=True, exist_ok=True)
+    user_durable_scratch_output.write_text("x,y\n", encoding="utf-8")
 
     warnings = layout.audit_storage_warnings()
 
@@ -320,12 +331,18 @@ def test_audit_storage_warnings_flags_hidden_results_and_scratch_outputs(tmp_pat
     assert any(".grd/paper/main.tex" in warning for warning in warnings)
     assert any(".grd/tmp/final.csv" in warning for warning in warnings)
     assert any("tmp/final.csv" in warning for warning in warnings)
+    assert any("notes/tmp/final.csv" in warning for warning in warnings)
+    assert any("artifacts/tmp/final.csv" in warning for warning in warnings)
 
 
 def test_resolve_anchors_relative_paths_at_project_root(tmp_path: Path) -> None:
     layout = _make_layout(tmp_path)
 
-    assert layout.resolve("paper/main.tex") == (layout.root / "paper" / "main.tex").resolve(strict=False)
-    assert layout.resolve(layout.root / "paper" / "main.tex") == (layout.root / "paper" / "main.tex").resolve(
+    assert layout.resolve("paper/curvature_flow_bounds.tex") == (
+        layout.root / "paper" / "curvature_flow_bounds.tex"
+    ).resolve(strict=False)
+    assert layout.resolve(layout.root / "paper" / "curvature_flow_bounds.tex") == (
+        layout.root / "paper" / "curvature_flow_bounds.tex"
+    ).resolve(
         strict=False
     )

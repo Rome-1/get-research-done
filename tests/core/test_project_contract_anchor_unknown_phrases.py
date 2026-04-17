@@ -68,6 +68,17 @@ def test_approved_mode_does_not_treat_generic_benchmark_parameter_questions_as_a
     assert any("approved project contract requires at least one concrete anchor" in error for error in result.errors)
 
 
+def test_approved_mode_rejects_repeated_generic_paper_phrase_as_grounding() -> None:
+    contract = _load_contract_fixture()
+    _remove_incidental_grounding(contract)
+    contract["context_intake"]["known_good_baselines"] = ["paper paper paper"]
+
+    result = validate_project_contract(contract, mode="approved")
+
+    assert result.valid is False
+    assert any("approved project contract requires at least one concrete anchor" in error for error in result.errors)
+
+
 def test_approved_mode_rejects_target_not_yet_chosen_phrase_in_weakest_anchors() -> None:
     contract = _load_contract_fixture()
     _remove_incidental_grounding(contract)

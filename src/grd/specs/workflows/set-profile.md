@@ -80,6 +80,7 @@ Focus: Rigorous analytical derivations, formal proofs, exact results
 | grd-paper-writer         | tier-1 |
 | grd-literature-reviewer  | tier-1 |
 | grd-bibliographer        | tier-2 |
+| grd-check-proof          | tier-1 |
 | grd-referee              | tier-1 |
 | grd-experiment-designer  | tier-2 |
 
@@ -132,6 +133,7 @@ Focus: Critical assessment, error checking, literature comparison
 | grd-verifier             | tier-1 |
 | grd-plan-checker         | tier-1 |
 | grd-consistency-checker  | tier-1 |
+| grd-check-proof          | tier-1 |
 | grd-referee              | tier-1 |
 
 Best for: Pre-submission review, debugging wrong results, resolving discrepancies, preparing referee responses, validating collaborator work.
@@ -150,6 +152,7 @@ Focus: Clear exposition, LaTeX production, figure generation, narrative flow
 | grd-paper-writer         | tier-1 |
 | grd-research-synthesizer | tier-1 |
 | grd-bibliographer        | tier-1 |
+| grd-check-proof          | tier-1 |
 | grd-referee              | tier-1 |
 
 Best for: Writing manuscripts, preparing talks, generating figures, formatting for journal submission, writing supplementary material.
@@ -170,7 +173,7 @@ Change cadence with `/grd:settings` or by editing `.grd/config.json` (`execution
 
 If you also want to pin concrete runtime model strings for `tier-1`, `tier-2`, or `tier-3`, use `/grd:settings`. `set-profile` changes the abstract tier assignments, not the runtime-native model IDs.
 
-For full agent tier assignments across all 23 agents, see `references/orchestration/model-profiles.md`.
+For full agent tier assignments across all 24 agents, see `references/orchestration/model-profiles.md`.
 For detailed behavioral effect descriptions per agent per profile, see the "Behavioral Effects" section in `references/orchestration/model-profiles.md`.
 
 Next spawned agents will use the new profile.

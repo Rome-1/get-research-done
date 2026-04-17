@@ -13,6 +13,7 @@ from grd.adapters.install_utils import CACHE_DIR_NAME, GRD_INSTALL_DIR_NAME, UPD
 from grd.core.constants import ENV_GRD_DEBUG, PLANNING_DIR_NAME
 from grd.hooks.install_metadata import config_dir_has_complete_install
 
+_SHARED_INSTALL_METADATA = get_shared_install_metadata()
 SECONDS_PER_HOUR = 3600
 UPDATE_CHECK_TTL_SECONDS = 12 * SECONDS_PER_HOUR
 UPDATE_CHECK_INFLIGHT_TTL_SECONDS = 5 * 60
@@ -47,7 +48,7 @@ def _suffix_rank(suffix: str) -> tuple[int, int]:
         return -1, _extract_number("beta") or _extract_number("b")
     if "rc" in normalized:
         return 0, _extract_number("rc")
-    return -1, 0
+    return 1, 0
 
 
 def _version_key(version: str) -> tuple[tuple[int, ...], int, int, str]:
@@ -246,6 +247,69 @@ def _clear_inflight_marker(cache_file: Path) -> None:
         return
 
 
+def _relevant_update_cache_candidates(
+    *,
+    self_config_dir: Path | None,
+    resolved_cwd: Path,
+    resolved_home: Path,
+) -> tuple[list[object], Path]:
+    from grd.hooks.install_context import detect_self_owned_install
+    from grd.hooks.runtime_detect import RUNTIME_UNKNOWN, UpdateCacheCandidate, detect_runtime_install_target
+    from grd.hooks.update_resolution import (
+        ordered_update_cache_candidates,
+        primary_update_cache_file,
+        resolve_update_cache_inputs,
+    )
+
+    workspace_path, resolved_home, active_installed_runtime, preferred_runtime = resolve_update_cache_inputs(
+        cwd=resolved_cwd,
+        home=resolved_home,
+    )
+    shared_candidates = ordered_update_cache_candidates(
+        cwd=workspace_path,
+        home=resolved_home,
+        active_installed_runtime=active_installed_runtime,
+        preferred_runtime=preferred_runtime,
+    )
+
+    if self_config_dir is not None:
+        self_install = detect_self_owned_install(__file__)
+        active_install_target = (
+            detect_runtime_install_target(active_installed_runtime, cwd=workspace_path, home=resolved_home)
+            if active_installed_runtime not in (None, "", RUNTIME_UNKNOWN)
+            else None
+        )
+        if should_prefer_self_owned_install(
+            self_install,
+            active_install_target=active_install_target,
+            active_runtime=active_installed_runtime,
+            workspace_path=workspace_path,
+        ):
+            self_candidate = (
+                UpdateCacheCandidate(path=self_config_dir / CACHE_DIR_NAME / UPDATE_CACHE_FILENAME)
+                if self_install is None
+                else UpdateCacheCandidate(
+                    path=self_install.cache_file,
+                    runtime=self_install.runtime,
+                    scope=self_install.install_scope,
+                )
+            )
+            relevant_candidates = [self_candidate]
+            seen_paths = {self_candidate.path}
+            for candidate in shared_candidates:
+                candidate_path = getattr(candidate, "path", None)
+                if candidate_path in seen_paths:
+                    continue
+                seen_paths.add(candidate_path)
+                relevant_candidates.append(candidate)
+        else:
+            relevant_candidates = shared_candidates
+    else:
+        relevant_candidates = shared_candidates
+
+    return relevant_candidates, primary_update_cache_file(relevant_candidates, home=resolved_home)
+
+
 def main(argv: list[str] | None = None) -> None:
     """Entry point: throttle-check for updates, spawn background worker if needed."""
     raw_argv = list(sys.argv[1:] if argv is None else argv)
@@ -308,7 +372,8 @@ def main(argv: list[str] | None = None) -> None:
         )
 
     # Throttle: skip only when the preferred runtime/home cache set is still fresh.
-    has_runtime_specific_candidate = any(candidate.runtime in ALL_RUNTIMES for candidate in relevant_candidates)
+    runtime_names = supported_runtime_names()
+    has_runtime_specific_candidate = any(candidate.runtime in runtime_names for candidate in relevant_candidates)
     for candidate in relevant_candidates:
         if candidate.runtime is None and has_runtime_specific_candidate:
             continue

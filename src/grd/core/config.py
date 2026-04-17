@@ -237,6 +237,13 @@ MODEL_PROFILES: dict[str, dict[str, ModelTier]] = {
         "review": ModelTier.TIER_1,
         "paper-writing": ModelTier.TIER_1,
     },
+    "grd-check-proof": {
+        "deep-theory": ModelTier.TIER_1,
+        "numerical": ModelTier.TIER_1,
+        "exploratory": ModelTier.TIER_2,
+        "review": ModelTier.TIER_1,
+        "paper-writing": ModelTier.TIER_1,
+    },
     "grd-review-physics": {
         "deep-theory": ModelTier.TIER_1,
         "numerical": ModelTier.TIER_1,
@@ -294,6 +301,7 @@ AGENT_DEFAULT_TIERS: dict[str, ModelTier] = {
     "grd-review-reader": ModelTier.TIER_2,
     "grd-review-literature": ModelTier.TIER_1,
     "grd-review-math": ModelTier.TIER_1,
+    "grd-check-proof": ModelTier.TIER_1,
     "grd-review-physics": ModelTier.TIER_1,
     "grd-review-significance": ModelTier.TIER_1,
     "grd-referee": ModelTier.TIER_1,
@@ -328,6 +336,8 @@ class GRDProjectConfig(BaseModel):
     checkpoint_after_n_tasks: int = Field(default=3, ge=1)
     checkpoint_after_first_load_bearing_result: bool = True
     checkpoint_before_downstream_dependent_tasks: bool = True
+    project_usd_budget: float | None = Field(default=None, gt=0)
+    session_usd_budget: float | None = Field(default=None, gt=0)
 
     # Git settings
     branching_strategy: BranchingStrategy = BranchingStrategy.NONE
@@ -345,6 +355,7 @@ class GRDProjectConfig(BaseModel):
             return None
 
         normalized: dict[str, dict[str, str]] = {}
+        normalized_runtime_sources: dict[str, str] = {}
         try:
             valid_runtime_names = _valid_runtime_names()
         except RuntimeError as exc:
@@ -353,7 +364,8 @@ class GRDProjectConfig(BaseModel):
         supported_tiers = ", ".join(sorted(_VALID_MODEL_TIER_VALUES))
 
         for runtime, tier_map in value.items():
-            if runtime not in valid_runtime_names:
+            normalized_runtime_name = normalize_runtime_name(runtime)
+            if normalized_runtime_name not in valid_runtime_names:
                 raise ValueError(
                     f"model_overrides contains unknown runtime {runtime!r}; expected one of: {supported_runtimes}"
                 )
@@ -372,7 +384,14 @@ class GRDProjectConfig(BaseModel):
                 normalized_runtime[tier] = model.strip()
 
             if normalized_runtime:
-                normalized[runtime] = normalized_runtime
+                previous_runtime = normalized_runtime_sources.get(normalized_runtime_name)
+                if previous_runtime is not None:
+                    raise ValueError(
+                        f"model_overrides contains duplicate runtime entries for {normalized_runtime_name!r}: "
+                        f"{previous_runtime!r} and {runtime!r} both target the same runtime"
+                    )
+                normalized_runtime_sources[normalized_runtime_name] = runtime
+                normalized[normalized_runtime_name] = normalized_runtime
 
         return normalized or None
 
@@ -409,9 +428,11 @@ _EFFECTIVE_CONFIG_LEAVES: dict[str, Callable[[GRDProjectConfig], object]] = {
     "parallelization": lambda config: config.parallelization,
     "phase_branch_template": lambda config: config.phase_branch_template,
     "plan_checker": lambda config: config.plan_checker,
+    "project_usd_budget": lambda config: config.project_usd_budget,
     "research": lambda config: config.research,
     "review_cadence": lambda config: _enum_value(config.review_cadence),
     "research_mode": lambda config: _enum_value(config.research_mode),
+    "session_usd_budget": lambda config: config.session_usd_budget,
     "verifier": lambda config: config.verifier,
 }
 
@@ -429,6 +450,8 @@ _EFFECTIVE_CONFIG_SECTIONS: dict[str, Callable[[GRDProjectConfig], dict[str, obj
         "checkpoint_after_n_tasks": config.checkpoint_after_n_tasks,
         "checkpoint_after_first_load_bearing_result": config.checkpoint_after_first_load_bearing_result,
         "checkpoint_before_downstream_dependent_tasks": config.checkpoint_before_downstream_dependent_tasks,
+        "project_usd_budget": config.project_usd_budget,
+        "session_usd_budget": config.session_usd_budget,
     },
     "workflow": lambda config: {
         "research": config.research,
@@ -462,10 +485,14 @@ _CONFIG_KEY_ALIASES: dict[str, str] = {
     "phase_branch_template": "phase_branch_template",
     "plan_checker": "plan_checker",
     "planning.commit_docs": "commit_docs",
+    "project_usd_budget": "project_usd_budget",
     "research": "research",
     "review_cadence": "review_cadence",
     "research_mode": "research_mode",
+    "session_usd_budget": "session_usd_budget",
     "verifier": "verifier",
+    "execution.project_usd_budget": "project_usd_budget",
+    "execution.session_usd_budget": "session_usd_budget",
     "workflow.plan_checker": "plan_checker",
     "workflow.research": "research",
     "workflow.verifier": "verifier",
@@ -488,6 +515,8 @@ _CANONICAL_CONFIG_STORAGE_PATHS.update(
             "execution",
             "checkpoint_before_downstream_dependent_tasks",
         ),
+        "project_usd_budget": ("execution", "project_usd_budget"),
+        "session_usd_budget": ("execution", "session_usd_budget"),
     }
 )
 
@@ -519,6 +548,12 @@ def effective_config_value(config: GRDProjectConfig, key: str) -> tuple[bool, ob
     if canonical_key is None:
         return False, None
     return True, _EFFECTIVE_CONFIG_LEAVES[canonical_key](config)
+
+
+def effective_raw_config_value(raw: dict[str, object], key: str) -> tuple[bool, object]:
+    """Return a CLI-facing effective config value directly from a raw payload."""
+
+    return effective_config_value(_model_from_parsed_config(raw), key)
 
 
 def _set_dict_path(target: dict[str, object], path: tuple[str, ...], value: object) -> None:
@@ -588,10 +623,15 @@ def _known_agent_names() -> frozenset[str]:
     known = set(MODEL_PROFILES) | set(AGENT_DEFAULT_TIERS)
     try:
         from grd import registry as content_registry
+    except (ImportError, ModuleNotFoundError):
+        return frozenset(known)
 
+    try:
         known.update(content_registry.list_agents())
-    except Exception:
-        pass
+    except AttributeError:
+        return frozenset(known)
+    except Exception as exc:
+        raise ConfigError("Unable to resolve known agent names from registry") from exc
     return frozenset(known)
 
 
@@ -621,6 +661,8 @@ _ALLOWED_CONFIG_ROOT_KEYS = frozenset(
         "checkpoint_after_first_load_bearing_result",
         "checkpoint_after_n_tasks",
         "checkpoint_before_downstream_dependent_tasks",
+        "project_usd_budget",
+        "session_usd_budget",
         "commit_docs",
         "execution",
         "git",
@@ -651,6 +693,8 @@ _ALLOWED_CONFIG_SECTION_KEYS = {
             "checkpoint_after_n_tasks",
             "checkpoint_after_first_load_bearing_result",
             "checkpoint_before_downstream_dependent_tasks",
+            "project_usd_budget",
+            "session_usd_budget",
         }
     ),
     "planning": frozenset({"commit_docs"}),
@@ -791,6 +835,14 @@ def _model_from_parsed_config(parsed: dict[str, object]) -> GRDProjectConfig:
                 ),
                 _CONFIG_DEFAULTS.checkpoint_before_downstream_dependent_tasks,
             ),
+            project_usd_budget=_coalesce(
+                _get_nested(parsed, "project_usd_budget", section="execution", field="project_usd_budget"),
+                _CONFIG_DEFAULTS.project_usd_budget,
+            ),
+            session_usd_budget=_coalesce(
+                _get_nested(parsed, "session_usd_budget", section="execution", field="session_usd_budget"),
+                _CONFIG_DEFAULTS.session_usd_budget,
+            ),
             model_overrides=_coalesce(
                 _get_nested(parsed, "model_overrides"),
                 None,
@@ -894,7 +946,10 @@ def resolve_model(project_dir: Path, agent_name: str, runtime: str | None = None
 
     config = load_config(project_dir)
     tier = resolve_agent_tier(agent_name, config.model_profile).value
-    runtime_overrides = (config.model_overrides or {}).get(runtime)
+    normalized_runtime = normalize_runtime_name(runtime)
+    if normalized_runtime is None:
+        return None
+    runtime_overrides = (config.model_overrides or {}).get(normalized_runtime)
     if not runtime_overrides:
         return None
     return runtime_overrides.get(tier)

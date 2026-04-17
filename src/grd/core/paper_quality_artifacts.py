@@ -18,16 +18,20 @@ from grd.core.frontmatter import (
     _validate_contract_mapping,
     extract_frontmatter,
 )
+from grd.core.manuscript_artifacts import locate_publication_artifact, resolve_current_manuscript_resolution
 from grd.core.paper_quality import (
+    _CITE_CMD_PREFIX,
     BinaryCheck,
     CitationsQualityInput,
     CompletenessQualityInput,
+    ConventionsQualityInput,
     CoverageMetric,
     FiguresQualityInput,
     PaperQualityInput,
     ResultsQualityInput,
     VerificationConfidence,
     VerificationQualityInput,
+    validate_tex_draft,
 )
 from grd.mcp.paper.bibliography import BibliographyAudit
 from grd.mcp.paper.models import ArtifactManifest, is_supported_paper_journal
@@ -36,13 +40,25 @@ __all__ = ["build_paper_quality_input"]
 
 
 _PLACEHOLDER_RE = re.compile(r"TODO|FIXME|PENDING|TBD|\\text\{\[PENDING\]\}")
-_MISSING_CITE_RE = re.compile(r"\\cite\{MISSING:")
-_ABSTRACT_RE = re.compile(r"\\begin\{abstract\}[\s\S]*?\\end\{abstract\}", re.IGNORECASE)
-_INTRO_RE = re.compile(r"\\section\*?\{[^}]*introduction[^}]*\}", re.IGNORECASE)
-_CONCLUSION_RE = re.compile(r"\\section\*?\{[^}]*conclusion[^}]*\}", re.IGNORECASE)
+_MISSING_CITE_RE = re.compile(_CITE_CMD_PREFIX + r"(?:\[[^\]]*\])*\{MISSING:")
+_ABSTRACT_RE = re.compile(
+    r"(\\begin\{abstract\}[\s\S]*?\\end\{abstract\}|^\s{0,3}#{1,6}\s*abstract\b)",
+    re.IGNORECASE | re.MULTILINE,
+)
+_INTRO_RE = re.compile(
+    r"(\\section\*?\{[^}]*introduction[^}]*\}|^\s{0,3}#{1,6}\s*introduction\b)",
+    re.IGNORECASE | re.MULTILINE,
+)
+_CONCLUSION_RE = re.compile(
+    r"(\\section\*?\{[^}]*conclusion[^}]*\}|^\s{0,3}#{1,6}\s*conclusion\b)",
+    re.IGNORECASE | re.MULTILINE,
+)
 _SUPPLEMENT_RE = re.compile(r"appendix|supplement", re.IGNORECASE)
-_CITE_RE = re.compile(r"\\cite\{([^}]*)\}")
+_CITE_RE = re.compile(_CITE_CMD_PREFIX + r"(?:\[[^\]]*\])*\{([^}]*)\}")
 _BIB_ENTRY_RE = re.compile(r"@\w+\s*\{\s*([^,\s]+)\s*,")
+_DERIVATION_ARTIFACT_RE = re.compile(r"(?i)^derivation-(?!state\.).+\.(?:md|markdown|tex|py)$")
+_DERIVATION_ARTIFACT_SUFFIXES = (".md", ".markdown", ".tex", ".py")
+_MANUSCRIPT_CONTENT_SUFFIXES = (".tex", ".md")
 
 
 class _FigureTrackerEntry(BaseModel):
@@ -77,6 +93,20 @@ class _ContractCoverage(BaseModel):
     latest_report_passed: bool = False
     requires_decisive_comparison: bool = False
     comparison_verdicts_valid: bool = True
+    contract_results_seen: bool = False
+    contract_results_parse_ok: bool = True
+    contract_results_alignment_ok: bool = True
+
+
+class _ManuscriptReferenceStatus(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    reference_id: str = ""
+    bibtex_key: str = ""
+    title: str = ""
+    resolution_status: str = ""
+    verification_status: str = ""
+    cited_in_text: bool = False
 
 
 def _coverage_metric(satisfied: int, total: int) -> CoverageMetric:
@@ -101,7 +131,9 @@ def _load_json(path: Path) -> dict[str, object]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _load_artifact_manifest(path: Path) -> ArtifactManifest | None:
+def _load_artifact_manifest(path: Path | None) -> ArtifactManifest | None:
+    if path is None or not path.exists():
+        return None
     payload = _load_json(path)
     if not payload:
         return None
@@ -111,7 +143,9 @@ def _load_artifact_manifest(path: Path) -> ArtifactManifest | None:
         return None
 
 
-def _load_bibliography_audit(path: Path) -> BibliographyAudit | None:
+def _load_bibliography_audit(path: Path | None) -> BibliographyAudit | None:
+    if path is None or not path.exists():
+        return None
     payload = _load_json(path)
     if not payload:
         return None
@@ -121,42 +155,176 @@ def _load_bibliography_audit(path: Path) -> BibliographyAudit | None:
         return None
 
 
-def _extract_meta(path: Path) -> dict[str, object]:
+def _load_convention_lock(project_root: Path) -> ConventionLock | None:
+    payload = _load_json(project_root / "GRD" / "state.json")
+    lock_data = payload.get("convention_lock")
+    if not isinstance(lock_data, dict):
+        return None
+    try:
+        return ConventionLock.model_validate(lock_data)
+    except PydanticValidationError:
+        return None
+
+
+def _extract_meta(path: Path, *, parse_errors: list[str] | None = None) -> dict[str, object]:
     content = _read_text(path)
     if content is None:
         return {}
     try:
         meta, _ = extract_frontmatter(content)
-    except FrontmatterParseError:
+    except FrontmatterParseError as exc:
+        if parse_errors is not None:
+            parse_errors.append(f"{path.name}: {exc}")
         return {}
     return meta
 
 
-def _plan_contract_for_artifact(path: Path, meta: dict[str, object]) -> ResearchContract | None:
+def _plan_contract_for_artifact(
+    path: Path,
+    meta: dict[str, object],
+    *,
+    project_root: Path,
+) -> ResearchContract | None:
     """Return the canonical plan contract for one phase artifact when available."""
 
     contract_data = meta.get("contract")
     if isinstance(contract_data, dict):
-        return _validate_contract_mapping(contract_data, enforce_plan_semantics=True).contract
-    return _find_matching_plan_contract(path.parent, meta).contract
+        return _validate_contract_mapping(
+            contract_data,
+            enforce_plan_semantics=True,
+            project_root=project_root,
+        ).contract
+    return _find_matching_plan_contract(path.parent, meta, project_root=project_root).contract
 
 
-def _collect_tex_content(paper_dir: Path) -> tuple[list[Path], str]:
-    tex_files = sorted(paper_dir.glob("*.tex"))
+def _collect_manuscript_content(
+    manuscript_dir: Path,
+    *,
+    entrypoint: Path | None,
+) -> tuple[list[Path], str]:
+    content_files: list[Path] = []
+    seen: set[Path] = set()
+
+    def add_candidate(path: Path) -> None:
+        if path in seen or not path.exists() or not path.is_file():
+            return
+        if path.suffix.lower() not in _MANUSCRIPT_CONTENT_SUFFIXES:
+            return
+        seen.add(path)
+        content_files.append(path)
+
+    if entrypoint is not None:
+        add_candidate(entrypoint)
+
+    for candidate in sorted(
+        path
+        for path in manuscript_dir.rglob("*")
+        if path.is_file() and path.suffix.lower() in _MANUSCRIPT_CONTENT_SUFFIXES
+    ):
+        add_candidate(candidate)
+
     bodies = []
-    for tex_file in tex_files:
-        text = _read_text(tex_file)
+    for content_file in content_files:
+        text = _read_text(content_file)
         if text is not None:
             bodies.append(text)
-    return tex_files, "\n".join(bodies)
+    return content_files, "\n".join(bodies)
 
 
-def _resolve_manuscript_dir(project_root: Path) -> Path:
-    for name in ("paper", "manuscript", "draft"):
-        candidate = project_root / name
+def _first_existing_path(*candidates: Path) -> Path | None:
+    for candidate in candidates:
         if candidate.exists():
             return candidate
-    return project_root / "paper"
+    return None
+
+
+def _load_manuscript_config(manuscript_dir: Path) -> dict[str, object]:
+    config_path = _first_existing_path(manuscript_dir / "PAPER-CONFIG.json")
+    if config_path is None:
+        return {}
+    payload = _load_json(config_path)
+    if not payload:
+        return {}
+    try:
+        return PaperConfig.model_validate(payload).model_dump(mode="python")
+    except PydanticValidationError:
+        return payload
+
+
+def _best_effort_manuscript_root(project_root: Path) -> Path | None:
+    resolution = resolve_current_manuscript_resolution(project_root, allow_markdown=True)
+    if resolution.status == "resolved" and resolution.manuscript_root is not None:
+        return resolution.manuscript_root
+    if resolution.status == "ambiguous":
+        return None
+
+    candidates: list[Path] = []
+    for root_name in ("paper", "manuscript", "draft"):
+        candidate = project_root / root_name
+        if not candidate.exists() or not candidate.is_dir():
+            continue
+        has_publication_artifacts = any(
+            (candidate / artifact_name).exists()
+            for artifact_name in (
+                "PAPER-CONFIG.json",
+                "ARTIFACT-MANIFEST.json",
+                "BIBLIOGRAPHY-AUDIT.json",
+                "FIGURE_TRACKER.md",
+                "reproducibility-manifest.json",
+            )
+        )
+        has_manuscript_content = any(
+            path.is_file() and path.suffix.lower() in _MANUSCRIPT_CONTENT_SUFFIXES for path in candidate.rglob("*")
+        )
+        if has_publication_artifacts or has_manuscript_content:
+            candidates.append(candidate)
+
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _derivation_artifacts(project_root: Path) -> list[Path]:
+    grd_root = project_root / "GRD"
+    if not grd_root.exists():
+        return []
+    return sorted(
+        path
+        for path in grd_root.rglob("derivation-*")
+        if path.is_file()
+        and path.suffix.lower() in _DERIVATION_ARTIFACT_SUFFIXES
+        and _DERIVATION_ARTIFACT_RE.fullmatch(path.name)
+    )
+
+
+def _build_conventions_input(project_root: Path) -> ConventionsQualityInput:
+    lock = _load_convention_lock(project_root)
+    lock_check = convention_check(lock) if lock is not None else None
+    derivation_paths = _derivation_artifacts(project_root)
+
+    if not derivation_paths:
+        coverage = CoverageMetric(not_applicable=True)
+    elif lock is None or lock_check is None or lock_check.set_count == 0:
+        coverage = CoverageMetric(satisfied=0, total=len(derivation_paths))
+    else:
+        satisfied = 0
+        for path in derivation_paths:
+            content = _read_text(path)
+            if content is None:
+                continue
+            assertion_check = check_assertions(
+                content,
+                lock,
+                filename=str(path.relative_to(project_root)),
+                require_assertions=True,
+            )
+            if assertion_check.passed:
+                satisfied += 1
+        coverage = _coverage_metric(satisfied, len(derivation_paths))
+
+    return ConventionsQualityInput(
+        convention_lock_complete=BinaryCheck(passed=bool(lock_check and lock_check.complete)),
+        assert_convention_coverage=coverage,
+        notation_consistent=BinaryCheck(not_applicable=True),
+    )
 
 
 def _available_citation_keys(manuscript_dir: Path, bibliography_audit: BibliographyAudit | None) -> set[str]:
@@ -199,23 +367,12 @@ def _parse_comparison_verdict_entries(
     *,
     errors: list[str] | None = None,
 ) -> list[ComparisonVerdict]:
-    if not isinstance(value, list):
+    try:
+        return parse_comparison_verdicts_data_strict(value)
+    except ValueError as exc:
         if errors is not None and value is not None:
-            errors.append(f"comparison_verdicts must be a list, not {type(value).__name__}")
+            errors.append(str(exc))
         return []
-
-    verdicts: list[ComparisonVerdict] = []
-    for index, item in enumerate(value):
-        if not isinstance(item, dict):
-            if errors is not None:
-                errors.append(f"comparison_verdicts[{index}] must be an object, not {type(item).__name__}")
-            continue
-        try:
-            verdicts.append(ComparisonVerdict.model_validate(item))
-        except PydanticValidationError as exc:
-            if errors is not None:
-                errors.append(f"comparison_verdicts[{index}]: {exc}")
-    return verdicts
 
 
 def _comparison_verdict_key(verdict: ComparisonVerdict) -> tuple[str, str | None, str | None, str]:
@@ -241,20 +398,30 @@ def _merge_comparison_verdict(existing: ComparisonVerdict, incoming: ComparisonV
     return existing.model_copy(update=updates) if updates else existing
 
 
-def _collect_comparison_verdicts(project_root: Path) -> tuple[list[ComparisonVerdict], bool]:
+def _collect_comparison_verdicts(
+    project_root: Path,
+    *,
+    manuscript_root: Path | None,
+) -> tuple[list[ComparisonVerdict], bool]:
     verdicts_by_key: dict[tuple[str, str | None, str | None, str], ComparisonVerdict] = {}
     parse_errors: list[str] = []
+    layout = ProjectLayout(project_root)
+    phase_root = project_root / "GRD" / "phases"
 
     candidate_roots = [
         project_root / "GRD" / "phases",
         project_root / "GRD" / "comparisons",
         project_root / "paper",
     ]
+    if manuscript_root is not None:
+        candidate_roots.append(manuscript_root)
     for root in candidate_roots:
         if not root.exists():
             continue
         for path in sorted(root.rglob("*.md")):
-            meta = _extract_meta(path)
+            if root == phase_root and not _is_contract_coverage_artifact(path, layout):
+                continue
+            meta = _extract_meta(path, parse_errors=parse_errors)
             for verdict in _parse_comparison_verdict_entries(meta.get("comparison_verdicts"), errors=parse_errors):
                 key = _comparison_verdict_key(verdict)
                 existing = verdicts_by_key.get(key)
@@ -280,6 +447,37 @@ def _resolve_paper_journal(artifact_manifest: ArtifactManifest | None, paper_con
     return "generic"
 
 
+def _manifest_metadata_matches_active_entrypoint(
+    artifact_manifest: ArtifactManifest | None,
+    *,
+    manuscript_root: Path | None,
+    manuscript_entrypoint: Path | None,
+) -> bool:
+    """Return whether manifest metadata matches the currently resolved manuscript entrypoint."""
+    if artifact_manifest is None or manuscript_root is None or manuscript_entrypoint is None:
+        return False
+    resolved_entrypoint = manuscript_entrypoint.resolve(strict=False)
+    for artifact in artifact_manifest.artifacts:
+        if artifact.category != "tex":
+            continue
+        candidate = manuscript_root / artifact.path
+        if candidate.exists() and candidate.resolve(strict=False) == resolved_entrypoint:
+            return True
+    return False
+
+
+def _is_contract_coverage_artifact(path: Path, layout: ProjectLayout) -> bool:
+    """Return whether a phase markdown file participates in contract coverage."""
+    filename = path.name
+    return (
+        layout.is_plan_file(filename)
+        or layout.is_summary_file(filename)
+        or layout.is_verification_file(filename)
+        or filename.endswith(VALIDATION_SUFFIX)
+        or filename == STANDALONE_VALIDATION
+    )
+
+
 def _collect_contract_coverage(project_root: Path) -> _ContractCoverage:
     total_claims: set[str] = set()
     total_deliverables: set[str] = set()
@@ -292,14 +490,24 @@ def _collect_contract_coverage(project_root: Path) -> _ContractCoverage:
     latest_report_passed = False
     requires_decisive_comparison = False
     comparison_verdicts_valid = True
+    contract_results_seen = False
+    contract_results_parse_ok = True
+    contract_results_alignment_ok = True
+    frontmatter_parse_errors = False
 
     phases_root = project_root / "GRD" / "phases"
     if not phases_root.exists():
         return _ContractCoverage()
+    layout = ProjectLayout(project_root)
 
     for path in sorted(phases_root.rglob("*.md")):
-        meta = _extract_meta(path)
-        plan_contract = _plan_contract_for_artifact(path, meta)
+        if not _is_contract_coverage_artifact(path, layout):
+            continue
+        parse_errors: list[str] = []
+        meta = _extract_meta(path, parse_errors=parse_errors)
+        if parse_errors:
+            frontmatter_parse_errors = True
+        plan_contract = _plan_contract_for_artifact(path, meta, project_root=project_root)
         if plan_contract is not None:
             total_claims.update(claim.id for claim in plan_contract.claims)
             total_deliverables.update(deliverable.id for deliverable in plan_contract.deliverables)
@@ -315,69 +523,84 @@ def _collect_contract_coverage(project_root: Path) -> _ContractCoverage:
         raw_results = meta.get("contract_results")
         contract_alignment_errors: list[str] = []
         contract_results: ContractResults | None = None
-        if isinstance(raw_results, dict) and plan_contract is not None:
-            try:
-                contract_results = ContractResults.model_validate(
-                    normalize_contract_results_input(raw_results, strict=True)
-                )
-            except PydanticValidationError:
-                contract_results = None
-            if contract_results is not None:
-                comparison_verdicts: list[ComparisonVerdict] = []
+        if "contract_results" in meta or parse_errors:
+            contract_results_seen = True
+            if parse_errors:
+                contract_results_parse_ok = False
+                contract_results_alignment_ok = False
+            elif not isinstance(raw_results, dict):
+                contract_results_parse_ok = False
+                contract_results_alignment_ok = False
+            else:
                 try:
-                    comparison_verdicts = _parse_comparison_verdicts(meta)
-                except (PydanticValidationError, TypeError, ValueError) as exc:
-                    contract_alignment_errors.append(f"comparison_verdicts: {exc}")
-                if not contract_alignment_errors:
-                    contract_alignment_errors = _summary_contract_errors(
-                        plan_contract,
-                        contract_results,
-                        comparison_verdicts,
-                    )
-                if comparison_verdicts and contract_alignment_errors:
-                    comparison_verdicts_valid = False
+                    contract_results = parse_contract_results_data_artifact(raw_results)
+                except (PydanticValidationError, TypeError, ValueError):
+                    contract_results = None
+                    contract_results_parse_ok = False
+                    contract_results_alignment_ok = False
+                else:
+                    if plan_contract is None:
+                        contract_results_alignment_ok = False
+                    else:
+                        comparison_verdicts: list[ComparisonVerdict] = []
+                        try:
+                            comparison_verdicts = _parse_comparison_verdicts(meta)
+                        except (PydanticValidationError, TypeError, ValueError) as exc:
+                            contract_alignment_errors.append(f"comparison_verdicts: {exc}")
+                        if not contract_alignment_errors:
+                            contract_alignment_errors = _summary_contract_errors(
+                                plan_contract,
+                                contract_results,
+                                comparison_verdicts,
+                            )
+                        if comparison_verdicts and contract_alignment_errors:
+                            comparison_verdicts_valid = False
 
-                if not contract_alignment_errors:
-                    expected_claim_ids = {claim.id for claim in plan_contract.claims}
-                    expected_deliverable_ids = {deliverable.id for deliverable in plan_contract.deliverables}
-                    expected_test_ids = {test.id for test in plan_contract.acceptance_tests}
-                    passed_claims.update(
-                        claim_id
-                        for claim_id, entry in contract_results.claims.items()
-                        if claim_id in expected_claim_ids and entry.status == "passed"
-                    )
-                    passed_deliverables.update(
-                        deliverable_id
-                        for deliverable_id, entry in contract_results.deliverables.items()
-                        if deliverable_id in expected_deliverable_ids and entry.status == "passed"
-                    )
-                    passed_tests.update(
-                        test_id
-                        for test_id, entry in contract_results.acceptance_tests.items()
-                        if test_id in expected_test_ids and entry.status == "passed"
-                    )
-                    for expected_ids, entries in (
-                        (expected_claim_ids, contract_results.claims),
-                        (expected_deliverable_ids, contract_results.deliverables),
-                        (expected_test_ids, contract_results.acceptance_tests),
-                    ):
-                        for entry_id, entry in entries.items():
-                            if entry_id not in expected_ids:
-                                continue
-                            for evidence in entry.evidence:
-                                if evidence.confidence == "high":
-                                    confidences.append(VerificationConfidence.independently_confirmed)
-                                elif evidence.confidence == "medium":
-                                    confidences.append(VerificationConfidence.structurally_present)
-                                elif evidence.confidence == "low":
-                                    confidences.append(VerificationConfidence.unable_to_verify)
-                                else:
-                                    confidences.append(VerificationConfidence.unreliable)
+                        if not contract_alignment_errors:
+                            expected_claim_ids = {claim.id for claim in plan_contract.claims}
+                            expected_deliverable_ids = {deliverable.id for deliverable in plan_contract.deliverables}
+                            expected_test_ids = {test.id for test in plan_contract.acceptance_tests}
+                            passed_claims.update(
+                                claim_id
+                                for claim_id, entry in contract_results.claims.items()
+                                if claim_id in expected_claim_ids and entry.status == "passed"
+                            )
+                            passed_deliverables.update(
+                                deliverable_id
+                                for deliverable_id, entry in contract_results.deliverables.items()
+                                if deliverable_id in expected_deliverable_ids and entry.status == "passed"
+                            )
+                            passed_tests.update(
+                                test_id
+                                for test_id, entry in contract_results.acceptance_tests.items()
+                                if test_id in expected_test_ids and entry.status == "passed"
+                            )
+                            for expected_ids, entries in (
+                                (expected_claim_ids, contract_results.claims),
+                                (expected_deliverable_ids, contract_results.deliverables),
+                                (expected_test_ids, contract_results.acceptance_tests),
+                            ):
+                                for entry_id, entry in entries.items():
+                                    if entry_id not in expected_ids:
+                                        continue
+                                    for evidence in entry.evidence:
+                                        if evidence.confidence == "high":
+                                            confidences.append(VerificationConfidence.independently_confirmed)
+                                        elif evidence.confidence == "medium":
+                                            confidences.append(VerificationConfidence.structurally_present)
+                                        elif evidence.confidence == "low":
+                                            confidences.append(VerificationConfidence.unable_to_verify)
+                                        else:
+                                            confidences.append(VerificationConfidence.unreliable)
+                        else:
+                            contract_results_alignment_ok = False
 
         verified_at = str(meta.get("verified") or meta.get("completed") or "")
         status = str(meta.get("status") or "")
         is_verification_report = path.name.endswith("VERIFICATION.md")
-        report_has_valid_contract_ledger = contract_results is not None and not contract_alignment_errors
+        report_has_valid_contract_ledger = (
+            plan_contract is not None and contract_results is not None and not contract_alignment_errors
+        )
         if is_verification_report and verified_at >= latest_verified_at:
             latest_verified_at = verified_at
             latest_report_passed = status == "passed" and report_has_valid_contract_ledger
@@ -390,7 +613,10 @@ def _collect_contract_coverage(project_root: Path) -> _ContractCoverage:
         confidences=confidences,
         latest_report_passed=latest_report_passed,
         requires_decisive_comparison=requires_decisive_comparison,
-        comparison_verdicts_valid=comparison_verdicts_valid,
+        comparison_verdicts_valid=comparison_verdicts_valid and not frontmatter_parse_errors,
+        contract_results_seen=contract_results_seen,
+        contract_results_parse_ok=contract_results_parse_ok,
+        contract_results_alignment_ok=contract_results_alignment_ok,
     )
 
 
@@ -426,17 +652,44 @@ def _build_figures_input(
     comparison_required: bool,
 ) -> tuple[FiguresQualityInput, ResultsQualityInput]:
     if not figure_registry:
-        return FiguresQualityInput(), ResultsQualityInput(
+        comparison_missing_inventory = comparison_required
+        figures = FiguresQualityInput(
+            decisive_artifacts_labeled_with_units=CoverageMetric()
+            if comparison_missing_inventory
+            else CoverageMetric(not_applicable=True),
+            decisive_artifacts_uncertainty_qualified=CoverageMetric()
+            if comparison_missing_inventory
+            else CoverageMetric(not_applicable=True),
+            decisive_artifacts_referenced_in_text=CoverageMetric()
+            if comparison_missing_inventory
+            else CoverageMetric(not_applicable=True),
+            decisive_artifact_roles_clear=CoverageMetric()
+            if comparison_missing_inventory
+            else CoverageMetric(not_applicable=True),
+        )
+        return figures, ResultsQualityInput(
             comparison_with_prior_work_present=BinaryCheck(
-                passed=bool(verdicts),
-                not_applicable=not comparison_required,
-            )
+                passed=False if comparison_missing_inventory else bool(verdicts),
+                not_applicable=not comparison_missing_inventory,
+            ),
+            physical_interpretation_present=BinaryCheck(not_applicable=True),
+            decisive_artifacts_with_explicit_verdicts=CoverageMetric()
+            if comparison_missing_inventory
+            else CoverageMetric(not_applicable=True),
+            decisive_artifacts_benchmark_anchored=CoverageMetric()
+            if comparison_missing_inventory
+            else CoverageMetric(not_applicable=True),
+            decisive_comparison_failures_scoped=BinaryCheck(
+                passed=False,
+                not_applicable=not comparison_missing_inventory,
+            ),
         )
 
     total_figures = len(figure_registry)
     decisive_entries = [
         entry for entry in figure_registry if entry.decisive or entry.role in {"smoking_gun", "benchmark", "comparison"}
     ]
+    decisive_inventory_missing = comparison_required and not decisive_entries
 
     decisive_with_verdict = 0
     decisive_with_anchor = 0
@@ -456,6 +709,61 @@ def _build_figures_input(
             if verdict.verdict in {"fail", "tension"} and not (verdict.recommended_action or verdict.notes):
                 decisive_failures_scoped = False
 
+    if decisive_inventory_missing:
+        decisive_artifacts_labeled_with_units = CoverageMetric()
+        decisive_artifacts_uncertainty_qualified = CoverageMetric()
+        decisive_artifacts_referenced_in_text = CoverageMetric()
+        decisive_artifact_roles_clear = CoverageMetric()
+        decisive_uncertainties_present = CoverageMetric()
+        decisive_artifacts_with_explicit_verdicts = CoverageMetric()
+        decisive_artifacts_benchmark_anchored = CoverageMetric()
+        comparison_with_prior_work_present = BinaryCheck(passed=False, not_applicable=False)
+        decisive_comparison_failures_scoped = BinaryCheck(passed=False, not_applicable=False)
+    else:
+        decisive_artifacts_labeled_with_units = (
+            _coverage_metric(sum(1 for entry in decisive_entries if entry.has_units), len(decisive_entries))
+            if decisive_entries
+            else CoverageMetric(not_applicable=True)
+        )
+        decisive_artifacts_uncertainty_qualified = (
+            _coverage_metric(uncertainty_count, len(decisive_entries))
+            if decisive_entries
+            else CoverageMetric(not_applicable=True)
+        )
+        decisive_artifacts_referenced_in_text = (
+            _coverage_metric(sum(1 for entry in decisive_entries if entry.referenced_in_text), len(decisive_entries))
+            if decisive_entries
+            else CoverageMetric(not_applicable=True)
+        )
+        decisive_artifact_roles_clear = (
+            _coverage_metric(sum(1 for entry in decisive_entries if entry.role and entry.role != "other"), len(decisive_entries))
+            if decisive_entries
+            else CoverageMetric(not_applicable=True)
+        )
+        decisive_uncertainties_present = (
+            _coverage_metric(uncertainty_count, len(decisive_entries))
+            if decisive_entries
+            else CoverageMetric()
+        )
+        decisive_artifacts_with_explicit_verdicts = (
+            _coverage_metric(decisive_with_verdict, len(decisive_entries))
+            if decisive_entries
+            else CoverageMetric(not_applicable=True)
+        )
+        decisive_artifacts_benchmark_anchored = (
+            _coverage_metric(decisive_with_anchor, len(decisive_entries))
+            if decisive_entries
+            else CoverageMetric(not_applicable=True)
+        )
+        comparison_with_prior_work_present = BinaryCheck(
+            passed=bool(verdicts),
+            not_applicable=not comparison_required,
+        )
+        decisive_comparison_failures_scoped = BinaryCheck(
+            passed=decisive_failures_scoped,
+            not_applicable=not decisive_entries,
+        )
+
     figures = FiguresQualityInput(
         axes_labeled_with_units=_coverage_metric(sum(1 for entry in figure_registry if entry.has_units), total_figures),
         error_bars_present=_coverage_metric(sum(1 for entry in figure_registry if entry.has_uncertainty), total_figures),
@@ -465,56 +773,18 @@ def _build_figures_input(
             total_figures,
         ),
         colorblind_safe=_coverage_metric(sum(1 for entry in figure_registry if entry.colorblind_safe), total_figures),
-        decisive_artifacts_labeled_with_units=_coverage_metric(
-            sum(1 for entry in decisive_entries if entry.has_units),
-            len(decisive_entries),
-        )
-        if decisive_entries
-        else CoverageMetric(not_applicable=True),
-        decisive_artifacts_uncertainty_qualified=_coverage_metric(
-            uncertainty_count,
-            len(decisive_entries),
-        )
-        if decisive_entries
-        else CoverageMetric(not_applicable=True),
-        decisive_artifacts_referenced_in_text=_coverage_metric(
-            sum(1 for entry in decisive_entries if entry.referenced_in_text),
-            len(decisive_entries),
-        )
-        if decisive_entries
-        else CoverageMetric(not_applicable=True),
-        decisive_artifact_roles_clear=_coverage_metric(
-            sum(1 for entry in decisive_entries if entry.role and entry.role != "other"),
-            len(decisive_entries),
-        )
-        if decisive_entries
-        else CoverageMetric(not_applicable=True),
+        decisive_artifacts_labeled_with_units=decisive_artifacts_labeled_with_units,
+        decisive_artifacts_uncertainty_qualified=decisive_artifacts_uncertainty_qualified,
+        decisive_artifacts_referenced_in_text=decisive_artifacts_referenced_in_text,
+        decisive_artifact_roles_clear=decisive_artifact_roles_clear,
     )
     results = ResultsQualityInput(
-        uncertainties_present=_coverage_metric(uncertainty_count, len(decisive_entries))
-        if decisive_entries
-        else CoverageMetric(),
-        comparison_with_prior_work_present=BinaryCheck(
-            passed=bool(verdicts),
-            not_applicable=not comparison_required,
-        ),
-        physical_interpretation_present=BinaryCheck(),
-        decisive_artifacts_with_explicit_verdicts=_coverage_metric(
-            decisive_with_verdict,
-            len(decisive_entries),
-        )
-        if decisive_entries
-        else CoverageMetric(not_applicable=True),
-        decisive_artifacts_benchmark_anchored=_coverage_metric(
-            decisive_with_anchor,
-            len(decisive_entries),
-        )
-        if decisive_entries
-        else CoverageMetric(not_applicable=True),
-        decisive_comparison_failures_scoped=BinaryCheck(
-            passed=decisive_failures_scoped,
-            not_applicable=not decisive_entries,
-        ),
+        uncertainties_present=decisive_uncertainties_present,
+        comparison_with_prior_work_present=comparison_with_prior_work_present,
+        physical_interpretation_present=BinaryCheck(not_applicable=True),
+        decisive_artifacts_with_explicit_verdicts=decisive_artifacts_with_explicit_verdicts,
+        decisive_artifacts_benchmark_anchored=decisive_artifacts_benchmark_anchored,
+        decisive_comparison_failures_scoped=decisive_comparison_failures_scoped,
     )
     return figures, results
 
@@ -523,21 +793,53 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
     """Build a conservative :class:`PaperQualityInput` from project artifacts."""
 
     root = Path(project_root)
-    paper_dir = _resolve_manuscript_dir(root)
-    artifact_manifest = _load_artifact_manifest(paper_dir / "ARTIFACT-MANIFEST.json")
-    paper_config = _load_json(paper_dir / "PAPER-CONFIG.json")
-    bibliography_audit = _load_bibliography_audit(paper_dir / "BIBLIOGRAPHY-AUDIT.json")
+    manuscript_resolution = resolve_current_manuscript_resolution(root, allow_markdown=True)
+    if manuscript_resolution.status in {"ambiguous", "invalid"}:
+        raise GRDError(
+            "paper-quality artifact resolution requires an unambiguous manuscript root; "
+            f"found {manuscript_resolution.status}: {manuscript_resolution.detail}"
+        )
 
-    tex_files, tex_content = _collect_tex_content(paper_dir)
+    paper_dir = manuscript_resolution.manuscript_root or _best_effort_manuscript_root(root)
+    manuscript_entrypoint = manuscript_resolution.manuscript_entrypoint
+    artifact_manifest = None
+    bibliography_audit = None
+    paper_config: dict[str, object] = {}
+    manuscript_files: list[Path] = []
+    manuscript_content = ""
+    if paper_dir is not None:
+        artifact_manifest = _load_artifact_manifest(
+            locate_publication_artifact(paper_dir, "ARTIFACT-MANIFEST.json")
+        )
+        bibliography_audit = _load_bibliography_audit(
+            locate_publication_artifact(paper_dir, "BIBLIOGRAPHY-AUDIT.json")
+        )
+        paper_config = _load_manuscript_config(paper_dir)
+        manuscript_files, manuscript_content = _collect_manuscript_content(
+            paper_dir,
+            entrypoint=manuscript_entrypoint,
+        )
+    trusted_artifact_manifest = (
+        artifact_manifest
+        if _manifest_metadata_matches_active_entrypoint(
+            artifact_manifest,
+            manuscript_root=paper_dir,
+            manuscript_entrypoint=manuscript_entrypoint,
+        )
+        else None
+    )
     title = (
-        artifact_manifest.paper_title
-        if artifact_manifest is not None
+        trusted_artifact_manifest.paper_title
+        if trusted_artifact_manifest is not None
         else str(paper_config.get("title") or paper_config.get("paper_title") or "")
     )
-    journal = _resolve_paper_journal(artifact_manifest, paper_config)
+    journal = _resolve_paper_journal(trusted_artifact_manifest, paper_config)
 
-    figure_registry = _load_figure_registry(root)
-    verdicts, verdicts_parse_ok = _collect_comparison_verdicts(root)
+    figure_registry = _load_figure_registry(paper_dir) if paper_dir is not None else {}
+    verdicts, verdicts_parse_ok = _collect_comparison_verdicts(
+        root,
+        manuscript_root=paper_dir,
+    )
     contract_coverage = _collect_contract_coverage(root)
     figures, results = _build_figures_input(
         figure_registry,
@@ -546,16 +848,26 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
         comparison_required=contract_coverage.requires_decisive_comparison,
     )
 
-    placeholder_count = len(_PLACEHOLDER_RE.findall(tex_content))
-    missing_cites = len(_MISSING_CITE_RE.findall(tex_content))
-    cite_keys = list(dict.fromkeys(part.strip() for match in _CITE_RE.findall(tex_content) for part in match.split(",") if part.strip()))
+    placeholder_count = len(_PLACEHOLDER_RE.findall(manuscript_content))
+    missing_cites = len(_MISSING_CITE_RE.findall(manuscript_content))
+    draft_findings = validate_tex_draft(manuscript_content)
+    empty_citation_commands = sum(1 for finding in draft_findings if finding.check == "empty_citation_command")
+    empty_reference_commands = sum(1 for finding in draft_findings if finding.check == "empty_reference_command")
+    cite_keys = list(
+        dict.fromkeys(
+            part.strip()
+            for match in _CITE_RE.findall(manuscript_content)
+            for part in match.split(",")
+            if part.strip()
+        )
+    )
     required_sections = 3
     present_sections = 0
-    if _ABSTRACT_RE.search(tex_content):
+    if _ABSTRACT_RE.search(manuscript_content):
         present_sections += 1
-    if _INTRO_RE.search(tex_content):
+    if _INTRO_RE.search(manuscript_content):
         present_sections += 1
-    if _CONCLUSION_RE.search(tex_content):
+    if _CONCLUSION_RE.search(manuscript_content):
         present_sections += 1
 
     resolved_sources = bibliography_audit.resolved_sources if bibliography_audit is not None else 0
@@ -563,7 +875,7 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
     partial_sources = bibliography_audit.partial_sources if bibliography_audit is not None else 0
     unverified_sources = bibliography_audit.unverified_sources if bibliography_audit is not None else 0
     failed_sources = bibliography_audit.failed_sources if bibliography_audit is not None else 0
-    available_citation_keys = _available_citation_keys(paper_dir, bibliography_audit)
+    available_citation_keys = _available_citation_keys(paper_dir, bibliography_audit) if paper_dir is not None else set()
 
     if cite_keys:
         resolved_citations = sum(1 for key in cite_keys if key in available_citation_keys)
@@ -572,11 +884,27 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
         citation_key_coverage = _coverage_metric(resolved_sources, total_sources)
     else:
         citation_key_coverage = CoverageMetric()
+    citation_audit_applicable = bibliography_audit is not None or bool(cite_keys) or missing_cites > 0
+    citation_audit_passed = (
+        bibliography_audit is not None and failed_sources == 0 and partial_sources == 0 and unverified_sources == 0
+    )
+
+    manuscript_reference_status = _manuscript_reference_status(bibliography_audit, cite_keys=set(cite_keys))
+    manuscript_reference_bridge_complete = bool(manuscript_reference_status) and all(
+        status.reference_id and status.bibtex_key for status in manuscript_reference_status
+    )
 
     journal_extra_checks: dict[str, bool] = {}
     raw_journal_extra_checks = paper_config.get("journal_extra_checks")
     if isinstance(raw_journal_extra_checks, dict):
         journal_extra_checks.update(raw_journal_extra_checks)
+    journal_extra_checks["manuscript_reference_status_present"] = bool(manuscript_reference_status)
+    journal_extra_checks["manuscript_reference_bridge_complete"] = manuscript_reference_bridge_complete
+    journal_extra_checks["empty_citation_commands_absent"] = empty_citation_commands == 0
+    journal_extra_checks["empty_reference_commands_absent"] = empty_reference_commands == 0
+    if contract_coverage.contract_results_seen:
+        journal_extra_checks["contract_results_parse_ok"] = contract_coverage.contract_results_parse_ok
+        journal_extra_checks["contract_results_alignment_ok"] = contract_coverage.contract_results_alignment_ok
     journal_extra_checks["comparison_verdicts_valid"] = verdicts_parse_ok and contract_coverage.comparison_verdicts_valid
 
     citations = CitationsQualityInput(
@@ -584,16 +912,19 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
         missing_placeholders=BinaryCheck(passed=missing_cites == 0),
         key_prior_work_cited=BinaryCheck(passed=bool(verdicts) or bool(cite_keys)),
         hallucination_free=BinaryCheck(
-            passed=failed_sources == 0 and partial_sources == 0 and unverified_sources == 0,
-            not_applicable=bibliography_audit is None,
+            passed=citation_audit_passed,
+            not_applicable=not citation_audit_applicable,
         ),
     )
     completeness = CompletenessQualityInput(
-        abstract_written_last=BinaryCheck(),
-        required_sections_present=_coverage_metric(present_sections, required_sections) if tex_files else CoverageMetric(),
+        abstract_written_last=BinaryCheck(not_applicable=True),
+        required_sections_present=_coverage_metric(present_sections, required_sections)
+        if manuscript_files
+        else CoverageMetric(),
         placeholders_cleared=BinaryCheck(passed=placeholder_count == 0),
-        supplemental_cross_referenced=BinaryCheck(passed=bool(_SUPPLEMENT_RE.search(tex_content))),
+        supplemental_cross_referenced=BinaryCheck(passed=bool(_SUPPLEMENT_RE.search(manuscript_content))),
     )
+    conventions = _build_conventions_input(root)
     verification = VerificationQualityInput(
         report_passed=BinaryCheck(passed=contract_coverage.latest_report_passed),
         contract_targets_verified=_coverage_metric(contract_coverage.satisfied_targets, contract_coverage.total_targets)
@@ -608,6 +939,7 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
         figures=figures,
         citations=citations,
         completeness=completeness,
+        conventions=conventions,
         verification=verification,
         results=results,
         journal_extra_checks=journal_extra_checks,

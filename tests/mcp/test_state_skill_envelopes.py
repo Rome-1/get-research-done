@@ -21,7 +21,13 @@ def _assert_stable_envelope(result: object, expected_payload: dict[str, object])
 def test_state_server_success_response_uses_strict_stable_envelope() -> None:
     from grd.mcp.servers.state_server import get_state
 
-    mock_state = {"position": {"current_phase": "01"}, "decisions": []}
+    mock_state = {
+        "position": {"current_phase": "01"},
+        "decisions": [],
+        "project_contract_load_info": {"status": "missing"},
+        "project_contract_validation": None,
+        "project_contract_gate": {"authoritative": False},
+    }
 
     with patch("grd.mcp.servers.state_server.load_state_json", return_value=mock_state):
         result = get_state("/fake/project")

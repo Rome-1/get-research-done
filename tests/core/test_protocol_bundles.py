@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -9,6 +10,10 @@ import pytest
 
 from grd.contracts import ResearchContract
 from grd.core.protocol_bundles import (
+    BundleAsset,
+    BundleAssets,
+    BundleVerifierExtension,
+    ResolvedProtocolBundle,
     get_protocol_bundle,
     invalidate_protocol_bundle_cache,
     list_protocol_bundles,
@@ -349,12 +354,78 @@ def test_render_protocol_bundle_context_surfaces_guidance() -> None:
 
     rendered = render_protocol_bundle_context(selected)
 
-    assert "Statistical Mechanics Simulation [stat-mech-simulation]" in rendered
+    assert json.dumps("Statistical Mechanics Simulation", ensure_ascii=False) in rendered
+    assert json.dumps("stat-mech-simulation", ensure_ascii=False) in rendered
     assert "Usage contract: additive specialized guidance only." in rendered
     assert "Selection tags:" in rendered
     assert "Estimator policies:" in rendered
     assert "Verifier extensions:" in rendered
     assert "{GRD_INSTALL_DIR}/domains/physics/protocols/monte-carlo.md" in rendered
+
+
+def test_render_protocol_bundle_context_includes_asset_notes() -> None:
+    selected = [
+        ResolvedProtocolBundle(
+            bundle_id="note-test",
+            title="Note Test",
+            summary="Bundle used to verify asset note rendering.",
+            score=1,
+            assets=BundleAssets(
+                protocols_core=[
+                    BundleAsset(path="references/protocols/note-test.md", note="Use this as the canonical overview"),
+                ]
+            ),
+        )
+    ]
+
+    rendered = render_protocol_bundle_context(selected)
+
+    assert f"(note: {json.dumps('Use this as the canonical overview', ensure_ascii=False)})" in rendered
+    assert "{GRD_INSTALL_DIR}/references/protocols/note-test.md" in rendered
+
+
+def test_render_protocol_bundle_context_literalizes_markdown_sensitive_metadata() -> None:
+    selected = [
+        ResolvedProtocolBundle(
+            bundle_id='bundle-id\n### injected',
+            title='Bundle title\n## injected',
+            summary='Bundle summary\n### injected',
+            score=1,
+            matched_tags=['tag-one', 'tag-two\n### injected'],
+            matched_terms=['term-one', 'term-two\n## injected'],
+            selection_tags=['selection-one', 'selection-two\n### injected'],
+            assets=BundleAssets(
+                protocols_core=[
+                    BundleAsset(
+                        path="references/protocols/malicious.md",
+                        note='note\n### injected',
+                    )
+                ]
+            ),
+            anchor_prompts=['anchor-one', 'anchor-two\n### injected'],
+            reference_prompts=['reference-one', 'reference-two\n## injected'],
+            estimator_policies=['policy-one', 'policy-two\n### injected'],
+            decisive_artifact_guidance=['artifact-one', 'artifact-two\n## injected'],
+            verifier_extensions=[
+                BundleVerifierExtension(
+                    name='extension label\n### injected',
+                    rationale="Rationale text.",
+                    check_ids=['5.1', '5.2\n### injected'],
+                )
+            ],
+        )
+    ]
+
+    rendered = render_protocol_bundle_context(selected)
+
+    assert rendered.count("\n### ") == 1
+    assert "\n### injected" not in rendered
+    assert "\n## injected" not in rendered
+    assert json.dumps("Bundle title\n## injected", ensure_ascii=False) in rendered
+    assert json.dumps("Bundle summary\n### injected", ensure_ascii=False) in rendered
+    assert json.dumps(["tag-one", "tag-two\n### injected"], ensure_ascii=False) in rendered
+    assert json.dumps("note\n### injected", ensure_ascii=False) in rendered
+    assert json.dumps("extension label\n### injected", ensure_ascii=False) in rendered
 
 
 def test_select_protocol_bundles_lattice_gauge_excludes_stat_mech_when_both_match() -> None:

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
+
+from grd.core.workflow_staging import load_workflow_stage_manifest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = REPO_ROOT / "src/grd/specs/workflows"
@@ -45,10 +48,9 @@ def test_artifact_surfacing_no_longer_promises_dead_progress_or_checkpoint_shape
     assert "checkpoint:human-verify" not in artifact_surfacing
 
 
-def test_execute_plan_and_repo_graph_surface_github_lifecycle_wiring() -> None:
+def test_execute_plan_surfaces_github_lifecycle_wiring() -> None:
     execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
     github_lifecycle = (EXECUTION_REFERENCES_DIR / "github-lifecycle.md").read_text(encoding="utf-8")
-    graph = GRAPH_PATH.read_text(encoding="utf-8")
 
     required_reading = "{GRD_INSTALL_DIR}/references/execution/github-lifecycle.md"
 
@@ -67,8 +69,11 @@ def test_execute_plan_and_repo_graph_surface_github_lifecycle_wiring() -> None:
     ) in graph
 
 
-def test_repo_graph_surfaces_execute_phase_artifact_surfacing_edge() -> None:
-    graph = GRAPH_PATH.read_text(encoding="utf-8")
+def test_execute_plan_uses_staged_execution_bootstrap_and_late_context_refreshes() -> None:
+    execute_plan = (WORKFLOWS_DIR / "execute-plan.md").read_text(encoding="utf-8")
+    manifest_stage_ids = set(load_workflow_stage_manifest("execute-phase").stage_ids())
+    requested_stage_ids = set(re.findall(r"--stage\s+(?:\"([^\"]+)\"|([A-Za-z0-9_]+))", execute_plan))
+    requested_stage_ids = {match[0] or match[1] for match in requested_stage_ids}
 
     assert (
         "- `src/grd/specs/workflows/execute-phase.md -> "

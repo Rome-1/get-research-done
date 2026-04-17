@@ -14,12 +14,8 @@ allowed-tools:
   - web_fetch
   - ask_user
 ---
-
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
-
 <objective>
-Conduct a systematic literature review for a physics research topic. Identifies key papers, maps citation networks, catalogs methods and results, finds open questions, and produces a structured LITERATURE-REVIEW.md.
+Run the literature-review workflow as a thin wrapper around the staged review pipeline. Produce `GRD/literature/{slug}-REVIEW.md` and the matching `GRD/literature/{slug}-CITATION-SOURCES.json` sidecar.
 
 **Orchestrator role:** Scope the review, spawn grd-literature-reviewer agent, handle checkpoints, present results.
 
@@ -44,9 +40,6 @@ ls .grd/literature/*.md 2>/dev/null | head -10
 </context>
 
 <process>
-
-## 0. Initialize Context
-
 ```bash
 CONTEXT=$(grd --raw validate command-context literature-review "$ARGUMENTS")
 if [ $? -ne 0 ]; then
@@ -243,6 +236,7 @@ task(
 )
 ```
 
+Follow `@{GRD_INSTALL_DIR}/workflows/literature-review.md` exactly. The workflow owns staged loading, scope fixing, artifact gating, and citation verification.
 </process>
 
 <success_criteria>

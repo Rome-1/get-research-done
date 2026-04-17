@@ -13,6 +13,17 @@ This reference is loaded by GRD agents when generating code or recommending comp
 
 ---
 
+## Package / Framework Selection
+
+Prefer established packages and frameworks when they fit the scientific requirements and are available in the current environment.
+
+- Check standard subfield tools, official documentation, and existing project code before recommending bespoke infrastructure.
+- Reuse can mean using a package directly or wrapping/extending it lightly; do not default to from-scratch infrastructure when the standard tooling already covers the hard parts.
+- Recommend bespoke code only when the required physics, controls, validation surface, or integration constraints make the standard tools a poor fit. State that gap explicitly.
+- If a package or external code is a hard execution prerequisite, surface it via `tool_requirements` or `researcher_setup` rather than burying it in task prose.
+
+---
+
 ## Python Scientific Stack
 
 - **NumPy/SciPy** -- Numerical linear algebra, integration, optimization, special functions
@@ -48,6 +59,14 @@ Mathematica excels at:
 - Exploring mathematical structure before committing to a numerical approach
 - Computations involving special functions, hypergeometric identities, or combinatorics
 - Visualization of complex mathematical objects
+
+Use a local Mathematica install when you need notebooks, local kernels, or `wolframscript` on the machine itself. Use the shared optional Wolfram integration when you want the runtime-agnostic remote MCP path managed through GRD config.
+
+### Shared optional Wolfram integration
+
+The shared integration is config-only. Enable it with `grd integrations enable wolfram` and inspect it with `grd integrations status wolfram`. This does not install Mathematica, does not prove local `wolframscript` availability, and does not replace `grd validate plan-preflight <PLAN.md>` for plan readiness.
+
+When a PLAN depends on this capability, declare it as `tool: wolfram` in `tool_requirements` so `grd validate plan-preflight` can check availability before execution. Keep fallback paths explicit when SymPy or another standard tool can cover the same scientific goal.
 
 ---
 

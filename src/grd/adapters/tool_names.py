@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from importlib import import_module
 
 CANONICAL_TOOL_NAMES: tuple[str, ...] = (
     "file_read",

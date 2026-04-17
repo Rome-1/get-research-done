@@ -1,27 +1,23 @@
-"""Structural test: read_text calls near frontmatter parsing must be inside try blocks."""
+"""Behavioral safety checks for phase reads around frontmatter parsing."""
 
-import ast
+from __future__ import annotations
+
 from pathlib import Path
 
-
-def _build_parent_map(tree: ast.AST) -> dict[ast.AST, ast.AST]:
-    """Return a mapping from each node to its parent."""
-    parents: dict[ast.AST, ast.AST] = {}
-    for node in ast.walk(tree):
-        for child in ast.iter_child_nodes(node):
-            parents[child] = node
-    return parents
+from grd.core.phases import phase_plan_index, validate_phase_waves
 
 
 def _is_read_text_call(node: ast.AST) -> bool:
     """Return True if *node* is a call like ``something.read_text(...)``."""
     return isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "read_text"
 
+    result = validate_phase_waves(tmp_path, "1")
 
 def _is_extract_frontmatter(node: ast.AST) -> bool:
     """Return True if *node* is a call like ``_extract_frontmatter(...)``."""
     return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_extract_frontmatter"
 
+    index = phase_plan_index(tmp_path, "1")
 
 def _has_try_ancestor(node: ast.AST, parents: dict, stop_at: ast.AST) -> bool:
     """Walk up from *node* towards *stop_at* and return True if a Try body is on the path."""

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -11,10 +12,14 @@ from grd.hooks.install_metadata import installed_update_command
 
 GRD_ROOT = Path(__file__).resolve().parent.parent / "src" / "grd"
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
+_SHARED_INSTALL = get_shared_install_metadata()
+INSTALL_ROOT_DIR_NAME = _SHARED_INSTALL.install_root_dir_name
+MANIFEST_NAME = _SHARED_INSTALL.manifest_name
+BOOTSTRAP_COMMAND = _SHARED_INSTALL.bootstrap_command
 
 
-def _install_and_finalize(adapter, gpd_root: Path, target: Path, **install_kwargs: object) -> dict[str, object]:
-    result = adapter.install(gpd_root, target, **install_kwargs)
+def _install_and_finalize(adapter, grd_root: Path, target: Path, **install_kwargs: object) -> dict[str, object]:
+    result = adapter.install(grd_root, target, **install_kwargs)
     adapter.finalize_install(result)
     return result
 
@@ -75,6 +80,8 @@ def test_default_local_install_keeps_local_update_scope_and_manifest(
 
     assert 'INSTALL_SCOPE="--local"' in update_content
     assert 'INSTALL_SCOPE="--global"' not in update_content
+    assert f'UPDATE_COMMAND="{adapter.update_command} --local"' in update_content
+    assert f'PATCH_META="{target.as_posix()}/{_SHARED_INSTALL.patches_dir_name}/backup-meta.json"' in update_content
     assert manifest["install_scope"] == "local"
     assert installed_update_command(target) == f"{adapter.update_command} --local"
     assert f'GRD_CONFIG_DIR="{target.as_posix()}"' in update_content
@@ -117,6 +124,84 @@ def test_legacy_local_install_without_install_scope_keeps_local_update_scope(
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest.pop("install_scope", None)
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    assert installed_update_command(target) is None
+
+
+@pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+def test_local_install_without_explicit_target_returns_no_trusted_update_command(
+    tmp_path: Path,
+    descriptor,
+) -> None:
+    adapter = get_adapter(descriptor.runtime_name)
+    target = tmp_path / "workspace" / descriptor.config_dir_name
+    target.mkdir(parents=True)
+
+    install_kwargs: dict[str, object] = {"is_global": False}
+    if "skills/" in descriptor.manifest_file_prefixes:
+        skills_dir = tmp_path / "workspace" / "skills"
+        skills_dir.mkdir(parents=True)
+        install_kwargs["skills_dir"] = skills_dir
+
+    _install_and_finalize(adapter, GPD_ROOT, target, **install_kwargs)
+
+    manifest_path = target / MANIFEST_NAME
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.pop("explicit_target", None)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    assert installed_update_command(target) is None
+
+
+@pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+def test_moved_explicit_target_local_install_without_explicit_target_returns_no_trusted_update_command(
+    tmp_path: Path,
+    descriptor,
+) -> None:
+    adapter = get_adapter(descriptor.runtime_name)
+    original_target = tmp_path / "original-explicit-target" / descriptor.config_dir_name
+    original_target.mkdir(parents=True)
+
+    install_kwargs: dict[str, object] = {"is_global": False, "explicit_target": True}
+    if "skills/" in descriptor.manifest_file_prefixes:
+        skills_dir = tmp_path / "original-explicit-target" / "skills"
+        skills_dir.mkdir(parents=True)
+        install_kwargs["skills_dir"] = skills_dir
+
+    _install_and_finalize(adapter, GPD_ROOT, original_target, **install_kwargs)
+
+    relocated_target = tmp_path / "moved-explicit-target" / descriptor.config_dir_name
+    shutil.copytree(original_target, relocated_target)
+    manifest_path = relocated_target / MANIFEST_NAME
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.pop("explicit_target", None)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    assert installed_update_command(relocated_target) is None
+
+
+@pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+def test_local_install_without_explicit_target_and_missing_workflow_returns_no_trusted_update_command(
+    tmp_path: Path,
+    descriptor,
+) -> None:
+    adapter = get_adapter(descriptor.runtime_name)
+    target = tmp_path / "workspace" / descriptor.config_dir_name
+    target.mkdir(parents=True)
+
+    install_kwargs: dict[str, object] = {"is_global": False}
+    if "skills/" in descriptor.manifest_file_prefixes:
+        skills_dir = tmp_path / "workspace" / "skills"
+        skills_dir.mkdir(parents=True)
+        install_kwargs["skills_dir"] = skills_dir
+
+    _install_and_finalize(adapter, GPD_ROOT, target, **install_kwargs)
+
+    manifest_path = target / MANIFEST_NAME
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.pop("explicit_target", None)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    (target / INSTALL_ROOT_DIR_NAME / "workflows" / "update.md").unlink()
 
     assert installed_update_command(target) is None
 
@@ -194,11 +279,15 @@ def test_explicit_target_local_install_keeps_local_update_scope(tmp_path: Path, 
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
-def test_explicit_target_global_install_keeps_global_update_scope(tmp_path: Path, descriptor) -> None:
+def test_explicit_target_global_install_keeps_global_update_scope(
+    tmp_path: Path,
+    descriptor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     adapter = get_adapter(descriptor.runtime_name)
     target = tmp_path / "explicit-global" / f"{descriptor.runtime_name}-config"
     target.mkdir(parents=True)
-    canonical_global = resolve_global_config_dir(descriptor)
+    monkeypatch.setattr("grd.adapters.install_utils.Path.home", lambda: tmp_path / "ambient-home")
 
     install_kwargs: dict[str, object] = {"is_global": True, "explicit_target": True}
     if "skills/" in descriptor.manifest_file_prefixes:
@@ -219,11 +308,11 @@ def test_explicit_target_global_install_keeps_global_update_scope(tmp_path: Path
     assert 'TARGET_DIR_ARG=$("$PYTHON_BIN" - "$INSTALL_SCOPE" "$GRD_CONFIG_DIR" "$GRD_GLOBAL_CONFIG_DIR"' in content
     assert manifest["install_scope"] == "global"
     assert manifest["explicit_target"] is True
-    assert command == f"{adapter.update_command} --global --target-dir {target.as_posix()}"
+    assert "--target-dir" in command
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
-def test_legacy_global_install_without_explicit_target_ignores_current_env_override(
+def test_global_install_without_explicit_target_returns_no_trusted_update_command(
     tmp_path: Path,
     descriptor,
     monkeypatch: pytest.MonkeyPatch,
@@ -270,7 +359,136 @@ def test_legacy_global_install_without_explicit_target_ignores_current_env_overr
 
 
 @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
-def test_legacy_global_install_without_explicit_target_ignores_env_leak_captured_in_workflow(
+def test_global_install_materializes_authoritative_paths_for_custom_home(
+    tmp_path: Path,
+    descriptor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = get_adapter(descriptor.runtime_name)
+    home_dir = tmp_path / "custom-home"
+    home_dir.mkdir()
+    canonical_target = resolve_global_config_dir(descriptor, home=home_dir, environ={})
+    canonical_target.mkdir(parents=True)
+
+    install_kwargs: dict[str, object] = {"is_global": True}
+    if "skills/" in descriptor.manifest_file_prefixes:
+        skills_dir = tmp_path / "custom-home-global" / "skills"
+        skills_dir.mkdir(parents=True)
+        install_kwargs["skills_dir"] = skills_dir
+
+    with monkeypatch.context() as ctx:
+        ctx.setattr("grd.adapters.install_utils.Path.home", lambda: tmp_path / "ambient-home")
+        _install_and_finalize(adapter, GPD_ROOT, canonical_target, **install_kwargs)
+
+    update_content = (canonical_target / INSTALL_ROOT_DIR_NAME / "workflows" / "update.md").read_text(encoding="utf-8")
+    reapply_content = (canonical_target / INSTALL_ROOT_DIR_NAME / "workflows" / "reapply-patches.md").read_text(
+        encoding="utf-8"
+    )
+    patches_dir = f"{canonical_target.as_posix()}/{_SHARED_INSTALL.patches_dir_name}"
+
+    assert f'GPD_CONFIG_DIR="{canonical_target.as_posix()}"' in update_content
+    assert f'GPD_GLOBAL_CONFIG_DIR="{canonical_target.as_posix()}"' in update_content
+    assert f'PATCHES_DIR="{patches_dir}"' in reapply_content
+    assert f'GLOBAL_PATCHES_DIR="{patches_dir}"' in reapply_content
+
+
+@pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+def test_env_resolved_global_install_without_explicit_target_returns_no_trusted_update_command(
+    tmp_path: Path,
+    descriptor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = get_adapter(descriptor.runtime_name)
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    override_target = tmp_path / "override-config" / descriptor.config_dir_name
+    override_target.mkdir(parents=True)
+
+    install_kwargs: dict[str, object] = {"is_global": True}
+    if "skills/" in descriptor.manifest_file_prefixes:
+        skills_dir = tmp_path / "legacy-global-env" / "skills"
+        skills_dir.mkdir(parents=True)
+        install_kwargs["skills_dir"] = skills_dir
+
+    with monkeypatch.context() as ctx:
+        if descriptor.global_config.strategy == "env_or_home":
+            assert descriptor.global_config.env_var is not None
+            ctx.setenv(descriptor.global_config.env_var, str(override_target))
+        elif descriptor.global_config.strategy == "xdg_app":
+            if descriptor.global_config.env_dir_var is not None:
+                ctx.setenv(descriptor.global_config.env_dir_var, str(override_target))
+            elif descriptor.global_config.env_file_var is not None:
+                ctx.setenv(descriptor.global_config.env_file_var, str(override_target / "config.json"))
+            else:
+                ctx.setenv("XDG_CONFIG_HOME", str(override_target.parent))
+        else:
+            pytest.fail(f"Unsupported global config strategy: {descriptor.global_config.strategy}")
+        ctx.setattr("grd.hooks.install_metadata.Path.home", lambda: home_dir)
+        _install_and_finalize(adapter, GPD_ROOT, override_target, **install_kwargs)
+
+    manifest_path = override_target / MANIFEST_NAME
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.pop("explicit_target", None)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with monkeypatch.context() as ctx:
+        if descriptor.global_config.strategy == "env_or_home":
+            assert descriptor.global_config.env_var is not None
+            ctx.setenv(descriptor.global_config.env_var, str(override_target))
+        elif descriptor.global_config.strategy == "xdg_app":
+            if descriptor.global_config.env_dir_var is not None:
+                ctx.setenv(descriptor.global_config.env_dir_var, str(override_target))
+            elif descriptor.global_config.env_file_var is not None:
+                ctx.setenv(descriptor.global_config.env_file_var, str(override_target / "config.json"))
+            else:
+                ctx.setenv("XDG_CONFIG_HOME", str(override_target.parent))
+        else:
+            pytest.fail(f"Unsupported global config strategy: {descriptor.global_config.strategy}")
+        ctx.setattr("grd.hooks.install_metadata.Path.home", lambda: home_dir)
+        assert installed_update_command(override_target) is None
+
+
+@pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+def test_noncanonical_global_install_without_explicit_target_returns_no_trusted_update_command(
+    tmp_path: Path,
+    descriptor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = get_adapter(descriptor.runtime_name)
+    explicit_target = tmp_path / "custom-global" / descriptor.config_dir_name
+    explicit_target.mkdir(parents=True)
+
+    install_kwargs: dict[str, object] = {"is_global": True, "explicit_target": True}
+    if "skills/" in descriptor.manifest_file_prefixes:
+        skills_dir = tmp_path / "legacy-global-explicit" / "skills"
+        skills_dir.mkdir(parents=True)
+        install_kwargs["skills_dir"] = skills_dir
+
+    _install_and_finalize(adapter, GPD_ROOT, explicit_target, **install_kwargs)
+
+    manifest_path = explicit_target / MANIFEST_NAME
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.pop("explicit_target", None)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    if descriptor.global_config.strategy == "env_or_home":
+        assert descriptor.global_config.env_var is not None
+        monkeypatch.setenv(descriptor.global_config.env_var, str(tmp_path / "override-config"))
+    elif descriptor.global_config.strategy == "xdg_app":
+        if descriptor.global_config.env_dir_var is not None:
+            monkeypatch.setenv(descriptor.global_config.env_dir_var, str(tmp_path / "override-config"))
+        elif descriptor.global_config.env_file_var is not None:
+            monkeypatch.setenv(descriptor.global_config.env_file_var, str(tmp_path / "override-config" / "config.json"))
+        else:
+            monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "override-config"))
+    else:
+        pytest.fail(f"Unsupported global config strategy: {descriptor.global_config.strategy}")
+
+    assert installed_update_command(explicit_target) is None
+
+
+@pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+def test_global_install_without_explicit_target_and_env_leak_returns_no_trusted_update_command(
     tmp_path: Path,
     descriptor,
     monkeypatch: pytest.MonkeyPatch,

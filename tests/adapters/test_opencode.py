@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 from pathlib import Path
 
 import pytest
@@ -17,6 +16,10 @@ from grd.adapters.opencode import (
     convert_tool_name,
     copy_agents_as_agent_files,
     copy_flattened_commands,
+)
+from tests.adapters.review_contract_test_utils import (
+    assert_review_contract_prompt_surface,
+    compile_review_contract_fixture_for_runtime,
 )
 
 
@@ -140,45 +143,72 @@ class TestConvertFrontmatter:
         assert "read_file: true" in result
         assert result.rstrip().endswith("Body")
 
+    def test_review_contract_is_prepended_to_prompt_body(self) -> None:
+        content = compile_review_contract_fixture_for_runtime("opencode")
+
+        result = convert_claude_to_opencode_frontmatter(content)
+
+        assert_review_contract_prompt_surface(result)
+
 
 class TestCopyFlattenedCommands:
-    def test_flattens_nested_dirs(self, gpd_root: Path, tmp_path: Path) -> None:
+    def test_flattens_nested_dirs(self, grd_root: Path, tmp_path: Path) -> None:
         dest = tmp_path / "command"
         dest.mkdir()
-        count = copy_flattened_commands(gpd_root / "commands", dest, "grd", "/prefix/")
+        count = copy_flattened_commands(grd_root / "commands", dest, "grd", "/prefix/")
 
         assert count >= 2
         assert (dest / "grd-help.md").exists()
         assert (dest / "grd-sub-deep.md").exists()
 
-    def test_placeholder_replacement(self, gpd_root: Path, tmp_path: Path) -> None:
+    def test_placeholder_replacement(self, grd_root: Path, tmp_path: Path) -> None:
         dest = tmp_path / "command"
         dest.mkdir()
-        copy_flattened_commands(gpd_root / "commands", dest, "grd", "/prefix/")
+        copy_flattened_commands(grd_root / "commands", dest, "grd", "/prefix/")
 
         content = (dest / "grd-help.md").read_text(encoding="utf-8")
         assert "{GRD_INSTALL_DIR}" not in content
         assert "~/.claude/" not in content
 
-    def test_frontmatter_converted(self, gpd_root: Path, tmp_path: Path) -> None:
+    def test_frontmatter_converted(self, grd_root: Path, tmp_path: Path) -> None:
         dest = tmp_path / "command"
         dest.mkdir()
-        copy_flattened_commands(gpd_root / "commands", dest, "grd", "/prefix/")
+        copy_flattened_commands(grd_root / "commands", dest, "grd", "/prefix/")
 
         content = (dest / "grd-help.md").read_text(encoding="utf-8")
         # name: should be stripped by OpenCode frontmatter conversion
         assert "name:" not in content
 
-    def test_cleans_old_files(self, gpd_root: Path, tmp_path: Path) -> None:
+    def test_cleans_old_files(self, grd_root: Path, tmp_path: Path) -> None:
         dest = tmp_path / "command"
         dest.mkdir()
         (dest / "grd-old-command.md").write_text("stale", encoding="utf-8")
         (dest / "custom-command.md").write_text("keep", encoding="utf-8")
+        (tmp_path / MANIFEST_NAME).write_text(
+            json.dumps({"opencode_generated_command_files": ["grd-old-command.md"]}),
+            encoding="utf-8",
+        )
 
-        copy_flattened_commands(gpd_root / "commands", dest, "grd", "/prefix/")
+        copy_flattened_commands(grd_root / "commands", dest, "grd", "/prefix/")
 
         assert not (dest / "grd-old-command.md").exists()
         assert (dest / "custom-command.md").exists()
+
+    def test_preserves_user_owned_grd_files_when_reinstalling(self, grd_root: Path, tmp_path: Path) -> None:
+        target = tmp_path / ".opencode"
+        dest = target / "command"
+        dest.mkdir(parents=True)
+        (dest / "grd-old-command.md").write_text("stale", encoding="utf-8")
+        (dest / "grd-user-keep.md").write_text("keep", encoding="utf-8")
+        (target / MANIFEST_NAME).write_text(
+            json.dumps({"opencode_generated_command_files": ["grd-old-command.md"]}),
+            encoding="utf-8",
+        )
+
+        copy_flattened_commands(grd_root / "commands", dest, "grd", "/prefix/", workflow_target_dir=target)
+
+        assert not (dest / "grd-old-command.md").exists()
+        assert (dest / "grd-user-keep.md").exists()
 
     def test_nonexistent_src_returns_zero(self, tmp_path: Path) -> None:
         dest = tmp_path / "command"
@@ -187,24 +217,24 @@ class TestCopyFlattenedCommands:
 
 
 class TestCopyAgentsAsAgentFiles:
-    def test_copies_agents_with_conversion(self, gpd_root: Path, tmp_path: Path) -> None:
+    def test_copies_agents_with_conversion(self, grd_root: Path, tmp_path: Path) -> None:
         dest = tmp_path / "agents"
-        count = copy_agents_as_agent_files(gpd_root / "agents", dest, "/prefix/")
+        count = copy_agents_as_agent_files(grd_root / "agents", dest, "/prefix/")
 
         assert count >= 2
         assert (dest / "grd-verifier.md").exists()
         assert (dest / "grd-executor.md").exists()
 
-    def test_frontmatter_converted(self, gpd_root: Path, tmp_path: Path) -> None:
+    def test_frontmatter_converted(self, grd_root: Path, tmp_path: Path) -> None:
         dest = tmp_path / "agents"
-        copy_agents_as_agent_files(gpd_root / "agents", dest, "/prefix/")
+        copy_agents_as_agent_files(grd_root / "agents", dest, "/prefix/")
 
         for agent_file in dest.glob("grd-*.md"):
             content = agent_file.read_text(encoding="utf-8")
             assert "allowed-tools:" not in content
 
-    def test_sanitizes_shell_placeholders_for_opencode_agents(self, gpd_root: Path, tmp_path: Path) -> None:
-        (gpd_root / "agents" / "grd-shell-vars.md").write_text(
+    def test_sanitizes_shell_placeholders_for_opencode_agents(self, grd_root: Path, tmp_path: Path) -> None:
+        (grd_root / "agents" / "grd-shell-vars.md").write_text(
             "---\nname: grd-shell-vars\ndescription: shell vars\n---\n"
             "Use ${PHASE_ARG} and $ARGUMENTS in prose.\n"
             'Inspect with `file_read("$artifact_path")`.\n'
@@ -215,7 +245,7 @@ class TestCopyAgentsAsAgentFiles:
             encoding="utf-8",
         )
         dest = tmp_path / "agents"
-        copy_agents_as_agent_files(gpd_root / "agents", dest, "/prefix/")
+        copy_agents_as_agent_files(grd_root / "agents", dest, "/prefix/")
 
         checker = (dest / "grd-shell-vars.md").read_text(encoding="utf-8")
         assert "${PHASE_ARG}" not in checker
@@ -230,12 +260,12 @@ class TestCopyAgentsAsAgentFiles:
         assert "<artifact_path>" in checker
         assert "Math stays $T$." in checker
 
-    def test_removes_stale_agents(self, gpd_root: Path, tmp_path: Path) -> None:
+    def test_removes_stale_agents(self, grd_root: Path, tmp_path: Path) -> None:
         dest = tmp_path / "agents"
         dest.mkdir(parents=True)
         (dest / "grd-stale.md").write_text("stale", encoding="utf-8")
 
-        copy_agents_as_agent_files(gpd_root / "agents", dest, "/prefix/")
+        copy_agents_as_agent_files(grd_root / "agents", dest, "/prefix/")
 
         assert not (dest / "grd-stale.md").exists()
 
@@ -280,17 +310,64 @@ class TestConfigureOpenCodePermissions:
         assert config["permission"]["*"] == "ask"
         assert any("get-research-done" in key for key in config["permission"]["external_directory"])
 
+
+class TestUninstallOwnership:
+    def test_uninstall_preserves_user_owned_grd_command_files(
+        self,
+        adapter: OpenCodeAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".opencode"
+        target.mkdir()
+
+        adapter.install(grd_root, target)
+        (target / "command" / "grd-user-keep.md").write_text("keep", encoding="utf-8")
+
+        from grd.adapters.opencode import uninstall_opencode
+
+        uninstall_opencode(target, config_dir=target, allow_empty_config_removal=True)
+
+        assert (target / "command" / "grd-user-keep.md").exists()
+
+    def test_uninstall_falls_back_to_manifest_files_when_generated_command_metadata_is_missing(
+        self,
+        adapter: OpenCodeAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".opencode"
+        dest = target / "command"
+        dest.mkdir(parents=True)
+
+        adapter.install(grd_root, target)
+        (dest / "grd-user-keep.md").write_text("keep", encoding="utf-8")
+
+        manifest_path = target / MANIFEST_NAME
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest.pop("opencode_generated_command_files", None)
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+        from grd.adapters.opencode import uninstall_opencode
+
+        uninstall_opencode(target, config_dir=target, allow_empty_config_removal=True)
+
+        assert not (dest / "grd-help.md").exists()
+        assert not (dest / "grd-start.md").exists()
+        assert (dest / "grd-user-keep.md").exists()
+        assert not (target / MANIFEST_NAME).exists()
+
 class TestInstall:
     def test_help_command_does_not_describe_opencode_commands_as_slash_commands(
         self,
         adapter: OpenCodeAdapter,
         tmp_path: Path,
     ) -> None:
-        gpd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
+        grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
         target = tmp_path / ".opencode"
         target.mkdir()
 
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         content = (target / "command" / "grd-help.md").read_text(encoding="utf-8")
         assert "slash-command" not in content
@@ -300,34 +377,141 @@ class TestInstall:
     def test_local_install_uses_relative_grd_paths(
         self,
         adapter: OpenCodeAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=False)
+        adapter.install(grd_root, target, is_global=False)
 
         content = (target / "command" / "grd-help.md").read_text(encoding="utf-8")
         assert "./.opencode/get-research-done/ref" in content
         assert "./.opencode/agents" in content
         assert f"{target.as_posix()}/get-research-done" not in content
 
-    def test_install_creates_flattened_commands(self, adapter: OpenCodeAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_completeness_requires_opencode_json(
+        self,
+        adapter: OpenCodeAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
+
+        assert adapter.missing_install_artifacts(target) == ()
+
+        (target / "opencode.json").unlink()
+
+        assert adapter.missing_install_artifacts(target) == ("opencode.json",)
+
+    def test_install_completeness_requires_manifest_backed_command_surface(
+        self,
+        adapter: OpenCodeAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".opencode"
+        target.mkdir()
+        adapter.install(grd_root, target)
+
+        command_dir = target / "command"
+        command_dir.rename(tmp_path / "command-missing")
+
+        missing = adapter.missing_install_artifacts(target)
+
+        assert adapter.has_complete_install(target) is False
+        assert "command/grd-*.md" in missing
+        assert any(item.startswith("command/") for item in missing)
+
+    def test_install_completeness_requires_manifest_metadata_for_generated_commands(
+        self,
+        adapter: OpenCodeAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".opencode"
+        target.mkdir()
+        adapter.install(grd_root, target)
+
+        manifest_path = target / MANIFEST_NAME
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest.pop("opencode_generated_command_files", None)
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+        missing = adapter.missing_install_artifacts(target)
+
+        assert adapter.has_complete_install(target) is False
+        assert "command/grd-*.md" in missing
+        assert all(not item.startswith("command/grd-") or item == "command/grd-*.md" for item in missing)
+
+    def test_install_fails_closed_for_malformed_opencode_json(
+        self,
+        adapter: OpenCodeAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".opencode"
+        target.mkdir()
+        config_path = target / "opencode.json"
+        config_path.write_text('{"permission": [\n', encoding="utf-8")
+        before = config_path.read_text(encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="malformed"):
+            adapter.install(grd_root, target)
+
+        assert config_path.read_text(encoding="utf-8") == before
+
+    def test_install_fails_closed_for_structurally_invalid_opencode_json(
+        self,
+        adapter: OpenCodeAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".opencode"
+        target.mkdir()
+        config_path = target / "opencode.json"
+        config_path.write_text(json.dumps({"permission": []}), encoding="utf-8")
+        before = config_path.read_text(encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="malformed"):
+            adapter.install(grd_root, target)
+
+        assert config_path.read_text(encoding="utf-8") == before
+
+    def test_install_fails_closed_for_structurally_invalid_opencode_mcp_config(
+        self,
+        adapter: OpenCodeAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".opencode"
+        target.mkdir()
+        config_path = target / "opencode.json"
+        config_path.write_text(json.dumps({"mcp": []}), encoding="utf-8")
+        before = config_path.read_text(encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="malformed"):
+            adapter.install(grd_root, target)
+
+        assert config_path.read_text(encoding="utf-8") == before
+
+    def test_install_creates_flattened_commands(self, adapter: OpenCodeAdapter, grd_root: Path, tmp_path: Path) -> None:
+        target = tmp_path / ".opencode"
+        target.mkdir()
+        adapter.install(grd_root, target)
 
         command_dir = target / "command"
         assert command_dir.is_dir()
-        gpd_cmds = [f for f in command_dir.iterdir() if f.name.startswith("grd-")]
-        assert len(gpd_cmds) > 0
+        grd_cmds = [f for f in command_dir.iterdir() if f.name.startswith("grd-")]
+        assert len(grd_cmds) > 0
 
     def test_update_command_inlines_workflow(self, adapter: OpenCodeAdapter, tmp_path: Path) -> None:
-        gpd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
+        grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         content = (target / "command" / "grd-update.md").read_text(encoding="utf-8")
         assert "Check for a newer GRD release" in content
@@ -340,10 +524,10 @@ class TestInstall:
         adapter: OpenCodeAdapter,
         tmp_path: Path,
     ) -> None:
-        gpd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
+        grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         content = (target / "command" / "grd-complete-milestone.md").read_text(encoding="utf-8")
         assert "<!-- [included: complete-milestone.md] -->" in content
@@ -353,20 +537,20 @@ class TestInstall:
         assert re.search(r"^\s*-\s*@.*?/workflows/complete-milestone\.md.*$", content, flags=re.MULTILINE) is None
         assert re.search(r"^\s*-\s*@.*?/templates/milestone-archive\.md.*$", content, flags=re.MULTILINE) is None
 
-    def test_install_creates_grd_content(self, adapter: OpenCodeAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_creates_grd_content(self, adapter: OpenCodeAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        gpd_dest = target / "get-research-done"
-        assert gpd_dest.is_dir()
+        grd_dest = target / "get-research-done"
+        assert grd_dest.is_dir()
         for subdir in ("references", "templates", "workflows"):
-            assert (gpd_dest / subdir).is_dir()
+            assert (grd_dest / subdir).is_dir()
 
-    def test_install_creates_agents(self, adapter: OpenCodeAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_creates_agents(self, adapter: OpenCodeAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         agents_dir = target / "agents"
         assert agents_dir.is_dir()
@@ -375,10 +559,10 @@ class TestInstall:
     def test_install_agents_inline_grd_agents_dir_includes(
         self,
         adapter: OpenCodeAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
-        agents_src = gpd_root / "agents"
+        agents_src = grd_root / "agents"
         (agents_src / "grd-shared.md").write_text(
             "---\nname: grd-shared\ndescription: shared\nsurface: internal\nrole_family: coordination\n---\n"
             "Shared agent body.\n",
@@ -392,59 +576,60 @@ class TestInstall:
 
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         content = (target / "agents" / "grd-main.md").read_text(encoding="utf-8")
         assert "Shared agent body." in content
         assert "<!-- [included: grd-shared.md] -->" in content
         assert "@ include not resolved:" not in content.lower()
 
-    def test_install_copies_hooks(self, adapter: OpenCodeAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_skips_unused_hooks(self, adapter: OpenCodeAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
-        assert (target / "hooks" / "statusline.py").exists()
+        assert not (target / "hooks").exists()
 
-    def test_install_writes_version(self, adapter: OpenCodeAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_writes_version(self, adapter: OpenCodeAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         assert (target / "get-research-done" / "VERSION").exists()
 
-    def test_install_configures_permissions(self, adapter: OpenCodeAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_configures_permissions(self, adapter: OpenCodeAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         assert (target / "opencode.json").exists()
 
-    def test_install_writes_manifest(self, adapter: OpenCodeAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_writes_manifest(self, adapter: OpenCodeAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         assert (target / "grd-file-manifest.json").exists()
 
-    def test_install_returns_counts(self, adapter: OpenCodeAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_install_returns_counts(self, adapter: OpenCodeAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
-        result = adapter.install(gpd_root, target)
+        result = adapter.install(grd_root, target)
 
         assert result["runtime"] == "opencode"
         assert result["commands"] > 0
         assert result["agents"] > 0
+        assert result["hooks"] == 0
 
     def test_install_rewrites_grd_cli_calls_to_runtime_cli_bridge(
         self,
         adapter: OpenCodeAdapter,
         tmp_path: Path,
     ) -> None:
-        gpd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
+        grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target, is_global=False)
+        adapter.install(grd_root, target, is_global=False)
 
         expected_bridge = expected_opencode_bridge(target, is_global=False)
         command = (target / "command" / "grd-settings.md").read_text(encoding="utf-8")
@@ -453,13 +638,13 @@ class TestInstall:
         agent = (target / "agents" / "grd-planner.md").read_text(encoding="utf-8")
 
         assert expected_bridge + " config ensure-section" in command
-        assert f'INIT=$({expected_bridge} init progress --include state,config)' in command
+        assert f'INIT=$({expected_bridge} --raw init progress --include state,config)' in command
         assert expected_bridge + " config ensure-section" in workflow
         assert f'INIT=$({expected_bridge} init progress --include state,config)' in workflow
         assert 'echo "ERROR: grd initialization failed: $INIT"' in workflow
         assert f'if ! {expected_bridge} verify plan "$plan"; then' in execute_phase
-        assert f'INIT=$({expected_bridge} init plan-phase "<PHASE>")' in agent
-        assert "```bash\ngpd config ensure-section\n" not in workflow
+        assert f'INIT=$({expected_bridge} --raw init plan-phase "<PHASE>")' in agent
+        assert "```bash\ngrd config ensure-section\n" not in workflow
         assert 'INIT=$(grd init progress --include state,config)' not in workflow
         assert 'if ! grd verify plan "$plan"; then' not in execute_phase
         assert 'INIT=$(grd init plan-phase "<PHASE>")' not in agent
@@ -467,7 +652,7 @@ class TestInstall:
     def test_install_preserves_existing_mcp_overrides(
         self,
         adapter: OpenCodeAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         from grd.mcp.builtin_servers import build_mcp_servers_dict
@@ -497,7 +682,7 @@ class TestInstall:
             encoding="utf-8",
         )
 
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         config = json.loads((target / "opencode.json").read_text(encoding="utf-8"))
         expected = build_mcp_servers_dict(python_path=sys.executable)["grd-state"]
@@ -510,17 +695,124 @@ class TestInstall:
         assert server["environment"]["EXTRA_FLAG"] == "1"
         assert config["mcp"]["custom-server"] == {"type": "local", "command": ["node", "custom.js"]}
 
-
-class TestRuntimePermissions:
-    def test_sync_runtime_permissions_yolo_sets_global_allow(
+    def test_install_projects_managed_wolfram_mcp_without_secrets(
         self,
         adapter: OpenCodeAdapter,
-        gpd_root: Path,
+        grd_root: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        target = tmp_path / ".opencode"
+        target.mkdir()
+        monkeypatch.setenv("GPD_WOLFRAM_MCP_API_KEY", "super-secret-token")
+        monkeypatch.setenv("GPD_WOLFRAM_MCP_ENDPOINT", "https://example.invalid/api/mcp")
+
+        adapter.install(grd_root, target)
+
+        config = json.loads((target / "opencode.json").read_text(encoding="utf-8"))
+        wolfram = config["mcp"]["grd-wolfram"]
+        assert wolfram["type"] == "local"
+        assert wolfram["command"] == ["grd-mcp-wolfram"]
+        assert wolfram["enabled"] is True
+        assert wolfram["environment"] == {"GPD_WOLFRAM_MCP_ENDPOINT": "https://example.invalid/api/mcp"}
+        assert "super-secret-token" not in json.dumps(wolfram)
+        assert "GPD_WOLFRAM_MCP_API_KEY" not in json.dumps(wolfram)
+
+    def test_install_preserves_existing_managed_wolfram_overrides(
+        self,
+        adapter: OpenCodeAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        target = tmp_path / ".opencode"
+        target.mkdir()
+        monkeypatch.setenv("GPD_WOLFRAM_MCP_API_KEY", "super-secret-token")
+        monkeypatch.setenv("GPD_WOLFRAM_MCP_ENDPOINT", "https://example.invalid/api/mcp")
+        (target / "opencode.json").write_text(
+            json.dumps(
+                {
+                    "mcp": {
+                        "grd-wolfram": {
+                            "type": "local",
+                            "command": ["legacy-wolfram-bridge", "--legacy"],
+                            "enabled": False,
+                            "timeout": 12000,
+                            "environment": {
+                                "GPD_WOLFRAM_MCP_ENDPOINT": "https://custom.invalid/api/mcp",
+                                "EXTRA_FLAG": "1",
+                            },
+                        },
+                        "custom-server": {
+                            "type": "local",
+                            "command": ["node", "custom.js"],
+                        },
+                    }
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        adapter.install(grd_root, target)
+
+        config = json.loads((target / "opencode.json").read_text(encoding="utf-8"))
+        wolfram = config["mcp"]["grd-wolfram"]
+        assert wolfram["type"] == "local"
+        assert wolfram["command"] == ["grd-mcp-wolfram"]
+        assert wolfram["enabled"] is False
+        assert wolfram["timeout"] == 12000
+        assert wolfram["environment"]["GPD_WOLFRAM_MCP_ENDPOINT"] == "https://custom.invalid/api/mcp"
+        assert wolfram["environment"]["EXTRA_FLAG"] == "1"
+
+    def test_install_omits_managed_wolfram_when_project_override_disables_it(
+        self,
+        adapter: OpenCodeAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        target = tmp_path / ".opencode"
+        target.mkdir()
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "integrations.json").write_text('{"wolfram":{"enabled":false}}', encoding="utf-8")
+        monkeypatch.setenv("GPD_WOLFRAM_MCP_API_KEY", "super-secret-token")
+
+        adapter.install(grd_root, target)
+
+        config = json.loads((target / "opencode.json").read_text(encoding="utf-8"))
+        assert "grd-wolfram" not in config.get("mcp", {})
+        assert "super-secret-token" not in json.dumps(config)
+
+
+class TestRuntimePermissions:
+    def test_runtime_permissions_status_marks_yolo_as_relaunch_required(
+        self,
+        adapter: OpenCodeAdapter,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
+        adapter.sync_runtime_permissions(target, autonomy="yolo")
+
+        status = adapter.runtime_permissions_status(target, autonomy="yolo")
+
+        assert status["config_aligned"] is True
+        assert status["requires_relaunch"] is True
+        assert "Restart OpenCode" in str(status["next_step"])
+
+    def test_sync_runtime_permissions_yolo_sets_global_allow(
+        self,
+        adapter: OpenCodeAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".opencode"
+        target.mkdir()
+        adapter.install(grd_root, target)
 
         result = adapter.sync_runtime_permissions(target, autonomy="yolo")
 
@@ -528,19 +820,19 @@ class TestRuntimePermissions:
         manifest = json.loads((target / "grd-file-manifest.json").read_text(encoding="utf-8"))
 
         assert config["permission"] == "allow"
-        assert manifest["gpd_runtime_permissions"]["mode"] == "yolo"
+        assert manifest["grd_runtime_permissions"]["mode"] == "yolo"
         assert result["sync_applied"] is True
         assert result["requires_relaunch"] is True
 
     def test_sync_runtime_permissions_restores_non_yolo_permissions(
         self,
         adapter: OpenCodeAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
 
         adapter.sync_runtime_permissions(target, autonomy="yolo")
         result = adapter.sync_runtime_permissions(target, autonomy="balanced")
@@ -551,21 +843,49 @@ class TestRuntimePermissions:
         assert isinstance(config["permission"], dict)
         assert config["permission"] != "allow"
         assert any("get-research-done" in key for key in config["permission"]["external_directory"])
-        assert "gpd_runtime_permissions" not in manifest
+        assert "grd_runtime_permissions" not in manifest
         assert result["sync_applied"] is True
+
+    def test_malformed_opencode_json_fails_closed_for_status_and_sync(
+        self,
+        adapter: OpenCodeAdapter,
+        grd_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        target = tmp_path / ".opencode"
+        target.mkdir()
+        adapter.install(grd_root, target)
+
+        config_path = target / "opencode.json"
+        config_path.write_text('{"permission": [\n', encoding="utf-8")
+        before = config_path.read_text(encoding="utf-8")
+
+        status = adapter.runtime_permissions_status(target, autonomy="yolo")
+        result = adapter.sync_runtime_permissions(target, autonomy="yolo")
+
+        assert status["config_valid"] is False
+        assert status["configured_mode"] == "malformed"
+        assert status["config_aligned"] is False
+        assert "malformed" in str(status["message"]).lower()
+        assert result["config_valid"] is False
+        assert result["changed"] is False
+        assert result["sync_applied"] is False
+        assert result["requires_relaunch"] is False
+        assert "malformed" in str(result["warning"]).lower()
+        assert config_path.read_text(encoding="utf-8") == before
 
 
 class TestUninstall:
     def test_uninstall_removes_only_exact_managed_permission_keys(
         self,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         adapter = OpenCodeAdapter()
         target = tmp_path / ".opencode"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=False)
+        adapter.install(grd_root, target, is_global=False)
 
         config_path = target / "opencode.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -588,7 +908,7 @@ class TestUninstall:
 
     def test_uninstall_cleans_local_opencode_json(
         self,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -597,11 +917,17 @@ class TestUninstall:
         target = tmp_path / ".opencode"
         target.mkdir()
 
-        adapter.install(gpd_root, target, is_global=False)
+        adapter.install(grd_root, target, is_global=False)
 
         config_path = target / "opencode.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
         config["permission"]["read"]["/tmp/custom/*"] = "allow"
+        config["mcp"]["grd-wolfram"] = {
+            "type": "local",
+            "command": ["grd-mcp-wolfram"],
+            "environment": {"GPD_WOLFRAM_MCP_ENDPOINT": "https://example.invalid/api/mcp"},
+        }
+        config["mcp"]["custom-server"] = {"type": "local", "command": ["node", "custom.js"]}
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
         adapter.uninstall(target)
@@ -609,25 +935,28 @@ class TestUninstall:
         cleaned = json.loads(config_path.read_text(encoding="utf-8"))
         read_permissions = cleaned.get("permission", {}).get("read", {})
         external_permissions = cleaned.get("permission", {}).get("external_directory", {})
+        mcp_servers = cleaned.get("mcp", {})
         assert "/tmp/custom/*" in read_permissions
         assert not any("get-research-done" in key for key in read_permissions)
         assert not any("get-research-done" in key for key in external_permissions)
+        assert "grd-wolfram" not in mcp_servers
+        assert mcp_servers == {"custom-server": {"type": "local", "command": ["node", "custom.js"]}}
 
-    def test_uninstall_removes_commands(self, adapter: OpenCodeAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_uninstall_removes_commands(self, adapter: OpenCodeAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
         adapter.uninstall(target)
 
         command_dir = target / "command"
         if command_dir.exists():
-            gpd_cmds = [f for f in command_dir.iterdir() if f.name.startswith("grd-")]
-            assert len(gpd_cmds) == 0
+            grd_cmds = [f for f in command_dir.iterdir() if f.name.startswith("grd-")]
+            assert len(grd_cmds) == 0
 
-    def test_uninstall_removes_grd_dir(self, adapter: OpenCodeAdapter, gpd_root: Path, tmp_path: Path) -> None:
+    def test_uninstall_removes_grd_dir(self, adapter: OpenCodeAdapter, grd_root: Path, tmp_path: Path) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
         adapter.uninstall(target)
 
         assert not (target / "get-research-done").exists()
@@ -641,12 +970,12 @@ class TestUninstall:
     def test_uninstall_restores_permissions_after_grd_managed_yolo(
         self,
         adapter: OpenCodeAdapter,
-        gpd_root: Path,
+        grd_root: Path,
         tmp_path: Path,
     ) -> None:
         target = tmp_path / ".opencode"
         target.mkdir()
-        adapter.install(gpd_root, target)
+        adapter.install(grd_root, target)
         adapter.sync_runtime_permissions(target, autonomy="yolo")
 
         adapter.uninstall(target)

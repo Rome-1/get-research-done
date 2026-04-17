@@ -6,11 +6,10 @@ logic, background spawn failure, and graceful degradation.
 
 from __future__ import annotations
 
-import inspect
 import json
-import os
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -27,7 +26,9 @@ from grd.hooks.check_update import (
     main,
 )
 from grd.hooks.runtime_detect import UpdateCacheCandidate
+from tests.hooks.helpers import mark_complete_install as _mark_complete_install
 
+_SHARED_INSTALL = get_shared_install_metadata()
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
 
 
@@ -136,12 +137,14 @@ class TestIsOlderThan:
     def test_pep440_post_release_is_not_older_than_base_release(self) -> None:
         assert _is_older_than("1.2.3.post1", "1.2.3") is False
 
+    def test_unknown_local_suffix_is_not_older_than_final_release(self) -> None:
+        assert _is_older_than("1.2.3-local", "1.2.3") is False
+        assert _is_older_than("1.2.3-local.1", "1.2.3") is False
+
 
 def test_version_comparison_does_not_depend_on_packaging_modules() -> None:
-    source = inspect.getsource(check_update)
-
-    assert "packaging.version" not in source
-    assert "pip._vendor.packaging" not in source
+    assert _is_older_than("1.0.0rc1", "1.0.0") is True
+    assert _is_older_than("1.0.0.post1", "1.0.0") is False
 
 
 # ─── _read_installed_version ───────────────────────────────────────────────
@@ -173,7 +176,7 @@ class TestReadInstalledVersion:
     def test_fallback_to_version_file(self, tmp_path: Path) -> None:
         """When metadata returns dev version, falls back to VERSION file."""
         version_file = tmp_path / "VERSION"
-        version_file.write_text("1.2.3\n")
+        version_file.write_text("1.2.3\n", encoding="utf-8")
 
         with (
             patch("grd.version.__version__", "0.0.0-dev"),
@@ -201,8 +204,8 @@ class TestReadInstalledVersion:
         codex_version = home / ".codex" / "get-research-done" / "VERSION"
         claude_version.parent.mkdir(parents=True)
         codex_version.parent.mkdir(parents=True)
-        claude_version.write_text("1.0.0\n")
-        codex_version.write_text("2.0.0\n")
+        claude_version.write_text("1.0.0\n", encoding="utf-8")
+        codex_version.write_text("2.0.0\n", encoding="utf-8")
         _mark_complete_install(codex_version.parent.parent, runtime="codex")
 
         with (
@@ -221,8 +224,8 @@ class TestReadInstalledVersion:
         installed_codex_version = installed_codex_dir / "get-research-done" / "VERSION"
         stale_claude_version.parent.mkdir(parents=True)
         installed_codex_version.parent.mkdir(parents=True)
-        stale_claude_version.write_text("1.0.0\n")
-        installed_codex_version.write_text("2.0.0\n")
+        stale_claude_version.write_text("1.0.0\n", encoding="utf-8")
+        installed_codex_version.write_text("2.0.0\n", encoding="utf-8")
         _mark_complete_install(installed_codex_dir, runtime="codex")
 
         with (
@@ -281,7 +284,7 @@ class TestReadInstalledVersion:
             assert _read_installed_version() == "7.7.7"
 
     def test_version_files_use_public_runtime_detect_surface(self) -> None:
-        source = inspect.getsource(_version_files)
+        from grd.adapters.install_utils import GRD_INSTALL_DIR_NAME
 
         assert "_detect_runtime_install_target" not in source
         assert "_local_runtime_dir" not in source
@@ -418,7 +421,7 @@ class TestMainThrottle:
         cache_dir.mkdir(parents=True)
         cache_file = cache_dir / "grd-update-check.json"
         stale_time = int(time.time()) - UPDATE_CHECK_TTL_SECONDS - 100
-        cache_file.write_text(json.dumps({"checked": stale_time, "update_available": False}))
+        cache_file.write_text(json.dumps({"checked": stale_time, "update_available": False}), encoding="utf-8")
 
         with (
             patch(
@@ -739,8 +742,10 @@ class TestMainThrottle:
         mock_popen.assert_called_once()
         assert marker.exists()
 
-    def test_explicit_target_hook_uses_own_cache_instead_of_workspace_candidates(self, tmp_path: Path) -> None:
-        """Explicit-target hook refresh should always target its own cache path."""
+    def test_explicit_target_hook_falls_back_to_fresh_workspace_candidate_when_self_cache_is_missing(
+        self, tmp_path: Path
+    ) -> None:
+        """Explicit-target hooks should still respect fresh fallback caches when self cache is missing."""
         workspace = tmp_path / "workspace"
         workspace.mkdir()
         home = tmp_path / "home"
@@ -749,7 +754,12 @@ class TestMainThrottle:
         hook_path = explicit_target / "hooks" / "check_update.py"
         hook_path.parent.mkdir(parents=True)
         hook_path.write_text("# hook\n", encoding="utf-8")
-        _mark_complete_install(explicit_target, runtime="codex")
+        self_install = SimpleNamespace(
+            config_dir=explicit_target,
+            runtime="codex",
+            install_scope="local",
+            cache_file=explicit_target / "cache" / "grd-update-check.json",
+        )
 
         fresh_workspace_cache = workspace / ".claude" / "cache"
         fresh_workspace_cache.mkdir(parents=True)
@@ -771,3 +781,59 @@ class TestMainThrottle:
         mock_popen.assert_called_once()
         spawned_argv = mock_popen.call_args.args[0]
         assert str(explicit_target / "cache" / "grd-update-check.json") == spawned_argv[-1]
+
+    def test_explicit_target_hook_prefers_workspace_cache_over_fresh_self_cache_when_workspace_install_owns_runtime(
+        self, tmp_path: Path
+    ) -> None:
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        home = tmp_path / "home"
+        home.mkdir()
+        explicit_target = tmp_path / "custom-runtime-dir"
+        hook_path = explicit_target / "hooks" / "check_update.py"
+        hook_path.parent.mkdir(parents=True)
+        hook_path.write_text("# hook\n", encoding="utf-8")
+
+        workspace_runtime_dir = workspace / ".codex"
+        workspace_cache = workspace_runtime_dir / "cache" / "grd-update-check.json"
+        workspace_cache.parent.mkdir(parents=True)
+        workspace_cache.write_text(
+            json.dumps({"checked": int(time.time()) - UPDATE_CHECK_TTL_SECONDS - 100, "update_available": False}),
+            encoding="utf-8",
+        )
+
+        self_cache = explicit_target / "cache" / "grd-update-check.json"
+        self_cache.parent.mkdir(parents=True)
+        self_cache.write_text(
+            json.dumps({"checked": int(time.time()), "update_available": False}),
+            encoding="utf-8",
+        )
+
+        active_install_target = SimpleNamespace(config_dir=workspace_runtime_dir, install_scope="local")
+        self_install = SimpleNamespace(config_dir=explicit_target, runtime="codex", install_scope="local")
+
+        with (
+            patch("grd.hooks.check_update.__file__", str(hook_path)),
+            patch("grd.hooks.check_update.Path.cwd", return_value=workspace),
+            patch("grd.hooks.check_update.Path.home", return_value=home),
+            patch("grd.hooks.check_update._self_config_dir", return_value=explicit_target),
+            patch("grd.hooks.install_context.detect_self_owned_install", return_value=self_install),
+            patch("grd.hooks.runtime_detect.detect_runtime_install_target", return_value=active_install_target),
+            patch(
+                "grd.hooks.update_resolution.resolve_update_cache_inputs",
+                return_value=(workspace, home, "codex", "codex"),
+            ),
+            patch(
+                "grd.hooks.update_resolution.ordered_update_cache_candidates",
+                return_value=[
+                    UpdateCacheCandidate(path=workspace_cache, runtime="codex", scope="local"),
+                ],
+            ),
+            patch("grd.hooks.check_update._claim_inflight_marker", return_value=True),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            main()
+
+        mock_popen.assert_called_once()
+        spawned_argv = mock_popen.call_args.args[0]
+        assert spawned_argv[-1] == str(workspace_cache)

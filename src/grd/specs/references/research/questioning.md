@@ -43,6 +43,8 @@ A vague PROJECT.md forces every downstream phase to guess. The cost compounds --
 
 **Surface anchors early.** Ask what references, prior outputs, benchmarks, datasets, or known results should remain visible if the project goes well. Push until you know the first hard correctness check or smoking-gun signal they would trust; do not settle for loose agreement or generic limiting cases if they expect a sharper benchmark. If none are known yet, record that explicitly instead of inventing one.
 
+**Keep the contract closed.** When you turn the discussion into a scoping contract, do not invent extra keys or collapse list fields into scalars. Array fields stay arrays, even for singletons, and blank or duplicate list items are invalid after trimming whitespace.
+
 **Preserve the user's guidance.** If they name a specific figure, dataset, derivation, notebook, prior run, paper, benchmark, stop condition, or review checkpoint, keep that wording recognizable. Do not flatten it into generic "artifact" or "benchmark" language unless they asked you to broaden it.
 
 **Pressure-test the first story.** Treat the first framing as a working hypothesis, not as truth. Once you have a plausible framing on the table, restate the current picture in one sentence and ask one question that could narrow, overturn, or falsify it.

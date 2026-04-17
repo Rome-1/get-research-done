@@ -23,19 +23,51 @@ All contributors must sign a CLA before their pull requests can be merged.
 ```bash
 uv sync --dev
 source .venv/bin/activate
+uv tool install pre-commit
+pre-commit install
 ```
+
+## Local CLI From This Checkout
+
+Prefer `uv run` from the repo root when you want the local CLI without relying
+on a separately installed `gpd` executable.
+
+```bash
+uv run grd --help
+uv run grd install <runtime> --local
+```
+
+Use `codex`, `claude`, `gemini`, or `opencode` for `<runtime>`. After
+`uv sync --dev`, an activated `.venv` can also run `gpd ...` directly.
+
+The tracked pre-commit hook runs `uv run ruff check --fix --unsafe-fixes` on staged Python files.
+
+## Contributor License Agreements
+
+Before we can accept a contribution, you must complete the applicable CLA:
+
+- Individual contributors should review `CLA/GPD_CLA_Individual.pdf`; signing is handled automatically via the CLA Assistant GitHub flow at https://cla-assistant.io/psi-oss/get-research-done
+- Corporate contributors, or contributors whose employer owns their IP, should review `CLA/GPD_CLA_Corporate.pdf` and email the signed PDF to legal@psi.inc
+- Corporate CLA submissions are collected manually and should be logged by the owner of contributor agreement tracking, Ted Grace
+- If your employer owns the intellectual property for your work, use the corporate CLA flow instead of the individual one
 
 Useful checks:
 
 ```bash
 uv build
 npm_config_cache="$(mktemp -d)" npm pack --dry-run --json
+pre-commit run --all-files
 python scripts/sync_repo_graph_contract.py
 uv run pytest tests/test_metadata_consistency.py -v
 uv run pytest tests/test_release_consistency.py -v
 uv run pytest tests/adapters/test_registry.py tests/adapters/test_install_roundtrip.py -v
 uv run pytest tests/core/test_cli.py -v
 uv run pytest tests/ -v
+HEAVY_SUITE_IGNORE_ARGS="$(uv run python - <<'PY'
+from tests.conftest import complementary_heavy_suite_ignore_args
+print(' '.join(complementary_heavy_suite_ignore_args()))
+PY
+)" uv run pytest tests/ -v --full-suite $HEAVY_SUITE_IGNORE_ARGS
 ```
 
 Cross-runtime release checks:
@@ -48,6 +80,21 @@ Cross-runtime release checks:
 - `npm pack --dry-run --json` validates the published `npx` bootstrap package surface before release. Use a temporary cache outside the repo so the worktree does not gain a local `.npm-cache/`.
 - Gemini installs are expected to be complete on disk after `GeminiAdapter.install()`: `.gemini/settings.json` should already exist with `experimental.enableAgents`, GRD hooks, GRD MCP servers, and `policyPaths` configured, and `policies/grd-auto-edit.toml` should already be present.
 - OpenCode installs are expected to leave `opencode.json` complete on disk with GRD-managed `permission.read` / `permission.external_directory` entries and built-in MCP servers under the `mcp` key.
+
+## Sharing Published Research
+
+If you've used GPD to complete and publish a physics paper, we encourage you to share it with the community by opening a pull request. This helps other researchers see real-world examples of GPD workflows and learn from your approach.
+
+**What to include in your PR:**
+
+- A short summary of the physics problem and your approach
+- Which GPD commands and workflows you used (e.g., `gpd:write-paper`, `gpd:verify-work`, `gpd:arxiv-submission`)
+- Key results, figures, or links to the published paper (optional)
+- Any tips or lessons learned that might help others
+
+You don't need to share your full manuscript or data — even a brief write-up with the GPD workflow you followed is valuable.
+
+**Where to add it:** Add your paper to the `README.md` `Papers Using GPD` list. If you want to share more context, include a short case-study note in the PR description or add a doc as part of the same PR. The paper workflows also include reminder text about this in their completion guidance.
 
 ## Release-Facing Guardrails
 

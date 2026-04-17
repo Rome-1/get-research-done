@@ -1,4 +1,4 @@
-"""Focused regressions for CLAIMS{round_suffix}.json schema visibility in review-reader prompts."""
+"""Prompt-visibility regressions for the review agents."""
 
 from __future__ import annotations
 
@@ -10,12 +10,11 @@ from grd.mcp.paper.models import (
     ClaimRecord,
     ClaimType,
     ReviewConfidence,
-    ReviewFinding,
     ReviewIssueSeverity,
+    ReviewIssueStatus,
     ReviewRecommendation,
     ReviewStageKind,
     ReviewSupportStatus,
-    StageReviewReport,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -23,65 +22,42 @@ AGENTS_DIR = REPO_ROOT / "src/grd/agents"
 REFERENCES_DIR = REPO_ROOT / "src/grd/specs/references"
 
 
-def _between(text: str, start: str, end: str) -> str:
-    _, start_marker, tail = text.partition(start)
-    assert start_marker, f"Missing marker: {start}"
-    body, end_marker, _ = tail.partition(end)
-    assert end_marker, f"Missing marker: {end}"
-    return body
+def _read(agent_name: str) -> str:
+    return (AGENTS_DIR / agent_name).read_text(encoding="utf-8")
 
 
-def _assert_schema_tokens_visible(text: str) -> None:
-    for token in (*ClaimIndex.model_fields, *ClaimRecord.model_fields):
-        assert f"`{token}`" in text or f'"{token}"' in text, f"Missing schema token: {token}"
-    for claim_type in ClaimType:
-        assert claim_type.value in text, f"Missing claim type: {claim_type.value}"
+def _expanded(agent_name: str) -> str:
+    return expand_at_includes(_read(agent_name), SPEC_ROOT, "/runtime/")
 
 
-def _assert_stage_review_schema_tokens_visible(text: str) -> None:
-    for token in (*StageReviewReport.model_fields, *ReviewFinding.model_fields):
-        assert f"`{token}`" in text or f'"{token}"' in text, f"Missing schema token: {token}"
-    for severity in ReviewIssueSeverity:
-        assert severity.value in text, f"Missing severity: {severity.value}"
-    for support_status in ReviewSupportStatus:
-        assert support_status.value in text, f"Missing support status: {support_status.value}"
-    for confidence in ReviewConfidence:
-        assert confidence.value in text, f"Missing confidence: {confidence.value}"
-    for recommendation in ReviewRecommendation:
-        assert recommendation.value in text, f"Missing recommendation: {recommendation.value}"
+def _enum_line(field_name: str, enum_type: type[object]) -> str:
+    values = " | ".join(member.value for member in enum_type)
+    return f"{field_name}: {values}"
 
 
-def _assert_stage_review_contract_visible(text: str, stage_kind: str) -> None:
-    _assert_stage_review_schema_tokens_visible(text)
-    assert f"`stage_id` and `stage_kind` must both be `{stage_kind}`" in text
-    assert "JSON `round` field must agree" in text
-    assert "`manuscript_path` must be non-empty" in text
-    assert "must exactly match the sibling `CLAIMS{round_suffix}.json`" in text
-    assert "`claims_reviewed` must be an array of Stage 1 `CLM-...` claim IDs" in text
-    assert "`manuscript_sha256` must exactly match the sibling `CLAIMS{round_suffix}.json`" in text
-    assert "`manuscript_sha256` must be the lowercase 64-hex digest" in text
-    assert "closed schema" in text
-    assert "do not invent extra keys" in text
-    assert "`claim_ids` must reuse Stage 1 `CLM-...` claim IDs" in text
-    assert "`issue_id` must use `REF-...`" in text
+def _assert_shared_contract_pointer(text: str, contract_fragment: str) -> None:
+    assert "references/publication/peer-review-panel.md" in text
+    assert contract_fragment in text
+    assert "Do not restate that schema here." in text
+    assert "Required schema for" not in text
+    assert "closed schema; do not invent extra keys" not in text
 
 
 def test_review_reader_prompt_surfaces_full_claim_index_schema() -> None:
     review_reader = (AGENTS_DIR / "grd-review-reader.md").read_text(encoding="utf-8")
     claims_schema = _between(
         review_reader,
-        "Required schema for `CLAIMS{round_suffix}.json` (`ClaimIndex`):",
-        "Required schema for `STAGE-reader{round_suffix}.json` (`StageReviewReport`, mirroring the staged-review contract):",
+        "full `ClaimIndex` and `StageReviewReport` contracts",
     )
+    assert "Stage 1 must also emit `GRD/review/CLAIMS{round_suffix}.json`." in review_reader
+    assert "Capture theorem kind, explicit hypotheses, and free target parameters for theorem-like claims." in review_reader
+    assert "Keep `proof_audits` empty in this stage." in review_reader
+    assert "Focus `findings` on overclaiming, missing promised deliverables, and claim-structure blockers." in review_reader
 
-    _assert_schema_tokens_visible(claims_schema)
-    assert "closed schema" in claims_schema
-    assert "do not invent extra keys" in claims_schema
-    assert "do not omit them" in claims_schema
-    assert "must be non-empty" in claims_schema
-    assert "lowercase 64-hex digest" in claims_schema
-    assert "CLAIMS.json" not in claims_schema
-    assert "round-specific variant when instructed" not in claims_schema
+    expanded = _expanded("grd-review-reader.md")
+    assert "Peer Review Panel Protocol" not in expanded
+    assert "Stage 1 `CLAIMS{round_suffix}.json` must follow this compact `ClaimIndex` shape:" not in expanded
+    assert "StageReviewReport`, nested `ReviewFinding`, and nested `ProofAuditRecord` entries use a closed schema" not in expanded
 
 
 def test_review_reader_prompt_surfaces_full_stage_review_schema() -> None:

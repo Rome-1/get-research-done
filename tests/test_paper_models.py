@@ -19,6 +19,58 @@ class TestModels:
         assert author.email == ""
         assert author.affiliation == ""
 
+    def test_author_rejects_blank_name(self):
+        with pytest.raises(ValidationError, match=r"name[\s\S]*non-empty string"):
+            Author(name="   ")
+
+    @pytest.mark.parametrize(
+        ("payload", "expected_fragment"),
+        [
+            (
+                {
+                    "title": "Test",
+                    "authors": [{"name": "Bob", "legacy_note": "stale"}],
+                    "abstract": "Abstract.",
+                    "sections": [{"title": "Intro", "content": "Hello."}],
+                },
+                r"authors\.0\.legacy_note[\s\S]*Extra inputs are not permitted",
+            ),
+            (
+                {
+                    "title": "Test",
+                    "authors": [{"name": "Bob"}],
+                    "abstract": "Abstract.",
+                    "sections": [{"title": "Intro", "content": "Hello.", "legacy_note": "stale"}],
+                },
+                r"sections\.0\.legacy_note[\s\S]*Extra inputs are not permitted",
+            ),
+            (
+                {
+                    "title": "Test",
+                    "authors": [{"name": "Bob"}],
+                    "abstract": "Abstract.",
+                    "sections": [{"title": "Intro", "content": "Hello."}],
+                    "figures": [
+                        {
+                            "path": "figures/fig01.pdf",
+                            "caption": "Caption",
+                            "label": "fig1",
+                            "legacy_note": "stale",
+                        }
+                    ],
+                },
+                r"figures\.0\.legacy_note[\s\S]*Extra inputs are not permitted",
+            ),
+        ],
+    )
+    def test_paper_config_rejects_nested_extra_keys(
+        self,
+        payload: dict[str, object],
+        expected_fragment: str,
+    ) -> None:
+        with pytest.raises(ValidationError, match=expected_fragment):
+            PaperConfig.model_validate(payload)
+
     def test_paper_config_minimal(self):
         config = PaperConfig(
             title="Test",
@@ -30,6 +82,7 @@ class TestModels:
         assert config.figures == []
         assert config.appendix_sections == []
         assert config.bib_file == "references"
+        assert config.acknowledgments == REQUIRED_GPD_ACKNOWLEDGMENT
         assert config.attribution_footer == "Generated with Get Research Done"
 
     def test_paper_config_full(self):
@@ -47,6 +100,10 @@ class TestModels:
         assert config.journal == "apj"
         assert len(config.figures) == 1
         assert len(config.appendix_sections) == 1
+        assert config.sections[0].label == "intro"
+        assert config.figures[0].label == "fig1"
+        assert config.acknowledgments.startswith("Thanks.")
+        assert config.acknowledgments.count(REQUIRED_GPD_ACKNOWLEDGMENT) == 1
 
     def test_paper_config_rejects_unknown_journal(self):
         with pytest.raises(ValidationError):
@@ -62,6 +119,124 @@ class TestModels:
         fig = FigureRef(path=Path("fig.pdf"), caption="Cap", label="f1")
         assert fig.width == r"\columnwidth"
         assert fig.double_column is False
+
+    def test_figure_ref_rejects_quoted_boolean(self) -> None:
+        with pytest.raises(ValidationError):
+            FigureRef.model_validate(
+                {
+                    "path": Path("fig.pdf"),
+                    "caption": "Cap",
+                    "label": "f1",
+                    "double_column": "false",
+                }
+            )
+
+    @pytest.mark.parametrize(
+        ("payload", "expected_fragment"),
+        [
+            (
+                {
+                    "title": "   ",
+                    "authors": [{"name": "Bob"}],
+                    "abstract": "Abstract.",
+                    "sections": [{"heading": "Intro", "content": "Hello."}],
+                },
+                r"title[\s\S]*non-empty string",
+            ),
+            (
+                {
+                    "title": "Test",
+                    "authors": [{"name": "Bob"}],
+                    "abstract": "   ",
+                    "sections": [{"heading": "Intro", "content": "Hello."}],
+                },
+                r"abstract[\s\S]*non-empty string",
+            ),
+            (
+                {
+                    "title": "Test",
+                    "authors": [{"name": "Bob"}],
+                    "abstract": "Abstract.",
+                    "sections": [{"heading": "Intro", "content": "Hello."}],
+                    "bib_file": "references.bib",
+                },
+                r"bib_file[\s\S]*stem-safe filename",
+            ),
+        ],
+    )
+    def test_paper_config_rejects_blank_required_text_and_legacy_bib_stems(
+        self,
+        payload: dict[str, object],
+        expected_fragment: str,
+    ) -> None:
+        with pytest.raises(ValidationError, match=expected_fragment):
+            PaperConfig.model_validate(payload)
+
+    @pytest.mark.parametrize(
+        ("payload", "expected_fragment"),
+        [
+            (
+                {"heading": "   ", "content": "Hello."},
+                r"title[\s\S]*non-empty string",
+            ),
+            (
+                {"heading": "Intro", "content": "   "},
+                r"content[\s\S]*non-empty string",
+            ),
+        ],
+    )
+    def test_section_rejects_blank_title_and_body(
+        self,
+        payload: dict[str, object],
+        expected_fragment: str,
+    ) -> None:
+        with pytest.raises(ValidationError, match=expected_fragment):
+            Section.model_validate(payload)
+
+    @pytest.mark.parametrize(
+        ("payload", "expected_fragment"),
+        [
+            (
+                {"path": Path("fig.pdf"), "caption": "   ", "label": "velocity"},
+                r"caption[\s\S]*non-empty string",
+            ),
+            (
+                {"path": Path("fig.pdf"), "caption": "Cap", "label": "   "},
+                r"label[\s\S]*non-empty string",
+            ),
+        ],
+    )
+    def test_figure_ref_rejects_blank_caption_and_label(
+        self,
+        payload: dict[str, object],
+        expected_fragment: str,
+    ) -> None:
+        with pytest.raises(ValidationError, match=expected_fragment):
+            FigureRef.model_validate(payload)
+
+    @pytest.mark.parametrize(
+        ("model_cls", "payload", "expected_fragment"),
+        [
+            (
+                Section,
+                {"heading": "Intro", "content": "Hello.", "label": "sec:intro"},
+                r"label[\s\S]*omit the legacy 'sec:' prefix",
+            ),
+            (
+                FigureRef,
+                {"path": Path("fig.pdf"), "caption": "Cap", "label": "fig:velocity"},
+                r"label[\s\S]*omit the legacy 'fig:' prefix",
+            ),
+        ],
+    )
+    def test_paper_models_reject_legacy_label_prefixes(
+        self,
+        model_cls: type[Section] | type[FigureRef],
+        payload: dict[str, object],
+        expected_fragment: str,
+    ) -> None:
+        with pytest.raises(ValidationError, match=expected_fragment):
+            model_cls.model_validate(payload)
 
     def test_journal_spec_fields(self):
         spec = JournalSpec(
@@ -147,7 +322,7 @@ class TestTemplates:
             title="Test Paper",
             authors=[Author(name="Test Author", email="test@test.com", affiliation="Test Univ")],
             abstract="This is a test abstract.",
-            sections=[Section(title="Introduction", content="Hello world.")],
+            sections=[Section(title="Introduction", content="Hello world.", label="introduction")],
         )
         tex = render_paper(config)
         assert r"\documentclass" in tex
@@ -156,6 +331,9 @@ class TestTemplates:
         assert r"\author{Test Author}" in tex
         assert r"\begin{abstract}" in tex
         assert r"\section{Introduction}" in tex
+        assert r"\label{sec:introduction}" in tex
+        assert "sec:sec:introduction" not in tex
+        assert REQUIRED_GPD_ACKNOWLEDGMENT in tex
         assert r"\bibliography{references}" in tex
         assert "Generated with Get Research Done" in tex
 
@@ -232,6 +410,7 @@ class TestTemplates:
         assert r"\includegraphics" in tex
         assert r"\caption{Velocity field.}" in tex
         assert r"\label{fig:velocity}" in tex
+        assert "fig:fig:velocity" not in tex
 
     def test_render_with_appendix(self):
         from grd.mcp.paper.template_registry import render_paper
@@ -246,6 +425,39 @@ class TestTemplates:
         tex = render_paper(config)
         assert r"\appendix" in tex
         assert "Details" in tex
+
+    def test_render_appends_required_acknowledgment_once(self):
+        from grd.mcp.paper.template_registry import render_paper
+
+        config = PaperConfig(
+            title="Custom Acknowledgments",
+            authors=[Author(name="C")],
+            abstract="Abstract.",
+            sections=[Section(title="Intro", content="Main.")],
+            acknowledgments="We thank our collaborators.",
+        )
+
+        tex = render_paper(config)
+        assert "We thank our collaborators." in tex
+        assert tex.count(REQUIRED_GPD_ACKNOWLEDGMENT) == 1
+
+    def test_acknowledgment_normalizer_deduplicates_whitespace_variants(self):
+        wrapped = (
+            "We thank our collaborators.\n\n"
+            "This research made use of Get Physics Done (GPD)\n"
+            "and was supported in part by a GRD Research Grant from\n"
+            "Physical Superintelligence PBC (PSI)."
+        )
+
+        config = PaperConfig(
+            title="Wrapped Acknowledgments",
+            authors=[Author(name="C")],
+            abstract="Abstract.",
+            sections=[Section(title="Intro", content="Main.")],
+            acknowledgments=wrapped,
+        )
+
+        assert config.acknowledgments == wrapped.strip()
 
     def test_unknown_template_raises(self):
         from grd.mcp.paper.template_registry import load_template

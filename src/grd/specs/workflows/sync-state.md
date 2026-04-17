@@ -1,5 +1,5 @@
 <purpose>
-Reconcile diverged `STATE.md` and `state.json`. These two files represent the same project state in different formats: `state.json` is the machine-readable authoritative store for structured state, while `STATE.md` is the human-readable markdown view that the CLI keeps in sync and can also use as a controlled recovery input when `state.json` is missing or corrupt. They can diverge when a tool crashes mid-update, when one file is edited directly, or when a manual markdown edit needs to be merged back into the structured state.
+Reconcile diverged `STATE.md` and `state.json` with a deterministic, fail-closed rule set. `state.json` is the authoritative store for structured state; `STATE.md` is the human-readable projection. When both files exist, structured fields follow `state.json` and the markdown view is regenerated from it. Markdown is only used as a recovery source when `state.json` is missing or unreadable.
 </purpose>
 
 <required_reading>
@@ -14,7 +14,7 @@ Canonical reconciliation contract:
 
 <process>
 
-<step name="init" priority="first">
+<step name="inspect" priority="first">
 **Check both state files exist:**
 
 ```bash
@@ -35,7 +35,7 @@ Exit.
 
 **If only STATE.md exists (state.json missing):**
 
-Use the authoritative markdown write path to recover `state.json` from the current markdown while preserving JSON-only fields and rebuilding the dual-write pair atomically:
+Recover `state.json` from the markdown recovery source and preserve the JSON-only state on disk by rebuilding the dual-write pair atomically:
 
 ```bash
 uv run python - <<'PY'
@@ -48,11 +48,11 @@ save_state_markdown(cwd, md_path.read_text(encoding="utf-8"))
 PY
 ```
 
-Report: "state.json recovered from STATE.md via authoritative markdown sync." Exit (no divergence to reconcile).
+Then run `grd --raw state validate`, report the recovery result, and stop. Do not prompt for a merge decision: markdown recovery is the only allowed source when JSON is absent.
 
 **If only state.json exists (STATE.md missing):**
 
-`state.json` is the authoritative copy. Rebuild `STATE.md` directly from it:
+`state.json` is authoritative. Rebuild `STATE.md` directly from it:
 
 ```bash
 uv run python - <<'PY'
@@ -66,14 +66,12 @@ save_state_json(cwd, state)
 PY
 ```
 
-If state.json is also corrupt or empty, re-initialize the project.
-
-Exit.
+Then run `grd --raw state validate`, report the regeneration result, and stop.
 
 **If both exist:** Continue to comparison.
 </step>
 
-<step name="read_both">
+<step name="compare">
 **Read both state representations:**
 
 ```bash
@@ -115,21 +113,15 @@ Extract from state.json:
 - `propagated_uncertainties` (JSON-only field)
 </step>
 
-<step name="compare_fields">
-**Compare shared fields between STATE.md and state.json:**
+<step name="classify">
+**Classify the relationship between the two files:**
 
-For each shared field, check if values match:
+1. If `state.json` is unreadable, invalid JSON, or missing required structured data, use the markdown recovery path and stop treating the pair as a bidirectional merge problem.
+2. If `state.json` parses successfully, treat it as the structured source of truth for all mirrored fields.
+3. If `STATE.md` contains schema-backed edits that disagree with `state.json` while both files parse, report the drift, but do not invent a field-by-field merge. Regenerate `STATE.md` from `state.json`.
+4. Preserve JSON-only fields from `state.json` on every sync path.
 
-| Field | STATE.md | state.json | Match |
-|-------|----------|------------|-------|
-| current_phase | {md_value} | {json_value} | {YES/NO} |
-| current_plan | {md_value} | {json_value} | {YES/NO} |
-| status | {md_value} | {json_value} | {YES/NO} |
-| last_activity | {md_value} | {json_value} | {YES/NO} |
-| core_research_question | {md_value} | {json_value} | {YES/NO} |
-| current_focus | {md_value} | {json_value} | {YES/NO} |
-| decision_count | {md_count} | {json_count} | {YES/NO} |
-| blocker_count | {md_count} | {json_count} | {YES/NO} |
+state.json is authoritative for structured fields, and STATE.md is regenerated as the markdown projection of that authority.
 
 **If all fields match:**
 
@@ -192,7 +184,7 @@ Wait for user confirmation.
 </step>
 
 <step name="reconcile">
-**Merge into consistent state:**
+**Rebuild the canonical pair deterministically:**
 
 **Strategy:** Apply the preferred value for each divergent field, then sync both files.
 
@@ -227,16 +219,50 @@ save_state_json(cwd, state)
 PY
 ```
 
+**If `state.json` is invalid or unreadable but `STATE.md` is valid:**
+
+Recover `state.json` from `STATE.md` through the authoritative markdown write path:
+
+```bash
+uv run python - <<'PY'
+from pathlib import Path
+from grd.core.state import save_state_markdown
+
+cwd = Path(".")
+md_path = cwd / "GRD" / "STATE.md"
+save_state_markdown(cwd, md_path.read_text(encoding="utf-8"))
+PY
+```
+
 **Verify sync result:**
 
 ```bash
 # Re-read both files and confirm no remaining divergences
 grd --raw state validate
 ```
+
+If validation fails, report the validation issues and stop. Do not commit a partially reconciled pair.
 </step>
 
-<step name="commit">
-**Commit reconciled state:**
+<step name="report">
+**Report what happened:**
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ GRD > STATE SYNCHRONIZED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Source used:** {state.json | STATE.md recovery}
+**Structured fields authoritative:** state.json
+**Markdown projection:** regenerated from the authoritative source
+**Validation status:** {healthy / warning / degraded}
+
+If STATE.md and state.json previously diverged, report the mirrored fields that changed and note that JSON-only fields were preserved.
+```
+</step>
+
+<step name="optional_commit">
+**Only if the operator explicitly asks to commit the reconciled state:**
 
 ```bash
 PRE_CHECK=$(grd pre-commit-check --files .grd/STATE.md .grd/state.json 2>&1) || true
@@ -287,13 +313,12 @@ Both files are now consistent.
 <success_criteria>
 
 - [ ] Both state files checked for existence
-- [ ] Missing file regenerated from the other (if applicable)
-- [ ] All shared fields compared between STATE.md and state.json
-- [ ] Divergences identified with recency analysis
-- [ ] User confirmed reconciliation plan
-- [ ] Preferred values applied to both files
+- [ ] Missing file regenerated from the other when applicable
+- [ ] Shared fields compared between STATE.md and state.json
+- [ ] `state.json` precedence applied deterministically for mirrored fields
 - [ ] JSON-only fields preserved during sync
-- [ ] Both files verified as consistent after reconciliation
-- [ ] Changes committed
-- [ ] Report presented with what was reconciled
+- [ ] Validation rerun after regeneration
+- [ ] Divergences reported without ad hoc merge heuristics
+- [ ] Optional commit kept separate from the core reconcile/validate/report path
+
 </success_criteria>

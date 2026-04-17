@@ -6,12 +6,36 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from grd.adapters.install_utils import expand_at_includes
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = REPO_ROOT / "src/grd/specs/workflows"
+COMMANDS_DIR = REPO_ROOT / "src/grd/commands"
 REFERENCES_DIR = REPO_ROOT / "src/grd/specs/references"
 TEMPLATES_DIR = REPO_ROOT / "src/grd/specs/templates"
+WORKFLOW_PATHS = (
+    WORKFLOWS_DIR / "quick.md",
+    WORKFLOWS_DIR / "map-research.md",
+    WORKFLOWS_DIR / "plan-phase.md",
+    WORKFLOWS_DIR / "research-phase.md",
+    WORKFLOWS_DIR / "execute-phase.md",
+    WORKFLOWS_DIR / "verify-work.md",
+    WORKFLOWS_DIR / "write-paper.md",
+    WORKFLOWS_DIR / "respond-to-referees.md",
+    WORKFLOWS_DIR / "new-project.md",
+    WORKFLOWS_DIR / "new-milestone.md",
+    WORKFLOWS_DIR / "parameter-sweep.md",
+    WORKFLOWS_DIR / "literature-review.md",
+    WORKFLOWS_DIR / "peer-review.md",
+    WORKFLOWS_DIR / "validate-conventions.md",
+    WORKFLOWS_DIR / "derive-equation.md",
+    WORKFLOWS_DIR / "explain.md",
+    WORKFLOWS_DIR / "audit-milestone.md",
+    WORKFLOWS_DIR / "debug.md",
+)
 
-RUNTIME_NOTE_FRAGMENT = "Runtime delegation:"
+RUNTIME_NOTE_INCLUDE_FRAGMENT = "@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md"
+RUNTIME_NOTE_BODY_FRAGMENT = "Spawn a fresh subagent for the task below."
 MODEL_OMISSION_FRAGMENT = (
     "If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model."
 )
@@ -37,6 +61,11 @@ def _extract_task_blocks(text: str) -> list[TaskBlock]:
         start = text.find("task(", cursor)
         if start == -1:
             return blocks
+
+        line_start = text.rfind("\n", 0, start) + 1
+        if text[line_start:start].lstrip().startswith("#"):
+            cursor = start + len("task(")
+            continue
 
         index = start + len("task(")
         depth = 1
@@ -70,6 +99,18 @@ def _extract_task_blocks(text: str) -> list[TaskBlock]:
             raise AssertionError("Unterminated task() block")
 
 
+def _task_agent_name(task_text: str) -> str:
+    match = re.search(r'subagent_type="([^"]+)"', task_text)
+    assert match is not None, f"task() block missing subagent_type:\n{task_text}"
+    return match.group(1)
+
+
+def _task_is_commented_out(text: str, start: int) -> bool:
+    line_start = text.rfind("\n", 0, start) + 1
+    line_prefix = text[line_start:start].lstrip()
+    return line_prefix.startswith("#")
+
+
 def _task_blocks_by_agent(path: Path, agent_name: str) -> list[TaskBlock]:
     return [block for block in _extract_task_blocks(_read(path)) if f'subagent_type="{agent_name}"' in block.text]
 
@@ -80,12 +121,11 @@ def _find_single_task(path: Path, agent_name: str) -> TaskBlock:
     return matches[0]
 
 
-def _assert_runtime_note_present(path: Path) -> None:
+def _assert_runtime_note_include(path: Path) -> None:
     content = _read(path)
-    assert RUNTIME_NOTE_FRAGMENT in content, path
-    assert MODEL_OMISSION_FRAGMENT in content, path
-    assert READONLY_RUNTIME_NOTE_FRAGMENT in content, (
-        f"{path.relative_to(REPO_ROOT)} runtime note missing readonly=false instruction"
+    assert RUNTIME_NOTE_INCLUDE_FRAGMENT in content, path
+    assert RUNTIME_NOTE_BODY_FRAGMENT not in content, (
+        f"{path.relative_to(REPO_ROOT)} should reference the shared runtime note instead of duplicating it"
     )
 
 
@@ -96,6 +136,25 @@ def _assert_prompt_bootstrap(task: TaskBlock, agent_name: str) -> None:
 
 def _extract_output_paths(task: TaskBlock) -> list[str]:
     return re.findall(r"Write to:\s*([^\s`]+)", task.text)
+
+
+def _assert_spawn_contract(
+    task: TaskBlock | str,
+    expected_outputs: tuple[str, ...],
+    *,
+    shared_state_policy: str = "return_only",
+    expected_write_paths: tuple[str, ...] = (),
+) -> None:
+    text = task.text if isinstance(task, TaskBlock) else task
+
+    assert "<spawn_contract>" in text
+    assert "write_scope:" in text
+    assert "expected_artifacts:" in text
+    assert f"shared_state_policy: {shared_state_policy}" in text
+    for output in expected_outputs:
+        assert output in text
+    for path in expected_write_paths:
+        assert path in text
 
 
 def test_agent_delegation_reference_defines_canonical_task_contract() -> None:
@@ -149,9 +208,103 @@ def test_representative_workflows_keep_runtime_note_and_agent_prompt_bootstrap()
 
     for workflow_name, agent_names in coverage.items():
         path = WORKFLOWS_DIR / workflow_name
-        _assert_runtime_note_present(path)
+        content = _read(path)
+        _assert_runtime_note_include(path)
+        _assert_expanded_runtime_note(path)
+        expanded_content = expand_at_includes(content, REPO_ROOT / "src/grd", "/runtime/")
+        if workflow_name == "explain.md":
+            assert 'prompt=filled_prompt' in content
+            assert 'subagent_type="grd-explainer"' in content
+            assert 'description="Explain {slug}"' in content
+            continue
         for agent_name in agent_names:
-            _assert_prompt_bootstrap(_find_single_task(path, agent_name), agent_name)
+            _assert_prompt_bootstrap_in_content(expanded_content, agent_name)
+
+
+def test_every_workflow_task_block_carries_runtime_delegation_note_and_bootstrap() -> None:
+    for path in WORKFLOW_PATHS:
+        _assert_runtime_note_include(path)
+
+
+def test_new_project_roadmapper_spawn_contract_uses_direct_shared_state_and_artifact_gate() -> None:
+    content = _read(WORKFLOWS_DIR / "new-project.md")
+    task = _find_single_task(WORKFLOWS_DIR / "new-project.md", "grd-roadmapper")
+
+    _assert_spawn_contract(
+        content,
+        (
+            "GRD/ROADMAP.md",
+            "GRD/STATE.md",
+        ),
+        shared_state_policy="direct",
+        expected_write_paths=(
+            "GRD/ROADMAP.md",
+            "GRD/STATE.md",
+            "GRD/REQUIREMENTS.md",
+        ),
+    )
+    assert "Do not trust the runtime handoff status by itself." in content
+    assert "subagent_type=\"grd-roadmapper\"" in task.text
+    assert "model=\"{roadmapper_model}\"" in task.text
+    assert "Write files immediately (ROADMAP.md, STATE.md, update REQUIREMENTS.md traceability)" in task.text
+    assert "grd_return.files_written" in task.text
+    assert "GRD/REQUIREMENTS.md" in task.text
+    assert "do not rely on runtime completion text alone." in task.text
+    assert "If the roadmapper reports `grd_return.status: completed`, verify that `GRD/ROADMAP.md`, `GRD/STATE.md`, and `GRD/REQUIREMENTS.md` are readable and named in `grd_return.files_written`." in content
+
+
+def test_new_milestone_roadmapper_spawn_contract_keeps_return_only_shared_state_and_explicit_contract_inputs() -> None:
+    content = _read(WORKFLOWS_DIR / "new-milestone.md")
+    task = _find_single_task(WORKFLOWS_DIR / "new-milestone.md", "grd-roadmapper")
+
+    _assert_spawn_contract(
+        content,
+        (
+            "GRD/ROADMAP.md",
+            "GRD/STATE.md",
+        ),
+        shared_state_policy="return_only",
+        expected_write_paths=(
+            "GRD/ROADMAP.md",
+            "GRD/STATE.md",
+            "GRD/REQUIREMENTS.md",
+        ),
+    )
+    assert "Do not trust the runtime handoff status by itself." in content
+    assert "<contract_context>" in task.text
+    assert "Project contract gate: {project_contract_gate}" in task.text
+    assert "Project contract load info: {project_contract_load_info}" in task.text
+    assert "Project contract validation: {project_contract_validation}" in task.text
+    assert "Contract intake: {contract_intake}" in task.text
+    assert "Active references: {active_reference_context}" in task.text
+    assert "Effective reference intake: {effective_reference_intake}" in task.text
+    assert "grd_return.files_written" in task.text
+    assert "treat existing files as stale unless the same paths appear in `grd_return.files_written`" in task.text
+    assert "GRD/REQUIREMENTS.md" in content
+    assert "If the roadmapper reports `grd_return.status: completed`, verify that `GRD/ROADMAP.md`, `GRD/STATE.md`, and `GRD/REQUIREMENTS.md` are readable and named in `grd_return.files_written`." in content
+    assert "If any expected artifact is missing from disk or from `grd_return.files_written`, treat the handoff as incomplete and request a fresh continuation." in content
+
+
+def test_debug_workflow_and_command_share_the_same_one_shot_debugger_contract() -> None:
+    workflow = _read(WORKFLOWS_DIR / "debug.md")
+    command = _read(COMMANDS_DIR / "debug.md")
+    expanded_workflow = expand_at_includes(workflow, REPO_ROOT / "src/grd", "/runtime/")
+
+    assert workflow.count('subagent_type="grd-debugger"') == 1
+    assert workflow.count("readonly=false") == 1
+    assert 'description="Investigate: {truth_short}"' in workflow
+    assert "Spawn a fresh subagent for the task below." in expanded_workflow
+    assert "one-shot handoff" in expanded_workflow
+    assert "Always pass `readonly=false` for file-producing agents." in expanded_workflow
+
+    assert command.count('subagent_type="grd-debugger"') == 2
+    assert command.count("readonly=false") == 2
+    assert 'description="Debug {slug}"' in command
+    assert 'description="Continue debug {slug}"' in command
+    assert "Create: GRD/debug/{slug}.md" in command
+    assert "Debug file path: GRD/debug/{slug}.md" in command
+    assert "expected debug session artifact" in command
+    assert "artifact gate" in command
 
 
 def test_quick_and_write_paper_gate_handoffs_on_expected_artifacts() -> None:
@@ -162,7 +315,7 @@ def test_quick_and_write_paper_gate_handoffs_on_expected_artifacts() -> None:
     assert "Verify summary exists at `${QUICK_DIR}/${next_num}-SUMMARY.md`" in quick
     assert "Do not trust the runtime handoff status by itself." in quick
     assert "check for the expected .tex output files before spawning writer agents" in write_paper
-    assert "Check if the expected .tex file was written to `paper/`" in write_paper
+    assert "Check if the expected .tex file was written to `${PAPER_DIR}/`" in write_paper
     assert "If the file exists, proceed to the next section." in write_paper
 
 
@@ -187,6 +340,9 @@ def test_execute_phase_requires_state_return_envelope_and_handoff_spot_checks() 
     assert "State updates returned (NOT written to STATE.md directly)" in executor.text
     assert "Executor subagents MUST NOT write STATE.md directly." in content
     assert "Verify expected output files, the structured return envelope, and git commits" in content
+    assert "pre_execution_specialists" in content
+    assert '# task(subagent_type="grd-notation-coordinator"' not in content
+    assert '# task(subagent_type="grd-experiment-designer"' not in content
 
 
 def test_parameter_sweep_executor_uses_spawn_contract_and_return_only_state_updates() -> None:
@@ -236,7 +392,102 @@ def test_new_project_parallel_researchers_write_to_disjoint_artifacts() -> None:
 
     assert expected <= outputs
     assert len(outputs) == len(set(outputs))
-    assert "If 1-2 agents failed, proceed with the synthesizer using available files" in _read(path)
+    assert len(tasks) == 4
+
+    for task in tasks:
+        task_outputs = tuple(_extract_output_paths(task))
+        assert len(task_outputs) == 1
+        _assert_spawn_contract(task, task_outputs)
+
+    content = _read(path)
+    synth = _find_single_task(path, "grd-research-synthesizer")
+    _assert_spawn_contract(synth, ("GRD/literature/SUMMARY.md",))
+    assert "GRD/PROJECT.md" in synth.text
+    assert "GRD/config.json" in synth.text
+    assert "GRD/literature/SUMMARY.md (if re-synthesizing an existing survey)" in synth.text
+    assert "Do not trust the runtime handoff status by itself." in content
+    assert "If a scout reports success but its `expected_artifacts` entry" in content
+    assert "`GRD/literature/{FILE}`" in content
+    assert "If `completed`, verify `GRD/literature/SUMMARY.md` exists and is named in the fresh return." in content
+    assert "Do not proceed with a partial literature survey" in content
+    assert "Do not synthesize from incomplete scout output" in content
+    assert "Do not fabricate a fallback summary in the main context" in content
+
+
+def test_map_research_parallel_mappers_use_spawn_contracts_and_return_only_artifacts() -> None:
+    path = WORKFLOWS_DIR / "map-research.md"
+    content = _read(path)
+    tasks = _task_blocks_by_agent(path, "grd-research-mapper")
+    outputs = {output for task in tasks for output in _extract_output_paths(task)}
+
+    expected = {
+        "GRD/research-map/FORMALISM.md",
+        "GRD/research-map/REFERENCES.md",
+        "GRD/research-map/ARCHITECTURE.md",
+        "GRD/research-map/STRUCTURE.md",
+        "GRD/research-map/CONVENTIONS.md",
+        "GRD/research-map/VALIDATION.md",
+        "GRD/research-map/CONCERNS.md",
+    }
+
+    assert expected <= outputs
+    assert len(outputs) == len(set(outputs))
+    assert len(tasks) == 4
+    assert content.count("<spawn_contract>") >= 4
+    assert "Route on `grd_return.status`, then verify `grd_return.files_written` against the expected artifacts before accepting the run." in content
+    assert "grd --raw config get research_mode" not in content
+    assert 'RESEARCH_MODE=$(echo "$BOOTSTRAP_INIT" | grd json get .research_mode --default balanced)' in content
+
+    for task in tasks:
+        task_outputs = tuple(_extract_output_paths(task))
+        assert len(task_outputs) in (1, 2)
+        _assert_spawn_contract(task, task_outputs)
+
+
+def test_new_project_roadmapper_uses_spawn_contract_and_artifact_gate() -> None:
+    path = WORKFLOWS_DIR / "new-project.md"
+    content = _read(path)
+    roadmapper = _find_single_task(path, "grd-roadmapper")
+
+    _assert_spawn_contract(roadmapper, ("GRD/ROADMAP.md", "GRD/STATE.md"), shared_state_policy="direct")
+    assert "GRD/REQUIREMENTS.md" in roadmapper.text
+    assert "grd_return.files_written" in roadmapper.text
+    assert "GRD/literature/SUMMARY.md" in roadmapper.text
+    assert "allowed_paths:" in roadmapper.text
+    assert "If the roadmapper reports `grd_return.status: completed`" in content
+    assert "`GRD/ROADMAP.md` or `GRD/STATE.md` is missing" in content
+    assert "Do not trust the runtime handoff status by itself." in content
+    assert "Do not create a second main-context roadmap implementation path" in content
+
+
+def test_new_project_notation_coordinator_uses_explicit_model_and_spawn_contract() -> None:
+    path = WORKFLOWS_DIR / "new-project.md"
+    content = _read(path)
+    notation = _find_single_task(path, "grd-notation-coordinator")
+
+    _assert_spawn_contract(notation, ("GRD/CONVENTIONS.md",), shared_state_policy="direct")
+    assert 'model="{NOTATION_MODEL}"' in notation.text
+    assert "grd convention set" in notation.text
+    assert "Do not hardcode `natural` or `mostly_minus`" in content
+    assert 'grd convention set units "$RESOLVED_UNITS"' in content
+    assert 'grd convention set metric_signature "$RESOLVED_METRIC"' in content
+
+
+def test_validate_conventions_uses_one_shot_delegation_and_artifact_gating_for_resolution() -> None:
+    content = _read(WORKFLOWS_DIR / "validate-conventions.md")
+
+    assert content.count('subagent_type="grd-consistency-checker"') == 1
+    assert content.count('subagent_type="grd-notation-coordinator"') == 0
+    assert "Thin wrapper around `grd-consistency-checker` for convention validation." in content
+    assert "Spawn `grd-consistency-checker` once and let it own convention policy." in content
+    assert "Runtime delegation rule: this is a one-shot handoff." in content
+    assert "Route only on the canonical `grd_return.status`:" in content
+    assert "Do not route on checker-local text markers or headings." in content
+    assert "grd-notation-coordinator" in content
+    assert "If the checker's `next_actions` call for notation repair, spawn `grd-notation-coordinator` with the checker report and the same scope." in content
+    assert "Keep that handoff thin: the coordinator owns the repair policy, not this workflow." in content
+    assert "If the checker returns `grd_return.status: completed`, accept success only after verifying that:" in content
+    assert "The same path appears in `grd_return.files_written`." in content
 
 
 def test_new_milestone_research_and_roadmapper_gate_success_path_artifacts() -> None:
@@ -253,22 +504,42 @@ def test_new_milestone_research_and_roadmapper_gate_success_path_artifacts() -> 
     )
     assert "shared_state_policy: return_only" in content
 
+    assert 'subagent_type="grd-project-researcher"' in content
+    assert "GRD/literature/{FILE}" in content
+    assert "expected_artifacts:" in content
+    assert "PRIOR-WORK.md" in content
+    assert "METHODS.md" in content
+    assert "COMPUTATIONAL.md" in content
+    assert "PITFALLS.md" in content
+    assert 'subagent_type="grd-research-synthesizer"' in content
+    assert "GRD/literature/SUMMARY.md" in content
+    assert 'subagent_type="grd-roadmapper"' in content
+    assert "GRD/ROADMAP.md" in content
+    assert "GRD/STATE.md" in content
+
 
 def test_peer_review_stages_use_fresh_context_and_stage_artifacts() -> None:
     path = WORKFLOWS_DIR / "peer-review.md"
     content = _read(path)
+    expanded_content = expand_at_includes(content, REPO_ROOT / "src/grd", "/runtime/")
 
     reader = _find_single_task(path, "grd-review-reader")
     literature = _find_single_task(path, "grd-review-literature")
     math = _find_single_task(path, "grd-review-math")
+    check_proof = _find_single_task(path, "grd-check-proof")
     physics = _find_single_task(path, "grd-review-physics")
     significance = _find_single_task(path, "grd-review-significance")
     referee = _find_single_task(path, "grd-referee")
 
-    assert "Spawn a fresh subagent for the task below." in content
+    assert RUNTIME_NOTE_INCLUDE_FRAGMENT in content
+    assert RUNTIME_NOTE_BODY_FRAGMENT not in content
+    assert RUNTIME_NOTE_BODY_FRAGMENT in expanded_content
+    assert MODEL_OMISSION_FRAGMENT in expanded_content
+    assert READONLY_RUNTIME_NOTE_FRAGMENT in expanded_content
     assert "This stage must start nearly fresh and remain manuscript-first." in reader.text
     assert "fresh context" in literature.text
     assert "fresh context" in math.text
+    assert "fresh context" in check_proof.text
     assert "fresh context" in physics.text
     assert "fresh context" in significance.text
     assert ".grd/review/CLAIMS{round_suffix}.json" in referee.text

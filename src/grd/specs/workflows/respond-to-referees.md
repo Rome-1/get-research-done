@@ -29,7 +29,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `commit_docs`, `state_exists`, `project_exists`, `project_contract`, `project_contract_load_info`, `project_contract_validation`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `active_reference_context`.
+Parse JSON for: `commit_docs`, `state_exists`, `project_exists`, `autonomy`, `research_mode`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `active_reference_context`, `derived_manuscript_reference_status`, `derived_manuscript_reference_status_count`, `derived_manuscript_proof_review_status`.
 
 **Read mode settings:**
 
@@ -39,7 +39,7 @@ AUTONOMY=$(grd --raw config get autonomy 2>/dev/null | grd json get .value --def
 
 **Mode-aware behavior:**
 - `autonomy=supervised`: Pause after each referee point for user review of the proposed response.
-- `autonomy=balanced` (default): Draft the full response and apply routine manuscript changes. Pause only for claim-level changes, new calculations, or unresolved referee disagreements.
+- `autonomy=balanced` (default): Draft the full response and apply routine manuscript changes. Do not force a parse-confirmation pause; pause only if the referee report is ambiguous, the response needs claim-level changes, new calculations, or unresolved referee disagreements. Any spawned agent that needs user input must return `status: checkpoint` and stop; the orchestrator presents the checkpoint and spawns a fresh continuation handoff after the user responds.
 - `autonomy=yolo`: Draft response and apply manuscript changes without pausing.
 
 Run centralized context preflight before continuing:
@@ -68,28 +68,30 @@ fi
 
 Use the literal `paste` sentinel when collecting inline report text. Do not pass the raw pasted referee report body as `$ARGUMENTS` to the strict preflight command.
 
-If review preflight exits nonzero because of missing project state, missing manuscript, missing referee report source when provided as a path, degraded review integrity, or missing required conventions, STOP and show the blocking issues before drafting responses. Treat `project_contract` as authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes; otherwise the contract is visible but blocked, and the response should surface the blocker instead of relying on it.
+If review preflight exits nonzero because of missing project state, missing manuscript, missing referee report source when provided as a path, degraded review integrity, or missing required conventions, STOP and show the blocking issues before drafting responses.
+Apply the shared publication bootstrap preflight exactly:
+
+@{GRD_INSTALL_DIR}/references/publication/publication-bootstrap-preflight.md
+
+Treat `project_contract` as authoritative only when `project_contract_gate.authoritative` is true; otherwise the contract is visible but blocked, and the response should surface the blocker instead of relying on it.
+If `derived_manuscript_reference_status` is present, use it as a quick manuscript-local summary of what is already cited, what is still pending, and what probably needs a bibliography refresh; keep `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` and the other manuscript-root publication artifacts authoritative for strict response and packaging decisions.
+If `derived_manuscript_proof_review_status` is present, use it as the first-pass manuscript-local summary of proof-review freshness for theorem-bearing revisions; keep passed proof-redteam artifacts and the manuscript-root publication artifacts authoritative for strict response and packaging decisions.
 
 **Locate paper directory:**
 
-```bash
-for DIR in paper manuscript draft; do
-  if [ -f "${DIR}/main.tex" ]; then
-    PAPER_DIR="$DIR"
-    break
-  fi
-done
-```
+Bind `PAPER_DIR` to the manuscript root resolved by the shared preflight and manuscript-root contract above, keep every manuscript-local path rooted there, and do not re-derive a second manuscript root later in this workflow. Set `MANUSCRIPT_BASENAME` from the resolved manuscript entrypoint for later rebuild and smoke-check steps.
 
 **If no paper found:**
 
 ```
-No paper directory found. Searched: paper/, manuscript/, draft/
+No paper directory found. Searched the canonical manuscript roots `paper/`, `manuscript/`, and `draft/` via the manuscript resolver
 
 Run /grd:write-paper first to generate a manuscript from research results.
 ```
 
 Exit.
+
+Treat every resolved manuscript file path as rooted under `${PAPER_DIR}`, including nested section files such as `${PAPER_DIR}/{section}.tex` and the response-letter companion `${PAPER_DIR}/response-letter.tex` when the revision round keeps a manuscript-local response artifact.
 
 **Convention verification** — referee responses must use the same conventions as the paper:
 
@@ -121,7 +123,7 @@ ls .grd/review/REFEREE-DECISION*.json 2>/dev/null
 
 If matching round-specific files exist, load them as structured context. Use `.grd/REFEREE-REPORT{round_suffix}.md` as the canonical issue-ID source, and use `REVIEW-LEDGER*.json` / `REFEREE-DECISION*.json` to identify blocking issues, unsupported-claim findings, recommendation floors, and the referee's stated rationale. Keep `project_contract`, `project_contract_load_info`, `project_contract_validation`, and `active_reference_context` visible together when drafting the response letter.
 
-Set `round_suffix` to match the peer-review artifact convention:
+@{GRD_INSTALL_DIR}/references/publication/publication-response-writer-handoff.md
 
 - `""` for the initial response round
 - `"-R2"` for the second round
@@ -137,6 +139,7 @@ Use `protocol_bundle_context` from init JSON as additive revision guidance.
 - Use bundle guidance to distinguish "missing decisive evidence we already owed" from "new side quest the referee is asking for."
 - Do **not** let bundle guidance justify broader claims, waive review-ledger blockers, or replace the manuscript's actual evidence trail in `.grd/comparisons/*-COMPARISON.md`, `.grd/paper/FIGURE_TRACKER.md`, phase summary artifacts, or `VERIFICATION.md`.
 - Keep revisions tied to claims the manuscript still intends to make. Review ledgers and bundle hints help prioritize, but they do not force new side analyses once honest claim narrowing resolves the concern.
+- Use `derived_manuscript_reference_status` as the first-pass triage signal for citation and bibliography changes, but do not let it override the manuscript-root audit or publication-manifest checks.
 </step>
 
 <step name="parse_referee_reports">
@@ -169,7 +172,7 @@ For each comment, extract:
 
 Do not invent new `REF-*` identifiers from the JSON artifacts. Instead, use them to prioritize and calibrate the responses to the issues already surfaced in the canonical `.grd/REFEREE-REPORT{round_suffix}.md`.
 
-Present the parsed structure for user confirmation:
+Present the parsed structure. Ask for explicit user confirmation only in supervised mode or when the report source is ambiguous; balanced mode should treat the parse as working context and continue unless ambiguity or missing source requires a checkpoint:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -203,11 +206,14 @@ Confirm parsing is correct, or paste corrections.
 <step name="create_response_file">
 **Create the structured referee response document:**
 
-Read the template:
+Read the canonical templates and the shared publication response-writer handoff:
 
 ```bash
+cat {GRD_INSTALL_DIR}/templates/paper/author-response.md
 cat {GRD_INSTALL_DIR}/templates/paper/referee-response.md
 ```
+
+@{GRD_INSTALL_DIR}/references/publication/publication-response-writer-handoff.md
 
 Create both response artifacts for the current round:
 
@@ -216,27 +222,13 @@ Create both response artifacts for the current round:
 
 Populate `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` with:
 
-- Paper metadata (journal, manuscript ID, dates)
-- Decision summary from editor
-- Decision summary from `REFEREE-DECISION*.json` when available
-- Each referee comment with full quote, category, priority
-- Explicit list of blocking items from `REVIEW-LEDGER*.json` when available
-- Empty response and changes-made fields (to be filled in subsequent steps)
-- Progress tracking table
+Before writing `GRD/AUTHOR-RESPONSE{round_suffix}.md`, load the canonical template at `@{GRD_INSTALL_DIR}/templates/paper/author-response.md` and keep the internal tracker aligned with it.
 
 Before writing `.grd/AUTHOR-RESPONSE{round_suffix}.md`, use this exact scaffold so the file matches the canonical author-response schema expected by later review rounds:
 
-```markdown
----
-response_to: REFEREE-REPORT{round_suffix}.md
-round: {N}
-date: YYYY-MM-DDTHH:MM:SSZ
-issues_fixed: {count}
-issues_rebutted: {count}
-issues_acknowledged: {count}
----
+Apply the shared publication response-writer handoff exactly for the response-artifact pair:
 
-# Author Response — Round {N}
+@{GRD_INSTALL_DIR}/references/publication/publication-response-writer-handoff.md
 
 ## Summary
 
@@ -388,7 +380,11 @@ Draft each response in `.grd/AUTHOR-RESPONSE{round_suffix}.md`, then mirror the 
 **For Group B (manuscript revision) items:**
 
 Group revision items by affected section to minimize agent spawns. For each affected section, spawn a paper-writer agent:
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
+
+> If subagent spawning is unavailable, execute these steps sequentially in the main context.
+
+Apply the shared publication round and response contracts exactly for the response-artifact pair. The workflow-specific addition for each section handoff is that the same fresh child return must also name the revised section file.
 
 ```
 task(
@@ -403,7 +399,7 @@ task(
 Each revision agent receives:
 
 - The specific referee comments affecting this section (with full quotes)
-- The current section text (read from `${PAPER_DIR}/{section}.tex`)
+- The current section text (read from the resolved section file within the manuscript tree rooted at `${PAPER_DIR}`, allowing nested subdirectories)
 - The planned response strategy for each comment
 - Relevant `.grd/comparisons/*-COMPARISON.md` files and `FIGURE_TRACKER.md` entries for decisive claims mentioned in the section
 - `protocol_bundle_context` and `selected_protocol_bundle_ids` as additive specialized guidance only; they help preserve benchmark anchors, decisive artifacts, and estimator caveats during revision, but do not create new claims or replace the review ledger
@@ -430,9 +426,9 @@ After all Group B revisions are applied, verify the revised manuscript compiles 
 
 ```bash
 cd "${PAPER_DIR}"
-pdflatex -interaction=nonstopmode main.tex 2>&1 | tail -20
-bibtex main 2>&1 | tail -10
-pdflatex -interaction=nonstopmode main.tex 2>&1 | tail -5
+pdflatex -interaction=nonstopmode "${MANUSCRIPT_BASENAME}" 2>&1 | tail -20
+bibtex "${MANUSCRIPT_BASENAME%.*}" 2>&1 | tail -10
+pdflatex -interaction=nonstopmode "${MANUSCRIPT_BASENAME}" 2>&1 | tail -5
 ```
 
 **If compilation errors:** Fix and retry (does not count as iteration).
@@ -445,7 +441,8 @@ pdflatex -interaction=nonstopmode main.tex 2>&1 | tail -5
 4. Check cross-references to new or renumbered equations/figures
 5. Resolve any `MISSING:` citation markers left by the paper-writer (see write-paper workflow for the resolution protocol)
 6. Re-check any decisive `comparison_verdicts` or benchmark anchors touched by the revision. If protocol bundles are selected, use them only as an additive reminder of which decisive comparisons or estimator caveats must remain visible after revision.
-7. If the revision touched bibliography files or citation commands, refresh `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` before generating the response letter or proceeding to final review. Stale bibliography audits are not acceptable in a referee-response round.
+7. If the revision touched bibliography files or citation commands, refresh `${PAPER_DIR}/BIBLIOGRAPHY-AUDIT.json` before generating the response letter or proceeding to final review. Use `derived_manuscript_reference_status` as the quick read on what likely changed, but the manuscript-root bibliography audit remains authoritative for the round. Stale bibliography audits are not acceptable in a referee-response round. Confirm the refreshed JSON artifact exists before treating the round as complete.
+8. If a spawned paper-writer returns `status: checkpoint`, stop after recording the checkpoint. Present it to the user and spawn a fresh continuation handoff after the user responds. Do not ask the child agent to wait inside the same run.
 
 **If inconsistencies found and iteration < 3:**
 

@@ -29,6 +29,7 @@ Agents override defaults based on their context consumption patterns. Agents tha
 | grd-review-reader | < 35% | 35-50% | 50-65% | > 65% | manuscript section | Full-manuscript reading stage; summarize claims early rather than hoarding text |
 | grd-review-literature | < 35% | 35-50% | 50-60% | > 60% | claim cluster | Literature search results accumulate quickly; synthesize overlap after each claim cluster |
 | grd-review-math | < 35% | 35-50% | 50-60% | > 60% | equation cluster | Keep only the 3-5 claim-central equations live; externalize side calculations immediately |
+| grd-check-proof | < 35% | 35-50% | 50-60% | > 60% | proof inventory slice | Keep only the active theorem inventory, proof skeleton, and adversarial probe live; externalize side lemmas immediately |
 | grd-review-physics | < 35% | 35-50% | 50-60% | > 60% | physical claim cluster | Focus on regime-of-validity and claim-support tables rather than full derivation history |
 | grd-review-significance | < 35% | 35-50% | 50-60% | > 60% | venue-fit dimension | Compare contribution vs venue bar explicitly; avoid retaining unnecessary derivation detail |
 | grd-referee | < 40% | 40-50% | 50-65% | > 65% | evaluation dimension | Start with 5 critical dimensions, expand if budget allows |

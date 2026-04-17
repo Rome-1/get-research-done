@@ -9,16 +9,12 @@ allowed-tools:
   - task
   - ask_user
 ---
-
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
-
 <objective>
 Debug physics calculations using systematic isolation with subagent investigation.
 
 **Orchestrator role:** Gather symptoms, spawn grd-debugger agent, handle checkpoints, spawn continuations.
 
-**Why subagent:** Investigation burns context fast (reading derivations, forming hypotheses, testing limiting cases, running numerical checks). Fresh 200k context per investigation. Main context stays lean for user interaction.
+**Why subagent:** Investigation burns context fast. Fresh context keeps the orchestrator lean.
 
 Physics debugging differs fundamentally from software debugging. In software, a bug is deterministic: same input gives same wrong output. In physics calculations, errors can be subtle — a sign error that only matters in one regime, a factor of 2 from a symmetry argument, a gauge artifact that looks like a physical effect, a numerical instability that masquerades as a phase transition. The debugger must think like a physicist, not a programmer.
 </objective>
@@ -109,39 +105,8 @@ already_tried: {already_tried}
 
 <mode>
 symptoms_prefilled: true
-goal: find_and_fix
+goal: find_root_cause_only
 </mode>
-
-<investigation_strategy>
-Physics debugging follows a hierarchy of checks, ordered from cheapest to most expensive:
-
-1. **Dimensional analysis** — Check dimensions of every intermediate expression. This catches ~30% of errors and costs almost nothing.
-2. **Special/limiting cases** — Evaluate the expression in limits where the answer is known. Catches ~20% of remaining errors.
-3. **Sign and symmetry audit** — Track signs through the derivation. Check that symmetries of the problem are preserved. Catches sign errors and parity mistakes.
-4. **Term-by-term comparison** — If an alternative derivation exists, compare term by term to isolate where they diverge.
-5. **Numerical spot-check** — Evaluate both sides of key equations numerically at random parameter values. Catches algebraic errors that are hard to see symbolically.
-6. **Bisection** — If the derivation is long, check the result at the midpoint. Is it already wrong there? Binary search for the first wrong step.
-7. **Simplification** — Strip the problem to its simplest version that still exhibits the bug. Remove all complications (interactions, finite size, finite temperature) until the error disappears, then add them back one at a time.
-   </investigation_strategy>
-
-<common_physics_errors>
-
-- Factor of 2 from double-counting (symmetry factors, identical particles, Wick contractions)
-- Factor of 2 from real vs complex conventions (Fourier transforms, field normalizations)
-- Factor of pi from Fourier transform conventions (2pi in measure vs in exponential)
-- Sign from metric signature convention (+--- vs -+++)
-- Sign from Wick rotation (Euclidean vs Minkowski)
-- Sign from fermion anti-commutation (ordering of Grassmann variables)
-- Missing Jacobian from coordinate transformation
-- Wrong measure in path integral or partition function
-- Forgetting that trace is cyclic but not symmetric under transposition for non-Hermitian operators
-- Regularization-scheme-dependent finite parts
-- Gauge artifact mistaken for physical effect
-- Infrared divergence from massless limit taken too early
-- Numerical precision loss from catastrophic cancellation
-- Stiff ODE requiring implicit integrator
-- Aliasing from insufficient spatial resolution
-  </common_physics_errors>
 
 <debug_file>
 Create: .grd/debug/{slug}.md
@@ -160,7 +125,7 @@ task(
 
 ## 4. Handle Agent Return
 
-**If `## ROOT CAUSE FOUND`:**
+Handle the debugger return once through the workflow-owned typed child-return contract. Do not branch on heading text here.
 
 - Display root cause and evidence summary
 - Classify the error type (sign error, missing factor, wrong convention, numerical issue, conceptual error)
@@ -169,27 +134,7 @@ task(
   - "Plan fix" — suggest /grd:plan-phase --gaps
   - "Manual fix" — done (provide the identified error location and correction)
 
-**If `## CHECKPOINT REACHED`:**
-
-- Present checkpoint details to user
-- Common checkpoint reasons in physics debugging:
-  - "Need to know which convention you are using for X"
-  - "Found two candidate errors — which regime matters more to you?"
-  - "Numerical test requires running a simulation — should I proceed?"
-  - "Discrepancy might be a known issue in the literature — should I search?"
-- Get user response
-- Spawn continuation agent (see step 5)
-
-**If `## INVESTIGATION INCONCLUSIVE`:**
-
-- Show what was checked and eliminated
-- Offer options:
-  - "Continue investigating" — spawn new agent with additional context
-  - "Manual investigation" — done, provide summary of what was ruled out
-  - "Add more context" — gather more symptoms, spawn again
-  - "Simplify the problem" — suggest stripping to minimal reproducing case
-
-## 5. Spawn Continuation agent (After Checkpoint)
+## 5. Spawn Fresh Continuation agent (After Checkpoint)
 
 When user responds to checkpoint, spawn fresh agent:
 
@@ -209,7 +154,7 @@ Read that file before continuing so you inherit the prior investigation state in
 </checkpoint_response>
 
 <mode>
-goal: find_and_fix
+goal: find_root_cause_only
 </mode>
 ```
 

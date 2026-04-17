@@ -30,7 +30,8 @@ Source of truth: `default_state_dict()` in `grd.core.state`.
 | `propagated_uncertainties` | `UncertaintyObject[]` | `[]` | Uncertainty propagation tracking | **Authoritative** (JSON-only, from `uncertainty add`) |
 | `pending_todos` | `string[]` | `[]` | Ideas captured via /grd:add-todo | Synced from todos/ |
 | `blockers` | `string[]` | `[]` | Active blockers/concerns | Synced from STATE.md |
-| `session` | `SessionObject` | see below | Session continuity for resumption | Synced from STATE.md |
+| `continuation` | `ContinuationObject` | see below | Durable canonical continuation authority; compatibility mirrors derive from it | **Authoritative** (JSON-only) |
+| `session` | `SessionObject` | see below | Markdown-compatible compatibility mirror of canonical continuation for STATE.md rendering; not part of the public resume vocabulary | Synced from canonical continuation / STATE.md |
 
 ### Authoritative vs Derived
 
@@ -95,10 +96,36 @@ Fields marked **Authoritative** exist only in state.json (not representable in S
     {
       "id": "claim-main",
       "statement": "Recover the published benchmark curve within the stated tolerance",
+      "claim_kind": "theorem",
       "observables": ["obs-main"],
-      "deliverables": ["deliv-main"],
-      "acceptance_tests": ["test-main"],
-      "references": ["Ref-01"]
+      "deliverables": ["deliv-main", "deliv-proof-main"],
+      "acceptance_tests": ["test-main", "test-proof-main"],
+      "references": ["Ref-01"],
+      "parameters": [
+        {
+          "symbol": "k",
+          "domain_or_type": "benchmark sample index",
+          "aliases": ["sample-k"],
+          "required_in_proof": true
+        }
+      ],
+      "hypotheses": [
+        {
+          "id": "hyp-main",
+          "text": "Published normalization and tolerance convention are interpreted exactly as stated in Ref-01",
+          "symbols": ["k"],
+          "category": "assumption",
+          "required_in_proof": true
+        }
+      ],
+      "quantifiers": ["for every benchmark sample k in the approved comparison set"],
+      "conclusion_clauses": [
+        {
+          "id": "concl-main",
+          "text": "Relative error stays within the stated 1% tolerance at every approved benchmark sample"
+        }
+      ],
+      "proof_deliverables": ["deliv-proof-main"]
     }
   ],
   "deliverables": [
@@ -108,6 +135,13 @@ Fields marked **Authoritative** exist only in state.json (not representable in S
       "path": "paper/figures/benchmark-curve.pdf",
       "description": "Figure comparing the reproduced curve against the benchmark",
       "must_contain": ["benchmark overlay"]
+    },
+    {
+      "id": "deliv-proof-main",
+      "kind": "derivation",
+      "path": "derivations/benchmark-proof.md",
+      "description": "Auditable proof sketch tying the tolerance claim to the benchmark construction",
+      "must_contain": ["named hypotheses", "parameter coverage", "conclusion mapping"]
     }
   ],
   "acceptance_tests": [
@@ -119,6 +153,15 @@ Fields marked **Authoritative** exist only in state.json (not representable in S
       "pass_condition": "Relative error <= 1%",
       "evidence_required": ["deliv-main", "Ref-01"],
       "automation": "hybrid"
+    },
+    {
+      "id": "test-proof-main",
+      "subject": "claim-main",
+      "kind": "claim_to_proof_alignment",
+      "procedure": "Check that every named hypothesis, parameter, and conclusion clause in the theorem claim is covered by the proof artifact",
+      "pass_condition": "Every theorem field is covered explicitly or auditable as intentionally omitted",
+      "evidence_required": ["deliv-proof-main"],
+      "automation": "human"
     }
   ],
   "references": [
@@ -176,9 +219,9 @@ The stdin path is canonical because it keeps the exact approved JSON payload in-
 
 The `project_contract` value itself must be a JSON object. Do not replace it with prose, a list, or a string.
 
-`schema_version` must be `1`. Unsupported schema versions are invalid.
+`schema_version` must be the integer `1`. Unsupported schema versions are invalid.
 
-Approved project contracts must include at least one observable, claim, or deliverable.
+Project contracts must include at least one observable, claim, or deliverable.
 
 `uncertainty_markers.weakest_anchors` and `uncertainty_markers.disconfirming_observations` must both be non-empty.
 
@@ -186,67 +229,65 @@ Canonical IDs and other required string fields are trimmed before validation. Bl
 
 `scope.in_scope` must name at least one project boundary or objective.
 
+`context_intake` must not be empty. At least one of `must_read_refs`, `must_include_prior_outputs`, `user_asserted_anchors`, `known_good_baselines`, `context_gaps`, or `crucial_inputs` must carry a non-empty item, and the grounding fields must be concrete enough to re-find later.
+`context_intake`, `approach_policy`, and `uncertainty_markers` are JSON objects when present; do not collapse them to strings or lists.
+Closed-vocabulary enum fields use the exact lowercase literals shown here. Case drift such as `Theorem`, `Benchmark`, or `Read` fails strict validation.
+
+#### Closed Schema And List Shape
+
+The `project_contract` schema is closed. Do not invent extra keys at the top level or inside nested objects. Only the fields defined here are valid.
+
+List-shaped fields must stay lists, even when they contain one item. Do not collapse `scope.in_scope`, `scope.out_of_scope`, `scope.unresolved_questions`, `context_intake.*`, or any nested `[]` field to a scalar string.
+
+Blank list entries are invalid. Duplicate list entries are also invalid after trimming whitespace, even if the duplicates only differ by surrounding spaces.
+
 The following fields always store arrays of objects, never arrays of plain strings:
 
 - `observables[]` — `{ "id", "name", "kind", "definition", "regime?", "units?" }`
-- `claims[]` — `{ "id", "statement", "observables[]", "deliverables[]", "acceptance_tests[]", "references[]" }`
+- `claims[]` — `{ "id", "statement", "claim_kind", "observables[]", "deliverables[]", "acceptance_tests[]", "references[]", "parameters[]", "hypotheses[]", "quantifiers[]", "conclusion_clauses[]", "proof_deliverables[]" }`
 - `deliverables[]` — `{ "id", "kind", "path?", "description", "must_contain[]" }`
 - `acceptance_tests[]` — `{ "id", "subject", "kind", "procedure", "pass_condition", "evidence_required[]", "automation" }`
-- `references[]` — `{ "id", "kind", "locator", "aliases[]", "role", "why_it_matters", "applies_to[]", "carry_forward_to[]", "must_surface", "required_actions[]" }`
+- `references[]` — `{ "id", "kind", "locator", "aliases[]", "role", "why_it_matters", "applies_to[]", "carry_forward_to[]", "must_surface": true|false, "required_actions[]" }`
 - `forbidden_proxies[]` — `{ "id", "subject", "proxy", "reason" }`
 - `links[]` — `{ "id", "source", "target", "relation", "verified_by[]" }`
 
-If a project-contract reference sets `must_surface: true`, `required_actions[]` must not be empty.
-`required_actions[]` uses the same closed action vocabulary enforced downstream in contract ledgers: `read`, `use`, `compare`, `cite`, `avoid`.
+Treat a claim as proof-bearing whenever any of these is true: `claim_kind` is `theorem`, `lemma`, `corollary`, `proposition`, or `claim`; the statement is theorem-like (`prove/show that`, explicit `for all` / `exists`, or uniqueness language); any proof field is already populated (`parameters`, `hypotheses`, `quantifiers`, `conclusion_clauses`, or `proof_deliverables`); or `observables[]` references a `proof_obligation` target.
 
-If a project contract has any `references[]` and does not already carry concrete prior-output, user-anchor, or baseline grounding, at least one reference must set `must_surface: true`. When that other grounding exists, a missing `must_surface: true` reference is still a warning that should be repaired, not a silent ignore.
+When that applies, require:
 
-If a project-contract reference sets `must_surface: true`, `applies_to[]` must not be empty.
+- `claims[].claim_kind` must use the closed vocabulary: `theorem | lemma | corollary | proposition | result | claim | other`.
+- Closed semantic enum fields use these exact lowercase literals:
+  - `claims[].claim_kind: theorem | lemma | corollary | proposition | result | claim | other`
+  - `observables[].kind: scalar | curve | map | classification | proof_obligation | other`
+  - `deliverables[].kind: figure | table | dataset | data | derivation | code | note | report | other`
+  - `acceptance_tests[].kind: existence | schema | benchmark | consistency | cross_method | limiting_case | symmetry | dimensional_analysis | convergence | oracle | proxy | reproducibility | proof_hypothesis_coverage | proof_parameter_coverage | proof_quantifier_domain | claim_to_proof_alignment | lemma_dependency_closure | counterexample_search | human_review | other`
+  - `acceptance_tests[].automation: automated | hybrid | human`
+  - `references[].kind: paper | dataset | prior_artifact | spec | user_anchor | other`
+  - `references[].role: definition | benchmark | method | must_consider | background | other`
+  - `required_actions[]: read | use | compare | cite | avoid`
+  - `links[].relation: supports | computes | visualizes | benchmarks | depends_on | evaluated_by | proves | uses_hypothesis | depends_on_lemma | other`
+- `claims[].proof_deliverables[]` must be non-empty and contain only `deliverables[].id` values.
+- `claims[].parameters[]`, `claims[].hypotheses[]`, and `claims[].conclusion_clauses[]` must each be non-empty.
+- `claims[].acceptance_tests[]` must include at least one proof-specific test kind (`proof_hypothesis_coverage`, `proof_parameter_coverage`, `proof_quantifier_domain`, `claim_to_proof_alignment`, `lemma_dependency_closure`, or `counterexample_search`).
+- `claims[].quantifiers[]` is optional but, when present, must stay a list (not a scalar string).
 
-Approved-mode grounding is field-specific:
+### Shared Grounding And Linkage Rules
 
 - `must_include_prior_outputs[]` entries should be explicit project-artifact paths or filenames, such as `.grd/phases/.../*-SUMMARY.md` or `paper/main.tex`.
 - `user_asserted_anchors[]` and `known_good_baselines[]` should name a concrete benchmark, baseline, reference, notebook, figure, dataset, or comparable anchor phrase. Single-token filler does not count.
 - `Placeholder`, `TBD`, `TODO`, `unknown`, `unclear`, `none`, `n/a`, and `placeholder` remain non-grounding unless they are part of a genuinely missing-anchor blocker phrase.
 
-#### Approved-Mode Grounding Rule
+`must_include_prior_outputs[]` entries should be explicit project-artifact paths or filenames that already exist inside the current project root. If `project_root` is unavailable, treat them as non-grounding until the file can be resolved against a concrete root.
 
-The approved-mode gate uses the exact rule:
+Placeholder or `TBD` text does not count as concrete grounding. Explicit missing-anchor notes preserve uncertainty, but they do not satisfy approved-mode grounding on their own.
 
-`approved project contract requires at least one concrete anchor/reference/prior-output/baseline; explicit missing-anchor notes preserve uncertainty but do not satisfy approval on their own`
+Keep these exact grounding reminders visible in the raw schema surface as well:
 
-Placeholder or `TBD` text does not count as concrete grounding. That includes generic filler such as `TBD`, `TODO`, `unknown`, `unclear`, `none`, `n/a`, and `placeholder` when they are not attached to a real anchor.
+- Need grounding before the decisive anchor is chosen.
+- Decisive target not yet chosen before planning can proceed.
+- If other grounding already exists, a missing `must_surface: true` reference is still a warning that should be repaired, not a silent ignore.
 
-#### Project Contract ID Linkage Rules
-
-Every ID-like field must point to a declared object ID in the same contract:
-
-- Do not reuse the same ID across `claims[]`, `deliverables[]`, `acceptance_tests[]`, or `references[]`; target resolution becomes ambiguous.
-- `context_intake.must_read_refs[]` must contain `references[].id` values only.
-- `references[].aliases[]` may store stable human-facing labels or citation strings that help canonicalize downstream anchor mentions.
-- `claims[].observables[]` must contain `observables[].id` values only.
-- `claims[].deliverables[]` must contain `deliverables[].id` values only.
-- `claims[].acceptance_tests[]` must contain `acceptance_tests[].id` values only.
-- `claims[].references[]` must contain `references[].id` values only.
-- `acceptance_tests[].subject` must point to a `claims[].id` or `deliverables[].id`, never an observable ID or prose label.
-- `acceptance_tests[].evidence_required[]` may point only to claim, deliverable, acceptance-test, or reference IDs.
-- `references[].applies_to[]` must point to a claim ID or deliverable ID.
-- `references[].carry_forward_to[]` is free-text workflow scope (for example `planning`, `verification`, `writing`) and must not be overloaded with claim or deliverable IDs.
-- `forbidden_proxies[].subject` must point to a claim ID or deliverable ID.
-- `links[].source` and `links[].target` may point only to claim, deliverable, acceptance-test, or reference IDs.
-- `links[].verified_by[]` must contain `acceptance_tests[].id` values only.
-
-#### Explicit Anchor-Gap Guidance
-
-If the user does not know the decisive anchor yet, keep that uncertainty explicit instead of inventing a paper, reference, benchmark, or baseline. Put that blocker in `scope.unresolved_questions`, `context_intake.context_gaps`, or `uncertainty_markers.weakest_anchors`. Accepted phrasings include:
-
-- `Which reference should serve as the decisive benchmark anchor?`
-- `Benchmark reference not yet selected; still to identify the decisive anchor.`
-- `Need grounding before the decisive anchor is chosen.`
-- `Decisive target not yet chosen before planning can proceed.`
-- `Baseline comparison is TBD before planning can proceed.`
-
-These phrases are valid for preserving uncertainty when they point to a genuinely missing decisive anchor, but they do not satisfy approved-mode grounding on their own. Approved mode still needs a concrete reference, prior output, user anchor, or baseline elsewhere in the contract; placeholder-only wording does not count.
+@{GRD_INSTALL_DIR}/templates/project-contract-grounding-linkage.md
 
 ### `position`
 

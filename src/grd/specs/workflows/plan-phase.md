@@ -15,7 +15,7 @@ Read these files using the file_read tool:
 
 ## 1. Initialize
 
-Load all context in one call (include file contents to avoid redundant reads):
+Bootstrap with only the phase metadata and contract gate:
 
 ```bash
 INIT=$(grd init plan-phase "$PHASE" --include state,roadmap,requirements,context,research,verification,validation)
@@ -25,22 +25,120 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_enabled`, `plan_checker_enabled`, `commit_docs`, `autonomy`, `research_mode`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_plans`, `plan_count`, `planning_exists`, `roadmap_exists`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `protocol_bundle_verifier_extensions`, `active_reference_context`, `reference_artifacts_content`.
-
-**File contents (from --include):** `state_content`, `roadmap_content`, `requirements_content`, `context_content`, `research_content`, `verification_content`, `validation_content`, plus reference-artifact fields from init JSON. These are null if files don't exist.
+Parse JSON for: `researcher_model`, `planner_model`, `checker_model`, `research_enabled`, `plan_checker_enabled`, `commit_docs`, `autonomy`, `research_mode`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_plans`, `plan_count`, `planning_exists`, `roadmap_exists`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `platform`.
 
 **Mode-aware behavior:**
 - `autonomy=supervised`: Present the written draft plans for user review before treating them as approved or moving on to execution. Do not weaken the contract gate just because the draft is human-reviewed.
 - `autonomy=balanced` (default): Write the plan and pause only if the plan-checker raises issues or the planning choices need user judgment.
 - `autonomy=yolo`: Write the plan and proceed without pausing.
-- `research_mode=explore`: Always run research step even if research exists. Expand wave count for thorough coverage.
-- `research_mode=exploit`: Reuse existing research only when it already covers the exact method family, anchors, and decisive evidence path for this phase. Otherwise run targeted research.
+- `research_mode=explore`: Always run research step even if research exists. Expand research and comparison coverage, but do not auto-create git-backed branches or branch-like plans just because alternatives appear.
+- `research_mode=exploit`: Reuse existing research only when it already covers the exact method family, anchors, and decisive evidence path for this phase. Otherwise run targeted research. suppress optional tangents entirely unless the user explicitly requests them. Do not volunteer `grd:branch-hypothesis` as the default response in exploit mode.
+- `research_mode=balanced` (default): Use the standard research depth for the phase and keep the default contract-checking and comparison coverage unless the phase needs broader or narrower review.
 - `research_mode=adaptive`: Start broad until prior decisive evidence or an explicit approach lock justifies narrowing. Do not infer “safe to narrow” from phase number alone.
+- Tangent policy: when multiple viable approaches or optional side questions appear, do NOT silently branch or widen the plan. Use the canonical tangent decision model below instead of assuming extra plans or branches. `git.branching_strategy` does not override this rule.
 - All modes still require contract completeness, decisive outputs, required anchors, forbidden-proxy handling, and disconfirming paths before execution starts.
 
-**Set shell variables from init JSON:**
+**Bind the current INIT snapshot into shell variables, then re-run this binding after every staged reload before routing on any later step:**
 
 ```bash
+bind_plan_phase_init() {
+  local init="$1"
+
+  researcher_model=$(echo "$init" | grd json get .researcher_model --default "")
+  planner_model=$(echo "$init" | grd json get .planner_model --default "")
+  checker_model=$(echo "$init" | grd json get .checker_model --default "")
+  research_enabled=$(echo "$init" | grd json get .research_enabled --default false)
+  plan_checker_enabled=$(echo "$init" | grd json get .plan_checker_enabled --default false)
+  commit_docs=$(echo "$init" | grd json get .commit_docs --default false)
+  autonomy=$(echo "$init" | grd json get .autonomy --default balanced)
+  research_mode=$(echo "$init" | grd json get .research_mode --default balanced)
+  phase_found=$(echo "$init" | grd json get .phase_found --default false)
+  phase_dir=$(echo "$init" | grd json get .phase_dir --default "")
+  phase_number=$(echo "$init" | grd json get .phase_number --default "")
+  phase_name=$(echo "$init" | grd json get .phase_name --default "")
+  phase_slug=$(echo "$init" | grd json get .phase_slug --default "")
+  padded_phase=$(echo "$init" | grd json get .padded_phase --default "")
+  has_research=$(echo "$init" | grd json get .has_research --default false)
+  has_context=$(echo "$init" | grd json get .has_context --default false)
+  has_plans=$(echo "$init" | grd json get .has_plans --default false)
+  plan_count=$(echo "$init" | grd json get .plan_count --default 0)
+  planning_exists=$(echo "$init" | grd json get .planning_exists --default false)
+  roadmap_exists=$(echo "$init" | grd json get .roadmap_exists --default false)
+  project_contract=$(echo "$init" | grd json get .project_contract --default "")
+  project_contract_gate=$(echo "$init" | grd json get .project_contract_gate --default "")
+  project_contract_load_info=$(echo "$init" | grd json get .project_contract_load_info --default "")
+  project_contract_validation=$(echo "$init" | grd json get .project_contract_validation --default "")
+  contract_intake=$(echo "$init" | grd json get .contract_intake --default "")
+  effective_reference_intake=$(echo "$init" | grd json get .effective_reference_intake --default "")
+  selected_protocol_bundle_ids=$(echo "$init" | grd json get .selected_protocol_bundle_ids --default "")
+  protocol_bundle_count=$(echo "$init" | grd json get .protocol_bundle_count --default 0)
+  protocol_bundle_context=$(echo "$init" | grd json get .protocol_bundle_context --default "")
+  protocol_bundle_verifier_extensions=$(echo "$init" | grd json get .protocol_bundle_verifier_extensions --default "")
+  active_reference_context=$(echo "$init" | grd json get .active_reference_context --default "")
+  reference_artifact_files=$(echo "$init" | grd json get .reference_artifact_files --default "")
+  reference_artifacts_content=$(echo "$init" | grd json get .reference_artifacts_content --default "")
+  literature_review_files=$(echo "$init" | grd json get .literature_review_files --default "")
+  literature_review_count=$(echo "$init" | grd json get .literature_review_count --default 0)
+  research_map_reference_files=$(echo "$init" | grd json get .research_map_reference_files --default "")
+  research_map_reference_count=$(echo "$init" | grd json get .research_map_reference_count --default 0)
+  derived_manuscript_proof_review_status=$(echo "$init" | grd json get .derived_manuscript_proof_review_status --default "")
+  state_content=$(echo "$init" | grd json get .state_content --default "")
+  roadmap_content=$(echo "$init" | grd json get .roadmap_content --default "")
+  requirements_content=$(echo "$init" | grd json get .requirements_content --default "")
+  context_content=$(echo "$init" | grd json get .context_content --default "")
+  research_content=$(echo "$init" | grd json get .research_content --default "")
+  experiment_design_content=$(echo "$init" | grd json get .experiment_design_content --default "")
+  verification_content=$(echo "$init" | grd json get .verification_content --default "")
+  validation_content=$(echo "$init" | grd json get .validation_content --default "")
+
+  RESEARCHER_MODEL="$researcher_model"
+  PLANNER_MODEL="$planner_model"
+  CHECKER_MODEL="$checker_model"
+  RESEARCH_ENABLED="$research_enabled"
+  PLAN_CHECKER_ENABLED="$plan_checker_enabled"
+  COMMIT_DOCS="$commit_docs"
+  AUTONOMY="$autonomy"
+  RESEARCH_MODE="$research_mode"
+  PHASE_FOUND="$phase_found"
+  PHASE_DIR="$phase_dir"
+  PHASE_NUMBER="$phase_number"
+  PHASE_NAME="$phase_name"
+  PHASE_SLUG="$phase_slug"
+  PADDED_PHASE="$padded_phase"
+  HAS_RESEARCH="$has_research"
+  HAS_CONTEXT="$has_context"
+  HAS_PLANS="$has_plans"
+  PLAN_COUNT="$plan_count"
+  PLANNING_EXISTS="$planning_exists"
+  ROADMAP_EXISTS="$roadmap_exists"
+  PROJECT_CONTRACT="$project_contract"
+  PROJECT_CONTRACT_GATE="$project_contract_gate"
+  PROJECT_CONTRACT_LOAD_INFO="$project_contract_load_info"
+  PROJECT_CONTRACT_VALIDATION="$project_contract_validation"
+  CONTRACT_INTAKE="$contract_intake"
+  EFFECTIVE_REFERENCE_INTAKE="$effective_reference_intake"
+  SELECTED_PROTOCOL_BUNDLE_IDS="$selected_protocol_bundle_ids"
+  PROTOCOL_BUNDLE_COUNT="$protocol_bundle_count"
+  PROTOCOL_BUNDLE_CONTEXT="$protocol_bundle_context"
+  PROTOCOL_BUNDLE_VERIFIER_EXTENSIONS="$protocol_bundle_verifier_extensions"
+  ACTIVE_REFERENCE_CONTEXT="$active_reference_context"
+  REFERENCE_ARTIFACT_FILES="$reference_artifact_files"
+  REFERENCE_ARTIFACTS_CONTENT="$reference_artifacts_content"
+  LITERATURE_REVIEW_FILES="$literature_review_files"
+  LITERATURE_REVIEW_COUNT="$literature_review_count"
+  RESEARCH_MAP_REFERENCE_FILES="$research_map_reference_files"
+  RESEARCH_MAP_REFERENCE_COUNT="$research_map_reference_count"
+  DERIVED_MANUSCRIPT_PROOF_REVIEW_STATUS="$derived_manuscript_proof_review_status"
+  STATE_CONTENT="$state_content"
+  ROADMAP_CONTENT="$roadmap_content"
+  REQUIREMENTS_CONTENT="$requirements_content"
+  CONTEXT_CONTENT="$context_content"
+  RESEARCH_CONTENT="$research_content"
+  EXPERIMENT_DESIGN_CONTENT="$experiment_design_content"
+  VERIFICATION_CONTENT="$verification_content"
+  VALIDATION_CONTENT="$validation_content"
+}
+
 REQUESTED_PHASE="${PHASE}"
 PHASE=$(echo "$INIT" | grd json get .phase_number --default "${REQUESTED_PHASE}")
 PHASE_DIR=$(echo "$INIT" | grd json get .phase_dir --default "")
@@ -50,13 +148,17 @@ RESEARCH_MODE=$(echo "$INIT" | grd json get .research_mode --default balanced)
 
 **If `planning_exists` is false:** Error -- run `/grd:new-project` first.
 
-**If `project_contract_load_info.status` starts with `blocked`:** STOP and checkpoint with the user. Show the specific `project_contract_load_info.errors` / `warnings`; do not silently continue from `ROADMAP.md`, `REQUIREMENTS.md`, or `active_reference_context` alone when the stored contract could not even be loaded cleanly.
+**If `project_contract_load_info.status` starts with `blocked`:** STOP and checkpoint with the user. Show the specific `project_contract_load_info.errors` / `warnings`; do not silently continue from `ROADMAP.md` or `REQUIREMENTS.md` alone when the stored contract could not even be loaded cleanly.
 
 **If `project_contract` is empty or null:** STOP and checkpoint with the user. Planning requires an approved scoping contract in `.grd/state.json`; do not infer phase scope from `ROADMAP.md` or `REQUIREMENTS.md` alone.
 
+**Treat `project_contract` as authoritative only when `project_contract_gate.authoritative` is true.** If the gate is false, keep the contract visible as context and diagnostics, not as approved planning scope.
+
 **If `project_contract_validation.valid` is false:** STOP and checkpoint with the user. Quote the `project_contract_validation.errors` explicitly and repair the contract before planning; a visible-but-blocked contract is not an approved planning contract.
 
-Treat `effective_reference_intake` as the machine-readable carry-forward anchor ledger for this phase. Do not rely only on the rendered `active_reference_context` prose when deciding what must stay visible.
+## 1.5 Proof-Obligation Planning Gate
+
+The planner template owns the detailed theorem and proof-redteam policy. The workflow only needs to keep proof-bearing work fail-closed: `--skip-verify` does NOT waive checker review, checker-disabled config does not waive proof review, and any proof-bearing plan set still needs checker review or an equivalent main-context audit before planning is considered complete. Proof-bearing work includes theorem-style claims, `claim`, lemma, corollary, proposition, proof, prove, existence, and uniqueness tasks.
 
 ## 2. Parse and Normalize Arguments
 
@@ -73,8 +175,10 @@ When `--inline-discuss` is present, combine discuss-phase and plan-phase into a 
    - "What formalism/method do you envision for this phase?" (if multiple valid approaches exist)
    - "Are there any constraints or conventions from prior phases that should carry through?" (if phase has dependencies)
    - "What precision level is acceptable?" (for numerical/computational phases)
-3. Record responses as a lightweight CONTEXT.md in the phase directory (same format as discuss-phase output, but with only the critical decisions — skip the full Socratic dialogue)
-4. Proceed to step 5 with the context populated
+3. If those questions reveal multiple viable approaches or optional side questions, use the canonical tangent decision model below instead of assuming extra plans or branches.
+4. Record any explicit tangent decision in the lightweight CONTEXT.md so downstream agents see whether the user chose to stay on the main line, branch, quick-check, or defer.
+5. Record responses as a lightweight CONTEXT.md in the phase directory (same format as discuss-phase output, but with only the critical decisions — skip the full Socratic dialogue)
+6. Proceed to step 5 with the context populated
 
 This is NOT the full discuss-phase flow — just the 2-3 most impactful questions. If the phase is complex enough to need full discussion, the researcher should run `/grd:discuss-phase` separately.
 
@@ -122,12 +226,17 @@ If `context_content` is not null, display: `Using phase context from: ${PHASE_DI
 Check if STATE.md contains an active hypothesis:
 
 ```bash
-HYPOTHESIS_SECTION=$(echo "$STATE_CONTENT" | grep -A5 "## Active Hypothesis")
+HYPOTHESIS_INFO=$(grd --raw state active-hypothesis)
+if [ "$(echo "$HYPOTHESIS_INFO" | grd json get .found --default false)" = "true" ]; then
+  HYPOTHESIS_SLUG=$(echo "$HYPOTHESIS_INFO" | grd json get .branch_slug --default "")
+  HYPOTHESIS_FILE="GRD/hypotheses/${HYPOTHESIS_SLUG}/HYPOTHESIS.md"
+  HYPOTHESIS_CONTENT=$(cat "$HYPOTHESIS_FILE" 2>/dev/null)
+fi
 ```
 
 **If an active hypothesis exists:**
 
-1. Extract the hypothesis branch slug from STATE.md
+1. Extract the hypothesis branch slug from the helper output
 2. Read the HYPOTHESIS.md file:
 
 ```bash
@@ -171,6 +280,31 @@ fi
 
 If the check fails, warn the user before spawning the researcher or planner. Convention mismatches in the plan will propagate into every task during execution.
 
+## 4.6. Tangent Control During Planning
+
+Required 4-way tangent decision model:
+
+- Branch as alternative hypothesis -> route through `grd:tangent` or `grd:branch-hypothesis`
+- Run a bounded side investigation now -> route through `grd:quick`
+- Capture and defer -> route through `grd:add-todo`
+- Stay on the main line -> create plans only for the selected primary approach
+
+The planner template owns the detailed tangent decision model. The workflow only needs to surface an explicit checkpoint when the planner reports multiple viable approaches; do NOT silently branch, widen scope, or create detached side plans here.
+
+## 4.7 Refresh Research Handoff Context
+
+Load the staged handoff slice needed to assemble the researcher prompt. Do not use the lighter routing slice here:
+
+```bash
+INIT=$(grd --raw init plan-phase "$PHASE" --stage planner_authoring)
+# Legacy routing slice: grd --raw init plan-phase "$PHASE" --stage research_routing
+if [ $? -ne 0 ]; then
+  echo "ERROR: staged plan-phase init failed: $INIT"
+  exit 1
+fi
+bind_plan_phase_init "$INIT"
+```
+
 ## 5. Handle Research
 
 **Skip if:** `--gaps` flag, `--skip-research` flag, or `research_enabled` is false (from init) without `--research` override.
@@ -187,8 +321,8 @@ RESEARCH_MODE=$(echo "$INIT" | grd json get .research_mode --default balanced)
 |------|-------------------|--------------------|--------------------|
 | **explore** | Re-research always (expand scope, compare alternatives, refresh anchors) | Research (comprehensive — multiple methods, broad survey) | Research (comprehensive) |
 | **balanced** (default) | Skip by default, but re-research if inputs look stale or missing for the current contract slice | Research (standard) | Research (standard) |
-| **exploit** | Skip only if the existing research already covers the exact method family, anchor set, and decisive evidence path; otherwise run targeted method research | Research (minimal — method-specific only, no broad survey) | Research (minimal) |
-| **adaptive** | Reuse existing research only after prior decisive evidence or explicit approach-lock markers show the method is stable; otherwise refresh research in a balanced or explore-style pass | Research (broad enough to choose and lock an approach) | Research (standard) |
+| **exploit** | Skip only if the existing research already covers the exact method family, anchor set, and decisive evidence path; otherwise run targeted method research | Research (minimal — method-specific only, no broad survey, no optional tangent surfacing unless explicitly requested) | Research (minimal) |
+| **adaptive** | Reuse existing research only after prior decisive evidence or explicit approach-lock markers show the method is stable; otherwise refresh research in a balanced or explore-style pass while surfacing unresolved alternatives as tangent candidates rather than silent branches | Research (broad enough to choose and lock an approach) | Research (standard) |
 
 **If `has_research` is true (from init) AND no `--research` flag:**
 
@@ -206,7 +340,7 @@ elif [ "$RESEARCH_MODE" = "exploit" ]; then
     echo "Research mode: exploit — existing targeted research appears sufficient"
     # Skip to step 6
   else
-    echo "Research mode: exploit — existing research is too generic, refreshing targeted method context"
+    echo "Research mode: exploit — no RESEARCH.md found, refreshing targeted method context"
     # Proceed to spawn researcher below
   fi
 elif [ "$RESEARCH_MODE" = "adaptive" ]; then
@@ -259,8 +393,7 @@ Research prompt:
 
 ```markdown
 <objective>
-Research how to approach Phase {phase_number}: {phase_name}
-Answer: "What mathematical methods, physical principles, and computational tools do I need to PLAN this phase rigorously?"
+Research Phase {phase_number}: {phase_name} well enough to plan it rigorously.
 </objective>
 
 <phase_context>
@@ -274,45 +407,45 @@ IMPORTANT: If CONTEXT.md exists below, it contains user decisions from /grd:disc
 </phase_context>
 
 <additional_context>
-**Phase description:** {phase_description}
-**Requirements:** {requirements}
-**Prior decisions:** {decisions}
-**Project contract:** {project_contract}
-**Active references:** {active_reference_context}
-**Reference artifacts:** {reference_artifacts_content}
+Phase description: {phase_description}
+Requirements: {requirements}
+Prior decisions: {decisions}
+Project contract: {project_contract}
+Active references: {active_reference_context}
+Reference artifacts: {reference_artifacts_content}
 </additional_context>
 
 <research_mode>{RESEARCH_MODE}</research_mode>
 
-<physics_research_focus>
-
-**Research depth by mode:**
-- **explore:** COMPREHENSIVE — survey ALL viable methods, compare 3+ approaches, include failed approaches from literature, broad literature search (10+ papers), identify unexplored angles
-- **balanced** (default): STANDARD — identify best approach, document known difficulties, targeted literature (5-7 key papers)
-- **exploit:** MINIMAL — method-specific details only (parameters, convergence criteria, implementation notes). Skip broad survey. Only papers directly relevant to the exact computation.
-- **adaptive:** Use explore-style until prior decisive evidence or an explicit approach lock shows the method family is stable. Then narrow to a balanced or exploit-style pass for the locked method.
-
-**Core research areas (all modes):**
-- **Mathematical framework:** Identify the governing equations, symmetry groups, relevant Hilbert spaces, or variational principles
-- **Known solutions:** Find exact solutions, standard approximations (perturbative, WKB, mean-field), and their regimes of validity
-- **Limiting cases:** Identify all limiting cases that must be recovered (classical limit, weak-coupling, non-relativistic, thermodynamic limit, etc.)
-- **Computational methods:** Survey numerical approaches (finite element, Monte Carlo, spectral methods) and existing packages
-- **Literature:** Key papers, textbook treatments, and review articles relevant to this phase
-- **Dimensional analysis:** Identify natural scales and dimensionless parameters that govern the physics
-</physics_research_focus>
+<hypothesis_constraint>
+If this phase belongs to a hypothesis branch, include the hypothesis constraint block below verbatim. Otherwise omit this section.
+{hypothesis_constraint}
+</hypothesis_constraint>
 
 <output>
-Write to: {phase_dir}/{phase}-RESEARCH.md
+Write to: {phase_dir}/{phase_number}-RESEARCH.md
 </output>
+
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - {phase_dir}/{phase_number}-RESEARCH.md
+expected_artifacts:
+  - {phase_dir}/{phase_number}-RESEARCH.md
+shared_state_policy: return_only
+</spawn_contract>
 ```
 
 ```
+RESEARCH_RETURN=$(
 task(
   prompt="First, read {GRD_AGENTS_DIR}/grd-phase-researcher.md for your role and instructions.\n\n" + research_prompt,
   subagent_type="grd-phase-researcher",
   model="{researcher_model}",
   readonly=false,
-  description="Research Phase {phase}"
+  description="Research Phase {phase_number}"
+)
 )
 ```
 
@@ -320,29 +453,75 @@ task(
 
 ### Handle Researcher Return
 
-- **`## RESEARCH COMPLETE`:** Verify RESEARCH.md exists (below), then display confirmation, continue to step 6
-- **`## RESEARCH BLOCKED`:** Display blocker, offer: 1) Provide context, 2) Skip research, 3) Abort
+Human-readable headings such as `## RESEARCH COMPLETE` and `## RESEARCH BLOCKED` are presentation only. Route on `grd_return.status` and the artifact gate below.
+
+- **`grd_return.status: completed`:** Verify the returned files and the on-disk artifact before accepting completion, then display confirmation and continue to step 6.
+- **`grd_return.status: checkpoint`:** Present the checkpoint, collect the response, and spawn a fresh continuation handoff. Do not wait inside the child run.
+- **`grd_return.status: blocked` or `failed`:** Display blocker, offer: 1) Provide context, 2) Skip research, 3) Abort
 
 **Verify RESEARCH.md was written (guard against silent researcher failure):**
 
 ```bash
-if ! ls "${PHASE_DIR}"/*-RESEARCH.md 1>/dev/null 2>&1; then
-  echo "WARNING: Researcher agent returned but RESEARCH.md was not created."
+EXPECTED_RESEARCH_FILE="${PHASE_DIR}/${PHASE_NUMBER}-RESEARCH.md"
+RESEARCH_FILES=$(echo "$RESEARCH_RETURN" | grd json list .grd_return.files_written --default "")
+if ! printf '%s\n' "$RESEARCH_FILES" | grep -Fxq "$EXPECTED_RESEARCH_FILE"; then
+  echo "ERROR: researcher returned completed without naming ${EXPECTED_RESEARCH_FILE}"
+  exit 1
+fi
+if [ ! -r "$EXPECTED_RESEARCH_FILE" ]; then
+  echo "ERROR: researcher returned completed but ${EXPECTED_RESEARCH_FILE} is missing or unreadable"
+  exit 1
 fi
 ```
 
-If RESEARCH.md is missing after the researcher returned, present:
+## 5.1 Handle Researcher Checkpoint
 
+If the researcher returns `grd_return.status: checkpoint`, present the checkpoint to the user and spawn a fresh continuation handoff:
+
+```markdown
+<objective>
+Continue research as a fresh continuation handoff for Phase {phase_number}: {phase_name}
+</objective>
+
+<prior_state>
+Research file path: {phase_dir}/{phase_number}-RESEARCH.md
+Read that file before continuing so you inherit the prior research state instead of relying on inline prompt state.
+</prior_state>
+
+<checkpoint_response>
+**Type:** {checkpoint_type}
+**Response:** {user_response}
+</checkpoint_response>
+
+<hypothesis_constraint>
+If this phase belongs to a hypothesis branch, include the hypothesis constraint block below verbatim. Otherwise omit this section.
+{hypothesis_constraint}
+</hypothesis_constraint>
+
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - {phase_dir}/{phase_number}-RESEARCH.md
+expected_artifacts:
+  - {phase_dir}/{phase_number}-RESEARCH.md
+shared_state_policy: return_only
+</spawn_contract>
 ```
-WARNING: Researcher completed but did not write RESEARCH.md.
 
-Options:
-1. Retry research (re-spawn researcher)
-2. Continue without research (planner will have no research context)
-3. Abort
+```bash
+RESEARCH_RETURN=$(
+task(
+  prompt="First, read {GRD_AGENTS_DIR}/grd-phase-researcher.md for your role and instructions.\n\n" + continuation_prompt,
+  subagent_type="grd-phase-researcher",
+  model="{researcher_model}",
+  readonly=false,
+  description="Continue research Phase {phase_number}"
+)
+)
 ```
 
-Wait for user decision before proceeding to step 6.
+After the continuation returns, rerun the same `grd_return.files_written` and on-disk artifact gate above before advancing.
 
 ## 5.5. Experiment Design (Numerical/Computational Phases)
 
@@ -362,7 +541,7 @@ Wait for user decision before proceeding to step 6.
 ```bash
 PHASE_GOAL=$(echo "$INIT" | grd json get .phase_name --default "")
 
-# Re-read RESEARCH.md from disk — the value from INIT (step 1) is stale
+# Re-read RESEARCH.md from disk — `research_content` from INIT (step 1) is **stale**
 # because the researcher in step 5 may have just created/updated it.
 RESEARCH_FILE=$(ls "${PHASE_DIR}"/*-RESEARCH.md 2>/dev/null | head -1)
 if [ -n "$RESEARCH_FILE" ]; then
@@ -426,7 +605,7 @@ task(
 - **`EXPERIMENT DESIGN COMPLETE`:** Verify EXPERIMENT-DESIGN.md exists, display confirmation, continue to step 6
 - **`DESIGN BLOCKED`:** Display blocker, offer: 1) Provide context, 2) Skip experiment design, 3) Abort
 
-**If EXPERIMENT-DESIGN.md created:** The planner (step 8) receives this as additional context. Add to the planner prompt:
+**If EXPERIMENT-DESIGN.md created:** The planner stage payload already carries this as `experiment_design_content`. Keep it in the stage-local payload rather than re-reading it from disk.
 
 ```markdown
 **Experiment Design:** {experiment_design_content}
@@ -444,7 +623,7 @@ ls "${PHASE_DIR}"/*-PLAN.md 2>/dev/null
 
 ## 7. Use Context Files from INIT
 
-Most file contents are already loaded via `--include` in step 1 (`@` syntax doesn't work across task() boundaries):
+Refresh the stage-local planning payload now that research routing is complete and immediately rebind the live shell variables:
 
 ```bash
 # Extract from INIT JSON
@@ -483,6 +662,7 @@ EXPERIMENT_FILE=$(ls "${PHASE_DIR}"/*-EXPERIMENT-DESIGN.md 2>/dev/null | head -1
 if [ -n "$EXPERIMENT_FILE" ]; then
   EXPERIMENT_DESIGN_CONTENT=$(cat "$EXPERIMENT_FILE")
 fi
+bind_plan_phase_init "$INIT"
 ```
 
 ## 8. Spawn grd-planner Agent
@@ -499,15 +679,36 @@ Display banner:
 
 Planner prompt:
 
-```markdown
-<planning_context>
-**Phase:** {phase_number}
-**Mode:** {standard | gap_closure}
-**Plan depth:** {full | light}
-**Research mode:** {RESEARCH_MODE}
-**Autonomy:** {AUTONOMY}
+Use `templates/planner-subagent-prompt.md` here as the stage-local planner template and render its `## Standard Planning Template` section.
 
-Planning requires an approved project contract. If `{project_contract}` is empty, stale, or too underspecified to identify the phase contract slice, return `## CHECKPOINT REACHED` instead of writing or revising plans from inferred scope.
+```markdown
+Render the template's `## Standard Planning Template` into `filled_prompt` with these bindings:
+
+- `{phase_number}` -> {phase_number}
+- `{standard | gap_closure}` -> `standard` unless this is explicit gap-closure planning
+- `{full | light}` -> `light` only when `--light`; otherwise `full`
+- `{research_mode}` -> {RESEARCH_MODE}
+- `{autonomy}` -> {AUTONOMY}
+- `{state_content}` -> {state_content}
+- `{project_contract}` -> {project_contract}
+- `{project_contract_gate}` -> {project_contract_gate}
+- `{project_contract_load_info}` -> {project_contract_load_info}
+- `{project_contract_validation}` -> {project_contract_validation}
+- `{contract_intake}` -> {contract_intake}
+- `{effective_reference_intake}` -> {effective_reference_intake}
+- `{roadmap_content}` -> {roadmap_content}
+- `{requirements_content}` -> {requirements_content}
+- `{protocol_bundle_context}` -> {protocol_bundle_context}
+- `{active_reference_context}` -> {active_reference_context}
+- `{reference_artifacts_content}` -> {reference_artifacts_content}
+- `{context_content}` -> {context_content}
+- `{research_content}` -> {research_content}
+- `{experiment_design_content}` -> {experiment_design_content}
+- `{verification_content}` -> {verification_content}
+- `{validation_content}` -> {validation_content}
+Keep `{contract_intake}` and `{effective_reference_intake}` visible in the rendered prompt.
+Stable knowledge docs may appear inside `{active_reference_context}` and `{reference_artifacts_content}`. Treat them as reviewed background syntheses only; they may refine assumptions, caveats, or method choice when consistent with stronger sources, but they do not override `convention_lock`, `project_contract`, the PLAN `contract`, or direct evidence.
+If a plan materially depends on a reviewed knowledge doc and that reliance must be gateable downstream, express it with explicit `knowledge_deps`; keep implicit stable background advisory only.
 
 **Project State:** {state_content}
 **Project Contract:** {project_contract}
@@ -621,13 +822,42 @@ task(
 )
 ```
 
+> Runtime delegation rule: this is a one-shot handoff. If the planner needs user input, it checkpoints and returns; the wrapper must start a fresh continuation after the user responds.
+
 ## 9. Handle Planner Return
 
-**If the planner agent fails to spawn or returns an error:** Check if any PLAN.md files were written to the phase directory (agents write files first). If plans exist, proceed as if PLANNING COMPLETE. If no plans, offer: 1) Retry planner, 2) Create plans in the main context, 3) Abort.
+**If the planner agent fails to spawn or returns an error:** Do not infer completion from files that already exist on disk. Treat any preexisting `PLAN.md` artifacts as a stale baseline unless this run returns a fresh typed `grd_return` that names them in `grd_return.files_written`. If no fresh planner return is available, keep the handoff incomplete. Offer: 1) Retry planner, 2) Create plans in the main context, 3) Abort.
 
-- **`## PLANNING COMPLETE`:** Display plan count. If `AUTONOMY=supervised`, show the written draft plans and get user confirmation before advancing to checker or next-step output. If `--skip-verify` or `plan_checker_enabled` is false (from init): skip to step 13. Otherwise: step 10.
-- **`## CHECKPOINT REACHED`:** Present to user, get response, spawn continuation (step 12)
-- **`## PLANNING INCONCLUSIVE`:** Show attempts, offer: Add context / Retry / Manual
+Human-readable headings such as `## PLANNING COMPLETE`, `## CHECKPOINT REACHED`, and `## PLANNING INCONCLUSIVE` are presentation only. Route on the planner's structured `grd_return.status`, `grd_return.files_written`, and the on-disk artifact check.
+
+- **`grd_return.status: completed`:** Before accepting the success state, verify that at least one readable `*-PLAN.md` artifact exists in `${PHASE_DIR}` and extract the fresh plan artifact list from `grd_return.files_written`; verify that every named file exists, is readable, and ends in `-PLAN.md`. Do not accept the planner return text alone. Use the init snapshot (`has_plans`, `plan_count`) as the stale baseline: a plan file that already existed before this handoff only counts as fresh output if this planner return explicitly names it in `grd_return.files_written`. If the planner says complete but no plan files are present, treat the handoff as incomplete until a fresh continuation names them in `grd_return.files_written`. Display plan count. If `AUTONOMY=supervised`, show the written draft plans and get user confirmation before advancing to checker or next-step output. If `--skip-verify` or `plan_checker_enabled` is false (from init): skip to step 13 only when no proof-bearing plans were written. Proof-bearing plans still require checker review or an equivalent main-context audit before planning is considered complete. Otherwise: step 10.
+- **`grd_return.status: checkpoint`:** Present to user, get response, spawn a fresh planner continuation handoff. Do not route planner checkpoints into the checker revision loop.
+- **`grd_return.status: blocked` or `failed`:** Show attempts, offer: Add context / Retry / Manual
+
+Before the checker loop, validate only the fresh plan artifacts named by the planner return:
+
+```bash
+FRESH_PLAN_FILES=$(echo "$PLANNER_RETURN" | grd json list .grd_return.files_written --default "")
+if [ -z "$FRESH_PLAN_FILES" ]; then
+  echo "ERROR: planner returned completed without naming fresh PLAN.md artifacts"
+  exit 1
+fi
+
+for plan_file in $FRESH_PLAN_FILES; do
+  [ -f "$plan_file" ] || continue
+  grd validate plan-contract "$plan_file" || exit 1
+done
+```
+
+## 9b. Handle Planner Checkpoint
+
+**Planner checkpoints are a separate one-shot continuation path**
+
+If the planner returns `grd_return.status: checkpoint`, present the checkpoint to the user, collect the response, and spawn a fresh `grd-planner` continuation handoff with the updated context. Keep this path distinct from checker-driven revision.
+
+Before continuing, verify that the planner's expected `PLAN.md` artifacts still exist and are readable. If the planner continuation changes the plans, re-run the explicit plan-contract validation against the refreshed `grd_return.files_written` set before checker review.
+
+Only after the planner returns `completed` should the workflow advance to checker review.
 
 ## 10. Spawn grd-plan-checker Agent
 
@@ -641,8 +871,22 @@ Display banner (include iteration count if in revision loop):
 * Spawning plan checker...
 ```
 
+Refresh the checker/revision payload before entering the checker loop:
+
 ```bash
-PLANS_CONTENT=$(cat "${PHASE_DIR}"/*-PLAN.md 2>/dev/null)
+INIT=$(grd --raw init plan-phase "$PHASE" --stage checker_revision)
+if [ $? -ne 0 ]; then
+  echo "ERROR: staged plan-phase init failed: $INIT"
+  exit 1
+fi
+bind_plan_phase_init "$INIT"
+```
+
+```bash
+PLANS_CONTENT=""
+for plan_file in $FRESH_PLAN_FILES; do
+  PLANS_CONTENT="${PLANS_CONTENT}$(cat "$plan_file" 2>/dev/null)"
+done
 ```
 
 Checker prompt:
@@ -655,9 +899,16 @@ Checker prompt:
 **Plans to verify:** {plans_content}
 **Requirements:** {requirements_content}
 **Project Contract:** {project_contract}
+**Project Contract Gate:** {project_contract_gate}
+**Project Contract Load Info:** {project_contract_load_info}
+**Project Contract Validation:** {project_contract_validation}
+**Contract Intake:** {contract_intake}
+**Effective Reference Intake:** {effective_reference_intake}
 **Protocol Bundles:** {protocol_bundle_context}
 **Active References:** {active_reference_context}
 **Reference Artifacts:** {reference_artifacts_content}
+Treat stable knowledge docs in `active_reference_context` and `reference_artifacts_content` as reviewed background synthesis. They may influence assumptions or method choice when consistent with stronger sources, but they do not override `convention_lock`, `project_contract`, the PLAN `contract`, or decisive evidence.
+Check that any downstream-gateable reliance on a reviewed knowledge doc is written as explicit `knowledge_deps`, not only implied by background context.
 
 **Phase Context:**
 IMPORTANT: Plans MUST honor user decisions. Flag as issue if plans contradict.
@@ -686,6 +937,8 @@ In addition to structural checks, verify:
 - [ ] **Acceptance tests:** Every decisive claim or deliverable has at least one executable or reviewable test
 - [ ] **Disconfirming path:** Risky plans name the observation or comparison that would force a rethink
 - [ ] **Forbidden proxies:** Proxy-only success conditions are rejected explicitly
+- [ ] **Proof-obligation audit path:** Proof-bearing plans expose theorem targets, named parameters/hypotheses/quantifiers, and a sibling `{plan_id}-PROOF-REDTEAM.md` review artifact
+- [ ] **Anti-bypass language:** Plans do not rely on `--skip-verify`, sparse cadence, or later human inspection to waive proof red-teaming
 </physics_verification_criteria>
 
 <expected_output>
@@ -708,32 +961,47 @@ task(
 
 ## 11. Handle Checker Return
 
-**If the plan-checker agent fails to spawn or returns an error:** Proceed without plan verification. Plans are still executable. Note that verification was skipped and recommend the user review the plans manually before executing.
+**If the plan-checker agent fails to spawn or returns an error:** Proceed without plan verification. Plans are still executable. Note that verification was skipped and recommend the user review the plans manually before executing. If any plan is proof-bearing, do NOT waive this gate: run an equivalent main-context proof-plan audit against the checker criteria above or STOP and report that proof-obligation planning could not be cleared safely.
 
-- **`## VERIFICATION PASSED`:** Display iteration-aware confirmation and proceed to step 13:
+Human-readable headings such as `## VERIFICATION PASSED`, `## ISSUES FOUND`, and `## PARTIAL APPROVAL` are presentation only. Route on the checker's structured `grd_return.status` and plan lists.
+
+- **`grd_return.status: completed`:** Treat as a full pass only after plan-ID reconciliation succeeds. Before accepting the success state, verify:
+
+  1. `approved_plans` names only readable `*-PLAN.md` artifacts in `FRESH_PLAN_FILES`
+  2. `blocked_plans` is empty
+  3. every approved plan file still exists and matches the approved plan IDs
+  4. the checker's `files_written` value does not claim unrelated artifacts
+
+  If any of those checks fail, reject the success state and send the checker output back through the revision loop as a fail-closed mismatch.
+
+  Display iteration-aware confirmation and proceed to step 13 only after reconciliation passes:
 
   ```
   Plan passed checker (attempt {iteration_count}/3)
   ```
 
-- **`## ISSUES FOUND`:** Display iteration-aware status, show issues, check iteration count, proceed to step 12:
+- **`grd_return.status: checkpoint`:** Some plans passed, others need revision. Split the work:
 
-  ```
-  Checker found {N} issues (attempt {iteration_count}/3). Revising plan...
-  ```
-
-- **`## PARTIAL APPROVAL`:** Some plans passed, others need revision. Split the work:
-
-  1. Record approved plans (from the checker's "Approved Plans" table)
-  2. Display status:
+  1. Record approved plans from the structured `approved_plans` list only.
+  2. Record blocked plans from the structured `blocked_plans` list only.
+  3. Reject the return if any listed plan ID does not map to a readable `*-PLAN.md` file in `FRESH_PLAN_FILES`.
+  4. Display status:
 
      ```
      Partial approval (attempt {iteration_count}/3): {N_approved} plans approved, {N_blocked} need revision
      ```
 
-  3. Send ONLY the blocked plans to the revision loop (step 12). Pass the checker's blocker details as `{structured_issues_from_checker}`. Do NOT re-check already-approved plans unless their inputs change during revision.
-  4. After revision + re-check cycle, if the re-check returns VERIFICATION PASSED for the revised plans, merge approved sets and proceed to step 13. If it returns PARTIAL APPROVAL again, repeat. If ISSUES FOUND, enter standard revision loop for remaining plans.
-  5. Approved plans from partial approval are final — they proceed to execution regardless of the revision outcome for blocked plans.
+  5. Send ONLY the blocked plans from the fresh returned plan set to the revision loop (step 12). Pass the checker's blocker details as `{structured_issues_from_checker}`. Do NOT re-check already-approved plans unless their inputs change during revision, and do not treat preexisting blocked-plan files as revised unless the fresh planner return names them in `grd_return.files_written`.
+  6. After revision + re-check cycle, if the re-check returns `grd_return.status: completed` for the revised plans, merge approved sets and proceed to step 13. If it returns `grd_return.status: checkpoint` again, repeat. If `grd_return.status: failed`, enter standard revision loop for remaining plans.
+  7. Approved plans from partial approval are final only after the plan-ID reconciliation checks pass.
+
+- **`grd_return.status: blocked`:** The checker found a blocker that prevents accepting the current plan set as-is. If `approved_plans` is empty, treat this as a full rejection and send all plans to the revision loop. If `approved_plans` is non-empty, preserve the approved subset only after plan-ID reconciliation passes, then send the blocked subset to the revision loop with the structured issues.
+
+- **`grd_return.status: failed`:** Display iteration-aware status, show issues, check iteration count, proceed to step 12:
+
+  ```
+  Checker found {N} issues (attempt {iteration_count}/3). Revising plan...
+  ```
 
 ## 12. Revision Loop (Max 3 Iterations)
 
@@ -748,58 +1016,52 @@ Track `iteration_count` (starts at 1 after initial plan + check).
 
 Display: `Checker found issues, revising plan (attempt {N}/3)...`
 
-```bash
-# If PARTIAL APPROVAL: only load blocked plans (stored in BLOCKED_PLANS list from step 11)
-# If ISSUES FOUND: load all plans
-if [ -n "$BLOCKED_PLANS" ]; then
-  PLANS_CONTENT=""
-  for plan_id in $BLOCKED_PLANS; do
-    PLANS_CONTENT="${PLANS_CONTENT}$(cat "${PHASE_DIR}"/*-${plan_id}-PLAN.md 2>/dev/null)"
-  done
-else
-  PLANS_CONTENT=$(cat "${PHASE_DIR}"/*-PLAN.md 2>/dev/null)
-fi
-```
+  ```bash
+  # If PARTIAL APPROVAL: only load blocked plans (stored in BLOCKED_PLANS list from step 11)
+  # If ISSUES FOUND: load all plans
+  if [ -n "$BLOCKED_PLANS" ]; then
+    PLANS_CONTENT=""
+    for plan_id in $BLOCKED_PLANS; do
+      for plan_file in $FRESH_PLAN_FILES; do
+        case "$plan_file" in
+          *-"$plan_id"-PLAN.md) PLANS_CONTENT="${PLANS_CONTENT}$(cat "$plan_file" 2>/dev/null)" ;;
+        esac
+      done
+    done
+  else
+    for plan_file in $FRESH_PLAN_FILES; do
+      PLANS_CONTENT="${PLANS_CONTENT}$(cat "$plan_file" 2>/dev/null)"
+    done
+  fi
+  ```
+
+Before spawning the revision planner, confirm that every `plan_id` in `BLOCKED_PLANS` maps to exactly one readable `*-PLAN.md` file in `FRESH_PLAN_FILES`. If any blocked ID is missing or ambiguous, stop and report the reconciliation failure rather than inventing a fallback mapping.
 
 Revision prompt:
 
+Use `templates/planner-subagent-prompt.md` here as the stage-local planner template and render its `## Revision Template` section.
+
 ```markdown
-<revision_context>
-**Phase:** {phase_number}
-**Mode:** revision
+Render the template's `## Revision Template` into `revision_prompt` with these bindings:
 
-**Existing plans:** {plans_content}
-**Checker issues:** {structured_issues_from_checker}
-**Protocol Bundles:** {protocol_bundle_context}
-**Contract Intake:** {contract_intake}
-**Effective Reference Intake:** {effective_reference_intake}
-**Active References:** {active_reference_context}
-**Project Contract:** {project_contract}
-**Reference Artifacts:** {reference_artifacts_content}
+- `{phase_number}` -> {phase_number}
+- `{plans_content}` -> {plans_content}
+- `{structured_issues_from_checker}` -> {structured_issues_from_checker}
+- `{state_content}` -> {state_content}
+- `{project_contract}` -> {project_contract}
+- `{project_contract_gate}` -> {project_contract_gate}
+- `{project_contract_load_info}` -> {project_contract_load_info}
+- `{project_contract_validation}` -> {project_contract_validation}
+- `{contract_intake}` -> {contract_intake}
+- `{effective_reference_intake}` -> {effective_reference_intake}
+- `{protocol_bundle_context}` -> {protocol_bundle_context}
+- `{active_reference_context}` -> {active_reference_context}
+- `{reference_artifacts_content}` -> {reference_artifacts_content}
+- `{context_content}` -> {context_content}
+If the revised fix plan still needs specialized tooling or other machine-checkable hard requirements, keep them in PLAN frontmatter `tool_requirements`.
+Treat `effective_reference_intake` as the structured source of carry-forward anchors; `active_reference_context` is the readable projection, not the source of truth.
 
-## Canonical PLAN Contract Schema
-
-Use `templates/plan-contract-schema.md` as the canonical contract schema reference.
-
-**Phase Context:**
-Revisions MUST still honor user decisions.
-{context_content}
-</revision_context>
-
-<instructions>
-Make targeted updates to address checker issues.
-Do NOT replan from scratch unless issues are fundamental (e.g., wrong physical regime, missing conservation law, incorrect symmetry).
-If the approved project contract is missing or no longer sufficient to identify the right phase slice, return `## CHECKPOINT REACHED` instead of patching plans against guessed scope.
-Pay special attention to:
-- Dimensional consistency fixes
-- Missing limiting case checks
-- Approximation validity bounds
-- Missing decisive outputs or deliverables
-- Missing acceptance tests, anchor refs, or forbidden-proxy handling
-- Missing protocol-bundle-driven estimator guards, decisive artifacts, or verifier extensions
-- Missing disconfirming paths
-Return what changed.
-</instructions>
+Keep the revision prompt scoped to targeted checker fixes. Do not restate template-owned revision policy here.
 ```
 
 ```
@@ -812,7 +1074,7 @@ task(
 )
 ```
 
-**If the revision planner agent fails to spawn or returns an error:** Check if any revised PLAN.md files were written. If revisions exist, proceed to re-check (step 10). If no revisions, offer: 1) Retry revision planner, 2) Apply revisions manually in the main context using checker feedback, 3) Force proceed with current plans despite checker issues.
+**If the revision planner agent fails to spawn or returns an error:** Do not proceed to re-check just because revised `PLAN.md` files exist on disk. Treat any such files as incomplete until a fresh typed planner return explicitly names them in `grd_return.files_written`. If no fresh revision return is available, keep the loop fail-closed and offer: 1) Retry revision planner, 2) Apply revisions manually in the main context using checker feedback, 3) Force proceed with current plans despite checker issues.
 
 After planner returns -> spawn checker again (step 10), increment iteration_count. If revising from PARTIAL APPROVAL, only pass the revised plans (not already-approved plans) to the checker.
 

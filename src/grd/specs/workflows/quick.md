@@ -42,7 +42,9 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `planner_model`, `executor_model`, `commit_docs`, `autonomy`, `next_num`, `slug`, `date`, `timestamp`, `quick_dir`, `task_dir`, `roadmap_exists`, `planning_exists`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`.
+Parse JSON for: `planner_model`, `executor_model`, `commit_docs`, `autonomy`, `next_num`, `slug`, `date`, `timestamp`, `quick_dir`, `task_dir`, `roadmap_exists`, `project_exists`, `planning_exists`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`.
+
+If staged planner-loading fields appear in the init payload, treat them as authoritative for the planner handoff shape rather than reconstructing a separate quick-specific prompt contract.
 
 **Mode-aware behavior:**
 - `autonomy=supervised`: Pause after the plan for user approval before execution.
@@ -79,7 +81,9 @@ Directory: ${QUICK_DIR}
 
 Spawn grd-planner with quick mode context:
 
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
+
+> If subagent spawning is unavailable, execute these steps sequentially in the main context.
 
 ```
 task(
@@ -96,9 +100,13 @@ Then read {GRD_INSTALL_DIR}/templates/planner-subagent-prompt.md, {GRD_INSTALL_D
 **Project State:**
 Read the file at .grd/STATE.md
 
+**Project Exists:** {project_exists}
+
 **Project Contract:** {project_contract}
+**Project Contract Gate:** {project_contract_gate}
 **Project Contract Load Info:** {project_contract_load_info}
 **Project Contract Validation:** {project_contract_validation}
+**Contract Intake:** {contract_intake}
 **Effective Reference Intake:** {effective_reference_intake}
 **Active References:** {active_reference_context}
 **Reference Artifacts:** {reference_artifacts_content}
@@ -109,13 +117,15 @@ Read the file at .grd/STATE.md
 - Create a SINGLE plan with 1-3 focused tasks
 - Quick tasks should be atomic and self-contained
 - No literature review phase, no checker phase
-- If `project_contract_load_info.status` starts with `blocked` or `project_contract_validation.valid` is false, return `## CHECKPOINT REACHED` instead of drafting a plan from guessed scope.
+- If staged planner-loading fields are present in the init payload, use them as the source of truth for the handoff instead of inventing a separate quick-only contract
+- If `project_contract_load_info.status` starts with `blocked` or `project_contract_validation.valid` is false, return `grd_return.status: checkpoint` instead of drafting a plan from guessed scope. The `## CHECKPOINT REACHED` heading is presentation only.
+- If the task is theorem-style or proof-bearing, return `grd_return.status: checkpoint` and tell the user quick mode is blocked pending the full proof-redteam workflow.
 - Target ~30% context usage (simple, focused)
 </constraints>
 
 <output>
 Write plan to: ${QUICK_DIR}/${next_num}-PLAN.md
-Return: ## PLANNING COMPLETE with plan path
+Return a structured `grd_return` envelope. Use `grd_return.status: completed` only when the plan file was written and named in `grd_return.files_written`. Use `grd_return.status: checkpoint` when user input is needed, `blocked` when the task cannot proceed without external repair, and `failed` when the handoff did not complete. The `## PLANNING COMPLETE` heading is presentation only.
 </output>
 ",
   subagent_type="grd-planner",
@@ -129,11 +139,28 @@ Return: ## PLANNING COMPLETE with plan path
 
 After planner returns:
 
-1. Verify plan exists at `${QUICK_DIR}/${next_num}-PLAN.md`
-2. Extract plan count (typically 1 for quick tasks)
-3. Report: "Plan created: ${QUICK_DIR}/${next_num}-PLAN.md"
+1. Route on `grd_return.status`, not on headings.
+2. Verify plan exists at `${QUICK_DIR}/${next_num}-PLAN.md` and that the same path appears in `grd_return.files_written`.
+3. Treat any preexisting plan file as stale unless the child reported that exact path in `grd_return.files_written` for this run.
+4. If the planner returned `checkpoint`, present the checkpoint to the user and wait for the updated continuation handoff before proceeding.
+5. If the planner returned `blocked` or `failed`, treat the handoff as incomplete unless a fresh plan file was created and named in `grd_return.files_written`; then offer retry, main-context planning, or abort.
+6. Extract plan count (typically 1 for quick tasks).
+7. Report: "Plan created: ${QUICK_DIR}/${next_num}-PLAN.md"
 
-If plan not found, error: "Planner failed to create ${next_num}-PLAN.md"
+If the plan file is missing, unreadable, stale, or absent from `grd_return.files_written`, error: "Planner failed to create ${next_num}-PLAN.md"
+
+If the plan declares specialized `tool_requirements`, run `grd validate plan-preflight <PLAN.md>` before spawning the executor:
+
+```bash
+PLAN_TOOL_REQUIREMENTS=$(grd frontmatter get "${QUICK_DIR}/${next_num}-PLAN.md" --field tool_requirements 2>/dev/null || true)
+if [ -n "$PLAN_TOOL_REQUIREMENTS" ]; then
+  PLAN_PREFLIGHT=$(grd --raw validate plan-preflight "${QUICK_DIR}/${next_num}-PLAN.md")
+  if [ $? -ne 0 ]; then
+    echo "ERROR: plan-preflight failed: $PLAN_PREFLIGHT"
+    # STOP — display the error to the user and do not proceed.
+  fi
+fi
+```
 
 ---
 
@@ -151,8 +178,10 @@ Execute quick task ${next_num}.
 Plan: Read the file at ${QUICK_DIR}/${next_num}-PLAN.md
 Project state: Read the file at .grd/STATE.md
 Project contract: {project_contract}
+Project contract gate: {project_contract_gate}
 Project contract load info: {project_contract_load_info}
 Project contract validation: {project_contract_validation}
+Contract intake: {contract_intake}
 Effective reference intake: {effective_reference_intake}
 Active references: {active_reference_context}
 Reference artifacts: {reference_artifacts_content}
@@ -162,6 +191,8 @@ Reference artifacts: {reference_artifacts_content}
 - Commit each task atomically
 - Create summary at: ${QUICK_DIR}/${next_num}-SUMMARY.md
 - Do NOT update ROADMAP.md (quick tasks are separate from planned phases)
+- If proof-bearing work slipped through planning, STOP and return the reroute instead of executing. Quick mode must not produce a proof result without the mandatory proof-redteam gate.
+- Return a structured `grd_return` envelope with `grd_return.status` and `grd_return.files_written`; the `## PLANNING COMPLETE` / `## CHECKPOINT REACHED` headings are presentation only.
 </constraints>
 ",
   subagent_type="grd-executor",
@@ -187,25 +218,44 @@ Note: For quick tasks producing multiple plans (rare), spawn executors in parall
 
 ---
 
-**Step 6: Update project state**
+**Step 6: Apply child-return effects**
+
+Treat the executor summary as the canonical child-return artifact. Before any direct quick-task state updates, validate and apply its durable subset through the shared command path:
+
+```bash
+APPLY_RETURN=$(grd apply-return-updates "${QUICK_DIR}/${next_num}-SUMMARY.md")
+if [ $? -ne 0 ]; then
+  echo "ERROR: apply-return-updates failed: $APPLY_RETURN"
+  # STOP — show the structured errors and do not proceed.
+fi
+```
+
+Route on `grd_return.status` and the artifact gate, not on the human-readable headings:
+
+- `grd_return.status: completed` means the summary file passed the artifact gate and its durable child-return effects were applied.
+- `grd_return.status: checkpoint` means the quick task needs user input; present the checkpoint and spawn a fresh continuation handoff.
+- `grd_return.status: blocked` means the task cannot be completed without external repair.
+- `grd_return.status: failed` means the task did not complete and must be retried or handled manually.
+
+Only proceed to the quick-task completion record after `apply-return-updates` succeeds and the summary file still exists on disk.
+
+**Step 7: Update project state**
 
 Update project state with quick task completion record using grd commands (ensures STATE.md + state.json stay in sync):
 
-**6a. Record quick task completion as a decision:**
+**7a. Record quick task completion as a decision:**
 
 ```bash
 grd state add-decision --phase "quick-${next_num}" --summary "Quick task ${next_num}: ${DESCRIPTION}" --rationale "Ad-hoc task completed outside planned phases"
 ```
 
-**6b. Update last activity:**
+**7b. Update last activity:**
 
 ```bash
 grd state update "Last Activity" "${date}"
 ```
 
-**6c. Do not add a custom "Quick Tasks Completed" section to STATE.md.**
-
-The current state schema does not round-trip arbitrary markdown-only sections when JSON-driven state commands regenerate `STATE.md`. Treat the durable record for a quick task as:
+Treat the durable record for a quick task as:
 
 - the decision entry written above via `grd state add-decision`
 - the updated `Last Activity` field
@@ -215,7 +265,7 @@ If you want a human-facing index, put it in `.grd/quick/README.md` or in the qui
 
 ---
 
-**Step 7: Final commit and completion**
+**Step 8: Final commit and completion**
 
 Stage and commit quick task artifacts:
 

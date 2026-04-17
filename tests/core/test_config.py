@@ -1,5 +1,6 @@
 """Tests for grd.core.config."""
 
+import builtins
 import json
 import re
 from pathlib import Path
@@ -69,8 +70,8 @@ class TestEnums:
 
 
 class TestModelProfiles:
-    def test_all_23_agents_present(self):
-        assert len(MODEL_PROFILES) == 23
+    def test_all_24_agents_present(self):
+        assert len(MODEL_PROFILES) == 24
 
     def test_all_agents_have_5_profiles(self):
         profiles = {"deep-theory", "numerical", "exploratory", "review", "paper-writing"}
@@ -107,6 +108,8 @@ class TestGRDProjectConfigDefaults:
         assert cfg.checkpoint_after_n_tasks == 3
         assert cfg.checkpoint_after_first_load_bearing_result is True
         assert cfg.checkpoint_before_downstream_dependent_tasks is True
+        assert cfg.project_usd_budget is None
+        assert cfg.session_usd_budget is None
         assert cfg.branching_strategy == BranchingStrategy.NONE
         assert cfg.model_overrides is None
 
@@ -135,8 +138,12 @@ class TestLoadConfig:
                     "review_cadence": "dense",
                     "research_mode": "explore",
                     "commit_docs": False,
+                    "execution": {
+                        "project_usd_budget": 12.5,
+                        "session_usd_budget": 2.25,
+                    },
                 }
-            )
+            ), encoding="utf-8"
         )
         cfg = load_config(tmp_path)
         assert cfg.model_profile == ModelProfile.DEEP_THEORY
@@ -144,6 +151,8 @@ class TestLoadConfig:
         assert cfg.review_cadence == ReviewCadence.DENSE
         assert cfg.research_mode == ResearchMode.EXPLORE
         assert cfg.commit_docs is False
+        assert cfg.project_usd_budget == 12.5
+        assert cfg.session_usd_budget == 2.25
 
     @pytest.mark.parametrize(
         "invalid_value",
@@ -174,7 +183,7 @@ class TestLoadConfig:
                     "git": {"branching_strategy": "per-phase"},
                     "workflow": {"research": False, "verifier": False},
                 }
-            )
+            ), encoding="utf-8"
         )
         cfg = load_config(tmp_path)
         assert cfg.commit_docs is False
@@ -267,6 +276,46 @@ class TestLoadConfig:
 
         _valid_runtime_names.cache_clear()
 
+    def test_model_overrides_accept_runtime_display_name_and_normalize_to_canonical_id(self, tmp_path: Path) -> None:
+        descriptor = next(
+            descriptor
+            for descriptor in _RUNTIME_DESCRIPTORS
+            if descriptor.display_name != descriptor.runtime_name
+        )
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(
+            json.dumps({"model_overrides": {descriptor.display_name: {"tier-1": "gpt-5.4"}}}),
+            encoding="utf-8",
+        )
+
+        cfg = load_config(tmp_path)
+
+        assert cfg.model_overrides == {descriptor.runtime_name: {"tier-1": "gpt-5.4"}}
+
+    def test_model_overrides_reject_duplicate_canonical_and_display_runtime_entries(self, tmp_path: Path) -> None:
+        descriptor = next(
+            descriptor
+            for descriptor in _RUNTIME_DESCRIPTORS
+            if descriptor.display_name != descriptor.runtime_name
+        )
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(
+            json.dumps(
+                {
+                    "model_overrides": {
+                        descriptor.runtime_name: {"tier-1": "canonical-model"},
+                        descriptor.display_name: {"tier-2": "display-model"},
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        expected_match = re.escape(
+            f"model_overrides contains duplicate runtime entries for '{descriptor.runtime_name}'"
+        )
+        with pytest.raises(ConfigError, match=expected_match):
+            load_config(tmp_path)
 # ─── resolve_agent_tier ─────────────────────────────────────────────────────────
 
 
@@ -296,6 +345,34 @@ class TestResolveAgentTier:
 
         assert tier == ModelTier.TIER_2
 
+    def test_registry_import_failure_falls_back_to_default_agent_names(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        original_import = builtins.__import__
+
+        def _missing_registry(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "grd.registry":
+                raise ModuleNotFoundError("No module named 'grd.registry'")
+            return original_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", _missing_registry)
+
+        tier = resolve_agent_tier("grd-planner", "review")
+
+        assert tier == ModelTier.TIER_1
+
+    def test_registry_runtime_failure_surfaces_config_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import grd.registry as content_registry
+
+        monkeypatch.setattr(content_registry, "list_agents", lambda: (_ for _ in ()).throw(RuntimeError("registry boom")))
+
+        with pytest.raises(ConfigError, match="Unable to resolve known agent names from registry"):
+            resolve_agent_tier("grd-planner", "review")
+
 
 # ─── resolve_model ──────────────────────────────────────────────────────────────
 
@@ -318,7 +395,7 @@ class TestResolveModel:
                         for runtime_descriptor in _RUNTIME_DESCRIPTORS
                     },
                 }
-            )
+            ), encoding="utf-8"
         )
         model = resolve_model(tmp_path, "grd-planner", runtime=descriptor.runtime_name)
         assert model == f"{descriptor.runtime_name}-tier-1"
@@ -336,10 +413,31 @@ class TestResolveModel:
                         foreign_descriptor.runtime_name: {"tier-1": f"{foreign_descriptor.runtime_name}-tier-1"}
                     }
                 }
-            )
+            ), encoding="utf-8"
         )
         model = resolve_model(tmp_path, "grd-planner", runtime=descriptor.runtime_name)
         assert model is None
+
+    @pytest.mark.parametrize("descriptor", _RUNTIME_DESCRIPTORS, ids=lambda descriptor: descriptor.runtime_name)
+    def test_normalizes_runtime_display_names_before_override_lookup(self, tmp_path: Path, descriptor) -> None:
+        display_name = descriptor.display_name
+        if display_name == descriptor.runtime_name:
+            pytest.skip(f"{descriptor.runtime_name} has no distinct display name")
+
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text(
+            json.dumps(
+                {
+                    "model_overrides": {
+                        descriptor.runtime_name: {"tier-1": f"{descriptor.runtime_name}-tier-1"}
+                    }
+                }
+            ), encoding="utf-8"
+        )
+
+        model = resolve_model(tmp_path, "grd-planner", runtime=display_name)
+
+        assert model == f"{descriptor.runtime_name}-tier-1"
 
 
 class TestResolveTier:
@@ -350,3 +448,15 @@ class TestResolveTier:
         )
         tier = resolve_tier(tmp_path, "grd-project-researcher")
         assert tier == ModelTier.TIER_3
+
+    def test_phase_researcher_resolve_tier_defaults_to_tier_2(self, tmp_path: Path) -> None:
+        (tmp_path / "GRD").mkdir()
+        (tmp_path / "GRD" / "config.json").write_text("{}", encoding="utf-8")
+
+        tier = resolve_tier(tmp_path, "grd-phase-researcher")
+
+        assert tier == ModelTier.TIER_2
+
+    def test_project_researcher_agent_tier_tracks_profile_specific_overrides(self) -> None:
+        assert resolve_agent_tier("grd-project-researcher", ModelProfile.REVIEW) == ModelTier.TIER_2
+        assert resolve_agent_tier("grd-project-researcher", ModelProfile.PAPER_WRITING) == ModelTier.TIER_3

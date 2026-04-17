@@ -76,6 +76,9 @@ def session_state_project_factory(state_project_factory):
         state["position"]["current_plan"] = "1"
         state["position"]["total_plans_in_phase"] = 2
         state["position"]["progress_percent"] = 50
+        state["continuation"]["handoff"]["recorded_at"] = "2025-01-01T00:00:00+00:00"
+        state["continuation"]["handoff"]["stopped_at"] = "Task 3"
+        state["continuation"]["handoff"]["resume_file"] = "resume.md"
         state["session"]["last_date"] = "2025-01-01T00:00:00+00:00"
         state["session"]["stopped_at"] = "Task 3"
         state["session"]["resume_file"] = "resume.md"

@@ -22,6 +22,33 @@ SUPPORTED_FORMATS: set[str] = {"pdf", "png", "jpg", "jpeg", "svg", "tiff", "tif"
 PASSTHROUGH_FORMATS: set[str] = {"pdf", "png", "jpg", "jpeg"}
 
 
+def _cleanup_failed_output(path: Path) -> None:
+    if path.exists():
+        path.unlink()
+
+
+def _missing_optional_module(exc: ImportError, module_name: str) -> bool:
+    missing_name = getattr(exc, "name", None)
+    if missing_name == module_name:
+        return True
+    return f"No module named '{module_name}'" in str(exc)
+
+
+def _describe_inkscape_failure(exc: FileNotFoundError | subprocess.CalledProcessError | subprocess.TimeoutExpired) -> str:
+    if isinstance(exc, FileNotFoundError):
+        return f"Inkscape fallback failed: {exc}"
+    if isinstance(exc, subprocess.TimeoutExpired):
+        return f"Inkscape fallback timed out after {exc.timeout}s"
+    details = [f"Inkscape fallback failed with exit code {exc.returncode}"]
+    stderr = (exc.stderr or "").strip() if isinstance(exc.stderr, str) else ""
+    stdout = (exc.stdout or "").strip() if isinstance(exc.stdout, str) else ""
+    if stderr:
+        details.append(f"stderr: {stderr}")
+    elif stdout:
+        details.append(f"stdout: {stdout}")
+    return "; ".join(details)
+
+
 def detect_format(path: Path) -> str:
     """Return the lowercase file extension.
 
@@ -87,6 +114,7 @@ def normalize_figure(source: Path, output_dir: Path) -> Path:
 def _convert_svg(source: Path, output_dir: Path) -> Path:
     """Convert SVG to PDF using cairosvg or inkscape."""
     dest = _unique_dest(output_dir, Path(f"{source.stem}.pdf"))
+    cairosvg_error: Exception | None = None
 
     # Try cairosvg first
     try:
@@ -94,11 +122,15 @@ def _convert_svg(source: Path, output_dir: Path) -> Path:
 
         cairosvg.svg2pdf(url=str(source), write_to=str(dest))
         return dest
-    except ImportError:
-        pass
-    except Exception:
-        if dest.exists():
-            dest.unlink()
+    except ImportError as exc:
+        if _missing_optional_module(exc, "cairosvg"):
+            pass
+        else:
+            cairosvg_error = exc
+            _cleanup_failed_output(dest)
+    except Exception as exc:
+        cairosvg_error = exc
+        _cleanup_failed_output(dest)
 
     # Fall back to inkscape
     try:
@@ -110,10 +142,20 @@ def _convert_svg(source: Path, output_dir: Path) -> Path:
             check=True,
         )
         return dest
-    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        pass
-
-    raise RuntimeError(f"SVG conversion requires cairosvg (pip install cairosvg) or inkscape. Cannot convert: {source}")
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        _cleanup_failed_output(dest)
+        inkscape_detail = _describe_inkscape_failure(exc)
+        if cairosvg_error is not None:
+            raise RuntimeError(
+                "SVG conversion failed after CairoSVG raised "
+                f"{type(cairosvg_error).__name__}: {cairosvg_error}. "
+                f"{inkscape_detail}. "
+                f"Cannot convert: {source}"
+            ) from cairosvg_error
+        raise RuntimeError(
+            "SVG conversion requires cairosvg (pip install cairosvg) or inkscape. "
+            f"{inkscape_detail}. Cannot convert: {source}"
+        ) from exc
 
 
 def _convert_tiff(source: Path, output_dir: Path) -> Path:

@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import importlib
 import json
+import re
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
+from grd.core.public_surface_contract import local_cli_bridge_commands
+from grd.mcp.builtin_servers import GRD_MCP_SERVER_KEYS
 
 
 def test_write_settings_errors_reference_the_directory(tmp_path: Path) -> None:
@@ -16,7 +20,7 @@ def test_write_settings_errors_reference_the_directory(tmp_path: Path) -> None:
     settings_path = tmp_path / "settings.json"
 
     with patch("pathlib.Path.write_text", side_effect=PermissionError("denied")):
-        with pytest.raises(PermissionError, match=str(tmp_path)):
+        with pytest.raises(PermissionError, match=re.escape(str(tmp_path))):
             write_settings(settings_path, {"key": "value"})
 
 
@@ -88,13 +92,12 @@ def test_configure_opencode_permissions_recovers_from_non_dict_json(tmp_path: Pa
     config_dir = tmp_path / "opencode"
     config_dir.mkdir()
     (config_dir / "opencode.json").write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+    before = (config_dir / "opencode.json").read_text(encoding="utf-8")
 
-    modified = configure_opencode_permissions(config_dir)
-    written = json.loads((config_dir / "opencode.json").read_text(encoding="utf-8"))
+    with pytest.raises(RuntimeError, match="malformed"):
+        configure_opencode_permissions(config_dir)
 
-    assert modified is True
-    assert isinstance(written, dict)
-    assert isinstance(written["permission"], dict)
+    assert (config_dir / "opencode.json").read_text(encoding="utf-8") == before
 
 
 def test_write_mcp_servers_opencode_recovers_from_non_dict_mcp_key(tmp_path: Path) -> None:
@@ -103,6 +106,7 @@ def test_write_mcp_servers_opencode_recovers_from_non_dict_mcp_key(tmp_path: Pat
     config_dir = tmp_path / "opencode"
     config_dir.mkdir()
     (config_dir / "opencode.json").write_text(json.dumps({"mcp": "not a dict"}), encoding="utf-8")
+    before = (config_dir / "opencode.json").read_text(encoding="utf-8")
 
     count = _write_mcp_servers_opencode(
         config_dir,
@@ -149,3 +153,35 @@ def test_runtime_shell_rewriters_handle_metacharacter_terminated_grd_commands(
     result = rewrite(f"```bash\n{shell_line}```\n", "/runtime/grd")
 
     assert expected_fragment in result
+
+
+@pytest.mark.parametrize(
+    ("module_name", "function_name"),
+    [
+        ("grd.adapters.claude_code", "_rewrite_grd_cli_invocations"),
+        ("grd.adapters.codex", "_rewrite_codex_grd_cli_invocations"),
+        ("grd.adapters.gemini", "_rewrite_grd_cli_invocations"),
+        ("grd.adapters.opencode", "_rewrite_grd_cli_invocations"),
+    ],
+)
+def test_runtime_rewriters_preserve_public_local_cli_contract(module_name: str, function_name: str) -> None:
+    module = importlib.import_module(module_name)
+    rewrite = getattr(module, function_name)
+
+    public_commands = local_cli_bridge_commands()
+    content = (
+        "Use `grd --help` before anything else.\n"
+        "Keep `grd config ensure-section` bridged because it is an executable shell step.\n"
+        "```bash\n"
+        + "\n".join([*public_commands, "grd config ensure-section"])
+        + "\n```\n"
+    )
+
+    result = rewrite(content, "/runtime/grd")
+
+    assert "`grd --help`" in result
+    assert "`grd config ensure-section`" in result
+    for command in public_commands:
+        assert command in result
+        assert f"/runtime/grd{command[3:]}" not in result
+    assert "/runtime/grd config ensure-section" in result

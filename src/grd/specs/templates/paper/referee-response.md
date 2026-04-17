@@ -41,7 +41,7 @@ Template for `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` — tracks referee c
 
 ### REF-001 (Referee 1, Comment 1.1): [Brief summary of the comment]
 
-**Category:** [Physics concern / Clarity / Missing reference / Technical error / Presentation / Additional calculation requested]
+**Classification:** [fixed / rebutted / acknowledged / needs-calculation]
 **Priority:** [Must address / Should address / Optional]
 **Blocking issue:** [Yes / No / Unknown]
 **Decision-artifact context:** [What REVIEW-LEDGER{round_suffix} / REFEREE-DECISION{round_suffix} says about this issue, or "N/A"]
@@ -68,12 +68,14 @@ Template for `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` — tracks referee c
 
 ### REF-002 (Referee 1, Comment 1.2): [Brief summary]
 
-**Category:** [category]
-**Priority:** [priority]
+**Classification:** [fixed / rebutted / acknowledged / needs-calculation]
+**Priority:** [Must address / Should address / Optional]
+**Blocking issue:** [Yes / No / Unknown]
+**Decision-artifact context:** [What REVIEW-LEDGER{round_suffix} / REFEREE-DECISION{round_suffix} says about this issue, or "N/A"]
 
 > [Full quote]
 
-**Assessment:** [assessment]
+**Assessment:** [Is the referee correct? Partially correct? Based on misunderstanding?]
 
 **Response:**
 
@@ -83,8 +85,9 @@ Template for `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` — tracks referee c
 
 - [changes]
 
-**New calculations required:** [Yes/No]
-**Status:** [status]
+**New calculations required:** [Yes — describe / No]
+**Source phase for new work:** [Phase X or "N/A"]
+**Status:** [Not started / In progress / Response drafted / Final]
 
 ---
 
@@ -98,12 +101,14 @@ Template for `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` — tracks referee c
 
 ### REF-101 (Referee 2, Comment 2.1): [Brief summary]
 
-**Category:** [category]
-**Priority:** [priority]
+**Classification:** [fixed / rebutted / acknowledged / needs-calculation]
+**Priority:** [Must address / Should address / Optional]
+**Blocking issue:** [Yes / No / Unknown]
+**Decision-artifact context:** [What REVIEW-LEDGER{round_suffix} / REFEREE-DECISION{round_suffix} says about this issue, or "N/A"]
 
 > [Full quote]
 
-**Assessment:** [assessment]
+**Assessment:** [Is the referee correct? Partially correct? Based on misunderstanding?]
 
 **Response:**
 
@@ -113,9 +118,9 @@ Template for `.grd/paper/REFEREE_RESPONSE{round_suffix}.md` — tracks referee c
 
 - [changes]
 
-**New calculations required:** [Yes/No]
+**New calculations required:** [Yes — describe / No]
 **Source phase for new work:** [Phase X or "N/A"]
-**Status:** [status]
+**Status:** [Not started / In progress / Response drafted / Final]
 
 ---
 

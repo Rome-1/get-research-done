@@ -2,6 +2,7 @@
 name: grd:resume-work
 description: Resume research from previous session with full context restoration
 context_mode: project-required
+project_reentry_capable: true
 requires:
   files: [".grd/ROADMAP.md", ".grd/STATE.md"]
 allowed-tools:
@@ -11,22 +12,10 @@ allowed-tools:
   - ask_user
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
-Restore complete research context and resume work seamlessly from previous session.
-
-Routes to the resume-work workflow which handles:
-
-- STATE.md loading (or reconstruction if missing)
-- Active execution checkpoint detection
-- Incomplete work detection (PLAN without SUMMARY)
-- Full awareness of where the calculation or derivation left off
-- Restoration of parameter values, intermediate results, and assumptions
-- Status presentation
-- Context-aware next action routing
-  </objective>
+Resume research from the selected project's canonical state.
+</objective>
 
 <execution_context>
 @{GRD_INSTALL_DIR}/workflows/resume-work.md

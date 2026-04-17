@@ -11,20 +11,9 @@ allowed-tools:
   - search_files
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
-Reconcile STATE.md and state.json when they have diverged due to manual edits, partial updates, or corruption.
-
-STATE.md (human-readable) and state.json (machine-readable) should always be consistent. Divergence can occur when:
-
-- A user manually edits STATE.md without updating state.json
-- A workflow crashes mid-update, leaving one file stale
-- A git merge introduces conflicting state entries
-- An external tool modifies state.json directly
-
-Routes to the sync-state workflow which handles conflict detection and resolution.
+Reconcile `STATE.md` and `state.json` when they diverge.
 </objective>
 
 <execution_context>

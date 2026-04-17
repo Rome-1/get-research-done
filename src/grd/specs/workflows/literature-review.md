@@ -52,7 +52,9 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Parse JSON for: `commit_docs`, `state_exists`, `project_exists`, `project_contract`, `project_contract_load_info`, `project_contract_validation`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifact_files`, `reference_artifacts_content`.
+Parse JSON for: `commit_docs`, `state_exists`, `project_exists`, `project_contract`, `project_contract_gate`, `project_contract_load_info`, `project_contract_validation`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `topic`, `slug`.
+
+Do not use `reference_artifact_files` or `reference_artifacts_content` yet. Keep them deferred until the review scope is fixed so reference artifacts cannot broaden the topic before the user has chosen it.
 
 **Read mode settings:**
 
@@ -64,6 +66,7 @@ RESEARCH_MODE=$(grd --raw config get research_mode 2>/dev/null | grd json get .v
 **Mode-aware behavior:**
 - `research_mode=explore`: Comprehensive review (30+ papers), include tangential fields, map full citation network, identify open questions.
 - `research_mode=exploit`: Focused review (8-12 papers), direct relevance only, extract key results and methods.
+- `research_mode=balanced` (default): Use the standard review depth for this workflow and keep the default anchor and contract coverage unless the topic needs broader or narrower review.
 - `research_mode=adaptive`: Start with 15 papers, expand if citation network reveals critical gaps.
 - `autonomy=supervised`: Pause after each review round for user feedback on scope and direction.
 - `autonomy=balanced` (default): Complete the full review pipeline automatically. Pause only if the literature reveals scope ambiguity, contradictory evidence, or a change in recommendation.
@@ -72,8 +75,7 @@ RESEARCH_MODE=$(grd --raw config get research_mode 2>/dev/null | grd json get .v
 - **If `state_exists` is true:** Extract `convention_lock` for notation context (helps identify which conventions are used in papers being reviewed). Extract active research topic, phase context, and any contract-critical references from `active_reference_context`.
 - **If `state_exists` is false** (standalone usage): Proceed — the user will specify the topic directly.
 - Treat `effective_reference_intake` as the machine-readable carry-forward ledger for anchors, prior outputs, baselines, user-mandated context, and unresolved gaps. Re-surface those items in the review even if the broader search expands beyond them.
-- Use `reference_artifacts_content` as supporting evidence when existing literature/research-map artifacts already pin down benchmark values, prior outputs, or anchor wording that should remain stable.
-- Treat `project_contract` as authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes. If either gate is blocked, keep the contract visible as context but do not promote it to approved review truth.
+- Treat `project_contract` as authoritative only when `project_contract_gate.authoritative` is true. If the gate is blocked, keep the contract visible as context but do not promote it to approved review truth.
 
 Project context helps focus the review on conventions and methods relevant to the current research.
 </step>
@@ -92,7 +94,27 @@ Define explicit include/exclude boundaries:
 - Include: specific phenomena, methods, energy ranges, dimensions
 - Exclude: tangential fields, historical reviews (unless depth=comprehensive)
 - Record any contract-critical anchor that must be surfaced even if it falls outside the default search breadth
+- Track contract-critical anchors in a compact registry with a `| Must Surface |` column.
+- Set `Must Surface` to `yes` for any anchor that must be surfaced even if it falls outside the default search breadth; use roles like `benchmark`, `definition`, `method`, or `must_consider` to guide the fallback heuristic.
   </step>
+
+<step name="load_scoped_reference_artifacts">
+Once the scope is fixed, surface only the reference artifacts that remain relevant to the agreed topic.
+
+```bash
+SCOPE_LOCKED_INIT=$(load_literature_review_stage scope_locked "${topic:-$ARGUMENTS}")
+if [ $? -ne 0 ]; then
+  echo "ERROR: grd initialization failed: $SCOPE_LOCKED_INIT"
+  exit 1
+fi
+```
+
+- Parse the staged refresh for `reference_artifact_files`, `reference_artifacts_content`, `literature_review_files`, `research_map_reference_files`, `knowledge_doc_files`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, and `active_references`.
+- If `reference_artifact_files` is populated, read those files now and keep only the entries that support the confirmed scope.
+- If `reference_artifacts_content` is available, use it now as supporting evidence for already-scoped anchors, baselines, prior outputs, and citation reuse.
+- Only read or propagate the deferred reference-artifact context after the scope has been fixed.
+- Do not use deferred reference artifacts to reopen the scope question.
+</step>
 
 <step name="identify_foundations">
 **Phase 1: Foundational Works**
@@ -273,7 +295,7 @@ Map the state-of-the-art:
      </step>
 
 <step name="create_review_document">
-Ensure the output directory exists:
+The reviewer now owns the synthesis pass in fresh context. Use the stage-local scope, anchors, and reference context to write the review and sidecar, rather than synthesizing it inline in the orchestrator.
 
 ```bash
 mkdir -p .grd/literature
@@ -282,107 +304,72 @@ mkdir -p .grd/literature
 Write `.grd/literature/{slug}-REVIEW.md`:
 
 ```markdown
----
-topic: { topic }
-date: { YYYY-MM-DD }
-depth: { quick/standard/comprehensive }
-paper_count: { N }
-status: completed | checkpoint
----
+<objective>
+Write a systematic literature review for {topic} and produce the matching review document and citation-sidecar outputs.
+</objective>
 
-# Literature Review: {Topic}
+<scope_summary>
+Topic: {topic}
+Slug: {slug}
+Depth: {depth}
+Seed anchors: {seed_anchors}
+Confirmed boundaries: {scope_boundaries}
+Contract-critical anchors: {contract_critical_anchors}
+</scope_summary>
 
-## Executive Summary
+<context>
+Project contract: {project_contract}
+Contract intake: {contract_intake}
+Effective reference intake: {effective_reference_intake}
+Active references: {active_reference_context}
+Scoped reference artifacts: {reference_artifacts_content}
+</context>
 
-{3-5 key takeaways from the review. What should a physicist entering this area know first?}
+<output>
+Write `GRD/literature/{slug}-REVIEW.md` and `GRD/literature/{slug}-CITATION-SOURCES.json`.
+</output>
 
-## Foundational Works
-
-| #   | Reference                | Year   | Key Contribution   |
-| --- | ------------------------ | ------ | ------------------ |
-| 1   | {Author et al., Journal} | {year} | {what they showed} |
-
-{Brief narrative connecting these works and showing how the field developed.}
-
-## Methodological Landscape
-
-### Exact Methods
-
-{Description of applicable exact methods, regimes, limitations}
-
-### Perturbative Methods
-
-{Description of perturbative approaches, convergence properties}
-
-### Numerical Methods
-
-{Description of computational approaches, costs, accuracies}
-
-### Effective Theories
-
-{Description of effective theory approaches, energy scales}
-
-### Method Comparison
-
-| Method   | Regime           | Accuracy            | Cost      | Key Reference |
-| -------- | ---------------- | ------------------- | --------- | ------------- |
-| {method} | {where it works} | {typical precision} | {scaling} | {citation}    |
-
-## Key Results
-
-| Quantity     | Value             | Method   | Reference  | Status                |
-| ------------ | ----------------- | -------- | ---------- | --------------------- |
-| {observable} | {value +/- error} | {method} | {citation} | {confirmed/contested} |
-
-## Citation Network
-
-{Intellectual lineages showing how ideas evolved. Key branching and merging points.}
-
-## Controversies and Disagreements
-
-### {Controversy 1}
-
-- **The disagreement:** {what's contested}
-- **Side A:** {position, evidence, key reference}
-- **Side B:** {position, evidence, key reference}
-- **Current status:** {resolved/active/dormant}
-
-## Open Questions
-
-1. **{Question}** -- {Why it matters, why it's hard, what it would take}
-
-## Current Frontier
-
-{State-of-the-art: most recent results, active groups, emerging methods}
-
-## Active Anchor Registry
-
-| Anchor ID | Anchor | Type | Source / Locator | Why It Matters | Contract Subject IDs | Must Surface | Required Action | Carry Forward To |
-| --------- | ------ | ---- | ---------------- | -------------- | -------------------- | ------------ | --------------- | ---------------- |
-| {stable-anchor-id} | {reference or artifact} | {benchmark/method/background/prior artifact} | {citation, dataset id, or path} | {claim, observable, deliverable, or convention constrained} | {claim-id, deliverable-id, or blank} | {yes/no} | {read/use/compare/cite} | {planning/execution/verification/writing} |
-
-`Carry Forward To` is workflow stage scope only. If exact contract subject IDs are known, store them in `Contract Subject IDs` instead of collapsing them into stage labels.
-Set `Must Surface` to `yes` when later planners or verifiers must explicitly re-surface the anchor. If you leave it blank, ingestion promotes anchors with roles like `benchmark`, `definition`, `method`, or `must_consider`, and anchors whose required actions include `use`, `compare`, or `avoid`.
-
-## Convention Catalog
-
-| Convention     | Choice A  | Choice B  | Used By        |
-| -------------- | --------- | --------- | -------------- |
-| {e.g., metric} | (-,+,+,+) | (+,-,-,-) | {which papers} |
-
-## Recommended Reading Path
-
-For someone entering this area, read in this order:
-
-1. {Textbook chapter for background}
-2. {Review article for overview}
-3. {Seminal paper for key result}
-4. {Recent paper for current state}
-
-## Full Reference List
-
-{Formatted citations, organized by topic/method}
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - GRD/literature/{slug}-REVIEW.md
+    - GRD/literature/{slug}-CITATION-SOURCES.json
+expected_artifacts:
+  - GRD/literature/{slug}-REVIEW.md
+  - GRD/literature/{slug}-CITATION-SOURCES.json
+shared_state_policy: return_only
+</spawn_contract>
 ```
+
+```
+REVIEW_RETURN=$(
+task(
+  subagent_type="grd-literature-reviewer",
+  model="{reviewer_model}",
+  readonly=false,
+  prompt="First, read {GRD_AGENTS_DIR}/grd-literature-reviewer.md for your role and instructions.\\n\\n" + review_prompt
+)
+)
+```
+
+**If the reviewer agent fails to spawn or returns an error:** Report the failure and stop. Offer: 1) Retry with the same scope, 2) Execute the review in the main context, 3) Abort.
+
+**If the reviewer reports `grd_return.status: completed`:**
+- Verify `GRD/literature/{slug}-REVIEW.md` and `GRD/literature/{slug}-CITATION-SOURCES.json` are readable
+- Verify both files are named in `grd_return.files_written`
+- Do not trust the runtime handoff status by itself. Require the files on disk and the file list to agree before advancing.
+- Treat the handoff as incomplete if either file is missing, unreadable, or unnamed
+
+**If the reviewer reports `grd_return.status: checkpoint`:**
+- Present the checkpoint to the user
+- Collect the response
+- Spawn a fresh continuation handoff with the updated scope and checkpoint response
+- Re-run the same `grd_return.files_written` and on-disk artifact gate before advancing
+
+**If the reviewer reports `grd_return.status: blocked` or `failed`:**
+- Surface the blocker
+- Offer: 1) Add context, 2) Narrow scope, 3) Abort
 
 </step>
 
@@ -391,12 +378,22 @@ For someone entering this area, read in this order:
 
 Spawn the bibliographer agent to verify all citations collected during the review. The bibliographer has the hallucination detection protocol, INSPIRE/ADS/arXiv search capability, and BibTeX management expertise needed for citation verification.
 
+```bash
+REVIEW_HANDOFF_INIT=$(load_literature_review_stage review_handoff "${topic:-$ARGUMENTS}")
+if [ $? -ne 0 ]; then
+  echo "ERROR: grd initialization failed: $REVIEW_HANDOFF_INIT"
+  exit 1
+fi
+```
+
+Parse the staged refresh for `citation_source_files`, `derived_citation_sources`, `selected_protocol_bundle_ids`, `protocol_bundle_context`, `active_references`, `derived_manuscript_reference_status`, and `derived_manuscript_proof_review_status` before spawning the bibliographer or accepting a completed review handoff.
+
 Resolve bibliographer model:
 
 ```bash
 BIBLIO_MODEL=$(grd resolve-model grd-bibliographer)
 ```
-> **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+@{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
 ```
 task(
@@ -423,13 +420,24 @@ Return BIBLIOGRAPHY UPDATED or CITATION ISSUES FOUND."
 )
 ```
 
-**If the bibliographer agent fails to spawn or returns an error:** Proceed without citation audit. Note in the review summary that citations are unverified. The user should manually check key references against INSPIRE-HEP/ADS.
+<spawn_contract>
+write_scope:
+  mode: scoped_write
+  allowed_paths:
+    - GRD/literature/{slug}-CITATION-AUDIT.md
+expected_artifacts:
+  - GRD/literature/{slug}-CITATION-AUDIT.md
+shared_state_policy: return_only
+</spawn_contract>
 
-**If CITATION ISSUES FOUND:**
+**If the bibliographer agent fails to spawn or returns an error:** Treat the review as blocked until citation audit completes. Offer: 1) Retry citation audit, 2) Abort, 3) Return to the user with the review incomplete.
+
+**If the bibliographer completed with issues recorded in the audit report:**
 
 - Read the audit report
 - Fix or remove hallucinated citations from the review document
 - Update corrected metadata in the reference list
+- Refresh `GRD/literature/{slug}-CITATION-SOURCES.json` so the sidecar stays aligned with the corrected review and reference keys.
 - Note unresolvable citations in the return summary
 
 **If BIBLIOGRAPHY UPDATED:**
@@ -499,7 +507,27 @@ grd commit \
   --files "${OUTPUT_PATH}"
 ```
 
-Where `${OUTPUT_PATH}` is the path where LITERATURE-REVIEW.md was written.
+Parse the completion refresh for `topic`, `slug`, and any final presentation/runtime fields before presenting results.
+
+On completion:
+
+- Verify `GRD/literature/{slug}-REVIEW.md` exists on disk
+- Verify `GRD/literature/{slug}-CITATION-SOURCES.json` exists on disk and remains aligned with the review's Full Reference List
+- Return `grd_return.status: completed` only when the review is named in `grd_return.files_written` and the sidecar is present, readable, and aligned on disk
+- Include `papers_reviewed`, `field_assessment`, and citation verification details as needed
+- If either artifact is missing, malformed, or stale, return `grd_return.status: blocked` or `failed` instead of `completed`
+
+On checkpoint:
+
+- Return `grd_return.status: checkpoint`
+- Include the decision question, context, options, and partial progress
+- Record the user's answer as `checkpoint_response` for the fresh continuation handoff.
+- Do not trust the runtime handoff status by itself.
+- Stop and let the orchestrator present the checkpoint to the user, then spawn a fresh continuation run after the response
+
+If the review is incomplete or blocked, use `grd_return.status: blocked` or `failed` and list the missing artifact or unresolved scope issue explicitly.
+
+</step>
 
 </process>
 

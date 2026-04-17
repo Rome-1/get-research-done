@@ -20,10 +20,10 @@
       ".grd/phases/01-setup/01-01-SUMMARY.md"
     ],
     "user_asserted_anchors": [
-      "Recover known limiting behavior"
+      "https://doi.org/10.1234/benchmark-figure-2"
     ],
     "known_good_baselines": [
-      "Baseline notebook A"
+      "https://doi.org/10.1234/benchmark-table-1"
     ],
     "context_gaps": [
       "Missing benchmark table"

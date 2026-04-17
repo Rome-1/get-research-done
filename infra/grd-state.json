@@ -21,15 +21,13 @@
     "Install GRD first: npx -y get-research-done"
   ],
   "health_check": {
-    "tool": "get_config",
-    "input": {
-      "project_dir": "/tmp/test"
-    },
-    "expect": "contains model_profile"
+    "tool": "get_state",
+    "input": {},
+    "expect": "returns a stable validation error envelope for missing required project_dir"
   },
   "alternatives": {
     "python_module": {
-      "command": "python3",
+      "command": "${GPD_PYTHON}",
       "args": [
         "-m",
         "grd.mcp.servers.state_server"

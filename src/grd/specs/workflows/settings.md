@@ -2,6 +2,33 @@
 Interactive configuration of GRD workflow agents (research, plan_checker, verifier), research profile selection, runtime-specific tier model overrides, `execution.review_cadence`, git branching, and runtime-permission sync guidance. Updates `.grd/config.json` with user preferences including model profile, optional `model_overrides`, workflow toggles, execution cadence, and branching strategy.
 </purpose>
 
+<preset_guidance>
+Workflow presets are bundles over the existing config keys only; they do not add a separate persisted preset block. Do not create, persist, or infer a separate `preset` block in `GRD/config.json`.
+
+When a preset is selected, resolve it into the current knobs:
+
+- `autonomy`
+- `research_mode`
+- `execution.review_cadence`
+- `parallelization`
+- `planning.commit_docs`
+- `workflow.research`
+- `workflow.plan_checker`
+- `workflow.verifier`
+- `model_profile`
+- Existing `model_overrides` should remain unchanged unless the user explicitly edits tier overrides later in this same settings flow.
+
+Current preset catalog:
+
+- `core-research` — recommended balanced default for most projects
+- `theory` — derivation-heavy workflow with `model_profile=deep-theory`
+- `numerics` — computation-heavy workflow with `model_profile=numerical`
+- `publication-manuscript` — paper-writing workflow with `model_profile=paper-writing`; `paper-build` remains the manuscript build contract, while LaTeX readiness still drives readiness for `write-paper` / `peer-review` and can degrade or block `paper-build` / `arxiv-submission`
+- `full-research` — core research defaults with publication readiness tracked alongside them; `paper-build` still defines the manuscript build contract
+
+Preset application must be explicit and previewable. Show the resolved knobs first, then ask whether to apply the bundle or return to the detailed questions. Do not create or persist a separate preset block.
+</preset_guidance>
+
 <required_reading>
 Read all files referenced by the invoking prompt's execution_context before starting.
 </required_reading>
@@ -35,16 +62,24 @@ Parse current values (default to `true` / first option if not present):
 - `model_overrides` -- optional runtime-scoped concrete model mapping for `tier-1`, `tier-2`, `tier-3`
 - `workflow.research` -- spawn researcher during plan-phase
 - `workflow.plan_checker` -- spawn plan checker during plan-phase
-- `workflow.verifier` -- spawn verifier during execute-phase
+- `workflow.verifier` -- spawn verifier during execute-phase (this does NOT disable mandatory proof red-teaming for `proof_obligation` work)
 - `execution.review_cadence` -- execution review density: `"dense"`, `"adaptive"` (default), `"sparse"`
 - `execution.max_unattended_minutes_per_plan` -- wall-clock budget before a bounded continuation should be created
+- `execution.project_usd_budget` -- optional advisory USD budget for the whole current workspace / project
+- `execution.session_usd_budget` -- optional advisory USD budget for the current active session
 - `execution.checkpoint_after_n_tasks` -- task budget before a bounded continuation should be created
 - `planning.commit_docs` -- whether planning artifacts are committed to git (default: `true`)
 - `parallelization` -- execute wave plans in parallel (default: `true`)
 - `model_profile` -- which agent model profile to use (default: `review`)
+- `model-cost posture` is a qualitative guidance layer only; it maps onto the existing `model_profile` and `model_overrides` choices and does not add a new persisted config key.
+- Optional USD budget guardrails are advisory only; `grd cost` evaluates them, and missing telemetry keeps the result partial or estimated rather than exact.
 - `git.branching_strategy` -- branching approach (default: `"none"`)
 
-`execution.review_cadence` is independent of `model_profile` and `research_mode`: it controls bounded review stop density, not agent tiering or verification rigor.
+`research_mode` controls breadth vs focus only. It does **not** by itself authorize git-backed hypothesis branches, branch-like alternative plans, or side investigations; those still require an explicit tangent decision.
+
+`git.branching_strategy` is separate from tangent handling. It controls the normal git branch naming policy for approved phase/milestone work, not whether GRD may silently create hypothesis branches.
+
+`execution.review_cadence` is independent of `model_profile` and `research_mode`: it controls bounded review stop density, not agent tiering or verification rigor. Sparse cadence does not waive proof red-teaming for proof-bearing work.
 
 Project conventions do **not** live in `.grd/config.json`. Do not invent or preserve a `physics` section here. Unit systems, metric signatures, Fourier conventions, and other notation choices belong in `.grd/CONVENTIONS.md` and `.grd/state.json` via `grd convention set`.
   </step>
@@ -63,17 +98,45 @@ If `model_overrides.<runtime>` already exists, surface the current `tier-1` / `t
 
 > **Platform note:** If `ask_user` is not available, present these options in plain text and wait for the user's freeform response.
 
+Treat this as the primary guided unattended-use flow: explain that autonomy, unattended budgets, runtime permission sync, and conservative preset bundles all live here, and that `Balanced` is the recommended default for most users.
+Teach one coherent posture-to-inspection loop:
+
+- choose a qualitative posture first (`Max Quality`, `Balanced`, `Budget-aware`)
+- use that posture to decide whether to keep runtime defaults or pin explicit tier model strings
+- use `grd cost` after runs to inspect recorded local usage / cost, optional USD budget guardrails, and the current profile tier mix instead of treating posture labels as billing truth
+- do not present posture labels or `grd cost` as provider billing truth or spend enforcement
+
+If the user asks for a preset, map it onto the existing knobs above. Preview the changed knobs first, then ask for an explicit apply or customize choice. Do not add a new persisted config section or install step.
+
+For normal-terminal follow-up around these settings:
+
+- use `grd --help` when you need the broader local CLI entrypoint
+- use `grd validate unattended-readiness --runtime <runtime> --autonomy <mode>` for the unattended or overnight verdict after autonomy and permissions changes
+- use `grd permissions sync --runtime <runtime> --autonomy <mode>` when the runtime-owned permission settings need explicit alignment
+- use `grd cost` after runs for advisory local usage / cost, optional USD budget guardrails, and the current profile tier mix
+
+Broader local reference surfaces stay outside this settings-specific follow-up list: use `grd doctor` for install and runtime-local readiness, `grd integrations status wolfram` for the shared optional Wolfram integration config that stays separate from a local Mathematica install, and `grd validate plan-preflight <PLAN.md>` for plan readiness rather than a settings change.
+
+Before the detailed question list, offer a compact preset chooser when the user wants a starter bundle:
+
+- Core research (Recommended): preview the balanced default bundle over the existing knobs, then apply or customize
+- Theory: preview the derivation-heavy bundle over the existing knobs, then apply or customize
+- Numerics: preview the computation-heavy bundle over the existing knobs, then apply or customize
+- Publication / manuscript: preview the paper-writing bundle over the existing knobs, then apply or customize
+- Full research: preview the core-research-plus-publication-readiness bundle over the existing knobs, then apply or customize
+- Customize settings: skip the preset and proceed to the detailed questions below
+
 Use ask_user with current values pre-selected:
 
 ```
 ask_user([
   {
-    question: "How much autonomy should the AI have? Supervised pauses constantly, Balanced handles routine work but still pauses on important physics or scope decisions, and YOLO only stops on hard failures after runtime permissions are synced.",
+    question: "How much autonomy should the AI have? Supervised pauses constantly, Balanced is the recommended default for most unattended runs because it still pauses on important physics or scope decisions, and YOLO only stops on hard failures after runtime permissions are synced.",
     header: "Autonomy",
     multiSelect: false,
     options: [
-      { label: "Supervised", description: "Checkpoint after every important step. You approve each physics-bearing move." },
-      { label: "Balanced (Recommended)", description: "AI handles routine work and pauses on important physics decisions, ambiguities, blockers, or scope changes." },
+      { label: "Supervised", description: "Checkpoint after every important step. Best when you plan to stay nearby and approve each physics-bearing move." },
+      { label: "Balanced (Recommended)", description: "Best default for most unattended runs. AI handles routine work and pauses on important physics decisions, ambiguities, blockers, or scope changes." },
       { label: "YOLO", description: "Fastest mode. AI auto-approves checkpoints, syncs the runtime to its most autonomous permission mode when supported, and only stops on hard failures." }
     ]
   },
@@ -82,10 +145,10 @@ ask_user([
     header: "Research Mode",
     multiSelect: false,
     options: [
-      { label: "Explore", description: "Broad literature search, multiple hypothesis branches, compare approaches" },
+      { label: "Explore", description: "Broad literature search, compare multiple viable approaches, and surface tangent decisions explicitly before any branch or side investigation." },
       { label: "Balanced (Recommended)", description: "Standard: plan one approach, execute, verify, iterate" },
-      { label: "Exploit", description: "Focused execution of known methodology. Minimal branching, fast convergence." },
-      { label: "Adaptive", description: "Start exploring, auto-switch to exploit once approach is validated" }
+      { label: "Exploit", description: "Focused execution of known methodology. Suppress optional tangents unless the user explicitly requests them or the current approach is blocked." },
+      { label: "Adaptive", description: "Start broad enough to compare viable approaches, keep tangents explicit, then narrow only after decisive evidence locks the method." }
     ]
   },
   {
@@ -98,6 +161,16 @@ ask_user([
       { label: "Exploratory", description: "Rapid prototyping, hypothesis testing, parameter scanning" },
       { label: "Review (Recommended)", description: "Critical assessment, error checking, literature comparison (default)" },
       { label: "Paper Writing", description: "LaTeX production, figures, narrative flow" }
+    ]
+  },
+  {
+    question: "What model-cost posture should GRD optimize for?",
+    header: "Model Cost Posture",
+    multiSelect: false,
+    options: [
+      { label: "Max Quality", description: "Favor the strongest acceptable runtime-native models. Use explicit tier overrides only when you already know the exact ids you want." },
+      { label: "Balanced (Recommended)", description: "Keep the default `review` profile guidance and runtime defaults unless there is a concrete reason to pin tier models." },
+      { label: "Budget-aware", description: "Prefer runtime defaults and avoid explicit tier pinning unless it clearly improves the result for this runtime." }
     ]
   },
   {
@@ -128,25 +201,25 @@ ask_user([
       { label: "No", description: "Skip plan verification" }
     ]
   },
-  {
-    question: "Spawn Execution Verifier? (verifies phase completion)",
-    header: "Verifier",
-    multiSelect: false,
-    options: [
-      { label: "Yes", description: "Verify contract targets after execution" },
-      { label: "No", description: "Skip post-execution verification" }
-    ]
-  },
+	{
+	    question: "Spawn Execution Verifier? (verifies phase completion)",
+	    header: "Verifier",
+	    multiSelect: false,
+	    options: [
+	      { label: "Yes", description: "Verify contract targets after execution" },
+	      { label: "No", description: "Skip only the generic post-execution verifier. Mandatory proof red-teaming for proof-bearing or `proof_obligation` work still runs." }
+	    ]
+	  },
   {
     question: "How aggressively should execution inject review gates?",
     header: "Cadence",
     multiSelect: false,
     options: [
-      { label: "Adaptive (Recommended)", description: "Inject first-result and risky-fanout gates automatically while letting clean segments continue. Independent of profile choice." },
-      { label: "Dense", description: "Frequent bounded review points for high-risk or high-touch work." },
-      { label: "Sparse", description: "Fewest review stops, but required correctness gates still run." }
-    ]
-  },
+	      { label: "Adaptive (Recommended)", description: "Inject first-result and risky-fanout gates automatically while letting clean segments continue. Independent of profile choice. Mandatory proof red-teaming still runs when proof obligations exist." },
+	      { label: "Dense", description: "Frequent bounded review points for high-risk or high-touch work." },
+	      { label: "Sparse", description: "Fewest review stops, but required correctness gates still run. Sparse mode does not waive proof red-teaming for proof-bearing work." }
+	    ]
+	  },
   {
     question: "Should planning artifacts be committed to git?",
     header: "Planning Commit Docs",
@@ -178,6 +251,20 @@ ask_user([
 ])
 ```
 
+After the ask_user responses are collected, ask one compact inline follow-up for unattended execution budgets using the current values as defaults:
+
+- `execution.max_unattended_minutes_per_plan`
+- `execution.max_unattended_minutes_per_wave`
+
+Explain that these budgets bound how long GRD should keep running before it creates a continuation or another review stop. If the user is unsure, preserve the current values.
+
+Then ask one compact inline follow-up for optional advisory USD budget guardrails using the current values as defaults:
+
+- `execution.project_usd_budget`
+- `execution.session_usd_budget`
+
+Explain that these are optional read-only guardrails checked by `grd cost` against recorded machine-local USD telemetry. They are advisory only, may stay partial or estimated when telemetry is missing, and never stop work automatically. If the user is unsure, preserve the current values. Blank / `none` should clear the corresponding USD budget.
+
 </step>
 
 <step name="configure_model_overrides">
@@ -199,6 +286,12 @@ Suggested defaults when the user wants a recommendation:
 - Prefer leaving overrides unset unless the user explicitly asks to pin concrete model ids.
 - When the user does want explicit overrides, suggest exact ids already known to work in the active runtime and preserve its native identifier format.
 - If the runtime routes through multiple providers, confirm the provider first before suggesting provider-native ids.
+
+Qualitative posture guidance:
+
+- **Balanced** is the default recommendation and should usually keep the runtime on its own defaults unless the user has a concrete reason to pin models.
+- **Budget-aware** should push the flow toward runtime defaults and away from explicit tier pinning unless the user asks for a specific override.
+- **Max Quality** should bias toward the strongest acceptable runtime-native model strings only when the user is already opting into explicit overrides.
 
 Normalization rules:
 
@@ -238,6 +331,8 @@ Merge new settings into existing config.json:
     "review_cadence": "dense" | "adaptive" | "sparse",
     "max_unattended_minutes_per_plan": 45,
     "max_unattended_minutes_per_wave": 90,
+    "project_usd_budget": 25.0,
+    "session_usd_budget": 5.0,
     "checkpoint_after_n_tasks": 3,
     "checkpoint_after_first_load_bearing_result": true/false,
     "checkpoint_before_downstream_dependent_tasks": true/false
@@ -278,11 +373,14 @@ Display:
 |----------------------|-------|
 | Active Runtime       | {detected runtime id} |
 | Research Profile     | {deep-theory/numerical/exploratory/review/paper-writing} |
+| Model Cost Posture   | {Max Quality/Balanced/Budget-aware} |
 | Tier Models          | {runtime default / tier-1=..., tier-2=..., tier-3=...} |
 | Plan Researcher      | {On/Off} |
 | Plan Checker         | {On/Off} |
 | Execution Verifier   | {On/Off} |
 | Review Cadence       | {Dense/Adaptive/Sparse} |
+| Project USD Budget   | {none / $... advisory} |
+| Session USD Budget   | {none / $... advisory} |
 | Planning Commit Docs | {On/Off} |
 | Parallelization      | {On/Off} |
 | Git Branching        | {none/per-phase/per-milestone} |
@@ -295,6 +393,8 @@ Concrete tier model strings are passed through to the active runtime unchanged, 
 Runtime sync:
 - {permissions_sync.message}
 - {permissions_sync.next_step if present}
+- If relaunch is still required, say clearly that unattended use is not ready yet under the newly selected autonomy setting.
+- `grd permissions status --runtime <runtime> --autonomy balanced` and `grd permissions sync --runtime <runtime> --autonomy balanced` in this workflow only handle runtime-owned permission alignment, not install validation.
 
 Project conventions still live in `.grd/CONVENTIONS.md` and `.grd/state.json` (`convention_lock`), not in `.grd/config.json`.
 
@@ -308,6 +408,15 @@ Quick commands:
 - /grd:plan-phase --skip-verify -- skip plan check
 ```
 
+</step>
+
+<step name="runtime_guidance">
+Refer to `{GRD_INSTALL_DIR}/references/tooling/runtime-config-guide.md` for:
+- recommended minimal runtime configuration
+- extension and skill compatibility guidance
+- portable configuration patterns for multi-machine setups
+- permission mode alignment with GRD autonomy settings
+- troubleshooting common environment issues
 </step>
 
 </process>
@@ -326,7 +435,7 @@ Project conventions propagate separately through `.grd/CONVENTIONS.md` and `.grd
 
 - [ ] Current config read
 - [ ] Active runtime inferred or explicitly confirmed before model override guidance
-- [ ] User presented with profile, runtime-specific tier-model handling, workflow toggles, review cadence, and git branching
+- [ ] User presented with autonomy guidance (`Balanced` recommended), unattended time-budget review, optional advisory USD budget guardrails, profile, model-cost posture, runtime-specific tier-model handling, workflow toggles, review cadence, and git branching
 - [ ] Config updated with model_profile, optional model_overrides, workflow, execution, and git sections
 - [ ] Runtime permissions sync attempted after autonomy is written, with relaunch guidance surfaced when required
 - [ ] No stale `physics` section written into `.grd/config.json`

@@ -7,8 +7,11 @@ hook configs, and tool name translations across runtimes.
 from __future__ import annotations
 
 from importlib import import_module
+from typing import TYPE_CHECKING
 
-from grd.adapters.base import RuntimeAdapter
+if TYPE_CHECKING:
+    from grd.adapters.base import RuntimeAdapter
+
 from grd.adapters.runtime_catalog import (
     get_runtime_descriptor,
     iter_runtime_descriptors,
@@ -26,17 +29,15 @@ def _module_name_for_runtime(runtime_name: str) -> str:
 
 def _load_adapter_class(runtime_name: str) -> type[RuntimeAdapter]:
     """Import and return the adapter class that owns *runtime_name*."""
+    from grd.adapters.base import RuntimeAdapter
+
     module = import_module(f"grd.adapters.{_module_name_for_runtime(runtime_name)}")
 
     matches: list[type[RuntimeAdapter]] = []
     for value in vars(module).values():
         if not isinstance(value, type) or not issubclass(value, RuntimeAdapter) or value is RuntimeAdapter:
             continue
-        try:
-            if value().runtime_name == runtime_name:
-                matches.append(value)
-        except Exception:
-            continue
+        matches.append(value)
 
     if len(matches) == 1:
         return matches[0]
@@ -63,22 +64,34 @@ def _ensure_loaded() -> None:
     _LOADED = True
 
 
+def _ensure_runtime_loaded(runtime_name: str) -> type[RuntimeAdapter]:
+    """Return the adapter class for one runtime, loading only that runtime if needed."""
+
+    if runtime_name in _REGISTRY:
+        return _REGISTRY[runtime_name]
+
+    supported_runtime_names = list_runtimes()
+    if runtime_name not in supported_runtime_names:
+        supported = ", ".join(sorted(supported_runtime_names))
+        raise KeyError(f"Unknown runtime {runtime_name!r}. Supported: {supported}")
+
+    adapter_class = _load_adapter_class(runtime_name)
+    _REGISTRY[runtime_name] = adapter_class
+    return adapter_class
+
+
 def get_adapter(runtime: str) -> RuntimeAdapter:
     """Get an adapter instance for the given runtime name.
 
     Raises ``KeyError`` if the runtime is not supported.
     """
-    _ensure_loaded()
-    if runtime not in _REGISTRY:
-        supported = ", ".join(sorted(_REGISTRY.keys()))
-        raise KeyError(f"Unknown runtime {runtime!r}. Supported: {supported}")
-    return _REGISTRY[runtime]()
+    adapter_class = _ensure_runtime_loaded(runtime)
+    return adapter_class()
 
 
 def iter_adapters() -> list[RuntimeAdapter]:
     """Return adapter instances in registry order."""
-    _ensure_loaded()
-    return [adapter_cls() for adapter_cls in _REGISTRY.values()]
+    return [get_adapter(runtime_name) for runtime_name in list_runtimes()]
 
 
 def list_runtimes() -> list[str]:
@@ -87,6 +100,14 @@ def list_runtimes() -> list[str]:
     return [
         descriptor.runtime_name for descriptor in iter_runtime_descriptors() if descriptor.runtime_name in _REGISTRY
     ]
+
+
+def __getattr__(name: str):
+    if name == "RuntimeAdapter":
+        from grd.adapters.base import RuntimeAdapter  # noqa: PLC0415
+
+        return RuntimeAdapter
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [

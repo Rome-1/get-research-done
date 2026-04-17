@@ -21,12 +21,17 @@ review-contract:
     - missing phase artifacts
     - degraded review integrity
   preflight_checks:
+    - command_context
     - project_state
     - roadmap
+    - phase_lookup
     - phase_artifacts
+    - phase_summaries
+    - phase_proof_review
   required_state: phase_executed
 allowed-tools:
   - file_read
+  - ask_user
   - shell
   - find_files
   - search_files
@@ -38,11 +43,10 @@ allowed-tools:
   - mcp__grd_verification__run_contract_check
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
+<!-- Tool names and @ includes are runtime-specific; the installer rewrites paths for your runtime. -->
 
 <objective>
-Verify research results through systematic physics checks with persistent state.
+Run the staged verification workflow for an executed phase.
 
 Purpose: Confirm that derivations are correct, numerical results are trustworthy, and physical conclusions are sound. One check at a time, plain text responses, no interrogation. When issues are found, automatically diagnose, classify severity, and prepare for resolution.
 

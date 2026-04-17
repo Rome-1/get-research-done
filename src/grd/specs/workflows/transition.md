@@ -126,13 +126,13 @@ Wait for user decision.
 
 <step name="cleanup_handoff">
 
-Check for lingering handoffs:
+Check for lingering continuation handoff artifacts:
 
 ```bash
 ls ${PHASE_DIR}/.continue-here*.md 2>/dev/null
 ```
 
-If found, delete them — phase is complete, handoffs are stale.
+If found, delete them — phase is complete, so those continuation handoff artifacts are stale.
 
 </step>
 
@@ -347,27 +347,27 @@ If no decisions are present in the phase summaries or CONTEXT.md, skip this step
 
 **Note:** Basic position updates (Current Phase, Status, Current Plan, Last Activity) were already handled by `grd phase complete` in the update_roadmap_and_state step.
 
-Verify the updates are correct by reading STATE.md. If the progress bar needs updating, use:
+Verify the updates are correct by reading the structured state surface. If the progress bar needs updating, use:
 
 ```bash
 PROGRESS=$(grd --raw progress bar)
 ```
 
-Update the progress bar line in STATE.md with the result.
+Then use `grd state update-progress` to sync the derived progress field and, if needed, `grd state update` / `grd state patch` for any remaining structured fields that feed the rendered state surface.
 
 **Step complete when:**
 
 - [ ] Phase number incremented to next phase (done by phase complete)
 - [ ] Plan status reset to "Not started" (done by phase complete)
 - [ ] Status shows "Ready to plan" (done by phase complete)
-- [ ] Progress bar reflects total completed plans
+- [ ] Progress bar reflects total completed plans after `grd state update-progress`
 
 
 </step>
 
 <step name="update_project_reference">
 
-Update Project Reference section in STATE.md.
+Update the project reference fields through the structured state commands so the rendered Project Reference section stays in sync.
 
 ```markdown
 ## Project Reference
@@ -378,13 +378,13 @@ See: .grd/PROJECT.md (updated [today])
 **Current focus:** [Next phase name]
 ```
 
-Update the date and current focus to reflect the transition.
+Update the date and current focus to reflect the transition using `grd state update` / `grd state patch` so the rendered state surface stays in sync.
 
 </step>
 
 <step name="review_accumulated_context">
 
-Review and update Accumulated Context section in STATE.md.
+Review and update the accumulated context through the structured state commands and durable phase artifacts.
 
 **Key Results:**
 
@@ -587,7 +587,7 @@ fi
 
 **4. Append a phase-transition session block:**
 
-Append a `## Session:` block (same format as pause-work) capturing the phase's key results:
+Append a `## Session:` block (same format as pause-work) capturing the phase's key results. If the phase has already established a canonical derivation `result_id`, carry it into the session block so reruns can recover the same anchor directly:
 
 ```bash
 timestamp=$(grd --raw timestamp full)
@@ -605,7 +605,7 @@ cat >> .grd/DERIVATION-STATE.md << EOF
 [Fill from SUMMARY conventions frontmatter: convention choices active in this phase]
 
 ### Intermediate Results
-[Fill from SUMMARY provides frontmatter: result IDs with brief descriptions]
+[Fill from SUMMARY provides frontmatter: result IDs with brief descriptions, including the canonical derivation `result_id` / `last_result_id` when one is known]
 [Mark Verified: yes if VERIFICATION.md exists with status passed, otherwise pending]
 
 ### Approximations Used

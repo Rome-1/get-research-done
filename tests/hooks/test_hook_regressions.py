@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -10,6 +11,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from grd.adapters.runtime_catalog import list_runtime_names
+from grd.hooks.install_context import (
+    SelfOwnedInstallContext,
+    ordered_todo_lookup_candidates,
+    should_prefer_self_owned_install,
+)
 
 
 @pytest.mark.parametrize(
@@ -63,6 +69,188 @@ def test_check_update_reexecs_current_script_with_cache_file_arg(tmp_path: Path)
     assert args[1] == str(hook_path)
     assert args[2] == "--cache-file"
     assert args[3] == str(cache_path)
+
+
+def test_check_update_uses_shared_update_resolution_candidates() -> None:
+    from grd.hooks.check_update import main
+    from grd.hooks.runtime_detect import UpdateCacheCandidate
+
+    candidate = UpdateCacheCandidate(path=Path("/tmp/shared-cache.json"), runtime="codex", scope="local")
+
+    with (
+        patch("grd.hooks.check_update._self_config_dir", return_value=None),
+        patch(
+            "grd.hooks.update_resolution.resolve_update_cache_inputs",
+            return_value=(Path("/tmp/workspace"), Path("/tmp/home"), None, "codex"),
+        ) as mock_inputs,
+        patch("grd.hooks.update_resolution.ordered_update_cache_candidates", return_value=[candidate]) as mock_candidates,
+        patch("grd.hooks.update_resolution.primary_update_cache_file", return_value=candidate.path) as mock_primary,
+        patch("grd.hooks.runtime_detect.get_update_cache_candidates", side_effect=AssertionError("unexpected direct cache lookup")),
+        patch(
+            "grd.hooks.runtime_detect.should_consider_update_cache_candidate",
+            side_effect=AssertionError("unexpected direct cache filtering"),
+        ),
+        patch("grd.hooks.check_update._has_fresh_inflight_marker", return_value=False),
+        patch("grd.hooks.check_update._claim_inflight_marker", return_value=True),
+        patch("subprocess.Popen") as mock_popen,
+    ):
+        mock_popen.return_value = MagicMock()
+        main()
+
+    mock_inputs.assert_called_once()
+    mock_candidates.assert_called_once()
+    mock_primary.assert_called_once_with([candidate], home=Path("/tmp/home"))
+    mock_popen.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "active_install_target",
+    [
+        SimpleNamespace(config_dir=Path("/tmp/global-runtime-dir"), install_scope="global"),
+        None,
+    ],
+    ids=["global", "missing"],
+)
+def test_should_prefer_self_owned_install_rejects_mismatched_runtime_when_active_target_is_global_or_missing(
+    tmp_path: Path,
+    active_install_target: object,
+) -> None:
+    self_install = SelfOwnedInstallContext(
+        config_dir=tmp_path / ".claude",
+        runtime="claude-code",
+        install_scope="local",
+    )
+
+    assert (
+        should_prefer_self_owned_install(
+            self_install,
+            active_install_target=active_install_target,
+            active_runtime="codex",
+            workspace_path=tmp_path,
+        )
+        is False
+    )
+
+
+def test_should_prefer_self_owned_install_still_allows_the_same_config_dir_even_when_runtime_differs(
+    tmp_path: Path,
+) -> None:
+    self_install = SelfOwnedInstallContext(
+        config_dir=tmp_path / ".claude",
+        runtime="claude-code",
+        install_scope="global",
+    )
+    active_install_target = SimpleNamespace(config_dir=self_install.config_dir, install_scope="global")
+
+    assert (
+        should_prefer_self_owned_install(
+            self_install,
+            active_install_target=active_install_target,
+            active_runtime="codex",
+            workspace_path=None,
+        )
+        is True
+    )
+
+
+@pytest.mark.parametrize(
+    "active_install_target",
+    [
+        SimpleNamespace(config_dir=Path("/tmp/global-runtime-dir"), install_scope="global"),
+        None,
+    ],
+    ids=["global", "missing"],
+)
+def test_ordered_todo_lookup_candidates_rejects_mismatched_self_owned_install_when_active_target_is_global_or_missing(
+    tmp_path: Path,
+    active_install_target: object,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    workspace_candidate = SimpleNamespace(path=workspace / ".codex" / "todos")
+    self_install = SelfOwnedInstallContext(
+        config_dir=tmp_path / ".claude",
+        runtime="claude-code",
+        install_scope="global",
+    )
+
+    with (
+        patch(
+            "grd.hooks.install_context.resolve_hook_lookup_context",
+            return_value=SimpleNamespace(
+                lookup_cwd=workspace,
+                resolved_home=tmp_path / "home",
+                active_runtime="codex",
+                preferred_runtime="codex",
+            ),
+        ),
+        patch("grd.hooks.install_context.detect_self_owned_install", return_value=self_install),
+        patch("grd.hooks.runtime_detect.detect_runtime_install_target", return_value=active_install_target),
+        patch("grd.hooks.runtime_detect.get_todo_candidates", return_value=[workspace_candidate]),
+        patch("grd.hooks.runtime_detect.should_consider_todo_candidate", return_value=True),
+    ):
+        candidates = ordered_todo_lookup_candidates(hook_file=__file__, cwd=str(workspace))
+
+    assert [candidate.path for candidate in candidates] == [workspace_candidate.path]
+
+
+def test_statusline_current_task_uses_shared_todo_resolution_candidates(tmp_path: Path) -> None:
+    from grd.hooks.statusline import _read_current_task
+
+    todos_dir = tmp_path / "todos"
+    todos_dir.mkdir(parents=True)
+    (todos_dir / "todo.json").write_text(
+        json.dumps(
+            [
+                {
+                    "status": "in_progress",
+                    "activeForm": "Investigating the current task",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    candidate = type("TodoCandidate", (), {"path": todos_dir})()
+
+    with (
+        patch("grd.hooks.install_context.ordered_todo_lookup_candidates", return_value=[candidate]) as mock_candidates,
+        patch("grd.hooks.runtime_detect.get_todo_candidates", side_effect=AssertionError("unexpected direct todo lookup")),
+        patch(
+            "grd.hooks.runtime_detect.should_consider_todo_candidate",
+            side_effect=AssertionError("unexpected direct todo filtering"),
+        ),
+        patch("grd.hooks.statusline._matching_todo_files", return_value=[(1.0, todos_dir / "todo.json")]),
+    ):
+        task = _read_current_task("session-1", str(tmp_path))
+
+    mock_candidates.assert_called_once()
+    assert task == "Investigating the current task"
+
+
+def test_check_update_ignores_rejected_preferred_runtime_cache_when_no_runtime_is_active(
+    tmp_path: Path,
+) -> None:
+    from grd.hooks.check_update import main
+    from grd.hooks.runtime_detect import UpdateCacheCandidate
+
+    cache_path = tmp_path / "preferred-runtime-cache.json"
+    cache_path.write_text(json.dumps({"checked": int(time.time())}), encoding="utf-8")
+
+    preferred_candidate = UpdateCacheCandidate(path=cache_path, runtime="codex", scope="local")
+
+    with (
+        patch("grd.hooks.runtime_detect.get_update_cache_candidates", return_value=[preferred_candidate]),
+        patch("grd.hooks.runtime_detect.detect_active_runtime_with_grd_install", return_value="unknown"),
+        patch("grd.hooks.runtime_detect.detect_runtime_for_grd_use", return_value="codex"),
+        patch("grd.hooks.runtime_detect.should_consider_update_cache_candidate", return_value=False),
+        patch("grd.hooks.check_update._claim_inflight_marker", return_value=True) as mock_claim,
+        patch("grd.hooks.check_update.subprocess.Popen") as mock_popen,
+    ):
+        mock_popen.return_value = MagicMock()
+        main()
+
+    mock_claim.assert_called_once()
+    mock_popen.assert_called_once()
 
 
 def test_runtime_detect_does_not_keep_dead_private_lookup_helpers() -> None:
@@ -293,9 +481,7 @@ def test_installed_update_command_normalizes_manifest_runtime_alias(tmp_path: Pa
 
     command = installed_update_command(explicit_target)
 
-    assert command is not None
-    assert "--codex" in command
-    assert "--target-dir" in command
+    assert command is None
 
 
 @pytest.mark.parametrize("runtime_arg", ["Claude Code", "claude"])
@@ -308,10 +494,10 @@ def test_runtime_cli_accepts_display_name_and_alias_runtime_argument(
 
     runtime = "claude-code"
     adapter = get_adapter(runtime)
-    gpd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
+    grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
     target_dir = tmp_path / adapter.config_dir_name
     target_dir.mkdir(parents=True, exist_ok=True)
-    result = adapter.install(gpd_root, target_dir, is_global=True)
+    result = adapter.install(grd_root, target_dir, is_global=True)
     adapter.finalize_install(result)
     manifest_path = target_dir / "grd-file-manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -341,10 +527,11 @@ def test_installed_runtime_fails_closed_for_invalid_manifest_runtime(tmp_path: P
 
     runtime = "codex"
     adapter = get_adapter(runtime)
-    gpd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
+    grd_root = Path(__file__).resolve().parents[2] / "src" / "grd"
     target_dir = tmp_path / adapter.config_dir_name
+    skills_dir = tmp_path / ".agents" / "skills"
     target_dir.mkdir(parents=True, exist_ok=True)
-    result = adapter.install(gpd_root, target_dir, is_global=True)
+    result = adapter.install(grd_root, target_dir, is_global=True, skills_dir=skills_dir)
     adapter.finalize_install(result)
 
     manifest_path = target_dir / "grd-file-manifest.json"
@@ -440,7 +627,7 @@ def test_installed_update_command_treats_scope_less_explicit_local_named_target_
     assert command is None
 
 
-def test_installed_update_command_does_not_recover_legacy_explicit_target_named_like_default_from_update_workflow(
+def test_installed_update_command_keeps_implicit_local_scope_when_manifest_omits_explicit_target_and_workflow_is_incomplete(
     tmp_path: Path,
 ) -> None:
     from grd.hooks.install_metadata import installed_update_command
@@ -471,9 +658,36 @@ def test_installed_update_command_does_not_recover_legacy_explicit_target_named_
         encoding="utf-8",
     )
 
-    command = installed_update_command(explicit_target)
+    assert installed_update_command(explicit_target) is None
 
-    assert command is None
+
+@pytest.mark.parametrize("runtime", list_runtime_names())
+def test_installed_update_command_rejects_legacy_global_manifest_without_explicit_target_flag(
+    tmp_path: Path,
+    runtime: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from grd.adapters import get_adapter
+    from grd.hooks.install_metadata import installed_update_command
+
+    adapter = get_adapter(runtime)
+    canonical_home = tmp_path / "relocated-home"
+    canonical_home.mkdir(parents=True)
+    global_target = adapter.resolve_global_config_dir(home=canonical_home)
+    global_target.mkdir(parents=True)
+    (global_target / "grd-file-manifest.json").write_text(
+        json.dumps(
+            {
+                "install_scope": "global",
+                "runtime": runtime,
+                "install_target_dir": str(global_target),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("grd.hooks.install_metadata.Path.home", lambda: tmp_path / "ambient-home")
+    assert installed_update_command(global_target) is None
 
 
 @pytest.mark.parametrize(

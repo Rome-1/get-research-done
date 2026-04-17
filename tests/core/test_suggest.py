@@ -17,6 +17,14 @@ from grd.core.suggest import (
     SuggestResult,
     suggest_next,
 )
+from grd.hooks.runtime_detect import RUNTIME_UNKNOWN
+from tests.manuscript_test_support import (
+    CANONICAL_MANUSCRIPT_STEM,
+    manuscript_path,
+    manuscript_pdf_path,
+    manuscript_relpath,
+    write_proof_review_package,
+)
 from tests.runtime_install_helpers import seed_complete_runtime_install
 
 _RUNTIME_NAMES = tuple(list_runtimes())
@@ -65,7 +73,7 @@ def _setup_project(tmp_path: Path) -> Path:
     planning = tmp_path / "GRD"
     planning.mkdir()
     (planning / "phases").mkdir()
-    (planning / "PROJECT.md").write_text("# My Project\n")
+    (planning / "PROJECT.md").write_text("# My Project\n", encoding="utf-8")
     return tmp_path
 
 
@@ -92,14 +100,107 @@ def _create_phase(
     phase_dir = tmp_path / "GRD" / "phases" / name
     phase_dir.mkdir(parents=True, exist_ok=True)
     for i in range(1, plans + 1):
-        (phase_dir / f"{i:02d}-PLAN.md").write_text(f"Plan {i}\n")
+        (phase_dir / f"{i:02d}-PLAN.md").write_text(f"Plan {i}\n", encoding="utf-8")
     for i in range(1, summaries + 1):
-        (phase_dir / f"{i:02d}-SUMMARY.md").write_text(f"Summary {i}\n")
+        (phase_dir / f"{i:02d}-SUMMARY.md").write_text(f"Summary {i}\n", encoding="utf-8")
     if research:
-        (phase_dir / "RESEARCH.md").write_text("Research\n")
+        (phase_dir / "RESEARCH.md").write_text("Research\n", encoding="utf-8")
     if verification:
-        (phase_dir / "01-VERIFICATION.md").write_text("Verification\n")
+        (phase_dir / "01-VERIFICATION.md").write_text("Verification\n", encoding="utf-8")
     return phase_dir
+
+
+def _write_active_manuscript_entrypoint(
+    project_root: Path,
+    *,
+    root_name: str = "paper",
+    suffix: str = ".tex",
+    body: str = "\\documentclass{article}\n",
+) -> Path:
+    manuscript_root = project_root / root_name
+    manuscript_root.mkdir(parents=True, exist_ok=True)
+    entrypoint = manuscript_root / f"{CANONICAL_MANUSCRIPT_STEM}{suffix}"
+    entrypoint.write_text(body, encoding="utf-8")
+    (manuscript_root / "ARTIFACT-MANIFEST.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "paper_title": "Curvature Flow Bounds",
+                "journal": "jhep",
+                "created_at": "2026-03-10T00:00:00+00:00",
+                "artifacts": [
+                    {
+                        "artifact_id": "manuscript",
+                        "category": "tex",
+                        "path": entrypoint.name,
+                        "sha256": compute_sha256(entrypoint),
+                        "produced_by": "tests.core.test_suggest",
+                        "sources": [],
+                        "metadata": {"role": "manuscript"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return entrypoint
+
+
+def _write_reproducibility_manifest(project_root: Path, *, manuscript_pdf: Path) -> None:
+    (project_root / "paper" / "reproducibility-manifest.json").write_text(
+        json.dumps(
+            {
+                "paper_title": "Curvature Flow Bounds",
+                "date": "2026-03-10",
+                "contact": "research@example.com",
+                "environment": {
+                    "python_version": "3.12.1",
+                    "package_manager": "uv",
+                    "required_packages": [{"package": "numpy", "version": "1.26.4"}],
+                    "lock_file": "pyproject.toml",
+                },
+                "execution_steps": [
+                    {
+                        "name": "run-analysis",
+                        "command": "python scripts/run_analysis.py",
+                        "outputs": ["results/out.json"],
+                        "stochastic": False,
+                    }
+                ],
+                "expected_results": [
+                    {
+                        "quantity": "x",
+                        "expected_value": "1",
+                        "tolerance": "0.1",
+                        "script": "scripts/run_analysis.py",
+                    }
+                ],
+                "output_files": [
+                    {
+                        "path": manuscript_pdf.name,
+                        "checksum_sha256": compute_sha256(manuscript_pdf),
+                    }
+                ],
+                "resource_requirements": [
+                    {
+                        "step": "run-analysis",
+                        "cpu_cores": 1,
+                        "memory_gb": 1.0,
+                    }
+                ],
+                "minimum_viable": "1 core",
+                "recommended": "2 cores",
+                "random_seeds": [],
+                "seeding_strategy": "",
+                "known_platform_differences": [],
+                "verification_steps": ["pipeline rerun", "numerical comparison", "artifact inspection"],
+                "manifest_created": "2026-03-10T00:00:00+00:00",
+                "last_verified": "2026-03-10T00:00:00+00:00",
+                "last_verified_platform": "macOS-15-arm64",
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def _create_roadmap_with_phases(tmp_path: Path, phases: list[tuple[str, str]]) -> None:
@@ -120,7 +221,36 @@ def _create_todos(tmp_path: Path, count: int) -> None:
     pending = tmp_path / "GRD" / "todos" / "pending"
     pending.mkdir(parents=True, exist_ok=True)
     for i in range(count):
-        (pending / f"todo-{i}.md").write_text(f"Todo {i}\n")
+        (pending / f"todo-{i}.md").write_text(f"Todo {i}\n", encoding="utf-8")
+
+
+def _write_submission_review_package(
+    tmp_path: Path,
+    *,
+    theorem_bearing: bool,
+    review_report: bool = False,
+) -> Path:
+    root = _setup_project(tmp_path)
+    _create_state(
+        root,
+        {
+            "convention_lock": {
+                "metric_signature": "(-,+,+,+)",
+                "natural_units": "c=1",
+                "coordinate_system": "global chart",
+            }
+        },
+    )
+    package = write_proof_review_package(
+        root,
+        theorem_bearing=theorem_bearing,
+        review_report=review_report,
+    )
+    resolve_manuscript_proof_review_status(root, package.manuscript_path, persist_manifest=True)
+    if review_report:
+        (root / "GRD" / "REFEREE-REPORT.md").write_text("Accepted after revision.\n", encoding="utf-8")
+    _write_reproducibility_manifest(root, manuscript_pdf=package.manuscript_pdf_path)
+    return root
 
 
 # ─── No Project ────────────────────────────────────────────────────────────────
@@ -184,6 +314,57 @@ def test_no_project_with_runtime_dir_but_no_install_uses_plain_grd_command(tmp_p
     assert result.top_action.command == "grd init new-project"
 
 
+def test_format_command_matches_shared_runtime_surface_helper_for_suggest_next(tmp_path: Path) -> None:
+    """Suggest formatting should match the shared active-runtime command helper."""
+    workspace_runtime, _ = _runtime_pair_with_distinct_commands("suggest-next")
+    adapter = get_adapter(workspace_runtime)
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    seed_complete_runtime_install(workspace / adapter.local_config_dir_name, runtime=workspace_runtime)
+
+    result = suggest_module._format_command("suggest-next", cwd=workspace)
+
+    assert result == adapter.format_command("suggest-next")
+    assert result == format_active_runtime_command("suggest-next", cwd=workspace, fallback=None)
+
+
+def test_format_command_falls_back_to_local_cli_for_unknown_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unknown runtime detection should preserve the local CLI fallback surface."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    monkeypatch.setattr("grd.hooks.runtime_detect.detect_runtime_for_grd_use", lambda cwd=None: RUNTIME_UNKNOWN)
+
+    assert suggest_module._format_command("new-project", cwd=workspace) == "grd init new-project"
+
+
+@pytest.mark.parametrize("include_local_conflict", [False, True])
+def test_no_project_uses_global_runtime_command_when_global_install_is_effective(
+    tmp_path: Path, include_local_conflict: bool
+) -> None:
+    """A verified global install should surface adapter-formatted commands even with local clutter present."""
+    runtime = _RUNTIME_NAMES[0]
+    adapter = get_adapter(runtime)
+    home_dir = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    seed_complete_runtime_install(
+        adapter.resolve_global_config_dir(home=home_dir),
+        runtime=runtime,
+        install_scope="global",
+        home=home_dir,
+    )
+    if include_local_conflict:
+        (workspace / adapter.local_config_dir_name).mkdir(parents=True, exist_ok=True)
+
+    result = suggest_next(workspace)
+
+    assert result.top_action is not None
+    assert result.top_action.command == adapter.format_command("new-project")
+    assert result.top_action.command != "grd init new-project"
+
+
 # ─── Empty Project ─────────────────────────────────────────────────────────────
 
 
@@ -228,6 +409,25 @@ def test_paused_status_without_timestamp(tmp_path: Path) -> None:
     result = suggest_next(root)
     actions = [s.action for s in result.suggestions]
     assert "resume" in actions
+
+
+def test_paused_work_defers_missing_convention_suggestions_until_after_resume(tmp_path: Path) -> None:
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    _create_state(
+        root,
+        {
+            "position": {"status": "Paused", "paused_at": "2026-01-15T10:00:00Z"},
+            "convention_lock": {"metric_signature": "(-,+,+,+)"},
+        },
+    )
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "resume" in actions
+    assert "set-conventions" not in actions
+    assert result.context.missing_conventions == ()
 
 
 # ─── Blockers ──────────────────────────────────────────────────────────────────
@@ -448,8 +648,10 @@ def test_active_calculations_suggest_continue(tmp_path: Path) -> None:
     _create_roadmap(root)
     _create_state(root, {"active_calculations": ["RG flow computation"]})
     result = suggest_next(root)
-    actions = [s.action for s in result.suggestions]
-    assert "continue-calculations" in actions
+    continue_calculations = next((s for s in result.suggestions if s.action == "continue-calculations"), None)
+
+    assert continue_calculations is not None
+    assert continue_calculations.command == "grd progress"
     assert result.context.active_calculations == 1
 
 
@@ -477,28 +679,83 @@ def test_missing_conventions_suggest_set(tmp_path: Path) -> None:
     _create_state(root, {"convention_lock": {"metric_signature": "(-,+,+,+)"}})
     result = suggest_next(root)
     actions = [s.action for s in result.suggestions]
+    set_conventions = next((s for s in result.suggestions if s.action == "set-conventions"), None)
+    expected_missing = tuple(key for key in KNOWN_CONVENTIONS if key != "metric_signature")
+
     assert "set-conventions" in actions
-    assert "natural_units" in result.context.missing_conventions
-    assert "coordinate_system" in result.context.missing_conventions
+    assert result.context.missing_conventions == expected_missing
+    assert set_conventions is not None
+    assert "17 convention fields missing" in set_conventions.reason
 
 
 # ─── Paper Pipeline ────────────────────────────────────────────────────────────
 
 
+def test_markdown_manuscript_is_not_treated_as_new_project(tmp_path: Path) -> None:
+    """A markdown manuscript should be recognized without PROJECT.md."""
+    _write_active_manuscript_entrypoint(tmp_path, suffix=".md", body="# Markdown manuscript\n")
+
+    result = suggest_next(tmp_path)
+    actions = [s.action for s in result.suggestions]
+
+    assert "new-project" not in actions
+    assert "new-milestone" in actions
+    assert "peer-review" in actions
+    assert "arxiv-submission" not in actions
+    assert result.context.has_paper is True
+
+
 def test_paper_exists_suggests_peer_review_before_submission(tmp_path: Path) -> None:
-    """Paper draft suggests peer review before arXiv submission."""
+    """Paper draft suggests peer review and does not suggest arXiv before review clears."""
     root = _setup_project(tmp_path)
     _create_roadmap(root)
-    (root / "paper").mkdir()
-    (root / "paper" / "main.tex").write_text("\\documentclass{article}\n")
+    _write_active_manuscript_entrypoint(root)
     result = suggest_next(root)
     actions = [s.action for s in result.suggestions]
     assert "peer-review" in actions
-    assert "arxiv-submission" in actions
-    peer_review = next(s for s in result.suggestions if s.action == "peer-review")
-    arxiv_submission = next(s for s in result.suggestions if s.action == "arxiv-submission")
-    assert peer_review.priority < arxiv_submission.priority
+    assert "arxiv-submission" not in actions
     assert result.context.has_paper is True
+
+
+def test_ambiguous_manuscript_state_blocks_write_paper_and_arxiv_submission(tmp_path: Path) -> None:
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    _create_phase(root, "01-setup", plans=1, summaries=1, verification=True)
+    write_proof_review_package(root, theorem_bearing=False, review_report=True)
+    _write_active_manuscript_entrypoint(root, root_name="manuscript")
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "write-paper" not in actions
+    assert "arxiv-submission" not in actions
+    assert result.context.has_paper is False
+
+
+def test_inconsistent_manuscript_state_blocks_write_paper_and_arxiv_submission(tmp_path: Path) -> None:
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    _create_phase(root, "01-setup", plans=1, summaries=1, verification=True)
+    write_proof_review_package(root, theorem_bearing=False, review_report=True)
+    paper_dir = root / "paper"
+    (paper_dir / "PAPER-CONFIG.json").write_text(
+        json.dumps(
+            {
+                "title": "Alternate Title",
+                "authors": [{"name": "A. Researcher"}],
+                "abstract": "Abstract.",
+                "sections": [{"heading": "Intro", "content": "Hello."}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "write-paper" not in actions
+    assert "arxiv-submission" not in actions
+    assert result.context.has_paper is False
 
 
 def test_referee_report_in_planning_root_suggests_response(tmp_path: Path) -> None:
@@ -529,6 +786,275 @@ def test_referee_report_in_canonical_grd_root_suggests_response(tmp_path: Path) 
     assert "peer-review" not in actions
 
 
+def test_markdown_referee_report_suggests_response_without_arxiv_submission(tmp_path: Path) -> None:
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    _write_active_manuscript_entrypoint(root, suffix=".md", body="# Markdown manuscript\n")
+    (root / "GRD" / "REFEREE-REPORT.md").write_text("Major revision needed.\n", encoding="utf-8")
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "respond-to-referees" in actions
+    assert "peer-review" not in actions
+    assert "arxiv-submission" not in actions
+
+
+def test_author_response_and_accepted_decision_clear_referee_response_suggestion(tmp_path: Path) -> None:
+    root = _write_submission_review_package(tmp_path, theorem_bearing=False, review_report=True)
+    _create_roadmap(root)
+    (root / "GRD" / "AUTHOR-RESPONSE.md").write_text("Responses incorporated.\n", encoding="utf-8")
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "respond-to-referees" not in actions
+    assert "peer-review" not in actions
+    assert "arxiv-submission" in actions
+
+
+def test_blocking_accepted_decision_does_not_suggest_arxiv_submission(tmp_path: Path) -> None:
+    root = _write_submission_review_package(tmp_path, theorem_bearing=False, review_report=True)
+    _create_roadmap(root)
+    (root / "GRD" / "AUTHOR-RESPONSE.md").write_text("Responses incorporated.\n", encoding="utf-8")
+    (root / "GRD" / "review" / "REFEREE-DECISION.json").write_text(
+        json.dumps(
+            {
+                "manuscript_path": manuscript_relpath(),
+                "target_journal": "jhep",
+                "final_recommendation": "accept",
+                "final_confidence": "high",
+                "stage_artifacts": [f"GRD/review/STAGE-{stage}.json" for stage in ("reader", "literature", "math", "physics", "interestingness")],
+                "central_claims_supported": True,
+                "claim_scope_proportionate_to_evidence": True,
+                "physical_assumptions_justified": True,
+                "proof_audit_coverage_complete": True,
+                "theorem_proof_alignment_adequate": False,
+                "unsupported_claims_are_central": False,
+                "reframing_possible_without_new_results": True,
+                "mathematical_correctness": "adequate",
+                "novelty": "adequate",
+                "significance": "adequate",
+                "venue_fit": "adequate",
+                "literature_positioning": "adequate",
+                "unresolved_major_issues": 0,
+                "unresolved_minor_issues": 0,
+                "blocking_issue_ids": ["REF-001"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "arxiv-submission" not in actions
+
+
+def test_accepted_review_decision_overrides_referee_response_with_submission(tmp_path: Path) -> None:
+    root = _write_submission_review_package(tmp_path, theorem_bearing=False, review_report=True)
+    _create_roadmap(root)
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "respond-to-referees" not in actions
+    assert "peer-review" not in actions
+    assert "arxiv-submission" in actions
+
+
+def test_stale_non_theorem_review_snapshot_does_not_suggest_arxiv_submission(tmp_path: Path) -> None:
+    root = _write_submission_review_package(tmp_path, theorem_bearing=False, review_report=True)
+    _create_roadmap(root)
+    manuscript_path(root).write_text(
+        "\\documentclass{article}\n\\begin{document}\nEdited after accepted review.\n\\end{document}\n",
+        encoding="utf-8",
+    )
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "arxiv-submission" not in actions
+
+
+def test_review_package_for_different_active_manuscript_does_not_suggest_arxiv_submission(tmp_path: Path) -> None:
+    root = _write_submission_review_package(tmp_path, theorem_bearing=False, review_report=True)
+    _create_roadmap(root)
+    manuscript_path(root).unlink()
+    _write_active_manuscript_entrypoint(
+        root,
+        root_name="manuscript",
+        body="\\documentclass{article}\n\\begin{document}\nOther draft.\n\\end{document}\n",
+    )
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "arxiv-submission" not in actions
+
+
+def test_missing_submission_support_artifacts_do_not_suggest_arxiv_submission(tmp_path: Path) -> None:
+    root = _write_submission_review_package(tmp_path, theorem_bearing=False, review_report=True)
+    _create_roadmap(root)
+    for artifact_path in (
+        root / "paper" / "ARTIFACT-MANIFEST.json",
+        root / "paper" / "BIBLIOGRAPHY-AUDIT.json",
+        manuscript_pdf_path(root),
+    ):
+        artifact_path.unlink()
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "arxiv-submission" not in actions
+
+
+def test_missing_reproducibility_manifest_blocks_arxiv_submission(tmp_path: Path) -> None:
+    root = _write_submission_review_package(tmp_path, theorem_bearing=False, review_report=True)
+    _create_roadmap(root)
+    (root / "paper" / "reproducibility-manifest.json").unlink()
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "arxiv-submission" not in actions
+
+
+def test_publication_blockers_block_arxiv_submission_suggestion(tmp_path: Path) -> None:
+    root = _write_submission_review_package(tmp_path, theorem_bearing=False, review_report=True)
+    _create_roadmap(root)
+    _create_state(root, {"blockers": ["Venue fit still unresolved"]})
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "arxiv-submission" not in actions
+
+
+def test_missing_conventions_block_arxiv_submission_suggestion(tmp_path: Path) -> None:
+    root = _setup_project(tmp_path)
+    write_proof_review_package(root, theorem_bearing=False, review_report=True)
+    _create_roadmap(root)
+    _create_state(root, {"convention_lock": {"metric_signature": "(-,+,+,+)"}})
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+    expected_missing = tuple(key for key in KNOWN_CONVENTIONS if key != "metric_signature")
+
+    assert "arxiv-submission" not in actions
+    assert "set-conventions" in actions
+    assert result.context.missing_conventions == expected_missing
+
+
+def test_accepted_review_decision_without_review_ledger_does_not_suggest_arxiv_submission(tmp_path: Path) -> None:
+    root = _setup_project(tmp_path)
+    _create_roadmap(root)
+    _write_active_manuscript_entrypoint(root)
+    review_dir = root / "GRD" / "review"
+    review_dir.mkdir(parents=True, exist_ok=True)
+    (review_dir / "REFEREE-DECISION.json").write_text(
+        json.dumps(
+            {
+                "manuscript_path": manuscript_relpath(),
+                "target_journal": "jhep",
+                "final_recommendation": "accept",
+                "final_confidence": "high",
+                "stage_artifacts": [],
+                "central_claims_supported": True,
+                "claim_scope_proportionate_to_evidence": True,
+                "physical_assumptions_justified": True,
+                "proof_audit_coverage_complete": True,
+                "theorem_proof_alignment_adequate": False,
+                "unsupported_claims_are_central": False,
+                "reframing_possible_without_new_results": True,
+                "mathematical_correctness": "adequate",
+                "novelty": "adequate",
+                "significance": "adequate",
+                "venue_fit": "adequate",
+                "literature_positioning": "adequate",
+                "unresolved_major_issues": 0,
+                "unresolved_minor_issues": 0,
+                "blocking_issue_ids": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "arxiv-submission" not in actions
+
+
+def test_theorem_bearing_stale_manuscript_proof_review_blocks_arxiv_submission(tmp_path: Path) -> None:
+    root = _write_submission_review_package(tmp_path, theorem_bearing=True, review_report=True)
+    _create_roadmap(root)
+    (root / "GRD" / "AUTHOR-RESPONSE.md").write_text("Responses incorporated.\n", encoding="utf-8")
+    manuscript = manuscript_path(root)
+    manuscript.write_text(
+        "\\documentclass{article}\n\\begin{document}\nRevised theorem statement.\n\\end{document}\n",
+        encoding="utf-8",
+    )
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "arxiv-submission" not in actions
+
+
+def test_theorem_bearing_claim_inventory_without_math_coverage_blocks_arxiv_submission(tmp_path: Path) -> None:
+    root = _write_submission_review_package(tmp_path, theorem_bearing=False, review_report=True)
+    _create_roadmap(root)
+    claims_path = root / "GRD" / "review" / "CLAIMS.json"
+    claims_payload = json.loads(claims_path.read_text(encoding="utf-8"))
+    claims_payload["claims"][0]["claim_kind"] = "theorem"
+    claims_payload["claims"][0]["text"] = "For every r_0 > 0, the orbit intersects the target annulus."
+    claims_payload["claims"][0]["theorem_assumptions"] = ["chi > 0"]
+    claims_payload["claims"][0]["theorem_parameters"] = ["r_0"]
+    claims_path.write_text(json.dumps(claims_payload), encoding="utf-8")
+    math_stage_path = root / "GRD" / "review" / "STAGE-math.json"
+    math_stage_payload = json.loads(math_stage_path.read_text(encoding="utf-8"))
+    math_stage_payload["claims_reviewed"] = []
+    math_stage_payload["proof_audits"] = []
+    math_stage_path.write_text(json.dumps(math_stage_payload), encoding="utf-8")
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "arxiv-submission" not in actions
+
+
+def test_theorem_bearing_nested_section_text_blocks_arxiv_submission_without_claim_inventory(tmp_path: Path) -> None:
+    root = _write_submission_review_package(tmp_path, theorem_bearing=False, review_report=True)
+    _create_roadmap(root)
+    manuscript = _write_active_manuscript_entrypoint(
+        root,
+        body="\\documentclass{article}\n\\begin{document}\n\\input{sections/results}\n\\end{document}\n",
+    )
+    section_path = manuscript.parent / "sections" / "results.tex"
+    section_path.parent.mkdir(parents=True, exist_ok=True)
+    section_path.write_text(
+        "\\begin{theorem}For every r_0 > 0, the orbit intersects the target annulus.\\end{theorem}\n"
+        "\\begin{proof}Nested theorem proof.\\end{proof}\n",
+        encoding="utf-8",
+    )
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "arxiv-submission" not in actions
+
+
+def test_theorem_bearing_fresh_manuscript_proof_review_allows_arxiv_submission(tmp_path: Path) -> None:
+    root = _write_submission_review_package(tmp_path, theorem_bearing=True, review_report=True)
+    _create_roadmap(root)
+
+    result = suggest_next(root)
+    actions = [s.action for s in result.suggestions]
+
+    assert "arxiv-submission" in actions
+
+
 def test_milestone_referee_report_namespace_does_not_trigger_response(tmp_path: Path) -> None:
     root = _setup_project(tmp_path)
     _create_roadmap(root)
@@ -548,9 +1074,8 @@ def test_legacy_lowercase_referee_report_locations_no_longer_trigger_response(tm
     _create_roadmap(root)
     paper_dir = root / "GRD" / "paper"
     paper_dir.mkdir(parents=True)
-    (root / "paper").mkdir(parents=True)
-    (root / "paper" / "main.tex").write_text("\\documentclass{article}\n")
-    (paper_dir / "referee-report-1.md").write_text("Major revision needed.\n")
+    _write_active_manuscript_entrypoint(root)
+    (paper_dir / "referee-report-1.md").write_text("Major revision needed.\n", encoding="utf-8")
 
     result = suggest_next(root)
     actions = [s.action for s in result.suggestions]
@@ -564,8 +1089,8 @@ def test_non_markdown_referee_report_does_not_trigger_response(tmp_path: Path) -
     _create_roadmap(root)
     reports_dir = root / "paper" / "referee-reports"
     reports_dir.mkdir(parents=True)
-    (root / "paper" / "main.tex").write_text("\\documentclass{article}\n")
-    (reports_dir / "REFEREE-REPORT-1.txt").write_text("Major revision needed.\n")
+    _write_active_manuscript_entrypoint(root)
+    (reports_dir / "REFEREE-REPORT-1.txt").write_text("Major revision needed.\n", encoding="utf-8")
 
     result = suggest_next(root)
     actions = [s.action for s in result.suggestions]
@@ -757,6 +1282,10 @@ comparison_verdicts:
     assert execute is not None
     assert execute.priority <= 3  # boosted from 3 → 2
     assert result.context.adaptive_approach_locked is True
+
+
+def test_format_local_cli_command_falls_back_to_canonical_command_surface_for_unmapped_actions() -> None:
+    assert suggest_module._format_local_cli_command("discuss-phase") == "grd:discuss-phase"
 
 
 # ─── Issue 3: current_phase int coercion ─────────────────────────────────────

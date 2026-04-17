@@ -1,0 +1,186 @@
+"""Regression tests for the staged `new-project` contract."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from tests import new_project_stage_contract_support as stage_contract_module
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+NEW_PROJECT_COMMAND_PATH = REPO_ROOT / "src" / "grd" / "commands" / "new-project.md"
+
+
+def test_new_project_stage_contract_loads_and_preserves_stage_order() -> None:
+    contract = stage_contract_module.load_new_project_stage_contract()
+
+    assert contract.schema_version == 1
+    assert contract.workflow_id == "new-project"
+    assert contract.stage_ids() == ("scope_intake", "scope_approval", "post_scope")
+    assert contract.stages[0].order == 1
+    assert contract.stages[1].order == 2
+    assert contract.stages[2].order == 3
+    assert contract.stages[0].mode_paths == ("workflows/new-project.md",)
+    assert contract.stages[0].loaded_authorities == ("workflows/new-project.md",)
+    assert contract.stages[0].required_init_fields == (
+        "researcher_model",
+        "synthesizer_model",
+        "commit_docs",
+        "autonomy",
+        "research_mode",
+        "project_exists",
+        "has_research_map",
+        "planning_exists",
+        "has_research_files",
+        "has_project_manifest",
+        "needs_research_map",
+        "has_git",
+        "platform",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+    )
+    assert "project_contract_gate" in contract.stages[0].required_init_fields
+    assert "needs_research_map" in contract.stages[0].required_init_fields
+    assert contract.stages[0].conditional_authorities[0].when == "full_questioning_path"
+    assert contract.stages[0].conditional_authorities[0].authorities == ("references/research/questioning.md",)
+    assert "references/research/questioning.md" in contract.stages[0].must_not_eager_load
+    assert "references/shared/canonical-schema-discipline.md" in contract.stages[0].must_not_eager_load
+    assert "templates/project-contract-schema.md" in contract.stages[0].must_not_eager_load
+    assert "templates/project-contract-grounding-linkage.md" in contract.stages[0].must_not_eager_load
+    assert contract.stages[0].produced_state == ("intake routing state", "scoping-contract gate state")
+    assert contract.stages[0].checkpoints == (
+        "detect existing workspace state",
+        "surface the first scoping question",
+        "preserve contract gate visibility without assuming approval-stage authority",
+    )
+    assert contract.stages[0].writes_allowed == ()
+    assert contract.stages[1].required_init_fields == (
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+    )
+    assert contract.stages[1].loaded_authorities == (
+        "templates/project-contract-schema.md",
+        "templates/project-contract-grounding-linkage.md",
+        "references/shared/canonical-schema-discipline.md",
+    )
+    assert contract.stages[1].conditional_authorities == ()
+    assert contract.stages[1].produced_state == ("approved project contract", "approval-state persistence")
+    assert contract.stages[1].checkpoints == (
+        "approval gate has passed",
+        "project contract is ready for persistence",
+    )
+    assert contract.stages[1].writes_allowed == ("GRD/state.json",)
+    assert contract.stages[2].required_init_fields == (
+        "researcher_model",
+        "synthesizer_model",
+        "roadmapper_model",
+        "commit_docs",
+        "autonomy",
+        "research_mode",
+        "project_contract",
+        "project_contract_gate",
+        "project_contract_load_info",
+        "project_contract_validation",
+    )
+    assert contract.stages[2].loaded_authorities == (
+        "references/ui/ui-brand.md",
+        "templates/project.md",
+        "templates/requirements.md",
+    )
+    assert contract.stages[2].conditional_authorities == ()
+    assert contract.stages[2].writes_allowed == (
+        "GRD/PROJECT.md",
+        "GRD/REQUIREMENTS.md",
+        "GRD/ROADMAP.md",
+        "GRD/STATE.md",
+        "GRD/state.json",
+        "GRD/config.json",
+        "GRD/CONVENTIONS.md",
+        "GRD/literature/PRIOR-WORK.md",
+        "GRD/literature/METHODS.md",
+        "GRD/literature/COMPUTATIONAL.md",
+        "GRD/literature/PITFALLS.md",
+        "GRD/literature/SUMMARY.md",
+    )
+    assert "references/research/questioning.md" not in contract.stages[2].loaded_authorities
+    assert contract.stages[2].produced_state == (
+        "project artifacts",
+        "workflow preferences",
+        "downstream stage handoff",
+    )
+    assert contract.stages[2].checkpoints == (
+        "approval gate has passed",
+        "stage-aware deferred reads are now allowed",
+    )
+
+
+def test_new_project_stage_contract_loader_is_cached() -> None:
+    first = stage_contract_module.load_new_project_stage_contract()
+    second = stage_contract_module.load_new_project_stage_contract()
+
+    assert first is second
+
+
+def test_new_project_command_mentions_approval_time_grounding_linkage() -> None:
+    command_text = NEW_PROJECT_COMMAND_PATH.read_text(encoding="utf-8")
+
+    assert "project-contract-schema.md" in command_text
+    assert "project-contract-grounding-linkage.md" in command_text
+
+
+def test_new_project_stage_contract_rejects_unknown_top_level_keys() -> None:
+    payload = {
+        "schema_version": 1,
+        "workflow_id": "new-project",
+        "stages": [],
+        "unexpected": True,
+    }
+
+    with pytest.raises(ValueError, match="unexpected key"):
+        stage_contract_module.validate_new_project_stage_contract_payload(payload)
+
+
+def test_new_project_stage_contract_rejects_unknown_stage_keys() -> None:
+    payload = json.loads(stage_contract_module.NEW_PROJECT_STAGE_MANIFEST_PATH.read_text(encoding="utf-8"))
+    payload["stages"][0]["unexpected"] = "boom"
+
+    with pytest.raises(ValueError, match="unexpected key"):
+        stage_contract_module.validate_new_project_stage_contract_payload(payload)
+
+
+def test_new_project_stage_contract_rejects_invalid_ordering(tmp_path: Path) -> None:
+    payload = json.loads(stage_contract_module.NEW_PROJECT_STAGE_MANIFEST_PATH.read_text(encoding="utf-8"))
+    payload["stages"][0]["order"] = 2
+    payload["stages"][1]["order"] = 1
+    path = tmp_path / "new-project-stage-manifest.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="stage order values"):
+        stage_contract_module.load_new_project_stage_contract_from_path(path)
+
+
+@pytest.mark.parametrize(
+    ("mutator", "expected"),
+    [
+        (lambda payload: payload["stages"][0]["loaded_authorities"].__setitem__(0, "references/missing.md"), "markdown file"),
+        (lambda payload: payload["stages"][0]["allowed_tools"].__setitem__(0, "network"), "unknown tool name"),
+        (lambda payload: payload["stages"][1]["required_init_fields"].__setitem__(0, "bogus_field"), "unknown field name"),
+        (
+            lambda payload: payload["stages"][0]["must_not_eager_load"].append("workflows/new-project.md"),
+            "overlap with must_not_eager_load",
+        ),
+        (lambda payload: payload["stages"][0]["writes_allowed"].append("../state.json"), "normalized relative POSIX path"),
+    ],
+)
+def test_new_project_stage_contract_rejects_validation_drift(mutator, expected: str) -> None:
+    payload = json.loads(stage_contract_module.NEW_PROJECT_STAGE_MANIFEST_PATH.read_text(encoding="utf-8"))
+    mutator(payload)
+
+    with pytest.raises(ValueError, match=expected):
+        stage_contract_module.validate_new_project_stage_contract_payload(payload)

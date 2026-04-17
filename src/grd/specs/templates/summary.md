@@ -1,12 +1,13 @@
 ---
 template_version: 1
+type: summary-template
 ---
 
 # Summary Template
 
 Template for `.grd/phases/XX-name/{phase}-{plan}-SUMMARY.md` - phase completion documentation.
 
----
+For contract-backed summaries, include `plan_contract_ref`, `contract_results`, and any required `comparison_verdicts`. Keep `uncertainty_markers` explicit. The canonical schema defines the exact list-trimming semantics, status vocabularies, and ID alignment; this wrapper should not restate them.
 
 ## Summary Depth Selection
 

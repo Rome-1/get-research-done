@@ -9,8 +9,6 @@ allowed-tools:
   - find_files
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Safely rollback the last GRD-related git commit. Creates a safety checkpoint tag before reverting so the operation itself is reversible.
@@ -27,7 +25,7 @@ Use this when a plan, execution, or verification produced incorrect results and 
 </context>
 
 <process>
-If `--dry-run` flag is present, show the commit that would be reverted and files affected, without actually reverting.
+This wrapper runs the undo workflow directly. Any stopping points come from the workflow's own safety gates and confirmation steps.
 
 Execute the undo workflow from @{GRD_INSTALL_DIR}/workflows/undo.md end-to-end.
 Preserve all safety gates and confirmation steps.

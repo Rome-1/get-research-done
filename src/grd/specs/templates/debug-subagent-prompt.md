@@ -8,9 +8,25 @@ Template for spawning grd-debugger agent. The agent contains all physics debuggi
 
 ---
 
+## Canonical Debug Session Contract
+
+The spawned debugger must satisfy this contract before producing output:
+
+- Session artifact: `GRD/debug/{slug}.md`
+- Lifecycle/status vocabulary: `gathering | investigating | fixing | verifying | resolved`
+- Goal vocabulary: `find_root_cause_only | find_and_fix`
+- Continuation semantics: read `GRD/debug/{slug}.md` first, then continue from next_action
+
 ## Template
 
 ```markdown
+<debug_session_contract>
+session_artifact: GRD/debug/{slug}.md
+status: gathering | investigating | fixing | verifying | resolved
+goal: find_root_cause_only | find_and_fix
+continuation: Read the file at GRD/debug/{slug}.md first, then continue from next_action.
+</debug_session_contract>
+
 <objective>
 Investigate issue: {issue_id}
 
@@ -88,7 +104,7 @@ task(prompt=template, subagent_type="grd-debugger", description="Debug VAL-001")
 # model parameter from profile tier — omit on single-model platforms
 ```
 
-## <!-- task() subagent_type and model parameters are runtime-specific. The installer adapts these to the target platform's delegation mechanism. -->
+## <!-- task() subagent_type and model parameters are runtime-specific; the installer adapts them to the target platform's delegation mechanism. -->
 
 ## Systematic Physics Debugging Strategy
 
@@ -107,9 +123,16 @@ The grd-debugger agent applies a systematic approach to physics calculation erro
 
 ## Continuation
 
-For checkpoints, spawn fresh agent with:
+For checkpoints, spawn a fresh agent with:
 
 ```markdown
+<debug_session_contract>
+session_artifact: GRD/debug/{slug}.md
+status: gathering | investigating | fixing | verifying | resolved
+goal: {goal}
+continuation: Read the file at GRD/debug/{slug}.md first, then continue from next_action.
+</debug_session_contract>
+
 <objective>
 Continue debugging {slug}. Evidence is in the debug file.
 </objective>

@@ -5,7 +5,7 @@ tools: file_read, file_write, shell, find_files, search_files, web_search, web_f
 commit_authority: orchestrator
 surface: internal
 role_family: verification
-artifact_write_authority: scoped_write
+artifact_write_authority: read_only
 shared_state_authority: return_only
 color: green
 ---
@@ -142,7 +142,8 @@ Read autonomy mode from config. Higher autonomy = plan checker is more critical 
 
 **Question:** Do these plans carry the approved contract into execution without allowing false progress?
 
-**Authority order:** `plan frontmatter contract` -> `verification_context project_contract` -> `active_reference_context`.
+**Authority order:** `plan frontmatter contract` -> `verification_context project_contract`. Treat `effective_reference_intake` and `active_reference_context` only as readable projections of those anchors, never as substitute authority.
+Treat stable knowledge docs surfaced through the shared reference context as reviewed background syntheses only. They may refine assumptions or method choice when they agree with stronger sources, but they do not override `convention_lock`, `project_contract`, the PLAN `contract`, `contract_results`, `comparison_verdicts`, proof-review artifacts, or direct benchmark/result evidence.
 
 Reject with `blocker` if any of the following is true:
 
@@ -772,7 +773,7 @@ issue:
 - Plan assumes internet access for downloading data or packages during execution
 - Code requires specific OS features (Linux-only system calls, Windows COM objects)
 
-**Key principle:** The executor agent runs in a computational environment with Python, standard scientific packages, and file I/O. Plans should not assume anything beyond this without explicit justification. When specialized tools are genuinely needed, the plan must either (a) confirm availability, (b) provide installation instructions as a permission-gated prerequisite task, or (c) offer a fallback using standard tools.
+**Key principle:** The executor agent runs in a computational environment with Python, standard scientific packages, and file I/O. Plans should not assume anything beyond this without explicit justification. When specialized tools are genuinely needed, the plan must declare them in `tool_requirements`, keep `researcher_setup` for human-only credentials/setup, and then either (a) confirm availability, (b) provide installation instructions as a permission-gated prerequisite task, or (c) offer a fallback using standard tools.
 
 **Example — licensed software:**
 
@@ -783,7 +784,7 @@ issue:
   description: "Task 3 requires Mathematica for symbolic Groebner basis computation but availability is not confirmed"
   plan: "04-02"
   task: 3
-  fix_hint: "Use sympy.polys.groebnertools as alternative, or add prerequisite confirming Mathematica access via Wolfram Engine"
+  fix_hint: "Declare `tool_requirements: [{id: wolfram-cas, tool: wolfram, purpose: ..., fallback: ...}]`, use sympy.polys.groebnertools as alternative, or add prerequisite confirming Mathematica access via Wolfram Engine"
 ```
 
 **Example — hardware assumption:**
@@ -883,51 +884,43 @@ If present, treat it as the canonical planning surface.
 
 **Expected contract structure** (field names match grd-planner canonical output):
 
-```yaml
-contract:
-  scope:
-    question: "What decisive question does this plan advance?"
-  context_intake:
-    must_read_refs: [ref-main]
-    must_include_prior_outputs: ["Phase 00 baseline table"]
-    user_asserted_anchors: ["Use the approved gauge, unit, and notation conventions"]
-  claims:
-    - id: claim-main
-      statement: "Recover the benchmark value within tolerance"
-      deliverables: [deliv-main]
-      acceptance_tests: [test-main]
-      references: [ref-main]
-  deliverables:
-    - id: deliv-main
-      kind: figure
-      path: "figures/benchmark.png"
-      description: "Benchmark comparison figure"
-      must_contain: ["benchmark value", "tolerance"]
-  references:
-    - id: ref-main
-      kind: paper
-      locator: "Author et al., Journal, 2024"
-      role: benchmark
-      why_it_matters: "Provides the benchmark value and comparison convention."
-      applies_to: [claim-main]
-      must_surface: true
-      required_actions: [read, compare, cite]
-  acceptance_tests:
-    - id: test-main
-      subject: claim-main
-      kind: benchmark
-      procedure: "Compare the computed value against the benchmark anchor within tolerance."
-      pass_condition: "Matches benchmark within tolerance"
-      evidence_required: [deliv-main, ref-main]
-  forbidden_proxies:
-    - id: fp-main
-      subject: claim-main
-      proxy: "Qualitative trend match without numerical comparison"
-      reason: "Would not establish the decisive benchmark result."
-  uncertainty_markers:
-    weakest_anchors: ["Reference tolerance interpretation"]
-    disconfirming_observations: ["Benchmark agreement disappears after normalization fix"]
-```
+**Checker anchor example:** Keep one concrete benchmark contract visible when it matters:
+
+- `schema_version: 1`
+- `in_scope: ["Recover the benchmark value within tolerance"]`
+- `GRD/phases/00-baseline/00-01-SUMMARY.md`
+- `GRD/phases/00-baseline/00-01-SUMMARY.md#gauge-unit-and-notation-conventions`
+- `GRD/phases/00-baseline/00-01-SUMMARY.md#gauge-and-tensor-convention`
+- `GRD/phases/01-vacuum-polarization/01-01-SUMMARY.md`
+- `claim_kind: theorem`
+- `parameters:`
+- `- symbol: k`
+- `domain_or_type: "dimensionless"`
+- `aliases: [kappa]`
+- `required_in_proof: true`
+- `hypotheses:`
+- `- id: hyp-normalization`
+- `text: "Reference normalization and tolerance convention match Ref-01"`
+- `symbols: [k]`
+- `category: assumption`
+- `conclusion_clauses:`
+- `- id: concl-benchmark`
+- `text: "Benchmark agreement stays within tolerance at every approved sample"`
+- `proof_deliverables: [deliv-proof-main]`
+
+context_intake:
+  must_read_refs: [ref-main]
+  must_include_prior_outputs: ["GRD/phases/00-baseline/00-01-SUMMARY.md"]
+  user_asserted_anchors: ["GRD/phases/00-baseline/00-01-SUMMARY.md#gauge-unit-and-notation-conventions"]
+
+references:
+  - id: ref-main
+    why_it_matters: "Provides the benchmark value and comparison convention."
+    required_actions: [read, compare, cite]
+
+acceptance_tests:
+  - id: test-main
+    procedure: "Compare the computed value against the benchmark anchor within tolerance."
 
 Reject plans when the contract is missing or incomplete. The contract is the only machine-readable source for executor-readiness and verification coverage.
 
@@ -1125,11 +1118,14 @@ grep -iE '(mathematica|matlab|maple|cadabra|FORM|gaussian|VASP|ABINIT|COMSOL|for
 
 For each hit: classify by dependency tier (standard/common/specialized/licensed/hardware/external), check if availability is confirmed or an alternative is provided, flag if not.
 
-## Step 17: Determine Overall Status
+## Step 17: Determine `grd_return.status`
 
-**passed:** All research requirements covered, all tasks complete, dependencies valid, approximations justified, computations feasible, validation adequate, results wired, literature reviewed, path to publication clear.
+Headings such as `## VERIFICATION PASSED`, `## ISSUES FOUND`, and `## PLAN_BLOCKED — Escalation to User` are presentation only. Route on `grd_return.status`.
 
-**issues_found:** One or more blockers or warnings. Plans need revision.
+- `grd_return.status: completed` -- All research requirements are covered, tasks are complete, dependencies are valid, approximations are justified, computations are feasible, validation is adequate, results are wired, literature is covered, and the path to publication is clear.
+- `grd_return.status: checkpoint` -- Some plans are approved and can proceed, but one or more plans still need revision. Return the approved and blocked plan sets explicitly.
+- `grd_return.status: failed` -- No executable approval set is ready yet. One or more blockers or warnings require planner revision before execution.
+- `grd_return.status: blocked` -- Blocker-level issues persisted through 3 revision rounds and must escalate to the user.
 
 Severities: `blocker` (must fix), `warning` (should fix), `info` (suggestions).
 
@@ -1145,7 +1141,7 @@ Round 3: {N''} blockers remaining → if any remain, trigger escalation
 
 **Persistent blocker escalation (after 3 rounds):**
 
-If BLOCKER-level issues persist after 3 revision rounds, return PLAN_BLOCKED with a structured escalation report. Do NOT simply repeat the same feedback — the planner has already failed to resolve it three times. Instead, provide the user with a diagnosis and concrete options.
+If BLOCKER-level issues persist after 3 revision rounds, return `grd_return.status: blocked` with a structured escalation report. Do NOT simply repeat the same feedback — the planner has already failed to resolve it three times. Instead, provide the user with a diagnosis and concrete options.
 
 ```markdown
 ## PLAN_BLOCKED — Escalation to User
@@ -1415,6 +1411,8 @@ Plans verified. Run `/grd:execute-phase {phase}` to proceed.
 
 ### Machine-Readable Return Envelope
 
+Headings above are presentation only. Route on `grd_return.status`, the approved/blocked plan lists, and `issues`.
+
 ```yaml
 grd_return:
   # base fields (status, files_written, issues, next_actions) per agent-infrastructure.md
@@ -1433,8 +1431,9 @@ grd_return:
   issues_found: [list with severity]
   revision_round: 1-3  # current round number
   revision_guidance: "specific feedback for planner"
-  escalation: null | {pattern, options}  # present when status is blocked (after 3 rounds)
 ```
+
+When contract-gate failures or escalation diagnoses matter, represent them in the `issues` list and the markdown report above instead of inventing nested `grd_return` payloads.
 
 Use only status names: `completed` | `checkpoint` | `blocked` | `failed`.
 
@@ -1583,7 +1582,7 @@ Plan verification complete when:
   - [ ] Locked decisions have implementing tasks
   - [ ] No tasks contradict locked decisions
   - [ ] Deferred ideas not included in plans
-- [ ] Overall status determined (passed | issues_found)
+- [ ] Overall `grd_return.status` determined (completed | checkpoint | failed | blocked)
 - [ ] Structured issues returned (if any found)
 - [ ] Result returned to orchestrator
 

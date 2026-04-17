@@ -1,8 +1,9 @@
 ---
 name: grd:progress
 description: Check research progress, show context, and route to next action (execute or plan)
-argument-hint: "[--brief] [--full] [--reconcile]"
+argument-hint: "[--brief | --full | --reconcile]"
 context_mode: project-required
+project_reentry_capable: true
 requires:
   files: [".grd/PROJECT.md"]
 allowed-tools:
@@ -12,13 +13,12 @@ allowed-tools:
   - find_files
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
-
 <objective>
-Check physics research progress, summarize recent work and what's ahead, then intelligently route to the next action — either executing an existing plan or creating the next one.
+Check physics research progress and route to the next action.
 
-Provides situational awareness before continuing research work.
+Runtime note: `--brief`, `--full`, and `--reconcile` are runtime-surface
+options for `grd:progress`. The local CLI `grd progress` is a separate
+read-only renderer that takes `json|bar|table` and does not accept these flags.
 </objective>
 
 <execution_context>

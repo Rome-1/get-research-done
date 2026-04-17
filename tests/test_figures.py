@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import struct
+import types
 from pathlib import Path
 
 import pytest
@@ -35,6 +37,40 @@ class TestFormatDetection:
 # ---- Normalization ----
 
 
+def _write_minimal_rgb_tiff(path: Path) -> None:
+    """Write a deterministic 1x1 RGB TIFF without relying on Pillow's TIFF encoder."""
+    entries: list[bytes] = []
+
+    def _entry(tag: int, value_type: int, count: int, value: int) -> None:
+        entries.append(struct.pack("<HHII", tag, value_type, count, value))
+
+    bits_per_sample_offset = 8 + 2 + (10 * 12) + 4
+    pixel_offset = bits_per_sample_offset + 6
+
+    _entry(256, 4, 1, 1)  # ImageWidth
+    _entry(257, 4, 1, 1)  # ImageLength
+    _entry(258, 3, 3, bits_per_sample_offset)  # BitsPerSample
+    _entry(259, 3, 1, 1)  # Compression = none
+    _entry(262, 3, 1, 2)  # PhotometricInterpretation = RGB
+    _entry(273, 4, 1, pixel_offset)  # StripOffsets
+    _entry(277, 3, 1, 3)  # SamplesPerPixel
+    _entry(278, 4, 1, 1)  # RowsPerStrip
+    _entry(279, 4, 1, 3)  # StripByteCounts
+    _entry(284, 3, 1, 1)  # PlanarConfiguration = chunky
+
+    payload = bytearray()
+    payload += b"II"
+    payload += struct.pack("<H", 42)
+    payload += struct.pack("<I", 8)
+    payload += struct.pack("<H", len(entries))
+    for entry in entries:
+        payload += entry
+    payload += struct.pack("<I", 0)
+    payload += struct.pack("<HHH", 8, 8, 8)
+    payload += b"\x00\x00\xff"
+    path.write_bytes(payload)
+
+
 class TestNormalization:
     def test_normalize_png_passthrough(self, tmp_path):
         # Create a real 10x10 PNG
@@ -50,7 +86,7 @@ class TestNormalization:
     def test_normalize_tiff_to_png(self, tmp_path):
         src = tmp_path / "input" / "fig.tiff"
         src.parent.mkdir()
-        Image.new("RGB", (10, 10), color="blue").save(src, "TIFF")
+        _write_minimal_rgb_tiff(src)
 
         out = tmp_path / "output"
         result = normalize_figure(src, out)
@@ -71,7 +107,7 @@ class TestNormalization:
     def test_normalize_svg_no_converter(self, tmp_path, monkeypatch):
         src = tmp_path / "input" / "fig.svg"
         src.parent.mkdir()
-        src.write_text("<svg></svg>")
+        src.write_text("<svg></svg>", encoding="utf-8")
 
         out = tmp_path / "output"
 
@@ -93,6 +129,115 @@ class TestNormalization:
 
         with pytest.raises(RuntimeError, match="SVG conversion requires"):
             normalize_figure(src, out)
+
+    def test_normalize_svg_preserves_cairosvg_failure_when_inkscape_also_missing(
+        self, tmp_path, monkeypatch
+    ):
+        src = tmp_path / "input" / "fig.svg"
+        src.parent.mkdir()
+        src.write_text("<svg></svg>", encoding="utf-8")
+
+        out = tmp_path / "output"
+
+        import subprocess
+        import sys
+
+        cairo_error = ValueError("invalid SVG content")
+        fake_cairosvg = types.ModuleType("cairosvg")
+
+        def _raise_svg2pdf(*args, **kwargs):
+            raise cairo_error
+
+        fake_cairosvg.svg2pdf = _raise_svg2pdf  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "cairosvg", fake_cairosvg)
+        _original_run = subprocess.run
+
+        def _mock_run(args, **kwargs):
+            if args and args[0] == "inkscape":
+                raise FileNotFoundError("inkscape not found")
+            return _original_run(args, **kwargs)
+
+        monkeypatch.setattr("subprocess.run", _mock_run)
+
+        with pytest.raises(RuntimeError) as exc_info:
+            normalize_figure(src, out)
+
+        message = str(exc_info.value)
+        assert "SVG conversion failed after CairoSVG raised ValueError: invalid SVG content" in message
+        assert "Inkscape fallback failed: inkscape not found" in message
+        assert exc_info.value.__cause__ is cairo_error
+
+    def test_normalize_svg_reports_inkscape_stderr_and_cleans_partial_output(self, tmp_path, monkeypatch):
+        src = tmp_path / "input" / "fig.svg"
+        src.parent.mkdir()
+        src.write_text("<svg></svg>", encoding="utf-8")
+
+        out = tmp_path / "output"
+
+        import subprocess
+        import sys
+
+        cairo_error = ValueError("invalid SVG content")
+        fake_cairosvg = types.ModuleType("cairosvg")
+
+        def _raise_svg2pdf(*args, **kwargs):
+            raise cairo_error
+
+        fake_cairosvg.svg2pdf = _raise_svg2pdf  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "cairosvg", fake_cairosvg)
+
+        def _mock_run(args, **kwargs):
+            export_arg = next(arg for arg in args if arg.startswith("--export-filename="))
+            dest = Path(export_arg.split("=", 1)[1])
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text("partial pdf", encoding="utf-8")
+            raise subprocess.CalledProcessError(
+                1,
+                args,
+                stderr="inkscape parse failure",
+            )
+
+        monkeypatch.setattr("subprocess.run", _mock_run)
+
+        with pytest.raises(RuntimeError) as exc_info:
+            normalize_figure(src, out)
+
+        message = str(exc_info.value)
+        assert "stderr: inkscape parse failure" in message
+        assert exc_info.value.__cause__ is cairo_error
+        assert not (out / "fig.pdf").exists()
+
+    def test_normalize_svg_preserves_broken_cairosvg_import_error(self, tmp_path, monkeypatch):
+        src = tmp_path / "input" / "fig.svg"
+        src.parent.mkdir()
+        src.write_text("<svg></svg>", encoding="utf-8")
+
+        out = tmp_path / "output"
+
+        import builtins
+
+        original_import = builtins.__import__
+        cairo_error = ImportError("missing libcairo runtime")
+        cairo_error.name = "libcairo"
+
+        def _mock_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "cairosvg":
+                raise cairo_error
+            return original_import(name, globals, locals, fromlist, level)
+
+        def _mock_run(args, **kwargs):
+            raise FileNotFoundError("inkscape not found")
+
+        monkeypatch.setattr(builtins, "__import__", _mock_import)
+        monkeypatch.setattr("subprocess.run", _mock_run)
+
+        with pytest.raises(RuntimeError) as exc_info:
+            normalize_figure(src, out)
+
+        message = str(exc_info.value)
+        assert "SVG conversion failed after CairoSVG raised ImportError: missing libcairo runtime" in message
+        assert "Inkscape fallback failed: inkscape not found" in message
+        assert exc_info.value.__cause__ is cairo_error
 
 
 # ---- Sizing ----

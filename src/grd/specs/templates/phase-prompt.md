@@ -6,13 +6,18 @@ template_version: 1
 
 Canonical PLAN.md structure for `grd-planner`. PLAN.md is the executor prompt, so every field must be specific enough to execute and verify without interpretation.
 
-Before authoring or revising the `contract:` block, use the canonical schema below as the source of truth. The include is intentionally standalone so the prompt expander can inline it.
+Use the canonical schema below before drafting any `contract:` block.
 
 @{GRD_INSTALL_DIR}/templates/plan-contract-schema.md
 
-The validator is strict here: for ordinary execution plans, the contract must carry non-empty claims, deliverables, acceptance tests, forbidden proxies, and a non-empty `context_intake`, plus non-empty `uncertainty_markers.weakest_anchors` and `uncertainty_markers.disconfirming_observations`. If references are present, at least one must set `must_surface: true`.
-Semantic enum fields with schema defaults may be omitted when `other` is actually intended. Use explicit `kind`, `role`, and `relation` values when the plan already knows the more specific semantics.
-The defaultable semantic fields still exist in the contract surface: `observables[].kind`, `deliverables[].kind`, `acceptance_tests[].kind`, `references[].kind`, `references[].role`, and `links[].relation`. They default to `other`, but the more specific value remains mandatory when the plan already knows it.
+Quick contract rules:
+- Put machine-checkable prerequisites in `tool_requirements`; keep human-only setup in `researcher_setup`. `tool_requirements[].id` values must be unique within the list.
+- Gap-closure plans still use `type: execute`; mark verification-repair plans with `gap_closure: true` instead of inventing a third plan type.
+- `scope.in_scope` must be populated in project-scoping plans, and `context_intake` anchors must be concrete enough to re-find later.
+- Keep `claim_kind`, `observables[].kind`, `deliverables[].kind`, `acceptance_tests[].kind`, `references[].kind`, `references[].role`, `links[].relation`, `must_surface`, `required_actions[]`, `applies_to[]`, `carry_forward_to[]`, and `uncertainty_markers` visible. When `must_surface` is `true`, keep `required_actions[]` and `applies_to[]` non-empty, and treat `carry_forward_to[]` as workflow scope only.
+- `context_intake`, `approach_policy`, and `uncertainty_markers` must stay YAML objects.
+- The validator accepts a closed tool vocabulary today: `wolfram` and `command`. For `tool: command`, a non-empty `command` field is mandatory; for other tools, omit `command`. `required` defaults to `true`, and `fallback` does not waive a required tool.
+- For proof-bearing work, use an explicit non-`other` `claim_kind`, keep hypotheses, parameters, and conclusions auditable, and name `observables[].kind: proof_obligation` items with the theorem or claim plus the hypotheses or parameter regime they cover. If a proof or theorem statement changes after a proof audit, treat that audit as stale before `status: passed` is possible for the affected target.
 
 ---
 
@@ -22,12 +27,25 @@ The defaultable semantic fields still exist in the contract surface: `observable
 ---
 phase: XX-name
 plan: NN
-type: execute | tdd | gap_closure
+type: execute | tdd
 wave: N
 depends_on: []
 files_modified: []
 interactive: false
+# gap_closure: true # Optional. Use only for verification repair plans.
 researcher_setup: [] # Optional. Omit if empty.
+# tool_requirements: # Optional machine-checkable specialized tools. Omit entirely if none.
+#   - id: "wolfram-cas"
+#     tool: "wolfram"
+#     purpose: "[Why this specialized tool is needed]"
+#     required: false
+#     fallback: "[Standard-tool fallback when feasible]"
+#   - id: "latex-compiler"
+#     tool: "command"
+#     command: "pdflatex --version"
+#     purpose: "[Executable probe when a specific local command must exist]"
+#     # `required` defaults to true when omitted.
+#     # A fallback does not make a missing required tool non-blocking.
 
 conventions:
   units: "natural"
@@ -45,13 +63,15 @@ approximations:
     check: "verification that guards the approximation"
 
 contract:
+  schema_version: 1
   scope:
     question: "[The decisive question this plan advances]"
+    in_scope: ["[Concrete objective or boundary this plan owns]"]
   context_intake:
     must_read_refs: [ref-main]
-    must_include_prior_outputs: ["Phase 00 benchmark table"]
-    user_asserted_anchors: ["Use the lattice normalization from the user notes"]
-    known_good_baselines: ["Published large-N curve from Smith et al."]
+    must_include_prior_outputs: ["GRD/phases/00-baseline/00-01-SUMMARY.md"]
+    user_asserted_anchors: ["GRD/phases/00-baseline/00-01-SUMMARY.md#vacuum-polarization-normalization"]
+    known_good_baselines: ["GRD/phases/00-baseline/00-01-SUMMARY.md#accepted-reference-curve"]
     context_gaps: ["Comparison source still undecided before planning"]
     crucial_inputs: ["Check the user's finite-volume cutoff choice before proceeding"]
   claims:
@@ -190,8 +210,15 @@ For `plan depth: light`, keep the same frontmatter but reduce the body to:
 - `<success_criteria>`
 
 Do not omit the `contract`, conventions, or approximation validity just because the plan is light.
-The `contract` block is still required in light mode, including `context_intake` and any `links` needed to make downstream handoffs explicit.
-If the plan is intentionally scoping-only, keep that limited shape explicit and preserve at least one target, open question, or carry-forward input instead of emitting a half-empty execution contract.
+The `contract` block is still required in light mode, including `contract.context_intake` and any `links` needed to make downstream handoffs explicit.
+If the plan is intentionally scoping-only, keep that limited shape explicit and preserve at least one target, open question, or carry-forward input.
+
+## Contract Shape Classifier
+
+- Reduced contract: legal only when the plan is explicitly scoping or exploratory.
+- Full contract: required when the plan will execute, verify, or publish a concrete result.
+- A reduced contract still needs `scope`, `contract.context_intake`, and `uncertainty_markers` explicit, plus at least one target, open question, or carry-forward input.
+- Light mode changes the body only; it does not change the contract classifier above.
 
 ---
 
@@ -216,13 +243,15 @@ dimensional_check:
   Pi_munu: "[mass^2]"
 
 contract:
+  schema_version: 1
   scope:
     question: What benchmark must this plan recover?
+    in_scope: ["Recover the benchmark curve within tolerance"]
   context_intake:
     must_read_refs: [ref-textbook]
-    must_include_prior_outputs: ["Phase 01 benchmark table"]
-    user_asserted_anchors: ["Use the normalization from the user notes"]
-    known_good_baselines: ["Accepted reference curve from the milestone review"]
+    must_include_prior_outputs: ["GRD/phases/00-baseline/00-01-SUMMARY.md"]
+    user_asserted_anchors: ["GRD/phases/00-baseline/00-01-SUMMARY.md#vacuum-polarization-normalization"]
+    known_good_baselines: ["GRD/phases/00-baseline/00-01-SUMMARY.md#accepted-reference-curve"]
     context_gaps: ["Need the exact comparison source before planning"]
     crucial_inputs: ["Confirm the user's cutoff convention before writing the plan"]
   claims:

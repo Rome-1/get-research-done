@@ -175,8 +175,8 @@ class ProjectStorageLayout:
 
     def _display_path(self, path: Path) -> str:
         if _is_relative_to(path, self.root):
-            return str(path.relative_to(self.root))
-        return str(path)
+            return path.relative_to(self.root).as_posix()
+        return path.as_posix()
 
     def _is_project_local_scratch_path(self, path: Path) -> bool:
         if not _is_relative_to(path, self.root) or _is_relative_to(path, self.grd):
@@ -243,7 +243,7 @@ class ProjectStorageLayout:
         if classification != StorageClass.USER_DURABLE:
             raise StoragePathError(
                 "User-visible durable outputs must land in a stable project directory, "
-                f"got {resolved} ({classification})."
+                f"got {resolved.as_posix()} ({classification})."
             )
         if kind is not None and not _is_relative_to(resolved, self.output_dir(kind)):
             raise StoragePathError(f"Expected a {kind.value} output under {self.output_dir(kind)}, got {resolved}.")
@@ -298,30 +298,30 @@ class ProjectStorageLayout:
         preferred_dirs = tuple(self.output_dir(candidate) for candidate in preferred_kinds)
 
         if self.project_root_is_temporary():
-            warnings.append(f"Project root is under a temporary directory: {self.root}")
+            warnings.append(f"Project root is under a temporary directory: {self.root.as_posix()}")
 
         if classification == StorageClass.PROJECT_LOCAL_OTHER and self._is_project_local_scratch_path(resolved):
             warnings.append(
                 "User-visible durable outputs should not land in project-local tmp/temp/scratch directories, "
-                f"got {resolved}."
+                f"got {resolved.as_posix()}."
             )
         elif classification == StorageClass.PROJECT_LOCAL_OTHER:
             preferred_label = (
                 ", ".join(str(path.relative_to(self.root)) for path in preferred_dirs) or "named durable roots"
             )
             warnings.append(
-                f"Output is in a custom project directory; prefer {preferred_label} for discoverability, got {resolved}."
+                f"Output is in a custom project directory; prefer {preferred_label} for discoverability, got {resolved.as_posix()}."
             )
         elif classification != StorageClass.USER_DURABLE:
             warnings.append(
                 "User-visible durable outputs should land in a stable project directory, "
-                f"got {resolved} ({classification})."
+                f"got {resolved.as_posix()} ({classification})."
             )
         elif preferred_dirs and not any(_is_relative_to(resolved, parent) for parent in preferred_dirs):
-            preferred_label = ", ".join(str(path.relative_to(self.root)) for path in preferred_dirs)
-            warnings.append(f"Expected output under one of {preferred_label}, got {resolved}.")
+            preferred_label = ", ".join(path.relative_to(self.root).as_posix() for path in preferred_dirs)
+            warnings.append(f"Expected output under one of {preferred_label}, got {resolved.as_posix()}.")
         elif kind is not None and not _is_relative_to(resolved, self.output_dir(kind)):
-            warnings.append(f"Expected a {kind.value} output under {self.output_dir(kind)}, got {resolved}.")
+            warnings.append(f"Expected a {kind.value} output under {self.output_dir(kind).as_posix()}, got {resolved.as_posix()}.")
 
         return StoragePathCheck(
             path=resolved,
@@ -333,7 +333,7 @@ class ProjectStorageLayout:
     def audit_storage_warnings(self) -> tuple[str, ...]:
         warnings: list[str] = []
         if self.project_root_is_temporary():
-            warnings.append(f"Project root is under a temporary directory: {self.root}")
+            warnings.append(f"Project root is under a temporary directory: {self.root.as_posix()}")
 
         if self.grd.exists():
             for path in self.grd.rglob("*"):
@@ -343,16 +343,15 @@ class ProjectStorageLayout:
                 suffix = path.suffix.lower()
 
                 if _is_relative_to(path, self.scratch_dir) and suffix not in _SCRATCH_TEMP_SUFFIXES:
-                    warnings.append(f"Scratch file should not be treated as durable output: {rel}")
+                    warnings.append(f"Scratch file should not be treated as durable output: {rel.as_posix()}")
                     continue
 
                 violation = self._internal_storage_violation(path)
                 if violation is not None:
                     warnings.append(violation)
 
-        for dirname in _PROJECT_SCRATCH_SEGMENTS:
-            project_scratch_root = self.root / dirname
-            if not project_scratch_root.is_dir():
+        for path in self.root.rglob("*"):
+            if not path.is_file() or _is_relative_to(path, self.grd):
                 continue
             for path in project_scratch_root.rglob("*"):
                 if not path.is_file():

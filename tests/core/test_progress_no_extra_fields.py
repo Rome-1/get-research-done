@@ -27,6 +27,6 @@ def test_progress_json_result_no_total_plans_in_phase_field():
 
 def test_progress_json_result_defined_fields():
     """ProgressJsonResult should only have these explicit fields."""
-    expected = {"milestone_version", "milestone_name", "phases", "total_plans", "total_summaries", "percent"}
+    expected = {"milestone_version", "milestone_name", "phases", "total_plans", "total_summaries", "percent", "state_progress_percent", "diverged", "warnings"}
     actual = set(ProgressJsonResult.model_fields.keys())
     assert actual == expected

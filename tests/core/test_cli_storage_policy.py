@@ -11,7 +11,32 @@ from grd.cli import app
 from grd.core.state import default_state_dict, generate_state_markdown
 from grd.core.storage_paths import ProjectStorageLayout, StoragePathError
 
-runner = CliRunner()
+
+class _StableCliRunner(CliRunner):
+    def invoke(self, *args, **kwargs):
+        kwargs.setdefault("color", False)
+        return super().invoke(*args, **kwargs)
+
+
+runner = _StableCliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _mock_paper_toolchain_payload() -> None:
+    with patch(
+        "grd.cli._paper_build_toolchain_payload",
+        return_value={
+            "compiler": "pdflatex",
+            "available": True,
+            "compiler_path": "/usr/bin/pdflatex",
+            "distribution": "texlive",
+            "latexmk_available": True,
+            "bibtex_available": True,
+            "kpsewhich_available": True,
+            "warnings": [],
+        },
+    ):
+        yield
 
 
 def _write_basic_paper_config(project_root: Path) -> Path:
@@ -37,7 +62,7 @@ def _build_result(output_dir: Path) -> MagicMock:
     result = MagicMock()
     result.manifest_path = output_dir / "ARTIFACT-MANIFEST.json"
     result.bibliography_audit_path = None
-    result.pdf_path = output_dir / "main.pdf"
+    result.pdf_path = output_dir / "curvature_flow_bounds.pdf"
     result.success = True
     result.errors = []
     return result
@@ -85,6 +110,26 @@ def test_paper_build_default_paper_output_has_no_storage_warnings(tmp_path: Path
     payload = json.loads(result.output)
     assert payload["output_dir"] == "./paper"
     assert payload["warnings"] == []
+
+
+def test_paper_build_nested_cwd_uses_project_root_for_storage_validation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(ProjectStorageLayout, "project_root_is_temporary", lambda self: False)
+    nested_cwd = tmp_path / "notes"
+    nested_cwd.mkdir()
+    (tmp_path / "GRD").mkdir()
+    _write_basic_paper_config(tmp_path)
+    paper_dir = tmp_path / "paper"
+
+    with patch("grd.mcp.paper.compiler.build_paper", new=AsyncMock(return_value=_build_result(paper_dir))) as mock_build:
+        result = runner.invoke(app, ["--raw", "--cwd", str(nested_cwd), "paper-build"], catch_exceptions=False)
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["output_dir"] == "../paper"
+    assert payload["warnings"] == []
+    assert mock_build.await_args.args[1] == paper_dir.resolve(strict=False)
 
 
 def test_paper_build_explicit_nonstandard_output_dir_warns_but_builds(tmp_path: Path, monkeypatch) -> None:

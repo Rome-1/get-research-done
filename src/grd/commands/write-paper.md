@@ -24,11 +24,23 @@ review-contract:
     - no research artifacts
     - degraded review integrity
   preflight_checks:
+    - command_context
     - project_state
     - roadmap
     - conventions
     - research_artifacts
+    - verification_reports
     - manuscript
+    - artifact_manifest
+    - bibliography_audit
+    - bibliography_audit_clean
+    - reproducibility_manifest
+    - reproducibility_ready
+    - manuscript_proof_review
+  conditional_requirements:
+    - when: theorem-bearing claims are present
+      required_outputs:
+        - "GRD/review/PROOF-REDTEAM{round_suffix}.md"
 allowed-tools:
   - file_read
   - file_write
@@ -41,11 +53,9 @@ allowed-tools:
   - ask_user
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
-Structure and write a physics paper from completed research results. Handles the full pipeline from research digest through polished draft: paper-readiness audit, scope and outline, figure generation, wave-parallelized section drafting, notation audit, bibliography verification, staged pre-submission peer review, and revision handling.
+Structure and write a physics paper from completed research results.
 
 **Orchestrator role:** Establish paper scope and structure, spawn grd-paper-writer agents for section drafting (wave-parallelized), grd-bibliographer for citation verification, run the staged peer-review panel (`grd-review-reader`, `grd-review-literature`, `grd-review-math`, `grd-review-physics`, `grd-review-significance`, then `grd-referee` as final adjudicator), coordinate revisions, ensure internal consistency.
 

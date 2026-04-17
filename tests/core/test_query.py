@@ -52,7 +52,7 @@ def project_dir(tmp_path: Path) -> Path:
 
         We derived the bare Hamiltonian H = p^2/2m + V(x).
         The spectral gap is Delta = 1.5 eV.
-    """)
+    """), encoding="utf-8"
     )
 
     # Phase 02
@@ -75,7 +75,7 @@ def project_dir(tmp_path: Path) -> Path:
 
         Applied perturbation theory to obtain the effective Hamiltonian.
         The correction term is delta_H = g * V_1.
-    """)
+    """), encoding="utf-8"
     )
 
     # Phase 03
@@ -95,7 +95,7 @@ def project_dir(tmp_path: Path) -> Path:
 
         Computed the scattering amplitude T = -i * g^2 / (E - E_0).
         This uses the weak coupling approximation.
-    """)
+    """), encoding="utf-8"
     )
 
     return tmp_path
@@ -272,7 +272,7 @@ class TestCollectSummaries:
     def test_skips_parse_errors(self, tmp_path: Path) -> None:
         phases_dir = tmp_path / "GRD" / "phases" / "01-test"
         phases_dir.mkdir(parents=True)
-        (phases_dir / "01-01-SUMMARY.md").write_text("---\nbad: [yaml: {{\n---\n")
+        (phases_dir / "01-01-SUMMARY.md").write_text("---\nbad: [yaml: {{\n---\n", encoding="utf-8")
         summaries = collect_summaries(tmp_path)
         assert len(summaries) == 0
 
@@ -292,7 +292,7 @@ class TestCollectSummaries:
             # Phase 02 Summary
 
             This summary should still be collected.
-        """)
+        """), encoding="utf-8"
         )
 
         summaries = collect_summaries(tmp_path)
@@ -343,6 +343,34 @@ class TestQuery:
         result = query(empty_project, provides="anything")
         assert result.total == 0
 
+    def test_query_search_includes_intermediate_results_registry(self, tmp_path: Path) -> None:
+        planning_dir = tmp_path / "GRD"
+        planning_dir.mkdir()
+        (planning_dir / "state.json").write_text(
+            dedent("""\
+            {
+              "intermediate_results": [
+                {
+                  "id": "R-01",
+                  "equation": "E = mc^2",
+                  "description": "registry-only result",
+                  "phase": "1",
+                  "depends_on": [],
+                  "verified": false,
+                  "verification_records": []
+                }
+              ]
+            }
+            """),
+            encoding="utf-8",
+        )
+
+        result = query(tmp_path, equation="E = mc^2")
+
+        assert result.total == 1
+        assert result.matches[0].field == "result_registry"
+        assert result.matches[0].value == "R-01"
+
     def test_query_phase_range(self, project_dir: Path) -> None:
         result = query(project_dir, phase_range="1-2")
         # Should only return phases 1 and 2
@@ -362,7 +390,7 @@ class TestQuery:
             # Phase 04 Summary
 
             Body text intentionally unrelated.
-        """)
+        """), encoding="utf-8"
         )
 
         result = query(project_dir, text="renormalization note")
@@ -382,7 +410,7 @@ class TestQuery:
             # Phase 04 Summary
 
             Structured provides entry.
-        """)
+        """), encoding="utf-8"
         )
 
         result = query(project_dir, provides="dated-result")
@@ -422,7 +450,7 @@ class TestQueryDeps:
             provides: bare-hamiltonian
             ---
             # Summary
-            """)
+            """), encoding="utf-8"
         )
 
         phase2 = tmp_path / "GRD" / "phases" / "02-core"
@@ -433,7 +461,7 @@ class TestQueryDeps:
             requires: bare-hamiltonian
             ---
             # Summary
-            """)
+            """), encoding="utf-8"
         )
 
         result = query_deps(tmp_path, "bare-hamiltonian")
@@ -452,7 +480,7 @@ class TestQueryDeps:
             provides: bare-hamiltonian
             ---
             # Summary
-            """)
+            """), encoding="utf-8"
         )
 
         phase2 = tmp_path / "GRD" / "phases" / "02-core"
@@ -463,7 +491,7 @@ class TestQueryDeps:
             requires: bare-hamiltonian
             ---
             # Summary
-            """)
+            """), encoding="utf-8"
         )
 
         result = query_deps(tmp_path, "bare hamiltonian")
@@ -483,7 +511,7 @@ class TestQueryDeps:
             provides: phase-10
             ---
             # Summary
-            """)
+            """), encoding="utf-8"
         )
 
         phase2 = tmp_path / "GRD" / "phases" / "02-core"
@@ -494,7 +522,7 @@ class TestQueryDeps:
             requires: phase-10
             ---
             # Summary
-            """)
+            """), encoding="utf-8"
         )
 
         result = query_deps(tmp_path, "phase-1")
@@ -511,7 +539,7 @@ class TestQueryDeps:
             provides: alpha
             ---
             # Summary
-            """)
+            """), encoding="utf-8"
         )
 
         phase2 = tmp_path / "GRD" / "phases" / "02-core"
@@ -524,7 +552,7 @@ class TestQueryDeps:
                 phase: phase-01-plan-01
             ---
             # Summary
-            """)
+            """), encoding="utf-8"
         )
 
         result = query_deps(tmp_path, "phase-01-plan-01")
@@ -542,7 +570,7 @@ class TestQueryDeps:
               - QED Feynman rules and conventions
             ---
             # Summary
-            """)
+            """), encoding="utf-8"
         )
 
         phase2 = tmp_path / "GRD" / "phases" / "02-core"
@@ -554,7 +582,7 @@ class TestQueryDeps:
               - "01-01: QED Feynman rules and conventions"
             ---
             # Summary
-            """)
+            """), encoding="utf-8"
         )
 
         result = query_deps(tmp_path, "QED Feynman rules and conventions")
@@ -574,7 +602,7 @@ class TestQueryDeps:
             provides: alpha
             ---
             # Summary
-            """)
+            """), encoding="utf-8"
         )
 
         phase3 = tmp_path / "GRD" / "phases" / "03-update"
@@ -585,7 +613,7 @@ class TestQueryDeps:
             provides: alpha
             ---
             # Summary
-            """)
+            """), encoding="utf-8"
         )
 
         result = query_deps(tmp_path, "alpha")
@@ -594,6 +622,46 @@ class TestQueryDeps:
         assert result.provides_by.phase in ("3", "03")
         assert len(result.provider_conflicts) == 1
         assert result.provider_conflicts[0].phase in ("1", "01")
+
+    def test_deps_includes_intermediate_result_registry_dependency_chain(self, tmp_path: Path) -> None:
+        planning_dir = tmp_path / "GRD"
+        planning_dir.mkdir()
+        (planning_dir / "state.json").write_text(
+            dedent("""\
+            {
+              "intermediate_results": [
+                {
+                  "id": "R-01-foundation",
+                  "equation": "F",
+                  "description": "foundation",
+                  "phase": "01",
+                  "depends_on": [],
+                  "verified": false,
+                  "verification_records": []
+                },
+                {
+                  "id": "R-02-target",
+                  "equation": "T",
+                  "description": "target",
+                  "phase": "02",
+                  "depends_on": ["R-01-foundation"],
+                  "verified": false,
+                  "verification_records": []
+                }
+              ]
+            }
+            """),
+            encoding="utf-8",
+        )
+
+        target = query_deps(tmp_path, "R-02-target")
+        foundation = query_deps(tmp_path, "R-01-foundation")
+
+        assert target.provides_by is not None
+        assert target.provides_by.value == "R-02-target"
+        assert target.direct_deps == ["R-01-foundation"]
+        assert target.depends_on == ["R-01-foundation"]
+        assert foundation.required_by[0].value == "R-02-target"
 
 
 # ─── query_assumptions ───────────────────────────────────────────────────────────
@@ -645,7 +713,7 @@ class TestQueryAssumptions:
             # Phase 05 Summary
 
             Body text intentionally unrelated.
-        """)
+        """), encoding="utf-8"
         )
 
         result = query_assumptions(project_dir, "adiabatic switching")

@@ -14,11 +14,7 @@ allowed-tools:
   - search_files
   - task
   - web_fetch
-  - mcp__context7__*
 ---
-
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Create executable phase prompts (PLAN.md files) for a research-project phase with integrated research and verification.
@@ -41,17 +37,18 @@ Create executable phase prompts (PLAN.md files) for a research-project phase wit
 </execution_context>
 
 <context>
-Phase number: $ARGUMENTS (optional -- auto-detects next unplanned phase if omitted)
+Phase number: $ARGUMENTS (optional; auto-detects the next unplanned phase if omitted)
+Canonical contract schema and hard validation rules are enforced later by the staged planner and checker handoffs; every proof-bearing plan must surface the theorem statement, named parameters, hypotheses, quantifier/domain obligations, and intended conclusion clauses visibly enough that a later audit can detect missing coverage.
 
 **Flags:**
 
-- `--research` -- Force re-research even if RESEARCH.md exists
-- `--skip-research` -- Skip research, go straight to planning
-- `--gaps` -- Gap closure mode (reads VERIFICATION.md, skips research)
-- `--skip-verify` -- Skip verification loop
-- `--light` -- Produce simplified plans: contract + constraints + high-level approach only (no code snippets, no detailed implementation steps)
+- `--research` -- Re-research even if `RESEARCH.md` exists
+- `--skip-research` -- Skip research and plan directly
+- `--gaps` -- Gap-closure mode (`VERIFICATION.md`, no research)
+- `--skip-verify` -- Skip the verification loop
+- `--light` -- Produce contract-plus-constraints plans only
 
-Normalize phase input in step 2 before any directory lookups.
+Normalize the phase input before any directory lookups.
 </context>
 
 <inline_guidance>

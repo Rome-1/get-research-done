@@ -5,19 +5,15 @@ argument-hint: "[--all]"
 context_mode: global
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Display the complete GRD command reference.
 
-Output ONLY the reference content below. Do NOT add:
+Output ONLY reference content. Do NOT add project-specific analysis, git status,
+next-step suggestions, or commentary beyond the requested reference extract.
+</objective>
 
-- Project-specific analysis
-- Git status or file context
-- Next-step suggestions
-- Any commentary beyond the reference
-  </objective>
+Shared wrapper rule for every extract below: the loaded workflow help file is the authority. output only the requested section and do not rewrite, summarize, or invent alternate wording.
 
 <execution_context>
 @{GRD_INSTALL_DIR}/workflows/help.md
@@ -27,14 +23,15 @@ Output ONLY the reference content below. Do NOT add:
 
 ## Step 1: Parse Arguments
 
-Check if the user passed `--all` as an argument.
+Check whether the user passed `--command <name>` or `--all`.
 
-- If `$ARGUMENTS` contains `--all`: display the **Full Command Reference** (step 3).
-- If `$ARGUMENTS` is empty or does not contain `--all`: display the **Quick Start** (step 2) only.
+- If `$ARGUMENTS` contains `--command <name>`: display the **Single Command Detail Extract** (step 4).
+- If `$ARGUMENTS` contains `--all` and does not contain `--command <name>`: display the **Compact Command Index** (step 3).
+- If `$ARGUMENTS` is empty or contains neither `--all` nor `--command <name>`: display the **Quick Start Extract** (step 2) only.
 
-## Step 2: Quick Start (Default Output)
+## Step 2: Quick Start Extract (Default Output)
 
-Output this and STOP (do not display the full reference):
+Output ONLY this extract from the workflow-owned reference and then STOP:
 
 # GRD Command Reference
 
@@ -42,7 +39,11 @@ Output this and STOP (do not display the full reference):
 
 These `/grd:*` entries are canonical in-runtime slash-command names exposed inside the installed agent surface. They are not a promise that the local `grd` CLI exposes matching top-level subcommands.
 
-## Quick Start
+- Start at the workflow-owned `## Quick Start` section.
+- Include the workflow-owned `## Quick Start` section.
+- Include the workflow-owned `## Command Index` section.
+- Stop before `## Detailed Command Reference`.
+- Append this one wrapper-owned line: `Run \`grd:help --command <name>\` for detailed help on one command.`
 
 1. `/grd:new-project` — Initialize research project
 2. `/grd:discuss-phase <N>` — Clarify the phase before planning

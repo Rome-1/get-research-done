@@ -15,8 +15,15 @@ import subprocess
 import sys
 from copy import deepcopy
 
+from grd.mcp.verification_contract_policy import verification_server_description
+
 logger = logging.getLogger(__name__)
 
+_PYTHON_COMMAND_SENTINEL = "__GPD_PYTHON__"
+_PUBLIC_PYTHON_PLACEHOLDER = "${GPD_PYTHON}"
+_PYTHON_LAUNCH_NOTES = (
+    f"Replace `{_PUBLIC_PYTHON_PLACEHOLDER}` with a Python >=3.11 interpreter that has GRD installed."
+)
 
 # Canonical definition of all GRD built-in MCP servers.
 # Mirrors infra/*.json but lives inside the package so it ships with the wheel.
@@ -100,7 +107,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "assert_convention_validate",
             "subfield_defaults",
         ],
-        "registry_prefix": "gpd_conventions",
+        "registry_prefix": "grd_conventions",
         "health_check": {
             "tool": "subfield_defaults",
             "input": {"domain": "qft"},
@@ -119,7 +126,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "get_traceability",
             "list_error_classes",
         ],
-        "registry_prefix": "gpd_errors",
+        "registry_prefix": "grd_errors",
         "health_check": {
             "tool": "list_error_classes",
             "input": {},
@@ -138,7 +145,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "seed_patterns",
             "list_domains",
         ],
-        "registry_prefix": "gpd_patterns",
+        "registry_prefix": "grd_patterns",
         "health_check": {
             "tool": "list_domains",
             "input": {},
@@ -156,7 +163,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "route_protocol",
             "get_protocol_checkpoints",
         ],
-        "registry_prefix": "gpd_protocols",
+        "registry_prefix": "grd_protocols",
         "health_check": {
             "tool": "list_protocols",
             "input": {},
@@ -174,7 +181,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "route_skill",
             "get_skill_index",
         ],
-        "registry_prefix": "gpd_skills",
+        "registry_prefix": "grd_skills",
         "health_check": {
             "tool": "list_skills",
             "input": {},
@@ -195,11 +202,11 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "run_health_check",
             "get_config",
         ],
-        "registry_prefix": "gpd_state",
+        "registry_prefix": "grd_state",
         "health_check": {
-            "tool": "get_config",
-            "input": {"project_dir": "/tmp/test"},
-            "expect": "contains model_profile",
+            "tool": "get_state",
+            "input": {},
+            "expect": "returns a stable validation error envelope for missing required project_dir",
         },
     },
     "grd-verification": {
@@ -227,7 +234,7 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
             "symmetry_check",
             "get_verification_coverage",
         ],
-        "registry_prefix": "gpd_verification",
+        "registry_prefix": "grd_verification",
         "health_check": {
             "tool": "get_checklist",
             "input": {"domain": "qft"},
@@ -236,17 +243,18 @@ _PUBLIC_DESCRIPTOR_METADATA: dict[str, dict[str, object]] = {
     },
     "grd-arxiv": {
         "description": (
-            "Optional/conditional arXiv paper search and retrieval via arxiv-mcp-server. "
+            "Optional/conditional arXiv paper search, retrieval, and source-archive download via arxiv-mcp-server. "
             "Available only when the optional arxiv-mcp-server dependency is installed; "
-            "search for physics papers, fetch abstracts, and download full text."
+            "search for physics papers, fetch abstracts, download full text, and download raw source archives."
         ),
         "capabilities": [
             "search_papers",
             "download_paper",
             "list_papers",
             "read_paper",
+            "download_source",
         ],
-        "registry_prefix": "gpd_arxiv",
+        "registry_prefix": "grd_arxiv",
         "health_check": {
             "tool": "search_papers",
             "input": {"query": "quantum field theory", "max_results": 1},
@@ -306,7 +314,7 @@ def _build_public_alternatives(name: str) -> dict[str, dict[str, object]] | None
     args = list(raw.get("args", [])) if isinstance(raw.get("args"), list) else []
     return {
         "python_module": {
-            "command": _VersionedPythonLauncher(),
+            "command": _PUBLIC_PYTHON_PLACEHOLDER,
             "args": args,
             "notes": _ENTRY_POINT_NOTES,
         }
@@ -324,6 +332,8 @@ def build_public_descriptor(name: str) -> dict[str, object]:
     if name != "grd-arxiv" and name.startswith("grd-"):
         command = f"grd-mcp-{name.removeprefix('grd-')}"
         args = []
+    elif command == _PYTHON_COMMAND_SENTINEL:
+        command = _PUBLIC_PYTHON_PLACEHOLDER
     descriptor: dict[str, object] = {
         "name": name,
         "description": str(metadata["description"]),
@@ -347,6 +357,8 @@ def build_public_descriptor(name: str) -> dict[str, object]:
             descriptor["availability_condition"] = (
                 f"Available only when the optional Python module '{module_check}' is installed."
             )
+    if command == _PUBLIC_PYTHON_PLACEHOLDER:
+        descriptor["notes"] = _PYTHON_LAUNCH_NOTES
     return descriptor
 
 
@@ -441,7 +453,7 @@ def build_mcp_servers_dict(
                 continue
 
         cmd = str(raw["command"])
-        if cmd == "python":
+        if cmd == _PYTHON_COMMAND_SENTINEL:
             cmd = python_path
 
         raw_args = raw.get("args", [])

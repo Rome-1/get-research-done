@@ -49,7 +49,7 @@ Install GRD:
 npx get-research-done
 ```
 
-**Next steps after install**
+`help -> start -> tour -> new-project / map-research -> resume-work`
 
 The installer adds GRD to your runtime config, but it does not launch the runtime for you.
 
@@ -57,7 +57,17 @@ The installer adds GRD to your runtime config, but it does not launch the runtim
 2. Run its help command first: Claude Code / Gemini CLI use `/grd:help`, Codex uses `$grd-help`, and OpenCode uses `/grd-help`.
 3. Start with `new-project` for a fresh research project or `map-research` for an existing folder or project.
 
-For best performance, run both this install step and your chosen runtime from your normal system terminal, not inside the VS Code, Cursor, or other AI runtime command/chat interface.
+- From inside the folder where your project should live, install GPD with the matching `npx -y get-physics-done` bootstrap command from [Start Here](#start-here), then launch `claude`, `codex`, `gemini`, or `opencode`.
+- Run the matching GPD help command shown in [Supported Runtimes](#supported-runtimes).
+- Then use `start` if you are not sure what fits this folder, `tour` for a read-only walkthrough, `new-project --minimal` for new work, `map-research` for existing work, or `resume-work` when you return later.
+- Treat the new-work choice as distinct from the existing-work choice; pick one, then follow it through.
+
+The bootstrap installer requires Node.js 20+, Python 3.11+ with `venv`, and one supported runtime (`claude`, `gemini`, `codex`, or `opencode`).
+
+If the install worked, both of these should be true:
+
+1. `gpd --help` works in your normal terminal.
+2. Your runtime-specific GPD help command works inside the runtime.
 
 Then choose the path that matches your starting point:
 
@@ -69,7 +79,53 @@ Then choose the path that matches your starting point:
 
 Use the runtime-specific command syntax shown in [Supported Runtimes](#supported-runtimes), for example `/grd:settings` or `/grd:set-profile review`.
 
-If you are starting from existing work, run `map-research` first to map the formalism, computations, conventions, validation status, and open questions before `new-project`.
+`gpd resume` is the normal-terminal recovery step; `resume-work` is the in-runtime continue command after the right folder is open.
+
+After resuming, the runtime `suggest-next` command is the fastest post-resume next command when you only need the next action.
+
+<details>
+<summary><strong>Optional Terminal-Side Readiness And Troubleshooting Reference</strong></summary>
+
+Use this when you want to verify install health, unattended readiness, paper-toolchain prerequisites, or local CLI surfaces from your normal terminal. If you want the full beginner path, stay with the onboarding hub and your selected OS/runtime guides.
+
+**Bootstrap hard blockers**
+
+- `node` / `npx` work in your normal system terminal
+- Python 3.11+ with the standard `venv` module is available in that same terminal
+- Your selected runtime is already installed and launchable there (`claude`, `gemini`, `codex`, or `opencode`)
+
+If any of those fail, fix them before troubleshooting GPD itself. These are bootstrap prerequisites for the matching installer command, not a claim that every local `gpd ...` command rechecks them.
+
+**Advisories**
+
+- Choose `--local` or `--global` explicitly if you do not want the installer's default path selection
+- Runtime permissions are runtime-owned permission alignment only; use the guided checks after startup to decide whether the runtime is ready.
+- Use your runtime-specific `settings` command after the first successful launch as the guided path for unattended configuration. Balanced (`balanced`) is the recommended unattended default.
+- For the broader terminal-side diagnostics, readiness, recovery, visibility, cost, and preset surface, start with `gpd --help` from your normal terminal.
+- Use `gpd validate unattended-readiness --runtime <runtime> --autonomy balanced` when you want a terminal-side unattended or overnight verdict.
+- If you plan paper/manuscript work later, use `gpd doctor --runtime <runtime> --local` for the project-local target or `gpd doctor --runtime <runtime> --global` for the global target first. For the fuller preset catalog, shared Wolfram integration details, and plan-preflight boundaries, use `gpd presets list`, `gpd integrations status wolfram`, and `gpd validate plan-preflight <PLAN.md>` from your normal terminal.
+- Provider authentication is checked manually in the runtime itself; GPD will point this out, but it does not hard-block installation readiness on it
+- Use `--upgrade` only when you intentionally want the latest unreleased GitHub `main` snapshot
+
+**Quick verification path**
+
+1. Install with an explicit runtime when possible, for example use the matching bootstrap command with `--<runtime-flag> --local`.
+2. From the same terminal, run `gpd doctor --runtime <runtime> --local` and `gpd --help`. Add `--live-executable-probes` if you also want cheap local executable probes such as `pdflatex --version` or `wolframscript -version`. Here, `gpd doctor --runtime ...` is a runtime-readiness check for the selected runtime target. If you plan to use the paper/manuscript workflow preset later, treat the `Workflow Presets` and `LaTeX Toolchain` rows in this doctor report as paper-toolchain readiness signals for local smoke checks; `write-paper` can still proceed degraded, but `paper-build` is the build truth.
+3. Launch your selected runtime and run its GPD help command (`/gpd:help`, `$gpd-help`, or `/gpd-help`).
+4. If you want unattended execution, use your runtime-specific `settings` command as the guided configuration path and keep autonomy at Balanced (`balanced`) unless you intentionally want a more hands-off posture.
+5. Run `gpd permissions status --runtime <runtime> --autonomy balanced` for the read-only runtime-owned permission snapshot, then run `gpd validate unattended-readiness --runtime <runtime> --autonomy balanced`. If it returns `not-ready`, run `gpd permissions sync --runtime <runtime> --autonomy balanced`; if it returns `relaunch-required`, exit and relaunch the selected runtime before treating unattended use as ready.
+6. If those checks pass, continue with the runtime-specific `new-project`, `new-project --minimal`, `resume-work`, or `map-research` command.
+
+**Troubleshooting**
+
+- If the bootstrap installer fails before either `gpd doctor --runtime <runtime> --local` or `gpd doctor --runtime <runtime> --global` can run, fix Node / Python / `venv` bootstrap prerequisites first.
+- If the matching `gpd doctor --runtime <runtime> --local` or `gpd doctor --runtime <runtime> --global` command fails, fix the selected runtime's launcher / target / runtime-readiness issue first.
+- If that matching doctor command only warns about `Workflow Presets` or `LaTeX Toolchain`, the base install can still be fine; treat that as degraded readiness for `write-paper` and local smoke checks rather than a full install blocker. Use `gpd paper-build` to judge whether the manuscript scaffold is buildable.
+- If the runtime launches but GPD commands are missing, rerun the installer with an explicit runtime and explicit scope from your normal system terminal.
+- If you want the read-only runtime-owned permission snapshot first, run `gpd permissions status --runtime <runtime> --autonomy balanced`. If `gpd validate unattended-readiness --runtime <runtime> --autonomy balanced` returns `not-ready`, run `gpd permissions sync --runtime <runtime> --autonomy balanced` and check again; if it returns `relaunch-required`, exit and relaunch the runtime before unattended use.
+- If the runtime itself cannot launch or is not authenticated, fix the runtime/provider setup outside GPD before retrying the GPD install.
+
+</details>
 
 Typical new-project workflow:
 
@@ -229,26 +285,20 @@ Typical artifacts include derivation notes, numerical scripts, convergence studi
 
 </details>
 
-## Key In-Runtime Commands
+## Key GPD Paths
 
 These commands run inside your installed AI runtime after GRD has been installed there. The examples below use Claude Code / Gemini CLI syntax.
 
-### Common Starting Points
+### Core Runtime Paths
 
-| Command | What it does |
-|---------|--------------|
-| `map-research` | Map an existing research project before `new-project` |
-| `new-project` | Start a new research project |
-| `plan-phase N` | Plan phase `N` with task breakdown and checkpoints |
-| `execute-phase N` | Execute all tasks in phase `N` |
-| `verify-work` | Run verification checks against current work |
-| `peer-review` | Run manuscript peer review inside the current project before submission |
-| `progress` | Show project state and recommend the next step |
-| `discuss-phase N` | Explore a phase before committing to a plan |
-| `quick` | Run a smaller task with a lighter workflow |
-| `write-paper` | Draft a manuscript from completed research artifacts |
-| `respond-to-referees` | Structure referee responses and revise the manuscript |
-| `arxiv-submission` | Validate and package the manuscript for arXiv |
+| Path | Use these commands |
+|------|--------------------|
+| Start or orient | `start`, `tour` |
+| Create or import work | `new-project`, `new-project --minimal`, `map-research` |
+| Leave or return after a break | `gpd resume`, `gpd resume --recent`, `resume-work`, `pause-work`, `suggest-next` |
+| Run the research loop | `discuss-phase N`, `plan-phase N`, `execute-phase N`, `verify-work`, `progress`, `quick` |
+| Write and review | `write-paper`, `peer-review`, `respond-to-referees`, `arxiv-submission` |
+| Configure or branch | `settings`, `set-profile`, `set-tier-models`, `tangent`, `branch-hypothesis` |
 
 Typical research loop: `/grd:new-project -> /grd:discuss-phase 1 -> /grd:plan-phase 1 -> /grd:execute-phase 1 -> /grd:verify-work -> repeat -> /grd:complete-milestone`
 
@@ -269,9 +319,17 @@ Passing a manuscript path to a project-required command such as `/grd:peer-revie
 The full command reference below uses Claude Code / Gemini CLI syntax. Codex uses `$grd-...` and OpenCode uses `/grd-...`.
 
 <details>
-<summary><strong>Full Command Reference (61 Commands)</strong></summary>
+<summary><strong>Where To Find The Full Runtime Command Reference</strong></summary>
 
-#### Project Initialization
+This README is the onboarding and orientation surface, not the complete in-runtime command manual.
+
+- For the full in-runtime command reference, examples, and per-command usage details, run your runtime's help command such as `/gpd:help --all`, `$gpd-help --all`, or `/gpd-help --all`.
+- For local CLI commands such as install checks, readiness, validation, permissions, observability, recovery, and diagnostics, run `gpd --help` in your normal system terminal.
+Use the runtime-specific `pause-work` command when you want an explicit context handoff to restore on return.
+
+#### Tangents & Hypothesis Branches
+
+Tangents and alternative paths live primarily in `gpd:tangent`, `gpd:branch-hypothesis`, and `gpd:compare-branches`.
 
 | Command | What it does |
 |---------|--------------|
@@ -486,19 +544,19 @@ Per-project tier settings live in `.grd/config.json` under `model_overrides`:
   "model_profile": "review",
   "model_overrides": {
     "codex": {
-      "tier-1": "gpt-5.4",
-      "tier-2": "gpt-5.4-mini",
-      "tier-3": "gpt-5.4-nano"
+      "tier-1": "<runtime-native-model-id>",
+      "tier-2": "<runtime-native-model-id>",
+      "tier-3": "<runtime-native-model-id>"
     },
     "claude-code": {
-      "tier-1": "opus",
-      "tier-2": "sonnet",
-      "tier-3": "haiku"
+      "tier-1": "<runtime-native-model-id>",
+      "tier-2": "<runtime-native-model-id>",
+      "tier-3": "<runtime-native-model-id>"
     },
     "gemini": {
-      "tier-1": "your-tier-1-gemini-model",
-      "tier-2": "your-tier-2-gemini-model",
-      "tier-3": "your-tier-3-gemini-model"
+      "tier-1": "<runtime-native-model-id>",
+      "tier-2": "<runtime-native-model-id>",
+      "tier-3": "<runtime-native-model-id>"
     }
   }
 }
@@ -548,6 +606,11 @@ GRD stores project-local observability under `.grd/observability/` and detailed 
 | `grd trace stop` | Stop the active trace session |
 | `grd trace show [--phase ...] [--plan ...] [--type ...] [--last N]` | Inspect plan-local trace events |
 
+For read-only long-run visibility from your normal system terminal, use `gpd observe execution`.
+When the status is uncertain, conservatively say `possibly stalled` instead of relying on runtime hotkeys.
+Start with `gpd observe show --last 20` when you need the recent event trail.
+If `gpd observe execution` surfaces an alternative-path follow-up or `branch later` recommendation, route it through the runtime `tangent` command first; use the matching `branch-hypothesis` command only when you want the explicit git-backed alternative path.
+
 | Path | What it stores |
 |------|----------------|
 | `.grd/observability/sessions/*.jsonl` | Per-session event logs |
@@ -570,8 +633,8 @@ Low-level function and span calls are not recorded automatically. Observability 
 
 ## System Requirements
 
-- Node.js with `npm`/`npx`
-- Python 3.11+ with the standard `venv` module (install a newer version with `brew install python@3.13` on macOS, `pyenv install 3.13` on Linux, or from [python.org](https://www.python.org/downloads/) on Windows)
+- Node.js with `npm`/`npx` (see the `Need Node.js?` note above if Node.js is missing)
+- Python 3.11+ with the standard `venv` module (see the OS guides above for beginner setup steps on macOS, Linux, and Windows)
 - Network access to npm and GitHub for the bootstrap installer
 - One of: Claude Code, Gemini CLI, Codex, or OpenCode
 - API access for the model provider used by your selected runtime
@@ -592,7 +655,7 @@ GRD takes its name in explicit analogy with [GSD (Get Shit Done)](https://github
 
 GRD is also the research-general sibling of [Get Physics Done (GPD)](https://github.com/psi-oss/get-physics-done) — the physics-specific upstream that motivated much of the verification, formal-proof, and convention-lock tooling landing here. Improvements flow in both directions.
 
-## Citation
+## Citation and Acknowledgement
 
 If GRD contributes to published research, please cite **both** the upstream project and this fork. Metadata for the upstream is in [`CITATION.cff`](https://github.com/psi-oss/get-research-done/blob/main/CITATION.cff).
 

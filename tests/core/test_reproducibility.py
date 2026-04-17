@@ -110,6 +110,94 @@ def test_validate_reproducibility_manifest_valid():
     assert result.issues == []
 
 
+def test_validate_reproducibility_manifest_zero_checksum_bearing_artifacts_are_not_ready():
+    manifest = _manifest().model_copy(
+        update={
+            "input_data": [],
+            "generated_data": [],
+            "output_files": [],
+        }
+    )
+
+    result = validate_reproducibility_manifest(manifest)
+
+    assert result.valid is True
+    assert result.checksum_coverage_percent == 0.0
+    assert result.ready_for_review is False
+    assert result.issues == []
+    assert result.warnings == []
+
+
+def test_validate_reproducibility_manifest_rejects_string_booleans():
+    manifest = _manifest().model_dump()
+    manifest["execution_steps"][1]["stochastic"] = "true"
+    manifest["output_files"][0]["approximate_checksum"] = "false"
+
+    result = validate_reproducibility_manifest(manifest)
+
+    assert result.valid is False
+    fields = {issue.field for issue in result.issues}
+    assert "execution_steps.1.stochastic" in fields
+    assert "output_files.0.approximate_checksum" in fields
+    assert any("boolean" in issue.message.lower() for issue in result.issues)
+
+
+def test_validate_reproducibility_manifest_rejects_string_numerics():
+    manifest = _manifest().model_dump()
+    manifest["resource_requirements"][0]["cpu_cores"] = "4"
+    manifest["resource_requirements"][0]["memory_gb"] = "8.0"
+
+    result = validate_reproducibility_manifest(manifest)
+
+    assert result.valid is False
+    fields = {issue.field for issue in result.issues}
+    assert "resource_requirements.0.cpu_cores" in fields
+    assert "resource_requirements.0.memory_gb" in fields
+    assert any("integer" in issue.message.lower() for issue in result.issues)
+    assert any("number" in issue.message.lower() for issue in result.issues)
+
+
+def test_validate_reproducibility_manifest_accepts_integer_memory_gb():
+    manifest = _manifest().model_dump()
+    manifest["resource_requirements"][0]["memory_gb"] = 8
+
+    result = validate_reproducibility_manifest(manifest)
+
+    assert result.valid is True
+    assert result.issues == []
+
+
+def test_validate_reproducibility_manifest_rejects_unknown_fields():
+    manifest = _manifest().model_dump()
+    manifest["unexpected"] = "legacy"
+    manifest["execution_steps"][0]["legacy_flag"] = True
+
+    result = validate_reproducibility_manifest(manifest)
+
+    assert result.valid is False
+    fields = {issue.field for issue in result.issues}
+    assert "unexpected" in fields
+    assert "execution_steps.0.legacy_flag" in fields
+    assert any("extra inputs are not permitted" in issue.message.lower() for issue in result.issues)
+
+
+def test_validate_reproducibility_manifest_rejects_seed_records_for_non_stochastic_steps():
+    manifest = _manifest().model_dump()
+    manifest["random_seeds"].append(
+        {
+            "computation": "prepare",
+            "seed": "7",
+            "purpose": "stale seed record for deterministic step",
+        }
+    )
+
+    result = validate_reproducibility_manifest(manifest)
+
+    assert result.valid is False
+    assert any(issue.field == "random_seeds" for issue in result.issues)
+    assert any("non-stochastic or unknown execution steps" in issue.message for issue in result.issues)
+
+
 def test_build_reproducibility_kernel_verdict_is_stably_content_addressed():
     manifest = _manifest()
 
@@ -259,16 +347,16 @@ def test_nonempty_last_verified_without_platform_warns():
     assert "last_verified_platform" in warning_fields
 
 
-# ─── Issue 2: approximate checksum should count toward coverage ──
+# ─── Issue 2: approximate checksums should not count as full coverage ──
 
 
-def test_approximate_checksum_counts_toward_coverage():
+def test_approximate_checksum_does_not_count_as_full_coverage():
     """An output file with approximate_checksum=True and a non-empty checksum
-    should count as covered, yielding 100% checksum_coverage_percent.
+    should still trigger a warning, but it must not be counted as full checksum
+    coverage.
 
-    Before the fix, the elif branch for approximate checksums appended a
-    warning but did not increment checksum_ok, dragging down coverage and
-    potentially blocking ready_for_review.
+    Approximate checksums are lower-confidence evidence and should not satisfy
+    the hard coverage predicate used by validation and kernel verdicts.
     """
     manifest = _manifest().model_copy(
         update={
@@ -284,8 +372,11 @@ def test_approximate_checksum_counts_toward_coverage():
     )
 
     result = validate_reproducibility_manifest(manifest)
+    verdict = build_reproducibility_kernel_verdict(manifest, validation=result)
 
-    assert result.checksum_coverage_percent == 100.0
+    assert result.checksum_coverage_percent < 100.0
     # The informational warning should still be emitted
     approx_warnings = [w for w in result.warnings if "approximate checksum" in w.message]
     assert len(approx_warnings) == 1
+    assert result.ready_for_review is False
+    assert verdict["results"]["checksum_coverage_complete"]["passed"] is False

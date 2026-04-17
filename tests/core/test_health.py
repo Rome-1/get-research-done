@@ -3,38 +3,222 @@
 from __future__ import annotations
 
 import json
+import shlex
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
+import grd.core.health as health_module
 from grd.core.constants import ProjectLayout
 from grd.core.contract_validation import validate_project_contract
+from grd.core.errors import ValidationError
+from grd.core.frontmatter import compute_knowledge_reviewed_content_sha256
 from grd.core.health import (
     CheckStatus,
+    DoctorReport,
     HealthCheck,
     HealthReport,
     HealthSummary,
+    RuntimeTargetAssessment,
+    _doctor_check_latex_toolchain,
+    _doctor_check_workflow_presets,
+    build_unattended_readiness_result,
     check_checkpoint_tags,
     check_compaction_needed,
     check_config,
     check_convention_lock,
     check_environment,
     check_git_status,
+    check_knowledge_inventory,
     check_latest_return,
     check_orphans,
     check_plan_frontmatter,
     check_project_structure,
+    check_result_consistency,
     check_roadmap_consistency,
     check_state_validity,
     check_storage_paths,
+    extract_doctor_advisories,
+    extract_doctor_blockers,
+    resolve_doctor_runtime_readiness,
     run_doctor,
     run_health,
+    runtime_doctor_hint,
 )
 from grd.core.state import default_state_dict, generate_state_markdown, save_state_json
 from grd.core.storage_paths import ProjectStorageLayout
+from grd.hooks.install_metadata import InstallTargetAssessment
+from tests.latex_test_support import toolchain_capability as _toolchain_capability
+from tests.runtime_test_support import (
+    FOREIGN_RUNTIME,
+    PRIMARY_RUNTIME,
+    runtime_config_dir_name,
+    runtime_launch_executable,
+    runtime_primary_config_filename,
+    runtime_prompt_free_mode_value,
+    runtime_target_dir,
+)
+
+_PRIMARY_CONFIG_DIR = runtime_config_dir_name(PRIMARY_RUNTIME)
+_PRIMARY_PROMPT_FREE_MODE = runtime_prompt_free_mode_value(PRIMARY_RUNTIME)
+_PRIMARY_TARGET_DIR = runtime_target_dir(Path("/tmp/project"), PRIMARY_RUNTIME)
+_PRIMARY_LAUNCHER_PATH = f"/usr/bin/{runtime_launch_executable(PRIMARY_RUNTIME)}"
+_PRIMARY_RELAUNCH_STEP = f"Exit and relaunch {PRIMARY_RUNTIME} before treating unattended use as ready."
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "stage0"
+
+
+def _latex_toolchain_check(**overrides: object) -> HealthCheck:
+    capability = _toolchain_capability(**overrides).model_dump(mode="python")
+    status = CheckStatus.OK if capability["full_toolchain_available"] else CheckStatus.WARN
+    return HealthCheck(
+        status=status,
+        label="LaTeX Toolchain",
+        details=capability,
+        warnings=list(capability.get("warnings", [])),
+    )
+
+
+def _draft_invalid_project_contract() -> dict[str, object]:
+    contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+    contract["claims"][0]["references"] = ["missing-ref"]
+    return contract
+
+
+def _expected_permissions_capability_fallback_payload(*, contract_source: str, contract_error: str | None = None) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "contract_source": contract_source,
+        "permissions_surface": "adapter-defined",
+        "permission_surface_kind": "unknown",
+        "prompt_free_mode_value": None,
+        "supports_runtime_permission_sync": False,
+        "supports_prompt_free_mode": False,
+        "prompt_free_requires_relaunch": False,
+        "statusline_surface": "unknown",
+        "statusline_config_surface": "unknown",
+        "notify_surface": "unknown",
+        "notify_config_surface": "unknown",
+        "telemetry_source": "unknown",
+        "telemetry_completeness": "unknown",
+        "supports_usage_tokens": False,
+        "supports_cost_usd": False,
+        "supports_context_meter": False,
+    }
+    if contract_error is not None:
+        payload["contract_error"] = contract_error
+    return payload
+
+
+def test_doctor_active_runtime_settings_command_falls_back_to_runtime_neutral_reference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "grd.hooks.runtime_detect.detect_runtime_for_grd_use",
+        lambda cwd=None: (_ for _ in ()).throw(RuntimeError("no runtime")),
+    )
+
+    assert health_module._doctor_active_runtime_settings_command(cwd=Path("/tmp")) == (
+        "the active runtime's `settings` command"
+    )
+
+
+def test_runtime_doctor_hint_uses_public_surface_contract_templates(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        health_module,
+        "local_cli_doctor_local_command",
+        lambda: "grd doctor dynamic --runtime <runtime> --local",
+    )
+    monkeypatch.setattr(
+        health_module,
+        "local_cli_doctor_global_command",
+        lambda: "grd doctor dynamic --runtime <runtime> --global",
+    )
+
+    assert runtime_doctor_hint(PRIMARY_RUNTIME, install_scope="local", target_dir=Path("/tmp/doctor-target")) == (
+        f"grd doctor dynamic --runtime {PRIMARY_RUNTIME} --local --target-dir {shlex.quote(str(Path('/tmp/doctor-target')))}"
+    )
+    assert runtime_doctor_hint(PRIMARY_RUNTIME, install_scope="global", target_dir=None) == (
+        f"grd doctor dynamic --runtime {PRIMARY_RUNTIME} --global"
+    )
+
+
+def test_build_unattended_readiness_result_uses_public_surface_contract_permissions_sync_template(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        health_module,
+        "local_cli_permissions_sync_command",
+        lambda: "grd permissions dynamic --runtime <runtime> --autonomy balanced",
+    )
+    monkeypatch.setattr(
+        health_module,
+        "_doctor_active_runtime_settings_command",
+        lambda cwd=None: "$grd-settings",
+    )
+
+    result = build_unattended_readiness_result(
+        runtime=PRIMARY_RUNTIME,
+        autonomy="yolo",
+        install_scope="local",
+        target_dir=None,
+        doctor_report=DoctorReport(
+            overall=CheckStatus.OK,
+            runtime=PRIMARY_RUNTIME,
+            install_scope="local",
+            summary=HealthSummary(ok=1, warn=0, fail=0, total=1),
+            checks=[],
+        ),
+        permissions_payload={
+            "runtime": PRIMARY_RUNTIME,
+            "autonomy": "yolo",
+            "config_aligned": False,
+            "status_scope": "config-only",
+            "current_session_verified": False,
+            "capabilities": {
+                "permissions_surface": "direct-sync",
+            },
+        },
+        live_executable_probes=False,
+    )
+
+    assert result.next_step == (
+        f"Use `$grd-settings` inside the runtime for guided changes, or run "
+        f"`grd permissions dynamic --runtime {PRIMARY_RUNTIME} --autonomy yolo` from your normal system terminal."
+    )
+
+
+def test_permissions_capability_payload_surfaces_unexpected_catalog_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _boom(runtime: str) -> object:
+        raise RuntimeError("catalog exploded")
+
+    monkeypatch.setattr("grd.adapters.runtime_catalog.get_runtime_capabilities", _boom)
+
+    payload = health_module._permissions_capability_payload(PRIMARY_RUNTIME)
+
+    assert payload == _expected_permissions_capability_fallback_payload(
+        contract_source="runtime-catalog-error",
+        contract_error="RuntimeError: catalog exploded",
+    )
+
+
+def test_permissions_capability_payload_keeps_generic_fallback_for_unknown_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _missing(runtime: str) -> object:
+        raise KeyError(runtime)
+
+    monkeypatch.setattr("grd.adapters.runtime_catalog.get_runtime_capabilities", _missing)
+
+    payload = health_module._permissions_capability_payload(PRIMARY_RUNTIME)
+
+    assert payload == _expected_permissions_capability_fallback_payload(contract_source="generic-fallback")
 
 # ─── Model Tests ─────────────────────────────────────────────────────────────
 
@@ -71,6 +255,295 @@ class TestHealthModels:
         assert restored.fixes_applied == ["fixed X"]
         assert len(restored.checks) == 1
 
+    def test_doctor_report_roundtrip_preserves_live_executable_probe_flag(self):
+        report = DoctorReport(
+            overall=CheckStatus.OK,
+            version="0.1.0",
+            summary=HealthSummary(ok=1, warn=0, fail=0, total=1),
+            live_executable_probes=True,
+            checks=[HealthCheck(status=CheckStatus.OK, label="A")],
+        )
+
+        restored = DoctorReport.model_validate(report.model_dump())
+
+        assert restored.live_executable_probes is True
+
+    def test_doctor_report_roundtrip_preserves_target_assessment(self):
+        report = DoctorReport(
+            overall=CheckStatus.OK,
+            version="0.1.0",
+            summary=HealthSummary(ok=1, warn=0, fail=0, total=1),
+            target_assessment=RuntimeTargetAssessment(
+                config_dir="/tmp/runtime-target",
+                expected_runtime="runtime-under-test",
+                state="clean",
+                manifest_state="missing",
+                manifest_runtime=None,
+                has_managed_markers=False,
+                missing_install_artifacts=[],
+                readiness_state="ready",
+                readiness_message="/tmp/runtime-target is ready for a new GRD install.",
+            ),
+            checks=[HealthCheck(status=CheckStatus.OK, label="A")],
+        )
+
+        restored = DoctorReport.model_validate(report.model_dump())
+
+        assert restored.target_assessment is not None
+        assert restored.target_assessment.state == "clean"
+        assert restored.target_assessment.readiness_state == "ready"
+        assert restored.target_assessment.readiness_message == "/tmp/runtime-target is ready for a new GRD install."
+
+    def test_extract_doctor_blockers_returns_only_failures(self):
+        report = DoctorReport(
+            overall=CheckStatus.FAIL,
+            version="0.1.0",
+            summary=HealthSummary(ok=1, warn=1, fail=2, total=4),
+            checks=[
+                HealthCheck(status=CheckStatus.OK, label="ok"),
+                HealthCheck(status=CheckStatus.WARN, label="warn"),
+                HealthCheck(status=CheckStatus.FAIL, label="fail-a"),
+                HealthCheck(status=CheckStatus.FAIL, label="fail-b"),
+            ],
+        )
+
+        blockers = extract_doctor_blockers(report)
+
+        assert [check.label for check in blockers] == ["fail-a", "fail-b"]
+
+    def test_extract_doctor_advisories_deduplicates_non_blocking_messages(self):
+        report = DoctorReport(
+            overall=CheckStatus.WARN,
+            version="0.1.0",
+            summary=HealthSummary(ok=1, warn=2, fail=0, total=3),
+            checks=[
+                HealthCheck(status=CheckStatus.OK, label="ok", warnings=["shared warning"]),
+                HealthCheck(status=CheckStatus.WARN, label="warn", warnings=["shared warning", "extra warning"]),
+                HealthCheck(status=CheckStatus.WARN, label="warn-2", issues=["non-blocking issue"]),
+            ],
+        )
+
+        advisories = extract_doctor_advisories(report)
+
+        assert advisories == ["shared warning", "extra warning", "non-blocking issue"]
+
+    def test_build_unattended_readiness_result_composes_ready_permissions_with_doctor_advisories(self):
+        report = DoctorReport(
+            overall=CheckStatus.WARN,
+            version="0.1.0",
+            summary=HealthSummary(ok=1, warn=1, fail=0, total=2),
+            checks=[
+                HealthCheck(status=CheckStatus.OK, label="Runtime Launcher"),
+                HealthCheck(status=CheckStatus.WARN, label="LaTeX Toolchain", warnings=["LaTeX toolchain is partial."]),
+            ],
+        )
+
+        result = build_unattended_readiness_result(
+            runtime=PRIMARY_RUNTIME,
+            autonomy=None,
+            install_scope="local",
+            target_dir=_PRIMARY_TARGET_DIR,
+            doctor_report=report,
+            permissions_payload={
+                "autonomy": "balanced",
+                "target": str(_PRIMARY_TARGET_DIR),
+                "readiness": "ready",
+                "ready": True,
+                "readiness_message": "Runtime permissions are ready for unattended use.",
+                "next_step": "",
+                "status_scope": "config-only",
+                "current_session_verified": False,
+            },
+            live_executable_probes=False,
+            validated_surface="public_runtime_command_surface",
+        )
+
+        assert result.runtime == PRIMARY_RUNTIME
+        assert result.autonomy == "balanced"
+        assert result.install_scope == "local"
+        assert result.target == str(_PRIMARY_TARGET_DIR)
+        assert result.readiness == "ready"
+        assert result.ready is True
+        assert result.passed is True
+        assert result.live_executable_probes is False
+        assert result.status_scope == "config-only"
+        assert result.current_session_verified is False
+        assert result.validated_surface == "public_runtime_command_surface"
+        assert result.blocking_conditions == []
+        assert result.warnings == ["LaTeX toolchain is partial."]
+        assert result.next_step == ""
+        assert [check.__dict__ for check in result.checks] == [
+            {
+                "name": "permissions",
+                "passed": True,
+                "blocking": False,
+                "detail": "Runtime permissions are ready for unattended use.",
+            },
+            {
+                "name": "doctor",
+                "passed": True,
+                "blocking": False,
+                "detail": "Runtime readiness checks passed with 1 advisory(s).",
+            },
+        ]
+
+    def test_build_unattended_readiness_result_prefers_permissions_next_step_when_present(self):
+        report = DoctorReport(
+            overall=CheckStatus.OK,
+            version="0.1.0",
+            summary=HealthSummary(ok=2, warn=0, fail=0, total=2),
+            checks=[
+                HealthCheck(status=CheckStatus.OK, label="Runtime Launcher"),
+                HealthCheck(status=CheckStatus.OK, label="Runtime Config Target"),
+            ],
+        )
+
+        result = build_unattended_readiness_result(
+            runtime=PRIMARY_RUNTIME,
+            autonomy="balanced",
+            install_scope="local",
+            target_dir=_PRIMARY_TARGET_DIR,
+            doctor_report=report,
+            permissions_payload={
+                "autonomy": "balanced",
+                "target": str(_PRIMARY_TARGET_DIR),
+                "readiness": "relaunch-required",
+                "ready": False,
+                "readiness_message": "Runtime permissions are aligned, but the runtime must be relaunched before unattended use.",
+                "next_step": _PRIMARY_RELAUNCH_STEP,
+                "status_scope": "next-launch",
+                "current_session_verified": False,
+            },
+            live_executable_probes=False,
+            validated_surface="public_runtime_command_surface",
+        )
+
+        assert result.readiness == "relaunch-required"
+        assert result.ready is False
+        assert result.passed is False
+        assert result.next_step == _PRIMARY_RELAUNCH_STEP
+        assert result.status_scope == "next-launch"
+        assert result.current_session_verified is False
+        assert result.validated_surface == "public_runtime_command_surface"
+        assert result.blocking_conditions == [
+            "Runtime permissions are aligned, but the runtime must be relaunched before unattended use."
+        ]
+        assert result.warnings == []
+        assert [check.__dict__ for check in result.checks] == [
+            {
+                "name": "permissions",
+                "passed": False,
+                "blocking": True,
+                "detail": "Runtime permissions are aligned, but the runtime must be relaunched before unattended use.",
+            },
+            {
+                "name": "doctor",
+                "passed": True,
+                "blocking": False,
+                "detail": "Runtime readiness checks passed.",
+            },
+        ]
+
+    def test_build_unattended_readiness_result_marks_prompt_free_permissions_as_more_permissive(
+        self,
+    ):
+        report = DoctorReport(
+            overall=CheckStatus.OK,
+            version="0.1.0",
+            summary=HealthSummary(ok=2, warn=0, fail=0, total=2),
+            checks=[
+                HealthCheck(status=CheckStatus.OK, label="Runtime Launcher"),
+                HealthCheck(status=CheckStatus.OK, label="Runtime Config Target"),
+            ],
+        )
+
+        result = build_unattended_readiness_result(
+            runtime=PRIMARY_RUNTIME,
+            autonomy="balanced",
+            install_scope="local",
+            target_dir=_PRIMARY_TARGET_DIR,
+            doctor_report=report,
+            permissions_payload={
+                "runtime": PRIMARY_RUNTIME,
+                "autonomy": "balanced",
+                "target": str(_PRIMARY_TARGET_DIR),
+                "desired_mode": "default",
+                "configured_mode": _PRIMARY_PROMPT_FREE_MODE,
+                "config_aligned": True,
+                "requires_relaunch": False,
+            },
+            live_executable_probes=False,
+            validated_surface="public_runtime_command_surface",
+        )
+
+        assert result.readiness == "not-ready"
+        assert result.ready is False
+        assert result.passed is False
+        assert result.blocking_conditions == [
+            "Runtime permissions are more permissive than the requested autonomy, so unattended readiness is not confirmed."
+        ]
+
+    def test_build_unattended_readiness_result_falls_back_to_doctor_hint_for_blockers(self):
+        report = DoctorReport(
+            overall=CheckStatus.FAIL,
+            version="0.1.0",
+            summary=HealthSummary(ok=1, warn=0, fail=1, total=2),
+            checks=[
+                HealthCheck(status=CheckStatus.OK, label="Runtime Launcher"),
+                HealthCheck(
+                    status=CheckStatus.FAIL,
+                    label="Runtime Config Target",
+                    issues=["Runtime config target not writable"],
+                ),
+            ],
+        )
+
+        result = build_unattended_readiness_result(
+            runtime=PRIMARY_RUNTIME,
+            autonomy="balanced",
+            install_scope="local",
+            target_dir=_PRIMARY_TARGET_DIR,
+            doctor_report=report,
+            permissions_payload={
+                "autonomy": "balanced",
+                "target": str(_PRIMARY_TARGET_DIR),
+                "readiness": "ready",
+                "ready": True,
+                "readiness_message": "Runtime permissions are ready for unattended use.",
+                "status_scope": "config-only",
+                "current_session_verified": False,
+            },
+            live_executable_probes=True,
+            validated_surface="public_runtime_command_surface",
+        )
+
+        assert result.passed is False
+        assert result.ready is True
+        assert result.readiness == "ready"
+        assert result.status_scope == "config-only"
+        assert result.current_session_verified is False
+        assert result.validated_surface == "public_runtime_command_surface"
+        assert result.next_step == (
+            f"Run `{runtime_doctor_hint(PRIMARY_RUNTIME, install_scope='local', target_dir=_PRIMARY_TARGET_DIR)}` "
+            "to inspect and clear the blocking runtime-readiness issues."
+        )
+        assert result.blocking_conditions == ["Runtime config target not writable"]
+        assert result.warnings == []
+        assert [check.__dict__ for check in result.checks] == [
+            {
+                "name": "permissions",
+                "passed": True,
+                "blocking": False,
+                "detail": "Runtime permissions are ready for unattended use.",
+            },
+            {
+                "name": "doctor",
+                "passed": False,
+                "blocking": True,
+                "detail": "Runtime config target not writable",
+            },
+        ]
+
 
 # ─── Individual Check Tests ──────────────────────────────────────────────────
 
@@ -81,6 +554,137 @@ class TestCheckEnvironment:
         assert result.label == "Environment"
         assert result.status == CheckStatus.OK
         assert "python_version" in result.details
+
+
+class TestDoctorCheckLatexToolchain:
+    def test_full_toolchain_reports_ok(self, monkeypatch):
+        monkeypatch.setattr(
+            "grd.mcp.paper.compiler.detect_latex_toolchain",
+            lambda: _toolchain_capability(),
+        )
+
+        result = _doctor_check_latex_toolchain()
+
+        assert result.status == CheckStatus.OK
+        assert result.details["available"] is True
+        assert result.details["compiler_available"] is True
+        assert result.details["full_toolchain_available"] is True
+        assert result.details["latexmk_available"] is True
+        assert result.details["bibtex_available"] is True
+        assert result.details["kpsewhich_available"] is True
+        assert result.details["paper_build_ready"] is True
+        assert result.details["arxiv_submission_ready"] is True
+        assert result.details["missing_components"] == []
+        assert result.warnings == []
+
+    def test_partial_toolchain_reports_warn(self, monkeypatch):
+        monkeypatch.setattr(
+            "grd.mcp.paper.compiler.detect_latex_toolchain",
+            lambda: _toolchain_capability(
+                latexmk_available=False,
+                kpsewhich_available=False,
+                warnings=[
+                    "latexmk not found; multi-pass compilation will fall back to manual passes.",
+                    "kpsewhich not found; TeX resource checks will assume installed resources.",
+                ],
+            ),
+        )
+
+        result = _doctor_check_latex_toolchain()
+
+        assert result.status == CheckStatus.WARN
+        assert result.details["available"] is True
+        assert result.details["compiler_available"] is True
+        assert result.details["full_toolchain_available"] is False
+        assert result.details["latexmk_available"] is False
+        assert result.details["bibtex_available"] is True
+        assert result.details["kpsewhich_available"] is False
+        assert result.details["paper_build_ready"] is True
+        assert result.details["arxiv_submission_ready"] is False
+        assert result.details["missing_components"] == ["latexmk", "kpsewhich"]
+        assert any("partial" in warning for warning in result.warnings)
+
+    def test_missing_compiler_reports_warn(self, monkeypatch):
+        monkeypatch.setattr(
+            "grd.mcp.paper.compiler.detect_latex_toolchain",
+            lambda: _toolchain_capability(
+                compiler_available=False,
+                compiler_path=None,
+                distribution=None,
+                bibtex_available=False,
+                latexmk_available=False,
+                kpsewhich_available=False,
+                readiness_state="blocked",
+                message="No LaTeX compiler found.\nInstall a LaTeX distribution.",
+                warnings=["Install a LaTeX distribution to enable paper compilation."],
+            ),
+        )
+
+        result = _doctor_check_latex_toolchain()
+
+        assert result.status == CheckStatus.WARN
+        assert result.details["available"] is False
+        assert result.details["compiler_available"] is False
+        assert result.details["full_toolchain_available"] is False
+        assert result.details["paper_build_ready"] is False
+        assert result.details["arxiv_submission_ready"] is False
+        assert result.details["missing_components"] == ["pdflatex"]
+        assert result.details["readiness_state"] == "blocked"
+        assert result.details["message"] == "No LaTeX compiler found.\nInstall a LaTeX distribution."
+        assert result.warnings == ["Install a LaTeX distribution to enable paper compilation."]
+
+    def test_import_failure_keeps_latex_capability_shape_stable(self, monkeypatch):
+        import builtins
+
+        original_import = builtins.__import__
+
+        def _failing_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "grd.mcp.paper.compiler":
+                raise ImportError("boom")
+            return original_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", _failing_import)
+
+        result = _doctor_check_latex_toolchain()
+
+        assert result.status == CheckStatus.WARN
+        assert result.details["available"] is False
+        assert result.details["compiler_available"] is False
+        assert result.details["full_toolchain_available"] is False
+        assert result.details["paper_build_ready"] is False
+        assert result.details["arxiv_submission_ready"] is False
+        assert result.details["compiler"] == "pdflatex"
+        assert result.details["latexmk_available"] is None
+        assert result.details["bibtex_available"] is None
+        assert result.details["kpsewhich_available"] is None
+        assert result.details["readiness_state"] == "blocked"
+        assert result.details["message"] == "Could not load LaTeX detection helpers."
+        assert any("Could not load LaTeX detection helpers" in warning for warning in result.details["warnings"])
+        assert any("Could not load LaTeX detection helpers" in warning for warning in result.warnings)
+
+    def test_workflow_presets_do_not_backfill_publication_readiness_from_minimal_legacy_latex_payload(self) -> None:
+        result = _doctor_check_workflow_presets(
+            latex_check=HealthCheck(
+                status=CheckStatus.OK,
+                label="LaTeX Toolchain",
+                details={"available": True},
+                warnings=[],
+            ),
+            base_ready=True,
+        )
+
+        checks = {preset["id"]: preset for preset in result.details["presets"]}
+        publication = checks["publication-manuscript"]
+
+        assert publication["status"] == "degraded"
+        assert publication["summary"] == (
+            "degraded without bibliography tooling: draft/review remain usable, while paper-build and "
+            "arxiv-submission may fail for manuscripts that require bibliography processing"
+        )
+        assert publication["ready_workflows"] == ["write-paper", "peer-review"]
+        assert publication["blocked_workflows"] == []
+        assert publication["degraded_workflows"] == ["paper-build", "arxiv-submission"]
+        assert result.details["latex_capability"]["full_toolchain_available"] is False
 
 
 class TestCheckProjectStructure:
@@ -95,11 +699,160 @@ class TestCheckProjectStructure:
         planning = tmp_path / "GRD"
         planning.mkdir()
         for f in REQUIRED_PLANNING_FILES:
-            (planning / f).write_text("stub")
+            (planning / f).write_text("stub", encoding="utf-8")
         for d in REQUIRED_PLANNING_DIRS:
             (planning / d).mkdir(parents=True, exist_ok=True)
         result = check_project_structure(tmp_path)
         assert result.status == CheckStatus.OK
+
+
+class TestCheckKnowledgeInventory:
+    def test_missing_knowledge_dir_is_ok(self, tmp_path: Path) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+
+        result = check_knowledge_inventory(cwd)
+
+        assert result.status == CheckStatus.OK
+        assert result.details["knowledge_dir_present"] is False
+        assert result.details["knowledge_doc_count"] == 0
+        assert result.details["stable_knowledge_doc_count"] == 0
+        assert result.details["runtime_active_count"] == 0
+        assert result.details["status_counts"] == {"draft": 0, "in_review": 0, "stable": 0, "superseded": 0}
+        assert result.details["reason"] == "no_knowledge_dir"
+        assert result.warnings == []
+
+    def test_reports_counts_staleness_supersession_and_skipped_docs(self, tmp_path: Path) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        knowledge_dir = cwd / "GRD" / "knowledge"
+        knowledge_dir.mkdir(parents=True, exist_ok=True)
+
+        stable_base_body = "Trusted knowledge body.\n"
+        stable_base_content = _knowledge_doc_content(
+            body=stable_base_body,
+            knowledge_id="K-renormalization-group-fixed-points",
+            status="stable",
+        )
+        stable_hash = compute_knowledge_reviewed_content_sha256(stable_base_content)
+        _write_knowledge_doc(
+            knowledge_dir / "K-renormalization-group-fixed-points.md",
+            body=stable_base_body,
+            reviewed_content_sha256=stable_hash,
+        )
+
+        stale_body = "Trusted knowledge body.\nEdited after review.\n"
+        stale_base_content = _knowledge_doc_content(
+            body=stable_base_body,
+            knowledge_id="K-renormalization-group-stale",
+            status="stable",
+        )
+        stale_hash = compute_knowledge_reviewed_content_sha256(stale_base_content)
+        _write_knowledge_doc(
+            knowledge_dir / "K-renormalization-group-stale.md",
+            knowledge_id="K-renormalization-group-stale",
+            body=stale_body,
+            reviewed_content_sha256=stale_hash,
+        )
+
+        _write_knowledge_doc(
+            knowledge_dir / "K-renormalization-group-superseded.md",
+            knowledge_id="K-renormalization-group-superseded",
+            status="superseded",
+            superseded_by="K-renormalization-group-missing-target",
+        )
+
+        (knowledge_dir / "K-invalid-knowledge.md").write_text(
+            "---\nknowledge_schema_version: 1\nknowledge_id: K-invalid-knowledge\n---\ninvalid\n",
+            encoding="utf-8",
+        )
+
+        result = check_knowledge_inventory(cwd)
+
+        assert result.status == CheckStatus.WARN
+        assert result.details["knowledge_dir_present"] is True
+        assert result.details["knowledge_doc_count"] == 3
+        assert result.details["stable_knowledge_doc_count"] == 2
+        assert result.details["runtime_active_count"] == 1
+        assert result.details["status_counts"] == {"draft": 0, "in_review": 0, "stable": 2, "superseded": 1}
+        assert result.details["discovery_warning_count"] == 1
+        assert result.details["migration_doc_count"] == 4
+        assert result.details["migration_classification_counts"] == {
+            "canonical": 3,
+            "upgradeable": 0,
+            "blocked": 1,
+        }
+        assert result.details["migration_warning_count"] == 1
+        assert result.details["stale_review_count"] == 1
+        assert result.details["stale_review_files"] == ["GRD/knowledge/K-renormalization-group-stale.md"]
+        assert result.details["missing_supersession_target_count"] == 1
+        assert result.details["missing_supersession_target_files"] == [
+            "GRD/knowledge/K-renormalization-group-superseded.md -> K-renormalization-group-missing-target"
+        ]
+        assert any("skipping knowledge doc GRD/knowledge/K-invalid-knowledge.md" in warning for warning in result.warnings)
+        assert any("stale reviews" in warning for warning in result.warnings)
+        assert any("missing targets" in warning for warning in result.warnings)
+
+    def test_reports_migration_diagnostics_for_upgradeable_and_blocked_docs(self, tmp_path: Path) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        knowledge_dir = cwd / "GRD" / "knowledge"
+        knowledge_dir.mkdir(parents=True, exist_ok=True)
+
+        stable_body = "Trusted knowledge body.\n"
+        stable_base_content = _knowledge_doc_content(
+            body=stable_body,
+            knowledge_id="K-renormalization-group-fixed-points",
+            status="stable",
+        )
+        stable_hash = compute_knowledge_reviewed_content_sha256(stable_base_content)
+        _write_knowledge_doc(
+            knowledge_dir / "K-renormalization-group-fixed-points.md",
+            body=stable_body,
+            reviewed_content_sha256=stable_hash,
+        )
+        shutil.copytree(
+            Path(__file__).resolve().parents[1] / "fixtures" / "knowledge" / "upgradeable",
+            knowledge_dir,
+            dirs_exist_ok=True,
+        )
+        shutil.copytree(
+            Path(__file__).resolve().parents[1] / "fixtures" / "knowledge" / "blocked",
+            knowledge_dir,
+            dirs_exist_ok=True,
+        )
+
+        result = check_knowledge_inventory(cwd)
+
+        assert result.status == CheckStatus.WARN
+        assert result.details["migration_doc_count"] == 3
+        assert result.details["migration_classification_counts"] == {
+            "canonical": 1,
+            "upgradeable": 1,
+            "blocked": 1,
+        }
+        assert result.details["migration_warning_count"] == 2
+        assert any("upgradeable" in warning for warning in result.warnings)
+        assert any("blocked" in warning for warning in result.warnings)
+
+    def test_reports_plan_level_explicit_knowledge_dependency_issues(self, tmp_path: Path) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        phase_dir = cwd / "GRD" / "phases" / "01-setup"
+        phase_dir.mkdir(parents=True, exist_ok=True)
+        plan_content = _canonical_plan_frontmatter().replace(
+            "---\n\nFixture plan body.\n",
+            "knowledge_gate: warn\nknowledge_deps:\n  - K-missing-dependency\n---\n\nFixture plan body.\n",
+        )
+        (phase_dir / "01-PLAN.md").write_text(plan_content, encoding="utf-8")
+
+        result = check_knowledge_inventory(cwd)
+
+        assert result.status == CheckStatus.WARN
+        assert result.details["plans_with_knowledge_deps_count"] == 1
+        assert result.details["plans_with_knowledge_deps"] == ["GRD/phases/01-setup/01-PLAN.md"]
+        assert result.details["plan_knowledge_dependency_issue_count"] == 1
+        assert result.details["plan_knowledge_warning_count"] == 1
+        assert result.details["plan_knowledge_blocker_count"] == 0
+        assert result.details["plan_knowledge_issue_files"] == ["GRD/phases/01-setup/01-PLAN.md"]
+        assert any("GRD/phases/01-setup/01-PLAN.md:" in warning for warning in result.warnings)
+        assert any("K-missing-dependency" in warning for warning in result.warnings)
 
 
 class TestCheckStoragePaths:
@@ -156,9 +909,49 @@ class TestCheckStoragePaths:
             check=False,
         )
 
-        assert result.returncode == 1
-        assert result.stdout == ""
         assert result.stderr == ""
+        if result.returncode == 1:
+            assert result.stdout == ""
+            return
+
+        assert result.returncode == 0
+        lines = [line for line in result.stdout.splitlines() if line.strip()]
+        assert lines == [
+            ".gitignore:23:!GRD/CHECKPOINTS.md\tGPD/CHECKPOINTS.md",
+            ".gitignore:25:!GRD/phase-checkpoints/*.md\tGPD/phase-checkpoints/01-test-phase.md",
+        ]
+
+    def test_repo_gitignore_does_not_hide_grd_state_surfaces(self, tmp_path: Path) -> None:
+        """Regression: GRD/ files must NOT be gitignored.
+
+        Workflow commit commands include these files; gitignoring them causes
+        ``git add`` failures (exit code 1) at commit time.  A pre-commit hook
+        strips GRD/ from commits to the codebase repo instead.
+        """
+        repo = _init_git_repo(tmp_path)
+
+        grd_paths = [
+            "GRD/STATE.md",
+            "GRD/state.json",
+            "GRD/state.json.bak",
+            "GRD/PROJECT.md",
+            "GRD/ROADMAP.md",
+            "GRD/REQUIREMENTS.md",
+            "GRD/config.json",
+            "GRD/CONVENTIONS.md",
+        ]
+        result = subprocess.run(
+            ["git", "check-ignore", "--", *grd_paths],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 1, (
+            f"GRD files should not be gitignored but git check-ignore matched: "
+            f"{result.stdout.strip()}"
+        )
 
     def test_git_status_reports_dirty_tracked_checkpoint_artifacts(self, tmp_path: Path) -> None:
         repo = _init_git_repo(tmp_path)
@@ -191,7 +984,7 @@ class TestCheckCompaction:
     def test_small_state_ok(self, tmp_path: Path):
         planning = tmp_path / "GRD"
         planning.mkdir()
-        (planning / "STATE.md").write_text("# State\nShort content\n")
+        (planning / "STATE.md").write_text("# State\nShort content\n", encoding="utf-8")
         result = check_compaction_needed(tmp_path)
         assert result.status == CheckStatus.OK
 
@@ -218,7 +1011,7 @@ class TestCheckConventionLock:
     def test_no_convention_lock_key(self, tmp_path: Path):
         planning = tmp_path / "GRD"
         planning.mkdir()
-        (planning / "state.json").write_text(json.dumps({"position": {}}))
+        (planning / "state.json").write_text(json.dumps({"position": {}}), encoding="utf-8")
         result = check_convention_lock(tmp_path)
         assert result.status == CheckStatus.WARN
 
@@ -306,7 +1099,7 @@ class TestCheckRoadmapConsistency:
     def test_roadmap_with_matching_phases(self, tmp_path: Path):
         planning = tmp_path / "GRD"
         planning.mkdir()
-        (planning / "ROADMAP.md").write_text("## Phase 1: Intro\n## Phase 2: Method\n")
+        (planning / "ROADMAP.md").write_text("## Phase 1: Intro\n## Phase 2: Method\n", encoding="utf-8")
         phases = planning / "phases"
         (phases / "1-intro").mkdir(parents=True)
         (phases / "2-method").mkdir(parents=True)
@@ -327,8 +1120,8 @@ class TestCheckPlanFrontmatter:
         phase_dir.mkdir(parents=True)
         # Create plans with a gap: 01, 03 (missing 02)
         plan_content = _canonical_plan_frontmatter()
-        (phase_dir / "01-PLAN.md").write_text(plan_content)
-        (phase_dir / "03-PLAN.md").write_text(plan_content)
+        (phase_dir / "01-PLAN.md").write_text(plan_content, encoding="utf-8")
+        (phase_dir / "03-PLAN.md").write_text(plan_content, encoding="utf-8")
         result = check_plan_frontmatter(tmp_path)
         assert result.status == CheckStatus.WARN
         assert result.details["numbering_gaps"] >= 1
@@ -340,9 +1133,9 @@ class TestCheckPlanFrontmatter:
         phase_dir = phases / "01-intro"
         phase_dir.mkdir(parents=True)
         plan_content = _canonical_plan_frontmatter()
-        (phase_dir / "01-PLAN.md").write_text(plan_content)
-        (phase_dir / "02-PLAN.md").write_text(plan_content)
-        (phase_dir / "03-PLAN.md").write_text(plan_content)
+        (phase_dir / "01-PLAN.md").write_text(plan_content, encoding="utf-8")
+        (phase_dir / "02-PLAN.md").write_text(plan_content, encoding="utf-8")
+        (phase_dir / "03-PLAN.md").write_text(plan_content, encoding="utf-8")
         result = check_plan_frontmatter(tmp_path)
         assert result.details["numbering_gaps"] == 0
         assert not any("Plan numbering gap" in w for w in result.warnings)
@@ -367,7 +1160,7 @@ class TestCheckPlanFrontmatter:
             "---\n\n"
             "# Plan\n"
         )
-        (phase_dir / "01-PLAN.md").write_text(plan_content)
+        (phase_dir / "01-PLAN.md").write_text(plan_content, encoding="utf-8")
 
         result = check_plan_frontmatter(tmp_path)
 
@@ -395,7 +1188,7 @@ class TestCheckPlanFrontmatter:
             "---\n\n"
             "# Plan\n"
         )
-        (phase_dir / "01-PLAN.md").write_text(plan_content)
+        (phase_dir / "01-PLAN.md").write_text(plan_content, encoding="utf-8")
 
         result = check_plan_frontmatter(tmp_path)
 
@@ -437,6 +1230,60 @@ class TestCheckStateValidityProjectContract:
         assert any(issue.startswith("project_contract: ") for issue in result.issues)
         assert not any(warning in result.warnings for warning in fake_state_validation.warnings)
 
+    def test_accepts_project_local_prior_artifact_grounding(self, tmp_path: Path) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        contract = json.loads((FIXTURES_DIR / "project_contract.json").read_text(encoding="utf-8"))
+        artifact = cwd / "artifacts" / "benchmark" / "report.json"
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text('{"status": "ok"}\n', encoding="utf-8")
+
+        contract["references"][0]["kind"] = "prior_artifact"
+        contract["references"][0]["locator"] = "artifacts/benchmark/report.json"
+        contract["references"][0]["role"] = "benchmark"
+        contract["references"][0]["must_surface"] = True
+        contract["references"][0]["applies_to"] = ["claim-benchmark"]
+        contract["references"][0]["required_actions"] = ["compare"]
+        contract["context_intake"] = {
+            "must_read_refs": [],
+            "must_include_prior_outputs": [],
+            "user_asserted_anchors": [],
+            "known_good_baselines": [],
+            "context_gaps": [],
+            "crucial_inputs": [],
+        }
+
+        state = default_state_dict()
+        state["project_contract"] = contract
+        save_state_json(cwd, state)
+        (cwd / "GRD" / "STATE.md").write_text(generate_state_markdown(state), encoding="utf-8")
+
+        result = check_state_validity(cwd)
+
+        assert not any(issue.startswith("project_contract: ") for issue in result.issues)
+        assert not any(warning.startswith("project_contract: ") for warning in result.warnings)
+
+    def test_draft_invalid_project_contract_is_promoted_during_health_approval_checks(self, tmp_path: Path) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        state = default_state_dict()
+        state["project_contract"] = _draft_invalid_project_contract()
+        layout = ProjectLayout(cwd)
+        layout.state_json.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+        layout.state_md.write_text(generate_state_markdown(state), encoding="utf-8")
+
+        result = check_state_validity(cwd)
+
+        assert result.status == CheckStatus.FAIL
+        assert any("project_contract: claim claim-benchmark references unknown reference missing-ref" in issue for issue in result.issues)
+        assert not any(
+            "project_contract: claim claim-benchmark references unknown reference missing-ref" in warning
+            for warning in result.warnings
+        )
+        assert any(
+            'schema normalization: dropped "project_contract" because contract failed draft scoping validation'
+            in warning
+            for warning in result.warnings
+        )
+
 
 class TestCheckStateValidity:
     def test_no_state_files(self, tmp_path: Path):
@@ -466,40 +1313,18 @@ class TestCheckStateValidity:
 
 
 class TestRunHealth:
-    def test_returns_report(self, tmp_path: Path):
-        report = run_health(tmp_path)
-        assert isinstance(report, HealthReport)
-        assert report.summary.total >= 13
-        assert report.overall in (CheckStatus.OK, CheckStatus.WARN, CheckStatus.FAIL)
-
-    def test_fix_mode(self, tmp_path: Path):
-        report = run_health(tmp_path, fix=True)
-        assert isinstance(report.fixes_applied, list)
-
-    def test_fixless_mode_does_not_rewrite_corrupt_state(self, tmp_path: Path) -> None:
+    def test_run_health_includes_knowledge_inventory_check(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        layout = ProjectLayout(cwd)
 
-        save_state_json(cwd, default_state_dict())
-        primary_state = json.loads(layout.state_json.read_text(encoding="utf-8"))
-        primary_state["position"] = []
-        layout.state_json.write_text(json.dumps(primary_state, indent=2) + "\n", encoding="utf-8")
-
-        backup_state = default_state_dict()
-        backup_state["position"]["current_phase"] = "12"
-        backup_state["position"]["status"] = "Executing"
-        layout.state_json_backup.write_text(json.dumps(backup_state, indent=2) + "\n", encoding="utf-8")
-
-        before = layout.state_json.read_text(encoding="utf-8")
         report = run_health(cwd, fix=False)
-        after = layout.state_json.read_text(encoding="utf-8")
-        state_check = next(check for check in report.checks if check.label == "State Validity")
 
-        assert before == after
-        assert report.fixes_applied == []
-        assert state_check.details["state_source"] == "state.json"
+        knowledge_check = next(check for check in report.checks if check.label == "Knowledge Inventory")
 
-    def test_read_only_health_recovers_intent_marker_and_reports_current_state(
+        assert knowledge_check.status == CheckStatus.OK
+        assert knowledge_check.details["knowledge_dir_present"] is False
+        assert knowledge_check.details["reason"] == "no_knowledge_dir"
+
+    def test_read_only_health_does_not_recover_intent_marker_and_keeps_state_unchanged(
         self, tmp_path: Path
     ) -> None:
         cwd = _bootstrap_health_project(tmp_path)
@@ -518,39 +1343,11 @@ class TestRunHealth:
         report = run_health(cwd, fix=False)
         state_check = next(check for check in report.checks if check.label == "State Validity")
 
-        assert layout.state_json.read_text(encoding="utf-8") != before_state
-        assert layout.state_md.read_text(encoding="utf-8") != before_md
-        assert not layout.state_intent.exists()
-        assert json.loads(layout.state_json.read_text(encoding="utf-8"))["position"]["current_phase"] == "05"
+        assert layout.state_json.read_text(encoding="utf-8") == before_state
+        assert layout.state_md.read_text(encoding="utf-8") == before_md
+        assert layout.state_intent.exists()
+        assert json.loads(layout.state_json.read_text(encoding="utf-8"))["position"]["current_phase"] == "01"
         assert state_check.details["state_source"] == "state.json"
-
-    def test_fix_mode_restores_backup_state_and_refreshes_report_details(self, tmp_path: Path) -> None:
-        cwd = _bootstrap_health_project(tmp_path)
-        layout = ProjectLayout(cwd)
-
-        backup_state = default_state_dict()
-        backup_state["position"]["status"] = "Executing"
-        backup_state["position"]["current_phase"] = "12"
-        backup_state["open_questions"] = ["Recovered from backup"]
-        save_state_json(cwd, backup_state)
-        backup_payload = json.loads(layout.state_json_backup.read_text(encoding="utf-8"))
-
-        layout.state_json.unlink()
-        layout.state_md.write_text("# State\nStale markdown that should not win.\n", encoding="utf-8")
-
-        report = run_health(cwd, fix=True)
-
-        restored_state = json.loads(layout.state_json.read_text(encoding="utf-8"))
-        state_check = next(check for check in report.checks if check.label == "State Validity")
-
-        assert restored_state == backup_payload
-        assert layout.state_json.exists()
-        assert state_check.details["has_json"] is True
-        assert state_check.details["has_md"] is True
-        assert state_check.details["state_source"] == "state.json"
-        assert not any("state.json not found" in issue for issue in state_check.issues)
-        assert report.fixes_applied
-        assert report.fixes_applied == ["Restored state.json from state.json.bak"]
 
     def test_fix_mode_regenerates_state_from_state_md_and_refreshes_report_details(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
@@ -573,28 +1370,18 @@ class TestRunHealth:
         assert state_check.details["state_source"] == "state.json"
         assert report.fixes_applied == ["Regenerated state.json from STATE.md"]
 
-    def test_fix_mode_restores_state_pair_coherently(self, tmp_path: Path) -> None:
+    def test_state_validity_phase_format_warning_uses_recovered_backup_state(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
         layout = ProjectLayout(cwd)
 
         backup_state = default_state_dict()
-        backup_state["position"]["status"] = "Executing"
-        backup_state["position"]["current_phase"] = "12"
-        backup_state["open_questions"] = ["Recovered from backup"]
+        backup_state["position"]["current_phase"] = "5"
         save_state_json(cwd, backup_state)
-        backup_payload = json.loads(layout.state_json_backup.read_text(encoding="utf-8"))
+        layout.state_json.write_text("{bad json\n", encoding="utf-8")
 
-        layout.state_json.unlink()
-        layout.state_md.write_text("# State\nThis markdown is stale.\n", encoding="utf-8")
+        result = check_state_validity(cwd)
 
-        report = run_health(cwd, fix=True)
-
-        restored_state = json.loads(layout.state_json.read_text(encoding="utf-8"))
-        restored_md = layout.state_md.read_text(encoding="utf-8")
-
-        assert restored_state == backup_payload
-        assert "Recovered from backup" in restored_md
-        assert "Restored state.json from state.json.bak" in report.fixes_applied
+        assert any('phase ID format: "5" -- expected zero-padded' in warning for warning in result.warnings)
 
     def test_fix_mode_removes_stale_checkpoint_tags(self, tmp_path: Path):
         def _run(args: list[str], **_: object) -> subprocess.CompletedProcess[str]:
@@ -624,12 +1411,12 @@ class TestRunHealth:
 class TestRunDoctor:
     def _make_specs_dir(self, tmp_path: Path, *, include_templates: bool = True) -> Path:
         specs = tmp_path / "specs"
-        (specs / "references" / "shared").mkdir(parents=True)
-        (specs / "references" / "verification" / "core").mkdir(parents=True)
-        (specs / "references" / "verification" / "errors").mkdir(parents=True)
-        (specs / "workflows").mkdir()
+        (specs / "references" / "shared").mkdir(parents=True, exist_ok=True)
+        (specs / "references" / "verification" / "core").mkdir(parents=True, exist_ok=True)
+        (specs / "references" / "verification" / "errors").mkdir(parents=True, exist_ok=True)
+        (specs / "workflows").mkdir(exist_ok=True)
         if include_templates:
-            (specs / "templates").mkdir()
+            (specs / "templates").mkdir(exist_ok=True)
 
         (specs / "references" / "shared" / "shared-protocols.md").write_text("shared\n", encoding="utf-8")
         (specs / "references" / "verification" / "core" / "verification-core.md").write_text(
@@ -644,12 +1431,76 @@ class TestRunDoctor:
 
         return specs
 
+    def _run_runtime_doctor(
+        self,
+        tmp_path: Path,
+        *,
+        assessment: InstallTargetAssessment,
+        target_dir: Path | None = None,
+    ) -> tuple[HealthReport, dict[str, HealthCheck]]:
+        specs_dir = self._make_specs_dir(tmp_path)
+        selected_target = target_dir or runtime_target_dir(tmp_path, PRIMARY_RUNTIME)
+        if not selected_target.exists():
+            selected_target.mkdir(parents=True, exist_ok=True)
+
+        with (
+            patch("grd.core.health._doctor_active_virtualenv", return_value=True),
+            patch("grd.core.health._doctor_which", return_value=_PRIMARY_LAUNCHER_PATH),
+            patch("grd.core.health.os.access", return_value=True),
+            patch(
+                "grd.core.health._doctor_check_bootstrap_network_access",
+                return_value=HealthCheck(status=CheckStatus.OK, label="Bootstrap Network Access"),
+            ),
+            patch(
+                "grd.core.health._doctor_check_provider_auth",
+                return_value=HealthCheck(status=CheckStatus.OK, label="Provider/Auth Guidance"),
+            ),
+            patch(
+                "grd.core.health._doctor_check_latex_toolchain",
+                return_value=_latex_toolchain_check(),
+            ),
+            patch("grd.core.health.assess_install_target", return_value=assessment),
+        ):
+            report = run_doctor(
+                specs_dir=specs_dir,
+                version="0.1.0",
+                runtime=PRIMARY_RUNTIME,
+                install_scope="local",
+                target_dir=selected_target,
+                cwd=tmp_path,
+            )
+
+        checks = {check.label: check for check in report.checks}
+        return report, checks
+
+    def _assessment(
+        self,
+        *,
+        state: str,
+        target_dir: Path,
+        manifest_state: str = "ok",
+        manifest_runtime: str | None = None,
+        has_managed_markers: bool = True,
+        missing_install_artifacts: tuple[str, ...] = (),
+    ) -> InstallTargetAssessment:
+        return InstallTargetAssessment(
+            config_dir=target_dir.resolve(strict=False),
+            expected_runtime=PRIMARY_RUNTIME,
+            state=state,
+            manifest_state=manifest_state,
+            manifest_runtime=manifest_runtime,
+            has_managed_markers=has_managed_markers,
+            missing_install_artifacts=missing_install_artifacts,
+        )
+
     def test_reports_specs_structure(self, tmp_path: Path):
         report = run_doctor(specs_dir=self._make_specs_dir(tmp_path), version="0.1.0")
         checks = {check.label: check for check in report.checks}
 
         assert checks["Specs Structure"].status == CheckStatus.OK
         assert checks["Key References"].status == CheckStatus.OK
+        assert report.mode == "installation"
+        assert report.runtime is None
 
     def test_missing_required_specs_subdir_fails(self, tmp_path: Path):
         report = run_doctor(specs_dir=self._make_specs_dir(tmp_path, include_templates=False), version="0.1.0")
@@ -789,24 +1640,12 @@ assets:
         assert checks["Protocol Bundles"].status == CheckStatus.FAIL
         assert any("path must stay within specs dir" in issue for issue in checks["Protocol Bundles"].issues)
 
-    def test_protocol_bundles_check_fails_when_bundle_file_is_not_utf8(self, tmp_path: Path):
-        specs_dir = self._make_specs_dir(tmp_path)
-        bundles_dir = specs_dir / "bundles"
-        bundles_dir.mkdir()
-        (bundles_dir / "invalid-encoding.md").write_bytes(b"\xff\xfe\x80")
-
-        report = run_doctor(specs_dir=specs_dir, version="0.1.0")
-        checks = {check.label: check for check in report.checks}
-
-        assert checks["Protocol Bundles"].status == CheckStatus.FAIL
-        assert any("unreadable bundle" in issue for issue in checks["Protocol Bundles"].issues)
-
-    def test_protocol_bundles_check_fails_when_verifier_extension_check_id_is_unknown(self, tmp_path: Path):
-        specs_dir = self._make_specs_dir(tmp_path)
-        bundles_dir = specs_dir / "bundles"
-        bundles_dir.mkdir()
-        (bundles_dir / "bad-check-bundle.md").write_text(
-            """---
+    def test_protocol_bundles_check_rejects_invalid_bundle_inputs(self, tmp_path: Path):
+        cases: tuple[tuple[str, str | bytes, str], ...] = (
+            ("invalid-encoding.md", b"\xff\xfe\x80", "unreadable bundle"),
+            (
+                "bad-check-bundle.md",
+                """---
 bundle_id: bad-check-bundle
 bundle_version: 1
 title: Bad Check Bundle
@@ -825,21 +1664,11 @@ verifier_extensions:
 
 # Bad Check Bundle
 """,
-            encoding="utf-8",
-        )
-
-        report = run_doctor(specs_dir=specs_dir, version="0.1.0")
-        checks = {check.label: check for check in report.checks}
-
-        assert checks["Protocol Bundles"].status == CheckStatus.FAIL
-        assert any("unknown check_id '5.99'" in issue for issue in checks["Protocol Bundles"].issues)
-
-    def test_protocol_bundles_check_fails_when_exclusive_with_bundle_is_unknown(self, tmp_path: Path):
-        specs_dir = self._make_specs_dir(tmp_path)
-        bundles_dir = specs_dir / "bundles"
-        bundles_dir.mkdir()
-        (bundles_dir / "bad-exclusive-bundle.md").write_text(
-            """---
+                "unknown check_id '5.99'",
+            ),
+            (
+                "bad-exclusive-bundle.md",
+                """---
 bundle_id: bad-exclusive-bundle
 bundle_version: 1
 title: Bad Exclusive Bundle
@@ -855,10 +1684,130 @@ trigger:
 
 # Bad Exclusive Bundle
 """,
-            encoding="utf-8",
+                "unknown exclusive_with bundle missing-bundle",
+            ),
         )
 
-        report = run_doctor(specs_dir=specs_dir, version="0.1.0")
+        for index, (filename, payload, expected_issue) in enumerate(cases, start=1):
+            case_root = tmp_path / f"case-{index}"
+            specs_dir = self._make_specs_dir(case_root)
+            bundles_dir = specs_dir / "bundles"
+            bundles_dir.mkdir()
+            bundle_path = bundles_dir / filename
+
+            if isinstance(payload, bytes):
+                bundle_path.write_bytes(payload)
+            else:
+                bundle_path.write_text(payload, encoding="utf-8")
+
+            report = run_doctor(specs_dir=specs_dir, version="0.1.0")
+            protocol_bundles = next(check for check in report.checks if check.label == "Protocol Bundles")
+
+            assert protocol_bundles.status == CheckStatus.FAIL
+            assert any(expected_issue in issue for issue in protocol_bundles.issues)
+
+    def test_default_mode_excludes_runtime_readiness_checks(self, tmp_path: Path):
+        report = run_doctor(specs_dir=self._make_specs_dir(tmp_path), version="0.1.0")
+        labels = {check.label for check in report.checks}
+
+        assert report.mode == "installation"
+        assert report.runtime is None
+        assert report.install_scope is None
+        assert report.target is None
+        assert report.live_executable_probes is False
+        assert "Runtime Launcher" not in labels
+        assert "Runtime Config Target" not in labels
+        assert "Bootstrap Network Access" not in labels
+        assert "Provider/Auth Guidance" not in labels
+        assert "LaTeX Toolchain" not in labels
+        assert "Workflow Presets" not in labels
+        assert "Live Executable Probes" not in labels
+
+    def test_live_executable_probes_are_opt_in_and_recorded(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        specs_dir = self._make_specs_dir(tmp_path)
+
+        def fake_which(binary: str) -> str | None:
+            return {
+                "pdflatex": "/usr/bin/pdflatex",
+                "bibtex": "/usr/bin/bibtex",
+                "wolframscript": None,
+            }.get(binary)
+
+        def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if command == ["git", "--version"]:
+                return subprocess.CompletedProcess(args=command, returncode=0, stdout="git version 2.47.0\n", stderr="")
+            if command == [sys.executable, "-m", "grd.cli", "--help"]:
+                return subprocess.CompletedProcess(args=command, returncode=0, stdout="Usage: grd [OPTIONS] COMMAND\n", stderr="")
+            if command == ["/usr/bin/pdflatex", "--version"]:
+                return subprocess.CompletedProcess(args=command, returncode=0, stdout="pdfTeX 3.14159265\n", stderr="")
+            if command == ["/usr/bin/bibtex", "--version"]:
+                return subprocess.CompletedProcess(args=command, returncode=0, stdout="BibTeX 0.99d\n", stderr="")
+            raise AssertionError(f"Unexpected command: {command}")
+
+        monkeypatch.setattr("grd.core.health._doctor_which", fake_which)
+        monkeypatch.setattr("grd.core.health.subprocess.run", fake_run)
+
+        report = run_doctor(
+            specs_dir=specs_dir,
+            version="0.1.0",
+            live_executable_probes=True,
+        )
+
+        checks = {check.label: check for check in report.checks}
+        probe_check = checks["Live Executable Probes"]
+
+        assert report.live_executable_probes is True
+        assert probe_check.status == CheckStatus.WARN
+        assert probe_check.details["enabled"] is True
+        assert probe_check.details["timeout_seconds"] == 5
+        assert probe_check.details["mandatory_probe"] == "python -m grd.cli --help"
+        assert probe_check.details["skipped"] == ["latexmk", "kpsewhich", "wolframscript"]
+        assert [probe["label"] for probe in probe_check.details["probed"]] == [
+            "grd-cli",
+            "pdflatex",
+            "bibtex",
+            "latexmk",
+            "kpsewhich",
+            "wolframscript",
+        ]
+        assert probe_check.details["probed"][0]["status"] == "ok"
+        assert probe_check.details["probed"][1]["status"] == "ok"
+        assert probe_check.details["probed"][2]["status"] == "ok"
+        assert probe_check.details["probed"][3]["status"] == "skipped"
+        assert probe_check.details["probed"][4]["status"] == "skipped"
+        assert probe_check.details["probed"][5]["status"] == "skipped"
+        assert "latexmk not found on PATH" in probe_check.warnings
+        assert "kpsewhich not found on PATH" in probe_check.warnings
+        assert "wolframscript not found on PATH" in probe_check.warnings
+
+    def test_runtime_mode_records_virtualenv_state_without_blocking(self, tmp_path: Path):
+        target_dir = runtime_target_dir(tmp_path, PRIMARY_RUNTIME)
+        specs_dir = self._make_specs_dir(tmp_path)
+
+        with (
+            patch("grd.core.health._doctor_active_virtualenv", return_value=False),
+            patch("grd.core.health._doctor_which", return_value=_PRIMARY_LAUNCHER_PATH),
+            patch(
+                "grd.core.health._doctor_check_bootstrap_network_access",
+                return_value=HealthCheck(status=CheckStatus.OK, label="Bootstrap Network Access"),
+            ),
+            patch(
+                "grd.core.health._doctor_check_provider_auth",
+                return_value=HealthCheck(status=CheckStatus.OK, label="Provider/Auth Guidance"),
+            ),
+            patch(
+                "grd.core.health._doctor_check_latex_toolchain",
+                return_value=_latex_toolchain_check(),
+            ),
+        ):
+            report = run_doctor(
+                specs_dir=specs_dir,
+                version="0.1.0",
+                runtime=PRIMARY_RUNTIME,
+                install_scope="global",
+                target_dir=target_dir,
+            )
+
         checks = {check.label: check for check in report.checks}
 
         assert checks["Protocol Bundles"].status == CheckStatus.FAIL
@@ -877,6 +1826,84 @@ def _bootstrap_health_project(tmp_path: Path) -> Path:
     (planning / "STATE.md").write_text("# State\n", encoding="utf-8")
     (planning / "PROJECT.md").write_text("# Project\n", encoding="utf-8")
     return tmp_path
+
+
+def _knowledge_doc_content(
+    *,
+    knowledge_id: str = "K-renormalization-group-fixed-points",
+    status: str = "stable",
+    title: str = "Renormalization Group Fixed Points",
+    topic: str = "renormalization-group",
+    body: str = "Trusted knowledge body.\n",
+    superseded_by: str | None = None,
+) -> str:
+    lines = [
+        "---",
+        "knowledge_schema_version: 1",
+        f"knowledge_id: {knowledge_id}",
+        f"title: {title}",
+        f"topic: {topic}",
+        f"status: {status}",
+        "created_at: 2026-04-07T12:00:00Z",
+        "updated_at: 2026-04-07T12:00:00Z",
+        "sources:",
+        "  - source_id: source-main",
+        "    kind: paper",
+        "    locator: Doe et al., 2024",
+        "    title: Renormalization Group Fixed Points",
+        "    why_it_matters: Reviewed source that anchors the topic",
+        "coverage_summary:",
+        "  covered_topics: [fixed points, scaling]",
+        "  excluded_topics: [numerical implementation details]",
+        "  open_gaps: [none]",
+    ]
+    if superseded_by is not None:
+        lines.append(f"superseded_by: {superseded_by}")
+    lines.extend(["---", "", body, ""])
+    return "\n".join(lines)
+
+
+def _write_knowledge_doc(
+    path: Path,
+    *,
+    knowledge_id: str = "K-renormalization-group-fixed-points",
+    status: str = "stable",
+    title: str = "Renormalization Group Fixed Points",
+    topic: str = "renormalization-group",
+    body: str = "Trusted knowledge body.\n",
+    reviewed_content_sha256: str | None = None,
+    superseded_by: str | None = None,
+) -> None:
+    base_content = _knowledge_doc_content(
+        knowledge_id=knowledge_id,
+        status=status,
+        title=title,
+        topic=topic,
+        body=body,
+        superseded_by=superseded_by,
+    )
+    if reviewed_content_sha256 is None and status in {"stable", "in_review"}:
+        reviewed_content_sha256 = compute_knowledge_reviewed_content_sha256(base_content)
+
+    lines = base_content.splitlines()
+    if reviewed_content_sha256 is not None:
+        review_lines = [
+            "review:",
+            "  reviewed_at: 2026-04-07T12:00:00Z",
+            "  review_round: 1",
+            "  reviewer_kind: human",
+            "  reviewer_id: grd-reviewer",
+            "  decision: approved",
+            "  summary: Reviewed and accepted for downstream use",
+            f"  approval_artifact_path: GRD/knowledge/reviews/{knowledge_id}-R1-REVIEW.md",
+            "  approval_artifact_sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            f"  reviewed_content_sha256: {reviewed_content_sha256}",
+            "  stale: false",
+        ]
+        insert_at = lines.index("---", 1)
+        lines = [*lines[:insert_at], *review_lines, *lines[insert_at:]]
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _write_intent_recovery_state(
@@ -932,8 +1959,10 @@ class TestCheckLatestReturn:
 
         assert result.status == CheckStatus.OK
         assert result.label == "Latest Return Envelope"
+        assert result.details["file"] == "01-setup/01-setup-01-SUMMARY.md"
+        assert result.details["fields_found"] == ["files_written", "issues", "next_actions", "status"]
 
-    def test_summary_without_return_block_warns(self, tmp_path: Path) -> None:
+    def test_summary_without_return_block_fails_closed(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
         phase_dir = cwd / "GRD" / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
@@ -944,5 +1973,546 @@ class TestCheckLatestReturn:
 
         result = check_latest_return(cwd)
 
+        assert result.status == CheckStatus.FAIL
+        assert any("No grd_return YAML block found" in issue for issue in result.issues)
+
+    def test_summary_with_malformed_return_envelope_propagates_validator_failure(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        phase_dir = cwd / "GRD" / "phases" / "01-setup"
+        phase_dir.mkdir(parents=True)
+        (phase_dir / "01-setup-01-SUMMARY.md").write_text(
+            "# Summary\n\n```yaml\ngrd_return:\n  status: completed\n```\n",
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(
+            health_module,
+            "cmd_validate_return",
+            lambda _path: SimpleNamespace(
+                passed=False,
+                errors=["grd_return YAML parse error: malformed envelope"],
+                warnings=[],
+                fields={},
+                warning_count=0,
+            ),
+        )
+
+        result = check_latest_return(cwd)
+
+        assert result.status == CheckStatus.FAIL
+        assert result.details["fields_found"] == []
+        assert any("grd_return YAML parse error: malformed envelope" in issue for issue in result.issues)
+
+    def test_summary_with_invalid_status_propagates_validator_failure(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        phase_dir = cwd / "GRD" / "phases" / "01-setup"
+        phase_dir.mkdir(parents=True)
+        (phase_dir / "01-setup-01-SUMMARY.md").write_text(
+            "# Summary\n\n```yaml\ngrd_return:\n  status: mystery\n```\n",
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(
+            health_module,
+            "cmd_validate_return",
+            lambda _path: SimpleNamespace(
+                passed=False,
+                errors=["Invalid status 'mystery'. Must be one of: blocked, checkpoint, completed, failed"],
+                warnings=[],
+                fields={"status": "mystery"},
+                warning_count=0,
+            ),
+        )
+
+        result = check_latest_return(cwd)
+
+        assert result.status == CheckStatus.FAIL
+        assert result.details["fields_found"] == ["status"]
+        assert any("Invalid status 'mystery'" in issue for issue in result.issues)
+
+    def test_summary_with_coercive_numeric_return_counts_fails(self, tmp_path: Path) -> None:
+        cwd = _bootstrap_health_project(tmp_path)
+        phase_dir = cwd / "GRD" / "phases" / "01-setup"
+        phase_dir.mkdir(parents=True)
+        (phase_dir / "01-setup-01-SUMMARY.md").write_text(
+            "# Summary\n\n"
+            "```yaml\n"
+            "grd_return:\n"
+            "  status: completed\n"
+            "  files_written: [src/main.py]\n"
+            "  issues: []\n"
+            "  next_actions: [/grd:verify-work 02]\n"
+            "  tasks_completed: true\n"
+            "  tasks_total: 2.0\n"
+            "```\n",
+            encoding="utf-8",
+        )
+
+        result = check_latest_return(cwd)
+
+        assert result.status == CheckStatus.FAIL
+        assert "tasks_completed not a number" in result.issues[0] or "tasks_completed not a number" in " ".join(result.issues)
+        assert "tasks_total not a number" in " ".join(result.issues)
+
+
+class TestCheckResultConsistency:
+    """Tests for the result-consistency health check."""
+
+    def test_no_state_returns_ok(self, tmp_path: Path) -> None:
+        """When state.json is absent, the check should gracefully return OK."""
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.OK
+        assert result.details.get("reason") == "no_state"
+
+    def test_empty_results_and_no_summaries_returns_ok(self, tmp_path: Path) -> None:
+        """When both registries are empty, there is nothing to mismatch."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        (planning / "state.json").write_text(
+            json.dumps({"intermediate_results": []}),
+            encoding="utf-8",
+        )
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.OK
+        assert result.details["state_result_count"] == 0
+        assert result.details["summary_provides_count"] == 0
+
+    def test_matching_results_returns_ok(self, tmp_path: Path) -> None:
+        """When descriptions and provides match, check should return OK."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        phases = planning / "phases"
+        phase_dir = phases / "01-setup"
+        phase_dir.mkdir(parents=True)
+
+        state = {
+            "intermediate_results": [
+                {
+                    "id": "R-01-01",
+                    "description": "Hamiltonian eigenvalues",
+                    "phase": "01",
+                },
+            ],
+        }
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+        summary_content = (
+            "---\n"
+            "provides:\n"
+            "  - Hamiltonian eigenvalues\n"
+            "---\n"
+            "# Summary\n"
+        )
+        (phase_dir / "SUMMARY.md").write_text(summary_content, encoding="utf-8")
+
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.OK
+        assert result.details["state_result_count"] == 1
+        assert result.details["summary_provides_count"] == 1
+        assert result.details["state_only_count"] == 0
+        assert result.details["summary_only_count"] == 0
+
+    def test_state_only_result_warns(self, tmp_path: Path) -> None:
+        """A result in state.json with no SUMMARY provides should warn."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        (planning / "phases").mkdir()
+
+        state = {
+            "intermediate_results": [
+                {
+                    "id": "R-01-01",
+                    "description": "partition function",
+                    "phase": "01",
+                },
+            ],
+        }
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+        result = check_result_consistency(tmp_path)
         assert result.status == CheckStatus.WARN
-        assert result.warnings
+        assert result.details["state_only_count"] == 1
+        assert any("state.json result" in w for w in result.warnings)
+
+    def test_summary_only_provides_warns(self, tmp_path: Path) -> None:
+        """A SUMMARY provides with no state.json result should warn."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        phases = planning / "phases"
+        phase_dir = phases / "01-setup"
+        phase_dir.mkdir(parents=True)
+
+        state = {"intermediate_results": []}
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+        summary_content = (
+            "---\n"
+            "provides:\n"
+            "  - correlation function\n"
+            "---\n"
+            "# Summary\n"
+        )
+        (phase_dir / "SUMMARY.md").write_text(summary_content, encoding="utf-8")
+
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.WARN
+        assert result.details["summary_only_count"] == 1
+        assert any("SUMMARY provides" in w for w in result.warnings)
+
+    def test_substring_match_is_accepted(self, tmp_path: Path) -> None:
+        """Substring matching should link related descriptions and provides."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        phases = planning / "phases"
+        phase_dir = phases / "01-setup"
+        phase_dir.mkdir(parents=True)
+
+        state = {
+            "intermediate_results": [
+                {
+                    "id": "R-01-01",
+                    "description": "energy spectrum",
+                    "phase": "01",
+                },
+            ],
+        }
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+        # provides is a superset string containing the description
+        summary_content = (
+            "---\n"
+            "provides:\n"
+            "  - full energy spectrum for ground state\n"
+            "---\n"
+            "# Summary\n"
+        )
+        (phase_dir / "SUMMARY.md").write_text(summary_content, encoding="utf-8")
+
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.OK
+        assert result.details["state_only_count"] == 0
+        assert result.details["summary_only_count"] == 0
+
+    def test_case_insensitive_matching(self, tmp_path: Path) -> None:
+        """Matching should be case-insensitive."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        phases = planning / "phases"
+        phase_dir = phases / "01-setup"
+        phase_dir.mkdir(parents=True)
+
+        state = {
+            "intermediate_results": [
+                {
+                    "id": "R-01-01",
+                    "description": "Green Function",
+                    "phase": "01",
+                },
+            ],
+        }
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+        summary_content = (
+            "---\n"
+            "provides:\n"
+            "  - green function\n"
+            "---\n"
+            "# Summary\n"
+        )
+        (phase_dir / "SUMMARY.md").write_text(summary_content, encoding="utf-8")
+
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.OK
+
+    def test_structured_provides_with_name_key(self, tmp_path: Path) -> None:
+        """Structured provides entries with 'name' key should be extracted."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        phases = planning / "phases"
+        phase_dir = phases / "01-setup"
+        phase_dir.mkdir(parents=True)
+
+        state = {
+            "intermediate_results": [
+                {
+                    "id": "R-01-01",
+                    "description": "dispersion relation",
+                    "phase": "01",
+                },
+            ],
+        }
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+        summary_content = (
+            "---\n"
+            "provides:\n"
+            "  - name: dispersion relation\n"
+            "    format: equation\n"
+            "---\n"
+            "# Summary\n"
+        )
+        (phase_dir / "SUMMARY.md").write_text(summary_content, encoding="utf-8")
+
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.OK
+        assert result.details["state_only_count"] == 0
+        assert result.details["summary_only_count"] == 0
+
+    def test_results_without_description_are_skipped(self, tmp_path: Path) -> None:
+        """Results without descriptions should not cause false warnings."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        (planning / "phases").mkdir()
+
+        state = {
+            "intermediate_results": [
+                {
+                    "id": "R-01-01",
+                    "equation": "E = mc^2",
+                    "phase": "01",
+                },
+            ],
+        }
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.OK
+        assert result.details["state_only_count"] == 0
+
+    def test_both_directions_mismatch(self, tmp_path: Path) -> None:
+        """Both state-only and summary-only mismatches should appear."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        phases = planning / "phases"
+        phase_dir = phases / "01-setup"
+        phase_dir.mkdir(parents=True)
+
+        state = {
+            "intermediate_results": [
+                {
+                    "id": "R-01-01",
+                    "description": "free energy",
+                    "phase": "01",
+                },
+            ],
+        }
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+        summary_content = (
+            "---\n"
+            "provides:\n"
+            "  - scattering amplitude\n"
+            "---\n"
+            "# Summary\n"
+        )
+        (phase_dir / "SUMMARY.md").write_text(summary_content, encoding="utf-8")
+
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.WARN
+        assert result.details["state_only_count"] == 1
+        assert result.details["summary_only_count"] == 1
+        assert len(result.warnings) == 2
+
+    # ── SERIOUS #1: Empty-string provides must not match everything ────────
+
+    def test_empty_provides_string_does_not_match_everything(
+        self, tmp_path: Path
+    ) -> None:
+        """An empty provides value must NOT suppress all state-only warnings.
+
+        In Python, ``"" in "any string"`` is ``True``. Without a guard, a
+        single ``""`` in provides would silently match every result description.
+        """
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        (planning / "phases").mkdir()
+        state = {
+            "intermediate_results": [
+                {"id": "R-01", "description": "critical measurement of g-factor", "phase": "01"},
+            ],
+        }
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        phase_dir = planning / "phases" / "01-setup"
+        phase_dir.mkdir(parents=True)
+        (phase_dir / "SUMMARY.md").write_text(
+            '---\nprovides:\n  - ""\n---\n# Summary\n', encoding="utf-8"
+        )
+        result = check_result_consistency(tmp_path)
+        # The empty provides must be ignored, so R-01 should be state-only.
+        assert result.status == CheckStatus.WARN
+        assert result.details["state_only_count"] == 1
+        # The empty provides itself must be excluded from all_provides.
+        assert result.details["summary_provides_count"] == 0
+
+    def test_whitespace_only_provides_string_is_ignored(
+        self, tmp_path: Path
+    ) -> None:
+        """Whitespace-only provides like ``"   "`` must be treated like empty."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        (planning / "phases").mkdir()
+        state = {
+            "intermediate_results": [
+                {"id": "R-01", "description": "mass renormalization", "phase": "01"},
+            ],
+        }
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        phase_dir = planning / "phases" / "01-setup"
+        phase_dir.mkdir(parents=True)
+        (phase_dir / "SUMMARY.md").write_text(
+            '---\nprovides:\n  - "   "\n---\n# Summary\n', encoding="utf-8"
+        )
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.WARN
+        assert result.details["summary_provides_count"] == 0
+
+    # ── SERIOUS #2: Malformed state.json records ──────────────────────────
+
+    def test_malformed_state_results_returns_warn_not_crash(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """If result_list raises PydanticValidationError (e.g., from a
+        malformed intermediate_results record that somehow bypassed state
+        normalization), the health check must return WARN, not crash.
+
+        In practice, _peek_normalized_state_for_health already strips
+        malformed records, so we monkeypatch result_list to simulate the
+        failure path.
+        """
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        (planning / "phases").mkdir()
+        (planning / "state.json").write_text(
+            json.dumps({"intermediate_results": [{"id": "R-01", "description": "valid"}]}),
+            encoding="utf-8",
+        )
+
+        def _boom(state, **kw):  # type: ignore[override]
+            from grd.core.results import IntermediateResult
+            # Force a real PydanticValidationError
+            IntermediateResult(**{"description": "no id"})
+
+        monkeypatch.setattr("grd.core.results.result_list", _boom)
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.WARN
+        assert result.details.get("error") == "malformed_state_results"
+        assert any("Cannot parse" in w for w in result.warnings)
+
+    def test_normalization_already_strips_malformed_records(
+        self, tmp_path: Path
+    ) -> None:
+        """Verify that state-loading normalization strips malformed records
+        (missing ``id``), so result_list sees only valid records and returns OK."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        (planning / "phases").mkdir()
+        (planning / "state.json").write_text(
+            json.dumps({"intermediate_results": [{"description": "no id field here"}]}),
+            encoding="utf-8",
+        )
+        result = check_result_consistency(tmp_path)
+        # Normalization drops the bad record; no crash, no warning.
+        assert result.status == CheckStatus.OK
+        assert result.details["state_result_count"] == 0
+
+    # ── WARNING #3: Short-string over-matching ────────────────────────────
+
+    def test_short_provides_do_not_match_via_substring(
+        self, tmp_path: Path
+    ) -> None:
+        """Provides shorter than _MIN_PROVIDES_LENGTH must not substring-match;
+        they should only exact-match (case-insensitive)."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        (planning / "phases").mkdir()
+        state = {
+            "intermediate_results": [
+                {"id": "R-01", "description": "energy spectrum", "phase": "01"},
+            ],
+        }
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        phase_dir = planning / "phases" / "01-setup"
+        phase_dir.mkdir(parents=True)
+        # "E" is too short to match "energy spectrum" via substring.
+        (phase_dir / "SUMMARY.md").write_text(
+            "---\nprovides:\n  - E\n---\n# Summary\n", encoding="utf-8"
+        )
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.WARN
+        assert result.details["state_only_count"] == 1
+
+    def test_short_provides_exact_match_still_works(
+        self, tmp_path: Path
+    ) -> None:
+        """A short provides string should still match if it is an exact
+        case-insensitive match for a result description."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        (planning / "phases").mkdir()
+        state = {
+            "intermediate_results": [
+                {"id": "R-01", "description": "ds", "phase": "01"},
+            ],
+        }
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        phase_dir = planning / "phases" / "01-setup"
+        phase_dir.mkdir(parents=True)
+        (phase_dir / "SUMMARY.md").write_text(
+            "---\nprovides:\n  - ds\n---\n# Summary\n", encoding="utf-8"
+        )
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.OK
+        assert result.details["state_only_count"] == 0
+
+    # ── MINOR #6: Structured provides with "provides" key ────────────────
+
+    def test_structured_provides_with_provides_key(
+        self, tmp_path: Path
+    ) -> None:
+        """Structured provides dicts with a ``provides`` key (not ``name``)
+        should have their value extracted and matched."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        phases = planning / "phases"
+        phase_dir = phases / "01-setup"
+        phase_dir.mkdir(parents=True)
+        state = {
+            "intermediate_results": [
+                {"id": "R-01", "description": "holographic entanglement entropy", "phase": "01"},
+            ],
+        }
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        (phase_dir / "SUMMARY.md").write_text(
+            "---\nprovides:\n  - provides: holographic entanglement entropy\n---\n# Summary\n",
+            encoding="utf-8",
+        )
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.OK
+        assert result.details["state_only_count"] == 0
+
+    def test_structured_provides_with_empty_name_is_ignored(
+        self, tmp_path: Path
+    ) -> None:
+        """Structured provides dict with empty ``name`` must be skipped."""
+        planning = tmp_path / "GRD"
+        planning.mkdir()
+        phases = planning / "phases"
+        phase_dir = phases / "01-setup"
+        phase_dir.mkdir(parents=True)
+        state = {
+            "intermediate_results": [
+                {"id": "R-01", "description": "Witten diagram", "phase": "01"},
+            ],
+        }
+        (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        (phase_dir / "SUMMARY.md").write_text(
+            '---\nprovides:\n  - name: ""\n---\n# Summary\n',
+            encoding="utf-8",
+        )
+        result = check_result_consistency(tmp_path)
+        assert result.status == CheckStatus.WARN
+        assert result.details["summary_provides_count"] == 0

@@ -47,14 +47,14 @@ fi
 
 ## 1. Identify What to Compare
 
-If the project is contract-backed, first resolve the comparison target against the approved contract only when `project_contract_load_info` is clean and `project_contract_validation` passes:
+If the project is contract-backed, first resolve the comparison target against the approved contract only when `project_contract_gate.authoritative` is true:
 - `subject_id`
 - `subject_kind` (`claim`, `deliverable`, `acceptance_test`, or `reference`)
 - `subject_role` (`decisive`, `supporting`, `supplemental`, or `other`)
 - `reference_id` for the benchmark / prior-work / data anchor
 - the pass condition or tolerance that makes this comparison decisive
 
-Treat `project_contract` as authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes. If either gate is blocked, keep the contract visible for context but do not treat it as approved comparison scope.
+Treat `project_contract` as authoritative only when `project_contract_gate.authoritative` is true. If the gate is blocked, keep the contract visible for context but do not treat it as approved comparison scope.
 
 Do not write a generic comparison report without this mapping when a decisive comparison target exists.
 If the comparison is about a concrete file or plot, map it to the deliverable or reference ID that owns it instead of inventing an `artifact` subject kind.
@@ -231,27 +231,29 @@ Write COMPARISON.md:
 date: { YYYY-MM-DD }
 theory_source: { derivation/computation path }
 data_source: { experiment/measurement reference }
-protocol_bundle_ids (optional):
+protocol_bundle_ids:
   - { bundle-id }
-bundle_expectations (optional):
+bundle_expectations:
   - { additive provenance cue that materially informed the comparison }
-overall_agreement: good | tension | discrepancy
+overall_agreement: good
 chi2_ndof: { value }
 p_value: { value }
 max_tension_sigma: { value }
 comparison_verdicts:
   - subject_id: claim-id
-    subject_kind: claim|deliverable|acceptance_test|reference
-    subject_role: decisive|supporting|supplemental|other
+    subject_kind: claim
+    subject_role: decisive
     reference_id: ref-id
-    comparison_kind: benchmark|prior_work|experiment|cross_method|baseline|other
-    metric: chi2_ndof | relative_error | pull
+    comparison_kind: experiment
+    metric: chi2_ndof
     threshold: "<= 2 sigma"
-    verdict: pass | tension | fail | inconclusive
+    verdict: pass
     recommended_action: { what to do next }
 ---
 
 # Theory-Experiment Comparison
+
+If no selected protocol bundle materially informed the comparison, omit `protocol_bundle_ids` and `bundle_expectations` entirely.
 
 ## Quantities Compared
 

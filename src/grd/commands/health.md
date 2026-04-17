@@ -2,7 +2,7 @@
 name: grd:health
 description: Run project health checks and optionally auto-fix issues
 argument-hint: "[--fix]"
-context_mode: project-required
+context_mode: projectless
 allowed-tools:
   - file_read
   - file_write
@@ -11,13 +11,11 @@ allowed-tools:
   - search_files
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Run comprehensive project health checks and optionally auto-fix detected issues.
 
-Checks include: environment, project structure, storage-path policy, state validity, compaction, roadmap consistency, orphaned phase directories, convention lock integrity, plan frontmatter, latest return envelope, config.json validity, checkpoint tags, and git status.
+Checks include: environment, project structure, knowledge inventory, storage-path policy, state validity, compaction, roadmap consistency, orphaned phase directories, convention lock integrity, plan frontmatter, latest return envelope, config.json validity, checkpoint tags, and git status.
 
 Use `--fix` to automatically repair detected issues.
 </objective>
@@ -52,8 +50,10 @@ fi
 ## Step 3: Parse and present
 
 Parse JSON output containing:
-- `checks`: Array of `{name, status, message, fixed}` where status is "pass", "warn", or "fail"
-- `summary`: Object with `total`, `passed`, `warnings`, `failures`, `fixed`
+- `overall`: top-level `CheckStatus` for the full report
+- `summary`: `HealthSummary` with `ok`, `warn`, `fail`, and `total`
+- `checks`: Array of `HealthCheck` objects with `status`, `label`, `details`, `issues`, and `warnings`
+- `fixes_applied`: top-level list of auto-applied fix descriptions
 
 ## Step 4: Display
 
@@ -67,7 +67,8 @@ Parse JSON output containing:
 
 ---
 
-**{passed}/{total} passed** | {warnings} warnings | {failures} failures
+**Overall:** {overall}
+**{ok}/{total} ok** | {warn} warnings | {fail} failures
 [If --fix was used:] | {fixed} auto-fixed
 ```
 

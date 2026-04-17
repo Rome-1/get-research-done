@@ -24,11 +24,14 @@ import re
 import shutil
 import tempfile
 import tomllib
+from collections.abc import Mapping
 from pathlib import Path
 
 from grd.adapters.base import RuntimeAdapter
 from grd.adapters.install_utils import (
     CACHE_DIR_NAME,
+    COMMANDS_DIR_NAME,
+    GRD_INSTALL_DIR_NAME,
     HOOK_SCRIPTS,
     MANIFEST_NAME,
     PATCHES_DIR_NAME,
@@ -39,18 +42,20 @@ from grd.adapters.install_utils import (
     get_global_dir,
     hook_python_interpreter,
     managed_hook_paths,
-    materialize_first_round_review_schema_headings,
     pre_install_cleanup,
     prune_empty_ancestors,
     remove_empty_text_file,
     remove_stale_agents,
     render_markdown_frontmatter,
+    should_preserve_public_local_cli_command,
     split_markdown_frontmatter,
     verify_installed,
     write_manifest,
 )
+from grd.adapters.runtime_catalog import get_runtime_descriptor
 from grd.adapters.tool_names import build_runtime_alias_map, reference_translation_map, translate_for_runtime
 from grd.core.observability import grd_span
+from grd.mcp import managed_integrations as _managed_integrations
 from grd.registry import AgentDef, load_agents_from_dir
 
 logger = logging.getLogger(__name__)
@@ -89,6 +94,38 @@ _MANIFEST_CODEX_GENERATED_SKILL_DIRS_KEY = "codex_generated_skill_dirs"
 _CODEX_DEFAULT_SANDBOX_MODE = "workspace-write"
 _CODEX_YOLO_APPROVAL_POLICY = "never"
 _CODEX_YOLO_SANDBOX_MODE = "danger-full-access"
+
+
+def _codex_runtime_config_shape_is_valid(config: dict[str, object]) -> bool:
+    mcp_servers = config.get("mcp_servers")
+    if mcp_servers is not None and not isinstance(mcp_servers, dict):
+        return False
+    agents = config.get("agents")
+    if agents is not None and not isinstance(agents, dict):
+        return False
+    return True
+
+
+def _read_codex_runtime_config(config_path: Path) -> tuple[dict[str, object] | None, str | None]:
+    """Return the parsed Codex config and a malformed marker when parsing fails."""
+    if not config_path.exists():
+        return None, None
+    try:
+        parsed = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return None, "malformed"
+    if not isinstance(parsed, dict):
+        return None, "malformed"
+    if not _codex_runtime_config_shape_is_valid(parsed):
+        return None, "malformed"
+    return parsed, None
+
+
+def _codex_config_dir_name() -> str:
+    """Return the descriptor-backed Codex config dir name."""
+    return get_runtime_descriptor("codex").config_dir_name
+
+
 _TOOL_REFERENCE_MAP = reference_translation_map(
     _TOOL_NAME_MAP,
     alias_map=_TOOL_ALIAS_MAP,
@@ -122,9 +159,6 @@ _CODEX_ASK_USER_PLATFORM_NOTE_RE = re.compile(
     r"^\s*>\s+\*\*Platform note:\*\* If `ask_user` is not available,[^\n]*\n(?:\s*\n)?",
     re.IGNORECASE | re.MULTILINE,
 )
-_CODEX_HELP_WORDING_RE = re.compile(r"\bslash-command\b")
-
-
 # ─── Directory helpers ──────────────────────────────────────────────────────
 
 
@@ -169,14 +203,18 @@ def _resolve_codex_skills_dir(target_dir: Path, *, is_global: bool, skills_dir: 
 
 
 def _load_manifest_codex_skills_dir(target_dir: Path) -> Path | None:
-    """Return the install-time Codex skills dir recorded in the local manifest."""
+    """Return the install-time Codex skills dir recorded in the local manifest.
+
+    `codex_skills_dir` is the only authoritative manifest key for Codex skill
+    ownership and uninstall validation.
+    """
     manifest_path = target_dir / MANIFEST_NAME
     if not manifest_path.exists():
         return None
 
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return None
 
     if not isinstance(manifest, dict):
@@ -197,7 +235,7 @@ def _load_manifest_codex_generated_skill_dirs(target_dir: Path) -> tuple[str, ..
 
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return ()
 
     if not isinstance(manifest, dict):
@@ -211,6 +249,107 @@ def _load_manifest_codex_generated_skill_dirs(target_dir: Path) -> tuple[str, ..
     return ()
 
 
+def _planned_installed_codex_skill_dirs(target_dir: Path) -> tuple[str, ...]:
+    """Return generated Codex skill directories inferable from installed command files."""
+    commands_dir = target_dir / GRD_INSTALL_DIR_NAME / COMMANDS_DIR_NAME
+    if not commands_dir.is_dir():
+        return ()
+    try:
+        return tuple(sorted(_planned_codex_skill_dirs(commands_dir, "grd")))
+    except OSError:
+        return ()
+
+
+def _load_live_managed_codex_skill_dirs(skills_dir: Path | None) -> tuple[str, ...]:
+    """Return live managed Codex skill directories identifiable by the GRD marker."""
+    if skills_dir is None or not skills_dir.is_dir():
+        return ()
+
+    names: list[str] = []
+    for entry in sorted(skills_dir.iterdir()):
+        if not entry.is_dir() or not entry.name.startswith("grd-"):
+            continue
+        skill_md = entry / "SKILL.md"
+        try:
+            content = skill_md.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if _GPD_CODEX_SKILL_MARKER in content:
+            names.append(entry.name)
+    return tuple(names)
+
+
+def _load_manifest_tracked_codex_skill_dirs(target_dir: Path) -> tuple[str, ...]:
+    """Return generated Codex skill names inferred from manifest-tracked skill files."""
+    manifest_path = target_dir / MANIFEST_NAME
+    if not manifest_path.exists():
+        return ()
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return ()
+
+    if not isinstance(manifest, dict):
+        return ()
+
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        return ()
+
+    names: list[str] = []
+    for relpath in files:
+        if not isinstance(relpath, str):
+            continue
+        if not relpath.startswith("skills/") or not relpath.endswith("/SKILL.md"):
+            continue
+        parts = relpath.split("/")
+        if len(parts) != 3:
+            continue
+        skill_name = parts[1].strip()
+        if skill_name.startswith("grd-"):
+            names.append(skill_name)
+    return tuple(dict.fromkeys(names))
+
+
+def _tracked_codex_generated_skill_dirs(
+    target_dir: Path,
+    *,
+    skills_dir: Path | None = None,
+) -> tuple[str, ...]:
+    """Return generated skill names when ownership evidence is unambiguous.
+
+    Only live install evidence is authoritative here: manifest-tracked files,
+    managed markers inside the skills tree, and the installed command tree.
+    Packaged source content is not an install-ownership signal.
+    """
+    candidates: list[set[str]] = []
+
+    live_managed = _load_live_managed_codex_skill_dirs(skills_dir)
+    if live_managed:
+        candidates.append(set(live_managed))
+
+    tracked_from_files = _load_manifest_tracked_codex_skill_dirs(target_dir)
+    if tracked_from_files:
+        candidates.append(set(tracked_from_files))
+
+    tracked_from_manifest = _load_manifest_codex_generated_skill_dirs(target_dir)
+    if tracked_from_manifest:
+        candidates.append(set(tracked_from_manifest))
+
+    if candidates:
+        first = candidates[0]
+        if any(candidate != first for candidate in candidates[1:]):
+            return ()
+        return tuple(sorted(first))
+
+    planned = _planned_installed_codex_skill_dirs(target_dir)
+    if planned:
+        return tuple(sorted(planned))
+
+    return ()
+
+
 def _load_manifest_install_scope(target_dir: Path) -> str | None:
     """Return the install scope recorded in the local manifest, if present."""
     manifest_path = target_dir / MANIFEST_NAME
@@ -219,7 +358,7 @@ def _load_manifest_install_scope(target_dir: Path) -> str | None:
 
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return None
 
     if not isinstance(manifest, dict):
@@ -365,12 +504,8 @@ def _convert_to_codex_skill(content: str, skill_name: str) -> str:
             new_lines.append(f"  - {tool}")
 
     new_frontmatter = "\n".join(new_lines).strip()
-    return render_markdown_frontmatter(preamble, new_frontmatter, separator or "\n", body)
-
-
-def _rewrite_codex_help_wording(content: str) -> str:
-    """Remove slash-command wording from the installed Codex help surface."""
-    return _CODEX_HELP_WORDING_RE.sub("command", content)
+    managed_body = f"{_GPD_CODEX_SKILL_MARKER}\n{body.lstrip()}" if body else f"{_GPD_CODEX_SKILL_MARKER}\n"
+    return render_markdown_frontmatter(preamble, new_frontmatter, separator or "\n", managed_body)
 
 
 def _toml_string(value: str) -> str:
@@ -517,6 +652,10 @@ def _rewrite_codex_shell_line(line: str, launcher: str) -> str:
             and _is_grd_command_start(line, index)
             and _is_grd_token_end(line, index + 3)
         ):
+            if should_preserve_public_local_cli_command(line[index:]):
+                pieces.append("grd")
+                index += 3
+                continue
             pieces.append(launcher)
             index += 3
             continue
@@ -590,7 +729,7 @@ class CodexAdapter(RuntimeAdapter):
 
     def install(
         self,
-        gpd_root: Path,
+        grd_root: Path,
         target_dir: Path,
         *,
         # is_global defaults to True here (base class defaults to False) because
@@ -609,7 +748,7 @@ class CodexAdapter(RuntimeAdapter):
         self._skills_dir = _resolve_codex_skills_dir(target_dir, is_global=is_global, skills_dir=skills_dir)
         self._generated_skill_dirs = ()
         try:
-            return super().install(gpd_root, target_dir, is_global=is_global, explicit_target=explicit_target)
+            return super().install(grd_root, target_dir, is_global=is_global, explicit_target=explicit_target)
         finally:
             self._skills_dir = prev_skills_dir
             self._generated_skill_dirs = prev_generated_skill_dirs
@@ -624,8 +763,8 @@ class CodexAdapter(RuntimeAdapter):
     def _pre_cleanup(self, target_dir: Path) -> None:
         pre_install_cleanup(target_dir, skills_dir=str(self._skills_dir))
 
-    def _install_commands(self, gpd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
-        commands_src = gpd_root / "commands"
+    def _install_commands(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
+        commands_src = grd_root / "commands"
         launcher = self._grd_shell_launcher(target_dir)
         self._skills_dir.mkdir(parents=True, exist_ok=True)
         generated_skill_dirs = _copy_commands_as_skills(
@@ -634,19 +773,20 @@ class CodexAdapter(RuntimeAdapter):
             "grd",
             path_prefix,
             target_dir,
-            gpd_root / "specs",
+            grd_root / "specs",
             self._current_install_scope_flag(),
             launcher=launcher,
+            explicit_target=getattr(self, "_install_explicit_target", False),
         )
         self._generated_skill_dirs = tuple(sorted(generated_skill_dirs))
-        if verify_installed(self._skills_dir, "command skills"):
+        if verify_installed(self._skills_dir):
             logger.info("Installed command skills")
         else:
             failures.append("command skills")
         skill_count = sum(1 for d in self._skills_dir.iterdir() if d.is_dir() and d.name.startswith("grd-"))
         return skill_count
 
-    def _install_content(self, gpd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> None:
+    def _install_content(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> None:
         """Install shared specs content with Codex runtime-aware shell rewrites."""
         launcher = self._grd_shell_launcher(target_dir)
 
@@ -663,20 +803,21 @@ class CodexAdapter(RuntimeAdapter):
 
         failures.extend(
             install_grd_content(
-                gpd_root / "specs",
+                grd_root / "specs",
                 target_dir,
                 path_prefix,
                 self.runtime_name,
                 install_scope=self._current_install_scope_flag(),
                 markdown_transform=_translate,
+                explicit_target=getattr(self, "_install_explicit_target", False),
             )
         )
 
-    def _install_agents(self, gpd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
-        agents_src = gpd_root / "agents"
-        gpd_specs_root = gpd_root / "specs"
+    def _install_agents(self, grd_root: Path, target_dir: Path, path_prefix: str, failures: list[str]) -> int:
+        agents_src = grd_root / "agents"
+        grd_specs_root = grd_root / "specs"
         launcher = self._grd_shell_launcher(target_dir)
-        runtime_agents = self.load_runtime_agents(gpd_root)
+        runtime_agents = self.load_runtime_agents(grd_root)
         agent_count = len(runtime_agents)
 
         # Install agents only as Codex role briefs plus role config TOMLs.
@@ -686,12 +827,12 @@ class CodexAdapter(RuntimeAdapter):
                 agents_src,
                 agents_dest,
                 path_prefix,
-                gpd_specs_root,
+                grd_specs_root,
                 self._current_install_scope_flag(),
                 launcher=launcher,
             )
             _write_codex_agent_role_files(agents_dest, runtime_agents)
-            if verify_installed(agents_dest, "agents"):
+            if verify_installed(agents_dest):
                 logger.info("Installed Codex agent role files")
             else:
                 failures.append("agents")
@@ -703,6 +844,8 @@ class CodexAdapter(RuntimeAdapter):
         super()._install_version(target_dir, version, failures)
 
     def _configure_runtime(self, target_dir: Path, is_global: bool) -> dict[str, object]:
+        project_cwd = None if is_global or getattr(self, "_install_explicit_target", False) else target_dir.parent
+        managed_optional_mcp_servers = _build_managed_optional_mcp_servers(cwd=project_cwd)
         _configure_config_toml(
             target_dir,
             is_global,
@@ -732,6 +875,7 @@ class CodexAdapter(RuntimeAdapter):
         from grd.mcp.builtin_servers import build_mcp_servers_dict
 
         mcp_servers = build_mcp_servers_dict(python_path=hook_python_interpreter())
+        mcp_servers.update(managed_optional_mcp_servers)
         mcp_count = 0
         if mcp_servers:
             mcp_count = _write_mcp_servers_codex_toml(target_dir, mcp_servers)
@@ -749,8 +893,10 @@ class CodexAdapter(RuntimeAdapter):
         """Report whether Codex approvals/sandbox are aligned with GRD autonomy."""
         config_path = target_dir / "config.toml"
         approval_policy: str | None = None
-        sandbox_mode: str = _CODEX_DEFAULT_SANDBOX_MODE
+        sandbox_mode: str | None = _CODEX_DEFAULT_SANDBOX_MODE
         root_managed = False
+        config_valid = True
+        config_parse_error: str | None = None
         if config_path.exists():
             content = config_path.read_text(encoding="utf-8")
             try:
@@ -780,7 +926,11 @@ class CodexAdapter(RuntimeAdapter):
         managed_state = self._runtime_permissions_manifest_state(target_dir) or {}
         managed_by_grd = managed_state.get("mode") == "yolo" or root_managed
 
-        if desired_mode == "yolo":
+        next_step: str | None = None
+        if not config_valid:
+            config_aligned = False
+            message = "Codex config.toml is malformed; GRD will not treat it as a defaulted permission state."
+        elif desired_mode == "yolo":
             root_aligned = (
                 approval_policy == _CODEX_YOLO_APPROVAL_POLICY
                 and sandbox_mode == _CODEX_YOLO_SANDBOX_MODE
@@ -793,10 +943,14 @@ class CodexAdapter(RuntimeAdapter):
                 )
             )
             config_aligned = root_aligned and roles_aligned
+            requires_relaunch = config_aligned
             if config_aligned:
                 message = (
                     "Codex is configured for prompt-free approvals and danger-full-access sandboxing "
                     "for the next session."
+                )
+                next_step = (
+                    "Restart Codex so the current session picks up the persisted yolo approval and sandbox settings."
                 )
             elif not root_aligned and not roles_aligned:
                 message = (
@@ -822,8 +976,8 @@ class CodexAdapter(RuntimeAdapter):
 
         configured_mode = (
             "yolo"
-            if approval_policy == _CODEX_YOLO_APPROVAL_POLICY and sandbox_mode == _CODEX_YOLO_SANDBOX_MODE
-            else f"{approval_policy or 'unset'}/{sandbox_mode}"
+            if config_valid and approval_policy == _CODEX_YOLO_APPROVAL_POLICY and sandbox_mode == _CODEX_YOLO_SANDBOX_MODE
+            else "malformed" if not config_valid else f"{approval_policy or 'unset'}/{sandbox_mode or 'unset'}"
         )
         return {
             "runtime": self.runtime_name,
@@ -832,17 +986,30 @@ class CodexAdapter(RuntimeAdapter):
             "config_aligned": config_aligned,
             "managed_by_grd": managed_by_grd,
             "settings_path": str(config_path),
-            "approval_policy": approval_policy or "unset",
+            "approval_policy": approval_policy,
             "sandbox_mode": sandbox_mode,
             "agent_role_approval_policy": role_approval_policy or "unset",
             "agent_role_sandbox_mode": role_sandbox_mode or "mixed",
+            "config_valid": config_valid,
+            "config_parse_error": config_parse_error,
             "message": message,
+            "next_step": next_step,
         }
 
     def sync_runtime_permissions(self, target_dir: Path, *, autonomy: str) -> dict[str, object]:
         """Align Codex approvals/sandbox settings with the requested autonomy."""
         config_path = target_dir / "config.toml"
         toml_content = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+        _, parse_error = _read_codex_runtime_config(config_path)
+        if parse_error is not None:
+            status = self.runtime_permissions_status(target_dir, autonomy=autonomy)
+            return {
+                **status,
+                "changed": False,
+                "sync_applied": False,
+                "requires_relaunch": False,
+                "warning": "Codex config.toml is malformed; GRD will not overwrite it.",
+            }
         changed = False
         if autonomy == "yolo":
             updated = toml_content
@@ -906,13 +1073,15 @@ class CodexAdapter(RuntimeAdapter):
             if updated != toml_content:
                 config_path.write_text(updated, encoding="utf-8")
                 changed = True
-            roles_changed = _rewrite_codex_agent_role_runtime_modes(
-                target_dir / "agents",
-                sandbox_mode=_CODEX_DEFAULT_SANDBOX_MODE,
-                approval_policy=None,
-            )
-            changed = changed or roles_changed
-            self._set_runtime_permissions_manifest_state(target_dir, None)
+            if has_role_files and (roles_managed_yolo or managed_mode_yolo):
+                roles_changed = _rewrite_codex_agent_role_runtime_modes(
+                    target_dir / "agents",
+                    sandbox_mode=_CODEX_DEFAULT_SANDBOX_MODE,
+                    approval_policy=None,
+                )
+                changed = changed or roles_changed
+            if managed_state:
+                self._set_runtime_permissions_manifest_state(target_dir, None)
 
         status = self.runtime_permissions_status(target_dir, autonomy=autonomy)
         sync_applied = bool(status.get("config_aligned"))
@@ -953,7 +1122,11 @@ class CodexAdapter(RuntimeAdapter):
         return (*super().install_completeness_relpaths(), "config.toml")
 
     def missing_install_artifacts(self, target_dir: Path) -> tuple[str, ...]:
-        """Return missing Codex install artifacts, including the shared skills dir."""
+        """Return missing Codex install artifacts, including the shared skills dir.
+
+        The shared skills directory is considered present only when the install
+        can justify its generated skill set from manifest or live install data.
+        """
         missing = list(super().missing_install_artifacts(target_dir))
 
         skills_dir = _load_manifest_codex_skills_dir(target_dir)
@@ -964,7 +1137,7 @@ class CodexAdapter(RuntimeAdapter):
                 is_global=manifest_install_scope == "global" if manifest_install_scope is not None else _is_global_codex_target(target_dir),
             )
 
-        tracked_skill_dirs = _load_manifest_codex_generated_skill_dirs(target_dir)
+        tracked_skill_dirs = _tracked_codex_generated_skill_dirs(target_dir, skills_dir=skills_dir)
         try:
             has_grd_skills = bool(tracked_skill_dirs) and skills_dir.is_dir() and all(
                 (skills_dir / name).is_dir() for name in tracked_skill_dirs
@@ -983,6 +1156,7 @@ class CodexAdapter(RuntimeAdapter):
             version,
             runtime=self.runtime_name,
             skills_dir=str(self._skills_dir),
+            managed_skill_dir_names=getattr(self, "_generated_skill_dirs", ()),
             metadata={
                 _MANIFEST_CODEX_SKILLS_DIR_KEY: str(self._skills_dir),
                 _MANIFEST_CODEX_GENERATED_SKILL_DIRS_KEY: list(getattr(self, "_generated_skill_dirs", ())),
@@ -1003,6 +1177,7 @@ class CodexAdapter(RuntimeAdapter):
         """
         with grd_span("adapter.uninstall", runtime=self.runtime_name, target=str(target_dir)) as span:
             self._validate_target_runtime(target_dir, action="uninstall from")
+            has_authoritative_manifest = self._has_authoritative_install_manifest(target_dir)
             if skills_dir is None:
                 skills_dir = _resolve_codex_uninstall_skills_dir(
                     target_dir,
@@ -1011,9 +1186,13 @@ class CodexAdapter(RuntimeAdapter):
             removed: list[str] = []
             counts: dict[str, int] = {"skills": 0, "agents": 0, "hooks": 0}
             managed_hooks = managed_hook_paths(target_dir)
-            tracked_skill_dirs = _load_manifest_codex_generated_skill_dirs(target_dir)
+            tracked_skill_dirs = _tracked_codex_generated_skill_dirs(
+                target_dir,
+                skills_dir=skills_dir,
+            )
 
-            # 1. Remove only skill directories tracked as generated in the manifest.
+            # 1. Remove generated GRD skill directories tracked in the manifest,
+            # or inferred from installed command sources when metadata drifted.
             if skills_dir.exists() and tracked_skill_dirs:
                 for skill_name in tracked_skill_dirs:
                     entry = skills_dir / skill_name
@@ -1140,10 +1319,11 @@ def _copy_commands_as_skills(
     prefix: str,
     path_prefix: str,
     workflow_target_dir: Path,
-    gpd_src_root: Path | None = None,
+    grd_src_root: Path | None = None,
     install_scope: str | None = None,
     *,
     launcher: str,
+    explicit_target: bool = False,
 ) -> set[str]:
     """Copy commands as Codex skill directories.
 
@@ -1163,10 +1343,14 @@ def _copy_commands_as_skills(
 
     live_backup: Path | None = None
     generated_skill_dirs: set[str] = set()
+    planned_skill_dirs = _planned_codex_skill_dirs(src_dir, prefix)
+    legacy_generated_skill_dirs = _load_manifest_codex_generated_skill_dirs(workflow_target_dir)
     try:
         if skills_dir.exists():
             for entry in sorted(skills_dir.iterdir()):
-                if entry.name.startswith(f"{prefix}-"):
+                if entry.name in planned_skill_dirs:
+                    continue
+                if entry.name in legacy_generated_skill_dirs:
                     continue
                 _copy_preserved_skill_entry(entry, staged_skills_dir / entry.name)
 
@@ -1176,9 +1360,10 @@ def _copy_commands_as_skills(
             prefix,
             path_prefix,
             workflow_target_dir,
-            gpd_src_root,
+            grd_src_root,
             install_scope,
             launcher=launcher,
+            explicit_target=explicit_target,
         )
 
         if skills_dir.exists():
@@ -1214,16 +1399,29 @@ def _copy_preserved_skill_entry(src: Path, dest: Path) -> None:
     shutil.copy2(src, dest)
 
 
+def _planned_codex_skill_dirs(src_dir: Path, prefix: str) -> set[str]:
+    """Return the exact Codex skill directory names generated from command sources."""
+    planned: set[str] = set()
+    for entry in sorted(src_dir.iterdir()):
+        if entry.is_dir():
+            planned.update(_planned_codex_skill_dirs(entry, f"{prefix}-{entry.name}"))
+            continue
+        if entry.suffix == ".md":
+            planned.add(f"{prefix}-{entry.stem}")
+    return planned
+
+
 def _render_commands_as_skills(
     src_dir: Path,
     skills_dir: Path,
     prefix: str,
     path_prefix: str,
     workflow_target_dir: Path,
-    gpd_src_root: Path | None = None,
+    grd_src_root: Path | None = None,
     install_scope: str | None = None,
     *,
     launcher: str,
+    explicit_target: bool = False,
 ) -> set[str]:
     """Render command markdown into a skills directory without mutating the live tree."""
     generated_skill_dirs: set[str] = set()
@@ -1236,9 +1434,10 @@ def _render_commands_as_skills(
                     f"{prefix}-{entry.name}",
                     path_prefix,
                     workflow_target_dir,
-                    gpd_src_root,
+                    grd_src_root,
                     install_scope,
                     launcher=launcher,
+                    explicit_target=explicit_target,
                 )
             )
         elif entry.suffix == ".md":
@@ -1253,8 +1452,9 @@ def _render_commands_as_skills(
                 runtime="codex",
                 path_prefix=path_prefix,
                 install_scope=install_scope,
-                src_root=gpd_src_root,
+                src_root=grd_src_root,
                 workflow_target_dir=workflow_target_dir,
+                explicit_target=explicit_target,
             )
             content = _convert_to_codex_skill(content, skill_name)
             content = convert_tool_references_in_body(content, _TOOL_REFERENCE_MAP)
@@ -1272,7 +1472,7 @@ def _copy_agents_as_agent_files(
     agents_src: Path,
     agents_dest: Path,
     path_prefix: str,
-    gpd_content_dir: Path | None = None,
+    grd_content_dir: Path | None = None,
     install_scope: str | None = None,
     *,
     launcher: str,
@@ -1284,7 +1484,7 @@ def _copy_agents_as_agent_files(
     if not agents_src.exists():
         return
     agents_dest.mkdir(parents=True, exist_ok=True)
-    source_root = gpd_content_dir or agents_src.parent / "specs"
+    source_root = grd_content_dir or agents_src.parent / "specs"
 
     new_agent_names: set[str] = set()
 
@@ -1300,7 +1500,6 @@ def _copy_agents_as_agent_files(
             src_root=source_root,
             protect_agent_prompt_body=True,
         )
-        content = materialize_first_round_review_schema_headings(content)
         content = convert_tool_references_in_body(content, _TOOL_REFERENCE_MAP)
         content = _rewrite_codex_grd_cli_invocations(content, launcher)
         content = _normalize_codex_questioning(content)
@@ -1422,16 +1621,18 @@ def _codex_agent_role_config_rel_path(agent_name: str) -> str:
     return f"agents/{agent_name}.toml"
 
 
-def _codex_agent_role_config_path(target_dir: Path, agent_name: str) -> Path:
-    return target_dir / "agents" / f"{agent_name}.toml"
-
-
 def _build_codex_agent_role_instructions(agent_name: str, agent_markdown_path: Path) -> str:
     agent_path = agent_markdown_path.resolve(strict=False).as_posix()
     return (
         f"You are the `{agent_name}` role for Get Research Done (GRD).\n"
         f'Before doing any substantive work, read and follow the installed role brief at "{agent_path}".\n'
-        "Treat that markdown file as the authoritative role contract for scope, workflow, and output expectations."
+        "Treat that markdown file as the authoritative role contract for scope, workflow, and output expectations.\n"
+        "Apply scientific skepticism and critical thinking by default. Stress-test preferred conclusions without "
+        "treating the user as an adversary.\n"
+        "Do not mirror preferred conclusions without evidence.\n"
+        "If information or artifacts cannot be found, produced, verified, or reproduced, report that plainly and keep "
+        "the status missing, failed, blocked, or inconclusive.\n"
+        "Never fabricate references, results, files, figures, tables, logs, summaries, proofs, or claimed completion."
     )
 
 
@@ -1539,6 +1740,36 @@ def _codex_agent_role_runtime_summary(agents_dest: Path) -> tuple[str | None, st
     sandbox_summary = sandbox_modes.pop() if len(sandbox_modes) == 1 else None
     approval_summary = approval_policies.pop() if len(approval_policies) == 1 else None
     return sandbox_summary, approval_summary
+
+
+def _is_grd_managed_codex_agent_role(content: str) -> bool:
+    """Return True when a role TOML is managed by GRD."""
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        return stripped == _GPD_AGENT_ROLE_FILE_MARKER
+    return False
+
+
+def _codex_agent_role_has_managed_yolo_state(agents_dest: Path) -> bool:
+    """Return True when any GRD-managed role TOML is pinned to yolo runtime mode."""
+    if not agents_dest.exists():
+        return False
+
+    for role_path in sorted(agents_dest.glob("grd-*.toml")):
+        try:
+            content = role_path.read_text(encoding="utf-8")
+            parsed = tomllib.loads(content)
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if not _is_grd_managed_codex_agent_role(content):
+            continue
+        sandbox_mode = parsed.get("sandbox_mode")
+        approval_policy = parsed.get("approval_policy")
+        if sandbox_mode == _CODEX_YOLO_SANDBOX_MODE and approval_policy == _CODEX_YOLO_APPROVAL_POLICY:
+            return True
+    return False
 
 
 def _is_managed_codex_agent_role_section(existing_body: list[str] | None, agent_name: str) -> bool:
@@ -1986,6 +2217,9 @@ def _configure_config_toml(
     config_toml = target_dir / "config.toml"
     toml_content = ""
     if config_toml.exists():
+        _parsed, config_error = _read_codex_runtime_config(config_toml)
+        if config_error is not None:
+            raise RuntimeError("Codex config.toml is malformed; refusing to overwrite it during install.")
         toml_content = config_toml.read_text(encoding="utf-8")
 
     notify_hook = HOOK_SCRIPTS["notify"]
@@ -2032,8 +2266,8 @@ def _build_notify_wrapper_line(existing_notify: list[str], desired_path: str) ->
         "import json, subprocess, sys\n"
         "payload = sys.stdin.buffer.read()\n"
         "existing = json.loads(sys.argv[1])\n"
-        "gpd_path = sys.argv[2]\n"
-        "for command in (existing, [sys.executable, gpd_path]):\n"
+        "grd_path = sys.argv[2]\n"
+        "for command in (existing, [sys.executable, grd_path]):\n"
         "    try:\n"
         "        subprocess.run(command, input=payload, check=False)\n"
         "    except OSError:\n"
@@ -2051,7 +2285,7 @@ def _build_notify_wrapper_line(existing_notify: list[str], desired_path: str) ->
 
 
 def _managed_notify_paths(target_dir: Path | None = None) -> set[str]:
-    paths = {".codex/hooks/notify.py"}
+    paths = {f"{_codex_config_dir_name()}/hooks/notify.py"}
     if target_dir is not None:
         paths.add(str(target_dir / "hooks" / HOOK_SCRIPTS["notify"]).replace("\\", "/"))
     return paths

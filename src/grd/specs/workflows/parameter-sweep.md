@@ -29,8 +29,8 @@ Parse JSON for: `executor_model`, `verifier_model`, `commit_docs`, `autonomy`, `
 - `research_mode=explore`: Broad parameter ranges, fine grid resolution, include secondary parameters. Spawn experiment-designer agent to validate sweep design.
 - `research_mode=exploit`: Tight ranges around known values, coarse grid, primary parameters only.
 - `research_mode=adaptive`: Start with coarse grid, refine adaptively around interesting regions.
-- `autonomy=supervised`: Pause after the sweep design for user approval before execution.
-- `autonomy=balanced` (default): Execute the sweep automatically and pause only if the design exceeds context budget, has more than 100 grid points, or changes scope materially.
+- `autonomy=supervised`: Show the sweep design and ask for approval before generating plans.
+- `autonomy=balanced` (default): Execute automatically unless the design exceeds context budget, has more than 100 grid points, or changes scope materially; only then pause for user approval.
 - `autonomy=yolo`: Execute the sweep without pausing.
 
 Read STATE.md for project conventions, unit system, and active approximations.
@@ -126,11 +126,9 @@ Adaptive refinement: {enabled|disabled}
 Parameter 1: {name1} -- {start1} to {end1} ({steps1} points)
 Parameter 2: {name2} -- {start2} to {end2} ({steps2} points)
 Grid: {steps1} x {steps2} = {total} points
-
-Proceed? (y/n)
 ```
 
-Wait for user confirmation before generating plans.
+If `autonomy=supervised`, show this plan and ask for confirmation before generating plans. Otherwise continue automatically unless the balanced-mode pause conditions are met.
 
 Derive a durable artifact location for the sweep outputs:
 
@@ -171,6 +169,7 @@ files_modified:
   - ${SWEEP_PHASE_DIR}/sweep-{PADDED_INDEX}-SUMMARY.md
   - ${SWEEP_ARTIFACT_DIR}/results/point-{PADDED_INDEX}.json
 contract:
+  schema_version: 1
   scope:
     question: "What does {observable} evaluate to at {param_name}={p_i}?"
   context_intake:
@@ -290,7 +289,7 @@ Execute the sweep plans using wave-based parallel execution following the execut
 2. **Spawn executor agents for all plans in the wave:**
 
    Follow the same task() spawning pattern as execute-phase.md step `execute_waves`.
-   > **Runtime delegation:** Spawn a subagent for the task below. Adapt the `task()` call to your runtime's agent spawning mechanism. If `model` resolves to `null` or an empty string, omit it so the runtime uses its default model. Always pass `readonly=false` for file-producing agents. If subagent spawning is unavailable, execute these steps sequentially in the main context.
+   @{GRD_INSTALL_DIR}/references/orchestration/runtime-delegation-note.md
 
    ```
    task(

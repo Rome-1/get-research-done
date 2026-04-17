@@ -12,23 +12,45 @@ review-contract:
     - arxiv-submission.tar.gz
   required_evidence:
     - compiled manuscript
-    - bibliography audit
-    - artifact manifest
-    - peer-review review ledger when available
-    - peer-review referee decision when available
+    - manuscript-root bibliography audit
+    - manuscript-root artifact manifest
+    - latest peer-review review ledger
+    - latest peer-review referee decision
   blocking_conditions:
     - missing project state
     - missing manuscript
+    - missing manuscript-root artifact manifest
+    - missing manuscript-root bibliography audit
     - missing compiled manuscript
     - missing conventions
+    - missing latest staged peer-review decision evidence
     - unresolved publication blockers
-    - peer-review recommendation blocks submission when staged review artifacts are present
+    - latest staged peer-review recommendation blocks submission packaging
     - degraded review integrity
   preflight_checks:
+    - command_context
     - project_state
     - manuscript
+    - artifact_manifest
+    - bibliography_audit
+    - bibliography_audit_clean
     - compiled_manuscript
     - conventions
+    - publication_blockers
+    - review_ledger
+    - review_ledger_valid
+    - referee_decision
+    - referee_decision_valid
+    - publication_review_outcome
+    - manuscript_proof_review
+  conditional_requirements:
+    - when: theorem-bearing manuscripts are present
+      required_evidence:
+        - cleared manuscript proof review for theorem-bearing manuscripts
+      blocking_conditions:
+        - missing or stale manuscript proof review for theorem-bearing manuscripts
+      blocking_preflight_checks:
+        - manuscript_proof_review
 allowed-tools:
   - file_read
   - file_write
@@ -39,17 +61,15 @@ allowed-tools:
   - task
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
-Prepare a completed paper for arXiv submission. Handles the full submission pipeline: LaTeX validation, figure embedding, bibliography flattening, file packaging, and metadata generation.
+Prepare a completed paper for arXiv submission.
 
-**Why a dedicated command:** arXiv has specific requirements (no subdirectories in uploads, .bbl instead of .bib, specific figure formats, 00README.XXX for multi-file submissions). Getting these wrong means rejected submissions and wasted time. This command automates the tedious compliance steps.
+Keep the wrapper thin and let the workflow own validation, packaging, and submission-gate details.
+
+**Why a dedicated command:** arXiv has specific requirements (no subdirectories in uploads, .bbl instead of .bib, specific figure formats, 00README.XXX for multi-file submissions). Getting these wrong means rejected submissions and wasted time. This command keeps the wrapper focused on the handoff instead of process duplication.
 
 Output: A submission-ready tarball and checklist of manual steps remaining.
-
-The workflow's preflight gate checks the explicit paper target, the compiled manuscript, unresolved publication blockers, and, when staged review artifacts exist, the latest `REVIEW-LEDGER{round_suffix}.json` / `REFEREE-DECISION{round_suffix}.json` outcome before packaging begins.
 </objective>
 
 <execution_context>
@@ -197,14 +217,8 @@ Present submission checklist:
 </process>
 
 <success_criteria>
-
-- [ ] Paper located and validated
-- [ ] LaTeX compiles without errors
-- [ ] Bibliography flattened to .bbl
-- [ ] Figures in arXiv-compatible formats
-- [ ] Submission tarball created (not committed — binary artifact)
-- [ ] Submission manifest committed
-- [ ] *.tar.gz added to .gitignore
-- [ ] Metadata file generated
-- [ ] Pre-submission checklist presented
-      </success_criteria>
+- [ ] Workflow ran end to end
+- [ ] `arxiv-submission.tar.gz` was created
+- [ ] The submission checklist was presented
+- [ ] The resolved manuscript root and its build artifacts satisfied the workflow gates
+</success_criteria>

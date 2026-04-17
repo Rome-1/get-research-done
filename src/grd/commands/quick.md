@@ -14,13 +14,11 @@ allowed-tools:
   - ask_user
 ---
 
-<!-- Tool names and @ includes are platform-specific. The installer translates paths for your runtime. -->
-<!-- Allowed-tools are runtime-specific. Other platforms may use different tool interfaces. -->
 
 <objective>
 Execute small, ad-hoc research tasks with GRD guarantees (atomic commits, STATE.md tracking) while skipping optional agents (research, plan-checker, verifier).
 
-Quick mode is the same system with a shorter path:
+Quick mode keeps the same guarantees with a shorter path:
 
 - Spawns grd-planner (quick mode) + grd-executor(s)
 - Skips grd-phase-researcher, grd-plan-checker, grd-verifier

@@ -17,8 +17,11 @@ from unittest.mock import patch
 import pytest
 
 from grd.adapters.install_utils import (
+    _inject_command_visibility_sections_from_frontmatter,
     _is_hook_command_for_script,
     build_hook_command,
+    build_runtime_install_repair_command,
+    compile_markdown_for_runtime,
     convert_tool_references_in_body,
     copy_with_path_replacement,
     ensure_update_hook,
@@ -37,7 +40,17 @@ from grd.adapters.install_utils import (
     write_manifest,
     write_settings,
 )
+from grd.adapters.runtime_catalog import get_shared_install_metadata, iter_runtime_descriptors
 from grd.core.constants import HOME_DATA_DIR_NAME
+
+_RUNTIME_DESCRIPTORS = tuple(iter_runtime_descriptors())
+_SHARED_INSTALL = get_shared_install_metadata()
+_DOLLAR_TEMPLATE_RUNTIMES = tuple(
+    descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS if descriptor.agent_prompt_uses_dollar_templates
+)
+_NON_DOLLAR_TEMPLATE_RUNTIMES = tuple(
+    descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS if not descriptor.agent_prompt_uses_dollar_templates
+)
 
 
 def _bundled_hook_text(name: str) -> str:
@@ -57,6 +70,31 @@ def test_get_global_dir_unknown_runtime_raises_keyerror() -> None:
 def test_replace_placeholders_unknown_runtime_raises_keyerror() -> None:
     with pytest.raises(KeyError, match="Unknown runtime"):
         replace_placeholders("{GRD_RUNTIME_FLAG}", "/custom/", "bogus-runtime")
+
+
+def test_build_runtime_install_repair_command_unknown_runtime_raises_keyerror(tmp_path: Path) -> None:
+    with pytest.raises(KeyError, match="Unknown runtime"):
+        build_runtime_install_repair_command("bogus-runtime", install_scope="local", target_dir=tmp_path / ".runtime")
+
+
+def test_replace_placeholders_materializes_shared_install_metadata_placeholders() -> None:
+    content = (
+        "{GPD_BOOTSTRAP_COMMAND}\n"
+        "{GPD_RELEASE_LATEST_URL}\n"
+        "{GPD_RELEASES_API_URL}\n"
+        "{GPD_RELEASES_PAGE_URL}\n"
+        "{GPD_INSTALL_ROOT_DIR_NAME}\n"
+        "{GPD_PATCHES_DIR_NAME}\n"
+    )
+
+    replaced = replace_placeholders(content, "/custom/", "codex", "--local")
+
+    assert _SHARED_INSTALL.bootstrap_command in replaced
+    assert _SHARED_INSTALL.latest_release_url in replaced
+    assert _SHARED_INSTALL.releases_api_url in replaced
+    assert _SHARED_INSTALL.releases_page_url in replaced
+    assert _SHARED_INSTALL.install_root_dir_name in replaced
+    assert _SHARED_INSTALL.patches_dir_name in replaced
 
 
 class TestExpandAtIncludes:
@@ -291,7 +329,7 @@ class TestProtectRuntimeAgentPrompt:
             "Inline math examples like `$sin(x)$` stay intact.\n"
         )
 
-        for runtime in ("gemini", "opencode"):
+        for runtime in _DOLLAR_TEMPLATE_RUNTIMES:
             result = protect_runtime_agent_prompt(content, runtime)
             assert "${PHASE_ARG}" not in result
             assert "${PHASE_ARG:-plan}" not in result
@@ -328,8 +366,220 @@ class TestProtectRuntimeAgentPrompt:
             "```\n"
         )
 
-        for runtime in ("claude-code", "codex"):
+        for runtime in _NON_DOLLAR_TEMPLATE_RUNTIMES:
             assert protect_runtime_agent_prompt(content, runtime) == content
+
+
+class TestCommandVisibilityInjection:
+    def test_agent_frontmatter_with_allowed_tools_is_injected_as_agent_surface(self) -> None:
+        content = (
+            "---\n"
+            "name: grd-executor\n"
+            "allowed-tools:\n"
+            "  - shell\n"
+            "surface: internal\n"
+            "role_family: worker\n"
+            "---\n"
+            "Body.\n"
+        )
+
+        result = _inject_command_visibility_sections_from_frontmatter(content)
+
+        assert "## Agent Requirements" in result
+        assert "## Command Requirements" not in result
+        assert "tools:\n- shell" in result
+        assert result.index("## Agent Requirements") < result.index("Body.")
+
+    def test_requires_only_section_is_injected_once_before_body(self) -> None:
+        content = (
+            "---\n"
+            "requires:\n"
+            "  files:\n"
+            "    - GRD/ROADMAP.md\n"
+            "---\n"
+            "Lead paragraph.\n\n"
+            "## Command Requirements\n\n"
+            "Stale body section.\n"
+        )
+
+        result = _inject_command_visibility_sections_from_frontmatter(content)
+
+        assert result.count("## Command Requirements") == 1
+        assert "## Review Contract" not in result
+        assert result.index("## Command Requirements") < result.index("Lead paragraph.")
+        assert "Stale body section." not in result
+        assert "GRD/ROADMAP.md" in result
+
+    def test_combined_command_visibility_sections_are_deduplicated_and_ordered(self) -> None:
+        content = (
+            "---\n"
+            "requires:\n"
+            "  files:\n"
+            "    - GRD/ROADMAP.md\n"
+            "review-contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: review\n"
+            "  required_outputs:\n"
+            "    - GRD/review/output.md\n"
+            "---\n"
+            "Lead paragraph.\n\n"
+            "## Review Contract\n\n"
+            "Stale review section.\n\n"
+            "## Command Requirements\n\n"
+            "Stale requirements section.\n"
+        )
+
+        result = _inject_command_visibility_sections_from_frontmatter(content)
+
+        assert result.count("## Command Requirements") == 1
+        assert result.count("## Review Contract") == 1
+        assert result.index("## Command Requirements") < result.index("## Review Contract")
+        assert result.index("## Review Contract") < result.index("Lead paragraph.")
+        assert "Stale review section." not in result
+        assert "Stale requirements section." not in result
+
+    def test_existing_review_contract_section_is_replaced_by_canonical_frontmatter_render(self) -> None:
+        content = (
+            "---\n"
+            "review-contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: review\n"
+            "  required_outputs:\n"
+            "    - GRD/review/output.md\n"
+            "  required_evidence:\n"
+            "    - GRD/review/evidence.md\n"
+            "  blocking_conditions:\n"
+            "    - missing evidence\n"
+            "  preflight_checks:\n"
+            "    - manuscript\n"
+            "  stage_artifacts:\n"
+            "    - artifact.md\n"
+            "  required_state: phase_executed\n"
+            "---\n"
+            "Prose before the existing section.\n\n"
+            "## Review Contract\n\n"
+            "Already present in the body.\n"
+        )
+
+        result = _inject_command_visibility_sections_from_frontmatter(content)
+
+        assert result.count("## Review Contract") == 1
+        assert result.index("## Review Contract") < result.index("Prose before the existing section.")
+        assert "Already present in the body." not in result
+        assert "review_contract:" in result
+        assert "phase_executed" in result
+
+    def test_review_contract_canonical_frontmatter_is_injected_once(self) -> None:
+        content = (
+            "---\n"
+            "review-contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: review\n"
+            "  required_outputs:\n"
+            "    - GRD/review/output.md\n"
+            "---\n"
+            "Body.\n"
+        )
+
+        result = _inject_command_visibility_sections_from_frontmatter(content)
+
+        assert result.count("## Review Contract") == 1
+        assert "review_contract:" in result
+        assert "review-contract:" not in result[result.index("## Review Contract") :]
+
+    def test_review_contract_injection_preserves_conditional_requirements(self) -> None:
+        content = (
+            "---\n"
+            "review-contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: publication\n"
+            "  conditional_requirements:\n"
+            "    - when: theorem-bearing claims are present\n"
+            "      required_outputs:\n"
+            "        - GRD/review/PROOF-REDTEAM{round_suffix}.md\n"
+            "---\n"
+            "Body.\n"
+        )
+
+        result = _inject_command_visibility_sections_from_frontmatter(content)
+
+        assert "conditional_requirements:" in result
+        assert "when: theorem-bearing claims are present" in result
+        assert "GRD/review/PROOF-REDTEAM{round_suffix}.md" in result
+
+    def test_review_contract_injection_preserves_crlf_line_endings(self) -> None:
+        content = (
+            "---\r\n"
+            "review-contract:\r\n"
+            "  schema_version: 1\r\n"
+            "  review_mode: review\r\n"
+            "  required_outputs:\r\n"
+            "    - GRD/review/output.md\r\n"
+            "---\r\n"
+            "Body.\r\n"
+        )
+
+        result = _inject_command_visibility_sections_from_frontmatter(content)
+
+        assert "\r\n" in result
+        assert "---\r\n" in result
+        assert "Body.\r\n" in result
+        assert "Body.\r" not in result.replace("Body.\r\n", "")
+
+    def test_review_contract_injection_ignores_fenced_review_contract_heading_markers(self) -> None:
+        content = (
+            "---\n"
+            "review-contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: review\n"
+            "  required_outputs:\n"
+            "    - GRD/review/output.md\n"
+            "---\n"
+            "```md\n"
+            "## Review Contract\n"
+            "example heading inside a fenced code block\n"
+            "```\n"
+            "\n"
+            "Body.\n"
+        )
+
+        result = _inject_command_visibility_sections_from_frontmatter(content)
+
+        assert result.count("## Review Contract") == 2
+        assert "example heading inside a fenced code block" in result
+        assert result.index("```md") < result.rindex("## Review Contract")
+
+    def test_review_contract_frontmatter_alias_is_rejected_by_install_injection(self) -> None:
+        content = (
+            "---\n"
+            "review_contract:\n"
+            "  schema_version: 1\n"
+            "  review_mode: review\n"
+            "  required_outputs:\n"
+            "    - GRD/review/output.md\n"
+            "---\n"
+            "Body.\n"
+        )
+
+        with pytest.raises(ValueError, match="must use the canonical frontmatter key 'review-contract'"):
+            _inject_command_visibility_sections_from_frontmatter(content)
+
+    def test_compile_markdown_rejects_invalid_review_contract_schema_version(self) -> None:
+        content = (
+            "---\n"
+            "review-contract:\n"
+            "  schema_version: true\n"
+            "  review_mode: review\n"
+            "---\n"
+            "Prompt body.\n"
+        )
+
+        with pytest.raises(ValueError, match="schema_version(?: .*?)? must be the integer 1"):
+            compile_markdown_for_runtime(
+                content,
+                runtime="codex",
+                path_prefix="/tmp/.codex/",
+            )
 
 
 class TestTranslateFrontmatterToolNames:
@@ -356,7 +606,7 @@ class TestTranslateFrontmatterToolNames:
     def test_frontmatter_with_literal_delimiter_text_keeps_frontmatter_vars_intact(self) -> None:
         content = "---\nname: grd:test\ndescription: keep --- and $HOME literal\n---\nBody uses $USER.\n"
 
-        for runtime in ("gemini", "opencode"):
+        for runtime in _DOLLAR_TEMPLATE_RUNTIMES:
             result = protect_runtime_agent_prompt(content, runtime)
             assert "description: keep --- and $HOME literal" in result
             assert "Body uses <USER>." in result
@@ -441,6 +691,15 @@ class TestParseJsonc:
         result = parse_jsonc(content)
         assert result == {"outer": {"inner": True}}
 
+    def test_trailing_comma_sanitizer_does_not_mutate_string_literals(self) -> None:
+        content = '{\n  "object_marker": ",}",\n  "array_marker": ",]",\n  "nested": [",}", ",]",],\n}'
+        result = parse_jsonc(content)
+        assert result == {
+            "object_marker": ",}",
+            "array_marker": ",]",
+            "nested": [",}", ",]"],
+        }
+
     def test_comment_only_lines(self) -> None:
         content = '// comment\n{"key": 1}\n// trailing'
         result = parse_jsonc(content)
@@ -467,34 +726,50 @@ class TestReadSettings:
             "nested": {"enabled": True},
         }
 
+    def test_preserves_strings_that_look_like_trailing_comma_markers(self, tmp_path: Path) -> None:
+        settings_path = tmp_path / "settings.json"
+        settings_path.write_text('{"marker": ",}", "markers": [",]",],}', encoding="utf-8")
+
+        assert read_settings(settings_path) == {
+            "marker": ",}",
+            "markers": [",]"],
+        }
+
 
 class TestBuildHookCommand:
     """Tests for build_hook_command: shared interpreter selection."""
 
     def test_defaults_to_current_python_interpreter(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("GPD_PYTHON", raising=False)
+        monkeypatch.setenv("GPD_HOME", str(tmp_path / "managed-home"))
         monkeypatch.setattr("grd.adapters.install_utils.sys.executable", "/custom/venv/bin/python")
+        monkeypatch.setattr("grd.version.checkout_root", lambda start=None: None)
 
         command = build_hook_command(
             tmp_path,
             "statusline.py",
             is_global=False,
-            config_dir_name=".claude",
+            config_dir_name=".runtime",
         )
 
-        assert command == "/custom/venv/bin/python .claude/hooks/statusline.py"
+        assert command == "/custom/venv/bin/python .runtime/hooks/statusline.py"
 
     def test_explicit_target_uses_absolute_hook_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("GPD_PYTHON", raising=False)
+        monkeypatch.setenv("GPD_HOME", str(tmp_path / "managed-home"))
         monkeypatch.setattr("grd.adapters.install_utils.sys.executable", "/custom/venv/bin/python")
+        monkeypatch.setattr("grd.version.checkout_root", lambda start=None: None)
 
         command = build_hook_command(
             tmp_path,
             "statusline.py",
             is_global=False,
-            config_dir_name=".claude",
+            config_dir_name=".runtime",
             explicit_target=True,
         )
 
-        assert command == f"/custom/venv/bin/python {tmp_path / 'hooks' / 'statusline.py'}"
+        expected_path = str(tmp_path / 'hooks' / 'statusline.py').replace("\\", "/")
+        assert command == f"/custom/venv/bin/python {expected_path}"
 
     def test_grd_python_override_beats_other_resolution(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("GRD_PYTHON", "/env/override/python")
@@ -504,7 +779,8 @@ class TestBuildHookCommand:
 
     def test_defaults_to_hidden_home_venv_when_grd_home_is_unset(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         fake_home = tmp_path / "home"
-        managed_python = fake_home / HOME_DATA_DIR_NAME / "venv" / "bin" / "python"
+        venv_python_rel = Path("Scripts") / "python.exe" if os.name == "nt" else Path("bin") / "python"
+        managed_python = fake_home / HOME_DATA_DIR_NAME / "venv" / venv_python_rel
         managed_python.parent.mkdir(parents=True)
         managed_python.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
 
@@ -513,12 +789,14 @@ class TestBuildHookCommand:
         monkeypatch.setattr(Path, "home", lambda: fake_home)
         monkeypatch.setattr("grd.adapters.install_utils.sys.executable", "/ambient/python")
         monkeypatch.setattr("grd.version.checkout_root", lambda start=None: None)
+        monkeypatch.setattr("grd.version.resolve_checkout_python", lambda start=None, fallback=None: "/ambient/python")
 
         assert hook_python_interpreter() == str(managed_python)
 
     def test_prefers_managed_grd_python_outside_checkout(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         managed_home = tmp_path / "managed-home"
-        managed_python = managed_home / "venv" / "bin" / "python"
+        venv_python_rel = Path("Scripts") / "python.exe" if os.name == "nt" else Path("bin") / "python"
+        managed_python = managed_home / "venv" / venv_python_rel
         managed_python.parent.mkdir(parents=True)
         managed_python.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
 
@@ -529,13 +807,12 @@ class TestBuildHookCommand:
 
         assert hook_python_interpreter() == str(managed_python)
 
-    def test_checkout_prefers_active_python_even_when_managed_env_exists(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
+    def test_outside_checkout_ignores_checkout_python_resolution_semantics(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         managed_home = tmp_path / "managed-home"
-        managed_python = managed_home / "venv" / "bin" / "python"
+        venv_python_rel = Path("Scripts") / "python.exe" if os.name == "nt" else Path("bin") / "python"
+        managed_python = managed_home / "venv" / venv_python_rel
         managed_python.parent.mkdir(parents=True)
         managed_python.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
 
@@ -544,14 +821,62 @@ class TestBuildHookCommand:
         monkeypatch.setattr("grd.adapters.install_utils.sys.executable", "/repo/.venv/bin/python")
         monkeypatch.setattr("grd.version.checkout_root", lambda start=None: Path("/repo"))
 
-        assert hook_python_interpreter() == "/repo/.venv/bin/python"
+        assert hook_python_interpreter() == str(managed_python)
+
+    def test_checkout_prefers_checkout_virtualenv_python_over_stale_managed_env(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        managed_home = tmp_path / "managed-home"
+        venv_python_rel = Path("Scripts") / "python.exe" if os.name == "nt" else Path("bin") / "python"
+        managed_python = managed_home / "venv" / venv_python_rel
+        managed_python.parent.mkdir(parents=True)
+        managed_python.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+
+        monkeypatch.delenv("GPD_PYTHON", raising=False)
+        monkeypatch.setenv("GPD_HOME", str(managed_home))
+        checkout_root = tmp_path / "repo"
+        checkout_python = checkout_root / ".venv" / venv_python_rel
+        checkout_python.parent.mkdir(parents=True)
+        checkout_python.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+        monkeypatch.setattr("grd.adapters.install_utils.sys.executable", "/managed/grd/venv/bin/python")
+        monkeypatch.setattr("grd.version.checkout_root", lambda start=None: checkout_root)
+        monkeypatch.setattr(
+            "grd.version.resolve_checkout_python",
+            lambda start=None, fallback=None: str(checkout_python),
+        )
+
+        assert hook_python_interpreter() == str(checkout_python)
+
+    def test_checkout_falls_back_to_active_python_when_checkout_virtualenv_is_missing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        managed_home = tmp_path / "managed-home"
+        venv_python_rel = Path("Scripts") / "python.exe" if os.name == "nt" else Path("bin") / "python"
+        managed_python = managed_home / "venv" / venv_python_rel
+        managed_python.parent.mkdir(parents=True)
+        managed_python.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+
+        monkeypatch.delenv("GPD_PYTHON", raising=False)
+        monkeypatch.setenv("GPD_HOME", str(managed_home))
+        monkeypatch.setattr("grd.adapters.install_utils.sys.executable", "/ambient/python")
+        monkeypatch.setattr("grd.version.checkout_root", lambda start=None: tmp_path / "repo")
+        monkeypatch.setattr(
+            "grd.version.resolve_checkout_python",
+            lambda start=None, fallback=None: fallback or "/ambient/python",
+        )
+
+        assert hook_python_interpreter() == "/ambient/python"
 
 
 class TestFinishInstall:
     """Tests for finish_install: preserve third-party statuslines unless forced."""
 
     def test_preserves_third_party_statusline_commands(self, tmp_path: Path) -> None:
-        settings_path = tmp_path / ".claude" / "settings.json"
+        settings_path = tmp_path / ".runtime" / "settings.json"
         settings_path.parent.mkdir(parents=True)
         settings_path.write_text(
             json.dumps(
@@ -577,7 +902,7 @@ class TestFinishInstall:
         assert updated["statusLine"]["command"] == "python3 /opt/thirdparty/statusline.py --mode other"
 
     def test_forced_install_overwrites_third_party_statusline_commands(self, tmp_path: Path) -> None:
-        settings_path = tmp_path / ".claude" / "settings.json"
+        settings_path = tmp_path / ".runtime" / "settings.json"
         settings_path.parent.mkdir(parents=True)
         settings_path.write_text(
             json.dumps(
@@ -742,9 +1067,9 @@ class TestWriteSettings:
         target = tmp_path / "settings.json"
         target.write_text('{"original": true}', encoding="utf-8")
 
-        # Patch rename to fail
-        with patch.object(Path, "rename", side_effect=OSError("rename failed")):
-            with pytest.raises(OSError, match="rename failed"):
+        # Patch replace to fail (write_settings uses Path.replace for atomic overwrite)
+        with patch.object(Path, "replace", side_effect=OSError("replace failed")):
+            with pytest.raises(OSError, match="replace failed"):
                 write_settings(target, {"new": True})
 
         # Original should be intact (write_text succeeded on .tmp, rename failed)
@@ -1074,4 +1399,4 @@ def test_verify_installed_rejects_unresolved_include_markers(tmp_path: Path) -> 
     install_dir.mkdir()
     (install_dir / "prompt.md").write_text("<!-- @ include not resolved: foo.md -->\n", encoding="utf-8")
 
-    assert verify_installed(install_dir, "installed prompt dir") is False
+    assert verify_installed(install_dir) is False

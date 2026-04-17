@@ -5,17 +5,59 @@ from pathlib import Path
 
 import pytest
 
-from grd.core.state import state_add_decision, state_record_metric, state_record_session
+from grd.core.state import (
+    default_state_dict,
+    generate_state_markdown,
+    load_state_json,
+    save_state_json,
+    state_add_decision,
+    state_record_metric,
+    state_record_session,
+    state_update,
+)
+
+
+def _bootstrap_markdown_recovery_project(tmp_path: Path, *, state: dict[str, object] | None = None) -> Path:
+    cwd = tmp_path
+    grd_dir = cwd / "GRD"
+    grd_dir.mkdir(parents=True, exist_ok=True)
+    (grd_dir / "PROJECT.md").write_text("# Project\n", encoding="utf-8")
+    (grd_dir / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+
+    phase_dir = grd_dir / "phases" / "03-phase"
+    phase_dir.mkdir(parents=True, exist_ok=True)
+    (phase_dir / "PLAN.md").write_text("# Plan\n", encoding="utf-8")
+    (phase_dir / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+
+    state_obj = state or default_state_dict()
+    position = state_obj.setdefault("position", {})
+    if position.get("current_phase") is None:
+        position["current_phase"] = "03"
+    if position.get("status") is None:
+        position["status"] = "Executing"
+    if position.get("current_plan") is None:
+        position["current_plan"] = "1"
+    if position.get("total_plans_in_phase") is None:
+        position["total_plans_in_phase"] = 3
+    if position.get("progress_percent") is None:
+        position["progress_percent"] = 33
+    save_state_json(cwd, state_obj)
+    return cwd
 
 
 class TestStateAddDecision:
     def test_add_decision_persists_to_markdown_and_json(self, tmp_path: Path, state_project_factory) -> None:
         cwd = state_project_factory(tmp_path)
 
-        result = state_add_decision(cwd, summary="Use SI units", phase="1")
+        result = state_add_decision(
+            cwd,
+            summary="Use SI units",
+            phase="1",
+            rationale="Keep the canonical convention consistent",
+        )
 
         assert result.added is True
-        assert result.decision == "- [Phase 1]: Use SI units"
+        assert result.decision == "- [Phase 1]: Use SI units — Keep the canonical convention consistent"
 
         markdown = (cwd / "GRD" / "STATE.md").read_text(encoding="utf-8")
         stored = json.loads((cwd / "GRD" / "state.json").read_text(encoding="utf-8"))
@@ -196,6 +238,13 @@ class TestStateRecordSession:
         assert stored["session"]["stopped_at"] == "Phase 03 Plan 2"
         assert stored["session"]["resume_file"] == "next-step.md"
         assert stored["session"]["last_date"] is not None
+        assert stored["continuation"]["handoff"]["recorded_at"] == stored["session"]["last_date"]
+        assert stored["continuation"]["handoff"]["stopped_at"] == "Phase 03 Plan 2"
+        assert stored["continuation"]["handoff"]["resume_file"] == "next-step.md"
+        assert stored["continuation"]["handoff"]["recorded_by"] == "state_record_session"
+        assert stored["continuation"]["machine"]["recorded_at"] == stored["session"]["last_date"]
+        assert stored["continuation"]["machine"]["hostname"] == stored["session"]["hostname"]
+        assert stored["continuation"]["machine"]["platform"] == stored["session"]["platform"]
 
     def test_record_session_preserves_resume_file_when_omitted(
         self, tmp_path: Path, session_state_project_factory
@@ -236,3 +285,18 @@ class TestStateRecordSession:
 
         assert result.recorded is False
         assert "not found" in (result.error or "").lower()
+
+
+def test_markdown_mutator_recovers_missing_state_markdown_from_state_json(
+    tmp_path: Path,
+) -> None:
+    cwd = _bootstrap_markdown_recovery_project(tmp_path)
+    state_md = cwd / "GRD" / "STATE.md"
+    state_md.unlink()
+
+    result = state_update(cwd, "Current Phase Name", "Recovered phase name")
+
+    assert result.updated is True
+    assert state_md.exists()
+    regenerated = generate_state_markdown(load_state_json(cwd) or default_state_dict())
+    assert regenerated.startswith("# Research State")

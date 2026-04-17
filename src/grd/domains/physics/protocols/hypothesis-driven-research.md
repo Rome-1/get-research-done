@@ -222,7 +222,7 @@ if [ -f Project.toml ]; then echo "julia"; fi
 if ls *.nb 1>/dev/null 2>&1; then echo "mathematica"; fi
 
 # LaTeX project
-if [ -f main.tex ] || ls *.tex 1>/dev/null 2>&1; then echo "latex"; fi
+if [ -f ARTIFACT-MANIFEST.json ] || [ -f PAPER-CONFIG.json ]; then echo "latex"; fi
 ```
 
 **2. Install minimal framework:**
@@ -246,7 +246,7 @@ if [ -f main.tex ] || ls *.tex 1>/dev/null 2>&1; then echo "latex"; fi
 # Run empty verification suite - should pass with 0 checks
 pytest tests/              # Python
 julia test/runtests.jl     # Julia
-latexmk -pdf main.tex      # LaTeX compiles
+latexmk -pdf "${MANUSCRIPT_TEX}"      # LaTeX compiles the resolved topic-specific manuscript stem
 ```
 
 **5. Create first prediction file:**

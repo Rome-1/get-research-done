@@ -2,6 +2,8 @@
 
 Model profiles control which model tier each GRD agent uses. This allows balancing quality vs token spend.
 
+For first-touch setup, treat `review` plus runtime defaults as the recommended starting point. If a user wants to think in plain language instead of tiers, frame the choice as `Max quality`, `Balanced`, or `Budget-aware`, then let `grd:settings` map that posture onto the existing profile and runtime-specific tier override machinery. Use `grd:set-tier-models` when the user wants the direct concrete path for `tier-1`, `tier-2`, and `tier-3` ids without the broader settings flow. Keep explicit tier IDs as an intentional override path.
+
 ## Tier System
 
 GRD uses capability tiers instead of platform-specific model names:
@@ -36,6 +38,7 @@ If no override is configured for the active runtime, `grd resolve-model` returns
 | grd-review-reader        | tier-2        | tier-2      | tier-2        | tier-2   | tier-2          |
 | grd-review-literature    | tier-1        | tier-2      | tier-1        | tier-1   | tier-2          |
 | grd-review-math          | tier-1        | tier-1      | tier-2        | tier-1   | tier-1          |
+| grd-check-proof          | tier-1        | tier-1      | tier-2        | tier-1   | tier-1          |
 | grd-review-physics       | tier-1        | tier-1      | tier-2        | tier-1   | tier-1          |
 | grd-review-significance  | tier-2        | tier-2      | tier-2        | tier-1   | tier-1          |
 | grd-referee              | tier-1        | tier-2      | tier-2        | tier-1   | tier-1          |

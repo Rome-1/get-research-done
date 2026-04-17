@@ -40,7 +40,7 @@ contract_results:
   deliverables:
     deliv-main:
       status: passed
-      path: "paper/figures/main.pdf"
+      path: "paper/figures/benchmark.pdf"
       summary: "[artifact produced and why it matters]"
       linked_ids: [claim-main, test-main]
   acceptance_tests:
@@ -194,14 +194,7 @@ grd state record-session \
   --stopped-at "Completed ${PHASE}-${PLAN}-PLAN.md"
 ```
 
-**State command behaviors:**
-
-- `state advance`: Increments Current Plan, detects last-plan edge case, sets status
-- `state update-progress`: Recalculates progress bar from SUMMARY.md counts on disk
-- `state record-metric`: Appends to Performance Metrics table
-- `state add-decision`: Adds to Decisions section, removes placeholders
-- `result add`: Adds to intermediate results registry for cross-referencing
-- `state record-session`: Updates Last session timestamp and Stopped At fields; omit `--resume-file` to preserve the current handoff pointer or pass `--resume-file "—"` to clear it explicitly
+The canonical applicator owns plan advance, progress recompute, metric recording, decisions, blockers, and session cleanup for spawned-agent completion. Do not duplicate those effects with direct `grd state ...` commands in the completion path.
 
 **grd CLI error handling:**
 
@@ -312,6 +305,40 @@ grd_return:
 ```
 
 Append this YAML block after the markdown completion format. It enables machine-readable parsing by the orchestrator.
+```
+
+If the workflow expects a spawned-agent handoff, the same `grd_return` object may also carry these top-level keys:
+
+```yaml
+grd_return:
+  status: completed | checkpoint | blocked | failed
+  files_written: ["GRD/phases/XX-name/{phase}-{plan}-SUMMARY.md"]
+  issues: [list of issues encountered, if any]
+  next_actions: [list of recommended follow-up actions]
+  state_updates:
+    advance_plan: true
+    update_progress: true
+    record_metric:
+      phase: "{phase}"
+      plan: "{plan}"
+      duration: NNN
+      tasks: N
+      files: N
+  contract_updates:
+    claim_id: { ... }
+  decisions:
+    - summary: "{decision summary}"
+      phase: "{phase}"
+  blockers:
+    - text: "{blocker text}"
+  continuation_update:
+    handoff:
+      recorded_at: "{timestamp}"
+      recorded_by: "grd-executor"
+      stopped_at: "Completed ${PHASE}-${PLAN}-PLAN.md"
+      resume_file: null
+      last_result_id: null
+    bounded_segment: null
 ```
 
 Include ALL checkpoints (previous + new if continuation agent).

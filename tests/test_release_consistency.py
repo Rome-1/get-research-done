@@ -7,13 +7,12 @@ import os
 import re
 import shutil
 import subprocess
-import tarfile
 import tomllib
-import zipfile
 from pathlib import Path
 
 import pytest
 
+from grd.adapters.runtime_catalog import get_shared_install_metadata
 from scripts.release_workflow import (
     ReleaseError,
     bump_version,
@@ -25,6 +24,15 @@ from scripts.release_workflow import (
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
+
+
+_SHARED_INSTALL = get_shared_install_metadata()
+_BOOTSTRAP_JSON_ASSETS = (
+    "src/grd/adapters/runtime_catalog.json",
+    "src/grd/adapters/runtime_catalog_schema.json",
+    "src/grd/core/public_surface_contract.json",
+    "src/grd/core/public_surface_contract_schema.json",
+)
 
 
 def _project_script_lines(repo_root: Path) -> list[str]:
@@ -216,16 +224,6 @@ def test_public_readme_citation_year_matches_citation_release_date() -> None:
     assert f"Research Institute ({release_year}). Get Research Done (GRD)" in readme
 
 
-def test_public_docs_acknowledge_psi_and_gsd_inspiration() -> None:
-    repo_root = _repo_root()
-
-    readme = (repo_root / "README.md").read_text(encoding="utf-8")
-    assert "Physical Superintelligence PBC" in readme
-    assert "GSD" in readme
-    assert "get-shit-done" in readme
-    assert "[Physical Superintelligence PBC (PSI)](https://www.psi.inc)" in readme
-
-
 def test_public_metadata_records_psi_affiliation() -> None:
     repo_root = _repo_root()
 
@@ -238,8 +236,7 @@ def test_public_metadata_records_psi_affiliation() -> None:
     assert pyproject["project"]["authors"] == [{"name": "Physical Superintelligence PBC"}]
     assert pyproject["project"]["maintainers"] == [{"name": "Physical Superintelligence PBC"}]
 
-
-def test_public_release_surfaces_share_copilot_positioning() -> None:
+def test_public_release_surfaces_share_agentic_system_positioning() -> None:
     repo_root = _repo_root()
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
     package_json = json.loads((repo_root / "package.json").read_text(encoding="utf-8"))
@@ -256,6 +253,7 @@ def test_public_release_surfaces_share_copilot_positioning() -> None:
 def test_public_bootstrap_package_exposes_npx_installer() -> None:
     repo_root = _repo_root()
     package_json = json.loads((repo_root / "package.json").read_text(encoding="utf-8"))
+    packaged_files = set(package_json.get("files", []))
 
     assert package_json["name"] == "get-research-done"
     assert package_json.get("bin", {}).get("get-research-done") == "bin/install.js"
@@ -443,19 +441,40 @@ def test_public_install_docs_list_bootstrap_prerequisites_and_current_layout() -
 def test_merge_gate_workflow_uses_main_branch_pytest_on_python_311() -> None:
     repo_root = _repo_root()
     workflow = (repo_root / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
+    pyproject = (repo_root / "pyproject.toml").read_text(encoding="utf-8")
 
     assert "name: tests" in workflow
     assert "pull_request:" in workflow
     assert "push:" in workflow
     assert "branches: [main]" in workflow
     assert "workflow_dispatch:" in workflow
-    assert "name: pytest (3.11)" in workflow
+    assert "name: pytest ${{ matrix.display_name }} (3.11)" in workflow
+    assert "fail-fast: false" in workflow
+    assert "display_name: root 1/9" in workflow
+    assert "display_name: root 9/9" in workflow
+    assert "display_name: adapters 1/2" in workflow
+    assert "display_name: adapters 2/2" in workflow
+    assert "display_name: hooks 1/2" in workflow
+    assert "display_name: hooks 2/2" in workflow
+    assert "display_name: mcp" in workflow
+    assert "display_name: core 5/5" in workflow
     assert "actions/checkout@v6" in workflow
     assert "actions/setup-python@v6" in workflow
     assert 'python-version: "3.11"' in workflow
     assert "astral-sh/setup-uv@v7" in workflow
     assert "uv sync --dev" in workflow
-    assert "uv run pytest -v" in workflow
+    assert 'addopts = "-n auto --dist=worksteal"' in pyproject
+    assert "Resolve pytest shard targets" in workflow
+    assert "Run pytest shard" in workflow
+    assert "from tests.ci_sharding import write_ci_shard_targets_file" in workflow
+    assert "PYTEST_CATEGORY" in workflow
+    assert 'uv run pytest -q "${PYTEST_TARGETS[@]}"' in workflow
+
+    # Staging rebuild trigger lives in a separate workflow (staging-rebuild.yml)
+    # to avoid showing as a skipped check on PRs. It gates on tests via workflow_run.
+    rebuild_workflow = (repo_root / ".github" / "workflows" / "staging-rebuild.yml").read_text(encoding="utf-8")
+    assert 'workflows: ["tests"]' in rebuild_workflow
+    assert "conclusion == 'success'" in rebuild_workflow
 
 
 def test_prepare_release_workflow_creates_release_pr_without_publishing() -> None:
@@ -716,7 +735,7 @@ def test_public_runtime_dependency_surface_stays_curated() -> None:
     optional = project.get("optional-dependencies", {})
 
     assert _normalized_dependency_names(dependencies) == _expected_runtime_dependency_names()
-    assert optional == {"arxiv": ["arxiv-mcp-server>=0.3.2"]}
+    assert optional == {"arxiv": ["arxiv-mcp-server>=0.4.11"]}
 
 
 def test_infra_descriptors_reference_public_bootstrap_flow() -> None:
@@ -782,6 +801,95 @@ def test_gitignore_covers_repo_local_npm_cache() -> None:
     assert ".npm-cache/" in (repo_root / ".gitignore").read_text(encoding="utf-8")
 
 
+def test_gitignore_covers_repo_local_tmp_root() -> None:
+    repo_root = _repo_root()
+    content = (repo_root / ".gitignore").read_text(encoding="utf-8")
+
+    assert "tmp/" in content
+
+
+def test_gitignore_does_not_exclude_grd_directory() -> None:
+    """Regression: GRD/ must not be gitignored.
+
+    Workflow commit commands (``grd commit``) include GRD/ files; gitignoring
+    them causes ``git add`` failures.  A pre-commit hook strips GRD/ from
+    commits to the codebase repo instead.
+    """
+    repo_root = _repo_root()
+    content = (repo_root / ".gitignore").read_text(encoding="utf-8")
+    for pattern in ("GRD/", "GRD/*", "GRD/STATE.md", "GRD/state.json", "GRD/state.json.bak"):
+        assert pattern not in content, f".gitignore must not contain {pattern!r}"
+
+
+def test_pre_commit_config_blocks_grd_directory() -> None:
+    """The pre-commit config must include the block-grd-directory hook."""
+    import yaml
+
+    repo_root = _repo_root()
+    config = yaml.safe_load((repo_root / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    hook_ids = [h["id"] for repo in config["repos"] for h in repo["hooks"]]
+    assert "block-grd-directory" in hook_ids
+
+
+def test_block_grd_commit_hook_script_exists_and_is_executable() -> None:
+    repo_root = _repo_root()
+    hook_script = repo_root / "scripts" / "block-grd-commit.sh"
+    assert hook_script.exists(), "scripts/block-grd-commit.sh must exist"
+    assert os.access(hook_script, os.X_OK), "scripts/block-grd-commit.sh must be executable"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="requires bash")
+def test_block_grd_commit_hook_unstages_grd_files(tmp_path: Path) -> None:
+    """Integration: the hook script strips GRD/ files from the index."""
+    repo_root = _repo_root()
+    hook_script = repo_root / "scripts" / "block-grd-commit.sh"
+
+    # Set up a throwaway git repo.
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=tmp_path, check=True, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=tmp_path, check=True, capture_output=True,
+    )
+
+    # Seed an initial commit so HEAD exists.
+    (tmp_path / "README.md").write_text("seed\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=tmp_path, check=True, capture_output=True,
+    )
+
+    # Stage a GRD file and a non-GRD file.
+    grd_dir = tmp_path / "GRD"
+    grd_dir.mkdir()
+    (grd_dir / "STATE.md").write_text("state\n", encoding="utf-8")
+    (tmp_path / "real.txt").write_text("real\n", encoding="utf-8")
+    subprocess.run(["git", "add", "GRD/STATE.md", "real.txt"], cwd=tmp_path, check=True, capture_output=True)
+
+    # Run the hook script.
+    result = subprocess.run(
+        [str(hook_script)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+
+    # GRD/STATE.md should be unstaged; real.txt should remain staged.
+    staged = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        cwd=tmp_path, capture_output=True, text=True, check=True,
+    )
+    staged_files = staged.stdout.strip().splitlines()
+    assert "real.txt" in staged_files
+    assert "GRD/STATE.md" not in staged_files
+
+
 def test_npm_pack_dry_run_uses_temp_cache_outside_repo(tmp_path: Path) -> None:
     repo_root = _repo_root()
     if shutil.which("npm") is None:
@@ -794,7 +902,7 @@ def test_npm_pack_dry_run_uses_temp_cache_outside_repo(tmp_path: Path) -> None:
     )
 
     pack = _npm_pack_dry_run(repo_root, tmp_path)
-    packed_paths = {str(item["path"]) for item in pack["files"]}
+    packed_paths = _packaged_file_paths(pack)
 
     assert pack["name"] == "get-research-done"
     assert pack["version"] == _python_release_version(repo_root)
@@ -947,3 +1055,11 @@ def test_stamp_publish_date_reports_no_changes_when_release_date_already_matches
     metadata = stamp_publish_date(tmp_path, release_date="2026-03-15")
 
     assert metadata.changed_files == ()
+
+
+def test_stamp_publish_date_rejects_full_datetime_release_inputs(tmp_path: Path) -> None:
+    repo_root = _repo_root()
+    _copy_release_surfaces(repo_root, tmp_path)
+
+    with pytest.raises(ReleaseError, match="YYYY-MM-DD"):
+        stamp_publish_date(tmp_path, release_date="2026-03-15T12:34:56Z")

@@ -79,7 +79,7 @@ if [ $? -ne 0 ]; then
 fi
 ```
 
-Extract from init JSON: `project_exists`, `roadmap_exists`, `state_exists`, `phases`, `current_phase`, `next_phase`, `milestone_version`, `completed_count`, `phase_count`, `paused_at`, `autonomy`, `research_mode`, `project_contract`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`.
+Extract from init JSON: `project_exists`, `roadmap_exists`, `state_exists`, `phases`, `current_phase`, `next_phase`, `milestone_version`, `completed_count`, `phase_count`, `paused_at`, `autonomy`, `research_mode`, `project_contract`, `project_contract_gate`, `project_contract_validation`, `project_contract_load_info`, `contract_intake`, `effective_reference_intake`, `active_reference_context`, `reference_artifacts_content`, `knowledge_doc_files`, `knowledge_doc_count`, `stable_knowledge_doc_files`, `stable_knowledge_doc_count`, `knowledge_doc_status_counts`, `derived_knowledge_docs`, `derived_knowledge_doc_count`, `knowledge_doc_warnings`, `derived_convention_lock`, `derived_convention_lock_count`, `derived_intermediate_results`, `derived_intermediate_result_count`, `derived_approximations`, `derived_approximation_count`.
 
 **File contents (from --include):** `state_content`, `roadmap_content`, `project_content`, `config_content`. These are null if files don't exist.
 
@@ -101,11 +101,16 @@ All file contents are already loaded via `--include` in init_context step:
 - `roadmap_content` — phase structure and objectives
 - `project_content` — current state (Research Question, Framework, Answered Questions)
 - `config_content` — settings (model_profile, workflow toggles)
-- `project_contract` — machine-readable scoping and anchor contract, authoritative only when `project_contract_load_info` is clean and `project_contract_validation` passes
+- `project_contract` — machine-readable scoping and anchor contract, authoritative only when `project_contract_gate.authoritative` is true
 - `project_contract_load_info` — structured load status, warnings, and blockers for the contract
 - `project_contract_validation` — contract approval gate for authoritative use
 - `effective_reference_intake` — structured carry-forward ledger for refs, baselines, prior outputs, and context gaps
 - `active_reference_context` / `reference_artifacts_content` — readable anchor context to explain the next-step recommendation
+- `knowledge_doc_files` / `knowledge_doc_count` — inventory-visible knowledge docs loaded from `GRD/knowledge/`
+- `stable_knowledge_doc_files` / `stable_knowledge_doc_count` — reviewed docs that are runtime-active for shared reference context
+- `knowledge_doc_status_counts` — lifecycle mix across `draft`, `in_review`, `stable`, and `superseded`
+- `derived_knowledge_docs` / `derived_knowledge_doc_count` — stable runtime-active docs surfaced for this run
+- `knowledge_doc_warnings` — parse/read problems forwarded from knowledge discovery
 
 No additional file reads needed.
 
@@ -220,6 +225,13 @@ CONTEXT: [present if has_context | - if not]
 
 ## What's Next
 [Next phase/plan objective from roadmap analyze]
+
+## Knowledge Status
+Inventory-visible knowledge docs: {knowledge_doc_count}
+Runtime-active knowledge docs: {stable_knowledge_doc_count}
+Lifecycle mix: {knowledge_doc_status_counts}
+Runtime-active knowledge surfaced in this run: {derived_knowledge_doc_count}
+Warnings: {knowledge_doc_warnings}
 ```
 
 If STATE.md exceeds 1500 lines, append after the report:
@@ -240,7 +252,7 @@ STATE.md is approaching compaction threshold (N lines). Will auto-compact at nex
 HEALTH=$(grd --raw health 2>/dev/null)
 ```
 
-If health reports any issues (non-empty `issues` array), append a summary:
+If `HEALTH.summary.warn > 0` or `HEALTH.summary.fail > 0`, append a summary:
 
 ```
 ## System Health
@@ -325,7 +337,7 @@ Read its `<objective>` section.
 
 `/grd:execute-phase {phase}`
 
-<sub>`/clear` first -> fresh context window</sub>
+<sub>`/clear` first, then run `grd:execute-phase {phase}`</sub>
 
 ---
 ```
@@ -348,7 +360,7 @@ Check if `{phase}-CONTEXT.md` exists in phase directory.
 
 `/grd:plan-phase {phase-number}`
 
-<sub>`/clear` first -> fresh context window</sub>
+<sub>`/clear` first, then run `grd:plan-phase {phase-number}`</sub>
 
 ---
 ```
@@ -364,7 +376,7 @@ Check if `{phase}-CONTEXT.md` exists in phase directory.
 
 `/grd:discuss-phase {phase}` — gather context and clarify approach
 
-<sub>`/clear` first -> fresh context window</sub>
+<sub>`/clear` first, then run `grd:discuss-phase {phase}`</sub>
 
 ---
 
@@ -392,7 +404,7 @@ Examples: [e.g., "Dimension mismatch in eq. 14", "Wrong sign in g -> 0 limit"]
 
 `/grd:plan-phase {phase} --gaps`
 
-<sub>`/clear` first -> fresh context window</sub>
+<sub>`/clear` first, then run `grd:plan-phase {phase} --gaps`</sub>
 
 ---
 
@@ -418,7 +430,7 @@ Gap-closure plans were created by `/grd:plan-phase --gaps` but have not been exe
 
 `/grd:execute-phase {phase} --gaps-only`
 
-<sub>`/clear` first -> fresh context window</sub>
+<sub>`/clear` first, then run `grd:execute-phase {phase} --gaps-only`</sub>
 
 ---
 
@@ -466,7 +478,7 @@ Read ROADMAP.md to get the next phase's name and goal.
 
 `/grd:discuss-phase {Z+1}` — gather context and clarify approach
 
-<sub>`/clear` first -> fresh context window</sub>
+<sub>`/clear` first, then run `grd:discuss-phase {Z+1}`</sub>
 
 ---
 
@@ -494,7 +506,7 @@ All {N} phases finished!
 
 `/grd:complete-milestone`
 
-<sub>`/clear` first -> fresh context window</sub>
+<sub>`/clear` first, then run `grd:complete-milestone`</sub>
 
 ---
 
@@ -525,7 +537,7 @@ Ready to plan the next research direction.
 
 `/grd:new-milestone`
 
-<sub>`/clear` first -> fresh context window</sub>
+<sub>`/clear` first, then run `grd:new-milestone`</sub>
 
 ---
 ```

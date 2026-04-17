@@ -57,8 +57,9 @@ const productPositioning = "Open-source AI copilot for research";
 
 let bootstrapProbeOverridesCache = undefined;
 
-const ALL_RUNTIMES = RUNTIME_CATALOG.map((runtime) => runtime.runtime_name);
-const RUNTIME_BY_NAME = Object.fromEntries(RUNTIME_CATALOG.map((runtime) => [runtime.runtime_name, runtime]));
+let RUNTIME_CATALOG;
+let ALL_RUNTIMES = [];
+let RUNTIME_BY_NAME = {};
 
 function runtimeRecord(runtime) {
   const record = RUNTIME_BY_NAME[runtime];
@@ -90,6 +91,973 @@ function runtimeSelectionFlagList(runtime) {
 
 function runtimeSelectionAliases(runtime) {
   return runtimeRecord(runtime).selection_aliases || [];
+}
+
+function runtimeCommandPrefix(runtime) {
+  return runtimeRecord(runtime).command_prefix || "";
+}
+
+function runtimeSurfaceCommand(runtime, commandName) {
+  return `${runtimeCommandPrefix(runtime)}${commandName}`;
+}
+
+function runtimeLaunchCommand(runtime) {
+  return runtimeRecord(runtime).launch_command;
+}
+
+function runtimeInstallerHelpExampleScope(runtime) {
+  return runtimeRecord(runtime).installer_help_example_scope || null;
+}
+
+function loadSharedPublicSurfaceShape(contractPayload = PUBLIC_SURFACE_CONTRACT) {
+  const contract = requireJsonObject(contractPayload, "public surface contract");
+  requirePresentKeys(contract, ["schema_version"], "public surface contract");
+  if (contract.schema_version !== 1) {
+    throw new Error(`Unsupported public surface contract schema_version: ${JSON.stringify(contract.schema_version)}`);
+  }
+
+  const topLevelKeys = Object.keys(contract);
+  const sectionNames = topLevelKeys.filter((key) => key !== "schema_version");
+  const sectionKeys = Object.fromEntries(
+    sectionNames.map((sectionName) => [
+      sectionName,
+      Object.keys(requireJsonObject(contract[sectionName], `public surface contract.${sectionName}`)),
+    ])
+  );
+  const localCliBridge = requireJsonObject(contract.local_cli_bridge, "public surface contract.local_cli_bridge");
+  const namedCommands = requireJsonObject(
+    localCliBridge.named_commands,
+    "public surface contract.local_cli_bridge.named_commands"
+  );
+
+  return {
+    topLevelKeys,
+    sectionKeys,
+    localCliBridgeCommands: requireStrictStringList(
+      localCliBridge.commands,
+      "public surface contract.local_cli_bridge.commands"
+    ),
+    localCliNamedCommandKeys: Object.keys(namedCommands),
+  };
+}
+
+const RUNTIME_CATALOG_GLOBAL_CONFIG_KEYS = Object.fromEntries(
+  Object.entries(RUNTIME_CATALOG_SCHEMA.global_config_keys).map(([strategy, keys]) => [strategy, new Set(keys)])
+);
+const RUNTIME_CATALOG_GLOBAL_CONFIG_STRATEGIES = new Set(Object.keys(RUNTIME_CATALOG_GLOBAL_CONFIG_KEYS));
+const RUNTIME_CATALOG_ENTRY_REQUIRED_KEYS = new Set(RUNTIME_CATALOG_SCHEMA.entry_required_keys);
+const RUNTIME_CATALOG_ENTRY_OPTIONAL_KEYS = new Set(RUNTIME_CATALOG_SCHEMA.entry_optional_keys);
+const RUNTIME_CATALOG_ENTRY_KEYS = {
+  required: [...RUNTIME_CATALOG_ENTRY_REQUIRED_KEYS],
+  optional: [...RUNTIME_CATALOG_ENTRY_OPTIONAL_KEYS],
+};
+const RUNTIME_CATALOG_ALLOWED_KEYS = new Set([
+  ...RUNTIME_CATALOG_ENTRY_REQUIRED_KEYS,
+  ...RUNTIME_CATALOG_ENTRY_OPTIONAL_KEYS,
+]);
+const RUNTIME_CATALOG_CAPABILITY_KEYS = new Set(RUNTIME_CATALOG_SCHEMA.capability_keys);
+const RUNTIME_CATALOG_CAPABILITY_ENUMS = Object.fromEntries(
+  Object.entries(RUNTIME_CATALOG_SCHEMA.capability_enums).map(([fieldName, values]) => [fieldName, new Set(values)])
+);
+const RUNTIME_CATALOG_HOOK_PAYLOAD_KEYS = new Set(RUNTIME_CATALOG_SCHEMA.hook_payload_keys);
+const RUNTIME_INSTALL_HELP_EXAMPLE_SCOPES = new Set(RUNTIME_CATALOG_SCHEMA.install_help_example_scopes);
+const RUNTIME_LAUNCH_WRAPPER_PERMISSION_SURFACE_KINDS = new Set(
+  RUNTIME_CATALOG_SCHEMA.launch_wrapper_permission_surface_kinds
+);
+const PUBLIC_SURFACE_CONTRACT_SHAPE = loadSharedPublicSurfaceShape(PUBLIC_SURFACE_CONTRACT);
+const PUBLIC_SURFACE_CONTRACT_KEYS = [...PUBLIC_SURFACE_CONTRACT_SHAPE.topLevelKeys];
+const PUBLIC_SURFACE_CONTRACT_ALLOWED_KEYS = new Set(PUBLIC_SURFACE_CONTRACT_KEYS);
+const PUBLIC_SURFACE_CONTRACT_SECTION_KEYS = Object.fromEntries(
+  Object.entries(PUBLIC_SURFACE_CONTRACT_SHAPE.sectionKeys).map(([section, keys]) => [section, [...keys]])
+);
+const PUBLIC_SURFACE_CONTRACT_SECTION_ALLOWED_KEYS = Object.fromEntries(
+  Object.entries(PUBLIC_SURFACE_CONTRACT_SECTION_KEYS).map(([section, keys]) => [section, new Set(keys)])
+);
+const PUBLIC_SURFACE_LOCAL_CLI_NAMED_COMMAND_KEYS = [...PUBLIC_SURFACE_CONTRACT_SHAPE.localCliNamedCommandKeys];
+const PUBLIC_SURFACE_LOCAL_CLI_COMMANDS = [...PUBLIC_SURFACE_CONTRACT_SHAPE.localCliBridgeCommands];
+const RUNTIME_CONFIG_SURFACE_LABEL_RE = /^[A-Za-z0-9._-]+:[A-Za-z0-9+._-]+$/;
+
+function formatQuotedDisjunction(values) {
+  const normalized = [...values].sort();
+  if (normalized.length === 0) {
+    return "a bundled launch-wrapper surface literal";
+  }
+  if (normalized.length === 1) {
+    return JSON.stringify(normalized[0]);
+  }
+  return `one of ${normalized.map((value) => JSON.stringify(value)).join(", ")}`;
+}
+
+function requireJsonObject(payload, label) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error(`${label} must be a JSON object`);
+  }
+  return payload;
+}
+
+function requireJsonArray(payload, label) {
+  if (!Array.isArray(payload)) {
+    throw new Error(`${label} must be a JSON array`);
+  }
+  return payload;
+}
+
+function requireNonEmptyString(payload, key, label) {
+  const value = payload[key];
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`${label}.${key} must be a non-empty string`);
+  }
+  return value.trim();
+}
+
+function requireNonEmptyStringList(payload, key, label) {
+  const value = payload[key];
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`${label}.${key} must be a non-empty list`);
+  }
+  const items = [];
+  const seen = new Set();
+  for (const item of value) {
+    if (typeof item !== "string" || !item.trim()) {
+      throw new Error(`${label}.${key} entries must be non-empty strings`);
+    }
+    const normalized = item.trim();
+    if (seen.has(normalized)) {
+      throw new Error(`${label}.${key} must not contain duplicates`);
+    }
+    seen.add(normalized);
+    items.push(normalized);
+  }
+  return items;
+}
+
+function requireListedCommand(commands, label, command) {
+  if (!commands.includes(command)) {
+    throw new Error(`${label}.commands must include ${JSON.stringify(command)}`);
+  }
+  return command;
+}
+
+function requireStrictString(value, label) {
+  if (typeof value !== "string" || !value || value.trim() !== value) {
+    throw new Error(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function requireStrictEnumString(value, label, allowedValues) {
+  const normalized = requireStrictString(value, label);
+  if (!allowedValues.has(normalized)) {
+    throw new Error(`${label} must be one of: ${[...allowedValues].sort().join(", ")}`);
+  }
+  return normalized;
+}
+
+function requireStrictBoolean(value, label) {
+  if (typeof value !== "boolean") {
+    throw new Error(`${label} must be a boolean`);
+  }
+  return value;
+}
+
+function requireStrictInteger(value, label) {
+  if (!Number.isInteger(value)) {
+    throw new Error(`${label} must be an integer`);
+  }
+  return value;
+}
+
+function requireRuntimeSurfaceLabel(value, label, { allowSpecialValues = new Set() } = {}) {
+  const normalized = requireStrictString(value, label);
+  if (
+    normalized === "none" ||
+    allowSpecialValues.has(normalized) ||
+    RUNTIME_CONFIG_SURFACE_LABEL_RE.test(normalized)
+  ) {
+    return normalized;
+  }
+  if (allowSpecialValues.size > 0) {
+    const specialValues = [...allowSpecialValues].sort();
+    if (specialValues.length === 1) {
+      throw new Error(
+        `${label} must be "none", ${JSON.stringify(specialValues[0])}, or a config surface label like file:key`
+      );
+    }
+    throw new Error(
+      `${label} must be "none", one of ${specialValues.map((value) => JSON.stringify(value)).join(", ")}, `
+      + "or a config surface label like file:key"
+    );
+  }
+  throw new Error(`${label} must be "none" or a config surface label like file:key`);
+}
+
+function requireKnownKeys(payload, allowedKeys, label) {
+  const unknownKeys = Object.keys(payload).filter((key) => !allowedKeys.has(key));
+  if (unknownKeys.length > 0) {
+    throw new Error(`${label} contains unknown key(s): ${unknownKeys.join(", ")}`);
+  }
+}
+
+function requirePresentKeys(payload, requiredKeys, label) {
+  const missingKeys = [...requiredKeys].filter((key) => !Object.prototype.hasOwnProperty.call(payload, key));
+  if (missingKeys.length > 0) {
+    throw new Error(`${label} is missing required key(s): ${missingKeys.join(", ")}`);
+  }
+}
+
+function requireExactKeyOrder(actualKeys, expectedKeys, label) {
+  if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])) {
+    throw new Error(`${label} must exactly match the code-supported public surface fields`);
+  }
+}
+
+function validateSharedPublicSurfaceSchemaShape(schemaPayload = PUBLIC_SURFACE_CONTRACT_SCHEMA) {
+  const schema = requireJsonObject(schemaPayload, "public surface contract schema");
+  requireKnownKeys(schema, new Set(["schema_version", "top_level_keys", "sections"]), "public surface contract schema");
+  requirePresentKeys(schema, ["schema_version", "top_level_keys", "sections"], "public surface contract schema");
+  if (schema.schema_version !== 1) {
+    throw new Error(`Unsupported public surface contract schema_version: ${JSON.stringify(schema.schema_version)}`);
+  }
+
+  const topLevelKeys = requireStrictStringList(schema.top_level_keys, "public surface contract schema.top_level_keys");
+  requireExactKeyOrder(topLevelKeys, PUBLIC_SURFACE_CONTRACT_KEYS, "public surface contract schema.top_level_keys");
+
+  const sections = requireJsonObject(schema.sections, "public surface contract schema.sections");
+  const supportedSectionNames = PUBLIC_SURFACE_CONTRACT_KEYS.filter((key) => key !== "schema_version");
+  requireKnownKeys(sections, new Set(supportedSectionNames), "public surface contract schema.sections");
+  requirePresentKeys(sections, supportedSectionNames, "public surface contract schema.sections");
+
+  for (const [sectionName, expectedKeys] of Object.entries(PUBLIC_SURFACE_CONTRACT_SECTION_KEYS)) {
+    const section = requireJsonObject(sections[sectionName], `public surface contract schema.sections.${sectionName}`);
+    const allowedKeys = sectionName === "local_cli_bridge" ? new Set(["keys", "commands", "named_commands"]) : new Set(["keys"]);
+    requireKnownKeys(section, allowedKeys, `public surface contract schema.sections.${sectionName}`);
+    requirePresentKeys(section, [...allowedKeys], `public surface contract schema.sections.${sectionName}`);
+    const sectionKeys = requireStrictStringList(
+      section.keys,
+      `public surface contract schema.sections.${sectionName}.keys`
+    );
+    requireExactKeyOrder(
+      sectionKeys,
+      expectedKeys,
+      `public surface contract schema.sections.${sectionName}.keys`
+    );
+  }
+
+  const namedCommands = requireJsonObject(
+    sections.local_cli_bridge.named_commands,
+    "public surface contract schema.sections.local_cli_bridge.named_commands"
+  );
+  requireKnownKeys(
+    namedCommands,
+    new Set(["ordered_keys"]),
+    "public surface contract schema.sections.local_cli_bridge.named_commands"
+  );
+  requirePresentKeys(
+    namedCommands,
+    ["ordered_keys"],
+    "public surface contract schema.sections.local_cli_bridge.named_commands"
+  );
+  const orderedKeys = requireStrictStringList(
+    namedCommands.ordered_keys,
+    "public surface contract schema.sections.local_cli_bridge.named_commands.ordered_keys"
+  );
+  requireExactKeyOrder(
+    orderedKeys,
+    PUBLIC_SURFACE_LOCAL_CLI_NAMED_COMMAND_KEYS,
+    "public surface contract schema.sections.local_cli_bridge.named_commands.ordered_keys"
+  );
+
+  return schema;
+}
+
+function requireStrictStringList(value, label, { allowEmpty = false } = {}) {
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} must be a list of strings`);
+  }
+  if (value.length === 0 && !allowEmpty) {
+    throw new Error(`${label} must contain at least one string`);
+  }
+
+  const seen = new Set();
+  const items = [];
+  for (const [index, item] of value.entries()) {
+    const normalized = requireStrictString(item, `${label}[${index}]`);
+    if (seen.has(normalized)) {
+      throw new Error(`${label} must not contain duplicate values`);
+    }
+    seen.add(normalized);
+    items.push(normalized);
+  }
+  return items;
+}
+
+function validateRuntimeCatalogGlobalConfig(globalConfig, label) {
+  const payload = requireJsonObject(globalConfig, label);
+  const strategy = requireStrictString(payload.strategy, `${label}.strategy`);
+  if (!Object.prototype.hasOwnProperty.call(RUNTIME_CATALOG_GLOBAL_CONFIG_KEYS, strategy)) {
+    throw new Error(`${label}.strategy must be one of: env_or_home, xdg_app`);
+  }
+
+  const requiredKeys = RUNTIME_CATALOG_GLOBAL_CONFIG_KEYS[strategy];
+  requireKnownKeys(payload, requiredKeys, label);
+  requirePresentKeys(payload, requiredKeys, label);
+
+  if (strategy === "env_or_home") {
+    return {
+      strategy,
+      env_var: requireStrictString(payload.env_var, `${label}.env_var`),
+      home_subpath: requireStrictString(payload.home_subpath, `${label}.home_subpath`),
+    };
+  }
+
+  return {
+    strategy,
+    env_dir_var: requireStrictString(payload.env_dir_var, `${label}.env_dir_var`),
+    env_file_var: requireStrictString(payload.env_file_var, `${label}.env_file_var`),
+    xdg_subdir: requireStrictString(payload.xdg_subdir, `${label}.xdg_subdir`),
+    home_subpath: requireStrictString(payload.home_subpath, `${label}.home_subpath`),
+  };
+}
+
+validateSharedPublicSurfaceSchemaShape(PUBLIC_SURFACE_CONTRACT_SCHEMA);
+
+function validateRuntimeCatalogCapabilities(capabilities, label) {
+  const payload = requireJsonObject(capabilities, label);
+  requireKnownKeys(payload, RUNTIME_CATALOG_CAPABILITY_KEYS, label);
+  requirePresentKeys(payload, RUNTIME_CATALOG_CAPABILITY_KEYS, label);
+
+  const validated = {
+    permissions_surface: requireStrictEnumString(
+      payload.permissions_surface,
+      `${label}.permissions_surface`,
+      RUNTIME_CATALOG_CAPABILITY_ENUMS.permissions_surface
+    ),
+    permission_surface_kind: requireRuntimeSurfaceLabel(
+      payload.permission_surface_kind,
+      `${label}.permission_surface_kind`,
+      { allowSpecialValues: RUNTIME_LAUNCH_WRAPPER_PERMISSION_SURFACE_KINDS }
+    ),
+    prompt_free_mode_value: requireStrictString(payload.prompt_free_mode_value, `${label}.prompt_free_mode_value`),
+    supports_runtime_permission_sync: requireStrictBoolean(
+      payload.supports_runtime_permission_sync,
+      `${label}.supports_runtime_permission_sync`
+    ),
+    supports_prompt_free_mode: requireStrictBoolean(
+      payload.supports_prompt_free_mode,
+      `${label}.supports_prompt_free_mode`
+    ),
+    prompt_free_requires_relaunch: requireStrictBoolean(
+      payload.prompt_free_requires_relaunch,
+      `${label}.prompt_free_requires_relaunch`
+    ),
+    statusline_surface: requireStrictEnumString(
+      payload.statusline_surface,
+      `${label}.statusline_surface`,
+      RUNTIME_CATALOG_CAPABILITY_ENUMS.statusline_surface
+    ),
+    statusline_config_surface: requireRuntimeSurfaceLabel(
+      payload.statusline_config_surface,
+      `${label}.statusline_config_surface`
+    ),
+    notify_surface: requireStrictEnumString(
+      payload.notify_surface,
+      `${label}.notify_surface`,
+      RUNTIME_CATALOG_CAPABILITY_ENUMS.notify_surface
+    ),
+    notify_config_surface: requireRuntimeSurfaceLabel(
+      payload.notify_config_surface,
+      `${label}.notify_config_surface`
+    ),
+    telemetry_source: requireStrictEnumString(
+      payload.telemetry_source,
+      `${label}.telemetry_source`,
+      RUNTIME_CATALOG_CAPABILITY_ENUMS.telemetry_source
+    ),
+    telemetry_completeness: requireStrictEnumString(
+      payload.telemetry_completeness,
+      `${label}.telemetry_completeness`,
+      RUNTIME_CATALOG_CAPABILITY_ENUMS.telemetry_completeness
+    ),
+    supports_usage_tokens: requireStrictBoolean(payload.supports_usage_tokens, `${label}.supports_usage_tokens`),
+    supports_cost_usd: requireStrictBoolean(payload.supports_cost_usd, `${label}.supports_cost_usd`),
+    supports_context_meter: requireStrictBoolean(payload.supports_context_meter, `${label}.supports_context_meter`),
+  };
+  if (validated.permissions_surface === "config-file") {
+    if (
+      validated.permission_surface_kind === "none" ||
+      RUNTIME_LAUNCH_WRAPPER_PERMISSION_SURFACE_KINDS.has(validated.permission_surface_kind)
+    ) {
+      throw new Error(
+        `${label}.permission_surface_kind must be a config surface label when permissions_surface=config-file`
+      );
+    }
+    if (!validated.supports_runtime_permission_sync) {
+      throw new Error(`${label}.supports_runtime_permission_sync must be true when permissions_surface=config-file`);
+    }
+  } else if (validated.permissions_surface === "launch-wrapper") {
+    if (!RUNTIME_LAUNCH_WRAPPER_PERMISSION_SURFACE_KINDS.has(validated.permission_surface_kind)) {
+      throw new Error(
+        `${label}.permission_surface_kind must be ${formatQuotedDisjunction(RUNTIME_LAUNCH_WRAPPER_PERMISSION_SURFACE_KINDS)} `
+        + "when permissions_surface=launch-wrapper"
+      );
+    }
+    if (!validated.supports_runtime_permission_sync) {
+      throw new Error(`${label}.supports_runtime_permission_sync must be true when permissions_surface=launch-wrapper`);
+    }
+  } else {
+    if (validated.permission_surface_kind !== "none") {
+      throw new Error(`${label}.permission_surface_kind must be "none" when permissions_surface=unsupported`);
+    }
+    if (validated.supports_runtime_permission_sync) {
+      throw new Error(`${label}.supports_runtime_permission_sync must be false when permissions_surface=unsupported`);
+    }
+    if (validated.supports_prompt_free_mode) {
+      throw new Error(`${label}.supports_prompt_free_mode must be false when permissions_surface=unsupported`);
+    }
+    if (validated.prompt_free_requires_relaunch) {
+      throw new Error(`${label}.prompt_free_requires_relaunch must be false when permissions_surface=unsupported`);
+    }
+  }
+  if (!validated.supports_prompt_free_mode && validated.prompt_free_requires_relaunch) {
+    throw new Error(`${label}.prompt_free_requires_relaunch requires supports_prompt_free_mode=true`);
+  }
+  return validated;
+}
+
+function validateRuntimeCatalogHookPayload(hookPayload, label) {
+  const payload = requireJsonObject(hookPayload, label);
+  requireKnownKeys(payload, RUNTIME_CATALOG_HOOK_PAYLOAD_KEYS, label);
+  requirePresentKeys(payload, RUNTIME_CATALOG_HOOK_PAYLOAD_KEYS, label);
+
+  return {
+    notify_event_types: requireStrictStringList(payload.notify_event_types, `${label}.notify_event_types`, {
+      allowEmpty: true,
+    }),
+    workspace_keys: requireStrictStringList(payload.workspace_keys, `${label}.workspace_keys`, { allowEmpty: true }),
+    project_dir_keys: requireStrictStringList(payload.project_dir_keys, `${label}.project_dir_keys`, {
+      allowEmpty: true,
+    }),
+    runtime_session_id_keys: requireStrictStringList(
+      payload.runtime_session_id_keys,
+      `${label}.runtime_session_id_keys`,
+      { allowEmpty: true }
+    ),
+    model_keys: requireStrictStringList(payload.model_keys, `${label}.model_keys`, { allowEmpty: true }),
+    provider_keys: requireStrictStringList(payload.provider_keys, `${label}.provider_keys`, { allowEmpty: true }),
+    usage_keys: requireStrictStringList(payload.usage_keys, `${label}.usage_keys`, { allowEmpty: true }),
+    input_tokens_keys: requireStrictStringList(payload.input_tokens_keys, `${label}.input_tokens_keys`, {
+      allowEmpty: true,
+    }),
+    output_tokens_keys: requireStrictStringList(payload.output_tokens_keys, `${label}.output_tokens_keys`, {
+      allowEmpty: true,
+    }),
+    total_tokens_keys: requireStrictStringList(payload.total_tokens_keys, `${label}.total_tokens_keys`, {
+      allowEmpty: true,
+    }),
+    cached_input_tokens_keys: requireStrictStringList(
+      payload.cached_input_tokens_keys,
+      `${label}.cached_input_tokens_keys`,
+      { allowEmpty: true }
+    ),
+    cache_write_input_tokens_keys: requireStrictStringList(
+      payload.cache_write_input_tokens_keys,
+      `${label}.cache_write_input_tokens_keys`,
+      { allowEmpty: true }
+    ),
+    cost_usd_keys: requireStrictStringList(payload.cost_usd_keys, `${label}.cost_usd_keys`, { allowEmpty: true }),
+    agent_id_keys: requireStrictStringList(payload.agent_id_keys, `${label}.agent_id_keys`, { allowEmpty: true }),
+    agent_name_keys: requireStrictStringList(payload.agent_name_keys, `${label}.agent_name_keys`, { allowEmpty: true }),
+    agent_scope_keys: requireStrictStringList(payload.agent_scope_keys, `${label}.agent_scope_keys`, {
+      allowEmpty: true,
+    }),
+    context_window_size_keys: requireStrictStringList(
+      payload.context_window_size_keys,
+      `${label}.context_window_size_keys`,
+      { allowEmpty: true }
+    ),
+    context_remaining_keys: requireStrictStringList(
+      payload.context_remaining_keys,
+      `${label}.context_remaining_keys`,
+      { allowEmpty: true }
+    ),
+  };
+}
+
+function parsePublicCommandSurfacePrefix(value, label, commandPrefix) {
+  if (value === undefined || value === null) {
+    return commandPrefix;
+  }
+  const prefix = requireStrictString(value, label);
+  if (prefix !== commandPrefix) {
+    throw new Error(`${label} must match command_prefix`);
+  }
+  return prefix;
+}
+
+function parseInstallHelpExampleScope(value, label) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const scope = requireStrictString(value, label);
+  if (!RUNTIME_INSTALL_HELP_EXAMPLE_SCOPES.has(scope)) {
+    throw new Error(`${label} must be one of: ${[...RUNTIME_INSTALL_HELP_EXAMPLE_SCOPES].sort().join(", ")}`);
+  }
+  return scope;
+}
+
+function validateRuntimeCatalogEntry(entry, index, options = {}) {
+  const label = `runtime catalog entry ${index}`;
+  const payload = requireJsonObject(entry, label);
+  requireKnownKeys(payload, RUNTIME_CATALOG_ALLOWED_KEYS, label);
+  requirePresentKeys(payload, RUNTIME_CATALOG_ENTRY_KEYS.required, label);
+
+  const globalConfig = validateRuntimeCatalogGlobalConfig(payload.global_config, `${label}.global_config`);
+  const capabilities = validateRuntimeCatalogCapabilities(payload.capabilities, `${label}.capabilities`);
+  const hookPayload = validateRuntimeCatalogHookPayload(payload.hook_payload, `${label}.hook_payload`);
+
+  return {
+    runtime_name: requireStrictString(payload.runtime_name, `${label}.runtime_name`),
+    display_name: requireStrictString(payload.display_name, `${label}.display_name`),
+    priority: requireStrictInteger(payload.priority, `${label}.priority`),
+    config_dir_name: requireStrictString(payload.config_dir_name, `${label}.config_dir_name`),
+    install_flag: requireStrictString(payload.install_flag, `${label}.install_flag`),
+    launch_command: requireStrictString(payload.launch_command, `${label}.launch_command`),
+    command_prefix: requireStrictString(payload.command_prefix, `${label}.command_prefix`),
+    activation_env_vars: requireStrictStringList(payload.activation_env_vars, `${label}.activation_env_vars`),
+    selection_flags: requireStrictStringList(payload.selection_flags, `${label}.selection_flags`),
+    selection_aliases: requireStrictStringList(payload.selection_aliases, `${label}.selection_aliases`),
+    global_config: globalConfig,
+    capabilities,
+    hook_payload: hookPayload,
+    manifest_file_prefixes: Object.prototype.hasOwnProperty.call(payload, "manifest_file_prefixes")
+      ? requireStrictStringList(payload.manifest_file_prefixes, `${label}.manifest_file_prefixes`, {
+          allowEmpty: true,
+        })
+      : [],
+    native_include_support: requireStrictBoolean(
+      Object.prototype.hasOwnProperty.call(payload, "native_include_support")
+        ? payload.native_include_support
+        : false,
+      `${label}.native_include_support`
+    ),
+    agent_prompt_uses_dollar_templates: requireStrictBoolean(
+      Object.prototype.hasOwnProperty.call(payload, "agent_prompt_uses_dollar_templates")
+        ? payload.agent_prompt_uses_dollar_templates
+        : false,
+      `${label}.agent_prompt_uses_dollar_templates`
+    ),
+    installer_help_example_scope: Object.prototype.hasOwnProperty.call(payload, "installer_help_example_scope")
+      ? parseInstallHelpExampleScope(payload.installer_help_example_scope, `${label}.installer_help_example_scope`)
+      : null,
+    validated_command_surface: Object.prototype.hasOwnProperty.call(payload, "validated_command_surface")
+      ? (() => {
+          const surface = requireStrictString(payload.validated_command_surface, `${label}.validated_command_surface`);
+          if (!/^public_runtime_[a-z0-9_]+_command$/.test(surface)) {
+            throw new Error(
+              `${label}.validated_command_surface must match /^public_runtime_[a-z0-9_]+_command$/`
+            );
+          }
+          return surface;
+        })()
+      : "public_runtime_command_surface",
+    public_command_surface_prefix: parsePublicCommandSurfacePrefix(
+      Object.prototype.hasOwnProperty.call(payload, "public_command_surface_prefix")
+        ? payload.public_command_surface_prefix
+        : undefined,
+      `${label}.public_command_surface_prefix`,
+      requireStrictString(payload.command_prefix, `${label}.command_prefix`)
+    ),
+  };
+}
+
+function validateRuntimeCatalogHelpExampleScopes(entries) {
+  const scopeOwners = new Map();
+  for (const entry of entries) {
+    if (!entry.installer_help_example_scope) {
+      continue;
+    }
+    const existingOwner = scopeOwners.get(entry.installer_help_example_scope);
+    if (existingOwner && existingOwner !== entry.runtime_name) {
+      throw new Error(
+        `runtime catalog contains duplicate installer_help_example_scope ${JSON.stringify(entry.installer_help_example_scope)} for ${JSON.stringify(existingOwner)} and ${JSON.stringify(entry.runtime_name)}`
+      );
+    }
+    scopeOwners.set(entry.installer_help_example_scope, entry.runtime_name);
+  }
+}
+
+function validateRuntimeCatalog(catalogPayload) {
+  const payload = requireJsonArray(catalogPayload, "runtime catalog");
+  const entries = payload.map((entry, index) => validateRuntimeCatalogEntry(entry, index));
+  entries.sort((left, right) => {
+    if (left.priority !== right.priority) {
+      return left.priority - right.priority;
+    }
+    return left.runtime_name.localeCompare(right.runtime_name);
+  });
+
+  const runtimeNames = new Map();
+  const installFlags = new Map();
+  const selectionFlags = new Map();
+  const selectionTokens = new Map();
+  for (const entry of entries) {
+    if (runtimeNames.has(entry.runtime_name)) {
+      throw new Error(
+        `runtime catalog contains duplicate runtime_name ${JSON.stringify(entry.runtime_name)}`
+      );
+    }
+    runtimeNames.set(entry.runtime_name, entry.runtime_name);
+
+    const existingInstallFlagRuntime = installFlags.get(entry.install_flag);
+    if (existingInstallFlagRuntime && existingInstallFlagRuntime !== entry.runtime_name) {
+      throw new Error(
+        `runtime catalog contains duplicate install_flag ${JSON.stringify(entry.install_flag)} for ${JSON.stringify(existingInstallFlagRuntime)} and ${JSON.stringify(entry.runtime_name)}`
+      );
+    }
+    installFlags.set(entry.install_flag, entry.runtime_name);
+
+    for (const flag of entry.selection_flags) {
+      const existingRuntime = selectionFlags.get(flag);
+      if (existingRuntime && existingRuntime !== entry.runtime_name) {
+        throw new Error(
+          `runtime catalog contains duplicate selection flag ${JSON.stringify(flag)} for ${JSON.stringify(existingRuntime)} and ${JSON.stringify(entry.runtime_name)}`
+        );
+      }
+      selectionFlags.set(flag, entry.runtime_name);
+    }
+
+    const tokens = new Set([
+      entry.runtime_name,
+      entry.display_name.toLowerCase(),
+      ...entry.selection_aliases,
+      ...entry.selection_flags.map((flag) => flag.replace(/^--/, "")),
+      entry.install_flag.replace(/^--/, ""),
+    ]);
+    for (const token of tokens) {
+      const normalizedToken = token.toLowerCase();
+      const existingRuntime = selectionTokens.get(normalizedToken);
+      if (existingRuntime && existingRuntime !== entry.runtime_name) {
+        throw new Error(
+          `runtime catalog contains duplicate runtime selection token ${JSON.stringify(token)} for ${JSON.stringify(existingRuntime)} and ${JSON.stringify(entry.runtime_name)}`
+        );
+      }
+      selectionTokens.set(normalizedToken, entry.runtime_name);
+    }
+  }
+
+  validateRuntimeCatalogHelpExampleScopes(entries);
+
+  return entries;
+}
+
+RUNTIME_CATALOG = validateRuntimeCatalog(BUNDLED_RUNTIME_CATALOG_PAYLOAD);
+ALL_RUNTIMES = RUNTIME_CATALOG.map((runtime) => runtime.runtime_name);
+RUNTIME_BY_NAME = Object.fromEntries(RUNTIME_CATALOG.map((runtime) => [runtime.runtime_name, runtime]));
+
+function validateSharedPublicSurfaceContract(contractPayload) {
+  const contract = requireJsonObject(contractPayload, "public surface contract");
+  requireKnownKeys(contract, PUBLIC_SURFACE_CONTRACT_ALLOWED_KEYS, "public surface contract");
+  requirePresentKeys(contract, PUBLIC_SURFACE_CONTRACT_KEYS, "public surface contract");
+  if (contract.schema_version !== 1) {
+    throw new Error(`Unsupported public surface contract schema_version: ${JSON.stringify(contract.schema_version)}`);
+  }
+
+  const beginnerPayload = requireJsonObject(contract.beginner_onboarding, "beginner_onboarding");
+  requireKnownKeys(
+    beginnerPayload,
+    PUBLIC_SURFACE_CONTRACT_SECTION_ALLOWED_KEYS.beginner_onboarding,
+    "beginner_onboarding"
+  );
+  requirePresentKeys(beginnerPayload, PUBLIC_SURFACE_CONTRACT_SECTION_KEYS.beginner_onboarding, "beginner_onboarding");
+  const localCliBridge = requireJsonObject(contract.local_cli_bridge, "local_cli_bridge");
+  requireKnownKeys(
+    localCliBridge,
+    PUBLIC_SURFACE_CONTRACT_SECTION_ALLOWED_KEYS.local_cli_bridge,
+    "local_cli_bridge"
+  );
+  requirePresentKeys(localCliBridge, PUBLIC_SURFACE_CONTRACT_SECTION_KEYS.local_cli_bridge, "local_cli_bridge");
+  const localCliNamedCommands = requireJsonObject(localCliBridge.named_commands, "local_cli_bridge.named_commands");
+  requireKnownKeys(
+    localCliNamedCommands,
+    new Set(PUBLIC_SURFACE_LOCAL_CLI_NAMED_COMMAND_KEYS),
+    "local_cli_bridge.named_commands"
+  );
+  requirePresentKeys(
+    localCliNamedCommands,
+    PUBLIC_SURFACE_LOCAL_CLI_NAMED_COMMAND_KEYS,
+    "local_cli_bridge.named_commands"
+  );
+  const postStartSettings = requireJsonObject(contract.post_start_settings, "post_start_settings");
+  requireKnownKeys(
+    postStartSettings,
+    PUBLIC_SURFACE_CONTRACT_SECTION_ALLOWED_KEYS.post_start_settings,
+    "post_start_settings"
+  );
+  requirePresentKeys(postStartSettings, PUBLIC_SURFACE_CONTRACT_SECTION_KEYS.post_start_settings, "post_start_settings");
+  const resumeAuthority = requireJsonObject(contract.resume_authority, "resume_authority");
+  requireKnownKeys(
+    resumeAuthority,
+    PUBLIC_SURFACE_CONTRACT_SECTION_ALLOWED_KEYS.resume_authority,
+    "resume_authority"
+  );
+  requirePresentKeys(resumeAuthority, PUBLIC_SURFACE_CONTRACT_SECTION_KEYS.resume_authority, "resume_authority");
+  const recoveryLadder = requireJsonObject(contract.recovery_ladder, "recovery_ladder");
+  requireKnownKeys(
+    recoveryLadder,
+    PUBLIC_SURFACE_CONTRACT_SECTION_ALLOWED_KEYS.recovery_ladder,
+    "recovery_ladder"
+  );
+  requirePresentKeys(recoveryLadder, PUBLIC_SURFACE_CONTRACT_SECTION_KEYS.recovery_ladder, "recovery_ladder");
+
+  const beginnerHubUrl = requireNonEmptyString(beginnerPayload, "hub_url", "beginner_onboarding");
+  const beginnerPreflightRequirements = requireNonEmptyStringList(
+    beginnerPayload,
+    "preflight_requirements",
+    "beginner_onboarding"
+  );
+  const beginnerCaveats = requireNonEmptyStringList(beginnerPayload, "caveats", "beginner_onboarding");
+  const beginnerStartupLadder = requireNonEmptyStringList(beginnerPayload, "startup_ladder", "beginner_onboarding");
+  const localCliBridgeCommands = requireNonEmptyStringList(localCliBridge, "commands", "local_cli_bridge");
+  for (const command of PUBLIC_SURFACE_LOCAL_CLI_COMMANDS) {
+    requireListedCommand(localCliBridgeCommands, "local_cli_bridge", command);
+  }
+  const namedCommands = Object.fromEntries(
+    PUBLIC_SURFACE_LOCAL_CLI_NAMED_COMMAND_KEYS.map((key) => [
+      key,
+      requireNonEmptyString(localCliNamedCommands, key, "local_cli_bridge.named_commands"),
+    ])
+  );
+  const orderedNamedCommands = PUBLIC_SURFACE_LOCAL_CLI_NAMED_COMMAND_KEYS.map((key) =>
+    requireListedCommand(localCliBridgeCommands, "local_cli_bridge", namedCommands[key])
+  );
+  if (
+    localCliBridgeCommands.length !== orderedNamedCommands.length
+    || localCliBridgeCommands.some((command, index) => command !== orderedNamedCommands[index])
+  ) {
+    throw new Error(
+      "local_cli_bridge.commands must exactly match local_cli_bridge.named_commands in canonical order"
+    );
+  }
+  if (
+    localCliBridgeCommands.length !== PUBLIC_SURFACE_LOCAL_CLI_COMMANDS.length
+    || localCliBridgeCommands.some((command, index) => command !== PUBLIC_SURFACE_LOCAL_CLI_COMMANDS[index])
+  ) {
+    throw new Error(
+      "local_cli_bridge.commands must exactly match "
+      + "public_surface_contract_schema.sections.local_cli_bridge.commands"
+    );
+  }
+  const terminalPhrase = requireNonEmptyString(localCliBridge, "terminal_phrase", "local_cli_bridge");
+  const purposePhrase = requireNonEmptyString(localCliBridge, "purpose_phrase", "local_cli_bridge");
+  const installLocalExample = requireNonEmptyString(localCliBridge, "install_local_example", "local_cli_bridge");
+  const doctorLocalCommand = requireNonEmptyString(localCliBridge, "doctor_local_command", "local_cli_bridge");
+  const doctorGlobalCommand = requireNonEmptyString(localCliBridge, "doctor_global_command", "local_cli_bridge");
+  const validateCommandContextCommand = requireNonEmptyString(
+    localCliBridge,
+    "validate_command_context_command",
+    "local_cli_bridge"
+  );
+  const settingsCommandSentence = requireNonEmptyString(postStartSettings, "primary_sentence", "post_start_settings");
+  const settingsRecommendationSentence = requireNonEmptyString(
+    postStartSettings,
+    "default_sentence",
+    "post_start_settings"
+  );
+  const durableAuthorityPhrase = requireNonEmptyString(
+    resumeAuthority,
+    "durable_authority_phrase",
+    "resume_authority"
+  );
+  const publicVocabularyIntro = requireNonEmptyString(resumeAuthority, "public_vocabulary_intro", "resume_authority");
+  const publicFields = requireNonEmptyStringList(resumeAuthority, "public_fields", "resume_authority");
+  const recoveryTitle = requireNonEmptyString(recoveryLadder, "title", "recovery_ladder");
+  const recoveryLocalSnapshotCommand = requireListedCommand(
+    localCliBridgeCommands,
+    "local_cli_bridge",
+    requireNonEmptyString(
+      recoveryLadder,
+      "local_snapshot_command",
+      "recovery_ladder"
+    )
+  );
+  const recoveryLocalSnapshotPhrase = requireNonEmptyString(
+    recoveryLadder,
+    "local_snapshot_phrase",
+    "recovery_ladder"
+  );
+  const recoveryCrossWorkspaceCommand = requireListedCommand(
+    localCliBridgeCommands,
+    "local_cli_bridge",
+    requireNonEmptyString(
+      recoveryLadder,
+      "cross_workspace_command",
+      "recovery_ladder"
+    )
+  );
+  if (recoveryLocalSnapshotCommand !== namedCommands.resume) {
+    throw new Error(
+      "recovery_ladder.local_snapshot_command must equal local_cli_bridge.named_commands.resume"
+    );
+  }
+  if (recoveryCrossWorkspaceCommand !== namedCommands.resume_recent) {
+    throw new Error(
+      "recovery_ladder.cross_workspace_command must equal local_cli_bridge.named_commands.resume_recent"
+    );
+  }
+  const recoveryCrossWorkspacePhrase = requireNonEmptyString(
+    recoveryLadder,
+    "cross_workspace_phrase",
+    "recovery_ladder"
+  );
+  const recoveryResumePhrase = requireNonEmptyString(recoveryLadder, "resume_phrase", "recovery_ladder");
+  const recoveryNextPhrase = requireNonEmptyString(recoveryLadder, "next_phrase", "recovery_ladder");
+  const recoveryPausePhrase = requireNonEmptyString(recoveryLadder, "pause_phrase", "recovery_ladder");
+
+  return {
+    beginnerHubUrl,
+    beginnerPreflightRequirements,
+    beginnerCaveats,
+    beginnerStartupLadder,
+    localCliBridgeCommands,
+    localCliBridge: {
+      doctorCommand: namedCommands.doctor,
+      helpCommand: namedCommands.help,
+      permissionsStatusCommand: namedCommands.permissions_status,
+      permissionsSyncCommand: namedCommands.permissions_sync,
+      resumeCommand: namedCommands.resume,
+      resumeRecentCommand: namedCommands.resume_recent,
+      observeExecutionCommand: namedCommands.observe_execution,
+      costCommand: namedCommands.cost,
+      presetsListCommand: namedCommands.presets_list,
+      planPreflightCommand: namedCommands.plan_preflight,
+      integrationsStatusWolframCommand: namedCommands.integrations_status_wolfram,
+      terminalPhrase,
+      purposePhrase,
+      installLocalExample,
+      doctorLocalCommand,
+      doctorGlobalCommand,
+      validateCommandContextCommand,
+      unattendedReadinessCommand: namedCommands.unattended_readiness,
+    },
+    schemaVersion: 1,
+    resumeAuthority: {
+      durableAuthorityPhrase,
+      publicVocabularyIntro,
+      publicFields,
+    },
+    recoveryLadder: {
+      title: recoveryTitle,
+      localSnapshotCommand: recoveryLocalSnapshotCommand,
+      localSnapshotPhrase: recoveryLocalSnapshotPhrase,
+      crossWorkspaceCommand: recoveryCrossWorkspaceCommand,
+      crossWorkspacePhrase: recoveryCrossWorkspacePhrase,
+      resumePhrase: recoveryResumePhrase,
+      nextPhrase: recoveryNextPhrase,
+      pausePhrase: recoveryPausePhrase,
+    },
+    settingsCommandSentence,
+    settingsRecommendationSentence,
+  };
+}
+
+function loadSharedPublicSurfaceText() {
+  const contract = validateSharedPublicSurfaceContract(PUBLIC_SURFACE_CONTRACT);
+  return {
+    schemaVersion: contract.schemaVersion,
+    beginnerHubUrl: contract.beginnerHubUrl,
+    beginnerPreflightRequirements: contract.beginnerPreflightRequirements,
+    beginnerCaveats: contract.beginnerCaveats,
+    beginnerStartupLadder: contract.beginnerStartupLadder,
+    localCliBridgeCommands: contract.localCliBridgeCommands,
+    localCliBridge: contract.localCliBridge,
+    resumeAuthority: contract.resumeAuthority,
+    recoveryLadder: contract.recoveryLadder,
+    settingsCommandSentence: contract.settingsCommandSentence,
+    settingsRecommendationSentence: contract.settingsRecommendationSentence,
+  };
+}
+
+const SHARED_PUBLIC_SURFACE_TEXT = loadSharedPublicSurfaceText();
+
+function beginnerStartupLadderText() {
+  return `\`${SHARED_PUBLIC_SURFACE_TEXT.beginnerStartupLadder.join(" -> ")}\``;
+}
+
+function settingsCommandFollowUp(runtime = null) {
+  const sentence = SHARED_PUBLIC_SURFACE_TEXT.settingsCommandSentence;
+  if (!runtime) {
+    return sentence;
+  }
+  return `${sentence} For ${runtimeDisplayName(runtime)}, that command is \`${runtimeSurfaceCommand(runtime, "settings")}\`.`;
+}
+
+function sharedLocalCliHelpCommand() {
+  return SHARED_PUBLIC_SURFACE_TEXT.localCliBridge.helpCommand;
+}
+
+function sharedDoctorCommand() {
+  return SHARED_PUBLIC_SURFACE_TEXT.localCliBridge.doctorCommand;
+}
+
+function sharedUnattendedReadinessCommand() {
+  return SHARED_PUBLIC_SURFACE_TEXT.localCliBridge.unattendedReadinessCommand;
+}
+
+function sharedPermissionsStatusCommand() {
+  return SHARED_PUBLIC_SURFACE_TEXT.localCliBridge.permissionsStatusCommand;
+}
+
+function sharedPermissionsSyncCommand() {
+  return SHARED_PUBLIC_SURFACE_TEXT.localCliBridge.permissionsSyncCommand;
+}
+
+function sharedResumeCommand() {
+  return SHARED_PUBLIC_SURFACE_TEXT.recoveryLadder.localSnapshotCommand;
+}
+
+function sharedRecentRecoveryCommand() {
+  return SHARED_PUBLIC_SURFACE_TEXT.recoveryLadder.crossWorkspaceCommand;
+}
+
+function joinBacktickedCommands(commands) {
+  const rendered = commands.map((command) => `\`${command}\``);
+  if (rendered.length <= 1) {
+    return rendered.join("");
+  }
+  if (rendered.length === 2) {
+    return `${rendered[0]} and ${rendered[1]}`;
+  }
+  return `${rendered.slice(0, -1).join(", ")}, and ${rendered.at(-1)}`;
+}
+
+function localCliBridgeNote() {
+  return (
+    `Use ${joinBacktickedCommands(SHARED_PUBLIC_SURFACE_TEXT.localCliBridgeCommands)} `
+    + `${SHARED_PUBLIC_SURFACE_TEXT.localCliBridge.terminalPhrase} when you want `
+    + `${SHARED_PUBLIC_SURFACE_TEXT.localCliBridge.purposePhrase}.`
+  );
+}
+
+function localCliDiagnosticsFollowUpLine() {
+  return (
+    `Use \`${sharedLocalCliHelpCommand()}\` for local install, readiness, validation, permissions, observability, and diagnostics. `
+    + `Local CLI bridge: ${localCliBridgeNote()}`
+  );
+}
+
+function localCliInstallSummaryBridgeLine() {
+  return `Use \`${sharedLocalCliHelpCommand()}\` for local diagnostics and later setup.`;
+}
+
+function recoveryLadderNote({ resumeWorkPhrase, suggestNextPhrase, pauseWorkPhrase }) {
+  const recovery = SHARED_PUBLIC_SURFACE_TEXT.recoveryLadder;
+  return (
+    `${recovery.title}: use \`${recovery.localSnapshotCommand}\` for ${recovery.localSnapshotPhrase}. `
+    + `If that is the wrong workspace, use \`${recovery.crossWorkspaceCommand}\` to ${recovery.crossWorkspacePhrase}, `
+    + `then ${recovery.resumePhrase} with ${resumeWorkPhrase}. After resuming, `
+    + `${suggestNextPhrase} is ${recovery.nextPhrase}. Before stepping away mid-phase, `
+    + `run ${pauseWorkPhrase} so that ladder has ${recovery.pausePhrase}.`
+  );
 }
 
 function log(msg) {
@@ -548,12 +1516,12 @@ function flushCapturedOutput(result) {
   }
 }
 
-function gpdHomeDir() {
+function grdHomeDir() {
   return process.env[GRD_HOME_ENV] || path.join(os.homedir(), GRD_HOME_DIRNAME);
 }
 
-function managedEnvDir(gpdHome) {
-  return path.join(gpdHome, "venv");
+function managedEnvDir(grdHome) {
+  return path.join(grdHome, "venv");
 }
 
 function managedPythonPath(venvDir) {
@@ -561,8 +1529,8 @@ function managedPythonPath(venvDir) {
 }
 
 function ensureManagedEnvironment(basePython) {
-  const gpdHome = gpdHomeDir();
-  const venvDir = managedEnvDir(gpdHome);
+  const grdHome = grdHomeDir();
+  const venvDir = managedEnvDir(grdHome);
   const managedPython = managedPythonPath(venvDir);
   const existingManaged = pythonVersionInfo(managedPython);
 
@@ -585,7 +1553,7 @@ function ensureManagedEnvironment(basePython) {
 
   if (shouldCreate) {
     log(`Creating managed Python environment at ${venvDir}...`);
-    fs.mkdirSync(gpdHome, { recursive: true });
+    fs.mkdirSync(grdHome, { recursive: true });
     const venvResult = spawnSync(basePython.command, ["-m", "venv", venvDir], {
       stdio: "inherit",
     });
@@ -615,7 +1583,7 @@ function ensureManagedEnvironment(basePython) {
 
   log(`Using managed environment at ${venvDir}`);
   log(`Found ${pipVersion}`);
-  return { gpdHome, venvDir, python: managedPython };
+  return { grdHome, venvDir, python: managedPython };
 }
 
 async function installManagedPackage(python, pythonVersion, options = {}) {
@@ -773,6 +1741,299 @@ function formatLocationExample(runtimes, scope) {
   return `./${runtimeConfigDirName(runtime)}`;
 }
 
+function stripAnsi(text) {
+  return String(text || "").replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "");
+}
+
+function parseJsonText(text) {
+  const cleaned = stripAnsi(text).trim();
+  if (!cleaned) {
+    return null;
+  }
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    return null;
+  }
+}
+
+function shellQuote(arg) {
+  const text = String(arg);
+  if (text === "") {
+    return "''";
+  }
+  if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(text)) {
+    return text;
+  }
+  return `'${text.replace(/'/g, `'\\''`)}'`;
+}
+
+function formatShellCommand(argv) {
+  return argv.map((arg) => shellQuote(arg)).join(" ");
+}
+
+function runtimeDoctorHint(runtime, scope, targetDir = null) {
+  const parts = ["grd", "doctor", "--runtime", runtime, `--${scope}`];
+  if (targetDir) {
+    parts.push("--target-dir", targetDir);
+  }
+  return formatShellCommand(parts);
+}
+
+function buildRuntimeDoctorArgs(runtime, scope, targetDir = null) {
+  const args = ["-m", "grd.cli", "--raw", "doctor", "--runtime", runtime, `--${scope}`];
+  if (targetDir) {
+    args.push("--target-dir", targetDir);
+  }
+  return args;
+}
+
+function doctorCheckMessages(check, field) {
+  if (!check || typeof check !== "object") {
+    return [];
+  }
+  const messages = Array.isArray(check[field]) ? check[field] : [];
+  const label = typeof check.label === "string" && check.label.trim() ? check.label.trim() : "Readiness Check";
+  return messages
+    .filter((message) => typeof message === "string" && message.trim())
+    .map((message) => `${label}: ${message.trim()}`);
+}
+
+function collectDoctorAdvisories(report) {
+  const advisories = [];
+  const seen = new Set();
+  const checks = Array.isArray(report && report.checks) ? report.checks : [];
+
+  for (const check of checks) {
+    for (const message of doctorCheckMessages(check, "warnings")) {
+      if (!seen.has(message)) {
+        seen.add(message);
+        advisories.push(message);
+      }
+    }
+    if ((check && check.status) === "warn") {
+      for (const message of doctorCheckMessages(check, "issues")) {
+        if (!seen.has(message)) {
+          seen.add(message);
+          advisories.push(message);
+        }
+      }
+    }
+  }
+
+  return advisories;
+}
+
+function collectDoctorBlockers(report) {
+  const blockers = [];
+  const seen = new Set();
+  const checks = Array.isArray(report && report.checks) ? report.checks : [];
+
+  for (const check of checks) {
+    if ((check && check.status) !== "fail") {
+      continue;
+    }
+    const messages = [
+      ...doctorCheckMessages(check, "issues"),
+      ...doctorCheckMessages(check, "warnings"),
+    ];
+    if (messages.length === 0) {
+      const label = typeof check.label === "string" && check.label.trim() ? check.label.trim() : "Readiness Check";
+      messages.push(`${label}: readiness check failed.`);
+    }
+    for (const message of messages) {
+      if (!seen.has(message)) {
+        seen.add(message);
+        blockers.push(message);
+      }
+    }
+  }
+
+  return blockers;
+}
+
+function extractDoctorErrorMessage(result) {
+  const stderrJson = parseJsonText(result.stderr);
+  if (stderrJson && typeof stderrJson.error === "string" && stderrJson.error.trim()) {
+    return stderrJson.error.trim();
+  }
+
+  const stdoutJson = parseJsonText(result.stdout);
+  if (stdoutJson && typeof stdoutJson.error === "string" && stdoutJson.error.trim()) {
+    return stdoutJson.error.trim();
+  }
+
+  const stderrText = stripAnsi(result.stderr).trim();
+  if (stderrText) {
+    return stderrText;
+  }
+
+  const stdoutText = stripAnsi(result.stdout).trim();
+  if (stdoutText) {
+    return stdoutText;
+  }
+
+  return `managed doctor exited with status ${result.status}`;
+}
+
+function runManagedDoctorReadinessCheck(managedPython, runtime, scope, targetDir = null) {
+  const result = spawnSync(managedPython, buildRuntimeDoctorArgs(runtime, scope, targetDir), {
+    encoding: "utf-8",
+    env: process.env,
+  });
+
+  if (result.error) {
+    return {
+      ok: false,
+      errorMessage: result.error.message,
+    };
+  }
+
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      errorMessage: extractDoctorErrorMessage(result),
+    };
+  }
+
+  const report = parseJsonText(result.stdout);
+  if (!report || typeof report !== "object" || !Array.isArray(report.checks)) {
+    return {
+      ok: false,
+      errorMessage: "managed doctor did not return a valid readiness report.",
+    };
+  }
+
+  return {
+    ok: true,
+    report,
+  };
+}
+
+function runInstallReadinessPreflight(managedPython, runtimes, scope, targetDir = null) {
+  console.log(` ${bold}${brandTitle}Runtime launcher/target preflight${reset}`);
+  console.log("");
+
+  const blockers = [];
+
+  for (const runtime of runtimes) {
+    const displayName = runtimeDisplayName(runtime);
+    const doctorCheck = runManagedDoctorReadinessCheck(managedPython, runtime, scope, targetDir);
+    if (!doctorCheck.ok) {
+      blockers.push(`${displayName}: ${doctorCheck.errorMessage}`);
+      continue;
+    }
+
+    const report = doctorCheck.report;
+    const reportBlockers = collectDoctorBlockers(report);
+    if (reportBlockers.length > 0 || report.overall === "fail") {
+      const messages = reportBlockers.length > 0
+        ? reportBlockers
+        : ["Runtime readiness reported a failure without blocking details."];
+      blockers.push(...messages.map((message) => `${displayName}: ${message}`));
+      continue;
+    }
+
+    const advisories = collectDoctorAdvisories(report);
+    success(`${displayName}: launcher/target preflight passed${advisories.length > 0 ? " with advisories" : ""}.`);
+    advisories.forEach((message) => warn(`${displayName}: ${message}`));
+  }
+
+  if (blockers.length > 0) {
+    console.log("");
+    error("Runtime launcher/target preflight failed.");
+    [...new Set(blockers)].forEach((message) => error(message));
+    const doctorHints = runtimes.map((runtime) => `\`${runtimeDoctorHint(runtime, scope, targetDir)}\``).join(", ");
+    log(`Fix the blocking readiness issue(s) above, then rerun the bootstrap installer. Inspect directly with ${doctorHints}.`);
+    return false;
+  }
+
+  console.log("");
+  success(`Runtime launcher/target preflight passed for ${formatRuntimeList(runtimes)}.`);
+  const doctorHints = runtimes.map((runtime) => `\`${runtimeDoctorHint(runtime, scope, targetDir)}\``).join(", ");
+  log(`For the full runtime-target doctor report after install, use ${doctorHints}.`);
+  log(
+    `Use \`${sharedDoctorCommand()}\` for install and runtime-local readiness, `
+    + `\`${sharedUnattendedReadinessCommand().replace(/\s+--runtime\b[\s\S]*$/u, "")}\` `
+    + `for the unattended or overnight verdict, \`${sharedPermissionsStatusCommand()}\` `
+    + "for the read-only runtime-owned permission snapshot, and "
+    + `\`${sharedPermissionsSyncCommand()}\` when runtime-owned permission alignment needs a write/sync.`
+  );
+  log(
+    "Workflow presets: if you plan paper/manuscript workflows, rerun "
+    + `${doctorHints} after install and check whether \`Workflow Presets\` is \`ready\` or \`degraded\`. `
+    + "Without LaTeX, the paper/manuscript and full research presets remain usable for `write-paper` and `peer-review`, but `paper-build` and "
+    + "`arxiv-submission` require the `LaTeX Toolchain`."
+  );
+  console.log("");
+  return true;
+}
+
+function printUnattendedConfigurationReminder(runtimes, targetDir = null) {
+  console.log("");
+  console.log(` ${bold}${brandTitle}Startup checklist${reset}`);
+  console.log("");
+  log(`Beginner Onboarding Hub: ${SHARED_PUBLIC_SURFACE_TEXT.beginnerHubUrl}`);
+  log(`First-run order: ${beginnerStartupLadderText()}`);
+  if (runtimes.length === 1) {
+    const runtime = runtimes[0];
+    log(
+      `1. Open ${runtimeDisplayName(runtime)} from your system terminal `
+      + `(${runtimeLaunchCommand(runtime)}).`
+    );
+    log(`2. Run \`${runtimeSurfaceCommand(runtime, "help")}\` for the command list.`);
+    log(
+      `3. Run \`${runtimeSurfaceCommand(runtime, "start")}\` if you're not sure what fits this folder yet. `
+      + `Run \`${runtimeSurfaceCommand(runtime, "tour")}\` if you want a read-only overview of the broader command surface first.`
+    );
+    log(
+      `4. Then use \`${runtimeSurfaceCommand(runtime, "new-project")}\` for a new project or `
+      + `\`${runtimeSurfaceCommand(runtime, "map-research")}\` for existing work.`
+    );
+    log(
+      `5. Fast bootstrap: use \`${runtimeSurfaceCommand(runtime, "new-project")} --minimal\` `
+      + "for the shortest onboarding path."
+    );
+    const resumeWorkCommand = runtimeSurfaceCommand(runtime, "resume-work");
+    const suggestNextCommand = runtimeSurfaceCommand(runtime, "suggest-next");
+    const pauseWorkCommand = runtimeSurfaceCommand(runtime, "pause-work");
+    log(
+      `6. When you return later, use \`${resumeWorkCommand}\` after reopening the right workspace. `
+      + recoveryLadderNote({
+        resumeWorkPhrase: `\`${resumeWorkCommand}\``,
+        suggestNextPhrase: `\`${suggestNextCommand}\``,
+        pauseWorkPhrase: `\`${pauseWorkCommand}\``,
+      })
+    );
+    log(`7. ${localCliInstallSummaryBridgeLine()}`);
+  } else {
+    log("For multiple runtimes, follow the same order in each one.");
+    for (const runtime of runtimes) {
+      log(
+        `- ${runtimeDisplayName(runtime)} (${runtimeLaunchCommand(runtime)}): `
+        + `\`${runtimeSurfaceCommand(runtime, "help")}\`, then `
+        + `\`${runtimeSurfaceCommand(runtime, "start")}\`, then `
+        + `\`${runtimeSurfaceCommand(runtime, "tour")}\`, then `
+        + `\`${runtimeSurfaceCommand(runtime, "new-project")}\` for new work or `
+        + `\`${runtimeSurfaceCommand(runtime, "map-research")}\` for existing work, then `
+        + `\`${runtimeSurfaceCommand(runtime, "resume-work")}\` when you return later.`
+      );
+    }
+    log(
+      `Fast bootstrap: use \`${runtimeSurfaceCommand(runtimes[0], "new-project")} --minimal\` for the shortest onboarding path.`
+    );
+    log(
+      recoveryLadderNote({
+        resumeWorkPhrase: "your runtime-specific `resume-work` command",
+        suggestNextPhrase: "your runtime-specific `suggest-next` command",
+        pauseWorkPhrase: "your runtime-specific `pause-work` command",
+      })
+    );
+    log(localCliInstallSummaryBridgeLine());
+  }
+  console.log("");
+}
+
 function formatMenuOption(index, label, details = [], options = {}) {
   const { labelWidth = label.length } = options;
   const filteredDetails = details.filter(Boolean);
@@ -786,8 +2047,8 @@ function documentedRuntimeFlags() {
   return RUNTIME_CATALOG.flatMap((runtime) => runtimeSelectionFlagList(runtime.runtime_name));
 }
 
-function findRuntime(predicate, fallback = ALL_RUNTIMES[0]) {
-  const match = RUNTIME_CATALOG.find(predicate);
+function runtimeHelpExampleRuntime(scope, fallback = ALL_RUNTIMES[0]) {
+  const match = RUNTIME_CATALOG.find((runtime) => runtimeInstallerHelpExampleScope(runtime.runtime_name) === scope);
   return match ? match.runtime_name : fallback;
 }
 
@@ -808,10 +2069,11 @@ function printBanner() {
 function printHelp() {
   const installCommand = "npx -y get-research-done";
   const primaryRuntime = ALL_RUNTIMES[0];
-  const dollarCommandRuntime = findRuntime((runtime) => runtime.command_prefix.startsWith("$"), primaryRuntime);
-  const primaryFlag = runtimeInstallFlag(primaryRuntime);
-  const dollarCommandFlag = runtimeInstallFlag(dollarCommandRuntime);
-  const targetDirExample = `/path/to/${runtimeConfigDirName(dollarCommandRuntime)}`;
+  const globalHelpRuntime = runtimeHelpExampleRuntime("global", primaryRuntime);
+  const localHelpRuntime = runtimeHelpExampleRuntime("local", globalHelpRuntime);
+  const primaryFlag = runtimeInstallFlag(globalHelpRuntime);
+  const helpExampleFlag = runtimeInstallFlag(localHelpRuntime);
+  const targetDirExample = `/path/to/${runtimeConfigDirName(localHelpRuntime)}`;
   console.log(` ${yellow}Usage:${reset} ${installCommand} [install|uninstall] [options]`);
   console.log("");
   console.log(` ${dim}${productPositioning}${reset}`);
@@ -839,8 +2101,8 @@ function printHelp() {
   console.log(` ${dim}# Install for ${runtimeDisplayName(primaryRuntime)} globally${reset}`);
   console.log(` ${installCommand} ${primaryFlag} --global`);
   console.log("");
-  console.log(` ${dim}# Install for ${runtimeDisplayName(dollarCommandRuntime)} locally${reset}`);
-  console.log(` ${installCommand} ${dollarCommandFlag} --local`);
+  console.log(` ${dim}# Install for ${runtimeDisplayName(localHelpRuntime)} locally${reset}`);
+  console.log(` ${installCommand} ${helpExampleFlag} --local`);
   console.log("");
   console.log(` ${dim}# Reinstall the matching managed GitHub source${reset}`);
   console.log(` ${installCommand} --reinstall ${primaryFlag} --local`);
@@ -852,7 +2114,7 @@ function printHelp() {
   console.log(` ${installCommand} --all --global`);
   console.log("");
   console.log(` ${dim}# Install into an explicit local target directory${reset}`);
-  console.log(` ${installCommand} ${dollarCommandFlag} --local --target-dir ${targetDirExample}`);
+  console.log(` ${installCommand} ${helpExampleFlag} --local --target-dir ${targetDirExample}`);
   console.log("");
   console.log(` ${dim}# Interactive uninstall${reset}`);
   console.log(` ${installCommand} --uninstall`);
@@ -865,6 +2127,37 @@ function printHelp() {
   console.log("");
   console.log(` ${dim}# Equivalent uninstall subcommand form${reset}`);
   console.log(` ${installCommand} uninstall ${primaryRuntime} --local`);
+  console.log("");
+  console.log(` ${yellow}After install:${reset}`);
+  console.log(` ${dim}# Beginner startup checklist${reset}`);
+  console.log(" Bootstrap preflight checks runtime launcher/target blockers only; do the first successful startup before changing unattended behavior.");
+  console.log(` Beginner Onboarding Hub: ${SHARED_PUBLIC_SURFACE_TEXT.beginnerHubUrl}`);
+  console.log(` First-run order: ${beginnerStartupLadderText()}`);
+  console.log(" Open your runtime, run its help command first, use `start` if you are not sure what fits this folder, and use `tour` if you want a read-only overview of the broader command surface before choosing.");
+  console.log(
+    " Then use your runtime's `new-project` command for new work or `map-research` for existing work. When you come back later, use `grd resume` for the current-workspace read-only recovery snapshot or `grd resume --recent` to find a different workspace first, then continue in the runtime with `resume-work`."
+  );
+  console.log(` ${SHARED_PUBLIC_SURFACE_TEXT.settingsCommandSentence}`);
+  console.log(
+    " Recommended unattended default: Balanced autonomy (`balanced`). "
+    + SHARED_PUBLIC_SURFACE_TEXT.settingsRecommendationSentence
+  );
+  console.log(
+    ` ${recoveryLadderNote({
+      resumeWorkPhrase: "your runtime-specific `resume-work` command",
+      suggestNextPhrase: "your runtime-specific `suggest-next` command",
+      pauseWorkPhrase: "your runtime-specific `pause-work` command",
+    })}`
+  );
+  console.log(` ${localCliDiagnosticsFollowUpLine()}`);
+  console.log(
+    ` Workflow presets: if you plan paper/manuscript workflows, rerun \`${sharedDoctorCommand()} --runtime <runtime> --local|--global\` `
+    + "and check whether `Workflow Presets` is `ready` or `degraded`. Without LaTeX, the paper/manuscript and full research presets remain usable for `write-paper` and `peer-review`, "
+    + "but `paper-build` and `arxiv-submission` require the `LaTeX Toolchain`."
+  );
+  console.log(` Then run \`${sharedUnattendedReadinessCommand()}\`.`);
+  console.log(` If it reports \`not-ready\`, run \`${sharedPermissionsSyncCommand()}\`.`);
+  console.log(" If it reports `relaunch-required`, exit and relaunch the runtime before unattended use.");
   console.log("");
 }
 
@@ -1171,6 +2464,13 @@ async function main() {
     process.exit(1);
   }
 
+  if (!isUninstall) {
+    const readinessOk = runInstallReadinessPreflight(managedEnv.python, selectedRuntimes, scope, targetDir);
+    if (!readinessOk) {
+      process.exit(1);
+    }
+  }
+
   if (isUninstall) {
     log(`Uninstalling GRD from ${formatRuntimeList(selectedRuntimes)} (${scope})...`);
   }
@@ -1184,6 +2484,9 @@ async function main() {
   });
 
   if (result.status === 0) {
+    if (!isUninstall) {
+      printUnattendedConfigurationReminder(selectedRuntimes, targetDir);
+    }
     return;
   } else {
     error(`${isUninstall ? "Uninstall" : "Installation"} failed. Check the output above for details.`);
@@ -1191,7 +2494,16 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  error(err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    error(err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  loadSharedPublicSurfaceText,
+  validateRuntimeCatalog,
+  validateSharedPublicSurfaceSchemaShape,
+  validateSharedPublicSurfaceContract,
+};
