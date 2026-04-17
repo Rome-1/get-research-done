@@ -261,3 +261,50 @@ def test_physics_override_propagates_to_pipeline(
     )
     assert result.exit_code == 0, result.stdout
     assert captured["physics_override"] is True
+
+
+def test_raw_json_includes_chosen_semantic_diff(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ge-cla: ``--raw`` JSON must include the structured diff object."""
+    from grd.core.lean.autoformalize.faithfulness import SemanticDiff
+
+    (tmp_path / ".grd").mkdir()
+
+    diff = SemanticDiff(
+        similarity=0.71,
+        changed_quantifiers=["forall", "exists"],
+        changed_domains=[],
+        missing_hypotheses=["bounded"],
+        changed_convention_terms=[],
+        only_in_claim=["forall", "bounded"],
+        only_in_translation=["exists"],
+    )
+    stub_result = VerifyClaimResult(
+        claim="x",
+        outcome="escalate",
+        chosen_source=None,
+        chosen_back_translation=None,
+        chosen_similarity=0.71,
+        chosen_semantic_diff=diff,
+        candidates=[],
+        blueprint=None,
+        index_source="",
+        escalation=None,
+        notes=[],
+    )
+    monkeypatch.setattr("grd.core.lean.autoformalize.verify_claim", lambda **_kw: stub_result)
+
+    result = runner.invoke(
+        app,
+        ["--raw", "--cwd", str(tmp_path), "lean", "verify-claim", "x", "--no-llm"],
+    )
+    assert result.exit_code == 1
+    parsed = json.loads(result.stdout)
+    sd = parsed["chosen_semantic_diff"]
+    assert sd["similarity"] == 0.71
+    assert sd["changed_quantifiers"] == ["forall", "exists"]
+    assert sd["missing_hypotheses"] == ["bounded"]
+    assert sd["only_in_claim"] == ["forall", "bounded"]
+    assert sd["only_in_translation"] == ["exists"]

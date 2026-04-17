@@ -153,7 +153,8 @@ def test_low_similarity_routes_to_escalate(tmp_path: Path) -> None:
     assert result.chosen_similarity == 0.0
     assert result.escalation is not None
     assert result.escalation.bead_id == "ge-lowbead"
-    assert "escalate" in escalate.calls[0]["title"]
+    # ge-cla: title surfaces the specific divergence, not just "escalate".
+    assert "autoformalize:" in escalate.calls[0]["title"]
 
 
 def test_ambiguous_band_without_cluster_requests_human_review(tmp_path: Path) -> None:
@@ -188,7 +189,8 @@ def test_ambiguous_band_without_cluster_requests_human_review(tmp_path: Path) ->
     assert result.chosen_similarity is not None
     assert 0.70 <= result.chosen_similarity < 0.85
     assert result.escalation is not None
-    assert "cluster consensus" in escalate.calls[0]["title"]
+    # ge-cla: title surfaces the specific divergence, not just the outcome.
+    assert "autoformalize:" in escalate.calls[0]["title"]
 
 
 def test_cluster_consensus_upgrades_two_agreeing_candidates_to_accept(tmp_path: Path) -> None:
@@ -349,3 +351,88 @@ def test_notes_flag_empty_index(tmp_path: Path) -> None:
         escalate_fn=_EscalateSpy(),
     )
     assert any("name index is empty" in note for note in result.notes)
+
+
+# ─── ge-cla: structured semantic diff in pipeline output ─────────────────
+
+
+def test_auto_accept_carries_semantic_diff(tmp_path: Path) -> None:
+    """auto_accept results must include the structured diff for traceability."""
+    claim = "pi is irrational"
+    cfg = AutoformalizeConfig(num_candidates=1, repair_budget=0)
+    llm = MockLLM(responses=_candidate_and_backtranslation(claim))
+    check = _StubCheck([_ok()])
+
+    result = verify_claim(
+        claim=claim,
+        project_root=tmp_path,
+        llm=llm,
+        config=cfg,
+        index=NameIndex.empty(),
+        lean_check=check,
+    )
+
+    assert result.outcome == "auto_accept"
+    assert result.chosen_semantic_diff is not None
+    assert result.chosen_semantic_diff.similarity == result.chosen_similarity
+
+
+def test_escalation_title_surfaces_quantifier_divergence(tmp_path: Path) -> None:
+    """When quantifiers diverge, the escalation title should name them."""
+    claim = "forall real numbers the function converges"
+    cfg = AutoformalizeConfig(num_candidates=1, repair_budget=0)
+    # Back-translation swaps "forall" → "exists" — 0 overlap on those terms.
+    llm = MockLLM(
+        responses=[
+            "```lean\ntheorem foo : True := trivial\n```",
+            "exists real numbers the function converges",
+        ]
+    )
+    check = _StubCheck([_ok()])
+    escalate = _EscalateSpy(bead_id="ge-qdiff")
+
+    result = verify_claim(
+        claim=claim,
+        project_root=tmp_path,
+        llm=llm,
+        config=cfg,
+        index=NameIndex.empty(),
+        lean_check=check,
+        escalate_fn=escalate,
+    )
+
+    assert result.outcome != "auto_accept"
+    title = escalate.calls[0]["title"]
+    assert "quantifier" in title
+    # The body must include the semantic diff section.
+    body = escalate.calls[0]["body"]
+    assert "Semantic diff" in body
+    assert "Quantifiers" in body
+
+
+def test_escalation_body_includes_semantic_diff_section(tmp_path: Path) -> None:
+    """The escalation bead body must include categorized diff entries."""
+    claim = "pi is irrational"
+    cfg = AutoformalizeConfig(num_candidates=1, repair_budget=0)
+    llm = MockLLM(
+        responses=[
+            "```lean\ntheorem foo : True := trivial\n```",
+            "completely unrelated goldbach statement",
+        ]
+    )
+    check = _StubCheck([_ok()])
+    escalate = _EscalateSpy(bead_id="ge-bodydiff")
+
+    verify_claim(
+        claim=claim,
+        project_root=tmp_path,
+        llm=llm,
+        config=cfg,
+        index=NameIndex.empty(),
+        lean_check=check,
+        escalate_fn=escalate,
+    )
+
+    body = escalate.calls[0]["body"]
+    assert "Semantic diff" in body
+    assert "Missing from translation" in body
