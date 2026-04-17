@@ -89,6 +89,7 @@ class VerifyClaimResult:
     chosen_source: str | None
     chosen_back_translation: str | None
     chosen_similarity: float | None
+    chosen_goals: list[str] | None = None
     candidates: list[CandidateResult] = field(default_factory=list)
     blueprint: BlueprintContext | None = None
     index_source: str = ""
@@ -257,6 +258,7 @@ def verify_claim(
         chosen_source=chosen_source,
         chosen_back_translation=winner.faithfulness.back_translation,
         chosen_similarity=winner.faithfulness.similarity,
+        chosen_goals=winner.repair.goals_after,
         candidates=merged,
         blueprint=blueprint,
         index_source=idx.source,

@@ -84,6 +84,7 @@ class RepairOutcome:
     steps: list[RepairStep] = field(default_factory=list)
     total_elapsed_ms: int = 0
     reason: str = ""
+    goals_after: list[str] | None = None
 
 
 def repair_candidate(
@@ -180,6 +181,7 @@ def repair_candidate(
                 steps=steps,
                 total_elapsed_ms=total_ms,
                 reason="compiled" if not is_repair else f"repaired after {iteration} iterations",
+                goals_after=result.goals_after,
             )
 
         error_kind = classify_compile_error(result, source)
@@ -202,6 +204,7 @@ def repair_candidate(
                 steps=steps,
                 total_elapsed_ms=total_ms,
                 reason=f"budget exhausted ({max_attempts} compiles, last error: {error_kind})",
+                goals_after=result.goals_after,
             )
         source = _request_repair(
             llm=llm,

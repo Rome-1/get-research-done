@@ -230,6 +230,54 @@ def test_repair_extracts_lean_from_fenced_response(tmp_path: Path) -> None:
     assert check.calls[1]["code"] == "theorem bar : True := trivial"
 
 
+def test_success_populates_goals_after(tmp_path: Path) -> None:
+    """On compile success, goals_after comes from the LeanCheckResult (ge-2zu)."""
+    candidate = Candidate(index=0, source="theorem foo : True := trivial", raw="", temperature=0.3)
+    ok_with_goals = LeanCheckResult(ok=True, backend="subprocess", elapsed_ms=5, diagnostics=[], goals_after=[])
+    check = _ScriptedCheck([ok_with_goals])
+    llm = MockLLM(responses=[])
+
+    outcome = repair_candidate(
+        candidate=candidate,
+        blueprint=_bp(),
+        index=NameIndex.empty(),
+        llm=llm,
+        project_root=tmp_path,
+        repair_budget=0,
+        lean_check=check,
+    )
+
+    assert outcome.ok is True
+    assert outcome.goals_after == []
+
+
+def test_failure_populates_goals_after(tmp_path: Path) -> None:
+    """On compile failure with unsolved goals, goals_after carries them (ge-2zu)."""
+    candidate = Candidate(index=0, source="theorem foo : False := by rfl", raw="", temperature=0.3)
+    fail_with_goals = LeanCheckResult(
+        ok=False,
+        backend="subprocess",
+        elapsed_ms=4,
+        diagnostics=[LeanDiagnostic(severity="error", message="type mismatch")],
+        goals_after=["⊢ False"],
+    )
+    check = _ScriptedCheck([fail_with_goals])
+    llm = MockLLM(responses=[])
+
+    outcome = repair_candidate(
+        candidate=candidate,
+        blueprint=_bp(),
+        index=NameIndex.empty(),
+        llm=llm,
+        project_root=tmp_path,
+        repair_budget=0,
+        lean_check=check,
+    )
+
+    assert outcome.ok is False
+    assert outcome.goals_after == ["⊢ False"]
+
+
 def test_repair_propagates_imports_and_timeout(tmp_path: Path) -> None:
     candidate = Candidate(index=0, source="theorem foo : True := trivial", raw="", temperature=0.3)
     check = _ScriptedCheck([_ok()])

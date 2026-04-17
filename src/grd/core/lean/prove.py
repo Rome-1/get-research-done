@@ -66,6 +66,17 @@ class ProofAttempt(BaseModel):
     elapsed_ms: int = 0
     error_summary: str | None = None
     hint: str | None = None
+    goal_before: str | None = Field(
+        default=None,
+        description="Initial proof goal before this tactic (e.g. '⊢ 1 + 1 = 2').",
+    )
+    goal_after: list[str] | None = Field(
+        default=None,
+        description=(
+            "Remaining goals after this tactic. Empty list on success. "
+            "Populated from 'unsolved goals' diagnostics on failure."
+        ),
+    )
 
 
 class ProveResult(BaseModel):
@@ -141,6 +152,7 @@ def prove_statement(
     total_elapsed = 0
     proof_source: str | None = None
     overall_ok = False
+    initial_goal = _infer_initial_goal(statement)
 
     for tactic in ladder:
         source = compose_attempt_source(statement, tactic, imports=imports)
@@ -158,6 +170,8 @@ def prove_statement(
             elapsed_ms=result.elapsed_ms,
             error_summary=None if result.ok else _first_error_summary(result),
             hint=None if result.ok else _first_error_hint(result),
+            goal_before=initial_goal,
+            goal_after=result.goals_after,
         )
         attempts.append(attempt)
         if result.ok:
@@ -172,6 +186,35 @@ def prove_statement(
         attempts=attempts,
         total_elapsed_ms=total_elapsed,
     )
+
+
+def _infer_initial_goal(statement: str) -> str | None:
+    """Best-effort extraction of the initial goal from the statement.
+
+    For a bare proposition like ``1 + 1 = 2``, the goal is ``⊢ 1 + 1 = 2``.
+    For ``theorem foo : P → P``, the goal is ``⊢ P → P``.  When the
+    statement has a ``:=`` body, the proposition sits between ``:`` and
+    ``:=``.  Returns ``None`` if we can't confidently infer the goal.
+    """
+    body = statement.strip()
+    if not body:
+        return None
+    if ":=" in body:
+        head = body.split(":=", 1)[0].rstrip()
+    else:
+        head = body.rstrip()
+    # Strip keyword + name prefix to get the type.
+    for prefix in _KEYWORD_PREFIXES:
+        if head.startswith(prefix):
+            # "theorem foo : P → P" → after keyword+name → ": P → P"
+            rest = head[len(prefix) :].lstrip()
+            # Skip the name (identifier up to the first ':')
+            if ":" in rest:
+                prop = rest.split(":", 1)[1].strip()
+                return f"⊢ {prop}" if prop else None
+            return None
+    # Bare proposition — the whole thing is the goal.
+    return f"⊢ {body}"
 
 
 def _first_error_summary(result: LeanCheckResult) -> str:

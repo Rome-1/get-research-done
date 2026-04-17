@@ -333,6 +333,51 @@ def test_escalate_filed_stays_escalate(tmp_path: Path) -> None:
     assert result.escalation_error is None
 
 
+def test_auto_accept_exposes_chosen_goals(tmp_path: Path) -> None:
+    """chosen_goals comes from the winning candidate's repair outcome (ge-2zu)."""
+    claim = "one equals one"
+    cfg = AutoformalizeConfig(num_candidates=1, repair_budget=0)
+    llm = MockLLM(responses=_candidate_and_backtranslation(claim))
+    # Compile returns ok with goals_after=[] (all goals closed).
+    ok_with_goals = LeanCheckResult(ok=True, backend="subprocess", elapsed_ms=3, diagnostics=[], goals_after=[])
+    check = _StubCheck([ok_with_goals])
+    escalate = _EscalateSpy()
+
+    result = verify_claim(
+        claim=claim,
+        project_root=tmp_path,
+        llm=llm,
+        config=cfg,
+        index=NameIndex.empty(),
+        lean_check=check,
+        escalate_fn=escalate,
+    )
+
+    assert result.outcome == "auto_accept"
+    assert result.chosen_goals == []
+
+
+def test_chosen_goals_none_when_no_compile(tmp_path: Path) -> None:
+    """When no candidate compiles, chosen_goals is None."""
+    cfg = AutoformalizeConfig(num_candidates=1, repair_budget=0)
+    llm = MockLLM(responses=["```lean\nbad\n```"])
+    check = _StubCheck([_fail()])
+    escalate = _EscalateSpy(bead_id="ge-test")
+
+    result = verify_claim(
+        claim="some claim",
+        project_root=tmp_path,
+        llm=llm,
+        config=cfg,
+        index=NameIndex.empty(),
+        lean_check=check,
+        escalate_fn=escalate,
+    )
+
+    assert result.outcome == "escalate"
+    assert result.chosen_goals is None
+
+
 def test_notes_flag_empty_index(tmp_path: Path) -> None:
     """An empty NameIndex should surface a note explaining DDR is disabled."""
     cfg = AutoformalizeConfig(num_candidates=1, repair_budget=0)
