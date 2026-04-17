@@ -65,6 +65,27 @@ def _print_prove_hints(result: ProveResult) -> None:
     err_console.print(f"  [dim]last tactic: {last_tactic}[/] {last_hint}", highlight=False)
 
 
+def _print_verify_claim_warning(result: object) -> None:
+    """Announce when escalation wanted to file a bead but couldn't.
+
+    Silent failure here is the ge-1hr / UX-STUDY.md §P0-8 trap: the pipeline
+    "escalated" but no human will ever see the bead because ``bd`` was
+    missing from ``PATH`` (or errored mid-run). We promote ``outcome`` to
+    ``"escalate_unfiled"`` in the pipeline and surface the ``warning`` text
+    here as a prominent banner above the normal output, so a human skimming
+    the terminal can't miss it. ``--raw`` consumers get the same information
+    from the top-level ``warning`` / ``escalation_attempted`` /
+    ``escalation_error`` fields in JSON.
+    """
+    if _helpers._raw:
+        return
+    warning = getattr(result, "warning", None)
+    if not warning:
+        return
+    err_console.print("")
+    err_console.print(f"[bold yellow]⚠ {warning}[/]", highlight=False)
+
+
 def _print_verify_claim_hints(result: object) -> None:
     """Surface hints from the last failing candidate's last compile step.
 
@@ -418,6 +439,7 @@ def lean_verify_claim(
     )
 
     _output(_verify_result_to_dict(result))
+    _print_verify_claim_warning(result)
     _print_verify_claim_hints(result)
     if result.outcome != "auto_accept":
         raise typer.Exit(code=1)

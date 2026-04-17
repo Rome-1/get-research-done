@@ -124,6 +124,82 @@ def test_low_confidence_exits_nonzero(
     assert parsed["outcome"] == "escalate"
 
 
+def test_escalate_unfiled_raw_exposes_top_level_fields(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ``--raw`` JSON must expose ``warning`` / ``escalation_attempted`` /
+    ``escalation_error`` at the top level so automation doesn't have to dig
+    through the nested escalation block (ge-1hr / UX-STUDY.md §P0-8).
+    """
+    (tmp_path / ".grd").mkdir()
+
+    stub_result = VerifyClaimResult(
+        claim="x",
+        outcome="escalate_unfiled",
+        chosen_source=None,
+        chosen_back_translation=None,
+        chosen_similarity=None,
+        candidates=[],
+        blueprint=None,
+        index_source="",
+        escalation=None,
+        notes=[],
+        warning="ESCALATION NOT FILED (bd CLI not available). Install the beads CLI...",
+        escalation_attempted=False,
+        escalation_error="bd CLI not available",
+    )
+    monkeypatch.setattr("grd.core.lean.autoformalize.verify_claim", lambda **_kw: stub_result)
+
+    result = runner.invoke(
+        app,
+        ["--raw", "--cwd", str(tmp_path), "lean", "verify-claim", "x", "--no-llm"],
+    )
+    assert result.exit_code == 1
+    parsed = json.loads(result.stdout)
+    assert parsed["outcome"] == "escalate_unfiled"
+    assert "ESCALATION NOT FILED" in parsed["warning"]
+    assert parsed["escalation_attempted"] is False
+    assert parsed["escalation_error"] == "bd CLI not available"
+
+
+def test_escalate_unfiled_renders_warning_banner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-raw mode must surface a visible banner — a cold mathematician
+    should never miss the fact that escalation silently failed.
+    """
+    (tmp_path / ".grd").mkdir()
+
+    stub_result = VerifyClaimResult(
+        claim="x",
+        outcome="escalate_unfiled",
+        chosen_source=None,
+        chosen_back_translation=None,
+        chosen_similarity=None,
+        candidates=[],
+        blueprint=None,
+        index_source="",
+        escalation=None,
+        notes=[],
+        warning="ESCALATION NOT FILED (bd CLI not available). Install the beads CLI...",
+        escalation_attempted=False,
+        escalation_error="bd CLI not available",
+    )
+    monkeypatch.setattr("grd.core.lean.autoformalize.verify_claim", lambda **_kw: stub_result)
+
+    result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "lean", "verify-claim", "x", "--no-llm"],
+    )
+    # CliRunner mixes stderr into stdout by default — which is what we want
+    # here: the warning is emitted via err_console and must be visible to the
+    # user skimming the terminal.
+    assert result.exit_code == 1
+    assert "ESCALATION NOT FILED" in result.stdout
+
+
 def test_physics_and_no_physics_are_mutually_exclusive(tmp_path: Path) -> None:
     (tmp_path / ".grd").mkdir()
     result = runner.invoke(
