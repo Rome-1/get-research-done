@@ -211,6 +211,114 @@ def test_markdown_to_latex_fragment_basic() -> None:
 
 
 @pytest.mark.skipif(not HAS_PANDOC, reason="pandoc not installed")
+def test_markdown_to_latex_fragment_emits_cite_for_at_keys() -> None:
+    # Real pandoc with --natbib converts @key / [@k1; @k2] into natbib
+    # citation commands (\citet for textual, \citep for parenthetical) so
+    # the downstream bibtex pass can resolve them against the journal
+    # template's \bibliography{...}. Without --natbib pandoc just escapes
+    # the raw @ sigils.
+    out = markdown_to_latex_fragment(
+        "Einstein @einstein1905 and later [@michelson1887; @eddington1919]."
+    )
+    assert "\\citet{einstein1905}" in out
+    assert "\\citep{michelson1887, eddington1919}" in out or (
+        "\\citep{michelson1887,eddington1919}" in out
+    )
+    assert "@einstein1905" not in out
+
+
+def test_run_pandoc_default_emits_no_cite_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    # run_pandoc keeps natbib OFF by default (general-purpose) -- only
+    # markdown_to_latex_fragment opts in. This guards against a silent
+    # default change that would affect every run_pandoc caller.
+    status = PandocStatus(
+        available=True,
+        binary_path="/usr/bin/pandoc",
+        version=(3, 1, 3),
+        version_string="pandoc 3.1.3",
+        meets_minimum=True,
+    )
+    recorded: dict[str, object] = {}
+
+    def fake_run(cmd, *, input, capture_output, text, timeout, check):
+        recorded["cmd"] = cmd
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(pandoc_mod.subprocess, "run", fake_run)
+    run_pandoc("hi", status=status)
+    cmd = recorded["cmd"]
+    assert "--natbib" not in cmd
+    assert "--citeproc" not in cmd
+
+
+def test_markdown_to_latex_fragment_default_passes_natbib(monkeypatch: pytest.MonkeyPatch) -> None:
+    status = PandocStatus(
+        available=True,
+        binary_path="/usr/bin/pandoc",
+        version=(3, 1, 3),
+        version_string="pandoc 3.1.3",
+        meets_minimum=True,
+    )
+    recorded: dict[str, object] = {}
+
+    def fake_run(cmd, *, input, capture_output, text, timeout, check):
+        recorded["cmd"] = cmd
+        return MagicMock(returncode=0, stdout="LATEX", stderr="")
+
+    monkeypatch.setattr(pandoc_mod.subprocess, "run", fake_run)
+    markdown_to_latex_fragment("hi", status=status)
+    cmd = recorded["cmd"]
+    assert "--natbib" in cmd
+    assert "--citeproc" not in cmd
+
+
+def test_markdown_to_latex_fragment_citeproc_wins_over_natbib(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    status = PandocStatus(
+        available=True,
+        binary_path="/usr/bin/pandoc",
+        version=(3, 1, 3),
+        version_string="pandoc 3.1.3",
+        meets_minimum=True,
+    )
+    recorded: dict[str, object] = {}
+
+    def fake_run(cmd, *, input, capture_output, text, timeout, check):
+        recorded["cmd"] = cmd
+        return MagicMock(returncode=0, stdout="LATEX", stderr="")
+
+    monkeypatch.setattr(pandoc_mod.subprocess, "run", fake_run)
+    # natbib default is True, but citeproc should take precedence -- they
+    # are mutually exclusive in pandoc's CLI.
+    markdown_to_latex_fragment("hi", citeproc=True, status=status)
+    cmd = recorded["cmd"]
+    assert "--citeproc" in cmd
+    assert "--natbib" not in cmd
+
+
+def test_markdown_to_latex_fragment_natbib_opt_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    status = PandocStatus(
+        available=True,
+        binary_path="/usr/bin/pandoc",
+        version=(3, 1, 3),
+        version_string="pandoc 3.1.3",
+        meets_minimum=True,
+    )
+    recorded: dict[str, object] = {}
+
+    def fake_run(cmd, *, input, capture_output, text, timeout, check):
+        recorded["cmd"] = cmd
+        return MagicMock(returncode=0, stdout="LATEX", stderr="")
+
+    monkeypatch.setattr(pandoc_mod.subprocess, "run", fake_run)
+    markdown_to_latex_fragment("hi", natbib=False, status=status)
+    cmd = recorded["cmd"]
+    assert "--natbib" not in cmd
+    assert "--citeproc" not in cmd
+
+
+@pytest.mark.skipif(not HAS_PANDOC, reason="pandoc not installed")
 def test_markdown_to_latex_fragment_escapes_underscores() -> None:
     # The very error category that `latex.py`'s autofix exists for:
     # unescaped underscores in prose. Pandoc escapes them correctly in the AST.
@@ -265,6 +373,23 @@ def test_resolve_external_filters_explicit_list_filters_to_installed() -> None:
 def test_resolve_external_filters_empty_list_disables_all() -> None:
     status = _status_with_filters(("pandoc-crossref", "pandoc-citeproc"))
     assert resolve_external_filters([], status) == []
+
+
+def test_resolve_external_filters_auto_excludes_citeproc_even_when_installed() -> None:
+    # pandoc-citeproc is deprecated (pandoc 2.11+ uses --citeproc) and
+    # would double-process citations if auto-enabled alongside --natbib.
+    # Auto mode must never pick it up; callers who want it must ask by
+    # name.
+    status = _status_with_filters(("pandoc-crossref", "pandoc-citeproc"))
+    assert resolve_external_filters(None, status) == ["pandoc-crossref"]
+
+
+def test_resolve_external_filters_explicit_citeproc_is_honoured() -> None:
+    # Escape hatch: explicit opt-in by callers who genuinely need the
+    # legacy filter. This keeps the "auto excludes but explicit allows"
+    # contract visible in the test suite.
+    status = _status_with_filters(("pandoc-crossref", "pandoc-citeproc"))
+    assert resolve_external_filters(["pandoc-citeproc"], status) == ["pandoc-citeproc"]
 
 
 def test_run_pandoc_injects_external_filters_before_lua(

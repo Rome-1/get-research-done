@@ -34,7 +34,14 @@ DEFAULT_DETECT_TIMEOUT_SECONDS: float = 5.0
 
 # External filter binaries whose presence affects capability.
 # Kept domain-agnostic: this is a generic pandoc-adjacent tooling probe.
-_KNOWN_EXTERNAL_FILTERS: tuple[str, ...] = ("pandoc-crossref", "pandoc-citeproc")
+#
+# pandoc-citeproc is intentionally NOT auto-enabled: it was deprecated in
+# pandoc 2.11 (the `--citeproc` flag supersedes it), and on older hosts
+# where the binary is still present it would double-process citations
+# alongside `--natbib` and produce broken bibliographies. Callers that
+# genuinely want the legacy filter can still request it via
+# ``external_filters=["pandoc-citeproc"]``.
+_KNOWN_EXTERNAL_FILTERS: tuple[str, ...] = ("pandoc-crossref",)
 
 
 class PandocError(RuntimeError):
@@ -165,6 +172,7 @@ def _build_command(
     template: Path | None,
     standalone: bool,
     citeproc: bool,
+    natbib: bool,
     external_filters: list[str] | None,
     extra_args: list[str] | None,
 ) -> list[str]:
@@ -173,18 +181,24 @@ def _build_command(
         cmd.append("--standalone")
     if template is not None:
         cmd.extend(["--template", str(template)])
-    # External filters (pandoc-crossref, pandoc-citeproc) must come BEFORE
-    # Lua filters and BEFORE --citeproc so their transformations happen
-    # first in the filter chain -- pandoc-crossref has to resolve @fig:foo
-    # refs before citeproc would otherwise try to treat them as citations.
+    # External filters (pandoc-crossref) must come BEFORE Lua filters and
+    # BEFORE --citeproc so their transformations happen first in the
+    # filter chain -- pandoc-crossref has to resolve @fig:foo refs before
+    # citeproc would otherwise try to treat them as citations.
     for name in external_filters or []:
         cmd.extend(["--filter", name])
     for lua in lua_filters or []:
         cmd.extend(["--lua-filter", str(lua)])
     if bibliography is not None:
         cmd.extend(["--bibliography", str(bibliography)])
+    # --natbib and --citeproc are mutually exclusive to pandoc. citeproc
+    # inlines formatted citation text; natbib emits \cite{...} for a later
+    # bibtex pass. The paper pipeline relies on the template's
+    # \bibliography{...}, so natbib is the right default.
     if citeproc:
         cmd.append("--citeproc")
+    elif natbib:
+        cmd.append("--natbib")
     if extra_args:
         cmd.extend(extra_args)
     return cmd
@@ -200,6 +214,7 @@ def run_pandoc(
     template: Path | None = None,
     standalone: bool = False,
     citeproc: bool = False,
+    natbib: bool = False,
     external_filters: list[str] | None = None,
     extra_args: list[str] | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
@@ -226,6 +241,7 @@ def run_pandoc(
         template=template,
         standalone=standalone,
         citeproc=citeproc,
+        natbib=natbib,
         external_filters=external_filters,
         extra_args=extra_args,
     )
@@ -267,12 +283,15 @@ def resolve_external_filters(
     """Return the subset of *requested* external filters that are actually installed.
 
     When *requested* is ``None`` (the "auto" case), every known filter
-    (``pandoc-crossref``, ``pandoc-citeproc``) is enabled if it is in
-    ``status.installed_filters``. This makes ``markdown_to_latex_fragment``
-    light up extra capabilities automatically when they happen to be
-    present on the compile host, without forcing callers to probe.
+    in ``_KNOWN_EXTERNAL_FILTERS`` (currently just ``pandoc-crossref``) is
+    enabled if it is in ``status.installed_filters``. This makes
+    ``markdown_to_latex_fragment`` light up extra capabilities
+    automatically when they happen to be present on the compile host,
+    without forcing callers to probe.
 
-    Passing an empty list explicitly disables all external filters.
+    Passing an empty list explicitly disables all external filters. Pass
+    an explicit list (e.g. ``["pandoc-citeproc"]``) to opt in to filters
+    that are deliberately excluded from auto-detection.
     """
     if requested is None:
         return [name for name in _KNOWN_EXTERNAL_FILTERS if name in status.installed_filters]
@@ -291,6 +310,7 @@ def markdown_to_latex_fragment(
     lua_filters: list[Path] | None = None,
     bibliography: Path | None = None,
     citeproc: bool = False,
+    natbib: bool = True,
     external_filters: list[str] | None = None,
     extra_args: list[str] | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
@@ -304,10 +324,25 @@ def markdown_to_latex_fragment(
     a journal template. ``standalone`` is intentionally off so the output has
     no ``\\documentclass`` / ``\\begin{document}`` scaffolding.
 
-    *external_filters* defaults to ``None`` meaning "auto": every known
-    external filter (``pandoc-crossref``, ``pandoc-citeproc``) that is
+    ``natbib`` defaults to True so pandoc emits natbib commands --
+    ``\\citet{key}`` for textual ``@key`` references and ``\\citep{k1, k2}``
+    for parenthetical ``[@k1; @k2]`` groups -- for the downstream bibtex
+    pass to resolve against the template's ``\\bibliography{...}``.
+    ``citeproc=True`` takes precedence (inlines formatted text and disables
+    natbib), matching pandoc's own semantics (``--natbib`` and ``--citeproc``
+    are mutually exclusive on the CLI).
+
+    **Caveat:** with ``natbib=True``, any literal ``@token`` in prose is
+    interpreted as a cite key. Authors who need literal ``@`` (email
+    addresses, social handles) should escape as ``\\@`` or call with
+    ``natbib=False``.
+
+    *external_filters* defaults to ``None`` meaning "auto": every
+    auto-detected filter (currently just ``pandoc-crossref``) that is
     installed on the host is added to the chain. Pass an explicit list to
     pin the selection, or an empty list to disable them entirely.
+    ``pandoc-citeproc`` is intentionally excluded from auto-detection --
+    see :data:`_KNOWN_EXTERNAL_FILTERS` for the rationale.
     """
     if status is None:
         status = detect_pandoc(binary=binary)
@@ -321,6 +356,7 @@ def markdown_to_latex_fragment(
         template=None,
         standalone=False,
         citeproc=citeproc,
+        natbib=natbib,
         external_filters=resolved_externals,
         extra_args=extra_args,
         timeout=timeout,

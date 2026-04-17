@@ -8,8 +8,18 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{wasysym}
+%# Nature uses superscript-numeric citations in order of appearance.
+%# The pandoc pipeline emits natbib's \citet / \citep commands, so we
+%# load natbib in [numbers,super,sort&compress] mode -- both commands
+%# then render as Nature-style superscript numerals. `naturemag.bst`
+%# (Nature's own style file) is NOT natbib-aware and produces
+%# "(author?)" for \citet; use the natbib-compatible `unsrtnat` instead.
+\usepackage[numbers,super,sort&compress]{natbib}
 \usepackage{hyperref}
 \usepackage[margin=1in]{geometry}
+% Pandoc emits \tightlist for compact bullet lists; \providecommand is a
+% safe no-op when the document class already defines the macro.
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
 
 \title{\VAR{title}}
 
@@ -72,7 +82,7 @@
 \BLOCK{endfor}
 \BLOCK{endif}
 
-\bibliographystyle{naturemag}
+\bibliographystyle{unsrtnat}
 \bibliography{\VAR{bib_file}}
 
 \BLOCK{if attribution_footer}

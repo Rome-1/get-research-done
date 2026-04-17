@@ -1,12 +1,20 @@
 %# PRL template -- RevTeX 4.2
 %# Jinja2 template with custom LaTeX-safe delimiters
-\documentclass[aps,prl,twocolumn,superscriptaddress]{revtex4-2}
+%#
+%# `natbib` class option (not \usepackage{natbib}): revtex4-2 loads natbib
+%# itself when the class option is set, avoiding option-clash warnings and
+%# the duplicate-include footgun that comes from layering \usepackage on
+%# top of a class that already wraps the package.
+\documentclass[aps,prl,twocolumn,superscriptaddress,natbib]{revtex4-2}
 
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{wasysym}
 \usepackage{hyperref}
+% Pandoc emits \tightlist for compact bullet lists; \providecommand keeps
+% the include safe even under classes that already define the macro.
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
 
 \begin{document}
 

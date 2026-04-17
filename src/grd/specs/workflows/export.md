@@ -305,7 +305,11 @@ environments) and lets the journal template system produce the final scaffold.
    \usepackage{hyperref}
    \usepackage{booktabs}
    \usepackage{graphicx}
-   \usepackage{float}  % required by grd-figure filter ([H] placement)
+   \usepackage{float}   % required by grd-figure filter ([H] placement)
+   \usepackage{natbib}  % \citet / \citep from pandoc's --natbib citation output
+   % Pandoc emits \tightlist for compact bullet lists; define it so the
+   % fragment compiles under any document class.
+   \providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
    \title{ {project_title} }
    \author{[Author Name]}
    \date{\today}
@@ -314,6 +318,11 @@ environments) and lets the journal template system produce the final scaffold.
    % -- pandoc-produced fragment --
    { fragment }
    % --
+   % Use a natbib-compatible bibliography style. plain.bst does NOT know
+   % about natbib's \citet/\citep -- textual cites render as "(author?)"
+   % in the PDF. plainnat is the drop-in natbib-compatible replacement.
+   \bibliographystyle{plainnat}
+   \bibliography{references}
    \begin{center}
    {\footnotesize\textit{Generated with Get Research Done (PSI)}}
    \end{center}

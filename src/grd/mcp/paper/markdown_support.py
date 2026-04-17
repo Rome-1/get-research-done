@@ -61,6 +61,7 @@ def maybe_convert_to_latex(
     lua_filters: list[Path] | None = None,
     bibliography: Path | None = None,
     citeproc: bool = False,
+    natbib: bool = True,
     external_filters: list[str] | None = None,
     pandoc_status: PandocStatus | None = None,
 ) -> str:
@@ -75,9 +76,20 @@ def maybe_convert_to_latex(
     otherwise                     pandoc output
     ============================  ==============================
 
-    External filters (``pandoc-crossref``, ``pandoc-citeproc``) are
+    ``natbib`` defaults to True: the paper pipeline emits natbib
+    commands (``\\citet{key}`` for textual ``@key`` and ``\\citep{k1, k2}``
+    for ``[@k1; @k2]`` groups) so the template's ``\\bibliography{...}``
+    can resolve them via bibtex. Literal ``@token`` in prose will be
+    misread as a cite key in this mode -- pass ``natbib=False`` or
+    escape as ``\\@`` if the content has email addresses or social
+    handles. ``citeproc=True`` takes precedence and disables natbib.
+
+    External filters (currently only ``pandoc-crossref``) are
     auto-detected via ``status.installed_filters`` and prepended to the
-    filter chain. Pass ``external_filters=[]`` to opt out.
+    filter chain. Pass ``external_filters=[]`` to opt out. Legacy
+    ``pandoc-citeproc`` is deliberately excluded from auto-detection to
+    prevent double-processing alongside ``--natbib``; callers that
+    genuinely need it must request it explicitly.
 
     The graceful degradation path lets this function replace direct
     ``content`` use everywhere without risking regressions when pandoc
@@ -102,6 +114,7 @@ def maybe_convert_to_latex(
             lua_filters=lua_filters,
             bibliography=bibliography,
             citeproc=citeproc,
+            natbib=natbib,
             external_filters=external_filters,
             status=status,
         )
