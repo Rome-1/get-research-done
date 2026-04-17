@@ -132,11 +132,19 @@ If typechecking fails on the signature, the translation itself is wrong (missing
 
 Try in order, stopping at the first success:
 
-**(a) Tactic ladder.** The default `grd lean prove` tries a fixed ladder (`rfl`, `decide`, `norm_num`, `simp`, `linarith`, `ring`, `omega`, `aesop`, `polyrith`). For simple claims this closes the goal immediately:
+**(a) Tactic ladder.** `grd lean prove` iterates the default ladder (cheap decidable tactics first, then arithmetic normalizers, then general-purpose closers). For simple claims this closes the goal immediately:
 
 ```bash
-grd lean prove "stmt_1 : ${statement}" --import "${imports}" --json
+# Source of truth: the CLI itself. Don't hardcode — it drifts.
+grd --raw lean prove --list-tactics
+
+# Then attempt:
+grd --raw lean prove "stmt_1 : ${statement}" --import "${imports}"
 ```
+
+Note: `polyrith` is **not** in the shipped default because it makes an external
+Sage API call (network dependency, unbounded latency). Pass it explicitly via
+`--tactic polyrith` when you want it.
 
 **(b) Premise retrieval.** For claims that need domain lemmas, use LeanDojo-style retrieval to seed a richer `aesop` call:
 

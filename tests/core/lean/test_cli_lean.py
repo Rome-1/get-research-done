@@ -181,3 +181,54 @@ def test_bootstrap_uninstall_dry_run(tmp_path: Path) -> None:
     parsed = json.loads(result.stdout)
     assert parsed["dry_run"] is True
     assert isinstance(parsed["paths"], list)
+
+
+def test_prove_list_tactics_raw_matches_default_ladder(tmp_path: Path) -> None:
+    # P0-7: the CLI is the single source of truth for the ladder. The agent
+    # doc (grd-prover.md) references this flag instead of hardcoding the list
+    # so a mismatch here is a regression.
+    from grd.core.lean.prove import DEFAULT_TACTIC_LADDER
+
+    (tmp_path / ".grd").mkdir()
+    result = runner.invoke(
+        app,
+        ["--raw", "--cwd", str(tmp_path), "lean", "prove", "--list-tactics"],
+    )
+    assert result.exit_code == 0, result.stdout
+    parsed = json.loads(result.stdout)
+    assert parsed == {"tactics": list(DEFAULT_TACTIC_LADDER)}
+
+
+def test_prove_list_tactics_excludes_polyrith() -> None:
+    # Doc drift guard: grd-prover.md used to advertise polyrith in the ladder
+    # but it depends on an external Sage API call — deliberately not shipped.
+    # If polyrith ever re-enters the default, update the agent doc too.
+    from grd.core.lean.prove import DEFAULT_TACTIC_LADDER
+
+    assert "polyrith" not in DEFAULT_TACTIC_LADDER
+
+
+def test_prove_without_statement_or_flag_errors(tmp_path: Path) -> None:
+    (tmp_path / ".grd").mkdir()
+    result = runner.invoke(app, ["--raw", "--cwd", str(tmp_path), "lean", "prove"])
+    assert result.exit_code != 0
+    # --raw routes the error through err_console as JSON; CliRunner merges
+    # stdout+stderr into .output. The message must point at the flag so a
+    # user who typos 'grd lean prove' learns about --list-tactics.
+    assert "--list-tactics" in result.output
+
+
+def test_prove_list_tactics_does_not_require_lean(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Metadata query: must work on a bare machine with no Lean installed.
+    (tmp_path / ".grd").mkdir()
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    result = runner.invoke(
+        app,
+        ["--raw", "--cwd", str(tmp_path), "lean", "prove", "--list-tactics"],
+    )
+    assert result.exit_code == 0, result.stdout
+    parsed = json.loads(result.stdout)
+    assert parsed["tactics"]  # non-empty list

@@ -210,11 +210,12 @@ def lean_typecheck_file(
 
 @lean_app.command("prove")
 def lean_prove(
-    statement: str = typer.Argument(
-        ...,
+    statement: str | None = typer.Argument(
+        None,
         help="Lean 4 statement to prove. Accepts a bare proposition (e.g. '1 + 1 = 2'), "
         "a signature with a keyword header ('theorem foo : P → P'), or a full definition "
-        "whose ':=' tail will be rewritten with each candidate tactic.",
+        "whose ':=' tail will be rewritten with each candidate tactic. "
+        "Omit only when passing --list-tactics.",
     ),
     tactic: list[str] = typer.Option(
         [],
@@ -250,15 +251,30 @@ def lean_prove(
         "--no-spawn",
         help="Do not auto-spawn the daemon if the socket is absent.",
     ),
+    list_tactics: bool = typer.Option(
+        False,
+        "--list-tactics",
+        help="Print the default tactic ladder as JSON and exit. Authoritative source "
+        "for tooling and agents that would otherwise hardcode the ladder and drift.",
+    ),
 ) -> None:
     """Tactic-search a proof for the given Lean 4 statement.
 
-    Iterates a fixed ladder of common tactics (``rfl``, ``decide``,
-    ``norm_num``, ``ring``, ``linarith``, ``omega``, ``simp``, ``aesop``)
-    and returns the first one that type-checks. Exit 0 on success, 1 if no
-    tactic closed the goal. JSON output is suitable for agent consumption.
+    Iterates the default ladder (``rfl``, ``decide``, ``norm_num``, ``ring``,
+    ``linarith``, ``omega``, ``simp``, ``aesop``) and returns the first one
+    that type-checks. Exit 0 on success, 1 if no tactic closed the goal.
+
+    Pass ``--list-tactics`` with no statement to dump the current ladder —
+    the single source of truth for agents and docs.
     """
-    from grd.core.lean.prove import prove_statement
+    from grd.core.lean.prove import DEFAULT_TACTIC_LADDER, prove_statement
+
+    if list_tactics:
+        _output({"tactics": list(DEFAULT_TACTIC_LADDER)})
+        return
+
+    if statement is None:
+        _error("Provide a Lean 4 statement, or pass --list-tactics to dump the default ladder.")
 
     result = prove_statement(
         statement,
