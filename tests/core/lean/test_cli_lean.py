@@ -280,6 +280,80 @@ def test_exit_code_for_result_maps_elaboration_error_to_soft_fail() -> None:
     assert _exit_code_for_result(result) == EXIT_SOFT_FAIL
 
 
+# ─── ge-4yl: _lean_internal_guard exception wrapping ──────────────────────
+
+
+def test_guard_catches_unexpected_exception_with_exit_4(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unexpected exceptions inside guarded commands must exit 4 with structured JSON."""
+    (tmp_path / ".grd").mkdir()
+
+    def _boom(*_a: object, **_kw: object) -> None:
+        raise RuntimeError("kaboom from test")
+
+    monkeypatch.setattr("grd.core.lean.bootstrap.run_bootstrap", _boom)
+
+    result = runner.invoke(
+        app,
+        ["--raw", "--cwd", str(tmp_path), "lean", "bootstrap"],
+    )
+    assert result.exit_code == 4, f"exit={result.exit_code} out={result.output!r}"
+    # err_console.print_json pretty-prints; parse the full output block.
+    parsed = json.loads(result.output)
+    assert parsed["ok"] is False
+    assert parsed["error"]["kind"] == "internal_error"
+    assert "kaboom from test" in parsed["error"]["message"]
+    assert parsed["error"]["detail"]  # non-empty traceback tail
+
+
+def test_guard_passes_through_known_exceptions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GRDError, KeyError, TimeoutError must NOT be caught by the guard."""
+    from grd.core.errors import GRDError
+
+    (tmp_path / ".grd").mkdir()
+
+    def _raise_grd(*_a: object, **_kw: object) -> None:
+        raise GRDError("deliberate GRDError")
+
+    monkeypatch.setattr("grd.core.lean.bootstrap.run_bootstrap", _raise_grd)
+
+    result = runner.invoke(
+        app,
+        ["--raw", "--cwd", str(tmp_path), "lean", "bootstrap"],
+    )
+    # _GRDTyper catches GRDError and exits 1, NOT 4.
+    assert result.exit_code == 1
+
+
+def test_guard_raw_output_for_unexpected_exception_in_verify_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """verify-claim must emit structured JSON for unexpected exceptions."""
+    (tmp_path / ".grd").mkdir()
+
+    def _boom(**_kw: object) -> None:
+        raise ValueError("bad pipeline value")
+
+    monkeypatch.setattr("grd.core.lean.autoformalize.verify_claim", _boom)
+
+    result = runner.invoke(
+        app,
+        ["--raw", "--cwd", str(tmp_path), "lean", "verify-claim", "x", "--no-llm"],
+    )
+    assert result.exit_code == 4
+    # Parse only the last JSON object (guard output, not any prior output).
+    parsed = json.loads(result.output)
+    assert parsed["ok"] is False
+    assert parsed["error"]["kind"] == "internal_error"
+    assert "bad pipeline value" in parsed["error"]["message"]
+
+
 def test_check_no_input_exits_with_input_error(tmp_path: Path) -> None:
     (tmp_path / ".grd").mkdir()
     # CliRunner simulates non-tty stdin, so stdin fallback reads empty → input error.
