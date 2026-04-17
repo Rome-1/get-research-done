@@ -193,5 +193,14 @@ class LeanEnvStatus(BaseModel):
     socket_path: str | None = None
     daemon_running: bool = False
     daemon_pid: int | None = None
+    daemon_responsive: bool | None = Field(
+        default=None,
+        description=(
+            "True if the daemon answered a real ping; False if the socket "
+            "exists but the daemon didn't respond (stale socket); None if "
+            "no daemon is expected to be running."
+        ),
+    )
+    daemon_log: str | None = None
     ready: bool = False
     blocked_by: list[str] = Field(default_factory=list)

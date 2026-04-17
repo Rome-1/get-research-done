@@ -250,3 +250,29 @@ def test_compute_env_status_daemon_state_does_not_affect_ready(
     status = lean_env.compute_env_status(isolated_project)
     assert status.daemon_running is False
     assert status.ready is True
+
+
+def test_daemon_log_path_lives_under_dot_grd(isolated_project: Path) -> None:
+    """ge-f9i: daemon log path must be project-local under .grd/."""
+    log = lean_env.daemon_log_path(isolated_project)
+    assert log == isolated_project / ".grd" / "lean-daemon.log"
+
+
+def test_compute_env_status_daemon_responsive_none_when_not_running(
+    isolated_project: Path,
+) -> None:
+    """When no daemon is running, daemon_responsive should be None (not False)."""
+    status = lean_env.compute_env_status(isolated_project)
+    assert status.daemon_responsive is None
+    assert status.daemon_log is not None
+
+
+def test_compute_env_status_daemon_responsive_false_for_stale_socket(
+    isolated_project: Path,
+) -> None:
+    """Stale socket (file exists, process dead) → daemon_responsive is False."""
+    sock = lean_env.socket_path(isolated_project)
+    sock.write_text("stale", encoding="utf-8")
+    status = lean_env.compute_env_status(isolated_project)
+    # Socket exists but no PID → stale socket detected.
+    assert status.daemon_responsive is False

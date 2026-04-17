@@ -23,13 +23,14 @@ import time
 from pathlib import Path
 
 from grd.core.lean import backend as lean_backend
-from grd.core.lean.env import socket_path
+from grd.core.lean.env import daemon_log_path, socket_path
 from grd.core.lean.protocol import LeanCheckRequest, LeanCheckResult
 
 __all__ = [
     "check",
     "check_file",
     "ping_daemon",
+    "read_daemon_log_tail",
     "shutdown_daemon",
     "spawn_daemon",
     "MAX_UNIX_SOCKET_PATH",
@@ -111,19 +112,38 @@ def _send_request(sock_path: Path, req: LeanCheckRequest, *, timeout_s: float) -
             pass
 
 
+_LOG_ROTATE_BYTES = 1 * 1024 * 1024  # 1 MiB
+
+
+def _rotate_log(log: Path) -> None:
+    """Rotate the daemon log if it exceeds ``_LOG_ROTATE_BYTES``.
+
+    Simple single-generation rotation: ``lean-daemon.log`` →
+    ``lean-daemon.log.1``. Old ``.1`` is overwritten silently.
+    """
+    try:
+        if log.exists() and log.stat().st_size > _LOG_ROTATE_BYTES:
+            rotated = log.with_suffix(log.suffix + ".1")
+            log.rename(rotated)
+    except OSError:
+        pass
+
+
 def spawn_daemon(
     project_root: Path,
     *,
     idle_timeout_s: float | None = None,
     python_exe: str | None = None,
-    wait_s: float = 3.0,
+    wait_s: float = 5.0,
 ) -> bool:
     """Attempt to start the daemon in a detached subprocess.
 
-    Returns True iff the socket appears on disk within ``wait_s`` seconds.
-    We spawn by invoking ``python -m grd.core.lean.daemon_entrypoint`` so
-    the daemon lives or dies on its own; the parent process does not have
-    to stay attached.
+    Returns True iff the daemon answers a real ``ping`` within ``wait_s``
+    seconds. Socket-existence alone is insufficient — a daemon that crashes
+    during startup will create the socket briefly then exit, leaving a stale
+    file (ge-f9i / P1-5). Stderr is captured to the project-local
+    ``.grd/lean-daemon.log`` so that startup failures produce a readable
+    log rather than vanishing into ``/dev/null``.
     """
     if not _socket_usable(project_root):
         return False
@@ -137,25 +157,47 @@ def spawn_daemon(
     # Ensure the grd package is importable in the child.
     env.setdefault("PYTHONUNBUFFERED", "1")
 
+    log = daemon_log_path(project_root)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    _rotate_log(log)
+
+    try:
+        log_fd = open(log, "a", buffering=1)  # noqa: SIM115
+    except OSError:
+        log_fd = None  # type: ignore[assignment]
+
     try:
         subprocess.Popen(
             args,
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log_fd or subprocess.DEVNULL,
+            stderr=log_fd or subprocess.DEVNULL,
             start_new_session=True,
             env=env,
         )
     except OSError:
+        if log_fd:
+            log_fd.close()
         return False
 
+    # The parent doesn't write to the log — only the child does via its
+    # inherited fd. Close our copy so we don't hold the file open.
+    if log_fd:
+        log_fd.close()
+
+    # Wait for the daemon to actually respond to a ping, not just create
+    # the socket file. A crash-on-startup daemon creates the socket during
+    # _bind_socket() then exits — polling only for the file would report
+    # "started" when the process is already dead.
     sock = socket_path(project_root)
     deadline = time.monotonic() + wait_s
     while time.monotonic() < deadline:
         if sock.exists():
-            return True
-        time.sleep(0.05)
-    return sock.exists()
+            if ping_daemon(project_root, timeout_s=1.0):
+                return True
+        time.sleep(0.1)
+    # One last attempt at the deadline boundary.
+    return ping_daemon(project_root, timeout_s=1.0)
 
 
 def ping_daemon(project_root: Path, *, timeout_s: float = 2.0) -> bool:
@@ -180,6 +222,34 @@ def shutdown_daemon(project_root: Path, *, timeout_s: float = 5.0) -> LeanCheckR
     return _send_request(sock, LeanCheckRequest(op="shutdown"), timeout_s=timeout_s)
 
 
+def read_daemon_log_tail(project_root: Path, lines: int = 20) -> str | None:
+    """Return the last ``lines`` of the daemon log, or ``None`` if absent/empty.
+
+    Used by the CLI to surface startup failures inline (ge-f9i / P1-5):
+    when the daemon doesn't come up, printing the log tail saves the user
+    from hunting for the file manually.
+    """
+    log = daemon_log_path(project_root)
+    if not log.exists():
+        return None
+    try:
+        text = log.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    if not text.strip():
+        return None
+    tail = text.rstrip("\n").rsplit("\n", lines)
+    # rsplit with maxsplit=lines returns at most lines+1 parts; take everything
+    # after the first split boundary.
+    if len(tail) > lines:
+        tail = tail[1:]
+    return "\n".join(tail)
+
+
+# Track the most recent spawn failure per-process so the CLI can surface it.
+_last_spawn_failed: dict[str, bool] = {}
+
+
 def _run_with_daemon(
     project_root: Path,
     req: LeanCheckRequest,
@@ -190,11 +260,14 @@ def _run_with_daemon(
     if not _socket_usable(project_root):
         return None
     sock = socket_path(project_root)
-    if not sock.exists():
+    key = str(project_root)
+    if not sock.exists() or not ping_daemon(project_root, timeout_s=1.0):
         if not auto_spawn:
             return None
         if not spawn_daemon(project_root):
+            _last_spawn_failed[key] = True
             return None
+    _last_spawn_failed.pop(key, None)
     result = _send_request(sock, req, timeout_s=req.timeout_s)
     if result.error == "daemon_unavailable":
         return None

@@ -99,6 +99,36 @@ def _print_prove_hints(result: ProveResult) -> None:
     err_console.print(f"  [dim]last tactic: {last_tactic}[/] {last_hint}", highlight=False)
 
 
+def _print_daemon_spawn_failure() -> None:
+    """Surface daemon startup failure with the log tail (ge-f9i / P1-5).
+
+    When the daemon failed to start the client falls back to one-shot
+    subprocess silently — the user doesn't know why things are slow or
+    broken. This helper reads the daemon log and shows the last ~20 lines
+    so they can diagnose the cause without hunting for the file.
+    """
+    if _helpers._raw:
+        return
+    from grd.core.lean.client import _last_spawn_failed, read_daemon_log_tail  # noqa: PLC0415
+    from grd.core.lean.env import daemon_log_path  # noqa: PLC0415
+
+    project_root = _get_cwd()
+    key = str(project_root)
+    if not _last_spawn_failed.get(key):
+        return
+    log = daemon_log_path(project_root)
+    err_console.print("")
+    err_console.print(
+        f"[bold yellow]daemon failed to start[/] — see {log}",
+        highlight=False,
+    )
+    tail = read_daemon_log_tail(project_root, lines=20)
+    if tail:
+        err_console.print("[dim]Last lines from daemon log:[/]", highlight=False)
+        for line in tail.splitlines():
+            err_console.print(f"  [dim]{line}[/]", highlight=False)
+
+
 def _print_verify_claim_warning(result: object) -> None:
     """Announce when escalation wanted to file a bead but couldn't.
 
@@ -230,6 +260,7 @@ def lean_check(
         )
 
     _output(result)
+    _print_daemon_spawn_failure()
     _print_diagnostic_hints(result)
     if not result.ok:
         raise typer.Exit(code=_exit_code_for_result(result))
@@ -257,6 +288,7 @@ def lean_typecheck_file(
         auto_spawn=not no_spawn,
     )
     _output(result)
+    _print_daemon_spawn_failure()
     _print_diagnostic_hints(result)
     if not result.ok:
         raise typer.Exit(code=_exit_code_for_result(result))
@@ -341,6 +373,7 @@ def lean_prove(
         auto_spawn=not no_spawn,
     )
     _output(result)
+    _print_daemon_spawn_failure()
     _print_prove_hints(result)
     if not result.ok:
         raise typer.Exit(code=_exit_code_for_result(result))
@@ -368,6 +401,16 @@ def lean_env() -> None:
                 f"[bold yellow]Lean environment not ready[/] — blocked on: {missing} "
                 "(run [cyan]/grd:lean-bootstrap[/] to install)"
             )
+        # Daemon responsiveness line (ge-f9i / P1-5).
+        if status.daemon_responsive is True:
+            console.print("[green]daemon: responsive[/] (pinged ok)")
+        elif status.daemon_responsive is False:
+            console.print(
+                f"[bold yellow]daemon: stale socket[/] — socket exists but daemon is unresponsive"
+                f"{' (see ' + status.daemon_log + ')' if status.daemon_log else ''}"
+            )
+        elif status.daemon_running:
+            console.print("[yellow]daemon: running but ping failed[/]")
     _output(status)
 
 

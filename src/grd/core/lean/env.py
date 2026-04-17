@@ -23,6 +23,8 @@ __all__ = [
     "LEAN_ENV_FILENAME",
     "LEAN_SOCKET_FILENAME",
     "LEAN_PID_FILENAME",
+    "LEAN_DAEMON_LOG_FILENAME",
+    "daemon_log_path",
     "ToolchainInfo",
     "detect_toolchain",
     "env_file_path",
@@ -38,6 +40,7 @@ __all__ = [
 LEAN_ENV_FILENAME = "lean-env.json"
 LEAN_SOCKET_FILENAME = "lean-repl.sock"
 LEAN_PID_FILENAME = "lean-repl.pid"
+LEAN_DAEMON_LOG_FILENAME = "lean-daemon.log"
 
 
 @dataclass(frozen=True)
@@ -73,6 +76,15 @@ def socket_path(project_root: Path) -> Path:
 
 def pid_file_path(project_root: Path) -> Path:
     return project_root / PLANNING_DIR_NAME / LEAN_PID_FILENAME
+
+
+def daemon_log_path(project_root: Path) -> Path:
+    """Return the path to the daemon startup/error log.
+
+    The daemon writes its stderr here so that spawn failures produce a
+    readable log rather than vanishing into ``/dev/null`` (ge-f9i / P1-5).
+    """
+    return project_root / PLANNING_DIR_NAME / LEAN_DAEMON_LOG_FILENAME
 
 
 def _run_version(cmd: list[str], timeout: float = 2.0) -> str | None:
@@ -224,13 +236,33 @@ def _mathlib_cache_blocked(env_data: dict[str, object]) -> bool:
 
 
 def compute_env_status(project_root: Path) -> LeanEnvStatus:
-    """Build the ``grd lean env`` / status response from live host state."""
+    """Build the ``grd lean env`` / status response from live host state.
+
+    Daemon responsiveness is checked with a real ping when the PID +
+    socket look alive (ge-f9i / P1-5). The result is ``True`` for a
+    healthy daemon, ``False`` for a stale socket (process died without
+    cleanup), and ``None`` when no daemon is expected.
+    """
     tc = detect_toolchain()
     env_path = env_file_path(project_root)
     sock = socket_path(project_root)
+    log = daemon_log_path(project_root)
     pid = _read_daemon_pid(project_root)
     daemon_running = pid is not None and _pid_alive(pid) and sock.exists()
     pantograph_ok = pantograph_available()
+
+    # Determine responsiveness: only attempt a ping when the daemon looks
+    # alive (PID exists + socket file present). When the daemon is down,
+    # report None rather than False to distinguish "not running" from
+    # "running but unresponsive".
+    daemon_responsive: bool | None = None
+    if daemon_running:
+        from grd.core.lean.client import ping_daemon  # noqa: PLC0415
+
+        daemon_responsive = ping_daemon(project_root, timeout_s=2.0)
+    elif sock.exists():
+        # Socket file exists but process is dead → stale socket.
+        daemon_responsive = False
 
     present: dict[str, bool] = {
         "elan": tc.elan_path is not None,
@@ -256,6 +288,8 @@ def compute_env_status(project_root: Path) -> LeanEnvStatus:
         socket_path=str(sock),
         daemon_running=daemon_running,
         daemon_pid=pid if daemon_running else None,
+        daemon_responsive=daemon_responsive,
+        daemon_log=str(log),
         ready=not blocked_by,
         blocked_by=blocked_by,
     )
