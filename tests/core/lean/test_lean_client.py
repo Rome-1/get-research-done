@@ -94,6 +94,55 @@ def test_socket_path_too_long_forces_fallback(tmp_path: Path, monkeypatch: pytes
     assert result.ok is True
 
 
+def test_spawn_daemon_creates_log_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ge-f9i: daemon stderr must go to .grd/lean-daemon.log, not /dev/null."""
+    (tmp_path / ".grd").mkdir()
+    _stub_lean(tmp_path / "bin")
+    monkeypatch.setenv("PATH", str(tmp_path / "bin") + os.pathsep + os.environ["PATH"])
+
+    log = lean_env.daemon_log_path(tmp_path)
+    assert not log.exists(), "log should not exist before spawn"
+
+    try:
+        lean_client.spawn_daemon(tmp_path, wait_s=5.0)
+        # Log file must be created — even if daemon writes nothing,
+        # the open("a") in spawn_daemon creates it.
+        assert log.exists(), f"expected daemon log at {log}"
+    finally:
+        if lean_env.socket_path(tmp_path).exists():
+            lean_client.shutdown_daemon(tmp_path)
+            deadline = time.monotonic() + 2.0
+            while time.monotonic() < deadline and lean_env.socket_path(tmp_path).exists():
+                time.sleep(0.05)
+
+
+def test_read_daemon_log_tail_returns_none_when_absent(tmp_path: Path) -> None:
+    (tmp_path / ".grd").mkdir()
+    assert lean_client.read_daemon_log_tail(tmp_path) is None
+
+
+def test_read_daemon_log_tail_returns_last_lines(tmp_path: Path) -> None:
+    (tmp_path / ".grd").mkdir()
+    log = lean_env.daemon_log_path(tmp_path)
+    log.write_text("\n".join(f"line {i}" for i in range(50)), encoding="utf-8")
+    tail = lean_client.read_daemon_log_tail(tmp_path, lines=5)
+    assert tail is not None
+    lines = tail.splitlines()
+    assert len(lines) == 5
+    assert lines[-1] == "line 49"
+
+
+def test_log_rotation_renames_large_file(tmp_path: Path) -> None:
+    (tmp_path / ".grd").mkdir()
+    log = lean_env.daemon_log_path(tmp_path)
+    # Write > 1 MiB to trigger rotation.
+    log.write_text("x" * (lean_client._LOG_ROTATE_BYTES + 100), encoding="utf-8")
+    lean_client._rotate_log(log)
+    rotated = log.with_suffix(log.suffix + ".1")
+    assert rotated.exists()
+    assert not log.exists()
+
+
 def test_auto_spawn_starts_daemon_and_routes_request(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / ".grd").mkdir()
     _stub_lean(tmp_path / "bin")
