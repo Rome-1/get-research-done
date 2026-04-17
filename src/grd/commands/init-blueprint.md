@@ -1,7 +1,7 @@
 ---
 name: grd:init-blueprint
-description: "Planned (Phase 2) — scaffold blueprint/ directory inside the current phase. See research/formal-proof-integration/STATUS.md."
-argument-hint: "[--phase N] [--force]"
+description: "Scaffold a leanblueprint-compatible blueprint/ directory inside the given phase."
+argument-hint: "<phase> [--force]"
 context_mode: project-required
 requires:
   files: [".grd/PROJECT.md"]
@@ -12,11 +12,12 @@ allowed-tools:
 ---
 
 <objective>
-**This skill is not implemented yet.** It is a planned Phase 2 landing pad so
-that `/grd:` autocomplete finds an explanatory page instead of a 404.
+Generate a leanblueprint-compatible directory under the specified phase.
+Maps GRD plan entries to blueprint nodes (`\begin{lemma}`/`\begin{theorem}`),
+plan `depends_on` edges to `\uses{...}`, and creates stub `.lean` proof
+files under `Proofs/`.
 
-When shipped, `/grd:init-blueprint` will create the Leanblueprint-compatible
-directory under the current phase:
+The output directory is `phases/{N}/blueprint/` with:
 
 ```
 phases/{N}/
@@ -28,32 +29,15 @@ phases/{N}/
     Blueprint.lean     # Module root importing Proofs/
 ```
 
-Additionally, it will:
+The CLI primitive is:
 
-- Pin the Lean toolchain (from `.grd/lean-env.json` written by
-  `/grd:lean-bootstrap`).
-- Generate a convention preamble Lean file from `state.json` convention
-  locks (Convention Bridge, see PITCH §Convention Bridge).
-- Register the blueprint directory with the phase's `VERIFICATION.md` so
-  checks 5.20 / 5.21 (`universal.formal_statement` / `universal.formal_proof`,
-  already shipped) know where to look.
+```bash
+grd lean init-blueprint <phase> [--force] [--json]
+```
 </objective>
 
 <status>
-- **Phase:** 2 (Blueprint Integration) — see
-  [PITCH §Phase 2](../../../research/formal-proof-integration/PITCH.md#phase-2-blueprint-integration-3-4-weeks).
-- **Depends on:** Phase 1 bootstrap shipped; convention-bridge Lean template
-  not yet written; Leanblueprint integrated as a Python dependency.
-- **Tracking bead:** file a new bead under ge-wisp-rnf6 when work starts.
-
-See [STATUS.md](../../../research/formal-proof-integration/STATUS.md) for
-current status across formal-proof skills and CLI commands.
+- **Phase:** 2 (Blueprint Integration) — **shipped**.
+- See [STATUS.md](../../../research/formal-proof-integration/STATUS.md) for
+  the full shipped/planned matrix.
 </status>
-
-<fallback>
-No CLI fallback ships today. If you need a blueprint right now, follow the
-manual scaffold Patrick Massot documents at
-<https://github.com/PatrickMassot/leanblueprint> and drop it under
-`phases/{N}/blueprint/`. When `/grd:init-blueprint` ships, existing manual
-scaffolds will be detected and upgraded, not overwritten.
-</fallback>
