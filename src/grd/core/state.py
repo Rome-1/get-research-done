@@ -74,6 +74,7 @@ from grd.core.extras import Uncertainty as PropagatedUncertainty
 from grd.core.observability import grd_span, instrument_grd_function
 from grd.core.results import IntermediateResult
 from grd.core.utils import (
+    _replace_with_retry,
     atomic_write,
     compare_phase_numbers,
     file_lock,
