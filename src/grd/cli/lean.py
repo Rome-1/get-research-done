@@ -7,6 +7,10 @@ for the layering rationale and PITCH.md §Architecture Design for the
 
 from __future__ import annotations
 
+import contextlib
+import json
+import traceback
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -54,6 +58,46 @@ def _exit_code_for_result(result: object) -> int:
     if error_kind is not None:
         return _ERROR_KIND_TO_EXIT.get(error_kind, EXIT_INTERNAL_ERROR)
     return EXIT_SOFT_FAIL
+
+
+@contextlib.contextmanager
+def _lean_internal_guard() -> Iterator[None]:
+    """Catch unexpected exceptions and emit structured error JSON.
+
+    Wraps commands whose call stacks are deep and hard to predict
+    (verify-claim, bootstrap, daemon ops). Known exception classes
+    that ``_GRDTyper`` already handles are re-raised so their existing
+    exit semantics are preserved.
+    """
+    from grd.core.errors import GRDError
+
+    try:
+        yield
+    except (GRDError, KeyError, TimeoutError, typer.Exit):
+        raise  # _GRDTyper handles these; typer.Exit is a RuntimeError subclass
+    except Exception as exc:
+        # Capture the tail of the traceback (last 6 frames) for diagnostics
+        # without dumping the full stack at the user.
+        tb_lines = traceback.format_exception(type(exc), exc, exc.__traceback__)
+        tb_tail = "".join(tb_lines[-6:]).strip()
+
+        payload = {
+            "ok": False,
+            "error": {
+                "kind": "internal_error",
+                "message": str(exc),
+                "detail": tb_tail,
+            },
+        }
+        if _helpers._raw:
+            err_console.print_json(json.dumps(payload))
+        else:
+            err_console.print(
+                f"[bold red]Internal error:[/] {exc}\n"
+                f"[dim](Run with --raw for machine-readable diagnostics.)[/]",
+                highlight=False,
+            )
+        raise typer.Exit(code=EXIT_INTERNAL_ERROR) from None
 
 
 def _print_diagnostic_hints(result: LeanCheckResult) -> None:
@@ -427,55 +471,57 @@ def lean_verify_claim(
     Requires ``ANTHROPIC_API_KEY`` (and the ``autoformalize`` optional extra)
     unless ``--no-llm`` is passed.
     """
-    import os as _os  # noqa: PLC0415
-
-    from grd.core.lean.autoformalize import (
-        AutoformalizeConfig,
-        MockLLM,
-        VerifyClaimResult,
-        load_autoformalize_config,
-        verify_claim,
-    )
-
     if physics and no_physics:
         _error("Pass at most one of --physics / --no-physics.", code=EXIT_INPUT_ERROR)
-    physics_override: bool | None
-    if physics:
-        physics_override = True
-    elif no_physics:
-        physics_override = False
-    else:
-        physics_override = None
 
-    project_root = _get_cwd()
-    config: AutoformalizeConfig = load_autoformalize_config(project_root)
+    with _lean_internal_guard():
+        import os as _os  # noqa: PLC0415
 
-    llm: object
-    if no_llm:
-        llm = MockLLM(responses=_unconfigured_llm_responses(config.num_candidates))
-    else:
-        from grd.core.lean.autoformalize.llm import AnthropicLLM  # noqa: PLC0415
+        from grd.core.lean.autoformalize import (
+            AutoformalizeConfig,
+            MockLLM,
+            VerifyClaimResult,
+            load_autoformalize_config,
+            verify_claim,
+        )
 
-        api_key = _os.environ.get("ANTHROPIC_API_KEY")
-        llm = AnthropicLLM(model_id=config.model_id, api_key=api_key)
+        physics_override: bool | None
+        if physics:
+            physics_override = True
+        elif no_physics:
+            physics_override = False
+        else:
+            physics_override = None
 
-    result: VerifyClaimResult = verify_claim(
-        claim=claim,
-        project_root=project_root,
-        llm=llm,  # type: ignore[arg-type]
-        config=config,
-        phase=phase,
-        physics_override=physics_override,
-        imports=list(import_module) if import_module else None,
-        timeout_s=timeout_s,
-        use_daemon=not no_daemon,
-    )
+        project_root = _get_cwd()
+        config: AutoformalizeConfig = load_autoformalize_config(project_root)
 
-    _output(_verify_result_to_dict(result))
-    _print_verify_claim_warning(result)
-    _print_verify_claim_hints(result)
-    if result.outcome != "auto_accept":
-        raise typer.Exit(code=1)
+        llm: object
+        if no_llm:
+            llm = MockLLM(responses=_unconfigured_llm_responses(config.num_candidates))
+        else:
+            from grd.core.lean.autoformalize.llm import AnthropicLLM  # noqa: PLC0415
+
+            api_key = _os.environ.get("ANTHROPIC_API_KEY")
+            llm = AnthropicLLM(model_id=config.model_id, api_key=api_key)
+
+        result: VerifyClaimResult = verify_claim(
+            claim=claim,
+            project_root=project_root,
+            llm=llm,  # type: ignore[arg-type]
+            config=config,
+            phase=phase,
+            physics_override=physics_override,
+            imports=list(import_module) if import_module else None,
+            timeout_s=timeout_s,
+            use_daemon=not no_daemon,
+        )
+
+        _output(_verify_result_to_dict(result))
+        _print_verify_claim_warning(result)
+        _print_verify_claim_hints(result)
+        if result.outcome != "auto_accept":
+            raise typer.Exit(code=1)
 
 
 def _unconfigured_llm_responses(n: int) -> list[str]:
@@ -556,28 +602,29 @@ def lean_bootstrap(
     LeanDojo) require both the flag AND ``--yes``. State is recorded to
     ``.grd/lean-env.json`` after every stage so partial runs resume cleanly.
     """
-    from grd.core.lean.bootstrap import BootstrapOptions, run_bootstrap, uninstall
+    with _lean_internal_guard():
+        from grd.core.lean.bootstrap import BootstrapOptions, run_bootstrap, uninstall
 
-    project_root = _get_cwd()
-    if uninstall_flag:
-        _output(uninstall(project_root, dry_run=dry_run))
-        return
+        project_root = _get_cwd()
+        if uninstall_flag:
+            _output(uninstall(project_root, dry_run=dry_run))
+            return
 
-    report = run_bootstrap(
-        project_root,
-        options=BootstrapOptions(
-            yes=yes,
-            with_graphviz=with_graphviz,
-            with_tectonic=with_tectonic,
-            with_mathlib_cache=with_mathlib_cache,
-            with_leandojo=with_leandojo,
-            dry_run=dry_run,
-            force=force,
-        ),
-    )
-    _output(report)
-    if not report.ok:
-        raise typer.Exit(code=EXIT_ENV_ERROR)
+        report = run_bootstrap(
+            project_root,
+            options=BootstrapOptions(
+                yes=yes,
+                with_graphviz=with_graphviz,
+                with_tectonic=with_tectonic,
+                with_mathlib_cache=with_mathlib_cache,
+                with_leandojo=with_leandojo,
+                dry_run=dry_run,
+                force=force,
+            ),
+        )
+        _output(report)
+        if not report.ok:
+            raise typer.Exit(code=EXIT_ENV_ERROR)
 
 
 @lean_app.command("serve-repl")
@@ -604,31 +651,33 @@ def lean_serve_repl(
     daemon on the first ``grd lean check``. Exposed for debugging and for
     integration tests.
     """
-    from grd.core.lean.daemon import serve
-    from grd.core.lean.env import socket_path
+    with _lean_internal_guard():
+        from grd.core.lean.daemon import serve
+        from grd.core.lean.env import socket_path
 
-    project_root = _get_cwd()
-    if detach:
-        from grd.core.lean.client import spawn_daemon
+        project_root = _get_cwd()
+        if detach:
+            from grd.core.lean.client import spawn_daemon
 
-        ok = spawn_daemon(project_root, idle_timeout_s=idle_timeout_s)
-        if not ok:
-            _error(
-                f"Failed to spawn detached daemon (socket never appeared at {socket_path(project_root)}).",
-                code=EXIT_ENV_ERROR,
-            )
-        _output({"ok": True, "socket": str(socket_path(project_root))})
-        return
+            ok = spawn_daemon(project_root, idle_timeout_s=idle_timeout_s)
+            if not ok:
+                _error(
+                    f"Failed to spawn detached daemon (socket never appeared at {socket_path(project_root)}).",
+                    code=EXIT_ENV_ERROR,
+                )
+            _output({"ok": True, "socket": str(socket_path(project_root))})
+            return
 
-    serve(project_root, idle_timeout_s=idle_timeout_s, read_timeout_s=read_timeout_s)
+        serve(project_root, idle_timeout_s=idle_timeout_s, read_timeout_s=read_timeout_s)
 
 
 @lean_app.command("stop-repl")
 def lean_stop_repl() -> None:
     """Ask the running daemon to shut down."""
-    from grd.core.lean.client import shutdown_daemon
+    with _lean_internal_guard():
+        from grd.core.lean.client import shutdown_daemon
 
-    _output(shutdown_daemon(_get_cwd()))
+        _output(shutdown_daemon(_get_cwd()))
 
 
 @lean_app.command("ping")
