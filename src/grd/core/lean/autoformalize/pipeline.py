@@ -43,6 +43,7 @@ from grd.core.lean.autoformalize.repair import (
     RepairOutcome,
     repair_candidate,
 )
+from grd.core.lean.events import EventCallback, StageCompleted, StageStarted
 
 if TYPE_CHECKING:
     from grd.core.lean.autoformalize.llm import LLMBackend
@@ -113,6 +114,7 @@ def verify_claim(
     escalate_fn: Callable[..., BeadEscalationResult] | None = None,
     use_daemon: bool = True,
     timeout_s: float = 30.0,
+    on_event: EventCallback = None,
 ) -> VerifyClaimResult:
     """Run stages 1→6 for one informal claim and return the verdict.
 
@@ -120,8 +122,15 @@ def verify_claim(
     them in only when they already built one (batch runs, tests, etc.).
     ``lean_check`` and ``escalate_fn`` are seams for tests — production callers
     leave them at ``None`` and get the real lean client / ``bd create`` shell-out.
+
+    ``on_event`` receives ``StageStarted`` / ``StageCompleted`` events for each
+    of the 6 pipeline stages.
     """
+    _emit = on_event or (lambda _e: None)
     cfg = config or load_autoformalize_config(project_root)
+
+    # Stage 1: Extract
+    _emit(StageStarted(stage="extract"))
     idx = index or load_default_index(project_root, cfg)
     blueprint = extract_blueprint_context(
         claim=claim,
@@ -136,14 +145,24 @@ def verify_claim(
             "drop a newline-delimited identifier snapshot into "
             ".grd/mathlib4-names.txt to enable grounded retrieval"
         )
+    _emit(StageCompleted(stage="extract", status="ok"))
 
+    # Stage 2: Retrieve  (index loading happened above — report it)
+    _emit(StageStarted(stage="retrieve"))
+    _emit(StageCompleted(stage="retrieve", status="ok", detail=f"index: {idx.source} ({idx.size} names)"))
+
+    # Stage 3: Generate
+    _emit(StageStarted(stage="generate"))
     candidates = generate_candidates(
         blueprint=blueprint,
         index=idx,
         llm=llm,
         config=cfg,
     )
+    _emit(StageCompleted(stage="generate", status="ok", detail=f"{len(candidates)} candidates"))
 
+    # Stage 4: Compile-repair
+    _emit(StageStarted(stage="compile_repair"))
     candidate_results: list[CandidateResult] = []
     compiled: list[CandidateResult] = []
 
@@ -164,14 +183,21 @@ def verify_claim(
         candidate_results.append(result)
         if repair.ok:
             compiled.append(result)
+    _emit(StageCompleted(
+        stage="compile_repair",
+        status="ok" if compiled else "failed",
+        detail=f"{len(compiled)}/{len(candidate_results)} compiled",
+    ))
 
     if not compiled:
+        _emit(StageStarted(stage="gate"))
         esc = _escalate_no_compile(
             claim=claim,
             candidates=candidate_results,
             project_root=project_root,
             escalate_fn=escalate_fn,
         )
+        _emit(StageCompleted(stage="gate", status="escalate", detail="no candidate compiled"))
         final_outcome, warning = _promote_unfiled_outcome(base_outcome="escalate", escalation=esc)
         return VerifyClaimResult(
             claim=claim,
@@ -189,7 +215,8 @@ def verify_claim(
             escalation_error=esc.error if esc else None,
         )
 
-    # Score every compiled candidate so we have a cluster to reason over.
+    # Stage 5: Faithfulness
+    _emit(StageStarted(stage="faithfulness"))
     scored: list[CandidateResult] = []
     for r in compiled:
         fr = assess_faithfulness(
@@ -205,6 +232,7 @@ def verify_claim(
                 index=r.index, candidate=r.candidate, repair=r.repair, faithfulness=fr, decision=provisional
             )
         )
+    _emit(StageCompleted(stage="faithfulness", status="ok", detail=f"{len(scored)} scored"))
 
     # Pick the top-scoring compiled candidate; compute cluster consensus over
     # back-translations using the same Jaccard primitive so the MVP is
@@ -213,6 +241,8 @@ def verify_claim(
     winner = scored[0]
     assert winner.faithfulness is not None  # compiled path always produces one
 
+    # Stage 6: Gate
+    _emit(StageStarted(stage="gate"))
     cluster_size = _cluster_consensus_size(winner, scored, config=cfg)
     decision = decide_faithfulness(
         similarity=winner.faithfulness.similarity,
@@ -247,6 +277,7 @@ def verify_claim(
             project_root=project_root,
             escalate_fn=escalate_fn,
         )
+    _emit(StageCompleted(stage="gate", status=decision.outcome))
 
     chosen_source = winner.repair.final_source if decision.outcome == "auto_accept" else None
     final_outcome, warning = _promote_unfiled_outcome(base_outcome=decision.outcome, escalation=escalation)
