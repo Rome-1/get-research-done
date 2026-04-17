@@ -10,6 +10,7 @@ import pytest
 from typer.testing import CliRunner
 
 from grd.cli import app
+from grd.cli.lean import EXIT_ENV_ERROR, EXIT_INPUT_ERROR, EXIT_SOFT_FAIL
 
 runner = CliRunner()
 
@@ -78,7 +79,8 @@ def test_check_with_missing_lean_exits_nonzero_and_emits_error(
             "--no-daemon",
         ],
     )
-    assert result.exit_code == 1
+    # ge-oc0: lean_not_found is an environment error → exit 3, not 1.
+    assert result.exit_code == EXIT_ENV_ERROR
     parsed = json.loads(result.stdout)
     assert parsed["ok"] is False
     assert parsed["error"] == "lean_not_found"
@@ -125,7 +127,8 @@ def test_check_rejects_both_inline_code_and_file(tmp_path: Path) -> None:
             str(lean_file),
         ],
     )
-    assert result.exit_code != 0
+    # ge-oc0: bad flag combo is a user input error → exit 2.
+    assert result.exit_code == EXIT_INPUT_ERROR
 
 
 def test_typecheck_file_nonexistent_errors(tmp_path: Path) -> None:
@@ -140,7 +143,8 @@ def test_typecheck_file_nonexistent_errors(tmp_path: Path) -> None:
             str(tmp_path / "nope.lean"),
         ],
     )
-    assert result.exit_code != 0
+    # ge-oc0: nonexistent file is user input error → exit 2.
+    assert result.exit_code == EXIT_INPUT_ERROR
 
 
 def test_ping_when_no_daemon_exits_nonzero(tmp_path: Path) -> None:
@@ -211,7 +215,8 @@ def test_prove_list_tactics_excludes_polyrith() -> None:
 def test_prove_without_statement_or_flag_errors(tmp_path: Path) -> None:
     (tmp_path / ".grd").mkdir()
     result = runner.invoke(app, ["--raw", "--cwd", str(tmp_path), "lean", "prove"])
-    assert result.exit_code != 0
+    # ge-oc0: missing required argument is user input error → exit 2.
+    assert result.exit_code == EXIT_INPUT_ERROR
     # --raw routes the error through err_console as JSON; CliRunner merges
     # stdout+stderr into .output. The message must point at the flag so a
     # user who typos 'grd lean prove' learns about --list-tactics.
@@ -232,3 +237,55 @@ def test_prove_list_tactics_does_not_require_lean(
     assert result.exit_code == 0, result.stdout
     parsed = json.loads(result.stdout)
     assert parsed["tactics"]  # non-empty list
+
+
+# ─── ge-oc0: split exit code contract tests ─────────────────────────────────
+
+
+def test_exit_code_constants_match_spec() -> None:
+    """Guard the contract: if the constants change, tests will catch the drift."""
+    from grd.cli.lean import EXIT_ENV_ERROR, EXIT_INPUT_ERROR, EXIT_INTERNAL_ERROR, EXIT_SOFT_FAIL
+
+    assert EXIT_SOFT_FAIL == 1
+    assert EXIT_INPUT_ERROR == 2
+    assert EXIT_ENV_ERROR == 3
+    assert EXIT_INTERNAL_ERROR == 4
+
+
+def test_exit_code_for_result_maps_lean_not_found_to_env() -> None:
+    from grd.cli.lean import _exit_code_for_result
+    from grd.core.lean.protocol import LeanCheckResult
+
+    result = LeanCheckResult(ok=False, error="lean_not_found", error_detail="lean binary not on PATH")
+    assert _exit_code_for_result(result) == EXIT_ENV_ERROR
+
+
+def test_exit_code_for_result_maps_internal_error_to_internal() -> None:
+    from grd.cli.lean import EXIT_INTERNAL_ERROR, _exit_code_for_result
+    from grd.core.lean.protocol import LeanCheckResult
+
+    result = LeanCheckResult(ok=False, error="internal_error", error_detail="unexpected crash")
+    assert _exit_code_for_result(result) == EXIT_INTERNAL_ERROR
+
+
+def test_exit_code_for_result_maps_elaboration_error_to_soft_fail() -> None:
+    from grd.cli.lean import _exit_code_for_result
+    from grd.core.lean.protocol import LeanCheckResult, LeanDiagnostic
+
+    # ok=False with no error field → elaboration error (Lean said "no").
+    result = LeanCheckResult(
+        ok=False,
+        diagnostics=[LeanDiagnostic(severity="error", message="type mismatch")],
+    )
+    assert _exit_code_for_result(result) == EXIT_SOFT_FAIL
+
+
+def test_check_no_input_exits_with_input_error(tmp_path: Path) -> None:
+    (tmp_path / ".grd").mkdir()
+    # CliRunner simulates non-tty stdin, so stdin fallback reads empty → input error.
+    result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "lean", "check"],
+        input="",
+    )
+    assert result.exit_code == EXIT_INPUT_ERROR

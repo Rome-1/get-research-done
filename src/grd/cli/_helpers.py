@@ -87,13 +87,13 @@ def _pretty_print(d: dict) -> None:
     console.print(table)
 
 
-def _error(msg: str) -> NoReturn:
+def _error(msg: str, *, code: int = 1) -> NoReturn:
     """Print error and exit -- JSON when --raw, rich text otherwise."""
     if _raw:
         err_console.print_json(json.dumps({"error": str(msg)}))
     else:
         err_console.print(f"[bold red]Error:[/] {msg}", highlight=False)
-    raise typer.Exit(code=1)
+    raise typer.Exit(code=code)
 
 
 def _get_cwd() -> Path:
