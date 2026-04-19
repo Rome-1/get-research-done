@@ -1,6 +1,6 @@
 # Formal-Proof Integration — Status
 
-**Last updated:** 2026-04-17 (bead ge-8g5)
+**Last updated:** 2026-04-17 (bead ge-2zu)
 **Pitch:** [PITCH.md](./PITCH.md)
 **Epic:** ge-wisp-rnf6 (mol-polecat-work)
 
@@ -61,6 +61,19 @@ parser regardless of position, so `grd lean check '...' --json` and
 documentation — `--raw` is kept for backwards compatibility with existing
 skill bodies and agent plumbing. Wired in `src/grd/cli/_helpers.py`
 (`@app.callback` + `_split_global_cli_options`).
+
+### JSON schema: goal-state fields (ge-2zu)
+
+As of ge-2zu, the following goal-state fields are present in CLI JSON output:
+
+- **`LeanCheckResult`** (wire format): `goals_before: list[str] | null`, `goals_after: list[str] | null`
+- **`ProofAttempt`** (prove output): `goal_before: str | null`, `goal_after: list[str] | null`
+- **`VerifyClaimResult`** (verify-claim output): `chosen_goals: list[str] | null`
+- **`RepairOutcome`** (repair trace): `goals_after: list[str] | null`
+
+Semantics: `[]` = all goals closed (success), `null` = goal state unavailable
+(syntax error, non-tactic mode), `["⊢ …", …]` = unsolved goals remain.
+Human-readable CLI uses `--show-goal` to display goals below diagnostics.
 
 ## Agents
 

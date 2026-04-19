@@ -115,6 +115,24 @@ class LeanCheckResult(BaseModel):
     error: LeanErrorKind | None = None
     error_detail: str | None = None
     backend: Literal["subprocess", "daemon", "pantograph"] = "subprocess"
+    goals_before: list[str] | None = Field(
+        default=None,
+        description=(
+            "Proof-state goals at the start of elaboration, each rendered as "
+            "a multi-line string with hypothesis context and turnstile target "
+            "(e.g. 'x : Nat\\n⊢ x + 0 = x'). Populated when the backend can "
+            "infer the initial goal; None otherwise."
+        ),
+    )
+    goals_after: list[str] | None = Field(
+        default=None,
+        description=(
+            "Remaining proof-state goals after elaboration. Empty list when "
+            "the proof is complete (ok=True in tactic mode); populated from "
+            "'unsolved goals' diagnostics on failure. None when goal state "
+            "is unavailable (e.g. syntax error, non-tactic compilation)."
+        ),
+    )
 
 
 BootstrapStageStatus = Literal[

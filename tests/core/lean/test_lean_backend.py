@@ -233,6 +233,40 @@ class TestRunCheck:
         assert "import Std.Data.Nat.Basic" in src
         assert "theorem t : 1 = 1 := rfl" in src
 
+    def test_success_populates_goals_after_empty_list(self, tmp_path: Path) -> None:
+        """A clean compile with no unsolved goals sets ``goals_after=[]``."""
+        fake_lean = _write_fake_lean(tmp_path, stdout="", stderr="", exit_code=0)
+        result = lean_backend.run_check(
+            code="example : 1 + 1 = 2 := by norm_num",
+            lean_path=str(fake_lean),
+        )
+        assert result.ok is True
+        assert result.goals_after == []
+
+    def test_unsolved_goals_populates_goals_after(self, tmp_path: Path) -> None:
+        """Unsolved-goals diagnostics are extracted into ``goals_after``."""
+        stderr = "/tmp/x.lean:5:0: error: unsolved goals\n  x : Nat\n  ⊢ x + 0 = x\n"
+        fake_lean = _write_fake_lean(tmp_path, stderr=stderr, exit_code=1)
+        result = lean_backend.run_check(
+            code="theorem t (x : Nat) : x + 0 = x := by skip",
+            lean_path=str(fake_lean),
+        )
+        assert result.ok is False
+        assert result.goals_after is not None
+        assert len(result.goals_after) == 1
+        assert "⊢ x + 0 = x" in result.goals_after[0]
+
+    def test_non_goal_error_leaves_goals_after_none(self, tmp_path: Path) -> None:
+        """Syntax/identifier errors that aren't unsolved goals → goals_after=None."""
+        stderr = "/tmp/x.lean:1:0: error: unknown identifier 'foo'\n"
+        fake_lean = _write_fake_lean(tmp_path, stderr=stderr, exit_code=1)
+        result = lean_backend.run_check(
+            code="#check foo",
+            lean_path=str(fake_lean),
+        )
+        assert result.ok is False
+        assert result.goals_after is None
+
     def test_tempfile_removed_after_run(self, tmp_path: Path) -> None:
         fake_lean = _write_fake_lean(tmp_path)
         before = {p.name for p in Path("/tmp").iterdir() if p.name.startswith("grd_lean_check_")}
@@ -243,3 +277,60 @@ class TestRunCheck:
         after = {p.name for p in Path("/tmp").iterdir() if p.name.startswith("grd_lean_check_")}
         # No grd tempfiles added by our call.
         assert after - before == set()
+
+
+class TestExtractGoals:
+    """Tests for ``extract_goals`` — goal extraction from diagnostics (ge-2zu)."""
+
+    def test_empty_diagnostics_yields_empty(self) -> None:
+        assert lean_backend.extract_goals([]) == []
+
+    def test_single_unsolved_goal_extracted(self) -> None:
+        diag = lean_backend.LeanDiagnostic(
+            severity="error",
+            message="unsolved goals\nx : Nat\n⊢ x + 0 = x",
+        )
+        goals = lean_backend.extract_goals([diag])
+        assert len(goals) == 1
+        assert "⊢ x + 0 = x" in goals[0]
+
+    def test_multiple_goals_split_on_double_newline(self) -> None:
+        diag = lean_backend.LeanDiagnostic(
+            severity="error",
+            message="unsolved goals\n⊢ 1 = 1\n\n⊢ 2 = 2",
+        )
+        goals = lean_backend.extract_goals([diag])
+        assert len(goals) == 2
+        assert "⊢ 1 = 1" in goals[0]
+        assert "⊢ 2 = 2" in goals[1]
+
+    def test_warnings_and_info_ignored(self) -> None:
+        diags = [
+            lean_backend.LeanDiagnostic(severity="warning", message="⊢ False"),
+            lean_backend.LeanDiagnostic(severity="info", message="unsolved goals\n⊢ True"),
+        ]
+        assert lean_backend.extract_goals(diags) == []
+
+    def test_non_goal_error_ignored(self) -> None:
+        diag = lean_backend.LeanDiagnostic(
+            severity="error",
+            message="unknown identifier 'foo'",
+        )
+        assert lean_backend.extract_goals([diag]) == []
+
+    def test_goal_without_turnstile_filtered(self) -> None:
+        diag = lean_backend.LeanDiagnostic(
+            severity="error",
+            message="unsolved goals\nsome text without turnstile",
+        )
+        assert lean_backend.extract_goals([diag]) == []
+
+    def test_tactic_failure_with_inline_goals(self) -> None:
+        """Some tactic failures include goal state without 'unsolved goals' header."""
+        diag = lean_backend.LeanDiagnostic(
+            severity="error",
+            message="linarith failed to prove the goal\nα : Type\n⊢ False",
+        )
+        goals = lean_backend.extract_goals([diag])
+        assert len(goals) == 1
+        assert "⊢ False" in goals[0]

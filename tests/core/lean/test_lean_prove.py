@@ -119,6 +119,44 @@ def test_prove_statement_rejects_nonpositive_max_attempts(tmp_path: Path) -> Non
         lean_prove.prove_statement("p", project_root=tmp_path, max_attempts=0)
 
 
+def test_prove_statement_populates_goal_before_for_bare_prop(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """ProofAttempt.goal_before is inferred from the statement for bare propositions."""
+    monkeypatch.setattr(lean_prove, "lean_check", _fake_check(ok_on="norm_num"))
+    result = lean_prove.prove_statement("1 + 1 = 2", project_root=tmp_path, tactics=["norm_num"])
+    assert result.attempts[0].goal_before == "⊢ 1 + 1 = 2"
+
+
+def test_prove_statement_populates_goal_before_for_theorem_header(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """ProofAttempt.goal_before is inferred from a keyword header."""
+    monkeypatch.setattr(lean_prove, "lean_check", _fake_check(ok_on="rfl"))
+    result = lean_prove.prove_statement("theorem foo : 1 = 1", project_root=tmp_path, tactics=["rfl"])
+    assert result.attempts[0].goal_before == "⊢ 1 = 1"
+
+
+def test_prove_statement_populates_goal_after_from_lean_result(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """ProofAttempt.goal_after comes from the LeanCheckResult.goals_after."""
+
+    def _check_with_goals(*, code: str, **_kwargs) -> LeanCheckResult:
+        if ":= by omega" in code:
+            return LeanCheckResult(ok=True, backend="subprocess", elapsed_ms=5, goals_after=[])
+        return LeanCheckResult(
+            ok=False,
+            backend="subprocess",
+            elapsed_ms=3,
+            diagnostics=[LeanDiagnostic(severity="error", message="tactic failed")],
+            goals_after=["⊢ 1 + 1 = 3"],
+        )
+
+    monkeypatch.setattr(lean_prove, "lean_check", _check_with_goals)
+    result = lean_prove.prove_statement("1 + 1 = 3", project_root=tmp_path, tactics=["rfl", "omega"])
+    # First attempt fails — goal_after should show the unsolved goal.
+    assert result.attempts[0].goal_after == ["⊢ 1 + 1 = 3"]
+    # Second attempt succeeds — goal_after should be empty.
+    assert result.attempts[1].goal_after == []
+
+
 def test_prove_statement_surfaces_orchestration_error_summary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     def _lean_missing(**_kwargs) -> LeanCheckResult:
         return LeanCheckResult(
@@ -203,3 +241,31 @@ def test_cli_prove_exit_1_when_no_tactic_closes_goal(tmp_path: Path, monkeypatch
     parsed = json.loads(result.stdout)
     assert parsed["ok"] is False
     assert [a["tactic"] for a in parsed["attempts"]] == ["rfl", "decide"]
+
+
+# ─── _infer_initial_goal ────────────────────────────────────────────────────
+
+
+def test_infer_initial_goal_bare_prop() -> None:
+    assert lean_prove._infer_initial_goal("1 + 1 = 2") == "⊢ 1 + 1 = 2"
+
+
+def test_infer_initial_goal_theorem_header() -> None:
+    assert lean_prove._infer_initial_goal("theorem foo : P → P") == "⊢ P → P"
+
+
+def test_infer_initial_goal_lemma_header() -> None:
+    assert lean_prove._infer_initial_goal("lemma bar : True") == "⊢ True"
+
+
+def test_infer_initial_goal_with_definition_tail() -> None:
+    assert lean_prove._infer_initial_goal("theorem foo : 1 = 1 := sorry") == "⊢ 1 = 1"
+
+
+def test_infer_initial_goal_empty_returns_none() -> None:
+    assert lean_prove._infer_initial_goal("") is None
+    assert lean_prove._infer_initial_goal("   ") is None
+
+
+def test_infer_initial_goal_keyword_without_colon_returns_none() -> None:
+    assert lean_prove._infer_initial_goal("theorem foo") is None

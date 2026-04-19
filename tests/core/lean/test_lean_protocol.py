@@ -90,6 +90,33 @@ class TestLeanCheckResult:
         roundtripped = LeanCheckResult.model_validate_json(payload)
         assert roundtripped == original
 
+    def test_goals_before_and_after_roundtrip(self) -> None:
+        """goals_before / goals_after survive JSON serialization (ge-2zu)."""
+        original = LeanCheckResult(
+            ok=False,
+            diagnostics=[
+                LeanDiagnostic(
+                    severity="error",
+                    message="unsolved goals\n⊢ False",
+                ),
+            ],
+            backend="subprocess",
+            elapsed_ms=10,
+            goals_before=["⊢ True → False"],
+            goals_after=["⊢ False"],
+        )
+        payload = original.model_dump_json()
+        roundtripped = LeanCheckResult.model_validate_json(payload)
+        assert roundtripped.goals_before == ["⊢ True → False"]
+        assert roundtripped.goals_after == ["⊢ False"]
+        assert roundtripped == original
+
+    def test_goals_default_to_none(self) -> None:
+        """When not populated, goal fields are None (not empty list)."""
+        result = LeanCheckResult(ok=True, backend="subprocess")
+        assert result.goals_before is None
+        assert result.goals_after is None
+
 
 class TestLeanEnvStatus:
     def test_defaults_are_conservative(self) -> None:

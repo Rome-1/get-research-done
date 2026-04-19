@@ -147,11 +147,61 @@ def _lean_internal_guard() -> Iterator[None]:
             err_console.print_json(json.dumps(payload))
         else:
             err_console.print(
-                f"[bold red]Internal error:[/] {exc}\n"
-                f"[dim](Run with --raw for machine-readable diagnostics.)[/]",
+                f"[bold red]Internal error:[/] {exc}\n[dim](Run with --raw for machine-readable diagnostics.)[/]",
                 highlight=False,
             )
         raise typer.Exit(code=EXIT_INTERNAL_ERROR) from None
+
+
+def _print_goal_state(result: object, *, show_goal: bool = False) -> None:
+    """Print the goal state from a LeanCheckResult when ``--show-goal`` is set.
+
+    Renders ``goals_after`` (remaining goals) to stderr. On success the list
+    is empty (all goals closed); on failure it shows what's left, giving the
+    user the same live proof-state experience they'd get in VS Code's
+    Lean infoview (ge-2zu / P1-7).
+    """
+    if _helpers._raw or not show_goal:
+        return
+    goals_after = getattr(result, "goals_after", None)
+    if goals_after is None:
+        return
+    if not goals_after:
+        err_console.print("[green]all goals closed[/]", highlight=False)
+        return
+    err_console.print("")
+    err_console.print(f"[bold]Goals[/] ({len(goals_after)} remaining)", highlight=False)
+    for i, goal in enumerate(goals_after, 1):
+        err_console.print(f"  [dim]goal {i}:[/]", highlight=False)
+        for line in goal.splitlines():
+            err_console.print(f"    {line}", highlight=False)
+
+
+def _print_prove_goal_state(result: object, *, show_goal: bool = False) -> None:
+    """Print goal state from the last failing ProofAttempt."""
+    if _helpers._raw or not show_goal:
+        return
+    attempts = getattr(result, "attempts", []) or []
+    if not attempts:
+        return
+    # Show the goal state from the last attempt (whether it succeeded or failed).
+    last = attempts[-1]
+    goal_before = getattr(last, "goal_before", None)
+    goal_after = getattr(last, "goal_after", None)
+    if goal_before is None and goal_after is None:
+        return
+    err_console.print("")
+    if goal_before:
+        err_console.print(f"[bold]Initial goal:[/] {goal_before}", highlight=False)
+    if goal_after is not None:
+        if not goal_after:
+            err_console.print("[green]all goals closed[/]", highlight=False)
+        else:
+            err_console.print(f"[bold]Remaining goals[/] ({len(goal_after)}):", highlight=False)
+            for i, goal in enumerate(goal_after, 1):
+                err_console.print(f"  [dim]goal {i}:[/]", highlight=False)
+                for line in goal.splitlines():
+                    err_console.print(f"    {line}", highlight=False)
 
 
 def _print_diagnostic_hints(result: LeanCheckResult) -> None:
@@ -351,6 +401,11 @@ def lean_check(
         help="Do not auto-spawn the daemon if the socket is absent (implies one-shot).",
     ),
     events: str | None = _EVENTS_OPTION,
+    show_goal: bool = typer.Option(
+        False,
+        "--show-goal",
+        help="Show remaining proof goals after elaboration (extracted from diagnostics).",
+    ),
 ) -> None:
     """Type-check Lean 4 source.
 
@@ -414,6 +469,7 @@ def lean_check(
     _output_for_events(result, events)
     _print_daemon_spawn_failure()
     _print_diagnostic_hints(result)
+    _print_goal_state(result, show_goal=show_goal)
     if not result.ok:
         raise typer.Exit(code=_exit_code_for_result(result))
 
@@ -496,6 +552,11 @@ def lean_prove(
         "for tooling and agents that would otherwise hardcode the ladder and drift.",
     ),
     events: str | None = _EVENTS_OPTION,
+    show_goal: bool = typer.Option(
+        False,
+        "--show-goal",
+        help="Show initial goal and remaining goals for each tactic attempt.",
+    ),
 ) -> None:
     """Tactic-search a proof for the given Lean 4 statement.
 
@@ -533,6 +594,7 @@ def lean_prove(
     _output_for_events(result, events)
     _print_daemon_spawn_failure()
     _print_prove_hints(result)
+    _print_prove_goal_state(result, show_goal=show_goal)
     if not result.ok:
         raise typer.Exit(code=_exit_code_for_result(result))
 
@@ -788,9 +850,7 @@ def lean_blueprint_status(
         console.print("")
         console.print(result.ascii_graph)
         if result.summary.get("leanok_updated", 0) > 0:
-            console.print(
-                f"\n[green]Auto-marked {result.summary['leanok_updated']} node(s) as \\leanok[/]"
-            )
+            console.print(f"\n[green]Auto-marked {result.summary['leanok_updated']} node(s) as \\leanok[/]")
 
 
 @lean_app.command("bootstrap")

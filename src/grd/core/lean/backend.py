@@ -24,6 +24,7 @@ from grd.core.lean.hints import hint_for_message
 from grd.core.lean.protocol import LeanCheckResult, LeanDiagnostic
 
 __all__ = [
+    "extract_goals",
     "run_check",
     "parse_diagnostics",
 ]
@@ -93,6 +94,49 @@ def parse_diagnostics(text: str) -> list[LeanDiagnostic]:
 
     _flush()
     return diags
+
+
+_GOAL_SPLIT = re.compile(r"(?:^|\n)(?=case |\S+\s*:|\s*⊢)")
+"""Split multiple goals within an 'unsolved goals' diagnostic body.
+
+Lean separates goals with blank lines or ``case`` headers. Each goal is
+a block of hypotheses (``name : type``) terminated by a turnstile line
+(``⊢ target``). The split pattern looks for the start of each goal
+block — either a ``case`` keyword, a hypothesis at column 0, or a
+turnstile line — so that we can emit one rendered string per goal.
+"""
+
+
+def extract_goals(diagnostics: list[LeanDiagnostic]) -> list[str]:
+    """Extract rendered goal strings from ``unsolved goals`` diagnostics.
+
+    Returns a list where each entry is one goal rendered as
+    ``context-lines\\n⊢ target`` (preserving Lean's own formatting).
+    Empty list if no goal-bearing diagnostics are found.
+    """
+    goals: list[str] = []
+    for diag in diagnostics:
+        if diag.severity != "error":
+            continue
+        msg = diag.message
+        # Lean's "unsolved goals" error puts the goal body on continuation
+        # lines after the header. Some tactic failures also include goals.
+        if "unsolved goals" not in msg and "⊢" not in msg:
+            continue
+        # Strip the header line ("unsolved goals") if present.
+        lines = msg.split("\n", 1)
+        body = lines[1] if len(lines) > 1 and "unsolved goals" in lines[0] else msg
+        body = body.strip()
+        if not body:
+            continue
+        # Split into individual goals. Each goal ends at the next blank
+        # line or at the start of a new "case" block.
+        raw_goals = re.split(r"\n\n+", body)
+        for g in raw_goals:
+            g = g.strip()
+            if g and "⊢" in g:
+                goals.append(g)
+    return goals
 
 
 def _resolve_lean_binary(lean_path: str | None) -> str | None:
@@ -214,6 +258,19 @@ def run_check(
     else:
         ok = exit_code == 0 and not has_error_diag
 
+    # Extract goal state from diagnostics when available (ge-2zu / P1-7).
+    # goals_after is populated from "unsolved goals" errors so agents and
+    # the CLI can inspect what remains without parsing diagnostic text.
+    # On success (ok=True), we set an empty list to signal "all goals closed".
+    extracted = extract_goals(diagnostics)
+    goals_after: list[str] | None
+    if extracted:
+        goals_after = extracted
+    elif ok and not error_kind:
+        goals_after = []
+    else:
+        goals_after = None
+
     return LeanCheckResult(
         ok=ok,
         diagnostics=diagnostics,
@@ -224,4 +281,5 @@ def run_check(
         error=error_kind,
         error_detail=error_detail,
         backend="subprocess",
+        goals_after=goals_after,
     )
