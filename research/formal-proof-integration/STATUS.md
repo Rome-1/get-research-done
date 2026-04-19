@@ -50,6 +50,7 @@ the phase that will ship them.
 | `grd lean verify-claim` | shipped | 3 | `src/grd/cli/lean.py` (`@lean_app.command("verify-claim")`); drives the 6-stage autoformalization pipeline. |
 | `grd lean init-blueprint` | shipped | 2 | `src/grd/cli/lean.py` (`@lean_app.command("init-blueprint")`) |
 | `grd lean blueprint-status` | shipped | 2 | `src/grd/cli/lean.py` (`@lean_app.command("blueprint-status")`) |
+| `grd lean search` | shipped | 3 | `src/grd/cli/lean.py` (`@lean_app.command("search")`); wraps Loogle + LeanExplore + Lean Finder with intent-based routing. |
 | `grd lean sync` | planned | 3 | Rebuilds grounded retrieval index against pinned Mathlib4 + PhysLean snapshot (PITCH §Phase 3 §3.2). |
 
 ### JSON-output flag
