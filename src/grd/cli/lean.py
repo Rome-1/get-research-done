@@ -147,7 +147,8 @@ def _lean_internal_guard() -> Iterator[None]:
             err_console.print_json(json.dumps(payload))
         else:
             err_console.print(
-                f"[bold red]Internal error:[/] {exc}\n[dim](Run with --raw for machine-readable diagnostics.)[/]",
+                f"[bold red]Internal error:[/] {exc}\n"
+                f"[dim](Run with --raw for machine-readable diagnostics.)[/]",
                 highlight=False,
             )
         raise typer.Exit(code=EXIT_INTERNAL_ERROR) from None
@@ -202,6 +203,7 @@ def _print_prove_goal_state(result: object, *, show_goal: bool = False) -> None:
                 err_console.print(f"  [dim]goal {i}:[/]", highlight=False)
                 for line in goal.splitlines():
                     err_console.print(f"    {line}", highlight=False)
+
 
 
 def _print_diagnostic_hints(result: LeanCheckResult) -> None:
