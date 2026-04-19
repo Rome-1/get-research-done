@@ -599,6 +599,93 @@ def lean_prove(
         raise typer.Exit(code=_exit_code_for_result(result))
 
 
+@lean_app.command("search")
+def lean_search(
+    query: str = typer.Argument(
+        ...,
+        help="Search query: a Lean type signature (e.g. '(_ → _) → List _ → List _'), "
+        "an identifier (e.g. 'Nat.Prime'), or natural-language prose "
+        "(e.g. 'continuous function bounded on compact set').",
+    ),
+    limit: int = typer.Option(
+        10,
+        "--limit",
+        "-n",
+        help="Maximum number of results per backend.",
+        min=1,
+        max=200,
+    ),
+    timeout_s: float = typer.Option(
+        10.0,
+        "--timeout",
+        help="Per-backend HTTP timeout in seconds.",
+        min=1.0,
+        max=60.0,
+    ),
+) -> None:
+    """Search Lean 4 / Mathlib for lemmas, theorems, and definitions.
+
+    Routes automatically by intent — type-signature queries go to Loogle,
+    natural-language queries go to LeanExplore + Lean Finder side-by-side.
+    No manual backend selection needed.
+
+    Exit codes: 0 results found, 1 no results, 2 bad input, 4 internal error.
+    """
+    from grd.core.lean.search import search
+
+    with _lean_internal_guard():
+        result = search(query, limit=limit, timeout_s=timeout_s)
+
+    _output(result)
+
+    if not _helpers._raw:
+        _print_search_results(result)
+
+    if not result.hits and not result.errors:
+        raise typer.Exit(code=EXIT_SOFT_FAIL)
+    if not result.hits and result.errors:
+        raise typer.Exit(code=EXIT_INTERNAL_ERROR)
+
+
+def _print_search_results(result: object) -> None:
+    """Render search results to stderr for human consumption."""
+    from grd.core.lean.search import SearchResponse
+
+    if not isinstance(result, SearchResponse):
+        return
+    if not result.hits and not result.errors:
+        err_console.print("[yellow]No results found.[/]", highlight=False)
+        return
+
+    # Group hits by backend for side-by-side display.
+    by_backend: dict[str, list] = {}
+    for hit in result.hits:
+        by_backend.setdefault(hit.backend, []).append(hit)
+
+    for backend, hits in by_backend.items():
+        label = backend.replace("_", " ").title()
+        err_console.print(f"\n[bold]{label}[/] ({len(hits)} results)", highlight=False)
+        for i, hit in enumerate(hits, 1):
+            name_str = f"[cyan]{hit.name}[/]"
+            type_str = f" [dim]: {hit.type}[/]" if hit.type else ""
+            err_console.print(f"  {i}. {name_str}{type_str}", highlight=False)
+            if hit.module:
+                err_console.print(f"     [dim]{hit.module}[/]", highlight=False)
+            if hit.doc:
+                doc_line = hit.doc.splitlines()[0][:100]
+                err_console.print(f"     {doc_line}", highlight=False)
+            if hit.informal and not hit.doc:
+                err_console.print(f"     {hit.informal[:100]}", highlight=False)
+            if hit.source_url:
+                err_console.print(f"     [dim]{hit.source_url}[/]", highlight=False)
+
+    for error in result.errors:
+        label = error.backend.replace("_", " ").title()
+        err_console.print(f"\n[yellow]{label}:[/] {error.message}", highlight=False)
+
+    err_console.print(f"\n[dim]Intent: {result.intent} | {result.elapsed_ms}ms[/]", highlight=False)
+
+
 @lean_app.command("env")
 def lean_env() -> None:
     """Show detected Lean toolchain, env file status, and daemon state.
