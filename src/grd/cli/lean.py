@@ -634,6 +634,149 @@ def lean_env() -> None:
     _output(status)
 
 
+@lean_app.command("stub-claim")
+def lean_stub_claim(
+    claim: str = typer.Argument(
+        ...,
+        help="Informal mathematical/physical claim (e.g. 'for every prime p, p > 1').",
+    ),
+    physics: bool = typer.Option(
+        False,
+        "--physics",
+        help="Force physics retrieval path (Mathlib4 + PhysLean).",
+    ),
+    no_physics: bool = typer.Option(
+        False,
+        "--no-physics",
+        help="Force non-physics retrieval path (Mathlib4 only).",
+    ),
+    import_module: list[str] = typer.Option(
+        [],
+        "--import",
+        "-i",
+        help="Module to prepend as 'import <module>'. Repeatable.",
+    ),
+    no_llm: bool = typer.Option(
+        False,
+        "--no-llm",
+        help="Dry-run: skip LLM calls and emit a placeholder skeleton "
+        "(useful for testing plumbing without an API key).",
+    ),
+) -> None:
+    """Generate a skeleton Lean 4 statement from a natural-language claim.
+
+    Runs stages 1-3 of the autoformalization pipeline (context extraction,
+    retrieval, candidate generation) without compilation or faithfulness
+    checking. Emits:
+
+    \\b
+    - skeleton Lean statement with ``sorry`` body
+    - ranked retrieval hits from the Mathlib4/PhysLean name index
+    - suggested import list
+    - "what to try next" block
+
+    Flows into ``grd lean verify-claim`` as an optional preprocessing step.
+    """
+    if physics and no_physics:
+        _error("Pass at most one of --physics / --no-physics.", code=EXIT_INPUT_ERROR)
+
+    with _lean_internal_guard():
+        import os as _os  # noqa: PLC0415
+
+        from grd.core.lean.autoformalize import (
+            AutoformalizeConfig,
+            MockLLM,
+            StubClaimResult,
+            load_autoformalize_config,
+            stub_claim,
+        )
+
+        physics_override: bool | None
+        if physics:
+            physics_override = True
+        elif no_physics:
+            physics_override = False
+        else:
+            physics_override = None
+
+        project_root = _get_cwd()
+        config: AutoformalizeConfig = load_autoformalize_config(project_root)
+
+        llm: object
+        if no_llm:
+            stub_response = (
+                "```lean\n"
+                "-- stub-claim dry run (LLM disabled)\n"
+                "theorem stub_claim_placeholder : True := sorry\n"
+                "```"
+            )
+            llm = MockLLM(responses=[stub_response])
+        else:
+            from grd.core.lean.autoformalize.llm import AnthropicLLM  # noqa: PLC0415
+
+            api_key = _os.environ.get("ANTHROPIC_API_KEY")
+            llm = AnthropicLLM(model_id=config.model_id, api_key=api_key)
+
+        result: StubClaimResult = stub_claim(
+            claim=claim,
+            project_root=project_root,
+            llm=llm,  # type: ignore[arg-type]
+            config=config,
+            physics_override=physics_override,
+            imports=list(import_module) if import_module else None,
+        )
+
+        _output(_stub_result_to_dict(result))
+        _print_stub_claim_summary(result)
+
+
+def _stub_result_to_dict(result: object) -> dict:
+    """Serialize a ``StubClaimResult`` to a plain dict."""
+    from dataclasses import asdict, is_dataclass  # noqa: PLC0415
+
+    if is_dataclass(result) and not isinstance(result, type):
+        return asdict(result)  # type: ignore[call-overload]
+    raise TypeError(f"Cannot serialize {type(result).__name__}")
+
+
+def _print_stub_claim_summary(result: object) -> None:
+    """Print a human-readable summary of the stub-claim result."""
+    if _helpers._raw:
+        return
+    skeleton = getattr(result, "skeleton", "")
+    if skeleton:
+        err_console.print("")
+        err_console.print("[bold]Skeleton[/]", highlight=False)
+        err_console.print(f"```lean\n{skeleton}\n```", highlight=False)
+
+    hits = getattr(result, "retrieval_hits", []) or []
+    if hits:
+        err_console.print("")
+        err_console.print("[bold]Retrieval hits[/]", highlight=False)
+        for h in hits[:10]:
+            err_console.print(f"  {h}", highlight=False)
+        if len(hits) > 10:
+            err_console.print(f"  ... ({len(hits) - 10} more)", highlight=False)
+
+    imports = getattr(result, "suggested_imports", []) or []
+    if imports:
+        err_console.print("")
+        err_console.print("[bold]Suggested imports[/]", highlight=False)
+        for imp in imports:
+            err_console.print(f"  import {imp}", highlight=False)
+
+    steps = getattr(result, "next_steps", []) or []
+    if steps:
+        err_console.print("")
+        err_console.print("[bold]What to try next[/]", highlight=False)
+        for i, step in enumerate(steps, 1):
+            err_console.print(f"  {i}. {step}", highlight=False)
+
+    notes = getattr(result, "notes", []) or []
+    for note in notes:
+        err_console.print(f"\n[dim]{note}[/]", highlight=False)
+
+
 @lean_app.command("verify-claim")
 def lean_verify_claim(
     claim: str = typer.Argument(
