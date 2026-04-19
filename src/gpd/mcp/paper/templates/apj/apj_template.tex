@@ -2,6 +2,8 @@
 %# Jinja2 template with custom LaTeX-safe delimiters
 %# Note: AASTeX v7.0 (aastex701) is available for users who have it installed.
 %# v7.0 removes \affil command; use \affiliation instead.
+%# aastex631 loads natbib internally -- \citet/\citep (from pandoc's
+%# --natbib output) resolve without an extra \usepackage{natbib}.
 \documentclass[twocolumn]{aastex631}
 
 \usepackage{graphicx}
