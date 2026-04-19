@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from grd.core.lean.events import ProgressEvent
     from grd.core.lean.protocol import LeanCheckResult
     from grd.core.lean.prove import ProveResult
+    from grd.core.lean.try_prove import TryProveResult
 
 lean_app = typer.Typer(help="Lean 4 verification backend (type-check, proof daemon, env)")
 
@@ -599,6 +600,174 @@ def lean_prove(
     _print_prove_goal_state(result, show_goal=show_goal)
     if not result.ok:
         raise typer.Exit(code=_exit_code_for_result(result))
+
+
+def _print_try_prove_summary(result: TryProveResult) -> None:
+    """Render the ranked candidate list to stderr, Sledgehammer-style.
+
+    Matches Isabelle's "Try this:" UX — one line per kernel-checked
+    candidate, so the user can click or copy any of them. Failures are
+    summarised with a count so the user sees that the hammer actually
+    tried a range without flooding the terminal with stack traces.
+    """
+    if _helpers._raw:
+        return
+    if result.successes:
+        err_console.print("")
+        err_console.print(
+            f"[bold]Try this[/] ({len(result.successes)} candidate"
+            f"{'s' if len(result.successes) != 1 else ''}, ranked)",
+            highlight=False,
+        )
+        for cand in result.successes:
+            tag = " [dim](llm)[/]" if cand.via_llm else ""
+            rank_label = f"#{(cand.rank or 0) + 1}"
+            err_console.print(
+                f"  [green]{rank_label}[/] [cyan]{cand.snippet}[/]"
+                f" [dim]({cand.elapsed_ms}ms){tag}[/]",
+                highlight=False,
+            )
+    else:
+        err_console.print("")
+        err_console.print(
+            "[yellow]No tactic closed the goal.[/]",
+            highlight=False,
+        )
+
+    if result.failures:
+        err_console.print(
+            f"[dim]{len(result.failures)} candidate"
+            f"{'s' if len(result.failures) != 1 else ''} rejected by the "
+            f"kernel (run with --raw for details).[/]",
+            highlight=False,
+        )
+
+
+@lean_app.command("try-prove")
+def lean_try_prove(
+    statement: str | None = typer.Argument(
+        None,
+        help="Lean 4 statement to hammer. Accepts a bare proposition, a signature "
+        "with a keyword header, or a full definition whose ':=' tail will be "
+        "rewritten with each candidate tactic. Omit only with --list-tactics.",
+    ),
+    tactic: list[str] = typer.Option(
+        [],
+        "--tactic",
+        help="Override the default hammer tactics. Repeatable; order is preserved.",
+    ),
+    import_module: list[str] = typer.Option(
+        [],
+        "--import",
+        "-i",
+        help="Module to prepend as 'import <module>'. Repeatable.",
+    ),
+    max_candidates: int | None = typer.Option(
+        None,
+        "--max-candidates",
+        help="Cap the size of the parallel candidate pool (before --with-llm additions).",
+        min=1,
+    ),
+    timeout_s: float = typer.Option(
+        30.0,
+        "--timeout",
+        help="Per-candidate wall-clock timeout in seconds.",
+        min=0.1,
+        max=600.0,
+    ),
+    with_llm: bool = typer.Option(
+        False,
+        "--with-llm",
+        help="Also ask the configured LLM (Anthropic) for llmqed-style candidate "
+        "tactics. Requires ANTHROPIC_API_KEY; silently skipped when unset.",
+    ),
+    no_daemon: bool = typer.Option(
+        False,
+        "--no-daemon",
+        help="Skip the socket daemon; run each candidate via a one-shot subprocess.",
+    ),
+    no_spawn: bool = typer.Option(
+        False,
+        "--no-spawn",
+        help="Do not auto-spawn the daemon if the socket is absent.",
+    ),
+    list_tactics: bool = typer.Option(
+        False,
+        "--list-tactics",
+        help="Print the default hammer tactics as JSON and exit.",
+    ),
+    events: str | None = _EVENTS_OPTION,
+) -> None:
+    """Sledgehammer-style parallel hammer (ge-k8s / P2-1).
+
+    Runs ``exact?``, ``apply?``, ``simp_all``, ``aesop``, and ``hammer`` in
+    parallel, kernel-checks each, and returns a ranked list of tactic
+    snippets that actually close the goal. Follows Isabelle/Sledgehammer's
+    "never ship an oracle" discipline — a snippet is surfaced only if the
+    Lean kernel accepts it.
+
+    Exit 0 when at least one candidate closes the goal, 1 otherwise.
+    """
+    from grd.core.lean.events import tty_finish
+    from grd.core.lean.try_prove import DEFAULT_HAMMER_TACTICS, try_prove_statement
+
+    if list_tactics:
+        _output({"tactics": list(DEFAULT_HAMMER_TACTICS)})
+        return
+
+    if statement is None:
+        _error(
+            "Provide a Lean 4 statement, or pass --list-tactics to dump the default hammer.",
+            code=EXIT_INPUT_ERROR,
+        )
+
+    llm = _build_llmqed_backend() if with_llm else None
+
+    emit = _make_emitter(events)
+    result = try_prove_statement(
+        statement,
+        project_root=_get_cwd(),
+        tactics=list(tactic) if tactic else None,
+        imports=list(import_module),
+        max_candidates=max_candidates,
+        timeout_s=timeout_s,
+        with_llm=with_llm,
+        llm=llm,
+        use_daemon=not no_daemon,
+        auto_spawn=not no_spawn,
+        on_event=emit,
+    )
+    if events:
+        tty_finish()
+    _output_for_events(result, events)
+    _print_daemon_spawn_failure()
+    _print_try_prove_summary(result)
+    if not result.ok:
+        raise typer.Exit(code=EXIT_SOFT_FAIL)
+
+
+def _build_llmqed_backend() -> object | None:
+    """Instantiate the Anthropic LLM for the --with-llm path.
+
+    Returns ``None`` (silent degrade) when ``ANTHROPIC_API_KEY`` is unset or
+    the optional ``autoformalize`` extra isn't installed — the hammer still
+    runs with its built-in tactics.
+    """
+    import os as _os  # noqa: PLC0415
+
+    api_key = _os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+    try:
+        from grd.core.lean.autoformalize import load_autoformalize_config  # noqa: PLC0415
+        from grd.core.lean.autoformalize.llm import AnthropicLLM  # noqa: PLC0415
+    except ImportError:
+        return None
+    config = load_autoformalize_config(_get_cwd())
+    try:
+        return AnthropicLLM(model_id=config.model_id, api_key=api_key)
+    except RuntimeError:
+        return None
 
 
 @lean_app.command("search")
