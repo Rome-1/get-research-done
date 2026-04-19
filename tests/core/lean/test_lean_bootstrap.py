@@ -392,3 +392,55 @@ def _toolchain(
 
 def _explode(*_args: object, **_kwargs: object) -> tuple[int, str, str]:
     raise AssertionError("subprocess call not expected in this test")
+
+
+# ─── Persona-aware bootstrap ─────────────────────────────────────────────────
+
+
+def test_bootstrap_options_persona_defaults_none():
+    opts = bootstrap.BootstrapOptions()
+    assert opts.persona is None
+    resolved = opts.with_persona_defaults()
+    assert resolved is opts  # no-op when persona is None
+
+
+def test_mathematician_persona_enables_mathlib_cache():
+    opts = bootstrap.BootstrapOptions(persona="mathematician")
+    resolved = opts.with_persona_defaults()
+    assert resolved.with_mathlib_cache is True
+    assert resolved.with_leandojo is False
+
+
+def test_physicist_persona_enables_mathlib_cache():
+    opts = bootstrap.BootstrapOptions(persona="physicist")
+    resolved = opts.with_persona_defaults()
+    assert resolved.with_mathlib_cache is True
+    assert resolved.with_leandojo is False
+
+
+def test_ml_researcher_persona_enables_leandojo():
+    opts = bootstrap.BootstrapOptions(persona="ml-researcher")
+    resolved = opts.with_persona_defaults()
+    assert resolved.with_leandojo is True
+    assert resolved.with_mathlib_cache is False
+
+
+def test_explicit_flag_wins_over_persona_default():
+    """User explicitly passes --with-mathlib-cache; persona default doesn't override."""
+    opts = bootstrap.BootstrapOptions(
+        persona="mathematician",
+        with_mathlib_cache=True,  # already True — persona shouldn't break this
+    )
+    resolved = opts.with_persona_defaults()
+    assert resolved.with_mathlib_cache is True
+
+
+def test_valid_personas_contains_all_three():
+    assert "mathematician" in bootstrap.VALID_PERSONAS
+    assert "physicist" in bootstrap.VALID_PERSONAS
+    assert "ml-researcher" in bootstrap.VALID_PERSONAS
+
+
+def test_persona_stage_defaults_keys_match_valid_personas():
+    for persona in bootstrap.VALID_PERSONAS:
+        assert persona in bootstrap.PERSONA_STAGE_DEFAULTS

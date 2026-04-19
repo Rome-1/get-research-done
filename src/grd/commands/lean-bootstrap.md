@@ -1,7 +1,7 @@
 ---
 name: grd:lean-bootstrap
 description: Lazily install the Lean 4 toolchain, Pantograph, and optional formal-proof dependencies. Idempotent and non-blocking.
-argument-hint: "[--with-graphviz] [--with-tectonic] [--with-mathlib-cache] [--with-leandojo] [--force] [--dry-run] [--uninstall]"
+argument-hint: "[--for {mathematician,physicist,ml-researcher}] [--with-graphviz] [--with-tectonic] [--with-mathlib-cache] [--with-leandojo] [--force] [--dry-run] [--uninstall]"
 context_mode: project-aware
 allowed-tools:
   - file_read
@@ -46,6 +46,7 @@ Recognised flags:
 
 | Flag | Effect |
 |------|--------|
+| `--for <persona>` | Persona-aware on-ramp. Accepted: `mathematician`, `physicist`, `ml-researcher`. Auto-enables persona-specific optional stages and references a tailored walkthrough skill. |
 | `--with-graphviz` | Try user-local graphviz install for SVG dep graphs. Falls back to ASCII silently if no user package manager. |
 | `--with-tectonic` | Install tectonic via cargo when no LaTeX compiler is present. HTML Blueprint works without. |
 | `--with-mathlib-cache` | Opt-in: `lake exe cache get` (~10 GB). Requires user consent. |
@@ -53,6 +54,16 @@ Recognised flags:
 | `--force` | Re-attempt every stage, ignoring cached "already installed" and prior "never" consent answers. |
 | `--dry-run` | Report what would happen without touching anything. |
 | `--uninstall` | Remove GRD-added Lean artifacts (`~/.elan`, caches, project `.lake`). |
+
+Persona stage defaults:
+
+| Persona | Auto-enables |
+|---------|-------------|
+| `mathematician` | `--with-mathlib-cache` |
+| `physicist` | `--with-mathlib-cache` |
+| `ml-researcher` | `--with-leandojo` |
+
+After a successful bootstrap with `--for`, the user is directed to the persona walkthrough skill (`/grd:lean-bootstrap-mathematician`, `/grd:lean-bootstrap-physicist`, or `/grd:lean-bootstrap-ml-researcher`).
 
 If `--uninstall` is present, skip to Step 5.
 

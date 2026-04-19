@@ -34,6 +34,8 @@ from grd.core.lean.protocol import BootstrapReport, BootstrapStageResult
 __all__ = [
     "BOOTSTRAP_SCHEMA_VERSION",
     "BootstrapOptions",
+    "PERSONA_STAGE_DEFAULTS",
+    "VALID_PERSONAS",
     "run_bootstrap",
     "uninstall",
 ]
@@ -55,6 +57,33 @@ _PIP_PACKAGES: tuple[str, ...] = ("pantograph", "leanblueprint", "plastex")
 Pinned to the ones the PITCH calls out explicitly. ``pantograph`` is the one
 that gates the daemon's REPL-reuse upgrade (see follow-up bead ``ge-nsd``);
 the other two unlock Blueprint rendering once Phase 2 lands.
+"""
+
+
+VALID_PERSONAS: frozenset[str] = frozenset({
+    "mathematician",
+    "physicist",
+    "ml-researcher",
+})
+"""Accepted values for ``--for``.  Each maps to a different on-ramp skill and
+a set of default stage overrides (see ``persona_stage_defaults``)."""
+
+PERSONA_STAGE_DEFAULTS: dict[str, dict[str, bool]] = {
+    "mathematician": {
+        "with_mathlib_cache": True,
+    },
+    "physicist": {
+        "with_mathlib_cache": True,
+    },
+    "ml-researcher": {
+        "with_leandojo": True,
+    },
+}
+"""Per-persona stage overrides applied when ``--for`` is set.
+
+The persona enables optional stages that its walkthrough relies on.
+``yes`` is NOT forced — consent prompts still fire for heavy downloads.
+Explicit ``--with-*`` flags from the user always win over persona defaults.
 """
 
 
@@ -90,6 +119,28 @@ class BootstrapOptions:
     force: bool = False
     """Ignore cached ``skipped_user_declined`` / ``ok`` markers and re-attempt
     every stage. Users hit this via ``grd lean bootstrap --force``."""
+
+    persona: str | None = None
+    """Persona for the on-ramp flow (``mathematician``, ``physicist``, or
+    ``ml-researcher``). When set, persona-specific stage defaults are applied
+    and the matching walkthrough skill body is referenced in the report."""
+
+    def with_persona_defaults(self) -> BootstrapOptions:
+        """Return a copy with persona-specific stage defaults applied.
+
+        Explicit flags from the user always win — only fields that are still
+        at their default (``False``) get overridden by the persona preset.
+        """
+        if self.persona is None:
+            return self
+        defaults = PERSONA_STAGE_DEFAULTS.get(self.persona, {})
+        overrides: dict[str, object] = {}
+        for key, val in defaults.items():
+            if not getattr(self, key, False):
+                overrides[key] = val
+        if not overrides:
+            return self
+        return dataclasses.replace(self, **overrides)
 
 
 # ─── Stage helpers ──────────────────────────────────────────────────────────
@@ -675,7 +726,8 @@ def run_bootstrap(
     ``on_event`` receives ``StageStarted`` / ``StageCompleted`` events for
     each bootstrap stage. Pass ``None`` to disable (default).
     """
-    opts = options or BootstrapOptions()
+    raw_opts = options or BootstrapOptions()
+    opts = raw_opts.with_persona_defaults()
     _emit = on_event or (lambda _e: None)
     from grd.core.lean.env import env_file_path
 
