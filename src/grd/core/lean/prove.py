@@ -28,6 +28,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from grd.core.lean.client import check as lean_check
+from grd.core.lean.events import EventCallback, TacticAttempted
 from grd.core.lean.protocol import LeanCheckResult
 
 __all__ = [
@@ -123,6 +124,7 @@ def prove_statement(
     timeout_s: float = 30.0,
     use_daemon: bool = True,
     auto_spawn: bool = True,
+    on_event: EventCallback = None,
 ) -> ProveResult:
     """Try ``tactics`` (or the default ladder) in order; return the first pass.
 
@@ -130,7 +132,10 @@ def prove_statement(
     budget-constrained agent invocations. The returned ``ProveResult``
     always lists every attempt actually made so the caller can see partial
     progress, even on failure.
+
+    ``on_event`` receives ``TacticAttempted`` after each candidate tactic.
     """
+    _emit = on_event or (lambda _e: None)
     ladder = list(tactics) if tactics else list(DEFAULT_TACTIC_LADDER)
     if max_attempts is not None:
         if max_attempts < 1:
@@ -141,8 +146,9 @@ def prove_statement(
     total_elapsed = 0
     proof_source: str | None = None
     overall_ok = False
+    ladder_len = len(ladder)
 
-    for tactic in ladder:
+    for idx, tactic in enumerate(ladder):
         source = compose_attempt_source(statement, tactic, imports=imports)
         result: LeanCheckResult = lean_check(
             code=source,
@@ -160,6 +166,13 @@ def prove_statement(
             hint=None if result.ok else _first_error_hint(result),
         )
         attempts.append(attempt)
+        _emit(TacticAttempted(
+            tactic=tactic,
+            index=idx,
+            total=ladder_len,
+            ok=result.ok,
+            elapsed_ms=result.elapsed_ms,
+        ))
         if result.ok:
             overall_ok = True
             proof_source = source

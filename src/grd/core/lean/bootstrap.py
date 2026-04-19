@@ -28,6 +28,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from grd.core.lean.env import detect_toolchain, load_env, pantograph_available, save_env
+from grd.core.lean.events import EventCallback, StageCompleted, StageStarted
 from grd.core.lean.protocol import BootstrapReport, BootstrapStageResult
 
 __all__ = [
@@ -661,6 +662,7 @@ def run_bootstrap(
     project_root: Path,
     *,
     options: BootstrapOptions | None = None,
+    on_event: EventCallback = None,
 ) -> BootstrapReport:
     """Run all stages, write progress to ``.grd/lean-env.json`` after each.
 
@@ -669,8 +671,12 @@ def run_bootstrap(
     earlier one (e.g. a one-off elan hiccup) had a transient failure. The
     report's ``ok`` flag is False iff any *required* stage failed; opt-in
     skips don't count against it.
+
+    ``on_event`` receives ``StageStarted`` / ``StageCompleted`` events for
+    each bootstrap stage. Pass ``None`` to disable (default).
     """
     opts = options or BootstrapOptions()
+    _emit = on_event or (lambda _e: None)
     from grd.core.lean.env import env_file_path
 
     started = _now_ms()
@@ -679,19 +685,29 @@ def run_bootstrap(
     stages: list[BootstrapStageResult] = []
     degraded_notes: list[str] = []
 
-    def _record(result: BootstrapStageResult) -> None:
+    def _record(stage_fn: Callable[..., BootstrapStageResult], *args: object) -> None:
+        # Peek at the stage name from the function (all are _stage_<name>).
+        stage_name = getattr(stage_fn, "__name__", "").removeprefix("_stage_")
+        _emit(StageStarted(stage=stage_name))
+        result = stage_fn(*args)
         stages.append(result)
         _persist(project_root, prior, stages, opts, in_progress=True)
+        _emit(StageCompleted(
+            stage=result.name,
+            status=result.status,
+            elapsed_ms=result.elapsed_ms,
+            detail=result.detail,
+        ))
         if result.status == "degraded":
             degraded_notes.append(f"{result.name}: {result.detail}")
 
-    _record(_stage_elan(opts))
-    _record(_stage_toolchain(opts, project_root))
-    _record(_stage_pantograph(opts))
-    _record(_stage_graphviz(opts))
-    _record(_stage_tectonic(opts))
-    _record(_stage_mathlib_cache(opts, project_root, prior))
-    _record(_stage_leandojo(opts, prior))
+    _record(_stage_elan, opts)
+    _record(_stage_toolchain, opts, project_root)
+    _record(_stage_pantograph, opts)
+    _record(_stage_graphviz, opts)
+    _record(_stage_tectonic, opts)
+    _record(_stage_mathlib_cache, opts, project_root, prior)
+    _record(_stage_leandojo, opts, prior)
 
     required = {"elan", "toolchain", "pantograph"}
     ok = all(s.status != "failed" for s in stages if s.name in required)

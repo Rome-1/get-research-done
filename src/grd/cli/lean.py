@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import contextlib
 import json
+import sys
 import traceback
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -20,6 +21,7 @@ from grd.cli import _helpers
 from grd.cli._helpers import _error, _get_cwd, _output, console, err_console
 
 if TYPE_CHECKING:
+    from grd.core.lean.events import ProgressEvent
     from grd.core.lean.protocol import LeanCheckResult
     from grd.core.lean.prove import ProveResult
 
@@ -58,6 +60,58 @@ def _exit_code_for_result(result: object) -> int:
     if error_kind is not None:
         return _ERROR_KIND_TO_EXIT.get(error_kind, EXIT_INTERNAL_ERROR)
     return EXIT_SOFT_FAIL
+
+
+# ─── Event streaming helpers ─────────────────────────────────────────────────
+
+
+def _make_emitter(events: str | None) -> Callable[[ProgressEvent], None]:
+    """Build the progress-event callback for the given ``--events`` mode.
+
+    ``"jsonl"`` streams one JSON line per event to stdout (flush after each).
+    ``None`` (default) uses the TTY status line on interactive terminals,
+    or a no-op callback when stderr is not a TTY / ``--raw`` is active.
+    """
+    from grd.core.lean.events import jsonl_emitter, noop_emitter, tty_emitter  # noqa: PLC0415
+
+    if events == "jsonl":
+        return jsonl_emitter
+    if _helpers._raw:
+        return noop_emitter
+    if sys.stderr.isatty():
+        return tty_emitter
+    return noop_emitter
+
+
+def _output_for_events(data: object, events: str | None) -> None:
+    """Emit the final aggregate result, routing to stderr when streaming.
+
+    When ``--events jsonl`` is active, stdout carries the NDJSON event
+    stream. The final aggregate result goes to stderr so machine consumers
+    can distinguish events (stdout) from the summary (stderr).
+    """
+    if events == "jsonl":
+        import dataclasses  # noqa: PLC0415
+
+        if hasattr(data, "model_dump"):
+            payload = data.model_dump(mode="json", by_alias=True)
+        elif dataclasses.is_dataclass(data) and not isinstance(data, type):
+            payload = dataclasses.asdict(data)
+        elif isinstance(data, dict):
+            payload = data
+        else:
+            payload = {"result": str(data)}
+        err_console.print_json(json.dumps(payload, default=str))
+    else:
+        _output(data)
+
+
+_EVENTS_OPTION = typer.Option(
+    None,
+    "--events",
+    help="Enable streaming progress events. 'jsonl' emits NDJSON to stdout "
+    "with the final aggregate on stderr.",
+)
 
 
 @contextlib.contextmanager
@@ -296,6 +350,7 @@ def lean_check(
         "--no-spawn",
         help="Do not auto-spawn the daemon if the socket is absent (implies one-shot).",
     ),
+    events: str | None = _EVENTS_OPTION,
 ) -> None:
     """Type-check Lean 4 source.
 
@@ -303,6 +358,9 @@ def lean_check(
     3 missing toolchain, 4 internal/daemon error.
     """
     from grd.core.lean.client import check, check_file
+    from grd.core.lean.events import DiagnosticEmitted, StageCompleted, StageStarted, tty_finish
+
+    emit = _make_emitter(events)
 
     if code is None and file is None:
         # Fall back to stdin to support `grd lean check <<< '...'` style piping.
@@ -316,6 +374,7 @@ def lean_check(
     if code is not None and file is not None:
         _error("Pass only one of inline code or --file, not both.", code=EXIT_INPUT_ERROR)
 
+    emit(StageStarted(stage="check"))
     if file is not None:
         resolved = file if file.is_absolute() else (_get_cwd() / file).resolve()
         if not resolved.is_file():
@@ -338,7 +397,21 @@ def lean_check(
             auto_spawn=not no_spawn,
         )
 
-    _output(result)
+    for diag in result.diagnostics:
+        emit(DiagnosticEmitted(
+            severity=diag.severity,
+            message=diag.message,
+            line=diag.line,
+            column=diag.column,
+        ))
+    emit(StageCompleted(
+        stage="check",
+        status="ok" if result.ok else "failed",
+        elapsed_ms=result.elapsed_ms,
+    ))
+    if events:
+        tty_finish()
+    _output_for_events(result, events)
     _print_daemon_spawn_failure()
     _print_diagnostic_hints(result)
     if not result.ok:
@@ -422,6 +495,7 @@ def lean_prove(
         help="Print the default tactic ladder as JSON and exit. Authoritative source "
         "for tooling and agents that would otherwise hardcode the ladder and drift.",
     ),
+    events: str | None = _EVENTS_OPTION,
 ) -> None:
     """Tactic-search a proof for the given Lean 4 statement.
 
@@ -432,6 +506,7 @@ def lean_prove(
     Pass ``--list-tactics`` with no statement to dump the current ladder —
     the single source of truth for agents and docs.
     """
+    from grd.core.lean.events import tty_finish
     from grd.core.lean.prove import DEFAULT_TACTIC_LADDER, prove_statement
 
     if list_tactics:
@@ -441,6 +516,7 @@ def lean_prove(
     if statement is None:
         _error("Provide a Lean 4 statement, or pass --list-tactics to dump the default ladder.", code=EXIT_INPUT_ERROR)
 
+    emit = _make_emitter(events)
     result = prove_statement(
         statement,
         project_root=_get_cwd(),
@@ -450,8 +526,11 @@ def lean_prove(
         timeout_s=timeout_s,
         use_daemon=not no_daemon,
         auto_spawn=not no_spawn,
+        on_event=emit,
     )
-    _output(result)
+    if events:
+        tty_finish()
+    _output_for_events(result, events)
     _print_daemon_spawn_failure()
     _print_prove_hints(result)
     if not result.ok:
@@ -538,6 +617,7 @@ def lean_verify_claim(
         help="Dry-run: skip LLM calls and emit a structured 'unconfigured' result "
         "(useful for testing plumbing without an API key).",
     ),
+    events: str | None = _EVENTS_OPTION,
 ) -> None:
     """Autoformalize an informal claim into a Lean 4 theorem (6-stage pipeline).
 
@@ -562,7 +642,9 @@ def lean_verify_claim(
             load_autoformalize_config,
             verify_claim,
         )
+        from grd.core.lean.events import tty_finish
 
+        emit = _make_emitter(events)
         physics_override: bool | None
         if physics:
             physics_override = True
@@ -593,9 +675,12 @@ def lean_verify_claim(
             imports=list(import_module) if import_module else None,
             timeout_s=timeout_s,
             use_daemon=not no_daemon,
+            on_event=emit,
         )
 
-        _output(_verify_result_to_dict(result))
+        if events:
+            tty_finish()
+        _output_for_events(_verify_result_to_dict(result), events)
         _print_verify_claim_warning(result)
         _print_verify_claim_diff(result)
         _print_verify_claim_hints(result)
@@ -751,6 +836,7 @@ def lean_bootstrap(
         "--uninstall",
         help="Remove GRD-added Lean artifacts (~/.elan, caches, project .lake).",
     ),
+    events: str | None = _EVENTS_OPTION,
 ) -> None:
     """Lazy bootstrap: idempotently install elan, the Lean toolchain, and Pantograph.
 
@@ -761,7 +847,9 @@ def lean_bootstrap(
     """
     with _lean_internal_guard():
         from grd.core.lean.bootstrap import BootstrapOptions, run_bootstrap, uninstall
+        from grd.core.lean.events import tty_finish
 
+        emit = _make_emitter(events)
         project_root = _get_cwd()
         if uninstall_flag:
             _output(uninstall(project_root, dry_run=dry_run))
@@ -778,8 +866,11 @@ def lean_bootstrap(
                 dry_run=dry_run,
                 force=force,
             ),
+            on_event=emit,
         )
-        _output(report)
+        if events:
+            tty_finish()
+        _output_for_events(report, events)
         if not report.ok:
             raise typer.Exit(code=EXIT_ENV_ERROR)
 
