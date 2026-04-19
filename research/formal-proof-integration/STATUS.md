@@ -1,6 +1,6 @@
 # Formal-Proof Integration — Status
 
-**Last updated:** 2026-04-17 (bead ge-2zu)
+**Last updated:** 2026-04-19 (bead ge-5o8)
 **Pitch:** [PITCH.md](./PITCH.md)
 **Epic:** ge-wisp-rnf6 (mol-polecat-work)
 
@@ -21,6 +21,9 @@ Legend:
 | Skill | Status | Phase | Landing |
 |---|---|---|---|
 | `/grd:lean-bootstrap` | shipped | 1 | [`src/grd/commands/lean-bootstrap.md`](../../src/grd/commands/lean-bootstrap.md) |
+| `/grd:lean-bootstrap-mathematician` | shipped | 4 | [`src/grd/commands/lean-bootstrap-mathematician.md`](../../src/grd/commands/lean-bootstrap-mathematician.md) |
+| `/grd:lean-bootstrap-physicist` | shipped | 4 | [`src/grd/commands/lean-bootstrap-physicist.md`](../../src/grd/commands/lean-bootstrap-physicist.md) |
+| `/grd:lean-bootstrap-ml-researcher` | shipped | 4 | [`src/grd/commands/lean-bootstrap-ml-researcher.md`](../../src/grd/commands/lean-bootstrap-ml-researcher.md) |
 | `/grd:lean-check` | planned | 1 | [`src/grd/commands/lean-check.md`](../../src/grd/commands/lean-check.md) (stub) |
 | `/grd:init-blueprint` | shipped | 2 | [`src/grd/commands/init-blueprint.md`](../../src/grd/commands/init-blueprint.md) |
 | `/grd:blueprint-status` | shipped | 2 | [`src/grd/commands/blueprint-status.md`](../../src/grd/commands/blueprint-status.md) |
@@ -43,7 +46,7 @@ the phase that will ship them.
 | `grd lean typecheck-file` | shipped | 1 | `src/grd/cli/lean.py` (`@lean_app.command("typecheck-file")`) |
 | `grd lean serve-repl` | shipped | 1 | `src/grd/cli/lean.py` (`@lean_app.command("serve-repl")`) |
 | `grd lean stop-repl` | shipped | 1 | `src/grd/cli/lean.py` (`@lean_app.command("stop-repl")`) |
-| `grd lean bootstrap` | shipped | 1 | `src/grd/cli/lean.py` (`@lean_app.command("bootstrap")`) |
+| `grd lean bootstrap` | shipped | 1 | `src/grd/cli/lean.py` (`@lean_app.command("bootstrap")`); `--for` persona flag added in ge-5o8. |
 | `grd lean env` | shipped | 1 | `src/grd/cli/lean.py` (`@lean_app.command("env")`) — not in PITCH, surfaced by bootstrap work. |
 | `grd lean ping` | shipped | 1 | `src/grd/cli/lean.py` (`@lean_app.command("ping")`) — not in PITCH, daemon health check. |
 | `grd lean prove` | shipped | 3 | `src/grd/cli/lean.py` (`@lean_app.command("prove")`) |
@@ -108,6 +111,7 @@ via the per-project Unix socket is in `src/grd/core/lean/daemon.py`.
 |---|---|---|
 | `blueprint/` phase artifact directory (`content.tex`, `lakefile.lean`, `Proofs/`, `Blueprint.lean`) | shipped | 2 |
 | Convention bridge — Lean type classes generated from the 18-field convention lock | planned | 2 |
+| Persona-aware bootstrap (`--for` flag + 3 walkthrough skills) | shipped | 4 |
 | `formal-verification` domain pack | planned | 4 |
 | Kimina Lean Server batch backend | planned | 4 |
 | Multi-backend (Coq, Isabelle) | planned | 5 |
@@ -126,6 +130,7 @@ via the per-project Unix socket is in `src/grd/core/lean/daemon.py`.
 | ge-8g5 | Blueprint MVP — init-blueprint + blueprint-status with auto-leanok |
 | ge-cch | Running list of upstream tooling friction (Leanblueprint, Pantograph, LeanDojo, Kimina) |
 | ge-h0j | Testing strategy / test matrix |
+| ge-5o8 | Persona-aware bootstrap — `--for {mathematician,physicist,ml-researcher}` + walkthrough skills |
 
 ## Keeping this honest
 

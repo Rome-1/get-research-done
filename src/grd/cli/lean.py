@@ -896,6 +896,12 @@ def lean_bootstrap(
         "--uninstall",
         help="Remove GRD-added Lean artifacts (~/.elan, caches, project .lake).",
     ),
+    for_persona: str | None = typer.Option(
+        None,
+        "--for",
+        help="Persona-aware on-ramp: 'mathematician', 'physicist', or 'ml-researcher'. "
+        "Auto-enables stage defaults for the persona and references a tailored walkthrough.",
+    ),
     events: str | None = _EVENTS_OPTION,
 ) -> None:
     """Lazy bootstrap: idempotently install elan, the Lean toolchain, and Pantograph.
@@ -904,10 +910,26 @@ def lean_bootstrap(
     tectonic) run only when their flag is passed. Stages 6–7 (Mathlib cache,
     LeanDojo) require both the flag AND ``--yes``. State is recorded to
     ``.grd/lean-env.json`` after every stage so partial runs resume cleanly.
+
+    Pass ``--for mathematician|physicist|ml-researcher`` for a persona-tailored
+    on-ramp that auto-enables the right optional stages and references a
+    walkthrough skill body for that domain.
     """
     with _lean_internal_guard():
-        from grd.core.lean.bootstrap import BootstrapOptions, run_bootstrap, uninstall
+        from grd.core.lean.bootstrap import (
+            VALID_PERSONAS,
+            BootstrapOptions,
+            run_bootstrap,
+            uninstall,
+        )
         from grd.core.lean.events import tty_finish
+
+        if for_persona is not None and for_persona not in VALID_PERSONAS:
+            _error(
+                f"Unknown persona '{for_persona}'. "
+                f"Valid: {', '.join(sorted(VALID_PERSONAS))}",
+                code=EXIT_INPUT_ERROR,
+            )
 
         emit = _make_emitter(events)
         project_root = _get_cwd()
@@ -925,12 +947,24 @@ def lean_bootstrap(
                 with_leandojo=with_leandojo,
                 dry_run=dry_run,
                 force=force,
+                persona=for_persona,
             ),
             on_event=emit,
         )
         if events:
             tty_finish()
         _output_for_events(report, events)
+        if not _helpers._raw and for_persona and report.ok:
+            _PERSONA_SKILL_HINT = {
+                "mathematician": "/grd:lean-bootstrap-mathematician",
+                "physicist": "/grd:lean-bootstrap-physicist",
+                "ml-researcher": "/grd:lean-bootstrap-ml-researcher",
+            }
+            skill = _PERSONA_SKILL_HINT.get(for_persona, "")
+            if skill:
+                console.print(
+                    f"\n[bold]Next step:[/] Run [cyan]{skill}[/] for a guided walkthrough."
+                )
         if not report.ok:
             raise typer.Exit(code=EXIT_ENV_ERROR)
 
