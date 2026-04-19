@@ -1,0 +1,14 @@
+{
+  "name": "simple-mechanics",
+  "description": "1D harmonic oscillator with energy conservation -- the canonical physicist demo.",
+  "domain": "physics",
+  "project_type": "classical-mechanics",
+  "phases": 1,
+  "claims": ["derived-energy-conservation"],
+  "files": [
+    "PROJECT.md",
+    "CONVENTIONS.md",
+    "ROADMAP.md",
+    "state.json"
+  ]
+}

@@ -266,8 +266,25 @@ def init_plan_phase(
 
 
 @init_app.command("new-project")
-def init_new_project() -> None:
+def init_new_project(
+    template: str | None = typer.Option(
+        None, "--template", help="Stamp out a pre-populated project template"
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Overwrite existing files when stamping a template"
+    ),
+) -> None:
     """Assemble context for starting a new project."""
+    if template is not None:
+        from grd.core.templates import stamp_project_template
+
+        try:
+            result = stamp_project_template(_get_cwd(), template, force=force)
+        except KeyError as exc:
+            _error(str(exc), code=2)
+        _output(result)
+        return
+
     from grd.core.context import init_new_project
 
     _output(init_new_project(_get_cwd()))
