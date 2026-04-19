@@ -51,6 +51,8 @@ from grd.core.lean.autoformalize.decision import (
 )
 from grd.core.lean.autoformalize.faithfulness import (
     FaithfulnessReport,
+    SemanticDiff,
+    compute_semantic_diff,
     jaccard_similarity,
 )
 from grd.core.lean.autoformalize.index import NameIndex, load_default_index
@@ -80,7 +82,9 @@ __all__ = [
     "LLMBackend",
     "MockLLM",
     "NameIndex",
+    "SemanticDiff",
     "VerifyClaimResult",
+    "compute_semantic_diff",
     "classify_compile_error",
     "decide_faithfulness",
     "jaccard_similarity",

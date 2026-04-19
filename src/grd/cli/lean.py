@@ -226,6 +226,41 @@ def _print_verify_claim_hints(result: object) -> None:
         err_console.print(f"  {h}", highlight=False)
 
 
+def _print_verify_claim_diff(result: object) -> None:
+    """Print a structured semantic diff when the faithfulness gate rejects.
+
+    In non-raw mode, surfaces the specific divergences (quantifiers, domains,
+    conventions, missing terms) so the user sees *what* changed, not just a
+    similarity float (ge-cla / UX-STUDY.md §P1-6).
+    """
+    if _helpers._raw:
+        return
+    if getattr(result, "outcome", None) == "auto_accept":
+        return
+    diff = getattr(result, "chosen_semantic_diff", None)
+    if diff is None:
+        return
+
+    lines: list[str] = []
+    if getattr(diff, "changed_quantifiers", None):
+        lines.append(f"  Quantifiers: {', '.join(diff.changed_quantifiers)}")
+    if getattr(diff, "changed_domains", None):
+        lines.append(f"  Domains: {', '.join(diff.changed_domains)}")
+    if getattr(diff, "changed_convention_terms", None):
+        lines.append(f"  Conventions: {', '.join(diff.changed_convention_terms)}")
+    if getattr(diff, "missing_hypotheses", None):
+        lines.append(f"  Missing from translation: {', '.join(diff.missing_hypotheses)}")
+    if getattr(diff, "only_in_translation", None):
+        lines.append(f"  Added in translation: {', '.join(diff.only_in_translation)}")
+
+    if not lines:
+        return
+    err_console.print("")
+    err_console.print("[bold]Semantic diff[/]", highlight=False)
+    for ln in lines:
+        err_console.print(ln, highlight=False)
+
+
 @lean_app.command("check")
 def lean_check(
     code: str | None = typer.Argument(
@@ -562,6 +597,7 @@ def lean_verify_claim(
 
         _output(_verify_result_to_dict(result))
         _print_verify_claim_warning(result)
+        _print_verify_claim_diff(result)
         _print_verify_claim_hints(result)
         if result.outcome != "auto_accept":
             raise typer.Exit(code=1)

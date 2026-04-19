@@ -14,6 +14,7 @@ import pytest
 
 from grd.core.lean.autoformalize.faithfulness import (
     assess_faithfulness,
+    compute_semantic_diff,
     cosine_sbert_similarity,
     jaccard_similarity,
 )
@@ -152,3 +153,85 @@ def test_assess_records_divergent_back_translation() -> None:
     # No content overlap at all → 0.0.
     assert report.similarity == 0.0
     assert report.backend == "jaccard"
+
+
+def test_assess_populates_semantic_diff() -> None:
+    """assess_faithfulness must produce a SemanticDiff on the report."""
+    llm = MockLLM(responses=["something entirely different about Goldbach"])
+    report = assess_faithfulness(
+        claim="pi is irrational",
+        lean_source="theorem foo : Irrational Real.pi := sorry",
+        llm=llm,
+    )
+    assert report.semantic_diff is not None
+    assert report.semantic_diff.similarity == report.similarity
+    # "pi" and "irrational" are in claim but not in "something entirely different about Goldbach"
+    assert "pi" in report.semantic_diff.only_in_claim
+    assert "irrational" in report.semantic_diff.only_in_claim
+
+
+# ─── compute_semantic_diff ────────────────────────────────────────────────
+
+
+def test_diff_identical_text_has_no_divergence() -> None:
+    diff = compute_semantic_diff("pi is irrational", "pi is irrational", similarity=1.0)
+    assert diff.similarity == 1.0
+    assert diff.only_in_claim == []
+    assert diff.only_in_translation == []
+    assert diff.changed_quantifiers == []
+    assert diff.changed_domains == []
+    assert diff.missing_hypotheses == []
+    assert diff.changed_convention_terms == []
+
+
+def test_diff_detects_quantifier_change() -> None:
+    diff = compute_semantic_diff(
+        "forall real numbers the function is continuous",
+        "exists real numbers the function is continuous",
+        similarity=0.7,
+    )
+    # "forall" in claim only, "exists" in translation only — both quantifiers.
+    assert "exists" in diff.changed_quantifiers
+    assert "forall" in diff.changed_quantifiers
+
+
+def test_diff_detects_domain_change() -> None:
+    diff = compute_semantic_diff(
+        "the function is continuous on the reals",
+        "the function is continuous on the integers",
+        similarity=0.6,
+    )
+    assert "reals" in diff.changed_domains
+    assert "integers" in diff.changed_domains
+
+
+def test_diff_detects_convention_terms() -> None:
+    diff = compute_semantic_diff(
+        "using the mostly minus metric signature",
+        "using the mostly plus metric signature",
+        similarity=0.7,
+    )
+    assert "minus" in diff.changed_convention_terms
+    assert "plus" in diff.changed_convention_terms
+
+
+def test_diff_missing_hypotheses_excludes_categorized_tokens() -> None:
+    diff = compute_semantic_diff(
+        "for every bounded continuous function on the reals",
+        "for a function on a space",
+        similarity=0.3,
+    )
+    # "bounded" is a quantifier-class token, "continuous" and "reals" are domain-class.
+    # "every" is a quantifier. None of these should appear in missing_hypotheses.
+    for tok in diff.missing_hypotheses:
+        assert tok not in {"every", "bounded", "continuous", "reals"}
+
+
+def test_diff_only_in_translation_captures_added_terms() -> None:
+    diff = compute_semantic_diff(
+        "pi is irrational",
+        "pi is irrational and transcendental",
+        similarity=0.6,
+    )
+    assert "transcendental" in diff.only_in_translation
+    assert diff.only_in_claim == []

@@ -35,7 +35,9 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "FaithfulnessReport",
+    "SemanticDiff",
     "assess_faithfulness",
+    "compute_semantic_diff",
     "cosine_sbert_similarity",
     "jaccard_similarity",
 ]
@@ -77,6 +79,87 @@ _STOPWORDS = frozenset(
 
 
 @dataclass(frozen=True)
+class SemanticDiff:
+    """Structured diff between an informal claim and its back-translation.
+
+    Replaces the opaque scalar-only similarity signal with a breakdown of
+    *what* diverged, per AUTOFORMALIZATION.md §8.4: "surface the specific
+    ambiguity (e.g., quantifier-order uncertain between candidates A/B)".
+
+    All list fields are populated from token-level analysis (cheap, always
+    available) rather than LLM calls (expensive, optional). The categories
+    are not mutually exclusive — a token can appear in both
+    ``changed_quantifiers`` and ``only_in_claim``.
+    """
+
+    similarity: float
+    changed_quantifiers: list[str] = field(default_factory=list)
+    changed_domains: list[str] = field(default_factory=list)
+    missing_hypotheses: list[str] = field(default_factory=list)
+    changed_convention_terms: list[str] = field(default_factory=list)
+    only_in_claim: list[str] = field(default_factory=list)
+    only_in_translation: list[str] = field(default_factory=list)
+
+
+# ─── Token-level semantic categories ──────────────────────────────────────
+# These pattern sets map tokens to semantic categories so the diff can say
+# "quantifier changed" rather than just "token missing". Kept intentionally
+# small — false negatives are fine (the raw only_in_claim/only_in_translation
+# fields catch everything); false positives are worse.
+
+_QUANTIFIER_TOKENS = frozenset({
+    "forall", "exists", "every", "each", "some", "any", "no",
+    "unique", "infinitely", "finitely", "countably", "uncountably",
+    "bounded", "unbounded", "almost",
+})
+
+_DOMAIN_TOKENS = frozenset({
+    "real", "reals", "complex", "integer", "integers", "natural", "naturals",
+    "rational", "rationals", "positive", "negative", "nonnegative",
+    "nonzero", "finite", "infinite", "compact", "open", "closed",
+    "continuous", "differentiable", "measurable", "integrable",
+    "hilbert", "banach", "metric", "topological", "manifold",
+})
+
+_CONVENTION_TOKENS = frozenset({
+    "metric", "signature", "mostly", "minus", "plus",
+    "natural", "units", "planck", "hbar",
+    "covariant", "contravariant", "einstein", "summation",
+    "diag", "minkowski", "lorentz", "euclidean",
+})
+
+
+def compute_semantic_diff(
+    claim: str,
+    back_translation: str,
+    similarity: float,
+) -> SemanticDiff:
+    """Compute a structured diff from token-level analysis.
+
+    Classifies tokens unique to either side into semantic categories
+    (quantifiers, domains, conventions) so the escalation message can
+    say *what* changed, not just *how much*.
+    """
+    claim_tokens = set(_tokenize(claim))
+    trans_tokens = set(_tokenize(back_translation))
+
+    only_claim = sorted(claim_tokens - trans_tokens)
+    only_trans = sorted(trans_tokens - claim_tokens)
+
+    all_diff = set(only_claim) | set(only_trans)
+
+    return SemanticDiff(
+        similarity=similarity,
+        changed_quantifiers=sorted(all_diff & _QUANTIFIER_TOKENS),
+        changed_domains=sorted(all_diff & _DOMAIN_TOKENS),
+        missing_hypotheses=[t for t in only_claim if t not in _QUANTIFIER_TOKENS | _DOMAIN_TOKENS | _CONVENTION_TOKENS],
+        changed_convention_terms=sorted(all_diff & _CONVENTION_TOKENS),
+        only_in_claim=only_claim,
+        only_in_translation=only_trans,
+    )
+
+
+@dataclass(frozen=True)
 class FaithfulnessReport:
     """Similarity + metadata for one successful candidate.
 
@@ -89,6 +172,7 @@ class FaithfulnessReport:
     similarity: float
     back_translation: str
     backend: str
+    semantic_diff: SemanticDiff | None = None
     notes: str = ""
     tokens_claim: tuple[str, ...] = field(default_factory=tuple)
     tokens_translation: tuple[str, ...] = field(default_factory=tuple)
@@ -112,10 +196,12 @@ def assess_faithfulness(
     back = _strip_surrounding_quotes(back)
 
     sim, backend, notes = _similarity(claim, back, sbert_model=sbert_model)
+    diff = compute_semantic_diff(claim, back, similarity=sim)
     return FaithfulnessReport(
         similarity=sim,
         back_translation=back,
         backend=backend,
+        semantic_diff=diff,
         notes=notes,
         tokens_claim=tuple(_tokenize(claim)),
         tokens_translation=tuple(_tokenize(back)),

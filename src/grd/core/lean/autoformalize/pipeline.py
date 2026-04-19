@@ -34,6 +34,7 @@ from grd.core.lean.autoformalize.decision import FaithfulnessDecision, decide_fa
 from grd.core.lean.autoformalize.escalate import BeadEscalationResult, escalate_to_human
 from grd.core.lean.autoformalize.faithfulness import (
     FaithfulnessReport,
+    SemanticDiff,
     assess_faithfulness,
     jaccard_similarity,
 )
@@ -89,6 +90,7 @@ class VerifyClaimResult:
     chosen_source: str | None
     chosen_back_translation: str | None
     chosen_similarity: float | None
+    chosen_semantic_diff: SemanticDiff | None = None
     candidates: list[CandidateResult] = field(default_factory=list)
     blueprint: BlueprintContext | None = None
     index_source: str = ""
@@ -257,6 +259,7 @@ def verify_claim(
         chosen_source=chosen_source,
         chosen_back_translation=winner.faithfulness.back_translation,
         chosen_similarity=winner.faithfulness.similarity,
+        chosen_semantic_diff=winner.faithfulness.semantic_diff,
         candidates=merged,
         blueprint=blueprint,
         index_source=idx.source,
@@ -371,13 +374,74 @@ def _escalate_low_confidence(
 ) -> BeadEscalationResult:
     fn = escalate_fn or escalate_to_human
     assert winner.faithfulness is not None
-    title = f"autoformalize: {decision.outcome.replace('_', ' ')} — human review needed"
-    body = (
-        f"Informal claim:\n{claim}\n\n"
-        f"Top Lean candidate:\n```lean\n{winner.repair.final_source.strip()}\n```\n\n"
-        f"Back-translation:\n{winner.faithfulness.back_translation}\n\n"
-        f"Similarity: {winner.faithfulness.similarity:.3f} ({winner.faithfulness.backend})\n"
-        f"Reason: {decision.reason}\n\n"
-        "Filed automatically by grd lean verify-claim (ge-48t)."
-    )
+    diff = winner.faithfulness.semantic_diff
+    title = _compose_escalation_title(decision, diff)
+    body = _compose_escalation_body(claim, winner, decision, diff)
     return fn(title=title, body=body, project_root=project_root)
+
+
+def _compose_escalation_title(
+    decision: FaithfulnessDecision,
+    diff: SemanticDiff | None,
+) -> str:
+    """Build a specific escalation title from the top semantic diff entry.
+
+    Per ge-cla: "autoformalize: quantifier scope flipped — ∀x∈S vs ∀x:T"
+    instead of the generic "autoformalize: escalate — human review needed".
+    """
+    if diff is None:
+        return f"autoformalize: {decision.outcome.replace('_', ' ')} — human review needed"
+
+    # Pick the most informative category, in priority order.
+    if diff.changed_quantifiers:
+        detail = f"quantifier divergence — {', '.join(diff.changed_quantifiers[:3])}"
+    elif diff.changed_convention_terms:
+        detail = f"convention drift — {', '.join(diff.changed_convention_terms[:3])}"
+    elif diff.changed_domains:
+        detail = f"domain mismatch — {', '.join(diff.changed_domains[:3])}"
+    elif diff.missing_hypotheses:
+        detail = f"missing terms — {', '.join(diff.missing_hypotheses[:3])}"
+    elif diff.only_in_claim or diff.only_in_translation:
+        n_dropped = len(diff.only_in_claim)
+        n_added = len(diff.only_in_translation)
+        detail = f"{n_dropped} claim terms lost, {n_added} new terms appeared"
+    else:
+        detail = f"similarity {diff.similarity:.2f}"
+
+    return f"autoformalize: {detail}"
+
+
+def _compose_escalation_body(
+    claim: str,
+    winner: CandidateResult,
+    decision: FaithfulnessDecision,
+    diff: SemanticDiff | None,
+) -> str:
+    """Build the escalation bead body with full semantic diff."""
+    assert winner.faithfulness is not None
+    sections = [
+        f"Informal claim:\n{claim}",
+        f"Top Lean candidate:\n```lean\n{winner.repair.final_source.strip()}\n```",
+        f"Back-translation:\n{winner.faithfulness.back_translation}",
+        f"Similarity: {winner.faithfulness.similarity:.3f} ({winner.faithfulness.backend})",
+    ]
+
+    if diff is not None:
+        diff_lines = []
+        if diff.changed_quantifiers:
+            diff_lines.append(f"  Quantifiers: {', '.join(diff.changed_quantifiers)}")
+        if diff.changed_domains:
+            diff_lines.append(f"  Domains: {', '.join(diff.changed_domains)}")
+        if diff.changed_convention_terms:
+            diff_lines.append(f"  Conventions: {', '.join(diff.changed_convention_terms)}")
+        if diff.missing_hypotheses:
+            diff_lines.append(f"  Missing from translation: {', '.join(diff.missing_hypotheses)}")
+        if diff.only_in_translation:
+            diff_lines.append(f"  Added in translation: {', '.join(diff.only_in_translation)}")
+
+        if diff_lines:
+            sections.append("Semantic diff:\n" + "\n".join(diff_lines))
+
+    sections.append(f"Reason: {decision.reason}")
+    sections.append("Filed automatically by grd lean verify-claim (ge-48t).")
+    return "\n\n".join(sections)
