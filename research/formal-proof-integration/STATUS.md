@@ -108,7 +108,7 @@ via the per-project Unix socket is in `src/grd/core/lean/daemon.py`.
 | Item | Status | Phase |
 |---|---|---|
 | `blueprint/` phase artifact directory (`content.tex`, `lakefile.lean`, `Proofs/`, `Blueprint.lean`) | shipped | 2 |
-| Convention bridge — Lean type classes generated from the 18-field convention lock | planned | 2 |
+| Convention bridge — Lean type classes generated from the 18-field convention lock (`grd lean gen-conventions`, pipeline preamble injection) | shipped | 2 |
 | `formal-verification` domain pack | planned | 4 |
 | Kimina Lean Server batch backend | planned | 4 |
 | Multi-backend (Coq, Isabelle) | planned | 5 |

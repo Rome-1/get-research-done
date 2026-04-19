@@ -299,3 +299,86 @@ def test_repair_propagates_imports_and_timeout(tmp_path: Path) -> None:
     assert check.calls[0]["imports"] == ["Mathlib"]
     assert check.calls[0]["timeout_s"] == 42.0
     assert check.calls[0]["use_daemon"] is False
+
+
+def test_preamble_prepended_to_compile_source(tmp_path: Path) -> None:
+    """When a preamble is provided, it is prepended to the source sent to Lean
+    but NOT included in the final_source or shown to the repair LLM (ge-j8k)."""
+    preamble = "namespace Blueprint.Conventions\ninstance : MetricSignature := ⟨SignChoice.mostlyMinus⟩\nend Blueprint.Conventions"
+    candidate = Candidate(index=0, source="theorem foo : True := trivial", raw="", temperature=0.3)
+    check = _ScriptedCheck([_ok()])
+    llm = MockLLM(responses=[])
+
+    outcome = repair_candidate(
+        candidate=candidate,
+        blueprint=_bp(),
+        index=NameIndex.empty(),
+        llm=llm,
+        project_root=tmp_path,
+        repair_budget=0,
+        lean_check=check,
+        preamble=preamble,
+    )
+
+    assert outcome.ok is True
+    # The source sent to Lean must include the preamble.
+    compiled_code = check.calls[0]["code"]
+    assert compiled_code.startswith(preamble)
+    assert "theorem foo : True := trivial" in compiled_code
+    # But final_source must NOT include the preamble — callers get the raw source.
+    assert outcome.final_source == "theorem foo : True := trivial"
+    assert "Blueprint.Conventions" not in outcome.final_source
+
+
+def test_preamble_not_sent_to_repair_llm(tmp_path: Path) -> None:
+    """On compile failure, the repair LLM receives only the candidate source,
+    not the preamble — otherwise it would strip the preamble during repair and
+    break subsequent compiles (ge-j8k)."""
+    preamble = "namespace Blueprint.Conventions\nend Blueprint.Conventions"
+    candidate = Candidate(index=0, source="bad lean code", raw="", temperature=0.3)
+    check = _ScriptedCheck([_fail("type mismatch"), _ok()])
+    llm = MockLLM(responses=["```lean\ntheorem foo : True := trivial\n```"])
+
+    outcome = repair_candidate(
+        candidate=candidate,
+        blueprint=_bp(),
+        index=NameIndex.empty(),
+        llm=llm,
+        project_root=tmp_path,
+        repair_budget=1,
+        lean_check=check,
+        preamble=preamble,
+    )
+
+    assert outcome.ok is True
+    # Both compile calls should include the preamble.
+    assert preamble in check.calls[0]["code"]
+    assert preamble in check.calls[1]["code"]
+    # The LLM call messages should NOT contain the preamble.
+    # calls is list of (system, messages, temperature) tuples.
+    assert len(llm.calls) == 1
+    system, messages, _ = llm.calls[0]
+    assert "Blueprint.Conventions" not in system
+    for msg in messages:
+        if isinstance(msg, dict) and "content" in msg:
+            assert "Blueprint.Conventions" not in msg["content"]
+
+
+def test_preamble_none_compiles_source_directly(tmp_path: Path) -> None:
+    """When preamble is None, the raw source goes to Lean unmodified."""
+    candidate = Candidate(index=0, source="theorem foo : True := trivial", raw="", temperature=0.3)
+    check = _ScriptedCheck([_ok()])
+    llm = MockLLM(responses=[])
+
+    repair_candidate(
+        candidate=candidate,
+        blueprint=_bp(),
+        index=NameIndex.empty(),
+        llm=llm,
+        project_root=tmp_path,
+        repair_budget=0,
+        lean_check=check,
+        preamble=None,
+    )
+
+    assert check.calls[0]["code"] == "theorem foo : True := trivial"

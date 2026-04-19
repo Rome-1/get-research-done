@@ -99,6 +99,7 @@ def repair_candidate(
     imports: list[str] | None = None,
     use_daemon: bool = True,
     lean_check: LeanCheckFn | None = None,
+    preamble: str | None = None,
 ) -> RepairOutcome:
     """Compile ``candidate``; on failure, LLM-repair up to ``repair_budget`` times.
 
@@ -109,6 +110,11 @@ def repair_candidate(
     ``repair_budget`` is the total number of compile attempts (per §8.2 MVP:
     10-20). A budget of 0 means "compile once, no repairs" — useful for
     latency-sensitive dry-runs.
+
+    ``preamble`` is a Lean code block (convention instances, namespace opens)
+    prepended to every compile attempt but not shown to the repair LLM. This
+    keeps convention infrastructure invisible to the repair loop while ensuring
+    every candidate compiles against the project's convention lock (ge-j8k).
     """
     check = lean_check or default_lean_check
     steps: list[RepairStep] = []
@@ -155,8 +161,9 @@ def repair_candidate(
             )
             continue
 
+        compile_source = f"{preamble}\n{source}" if preamble else source
         result = check(
-            code=source,
+            code=compile_source,
             project_root=project_root,
             imports=list(imports) if imports else None,
             timeout_s=timeout_s,

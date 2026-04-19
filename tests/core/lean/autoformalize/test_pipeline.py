@@ -394,3 +394,93 @@ def test_notes_flag_empty_index(tmp_path: Path) -> None:
         escalate_fn=_EscalateSpy(),
     )
     assert any("name index is empty" in note for note in result.notes)
+
+
+def test_convention_preamble_injected_into_compile(tmp_path: Path) -> None:
+    """When the blueprint has conventions with Lean mappings, the preamble is
+    prepended to compile attempts (ge-j8k)."""
+    # Create state.json with a mapped convention.
+    state_dir = tmp_path / ".grd"
+    state_dir.mkdir()
+    (state_dir / "state.json").write_text(
+        '{"convention_lock": {"metric_signature": "mostly-minus"}}',
+        encoding="utf-8",
+    )
+
+    claim = "energy is conserved"
+    cfg = AutoformalizeConfig(num_candidates=1, repair_budget=0)
+    llm = MockLLM(responses=_candidate_and_backtranslation(claim))
+    check = _StubCheck([_ok()])
+
+    result = verify_claim(
+        claim=claim,
+        project_root=tmp_path,
+        llm=llm,
+        config=cfg,
+        index=NameIndex.empty(),
+        lean_check=check,
+        escalate_fn=_EscalateSpy(),
+    )
+
+    assert result.outcome == "auto_accept"
+    # The compile call should have received the preamble + source.
+    compiled_code = check.calls[0]["code"]
+    assert "Blueprint.Conventions" in compiled_code
+    assert "MetricSignature" in compiled_code
+
+
+def test_convention_gap_surfaces_as_note(tmp_path: Path) -> None:
+    """Unsupported convention fields should appear as notes in the result (ge-j8k)."""
+    state_dir = tmp_path / ".grd"
+    state_dir.mkdir()
+    (state_dir / "state.json").write_text(
+        '{"convention_lock": {"gauge_choice": "Lorenz"}}',
+        encoding="utf-8",
+    )
+
+    claim = "field equation"
+    cfg = AutoformalizeConfig(num_candidates=1, repair_budget=0)
+    llm = MockLLM(responses=_candidate_and_backtranslation(claim))
+    check = _StubCheck([_ok()])
+
+    result = verify_claim(
+        claim=claim,
+        project_root=tmp_path,
+        llm=llm,
+        config=cfg,
+        index=NameIndex.empty(),
+        lean_check=check,
+        escalate_fn=_EscalateSpy(),
+    )
+
+    assert any("convention gap" in note for note in result.notes)
+
+
+def test_no_preamble_when_no_mapped_conventions(tmp_path: Path) -> None:
+    """When no conventions have Lean mappings, no preamble should be injected."""
+    state_dir = tmp_path / ".grd"
+    state_dir.mkdir()
+    # Only unsupported fields — no mapped count.
+    (state_dir / "state.json").write_text(
+        '{"convention_lock": {"gauge_choice": "Lorenz"}}',
+        encoding="utf-8",
+    )
+
+    claim = "some claim"
+    cfg = AutoformalizeConfig(num_candidates=1, repair_budget=0)
+    llm = MockLLM(responses=_candidate_and_backtranslation(claim))
+    check = _StubCheck([_ok()])
+
+    verify_claim(
+        claim=claim,
+        project_root=tmp_path,
+        llm=llm,
+        config=cfg,
+        index=NameIndex.empty(),
+        lean_check=check,
+        escalate_fn=_EscalateSpy(),
+    )
+
+    # Compile call gets just the source — no preamble prepended.
+    compiled_code = check.calls[0]["code"]
+    assert "Blueprint.Conventions" not in compiled_code
