@@ -26,6 +26,8 @@ Layering (each module importable on its own):
                       CLUSTER_CONSENSUS / ESCALATE.
     escalate.py     — Shell out to ``bd create -l human`` when the decision gate
                       demands human review. Captures the specific ambiguity.
+    stub.py         — stub_claim(...): lightweight stages 1→3 only. NL claim →
+                      skeleton Lean statement + retrieval hits + suggested imports.
     pipeline.py     — verify_claim(...) orchestrator. Threads 1→6 and returns a
                       VerifyClaimResult ready for CLI/JSON emission.
 
@@ -67,6 +69,10 @@ from grd.core.lean.autoformalize.pipeline import (
     VerifyClaimResult,
     verify_claim,
 )
+from grd.core.lean.autoformalize.stub import (
+    StubClaimResult,
+    stub_claim,
+)
 
 __all__ = [
     "DEFAULT_AUTO_ACCEPT_SIMILARITY",
@@ -83,6 +89,7 @@ __all__ = [
     "MockLLM",
     "NameIndex",
     "SemanticDiff",
+    "StubClaimResult",
     "VerifyClaimResult",
     "compute_semantic_diff",
     "classify_compile_error",
@@ -90,5 +97,6 @@ __all__ = [
     "jaccard_similarity",
     "load_autoformalize_config",
     "load_default_index",
+    "stub_claim",
     "verify_claim",
 ]
