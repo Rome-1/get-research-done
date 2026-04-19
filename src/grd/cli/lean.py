@@ -686,6 +686,46 @@ def _print_search_results(result: object) -> None:
     err_console.print(f"\n[dim]Intent: {result.intent} | {result.elapsed_ms}ms[/]", highlight=False)
 
 
+@lean_app.command("gen-conventions")
+def lean_gen_conventions(
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Write the preamble to this path. Default: print to stdout (raw) or stderr (human).",
+    ),
+) -> None:
+    """Generate a Lean 4 preamble from the project's convention lock.
+
+    Reads ``.grd/state.json`` and maps each convention field to a Lean type
+    class instance. Fields with no Lean counterpart emit TODO comments
+    suitable for filing discovered-from children of ge-tau.
+
+    Exit codes: 0 success, 2 no state.json, 4 internal error.
+    """
+    from grd.core.lean.convention_bridge import generate_preamble
+
+    with _lean_internal_guard():
+        result = generate_preamble(_get_cwd(), output_path=output)
+
+    _output(result)
+
+    if not _helpers._raw:
+        if result.path:
+            err_console.print(f"[green]Wrote preamble to {result.path}[/]", highlight=False)
+        err_console.print(
+            f"[dim]Mapped: {result.mapped_count} | "
+            f"Unsupported: {result.unsupported_count} | "
+            f"Unset: {result.unset_count}[/]",
+            highlight=False,
+        )
+        todos = [m for m in result.mappings if m.todo]
+        if todos:
+            err_console.print("\n[bold]TODOs (file discovered-from:ge-tau):[/]", highlight=False)
+            for m in todos:
+                err_console.print(f"  - {m.todo}", highlight=False)
+
+
 @lean_app.command("env")
 def lean_env() -> None:
     """Show detected Lean toolchain, env file status, and daemon state.

@@ -44,6 +44,7 @@ from grd.core.lean.autoformalize.repair import (
     RepairOutcome,
     repair_candidate,
 )
+from grd.core.lean.convention_bridge import generate_preamble_from_lock
 from grd.core.lean.events import EventCallback, StageCompleted, StageStarted
 
 if TYPE_CHECKING:
@@ -150,6 +151,16 @@ def verify_claim(
         )
     _emit(StageCompleted(stage="extract", status="ok"))
 
+    # Generate convention preamble from the blueprint's convention lock (ge-j8k).
+    # The preamble is prepended to every compile attempt so candidates compile
+    # against the project's conventions without polluting the LLM repair context.
+    preamble_result = generate_preamble_from_lock(blueprint.conventions)
+    preamble: str | None = preamble_result.preamble if preamble_result.mapped_count > 0 else None
+    if preamble_result.unsupported_count > 0:
+        todos = [m.todo for m in preamble_result.mappings if m.todo]
+        for todo in todos[:3]:
+            notes.append(f"convention gap: {todo}")
+
     # Stage 2: Retrieve  (index loading happened above — report it)
     _emit(StageStarted(stage="retrieve"))
     _emit(StageCompleted(stage="retrieve", status="ok", detail=f"index: {idx.source} ({idx.size} names)"))
@@ -181,6 +192,7 @@ def verify_claim(
             imports=imports,
             use_daemon=use_daemon,
             lean_check=lean_check,
+            preamble=preamble,
         )
         result = CandidateResult(index=cand.index, candidate=cand, repair=repair)
         candidate_results.append(result)

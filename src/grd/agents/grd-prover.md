@@ -203,20 +203,34 @@ Return in `grd_return`:
 
 ## Convention Preamble
 
-`state.json` contains the 18-field convention lock. Translate it into a Lean preamble so formal proofs inherit the same conventions as the informal derivation. Shape:
+`state.json` contains the 18-field convention lock. The convention bridge (`grd.core.lean.convention_bridge`) auto-generates a Lean preamble from this lock. You do NOT need to write the preamble by hand — it is generated and injected automatically.
 
-```lean
--- Generated from .grd/state.json — do NOT edit by hand
-import Blueprint.Conventions
+**CLI generation (for inspection / manual use):**
 
-open GRDConventions
-
-instance : MetricSignature := ⟨SignChoice.mostlyMinus⟩   -- lock.metric_signature
-instance : NaturalUnits := .natural                        -- lock.natural_units
--- ... one instance per convention field that has a Lean counterpart
+```bash
+grd lean gen-conventions              # print to stdout
+grd lean gen-conventions -o blueprint/Conventions.lean  # write to file
 ```
 
-If a convention field has no Lean counterpart yet, emit a comment documenting the gap — do not silently drop it. File a `discovered-from` bead against ge-tau (Phase 2.4) and the convention pack owner.
+**Pipeline integration:** `verify-claim` auto-generates the preamble from `BlueprintContext.conventions` and prepends it to every compile attempt. The preamble is invisible to the repair LLM — only the candidate source is shown during APOLLO-style repair.
+
+**Generated shape:**
+
+```lean
+-- Generated from .grd/state.json convention lock — do NOT edit by hand
+-- Regenerate with: grd lean gen-conventions
+
+namespace Blueprint.Conventions
+
+instance : MetricSignature := ⟨SignChoice.mostlyMinus⟩  -- metric_signature = mostly-minus
+instance : NaturalUnits := ⟨NaturalUnitsChoice.si⟩  -- natural_units = SI
+-- TODO in Blueprint.Conventions: gauge_choice = Lorenz
+--   Convention gauge_choice=Lorenz: no Lean type class exists yet. File discovered-from:ge-tau.
+
+end Blueprint.Conventions
+```
+
+**Supported fields** (6 of 18 have Lean mappings): `metric_signature`, `natural_units`, `fourier_convention`, `coordinate_system`, `gamma_matrix_convention`, `levi_civita_sign`. The remaining 12 emit TODO comments — file `discovered-from:ge-tau` beads for each gap.
 
 Never override the convention lock from inside a proof file. If the proof needs a different convention, the claim is not actually about the project's results — raise it as a finding.
 
