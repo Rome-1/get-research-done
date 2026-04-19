@@ -1,6 +1,6 @@
 # Formal-Proof Integration — Status
 
-**Last updated:** 2026-04-19 (bead ge-5o8)
+**Last updated:** 2026-04-19 (bead ge-bqdt)
 **Pitch:** [PITCH.md](./PITCH.md)
 **Epic:** ge-wisp-rnf6 (mol-polecat-work)
 
@@ -113,6 +113,7 @@ via the per-project Unix socket is in `src/grd/core/lean/daemon.py`.
 | `blueprint/` phase artifact directory (`content.tex`, `lakefile.lean`, `Proofs/`, `Blueprint.lean`) | shipped | 2 |
 | Convention bridge — Lean type classes generated from the 18-field convention lock | planned | 2 |
 | Persona-aware bootstrap (`--for` flag + 3 walkthrough skills) | shipped | 4 |
+| `simple-mechanics` project template (`grd init new-project --template simple-mechanics`) | shipped | 3 |
 | `formal-verification` domain pack | planned | 4 |
 | Kimina Lean Server batch backend | planned | 4 |
 | Multi-backend (Coq, Isabelle) | planned | 5 |
@@ -132,6 +133,7 @@ via the per-project Unix socket is in `src/grd/core/lean/daemon.py`.
 | ge-cch | Running list of upstream tooling friction (Leanblueprint, Pantograph, LeanDojo, Kimina) |
 | ge-h0j | Testing strategy / test matrix |
 | ge-5o8 | Persona-aware bootstrap — `--for {mathematician,physicist,ml-researcher}` + walkthrough skills |
+| ge-bqdt | Canonical physicist demo template — `simple-mechanics` + `--template` CLI flag |
 
 ## Keeping this honest
 

@@ -1,0 +1,180 @@
+{
+  "_version": 1,
+  "project_reference": {
+    "project_md_updated": null,
+    "core_research_question": "Does the 1D SHO Hamiltonian H(q,p) remain constant along trajectories of Hamilton's equations?",
+    "current_focus": "Phase 1: Derive Hamiltonian and state energy conservation"
+  },
+  "project_contract": {
+    "schema_version": 1,
+    "scope": {
+      "question": "Prove energy conservation for the 1D simple harmonic oscillator",
+      "in_scope": [
+        "Energy conservation for autonomous 1D SHO with H(q,p) = p^2/(2m) + m*omega^2*q^2/2"
+      ],
+      "out_of_scope": [
+        "Driven or damped oscillator",
+        "Multi-DOF systems",
+        "Numerical integration",
+        "Quantum treatment"
+      ],
+      "unresolved_questions": []
+    },
+    "claims": [
+      {
+        "id": "derived-energy-conservation",
+        "statement": "For all m > 0, omega > 0, and all solutions (q(t), p(t)) of Hamilton's equations, dH/dt = 0",
+        "claim_kind": "theorem",
+        "observables": [],
+        "deliverables": ["deliv-proof"],
+        "acceptance_tests": ["test-formal-proof"],
+        "references": [],
+        "parameters": [
+          {
+            "symbol": "m",
+            "domain_or_type": "positive real (mass)",
+            "aliases": [],
+            "required_in_proof": true
+          },
+          {
+            "symbol": "omega",
+            "domain_or_type": "positive real (angular frequency)",
+            "aliases": ["w"],
+            "required_in_proof": true
+          }
+        ],
+        "hypotheses": [
+          {
+            "id": "hyp-mass-pos",
+            "text": "m > 0",
+            "symbols": ["m"],
+            "category": "assumption",
+            "required_in_proof": true
+          },
+          {
+            "id": "hyp-freq-pos",
+            "text": "omega > 0",
+            "symbols": ["omega"],
+            "category": "assumption",
+            "required_in_proof": true
+          }
+        ],
+        "quantifiers": [
+          "for all t in R"
+        ],
+        "conclusion_clauses": [
+          {
+            "id": "concl-energy-conserved",
+            "text": "H(q(t), p(t)) = H(q(0), p(0))"
+          }
+        ],
+        "proof_deliverables": ["deliv-proof"],
+        "verification_status": {
+          "tier_1": {
+            "dimensional_analysis": {
+              "status": "pass",
+              "detail": "[H] = kg * m^2 * s^{-2} = J; both terms p^2/(2m) and m*omega^2*q^2/2 have dimension J",
+              "evidence_kind": "computational"
+            },
+            "numerical_spot_check": {
+              "status": "pass",
+              "detail": "m=1, omega=1, q(0)=1, p(0)=0: H=0.5 J; q(pi/2)=0, p(pi/2)=-1: H=0.5 J",
+              "evidence_kind": "computational"
+            },
+            "limiting_cases": {
+              "status": "pass",
+              "detail": "omega -> 0: H = p^2/(2m), free particle with dH/dt = 0 (trivially conserved)",
+              "evidence_kind": "hybrid"
+            }
+          },
+          "tier_2": {
+            "conservation_laws": {
+              "status": "pass",
+              "detail": "Energy conservation IS the claim; self-consistent by construction",
+              "evidence_kind": "hybrid"
+            },
+            "literature_cross_check": {
+              "status": "pass",
+              "detail": "Standard textbook result: Goldstein Ch. 8, Landau & Lifshitz Mechanics Ch. 2",
+              "evidence_kind": "hybrid"
+            },
+            "order_of_magnitude_estimation": {
+              "status": "pass",
+              "detail": "For m=1 kg, omega=1 rad/s, amplitude A=1 m: H = 0.5 J, consistent with 1/2 * m * omega^2 * A^2",
+              "evidence_kind": "computational"
+            }
+          },
+          "tier_3": {
+            "not_applicable": "No gauge symmetry, unitarity, or causality constraints for classical 1D mechanics"
+          },
+          "tier_4": {
+            "symmetry_check": {
+              "status": "pass",
+              "detail": "H has no explicit time dependence => time-translation symmetry => Noether's theorem => energy conserved",
+              "evidence_kind": "hybrid"
+            }
+          },
+          "tier_5": {
+            "formal_statement": {
+              "status": "available",
+              "detail": "theorem energy_conserved (m omega : R) (hm : 0 < m) (hw : 0 < omega) : forall t, H q(t) p(t) = H q(0) p(0)"
+            },
+            "formal_proof": {
+              "status": "available",
+              "detail": "Awaiting formal proof via grd lean verify-claim"
+            }
+          }
+        }
+      }
+    ],
+    "deliverables": [
+      {
+        "id": "deliv-proof",
+        "kind": "derivation",
+        "path": "derivations/energy-conservation.md",
+        "description": "Derivation of dH/dt = 0 from Hamilton's equations",
+        "must_contain": ["chain rule computation", "substitution of Hamilton's equations"]
+      }
+    ],
+    "acceptance_tests": [
+      {
+        "id": "test-formal-proof",
+        "subject": "derived-energy-conservation",
+        "kind": "formal_verification",
+        "procedure": "Lean 4 proof of energy_conserved typechecks via grd lean check",
+        "pass_condition": "Lean kernel accepts the proof term",
+        "evidence_required": ["deliv-proof"],
+        "automation": "full"
+      }
+    ],
+    "references": []
+  },
+  "position": {
+    "phase": 1,
+    "plan": null,
+    "status": "active"
+  },
+  "active_calculations": [],
+  "intermediate_results": [],
+  "open_questions": [],
+  "convention_lock": {
+    "coordinate_system": "Cartesian 1D (q in R), conjugate momentum p = m dq/dt",
+    "natural_units": "SI (kg, m, s, J)",
+    "custom_conventions": {
+      "hamiltonian_form": "H(q,p) = p^2/(2m) + m*omega^2*q^2/2",
+      "poisson_bracket": "{q, p} = 1"
+    }
+  },
+  "decisions": [
+    {
+      "id": "dec-si-units",
+      "text": "Use SI units throughout",
+      "rationale": "Classical mechanics; no benefit from natural units",
+      "phase": 1
+    }
+  ],
+  "approximations": [],
+  "propagated_uncertainties": [],
+  "pending_todos": [],
+  "blockers": []
+}
