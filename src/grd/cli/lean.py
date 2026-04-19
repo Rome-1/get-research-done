@@ -1122,7 +1122,9 @@ def lean_blueprint_status(
         console.print("")
         console.print(result.ascii_graph)
         if result.summary.get("leanok_updated", 0) > 0:
-            console.print(f"\n[green]Auto-marked {result.summary['leanok_updated']} node(s) as \\leanok[/]")
+            console.print(
+                f"\n[green]Auto-marked {result.summary['leanok_updated']} node(s) as \\leanok[/]"
+            )
 
 
 @lean_app.command("bootstrap")
