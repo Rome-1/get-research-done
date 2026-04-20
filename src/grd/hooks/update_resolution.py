@@ -8,6 +8,7 @@ from pathlib import Path
 
 import grd.hooks.install_context as hook_layout
 from grd.adapters.install_utils import CACHE_DIR_NAME, UPDATE_CACHE_FILENAME
+from grd.core.constants import PLANNING_DIR_NAME
 from grd.core.root_resolution import resolve_project_root
 
 DebugLogger = Callable[[str], None]
@@ -84,14 +85,20 @@ def ordered_update_cache_candidates(
     runtime_names = supported_runtime_names()
     explicit_active_runtime = normalize_runtime_name(active_installed_runtime)
     no_active_runtime = (
-        explicit_active_runtime is None if active_installed_runtime is not None else active_runtime in (None, "", RUNTIME_UNKNOWN)
+        explicit_active_runtime is None
+        if active_installed_runtime is not None
+        else active_runtime in (None, "", RUNTIME_UNKNOWN)
     )
     if no_active_runtime and resolved_preferred_runtime in runtime_names:
         preferred_candidates = [
-            candidate for candidate in relevant_candidates if getattr(candidate, "runtime", None) == resolved_preferred_runtime
+            candidate
+            for candidate in relevant_candidates
+            if getattr(candidate, "runtime", None) == resolved_preferred_runtime
         ]
         if preferred_candidates:
-            fallback_candidates = [candidate for candidate in relevant_candidates if getattr(candidate, "runtime", None) is None]
+            fallback_candidates = [
+                candidate for candidate in relevant_candidates if getattr(candidate, "runtime", None) is None
+            ]
             seen_paths: set[Path] = set()
             preferred_first: list[object] = []
             for candidate in [*preferred_candidates, *fallback_candidates]:
@@ -124,7 +131,7 @@ def _project_layout_update_cache_candidate(workspace_path: Path | None):
     project_root = resolve_project_root(workspace_path, require_layout=True)
     if project_root is None:
         return None
-    return UpdateCacheCandidate(project_root / "GRD" / CACHE_DIR_NAME / UPDATE_CACHE_FILENAME)
+    return UpdateCacheCandidate(project_root / PLANNING_DIR_NAME / CACHE_DIR_NAME / UPDATE_CACHE_FILENAME)
 
 
 def latest_update_cache(
@@ -211,7 +218,9 @@ def update_command_for_candidate(
 
     runtime = getattr(candidate, "runtime", None) or RUNTIME_UNKNOWN
     scope = getattr(candidate, "scope", None)
-    if runtime != RUNTIME_UNKNOWN and not _runtime_dir_has_grd_install(runtime, cwd=workspace_path, home=lookup.resolved_home):
+    if runtime != RUNTIME_UNKNOWN and not _runtime_dir_has_grd_install(
+        runtime, cwd=workspace_path, home=lookup.resolved_home
+    ):
         runtime = RUNTIME_UNKNOWN
         scope = None
     if runtime == RUNTIME_UNKNOWN:

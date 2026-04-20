@@ -11,6 +11,7 @@ from pathlib import Path
 from pydantic import ValidationError as PydanticValidationError
 
 from grd.contracts import PROOF_AUDIT_REVIEWER, statement_looks_theorem_like
+from grd.core.constants import PLANNING_DIR_NAME
 from grd.core.frontmatter import FrontmatterParseError, extract_frontmatter
 from grd.core.manuscript_artifacts import resolve_current_manuscript_entrypoint
 from grd.core.publication_review_paths import resolve_review_manuscript_path, review_artifact_round
@@ -169,7 +170,7 @@ def manuscript_has_theorem_bearing_claim_inventory(
     if entrypoint is None:
         return False
 
-    review_dir = project_root / "GRD" / "review"
+    review_dir = project_root / PLANNING_DIR_NAME / "review"
     if not review_dir.exists():
         return False
 
@@ -346,7 +347,9 @@ def resolve_manuscript_proof_review_status(
         _resolve_review_artifacts(project_root, review_anchor.proof_artifact_paths),
     )
     if review_anchor.proof_bearing:
-        proof_redteam_path = project_root / "GRD" / "review" / f"PROOF-REDTEAM{review_anchor.round_suffix}.md"
+        proof_redteam_path = (
+            project_root / PLANNING_DIR_NAME / "review" / f"PROOF-REDTEAM{review_anchor.round_suffix}.md"
+        )
         watched_files = _with_extra_watched_files(watched_files, proof_redteam_path)
         if not proof_redteam_path.exists():
             return ProofReviewStatus(
@@ -433,7 +436,9 @@ def _resolve_status(
 
         expected_hashes = manifest_records["hashes"]
         changed_labels = sorted(
-            path for path in expected_hashes.keys() & current_hashes.keys() if expected_hashes[path] != current_hashes[path]
+            path
+            for path in expected_hashes.keys() & current_hashes.keys()
+            if expected_hashes[path] != current_hashes[path]
         )
         missing_labels = sorted(path for path in expected_hashes.keys() - current_hashes.keys())
         unexpected_labels = sorted(path for path in current_hashes.keys() - expected_hashes.keys())
@@ -609,7 +614,7 @@ def _with_extra_watched_files(*groups: tuple[Path, ...] | Path) -> tuple[Path, .
 
 
 def _latest_matching_math_review_anchor(project_root: Path, manuscript_entrypoint: Path) -> _MathReviewAnchor | None:
-    review_dir = project_root / "GRD" / "review"
+    review_dir = project_root / PLANNING_DIR_NAME / "review"
     if not review_dir.exists():
         return None
 
@@ -670,7 +675,9 @@ def _latest_matching_math_review_anchor(project_root: Path, manuscript_entrypoin
                 )
             )
             continue
-        report_matches_current = resolve_review_manuscript_path(project_root, report.manuscript_path) == resolved_manuscript
+        report_matches_current = (
+            resolve_review_manuscript_path(project_root, report.manuscript_path) == resolved_manuscript
+        )
         if not report_matches_current and not claim_index_matches_current:
             continue
         if claim_index is not None:
@@ -841,7 +848,11 @@ def _read_proof_redteam_status(
         return None, "proof-redteam Adversarial Probe must record both probe type and result"
 
     verdict_body = _section_body(body, "## Verdict")
-    if "Scope status:" not in verdict_body or "Quantifier status:" not in verdict_body or "Counterexample status:" not in verdict_body:
+    if (
+        "Scope status:" not in verdict_body
+        or "Quantifier status:" not in verdict_body
+        or "Counterexample status:" not in verdict_body
+    ):
         return None, "proof-redteam Verdict must include scope, quantifier, and counterexample status lines"
 
     if status == "passed":
@@ -869,7 +880,9 @@ def _read_proof_redteam_status(
     return status, None
 
 
-def _read_proof_redteam_structured_audit(meta: dict[str, object]) -> tuple[_ProofRedteamStructuredAudit | None, str | None]:
+def _read_proof_redteam_structured_audit(
+    meta: dict[str, object],
+) -> tuple[_ProofRedteamStructuredAudit | None, str | None]:
     missing_parameter_symbols, error = _read_proof_redteam_string_list(meta, "missing_parameter_symbols")
     if error is not None:
         return None, error
@@ -879,7 +892,9 @@ def _read_proof_redteam_structured_audit(meta: dict[str, object]) -> tuple[_Proo
     coverage_gaps, error = _read_proof_redteam_string_list(meta, "coverage_gaps")
     if error is not None:
         return None, error
-    scope_status, error = _read_proof_redteam_status_value(meta, "scope_status", _PROOF_REDTEAM_REQUIRED_SCOPE_STATUS_VALUES)
+    scope_status, error = _read_proof_redteam_status_value(
+        meta, "scope_status", _PROOF_REDTEAM_REQUIRED_SCOPE_STATUS_VALUES
+    )
     if error is not None:
         return None, error
     quantifier_status, error = _read_proof_redteam_status_value(

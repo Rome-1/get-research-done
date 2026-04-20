@@ -30,7 +30,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from grd.core import continuation as _continuation_module
-from grd.core.constants import ProjectLayout
+from grd.core.constants import PLANNING_DIR_NAME, ProjectLayout
 from grd.core.continuation import ContinuationBoundedSegment
 from grd.core.execution_lineage import (
     ExecutionHeadEffect,
@@ -509,7 +509,9 @@ def _sync_execution_visibility_anchors_from_canonical_continuation(
 ) -> bool:
     """Project canonical continuity anchors into existing live execution caches."""
 
-    layout = layout if isinstance(layout, ProjectLayout) else ProjectLayout(Path(layout).expanduser().resolve(strict=False))
+    layout = (
+        layout if isinstance(layout, ProjectLayout) else ProjectLayout(Path(layout).expanduser().resolve(strict=False))
+    )
     current_exists = layout.current_observability_execution.exists()
     head_exists = layout.execution_lineage_head.exists()
     if not current_exists and not head_exists:
@@ -568,7 +570,11 @@ def _sync_execution_visibility_anchors_from_canonical_continuation(
     if live_snapshot is None:
         return False
 
-    if current_snapshot is not None and head_snapshot is not None and not _execution_lanes_compatible(current_snapshot, head_snapshot):
+    if (
+        current_snapshot is not None
+        and head_snapshot is not None
+        and not _execution_lanes_compatible(current_snapshot, head_snapshot)
+    ):
         return False
     if not _execution_lanes_compatible(live_snapshot, canonical_bounded_segment):
         return False
@@ -584,7 +590,9 @@ def _sync_execution_visibility_anchors_from_canonical_continuation(
     with file_lock(lock_target):
         if current_exists:
             current_updated = (
-                updated_snapshot if head_snapshot is not None else current_snapshot.model_copy(update=updated_fields)
+                updated_snapshot
+                if head_snapshot is not None
+                else current_snapshot.model_copy(update=updated_fields)
                 if current_snapshot is not None
                 else updated_snapshot
             )
@@ -1005,8 +1013,7 @@ def _execution_visibility_next_steps(
     from grd.core.surface_phrases import command_follow_up_action
 
     return [
-        command_follow_up_action(command=suggestion.command, reason=suggestion.reason)
-        for suggestion in suggestions
+        command_follow_up_action(command=suggestion.command, reason=suggestion.reason) for suggestion in suggestions
     ]
 
 
@@ -1634,7 +1641,9 @@ def _updated_execution_state(
         current["segment_status"] = "active"
     elif payload.name == "segment" and payload.action == "pause":
         pause_status = (current.get("segment_status") or "").strip().lower()
-        current["segment_status"] = pause_status if pause_status in {"paused", "awaiting_user", "ready_to_continue"} else "paused"
+        current["segment_status"] = (
+            pause_status if pause_status in {"paused", "awaiting_user", "ready_to_continue"} else "paused"
+        )
     elif payload.name == "segment" and payload.action in {"finish", "stop"}:
         current["segment_status"] = "completed"
 
@@ -1747,7 +1756,9 @@ def _updated_execution_state(
         current["segment_status"] = "active"
     elif payload.name == "segment" and payload.action == "pause":
         pause_status = (current.get("segment_status") or "").strip().lower()
-        current["segment_status"] = pause_status if pause_status in {"paused", "awaiting_user", "ready_to_continue"} else "paused"
+        current["segment_status"] = (
+            pause_status if pause_status in {"paused", "awaiting_user", "ready_to_continue"} else "paused"
+        )
     elif payload.name == "segment" and payload.action in {"finish", "stop"}:
         current["segment_status"] = "completed"
 
@@ -2409,7 +2420,7 @@ def export_logs(
             reason="No GRD project found in working directory",
         )
 
-    dest = Path(output_dir) if output_dir else layout.root / "GRD" / "exports" / "logs"
+    dest = Path(output_dir) if output_dir else layout.root / PLANNING_DIR_NAME / "exports" / "logs"
     dest.mkdir(parents=True, exist_ok=True)
 
     if format not in {"jsonl", "json", "markdown"}:

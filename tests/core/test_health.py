@@ -90,7 +90,9 @@ def _draft_invalid_project_contract() -> dict[str, object]:
     return contract
 
 
-def _expected_permissions_capability_fallback_payload(*, contract_source: str, contract_error: str | None = None) -> dict[str, object]:
+def _expected_permissions_capability_fallback_payload(
+    *, contract_source: str, contract_error: str | None = None
+) -> dict[str, object]:
     payload: dict[str, object] = {
         "contract_source": contract_source,
         "permissions_surface": "adapter-defined",
@@ -219,6 +221,7 @@ def test_permissions_capability_payload_keeps_generic_fallback_for_unknown_runti
     payload = health_module._permissions_capability_payload(PRIMARY_RUNTIME)
 
     assert payload == _expected_permissions_capability_fallback_payload(contract_source="generic-fallback")
+
 
 # ─── Model Tests ─────────────────────────────────────────────────────────────
 
@@ -723,7 +726,7 @@ class TestCheckKnowledgeInventory:
 
     def test_reports_counts_staleness_supersession_and_skipped_docs(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        knowledge_dir = cwd / "GRD" / "knowledge"
+        knowledge_dir = cwd / ".grd" / "knowledge"
         knowledge_dir.mkdir(parents=True, exist_ok=True)
 
         stable_base_body = "Trusted knowledge body.\n"
@@ -787,13 +790,15 @@ class TestCheckKnowledgeInventory:
         assert result.details["missing_supersession_target_files"] == [
             "GRD/knowledge/K-renormalization-group-superseded.md -> K-renormalization-group-missing-target"
         ]
-        assert any("skipping knowledge doc GRD/knowledge/K-invalid-knowledge.md" in warning for warning in result.warnings)
+        assert any(
+            "skipping knowledge doc GRD/knowledge/K-invalid-knowledge.md" in warning for warning in result.warnings
+        )
         assert any("stale reviews" in warning for warning in result.warnings)
         assert any("missing targets" in warning for warning in result.warnings)
 
     def test_reports_migration_diagnostics_for_upgradeable_and_blocked_docs(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        knowledge_dir = cwd / "GRD" / "knowledge"
+        knowledge_dir = cwd / ".grd" / "knowledge"
         knowledge_dir.mkdir(parents=True, exist_ok=True)
 
         stable_body = "Trusted knowledge body.\n"
@@ -949,8 +954,7 @@ class TestCheckStoragePaths:
         )
 
         assert result.returncode == 1, (
-            f"GRD files should not be gitignored but git check-ignore matched: "
-            f"{result.stdout.strip()}"
+            f"GRD files should not be gitignored but git check-ignore matched: {result.stdout.strip()}"
         )
 
     def test_git_status_reports_dirty_tracked_checkpoint_artifacts(self, tmp_path: Path) -> None:
@@ -962,7 +966,13 @@ class TestCheckStoragePaths:
         root_index.write_text("initial index\n", encoding="utf-8")
         phase_checkpoint.write_text("initial phase checkpoint\n", encoding="utf-8")
 
-        subprocess.run(["git", "add", "-f", ".grd/CHECKPOINTS.md", ".grd/phase-checkpoints/01-test-phase.md"], cwd=repo, check=True, capture_output=True, text=True)
+        subprocess.run(
+            ["git", "add", "-f", ".grd/CHECKPOINTS.md", ".grd/phase-checkpoints/01-test-phase.md"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
         root_index.write_text("dirty index\n", encoding="utf-8")
         phase_checkpoint.write_text("dirty phase checkpoint\n", encoding="utf-8")
@@ -1273,7 +1283,10 @@ class TestCheckStateValidityProjectContract:
         result = check_state_validity(cwd)
 
         assert result.status == CheckStatus.FAIL
-        assert any("project_contract: claim claim-benchmark references unknown reference missing-ref" in issue for issue in result.issues)
+        assert any(
+            "project_contract: claim claim-benchmark references unknown reference missing-ref" in issue
+            for issue in result.issues
+        )
         assert not any(
             "project_contract: claim claim-benchmark references unknown reference missing-ref" in warning
             for warning in result.warnings
@@ -1324,9 +1337,7 @@ class TestRunHealth:
         assert knowledge_check.details["knowledge_dir_present"] is False
         assert knowledge_check.details["reason"] == "no_knowledge_dir"
 
-    def test_read_only_health_does_not_recover_intent_marker_and_keeps_state_unchanged(
-        self, tmp_path: Path
-    ) -> None:
+    def test_read_only_health_does_not_recover_intent_marker_and_keeps_state_unchanged(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
         layout = ProjectLayout(cwd)
 
@@ -1737,7 +1748,9 @@ trigger:
             if command == ["git", "--version"]:
                 return subprocess.CompletedProcess(args=command, returncode=0, stdout="git version 2.47.0\n", stderr="")
             if command == [sys.executable, "-m", "grd.cli", "--help"]:
-                return subprocess.CompletedProcess(args=command, returncode=0, stdout="Usage: grd [OPTIONS] COMMAND\n", stderr="")
+                return subprocess.CompletedProcess(
+                    args=command, returncode=0, stdout="Usage: grd [OPTIONS] COMMAND\n", stderr=""
+                )
             if command == ["/usr/bin/pdflatex", "--version"]:
                 return subprocess.CompletedProcess(args=command, returncode=0, stdout="pdfTeX 3.14159265\n", stderr="")
             if command == ["/usr/bin/bibtex", "--version"]:
@@ -1961,7 +1974,13 @@ class TestCheckLatestReturn:
         assert result.status == CheckStatus.OK
         assert result.label == "Latest Return Envelope"
         assert result.details["file"] == "01-setup/01-setup-01-SUMMARY.md"
-        assert result.details["fields_found"] == ["duration_seconds", "files_written", "issues", "next_actions", "status"]
+        assert result.details["fields_found"] == [
+            "duration_seconds",
+            "files_written",
+            "issues",
+            "next_actions",
+            "status",
+        ]
 
     def test_summary_without_return_block_fails_closed(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
@@ -2056,7 +2075,9 @@ class TestCheckLatestReturn:
         result = check_latest_return(cwd)
 
         assert result.status == CheckStatus.FAIL
-        assert "tasks_completed not a number" in result.issues[0] or "tasks_completed not a number" in " ".join(result.issues)
+        assert "tasks_completed not a number" in result.issues[0] or "tasks_completed not a number" in " ".join(
+            result.issues
+        )
         assert "tasks_total not a number" in " ".join(result.issues)
 
 
@@ -2101,13 +2122,7 @@ class TestCheckResultConsistency:
         }
         (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
 
-        summary_content = (
-            "---\n"
-            "provides:\n"
-            "  - Hamiltonian eigenvalues\n"
-            "---\n"
-            "# Summary\n"
-        )
+        summary_content = "---\nprovides:\n  - Hamiltonian eigenvalues\n---\n# Summary\n"
         (phase_dir / "SUMMARY.md").write_text(summary_content, encoding="utf-8")
 
         result = check_result_consistency(tmp_path)
@@ -2150,13 +2165,7 @@ class TestCheckResultConsistency:
         state = {"intermediate_results": []}
         (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
 
-        summary_content = (
-            "---\n"
-            "provides:\n"
-            "  - correlation function\n"
-            "---\n"
-            "# Summary\n"
-        )
+        summary_content = "---\nprovides:\n  - correlation function\n---\n# Summary\n"
         (phase_dir / "SUMMARY.md").write_text(summary_content, encoding="utf-8")
 
         result = check_result_consistency(tmp_path)
@@ -2184,13 +2193,7 @@ class TestCheckResultConsistency:
         (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
 
         # provides is a superset string containing the description
-        summary_content = (
-            "---\n"
-            "provides:\n"
-            "  - full energy spectrum for ground state\n"
-            "---\n"
-            "# Summary\n"
-        )
+        summary_content = "---\nprovides:\n  - full energy spectrum for ground state\n---\n# Summary\n"
         (phase_dir / "SUMMARY.md").write_text(summary_content, encoding="utf-8")
 
         result = check_result_consistency(tmp_path)
@@ -2217,13 +2220,7 @@ class TestCheckResultConsistency:
         }
         (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
 
-        summary_content = (
-            "---\n"
-            "provides:\n"
-            "  - green function\n"
-            "---\n"
-            "# Summary\n"
-        )
+        summary_content = "---\nprovides:\n  - green function\n---\n# Summary\n"
         (phase_dir / "SUMMARY.md").write_text(summary_content, encoding="utf-8")
 
         result = check_result_consistency(tmp_path)
@@ -2248,14 +2245,7 @@ class TestCheckResultConsistency:
         }
         (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
 
-        summary_content = (
-            "---\n"
-            "provides:\n"
-            "  - name: dispersion relation\n"
-            "    format: equation\n"
-            "---\n"
-            "# Summary\n"
-        )
+        summary_content = "---\nprovides:\n  - name: dispersion relation\n    format: equation\n---\n# Summary\n"
         (phase_dir / "SUMMARY.md").write_text(summary_content, encoding="utf-8")
 
         result = check_result_consistency(tmp_path)
@@ -2303,13 +2293,7 @@ class TestCheckResultConsistency:
         }
         (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
 
-        summary_content = (
-            "---\n"
-            "provides:\n"
-            "  - scattering amplitude\n"
-            "---\n"
-            "# Summary\n"
-        )
+        summary_content = "---\nprovides:\n  - scattering amplitude\n---\n# Summary\n"
         (phase_dir / "SUMMARY.md").write_text(summary_content, encoding="utf-8")
 
         result = check_result_consistency(tmp_path)
@@ -2320,9 +2304,7 @@ class TestCheckResultConsistency:
 
     # ── SERIOUS #1: Empty-string provides must not match everything ────────
 
-    def test_empty_provides_string_does_not_match_everything(
-        self, tmp_path: Path
-    ) -> None:
+    def test_empty_provides_string_does_not_match_everything(self, tmp_path: Path) -> None:
         """An empty provides value must NOT suppress all state-only warnings.
 
         In Python, ``"" in "any string"`` is ``True``. Without a guard, a
@@ -2339,9 +2321,7 @@ class TestCheckResultConsistency:
         (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
         phase_dir = planning / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
-        (phase_dir / "SUMMARY.md").write_text(
-            '---\nprovides:\n  - ""\n---\n# Summary\n', encoding="utf-8"
-        )
+        (phase_dir / "SUMMARY.md").write_text('---\nprovides:\n  - ""\n---\n# Summary\n', encoding="utf-8")
         result = check_result_consistency(tmp_path)
         # The empty provides must be ignored, so R-01 should be state-only.
         assert result.status == CheckStatus.WARN
@@ -2349,9 +2329,7 @@ class TestCheckResultConsistency:
         # The empty provides itself must be excluded from all_provides.
         assert result.details["summary_provides_count"] == 0
 
-    def test_whitespace_only_provides_string_is_ignored(
-        self, tmp_path: Path
-    ) -> None:
+    def test_whitespace_only_provides_string_is_ignored(self, tmp_path: Path) -> None:
         """Whitespace-only provides like ``"   "`` must be treated like empty."""
         planning = tmp_path / ".grd"
         planning.mkdir()
@@ -2364,9 +2342,7 @@ class TestCheckResultConsistency:
         (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
         phase_dir = planning / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
-        (phase_dir / "SUMMARY.md").write_text(
-            '---\nprovides:\n  - "   "\n---\n# Summary\n', encoding="utf-8"
-        )
+        (phase_dir / "SUMMARY.md").write_text('---\nprovides:\n  - "   "\n---\n# Summary\n', encoding="utf-8")
         result = check_result_consistency(tmp_path)
         assert result.status == CheckStatus.WARN
         assert result.details["summary_provides_count"] == 0
@@ -2374,7 +2350,9 @@ class TestCheckResultConsistency:
     # ── SERIOUS #2: Malformed state.json records ──────────────────────────
 
     def test_malformed_state_results_returns_warn_not_crash(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """If result_list raises PydanticValidationError (e.g., from a
         malformed intermediate_results record that somehow bypassed state
@@ -2394,6 +2372,7 @@ class TestCheckResultConsistency:
 
         def _boom(state, **kw):  # type: ignore[override]
             from grd.core.results import IntermediateResult
+
             # Force a real PydanticValidationError
             IntermediateResult(**{"description": "no id"})
 
@@ -2403,9 +2382,7 @@ class TestCheckResultConsistency:
         assert result.details.get("error") == "malformed_state_results"
         assert any("Cannot parse" in w for w in result.warnings)
 
-    def test_normalization_already_strips_malformed_records(
-        self, tmp_path: Path
-    ) -> None:
+    def test_normalization_already_strips_malformed_records(self, tmp_path: Path) -> None:
         """Verify that state-loading normalization strips malformed records
         (missing ``id``), so result_list sees only valid records and returns OK."""
         planning = tmp_path / ".grd"
@@ -2422,9 +2399,7 @@ class TestCheckResultConsistency:
 
     # ── WARNING #3: Short-string over-matching ────────────────────────────
 
-    def test_short_provides_do_not_match_via_substring(
-        self, tmp_path: Path
-    ) -> None:
+    def test_short_provides_do_not_match_via_substring(self, tmp_path: Path) -> None:
         """Provides shorter than _MIN_PROVIDES_LENGTH must not substring-match;
         they should only exact-match (case-insensitive)."""
         planning = tmp_path / ".grd"
@@ -2439,16 +2414,12 @@ class TestCheckResultConsistency:
         phase_dir = planning / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
         # "E" is too short to match "energy spectrum" via substring.
-        (phase_dir / "SUMMARY.md").write_text(
-            "---\nprovides:\n  - E\n---\n# Summary\n", encoding="utf-8"
-        )
+        (phase_dir / "SUMMARY.md").write_text("---\nprovides:\n  - E\n---\n# Summary\n", encoding="utf-8")
         result = check_result_consistency(tmp_path)
         assert result.status == CheckStatus.WARN
         assert result.details["state_only_count"] == 1
 
-    def test_short_provides_exact_match_still_works(
-        self, tmp_path: Path
-    ) -> None:
+    def test_short_provides_exact_match_still_works(self, tmp_path: Path) -> None:
         """A short provides string should still match if it is an exact
         case-insensitive match for a result description."""
         planning = tmp_path / ".grd"
@@ -2462,18 +2433,14 @@ class TestCheckResultConsistency:
         (planning / "state.json").write_text(json.dumps(state), encoding="utf-8")
         phase_dir = planning / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
-        (phase_dir / "SUMMARY.md").write_text(
-            "---\nprovides:\n  - ds\n---\n# Summary\n", encoding="utf-8"
-        )
+        (phase_dir / "SUMMARY.md").write_text("---\nprovides:\n  - ds\n---\n# Summary\n", encoding="utf-8")
         result = check_result_consistency(tmp_path)
         assert result.status == CheckStatus.OK
         assert result.details["state_only_count"] == 0
 
     # ── MINOR #6: Structured provides with "provides" key ────────────────
 
-    def test_structured_provides_with_provides_key(
-        self, tmp_path: Path
-    ) -> None:
+    def test_structured_provides_with_provides_key(self, tmp_path: Path) -> None:
         """Structured provides dicts with a ``provides`` key (not ``name``)
         should have their value extracted and matched."""
         planning = tmp_path / ".grd"
@@ -2495,9 +2462,7 @@ class TestCheckResultConsistency:
         assert result.status == CheckStatus.OK
         assert result.details["state_only_count"] == 0
 
-    def test_structured_provides_with_empty_name_is_ignored(
-        self, tmp_path: Path
-    ) -> None:
+    def test_structured_provides_with_empty_name_is_ignored(self, tmp_path: Path) -> None:
         """Structured provides dict with empty ``name`` must be skipped."""
         planning = tmp_path / ".grd"
         planning.mkdir()

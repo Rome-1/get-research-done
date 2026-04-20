@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydanticValidationError
 
 from grd.contracts import ComparisonVerdict, ContractResults, ResearchContract, normalize_contract_results_input
+from grd.core.constants import PLANNING_DIR_NAME
 from grd.core.frontmatter import (
     FrontmatterParseError,
     _find_matching_plan_contract,
@@ -156,7 +157,7 @@ def _load_bibliography_audit(path: Path | None) -> BibliographyAudit | None:
 
 
 def _load_convention_lock(project_root: Path) -> ConventionLock | None:
-    payload = _load_json(project_root / "GRD" / "state.json")
+    payload = _load_json(project_root / PLANNING_DIR_NAME / "state.json")
     lock_data = payload.get("convention_lock")
     if not isinstance(lock_data, dict):
         return None
@@ -283,7 +284,7 @@ def _best_effort_manuscript_root(project_root: Path) -> Path | None:
 
 
 def _derivation_artifacts(project_root: Path) -> list[Path]:
-    grd_root = project_root / "GRD"
+    grd_root = project_root / PLANNING_DIR_NAME
     if not grd_root.exists():
         return []
     return sorted(
@@ -345,7 +346,7 @@ def _available_citation_keys(manuscript_dir: Path, bibliography_audit: Bibliogra
 
 
 def _load_figure_registry(project_root: Path) -> list[_FigureTrackerEntry]:
-    tracker_path = project_root / "GRD" / "paper" / "FIGURE_TRACKER.md"
+    tracker_path = project_root / PLANNING_DIR_NAME / "paper" / "FIGURE_TRACKER.md"
     meta = _extract_meta(tracker_path)
     raw = meta.get("figure_registry")
     if not isinstance(raw, list):
@@ -406,11 +407,11 @@ def _collect_comparison_verdicts(
     verdicts_by_key: dict[tuple[str, str | None, str | None, str], ComparisonVerdict] = {}
     parse_errors: list[str] = []
     layout = ProjectLayout(project_root)
-    phase_root = project_root / "GRD" / "phases"
+    phase_root = project_root / PLANNING_DIR_NAME / "phases"
 
     candidate_roots = [
-        project_root / "GRD" / "phases",
-        project_root / "GRD" / "comparisons",
+        project_root / PLANNING_DIR_NAME / "phases",
+        project_root / PLANNING_DIR_NAME / "comparisons",
         project_root / "paper",
     ]
     if manuscript_root is not None:
@@ -495,7 +496,7 @@ def _collect_contract_coverage(project_root: Path) -> _ContractCoverage:
     contract_results_alignment_ok = True
     frontmatter_parse_errors = False
 
-    phases_root = project_root / "GRD" / "phases"
+    phases_root = project_root / PLANNING_DIR_NAME / "phases"
     if not phases_root.exists():
         return _ContractCoverage()
     layout = ProjectLayout(project_root)
@@ -736,14 +737,14 @@ def _build_figures_input(
             else CoverageMetric(not_applicable=True)
         )
         decisive_artifact_roles_clear = (
-            _coverage_metric(sum(1 for entry in decisive_entries if entry.role and entry.role != "other"), len(decisive_entries))
+            _coverage_metric(
+                sum(1 for entry in decisive_entries if entry.role and entry.role != "other"), len(decisive_entries)
+            )
             if decisive_entries
             else CoverageMetric(not_applicable=True)
         )
         decisive_uncertainties_present = (
-            _coverage_metric(uncertainty_count, len(decisive_entries))
-            if decisive_entries
-            else CoverageMetric()
+            _coverage_metric(uncertainty_count, len(decisive_entries)) if decisive_entries else CoverageMetric()
         )
         decisive_artifacts_with_explicit_verdicts = (
             _coverage_metric(decisive_with_verdict, len(decisive_entries))
@@ -766,8 +767,12 @@ def _build_figures_input(
 
     figures = FiguresQualityInput(
         axes_labeled_with_units=_coverage_metric(sum(1 for entry in figure_registry if entry.has_units), total_figures),
-        error_bars_present=_coverage_metric(sum(1 for entry in figure_registry if entry.has_uncertainty), total_figures),
-        referenced_in_text=_coverage_metric(sum(1 for entry in figure_registry if entry.referenced_in_text), total_figures),
+        error_bars_present=_coverage_metric(
+            sum(1 for entry in figure_registry if entry.has_uncertainty), total_figures
+        ),
+        referenced_in_text=_coverage_metric(
+            sum(1 for entry in figure_registry if entry.referenced_in_text), total_figures
+        ),
         captions_self_contained=_coverage_metric(
             sum(1 for entry in figure_registry if entry.caption_self_contained),
             total_figures,
@@ -808,12 +813,8 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
     manuscript_files: list[Path] = []
     manuscript_content = ""
     if paper_dir is not None:
-        artifact_manifest = _load_artifact_manifest(
-            locate_publication_artifact(paper_dir, "ARTIFACT-MANIFEST.json")
-        )
-        bibliography_audit = _load_bibliography_audit(
-            locate_publication_artifact(paper_dir, "BIBLIOGRAPHY-AUDIT.json")
-        )
+        artifact_manifest = _load_artifact_manifest(locate_publication_artifact(paper_dir, "ARTIFACT-MANIFEST.json"))
+        bibliography_audit = _load_bibliography_audit(locate_publication_artifact(paper_dir, "BIBLIOGRAPHY-AUDIT.json"))
         paper_config = _load_manuscript_config(paper_dir)
         manuscript_files, manuscript_content = _collect_manuscript_content(
             paper_dir,
@@ -855,10 +856,7 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
     empty_reference_commands = sum(1 for finding in draft_findings if finding.check == "empty_reference_command")
     cite_keys = list(
         dict.fromkeys(
-            part.strip()
-            for match in _CITE_RE.findall(manuscript_content)
-            for part in match.split(",")
-            if part.strip()
+            part.strip() for match in _CITE_RE.findall(manuscript_content) for part in match.split(",") if part.strip()
         )
     )
     required_sections = 3
@@ -875,7 +873,9 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
     partial_sources = bibliography_audit.partial_sources if bibliography_audit is not None else 0
     unverified_sources = bibliography_audit.unverified_sources if bibliography_audit is not None else 0
     failed_sources = bibliography_audit.failed_sources if bibliography_audit is not None else 0
-    available_citation_keys = _available_citation_keys(paper_dir, bibliography_audit) if paper_dir is not None else set()
+    available_citation_keys = (
+        _available_citation_keys(paper_dir, bibliography_audit) if paper_dir is not None else set()
+    )
 
     if cite_keys:
         resolved_citations = sum(1 for key in cite_keys if key in available_citation_keys)
@@ -905,7 +905,9 @@ def build_paper_quality_input(project_root: Path) -> PaperQualityInput:
     if contract_coverage.contract_results_seen:
         journal_extra_checks["contract_results_parse_ok"] = contract_coverage.contract_results_parse_ok
         journal_extra_checks["contract_results_alignment_ok"] = contract_coverage.contract_results_alignment_ok
-    journal_extra_checks["comparison_verdicts_valid"] = verdicts_parse_ok and contract_coverage.comparison_verdicts_valid
+    journal_extra_checks["comparison_verdicts_valid"] = (
+        verdicts_parse_ok and contract_coverage.comparison_verdicts_valid
+    )
 
     citations = CitationsQualityInput(
         citation_keys_resolve=citation_key_coverage,

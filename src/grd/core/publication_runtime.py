@@ -9,6 +9,7 @@ from pathlib import Path
 
 from pydantic import ValidationError as PydanticValidationError
 
+from grd.core.constants import PLANNING_DIR_NAME
 from grd.core.manuscript_artifacts import (
     ManuscriptArtifacts,
     ManuscriptResolution,
@@ -321,7 +322,7 @@ def resolve_latest_publication_review_artifacts(
 ) -> PublicationReviewArtifacts | None:
     """Resolve the latest review-round bundle for the current manuscript."""
 
-    review_dir = project_root / "GRD" / "review"
+    review_dir = project_root / PLANNING_DIR_NAME / "review"
     if not review_dir.exists():
         return None
 
@@ -382,7 +383,7 @@ def resolve_latest_publication_review_artifacts(
 def resolve_latest_publication_response_artifacts(project_root: Path) -> PublicationResponseArtifacts | None:
     """Resolve the latest paired response artifacts for the current manuscript."""
 
-    review_dir = project_root / "GRD" / "review"
+    review_dir = project_root / PLANNING_DIR_NAME / "review"
     if not review_dir.exists():
         return None
 
