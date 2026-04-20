@@ -27,10 +27,7 @@ def _verification_with_contract_results() -> str:
         (FIXTURES_STAGE4 / "verification_with_contract_results.md")
         .read_text(encoding="utf-8")
         .replace(
-            "  forbidden_proxies:\n"
-            "    fp-benchmark:\n"
-            "      status: rejected\n"
-            "comparison_verdicts:\n",
+            "  forbidden_proxies:\n    fp-benchmark:\n      status: rejected\ncomparison_verdicts:\n",
             "  forbidden_proxies:\n"
             "    fp-benchmark:\n"
             "      status: rejected\n"
@@ -89,9 +86,13 @@ def _proof_audit_block(
         _sha256_path(_proof_artifact_path(phase_dir)) if proof_artifact_sha256 is None else proof_artifact_sha256
     )
     resolved_audit_artifact_sha256 = (
-        _sha256_path(_proof_redteam_artifact_path(phase_dir)) if audit_artifact_sha256 is None else audit_artifact_sha256
+        _sha256_path(_proof_redteam_artifact_path(phase_dir))
+        if audit_artifact_sha256 is None
+        else audit_artifact_sha256
     )
-    resolved_claim_statement_sha256 = _proof_claim_statement_sha256() if claim_statement_sha256 is None else claim_statement_sha256
+    resolved_claim_statement_sha256 = (
+        _proof_claim_statement_sha256() if claim_statement_sha256 is None else claim_statement_sha256
+    )
     return (
         "      proof_audit:\n"
         f"        completeness: {completeness}\n"
@@ -116,7 +117,7 @@ def _proof_audit_block(
 
 
 def _write_proof_contract_phase(tmp_path: Path) -> tuple[Path, Path]:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-proof"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-proof"
     phase_dir.mkdir(parents=True)
     plan_path = phase_dir / "01-01-PLAN.md"
     plan_path.write_text(
@@ -135,7 +136,7 @@ def _write_proof_contract_phase(tmp_path: Path) -> tuple[Path, Path]:
               scope:
                 question: Prove the full theorem without silently dropping r_0
               context_intake:
-                must_include_prior_outputs: [GRD/phases/00-baseline/00-01-SUMMARY.md]
+                must_include_prior_outputs: [.grd/phases/00-baseline/00-01-SUMMARY.md]
               observables:
                 - id: obs-proof
                   name: theorem proof obligation
@@ -288,7 +289,7 @@ def _proof_verification_content(
         verified: 2026-04-02T12:00:00Z
         status: passed
         score: 3/3 contract targets verified
-        plan_contract_ref: GRD/phases/01-proof/01-01-PLAN.md#/contract
+        plan_contract_ref: .grd/phases/01-proof/01-01-PLAN.md#/contract
         contract_results:
           claims:
             claim-proof:
@@ -339,12 +340,16 @@ def test_validate_frontmatter_summary_accepts_contract_results() -> None:
 
 
 def test_validate_frontmatter_summary_rejects_missing_uncertainty_markers_for_contract_backed_summary() -> None:
-    content = (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
-        "  uncertainty_markers:\n"
-        "    weakest_anchors: [Reference tolerance interpretation]\n"
-        "    disconfirming_observations: [Benchmark agreement disappears once normalization is fixed]\n",
-        "",
-        1,
+    content = (
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
+            "  uncertainty_markers:\n"
+            "    weakest_anchors: [Reference tolerance interpretation]\n"
+            "    disconfirming_observations: [Benchmark agreement disappears once normalization is fixed]\n",
+            "",
+            1,
+        )
     )
 
     result = validate_frontmatter(content, "summary")
@@ -379,7 +384,9 @@ def test_validate_frontmatter_verification_rejects_passed_proof_claim_without_co
     )
 
     assert result.valid is False
-    assert any("claim claim-proof status=passed requires proof_audit.completeness=complete" in error for error in result.errors)
+    assert any(
+        "claim claim-proof status=passed requires proof_audit.completeness=complete" in error for error in result.errors
+    )
 
 
 def test_validate_frontmatter_verification_rejects_passed_proof_claim_without_passed_proof_specific_acceptance_test(
@@ -403,8 +410,7 @@ def test_validate_frontmatter_verification_rejects_passed_proof_claim_without_pa
 
     assert result.valid is False
     assert any(
-        "claim claim-proof status=passed requires all declared proof-specific acceptance_tests to pass"
-        in error
+        "claim claim-proof status=passed requires all declared proof-specific acceptance_tests to pass" in error
         for error in result.errors
     )
 
@@ -449,7 +455,10 @@ def test_validate_frontmatter_verification_rejects_passed_proof_claim_when_named
     )
 
     assert result.valid is False
-    assert any("claim claim-proof proof_audit does not cover required parameter symbols: r_0" in error for error in result.errors)
+    assert any(
+        "claim claim-proof proof_audit does not cover required parameter symbols: r_0" in error
+        for error in result.errors
+    )
 
 
 def test_validate_frontmatter_verification_rejects_passed_proof_claim_with_unclear_quantifier_status(
@@ -506,8 +515,7 @@ def test_validate_frontmatter_verification_rejects_passed_proof_claim_with_proof
 
     assert result.valid is False
     assert any(
-        "claim claim-proof proof_audit.proof_artifact_path must match a declared proof_deliverables path"
-        in error
+        "claim claim-proof proof_audit.proof_artifact_path must match a declared proof_deliverables path" in error
         for error in result.errors
     )
 
@@ -538,8 +546,7 @@ def test_validate_frontmatter_verification_rejects_passed_proof_claim_with_non_r
 
     assert result.valid is False
     assert any(
-        "claim claim-proof proof_audit.audit_artifact_path must point to a proof-redteam artifact"
-        in error
+        "claim claim-proof proof_audit.audit_artifact_path must point to a proof-redteam artifact" in error
         for error in result.errors
     )
 
@@ -621,41 +628,51 @@ def test_validate_frontmatter_verification_rejects_passed_proof_claim_with_unrea
     )
 
     assert result.valid is False
-    assert any("proof_audit audit_artifact_path does not resolve to a readable file" in error for error in result.errors)
+    assert any(
+        "proof_audit audit_artifact_path does not resolve to a readable file" in error for error in result.errors
+    )
 
 
 def test_validate_frontmatter_verification_rejects_status_passed_with_incomplete_reference_ledger(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
-    (phase_dir / "01-01-PLAN.md").write_text((FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"), encoding="utf-8")
+    (phase_dir / "01-01-PLAN.md").write_text(
+        (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"), encoding="utf-8"
+    )
     verification_path = phase_dir / "01-VERIFICATION.md"
     content = _verification_with_contract_results().replace(
         "    ref-benchmark:\n"
         "      status: completed\n"
         "      completed_actions: [read, compare, cite]\n"
         "      missing_actions: []\n",
-        "    ref-benchmark:\n"
-        "      status: not_applicable\n"
-        "      completed_actions: []\n"
-        "      missing_actions: []\n",
+        "    ref-benchmark:\n      status: not_applicable\n      completed_actions: []\n      missing_actions: []\n",
         1,
     )
 
     result = validate_frontmatter(content, "verification", source_path=verification_path)
 
     assert result.valid is False
-    assert any("status: passed is inconsistent with non-completed contract_results references" in error for error in result.errors)
+    assert any(
+        "status: passed is inconsistent with non-completed contract_results references" in error
+        for error in result.errors
+    )
 
 
-def test_validate_frontmatter_verification_rejects_missing_uncertainty_markers_for_contract_backed_verification() -> None:
-    content = (FIXTURES_STAGE4 / "verification_with_contract_results.md").read_text(encoding="utf-8").replace(
-        "  uncertainty_markers:\n"
-        "    weakest_anchors: [Verification spot-check coverage]\n"
-        "    disconfirming_observations: [Independent rerun misses the benchmark tolerance]\n",
-        "",
-        1,
+def test_validate_frontmatter_verification_rejects_missing_uncertainty_markers_for_contract_backed_verification() -> (
+    None
+):
+    content = (
+        (FIXTURES_STAGE4 / "verification_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
+            "  uncertainty_markers:\n"
+            "    weakest_anchors: [Verification spot-check coverage]\n"
+            "    disconfirming_observations: [Independent rerun misses the benchmark tolerance]\n",
+            "",
+            1,
+        )
     )
 
     result = validate_frontmatter(content, "verification")
@@ -675,8 +692,7 @@ def test_validate_frontmatter_verification_rejects_missing_uncertainty_markers_f
                 "    claim-benchmark:\n"
                 "      status: passed\n"
                 "      summary: Benchmark claim verified against the decisive anchor.\n",
-                "    claim-benchmark:\n"
-                "      summary: Benchmark claim verified against the decisive anchor.\n",
+                "    claim-benchmark:\n      summary: Benchmark claim verified against the decisive anchor.\n",
                 1,
             ),
         ),
@@ -685,11 +701,8 @@ def test_validate_frontmatter_verification_rejects_missing_uncertainty_markers_f
             (FIXTURES_STAGE4 / "verification_with_contract_results.md")
             .read_text(encoding="utf-8")
             .replace(
-                "    claim-benchmark:\n"
-                "      status: passed\n"
-                "      summary: Claim independently verified.\n",
-                "    claim-benchmark:\n"
-                "      summary: Claim independently verified.\n",
+                "    claim-benchmark:\n      status: passed\n      summary: Claim independently verified.\n",
+                "    claim-benchmark:\n      summary: Claim independently verified.\n",
                 1,
             ),
         ),
@@ -710,25 +723,25 @@ def test_validate_frontmatter_contract_results_rejects_omitted_status_fields(
     [
         (
             "summary",
-            (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
+            (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+            .read_text(encoding="utf-8")
+            .replace(
                 "  uncertainty_markers:\n"
                 "    weakest_anchors: [Reference tolerance interpretation]\n"
                 "    disconfirming_observations: [Benchmark agreement disappears once normalization is fixed]\n",
-                "  uncertainty_markers:\n"
-                "    weakest_anchors: []\n"
-                "    disconfirming_observations: []\n",
+                "  uncertainty_markers:\n    weakest_anchors: []\n    disconfirming_observations: []\n",
                 1,
             ),
         ),
         (
             "verification",
-            (FIXTURES_STAGE4 / "verification_with_contract_results.md").read_text(encoding="utf-8").replace(
+            (FIXTURES_STAGE4 / "verification_with_contract_results.md")
+            .read_text(encoding="utf-8")
+            .replace(
                 "  uncertainty_markers:\n"
                 "    weakest_anchors: [Verification spot-check coverage]\n"
                 "    disconfirming_observations: [Independent rerun misses the benchmark tolerance]\n",
-                "  uncertainty_markers:\n"
-                "    weakest_anchors: []\n"
-                "    disconfirming_observations: []\n",
+                "  uncertainty_markers:\n    weakest_anchors: []\n    disconfirming_observations: []\n",
                 1,
             ),
         ),
@@ -746,7 +759,7 @@ def test_validate_frontmatter_contract_results_rejects_empty_uncertainty_markers
 
 
 def test_validate_frontmatter_summary_with_source_path_checks_plan_alignment(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -765,14 +778,16 @@ def test_validate_frontmatter_summary_with_source_path_checks_plan_alignment(tmp
 
 
 def test_validate_frontmatter_summary_with_source_path_accepts_canonical_plan_contract_ref(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     summary_path = phase_dir / "01-SUMMARY.md"
-    summary_path.write_text((FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8"), encoding="utf-8")
+    summary_path.write_text(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8"), encoding="utf-8"
+    )
 
     result = validate_frontmatter(summary_path.read_text(encoding="utf-8"), "summary", source_path=summary_path)
 
@@ -783,9 +798,9 @@ def test_validate_frontmatter_summary_with_source_path_accepts_canonical_plan_co
 @pytest.mark.parametrize(
     ("ref_kind", "expected_error"),
     [
-        ("absolute", "plan_contract_ref: must reference a canonical project-root-relative GRD PLAN path"),
-        ("external", "plan_contract_ref: must reference a canonical project-root-relative GRD PLAN path"),
-        ("relative", "plan_contract_ref: must reference a canonical project-root-relative GRD PLAN path"),
+        ("absolute", "plan_contract_ref: must reference a canonical project-root-relative .grd PLAN path"),
+        ("external", "plan_contract_ref: must reference a canonical project-root-relative .grd PLAN path"),
+        ("relative", "plan_contract_ref: must reference a canonical project-root-relative .grd PLAN path"),
         ("traversal", "plan_contract_ref: must not traverse parent directories"),
     ],
 )
@@ -864,7 +879,7 @@ def test_validate_frontmatter_summary_with_source_path_rejects_non_contract_plan
 
 
 def test_validate_frontmatter_summary_with_source_path_rejects_unknown_contract_ids(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -872,7 +887,9 @@ def test_validate_frontmatter_summary_with_source_path_rejects_unknown_contract_
     )
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text(
-        (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
             "claim-benchmark:",
             "claim-unknown:",
             1,
@@ -887,7 +904,7 @@ def test_validate_frontmatter_summary_with_source_path_rejects_unknown_contract_
 
 
 def test_validate_frontmatter_summary_with_source_path_rejects_unknown_linked_ids(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -895,7 +912,9 @@ def test_validate_frontmatter_summary_with_source_path_rejects_unknown_linked_id
     )
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text(
-        (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
             "linked_ids: [deliv-figure, test-benchmark, ref-benchmark]",
             "linked_ids: [deliv-figure, test-benchmark, ref-missing]",
             1,
@@ -907,12 +926,13 @@ def test_validate_frontmatter_summary_with_source_path_rejects_unknown_linked_id
 
     assert result.valid is False
     assert any(
-        "claim claim-benchmark linked_ids references unknown contract id ref-missing" in error for error in result.errors
+        "claim claim-benchmark linked_ids references unknown contract id ref-missing" in error
+        for error in result.errors
     )
 
 
 def test_validate_frontmatter_summary_with_source_path_rejects_unknown_evidence_bindings(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -920,7 +940,9 @@ def test_validate_frontmatter_summary_with_source_path_rejects_unknown_evidence_
     )
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text(
-        (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
             "reference_id: ref-benchmark",
             "reference_id: ref-missing",
             1,
@@ -939,7 +961,7 @@ def test_validate_frontmatter_summary_with_source_path_rejects_unknown_evidence_
 def test_validate_frontmatter_summary_with_source_path_accepts_forbidden_proxy_evidence_binding(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -947,10 +969,11 @@ def test_validate_frontmatter_summary_with_source_path_accepts_forbidden_proxy_e
     )
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text(
-        (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
             "          reference_id: ref-benchmark\n",
-            "          reference_id: ref-benchmark\n"
-            "          forbidden_proxy_id: fp-benchmark\n",
+            "          reference_id: ref-benchmark\n          forbidden_proxy_id: fp-benchmark\n",
             1,
         ),
         encoding="utf-8",
@@ -965,7 +988,7 @@ def test_validate_frontmatter_summary_with_source_path_accepts_forbidden_proxy_e
 def test_validate_frontmatter_summary_with_source_path_rejects_unknown_forbidden_proxy_evidence_binding(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -973,10 +996,11 @@ def test_validate_frontmatter_summary_with_source_path_rejects_unknown_forbidden
     )
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text(
-        (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
             "          reference_id: ref-benchmark\n",
-            "          reference_id: ref-benchmark\n"
-            "          forbidden_proxy_id: fp-missing\n",
+            "          reference_id: ref-benchmark\n          forbidden_proxy_id: fp-missing\n",
             1,
         ),
         encoding="utf-8",
@@ -994,7 +1018,7 @@ def test_validate_frontmatter_summary_with_source_path_rejects_unknown_forbidden
 def test_validate_frontmatter_summary_with_source_path_rejects_blank_optional_links_and_evidence_ids(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1026,7 +1050,7 @@ def test_validate_frontmatter_summary_with_source_path_rejects_blank_optional_li
 
 
 def test_validate_frontmatter_summary_with_source_path_reports_unresolved_plan_contract_ref(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text(
@@ -1042,7 +1066,7 @@ def test_validate_frontmatter_summary_with_source_path_reports_unresolved_plan_c
 
 def test_validate_frontmatter_summary_does_not_resolve_plan_contract_ref_above_project_root(tmp_path: Path) -> None:
     project_root = tmp_path / "project"
-    (project_root / "GRD").mkdir(parents=True)
+    (project_root / ".grd").mkdir(parents=True)
     summary_dir = project_root / "artifacts" / "nested"
     summary_dir.mkdir(parents=True)
     summary_path = summary_dir / "01-SUMMARY.md"
@@ -1051,7 +1075,7 @@ def test_validate_frontmatter_summary_does_not_resolve_plan_contract_ref_above_p
         encoding="utf-8",
     )
 
-    external_phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    external_phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     external_phase_dir.mkdir(parents=True)
     (external_phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1074,7 +1098,7 @@ def test_validate_frontmatter_summary_does_not_resolve_plan_contract_ref_above_p
 def test_validate_frontmatter_summary_with_source_path_reports_referenced_plan_contract_schema_errors(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md")
@@ -1083,7 +1107,9 @@ def test_validate_frontmatter_summary_with_source_path_reports_referenced_plan_c
         encoding="utf-8",
     )
     summary_path = phase_dir / "01-SUMMARY.md"
-    summary_path.write_text((FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8"), encoding="utf-8")
+    summary_path.write_text(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8"), encoding="utf-8"
+    )
 
     result = validate_frontmatter(summary_path.read_text(encoding="utf-8"), "summary", source_path=summary_path)
 
@@ -1094,7 +1120,7 @@ def test_validate_frontmatter_summary_with_source_path_reports_referenced_plan_c
 def test_validate_frontmatter_summary_with_source_path_reports_referenced_plan_contract_semantic_errors(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md")
@@ -1113,7 +1139,9 @@ def test_validate_frontmatter_summary_with_source_path_reports_referenced_plan_c
         encoding="utf-8",
     )
     summary_path = phase_dir / "01-SUMMARY.md"
-    summary_path.write_text((FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8"), encoding="utf-8")
+    summary_path.write_text(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8"), encoding="utf-8"
+    )
 
     result = validate_frontmatter(summary_path.read_text(encoding="utf-8"), "summary", source_path=summary_path)
 
@@ -1122,7 +1150,7 @@ def test_validate_frontmatter_summary_with_source_path_reports_referenced_plan_c
 
 
 def test_validate_frontmatter_verification_with_source_path_requires_contract_results(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1162,8 +1190,7 @@ def test_validate_frontmatter_verification_with_adjacent_contract_backed_plan_re
     )
     verification_path = artifact_dir / "01-VERIFICATION.md"
     verification_path.write_text(
-        _verification_with_contract_results()
-        .replace(
+        _verification_with_contract_results().replace(
             "plan_contract_ref: .grd/phases/01-benchmark/01-01-PLAN.md#/contract\n",
             "",
             1,
@@ -1182,7 +1209,7 @@ def test_validate_frontmatter_verification_with_adjacent_contract_backed_plan_re
 
 
 def test_validate_frontmatter_verification_with_source_path_accepts_canonical_plan_contract_ref(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1204,7 +1231,7 @@ def test_validate_frontmatter_verification_with_source_path_accepts_canonical_pl
 def test_validate_frontmatter_verification_with_source_path_accepts_structured_suggested_contract_checks(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1260,7 +1287,7 @@ def test_validate_frontmatter_verification_with_source_path_accepts_structured_s
 def test_validate_frontmatter_verification_with_source_path_accepts_partial_results_with_inconclusive_verdict(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1319,7 +1346,7 @@ def test_validate_frontmatter_verification_with_source_path_accepts_partial_resu
 def test_validate_frontmatter_verification_rejects_undocumented_suggested_contract_check_shape(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1367,7 +1394,7 @@ def test_validate_frontmatter_verification_rejects_undocumented_suggested_contra
 def test_validate_frontmatter_summary_rejects_plan_contract_ref_that_points_to_different_plan(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1409,10 +1436,10 @@ def test_verify_summary_rejects_unresolved_plan_contract_ref(tmp_path: Path) -> 
 
 
 def test_verify_summary_rejects_non_contract_plan_fragment(tmp_path: Path) -> None:
-    plan_path = tmp_path / "GRD" / "phases" / "01-benchmark" / "01-01-PLAN.md"
+    plan_path = tmp_path / ".grd" / "phases" / "01-benchmark" / "01-01-PLAN.md"
     plan_path.parent.mkdir(parents=True)
     plan_path.write_text((FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"), encoding="utf-8")
-    summary_path = tmp_path / "GRD" / "phases" / "01-benchmark" / "01-SUMMARY.md"
+    summary_path = tmp_path / ".grd" / "phases" / "01-benchmark" / "01-SUMMARY.md"
     summary_path.write_text(
         (FIXTURES_STAGE4 / "summary_with_contract_results.md")
         .read_text(encoding="utf-8")
@@ -1431,7 +1458,7 @@ def test_verify_summary_rejects_non_contract_plan_fragment(tmp_path: Path) -> No
 
 
 def test_validate_frontmatter_summary_rejects_contradictory_comparison_verdict(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1476,7 +1503,7 @@ def test_validate_frontmatter_summary_rejects_contradictory_reference_action_led
     missing_actions: str,
     message: str,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1501,7 +1528,7 @@ def test_validate_frontmatter_summary_rejects_contradictory_reference_action_led
 def test_validate_frontmatter_verification_with_source_path_requires_suggested_contract_checks_for_partial_decisive_checks(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1569,7 +1596,7 @@ def test_verify_summary_requires_plan_contract_ref_for_contract_backed_plan(tmp_
         (
             (FIXTURES_STAGE4 / "summary_with_contract_results.md")
             .read_text(encoding="utf-8")
-            .replace('plan_contract_ref: .grd/phases/01-benchmark/01-01-PLAN.md#/contract\n', "")
+            .replace("plan_contract_ref: .grd/phases/01-benchmark/01-01-PLAN.md#/contract\n", "")
         ),
         encoding="utf-8",
     )
@@ -1581,14 +1608,18 @@ def test_verify_summary_requires_plan_contract_ref_for_contract_backed_plan(tmp_
 
 
 def test_verify_summary_rejects_unknown_contract_ids(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     plan_path = phase_dir / "01-01-PLAN.md"
     plan_path.write_text((FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"), encoding="utf-8")
-    summary_content = (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
-        "claim-benchmark:",
-        "claim-unknown:",
-        1,
+    summary_content = (
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
+            "claim-benchmark:",
+            "claim-unknown:",
+            1,
+        )
     )
     summary_path = phase_dir / "01-01-SUMMARY.md"
     summary_path.write_text(summary_content, encoding="utf-8")
@@ -1604,7 +1635,7 @@ def test_verify_summary_rejects_unknown_contract_ids(tmp_path: Path) -> None:
 
 
 def test_verify_summary_allows_explicit_incomplete_contract_results_statuses(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     plan_path = phase_dir / "01-01-PLAN.md"
     plan_path.write_text((FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"), encoding="utf-8")
@@ -1650,7 +1681,7 @@ def test_verify_summary_allows_explicit_incomplete_contract_results_statuses(tmp
 
 
 def test_validate_frontmatter_summary_rejects_missing_contract_results_coverage(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1658,7 +1689,9 @@ def test_validate_frontmatter_summary_rejects_missing_contract_results_coverage(
     )
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text(
-        (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
             "  deliverables:\n"
             "    deliv-figure:\n"
             "      status: passed\n"
@@ -1678,7 +1711,7 @@ def test_validate_frontmatter_summary_rejects_missing_contract_results_coverage(
 
 
 def test_validate_frontmatter_summary_rejects_mismatched_comparison_verdict_subject_kind(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1699,7 +1732,7 @@ def test_validate_frontmatter_summary_rejects_mismatched_comparison_verdict_subj
 
 
 def test_validate_frontmatter_summary_rejects_non_contract_comparison_verdict_subject_kind(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1716,14 +1749,16 @@ def test_validate_frontmatter_summary_rejects_non_contract_comparison_verdict_su
     result = validate_frontmatter(summary_path.read_text(encoding="utf-8"), "summary", source_path=summary_path)
 
     assert result.valid is False
-    assert any("comparison_verdicts:" in error and "acceptance_test' or 'reference'" in error for error in result.errors)
+    assert any(
+        "comparison_verdicts:" in error and "acceptance_test' or 'reference'" in error for error in result.errors
+    )
 
 
 @pytest.mark.parametrize("role", ["supporting", "supplemental"])
 def test_validate_frontmatter_summary_allows_non_decisive_comparison_tension_without_contradicting_passed_target(
     tmp_path: Path, role: str
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1731,7 +1766,9 @@ def test_validate_frontmatter_summary_allows_non_decisive_comparison_tension_wit
     )
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text(
-        (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
             "comparison_verdicts:\n",
             "comparison_verdicts:\n"
             "  - subject_id: claim-benchmark\n"
@@ -1757,7 +1794,7 @@ def test_validate_frontmatter_summary_allows_non_decisive_comparison_tension_wit
 def test_validate_frontmatter_summary_rejects_missing_subject_role_for_non_decisive_comparison_kind(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1789,7 +1826,7 @@ def test_validate_frontmatter_summary_rejects_missing_subject_role_for_non_decis
 
 
 def test_validate_frontmatter_summary_requires_decisive_role_for_decisive_comparison_coverage(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1806,14 +1843,16 @@ def test_validate_frontmatter_summary_requires_decisive_role_for_decisive_compar
     result = validate_frontmatter(summary_path.read_text(encoding="utf-8"), "summary", source_path=summary_path)
 
     assert result.valid is False
-    assert any("Missing decisive comparison_verdict for acceptance test test-benchmark" in error for error in result.errors)
+    assert any(
+        "Missing decisive comparison_verdict for acceptance test test-benchmark" in error for error in result.errors
+    )
 
 
 @pytest.mark.parametrize("comparison_kind", ["benchmark", "prior_work", "experiment", "cross_method", "baseline"])
 def test_validate_frontmatter_summary_rejects_missing_subject_role_for_decisive_comparison_kind(
     tmp_path: Path, comparison_kind: str
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1822,7 +1861,9 @@ def test_validate_frontmatter_summary_rejects_missing_subject_role_for_decisive_
     reference_line = "    reference_id: ref-benchmark\n" if comparison_kind not in {"cross_method"} else ""
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text(
-        (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
             "comparison_verdicts:\n",
             "comparison_verdicts:\n"
             "  - subject_id: claim-benchmark\n"
@@ -1848,7 +1889,7 @@ def test_validate_frontmatter_summary_rejects_missing_subject_role_for_decisive_
 def test_validate_frontmatter_summary_rejects_unanchored_decisive_external_comparison(
     tmp_path: Path, comparison_kind: str
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1856,7 +1897,9 @@ def test_validate_frontmatter_summary_rejects_unanchored_decisive_external_compa
     )
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text(
-        (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
             "comparison_verdicts:\n",
             "comparison_verdicts:\n"
             "  - subject_id: claim-benchmark\n"
@@ -1876,14 +1919,13 @@ def test_validate_frontmatter_summary_rejects_unanchored_decisive_external_compa
 
     assert result.valid is False
     assert any(
-        f"must include reference_id or use subject_kind: reference for decisive {comparison_kind} comparisons"
-        in error
+        f"must include reference_id or use subject_kind: reference for decisive {comparison_kind} comparisons" in error
         for error in result.errors
     )
 
 
 def test_validate_frontmatter_summary_requires_reference_backed_comparison_to_use_decisive_kind(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md")
@@ -1914,7 +1956,7 @@ def test_validate_frontmatter_summary_requires_reference_backed_comparison_to_us
 def test_validate_frontmatter_summary_rejects_prior_work_verdict_for_benchmark_acceptance_test(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1931,13 +1973,15 @@ def test_validate_frontmatter_summary_rejects_prior_work_verdict_for_benchmark_a
     result = validate_frontmatter(summary_path.read_text(encoding="utf-8"), "summary", source_path=summary_path)
 
     assert result.valid is False
-    assert any("Missing decisive comparison_verdict for acceptance test test-benchmark" in error for error in result.errors)
+    assert any(
+        "Missing decisive comparison_verdict for acceptance test test-benchmark" in error for error in result.errors
+    )
 
 
 def test_validate_frontmatter_summary_accepts_decisive_cross_method_without_reference_anchor(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md")
@@ -1946,7 +1990,11 @@ def test_validate_frontmatter_summary_accepts_decisive_cross_method_without_refe
         .replace("required_actions: [read, compare, cite]", "required_actions: [read, cite]", 1)
         .replace("kind: benchmark", "kind: cross_method", 1)
         .replace("procedure: Compare against the benchmark reference", "procedure: Compare the independent methods", 1)
-        .replace("pass_condition: Matches reference within tolerance", "pass_condition: Independent methods agree within tolerance", 1),
+        .replace(
+            "pass_condition: Matches reference within tolerance",
+            "pass_condition: Independent methods agree within tolerance",
+            1,
+        ),
         encoding="utf-8",
     )
     summary_path = phase_dir / "01-SUMMARY.md"
@@ -1954,11 +2002,8 @@ def test_validate_frontmatter_summary_accepts_decisive_cross_method_without_refe
         (FIXTURES_STAGE4 / "summary_with_contract_results.md")
         .read_text(encoding="utf-8")
         .replace(
-            "    subject_role: decisive\n"
-            "    reference_id: ref-benchmark\n"
-            "    comparison_kind: benchmark\n",
-            "    subject_role: decisive\n"
-            "    comparison_kind: cross_method\n",
+            "    subject_role: decisive\n    reference_id: ref-benchmark\n    comparison_kind: benchmark\n",
+            "    subject_role: decisive\n    comparison_kind: cross_method\n",
             1,
         ),
         encoding="utf-8",
@@ -1971,7 +2016,7 @@ def test_validate_frontmatter_summary_accepts_decisive_cross_method_without_refe
 
 
 def test_validate_frontmatter_summary_rejects_contract_results_context_usage(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -1979,7 +2024,9 @@ def test_validate_frontmatter_summary_rejects_contract_results_context_usage(tmp
     )
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text(
-        (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
             "  uncertainty_markers:\n",
             "  context_usage:\n"
             "    prior-baseline:\n"
@@ -1997,8 +2044,10 @@ def test_validate_frontmatter_summary_rejects_contract_results_context_usage(tmp
     assert any("contract_results:" in error and "context_usage" in error for error in result.errors)
 
 
-def test_validate_frontmatter_summary_requires_decisive_verdict_even_when_comparison_not_attempted(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+def test_validate_frontmatter_summary_requires_decisive_verdict_even_when_comparison_not_attempted(
+    tmp_path: Path,
+) -> None:
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -2007,7 +2056,11 @@ def test_validate_frontmatter_summary_requires_decisive_verdict_even_when_compar
     original = (
         (FIXTURES_STAGE4 / "summary_with_contract_results.md")
         .read_text(encoding="utf-8")
-        .replace("status: passed\n      summary: Benchmark claim verified against the decisive anchor.\n", "status: not_attempted\n      summary: Benchmark claim remains open.\n", 1)
+        .replace(
+            "status: passed\n      summary: Benchmark claim verified against the decisive anchor.\n",
+            "status: not_attempted\n      summary: Benchmark claim remains open.\n",
+            1,
+        )
         .replace(
             "status: passed\n      summary: Benchmark reproduced within the contracted tolerance.\n",
             "status: not_attempted\n      summary: Benchmark comparison has not been run yet.\n",
@@ -2022,13 +2075,15 @@ def test_validate_frontmatter_summary_requires_decisive_verdict_even_when_compar
     result = validate_frontmatter(summary_path.read_text(encoding="utf-8"), "summary", source_path=summary_path)
 
     assert result.valid is False
-    assert any("Missing decisive comparison_verdict for acceptance test test-benchmark" in error for error in result.errors)
+    assert any(
+        "Missing decisive comparison_verdict for acceptance test test-benchmark" in error for error in result.errors
+    )
 
 
 def test_validate_frontmatter_verification_rejects_mismatched_suggested_contract_check_binding(
     tmp_path: Path,
 ) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -2037,7 +2092,11 @@ def test_validate_frontmatter_verification_rejects_mismatched_suggested_contract
     verification_path = phase_dir / "01-VERIFICATION.md"
     verification_path.write_text(
         _verification_with_contract_results()
-        .replace("status: passed\nscore: 3/3 contract targets verified\n", "status: gaps_found\nscore: 3/3 contract targets verified\n", 1)
+        .replace(
+            "status: passed\nscore: 3/3 contract targets verified\n",
+            "status: gaps_found\nscore: 3/3 contract targets verified\n",
+            1,
+        )
         .replace(
             "comparison_verdicts:\n",
             "suggested_contract_checks:\n"
@@ -2058,11 +2117,14 @@ def test_validate_frontmatter_verification_rejects_mismatched_suggested_contract
     )
 
     assert result.valid is False
-    assert any("references test-benchmark as claim, but the contract declares it as acceptance_test" in error for error in result.errors)
+    assert any(
+        "references test-benchmark as claim, but the contract declares it as acceptance_test" in error
+        for error in result.errors
+    )
 
 
 def test_validate_frontmatter_verification_rejects_half_bound_suggested_contract_check(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -2071,7 +2133,11 @@ def test_validate_frontmatter_verification_rejects_half_bound_suggested_contract
     verification_path = phase_dir / "01-VERIFICATION.md"
     verification_path.write_text(
         _verification_with_contract_results()
-        .replace("status: passed\nscore: 3/3 contract targets verified\n", "status: gaps_found\nscore: 3/3 contract targets verified\n", 1)
+        .replace(
+            "status: passed\nscore: 3/3 contract targets verified\n",
+            "status: gaps_found\nscore: 3/3 contract targets verified\n",
+            1,
+        )
         .replace(
             "comparison_verdicts:\n",
             "suggested_contract_checks:\n"
@@ -2091,11 +2157,13 @@ def test_validate_frontmatter_verification_rejects_half_bound_suggested_contract
     )
 
     assert result.valid is False
-    assert any("must provide suggested_subject_kind and suggested_subject_id together" in error for error in result.errors)
+    assert any(
+        "must provide suggested_subject_kind and suggested_subject_id together" in error for error in result.errors
+    )
 
 
 def test_validate_frontmatter_verification_rejects_extra_keys_in_suggested_contract_check(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -2147,13 +2215,12 @@ def test_validate_frontmatter_verification_rejects_extra_keys_in_suggested_contr
 
     assert result.valid is False
     assert any(
-        "suggested_contract_checks: [0] check_id: Extra inputs are not permitted" in error
-        for error in result.errors
+        "suggested_contract_checks: [0] check_id: Extra inputs are not permitted" in error for error in result.errors
     )
 
 
 def test_validate_frontmatter_verification_rejects_passed_status_with_partial_contract_results(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -2161,8 +2228,7 @@ def test_validate_frontmatter_verification_rejects_passed_status_with_partial_co
     )
     verification_path = phase_dir / "01-VERIFICATION.md"
     verification_path.write_text(
-        _verification_with_contract_results()
-        .replace(
+        _verification_with_contract_results().replace(
             "      status: passed\n      summary: Claim independently verified.\n",
             "      status: partial\n      summary: Claim still needs the decisive rerun.\n",
             1,
@@ -2184,7 +2250,7 @@ def test_validate_frontmatter_verification_rejects_passed_status_with_partial_co
 
 
 def test_validate_frontmatter_verification_rejects_passed_status_with_suggested_contract_checks(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -2192,8 +2258,7 @@ def test_validate_frontmatter_verification_rejects_passed_status_with_suggested_
     )
     verification_path = phase_dir / "01-VERIFICATION.md"
     verification_path.write_text(
-        _verification_with_contract_results()
-        .replace(
+        _verification_with_contract_results().replace(
             "comparison_verdicts:\n",
             "suggested_contract_checks:\n"
             "  - check: Add decisive normalization benchmark comparison\n"
@@ -2217,8 +2282,10 @@ def test_validate_frontmatter_verification_rejects_passed_status_with_suggested_
     assert "status: passed is inconsistent with non-empty suggested_contract_checks" in result.errors
 
 
-def test_validate_frontmatter_verification_rejects_passed_status_with_unresolved_forbidden_proxy(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+def test_validate_frontmatter_verification_rejects_passed_status_with_unresolved_forbidden_proxy(
+    tmp_path: Path,
+) -> None:
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -2226,8 +2293,7 @@ def test_validate_frontmatter_verification_rejects_passed_status_with_unresolved
     )
     verification_path = phase_dir / "01-VERIFICATION.md"
     verification_path.write_text(
-        _verification_with_contract_results()
-        .replace(
+        _verification_with_contract_results().replace(
             "      status: rejected\n",
             "      status: unresolved\n      notes: Proxy rejection remains open pending the decisive rerun.\n",
             1,
@@ -2246,7 +2312,7 @@ def test_validate_frontmatter_verification_rejects_passed_status_with_unresolved
 
 
 def test_validate_frontmatter_verification_rejects_non_canonical_status(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     (phase_dir / "01-01-PLAN.md").write_text(
         (FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"),
@@ -2269,22 +2335,28 @@ def test_validate_frontmatter_verification_rejects_non_canonical_status(tmp_path
 
 
 def test_verify_summary_requires_must_surface_reference_actions(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     plan_path = phase_dir / "01-01-PLAN.md"
     plan_path.write_text((FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"), encoding="utf-8")
-    summary_content = (FIXTURES_STAGE4 / "summary_with_contract_results.md").read_text(encoding="utf-8").replace(
-        "completed_actions: [read, compare, cite]",
-        "completed_actions: [read]",
-        1,
-    ).replace(
-        "status: completed",
-        "status: missing",
-        1,
-    ).replace(
-        "missing_actions: []",
-        "missing_actions: [compare, cite]",
-        1,
+    summary_content = (
+        (FIXTURES_STAGE4 / "summary_with_contract_results.md")
+        .read_text(encoding="utf-8")
+        .replace(
+            "completed_actions: [read, compare, cite]",
+            "completed_actions: [read]",
+            1,
+        )
+        .replace(
+            "status: completed",
+            "status: missing",
+            1,
+        )
+        .replace(
+            "missing_actions: []",
+            "missing_actions: [compare, cite]",
+            1,
+        )
     )
     summary_path = phase_dir / "01-01-SUMMARY.md"
     summary_path.write_text(summary_content, encoding="utf-8")
@@ -2296,7 +2368,7 @@ def test_verify_summary_requires_must_surface_reference_actions(tmp_path: Path) 
 
 
 def test_verify_summary_requires_decisive_comparison_verdict_when_comparison_was_attempted(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-benchmark"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-benchmark"
     phase_dir.mkdir(parents=True)
     plan_path = phase_dir / "01-01-PLAN.md"
     plan_path.write_text((FIXTURES_STAGE0 / "plan_with_contract.md").read_text(encoding="utf-8"), encoding="utf-8")

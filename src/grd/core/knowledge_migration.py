@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+from grd.core.constants import PLANNING_DIR_NAME
 from grd.core.frontmatter import extract_frontmatter
 from grd.core.knowledge_docs import KnowledgeReviewRecord, KnowledgeSourceRecord, parse_knowledge_doc_data_strict
 from grd.core.utils import normalize_ascii_slug
@@ -348,7 +349,9 @@ def classify_knowledge_doc_migration(
     if canonical_knowledge_id is None:
         blockers.append("could not derive a canonical knowledge_id from the file")
 
-    canonical_path = _canonical_knowledge_path(resolved_root, canonical_knowledge_id) if canonical_knowledge_id else None
+    canonical_path = (
+        _canonical_knowledge_path(resolved_root, canonical_knowledge_id) if canonical_knowledge_id else None
+    )
     normalized_sources, source_notes, source_blockers = _normalize_sources(meta.get("sources"))
     notes.extend(source_notes)
     blockers.extend(source_blockers)
@@ -450,7 +453,7 @@ def discover_knowledge_migration(project_root: Path) -> KnowledgeDocMigrationInv
     """Discover all knowledge docs and classify them for dry-run migration."""
 
     layout_root = project_root.resolve(strict=False)
-    knowledge_dir = layout_root / "GRD" / "knowledge"
+    knowledge_dir = layout_root / PLANNING_DIR_NAME / "knowledge"
     inventory = KnowledgeDocMigrationInventory()
     if not knowledge_dir.is_dir():
         return inventory

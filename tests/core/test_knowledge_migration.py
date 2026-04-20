@@ -16,7 +16,7 @@ FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "knowledge"
 
 def _copy_fixture_tree(tmp_path: Path, fixture_name: str) -> Path:
     fixture_root = FIXTURES_DIR / fixture_name
-    knowledge_dir = tmp_path / "GRD" / "knowledge"
+    knowledge_dir = tmp_path / ".grd" / "knowledge"
     shutil.copytree(fixture_root, knowledge_dir, dirs_exist_ok=True)
     return knowledge_dir
 
@@ -30,7 +30,7 @@ def test_classify_knowledge_doc_migration_recognizes_canonical_fixture(tmp_path:
     assert record.classification == KnowledgeMigrationClassification.CANONICAL
     assert record.knowledge_id == "K-renormalization-group-fixed-points"
     assert record.canonical_knowledge_id == "K-renormalization-group-fixed-points"
-    assert record.canonical_path == "GRD/knowledge/K-renormalization-group-fixed-points.md"
+    assert record.canonical_path == ".grd/knowledge/K-renormalization-group-fixed-points.md"
     assert record.can_rewrite is True
     assert record.needs_review_refresh is False
 
@@ -46,7 +46,7 @@ def test_classify_knowledge_doc_migration_marks_upgradeable_fixture_without_fabr
     assert record.classification == KnowledgeMigrationClassification.UPGRADEABLE
     assert record.knowledge_id == "renormalization-group-fixed-points"
     assert record.canonical_knowledge_id == "K-renormalization-group-fixed-points"
-    assert record.canonical_path == "GRD/knowledge/K-renormalization-group-fixed-points.md"
+    assert record.canonical_path == ".grd/knowledge/K-renormalization-group-fixed-points.md"
     assert record.suggested_status == "draft"
     assert record.needs_review_refresh is True
     assert any("downgrade trust" in note for note in record.notes)
@@ -60,7 +60,7 @@ def test_classify_knowledge_doc_migration_blocks_free_form_sources(tmp_path: Pat
 
     assert record.classification == KnowledgeMigrationClassification.BLOCKED
     assert record.canonical_knowledge_id == "K-renormalization-group-fixed-points"
-    assert record.canonical_path == "GRD/knowledge/K-renormalization-group-fixed-points.md"
+    assert record.canonical_path == ".grd/knowledge/K-renormalization-group-fixed-points.md"
     assert any("knowledge.sources" in blocker for blocker in record.blockers)
     assert record.can_rewrite is False
 

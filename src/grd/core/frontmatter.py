@@ -38,9 +38,9 @@ from grd.contracts import (
     parse_project_contract_data_strict,
 )
 from grd.core import knowledge_docs as _knowledge_docs
-from grd.core.strict_yaml import load_strict_yaml
 from grd.core.constants import (
     PLAN_SUFFIX,
+    PLANNING_DIR_NAME,
     STANDALONE_PLAN,
     STANDALONE_SUMMARY,
     SUMMARY_SUFFIX,
@@ -48,6 +48,7 @@ from grd.core.constants import (
 from grd.core.contract_validation import _format_schema_error
 from grd.core.errors import GRDError
 from grd.core.observability import instrument_grd_function, resolve_project_root
+from grd.core.strict_yaml import load_strict_yaml
 from grd.core.utils import matching_phase_artifact_count, normalize_ascii_slug, phase_artifact_display_name, phase_artifact_id, safe_read_file
 
 # ---------------------------------------------------------------------------
@@ -268,7 +269,7 @@ def _source_path_project_root(source_path: Path | None) -> Path | None:
         return None
     source_dir = source_path.parent.resolve(strict=False)
     for candidate in (source_dir, *source_dir.parents):
-        if (candidate / "GRD").is_dir():
+        if (candidate / PLANNING_DIR_NAME).is_dir():
             return candidate
     return resolve_project_root(source_path.parent)
 
@@ -359,9 +360,7 @@ def parse_contract_block(content: str, *, source_path: Path | None = None) -> Re
         project_root=_source_path_project_root(source_path),
     )
     if resolution.errors:
-        raise FrontmatterValidationError(
-            "Invalid contract frontmatter: " + "; ".join(resolution.errors)
-        )
+        raise FrontmatterValidationError("Invalid contract frontmatter: " + "; ".join(resolution.errors))
     return resolution.contract
 
 
@@ -567,9 +566,7 @@ def validate_knowledge_frontmatter(
         errors.append(f"knowledge.superseded_by is forbidden when status is {status_value}")
 
     if source_path is not None and source_path.stem != str(knowledge_id or ""):
-        errors.append(
-            f"knowledge_id must match the filename stem ({source_path.stem!r} != {knowledge_id!r})"
-        )
+        errors.append(f"knowledge_id must match the filename stem ({source_path.stem!r} != {knowledge_id!r})")
 
     return FrontmatterValidation(
         valid=len(missing) == 0 and not errors,
@@ -673,6 +670,8 @@ _KNOWLEDGE_REVIEW_LEGACY_FIELDS = {
     "trace_id",
 }
 _KNOWLEDGE_REVIEW_DECISION_VALUES = ("approved", "needs_changes", "rejected")
+
+
 def _parse_iso8601_datetime(value: object) -> datetime | None:
     """Parse an ISO 8601 timestamp or return ``None`` when invalid."""
 
@@ -692,8 +691,11 @@ def _parse_iso8601_datetime(value: object) -> datetime | None:
 def _is_lower_hex_sha256(value: object) -> bool:
     """Return True when *value* is a lowercase SHA-256 digest string."""
 
-    return isinstance(value, str) and len(value) == 64 and value == value.lower() and all(
-        character in "0123456789abcdef" for character in value
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and value == value.lower()
+        and all(character in "0123456789abcdef" for character in value)
     )
 
 
@@ -812,9 +814,10 @@ def _validate_knowledge_review_block(
             errors.append("knowledge.review.review_round: expected an integer >= 1")
         _validate_knowledge_project_relative_path(review, "approval_artifact_path", errors)
         _validate_knowledge_sha256_field(review, "approval_artifact_sha256", errors)
-        if _validate_knowledge_sha256_field(review, "reviewed_content_sha256", errors) is None and review.get(
-            "reviewed_content_sha256"
-        ) is not None:
+        if (
+            _validate_knowledge_sha256_field(review, "reviewed_content_sha256", errors) is None
+            and review.get("reviewed_content_sha256") is not None
+        ):
             errors.append("knowledge.review.approval_artifact_sha256: expected a lowercase 64-hex sha256 digest")
         stale = review.get("stale")
         if type(stale) is not bool:
@@ -840,7 +843,9 @@ def _validate_knowledge_review_block(
         if evidence_sha256 is not None and not _is_lower_hex_sha256(evidence_sha256):
             errors.append("knowledge.review.evidence_sha256: expected a lowercase 64-hex sha256 digest")
         if audit_artifact_path is not None and (
-            not isinstance(audit_artifact_path, str) or not audit_artifact_path.strip() or _is_absolute_path(audit_artifact_path)
+            not isinstance(audit_artifact_path, str)
+            or not audit_artifact_path.strip()
+            or _is_absolute_path(audit_artifact_path)
         ):
             errors.append("knowledge.review.audit_artifact_path: must be a project-relative path")
         # Legacy review records do not carry the Step 4 freshness contract.
@@ -860,13 +865,21 @@ def _validate_knowledge_review_block(
             if canonical_contract:
                 if review.get("stale") is not False:
                     errors.append("knowledge.review.stale: approved stable docs must be marked stale: false")
-                if not isinstance(review.get("approval_artifact_path"), str) or not review.get("approval_artifact_path", "").strip():
+                if (
+                    not isinstance(review.get("approval_artifact_path"), str)
+                    or not review.get("approval_artifact_path", "").strip()
+                ):
                     errors.append("knowledge.review.approval_artifact_path: expected a project-relative path")
                 if not _is_lower_hex_sha256(review.get("approval_artifact_sha256")):
-                    errors.append("knowledge.review.approval_artifact_sha256: expected a lowercase 64-hex sha256 digest")
+                    errors.append(
+                        "knowledge.review.approval_artifact_sha256: expected a lowercase 64-hex sha256 digest"
+                    )
                 if not _is_lower_hex_sha256(review.get("reviewed_content_sha256")):
                     errors.append("knowledge.review.reviewed_content_sha256: expected a lowercase 64-hex sha256 digest")
-                if review.get("reviewed_content_sha256") is not None and review.get("reviewed_content_sha256") != current_content_sha256:
+                if (
+                    review.get("reviewed_content_sha256") is not None
+                    and review.get("reviewed_content_sha256") != current_content_sha256
+                ):
                     errors.append(
                         "knowledge.review.reviewed_content_sha256 does not match the current trusted content hash"
                     )
@@ -891,7 +904,13 @@ def _validate_knowledge_review_block(
             errors.append("knowledge.review is required when status is stable")
         elif decision_value != "approved":
             errors.append("knowledge.review.decision must be approved when status is stable")
-    if status == "in_review" and review is not None and canonical_contract and decision_value == "approved" and review.get("stale") is not True:
+    if (
+        status == "in_review"
+        and review is not None
+        and canonical_contract
+        and decision_value == "approved"
+        and review.get("stale") is not True
+    ):
         errors.append("knowledge.review.stale: approved in_review docs must be marked stale: true")
 
 
@@ -1228,9 +1247,7 @@ def _validate_knowledge_deps_field(meta: dict[str, object], errors: list[str]) -
             or not knowledge_id[2:]
             or normalize_ascii_slug(knowledge_id[2:]) != knowledge_id[2:]
         ):
-            errors.append(
-                f"{field_name}: entry {index} must use canonical K-{{ascii-hyphen-slug}} format"
-            )
+            errors.append(f"{field_name}: entry {index} must use canonical K-{{ascii-hyphen-slug}} format")
             continue
         if knowledge_id in seen and knowledge_id not in duplicates:
             duplicates.append(knowledge_id)
@@ -1282,19 +1299,19 @@ def _plan_contract_ref_path_error(plan_contract_ref: str) -> str | None:
 
     path_text = plan_contract_ref.strip().partition("#")[0].strip()
     if not path_text:
-        return "plan_contract_ref: must reference a canonical project-root-relative GRD PLAN path"
+        return "plan_contract_ref: must reference a canonical project-root-relative .grd PLAN path"
     if _PLAN_CONTRACT_REF_EXTERNAL_RE.match(path_text):
-        return "plan_contract_ref: must reference a canonical project-root-relative GRD PLAN path"
+        return "plan_contract_ref: must reference a canonical project-root-relative .grd PLAN path"
     if re.match(r"^[A-Za-z]:[\\/]", path_text) or re.match(r"^[A-Za-z]:$", path_text):
-        return "plan_contract_ref: must reference a canonical project-root-relative GRD PLAN path"
+        return "plan_contract_ref: must reference a canonical project-root-relative .grd PLAN path"
 
     relative_plan_path = Path(path_text[2:] if path_text.startswith("./") else path_text)
     if relative_plan_path.is_absolute():
-        return "plan_contract_ref: must reference a canonical project-root-relative GRD PLAN path"
+        return "plan_contract_ref: must reference a canonical project-root-relative .grd PLAN path"
     if any(part == ".." for part in relative_plan_path.parts):
         return "plan_contract_ref: must not traverse parent directories"
-    if not relative_plan_path.parts or relative_plan_path.parts[0] != "GRD":
-        return "plan_contract_ref: must reference a canonical project-root-relative GRD PLAN path"
+    if not relative_plan_path.parts or relative_plan_path.parts[0] != PLANNING_DIR_NAME:
+        return "plan_contract_ref: must reference a canonical project-root-relative .grd PLAN path"
     return None
 
 
@@ -1389,9 +1406,7 @@ def _claim_pass_proof_audit_errors(
         )
 
     allowed_proof_paths = {
-        path
-        for deliverable_id in claim.proof_deliverables
-        if (path := deliverable_path_by_id.get(deliverable_id))
+        path for deliverable_id in claim.proof_deliverables if (path := deliverable_path_by_id.get(deliverable_id))
     }
     if allowed_proof_paths and audit.proof_artifact_path not in allowed_proof_paths:
         errors.append(
@@ -1441,10 +1456,7 @@ def _proof_audit_errors(
     errors: list[str] = []
     observable_kind_by_id = {observable.id: observable.kind for observable in contract.observables}
     acceptance_test_kind_by_id = {test.id: test.kind for test in contract.acceptance_tests}
-    deliverable_path_by_id = {
-        deliverable.id: deliverable.path
-        for deliverable in contract.deliverables
-    }
+    deliverable_path_by_id = {deliverable.id: deliverable.path for deliverable in contract.deliverables}
 
     for claim in contract.claims:
         if not claim_requires_proof_audit(claim, observable_kind_by_id):
@@ -1639,9 +1651,7 @@ def _summary_contract_errors(
         completed = set(usage.completed_actions)
         missing = set(reference.required_actions) - completed
         if reference.must_surface and missing:
-            errors.append(
-                f"Reference {reference.id} missing required_actions in summary: {', '.join(sorted(missing))}"
-            )
+            errors.append(f"Reference {reference.id} missing required_actions in summary: {', '.join(sorted(missing))}")
 
     for verdict in comparison_verdicts:
         if verdict.subject_id not in known_subject_ids:
@@ -1844,9 +1854,7 @@ def _verification_status_errors(
         errors.append("status: passed is inconsistent with non-empty suggested_contract_checks")
 
     non_passed_subjects = [
-        f"claim {entry_id}"
-        for entry_id, entry in contract_results.claims.items()
-        if entry.status != "passed"
+        f"claim {entry_id}" for entry_id, entry in contract_results.claims.items() if entry.status != "passed"
     ]
     non_passed_subjects.extend(
         f"deliverable {entry_id}"
@@ -1882,8 +1890,7 @@ def _verification_status_errors(
     ]
     if unresolved_proxies:
         errors.append(
-            "status: passed is inconsistent with unresolved forbidden_proxies: "
-            + ", ".join(sorted(unresolved_proxies))
+            "status: passed is inconsistent with unresolved forbidden_proxies: " + ", ".join(sorted(unresolved_proxies))
         )
 
     return errors
@@ -1917,9 +1924,7 @@ def _resolve_plan_contract_candidate(
     try:
         meta, _body = extract_frontmatter(content)
     except FrontmatterParseError as exc:
-        return True, _PlanContractResolution(
-            errors=[f"referenced PLAN frontmatter YAML parse error: {exc}"]
-        )
+        return True, _PlanContractResolution(errors=[f"referenced PLAN frontmatter YAML parse error: {exc}"])
 
     if not _frontmatter_identity_matches(meta, artifact_meta):
         return False, _PlanContractResolution()
@@ -2002,9 +2007,7 @@ def _find_matching_plan_contract(
         )
         if resolution.errors:
             matching_candidates.append(
-                _PlanContractResolution(
-                    errors=[f"referenced PLAN contract: {error}" for error in resolution.errors]
-                )
+                _PlanContractResolution(errors=[f"referenced PLAN contract: {error}" for error in resolution.errors])
             )
             continue
         matching_candidates.append(resolution)
@@ -2013,9 +2016,7 @@ def _find_matching_plan_contract(
     if len(valid_candidates) == 1:
         return valid_candidates[0]
     if len(valid_candidates) > 1:
-        return _PlanContractResolution(
-            errors=["multiple matching sibling PLAN contracts found; add plan_contract_ref"]
-        )
+        return _PlanContractResolution(errors=["multiple matching sibling PLAN contracts found; add plan_contract_ref"])
     if matching_candidates:
         return matching_candidates[0]
     return _PlanContractResolution()
@@ -2076,9 +2077,7 @@ def validate_frontmatter(content: str, schema_name: str, source_path: Path | Non
         if not isinstance(raw_status, str):
             errors.append("status: expected a string")
         elif raw_status.strip() not in VERIFICATION_REPORT_STATUSES:
-            errors.append(
-                "status: must be one of passed, gaps_found, expert_needed, human_needed"
-            )
+            errors.append("status: must be one of passed, gaps_found, expert_needed, human_needed")
 
     if isinstance(meta.get("contract"), dict):
         resolution = _validate_contract_mapping(
@@ -2405,7 +2404,9 @@ def verify_summary(
     if self_check == "failed":
         errors.append("Self-check section indicates failure")
 
-    passed = len(errors) == 0 and len(missing_files) == 0 and self_check != "failed" and not (not commits_exist and hashes)
+    passed = (
+        len(errors) == 0 and len(missing_files) == 0 and self_check != "failed" and not (not commits_exist and hashes)
+    )
     return SummaryVerification(
         passed=passed,
         summary_exists=True,
