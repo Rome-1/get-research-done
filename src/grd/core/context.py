@@ -27,7 +27,6 @@ from grd.core.constants import (
     AGENT_ID_FILENAME,
     CONFIG_FILENAME,
     CONTEXT_SUFFIX,
-    ENV_GPD_ACTIVE_RUNTIME,
     MILESTONES_DIR_NAME,
     MILESTONES_FILENAME,
     PHASES_DIR_NAME,
@@ -51,7 +50,6 @@ from grd.core.constants import (
 )
 from grd.core.contract_validation import (
     _collect_list_shape_drift_errors,
-    _split_project_contract_schema_findings,
     salvage_project_contract,
     validate_project_contract,
 )
@@ -706,6 +704,9 @@ _RUNTIME_IGNORED_SCAN_PATHS = frozenset(
         for descriptor in iter_runtime_descriptors()
         if descriptor.global_config.xdg_subdir
     }
+)
+_RUNTIME_CONFIG_DIRS = frozenset(
+    descriptor.config_dir_name for descriptor in iter_runtime_descriptors()
 )
 _IGNORE_DIRS = frozenset(
     {

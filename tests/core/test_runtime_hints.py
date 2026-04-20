@@ -9,7 +9,7 @@ import pytest
 
 from grd.adapters import get_adapter, list_runtimes
 from grd.adapters.runtime_catalog import get_runtime_descriptor
-from grd.core.constants import ENV_GPD_ACTIVE_RUNTIME, ProjectLayout
+from grd.core.constants import ENV_GRD_ACTIVE_RUNTIME, ProjectLayout
 from grd.core.costs import UsageRecord, _profile_tier_mix, usage_ledger_path
 from grd.core.recent_projects import record_recent_project
 from grd.core.resume_surface import RESUME_COMPATIBILITY_ALIAS_FIELDS
@@ -41,7 +41,7 @@ _RUNTIME_WITH_ALIAS_AND_DISPLAY_NAME = next(
     _SUPPORTED_RUNTIME_DESCRIPTORS[0],
 )
 _RUNTIME_ENV_VARS_TO_CLEAR = {
-    ENV_GPD_ACTIVE_RUNTIME,
+    ENV_GRD_ACTIVE_RUNTIME,
     *(
         env_var
         for descriptor in _SUPPORTED_RUNTIME_DESCRIPTORS

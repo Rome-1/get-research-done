@@ -23,7 +23,7 @@ from pydantic import ValidationError as PydanticValidationError
 from grd.contracts import ResearchContract, collect_contract_integrity_errors
 from grd.core.contract_validation import (
     _sanitize_contract_scalars,
-    _split_project_contract_schema_findings,
+    split_project_contract_schema_findings,
     salvage_project_contract,
 )
 from grd.core.observability import grd_span
