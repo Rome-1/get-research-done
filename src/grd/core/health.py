@@ -48,6 +48,7 @@ from grd.core.frontmatter import FrontmatterParseError, extract_frontmatter, val
 from grd.core.knowledge_migration import discover_knowledge_migration
 from grd.core.knowledge_runtime import discover_knowledge_docs
 from grd.core.observability import grd_span
+from grd.core.project_files import MIGRATABLE_FILES as _ROOT_MIGRATABLE_FILES
 from grd.core.public_surface_contract import (
     local_cli_doctor_global_command,
     local_cli_doctor_local_command,
@@ -220,6 +221,7 @@ def check_project_structure(cwd: Path) -> HealthCheck:
 
     for name in REQUIRED_PLANNING_FILES:
         full = layout.grd / name
+        root_path = layout.root / name
         if full.exists():
             details[name] = "present"
             if name in _ROOT_MIGRATABLE_FILES and root_path.exists():
