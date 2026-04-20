@@ -2001,6 +2001,89 @@ def lean_render_proof(
     console.print(result.combined_narrative)
 
 
+@lean_app.command("demo")
+def lean_demo(
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Narrate the transcript without stamping the template. Every MOCK/SKIPPED "
+        "stage is labeled so the viewer can tell at a glance what ran live vs fixture.",
+    ),
+    template: str = typer.Option(
+        "simple-mechanics",
+        "--template",
+        help="Project template to demo against. Default: simple-mechanics (ge-bqdt).",
+    ),
+) -> None:
+    """Rome-persona single-entry physicist demo (ge-e2c1 / P1).
+
+    Runs MATHEMATICIAN-WORKFLOWS §7 end-to-end: ``new-project --template
+    simple-mechanics`` → ``lean-bootstrap --for physicist`` → ``/grd:progress``
+    → ``/grd:verify-claim`` → ``/grd:progress`` → Blueprint URL.
+
+    Every stage carries an honest status label:
+
+      - ``REAL``    — ran live; narration reflects real output.
+      - ``MOCK``    — dependency shipped, output is the §7 expected-state fixture.
+      - ``SKIPPED`` — long-running / LLM-backed; command printed, not executed.
+
+    The only live side effect (absent ``--dry-run``) is stamping ``template``
+    into ``.grd/demo/<template>/`` within the current working directory. The
+    bootstrap installer and live LLM-backed verify-claim are always SKIPPED
+    so the demo never exceeds the 5-min screen-share budget; the ``note`` on
+    each SKIPPED stage shows the exact command to run live.
+
+    Flags: exactly ``--dry-run`` and ``--template`` by design (ge-e2c1 (d)).
+
+    SIDE EFFECTS:
+      - Process spawns: none.
+      - Filesystem: writes ``.grd/demo/<template>/`` under cwd when not
+        ``--dry-run``; read-only otherwise.
+      - Network: none.
+      - Beads: none.
+      - Dependencies: reads the shipped template under
+        ``src/grd/specs/templates/project-templates/<template>/``.
+      - Audit-safe — ``--dry-run`` is implied under ``--audit-mode``.
+    """
+    from grd.core.lean.demo import run_demo
+
+    effective_dry_run = dry_run or is_audit_mode()
+    try:
+        result = run_demo(_get_cwd(), template=template, dry_run=effective_dry_run)
+    except ValueError as exc:
+        _error(str(exc), code=EXIT_INPUT_ERROR)
+
+    if _helpers._raw:
+        _output(result)
+        return
+
+    _STATUS_STYLE = {"real": "green", "mock": "yellow", "skipped": "cyan"}
+    header = f"[bold]grd lean demo[/] — template: [bold]{result.template}[/]{'  (dry-run)' if result.dry_run else ''}"
+    console.print(header)
+    console.print(
+        "[dim]Rome-persona transcript (MATHEMATICIAN-WORKFLOWS §7). "
+        "Stage labels: [green]REAL[/] live · [yellow]MOCK[/] fixture · "
+        "[cyan]SKIPPED[/] run manually.[/]"
+    )
+    console.print()
+
+    for stage in result.stages:
+        style = _STATUS_STYLE.get(stage.status, "white")
+        shipped = f" [dim]({stage.shipped_in})[/]" if stage.shipped_in else ""
+        console.print(f"[{style}]\\[{stage.status.upper()}][/] [bold]{stage.name}[/]{shipped}")
+        console.print(f"  [dim]$[/] [bold]{stage.command}[/]")
+        if stage.narration:
+            console.print(stage.narration)
+        if stage.note:
+            console.print(f"  [dim]→ {stage.note}[/]")
+        console.print()
+
+    if result.project_dir:
+        console.print(f"[green]✓[/] template stamped at {result.project_dir}")
+    for warning in result.warnings:
+        console.print(f"[yellow]warning:[/] {warning}")
+
+
 @lean_app.command("ping")
 def lean_ping() -> None:
     """Check whether the daemon is alive on this project's socket.
