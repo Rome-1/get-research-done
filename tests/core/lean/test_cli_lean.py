@@ -29,7 +29,17 @@ def _stub_lean(bin_dir: Path, *, exit_code: int = 0) -> Path:
 def test_help_lists_lean_subcommands() -> None:
     result = runner.invoke(app, ["lean", "--help"])
     assert result.exit_code == 0
-    for cmd in ("check", "typecheck-file", "env", "serve-repl", "stop-repl", "ping", "bootstrap", "prove", "stub-claim"):
+    for cmd in (
+        "check",
+        "typecheck-file",
+        "env",
+        "serve-repl",
+        "stop-repl",
+        "ping",
+        "bootstrap",
+        "prove",
+        "stub-claim",
+    ):
         assert cmd in result.stdout
 
 
@@ -185,6 +195,94 @@ def test_bootstrap_uninstall_dry_run(tmp_path: Path) -> None:
     parsed = json.loads(result.stdout)
     assert parsed["dry_run"] is True
     assert isinstance(parsed["paths"], list)
+
+
+# ─── ge-xvaw / P2-5: --audit-mode preset ─────────────────────────────────────
+
+
+def test_audit_mode_aliases_bootstrap_dry_run(tmp_path: Path) -> None:
+    # ge-xvaw: --audit-mode is the read-only preset. For bootstrap, it must
+    # force --dry-run so CI / unprivileged audits never install. The must-run
+    # stages (elan / toolchain / pantograph) emit detail lines prefixed with
+    # "dry-run:" whenever they're in dry-run mode, so checking those three
+    # is sufficient without over-specifying on the skippable stages.
+    (tmp_path / ".grd").mkdir()
+    result = runner.invoke(
+        app,
+        ["--raw", "--audit-mode", "--cwd", str(tmp_path), "lean", "bootstrap"],
+    )
+    assert result.exit_code == 0, result.stdout
+    parsed = json.loads(result.stdout)
+    assert "stages" in parsed
+    stage_details = {s["name"]: (s.get("detail") or "") for s in parsed["stages"]}
+    for must_run in ("elan", "toolchain", "pantograph"):
+        assert stage_details[must_run].startswith("dry-run:"), stage_details[must_run]
+
+
+def test_audit_mode_normalizer_hoists_from_end_of_argv() -> None:
+    # ge-xvaw: --audit-mode must hoist like --raw / --cwd, so agents can
+    # append it after the subcommand on the real argv (``sys.argv``). Typer's
+    # CliRunner bypasses our __call__ override, so we test the normalizer
+    # directly — the production path invokes ``_normalize_global_cli_options``
+    # before Typer parses the argv.
+    from grd.cli._helpers import _normalize_global_cli_options
+
+    argv = ["lean", "bootstrap", "--audit-mode", "--cwd", "/x"]
+    normalized = _normalize_global_cli_options(argv)
+    # Both globals are hoisted ahead of the subcommand path.
+    assert normalized.index("--audit-mode") < normalized.index("lean")
+    assert normalized.index("--cwd") < normalized.index("lean")
+
+
+def test_audit_mode_aliases_check_no_daemon(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # ge-xvaw: --audit-mode must force --no-daemon for ``grd lean check`` so
+    # no socket/PID file is written and no daemon is auto-spawned.
+    (tmp_path / ".grd").mkdir()
+    _stub_lean(tmp_path / "bin")
+    monkeypatch.setenv("PATH", str(tmp_path / "bin"))
+    result = runner.invoke(
+        app,
+        [
+            "--raw",
+            "--audit-mode",
+            "--cwd",
+            str(tmp_path),
+            "lean",
+            "check",
+            "theorem t : 1 = 1 := rfl",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    parsed = json.loads(result.stdout)
+    # backend == "subprocess" confirms we did not go through the daemon.
+    assert parsed["backend"] == "subprocess"
+    # No daemon socket should have been created under .grd/.
+    assert not (tmp_path / ".grd" / "lean-daemon.sock").exists()
+    assert not (tmp_path / ".grd" / "lean-daemon.pid").exists()
+
+
+def test_audit_mode_shown_in_root_help() -> None:
+    # ge-xvaw: --audit-mode must be discoverable from the root --help.
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    assert "--audit-mode" in result.stdout
+
+
+def test_check_help_lists_side_effects() -> None:
+    # ge-xvaw: every lean subcommand that supports the audit preset must
+    # document its side effects in --help.
+    result = runner.invoke(app, ["lean", "check", "--help"])
+    assert result.exit_code == 0
+    assert "SIDE EFFECTS" in result.stdout
+
+
+def test_bootstrap_help_lists_side_effects() -> None:
+    result = runner.invoke(app, ["lean", "bootstrap", "--help"])
+    assert result.exit_code == 0
+    assert "SIDE EFFECTS" in result.stdout
 
 
 def test_prove_list_tactics_raw_matches_default_ladder(tmp_path: Path) -> None:
@@ -386,9 +484,7 @@ def test_prove_help_documents_heartbeat_flags(monkeypatch: pytest.MonkeyPatch) -
     assert "initial-heartbeats" in result.stdout
 
 
-def _retry_stub_bin(
-    tmp_path: Path, *, counter: Path, first_exit: int, later_exit: int, stderr: str
-) -> Path:
+def _retry_stub_bin(tmp_path: Path, *, counter: Path, first_exit: int, later_exit: int, stderr: str) -> Path:
     """Create a lean stub bin_dir and return it.
 
     ``counter`` is an on-disk file updated by the stub on each call; the
@@ -405,7 +501,7 @@ def _retry_stub_bin(
         "#!/bin/bash\n"
         f"n=$(/bin/cat {counter})\n"
         f"echo $((n+1)) > {counter}\n"
-        "if [ \"$n\" = \"0\" ]; then\n"
+        'if [ "$n" = "0" ]; then\n'
         f"  echo '{stderr}' >&2\n"
         f"  exit {first_exit}\n"
         "fi\n"
@@ -456,9 +552,7 @@ def test_check_retries_on_heartbeat_timeout_and_prints_suggestion(
     assert int(counter.read_text()) >= 2
 
 
-def test_check_no_auto_retry_when_flag_disabled(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_check_no_auto_retry_when_flag_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """--max-heartbeat-retries 0 preserves one-shot behaviour (no retry)."""
     (tmp_path / ".grd").mkdir()
     counter = tmp_path / "counter"

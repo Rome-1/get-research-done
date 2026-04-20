@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 import typer
 
 from grd.cli import _helpers
-from grd.cli._helpers import _error, _get_cwd, _output, console, err_console
+from grd.cli._helpers import _error, _get_cwd, _output, console, err_console, is_audit_mode
 
 if TYPE_CHECKING:
     from grd.core.lean.events import ProgressEvent
@@ -502,11 +502,25 @@ def lean_check(
 
     Exit codes: 0 success, 1 Lean elaboration error, 2 bad input,
     3 missing toolchain, 4 internal/daemon error.
+
+    SIDE EFFECTS:
+      - Process spawns: Lean type-checker (via daemon unless --no-daemon),
+        spawns daemon on first use unless --no-spawn.
+      - Filesystem: reads --file path; daemon writes a socket under
+        .grd/lean-daemon.sock and a PID file under .grd/.
+      - Network: none.
+      - Beads: none.
+      - Dependencies: requires an installed Lean toolchain (see `grd lean bootstrap`).
+      - Audit-safe under --audit-mode (aliases --no-daemon --no-spawn;
+        no daemon spawn, no socket/PID file writes).
     """
     from grd.core.lean.client import check, check_file
     from grd.core.lean.events import DiagnosticEmitted, StageCompleted, StageStarted, tty_finish
     from grd.core.lean.heartbeats import check_with_heartbeat_retry
 
+    if is_audit_mode():
+        no_daemon = True
+        no_spawn = True
     emit = _make_emitter(events)
 
     if code is None and file is None:
@@ -584,8 +598,15 @@ def lean_typecheck_file(
     no_daemon: bool = typer.Option(False, "--no-daemon"),
     no_spawn: bool = typer.Option(False, "--no-spawn"),
 ) -> None:
-    """Type-check a ``.lean`` file by path (alias for ``check --file``)."""
+    """Type-check a ``.lean`` file by path (alias for ``check --file``).
+
+    SIDE EFFECTS: same as ``grd lean check``. Audit-safe under --audit-mode.
+    """
     from grd.core.lean.client import check_file
+
+    if is_audit_mode():
+        no_daemon = True
+        no_spawn = True
 
     resolved = path if path.is_absolute() else (_get_cwd() / path).resolve()
     if not resolved.is_file():
@@ -670,8 +691,7 @@ def lean_prove(
     initial_heartbeats: int | None = typer.Option(
         None,
         "--initial-heartbeats",
-        help="Starting maxHeartbeats for each tactic's first run. Omit to use "
-        "Lean's default (~200000).",
+        help="Starting maxHeartbeats for each tactic's first run. Omit to use Lean's default (~200000).",
         min=1,
     ),
 ) -> None:
@@ -683,9 +703,22 @@ def lean_prove(
 
     Pass ``--list-tactics`` with no statement to dump the current ladder —
     the single source of truth for agents and docs.
+
+    SIDE EFFECTS:
+      - Process spawns: one Lean invocation per tactic attempt (via daemon
+        unless --no-daemon); may spawn daemon unless --no-spawn.
+      - Filesystem: daemon socket + PID file under .grd/ when daemon is used.
+      - Network: none.
+      - Beads: none.
+      - Dependencies: requires an installed Lean toolchain.
+      - Audit-safe under --audit-mode (aliases --no-daemon --no-spawn).
     """
     from grd.core.lean.events import tty_finish
     from grd.core.lean.prove import DEFAULT_TACTIC_LADDER, prove_statement
+
+    if is_audit_mode():
+        no_daemon = True
+        no_spawn = True
 
     if list_tactics:
         _output({"tactics": list(DEFAULT_TACTIC_LADDER)})
@@ -822,9 +855,24 @@ def lean_try_prove(
     Lean kernel accepts it.
 
     Exit 0 when at least one candidate closes the goal, 1 otherwise.
+
+    SIDE EFFECTS:
+      - Process spawns: parallel Lean invocations (one per hammer tactic),
+        via daemon unless --no-daemon; may spawn daemon unless --no-spawn.
+      - Filesystem: daemon socket + PID file under .grd/ when daemon is used.
+      - Network: LLM call to Anthropic when --with-llm is set
+        (requires ANTHROPIC_API_KEY; silently skipped otherwise).
+      - Beads: none.
+      - Dependencies: requires an installed Lean toolchain; --with-llm
+        requires the autoformalize optional extra.
+      - Audit-safe under --audit-mode (aliases --no-daemon --no-spawn).
     """
     from grd.core.lean.events import tty_finish
     from grd.core.lean.try_prove import DEFAULT_HAMMER_TACTICS, try_prove_statement
+
+    if is_audit_mode():
+        no_daemon = True
+        no_spawn = True
 
     if list_tactics:
         _output({"tactics": list(DEFAULT_HAMMER_TACTICS)})
@@ -970,12 +1018,28 @@ def lean_find_counterexample(
 
     Exit 0 when at least one kernel-verified counterexample is found,
     1 otherwise.
+
+    SIDE EFFECTS:
+      - Process spawns: parallel Lean invocations (one per method/candidate),
+        via daemon unless --no-daemon; may spawn daemon unless --no-spawn.
+      - Filesystem: daemon socket + PID file under .grd/ when daemon is used.
+      - Network: LLM call to Anthropic when --with-llm is set
+        (requires ANTHROPIC_API_KEY; silently skipped otherwise).
+      - Beads: none.
+      - Dependencies: requires an installed Lean toolchain; --with-llm
+        requires the autoformalize optional extra; ``plausible`` method
+        requires the Plausible Lean dep in the target project.
+      - Audit-safe under --audit-mode (aliases --no-daemon --no-spawn).
     """
     from grd.core.lean.events import tty_finish
     from grd.core.lean.find_counterexample import (
         DEFAULT_METHODS,
         find_counterexample,
     )
+
+    if is_audit_mode():
+        no_daemon = True
+        no_spawn = True
 
     if list_methods:
         _output({"methods": list(DEFAULT_METHODS), "available": ["decide", "plausible", "llm"]})
@@ -1071,6 +1135,15 @@ def lean_search(
     No manual backend selection needed.
 
     Exit codes: 0 results found, 1 no results, 2 bad input, 4 internal error.
+
+    SIDE EFFECTS:
+      - Process spawns: none.
+      - Filesystem: none.
+      - Network: HTTP(S) calls to Loogle, LeanExplore, and Lean Finder.
+      - Beads: none.
+      - Dependencies: none beyond GRD itself.
+      - NOT audit-safe — this is an online-lookup command. Run in audit
+        contexts only when outbound HTTP is permitted.
     """
     from grd.core.lean.search import search
 
@@ -1143,6 +1216,15 @@ def lean_gen_conventions(
     suitable for filing discovered-from children of ge-tau.
 
     Exit codes: 0 success, 2 no state.json, 4 internal error.
+
+    SIDE EFFECTS:
+      - Process spawns: none.
+      - Filesystem: reads ``.grd/state.json``; writes ``--output`` path
+        when provided. With no ``--output``, prints to stdout/stderr only.
+      - Network: none.
+      - Beads: none.
+      - Dependencies: none.
+      - Audit-safe when ``--output`` is omitted (read-only).
     """
     from grd.core.lean.convention_bridge import generate_preamble
 
@@ -1175,6 +1257,15 @@ def lean_env() -> None:
     or ``blocked on: …``) so a human scanning the terminal knows whether to
     run ``/grd:lean-bootstrap`` before anything else. The JSON ``--raw`` mode
     emits only the structured payload — the summary is redundant there.
+
+    SIDE EFFECTS:
+      - Process spawns: invokes the installed daemon with a ``ping`` RPC
+        when the socket exists (no daemon spawn).
+      - Filesystem: reads ``.grd/lean-env.json`` and ``.grd/lean-daemon.sock``.
+      - Network: none.
+      - Beads: none.
+      - Dependencies: none installed; just reports what it found.
+      - Audit-safe — read-only.
     """
     from grd.cli._helpers import _raw
     from grd.core.lean.env import compute_env_status
@@ -1244,9 +1335,22 @@ def lean_stub_claim(
     - "what to try next" block
 
     Flows into ``grd lean verify-claim`` as an optional preprocessing step.
+
+    SIDE EFFECTS:
+      - Process spawns: none (retrieval is offline against the bundled index).
+      - Filesystem: reads the pinned Mathlib4/PhysLean name index.
+      - Network: Anthropic LLM call (unless ``--no-llm``).
+      - Beads: none.
+      - Dependencies: requires the ``autoformalize`` optional extra for the
+        real LLM path.
+      - Audit-safe under --audit-mode (aliases ``--no-llm`` → stub response,
+        no network).
     """
     if physics and no_physics:
         _error("Pass at most one of --physics / --no-physics.", code=EXIT_INPUT_ERROR)
+
+    if is_audit_mode():
+        no_llm = True
 
     with _lean_internal_guard():
         import os as _os  # noqa: PLC0415
@@ -1398,9 +1502,27 @@ def lean_verify_claim(
 
     Requires ``ANTHROPIC_API_KEY`` (and the ``autoformalize`` optional extra)
     unless ``--no-llm`` is passed.
+
+    SIDE EFFECTS:
+      - Process spawns: many Lean invocations (candidate compile + faithfulness
+        back-translation), via daemon unless --no-daemon.
+      - Filesystem: reads phase artifacts under .grd/; daemon socket + PID
+        file under .grd/ when daemon is used.
+      - Network: Anthropic LLM calls (unless --no-llm). Respects
+        ANTHROPIC_API_KEY; no key ⇒ runtime error.
+      - Beads: escalation path opens a ``bd new -l human`` bead on low-
+        confidence / failed-compile outcomes.
+      - Dependencies: requires an installed Lean toolchain and the
+        ``autoformalize`` optional extra.
+      - Audit-safe under --audit-mode (aliases --no-daemon and --no-llm;
+        LLM disabled ⇒ emits a stub "unconfigured" result, no network).
     """
     if physics and no_physics:
         _error("Pass at most one of --physics / --no-physics.", code=EXIT_INPUT_ERROR)
+
+    if is_audit_mode():
+        no_daemon = True
+        no_llm = True
 
     with _lean_internal_guard():
         import os as _os  # noqa: PLC0415
@@ -1506,6 +1628,16 @@ def lean_init_blueprint(
     The output directory is ``<phase-dir>/blueprint/`` with:
     ``content.tex``, ``lakefile.lean``, ``lean-toolchain``, ``Blueprint.lean``,
     and one ``Proofs/<PlanName>.lean`` stub per plan entry.
+
+    SIDE EFFECTS:
+      - Process spawns: none.
+      - Filesystem: writes ``<phase-dir>/blueprint/`` and everything inside.
+        ``--force`` overwrites an existing directory.
+      - Network: none.
+      - Beads: none.
+      - Dependencies: none beyond GRD itself.
+      - NOT audit-safe by default — does not honor ``--audit-mode`` because
+        blueprint scaffolding is the point of the command.
     """
     from grd.core.lean.blueprint_core import init_blueprint
 
@@ -1545,6 +1677,18 @@ def lean_blueprint_status(
     Renders the standard dependency graph color-coded by status:
     ``[OK]`` proved (green), ``[--]`` stated (yellow),
     ``[  ]`` informal (grey), ``[!!]`` failed (red).
+
+    SIDE EFFECTS:
+      - Process spawns: invokes Lean (one-shot) per ``\\lean{...}`` node
+        unless ``--no-typecheck`` is set.
+      - Filesystem: reads ``<phase-dir>/blueprint/content.tex`` and ``.lean``
+        files; writes ``\\leanok`` annotations back into ``content.tex`` for
+        nodes that type-check.
+      - Network: none.
+      - Beads: none.
+      - Dependencies: requires an installed Lean toolchain when type-checking.
+      - NOT audit-safe by default — use ``--no-typecheck`` plus read-only
+        filesystem to get a pure-read traversal.
     """
     from grd.core.lean.blueprint_core import blueprint_status
 
@@ -1622,6 +1766,19 @@ def lean_bootstrap(
     Pass ``--for mathematician|physicist|ml-researcher`` for a persona-tailored
     on-ramp that auto-enables the right optional stages and references a
     walkthrough skill body for that domain.
+
+    SIDE EFFECTS:
+      - Process spawns: shells out to ``curl``, ``elan``, ``lake``, ``pip``,
+        system package managers, and ``cargo`` depending on enabled stages.
+      - Filesystem: writes ``.grd/lean-env.json``; installs to ``~/.elan``,
+        ``~/.cache/mathlib``, the project ``.lake`` directory; ``--uninstall``
+        removes these.
+      - Network: downloads elan, the Lean toolchain, Pantograph, Mathlib
+        olean cache, LeanDojo wheels as selected.
+      - Beads: none.
+      - Dependencies: installs them. This is the one GRD command that is
+        always side-effectful by design — use ``--dry-run`` to preview.
+      - Audit-safe under --audit-mode (aliases --dry-run; no installs).
     """
     with _lean_internal_guard():
         from grd.core.lean.bootstrap import (
@@ -1631,6 +1788,9 @@ def lean_bootstrap(
             uninstall,
         )
         from grd.core.lean.events import tty_finish
+
+        if is_audit_mode():
+            dry_run = True
 
         if for_persona is not None and for_persona not in VALID_PERSONAS:
             _error(
@@ -1697,6 +1857,14 @@ def lean_serve_repl(
     Normally users don't invoke this directly — the client auto-spawns a
     daemon on the first ``grd lean check``. Exposed for debugging and for
     integration tests.
+
+    SIDE EFFECTS:
+      - Process spawns: starts a long-lived daemon holding a Lean REPL.
+      - Filesystem: creates ``.grd/lean-daemon.sock`` and ``.grd/lean-daemon.pid``.
+      - Network: none (Unix domain socket is local only).
+      - Beads: none.
+      - Dependencies: requires an installed Lean toolchain.
+      - NOT audit-safe — command's purpose is to spawn the daemon.
     """
     with _lean_internal_guard():
         from grd.core.lean.daemon import serve
@@ -1720,7 +1888,18 @@ def lean_serve_repl(
 
 @lean_app.command("stop-repl")
 def lean_stop_repl() -> None:
-    """Ask the running daemon to shut down."""
+    """Ask the running daemon to shut down.
+
+    SIDE EFFECTS:
+      - Process spawns: none; sends a shutdown RPC to the running daemon.
+      - Filesystem: daemon cleans up ``.grd/lean-daemon.sock`` and PID file
+        on shutdown. No-op when no daemon is running.
+      - Network: none.
+      - Beads: none.
+      - Dependencies: none.
+      - Audit-safe — stops a running daemon (equivalent to terminating a
+        spawned background process; read-only contexts have nothing to stop).
+    """
     with _lean_internal_guard():
         from grd.core.lean.client import shutdown_daemon
 
@@ -1729,7 +1908,16 @@ def lean_stop_repl() -> None:
 
 @lean_app.command("ping")
 def lean_ping() -> None:
-    """Check whether the daemon is alive on this project's socket."""
+    """Check whether the daemon is alive on this project's socket.
+
+    SIDE EFFECTS:
+      - Process spawns: none.
+      - Filesystem: reads ``.grd/lean-daemon.sock``.
+      - Network: none (Unix socket, local).
+      - Beads: none.
+      - Dependencies: none.
+      - Audit-safe — read-only.
+    """
     from grd.core.lean.client import ping_daemon
 
     alive = ping_daemon(_get_cwd())

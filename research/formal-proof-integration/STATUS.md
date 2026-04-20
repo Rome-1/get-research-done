@@ -66,6 +66,38 @@ documentation — `--raw` is kept for backwards compatibility with existing
 skill bodies and agent plumbing. Wired in `src/grd/cli/_helpers.py`
 (`@app.callback` + `_split_global_cli_options`).
 
+### Side effects cheat sheet (ge-xvaw / P2-5)
+
+`grd --audit-mode <subcommand> …` aliases `--no-daemon --no-spawn --dry-run`
+for every subcommand that supports them, so CI and unprivileged audits can
+run without touching the filesystem, spawning processes, hitting the network,
+or creating beads. Each subcommand's `--help` carries an authoritative
+`SIDE EFFECTS` section — the table below is the at-a-glance summary.
+
+Legend: `fs` = filesystem writes · `proc` = process spawns · `net` = network
+calls · `bd` = bead creation · `dep` = dependency install · `—` = none.
+`audit?` shows whether `--audit-mode` fully neutralizes the command's side
+effects (✓), partially (~), or leaves them intact (✗, by design).
+
+| Command | fs | proc | net | bd | dep | audit? |
+|---|---|---|---|---|---|---|
+| `grd lean check` | socket/PID | lean / daemon | — | — | — | ✓ (no daemon, one-shot lean) |
+| `grd lean typecheck-file` | socket/PID | lean / daemon | — | — | — | ✓ (no daemon, one-shot lean) |
+| `grd lean prove` | socket/PID | lean × N tactics | — | — | — | ✓ (no daemon) |
+| `grd lean try-prove` | socket/PID | lean × parallel | LLM (with `--with-llm`) | — | — | ✓ (no daemon; LLM opt-in so already off by default) |
+| `grd lean find-counterexample` | socket/PID | lean × parallel | LLM (with `--with-llm`) | — | — | ✓ (no daemon) |
+| `grd lean verify-claim` | socket/PID, reads phase artifacts | lean × many | LLM (Anthropic) | `bd new -l human` on escalation | autoformalize extra | ~ (aliases `--no-daemon` + `--no-llm`; bead writes still possible if LLM disabled and stub triggers an escalation — today stub stays in `unconfigured` so bd is skipped) |
+| `grd lean stub-claim` | — | — | LLM (Anthropic) | — | autoformalize extra | ✓ (aliases `--no-llm`; purely read-only) |
+| `grd lean search` | — | — | Loogle, LeanExplore, Lean Finder | — | — | ✗ (online lookup is the command) |
+| `grd lean gen-conventions` | `--output` path | — | — | — | — | ~ (read-only without `--output`) |
+| `grd lean env` | — | daemon `ping` RPC | — | — | — | ✓ (read-only) |
+| `grd lean init-blueprint` | `<phase>/blueprint/` tree | — | — | — | — | ✗ (scaffold writes are the command) |
+| `grd lean blueprint-status` | `\\leanok` edits in `content.tex` | lean | — | — | — | ~ (use `--no-typecheck` for pure-read) |
+| `grd lean bootstrap` | `~/.elan`, `.lake`, `~/.cache/mathlib`, `.grd/lean-env.json` | curl, elan, lake, cargo, pkg managers | large downloads | — | installs | ✓ (aliases `--dry-run`; no installs) |
+| `grd lean serve-repl` | socket/PID | daemon (long-lived) | — | — | — | ✗ (the command is "spawn the daemon") |
+| `grd lean stop-repl` | removes socket/PID | — | — | — | — | ✓ (no-op when nothing to stop) |
+| `grd lean ping` | — | — | — | — | — | ✓ (read-only) |
+
 ### JSON schema: goal-state fields (ge-2zu)
 
 As of ge-2zu, the following goal-state fields are present in CLI JSON output:

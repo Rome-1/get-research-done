@@ -35,6 +35,25 @@ err_console = Console(stderr=True)
 # Global state threaded through typer context
 _raw: bool = False
 _cwd: Path = Path(".")
+# ge-xvaw / P2-5: Read-only audit mode. When True, subcommands that understand
+# --no-daemon / --no-spawn / --dry-run must behave as if those flags were set.
+# The audit preset is an argv-time alias: it does not rewrite the argv stream,
+# because different subcommands accept different subsets of the three flags.
+# Subcommands read ``is_audit_mode()`` and OR it into their per-flag booleans.
+_audit_mode: bool = False
+
+
+def is_audit_mode() -> bool:
+    """Return True when the root ``--audit-mode`` preset is active (ge-xvaw).
+
+    Subcommands that accept ``--no-daemon`` / ``--no-spawn`` / ``--dry-run``
+    should OR this into the corresponding boolean so the preset acts as an
+    alias without requiring every subcommand to accept ``--audit-mode``
+    explicitly. Subcommands that do not accept any of the three flags are
+    no-ops under audit mode (their SIDE EFFECTS section flags what this
+    means for CI / unprivileged callers).
+    """
+    return _audit_mode
 
 
 def _output(data: object) -> None:
@@ -127,6 +146,15 @@ def _split_global_cli_options(argv: list[str]) -> tuple[list[str], list[str]]:
             continue
 
         if arg in ("--raw", "--json"):
+            global_args.append(arg)
+            index += 1
+            continue
+
+        # ge-xvaw / P2-5: --audit-mode is a root-global preset that aliases
+        # --no-daemon --no-spawn --dry-run for every subcommand that supports
+        # them. Hoist it like --raw so `grd lean check '...' --audit-mode`
+        # works identically to `grd --audit-mode lean check '...'`.
+        if arg == "--audit-mode":
             global_args.append(arg)
             index += 1
             continue
@@ -875,9 +903,10 @@ class _GRDTyper(typer.Typer):
     """Typer subclass that catches GRDError and prints a user-friendly message."""
 
     def __call__(self, *args: object, **kwargs: object) -> object:
-        global _raw, _cwd  # noqa: PLW0603
+        global _raw, _cwd, _audit_mode  # noqa: PLW0603
         _raw = False
         _cwd = Path(".")
+        _audit_mode = False
         normalized_kwargs = dict(kwargs)
         raw_args = normalized_kwargs.get("args")
         if raw_args is None and not args:
@@ -931,6 +960,13 @@ def main(
         is_eager=True,
     ),
     cwd: str = typer.Option(".", "--cwd", help="Working directory (default: current)"),
+    audit_mode: bool = typer.Option(
+        False,
+        "--audit-mode",
+        help="Read-only preset: aliases --no-daemon --no-spawn --dry-run for every "
+        "subcommand that supports them. Safe for CI and unprivileged audits. "
+        "See each subcommand's 'SIDE EFFECTS' section for what it still touches.",
+    ),
     version: bool = typer.Option(
         False,
         "--version",
@@ -941,6 +977,7 @@ def main(
     ),
 ) -> None:
     """GRD \u2014 Get Research Done."""
-    global _raw, _cwd  # noqa: PLW0603
+    global _raw, _cwd, _audit_mode  # noqa: PLW0603
     _raw = raw
     _cwd = Path(cwd)
+    _audit_mode = audit_mode
