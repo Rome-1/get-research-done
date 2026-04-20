@@ -1115,7 +1115,7 @@ class TestCheckPlanFrontmatter:
 
     def test_detects_plan_numbering_gap(self, tmp_path: Path):
         """Standard plan filenames like 01-PLAN.md must be parsed by the regex."""
-        phases = tmp_path / "GRD" / "phases"
+        phases = tmp_path / ".grd" / "phases"
         phase_dir = phases / "01-intro"
         phase_dir.mkdir(parents=True)
         # Create plans with a gap: 01, 03 (missing 02)
@@ -1129,7 +1129,7 @@ class TestCheckPlanFrontmatter:
 
     def test_no_gap_with_consecutive_plans(self, tmp_path: Path):
         """Consecutive plan numbers should not produce warnings."""
-        phases = tmp_path / "GRD" / "phases"
+        phases = tmp_path / ".grd" / "phases"
         phase_dir = phases / "01-intro"
         phase_dir.mkdir(parents=True)
         plan_content = _canonical_plan_frontmatter()
@@ -1141,7 +1141,7 @@ class TestCheckPlanFrontmatter:
         assert not any("Plan numbering gap" in w for w in result.warnings)
 
     def test_missing_contract_block_fails(self, tmp_path: Path):
-        phases = tmp_path / "GRD" / "phases"
+        phases = tmp_path / ".grd" / "phases"
         phase_dir = phases / "01-intro"
         phase_dir.mkdir(parents=True)
         plan_content = (
@@ -1168,7 +1168,7 @@ class TestCheckPlanFrontmatter:
         assert any("missing required frontmatter fields: contract" in issue for issue in result.issues)
 
     def test_invalid_contract_schema_fails(self, tmp_path: Path):
-        phases = tmp_path / "GRD" / "phases"
+        phases = tmp_path / ".grd" / "phases"
         phase_dir = phases / "01-intro"
         phase_dir.mkdir(parents=True)
         plan_content = (
