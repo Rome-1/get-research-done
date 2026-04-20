@@ -22,6 +22,7 @@ from grd.cli._helpers import _error, _get_cwd, _output, console, err_console
 
 if TYPE_CHECKING:
     from grd.core.lean.events import ProgressEvent
+    from grd.core.lean.find_counterexample import CounterexampleResult
     from grd.core.lean.protocol import LeanCheckResult
     from grd.core.lean.prove import ProveResult
     from grd.core.lean.try_prove import TryProveResult
@@ -110,8 +111,7 @@ def _output_for_events(data: object, events: str | None) -> None:
 _EVENTS_OPTION = typer.Option(
     None,
     "--events",
-    help="Enable streaming progress events. 'jsonl' emits NDJSON to stdout "
-    "with the final aggregate on stderr.",
+    help="Enable streaming progress events. 'jsonl' emits NDJSON to stdout with the final aggregate on stderr.",
 )
 
 
@@ -148,8 +148,7 @@ def _lean_internal_guard() -> Iterator[None]:
             err_console.print_json(json.dumps(payload))
         else:
             err_console.print(
-                f"[bold red]Internal error:[/] {exc}\n"
-                f"[dim](Run with --raw for machine-readable diagnostics.)[/]",
+                f"[bold red]Internal error:[/] {exc}\n[dim](Run with --raw for machine-readable diagnostics.)[/]",
                 highlight=False,
             )
         raise typer.Exit(code=EXIT_INTERNAL_ERROR) from None
@@ -204,7 +203,6 @@ def _print_prove_goal_state(result: object, *, show_goal: bool = False) -> None:
                 err_console.print(f"  [dim]goal {i}:[/]", highlight=False)
                 for line in goal.splitlines():
                     err_console.print(f"    {line}", highlight=False)
-
 
 
 def _print_diagnostic_hints(result: LeanCheckResult) -> None:
@@ -456,17 +454,21 @@ def lean_check(
         )
 
     for diag in result.diagnostics:
-        emit(DiagnosticEmitted(
-            severity=diag.severity,
-            message=diag.message,
-            line=diag.line,
-            column=diag.column,
-        ))
-    emit(StageCompleted(
-        stage="check",
-        status="ok" if result.ok else "failed",
-        elapsed_ms=result.elapsed_ms,
-    ))
+        emit(
+            DiagnosticEmitted(
+                severity=diag.severity,
+                message=diag.message,
+                line=diag.line,
+                column=diag.column,
+            )
+        )
+    emit(
+        StageCompleted(
+            stage="check",
+            status="ok" if result.ok else "failed",
+            elapsed_ms=result.elapsed_ms,
+        )
+    )
     if events:
         tty_finish()
     _output_for_events(result, events)
@@ -615,16 +617,14 @@ def _print_try_prove_summary(result: TryProveResult) -> None:
     if result.successes:
         err_console.print("")
         err_console.print(
-            f"[bold]Try this[/] ({len(result.successes)} candidate"
-            f"{'s' if len(result.successes) != 1 else ''}, ranked)",
+            f"[bold]Try this[/] ({len(result.successes)} candidate{'s' if len(result.successes) != 1 else ''}, ranked)",
             highlight=False,
         )
         for cand in result.successes:
             tag = " [dim](llm)[/]" if cand.via_llm else ""
             rank_label = f"#{(cand.rank or 0) + 1}"
             err_console.print(
-                f"  [green]{rank_label}[/] [cyan]{cand.snippet}[/]"
-                f" [dim]({cand.elapsed_ms}ms){tag}[/]",
+                f"  [green]{rank_label}[/] [cyan]{cand.snippet}[/] [dim]({cand.elapsed_ms}ms){tag}[/]",
                 highlight=False,
             )
     else:
@@ -742,6 +742,161 @@ def lean_try_prove(
     _output_for_events(result, events)
     _print_daemon_spawn_failure()
     _print_try_prove_summary(result)
+    if not result.ok:
+        raise typer.Exit(code=EXIT_SOFT_FAIL)
+
+
+def _print_find_counterexample_summary(result: CounterexampleResult) -> None:
+    """Render counterexample search results to stderr (ge-16j / P2-3).
+
+    Mirrors :func:`_print_try_prove_summary`. A confirmed counterexample is
+    one line per method+witness; rejected candidates collapse to a count so
+    the terminal stays readable under LLM-heavy workloads.
+    """
+    if _helpers._raw:
+        return
+    if result.counterexamples:
+        err_console.print("")
+        err_console.print(
+            f"[bold]Counterexample[/] ({len(result.counterexamples)} verified, ranked)",
+            highlight=False,
+        )
+        for cand in result.counterexamples:
+            rank_label = f"#{(cand.rank or 0) + 1}"
+            via = " [dim](llm)[/]" if cand.via_llm else ""
+            err_console.print(
+                f"  [green]{rank_label}[/] [cyan]{cand.snippet}[/] [dim]({cand.elapsed_ms}ms){via}[/]",
+                highlight=False,
+            )
+    else:
+        err_console.print("")
+        err_console.print(
+            "[yellow]No counterexample found.[/]",
+            highlight=False,
+        )
+
+    if result.rejected:
+        err_console.print(
+            f"[dim]{len(result.rejected)} candidate"
+            f"{'s' if len(result.rejected) != 1 else ''} did not yield a "
+            f"kernel-verified counterexample (run with --raw for details).[/]",
+            highlight=False,
+        )
+
+
+@lean_app.command("find-counterexample")
+def lean_find_counterexample(
+    statement: str | None = typer.Argument(
+        None,
+        help="Lean 4 statement to search for counterexamples. Accepts a bare "
+        "proposition (e.g. '∀ n : Nat, n * n ≠ 5'), a signature with a keyword "
+        "header, or a full definition whose ':=' tail will be discarded. "
+        "Omit only with --list-methods.",
+    ),
+    method: list[str] = typer.Option(
+        [],
+        "--method",
+        help="Override the default methods. Repeatable. Valid: decide, plausible, llm.",
+    ),
+    import_module: list[str] = typer.Option(
+        [],
+        "--import",
+        "-i",
+        help="Module to prepend as 'import <module>'. Repeatable.",
+    ),
+    budget: int | None = typer.Option(
+        None,
+        "--budget",
+        help="Cap the total number of candidates checked across all methods.",
+        min=1,
+    ),
+    witness_tactic: str = typer.Option(
+        "decide",
+        "--witness-tactic",
+        help="Tactic used to kernel-check each LLM-proposed witness refutation.",
+    ),
+    timeout_s: float = typer.Option(
+        30.0,
+        "--timeout",
+        help="Per-candidate wall-clock timeout in seconds.",
+        min=0.1,
+        max=600.0,
+    ),
+    with_llm: bool = typer.Option(
+        False,
+        "--with-llm",
+        help="Also ask the configured LLM (Anthropic) for concrete witness "
+        "values. Requires ANTHROPIC_API_KEY; silently skipped when unset.",
+    ),
+    no_daemon: bool = typer.Option(
+        False,
+        "--no-daemon",
+        help="Skip the socket daemon; run each candidate via a one-shot subprocess.",
+    ),
+    no_spawn: bool = typer.Option(
+        False,
+        "--no-spawn",
+        help="Do not auto-spawn the daemon if the socket is absent.",
+    ),
+    list_methods: bool = typer.Option(
+        False,
+        "--list-methods",
+        help="Print the default methods as JSON and exit.",
+    ),
+    events: str | None = _EVENTS_OPTION,
+) -> None:
+    """First-class counterexample search (ge-16j / P2-3).
+
+    Runs ``decide``, ``plausible``, and (with ``--with-llm``) LLM-proposed
+    concrete witnesses in parallel, kernel-checking each to produce a ranked
+    list of verified refutations. "Never ship an oracle": a candidate is
+    surfaced only when the Lean kernel accepts its refutation (or, for
+    Plausible, rejects the goal with a reported counterexample).
+
+    Exit 0 when at least one kernel-verified counterexample is found,
+    1 otherwise.
+    """
+    from grd.core.lean.events import tty_finish
+    from grd.core.lean.find_counterexample import (
+        DEFAULT_METHODS,
+        find_counterexample,
+    )
+
+    if list_methods:
+        _output({"methods": list(DEFAULT_METHODS), "available": ["decide", "plausible", "llm"]})
+        return
+
+    if statement is None:
+        _error(
+            "Provide a Lean 4 statement, or pass --list-methods to dump the default methods.",
+            code=EXIT_INPUT_ERROR,
+        )
+
+    llm = _build_llmqed_backend() if with_llm else None
+
+    emit = _make_emitter(events)
+    try:
+        result = find_counterexample(
+            statement,
+            project_root=_get_cwd(),
+            methods=list(method) if method else None,
+            budget=budget,
+            witness_tactic=witness_tactic,
+            imports=list(import_module),
+            timeout_s=timeout_s,
+            with_llm=with_llm,
+            llm=llm,
+            use_daemon=not no_daemon,
+            auto_spawn=not no_spawn,
+            on_event=emit,
+        )
+    except ValueError as exc:
+        _error(str(exc), code=EXIT_INPUT_ERROR)
+    if events:
+        tty_finish()
+    _output_for_events(result, events)
+    _print_daemon_spawn_failure()
+    _print_find_counterexample_summary(result)
     if not result.ok:
         raise typer.Exit(code=EXIT_SOFT_FAIL)
 
@@ -1003,10 +1158,7 @@ def lean_stub_claim(
         llm: object
         if no_llm:
             stub_response = (
-                "```lean\n"
-                "-- stub-claim dry run (LLM disabled)\n"
-                "theorem stub_claim_placeholder : True := sorry\n"
-                "```"
+                "```lean\n-- stub-claim dry run (LLM disabled)\ntheorem stub_claim_placeholder : True := sorry\n```"
             )
             llm = MockLLM(responses=[stub_response])
         else:
@@ -1291,9 +1443,7 @@ def lean_blueprint_status(
         console.print("")
         console.print(result.ascii_graph)
         if result.summary.get("leanok_updated", 0) > 0:
-            console.print(
-                f"\n[green]Auto-marked {result.summary['leanok_updated']} node(s) as \\leanok[/]"
-            )
+            console.print(f"\n[green]Auto-marked {result.summary['leanok_updated']} node(s) as \\leanok[/]")
 
 
 @lean_app.command("bootstrap")
@@ -1369,8 +1519,7 @@ def lean_bootstrap(
 
         if for_persona is not None and for_persona not in VALID_PERSONAS:
             _error(
-                f"Unknown persona '{for_persona}'. "
-                f"Valid: {', '.join(sorted(VALID_PERSONAS))}",
+                f"Unknown persona '{for_persona}'. Valid: {', '.join(sorted(VALID_PERSONAS))}",
                 code=EXIT_INPUT_ERROR,
             )
 
@@ -1405,9 +1554,7 @@ def lean_bootstrap(
             }
             skill = _PERSONA_SKILL_HINT.get(for_persona, "")
             if skill:
-                console.print(
-                    f"\n[bold]Next step:[/] Run [cyan]{skill}[/] for a guided walkthrough."
-                )
+                console.print(f"\n[bold]Next step:[/] Run [cyan]{skill}[/] for a guided walkthrough.")
         if not report.ok:
             raise typer.Exit(code=EXIT_ENV_ERROR)
 
