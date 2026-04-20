@@ -9,6 +9,7 @@ from pathlib import Path
 
 import yaml
 
+from grd.core.constants import PLANNING_DIR_NAME
 from grd.core.knowledge_runtime import KnowledgeDocRuntimeRecord, discover_knowledge_docs
 from grd.core.manuscript_artifacts import resolve_current_manuscript_artifacts
 from grd.mcp.paper.bibliography import CitationSource, parse_citation_source_payload
@@ -527,12 +528,12 @@ def _review_root_from_files(review_files: list[str]) -> Path | None:
     """Return the review directory implied by the selected review files."""
     for rel_path in review_files:
         parts = Path(rel_path).parts
-        if len(parts) >= 2 and parts[0] == "GRD" and parts[1] == "literature":
-            return Path("GRD") / "literature"
+        if len(parts) >= 2 and parts[0] == PLANNING_DIR_NAME and parts[1] == "literature":
+            return Path(PLANNING_DIR_NAME) / "literature"
     for rel_path in review_files:
         parts = Path(rel_path).parts
-        if len(parts) >= 2 and parts[0] == "GRD" and parts[1] == "research":
-            return Path("GRD") / "research"
+        if len(parts) >= 2 and parts[0] == PLANNING_DIR_NAME and parts[1] == "research":
+            return Path(PLANNING_DIR_NAME) / "research"
     return None
 
 
@@ -645,8 +646,7 @@ def _detail_mapping(details: object) -> dict[str, str]:
         if cleaned_value not in bucket:
             bucket.append(cleaned_value)
     mapping = {
-        key: (" / " if key in _DETAIL_SLASH_JOIN_KEYS else "; ").join(values)
-        for key, values in collected.items()
+        key: (" / " if key in _DETAIL_SLASH_JOIN_KEYS else "; ").join(values) for key, values in collected.items()
     }
     if freeform:
         mapping["freeform"] = "; ".join(freeform)
@@ -851,9 +851,13 @@ def _reference_from_active_anchor(
         if alias and alias not in {locator_value, _clean_text(anchor_id)}:
             alias_values.append(alias)
     explicit_must_surface = _normalize_optional_bool(must_surface_hint)
-    must_surface = explicit_must_surface if explicit_must_surface is not None else (
-        normalized_role in {"benchmark", "definition", "method", "must_consider"}
-        or bool({"use", "compare", "avoid"} & set(normalized_actions))
+    must_surface = (
+        explicit_must_surface
+        if explicit_must_surface is not None
+        else (
+            normalized_role in {"benchmark", "definition", "method", "must_consider"}
+            or bool({"use", "compare", "avoid"} & set(normalized_actions))
+        )
     )
     return ArtifactReference(
         id=_clean_text(anchor_id) or _reference_id(label, locator_value, prefix),
@@ -1005,9 +1009,7 @@ def _ingest_literature_review(content: str, source_path: str, result: ArtifactRe
                     anchor_id=str(entry.get("anchor_id") or ""),
                     label=str(entry.get("anchor") or entry.get("label") or entry.get("locator") or "literature-anchor"),
                     locator=str(entry.get("locator") or entry.get("source") or entry.get("anchor") or ""),
-                    applies_to=entry.get("applies_to")
-                    or entry.get("contract_subject_ids")
-                    or entry.get("subject_ids"),
+                    applies_to=entry.get("applies_to") or entry.get("contract_subject_ids") or entry.get("subject_ids"),
                     kind=str(entry.get("kind") or ""),
                     role=str(entry.get("type") or entry.get("role") or "other"),
                     why_it_matters=str(entry.get("why_it_matters") or ""),

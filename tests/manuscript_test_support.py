@@ -148,7 +148,7 @@ def _write_stage_report(
         ),
         encoding="utf-8",
     )
-    return f"GRD/review/{artifact_name}"
+    return f".grd/review/{artifact_name}"
 
 
 def write_proof_review_package(
@@ -171,10 +171,7 @@ def write_proof_review_package(
     manuscript = manuscript_path(project_root, stem=manuscript_stem)
     manuscript.parent.mkdir(parents=True, exist_ok=True)
     manuscript.write_text(
-        "\\documentclass{article}\n"
-        "\\begin{document}\n"
-        f"{manuscript_body}\n"
-        "\\end{document}\n",
+        f"\\documentclass{{article}}\n\\begin{{document}}\n{manuscript_body}\n\\end{{document}}\n",
         encoding="utf-8",
     )
     manuscript_rel = manuscript_relpath(stem=manuscript_stem)
@@ -201,7 +198,7 @@ def write_proof_review_package(
         )
 
     manuscript_sha256 = compute_sha256(manuscript)
-    review_dir = project_root / "GRD" / "review"
+    review_dir = project_root / ".grd" / "review"
     review_dir.mkdir(parents=True, exist_ok=True)
     round_suffix = "" if round_number <= 1 else f"-R{round_number}"
     claim_text = (

@@ -16,7 +16,7 @@ from tests.manuscript_test_support import CANONICAL_MANUSCRIPT_STEM, write_proof
 
 
 def test_phase_proof_review_bootstraps_manifest_and_turns_stale_after_edit(tmp_path: Path) -> None:
-    phase_dir = tmp_path / "GRD" / "phases" / "01-proofs"
+    phase_dir = tmp_path / ".grd" / "phases" / "01-proofs"
     phase_dir.mkdir(parents=True)
     summary_path = phase_dir / "01-SUMMARY.md"
     summary_path.write_text("# Summary\n", encoding="utf-8")
@@ -60,22 +60,21 @@ def test_manuscript_proof_review_bootstraps_manifest_and_turns_stale_after_edit(
 
 
 def test_manuscript_proof_review_requires_proof_redteam_artifact_for_proof_bearing_manuscript(tmp_path: Path) -> None:
-    manuscript_path = write_proof_review_package(tmp_path, theorem_bearing=True, review_report=False, proof_redteam_status=None).manuscript_path
+    manuscript_path = write_proof_review_package(
+        tmp_path, theorem_bearing=True, review_report=False, proof_redteam_status=None
+    ).manuscript_path
 
     status = resolve_manuscript_proof_review_status(tmp_path, manuscript_path)
 
     assert status.state == "missing_required_artifact"
     assert status.can_rely_on_prior_review is False
-    assert status.anchor_artifact == tmp_path / "GRD" / "review" / "PROOF-REDTEAM.md"
+    assert status.anchor_artifact == tmp_path / ".grd" / "review" / "PROOF-REDTEAM.md"
 
 
 def test_manuscript_theorem_language_scan_follows_nested_section_files(tmp_path: Path) -> None:
     manuscript_path = write_proof_review_package(tmp_path, theorem_bearing=False, review_report=False).manuscript_path
     manuscript_path.write_text(
-        "\\documentclass{article}\n"
-        "\\begin{document}\n"
-        "\\input{sections/results}\n"
-        "\\end{document}\n",
+        "\\documentclass{article}\n\\begin{document}\n\\input{sections/results}\n\\end{document}\n",
         encoding="utf-8",
     )
     section_path = tmp_path / "paper" / "sections" / "results.tex"
@@ -91,13 +90,15 @@ def test_manuscript_theorem_language_scan_follows_nested_section_files(tmp_path:
 
 
 def test_manuscript_proof_review_rejects_nonpassing_proof_redteam_artifact(tmp_path: Path) -> None:
-    manuscript_path = write_proof_review_package(tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="gaps_found").manuscript_path
+    manuscript_path = write_proof_review_package(
+        tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="gaps_found"
+    ).manuscript_path
 
     status = resolve_manuscript_proof_review_status(tmp_path, manuscript_path)
 
     assert status.state == "open_required_artifact"
     assert status.can_rely_on_prior_review is False
-    assert status.anchor_artifact == tmp_path / "GRD" / "review" / "PROOF-REDTEAM.md"
+    assert status.anchor_artifact == tmp_path / ".grd" / "review" / "PROOF-REDTEAM.md"
 
 
 def test_manuscript_proof_review_rejects_noncanonical_reviewer(tmp_path: Path) -> None:
@@ -133,9 +134,11 @@ def test_manuscript_proof_review_rejects_mismatched_proof_redteam_snapshot(tmp_p
 
 
 def test_manuscript_proof_review_rejects_incomplete_proof_redteam_body(tmp_path: Path) -> None:
-    package = write_proof_review_package(tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed")
+    package = write_proof_review_package(
+        tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed"
+    )
     manuscript_path = package.manuscript_path
-    (tmp_path / "GRD" / "review" / "PROOF-REDTEAM.md").write_text(
+    (tmp_path / ".grd" / "review" / "PROOF-REDTEAM.md").write_text(
         (
             "---\n"
             "status: passed\n"
@@ -169,8 +172,10 @@ def test_manuscript_proof_review_rejects_incomplete_proof_redteam_body(tmp_path:
 def test_manuscript_proof_review_rejects_passed_artifact_missing_structured_audit_fields(
     tmp_path: Path,
 ) -> None:
-    package = write_proof_review_package(tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed")
-    proof_redteam_path = tmp_path / "GRD" / "review" / "PROOF-REDTEAM.md"
+    package = write_proof_review_package(
+        tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed"
+    )
+    proof_redteam_path = tmp_path / ".grd" / "review" / "PROOF-REDTEAM.md"
     proof_redteam_path.write_text(
         (
             "---\n"
@@ -236,8 +241,10 @@ def test_manuscript_proof_review_rejects_passed_artifact_missing_structured_audi
 
 
 def test_manuscript_proof_review_trusts_structured_audit_over_prose_hints(tmp_path: Path) -> None:
-    package = write_proof_review_package(tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed")
-    proof_redteam_path = tmp_path / "GRD" / "review" / "PROOF-REDTEAM.md"
+    package = write_proof_review_package(
+        tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed"
+    )
+    proof_redteam_path = tmp_path / ".grd" / "review" / "PROOF-REDTEAM.md"
     proof_redteam_path.write_text(
         (
             "---\n"
@@ -325,8 +332,10 @@ def test_manuscript_proof_review_rejects_passed_artifact_with_structured_gap(
     field_value: object,
     expected_fragment: str,
 ) -> None:
-    package = write_proof_review_package(tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed")
-    proof_redteam_path = tmp_path / "GRD" / "review" / "PROOF-REDTEAM.md"
+    package = write_proof_review_package(
+        tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed"
+    )
+    proof_redteam_path = tmp_path / ".grd" / "review" / "PROOF-REDTEAM.md"
 
     structured_fields = {
         "missing_parameter_symbols": [],
@@ -408,13 +417,15 @@ def test_manuscript_proof_review_rejects_passed_artifact_with_structured_gap(
 
 
 def test_manuscript_proof_review_anchors_to_passed_proof_redteam_artifact(tmp_path: Path) -> None:
-    manuscript_path = write_proof_review_package(tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed").manuscript_path
+    manuscript_path = write_proof_review_package(
+        tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed"
+    ).manuscript_path
 
     status = resolve_manuscript_proof_review_status(tmp_path, manuscript_path, persist_manifest=True)
 
     assert status.state == "fresh"
     assert status.can_rely_on_prior_review is True
-    assert status.anchor_artifact == tmp_path / "GRD" / "review" / "PROOF-REDTEAM.md"
+    assert status.anchor_artifact == tmp_path / ".grd" / "review" / "PROOF-REDTEAM.md"
     assert manuscript_proof_review_manifest_path(manuscript_path).exists()
 
 
@@ -438,7 +449,7 @@ def test_manuscript_proof_review_uses_latest_matching_round_specific_proof_redte
 
     assert status.state == "missing_required_artifact"
     assert status.can_rely_on_prior_review is False
-    assert status.anchor_artifact == tmp_path / "GRD" / "review" / "PROOF-REDTEAM-R2.md"
+    assert status.anchor_artifact == tmp_path / ".grd" / "review" / "PROOF-REDTEAM-R2.md"
 
 
 def test_manuscript_proof_review_rejects_invalid_latest_round_anchor_without_falling_back(tmp_path: Path) -> None:
@@ -456,13 +467,13 @@ def test_manuscript_proof_review_rejects_invalid_latest_round_anchor_without_fal
         proof_redteam_status="passed",
         round_number=2,
     )
-    (tmp_path / "GRD" / "review" / "CLAIMS-R2.json").write_text("{}", encoding="utf-8")
+    (tmp_path / ".grd" / "review" / "CLAIMS-R2.json").write_text("{}", encoding="utf-8")
 
     status = resolve_manuscript_proof_review_status(tmp_path, manuscript_path)
 
     assert status.state == "invalid_required_artifact"
     assert status.can_rely_on_prior_review is False
-    assert status.anchor_artifact == tmp_path / "GRD" / "review" / "STAGE-math-R2.json"
+    assert status.anchor_artifact == tmp_path / ".grd" / "review" / "STAGE-math-R2.json"
     assert "STAGE-math-R2.json" in status.detail
 
 
@@ -481,18 +492,20 @@ def test_manuscript_proof_review_rejects_unreadable_latest_stage_math_without_fa
         proof_redteam_status="passed",
         round_number=2,
     )
-    (tmp_path / "GRD" / "review" / "STAGE-math-R2.json").write_text("{not json", encoding="utf-8")
+    (tmp_path / ".grd" / "review" / "STAGE-math-R2.json").write_text("{not json", encoding="utf-8")
 
     status = resolve_manuscript_proof_review_status(tmp_path, manuscript_path)
 
     assert status.state == "invalid_required_artifact"
     assert status.can_rely_on_prior_review is False
-    assert status.anchor_artifact == tmp_path / "GRD" / "review" / "STAGE-math-R2.json"
+    assert status.anchor_artifact == tmp_path / ".grd" / "review" / "STAGE-math-R2.json"
     assert "STAGE-math-R2.json" in status.detail
 
 
 def test_manuscript_proof_review_turns_stale_after_bibliography_edit(tmp_path: Path) -> None:
-    manuscript_path = write_proof_review_package(tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed").manuscript_path
+    manuscript_path = write_proof_review_package(
+        tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed"
+    ).manuscript_path
     bibliography_path = tmp_path / "paper" / "references.bib"
 
     fresh = resolve_manuscript_proof_review_status(tmp_path, manuscript_path, persist_manifest=True)
@@ -509,14 +522,18 @@ def test_manuscript_proof_review_turns_stale_after_bibliography_edit(tmp_path: P
 
 
 def test_manuscript_proof_review_turns_stale_after_proof_redteam_edit(tmp_path: Path) -> None:
-    manuscript_path = write_proof_review_package(tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed").manuscript_path
-    proof_redteam_path = tmp_path / "GRD" / "review" / "PROOF-REDTEAM.md"
+    manuscript_path = write_proof_review_package(
+        tmp_path, theorem_bearing=True, review_report=True, proof_redteam_status="passed"
+    ).manuscript_path
+    proof_redteam_path = tmp_path / ".grd" / "review" / "PROOF-REDTEAM.md"
 
     fresh = resolve_manuscript_proof_review_status(tmp_path, manuscript_path, persist_manifest=True)
 
     assert fresh.state == "fresh"
 
-    proof_redteam_path.write_text(proof_redteam_path.read_text(encoding="utf-8") + "\n<!-- drift -->\n", encoding="utf-8")
+    proof_redteam_path.write_text(
+        proof_redteam_path.read_text(encoding="utf-8") + "\n<!-- drift -->\n", encoding="utf-8"
+    )
 
     stale = resolve_manuscript_proof_review_status(tmp_path, manuscript_path)
 

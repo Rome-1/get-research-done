@@ -22,7 +22,7 @@ def _write_knowledge_doc(
     status: str = "stable",
     superseded_by: str | None = None,
 ) -> Path:
-    knowledge_dir = tmp_path / "GRD" / "knowledge"
+    knowledge_dir = tmp_path / ".grd" / "knowledge"
     knowledge_dir.mkdir(parents=True, exist_ok=True)
     path = knowledge_dir / f"{knowledge_id}.md"
     base_content = (
@@ -58,7 +58,7 @@ def _write_knowledge_doc(
             "  reviewer_id: grd-review-knowledge\n"
             "  decision: approved\n"
             "  summary: Stable review approved.\n"
-            f"  approval_artifact_path: GRD/knowledge/reviews/{knowledge_id}-R1-REVIEW.md\n"
+            f"  approval_artifact_path: .grd/knowledge/reviews/{knowledge_id}-R1-REVIEW.md\n"
             f"  approval_artifact_sha256: {'a' * 64}\n"
             f"  reviewed_content_sha256: {reviewed_content_sha256}\n"
             f"  stale: {'false' if status != 'in_review' else 'true'}\n"

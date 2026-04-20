@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from grd.core.constants import PLANNING_DIR_NAME
 from grd.core.frontmatter import compute_knowledge_reviewed_content_sha256, extract_frontmatter
 from grd.core.knowledge_docs import (
     KnowledgeDocData,
@@ -173,7 +174,7 @@ def _record_from_parsed_doc(
 def discover_knowledge_docs(project_root: Path) -> KnowledgeDocDiscovery:
     """Discover and parse project knowledge documents for runtime use."""
 
-    knowledge_dir = project_root / "GRD" / "knowledge"
+    knowledge_dir = project_root / PLANNING_DIR_NAME / "knowledge"
     if not knowledge_dir.is_dir():
         return KnowledgeDocDiscovery()
 

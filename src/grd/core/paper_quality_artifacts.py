@@ -14,10 +14,11 @@ from grd.contracts import (
     ContractResults,
     ConventionLock,
     ResearchContract,
+    normalize_contract_results_input,
     parse_comparison_verdicts_data_strict,
     parse_contract_results_data_artifact,
 )
-from grd.core.constants import STANDALONE_VALIDATION, VALIDATION_SUFFIX, ProjectLayout
+from grd.core.constants import PLANNING_DIR_NAME, STANDALONE_VALIDATION, VALIDATION_SUFFIX, ProjectLayout
 from grd.core.conventions import check_assertions, convention_check
 from grd.core.errors import GRDError
 from grd.core.frontmatter import (
@@ -166,7 +167,7 @@ def _load_bibliography_audit(path: Path | None) -> BibliographyAudit | None:
 
 
 def _load_convention_lock(project_root: Path) -> ConventionLock | None:
-    payload = _load_json(project_root / "GRD" / "state.json")
+    payload = _load_json(project_root / PLANNING_DIR_NAME / "state.json")
     lock_data = payload.get("convention_lock")
     if not isinstance(lock_data, dict):
         return None
@@ -293,7 +294,7 @@ def _best_effort_manuscript_root(project_root: Path) -> Path | None:
 
 
 def _derivation_artifacts(project_root: Path) -> list[Path]:
-    grd_root = project_root / "GRD"
+    grd_root = project_root / PLANNING_DIR_NAME
     if not grd_root.exists():
         return []
     return sorted(
@@ -382,7 +383,7 @@ def _manuscript_reference_status(
 
 
 def _load_figure_registry(project_root: Path) -> list[_FigureTrackerEntry]:
-    tracker_path = project_root / "GRD" / "paper" / "FIGURE_TRACKER.md"
+    tracker_path = project_root / PLANNING_DIR_NAME / "paper" / "FIGURE_TRACKER.md"
     meta = _extract_meta(tracker_path)
     raw = meta.get("figure_registry")
     if not isinstance(raw, list):
@@ -443,11 +444,11 @@ def _collect_comparison_verdicts(
     verdicts_by_key: dict[tuple[str, str | None, str | None, str], ComparisonVerdict] = {}
     parse_errors: list[str] = []
     layout = ProjectLayout(project_root)
-    phase_root = project_root / "GRD" / "phases"
+    phase_root = project_root / PLANNING_DIR_NAME / "phases"
 
     candidate_roots = [
-        project_root / "GRD" / "phases",
-        project_root / "GRD" / "comparisons",
+        project_root / PLANNING_DIR_NAME / "phases",
+        project_root / PLANNING_DIR_NAME / "comparisons",
         project_root / "paper",
     ]
     if manuscript_root is not None:
@@ -532,7 +533,7 @@ def _collect_contract_coverage(project_root: Path) -> _ContractCoverage:
     contract_results_alignment_ok = True
     frontmatter_parse_errors = False
 
-    phases_root = project_root / "GRD" / "phases"
+    phases_root = project_root / PLANNING_DIR_NAME / "phases"
     if not phases_root.exists():
         return _ContractCoverage()
     layout = ProjectLayout(project_root)
