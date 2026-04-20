@@ -719,8 +719,12 @@ def check_plan_frontmatter(cwd: Path) -> HealthCheck:
     return HealthCheck(status=status, label="Plan Frontmatter", details=details, issues=issues, warnings=warnings)
 
 
-def check_latest_return(cwd: Path) -> HealthCheck:
-    """Validate the grd_return YAML block in the most recent SUMMARY file."""
+def _latest_summary_file(cwd: Path) -> tuple[Path, str] | None:
+    """Find the newest SUMMARY file across all phase directories.
+
+    Returns ``(summary_path, "<phase>/<filename>")`` for the most recent summary,
+    or ``None`` if no summaries exist.
+    """
     layout = ProjectLayout(cwd)
     phases_dir = layout.phases_dir
     candidates: list[tuple[int, str, Path]] = []
