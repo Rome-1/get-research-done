@@ -1031,6 +1031,40 @@ def check_result_consistency(cwd: Path) -> HealthCheck:
     )
 
 
+def check_bst_natbib_pairing(cwd: Path) -> HealthCheck:  # noqa: ARG001
+    """Static lint of bst/natbib pairings in shipped LaTeX templates.
+
+    Validates every packaged ``templates/<journal>/<journal>_template.tex``
+    plus the standalone wrapper(s) embedded in ``specs/workflows/export.md``
+    against the natbib loading state. Catches the ge-kus / naturemag silent-
+    rendering bug class at template-author time.
+    """
+    from grd.core.bst_natbib_lint import iter_packaged_template_sources, lint_sources
+
+    try:
+        sources = list(iter_packaged_template_sources())
+    except (FileNotFoundError, OSError) as exc:
+        return HealthCheck(
+            status=CheckStatus.WARN,
+            label="BST/Natbib Pairing",
+            warnings=[f"Could not enumerate packaged templates: {exc}"],
+        )
+
+    findings = lint_sources(sources)
+    issues = [f"{f.source}: {f.message}" for f in findings]
+
+    status = CheckStatus.FAIL if findings else CheckStatus.OK
+    return HealthCheck(
+        status=status,
+        label="BST/Natbib Pairing",
+        details={
+            "sources_checked": len(sources),
+            "finding_count": len(findings),
+        },
+        issues=issues,
+    )
+
+
 # ─── Auto-Fix ────────────────────────────────────────────────────────────────
 
 
@@ -1162,6 +1196,7 @@ _ALL_CHECKS: list[tuple[str, object]] = [
     ("checkpoint_tags", check_checkpoint_tags),
     ("git_status", check_git_status),
     ("result_consistency", check_result_consistency),
+    ("bst_natbib_pairing", check_bst_natbib_pairing),
 ]
 
 
@@ -1204,6 +1239,7 @@ def run_health(cwd: Path, *, fix: bool = False) -> HealthReport:
                     "checkpoint_tags": "Checkpoint Tags",
                     "git_status": "Git Status",
                     "result_consistency": "Result Consistency",
+                    "bst_natbib_pairing": "BST/Natbib Pairing",
                 }
                 for name, check_fn in _ALL_CHECKS:
                     label = check_labels[name]
