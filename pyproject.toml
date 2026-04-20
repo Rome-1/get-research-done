@@ -79,6 +79,7 @@ asyncio_mode = "auto"
 addopts = "-n auto --dist=worksteal"
 markers = [
     "no_stable_hook_python: opt out of the autouse _stable_hook_python fixture",
+    "requires_latex: end-to-end pdflatex+bibtex+pdftotext template render; skipped unless RUN_LATEX_TESTS=1 and the full TeX toolchain is installed",
 ]
 
 [tool.ruff]

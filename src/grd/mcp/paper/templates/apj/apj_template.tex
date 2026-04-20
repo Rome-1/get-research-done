@@ -49,8 +49,12 @@
 \BLOCK{endfor}
 
 \BLOCK{if acknowledgments}
-\acknowledgments
+%# AASTeX v6.3.1 deprecated the bare \acknowledgments command in favour of
+%# the environment form. The bare form aborts the compile (\stop) before
+%# \bibliography is reached, so cite resolution silently fails.
+\begin{acknowledgments}
 \VAR{acknowledgments}
+\end{acknowledgments}
 \BLOCK{endif}
 
 \BLOCK{if appendix_sections}

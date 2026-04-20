@@ -270,6 +270,21 @@ Append-only log of work on this plan. Newest entries on top. Each entry: what wa
 **Artifacts:** Commit SHAs, files touched, test results.
 ```
 
+### 2026-04-20 — ge-blo: pdftotext smoke test for template renders
+
+**What changed:** Landed `tests/test_template_render.py`, a parametrized end-to-end suite that, for every journal in `JOURNAL_SPECS`, drives `render_paper` against a 2-key fixture bibliography, runs `pdflatex → bibtex → pdflatex → pdflatex`, extracts the resulting PDF text with `pdftotext -layout`, and asserts none of the citation failure-mode sentinels survive: `(author?)` (bst/natbib mismatch — the ge-kus / naturemag class), `[?]` (unresolved cite key), and raw `\citet{`/`\citep{`/`\citealp{`/`\citeyearpar{` (an unresolved natbib command escaped into the rendered text). Gated by `RUN_LATEX_TESTS=1` plus a `requires_latex` pytest marker so minimal CI images skip cleanly; per-template `kpsewhich` checks also skip individual cases when a class or bst (e.g. `jhep`, `jfm`) is not installed, so partial TeX Live setups still run the cases they can.
+
+**Outcome:** 4 of 6 templates pass on the standard texlive-publishers install (apj, mnras, nature, prl); jhep and jfm skip because `jheppub.sty` and `jfm.cls` are not in standard TeX Live. The new test exercises the same pipeline that ge-kus and the naturemag fix had to repair — string-level `.tex` invariants passed both bugs while pdftotext would have caught them on the first run. Two latent regressions were unblocked along the way: (1) restored the `_clean_user_text` helper plus its imports in `template_registry.py` (lost in the GPD upstream merge — broke every `render_paper` caller); (2) replaced the deprecated bare `\acknowledgments` command in `apj_template.tex` with the `\begin{acknowledgments}...\end{acknowledgments}` environment form (aastex631 treats the bare form as fatal — `\stop`s the document before `\bibliography` is reached, silently dropping all bibliography processing).
+
+**Plan impact:** ge-chy P2 recommendation #3 ("add pdftotext smoke test to GRD pandoc demo + paper-pipeline integration tests, gated behind RUN_LATEX_TESTS=1") is now landed for GRD. Port to GPD per the ge-chy follow-up plan once this proves out in CI.
+
+**Artifacts:**
+- `tests/test_template_render.py` (new)
+- `src/grd/mcp/paper/template_registry.py` (restored `_clean_user_text` helper + imports)
+- `src/grd/mcp/paper/templates/apj/apj_template.tex` (deprecated `\acknowledgments` → environment form)
+- `pyproject.toml` (registered `requires_latex` marker)
+- Beads: ge-blo (this); ge-chy (parent audit)
+
 ### 2026-04-13 — reviewer sweep: three polecats, two HIGH fixes
 
 **What changed:** Before proceeding with the GPD PR, ran three parallel reviewers (Claude Opus, Claude Sonnet, OpenAI Codex GPT-5) against the working-tree diff. Consolidated findings surfaced three actionable HIGH-severity issues plus one LOW docstring gap. All four are now fixed in-tree.
