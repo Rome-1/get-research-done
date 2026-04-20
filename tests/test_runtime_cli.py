@@ -687,13 +687,13 @@ def test_runtime_cli_restores_process_env_after_dispatch(monkeypatch, tmp_path: 
     observed: dict[str, object] = {}
 
     def fake_entrypoint() -> int:
-        observed["runtime"] = os.environ.get(ENV_GPD_ACTIVE_RUNTIME)
-        observed["disable_reexec"] = os.environ.get(ENV_GPD_DISABLE_CHECKOUT_REEXEC)
+        observed["runtime"] = os.environ.get(ENV_GRD_ACTIVE_RUNTIME)
+        observed["disable_reexec"] = os.environ.get(ENV_GRD_DISABLE_CHECKOUT_REEXEC)
         return 0
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv(ENV_GPD_ACTIVE_RUNTIME, "outer-runtime")
-    monkeypatch.setenv(ENV_GPD_DISABLE_CHECKOUT_REEXEC, "outer-flag")
+    monkeypatch.setenv(ENV_GRD_ACTIVE_RUNTIME, "outer-runtime")
+    monkeypatch.setenv(ENV_GRD_DISABLE_CHECKOUT_REEXEC, "outer-flag")
     monkeypatch.setattr("grd.runtime_cli._maybe_reexec_from_checkout", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("grd.cli.entrypoint", fake_entrypoint)
 
@@ -713,8 +713,8 @@ def test_runtime_cli_restores_process_env_after_dispatch(monkeypatch, tmp_path: 
     assert exit_code == 0
     assert observed["runtime"] == descriptor.runtime_name
     assert observed["disable_reexec"] == "1"
-    assert os.environ[ENV_GPD_ACTIVE_RUNTIME] == "outer-runtime"
-    assert os.environ[ENV_GPD_DISABLE_CHECKOUT_REEXEC] == "outer-flag"
+    assert os.environ[ENV_GRD_ACTIVE_RUNTIME] == "outer-runtime"
+    assert os.environ[ENV_GRD_DISABLE_CHECKOUT_REEXEC] == "outer-flag"
 
 
 def test_runtime_cli_bridge_parse_preserves_passthrough_after_double_dash() -> None:

@@ -673,13 +673,13 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         sys.argv = original_argv
         if prior_active_runtime is None:
-            os.environ.pop(ENV_GPD_ACTIVE_RUNTIME, None)
+            os.environ.pop(ENV_GRD_ACTIVE_RUNTIME, None)
         else:
-            os.environ[ENV_GPD_ACTIVE_RUNTIME] = prior_active_runtime
+            os.environ[ENV_GRD_ACTIVE_RUNTIME] = prior_active_runtime
         if prior_disable_checkout_reexec is None:
-            os.environ.pop(ENV_GPD_DISABLE_CHECKOUT_REEXEC, None)
+            os.environ.pop(ENV_GRD_DISABLE_CHECKOUT_REEXEC, None)
         else:
-            os.environ[ENV_GPD_DISABLE_CHECKOUT_REEXEC] = prior_disable_checkout_reexec
+            os.environ[ENV_GRD_DISABLE_CHECKOUT_REEXEC] = prior_disable_checkout_reexec
 
     if result is None:
         return 0

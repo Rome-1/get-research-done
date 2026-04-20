@@ -2877,7 +2877,7 @@ def contract_from_data(
 
     if not isinstance(data, dict):
         return None
-    from grd.core.contract_validation import _split_project_contract_schema_findings, salvage_project_contract
+    from grd.core.contract_validation import salvage_project_contract
 
     strict_result = parse_project_contract_data_strict(data)
     if strict_result.contract is None or strict_result.errors:

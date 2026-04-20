@@ -81,7 +81,7 @@ def _collect_textual_artifacts(root: Path) -> str:
     return "\n".join(chunks)
 
 
-def _install_real_repo_for_runtime(tmp_path: Path, runtime: str, source_root: Path = REPO_GPD_ROOT) -> Path:
+def _install_real_repo_for_runtime(tmp_path: Path, runtime: str, source_root: Path = REPO_GRD_ROOT) -> Path:
     if runtime == "claude-code":
         target = tmp_path / ".claude"
         target.mkdir()
@@ -143,7 +143,7 @@ def _cached_real_install(runtime: str, source_root: Path, tmp_path_factory: pyte
 @pytest.fixture(scope="module")
 def real_installed_repo_factory(tmp_path_factory: pytest.TempPathFactory):
     def factory(runtime: str) -> Path:
-        return _cached_real_install(runtime, REPO_GPD_ROOT, tmp_path_factory)
+        return _cached_real_install(runtime, REPO_GRD_ROOT, tmp_path_factory)
 
     return factory
 
@@ -409,7 +409,7 @@ class TestClaudeCodeRoundtrip:
 
     @pytest.fixture()
     def installed(self, tmp_path_factory: pytest.TempPathFactory) -> Path:
-        return _cached_real_install("claude-code", REPO_GPD_ROOT, tmp_path_factory)
+        return _cached_real_install("claude-code", REPO_GRD_ROOT, tmp_path_factory)
 
     def test_commands_roundtrip(self, installed: Path, grd_root: Path) -> None:
         """Installed commands/grd/ files correspond 1:1 with source commands/."""
@@ -645,7 +645,7 @@ class TestCodexRoundtrip:
 
     @pytest.fixture()
     def installed(self, tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
-        target = _cached_real_install("codex", REPO_GPD_ROOT, tmp_path_factory)
+        target = _cached_real_install("codex", REPO_GRD_ROOT, tmp_path_factory)
         return target, target.parent / "skills"
 
     def test_commands_become_skill_dirs(self, installed: tuple[Path, Path]) -> None:
@@ -690,7 +690,7 @@ class TestCodexRoundtrip:
     def test_agents_not_installed_as_skills(self, installed: tuple[Path, Path]) -> None:
         """Codex agents are registered as roles, not duplicated as discoverable skills."""
         _, skills = installed
-        agents = load_agents_from_dir(REPO_GPD_ROOT / "agents")
+        agents = load_agents_from_dir(REPO_GRD_ROOT / "agents")
         for agent_name in sorted(agents):
             assert not (skills / agent_name).exists(), f"Agent should not be a Codex skill: {agent_name}"
 
@@ -699,7 +699,7 @@ class TestCodexRoundtrip:
         target, _ = installed
         agents_dir = target / "agents"
         assert agents_dir.is_dir()
-        src_agents = sorted(f.name for f in (REPO_GPD_ROOT / "agents").glob("*.md"))
+        src_agents = sorted(f.name for f in (REPO_GRD_ROOT / "agents").glob("*.md"))
         dest_agents = sorted(f.name for f in agents_dir.glob("*.md"))
         assert dest_agents == src_agents
 
