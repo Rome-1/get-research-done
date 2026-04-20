@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydanticValidationError
 
 from grd.contracts import contract_from_data
+from grd.core.commands import cmd_validate_return
 from grd.core.config import GRDProjectConfig, load_config
 from grd.core.constants import (
     DECISION_THRESHOLD,
@@ -198,8 +199,7 @@ def check_pandoc() -> HealthCheck:
     elif not status.meets_minimum:
         min_major, min_minor = MIN_PANDOC_VERSION
         warnings.append(
-            f"pandoc {status.version_string or 'unknown'} < {min_major}.{min_minor}; "
-            "Lua filters may be unreliable"
+            f"pandoc {status.version_string or 'unknown'} < {min_major}.{min_minor}; Lua filters may be unreliable"
         )
     else:
         if "pandoc-crossref" not in status.installed_filters:
@@ -209,7 +209,9 @@ def check_pandoc() -> HealthCheck:
                 "pandoc-crossref's numbering). "
                 "Install: apt-get install pandoc-crossref | brew install pandoc-crossref"
             )
-    return HealthCheck(status=CheckStatus.WARN if warnings else CheckStatus.OK, label="Pandoc", details=details, warnings=warnings)
+    return HealthCheck(
+        status=CheckStatus.WARN if warnings else CheckStatus.OK, label="Pandoc", details=details, warnings=warnings
+    )
 
 
 def check_project_structure(cwd: Path) -> HealthCheck:
@@ -269,14 +271,10 @@ def check_knowledge_inventory(cwd: Path) -> HealthCheck:
     stable_records = [record for record in discovery.records if record.status == "stable"]
     active_records = [record for record in discovery.records if record.runtime_active]
     stale_review_records = [
-        record
-        for record in stable_records
-        if record.review_fresh is False or record.runtime_active is False
+        record for record in stable_records if record.review_fresh is False or record.runtime_active is False
     ]
     broken_supersession_records = [
-        record
-        for record in discovery.records
-        if record.status == "superseded" and record.superseded_by not in by_id
+        record for record in discovery.records if record.status == "superseded" and record.superseded_by not in by_id
     ]
     plans_with_knowledge_deps: list[str] = []
     plan_knowledge_issue_files: list[str] = []
@@ -286,9 +284,13 @@ def check_knowledge_inventory(cwd: Path) -> HealthCheck:
     plan_dependency_warnings: list[str] = []
 
     if layout.phases_dir.is_dir():
-        phase_dirs = sorted((d for d in layout.phases_dir.iterdir() if d.is_dir()), key=lambda d: phase_sort_key(d.name))
+        phase_dirs = sorted(
+            (d for d in layout.phases_dir.iterdir() if d.is_dir()), key=lambda d: phase_sort_key(d.name)
+        )
         for phase_dir in phase_dirs:
-            plan_files = sorted((f for f in phase_dir.iterdir() if f.is_file() and layout.is_plan_file(f.name)), key=lambda f: f.name)
+            plan_files = sorted(
+                (f for f in phase_dir.iterdir() if f.is_file() and layout.is_plan_file(f.name)), key=lambda f: f.name
+            )
             for plan_path in plan_files:
                 preflight = build_plan_tool_preflight(plan_path)
                 if not preflight.knowledge_deps and preflight.knowledge_gate == "off":
@@ -737,11 +739,7 @@ def _latest_summary_file(cwd: Path) -> tuple[Path, str] | None:
         key=lambda entry: phase_sort_key(entry.name),
     ):
         for summary in sorted(
-            (
-                entry
-                for entry in phase_dir.iterdir()
-                if entry.is_file() and layout.is_summary_file(entry.name)
-            ),
+            (entry for entry in phase_dir.iterdir() if entry.is_file() and layout.is_summary_file(entry.name)),
             key=lambda entry: entry.name,
         ):
             try:
@@ -759,9 +757,11 @@ def _latest_summary_file(cwd: Path) -> tuple[Path, str] | None:
 
 
 def check_latest_return(cwd: Path) -> HealthCheck:
-    """Validate the grd_return YAML block in the most recent SUMMARY file."""
-    warnings: list[str] = []
-    issues: list[str] = []
+    """Validate the grd_return YAML block in the most recent SUMMARY file.
+
+    Delegates to :func:`cmd_validate_return` so the health dashboard and the CLI
+    share a single validator for shape, required fields, and nested payloads.
+    """
     details: dict[str, object] = {}
 
     latest = _latest_summary_file(cwd)
@@ -775,44 +775,25 @@ def check_latest_return(cwd: Path) -> HealthCheck:
     summary_path, summary_name = latest
     details["file"] = summary_name
 
-    content = safe_read_file(summary_path)
-    if content is None:
-        issues.append(f"{summary_name}: cannot read file")
-        return HealthCheck(status=CheckStatus.FAIL, label="Latest Return Envelope", details=details, issues=issues)
-
-    return_match = re.search(r"```ya?ml\s*\n(\s*grd_return:\s*\n[\s\S]*?)```", content)
-    if not return_match:
-        warnings.append(f"{summary_name}: no grd_return YAML block")
+    try:
+        validation = cmd_validate_return(summary_path)
+    except ValidationError:
         return HealthCheck(
-            status=CheckStatus.WARN,
+            status=CheckStatus.FAIL,
             label="Latest Return Envelope",
             details=details,
-            warnings=warnings,
+            issues=[f"{summary_name}: cannot read file"],
         )
 
-    try:
-        parsed = yaml.safe_load(return_match.group(1))
-    except yaml.YAMLError as e:
-        issues.append(f"{summary_name}: grd_return YAML parse error: {e}")
-        return HealthCheck(status=CheckStatus.FAIL, label="Latest Return Envelope", details=details, issues=issues)
+    details["fields_found"] = sorted(validation.fields.keys())
 
-    raw = parsed.get("grd_return") if isinstance(parsed, dict) else None
-    fields = raw if isinstance(raw, dict) else {}
-    details["fields_found"] = list(fields.keys())
+    issues = [f"{summary_name}: {err}" for err in validation.errors]
+    warnings = [f"{summary_name}: {warn}" for warn in validation.warnings]
 
-    for field_name in REQUIRED_RETURN_FIELDS:
-        if field_name not in fields or fields[field_name] is None:
-            issues.append(f"{summary_name}: missing required field '{field_name}' in grd_return")
-
-    if fields.get("status") and str(fields["status"]).lower() not in VALID_RETURN_STATUSES:
-        issues.append(f"{summary_name}: invalid status '{fields['status']}'")
-
-    for numeric_field in ("tasks_completed", "tasks_total"):
-        val = fields.get(numeric_field)
-        if val is not None and safe_parse_int(val, None) is None:
-            issues.append(f"{summary_name}: {numeric_field} not a number")
-
-    status = CheckStatus.FAIL if issues else (CheckStatus.WARN if warnings else CheckStatus.OK)
+    if validation.passed:
+        status = CheckStatus.WARN if warnings else CheckStatus.OK
+    else:
+        status = CheckStatus.FAIL
     return HealthCheck(status=status, label="Latest Return Envelope", details=details, issues=issues, warnings=warnings)
 
 
@@ -949,9 +930,7 @@ def check_result_consistency(cwd: Path) -> HealthCheck:
             status=CheckStatus.WARN,
             label="Result Consistency",
             details={"error": "malformed_state_results"},
-            warnings=[
-                f"Cannot parse intermediate_results from state.json: {exc}"
-            ],
+            warnings=[f"Cannot parse intermediate_results from state.json: {exc}"],
         )
     details["state_result_count"] = len(results)
 
@@ -995,11 +974,7 @@ def check_result_consistency(cwd: Path) -> HealthCheck:
             state_only.append(f"{result.id}: {desc}")
 
     # 4. Compare: SUMMARY provides with no corresponding state result
-    result_descriptions_lower = [
-        (r.description or "").lower()
-        for r in results
-        if r.description
-    ]
+    result_descriptions_lower = [(r.description or "").lower() for r in results if r.description]
     summary_only: list[str] = []
     for provides_text in all_provides:
         prov_lower = provides_text.lower()
@@ -1616,18 +1591,20 @@ def normalize_permissions_readiness_payload(
             readiness_message = "Runtime permissions are ready for unattended use."
         elif bool(normalized.get("requires_relaunch", False)):
             readiness = "relaunch-required"
-            readiness_message = "Runtime permissions are aligned, but the runtime must be relaunched before unattended use."
+            readiness_message = (
+                "Runtime permissions are aligned, but the runtime must be relaunched before unattended use."
+            )
         elif more_permissive_than_requested:
             readiness = "not-ready"
-            readiness_message = (
-                "Runtime permissions are more permissive than the requested autonomy, so unattended readiness is not confirmed."
-            )
+            readiness_message = "Runtime permissions are more permissive than the requested autonomy, so unattended readiness is not confirmed."
         elif "config_aligned" in normalized:
             readiness = "not-ready"
             readiness_message = "Runtime permissions are not ready for unattended use under the requested autonomy."
         else:
             readiness = "unresolved"
-            readiness_message = str(normalized.get("message") or "Runtime permissions are not ready for unattended use.")
+            readiness_message = str(
+                normalized.get("message") or "Runtime permissions are not ready for unattended use."
+            )
 
         next_step = normalized.get("next_step")
         if not isinstance(next_step, str) or not next_step.strip():
@@ -1702,7 +1679,9 @@ def _doctor_check_python_runtime() -> HealthCheck:
     }
 
     if sys.version_info < (MIN_PYTHON_MAJOR, MIN_PYTHON_MINOR):
-        issues.append(f"Python {sys.version_info.major}.{sys.version_info.minor} < {MIN_PYTHON_MAJOR}.{MIN_PYTHON_MINOR}")
+        issues.append(
+            f"Python {sys.version_info.major}.{sys.version_info.minor} < {MIN_PYTHON_MAJOR}.{MIN_PYTHON_MINOR}"
+        )
     elif sys.version_info < RECOMMENDED_PYTHON_VERSION:
         warnings.append(f"Python >= {RECOMMENDED_PYTHON_VERSION[0]}.{RECOMMENDED_PYTHON_VERSION[1]} recommended")
 
@@ -1831,7 +1810,9 @@ def _doctor_check_live_executable_probes() -> HealthCheck:
             warnings.append(f"{executable} not found on PATH")
             continue
 
-        probe = _doctor_run_executable_probe([resolved, "--version"], timeout_seconds=_DOCTOR_LIVE_EXECUTABLE_PROBE_TIMEOUT_SECONDS)
+        probe = _doctor_run_executable_probe(
+            [resolved, "--version"], timeout_seconds=_DOCTOR_LIVE_EXECUTABLE_PROBE_TIMEOUT_SECONDS
+        )
         probe["label"] = executable
         probe["resolved_path"] = resolved
         probe_results.append(probe)
@@ -2086,7 +2067,9 @@ def _doctor_check_latex_toolchain() -> HealthCheck:
     if compiler_available and not kpsewhich_available:
         missing_components.append("kpsewhich")
 
-    warnings = list(capability_details.get("warnings", [])) if isinstance(capability_details.get("warnings"), list) else []
+    warnings = (
+        list(capability_details.get("warnings", [])) if isinstance(capability_details.get("warnings"), list) else []
+    )
     if compiler_available and missing_components:
         missing_text = ", ".join(f"`{component}`" for component in missing_components)
         warnings.append(
@@ -2167,9 +2150,7 @@ def resolve_doctor_runtime_readiness(
     normalized_runtime = _doctor_normalize_runtime(runtime)
     normalized_scope_input = install_scope.lower() if isinstance(install_scope, str) else None
     if normalized_scope_input not in {None, "local", "global"}:
-        raise ValidationError(
-            f"Unsupported install_scope {install_scope!r}; expected 'local' or 'global'."
-        )
+        raise ValidationError(f"Unsupported install_scope {install_scope!r}; expected 'local' or 'global'.")
 
     adapter = get_adapter(normalized_runtime)
     workspace_root = cwd or Path.cwd()
@@ -2297,7 +2278,9 @@ def build_unattended_readiness_result(
         target = str(target_dir) if target_dir is not None else getattr(doctor_report, "target", None)
 
     resolved_autonomy = normalized_permissions.get("autonomy")
-    autonomy_value = str(resolved_autonomy) if isinstance(resolved_autonomy, str) and resolved_autonomy else (autonomy or "")
+    autonomy_value = (
+        str(resolved_autonomy) if isinstance(resolved_autonomy, str) and resolved_autonomy else (autonomy or "")
+    )
     passed = permissions_ready and not blocker_messages
     return UnattendedReadinessResult(
         runtime=runtime,
