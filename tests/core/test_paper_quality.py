@@ -776,3 +776,23 @@ def test_validate_tex_draft_detects_natbib_missing_citep() -> None:
     )
     checks = {finding.check for finding in findings}
     assert "missing_citation_placeholder" in checks
+
+
+def test_validate_tex_draft_ignores_biblatex_missing_and_empty() -> None:
+    r"""Biblatex citation commands (\parencite, \textcite, \autocite) are
+    intentionally not recognized: no shipped template loads
+    \usepackage{biblatex}, so even malformed biblatex markup is ignored
+    by the draft-lint rather than surfaced as a "missing" or "empty"
+    citation finding.  See ge-b7n.
+    """
+    findings = validate_tex_draft(
+        "\\documentclass{article}\n"
+        "\\begin{document}\n"
+        "See \\parencite{MISSING:ref1}.\n"
+        "Also \\autocite{}.\n"
+        "And \\textcite{MISSING:ref2}.\n"
+        "\\end{document}\n"
+    )
+    checks = {finding.check for finding in findings}
+    assert "missing_citation_placeholder" not in checks
+    assert "empty_citation_command" not in checks

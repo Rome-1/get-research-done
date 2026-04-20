@@ -69,7 +69,6 @@ def _fix_unescaped_underscores(tex: str) -> str:
                 r"|includegraphics|input|include|bibliography|bibliographystyle"
                 r"|hyperref|nameref|pageref"
                 r"|citep|citet|citealp|citeauthor|citeyear"
-                r"|parencite|textcite"
                 r"|texttt|textbf|textit|emph|path|lstinline)(?:\[[^\]]*\])*\{[^}]*\})",
                 lambda m: m.group(0).replace("_", "\x00"),
                 content,
