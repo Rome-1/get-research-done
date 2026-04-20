@@ -243,6 +243,78 @@ def test_cli_prove_exit_1_when_no_tactic_closes_goal(tmp_path: Path, monkeypatch
     assert [a["tactic"] for a in parsed["attempts"]] == ["rfl", "decide"]
 
 
+# ─── Heartbeat auto-retry (ge-l9cz) ──────────────────────────────────────────
+
+
+def _heartbeat_timeout_result() -> LeanCheckResult:
+    return LeanCheckResult(
+        ok=False,
+        backend="subprocess",
+        elapsed_ms=4,
+        diagnostics=[
+            LeanDiagnostic(
+                severity="error",
+                message=(
+                    "(deterministic) timeout at `whnf`, maximum number of "
+                    "heartbeats (200000) has been reached"
+                ),
+            )
+        ],
+    )
+
+
+def test_prove_statement_retries_tactic_on_heartbeat_timeout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A heartbeat timeout on a tactic triggers a doubled-budget retry."""
+    seen: list[tuple[str, int | None]] = []
+
+    def _check(*, code: str, max_heartbeats: int | None = None, **_kw) -> LeanCheckResult:
+        if ":= by omega" in code:
+            tactic = "omega"
+        else:
+            tactic = "other"
+        seen.append((tactic, max_heartbeats))
+        # Baseline omega run times out; the retry with doubled budget wins.
+        if tactic == "omega" and max_heartbeats is None:
+            return _heartbeat_timeout_result()
+        if tactic == "omega":
+            return LeanCheckResult(ok=True, backend="subprocess", elapsed_ms=5)
+        return LeanCheckResult(
+            ok=False,
+            backend="subprocess",
+            diagnostics=[LeanDiagnostic(severity="error", message="tactic failed")],
+        )
+
+    monkeypatch.setattr(lean_prove, "lean_check", _check)
+
+    result = lean_prove.prove_statement(
+        "1 + 1 = 2",
+        project_root=tmp_path,
+        tactics=["omega"],
+        max_heartbeat_retries=2,
+    )
+    assert result.ok is True
+    attempt = result.attempts[0]
+    assert attempt.ok is True
+    assert attempt.heartbeat_retry is not None
+    assert attempt.heartbeat_retry.retries_used == 1
+    assert attempt.heartbeat_retry.winning_heartbeats == 400_000
+    # Baseline + retry → exactly two invocations with the expected budgets.
+    assert seen == [("omega", None), ("omega", 400_000)]
+
+
+def test_prove_statement_no_retry_records_no_report(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """When auto-retry is off, ProofAttempt.heartbeat_retry stays None."""
+    monkeypatch.setattr(lean_prove, "lean_check", _fake_check(ok_on="rfl"))
+    result = lean_prove.prove_statement(
+        "1 = 1", project_root=tmp_path, tactics=["rfl"], max_heartbeat_retries=0
+    )
+    assert result.attempts[0].heartbeat_retry is None
+
+
 # ─── _infer_initial_goal ────────────────────────────────────────────────────
 
 

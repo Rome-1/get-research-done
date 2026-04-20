@@ -93,6 +93,18 @@ class LeanCheckRequest(BaseModel):
         le=600.0,
         description="Hard wall-clock timeout for the Lean subprocess.",
     )
+    max_heartbeats: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Override Lean's ``maxHeartbeats`` option for this elaboration. "
+            "``None`` leaves the toolchain default (~200000) in place; any "
+            "non-negative integer is passed through as ``-DmaxHeartbeats=N`` "
+            "for the subprocess backend or prepended as a ``set_option`` line "
+            "for the Pantograph REPL. Used by the heartbeat auto-retry layer "
+            "to re-run timing-out proofs with a doubled budget."
+        ),
+    )
 
 
 class LeanCheckResult(BaseModel):

@@ -111,8 +111,13 @@ class PantographBackend:
         *,
         code: str,
         imports: Iterable[str] | None = None,
+        max_heartbeats: int | None = None,
     ) -> LeanCheckResult | None:
-        """Elaborate ``code`` via the reused ``Server``. Returns ``None`` on fallback."""
+        """Elaborate ``code`` via the reused ``Server``. Returns ``None`` on fallback.
+
+        ``max_heartbeats`` is injected as a ``set_option`` prefix line so the
+        REPL path honours the same budget override as the subprocess backend.
+        """
         if self._permanently_disabled:
             return None
 
@@ -120,6 +125,11 @@ class PantographBackend:
         server = self._ensure_server(imports_tuple)
         if server is None:
             return None
+
+        if max_heartbeats is not None:
+            # Pantograph has no CLI-style '-D' knob — prepend a set_option line
+            # so the Lean REPL applies the override for the rest of this file.
+            code = f"set_option maxHeartbeats {max_heartbeats}\n{code}"
 
         start = time.monotonic()
         try:

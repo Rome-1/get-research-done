@@ -23,6 +23,7 @@ from grd.cli._helpers import _error, _get_cwd, _output, console, err_console
 if TYPE_CHECKING:
     from grd.core.lean.events import ProgressEvent
     from grd.core.lean.find_counterexample import CounterexampleResult
+    from grd.core.lean.heartbeats import HeartbeatRetryReport
     from grd.core.lean.protocol import LeanCheckResult
     from grd.core.lean.prove import ProveResult
     from grd.core.lean.try_prove import TryProveResult
@@ -248,6 +249,81 @@ def _print_prove_hints(result: ProveResult) -> None:
     err_console.print(f"  [dim]last tactic: {last_tactic}[/] {last_hint}", highlight=False)
 
 
+def _print_heartbeat_retry(report: HeartbeatRetryReport | None) -> None:
+    """Surface the heartbeat auto-retry ladder + winning set_option suggestion.
+
+    Only printed in non-raw mode when the layer actually retried — a
+    zero-retry report means the baseline already passed (or failed for
+    non-heartbeat reasons) and there is nothing to say.
+    """
+    if _helpers._raw or report is None or report.retries_used == 0:
+        return
+    err_console.print("")
+    if report.winning_heartbeats is not None:
+        err_console.print(
+            f"[bold green]Heartbeat auto-retry:[/] succeeded at "
+            f"maxHeartbeats={report.winning_heartbeats} "
+            f"(after {report.retries_used} retr{'ies' if report.retries_used != 1 else 'y'}).",
+            highlight=False,
+        )
+        if report.suggestion:
+            err_console.print(f"  [dim]{report.suggestion}[/]", highlight=False)
+    else:
+        tail = " (ceiling reached)" if report.ceiling_hit else ""
+        err_console.print(
+            f"[bold yellow]Heartbeat auto-retry:[/] exhausted "
+            f"{report.retries_used} retr{'ies' if report.retries_used != 1 else 'y'}"
+            f"{tail} without closing the goal.",
+            highlight=False,
+        )
+
+
+def _print_prove_heartbeat_retries(result: ProveResult) -> None:
+    """Surface heartbeat retries from the tactic whose retry actually helped.
+
+    Scans attempts back-to-front so the most recent (i.e. winning) retry is
+    reported first. Non-interesting (zero-retry) attempts are skipped.
+    """
+    if _helpers._raw:
+        return
+    attempts = getattr(result, "attempts", []) or []
+    # Prefer the winning attempt's retry report; fall back to the last
+    # attempt that retried, so even on overall failure the user sees which
+    # tactic burned through retries.
+    winner = next(
+        (a for a in reversed(attempts) if getattr(a, "ok", False) and getattr(a, "heartbeat_retry", None)),
+        None,
+    )
+    if winner is None:
+        winner = next(
+            (a for a in reversed(attempts) if getattr(a, "heartbeat_retry", None)),
+            None,
+        )
+    if winner is None:
+        return
+    report = winner.heartbeat_retry
+    err_console.print("")
+    tactic = getattr(winner, "tactic", "<tactic>")
+    if report.winning_heartbeats is not None:
+        err_console.print(
+            f"[bold green]Heartbeat auto-retry:[/] tactic `{tactic}` closed "
+            f"the goal at maxHeartbeats={report.winning_heartbeats} "
+            f"(after {report.retries_used} retr"
+            f"{'ies' if report.retries_used != 1 else 'y'}).",
+            highlight=False,
+        )
+        if report.suggestion:
+            err_console.print(f"  [dim]{report.suggestion}[/]", highlight=False)
+    else:
+        tail = " (ceiling reached)" if report.ceiling_hit else ""
+        err_console.print(
+            f"[bold yellow]Heartbeat auto-retry:[/] tactic `{tactic}` "
+            f"exhausted {report.retries_used} retr"
+            f"{'ies' if report.retries_used != 1 else 'y'}{tail}.",
+            highlight=False,
+        )
+
+
 def _print_daemon_spawn_failure() -> None:
     """Surface daemon startup failure with the log tail (ge-f9i / P1-5).
 
@@ -407,6 +483,20 @@ def lean_check(
         "--show-goal",
         help="Show remaining proof goals after elaboration (extracted from diagnostics).",
     ),
+    max_heartbeat_retries: int = typer.Option(
+        3,
+        "--max-heartbeat-retries",
+        help="On a heartbeat-timeout diagnostic, rerun with 2× maxHeartbeats up "
+        "to N times (default 3; 0 disables auto-retry).",
+        min=0,
+    ),
+    initial_heartbeats: int | None = typer.Option(
+        None,
+        "--initial-heartbeats",
+        help="Starting maxHeartbeats value for the first run. Omit to use Lean's "
+        "default (~200000); pass an explicit value to start from a larger budget.",
+        min=1,
+    ),
 ) -> None:
     """Type-check Lean 4 source.
 
@@ -415,6 +505,7 @@ def lean_check(
     """
     from grd.core.lean.client import check, check_file
     from grd.core.lean.events import DiagnosticEmitted, StageCompleted, StageStarted, tty_finish
+    from grd.core.lean.heartbeats import check_with_heartbeat_retry
 
     emit = _make_emitter(events)
 
@@ -435,7 +526,10 @@ def lean_check(
         resolved = file if file.is_absolute() else (_get_cwd() / file).resolve()
         if not resolved.is_file():
             _error(f"File not found: {resolved}", code=EXIT_INPUT_ERROR)
-        result = check_file(
+        result, retry_report = check_with_heartbeat_retry(
+            check_file,
+            initial_heartbeats=initial_heartbeats,
+            max_retries=max_heartbeat_retries,
             path=resolved,
             project_root=_get_cwd(),
             timeout_s=timeout_s,
@@ -444,7 +538,10 @@ def lean_check(
         )
     else:
         assert code is not None  # for type checker
-        result = check(
+        result, retry_report = check_with_heartbeat_retry(
+            check,
+            initial_heartbeats=initial_heartbeats,
+            max_retries=max_heartbeat_retries,
             code=code,
             project_root=_get_cwd(),
             imports=list(import_module),
@@ -474,6 +571,7 @@ def lean_check(
     _output_for_events(result, events)
     _print_daemon_spawn_failure()
     _print_diagnostic_hints(result)
+    _print_heartbeat_retry(retry_report)
     _print_goal_state(result, show_goal=show_goal)
     if not result.ok:
         raise typer.Exit(code=_exit_code_for_result(result))
@@ -562,6 +660,20 @@ def lean_prove(
         "--show-goal",
         help="Show initial goal and remaining goals for each tactic attempt.",
     ),
+    max_heartbeat_retries: int = typer.Option(
+        3,
+        "--max-heartbeat-retries",
+        help="Per-tactic heartbeat retry cap. On a heartbeat timeout, rerun the "
+        "same tactic with 2× maxHeartbeats up to N times (default 3; 0 disables).",
+        min=0,
+    ),
+    initial_heartbeats: int | None = typer.Option(
+        None,
+        "--initial-heartbeats",
+        help="Starting maxHeartbeats for each tactic's first run. Omit to use "
+        "Lean's default (~200000).",
+        min=1,
+    ),
 ) -> None:
     """Tactic-search a proof for the given Lean 4 statement.
 
@@ -593,12 +705,15 @@ def lean_prove(
         use_daemon=not no_daemon,
         auto_spawn=not no_spawn,
         on_event=emit,
+        max_heartbeat_retries=max_heartbeat_retries,
+        initial_heartbeats=initial_heartbeats,
     )
     if events:
         tty_finish()
     _output_for_events(result, events)
     _print_daemon_spawn_failure()
     _print_prove_hints(result)
+    _print_prove_heartbeat_retries(result)
     _print_prove_goal_state(result, show_goal=show_goal)
     if not result.ok:
         raise typer.Exit(code=_exit_code_for_result(result))

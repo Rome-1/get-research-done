@@ -29,6 +29,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from grd.core.lean.client import check as lean_check
 from grd.core.lean.events import EventCallback, TacticAttempted
+from grd.core.lean.heartbeats import (
+    DEFAULT_HEARTBEAT_CEILING,
+    HeartbeatRetryReport,
+    check_with_heartbeat_retry,
+)
 from grd.core.lean.protocol import LeanCheckResult
 
 __all__ = [
@@ -76,6 +81,14 @@ class ProofAttempt(BaseModel):
         description=(
             "Remaining goals after this tactic. Empty list on success. "
             "Populated from 'unsolved goals' diagnostics on failure."
+        ),
+    )
+    heartbeat_retry: HeartbeatRetryReport | None = Field(
+        default=None,
+        description=(
+            "Populated when this tactic's elaboration tripped a heartbeat "
+            "timeout and the auto-retry layer doubled the budget. Present "
+            "even on final failure so callers can see the ladder we tried."
         ),
     )
 
@@ -136,6 +149,9 @@ def prove_statement(
     use_daemon: bool = True,
     auto_spawn: bool = True,
     on_event: EventCallback = None,
+    max_heartbeat_retries: int = 0,
+    initial_heartbeats: int | None = None,
+    heartbeat_ceiling: int = DEFAULT_HEARTBEAT_CEILING,
 ) -> ProveResult:
     """Try ``tactics`` (or the default ladder) in order; return the first pass.
 
@@ -145,6 +161,12 @@ def prove_statement(
     progress, even on failure.
 
     ``on_event`` receives ``TacticAttempted`` after each candidate tactic.
+
+    ``max_heartbeat_retries`` enables per-tactic heartbeat auto-retry:
+    when a tactic's elaboration fails with a heartbeat timeout, re-run it
+    with doubled ``maxHeartbeats`` up to this many times (ladder capped at
+    ``heartbeat_ceiling``). ``0`` (the default) preserves the historical
+    single-shot behaviour.
     """
     _emit = on_event or (lambda _e: None)
     ladder = list(tactics) if tactics else list(DEFAULT_TACTIC_LADDER)
@@ -162,7 +184,11 @@ def prove_statement(
 
     for idx, tactic in enumerate(ladder):
         source = compose_attempt_source(statement, tactic, imports=imports)
-        result: LeanCheckResult = lean_check(
+        result, retry_report = check_with_heartbeat_retry(
+            lean_check,
+            initial_heartbeats=initial_heartbeats,
+            max_retries=max_heartbeat_retries,
+            ceiling=heartbeat_ceiling,
             code=source,
             project_root=project_root,
             timeout_s=timeout_s,
@@ -178,6 +204,7 @@ def prove_statement(
             hint=None if result.ok else _first_error_hint(result),
             goal_before=initial_goal,
             goal_after=result.goals_after,
+            heartbeat_retry=retry_report if retry_report.retries_used > 0 else None,
         )
         attempts.append(attempt)
         _emit(TacticAttempted(
