@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from grd.adapters import get_adapter
-from grd.adapters.runtime_catalog import iter_runtime_descriptors, resolve_global_config_dir
+from grd.adapters.runtime_catalog import get_shared_install_metadata, iter_runtime_descriptors, resolve_global_config_dir
 from grd.hooks.install_metadata import installed_update_command
 
 GRD_ROOT = Path(__file__).resolve().parent.parent / "src" / "grd"

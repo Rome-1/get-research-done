@@ -16,7 +16,7 @@ import pytest
 
 import grd.hooks.check_update as check_update
 from grd.adapters import get_adapter
-from grd.adapters.runtime_catalog import iter_runtime_descriptors
+from grd.adapters.runtime_catalog import get_shared_install_metadata, iter_runtime_descriptors
 from grd.hooks.check_update import (
     UPDATE_CHECK_TTL_SECONDS,
     _do_check,

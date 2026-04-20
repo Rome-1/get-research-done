@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from grd.adapters import get_adapter
-from grd.adapters.runtime_catalog import list_runtime_names
+from grd.adapters.runtime_catalog import get_shared_install_metadata, list_runtime_names
 
 RUNTIME_NAMES = list_runtime_names()
 _SHARED_INSTALL = get_shared_install_metadata()

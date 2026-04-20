@@ -27,7 +27,7 @@ from grd.adapters.install_utils import (
     translate_frontmatter_tool_names,
 )
 from grd.adapters.opencode import OpenCodeAdapter
-from grd.adapters.runtime_catalog import resolve_global_config_dir
+from grd.adapters.runtime_catalog import get_shared_install_metadata, resolve_global_config_dir
 from grd.adapters.tool_names import build_canonical_alias_map
 from grd.registry import load_agents_from_dir
 

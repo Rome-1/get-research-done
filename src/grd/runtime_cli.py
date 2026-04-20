@@ -30,6 +30,7 @@ from grd.adapters.install_utils import (
 )
 from grd.core.cli_args import resolve_root_global_cli_cwd_from_argv as _resolve_cli_cwd_from_argv
 from grd.core.constants import ENV_GRD_ACTIVE_RUNTIME, ENV_GRD_DISABLE_CHECKOUT_REEXEC
+from grd.adapters.runtime_catalog import get_shared_install_metadata
 from grd.hooks.install_metadata import load_install_manifest_runtime_status
 from grd.hooks.runtime_detect import normalize_runtime_name
 

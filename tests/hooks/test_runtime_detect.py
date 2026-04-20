@@ -15,7 +15,7 @@ from unittest.mock import patch
 import pytest
 
 from grd.adapters import get_adapter
-from grd.adapters.runtime_catalog import iter_runtime_descriptors
+from grd.adapters.runtime_catalog import get_shared_install_metadata, iter_runtime_descriptors
 from grd.hooks.install_metadata import installed_runtime
 from grd.hooks.runtime_detect import (
     RUNTIME_UNKNOWN,

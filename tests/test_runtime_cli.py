@@ -14,7 +14,7 @@ import grd.cli as cli_module
 import grd.runtime_cli as runtime_cli
 from grd.adapters import get_adapter
 from grd.adapters.install_utils import AGENTS_DIR_NAME, HOOKS_DIR_NAME
-from grd.adapters.runtime_catalog import iter_runtime_descriptors, resolve_global_config_dir
+from grd.adapters.runtime_catalog import get_shared_install_metadata, iter_runtime_descriptors, resolve_global_config_dir
 from grd.core.constants import ENV_GRD_ACTIVE_RUNTIME, ENV_GRD_DISABLE_CHECKOUT_REEXEC
 from grd.runtime_cli import _parse_args, _resolve_cli_cwd_from_argv, main
 
