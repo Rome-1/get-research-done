@@ -270,7 +270,7 @@ def _source_path_project_root(source_path: Path | None) -> Path | None:
     for candidate in (source_dir, *source_dir.parents):
         if (candidate / "GRD").is_dir():
             return candidate
-    return resolve_project_root(source_path.parent, require_layout=False)
+    return resolve_project_root(source_path.parent)
 
 
 def _normalize_frontmatter_contract_mapping(contract_data: object) -> object:
